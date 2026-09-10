@@ -52,14 +52,16 @@ export const isRelPath = p =>
   !p.replace(/\/$/, '').split('/').some(seg => seg === '' || seg === '.' || seg === '..')
 // A test artifact, by path shape. Used ONLY to catch test files changed after the seal that the
 // manifest does not list — a listed artifact is checked by blob identity regardless of its name.
-// A production MODULE — what a `behavioral` scope may edit but never create, move or split. A
-// decision-log entry, an ADR, a doc or a fixture inside an allowed path is not a module: it is
-// always a NEW file, and refusing it forced the implementer to revert its ADL (canary run 12b, CG-3).
-const MODULE_EXT = /\.(m?[jt]sx?|c[jt]s|py|go|rs|java|kt|swift|rb|php|cs|c|cc|cpp|h|hpp|sh|bash|zsh|ps1)$/i
+// A production MODULE — what a `behavioral` scope may edit but never create, move or split. ONLY
+// documentation and decision evidence is exempt (an explicit allow-list, T-9 re-review t9b-2):
+// `.md` / `.mdx` / `.txt` anywhere, or anything under `.pair/adoption/`, `.pair/knowledge/`,
+// `docs/`. Everything else added or moved under a behavioral scope — a CI workflow, Terraform, a
+// migration, a Dockerfile, a JSON config, a script under `.pair/` — is a module and a breach.
 export const isModulePath = p => {
   const s = String(p ?? '')
-  if (s.startsWith('.pair/') || /^docs?\//.test(s) || /\.(md|mdx|txt|json|ya?ml|toml)$/i.test(s)) return false
-  return MODULE_EXT.test(s)
+  if (/\.(md|mdx|txt)$/i.test(s)) return false
+  if (/^(\.pair\/(adoption|knowledge)\/|docs\/)/.test(s)) return false
+  return true
 }
 export const isTestPath = p =>
   /(^|\/)(test|tests|__tests__|spec|fixtures?)\//.test(p) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(p)
@@ -395,7 +397,9 @@ export function listSnapshots({ pr, base, cwd }) {
   void pr
   const head = git(['rev-parse', 'HEAD'], cwd)
   const range = head === base ? [] : [`${base}..HEAD`]
-  const out = git(['log', '--reverse', '--format=%H%x00%B%x1e', ...range], cwd) ?? ''
+  // First-parent history only: a foreign branch merged into the story branch (its seals included)
+  // never contributes a segment boundary of THIS cycle (T-9 re-review, t9b-3).
+  const out = git(['log', '--reverse', '--first-parent', '--format=%H%x00%B%x1e', ...range], cwd) ?? ''
   const re = new RegExp(`^${TRAILER_KEY}: pr=(\\d+); phase=([^;]+); base=([0-9a-f]{40}); manifest=(\\S+)$`)
   const snaps = []
   for (const rec of out.split('\x1e').map(r => r.replace(/^\n/, '')).filter(Boolean)) {

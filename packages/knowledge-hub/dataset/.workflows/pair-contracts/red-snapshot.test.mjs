@@ -239,6 +239,19 @@ test('verify breach: a behavioral scope may not add a production module even ins
   assert.equal(isModulePath('src/helper.js'), true)
   assert.equal(isModulePath('packages/x/src/tool.ts'), true)
   rmSync(cwd3, { recursive: true, force: true })
+  // …and ONLY documentation / decision evidence is exempt (T-9 re-review, t9b-2): a new CI workflow,
+  // Terraform, a SQL migration, a Dockerfile, a JSON config or a script under .pair/ is still a module
+  const { cwd: cwd4, base: base4 } = repo()
+  redContract(cwd4, { fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/', 'infra/', '.github/', 'db/', 'Dockerfile', '.pair/', 'docs/'] } })
+  const s4 = seal({ pr: PR, phase: PHASE, base: base4, contractPath: '.pair/working/red-draft.json', cwd: cwd4 })
+  rmSync(join(cwd4, '.pair/working/red-draft.json'))
+  const modules = ['.github/workflows/deploy.yml', 'infra/main.tf', 'db/migrations/001.sql', 'Dockerfile', 'src/config.json', '.pair/scripts/tool.mjs']
+  green(cwd4, s4.manifest, Object.fromEntries([['src/a.js', 'export const a = () => 2\n'], ['docs/guide.md', '# guide\n'], ['.pair/adoption/decision-log/2026-09-10-x.md', '# ADL\n'], ['.pair/knowledge/notes.txt', 'n\n'], ...modules.map(m => [m, 'x\n'])]))
+  const v4 = verify({ pr: PR, phase: PHASE, base: base4, cwd: cwd4 })
+  assert.deepEqual(v4.breaches.map(b => [b.code, b.path]).sort(), modules.map(m => ['behavioral-adds-or-moves-module', m]).sort())
+  for (const m of [...modules, 'web/App.vue', 'bin/run', 'package.json', '.env.production']) assert.equal(isModulePath(m), true, m)
+  for (const d of ['docs/guide.md', 'README.md', 'notes/x.txt', '.pair/adoption/decision-log/y.md', '.pair/knowledge/g.md']) assert.equal(isModulePath(d), false, d)
+  rmSync(cwd4, { recursive: true, force: true })
   // the same change under a structural scope is in scope
   const { cwd: cwd2, base: base2 } = repo()
   redContract(cwd2, { fixScope: { owner: 'a()', mode: 'structural', allowedPaths: ['src/'] } })
@@ -490,6 +503,28 @@ test('verify-chain spans every seal identity of the cycle (t9-1): a pr=0 initial
   write(cwd, 'test/a.test.js', 'tampered\n')
   git(cwd, 'commit', '-q', '--no-verify', '-am', 'tamper')
   assert.deepEqual(verifyChain({ pr: '0', base, cwd }).breaches.map(b => b.code), ['test-blob-changed'])
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('verify-chain lists only first-parent history (t9b-3): a foreign PR seal merged into the story branch is not a segment boundary of this cycle', () => {
+  const { cwd, base } = repo()
+  const { contractPath } = redContract(cwd)
+  const s1 = seal({ pr: '0', phase: 'a0', base, contractPath, cwd })
+  assert.equal(s1.sealed, true)
+  rmSync(join(cwd, contractPath))
+  green(cwd, s1.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  // a side branch from the base carries another PR's seal
+  git(cwd, 'checkout', '-q', '-b', 'side', base)
+  write(cwd, 'other/o.test.mjs', 'throw new Error("FAIL")\n')
+  const c777 = { sourceOfTruth: 'o', fixScope: { owner: 'o', mode: 'behavioral', allowedPaths: ['other/'] }, matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'c', oracle: 'node other/o.test.mjs', expected: 'e', covers: ['x-1'] }], redTests: [{ file: 'other/o.test.mjs', kind: 'test', sha256: hashFile('other/o.test.mjs', cwd), command: 'node other/o.test.mjs', observed: 'Error: FAIL' }], testExempt: false }
+  write(cwd, '.pair/working/side.json', JSON.stringify(c777))
+  assert.equal(seal({ pr: '777', phase: 'a0', base, contractPath: '.pair/working/side.json', cwd }).sealed, true)
+  rmSync(join(cwd, '.pair/working/side.json'))
+  git(cwd, 'checkout', '-q', 'main')
+  git(cwd, 'merge', '-q', '--no-ff', '--no-edit', 'side')
+  const chain = verifyChain({ pr: '0', base, cwd })
+  assert.deepEqual(chain.snapshots.map(s => [s.phase, s.pr]), [['a0', '0']], 'the foreign seal is not part of this cycle')
+  assert.ok(!chain.breaches.some(b => b.code === 'successor-not-above-predecessor'), JSON.stringify(chain.breaches))
   rmSync(cwd, { recursive: true, force: true })
 })
 

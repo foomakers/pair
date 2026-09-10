@@ -449,7 +449,7 @@ const RUN_ID = PARSED.runId
 // The coordinator's own version, returned with every result and handed to every phase skill so
 // each handoff records which coordinator produced it. Bump on any change to the dispatch
 // contract (skill names, argument names, statuses).
-const WORKFLOW_VERSION = '3.0.9'
+const WORKFLOW_VERSION = '3.0.10'
 
 // ── Pipeline configuration: what makes this engine reusable ─────────────────
 // Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved
@@ -1068,8 +1068,10 @@ const isProvenArtifact = a => {
 // The evidence a preparation result must carry before anyone validates it: an inventory, a
 // discriminating matrix that covers every inventory item (or says why not), hashed artifacts whose
 // observed baseline matches the row they prove, a typed scope and an absolute contract path.
-function hasPreparedContract(r, { needPlan = false, ids = [] } = {}) {
+function hasPreparedContract(r, { needPlan = false, ids = [], mode } = {}) {
   if (!r || r.status !== 'red') return false
+  // The mode is the DISPATCHED one: a result claiming another mode is not the preparation asked for (t9b-4).
+  if (mode !== undefined && r.mode !== mode) return false
   if (!SHA40.test(String(r.inputHead ?? ''))) return false
   if (!String(r.sourceOfTruth ?? '').trim()) return false
   if (!isContractPath(r.contractPath) || !SHA256_RE.test(String(r.contractHash ?? ''))) return false
@@ -1085,7 +1087,7 @@ function hasPreparedContract(r, { needPlan = false, ids = [] } = {}) {
   // obligations of the base contract (an AC id the delta inventory does not repeat) — each row must
   // cover at least one obligation of the delta itself; the independent validator checks the full
   // file. An initial or remediation contract covers exactly its own inventory.
-  const delta = r.mode === 'repair' || r.mode === 'revision'
+  const delta = (mode ?? r.mode) === 'repair' || (mode ?? r.mode) === 'revision'
   const rowIds = new Set()
   const covered = new Set()
   let witnesses = 0
@@ -1451,7 +1453,7 @@ async function driveStory(story) {
     agentRetry(
       invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${notesArg()}`),
       withModel('red', { agentType: 'pair-fix-test-author', phase: 'Prepare', label: `prepare:${tag} ${n.phase}${n.mode === 'repair' ? ' repair' : n.mode === 'revision' ? ' revision' : ''}`, effort: 'high', schema: PREPARE_SCHEMA }),
-      r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && /-g1$/.test(n.phase), ids: (n.findings ?? []).map(f => f.id) }),
+      r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && /-g1$/.test(n.phase), ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
     )
   const validate = n =>
     agentRetry(
@@ -1475,7 +1477,7 @@ async function driveStory(story) {
     agentRetry(
       invoke(
         SK.reviewPhase,
-        `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}`,
+        `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}`,
       ),
       withModel('reviewer', { agentType: 'pair-reviewer', phase: 'Verify', label: `verify:${tag} ${n.phase}${n.reviewer > 1 ? ` reviewer ${n.reviewer}` : ''}`, effort: 'high', schema: VERIFY_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasReviewEvidence(r),
@@ -1569,7 +1571,7 @@ async function driveStory(story) {
     // ── Stage-specific validation of the typed evidence ─────────────────────────────────────
     if (stage === 'prepare') {
       if (isPrepareRefusal(res)) return result('failed-preparation', { reason: res.reason ?? res.splitReason ?? res.status, refusal: res.status, phase: next.phase, findings: next.findings })
-      if (!hasPreparedContract(res, { needPlan: next.mode === 'remediation' && /-g1$/.test(next.phase), ids: (next.findings ?? []).map(f => f.id) })) return result('failed-preparation', { reason: 'the preparation stage returned no usable contract', phase: next.phase })
+      if (!hasPreparedContract(res, { needPlan: next.mode === 'remediation' && /-g1$/.test(next.phase), ids: (next.findings ?? []).map(f => f.id), mode: next.mode })) return result('failed-preparation', { reason: 'the preparation stage returned no usable contract', phase: next.phase })
       if (next.mode === 'remediation' && res.plan) {
         const carried = (res.plan.carried ?? []).map(c => ({ ...(next.findings ?? []).find(f => f.id === c.finding), external: true, disposition: `Outside the repository — ${c.disposition}` }))
         // Carried is a LOCATION, not acceptance: the finding stays blocking for the verifier; here it

@@ -1,4 +1,4 @@
-// Dry-run harness for pair-implement-batch.js (engine 3.0.9, US-479): executes the workflow
+// Dry-run harness for pair-implement-batch.js (engine 3.0.10, US-479): executes the workflow
 // source with stubbed `agent`/`parallel` (the sandbox primitives) and asserts the coordinator's
 // contract — four judgment stages dispatched by skill name with typed arguments, a `next`-driven
 // state machine that never derives a transition of its own, fail-closed validation of every typed
@@ -259,10 +259,10 @@ test('TC-11: a resumed PR with a clean verification is ONE dispatch — the fina
 test('TC-11: every dispatch is a configured skill + typed arguments + the engine version, run directory and policy', async () => {
   const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] })
   const { result, calls } = await runWorkflow({ args: { cards: [STORY], runId: 'run-42' }, dispatch: stdDispatch({ review }) })
-  assert.equal(result.workflowVersion, '3.0.9')
+  assert.equal(result.workflowVersion, '3.0.10')
   for (const c of calls.slice(1)) {
     assert.match(c.prompt, /^Invoke \*\*\/pair-workflow-(red-spec|red-verify|implement-phase|green-fix|review-phase)\*\* for story #292 with \$run=run-42 \$story=292 \$branch=feat\/#292-x \$worktree=\.\.\/pair-worktrees\/292 \$base=origin\/main \$stacked=false/, c.opts.label)
-    assert.ok(c.prompt.includes('$workflowVersion=3.0.9'), `${c.opts.label} was not told the workflow version`)
+    assert.ok(c.prompt.includes('$workflowVersion=3.0.10'), `${c.opts.label} was not told the workflow version`)
     assert.ok(c.prompt.includes('$policy={"maxFixRounds":3,"redRepairs":1,"greenRetries":1,"reviewers":1}'), `${c.opts.label} was not told the policy`)
     assert.match(c.prompt, /\$inputs=[0-9a-f]{16}/, `${c.opts.label} was not told the effective-inputs digest`)
     assert.match(c.prompt, /\$entry=(fresh|pr)/)
@@ -275,7 +275,7 @@ test('TC-11: every dispatch is a configured skill + typed arguments + the engine
   assert.match(byLabel('prepare:#292 a0'), /\$mode=initial \$phase=a0 \$title="T" \$workflowVersion/)
   assert.match(byLabel('validate:#292 a0'), /\$phase=a0 \$head=a{40} \$contract=\"\/main\/\.pair\/working\/runs\/run-42\/292\/a0-red-contract\.json\" \$contractHash=sha256:1{64}/)
   assert.match(byLabel('implement:#292'), /\$snapshot=c{40} \$contract=\"\/main\/.*\$implementSkill=\/pair-process-implement \$verifyQuality=\/pair-capability-verify-quality \$recordDecision=\/pair-capability-record-decision \$checkpoint=\/pair-capability-checkpoint \$publishPr=\/pair-capability-publish-pr/)
-  assert.match(byLabel('verify:#292 r0'), /\$pr=7 .*\$phase=r0 \$mode=first \$head=a{40} \$worktree=\.\.\/pair-worktrees\/292-review \$reviewLog=\.pair\/working\/reviews\/292\.md \$marker="<!-- pair:first-review #292 PR#7 -->" \$synthesisMarker="<!-- pair:synthesis #292 PR#7 -->" \$template=code-review-template\.md .*\$floor=Minor \$ranks=\{"Blocker":3,"Major":2,"Minor":1\} \$reviewer=1 \$reviewers=1 \$reviewSkill=\/pair-process-review \$writeIssue=\/pair-capability-write-issue/)
+  assert.match(byLabel('verify:#292 r0'), /\$pr=7 .*\$phase=r0 \$mode=first \$head=a{40} \$worktree=\.\.\/pair-worktrees\/292-review \$reviewLog=\.pair\/working\/reviews\/292\.md \$marker="<!-- pair:first-review #292 PR#7 -->" \$synthesisMarker="<!-- pair:synthesis #292 PR#7 -->" \$template=code-review-template\.md .*\$floor=Minor \$ranks=\{"Blocker":3,"Major":2,"Minor":1\} \$attempt=1 \$reviewer=1 \$reviewers=1 \$reviewSkill=\/pair-process-review \$writeIssue=\/pair-capability-write-issue/)
   assert.match(byLabel('prepare:#292 r1-g1'), /\$mode=remediation \$phase=r1-g1 \$head=a{40} \$findings=\[\{"id":"r0-1","severity":"Major","location":"src\/a\.ts:1","description":"wrong output on the empty form","recommendation":"handle it","kind":"defect"\}\]/)
   assert.match(byLabel('green:#292 r1-g1'), /\$phase=r1-g1 \$head=a{40} \$attempt=1 \$snapshot=c{40} \$contract=\"\/main\/.*\$findings=\[.*\$reviewLog=\.pair\/working\/reviews\/292\.md \$marker="<!-- pair:first-review #292 PR#7 -->" \$writeIssue=/)
   assert.match(byLabel('verify:#292 r1'), /\$mode=re-review \$head=a{40} .*\$prior=r0-review-phase \$openIds=\["r0-1"\]/)
@@ -745,6 +745,23 @@ test('a revision or repair result is a DELTA: its rows may cover obligations of 
   assert.equal(initial.result.batch[0].status, 'failed-preparation')
 })
 
+test('t9b-1: every verify dispatch carries the cycle state attempt — the second review of a phase (after a GREEN retry) is attempt 2, so its handoff lands on its own filename', async () => {
+  const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : pass === 1 ? { verdict: 'Rework', findings: [finding({ id: 'r0-1', transition: 'open', kind: 'approved-test-failing', groupId: 'r1-g1', rowId: 'row-1' })] } : { verdict: 'Approved', findings: [] })
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review }) })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  const r1 = calls.filter(c => c.opts.label === 'verify:#292 r1')
+  assert.equal(r1.length, 2)
+  assert.match(r1[0].prompt, /\$phase=r1 \$mode=re-review .*\$attempt=1 \$reviewer=1 /)
+  assert.match(r1[1].prompt, /\$phase=r1 \$mode=re-review .*\$attempt=2 \$reviewer=1 /)
+  assert.match(calls.find(c => c.opts.label === 'verify:#292 r0').prompt, /\$attempt=1 \$reviewer=1 /)
+})
+
+test('t9b-4: the delta rule of a preparation result follows the DISPATCHED mode — an initial preparation claiming mode repair with a row covering an unknown id is refused', async () => {
+  const std = stdDispatch()
+  const { result } = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-fix-test-author' ? { mode: 'repair', matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'c', oracle: 'o', expected: 'e', covers: ['AC-9', 'AC-1'] }] } : std(p, o)) })
+  assert.equal(result.batch[0].status, 'failed-preparation', JSON.stringify(result.batch[0]))
+})
+
 test('TC-10: a remediation plan that drops, duplicates or invents a finding id, or names a group outside r<n>-g<k>, is not a usable preparation', async () => {
   for (const plan of [
     { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, // drops r0-2
@@ -824,10 +841,10 @@ test('t9-5: a next that asks for validate/implement/green without a usable contr
   }
 })
 
-test('TC-14: the result carries workflowVersion 3.0.9 and every status row is one of the documented set; ready rows carry reviewedHead + verdict', async () => {
+test('TC-14: the result carries workflowVersion 3.0.10 and every status row is one of the documented set; ready rows carry reviewedHead + verdict', async () => {
   const STATUSES = new Set(['ready-for-merge', 'escalate', 'failed-preparation', 'failed-contract', 'failed-seal', 'failed-implement', 'failed-fix', 'failed-verify', 'failed-custody', 'failed-resume', 'incompatible'])
   const { result } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch() })
-  assert.equal(result.workflowVersion, '3.0.9')
+  assert.equal(result.workflowVersion, '3.0.10')
   for (const row of result.batch) {
     assert.equal(row.id, STORY.id)
     assert.ok(STATUSES.has(row.status), row.status)
@@ -974,7 +991,7 @@ test('an EXPLICIT empty list stays a legal no-op — no agent, no contract', asy
   assert.equal(calls.length, 0)
   assert.deepEqual(result.batch, [])
   assert.match(result.note, /Empty batch/)
-  assert.equal(result.workflowVersion, '3.0.9')
+  assert.equal(result.workflowVersion, '3.0.10')
 })
 test('a bare array, a JSON string, `cards` and the `stories` alias all drive the batch; both lists together throw', async () => {
   for (const args of [[STORY], JSON.stringify({ stories: [STORY] }), { cards: [STORY] }, { stories: [STORY] }, { cards: [STORY], stories: undefined }, { stories: [STORY], cards: null }]) {
