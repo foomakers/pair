@@ -14,16 +14,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import {
-  contractErrors,
-  hashFile,
-  isTestPath,
-  manifestPathFor,
-  seal,
-  trailerFor,
-  verify,
-  verifyChain,
-} from '../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs'
+import { contractErrors, hashFile, isTestPath, manifestPathFor, seal, trailerFor, verify, verifyChain, predecessorPhase, scopeNarrowing } from '../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url))
 
@@ -378,6 +369,7 @@ function chainRepo() {
   const head1 = git(cwd, 'rev-parse', 'HEAD')
   return { cwd, base, s1, head1 }
 }
+const chainBase = cwd => git(cwd, 'rev-list', '--max-parents=0', 'HEAD')
 function revision(cwd, head1, extra = {}) {
   // the gap: the empty form; the revised witness extends the SAME sealed test file
   write(cwd, 'test/a.test.js', 'import { a } from "../src/a.js"\nif (a() !== 2) throw new Error("FAIL")\nif (a(0) !== 0) throw new Error("FAIL empty")\n')
@@ -410,6 +402,52 @@ test('verify-chain: seal → GREEN → successor seal (revision) → GREEN is on
   // the single-snapshot verify of the superseded phase still reports the changed blob — that is
   // WHY the final verifier runs verify-chain, not verify, once a revision exists
   assert.equal(verify({ pr: PR, phase: 'r1-g1', base, cwd }).contractBreach, true)
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('seal: a revision inherits the predecessor fixScope — it may ADD paths, never drop one or change the mode; without a predecessor snapshot in history it is refused (canary run 11: a0-rev2 narrowed a0 to one file)', () => {
+  assert.equal(predecessorPhase('a0-rev2'), 'a0')
+  assert.equal(predecessorPhase('r1-g1-rev3'), 'r1-g1-rev2')
+  assert.equal(predecessorPhase('r1-g1'), null)
+  assert.deepEqual(scopeNarrowing({ fixScope: { mode: 'behavioral', allowedPaths: ['src/a.js', 'docs/'] } }, { fixScope: { mode: 'behavioral', allowedPaths: ['src/a.js', 'docs/', 'src/b.js'] } }), [])
+  assert.deepEqual(scopeNarrowing({ fixScope: { mode: 'behavioral', allowedPaths: ['src/a.js', 'docs/'] } }, { fixScope: { mode: 'structural', allowedPaths: ['src/a.js'] } }), ['fixScope.mode changed from behavioral to structural', 'fixScope.allowedPaths drops docs/'])
+  // narrowed: refused before any commit
+  let { cwd, head1 } = chainRepo()
+  const before = git(cwd, 'rev-parse', 'HEAD')
+  let s2 = revision(cwd, head1, { fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/other.js'] } })
+  assert.equal(s2.sealed, false)
+  assert.equal(s2.reason, 'fixScope-narrowed')
+  assert.equal(s2.predecessor, 'r1-g1')
+  assert.deepEqual(s2.errors, ['fixScope.allowedPaths drops src/a.js'])
+  assert.equal(git(cwd, 'rev-parse', 'HEAD'), before, 'nothing committed')
+  // widened: sealed, and the chain verifies with the wider scope in force for the later GREEN
+  s2 = revision(cwd, head1, { fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/a.js', 'src/other.js'] } })
+  assert.equal(s2.sealed, true, JSON.stringify(s2))
+  green(cwd, s2.manifest, { 'src/a.js': 'export const a = (x = 2) => x\n', 'src/other.js': 'export const o = 1\n' })
+  assert.equal(verifyChain({ pr: PR, base: chainBase(cwd), cwd }).verified, true)
+  rmSync(cwd, { recursive: true, force: true })
+  // a revision with no predecessor snapshot anywhere in history cannot inherit anything
+  const fresh = repo()
+  const { contractPath } = redContract(fresh.cwd)
+  const s = seal({ pr: PR, phase: 'r1-g1-rev2', base: fresh.base, contractPath, cwd: fresh.cwd })
+  assert.deepEqual({ sealed: s.sealed, reason: s.reason, predecessor: s.predecessor }, { sealed: false, reason: 'predecessor-snapshot-missing', predecessor: 'r1-g1' })
+  rmSync(fresh.cwd, { recursive: true, force: true })
+})
+
+test('verify-chain breach: a successor snapshot that narrows the predecessor scope (forged past the sealer) is successor-narrows-scope', () => {
+  const { cwd, base, head1 } = chainRepo()
+  // forge the successor by hand: the sealer would have refused it
+  write(cwd, 'test/a.test.js', 'import { a } from "../src/a.js"\nif (a() !== 2) throw new Error("FAIL")\nif (a(0) !== 0) throw new Error("FAIL empty")\n')
+  const phase = 'r1-g1-rev2'
+  const manifest = manifestPathFor(PR, phase)
+  const trailer = trailerFor({ pr: PR, phase, base: head1, manifest })
+  const contract = { sourceOfTruth: 'a()', fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/other.js'] }, matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'default', oracle: 'node test/a.test.js', expected: '2', covers: ['r0-1'] }], redTests: [{ file: 'test/a.test.js', kind: 'test', sha256: hashFile('test/a.test.js', cwd), command: 'node test/a.test.js', observed: 'Error: FAIL empty' }], testExempt: false }
+  write(cwd, manifest, JSON.stringify({ $meta: { pr: PR, phase, base: head1, trailer, artifacts: ['test/a.test.js'] }, ...contract }, null, 2) + '\n')
+  git(cwd, 'add', '--', manifest, 'test/a.test.js')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', `RED snapshot pr=${PR} phase=${phase}\n\n${trailer}`)
+  const chain = verifyChain({ pr: PR, base, cwd })
+  assert.equal(chain.verified, false)
+  assert.deepEqual(chain.breaches.filter(b => b.code === 'successor-narrows-scope'), [{ code: 'successor-narrows-scope', phase, errors: ['fixScope.allowedPaths drops src/a.js'] }])
   rmSync(cwd, { recursive: true, force: true })
 })
 

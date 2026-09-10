@@ -15,7 +15,10 @@
 //     → { status: empty | in-progress | completed | blocked | incompatible | invalid | other-run, next, ... }
 //
 //   node … publish --dir <dir> --file <complete draft.json> --phase <p> --skill <s> --workflowVersion <v>
-//        [--predecessor <phase>-<skill>] [--attempt <n>]
+//        [--predecessor <phase>-<skill>] [--attempt <n>] [--pr <n>]
+//        --pr stamps the PR the cycle is bound to into the envelope (canary run 11: a revision's
+//        implement handoff carried pr=null although #483 existed); a PR that contradicts the draft
+//        or an earlier handoff of the run is refused (pr-mismatch), never overwritten.
 //     Validates the envelope, checks the predecessor, takes the directory lock, assigns a monotonic
 //     `seq`, writes `<phase>-<skill>[.attempt-<n>].json` atomically (temp + rename), removes the
 //     draft. A second writer for the same step is `stale-write`; a held lock is never broken.
@@ -129,7 +132,7 @@ function withLock(dir, waitMs, fn) {
   }
 }
 
-export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, lockWaitMs = 5000 }) {
+export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, pr, lockWaitMs = 5000 }) {
   let data
   try {
     data = JSON.parse(readFileSync(file, 'utf8'))
@@ -139,6 +142,13 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   const errs = envelopeErrors(data, { phase, skill })
   if (errs.length) return { published: false, reason: errs[0], errors: errs }
   if (!compatible(workflowVersion, workflowVersion)) return { published: false, reason: 'workflowVersion-invalid' }
+  if (pr !== undefined) {
+    if (!Number.isInteger(pr) || pr <= 0) return { published: false, reason: 'pr-invalid', pr }
+    if (data.pr !== undefined && data.pr !== null && Number(data.pr) !== pr) return { published: false, reason: 'pr-mismatch', stated: data.pr, pr }
+    const prior = existsSync(dir) ? readHandoffs(dir).map(h => h.data?.pr).find(x => Number.isInteger(x) && x > 0) : undefined
+    if (prior !== undefined && prior !== pr) return { published: false, reason: 'pr-mismatch', stated: prior, pr, source: 'earlier-handoff' }
+    data = { ...data, pr }
+  }
   mkdirSync(dir, { recursive: true })
   if (predecessor && !existsSync(join(dir, `${predecessor}.json`))) return { published: false, reason: 'predecessor-missing', predecessor }
   const n = Number.isInteger(attempt) ? attempt : Number.isInteger(data.attempt) ? data.attempt : 1
@@ -412,7 +422,7 @@ if (isMain()) {
       process.exit(0)
     } else if (cmd === 'publish') {
       need('dir', 'file', 'phase', 'skill', 'workflowVersion')
-      out = publish({ dir: opts.dir, file: opts.file, phase: opts.phase, skill: opts.skill, workflowVersion: opts.workflowVersion, predecessor: opts.predecessor, attempt: opts.attempt ? Number(opts.attempt) : undefined })
+      out = publish({ dir: opts.dir, file: opts.file, phase: opts.phase, skill: opts.skill, workflowVersion: opts.workflowVersion, predecessor: opts.predecessor, attempt: opts.attempt ? Number(opts.attempt) : undefined, pr: opts.pr !== undefined ? Number(opts.pr) : undefined })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.published ? 0 : 1)
     } else if (cmd === 'hash') {

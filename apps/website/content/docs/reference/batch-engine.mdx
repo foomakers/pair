@@ -154,7 +154,9 @@ no register, no projector.
 - **An approved witness fails on production** ⇒ back to `green-fix` on the same seal, once; a
   second failure is `failed-fix`. **A genuine contract gap** ⇒ `red-spec` revises only the
   affected group (`r<n>-g<k>-rev<m>`), stable row ids kept, the changed rows re-validated and
-  sealed as a successor snapshot; `verify-chain` treats the earlier seal as history. **A
+  sealed as a successor snapshot; `verify-chain` treats the earlier seal as history. A revision
+  or repair inherits the predecessor's `fixScope` and may only add paths — the sealer refuses a
+  narrowed one (`fixScope-narrowed`, engine 3.0.8). **A
   custody breach** ⇒ `failed-custody`, the trusted snapshot preserved, nothing reset.
 - **Findings** carry an id assigned once by the verifier that first saw them
   (`r<round>[-<reviewer>]-<n>`), a `kind` (`defect`, `regression`, `approved-test-failing`,

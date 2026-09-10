@@ -153,6 +153,46 @@ export const artifactPaths = c => (c.testExempt === true ? [] : c.redTests.map(a
 // already-correct test and may be sealed unchanged.
 export const witnessPaths = c => (c.testExempt === true ? [] : c.redTests.filter(a => artifactBaseline(a) === 'red').map(a => a.file))
 
+// ── scope inheritance ──────────────────────────────────────────────────────────────────────
+// A repair or a revision (`<stem>-rev<m>`) re-contracts the SAME obligation: it inherits the
+// predecessor's fixScope — the mode and every allowedPaths entry — and may only ADD paths. Canary
+// run 11: a0-rev2 narrowed a0's scope to the one production file, so the implementer could neither
+// record its decision in the decision log nor document the convention, and reported both as gaps.
+export const predecessorPhase = phase => {
+  const m = /^(.+)-rev(\d+)$/.exec(String(phase ?? ''))
+  if (!m) return null
+  const n = Number(m[2])
+  return n > 2 ? `${m[1]}-rev${n - 1}` : m[1]
+}
+export function scopeNarrowing(prev, next) {
+  const errs = []
+  const a = prev?.fixScope, b = next?.fixScope
+  if (!a || !b) return errs
+  if (a.mode !== b.mode) errs.push(`fixScope.mode changed from ${a.mode} to ${b.mode}`)
+  for (const p of a.allowedPaths ?? []) if (!inScope(p.replace(/\/$/, ''), b.allowedPaths ?? []) && !(b.allowedPaths ?? []).includes(p)) errs.push(`fixScope.allowedPaths drops ${p}`)
+  return errs
+}
+// The snapshot of <phase> anywhere in HEAD's history (a predecessor predates the revision's base).
+export function findSnapshotByPhase({ pr, phase, cwd }) {
+  const re = new RegExp(`^${TRAILER_KEY}: pr=${String(pr).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}; phase=${String(phase).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}; base=([0-9a-f]{40}); manifest=(\\S+)$`)
+  const out = git(['log', '--format=%H%x00%B%x1e'], cwd) ?? ''
+  for (const rec of out.split('\x1e').map(r => r.replace(/^\n/, '')).filter(Boolean)) {
+    const [sha, body] = rec.split('\x00')
+    for (const line of (body ?? '').split('\n')) {
+      const m = re.exec(line.trim())
+      if (m) {
+        const raw = git(['show', `${sha}:${m[2]}`], cwd, { allowFail: true })
+        let contract = null
+        try {
+          contract = raw === null ? null : JSON.parse(raw)
+        } catch {}
+        return { sha, base: m[1], manifest: m[2], contract }
+      }
+    }
+  }
+  return null
+}
+
 // ── seal ───────────────────────────────────────────────────────────────────────────────────
 export function findSnapshot({ pr, phase, base, cwd }) {
   const manifest = manifestPathFor(pr, phase)
@@ -210,6 +250,14 @@ export function seal({ pr, phase, base, contractPath, cwd, root }) {
   }
   const errs = contractErrors(contract)
   if (errs.length) return { sealed: false, reason: 'contract-invalid', errors: errs }
+  const predecessor = predecessorPhase(phase)
+  if (predecessor) {
+    const prev = findSnapshotByPhase({ pr, phase: predecessor, cwd })
+    if (!prev) return { sealed: false, reason: 'predecessor-snapshot-missing', predecessor }
+    if (!prev.contract) return { sealed: false, reason: 'predecessor-manifest-unreadable', predecessor, snapshot: prev.sha }
+    const narrowed = scopeNarrowing(prev.contract, contract)
+    if (narrowed.length) return { sealed: false, reason: 'fixScope-narrowed', predecessor, snapshot: prev.sha, errors: narrowed }
+  }
   const { manifest, trailer, matches } = findSnapshot({ pr, phase, base, cwd })
   const files = artifactPaths(contract)
 
@@ -374,6 +422,10 @@ export function verifyChain({ pr, base, cwd }) {
         breach('manifest-invalid', { phase: s.phase, errors: errs })
         contract = null
       }
+    }
+    if (contract && i > 0 && predecessorPhase(s.phase) === snaps[i - 1].phase && contracts[i - 1]?.contract) {
+      const narrowed = scopeNarrowing(contracts[i - 1].contract, contract)
+      if (narrowed.length) breach('successor-narrows-scope', { phase: s.phase, errors: narrowed })
     }
     const listed = contract ? artifactPaths(contract) : []
     const tree = (git(['diff-tree', '--no-commit-id', '--name-only', '-r', s.sha], cwd) ?? '').split('\n').filter(Boolean)

@@ -42,7 +42,7 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVer
 
 1. Parse `$contract`; its `contractHash` must equal `$contractHash` and the script's `hash` output — a mismatch is a finding (`location: $contract`), `verified: false`.
 2. `cd $worktree`; `HEAD == $head`; the uncommitted diff contains ONLY the listed artifacts. Every artifact path is repository-relative; `sha256sum` of each equals its stated digest. Anything else ⇒ finding, `verified: false`.
-3. `fixScope` has one owner, one mode, only the paths the contract needs, and is not wider than `$scope`.
+3. `fixScope` has one owner, one mode, only the paths the contract needs, and is not wider than `$scope`. A `repair` or `revision` (`-rev<m>`) is not NARROWER than the contract it revises: same `mode`, every predecessor `allowedPaths` entry still present — the sealer re-checks this against the predecessor snapshot's manifest and refuses `fixScope-narrowed`; name the dropped paths as a gap.
 
 ### Step 2: Reproduce (every row, every artifact)
 
@@ -69,7 +69,7 @@ The script (shipped beside this file, [scripts/red-snapshot.mjs](scripts/red-sna
 
 ### Step 6: Persist and hand off
 
-Publish the handoff (`skill: "red-verify"`, `inputHead: $head`, `inputsDigest`, `attempt`, `verified`, `findings`, `sealed`, `snapshot?`, `manifest?`, `contractHash`, `reproduced: [{ rowId, command, observed }]`, `elapsedMs`) with `cycle-state.mjs publish … --predecessor $phase-red-spec`, run `resolve` again and return its `next`.
+Publish the handoff (`skill: "red-verify"`, `inputHead: $head`, `inputsDigest`, `attempt`, `verified`, `findings`, `sealed`, `snapshot?`, `manifest?`, `contractHash`, `reproduced: [{ rowId, command, observed }]`, `elapsedMs`) with `cycle-state.mjs publish … --predecessor $phase-red-spec ${pr:+--pr $pr}`, run `resolve` again and return its `next`.
 
 ## Output Format
 

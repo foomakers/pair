@@ -75,6 +75,7 @@ One row per class and interaction of every inventory item: `{ id, kind, baseline
 - Every inventory `id` is `covers`-ed by at least one row; at least one `witness` with `baseline: red` exists unless `fixScope.mode` is `test`. Do not collapse rows because their outputs agree today; justify any equivalence in `rationale`.
 - `mode: test` (guard-strength — production is already correct): the witness FAILS against an injected regression in an isolated copy and PASSES against the current source; `observed` records both. Never edit production to make a guard red.
 - Row ids are stable: a `repair` or `revision` keeps every existing id and changed row unchanged; it adds rows or edits only the rows the rejection / gap names, and lists them under `changedRows`.
+- Scope is inherited: a `repair` or `revision` keeps the `fixScope` of the contract it repairs or revises — the same `mode`, every `allowedPaths` entry — and may only ADD paths. The sealer refuses a narrowed scope (`fixScope-narrowed`); a0-rev2 in canary run 11 shrank a0 to one production file and left the implementer no home for its decision log or convention page.
 
 ### Step 4: Write and prove the artifacts
 
@@ -91,7 +92,7 @@ One row per class and interaction of every inventory item: `{ id, kind, baseline
 
    ```bash
    node "$SKILL_DIR/scripts/cycle-state.mjs" publish --dir "$RUN_DIR" --file <draft> --phase $phase --skill red-spec \
-     --workflowVersion $workflowVersion --attempt <n> [--predecessor <phase>-<skill>]
+     --workflowVersion $workflowVersion --attempt <n> [--predecessor <phase>-<skill>] ${pr:+--pr $pr}
    ```
 
    A refusal (`stale`, `split-required`, `unprovable`, `dirty`) is published too, with `reason` — it is the cycle's answer, not a dead agent.

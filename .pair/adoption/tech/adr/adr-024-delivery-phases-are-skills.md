@@ -129,6 +129,9 @@ Retired and **rejected at parse time** with a migration message: `pipeline.skill
 - Statuses a caller may see: `ready-for-merge` | `escalate` | `failed-preparation` | `failed-contract` | `failed-seal` | `failed-implement` | `failed-fix` | `failed-verify` | `failed-custody` | `failed-resume` | `incompatible`. Only `ready-for-merge` advances, and only with a 40-hex `reviewedHead` equal to the remote head at publication.
 - Finding IDs are assigned once by the emitting verifier (`r<round>[-<reviewer>]-<n>`), persist across rounds and runs with an explicit transition (`open | resolved | superseded | human`); a severity change needs `severityEvidence` (a new failure case or changed impact). A newly evidenced defect on old code blocks under the unchanged policy, is marked `missedUpstream` and gets a regression row.
 
+- **Scope inheritance (3.0.8, canary run 11)**: a `repair` or `revision` (`<phase>-rev<m>`) inherits the `fixScope` of the contract it revises — same `mode`, every `allowedPaths` entry — and may only add paths. The sealer reads the predecessor snapshot's manifest from Git and refuses `fixScope-narrowed` (`predecessor-snapshot-missing` when no predecessor exists); `verify-chain` reports a forged narrowing successor as `successor-narrows-scope`. Reason: a0-rev2 shrank a0 to one production file, so the implementer had no home for its decision log or convention page and reported both as gaps.
+- **Envelope carries the PR (3.0.8)**: `cycle-state.mjs publish --pr <n>` stamps the bound PR into every handoff once it exists; a PR contradicting the draft or an earlier handoff of the run is `pr-mismatch`. A resumed coordinator reads the PR from the envelope, not only from `next.pr`.
+
 ### Baseline frozen before optimizing
 
 | Item | Value |

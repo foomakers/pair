@@ -517,6 +517,33 @@ test('CLI: resolve/publish/hash print JSON; a bad command exits 2 with an error 
   rmSync(dir, { recursive: true, force: true })
 })
 
+test('publish --pr: the PR the cycle is bound to is stamped into the envelope; a PR that contradicts the draft or an earlier handoff, or is not a positive integer, is refused (canary run 11: a revision implement handoff carried pr=null)', () => {
+  const { dir } = runDir()
+  // the draft omits pr (as implement-phase did in revision mode) — the flag supplies it
+  let file = join(dir, 'd1.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', branch: 'feature/US-42', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath: '/abs/a0-red-contract.json', contractHash: `sha256:${'1'.repeat(64)}` }))
+  let out = publish({ dir, file, phase: 'a0', skill: 'red-spec', workflowVersion: V, pr: 483 })
+  assert.equal(out.published, true, JSON.stringify(out))
+  assert.equal(JSON.parse(readFileSync(join(dir, 'a0-red-spec.json'), 'utf8')).pr, 483)
+  // a contradicting draft is refused
+  file = join(dir, 'd2.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 484, branch: 'feature/US-42', phase: 'a0', skill: 'red-verify', inputHead: SHA('a'), verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}` }))
+  assert.deepEqual(publish({ dir, file, phase: 'a0', skill: 'red-verify', workflowVersion: V, pr: 483 }), { published: false, reason: 'pr-mismatch', stated: 484, pr: 483 })
+  // a flag contradicting the run's earlier handoff is refused too
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', branch: 'feature/US-42', phase: 'a0', skill: 'red-verify', inputHead: SHA('a'), verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}` }))
+  out = publish({ dir, file, phase: 'a0', skill: 'red-verify', workflowVersion: V, pr: 484 })
+  assert.deepEqual(out, { published: false, reason: 'pr-mismatch', stated: 483, pr: 484, source: 'earlier-handoff' })
+  assert.equal(publish({ dir, file, phase: 'a0', skill: 'red-verify', workflowVersion: V, pr: 0 }).reason, 'pr-invalid')
+  assert.equal(existsSync(join(dir, 'a0-red-verify.json')), false)
+  // the CLI spelling
+  const r = spawnSync('node', [CLI, 'publish', '--dir', dir, '--file', file, '--phase', 'a0', '--skill', 'red-verify', '--workflowVersion', V, '--predecessor', 'a0-red-spec', '--pr', '483'], { encoding: 'utf8' })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.equal(JSON.parse(readFileSync(join(dir, 'a0-red-verify.json'), 'utf8')).pr, 483)
+  // and resolve now knows the PR from the envelope alone
+  assert.equal(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr' }).next.pr, 483)
+  rmSync(dir, { recursive: true, force: true })
+})
+
 test('readHandoffs ignores contracts, drafts, locks and the attempt suffix is parsed back', () => {
   const { dir } = runDir()
   redSpec(dir, 'a0')
