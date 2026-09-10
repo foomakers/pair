@@ -7,10 +7,11 @@ import {
   readdirSync,
   existsSync,
   copyFileSync,
+  symlinkSync,
 } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
-import { join, basename } from 'node:path'
+import { join, basename, dirname } from 'node:path'
 import {
   parseFrontmatter,
   checkFrontmatterFields,
@@ -1041,8 +1042,44 @@ describe('checkSkillLocalScripts — linked scripts exist, installed twins are b
         mkdirSync(join(installed, installedDir, 'scripts', file), { recursive: true })
         return api
       },
+      /**
+       * A skill-local script that is a SYMLINK to a file living outside the skill —
+       * the layout a maintainer reaches for when the same helper is copied into
+       * several skills. `readdirSync(…, { withFileTypes: true })` reports lstat
+       * semantics, so the entry is neither a file nor a directory to the walk.
+       */
+      scriptSymlink(rel: string, file: string, target: string) {
+        mkdirSync(join(dataset, rel, 'scripts'), { recursive: true })
+        symlinkSync(target, join(dataset, rel, 'scripts', file))
+        return api
+      },
+      /** A SYMLINKED sub-directory under a skill's `scripts/` (`scripts/<name>` → an outside dir). */
+      scriptDirSymlink(rel: string, name: string, target: string) {
+        mkdirSync(join(dataset, rel, 'scripts'), { recursive: true })
+        symlinkSync(target, join(dataset, rel, 'scripts', name), 'dir')
+        return api
+      },
+      /** The skill's `scripts` entry itself, as a symlink that points at nothing. */
+      scriptsAsBrokenSymlink(rel: string) {
+        mkdirSync(join(dataset, rel), { recursive: true })
+        symlinkSync(join(dataset, rel, 'no-such-target'), join(dataset, rel, 'scripts'), 'dir')
+        return api
+      },
+      /** A plain file anywhere in the dataset tree — a link target that is not a script. */
+      datasetFile(relPath: string, content: string) {
+        mkdirSync(dirname(join(dataset, relPath)), { recursive: true })
+        writeFileSync(join(dataset, relPath), content)
+        return api
+      },
     }
     return api
+  }
+
+  /** A tree OUTSIDE any skill: the symlink is the subject of the row, its target is not. */
+  const outsideTree = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'skills-local-outside-'))
+    roots.push(dir)
+    return dir
   }
 
   it('R1 — a linked ./scripts/ file that does not exist beside the SKILL.md is an error naming the skill and the script', () => {
@@ -1312,5 +1349,130 @@ describe('checkSkillLocalScripts — linked scripts exist, installed twins are b
     // A flat `readdirSync` + `readFileSync(join(scriptsDir, name))` throws EISDIR on
     // the `lib` entry and takes the whole gate down; this row is the no-throw guard.
     expect(checkSkillLocalScripts(t.dataset, t.installed)).toEqual([])
+  })
+
+  it('R23 — a SYMLINKED skill-local script is compared or refused, never silently dropped (r0-1)', () => {
+    const outside = outsideTree()
+    writeFileSync(join(outside, 'real-helper.mjs'), 'export const h = 1\n')
+    const t = tree()
+    t.skill('workflow/alpha')
+    t.scriptSymlink('workflow/alpha', 'helper.mjs', join(outside, 'real-helper.mjs'))
+    t.twin('pair-workflow-alpha', 'other.mjs', 'unrelated\n')
+
+    // The walk reports lstat semantics: a symlink is neither `isFile()` nor
+    // `isDirectory()`, so the entry is dropped and the twin half goes green over a file
+    // that really ships. Both resolutions the module may take — follow the link and
+    // compare bytes, or refuse the layout — name this path; only silence is inadmissible.
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    const hit = errors.filter(e => e.includes(join('workflow', 'alpha', 'scripts', 'helper.mjs')))
+    expect(hit).toHaveLength(1)
+  })
+
+  it('R24 — a SYMLINKED sub-directory under scripts/ is walked or refused, never silently dropped (r0-1)', () => {
+    const outside = outsideTree()
+    mkdirSync(join(outside, 'lib'), { recursive: true })
+    writeFileSync(join(outside, 'lib', 'util.mjs'), 'export const u = 1\n')
+    const t = tree()
+    t.skill('workflow/alpha')
+    t.scriptDirSymlink('workflow/alpha', 'lib', join(outside, 'lib'))
+    t.twin('pair-workflow-alpha', 'other.mjs', 'unrelated\n')
+
+    // The recursive half is blind in the same way, so `scripts/lib/util.mjs` is never
+    // reached. Deliberately tolerant between the two admissible answers — following names
+    // `scripts/lib/util.mjs`, refusing names `scripts/lib`, and this assertion holds for
+    // either — while forbidding the empty array R21's real sub-directory never returns.
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    const hit = errors.filter(e => e.includes(join('workflow', 'alpha', 'scripts', 'lib')))
+    expect(hit).toHaveLength(1)
+  })
+
+  it('R25 — a broken symlink named scripts/ is reported by path, not skipped in silence (r0-1)', () => {
+    const t = tree()
+    t.skill('workflow/alpha')
+    t.scriptsAsBrokenSymlink('workflow/alpha')
+
+    // `existsSync` follows the link and answers false, so this skill's twin half is
+    // skipped without a word — while a non-directory `scripts` entry is already reported
+    // by path two lines below. A dangling link is the same unreadable thing, and the
+    // module's own principle is that an unreadable twin is never assumed identical.
+    let errors: string[] = []
+    expect(() => {
+      errors = checkSkillLocalScripts(t.dataset, t.installed)
+    }).not.toThrow()
+    expect(errors.some(e => e.includes(join('workflow', 'alpha', 'scripts')))).toBe(true)
+  })
+
+  it('R26 — a scripts/-prefixed link that ESCAPES the skill folder is refused (r2-6)', () => {
+    const t = tree()
+    t.skill('workflow/alpha', 'Run [the helper](scripts/../../beta/outside.mjs).\n')
+    t.skill('workflow/beta')
+    t.datasetFile(join('workflow', 'beta', 'outside.mjs'), 'export const o = 1\n')
+
+    // The prefix test claims the target and the existence test then accepts it, because
+    // the resolved path really exists — under a SIBLING skill. `checkLinks` accepts it for
+    // the same reason, so neither producer refuses it. Packaging or moving alpha alone
+    // breaks the link: precisely the failure the 'portable as ONE folder' rule exists for.
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    const hit = errors.filter(e => e.includes(join('workflow', 'alpha', 'SKILL.md')))
+    expect(hit).toHaveLength(1)
+    expect(hit[0]).toContain('scripts/../../beta/outside.mjs')
+  })
+
+  it('R27 — control: a scripts/ link that normalizes back INSIDE the skill stays legal', () => {
+    const t = tree()
+    t.skill('workflow/alpha', 'Run [the helper](scripts/lib/../helper.mjs).\n')
+    t.script('workflow/alpha', 'helper.mjs', 'export const h = 1\n')
+    t.twin('pair-workflow-alpha', 'helper.mjs', 'export const h = 1\n')
+    t.nestedScript('workflow/alpha', 'lib', 'util.mjs', 'export const u = 1\n')
+    t.nestedTwin('pair-workflow-alpha', 'lib', 'util.mjs', 'export const u = 1\n')
+
+    // Containment is decided on the RESOLVED path, never by banning `..` in the spelling:
+    // this target lands on the skill's own scripts/helper.mjs. Passes at this head — it is
+    // what stops R26's fix from turning a legal, self-contained link red.
+    expect(checkSkillLocalScripts(t.dataset, t.installed)).toEqual([])
+  })
+
+  it('R28 — a DANGLING symlink ENTRY inside scripts/ is reported by path, and never throws (RV-5)', () => {
+    const outside = outsideTree()
+    const t = tree()
+    t.skill('workflow/alpha')
+    // The target is NEVER created: the entry is a dangling link one level BELOW the
+    // `scripts` directory R25 guards. To the walk it is neither `isFile()` nor
+    // `isDirectory()` under lstat semantics, so it is dropped in the same silence as
+    // R23's and R24's entries — and the obvious fix for those two, resolving a symlinked
+    // entry's type with `statSync` inside the walk, throws ENOENT here and takes the whole
+    // conformance run down with no report. Both halves are the row: no throw, and the path
+    // named. Tolerant between the two admissible answers (follow-and-compare, or refuse
+    // the layout as unsupported); only `[]` and an exception are inadmissible.
+    t.scriptSymlink('workflow/alpha', 'ghost.mjs', join(outside, 'never-created.mjs'))
+    t.twin('pair-workflow-alpha', 'other.mjs', 'unrelated\n')
+
+    let errors: string[] = []
+    expect(() => {
+      errors = checkSkillLocalScripts(t.dataset, t.installed)
+    }).not.toThrow()
+    expect(errors.some(e => e.includes(join('workflow', 'alpha', 'scripts', 'ghost.mjs')))).toBe(
+      true,
+    )
+  })
+
+  it('R29 — the containment boundary is the skill’s own scripts/, not the skill folder (RV-6)', () => {
+    const t = tree()
+    t.skill('workflow/alpha', 'Run [the helper](scripts/../helper.mjs).\n')
+    t.datasetFile(join('workflow', 'alpha', 'helper.mjs'), 'export const h = 1\n')
+    t.script('workflow/alpha', 'real.mjs', 'export const r = 1\n')
+    t.twin('pair-workflow-alpha', 'real.mjs', 'export const r = 1\n')
+
+    // The one input that separates the two containment boundaries a fix could implement:
+    // the resolved path `<skill>/helper.mjs` is INSIDE the skill folder but OUTSIDE the
+    // skill's own scripts/. R26's fixture escapes both and R27's is inside both, so
+    // neither discriminates. The card decides it: AC 1 obliges the linked file to exist
+    // "in the skill's `scripts/` directory" and the business rule scopes the check to
+    // "files under a skill's own `scripts/` directory". The `scripts/` prefix CLAIMS this
+    // target, so this producer owes it an answer, and the answer is a refusal.
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    const hit = errors.filter(e => e.includes(join('workflow', 'alpha', 'SKILL.md')))
+    expect(hit).toHaveLength(1)
+    expect(hit[0]).toContain('scripts/../helper.mjs')
   })
 })
