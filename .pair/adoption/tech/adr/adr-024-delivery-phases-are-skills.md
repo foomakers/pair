@@ -197,6 +197,61 @@ of the T-19–28 delta builds on; it does not itself implement the behaviour tho
 | Metrics view | `cycle-metrics.mjs` `METRICS_SCHEMA_VERSION 1` (module lands in T-24) |
 | Prior baseline | `3.0.13` at `ab6d78de` (frozen table above), superseded by this amendment |
 
+## Amendment 2026-09-10 (b) — US-479 T-20..T-27 closed under `4.0.0`
+
+T-19's schema/taxonomy groundwork (above) is now load-bearing. Recorded per task, each its own
+commit on `feature/US-479-delivery-workflow-to-be` / PR #480:
+
+- **T-20** — `cycle-verify` gaps now carry `mechanismId`/`closureAssertions`/`reproducer`/
+  `applicability`; a verifier's own declared `mechanismsIdentified` set must be closed in ONE
+  answer (`publish` refuses an incomplete one); a repair must name every prior gap's row under
+  `changedRows` or `publish` refuses it before the write (`repair-incomplete:<id>`).
+- **T-21** — `cycleCounters` (attemptedCycles/completedCycles/reviewExecutions/reviewBatches/
+  contractRevisions/preparationRepairs/implementationRetries) is a pure derived view; the
+  `maxFixRounds` escalation check now bounds COMPLETED cycles, never the raw round counter — a
+  metadata-only re-review no longer spends a real remediation's budget.
+- **T-22** — scope proposals (`scopeChanges[]`) converge separately from defects:
+  `awaiting-scope-decision` when quality is converged but a proposal is pending;
+  `apply-scope-decisions` applies an authenticated maintainer decision mechanically (see the
+  batch-engine reference doc for the worked example). See also the 2026-09-10 decision log entry.
+- **T-23** — `args.entryCapsules` lets a proven-`done` story skip every dispatch, including the
+  batch-wide contract-phase call, once its identity is re-verified; never trusted blindly.
+- **T-24/25/26** — `cycle-metrics.mjs` (reducer, cohort aggregator) and `cycle-runtime.mjs` (host
+  journal/usage observer, zero sandbox API) are new, portable, dependency-light scripts — no new
+  agent. The final synthesis comment is RUNTIME's to publish, read back and confirm; a review-phase
+  handoff no longer upserts it itself.
+- **T-27** — one composed lifecycle (initial build → defect + scope proposal → remediation →
+  awaiting-scope-decision → authenticated extension → targeted remediation → done → confirmed
+  summary) replayed through the real script entrypoints, `pair-contracts/engine-integration.test.mjs`.
+  Full regression suite green at `76fa55aa`. The paid live canary (T-8) was NOT run.
+
+**Host launch recipe** (the coordinator's shell executor, never the Workflow sandbox, never a
+phase skill itself):
+
+```bash
+node <skill>/scripts/cycle-runtime.mjs entry --dir "$RUN_DIR" --repo "$REPO" --story "$STORY" --pr "$PR"
+# … dispatch the phase skills as already documented …
+node <skill>/scripts/cycle-runtime.mjs observe --dir "$RUN_DIR" --repository "$REPO" --story "$STORY" \
+  --branch "$BRANCH" --pr "$PR" --journal "$JOURNAL_PATH" --usage "$USAGE_PATH" &
+# … after the cycle reaches a terminal status …
+node <skill>/scripts/cycle-runtime.mjs finalize --dir "$RUN_DIR" --repo "$REPO" --story "$STORY" \
+  --branch "$BRANCH" --pr "$PR"
+```
+
+**Migration finding for #483 (read-only; no code or seal touched)**: `migrate-inspect` against the
+latest archived run directory
+(`.pair/working/runs/canary-479-v4/482/`) reports
+`{"compatibleEvidenceRefs":[],"missingDimensions":["scopeEpoch","scopeBaselineHash","findings-origin"],"ambiguity":[],"next":"migration-acknowledgment-required"}`
+— its handoffs are `schemaVersion: 2` / `workflowVersion: 3.0.10`, genuinely pre-`4.0.0`. A resumed
+cycle there needs an explicit migration acknowledgment (`recordType: migration`) before continuing
+under this engine; nothing was rewritten to produce this finding.
+
+**Known metrics limitations at `4.0.0`** (never claimed as measured): `usage.byRole`,
+`usage.sharedOverhead`, and `execution.redirects` / `engineRecoveries` / `startedWithoutResult` /
+`administrativeDispatches` / `nestedDispatches` are placeholders until a live host wiring (a real
+paid run) supplies them. Every other reported quantity's known/partial coverage is exact, derived
+from the durable handoffs alone.
+
 ## Consequences
 
 ### Benefits
