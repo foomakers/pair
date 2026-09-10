@@ -52,6 +52,15 @@ export const isRelPath = p =>
   !p.replace(/\/$/, '').split('/').some(seg => seg === '' || seg === '.' || seg === '..')
 // A test artifact, by path shape. Used ONLY to catch test files changed after the seal that the
 // manifest does not list — a listed artifact is checked by blob identity regardless of its name.
+// A production MODULE — what a `behavioral` scope may edit but never create, move or split. A
+// decision-log entry, an ADR, a doc or a fixture inside an allowed path is not a module: it is
+// always a NEW file, and refusing it forced the implementer to revert its ADL (canary run 12b, CG-3).
+const MODULE_EXT = /\.(m?[jt]sx?|c[jt]s|py|go|rs|java|kt|swift|rb|php|cs|c|cc|cpp|h|hpp|sh|bash|zsh|ps1)$/i
+export const isModulePath = p => {
+  const s = String(p ?? '')
+  if (s.startsWith('.pair/') || /^docs?\//.test(s) || /\.(md|mdx|txt|json|ya?ml|toml)$/i.test(s)) return false
+  return MODULE_EXT.test(s)
+}
 export const isTestPath = p =>
   /(^|\/)(test|tests|__tests__|spec|fixtures?)\//.test(p) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(p)
 
@@ -368,7 +377,7 @@ export function verify({ pr, phase, base, cwd }) {
       if (isTestPath(path)) continue
       if (mode === 'test') breach('test-mode-production-change', { path, status })
       else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path })
-      else if (mode === 'behavioral' && status !== 'M') breach('behavioral-adds-or-moves-module', { path, status })
+      else if (mode === 'behavioral' && status !== 'M' && isModulePath(path)) breach('behavioral-adds-or-moves-module', { path, status })
     }
   }
   const contractBreach = breaches.length > 0
@@ -376,18 +385,24 @@ export function verify({ pr, phase, base, cwd }) {
 }
 
 // ── verify-chain ───────────────────────────────────────────────────────────────────────────
-// Every snapshot of this PR between <base> and HEAD, oldest first, as {sha, phase, base, manifest}.
+// Every snapshot of the CYCLE between <base> and HEAD, oldest first, as {sha, pr, phase, base,
+// manifest} — under EVERY seal identity: the initial chain seals as pr=0 (it predates the PR) and a
+// remediation group seals as pr=<n>, and the segment of one seal ends where the next seal begins
+// whichever identity it carries. Filtering by one identity made the a0 segment swallow every
+// commit of the first remediation round and report a fabricated breach (T-9 review, t9-1). `pr`
+// is kept in the signature for the callers and reported per snapshot; it no longer filters.
 export function listSnapshots({ pr, base, cwd }) {
+  void pr
   const head = git(['rev-parse', 'HEAD'], cwd)
   const range = head === base ? [] : [`${base}..HEAD`]
   const out = git(['log', '--reverse', '--format=%H%x00%B%x1e', ...range], cwd) ?? ''
-  const re = new RegExp(`^${TRAILER_KEY}: pr=${String(pr).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}; phase=([^;]+); base=([0-9a-f]{40}); manifest=(\\S+)$`)
+  const re = new RegExp(`^${TRAILER_KEY}: pr=(\\d+); phase=([^;]+); base=([0-9a-f]{40}); manifest=(\\S+)$`)
   const snaps = []
   for (const rec of out.split('\x1e').map(r => r.replace(/^\n/, '')).filter(Boolean)) {
     const [sha, body] = rec.split('\x00')
     for (const line of (body ?? '').split('\n')) {
       const m = re.exec(line.trim())
-      if (m) snaps.push({ sha, phase: m[1], base: m[2], manifest: m[3] })
+      if (m) snaps.push({ sha, pr: m[1], phase: m[2], base: m[3], manifest: m[4] })
     }
   }
   return snaps
@@ -455,7 +470,10 @@ export function verifyChain({ pr, base, cwd }) {
       })
       .filter(({ path }) => !manifests.has(path))
     for (const { status, path } of changes) {
-      if (c.listed.includes(path)) {
+      // A blob sealed by THIS or an EARLIER snapshot stays sealed through every later segment: its
+      // change here is a sealed-blob change (reported once, by blob identity, unless a successor
+      // re-seals it), never an "unlisted test" of the segment's own contract.
+      if (contracts.slice(0, i + 1).some(x => x.listed.includes(path))) {
         // a sealed blob edited inside a segment (not by a successor snapshot) — even if a later
         // snapshot re-seals the file, THIS change was unauthorized
         if (!contracts.slice(i + 1).some(x => x.listed.includes(path))) continue // already reported by blob identity
@@ -470,7 +488,7 @@ export function verifyChain({ pr, base, cwd }) {
       const { allowedPaths, mode } = c.contract.fixScope
       if (mode === 'test') breach('test-mode-production-change', { path, status, segment: c.phase })
       else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path, segment: c.phase })
-      else if (mode === 'behavioral' && status !== 'M') breach('behavioral-adds-or-moves-module', { path, status, segment: c.phase })
+      else if (mode === 'behavioral' && status !== 'M' && isModulePath(path)) breach('behavioral-adds-or-moves-module', { path, status, segment: c.phase })
     }
   }
   // dedupe identical breaches
@@ -481,7 +499,7 @@ export function verifyChain({ pr, base, cwd }) {
     seen.add(k)
     return true
   })
-  return { verified: unique.length === 0, contractBreach: unique.length > 0, head, snapshots: snaps.map(s => ({ phase: s.phase, snapshot: s.sha, base: s.base, manifest: s.manifest })), breaches: unique }
+  return { verified: unique.length === 0, contractBreach: unique.length > 0, head, snapshots: snaps.map(s => ({ pr: s.pr, phase: s.phase, snapshot: s.sha, base: s.base, manifest: s.manifest })), breaches: unique }
 }
 
 // ── CLI ────────────────────────────────────────────────────────────────────────────────────

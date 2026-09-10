@@ -544,6 +544,63 @@ test('publish --pr: the PR the cycle is bound to is stamped into the envelope; a
   rmSync(dir, { recursive: true, force: true })
 })
 
+test('resolve (t9-2): the tier reviewer count is honoured by the transition authority — a partial or first-of-two review dispatches reviewer 2 on the same phase; only the last reviewer can complete the cycle', () => {
+  const { dir } = runDir()
+  const two = { ...POLICY, reviewers: 2 }
+  review(dir, 'r0', { partial: true, reviewer: 1, readiness: { ready: true, remoteHead: SHA('c') } })
+  let r = resolve({ dir, workflowVersion: V, policy: two, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, phase: r.next.phase, reviewer: r.next.reviewer, attempt: r.next.attempt, mode: r.next.mode }, { step: 'verify', phase: 'r0', reviewer: 2, attempt: 2, mode: 'first' })
+  // a lone review that forgot `partial` is still one of two — the count is the policy's, not the reviewer's word
+  const { dir: d2 } = runDir()
+  review(d2, 'r0', { readiness: { ready: true, remoteHead: SHA('c') } })
+  r = resolve({ dir: d2, workflowVersion: V, policy: two, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, reviewer: r.next.reviewer }, { step: 'verify', reviewer: 2 })
+  // reviewer 2 (attempt 2, not partial) completes it
+  handoff(dir, 'r0', 'review-phase', { attempt: 2, reviewer: 2, partial: false, reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') }, mode: 'first' })
+  r = resolve({ dir, workflowVersion: V, policy: two, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'done')
+  // with one reviewer a partial review can never complete either
+  const { dir: d3 } = runDir()
+  review(d3, 'r0', { partial: true, readiness: { ready: true, remoteHead: SHA('c') } })
+  assert.notEqual(resolve({ dir: d3, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next.step, 'done')
+})
+
+test('resolve (t9-3): readiness is proven only by a 40-hex remoteHead equal to the reviewed head — an omitted or different remoteHead is a re-verification, never `done`', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { readiness: { ready: true } })
+  let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'verify')
+  assert.equal(r.next.mode, 're-review')
+  const { dir: d2 } = runDir()
+  review(d2, 'r0', { readiness: { ready: true, remoteHead: SHA('d') } })
+  r = resolve({ dir: d2, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, headMoved: r.next.headMoved }, { step: 'verify', headMoved: true })
+  const { dir: d3 } = runDir()
+  review(d3, 'r0', { readiness: { ready: true, remoteHead: SHA('c') } })
+  assert.equal(resolve({ dir: d3, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next.step, 'done')
+})
+
+test('resolve (t9-4): two groups each with an approved test failing return to GREEN group by group on their own seals — never a fresh remediation contract — then one re-review of both', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r0-1'), finding('r0-2', { location: 'src/b.ts:1' })] })
+  const plan = { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }, { groupId: 'r1-g2', findings: ['r0-2'], owner: 'b', mode: 'behavioral', allowedPaths: ['src/b.ts'] }], carried: [] }
+  redSpec(dir, 'r1-g1', { plan, groupId: 'r1-g1' })
+  redVerify(dir, 'r1-g1', { snapshot: SHA('1') })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('d'), evidenceLedger: [] })
+  redSpec(dir, 'r1-g2', { groupId: 'r1-g2' })
+  redVerify(dir, 'r1-g2', { snapshot: SHA('2') })
+  handoff(dir, 'r1-g2', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('e'), evidenceLedger: [] })
+  review(dir, 'r1', { mode: 're-review', readiness: { ready: false }, reviewedHead: SHA('e'), findings: [finding('r0-1', { kind: 'approved-test-failing', groupId: 'r1-g1', rowId: 'row-1' }), finding('r0-2', { kind: 'approved-test-failing', groupId: 'r1-g2', rowId: 'row-1', location: 'src/b.ts:1' })] })
+  let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, phase: r.next.phase, attempt: r.next.attempt, snapshot: r.next.contract.snapshot, ids: r.next.findings.map(f => f.id) }, { step: 'green', phase: 'r1-g1', attempt: 2, snapshot: SHA('1'), ids: ['r0-1'] })
+  handoff(dir, 'r1-g1', 'green-fix', { attempt: 2, fixed: true, needsHumanDecision: false, outputHead: SHA('f'), evidenceLedger: [] })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, phase: r.next.phase, attempt: r.next.attempt, snapshot: r.next.contract.snapshot, ids: r.next.findings.map(f => f.id) }, { step: 'green', phase: 'r1-g2', attempt: 2, snapshot: SHA('2'), ids: ['r0-2'] })
+  handoff(dir, 'r1-g2', 'green-fix', { attempt: 2, fixed: true, needsHumanDecision: false, outputHead: SHA('9'), evidenceLedger: [] })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, phase: r.next.phase, attempt: r.next.attempt, openIds: r.next.openIds }, { step: 'verify', phase: 'r1', attempt: 2, openIds: ['r0-1', 'r0-2'] })
+})
+
 test('readHandoffs ignores contracts, drafts, locks and the attempt suffix is parsed back', () => {
   const { dir } = runDir()
   redSpec(dir, 'a0')

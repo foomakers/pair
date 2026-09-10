@@ -14,7 +14,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { contractErrors, hashFile, isTestPath, manifestPathFor, seal, trailerFor, verify, verifyChain, predecessorPhase, scopeNarrowing } from '../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs'
+import { contractErrors, hashFile, isTestPath, manifestPathFor, seal, trailerFor, verify, verifyChain, predecessorPhase, scopeNarrowing, isModulePath } from '../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url))
 
@@ -225,6 +225,20 @@ test('verify breach: a behavioral scope may not add a production module even ins
   green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n', 'src/helper.js': 'export const h = 1\n' })
   const v = verify({ pr: PR, phase: PHASE, base, cwd })
   assert.deepEqual(v.breaches, [{ code: 'behavioral-adds-or-moves-module', path: 'src/helper.js', status: 'A' }])
+  // …but a NEW decision-log entry (or any non-module file) inside an allowed path is legal under a
+  // behavioral scope — the implement process records its decisions there (canary run 12b, CG-3)
+  const { cwd: cwd3, base: base3 } = repo()
+  redContract(cwd3, { fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/a.js', '.pair/adoption/decision-log/'] } })
+  const s3 = seal({ pr: PR, phase: PHASE, base: base3, contractPath: '.pair/working/red-draft.json', cwd: cwd3 })
+  rmSync(join(cwd3, '.pair/working/red-draft.json'))
+  green(cwd3, s3.manifest, { 'src/a.js': 'export const a = () => 2\n', '.pair/adoption/decision-log/2026-09-10-walk-strategy.md': '# ADL\n' })
+  assert.deepEqual(verify({ pr: PR, phase: PHASE, base: base3, cwd: cwd3 }).breaches, [])
+  assert.equal(verifyChain({ pr: PR, base: base3, cwd: cwd3 }).verified, true)
+  assert.equal(isModulePath('.pair/adoption/decision-log/x.md'), false)
+  assert.equal(isModulePath('docs/guide.md'), false)
+  assert.equal(isModulePath('src/helper.js'), true)
+  assert.equal(isModulePath('packages/x/src/tool.ts'), true)
+  rmSync(cwd3, { recursive: true, force: true })
   // the same change under a structural scope is in scope
   const { cwd: cwd2, base: base2 } = repo()
   redContract(cwd2, { fixScope: { owner: 'a()', mode: 'structural', allowedPaths: ['src/'] } })
@@ -448,6 +462,34 @@ test('verify-chain breach: a successor snapshot that narrows the predecessor sco
   const chain = verifyChain({ pr: PR, base, cwd })
   assert.equal(chain.verified, false)
   assert.deepEqual(chain.breaches.filter(b => b.code === 'successor-narrows-scope'), [{ code: 'successor-narrows-scope', phase, errors: ['fixScope.allowedPaths drops src/a.js'] }])
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('verify-chain spans every seal identity of the cycle (t9-1): a pr=0 initial chain followed by a pr=N remediation seal verifies from the first base under either identity; one dirtied sealed blob is exactly one test-blob-changed', () => {
+  const { cwd, base } = repo()
+  const { contractPath } = redContract(cwd)
+  const s1 = seal({ pr: '0', phase: 'a0', base, contractPath, cwd })
+  assert.equal(s1.sealed, true, JSON.stringify(s1))
+  rmSync(join(cwd, contractPath))
+  green(cwd, s1.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  const head1 = git(cwd, 'rev-parse', 'HEAD')
+  // the remediation group: a NEW witness on another producer, sealed under the PR number
+  write(cwd, 'test/other.test.js', 'import { o } from "../src/other.js"\nif (o !== 1) throw new Error("FAIL")\n')
+  const c2 = { sourceOfTruth: 'o', fixScope: { owner: 'o', mode: 'behavioral', allowedPaths: ['src/other.js'] }, matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'default', oracle: 'node test/other.test.js', expected: '1', covers: ['r0-1'] }], redTests: [{ file: 'test/other.test.js', kind: 'test', sha256: hashFile('test/other.test.js', cwd), command: 'node test/other.test.js', observed: 'Error: FAIL' }], testExempt: false }
+  write(cwd, '.pair/working/r1-draft.json', JSON.stringify(c2))
+  const s2 = seal({ pr: PR, phase: 'r1-g1', base: head1, contractPath: '.pair/working/r1-draft.json', cwd })
+  assert.equal(s2.sealed, true, JSON.stringify(s2))
+  rmSync(join(cwd, '.pair/working/r1-draft.json'))
+  green(cwd, s2.manifest, { 'src/other.js': 'export const o = 1\n' })
+  for (const pr of ['0', PR]) {
+    const chain = verifyChain({ pr, base, cwd })
+    assert.equal(chain.verified, true, `pr=${pr}: ${JSON.stringify(chain.breaches)}`)
+    assert.deepEqual(chain.snapshots.map(s => [s.phase, s.pr]), [['a0', '0'], ['r1-g1', PR]])
+  }
+  assert.equal(verifyChain({ pr: PR, base: head1, cwd }).verified, true, 'from the round base too')
+  write(cwd, 'test/a.test.js', 'tampered\n')
+  git(cwd, 'commit', '-q', '--no-verify', '-am', 'tamper')
+  assert.deepEqual(verifyChain({ pr: '0', base, cwd }).breaches.map(b => b.code), ['test-blob-changed'])
   rmSync(cwd, { recursive: true, force: true })
 })
 

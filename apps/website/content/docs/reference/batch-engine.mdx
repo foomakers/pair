@@ -182,9 +182,9 @@ the preparation author and the validator on their declared models. Roles: `imple
 `cycleComments`, `prPhase`) are rejected with a message naming what absorbed them — never
 mapped silently.
 
-Every result carries `workflowVersion` and `metrics` (dispatches, retries, redirects, wall time;
-token counters are not exposed to a workflow script and are reported as `unknown`, never as
-zero), and every stage receives `$workflowVersion`, `$policy` and the effective-inputs digest so
+Every result carries `workflowVersion` and `metrics` (dispatches, retries, redirects; wall time
+and token counters are not exposed to a workflow script — the sandbox has no clock and no usage
+API — and are reported as `unknown`, never as zero: read both from the harness run summary), and every stage receives `$workflowVersion`, `$policy` and the effective-inputs digest so
 each handoff records which coordinator, policy and inputs produced it. An incompatible workflow
 major or schema found in a run directory is `incompatible`; prior approval is never reused or
 overwritten silently.

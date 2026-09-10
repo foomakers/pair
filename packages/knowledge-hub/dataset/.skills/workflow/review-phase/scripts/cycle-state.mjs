@@ -226,6 +226,19 @@ export function deriveNext(handoffs, policy, ctx = {}) {
   }
   const groupPhases = groupId => list.filter(h => h.skill === 'red-verify' && h.data.sealed === true && (h.phase === groupId || h.phase.startsWith(`${groupId}-rev`))).map(h => h.phase)
   const latestGroupPhase = groupId => groupPhases(groupId).pop() ?? groupId
+  // The GREEN retry for the FIRST group (dependency order) of `atf` that still has a retry left —
+  // on its own sealed contract, carrying only its findings; null when every group is out.
+  const greenRetryFor = (atf, round) => {
+    const order = (orderGroups(planFor(round)?.groups ?? []) ?? []).map(g => g.groupId)
+    const rank = g => (order.indexOf(g) === -1 ? Number.MAX_SAFE_INTEGER : order.indexOf(g))
+    const ids = [...new Set(atf.map(f => f.groupId))].sort((a, b) => rank(a) - rank(b))
+    for (const groupId of ids) {
+      const phase = latestGroupPhase(groupId)
+      const greens = list.filter(h => h.skill === 'green-fix' && h.phase === phase).length
+      if (greens <= (policy.greenRetries ?? 1)) return { step: 'green', mode: 'retry', phase, round, attempt: greens + 1, base: latestOf('red-verify', phase, x => x.sealed)?.data.inputHead, contract: contractOf(phase), group: groupOf(phase), findings: atf.filter(f => f.groupId === groupId), detail: 'an approved test still fails on production' }
+    }
+    return null
+  }
 
   if (last.skill === 'red-spec') {
     if (d.status === 'red') return { step: 'validate', mode: d.mode, phase: last.phase, round: parts.round, attempt: last.attempt, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined }
@@ -261,7 +274,14 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     const groups = orderGroups(plan?.groups ?? []) ?? []
     const idx = groups.findIndex(g => g.groupId === parts.groupId)
     const nextGroup = groups[idx + 1]
-    if (nextGroup) return { step: 'prepare', mode: 'remediation', phase: nextGroup.groupId, round: parts.round, attempt: 1, base: d.outputHead, group: nextGroup, findings: findingsByIds(nextGroup.findings), plan }
+    const roundReview = reviews.filter(h => (phaseParts(h.phase)?.round ?? -1) === parts.round).pop()
+    if (roundReview) {
+      // This GREEN was a retry after the round's review: the other groups whose approved test
+      // still failed take their own retry before the one re-review of all of them.
+      const still = (roundReview.data.findings ?? []).filter(f => isBlocking(f) && f.kind === 'approved-test-failing' && f.groupId).filter(f => !list.some(h => h.skill === 'green-fix' && h.phase === latestGroupPhase(f.groupId) && h.data.seq > roundReview.data.seq))
+      const retry = still.length ? greenRetryFor(still, parts.round) : null
+      if (retry) return retry
+    } else if (nextGroup) return { step: 'prepare', mode: 'remediation', phase: nextGroup.groupId, round: parts.round, attempt: 1, base: d.outputHead, group: nextGroup, findings: findingsByIds(nextGroup.findings), plan }
     const prior = lastReview
     return { step: 'verify', mode: 're-review', phase: `r${parts.round}`, round: parts.round, attempt: byPhase('review-phase', `r${parts.round}`).length + 1, base: prior?.data.reviewedHead, prior: prior?.name, openIds: (prior?.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: priorFindings() }
   }
@@ -270,23 +290,41 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     const findings = Array.isArray(d.findings) ? d.findings : []
     const blocking = findings.filter(isBlocking)
     const round = parts.round ?? 0
+    // The tier's independent reviewer count is HONOURED here, not merely rendered into a prompt
+    // (T-9 review, t9-2): the reviews of one pass share the reviewed head; while fewer than
+    // `policy.reviewers` exist — or the last one calls itself partial — the next dispatch is the next
+    // reviewer of the SAME phase, and only a complete, non-partial pass is judged below.
+    const required = Number.isInteger(policy.reviewers) && policy.reviewers > 0 ? policy.reviewers : 1
+    const pass = byPhase('review-phase', last.phase).filter(h => h.data.reviewedHead === d.reviewedHead)
+    if (d.partial === true || pass.length < required) {
+      const reviewer = Math.max(pass.length, Number.isInteger(d.reviewer) ? d.reviewer : 0) + 1
+      if (reviewer <= required) return { step: 'verify', mode: d.mode ?? (round === 0 ? 'first' : 're-review'), phase: last.phase, round, attempt: byPhase('review-phase', last.phase).length + 1, reviewer, base: d.inputHead, prior: last.name, openIds: blocking.map(f => f.id), priorFindings: priorFindings(), detail: `reviewer ${reviewer} of ${required}` }
+      return blocked('failed-verify', { phase: last.phase, detail: 'the last reviewer published a partial review' })
+    }
     if (!blocking.length) {
-      if (d.readiness?.ready === true) {
+      // Readiness is PROVEN only by the remote head the verifier read back at the very end: a
+      // 40-hex `readiness.remoteHead` equal to the head it reviewed (T-9 review, t9-3). An
+      // omitted or different one is unproven and re-verifies; a `--head` given by the caller
+      // must agree as well.
+      const remote = String(d.readiness?.remoteHead ?? '').toLowerCase()
+      if (d.readiness?.ready === true && SHA_RE.test(remote) && remote === String(d.reviewedHead).toLowerCase()) {
         if (ctx.head && SHA_RE.test(ctx.head) && ctx.head !== d.reviewedHead) return { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], priorFindings: priorFindings(), headMoved: true }
         return { step: 'done', reviewedHead: d.reviewedHead, round, verdict: d.verdict }
       }
-      return { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], priorFindings: priorFindings(), headMoved: true, detail: 'readiness not confirmed on the remote head' }
+      return { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], priorFindings: priorFindings(), headMoved: true, detail: SHA_RE.test(remote) ? 'readiness not confirmed on the remote head' : 'readiness not bound to a 40-hex remote head' }
     }
     if (d.needsHumanDecision === true && d.humanDecisionKind === 'history-rewrite') return blocked('escalate', { detail: 'history-rewrite decision', findings: blocking })
     if (blocking.every(f => f.external === true)) return blocked('escalate', { detail: 'external blockers need a human disposition or a read-back-verified correction', findings: blocking })
     if (round >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', findings: blocking })
     const atf = blocking.filter(f => f.kind === 'approved-test-failing')
     const gaps = blocking.filter(f => f.kind === 'contract-gap')
-    if (atf.length === blocking.length && new Set(atf.map(f => f.groupId)).size === 1 && atf[0].groupId) {
-      const phase = latestGroupPhase(atf[0].groupId)
-      const greens = list.filter(h => h.skill === 'green-fix' && h.phase === phase).length
-      if (greens <= (policy.greenRetries ?? 1)) return { step: 'green', mode: 'retry', phase, round, attempt: greens + 1, base: latestOf('red-verify', phase, x => x.sealed)?.data.inputHead, contract: contractOf(phase), group: groupOf(phase), findings: blocking }
-      return blocked('failed-fix', { budget: 'greenRetries', phase, findings: blocking })
+    // Every blocking finding is an approved test still failing ⇒ GREEN again on the SAME seals,
+    // group by group in dependency order (T-9 review, t9-4: two groups used to fall through to a
+    // fresh remediation contract). A group out of retries exhausts the budget.
+    if (atf.length === blocking.length && atf.every(f => f.groupId)) {
+      const retry = greenRetryFor(atf, round)
+      if (retry) return retry
+      return blocked('failed-fix', { budget: 'greenRetries', phase: latestGroupPhase(atf[0].groupId), findings: blocking })
     }
     if (gaps.length && gaps[0].groupId) {
       const groupId = gaps[0].groupId

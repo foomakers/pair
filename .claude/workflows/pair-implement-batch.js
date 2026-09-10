@@ -449,7 +449,7 @@ const RUN_ID = PARSED.runId
 // The coordinator's own version, returned with every result and handed to every phase skill so
 // each handoff records which coordinator produced it. Bump on any change to the dispatch
 // contract (skill names, argument names, statuses).
-const WORKFLOW_VERSION = '3.0.8'
+const WORKFLOW_VERSION = '3.0.9'
 
 // ── Pipeline configuration: what makes this engine reusable ─────────────────
 // Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved
@@ -861,14 +861,23 @@ const SHA256_RE = /^sha256:[0-9a-f]{64}$/
 const hasNext = n => !!n && typeof n === 'object' && STEPS.includes(n.step)
 // A `next` the coordinator will act on: the step is known and, for a dispatchable step, the phase
 // id has the shape the run directory expects. Anything else is `failed-resume`.
-const usableNext = n =>
-  hasNext(n) &&
-  (n.step === 'done'
-    ? SHA40.test(String(n.reviewedHead ?? ''))
-    : n.step === 'blocked'
-      ? !!String(n.reason ?? '').trim()
-      : PHASE_RE.test(String(n.phase ?? '')) && (n.base === undefined || SHA40.test(String(n.base))))
-const isRedirect = r => !!r && r.status === REDIRECT_STATUS && usableNext(r.next)
+const nextDefect = n => {
+  if (!hasNext(n)) return 'no step'
+  if (n.step === 'done') return SHA40.test(String(n.reviewedHead ?? '')) ? null : 'done without a 40-hex reviewedHead'
+  if (n.step === 'blocked') return String(n.reason ?? '').trim() ? null : 'blocked without a reason'
+  if (!PHASE_RE.test(String(n.phase ?? ''))) return `phase ${JSON.stringify(n.phase ?? null)} is not a phase id`
+  if (n.base !== undefined && !SHA40.test(String(n.base))) return 'base is not a 40-hex head'
+  // A validate/implement/green dereferences the contract it is bound to: a next without one is a
+  // typed refusal, never a TypeError reported as a dead agent (T-9 review, t9-5).
+  if (['validate', 'implement', 'green'].includes(n.step)) {
+    if (!n.contract || typeof n.contract !== 'object' || !String(n.contract.path ?? '').trim()) return `${n.step} without contract.path`
+    if (n.step !== 'validate' && !SHA40.test(String(n.contract.snapshot ?? ''))) return `${n.step} without a 40-hex contract.snapshot`
+  }
+  return null
+}
+const usableNext = n => nextDefect(n) === null
+// A redirect is recognised by its shape; whether its `next` is usable is judged where it is followed.
+const isRedirect = r => !!r && r.status === REDIRECT_STATUS && hasNext(r.next)
 const isOtherRun = r => !!r && r.status === 'other-run' && isSegment(String(r.runId ?? ''))
 
 // ── Stage 1: preparation (red-spec) ──────────────────────────────────────────
@@ -1072,6 +1081,11 @@ function hasPreparedContract(r, { needPlan = false, ids = [] } = {}) {
     inventoryIds.add(item.id)
   }
   if (!Array.isArray(r.matrix) || r.matrix.length === 0) return false
+  // A repair or revision result is the DELTA of the contract it revises: its rows may also cover
+  // obligations of the base contract (an AC id the delta inventory does not repeat) — each row must
+  // cover at least one obligation of the delta itself; the independent validator checks the full
+  // file. An initial or remediation contract covers exactly its own inventory.
+  const delta = r.mode === 'repair' || r.mode === 'revision'
   const rowIds = new Set()
   const covered = new Set()
   let witnesses = 0
@@ -1080,12 +1094,13 @@ function hasPreparedContract(r, { needPlan = false, ids = [] } = {}) {
     rowIds.add(row.id)
     if (!['witness', 'control', 'boundary', 'interaction', 'not-applicable'].includes(row.kind) || !['red', 'pass'].includes(row.baseline)) return false
     if (!String(row.condition ?? '').trim() || !String(row.oracle ?? '').trim() || !String(row.expected ?? '').trim()) return false
-    if (!Array.isArray(row.covers) || row.covers.length === 0 || row.covers.some(c => !inventoryIds.has(c))) return false
+    if (!Array.isArray(row.covers) || row.covers.length === 0 || row.covers.some(c => typeof c !== 'string' || !c.trim())) return false
+    if (delta ? !row.covers.some(c => inventoryIds.has(c)) : row.covers.some(c => !inventoryIds.has(c))) return false
     if (row.kind === 'not-applicable' && !String(row.rationale ?? '').trim()) return false
     if (row.kind === 'witness' && row.baseline === 'red') witnesses++
     for (const c of row.covers) covered.add(c)
   }
-  if (covered.size !== inventoryIds.size) return false
+  if ([...inventoryIds].some(id => !covered.has(id))) return false
   if (needPlan && !validPlan(r.plan, ids)) return false
   if (r.testExempt === true) return !!String(r.exemptionRationale ?? '').trim()
   if (r.testExempt !== false || !Array.isArray(r.redTests) || r.redTests.length === 0) return false
@@ -1315,7 +1330,8 @@ const VERIFY_SCHEMA = {
   required: ['status'],
 }
 const hasVerdict = r => !!r && !!String(r.verdict ?? '').trim()
-const hasReviewEvidence = r => hasVerdict(r) && SHA40.test(String(r.reviewedHead ?? '')) && Array.isArray(r.findings) && !!r.custody && typeof r.custody.contractBreach === 'boolean' && !!r.readiness && typeof r.readiness.ready === 'boolean'
+// A `ready: true` is evidence only with the 40-hex remote head it was read against (T-9, t9-3).
+const hasReviewEvidence = r => hasVerdict(r) && SHA40.test(String(r.reviewedHead ?? '')) && Array.isArray(r.findings) && !!r.custody && typeof r.custody.contractBreach === 'boolean' && !!r.readiness && typeof r.readiness.ready === 'boolean' && (r.readiness.ready !== true || SHA40.test(String(r.readiness.remoteHead ?? '')))
 
 // Reviewer prompt vocabulary — from the contract when present, pair's own only as the fallback.
 const REVIEW_VOCAB = crContract?.contract?.vocabulary
@@ -1371,9 +1387,12 @@ function fnv1a(str) {
 const canonical = v => (Array.isArray(v) ? `[${v.map(canonical).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}` : JSON.stringify(v))
 // The engine is keyed by MAJOR: compatibility is by major (cycle-state refuses another major), and a
 // patch/minor successor must not invalidate review evidence — each bump cost one extra
-// verification dispatch on canary run 11.
+// verification dispatch on canary run 11. The fix-round BUDGET is not an input either: it bounds
+// the transitions (cycle-state reads it from $policy on every resolve), it does not change what a
+// review judged — a human extending it after an `escalate` (canary run 11, r3) must resume at the
+// revision, not pay a re-review of the same head first and then hit the new ceiling one round early.
 const effectiveInputs = story =>
-  fnv1a(canonical({ workflowMajor: WORKFLOW_VERSION.split('.')[0], story: story.id, branch: story.branch, base: baseOf(story), title: story.title, notes: story.notes ?? null, severityFloor: SEVERITY_FLOOR?.name ?? null, skills: SK, reviewTemplate: PIPELINE.reviewTemplate, maxFixRounds: MAX_FIX_ROUNDS, reviewers: PIPELINE.reviewers }))
+  fnv1a(canonical({ workflowMajor: WORKFLOW_VERSION.split('.')[0], story: story.id, branch: story.branch, base: baseOf(story), title: story.title, notes: story.notes ?? null, severityFloor: SEVERITY_FLOOR?.name ?? null, skills: SK, reviewTemplate: PIPELINE.reviewTemplate, reviewers: PIPELINE.reviewers }))
 // The compact finding a stage receives: identity, severity, location, the failure case and the
 // recommendation — never raw logs, never the whole review history (the run directory holds it).
 const compactFinding = f => ({ id: f.id, severity: f.severity, location: f.location, description: f.description, recommendation: f.recommendation, ...(f.kind ? { kind: f.kind } : {}), ...(f.groupId ? { groupId: f.groupId } : {}), ...(f.rowId ? { rowId: f.rowId } : {}), ...(f.external ? { external: true } : {}), ...(f.missedUpstream ? { missedUpstream: true } : {}) })
@@ -1534,6 +1553,8 @@ async function driveStory(story) {
       continue
     }
     if (isRedirect(res)) {
+      const defect = nextDefect(res.next)
+      if (defect) return result('failed-resume', { reason: `${stage} redirected to an unusable next step: ${defect}`, phase: next.phase })
       if (isPosInt(res.next?.pr)) pr = res.next.pr
       // A stage that redirects to the very step it was dispatched for did not do its work: refuse
       // to loop on it, and say so.
@@ -1587,9 +1608,10 @@ async function driveStory(story) {
       const blocking = res.findings.filter(f => f.blocking)
       if (res.partial !== true) log(`${tag} ${next.phase}: ${res.findings.length} finding(s), ${blocking.length} blocking${res.published?.firstReview ? ', first review posted' : ''}${res.published?.synthesis ? ', synthesis published' : ''}`)
     }
-    if (!usableNext(res.next)) return result('failed-resume', { reason: `${stage} returned no usable next step`, phase: next.phase })
+    if (!usableNext(res.next)) return result('failed-resume', { reason: `${stage} returned no usable next step: ${nextDefect(res.next)}`, phase: next.phase })
     // A `done` may only follow a verification whose own evidence says ready on the head it reviewed.
-    if (res.next.step === 'done' && (stage !== 'verify' || res.readiness.ready !== true || res.findings.some(f => f.blocking) || res.next.reviewedHead !== String(res.reviewedHead).toLowerCase() || (res.readiness.remoteHead && String(res.readiness.remoteHead).toLowerCase() !== res.next.reviewedHead)))
+    // …never from a partial (non-final reviewer) review, nor from a readiness not bound to the remote head (T-9, t9-2 / t9-3).
+    if (res.next.step === 'done' && (stage !== 'verify' || res.partial === true || res.readiness.ready !== true || res.findings.some(f => f.blocking) || res.next.reviewedHead !== String(res.reviewedHead).toLowerCase() || String(res.readiness.remoteHead ?? '').toLowerCase() !== res.next.reviewedHead))
       return result('failed-verify', { reason: 'the cycle state declared done without matching verification evidence', phase: next.phase })
     next = res.next
   }
