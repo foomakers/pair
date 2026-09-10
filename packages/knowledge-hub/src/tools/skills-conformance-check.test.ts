@@ -1065,6 +1065,15 @@ describe('checkSkillLocalScripts — linked scripts exist, installed twins are b
         symlinkSync(join(dataset, rel, 'no-such-target'), join(dataset, rel, 'scripts'), 'dir')
         return api
       },
+      /**
+       * A symlinked directory NESTED one level down (`scripts/<sub>/<name>` → `target`).
+       * The shape a true cycle needs: `scripts/lib/loop` pointing back at `scripts`.
+       */
+      nestedDirSymlink(rel: string, sub: string, name: string, target: string) {
+        mkdirSync(join(dataset, rel, 'scripts', sub), { recursive: true })
+        symlinkSync(target, join(dataset, rel, 'scripts', sub, name), 'dir')
+        return api
+      },
       /** A plain file anywhere in the dataset tree — a link target that is not a script. */
       datasetFile(relPath: string, content: string) {
         mkdirSync(dirname(join(dataset, relPath)), { recursive: true })
@@ -1474,5 +1483,134 @@ describe('checkSkillLocalScripts — linked scripts exist, installed twins are b
     const hit = errors.filter(e => e.includes(join('workflow', 'alpha', 'SKILL.md')))
     expect(hit).toHaveLength(1)
     expect(hit[0]).toContain('scripts/../helper.mjs')
+  })
+
+  /**
+   * One tree, two readdir orders. `scripts/<aliasName>` is a symlink ALIASING the
+   * sibling real directory `scripts/zzz-lib` — not a cycle, just a second name for a
+   * directory that really ships. BOTH names ship, so both installed twins are guarded;
+   * `driftOn` chooses which twin drifted, and the whole correct answer is always exactly
+   * one DRIFTED error naming THAT side. `aaa-alias` sorts BEFORE `zzz-lib`, `zzz9-alias`
+   * sorts after (`-` 0x2D < `9` 0x39), so the two names give the two readdir orders.
+   *
+   * The two axes are independent, so the class is a 2x2 and each cell needs its own row:
+   * (alias-first, real drift) = R30 red · (real-first, real drift) = R31 pass ·
+   * (real-first, alias drift) = R33 red · (alias-first, alias drift) = R34 pass.
+   */
+  const aliasedSiblingTree = (aliasName: string, driftOn: 'real' | 'alias' = 'real') => {
+    const t = tree()
+    t.skill('workflow/alpha')
+    t.nestedScript('workflow/alpha', 'zzz-lib', 'util.mjs', 'CANONICAL')
+    t.scriptDirSymlink(
+      'workflow/alpha',
+      aliasName,
+      join(t.dataset, 'workflow', 'alpha', 'scripts', 'zzz-lib'),
+    )
+    t.nestedTwin(
+      'pair-workflow-alpha',
+      aliasName,
+      'util.mjs',
+      driftOn === 'alias' ? 'DRIFTED!!' : 'CANONICAL',
+    )
+    t.nestedTwin(
+      'pair-workflow-alpha',
+      'zzz-lib',
+      'util.mjs',
+      driftOn === 'real' ? 'DRIFTED!!' : 'CANONICAL',
+    )
+    return t
+  }
+
+  it('R30 — a drifted REAL script is still reported when an ALIAS symlink to its directory is walked FIRST (r3-9)', () => {
+    const t = aliasedSiblingTree('aaa-alias')
+
+    // The walk keeps ONE `visited` set for the whole descent, keyed on
+    // `realpathSync(dir)`. The alias is read first, consumes the identity of
+    // `scripts/zzz-lib`, and the real directory's own arrival returns early — so the
+    // drift on the file that really ships is never compared and the gate goes green
+    // over a shipped dataset entry, the one answer this guard may not give. Which half
+    // is dropped depends on `readdirSync` order, so the same tree answers differently
+    // on different machines: R31 is this row's mirror image and passes today.
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    const hit = errors.filter(e =>
+      e.includes(join('workflow', 'alpha', 'scripts', 'zzz-lib', 'util.mjs')),
+    )
+    expect(hit).toHaveLength(1)
+    expect(hit[0]).toMatch(/DRIFTED/i)
+  })
+
+  it('R31 — control: the SAME tree with the alias sorting LAST already reports it, and the answer must not depend on readdir order (r3-9)', () => {
+    const t = aliasedSiblingTree('zzz9-alias')
+
+    // Identical tree, alias renamed so the REAL directory is read first. Passes at this
+    // head — which is exactly what makes R30 a defect rather than a design choice: one
+    // corpus, two answers, decided by directory order.
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    const hit = errors.filter(e =>
+      e.includes(join('workflow', 'alpha', 'scripts', 'zzz-lib', 'util.mjs')),
+    )
+    expect(hit).toHaveLength(1)
+    expect(hit[0]).toMatch(/DRIFTED/i)
+  })
+
+  it('R32 — control: a TRUE symlink cycle still terminates and still reports its scripts (r3-9)', () => {
+    const t = tree()
+    t.skill('workflow/alpha')
+    t.nestedScript('workflow/alpha', 'lib', 'util.mjs', 'export const u = 1\n')
+    t.nestedDirSymlink(
+      'workflow/alpha',
+      'lib',
+      'loop',
+      join(t.dataset, 'workflow', 'alpha', 'scripts'),
+    )
+
+    // The regression guard on R30's fix: `scripts/lib/loop` really points back at
+    // `scripts`, so a fix that simply drops the visited set — or re-walks an
+    // already-seen directory under its second name without bounding the descent —
+    // recurses forever and takes the gate down. Terminating is not enough on its own:
+    // the real nested script must still be named, so termination cannot be bought by
+    // abandoning the subtree.
+    let errors: string[] = []
+    expect(() => {
+      errors = checkSkillLocalScripts(t.dataset, t.installed)
+    }).not.toThrow()
+    expect(
+      errors.some(e => e.includes(join('workflow', 'alpha', 'scripts', 'lib', 'util.mjs'))),
+    ).toBe(true)
+  })
+
+  it('R33 — a drifted ALIAS script is still reported when the REAL directory is walked FIRST (r3-9)', () => {
+    const t = aliasedSiblingTree('zzz9-alias', 'alias')
+
+    // The other half of the same defect, and the half no row watched. `scripts/zzz9-alias`
+    // is a name under which the directory REALLY ships, so `pair update` installs a twin
+    // at pair-workflow-alpha/scripts/zzz9-alias/util.mjs and that twin is guarded. The
+    // real `zzz-lib` is read first, consumes the shared realpath in `visited`, and the
+    // alias arrival returns early — so the drifted twin of a shipped path is answered
+    // with silence, exactly as in R30 with the two names swapped.
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    const hit = errors.filter(e =>
+      e.includes(join('workflow', 'alpha', 'scripts', 'zzz9-alias', 'util.mjs')),
+    )
+    expect(hit).toHaveLength(1)
+    expect(hit[0]).toMatch(/DRIFTED/i)
+  })
+
+  it('R34 — control: the SAME alias-side drift IS reported when the alias is walked first, and must stay reported (r3-9)', () => {
+    const t = aliasedSiblingTree('aaa-alias', 'alias')
+
+    // Passes at this head, and it is the regression guard that closes the cross-product.
+    // The cheapest way to satisfy R30 and R31 together is to order real directories
+    // before symlinked ones while keeping the global `visited` set: that makes R30, R31
+    // and R32 green and even honours "the answer does not depend on readdir order", yet
+    // it silences THIS row — the alias is then always second and always dropped. With
+    // R33 and R34 in the suite, only a fix that compares every name a directory really
+    // ships under passes all four cells.
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    const hit = errors.filter(e =>
+      e.includes(join('workflow', 'alpha', 'scripts', 'aaa-alias', 'util.mjs')),
+    )
+    expect(hit).toHaveLength(1)
+    expect(hit[0]).toMatch(/DRIFTED/i)
   })
 })
