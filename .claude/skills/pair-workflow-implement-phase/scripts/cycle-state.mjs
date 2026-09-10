@@ -52,6 +52,9 @@ export const STEPS = ['prepare', 'validate', 'implement', 'green', 'verify', 'do
 export const PREPARE_REFUSALS = ['stale', 'split-required', 'unprovable', 'dirty']
 // Schema-3 taxonomy (US-479 T-19, S1/S2/S5) — the ONE spelling every handoff and comment must use.
 export const FINDING_TRANSITIONS = ['open', 'resolved', 'superseded', 'human']
+// US-479 T-24 (S2/S9, AC-23): late-defect origin — never inferred from file age or LLM confidence,
+// only from a replay at the baseline head vs the defective head (originEvidence).
+export const FINDING_ORIGINS = ['preexisting-missed', 'introduced-by-remediation', 'unknown']
 export const RECORD_TYPES = ['decision', 'migration', 'judgment']
 export const SCOPE_CHANGE_TYPES = ['new-requirement', 'scope-extension']
 export const SCOPE_CHANGE_STATUSES = ['pending', 'ignored', 'extended', 'deferred']
@@ -143,6 +146,10 @@ export function envelopeErrors(data, { phase, skill }) {
       for (const f of data.findings) {
         if (!f || typeof f !== 'object') continue
         if (f.transition !== undefined && !FINDING_TRANSITIONS.includes(f.transition)) errs.push(`finding-transition-invalid:${f.id ?? '?'}`)
+        if (f.origin !== undefined && !FINDING_ORIGINS.includes(f.origin)) errs.push(`finding-origin-invalid:${f.id ?? '?'}`)
+        // Origin claimed as decided (not `unknown`) needs the replay evidence that decided it —
+        // never inferred from file age or confidence (S2).
+        if ((f.origin === 'preexisting-missed' || f.origin === 'introduced-by-remediation') && (!f.originEvidence || typeof f.originEvidence !== 'object')) errs.push(`finding-originEvidence-missing:${f.id ?? '?'}`)
         // US-479 T-20 (S3): a red-verify GAP that names a mechanism is closed only by an executable
         // closure assertion or an explicitly approved non-applicability — never a prose claim, and
         // never silently left for a later, separate rejection to (maybe) mention.
