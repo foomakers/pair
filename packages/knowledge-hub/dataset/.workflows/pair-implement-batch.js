@@ -99,9 +99,13 @@ export const meta = {
 //   status ∈ ready-for-merge | escalate
 //          | failed-preparation | failed-contract | failed-seal | failed-implement | failed-fix
 //          | failed-verify | failed-custody | failed-resume | incompatible
+//          | awaiting-scope-decision | failed-publication | interrupted | abandoned
 //   ONLY `ready-for-merge` may advance, and only when the row carries a 40-hex `reviewedHead`
 //   and a `verdict` — a caller MUST treat every other status — including one this list does not
 //   name yet — as halted. `escalate` and `failed-*` rows carry `reason` and the open findings.
+//   The last four (ADR-024 amendment 2026-09-10, US-479 T-19) are also non-ready: quality
+//   convergence with pending scope decisions, a publication that could not be confirmed and must
+//   only retry publication, a run stopped mid-cycle, and an explicit developer abandonment.
 //
 // FOUR JUDGMENT STAGES, ONE TRANSITION AUTHORITY. The cycle of a story is a chain of phase
 // handoffs under `.pair/working/runs/<runId>/<story>/` in the MAIN checkout. Every phase skill
@@ -449,7 +453,7 @@ const RUN_ID = PARSED.runId
 // The coordinator's own version, returned with every result and handed to every phase skill so
 // each handoff records which coordinator produced it. Bump on any change to the dispatch
 // contract (skill names, argument names, statuses).
-const WORKFLOW_VERSION = '3.0.13'
+const WORKFLOW_VERSION = '4.0.0'
 
 // ── Pipeline configuration: what makes this engine reusable ─────────────────
 // Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved

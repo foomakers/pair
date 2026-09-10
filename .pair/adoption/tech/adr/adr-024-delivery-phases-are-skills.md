@@ -148,6 +148,55 @@ Retired and **rejected at parse time** with a migration message: `pipeline.skill
 | Measured cost, runs 1–8 | 81 agents, 5.24M subagent tokens, 446 min — diagnostic context, not a like-for-like baseline |
 | Requirement map | AC-01..16 → TC-01..17 as tabled on #479; every replaced rule above is a TC-05/06/09/10/11/12/13/14 case |
 
+## Amendment 2026-09-10 — US-479 T-19: workflow 4.0.0, schema 3, human-only scope decisions
+
+Recorded for T-19 of #479 (delta specification D4). Pins the version/taxonomy groundwork the rest
+of the T-19–28 delta builds on; it does not itself implement the behaviour those fields enable.
+
+1. **Versions.** Coordinator `WORKFLOW_VERSION` is `4.0.0`; the handoff envelope is `schemaVersion 3`
+   (`cycle-state.mjs`, all five installed copies plus dataset sources); the metrics view T-24 adds
+   is pinned at `METRICS_SCHEMA_VERSION 1` in the same module so no later caller re-spells it. A
+   different major on either axis stays `incompatible`, exactly as `3.x` already was for `2.x`.
+2. **New public statuses.** `awaiting-scope-decision`, `failed-publication`, `interrupted` and
+   `abandoned` join the documented status list in `pair-implement-batch.js`; all four are non-ready.
+   No caller change was needed for AC-11 — `pair-loop.js` already halts on anything that is not
+   `ready-for-merge` — this amendment only names and pins the four for later stages to emit.
+3. **Schema-3 taxonomy.** `cycle-state.mjs` now exports and validates, before the atomic handoff
+   write: `FINDING_TRANSITIONS` (`open|resolved|superseded|human`), `RECORD_TYPES`
+   (`decision|migration|judgment`), `SCOPE_CHANGE_TYPES` (`new-requirement|scope-extension`),
+   `SCOPE_CHANGE_STATUSES` (`pending|ignored|extended|deferred`), and the new optional envelope
+   fields `scopeEpoch`, `scopeBaselineHash`, `firstReviewHead`, `remediationBatchId`. A scope
+   proposal can never carry `severity` or `nonActionable` — those stay findings-only. Unknown or
+   ambiguous values in any of these are refused at `publish` time, never accepted and reconciled
+   later.
+4. **`migrate-inspect` is read-only.** `cycle-state.mjs migrate-inspect --dir <dir>` reports
+   `{compatibleEvidenceRefs, missingDimensions, ambiguity, next}` from existing schema-2 (or
+   current) evidence without rewriting a byte of it; a migration acknowledgment is a NEW handoff a
+   later stage records (`recordType: migration`), never a silent upgrade of the old file.
+5. **Default severity floor stays `Minor`.** Already the coordinator default
+   (`DEFAULT_SEVERITY_FLOOR`); this amendment confirms it is not lowered by this delta.
+6. **Scope proposals are a human decision, never an automatic extension.** Superseded in part: see
+   the new decision log entry
+   [2026-09-10-scope-proposals-are-a-human-decision.md](../../decision-log/2026-09-10-scope-proposals-are-a-human-decision.md).
+   The 2026-08-12 rule (implementation/review never files a card for a **defect**; it fixes it or
+   extends the story) is unchanged. What changes is demonstrably **new scope** (S2:
+   `new-requirement` / `scope-extension`, never a defect): it is queued, never auto-absorbed or
+   auto-carded, until the maintainer's explicit `ignore` / `extend-current-card` / `new-card`
+   decision (S5).
+7. **Metrics-view exception to the agent-budget rule.** Decision §8 ("agent budget is an acceptance
+   criterion") is unaffected: `cycle-metrics.mjs` (T-24) and `cycle-runtime.mjs` (T-25) are
+   deterministic scripts a phase imports and runs, like `red-snapshot.mjs` and `pr-comment.mjs`
+   already are — not a new agent dispatch. Adding them does not raise the twelve-dispatch baseline.
+
+### Baseline moved
+
+| Item | Value |
+| --- | --- |
+| Coordinator | `pair-implement-batch.js` `WORKFLOW_VERSION 4.0.0` |
+| Handoff schema | `cycle-state.mjs` `SCHEMA_VERSION 3` |
+| Metrics view | `cycle-metrics.mjs` `METRICS_SCHEMA_VERSION 1` (module lands in T-24) |
+| Prior baseline | `3.0.13` at `ab6d78de` (frozen table above), superseded by this amendment |
+
 ## Consequences
 
 ### Benefits

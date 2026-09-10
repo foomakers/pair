@@ -29,7 +29,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { SCHEMA_VERSION, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
 const V = '3.0.0'
@@ -673,4 +673,71 @@ test('readHandoffs ignores contracts, drafts, locks and the attempt suffix is pa
   publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath: '/x', contractHash: 'sha256:' + '1'.repeat(64) }), phase: 'a0', skill: 'red-spec', workflowVersion: V, attempt: 2 })
   const two = readHandoffs(dir)
   assert.deepEqual(two.map(h => h.attempt), [1, 2])
+})
+
+// ── US-479 T-19: schema 3 / workflow 4.0.0 / metrics schema 1 (DT-11/12/17/33) ─────────────
+test('T-19: schema is pinned at 3, metrics view at 1, and the new non-ready statuses are exactly the four ADR-024-amendment ones', () => {
+  assert.equal(SCHEMA_VERSION, 3)
+  assert.equal(METRICS_SCHEMA_VERSION, 1)
+  assert.deepEqual([...NEW_PUBLIC_STATUSES].sort(), ['abandoned', 'awaiting-scope-decision', 'failed-publication', 'interrupted'])
+})
+
+test('T-19 (DT-11/12): a handoff whose scope/finding/record-type fields disagree with the schema-3 taxonomy is refused BEFORE the write — never accepted and reconciled later', () => {
+  const { dir } = runDir()
+  const base = { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath: '/x', contractHash: `sha256:${'1'.repeat(64)}` }
+  const bad = (extra, match) => {
+    const f = writeDraft(dir, { ...base, ...extra })
+    const out = publish({ dir, file: f, phase: 'a0', skill: 'red-spec', workflowVersion: V })
+    assert.equal(out.published, false, JSON.stringify(extra))
+    assert.match(out.reason, match, JSON.stringify(extra))
+    assert.equal(existsSync(join(dir, 'a0-red-spec.json')), false)
+  }
+  bad({ scopeEpoch: 0 }, /scopeEpoch-invalid/)
+  bad({ scopeEpoch: 1.5 }, /scopeEpoch-invalid/)
+  bad({ scopeBaselineHash: 'not-a-hash' }, /scopeBaselineHash-invalid/)
+  bad({ firstReviewHead: 'zzz' }, /firstReviewHead-invalid/)
+  bad({ remediationBatchId: '' }, /remediationBatchId-invalid/)
+  bad({ recordType: 'planning' }, /recordType-invalid:planning/)
+  bad({ findings: [{ id: 'r0-1', transition: 'discarded' }] }, /finding-transition-invalid:r0-1/)
+  bad({ scopeChanges: [{ id: 'sc-1', type: 'defect' }] }, /scopeChange-type-invalid:sc-1/)
+  bad({ scopeChanges: [{ id: 'sc-1', type: 'new-requirement', status: 'accepted' }] }, /scopeChange-status-invalid:sc-1/)
+  // A new-scope proposal can NEVER carry severity or nonActionable — that vocabulary is findings-only (S2)
+  bad({ scopeChanges: [{ id: 'sc-1', type: 'new-requirement', severity: 'Minor' }] }, /scopeChange-severity-forbidden:sc-1/)
+  bad({ scopeChanges: [{ id: 'sc-1', type: 'new-requirement', nonActionable: true }] }, /scopeChange-nonActionable-forbidden:sc-1/)
+  // Valid schema-3 fields publish cleanly
+  const ok = writeDraft(dir, { ...base, scopeEpoch: 1, scopeBaselineHash: `sha256:${'2'.repeat(64)}`, recordType: 'judgment', findings: [{ id: 'r0-1', transition: 'open' }], scopeChanges: [{ id: 'sc-1', type: 'new-requirement', status: 'pending' }] })
+  assert.equal(publish({ dir, file: ok, phase: 'a0', skill: 'red-spec', workflowVersion: V }).published, true)
+})
+
+test('T-19 (DT-33): migrate-inspect reads schema-2 evidence read-only — it never rewrites, and reports compatible/legacy/ambiguous evidence without inventing counters', () => {
+  const { dir } = runDir()
+  assert.deepEqual(migrateInspect({ dir: join(dir, 'missing') }), { compatibleEvidenceRefs: [], missingDimensions: ['no-run-directory'], ambiguity: [], next: 'fresh-cycle' })
+  // an empty existing directory has nothing to resume and nothing to migrate
+  assert.deepEqual(migrateInspect({ dir }), { compatibleEvidenceRefs: [], missingDimensions: [], ambiguity: [], next: 'fresh-cycle' })
+  // legacy schema-2 evidence only: migration acknowledgment required, missing dimensions named, nothing rewritten
+  writeFileSync(join(dir, 'r0-review-phase.json'), JSON.stringify({ run: 'run-1', story: '42', phase: 'r0', skill: 'review-phase', schemaVersion: 2, workflowVersion: '3.0.13', reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [] }))
+  const before = readFileSync(join(dir, 'r0-review-phase.json'), 'utf8')
+  const legacy = migrateInspect({ dir })
+  assert.deepEqual(legacy, { compatibleEvidenceRefs: [], missingDimensions: ['scopeEpoch', 'scopeBaselineHash', 'findings-origin'], ambiguity: [], next: 'migration-acknowledgment-required' })
+  assert.equal(readFileSync(join(dir, 'r0-review-phase.json'), 'utf8'), before, 'migrate-inspect never rewrites the evidence it reads')
+  // current-schema evidence resumes normally
+  const { dir: d2 } = runDir()
+  redSpec(d2, 'a0')
+  assert.deepEqual(migrateInspect({ dir: d2 }).next, 'resume')
+  // a malformed handoff is reported as ambiguity, not silently skipped or coerced
+  const { dir: d3 } = runDir()
+  writeFileSync(join(d3, 'a0-red-spec.json'), '{not json')
+  assert.equal(migrateInspect({ dir: d3 }).next, 'blocked')
+  assert.match(migrateInspect({ dir: d3 }).ambiguity[0], /not-json/)
+  // the CLI spelling
+  const r = spawnSync('node', [CLI, 'migrate-inspect', '--dir', d2], { encoding: 'utf8' })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.equal(JSON.parse(r.stdout).next, 'resume')
+})
+
+test('T-19: the schema-3 taxonomy is exactly the enums S2/S5 name — no extra or missing value slips in unnoticed', () => {
+  assert.deepEqual([...FINDING_TRANSITIONS].sort(), ['human', 'open', 'resolved', 'superseded'])
+  assert.deepEqual([...RECORD_TYPES].sort(), ['decision', 'judgment', 'migration'])
+  assert.deepEqual([...SCOPE_CHANGE_TYPES].sort(), ['new-requirement', 'scope-extension'])
+  assert.deepEqual([...SCOPE_CHANGE_STATUSES].sort(), ['deferred', 'extended', 'ignored', 'pending'])
 })

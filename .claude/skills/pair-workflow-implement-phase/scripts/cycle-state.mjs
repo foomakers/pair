@@ -26,6 +26,9 @@
 //   node … hash --file <contract.json>            → { contractHash }   (canonical, volatile fields excluded)
 //   node … inputs --json '<effective inputs>'      → { inputsDigest }
 //   node … ac-hash --story <id>                    → { acHash }        canonical sha256 of the card body (gh issue view)
+//   node … migrate-inspect --dir <run/story dir>   → { compatibleEvidenceRefs, missingDimensions, ambiguity, next }
+//     Read-only (US-479 T-19, S10): never rewrites schema-2 evidence, never fabricates a counter.
+//
 //   node … test-identity --cwd <worktree> --command <cmd> [--env-keys K1,K2] [--toolchain <s>]
 //     → { identity, parts, reusable, missing }     a cached test result is valid ONLY for this identity
 import { createHash } from 'node:crypto'
@@ -34,10 +37,22 @@ import { join, basename } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
+// Pinned once here (US-479 T-19, S1) so no caller re-spells it: workflow 4.0.0 / handoff schema 3
+// consume this; cycle-metrics.mjs (T-24) stamps its own views with METRICS_SCHEMA_VERSION.
+export const METRICS_SCHEMA_VERSION = 1
 export const SKILLS = ['red-spec', 'red-verify', 'implement-phase', 'green-fix', 'review-phase']
 export const STEPS = ['prepare', 'validate', 'implement', 'green', 'verify', 'done', 'blocked']
 export const PREPARE_REFUSALS = ['stale', 'split-required', 'unprovable', 'dirty']
+// Schema-3 taxonomy (US-479 T-19, S1/S2/S5) — the ONE spelling every handoff and comment must use.
+export const FINDING_TRANSITIONS = ['open', 'resolved', 'superseded', 'human']
+export const RECORD_TYPES = ['decision', 'migration', 'judgment']
+export const SCOPE_CHANGE_TYPES = ['new-requirement', 'scope-extension']
+export const SCOPE_CHANGE_STATUSES = ['pending', 'ignored', 'extended', 'deferred']
+// New public engine statuses beyond ready-for-merge/escalate/failed-*/incompatible (ADR-024
+// amendment 2026-09-10). All four are non-ready: a caller already halts on any status it does not
+// recognise, so this list is documentation the conformance tests pin, not a new caller branch.
+export const NEW_PUBLIC_STATUSES = ['awaiting-scope-decision', 'failed-publication', 'interrupted', 'abandoned']
 const SHA_RE = /^[0-9a-f]{40}$/
 const PHASE_RE = /^(a0(?:-rev\d+)?|r\d+(?:-g\d+(?:-rev\d+)?)?)$/
 const NAME_RE = /^(a0(?:-rev\d+)?|r\d+(?:-g\d+(?:-rev\d+)?)?)-(red-spec|red-verify|implement-phase|green-fix|review-phase)(?:\.attempt-(\d+))?\.json$/
@@ -95,6 +110,9 @@ const REQUIRED_BY_SKILL = {
   'green-fix': ['fixed'],
   'review-phase': ['reviewedHead', 'verdict', 'findings', 'custody', 'readiness'],
 }
+// The ONE semantic validator (US-479 T-19, S1 bullet 5): envelope shape AND the schema-3 scope/
+// finding-transition/record-type fields, checked here before `publish` takes the atomic write —
+// never split across a second, looser sandbox-side check that could accept what this rejects.
 export function envelopeErrors(data, { phase, skill }) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return ['not-an-object']
   const errs = []
@@ -104,6 +122,33 @@ export function envelopeErrors(data, { phase, skill }) {
   if (!SKILLS.includes(skill)) errs.push(`skill-unknown:${skill}`)
   for (const k of REQUIRED_BY_SKILL[skill] ?? []) if (data[k] === undefined) errs.push(`missing-field:${k}`)
   if (data.phase !== undefined && data.skill !== undefined && (String(data.phase) !== String(phase) || String(data.skill) !== String(skill))) errs.push('identity-mismatch')
+  if (data.scopeEpoch !== undefined && (!Number.isInteger(data.scopeEpoch) || data.scopeEpoch < 1)) errs.push('scopeEpoch-invalid')
+  if (data.scopeBaselineHash !== undefined && !/^sha256:[0-9a-f]{64}$/.test(String(data.scopeBaselineHash))) errs.push('scopeBaselineHash-invalid')
+  if (data.firstReviewHead !== undefined && !SHA_RE.test(String(data.firstReviewHead))) errs.push('firstReviewHead-invalid')
+  if (data.remediationBatchId !== undefined && (typeof data.remediationBatchId !== 'string' || data.remediationBatchId === '')) errs.push('remediationBatchId-invalid')
+  if (data.recordType !== undefined && !RECORD_TYPES.includes(data.recordType)) errs.push(`recordType-invalid:${data.recordType}`)
+  if (data.findings !== undefined) {
+    if (!Array.isArray(data.findings)) errs.push('findings-not-an-array')
+    else
+      for (const f of data.findings)
+        if (f && typeof f === 'object' && f.transition !== undefined && !FINDING_TRANSITIONS.includes(f.transition)) errs.push(`finding-transition-invalid:${f.id ?? '?'}`)
+  }
+  if (data.scopeChanges !== undefined) {
+    if (!Array.isArray(data.scopeChanges)) errs.push('scopeChanges-not-an-array')
+    else
+      for (const c of data.scopeChanges) {
+        if (!c || typeof c !== 'object') {
+          errs.push('scopeChange-not-an-object')
+          continue
+        }
+        if (!SCOPE_CHANGE_TYPES.includes(c.type)) errs.push(`scopeChange-type-invalid:${c.id ?? '?'}`)
+        if (c.status !== undefined && !SCOPE_CHANGE_STATUSES.includes(c.status)) errs.push(`scopeChange-status-invalid:${c.id ?? '?'}`)
+        // A scope proposal is NEVER a defect: it can never carry severity or a non-actionable
+        // shortcut (S2) — those fields exist only on findings[].
+        if (c.severity !== undefined) errs.push(`scopeChange-severity-forbidden:${c.id ?? '?'}`)
+        if (c.nonActionable !== undefined) errs.push(`scopeChange-nonActionable-forbidden:${c.id ?? '?'}`)
+      }
+  }
   return errs
 }
 
@@ -427,6 +472,33 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion }
 }
 
+// ── migration (US-479 T-19, S10) ───────────────────────────────────────────────────────────
+// Read-only inspection of a run directory's evidence against the CURRENT schema. Never rewrites,
+// never backfills a fabricated counter/token/timestamp; a caller acknowledges the migration as its
+// own new handoff (recordType=migration) only after this reports what is actually usable.
+export function migrateInspect({ dir }) {
+  if (!existsSync(dir)) return { compatibleEvidenceRefs: [], missingDimensions: ['no-run-directory'], ambiguity: [], next: 'fresh-cycle' }
+  const files = readdirSync(dir).filter(f => NAME_RE.test(f))
+  const compatibleEvidenceRefs = []
+  let legacyCount = 0
+  const ambiguity = []
+  for (const f of files) {
+    let data
+    try {
+      data = JSON.parse(readFileSync(join(dir, f), 'utf8'))
+    } catch {
+      ambiguity.push(`${f}:not-json`)
+      continue
+    }
+    if (data.schemaVersion === SCHEMA_VERSION) compatibleEvidenceRefs.push(f)
+    else if (Number.isInteger(data.schemaVersion) && data.schemaVersion < SCHEMA_VERSION) legacyCount++
+    else ambiguity.push(`${f}:schemaVersion ${JSON.stringify(data.schemaVersion)}`)
+  }
+  const missingDimensions = legacyCount && !compatibleEvidenceRefs.length ? ['scopeEpoch', 'scopeBaselineHash', 'findings-origin'] : []
+  const next = ambiguity.length ? 'blocked' : legacyCount && !compatibleEvidenceRefs.length ? 'migration-acknowledgment-required' : compatibleEvidenceRefs.length ? 'resume' : 'fresh-cycle'
+  return { compatibleEvidenceRefs, missingDimensions, ambiguity, next }
+}
+
 // ── test identity ──────────────────────────────────────────────────────────────────────────
 // A git process must act on the repository named by `cwd`, never on one named by an INHERITED
 // environment: a pre-push hook exports GIT_DIR (and friends) to everything it runs, and a script
@@ -511,6 +583,11 @@ if (isMain()) {
       need('json')
       process.stdout.write(JSON.stringify({ inputsDigest: inputsDigest(JSON.parse(opts.json)) }) + '\n')
       process.exit(0)
+    } else if (cmd === 'migrate-inspect') {
+      need('dir')
+      out = migrateInspect({ dir: opts.dir })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(0)
     } else if (cmd === 'test-identity') {
       need('cwd', 'command')
       const keys = (opts['env-keys'] ?? 'CI,NODE_ENV,TZ').split(',').filter(Boolean)
@@ -518,7 +595,7 @@ if (isMain()) {
       out = testIdentity({ cwd: opts.cwd, command: opts.command, env, toolchain: opts.toolchain ?? `node ${process.version}` })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
-    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | test-identity)`)
+    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | migrate-inspect | test-identity)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)

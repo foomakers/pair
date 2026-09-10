@@ -137,6 +137,7 @@
 - [Decision: Repo citation anchors are checked against github.com's own slugs, offline](.pair/adoption/decision-log/2026-09-08-repo-citation-anchors-are-githubs-own-slugs.md)
 - [Decision: Repo citations in the docs are gated through the site's own MDX compiler](.pair/adoption/decision-log/2026-09-08-repo-citations-are-gated-through-the-site-compiler.md)
 - [Decision: Use a deterministic code canary for delivery workflow validation](.pair/adoption/decision-log/2026-09-09-deterministic-code-canary-for-delivery-workflow.md)
+- [Decision: A demonstrably new scope proposal is queued and never absorbed or carded automatically — the maintainer alone chooses ignore, extend-current-card or new-card](.pair/adoption/decision-log/2026-09-10-scope-proposals-are-a-human-decision.md)
 
 ## How-To Guides
 
