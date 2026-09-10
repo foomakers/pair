@@ -58,10 +58,10 @@ function runDir() {
   return { root, dir }
 }
 // A handoff as a phase skill publishes it: envelope + phase fields.
-function handoff(dir, phase, skill, fields, { pr = 7, predecessor } = {}) {
+function handoff(dir, phase, skill, fields, { pr = 7, predecessor, attempt } = {}) {
   const file = join(dir, `tmp-${phase}-${skill}.json`)
   writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr, branch: 'feature/US-42', phase, skill, inputHead: SHA('a'), ...fields }))
-  const out = publish({ dir, file, phase, skill, workflowVersion: V, predecessor })
+  const out = publish({ dir, file, phase, skill, workflowVersion: V, predecessor, attempt })
   assert.equal(out.published, true, JSON.stringify(out))
   return out
 }
@@ -186,6 +186,30 @@ test('resolve: same-input resume executes the first incomplete step only — a r
   // the same evidence read under the PR entry (a different invocation id, same cycle) yields the same step
   const underPr = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.equal(underPr.next.step, 'implement')
+})
+
+test('resolve: a preparation refused for an EXTERNAL cause (dirty worktree, moved head) is retryable once the cause is cleared — the same phase, next attempt — and a second identical refusal is terminal; a refusal the cycle owns (unprovable, split-required) is terminal at once (canary v4 run 17)', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r0-1')] })
+  redSpec(dir, 'r1-g1', { status: 'dirty', reason: 'one dirty path this attempt does not own', preserved: ['src/a.test.ts'], contractPath: undefined, contractHash: undefined })
+  let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, phase: r.next.phase, mode: r.next.mode, attempt: r.next.attempt }, { step: 'prepare', phase: 'r1-g1', mode: 'remediation', attempt: 2 })
+  assert.match(r.next.detail, /dirty/)
+  // still dirty on the retry ⇒ terminal, the cause is not going away by itself
+  handoff(dir, 'r1-g1', 'red-spec', { status: 'dirty', mode: 'remediation', reason: 'still dirty', preserved: ['src/a.test.ts'] }, { attempt: 2 })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, reason: r.next.reason, refusal: r.next.refusal }, { step: 'blocked', reason: 'failed-preparation', refusal: 'dirty' })
+  // a stale head is the same class
+  const { dir: d2 } = runDir()
+  redSpec(d2, 'a0', { status: 'stale', reason: 'HEAD moved', contractPath: undefined, contractHash: undefined })
+  assert.equal(resolve({ dir: d2, workflowVersion: V, policy: POLICY, entry: 'fresh' }).next.attempt, 2)
+  // a refusal the cycle owns is terminal immediately — retrying it would only repeat the judgment
+  for (const status of ['unprovable', 'split-required']) {
+    const { dir: d3 } = runDir()
+    redSpec(d3, 'a0', { status, reason: 'no authority', contractPath: undefined, contractHash: undefined })
+    const rr = resolve({ dir: d3, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+    assert.deepEqual({ step: rr.next.step, reason: rr.next.reason, refusal: rr.next.refusal }, { step: 'blocked', reason: 'failed-preparation', refusal: status })
+  }
 })
 
 test('resolve: a rejected contract goes back to preparation as a REPAIR carrying the rejection; the second rejection exhausts the unchanged budget', () => {

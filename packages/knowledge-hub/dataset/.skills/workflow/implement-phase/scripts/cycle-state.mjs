@@ -212,6 +212,8 @@ const orderGroups = groups => {
   return out
 }
 const isBlocking = f => f && f.blocking === true && f.transition !== 'resolved' && f.nonActionable !== true
+// Preparation refusals whose cause lies outside the cycle: a later dispatch can succeed unchanged.
+const EXTERNAL_REFUSALS = new Set(['dirty', 'stale'])
 
 export function deriveNext(handoffs, policy, ctx = {}) {
   const list = handoffs.filter(h => h.data)
@@ -264,6 +266,12 @@ export function deriveNext(handoffs, policy, ctx = {}) {
 
   if (last.skill === 'red-spec') {
     if (d.status === 'red') return { step: 'validate', mode: d.mode, phase: last.phase, round: parts.round, attempt: last.attempt, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined }
+    // A refusal whose cause is OUTSIDE the cycle — a dirty worktree, a moved head — is retryable
+    // once a human clears it: the same phase, the next attempt. A refusal the cycle owns
+    // (`unprovable`, `split-required`) is terminal at once; a second identical external refusal too
+    // (canary v4 run 17: a cleared `dirty` had no resume path and the cycle stayed blocked).
+    if (EXTERNAL_REFUSALS.has(d.status) && byPhase('red-spec', last.phase).length <= 1)
+      return { step: 'prepare', mode: d.mode ?? (parts.kind === 'initial' ? 'initial' : 'remediation'), phase: last.phase, round: parts.round, attempt: byPhase('red-spec', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined, detail: `retry after the ${d.status} refusal: ${d.reason ?? ''}`.trim() }
     return blocked('failed-preparation', { refusal: d.status, detail: d.reason ?? d.splitReason, phase: last.phase })
   }
   if (last.skill === 'red-verify') {

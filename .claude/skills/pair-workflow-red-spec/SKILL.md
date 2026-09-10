@@ -95,7 +95,7 @@ One row per class and interaction of every inventory item: `{ id, kind, baseline
      --workflowVersion $workflowVersion --attempt <n> [--predecessor <phase>-<skill>] ${pr:+--pr $pr}
    ```
 
-   A refusal (`stale`, `split-required`, `unprovable`, `dirty`) is published too, with `reason` — it is the cycle's answer, not a dead agent.
+   A refusal (`stale`, `split-required`, `unprovable`, `dirty`) is published too, with `reason` — it is the cycle's answer, not a dead agent. `dirty` and `stale` name a cause OUTSIDE the cycle: once a human clears it the same phase is dispatched again as the next attempt (once); `unprovable` and `split-required` are terminal at once.
 3. Run `resolve` again (Step 0 command) and return its `next`.
 
 ## Output Format
