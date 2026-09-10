@@ -44,14 +44,19 @@ function sumUsage(a, b) {
   const out = {}
   for (const k of ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'totalTokens'])
     if (a?.[k] != null || b?.[k] != null) out[k] = (a?.[k] ?? 0) + (b?.[k] ?? 0)
+  if (b?.accountingBasis ?? a?.accountingBasis) out.accountingBasis = b?.accountingBasis ?? a?.accountingBasis
   return out
 }
 
 // A re-observation of the SAME (executionId, kind) updates it; a provider cumulative usage sample
-// REPLACES the prior one; a delta-marked sample (`usage.isDelta: true`, its own unique eventId) is
-// SUMMED. A genuinely new execution (different executionId/agentId) is never merged into an old one.
+// REPLACES the prior one; a delta-marked sample (`usage.isDelta: true`) is SUMMED — but only ONCE
+// per unique `eventId` (US-479 remediation, Finding 3.B): a lost-response retry replays the exact
+// same event, and applying it twice would double the total. The dedup key is (executionId,
+// eventId), never eventId alone (two different executions could reuse an id) and never content
+// alone (S7: two real executions may report identical usage).
 export function mergeObservations(raw) {
   const byKey = new Map()
+  const appliedDeltaEventIds = new Map() // executionId -> Set(eventId already summed)
   const errors = []
   for (const r of raw ?? []) {
     const n = normalizeObservation(r)
@@ -63,9 +68,22 @@ export function mergeObservations(raw) {
     const existing = byKey.get(key)
     if (!existing) {
       byKey.set(key, n)
+      if (n.usage?.isDelta) {
+        const seen = appliedDeltaEventIds.get(n.executionId) ?? new Set()
+        seen.add(n.eventId)
+        appliedDeltaEventIds.set(n.executionId, seen)
+      }
       continue
     }
-    byKey.set(key, n.usage?.isDelta && existing.usage ? { ...n, usage: sumUsage(existing.usage, n.usage) } : n)
+    if (n.usage?.isDelta && existing.usage) {
+      const seen = appliedDeltaEventIds.get(n.executionId) ?? new Set()
+      appliedDeltaEventIds.set(n.executionId, seen)
+      if (seen.has(n.eventId)) continue // idempotent replay of the SAME delta event — no-op
+      seen.add(n.eventId)
+      byKey.set(key, { ...n, usage: sumUsage(existing.usage, n.usage) })
+      continue
+    }
+    byKey.set(key, n)
   }
   return { observations: [...byKey.values()], errors }
 }
@@ -85,6 +103,21 @@ export function allocateSharedCost({ tokens, admittedIds }) {
     allocations[id] = base + (i < remainder ? 1 : 0)
   })
   return { allocations, coverage: 'known', total: tokens }
+}
+
+// US-479 remediation (Finding 2): observations carry `observedAt`/`occurredAt` as an epoch-ms
+// INTEGER (S7: "UTC timestamps, integer milliseconds") — never an ISO string. `Date.parse` expects
+// a string; handed a number it stringifies it into garbage and returns NaN, which later crashed
+// `new Date(NaN).toISOString()`. This is the ONE place either format is accepted: a genuine number
+// is used as-is; a string is parsed and validated; anything else is explicitly invalid (`null`),
+// never coerced into a fabricated duration.
+export function toEpochMs(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'string' && value) {
+    const n = Date.parse(value)
+    return Number.isFinite(n) ? n : null
+  }
+  return null
 }
 
 // ── time (S7): union for wall time, sum for agent time ──────────────────────────────────────
@@ -113,31 +146,69 @@ export function reduceTime(intervals) {
 }
 
 // ── usage (S7): one accounting basis per execution, coverage never fabricated ───────────────
+// US-479 remediation (Finding 3): the denominator is every OBSERVED execution — any kind, not only
+// `usage-observed` ones — so an execution that started/finished but never reported usage is
+// EXPLICITLY missing, never invisible. Parent/child: an execution whose usage carries
+// `accountingBasis: 'inclusive-subtree'` already counts its descendants; those descendants are
+// excluded from the sum so a subtree is never counted twice (S7 "never both parent and children").
 export function reduceUsage(observations) {
-  const usageEvents = (observations ?? []).filter(o => o.kind === 'usage-observed' && o.usage)
-  const byExec = new Map()
-  for (const e of usageEvents) byExec.set(e.executionId, e.usage)
-  const known = [...byExec.values()]
+  const all = (observations ?? []).filter(o => o && o.executionId)
+  const executionIds = new Set(all.map(o => o.executionId))
+  const usageByExec = new Map()
+  const parentOf = new Map()
+  const roleOf = new Map()
+  for (const o of all) {
+    if (o.parentExecutionId) parentOf.set(o.executionId, o.parentExecutionId)
+    if (o.role) roleOf.set(o.executionId, o.role)
+    if (o.kind === 'usage-observed' && o.usage) usageByExec.set(o.executionId, o.usage)
+  }
   const totalOf = u => (typeof u.totalTokens === 'number' ? u.totalTokens : ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens'].every(k => typeof u[k] !== 'number') ? null : ['inputTokens', 'outputTokens'].reduce((s, k) => s + (u[k] ?? 0), 0))
+  const excluded = new Set()
+  for (const [id, usage] of usageByExec) {
+    if (usage.accountingBasis !== 'inclusive-subtree') continue
+    for (const childId of executionIds) {
+      if (childId === id || excluded.has(childId)) continue
+      let p = parentOf.get(childId)
+      const seen = new Set()
+      while (p && !seen.has(p)) {
+        seen.add(p)
+        if (p === id) {
+          excluded.add(childId)
+          break
+        }
+        p = parentOf.get(p)
+      }
+    }
+  }
+  const relevantIds = [...executionIds].filter(id => !excluded.has(id))
+  const countedIds = relevantIds.filter(id => usageByExec.has(id))
+  const known = countedIds.map(id => usageByExec.get(id))
   const totals = known.map(totalOf).filter(t => t != null)
   const observedTotalTokens = totals.length ? totals.reduce((a, b) => a + b, 0) : null
-  const missingExecutionIds = [...byExec.entries()].filter(([, u]) => totalOf(u) == null).map(([id]) => id)
+  const missingExecutionIds = relevantIds.filter(id => !usageByExec.has(id) || totalOf(usageByExec.get(id)) == null).sort()
+  const byRoleMap = new Map()
+  for (const id of countedIds) {
+    const role = roleOf.get(id)
+    const t = totalOf(usageByExec.get(id))
+    if (!role || t == null) continue
+    byRoleMap.set(role, (byRoleMap.get(role) ?? 0) + t)
+  }
   return {
     observedTotalTokens,
     inputTokens: known.length ? known.reduce((s, u) => s + (u.inputTokens ?? 0), 0) : null,
     outputTokens: known.length ? known.reduce((s, u) => s + (u.outputTokens ?? 0), 0) : null,
     cacheReadTokens: known.some(u => u.cacheReadTokens != null) ? known.reduce((s, u) => s + (u.cacheReadTokens ?? 0), 0) : null,
     cacheWriteTokens: known.some(u => u.cacheWriteTokens != null) ? known.reduce((s, u) => s + (u.cacheWriteTokens ?? 0), 0) : null,
-    coverage: { known: byExec.size - missingExecutionIds.length, total: byExec.size },
+    coverage: { known: relevantIds.length - missingExecutionIds.length, total: relevantIds.length },
     missingExecutionIds,
     accountingBasis: 'leaf-exclusive',
-    byRole: [],
+    byRole: [...byRoleMap.entries()].map(([role, tokens]) => ({ role, tokens })),
     sharedOverhead: null,
   }
 }
 
 // ── the main reducer ─────────────────────────────────────────────────────────────────────────
-export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations = [], revision = 1, asOf = null }) {
+export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations = [], revision = 1, asOf = null, dispatchStats, sharedCost }) {
   const handoffs = readHandoffs(dir)
   const list = handoffs.filter(h => h.data)
   const counters = cycleCounters(handoffs)
@@ -178,24 +249,62 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   }
   const startEvents = new Map(merged.filter(o => o.kind === 'step-started').map(o => [o.executionId, o]))
   const finishEvents = merged.filter(o => o.kind === 'step-finished' || o.kind === 'step-failed' || o.kind === 'step-cancelled')
-  const intervals = finishEvents
-    .map(f => {
-      const s = startEvents.get(f.executionId)
-      return s ? { startMs: Date.parse(s.observedAt ?? s.occurredAt ?? ''), endMs: Date.parse(f.observedAt ?? f.occurredAt ?? '') } : null
-    })
-    .filter(Boolean)
-  const time = reduceTime(intervals)
+  // US-479 remediation (Finding 2): observedAt/occurredAt are epoch-ms NUMBERS (S7) — `toEpochMs`
+  // accepts that or a validated ISO string, never `Date.parse` on a number (NaN, then a crash).
+  const intervals = finishEvents.map(f => {
+    const s = startEvents.get(f.executionId)
+    if (!s) return null
+    return { startMs: toEpochMs(s.observedAt ?? s.occurredAt), endMs: toEpochMs(f.observedAt ?? f.occurredAt) }
+  })
+  const time = reduceTime(intervals.filter(Boolean))
   const usage = reduceUsage(merged)
+  // US-479 remediation (Finding 4): the shared-batch allocation formula (allocateSharedCost) is
+  // wired into the real reducer path — labeled distinctly from directly-measured tokens (S7).
+  if (sharedCost && Array.isArray(sharedCost.admittedIds) && sharedCost.admittedIds.length) {
+    const alloc = allocateSharedCost({ tokens: sharedCost.tokens, admittedIds: sharedCost.admittedIds })
+    usage.sharedOverhead = Object.prototype.hasOwnProperty.call(alloc.allocations, story) ? alloc.allocations[story] : null
+  }
+  const known = intervals.filter(i => i && Number.isInteger(i.startMs) && Number.isInteger(i.endMs) && i.endMs >= i.startMs && i.startMs >= 0)
+  const hasObservations = merged.length > 0
+  // Only an execution actually OBSERVED to start (Finding 4: "dispatches conta handoff, non
+  // esecuzioni avviate") — never the handoff count, and explicitly `null` (not 0) with zero
+  // telemetry, since a batch could genuinely have run zero OR simply never been observed.
+  const dispatches = hasObservations ? startEvents.size : null
+  const startedWithoutResult = hasObservations ? [...startEvents.keys()].filter(id => !finishEvents.some(f => f.executionId === id)).length : null
+  const admin = dispatchStats ?? {}
+  const asInt = v => (Number.isInteger(v) ? v : null)
+  // US-479 remediation (Finding 4): a real quantity this reducer cannot derive from handoffs or
+  // observations alone stays an explicit `null` — never a fabricated `0` presented as measured.
+  const execution = {
+    dispatches,
+    reviewExecutions: counters.reviewExecutions,
+    reviewBatches: counters.reviewBatches,
+    retries: counters.implementationRetries,
+    redirects: asInt(admin.redirects),
+    contractRevisions: counters.contractRevisions,
+    preparationRepairs: counters.preparationRepairs,
+    engineRecoveries: asInt(admin.engineRecoveries),
+    startedWithoutResult,
+    administrativeDispatches: asInt(admin.administrativeDispatches),
+    nestedDispatches: asInt(admin.nestedDispatches),
+  }
+  // US-479 remediation (Finding 4): `complete` is earned — every observed execution has matching
+  // usage, timing coverage is full, and there IS something observed; a bare "an observation
+  // exists" is not proof every declared source was actually reconciled.
+  const missingSources = []
+  if (usage.missingExecutionIds.length) missingSources.push('usage')
+  if (time.incomplete) missingSources.push('timing')
+  const completeness = hasObservations && !missingSources.length ? 'complete' : 'partial'
   return {
     schemaVersion: METRICS_SCHEMA_VERSION,
     identity: { repository, storyId: story, prNumber: Number.isInteger(pr) ? pr : null, branch, canonicalRunId: runId ?? null, runIds: runId ? [runId] : [], scopeEpoch: lastReview?.data.scopeEpoch ?? 1 },
     workflow: { name: 'pair-implement-batch', versions, sourceShas: [], artifactDigests: [], models: [], mixedVersions: versions.length > 1 },
-    snapshot: { revision, asOf, sourceDigest: sha256(canonical(list.map(h => h.name))), completeness: 'complete', missingSources: [] },
+    snapshot: { revision, asOf, sourceDigest: sha256(canonical(list.map(h => h.name))), completeness, missingSources },
     outcome: { quality, delivery, cohortState: delivery === 'ready-for-merge' ? 'completed' : delivery === 'in-progress' ? 'running' : 'blocked', reason: delivery === 'awaiting-scope-decision' ? 'human-scope' : null, qualityConvergedHead: quality === 'converged' ? lastReview?.data.reviewedHead ?? null : null, reviewedHead: lastReview?.data.reviewedHead ?? null },
     cycles: { attempted: counters.attemptedCycles, completed: counters.completedCycles, perScopeEpoch: [] },
-    execution: { dispatches: list.length, reviewExecutions: counters.reviewExecutions, reviewBatches: counters.reviewBatches, retries: counters.implementationRetries, redirects: 0, contractRevisions: counters.contractRevisions, preparationRepairs: counters.preparationRepairs, engineRecoveries: 0, startedWithoutResult: 0, administrativeDispatches: 0, nestedDispatches: 0 },
+    execution,
     usage,
-    time: { startedAt: intervals.length ? new Date(Math.min(...intervals.map(i => i.startMs))).toISOString() : null, lastObservedAt: intervals.length ? new Date(Math.max(...intervals.map(i => i.endMs))).toISOString() : null, terminalAt: delivery === 'ready-for-merge' ? asOf : null, elapsedMs: time.elapsedMs, activeWallMs: time.activeWallMs, agentMs: time.agentMs, waitMs: time.waitMs, byPhase: [] },
+    time: { startedAt: known.length ? new Date(Math.min(...known.map(i => i.startMs))).toISOString() : null, lastObservedAt: known.length ? new Date(Math.max(...known.map(i => i.endMs))).toISOString() : null, terminalAt: delivery === 'ready-for-merge' ? asOf : null, elapsedMs: time.elapsedMs, activeWallMs: time.activeWallMs, agentMs: time.agentMs, waitMs: time.waitMs, incomplete: time.incomplete, byPhase: [] },
     defects: { openBySeverity, closedBySeverity, late, entries: [...findingsById.values()] },
     scopeChanges: { ...scopeCounts, entries: scopeEntries },
     steps: merged,

@@ -902,48 +902,65 @@ test('T-23: HANDOFF_SCHEMA_VERSION (this sandboxed file cannot import cycle-stat
   assert.equal(wf, state)
 })
 
-test('T-23 (DT-10): a proven-done entry capsule spends ZERO dispatches — no contract-generator, no redirect-only agent, no fresh review', async () => {
-  const capsule = { workflowVersion: '4.0.0', schemaVersion: 3, run: 'story-292', story: '292', pr: 7, next: { step: 'done', reviewedHead: HEAD, round: 2, verdict: 'Approved' }, expectedHead: HEAD }
-  const { result, calls } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], entryCapsules: { '292': capsule } }, dispatch: () => ({}) })
-  assert.equal(calls.length, 0, 'no agent was ever dispatched')
-  assert.equal(result.metrics.dispatches, 0)
-  assert.deepEqual({ status: result.batch[0].status, reviewedHead: result.batch[0].reviewedHead, verdict: result.batch[0].verdict, fromCapsule: result.batch[0].fromCapsule }, { status: 'ready-for-merge', reviewedHead: HEAD, verdict: 'Approved', fromCapsule: true })
+// US-479 remediation (Finding 1): the entry capsule is NEVER an authority. A prior design let a
+// self-consistent capsule short-circuit straight to `ready-for-merge` with zero dispatch — even an
+// UNAPPROVED verdict, a fabricated `run`, or a stale head passed its shape check, because the
+// sandbox has no way to confirm any of it. That shortcut is removed: entryCapsules is still parsed
+// and schema-validated (unaffected), but it can never change what gets dispatched or reported.
+test('Finding 1 RED->GREEN (reported reproduction): a capsule with an UNAPPROVED verdict and a NONEXISTENT run must NOT reach ready-for-merge — a real dispatch decides, and here it reports what it was actually told', async () => {
+  const capsule = { workflowVersion: '4.0.0', schemaVersion: 3, run: 'nonexistent-run', story: '292', pr: 7, next: { step: 'done', reviewedHead: HEAD, round: 2, verdict: 'CHANGES-REQUESTED' } }
+  const { result, calls } = await runWorkflow({ args: { cards: [{ id: '292', title: 'T', branch: 'b', prNumber: 7 }], entryCapsules: { '292': capsule } }, dispatch: stdDispatch({ review: { verdict: 'Rework', findings: [finding()] } }) })
+  assert.ok(calls.length > 0, 'the capsule never skips the real dispatch')
+  assert.notEqual(result.batch[0].status, 'ready-for-merge')
 })
 
-test('T-23: a capsule that disagrees on story id, PR, workflow major, schema version, readiness or the reviewed head is NEVER trusted — normal dispatch proceeds instead of a shortcut', async () => {
-  const base = { workflowVersion: '4.0.0', schemaVersion: 3, run: 'story-292', story: '292', pr: 7, next: { step: 'done', reviewedHead: HEAD, verdict: 'Approved' } }
+test('Finding 1: no capsule shape — however self-consistent — ever produces ready-for-merge without a real dispatch; every negative case in the finding still requires the normal pipeline', async () => {
+  const base = { workflowVersion: '4.0.0', schemaVersion: 3, run: 'story-292', story: '292', pr: 7, next: { step: 'done', reviewedHead: HEAD, verdict: 'Approved' }, expectedHead: HEAD }
   const cases = {
-    'wrong story': { ...base, story: '999' },
+    'unapproved verdict': { ...base, next: { ...base.next, verdict: 'CHANGES-REQUESTED' } },
+    'nonexistent run': { ...base, run: 'nonexistent-run' },
+    'approved verdict but a stale head (expectedHead disagrees)': { ...base, expectedHead: HEAD2 },
+    'wrong story id': { ...base, story: '999' },
     'wrong pr': { ...base, pr: 8 },
     'wrong workflow major': { ...base, workflowVersion: '3.9.9' },
     'wrong schema version': { ...base, schemaVersion: 2 },
-    'not actually done': { ...base, next: { step: 'verify', mode: 'first' } },
-    'expectedHead contradicts reviewedHead': { ...base, expectedHead: HEAD2 },
+    'not actually done yet': { ...base, next: { step: 'verify', mode: 'first' } },
   }
   for (const [label, capsule] of Object.entries(cases)) {
-    const { result, calls } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], entryCapsules: { '292': capsule } }, dispatch: stdDispatch() })
-    assert.notEqual(result.batch[0].fromCapsule, true, label)
-    assert.ok(calls.length > 0, `${label}: normal dispatch should have run`)
-    assert.equal(result.batch[0].status, 'ready-for-merge', label)
+    // the REAL dispatch reports work still pending (gate/custody/scope not yet clear) — the
+    // capsule's own optimistic claim must never override that
+    const { result, calls } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], entryCapsules: { '292': capsule } }, dispatch: stdDispatch({ review: { verdict: 'Rework', findings: [finding()] } }) })
+    assert.ok(calls.length > 0, `${label}: a real dispatch must have run`)
+    assert.notEqual(result.batch[0].status, 'ready-for-merge', label)
   }
 })
 
-test('T-23: entryCapsules is validated strictly at parse time — an unknown key or a missing required field throws before any dispatch', async () => {
+test('Finding 1: the POSITIVE case comes from REAL dispatch evidence — the same fixture that always proved readiness (the phase\'s own resolve()-driven redirect) — never a capsule built and labeled "proven" in the test', async () => {
+  const capsule = { workflowVersion: '4.0.0', schemaVersion: 3, run: 'story-292', story: '292', pr: 7, next: { step: 'done', reviewedHead: HEAD, verdict: 'Approved' }, expectedHead: HEAD }
+  const { result, calls } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], entryCapsules: { '292': capsule } }, dispatch: stdDispatch() })
+  assert.ok(calls.length > 0, 'readiness still required a real dispatch — the capsule alone proves nothing')
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.notEqual(result.batch[0].fromCapsule, true, 'the outcome is not attributed to the capsule — it came from the real redirect')
+})
+
+test('Finding 1: entryCapsules is still parsed and schema-validated (unaffected by the remediation) — an unknown key or a missing required field throws before any dispatch', async () => {
   await assert.rejects(runWorkflow({ args: { cards: [STORY], entryCapsules: { 292: { workflowVersion: '4.0.0', schemaVersion: 3, run: 'r', story: '292', next: { step: 'done' }, bogus: true } } }, dispatch: stdDispatch() }), /bogus/)
   await assert.rejects(runWorkflow({ args: { cards: [STORY], entryCapsules: { 292: { workflowVersion: '4.0.0' } } }, dispatch: stdDispatch() }), /entryCapsules\.292/)
   await assert.rejects(runWorkflow({ args: { cards: [STORY], entryCapsules: 'not-an-object' }, dispatch: stdDispatch() }), /entryCapsules.*object/)
 })
 
-test('T-23: a MIXED batch still runs contracts (not every story shortcuts), but the capsule story spends zero of its OWN dispatches and no prompt ever names it', async () => {
+test('Finding 1: a MIXED batch dispatches BOTH stories normally — a capsule for one story never skips its dispatch, and the batch-wide contract-phase call always runs', async () => {
   const STORY2 = { id: '293', title: 'U', branch: 'feat/#293-y' }
   const capsule = { workflowVersion: '4.0.0', schemaVersion: 3, run: 'story-292', story: '292', pr: 7, next: { step: 'done', reviewedHead: HEAD, verdict: 'Approved' }, expectedHead: HEAD }
   const { result, calls } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }, STORY2], entryCapsules: { '292': capsule } }, dispatch: stdDispatch() })
-  const shortcut = result.batch.find(b => b.story.id === '292')
+  const withCapsule = result.batch.find(b => b.story.id === '292')
   const normal = result.batch.find(b => b.story.id === '293')
-  assert.deepEqual({ status: shortcut.status, fromCapsule: shortcut.fromCapsule }, { status: 'ready-for-merge', fromCapsule: true })
+  assert.equal(withCapsule.status, 'ready-for-merge')
+  assert.notEqual(withCapsule.fromCapsule, true)
   assert.equal(normal.status, 'ready-for-merge')
-  assert.ok(!calls.some(c => c.prompt.includes('story #292')), 'no dispatched prompt ever named the shortcut story')
-  assert.ok(calls.some(c => c.prompt.includes('story #293')), 'the other story dispatched normally')
+  assert.ok(calls.some(c => c.prompt.includes('story #292')), 'story 292 dispatched for real — the capsule never skipped it')
+  assert.ok(calls.some(c => c.prompt.includes('story #293')))
+  assert.ok(calls.some(c => c.opts.agentType === 'pair-contract-generator'), 'the batch-wide contract call always runs — no capsule-based skip')
 })
 
 // ═══════════════════════════════════════════════════════════════════════════

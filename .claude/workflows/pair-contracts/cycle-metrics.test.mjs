@@ -70,6 +70,49 @@ test('DT-19: a duplicate journal record and a cumulative usage replacement do no
   assert.equal(bad.errors.length, 2)
 })
 
+// ── Finding 3 (remediation): idempotent delta dedup, coverage from OBSERVED executions ──────
+test('Finding 3.B RED->GREEN: the SAME delta usage event (identical executionId AND eventId) replayed twice is applied ONCE — 100, never 200; a genuinely distinct delta (different eventId) still sums', () => {
+  const first = { eventId: 'usage-ev-1', kind: 'usage-observed', runId: 'r1', sourceRef: 's1', executionId: 'x1', usage: { inputTokens: 100, isDelta: true } }
+  const replay = { ...first } // byte-identical replay of the SAME observed event
+  const out = mergeObservations([first, replay])
+  assert.equal(out.observations.length, 1)
+  assert.equal(out.observations[0].usage.inputTokens, 100, 'a replayed identical delta event must not double the total')
+  // a THIRD, genuinely new delta (its own eventId) still sums on top
+  const second = { eventId: 'usage-ev-2', kind: 'usage-observed', runId: 'r1', sourceRef: 's1', executionId: 'x1', usage: { inputTokens: 40, isDelta: true } }
+  const withNewDelta = mergeObservations([first, replay, second])
+  assert.equal(withNewDelta.observations[0].usage.inputTokens, 140, 'a distinct delta event is summed, never dropped')
+  // replayed out of order (the "new" one arrives before its own later replay) is still idempotent
+  const outOfOrder = mergeObservations([first, second, replay])
+  assert.equal(outOfOrder.observations[0].usage.inputTokens, 140)
+})
+
+test('Finding 3.A RED->GREEN: reduceUsage denominator counts every OBSERVED execution (step-started/finished), not only ones that reported usage — B is explicitly missing, never invisible', () => {
+  const obs = [
+    { eventId: 'a-start', executionId: 'A', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-started', sourceRef: 'journal' },
+    { eventId: 'a-fin', executionId: 'A', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-finished', sourceRef: 'journal' },
+    { eventId: 'a-usage', executionId: 'A', runId: 'r1', phase: 'p', attempt: 1, kind: 'usage-observed', sourceRef: 'usage', usage: { inputTokens: 100 } },
+    { eventId: 'b-start', executionId: 'B', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-started', sourceRef: 'journal' },
+    { eventId: 'b-fin', executionId: 'B', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-finished', sourceRef: 'journal' },
+    // B never reports usage
+  ]
+  const u = reduceUsage(obs)
+  assert.deepEqual(u.coverage, { known: 1, total: 2 }, 'B is a real observed execution missing usage, so the denominator is 2')
+  assert.deepEqual(u.missingExecutionIds, ['B'])
+  assert.equal(u.observedTotalTokens, 100)
+})
+
+test('Finding 3: parent/child accounting never double-counts an inclusive-subtree total together with its own children', () => {
+  const obs = [
+    { eventId: 'p-start', executionId: 'parent', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-started', sourceRef: 'journal' },
+    { eventId: 'p-usage', executionId: 'parent', runId: 'r1', phase: 'p', attempt: 1, kind: 'usage-observed', sourceRef: 'usage', usage: { inputTokens: 500, accountingBasis: 'inclusive-subtree' } },
+    { eventId: 'c-start', executionId: 'child', parentExecutionId: 'parent', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-started', sourceRef: 'journal' },
+    { eventId: 'c-usage', executionId: 'child', parentExecutionId: 'parent', runId: 'r1', phase: 'p', attempt: 1, kind: 'usage-observed', sourceRef: 'usage', usage: { inputTokens: 120 } },
+  ]
+  const u = reduceUsage(obs)
+  assert.equal(u.observedTotalTokens, 500, 'the parent already reports the whole subtree — the child is excluded, never added again')
+  assert.equal(u.coverage.total, 1, 'the child is excluded from the denominator too — it is accounted for, not missing')
+})
+
 // ── shared cost allocation (DT-21) ───────────────────────────────────────────────────────────
 test('DT-21: 11 shared tokens over 3 sorted admitted PRs allocate 4/4/3, including a failed PR; batch counts 11 once', () => {
   const out = allocateSharedCost({ tokens: 11, admittedIds: ['292', '100', '5'] })
@@ -112,6 +155,53 @@ test('DT-20/22: known usage sums are exact; a missing token count is never a fab
   assert.equal(empty.observedTotalTokens, null, 'zero observations means UNKNOWN, never a fabricated 0')
 })
 
+// ── Finding 2 (remediation): observer/reducer timestamp format must agree ───────────────────
+test('Finding 2 RED->GREEN: runtimeTick emits observedAt as an epoch-ms NUMBER (S7); reduceCycleMetrics must consume that format directly, never Date.parse on a number, never crash', () => {
+  const { dir } = runDir()
+  const obs = [
+    { eventId: 'e1', executionId: 'x1', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-started', sourceRef: 'journal', observedAt: 1700000000000 },
+    { eventId: 'e2', executionId: 'x1', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-finished', sourceRef: 'journal', observedAt: 1700000001000 },
+  ]
+  // this call used to throw RangeError: Invalid time value (Date.parse(1700000000000) is NaN)
+  const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '1', branch: 'b', observations: obs })
+  assert.equal(view.time.elapsedMs, 1000)
+  assert.equal(view.time.activeWallMs, 1000)
+  assert.equal(view.time.startedAt, new Date(1700000000000).toISOString())
+  assert.equal(view.time.lastObservedAt, new Date(1700000001000).toISOString())
+})
+
+test('Finding 2: replay/resume across separate ticks (start on tick 1, finish on tick 2) still produces one correct interval; invalid timestamps are explicit partial evidence, never a crash and never an invented duration', () => {
+  const { dir } = runDir()
+  // start and finish observed on SEPARATE ticks (merged, as a checkpoint would accumulate them)
+  const tick1 = [{ eventId: 'e1', executionId: 'x1', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-started', sourceRef: 'journal', observedAt: 1000 }]
+  const tick2 = [{ eventId: 'e2', executionId: 'x1', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-finished', sourceRef: 'journal', observedAt: 4000 }]
+  const { observations: merged1 } = mergeObservations(tick1)
+  const { observations: merged2 } = mergeObservations([...merged1, ...tick2])
+  const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '1', branch: 'b', observations: merged2 })
+  assert.equal(view.time.elapsedMs, 3000)
+  assert.equal(view.time.incomplete, false, 'both timestamps were valid — nothing is flagged incomplete')
+  assert.equal(view.time.activeWallMs, 3000)
+  // an invalid/garbage timestamp on one execution never crashes and never fabricates a duration —
+  // it is dropped from the union/sum and the view stays honest about partial coverage
+  const withGarbage = [...merged2, { eventId: 'e3', executionId: 'x2', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-started', sourceRef: 'journal', observedAt: 'not-a-timestamp' }, { eventId: 'e4', executionId: 'x2', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-finished', sourceRef: 'journal', observedAt: NaN }]
+  const view2 = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '1', branch: 'b', observations: withGarbage })
+  assert.equal(view2.time.elapsedMs, 3000, 'the garbage-timestamped execution never poisons the valid interval')
+  assert.equal(view2.time.activeWallMs, 3000)
+})
+
+test('Finding 2: archived/replayed log entries arriving simultaneously (identical arrival tick) never get a fabricated non-zero historical duration attributed to them', () => {
+  const { dir } = runDir()
+  // two archived records observed in the SAME tick (same arrival time) — their REAL historical
+  // duration is unknown; the reducer must not invent one from the arrival gap being zero
+  const obs = [
+    { eventId: 'e1', executionId: 'x1', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-started', sourceRef: 'journal', observedAt: 5000 },
+    { eventId: 'e2', executionId: 'x1', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-finished', sourceRef: 'journal', observedAt: 5000 },
+  ]
+  const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '1', branch: 'b', observations: obs })
+  assert.equal(view.time.agentMs, 0, 'a zero-width observed interval is legitimately zero, not an error')
+  assert.equal(view.time.activeWallMs, 0)
+})
+
 // ── the main reducer, over real handoffs ──────────────────────────────────────────────────────
 test('DT-18: reduceCycleMetrics derives quality/delivery/cycles/defects/scopeChanges from the durable handoffs alone — schemaVersion pinned, snapshot has a digest', () => {
   const { dir } = runDir()
@@ -149,6 +239,53 @@ test('reduceCycleMetrics: zero blocking findings and a pending scope proposal is
   const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7 })
   assert.equal(view.outcome.quality, 'converged')
   assert.equal(view.outcome.delivery, 'awaiting-scope-decision')
+})
+
+// ── Finding 4 (remediation): real execution derivation, never placeholders ──────────────────
+test('Finding 4: execution.dispatches counts OBSERVED executions (step-started), never the handoff count; startedWithoutResult is real; zero telemetry is explicit null, not a fabricated 0', () => {
+  const { dir } = runDir()
+  const file = join(dir, 'd.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath: '/x', contractHash: `sha256:${'1'.repeat(64)}` }))
+  publish({ dir, file, phase: 'a0', skill: 'red-spec', workflowVersion: '4.0.0' })
+  // no observations at all: dispatches/startedWithoutResult are NOT measurable — null, never 0
+  const noObs = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7 })
+  assert.equal(noObs.execution.dispatches, null)
+  assert.equal(noObs.execution.startedWithoutResult, null)
+  assert.equal(noObs.execution.redirects, null)
+  assert.equal(noObs.execution.engineRecoveries, null)
+  assert.equal(noObs.execution.administrativeDispatches, null)
+  assert.equal(noObs.execution.nestedDispatches, null)
+  // three executions started, only two finished — one handoff exists (unrelated to this count)
+  const obs = [
+    { eventId: 'a-s', executionId: 'A', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-started', sourceRef: 'journal' },
+    { eventId: 'a-f', executionId: 'A', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-finished', sourceRef: 'journal' },
+    { eventId: 'b-s', executionId: 'B', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-started', sourceRef: 'journal' },
+    { eventId: 'b-f', executionId: 'B', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-finished', sourceRef: 'journal' },
+    { eventId: 'c-s', executionId: 'C', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-started', sourceRef: 'journal' },
+    // C never reports a result — started without a result
+  ]
+  const withObs = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, observations: obs })
+  assert.equal(withObs.execution.dispatches, 3, 'three EXECUTIONS started, not the one handoff on disk')
+  assert.equal(withObs.execution.startedWithoutResult, 1)
+})
+
+test('Finding 4: an explicitly supplied dispatchStats (from the host launch recipe / WF result) fills redirects/engineRecoveries/administrativeDispatches/nestedDispatches honestly — never invented when absent', () => {
+  const { dir } = runDir()
+  const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', dispatchStats: { redirects: 2, engineRecoveries: 1, administrativeDispatches: 0, nestedDispatches: 3 } })
+  assert.deepEqual({ redirects: view.execution.redirects, engineRecoveries: view.execution.engineRecoveries, administrativeDispatches: view.execution.administrativeDispatches, nestedDispatches: view.execution.nestedDispatches }, { redirects: 2, engineRecoveries: 1, administrativeDispatches: 0, nestedDispatches: 3 })
+})
+
+test('Finding 4: byRole aggregates usage tokens by the role an observation actually carries; sharedOverhead is the real allocateSharedCost share, wired into the reducer path (not orphaned)', () => {
+  const { dir } = runDir()
+  const obs = [
+    { eventId: 'r-s', executionId: 'R', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-started', sourceRef: 'journal', role: 'reviewer' },
+    { eventId: 'r-u', executionId: 'R', runId: 'r1', phase: 'p', attempt: 1, kind: 'usage-observed', sourceRef: 'usage', role: 'reviewer', usage: { inputTokens: 200 } },
+    { eventId: 'g-s', executionId: 'G', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-started', sourceRef: 'journal', role: 'green' },
+    { eventId: 'g-u', executionId: 'G', runId: 'r1', phase: 'p', attempt: 1, kind: 'usage-observed', sourceRef: 'usage', role: 'green', usage: { inputTokens: 50 } },
+  ]
+  const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '292', branch: 'b', observations: obs, sharedCost: { tokens: 11, admittedIds: ['292', '100', '5'] } })
+  assert.deepEqual(new Set(view.usage.byRole), new Set([{ role: 'reviewer', tokens: 200 }, { role: 'green', tokens: 50 }]))
+  assert.equal(view.usage.sharedOverhead, 4, 'story 292 sorts alongside 100 for the +1 remainder share (DT-21 formula)')
 })
 
 test('writeMetrics: atomic write, revision-guarded — a stale revision never overwrites a newer persisted view', () => {

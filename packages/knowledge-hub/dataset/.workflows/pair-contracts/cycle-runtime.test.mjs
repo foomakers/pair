@@ -145,6 +145,39 @@ test('shouldStop: keeps going with no terminal; stops once terminal+reconciled; 
 })
 
 // ── runtimeTick: real fs + real cycle-state handoffs, one full cycle ─────────────────────────
+// ── Finding 3 (remediation): the ADAPTER preserves event identity, not just the pure reducer ──
+test('Finding 3 (adapter): usageRecordToObservation preserves the raw record\'s OWN eventId (never a fixed synthesized one) — two genuinely distinct delta samples for the same execution stay distinguishable; role and parentExecutionId pass through', () => {
+  const first = usageRecordToObservation({ key: 'k', agentId: 'a1', eventId: 'usage-ev-1', role: 'reviewer', usage: { inputTokens: 10, isDelta: true } }, { runId: 'r1', storyId: '42', observedAt: 1 })
+  const second = usageRecordToObservation({ key: 'k', agentId: 'a1', eventId: 'usage-ev-2', role: 'reviewer', usage: { inputTokens: 5, isDelta: true } }, { runId: 'r1', storyId: '42', observedAt: 2 })
+  assert.notEqual(first.eventId, second.eventId, 'two distinct raw samples must not collapse onto one fixed synthesized eventId')
+  assert.equal(first.role, 'reviewer')
+  const withParent = usageRecordToObservation({ key: 'k', agentId: 'a1', parentExecutionId: 'parent-x' }, { runId: 'r1', storyId: '42', observedAt: 1 })
+  assert.equal(withParent.parentExecutionId, 'parent-x')
+  // no raw eventId supplied: falls back to the fixed id (only correct for a NON-delta cumulative
+  // sample, which mergeObservations replaces rather than sums, so no double count results)
+  const fallback = usageRecordToObservation({ key: 'k', agentId: 'a1' }, { runId: 'r1', storyId: '42', observedAt: 1 })
+  assert.equal(fallback.eventId, `${fallback.executionId}:usage`)
+})
+
+test('Finding 3 (adapter, real duplicate source line): the usage SOURCE itself commits the same delta record twice (an at-least-once upstream retry) — runtimeTick, through the real adapter mapping, applies it once; a second, genuinely NEW delta appended later still sums on top', () => {
+  const { dir, root } = runDir()
+  const file = join(dir, 'd.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') } }))
+  publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.0' })
+  const journal = journalFile(root, [{ key: 'prepare', agentId: 'ag1', started: true, result: { status: 'ok' } }])
+  const usagePath = join(root, 'usage.jsonl')
+  const record = { key: 'prepare', agentId: 'ag1', eventId: 'usage-ev-1', usage: { inputTokens: 100, isDelta: true } }
+  // the SAME record committed twice in one read, as an at-least-once upstream export would
+  writeFileSync(usagePath, JSON.stringify(record) + '\n' + JSON.stringify(record) + '\n')
+  const tick1 = runtimeTick({ dir, journalPath: journal, usagePath, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now: 1 })
+  writeCheckpoint(dir, tick1.checkpoint)
+  assert.equal(tick1.view.usage.observedTotalTokens, 100, 'the duplicated source line is applied once through the REAL adapter, not the pure function alone')
+  // a later, genuinely NEW delta (its own eventId) appended to the same file DOES sum on top
+  appendFileSync(usagePath, JSON.stringify({ key: 'prepare', agentId: 'ag1', eventId: 'usage-ev-2', usage: { inputTokens: 25, isDelta: true } }) + '\n')
+  const tick2 = runtimeTick({ dir, journalPath: journal, usagePath, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now: 2 })
+  assert.equal(tick2.view.usage.observedTotalTokens, 125)
+})
+
 test('DT-18/24: one runtime tick validates sources, merges idempotently, reduces metrics, writes atomically and reports errors visibly', () => {
   const { dir, root } = runDir()
   const file = join(dir, 'd.json')
@@ -220,16 +253,31 @@ test('runObserveLoop: an abort signal stops the loop immediately, mid-poll — n
 })
 
 // ── finalize: honest completeness, never claims a source it never saw ───────────────────────
-test('finalize: honest completeness — partial with no prior observations, complete once some were recorded', () => {
+test('finalize: honest completeness — partial with no prior observations; a lone observation missing its counterpart/usage is STILL partial (Finding 4: an observation existing is not proof every declared source was reconciled); complete only once start+finish+usage all agree', () => {
   const { dir } = runDir()
   const file = join(dir, 'd.json')
   writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') } }))
   publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.0' })
   const noObs = finalizeMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'run-1' })
   assert.equal(noObs.view.snapshot.completeness, 'partial')
+  // ONE observation with no matching start and no usage — an execution IS visible now, but it is
+  // missing usage, so this must still be partial, never complete just because something exists
   writeCheckpoint(dir, { journalOffset: 5, usageOffset: 0, observations: [{ eventId: 'e1', executionId: 'x', runId: 'run-1', kind: 'step-finished', phase: 'r0', attempt: 1, sourceRef: 'journal' }], revision: 1 })
-  const withObs = finalizeMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'run-1' })
-  assert.equal(withObs.view.snapshot.completeness, 'complete')
+  const oneSided = finalizeMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'run-1' })
+  assert.equal(oneSided.view.snapshot.completeness, 'partial', 'a lone finish observation with no usage is not proof of a fully reconciled cycle')
+  // start + finish + usage, all consistent — genuinely complete
+  writeCheckpoint(dir, {
+    journalOffset: 10,
+    usageOffset: 5,
+    observations: [
+      { eventId: 'e-start', executionId: 'x', runId: 'run-1', kind: 'step-started', phase: 'r0', attempt: 1, sourceRef: 'journal', observedAt: 1000 },
+      { eventId: 'e-fin', executionId: 'x', runId: 'run-1', kind: 'step-finished', phase: 'r0', attempt: 1, sourceRef: 'journal', observedAt: 2000 },
+      { eventId: 'e-usage', executionId: 'x', runId: 'run-1', kind: 'usage-observed', phase: 'r0', attempt: 1, sourceRef: 'usage', usage: { inputTokens: 10 } },
+    ],
+    revision: 2,
+  })
+  const complete = finalizeMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'run-1' })
+  assert.equal(complete.view.snapshot.completeness, 'complete')
 })
 
 // ── CLI ──────────────────────────────────────────────────────────────────────────────────────
@@ -238,7 +286,7 @@ test('CLI: entry/reconcile/finalize print JSON; observe runs a bounded real loop
   const file = join(dir, 'd.json')
   writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') } }))
   publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.0' })
-  let r = spawnSync('node', [CLI, 'entry', '--dir', dir, '--repo', 'foomakers/pair', '--story', '42'], { encoding: 'utf8' })
+  let r = spawnSync('node', [CLI, 'entry', '--dir', dir, '--repo', 'foomakers/pair', '--story', '42', '--workflowVersion', '4.0.0'], { encoding: 'utf8' })
   assert.equal(r.status, 0, r.stdout + r.stderr)
   const journal = journalFile(root, [{ key: 'prepare', agentId: 'ag1', started: true, result: { status: 'ok' }, terminal: true }])
   r = spawnSync('node', [CLI, 'observe', '--dir', dir, '--repository', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7', '--journal', journal, '--interval-ms', '5', '--max-ticks', '20'], { encoding: 'utf8', timeout: 5000 })

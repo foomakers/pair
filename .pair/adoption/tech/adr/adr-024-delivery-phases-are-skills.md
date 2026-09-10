@@ -246,11 +246,57 @@ latest archived run directory
 cycle there needs an explicit migration acknowledgment (`recordType: migration`) before continuing
 under this engine; nothing was rewritten to produce this finding.
 
-**Known metrics limitations at `4.0.0`** (never claimed as measured): `usage.byRole`,
-`usage.sharedOverhead`, and `execution.redirects` / `engineRecoveries` / `startedWithoutResult` /
-`administrativeDispatches` / `nestedDispatches` are placeholders until a live host wiring (a real
-paid run) supplies them. Every other reported quantity's known/partial coverage is exact, derived
-from the durable handoffs alone.
+## Amendment 2026-09-10 (c) — targeted remediation of six T-19..T-27 findings
+
+Six independent-review findings against the `4.0.0` metrics/entry-capsule/scope-decision surface,
+fixed test-first, no scope change:
+
+1. **Entry capsule was trusted as approval.** `entryCapsules`' zero-dispatch shortcut (T-23) let a
+   self-consistent but entirely fabricated capsule (nonexistent run, stale head, unapproved
+   verdict) reach `ready-for-merge` with no real check — the sandbox has no filesystem to validate
+   one itself. Removed: WF no longer short-circuits on a capsule; readiness comes ONLY from the
+   real dispatched phase's own `cycle-state.mjs resolve` redirect, exactly as before T-23. The
+   contract-phase batch skip tied to the same shortcut is removed with it.
+2. **Observer/reducer timestamp mismatch.** `cycle-runtime.mjs` emits `observedAt` as an epoch-ms
+   integer (S7); `cycle-metrics.mjs` fed it to `Date.parse` (string-only), producing `NaN` and then
+   `RangeError: Invalid time value`. Fixed with one shared `toEpochMs` accepting a number or a
+   validated ISO string; an invalid value is `null` (explicit partial evidence), never a crash or
+   a fabricated duration. `time.incomplete`/`flaggedCount` now propagate into the view.
+3. **Token accounting was not idempotent and coverage undercounted.** `reduceUsage`'s denominator
+   now comes from every OBSERVED execution (any kind), not only ones reporting usage — a started-
+   but-unmeasured execution is explicitly `missingExecutionIds`, never invisible.
+   `mergeObservations` dedupes delta samples by `(executionId, eventId)`, so an identical replay
+   sums once; the ADAPTER (`usageRecordToObservation`) now preserves a raw sample's OWN `eventId`
+   instead of always synthesizing a fixed one, which had made every later genuinely-new delta
+   collapse onto the first. Parent/child: an `accountingBasis: 'inclusive-subtree'` execution's
+   descendants are excluded from both the sum and the denominator.
+4. **Placeholder metrics presented as measured.** `execution.dispatches`/`startedWithoutResult` are
+   now derived from observed `step-started`/`step-finished` events (never the handoff count);
+   `redirects`/`engineRecoveries`/`administrativeDispatches`/`nestedDispatches` accept an optional
+   `dispatchStats` argument (the host launch recipe's own WF-return counters) and stay explicit
+   `null` — never a fabricated `0` — when not supplied; `usage.byRole` aggregates real observations
+   that carry a `role`; `usage.sharedOverhead` now calls the previously-orphaned
+   `allocateSharedCost` from the real reducer path via an optional `sharedCost` argument;
+   `snapshot.completeness` is `'complete'` only when every observed execution has matching usage
+   AND timing has no incomplete flags — an observation existing is no longer, by itself, proof of
+   a fully reconciled cycle (`finalizeMetrics` no longer overrides this with a cruder check).
+5. **Entry host output was unparseable by the workflow.** `buildEntryCapsule` returned
+   `schemaVersion: null, run: null`, no `next`, and a `note` key WF's strict parser rejects. It now
+   derives a genuinely-grounded capsule from a real `cycle-state.mjs resolve()` call (real
+   authority at capture time) in the exact shape the parser accepts, or returns `capsule: null`
+   when nothing is yet resolvable — never a malformed placeholder. Compatibility with finding 1:
+   this fixes the PRODUCER/CONSUMER shape mismatch; it does not restore any authority to the
+   capsule itself.
+6. **Scope decisions marked applied without their real effects.** `extend-current-card` now
+   actually updates the story card (idempotent: skips the edit if already applied, per a stable
+   marker) and reads back the confirmed body before recording `status: extended`; `new-card`
+   verifies an existing `targetIssueUrl` via a real `gh issue view`, or — only when explicitly
+   authorized with an approved title — creates the card and records the read-back URL; neither
+   marks success without a confirmed effect. Tested against a fake `gh` boundary only; no real card
+   was touched or created by this remediation.
+
+Every other reported quantity's known/partial coverage was already exact, derived from the durable
+handoffs alone.
 
 ## Consequences
 

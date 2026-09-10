@@ -55,8 +55,24 @@ import { createHash } from 'node:crypto'
 
 import { publish, resolve, applyScopeDecisions, scopeBaselineHashOf } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 import { reduceCycleMetrics } from '../../skills/pair-workflow-review-phase/scripts/cycle-metrics.mjs'
-import { finalizeMetrics } from '../../skills/pair-workflow-review-phase/scripts/cycle-runtime.mjs'
+import { finalizeMetrics, buildEntryCapsule } from '../../skills/pair-workflow-review-phase/scripts/cycle-runtime.mjs'
 import { listComments, findByMarker, upsert } from '../../skills/pair-workflow-review-phase/scripts/pr-comment.mjs'
+
+// Finding 5 (producer) fed to the REAL WF consumer (its actual entryCapsules parser) — the exact
+// boundary the finding names: "compatibilità non significa fiducia" (Finding 1 still governs what
+// happens once WF accepts the shape).
+const WF_SRC = readFileSync(new URL('../pair-implement-batch.js', import.meta.url), 'utf8').replace(/^export /gm, '')
+const WF_AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
+async function runWF({ cards, entryCapsules, dispatch }) {
+  const calls = []
+  const agent = async (prompt, opts) => {
+    calls.push({ prompt, opts })
+    return dispatch ? dispatch(prompt, opts) : {}
+  }
+  const parallel = fns => Promise.all(fns.map(f => Promise.resolve().then(f).catch(() => null)))
+  const result = await new WF_AsyncFunction('args', 'agent', 'parallel', 'log', WF_SRC)({ cards, entryCapsules }, agent, parallel, () => {})
+  return { result, calls }
+}
 
 const SHA = c => c.repeat(40)
 const V = '4.0.0'
@@ -207,4 +223,43 @@ test('T-27: one composed lifecycle — initial build, a real defect + a scope pr
   // ── a duplicate re-application of the SAME decisionRef is idempotent, never a second epoch ──
   const replay = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 480, maintainer: 'rucka', workflowVersion: V })
   assert.deepEqual(replay, { applied: true, reason: 'already-applied' })
+})
+
+// ── Finding 5: the ACTUAL entry producer output fed to the ACTUAL workflow consumer ──────────
+test('Finding 5 RED->GREEN: buildEntryCapsule\'s real output is accepted by WF\'s real entryCapsules parser — fresh state (no dir yet), a valid resume, a stale/incompatible schema, and incomplete (malformed) evidence', async () => {
+  // fresh: the run directory does not exist yet — no capsule, never a malformed placeholder
+  const freshRoot = mkdtempSync(join(tmpdir(), 'entry-fresh-'))
+  const freshDir = join(freshRoot, '.pair', 'working', 'runs', 'story-501', '501')
+  const fresh = buildEntryCapsule({ dir: freshDir, repo: 'foomakers/pair', story: '501', workflowVersion: V })
+  assert.equal(fresh.capsule, null)
+  assert.equal(fresh.telemetry.capability, 'fresh')
+
+  // valid resume: a real in-progress cycle (a0 prepared, not yet validated)
+  const dir = runDir()
+  step(dir, 'a0', 'red-spec', { status: 'red', mode: 'initial', contractPath: '/x', contractHash: `sha256:${'1'.repeat(64)}` })
+  const resumed = buildEntryCapsule({ dir, repo: 'foomakers/pair', story: '479', pr: 480, workflowVersion: V })
+  assert.ok(resumed.capsule, 'a real, resolvable state produces a real capsule, never null')
+  assert.equal(resumed.capsule.schemaVersion, 3)
+  assert.equal(resumed.capsule.run, 'canary-479-replay')
+  assert.equal(resumed.capsule.next.step, 'validate')
+  // fed to the REAL workflow parser: must not throw, and — Finding 1 — must not skip the dispatch
+  const { calls } = await runWF({ cards: [{ id: '479', title: 'T', branch: 'feature/US-479-delivery-workflow-to-be', prNumber: 480 }], entryCapsules: { 479: resumed.capsule }, dispatch: () => ({ status: 'redirect', next: { step: 'validate', mode: 'initial', phase: 'a0', base: SHA('a') } }) })
+  assert.ok(calls.length > 0, 'the capsule is compatible with the parser, but it never skips the real dispatch (Finding 1)')
+
+  // stale/incompatible: a handoff from a different schema major
+  const staleRoot = mkdtempSync(join(tmpdir(), 'entry-stale-'))
+  const staleDir = join(staleRoot, '.pair', 'working', 'runs', 'story-502', '502')
+  mkdirSync(staleDir, { recursive: true })
+  writeFileSync(join(staleDir, 'r0-review-phase.json'), JSON.stringify({ run: 'story-502', story: '502', phase: 'r0', skill: 'review-phase', schemaVersion: 2, workflowVersion: '3.0.13', reviewedHead: SHA('c'), verdict: 'x', findings: [] }))
+  const stale = buildEntryCapsule({ dir: staleDir, repo: 'foomakers/pair', story: '502', workflowVersion: V })
+  assert.equal(stale.capsule, null)
+  assert.equal(stale.telemetry.capability, 'stale')
+
+  // incomplete/malformed evidence: unparseable JSON on disk
+  const badRoot = mkdtempSync(join(tmpdir(), 'entry-bad-'))
+  const badDir = join(badRoot, '.pair', 'working', 'runs', 'story-503', '503')
+  mkdirSync(badDir, { recursive: true })
+  writeFileSync(join(badDir, 'r0-review-phase.json'), '{not json')
+  const bad = buildEntryCapsule({ dir: badDir, repo: 'foomakers/pair', story: '503', workflowVersion: V })
+  assert.equal(bad.capsule, null, 'malformed evidence never becomes a capsule claiming known state')
 })

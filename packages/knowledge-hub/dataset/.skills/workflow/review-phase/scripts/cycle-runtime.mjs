@@ -4,7 +4,7 @@
 // or usage API) — on the host, via the coordinator's existing shell executor. Imports STATE/COMMENT/
 // METRICS; introduces no new agent. One scoped deterministic local process, not a global watcher.
 //
-//   node <skill dir>/scripts/cycle-runtime.mjs entry --dir <abs> --repo <owner/name> --story <id> [--pr <n>] [--workflowVersion <v>]
+//   node <skill dir>/scripts/cycle-runtime.mjs entry --dir <abs> --repo <owner/name> --story <id> --workflowVersion <v> [--pr <n>] [--policy <json>]
 //     → { capsule, telemetry }  — capsule per S1 (schema/workflow identity, canonical run
 //       reference, PR/story/branch, expectedHead, scopeBaselineHash, last handoff identity, typed
 //       next step) — a cache hint, never approval. `telemetry` names what this host can observe.
@@ -22,11 +22,12 @@
 //
 //   node <skill dir>/scripts/cycle-runtime.mjs finalize --dir <abs> --repo <owner/name> --pr <n> (same story flags)
 //     → the final reduce+write, `completeness` reported honestly (never claims a source it never saw).
-import { existsSync, statSync, openSync, readSync, closeSync, readFileSync, writeFileSync, renameSync, realpathSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, statSync, openSync, readSync, closeSync, readFileSync, writeFileSync, renameSync, realpathSync } from 'node:fs'
+import { join, basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { reduceCycleMetrics, writeMetrics, mergeObservations, publishSummary } from './cycle-metrics.mjs'
 import { listComments, findByMarker, upsert } from './pr-comment.mjs'
+import { resolve as resolveCycleState, readHandoffs, SCHEMA_VERSION } from './cycle-state.mjs'
 
 // ── journal tailing (S7): explicit sources only, complete JSONL records, tolerant of a partial
 // last line, rotation/truncation detected by a shrunk size, replay is idempotent via the offset ──
@@ -70,7 +71,7 @@ export function tailJournalFile({ path, offset = 0 }) {
 export function journalRecordToObservation(record, { runId, storyId, observedAt }) {
   if (!record || typeof record !== 'object' || !record.key) return { error: 'record-missing-key' }
   const executionId = record.executionId || `${runId}:${record.key}:${record.agentId ?? ''}`
-  const base = { eventId: `${executionId}:${record.result === undefined || record.result === null ? 'started' : 'result'}`, executionId, runId, storyId, phase: record.phase ?? record.key, attempt: Number.isInteger(record.attempt) ? record.attempt : 1, sourceRef: 'journal', observedAt }
+  const base = { eventId: `${executionId}:${record.result === undefined || record.result === null ? 'started' : 'result'}`, executionId, parentExecutionId: record.parentExecutionId, role: record.role, runId, storyId, phase: record.phase ?? record.key, attempt: Number.isInteger(record.attempt) ? record.attempt : 1, sourceRef: 'journal', observedAt }
   if (record.result === undefined || record.result === null) return { ...base, kind: 'step-started' }
   if (record.terminal === true) return { ...base, kind: 'run-terminal' }
   const cancelled = record.result?.cancelled === true
@@ -78,10 +79,16 @@ export function journalRecordToObservation(record, { runId, storyId, observedAt 
   return { ...base, kind: cancelled ? 'step-cancelled' : failed ? 'step-failed' : 'step-finished' }
 }
 
+// US-479 remediation (Finding 3): a delta usage sample needs its OWN unique eventId (S7) to be
+// deduped correctly on replay — a fixed `${executionId}:usage` id for every sample would make the
+// reducer treat every later, genuinely NEW delta as a replay of the first and silently drop it.
+// The raw record's own id is preserved when supplied; a cumulative (non-delta) sample is safe to
+// fall back to the fixed id since `mergeObservations` replaces those unconditionally, never sums.
 export function usageRecordToObservation(record, { runId, storyId, observedAt }) {
   if (!record || typeof record !== 'object' || (!record.key && !record.executionId)) return { error: 'record-missing-key' }
   const executionId = record.executionId || `${runId}:${record.key}:${record.agentId ?? ''}`
-  return { eventId: `${executionId}:usage`, executionId, runId, storyId, phase: record.phase ?? record.key ?? 'unknown', attempt: Number.isInteger(record.attempt) ? record.attempt : 1, kind: 'usage-observed', sourceRef: 'usage', observedAt, usage: record.usage ?? record }
+  const eventId = record.eventId || `${executionId}:usage`
+  return { eventId, executionId, parentExecutionId: record.parentExecutionId, role: record.role, runId, storyId, phase: record.phase ?? record.key ?? 'unknown', attempt: Number.isInteger(record.attempt) ? record.attempt : 1, kind: 'usage-observed', sourceRef: 'usage', observedAt, usage: record.usage ?? record }
 }
 
 // ── checkpoint: offsets + accumulated observations, atomic ──────────────────────────────────
@@ -141,11 +148,35 @@ export function runtimeTick({ dir, journalPath, usagePath, runId, storyId, repos
 }
 
 // ── entry (S1, S7): a cache hint the phase re-validates, never approval ─────────────────────
-export function buildEntryCapsule({ dir, repo, story, pr, workflowVersion }) {
-  const jsonFiles = existsSync(dir) ? readdirSync(dir).filter(f => f.endsWith('.json') && !f.startsWith('.')) : []
-  const telemetry = { fsAvailable: true, sourcesDeclared: 0, capability: existsSync(dir) ? 'known-state' : 'fresh' }
-  if (!existsSync(dir) || !jsonFiles.length) return { capsule: null, telemetry }
-  return { capsule: { workflowVersion, schemaVersion: null, run: null, story: String(story), pr: pr ? Number(pr) : undefined, note: 'unresolved — the dispatched phase runs cycle-state.mjs resolve for the authoritative next step; this capsule is informational only' }, telemetry }
+// US-479 remediation (Finding 5): the capsule must be in the EXACT shape WF's strict parser
+// accepts (workflowVersion, schemaVersion, run, story, pr?, branch?, expectedHead?,
+// scopeBaselineHash?, lastHandoff?, next) — no `note`, no null `schemaVersion`/`run`, no missing
+// `next`. It is built from a REAL `cycle-state.mjs resolve()` call (real authority AT CAPTURE
+// TIME) rather than a hand-rolled placeholder; when nothing is yet resolvable, or the state is
+// stale/incompatible, this returns `capsule: null` — never a malformed stand-in. Compatibility
+// with Finding 1: a well-shaped capsule here is STILL never trusted as approval by WF — only
+// grounded enough to be worth forwarding as a cache hint.
+export function buildEntryCapsule({ dir, repo, story, pr, workflowVersion, policy = {} }) {
+  const exists = existsSync(dir)
+  const telemetry = { fsAvailable: true, capability: exists ? 'known-state' : 'fresh' }
+  if (!exists) return { capsule: null, telemetry }
+  const runId = basename(dirname(dir))
+  const result = resolveCycleState({ dir, workflowVersion, policy, entry: pr ? 'pr' : 'fresh', pr: pr !== undefined ? Number(pr) : undefined, runsRoot: dirname(dirname(dir)), story })
+  if (result.status === 'invalid' || result.status === 'incompatible' || result.status === 'other-run' || !result.next) return { capsule: null, telemetry: { ...telemetry, capability: 'stale', reason: result.reason ?? result.status } }
+  const handoffs = readHandoffs(dir)
+  const last = handoffs[handoffs.length - 1]
+  const expectedHead = last?.data?.reviewedHead ?? last?.data?.outputHead ?? undefined
+  const capsule = {
+    workflowVersion,
+    schemaVersion: SCHEMA_VERSION,
+    run: runId,
+    story: String(story),
+    ...(Number.isInteger(result.pr) ? { pr: result.pr } : pr !== undefined ? { pr: Number(pr) } : {}),
+    ...(expectedHead ? { expectedHead } : {}),
+    ...(last ? { lastHandoff: last.name } : {}),
+    next: result.next,
+  }
+  return { capsule, telemetry: { ...telemetry, capability: 'known-state' } }
 }
 
 // ── finalize (S8): last reduce+write, then the PR summary — deterministic, zero model tokens ──
@@ -154,8 +185,10 @@ export function buildEntryCapsule({ dir, repo, story, pr, workflowVersion }) {
 // `publication-pending`), never a fabricated `ready-for-merge` with no durable evidence.
 export function finalizeMetrics({ dir, repository, story, branch, pr, runId, publish }) {
   const checkpoint = readCheckpoint(dir)
+  // US-479 remediation (Finding 4): completeness is the reducer's OWN honest derivation (every
+  // observed execution has matching usage, timing coverage is full) — "an observation exists" was
+  // never proof every declared source was actually reconciled, and this no longer overrides it.
   const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: checkpoint.observations ?? [], revision: (checkpoint.revision ?? 0) + 1, asOf: new Date().toISOString() })
-  view.snapshot.completeness = checkpoint.observations?.length ? 'complete' : 'partial'
   if (Number.isInteger(pr) && publish) {
     const marker = `<!-- pair:synthesis #${story} PR#${pr} -->`
     const outcome = publishSummary({ view, marker, pr, repo: repository, ...publish })
@@ -218,8 +251,8 @@ async function main(argv) {
     for (const k of ks) if (opts[k] === undefined) throw new Error(`--${k} is required`)
   }
   if (cmd === 'entry') {
-    need('dir', 'repo', 'story')
-    return { out: buildEntryCapsule({ dir: opts.dir, repo: opts.repo, story: opts.story, pr: opts.pr, workflowVersion: opts.workflowVersion }), code: 0 }
+    need('dir', 'repo', 'story', 'workflowVersion')
+    return { out: buildEntryCapsule({ dir: opts.dir, repo: opts.repo, story: opts.story, pr: opts.pr, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {} }), code: 0 }
   }
   if (cmd === 'reconcile') {
     need('dir', 'repository', 'story', 'branch')
