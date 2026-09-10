@@ -64,6 +64,12 @@ if (a[0] === 'api') {
   process.stderr.write('unexpected api call'); process.exit(1)
 }
 if (a[0] === 'issue' && a[1] === 'view') {
+  if (process.env.FAKE_GH2_FAIL_VIEW) { process.stderr.write('HTTP 502 (simulated transient view failure)'); process.exit(1) }
+  const failAt = process.env.FAKE_GH2_FAIL_VIEW_CALL_INDEX ? Number(process.env.FAKE_GH2_FAIL_VIEW_CALL_INDEX) : null
+  if (failAt) {
+    const viewCallsSoFar = fs.readFileSync(${JSON.stringify(logFile)}, 'utf8').trim().split('\\n').filter(Boolean).map(l => JSON.parse(l)).filter(x => x[0] === 'issue' && x[1] === 'view').length
+    if (viewCallsSoFar === failAt) { process.stderr.write('HTTP 502 (simulated view failure #' + viewCallsSoFar + ')'); process.exit(1) }
+  }
   const id = idOf(a[2])
   const issue = state.issues[id]
   if (!issue) { process.stderr.write('HTTP 404 issue not found: ' + id); process.exit(1) }
@@ -86,10 +92,20 @@ if (a[0] === 'issue' && a[1] === 'edit') {
 if (a[0] === 'issue' && a[1] === 'create') {
   const titleIdx = a.indexOf('--title')
   const bodyIdx = a.indexOf('--body')
+  if (process.env.FAKE_GH2_FAIL_CREATE) { process.stderr.write('HTTP 502 (simulated create failure)'); process.exit(1) }
   const id = state.next++
   state.issues[id] = { title: titleIdx !== -1 ? a[titleIdx + 1] : '', body: bodyIdx !== -1 ? a[bodyIdx + 1] : '' }
   save()
+  if (process.env.FAKE_GH2_LOSE_CREATE_RESPONSE) { process.stderr.write('connection reset (simulated lost response — the issue WAS created)'); process.exit(1) }
   process.stdout.write(\`https://github.com/\${repo}/issues/\${id}\\n\`); process.exit(0)
+}
+if (a[0] === 'issue' && a[1] === 'list') {
+  const searchIdx = a.indexOf('--search')
+  const needle = searchIdx !== -1 ? a[searchIdx + 1] : ''
+  const rows = Object.entries(state.issues)
+    .filter(([, iss]) => typeof iss.body === 'string' && iss.body.includes(needle))
+    .map(([id, iss]) => ({ number: Number(id), url: \`https://github.com/\${repo}/issues/\${id}\`, title: iss.title, body: iss.body }))
+  process.stdout.write(JSON.stringify(rows)); process.exit(0)
 }
 process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(1)
 `)
@@ -109,7 +125,7 @@ process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(1)
 }
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync, rmdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -999,6 +1015,212 @@ test('Finding 6: new-card with explicit authorization (an approved title + AC, n
   assert.match(created.body, /the deferred requirement/)
   const createCalls = gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'create')
   assert.equal(createCalls.length, 1, 'exactly one real gh issue create call')
+})
+
+// ── Finding 6 residual: extend-current-card must match AC by EXACT id, never independent substring ──
+test('Finding 6 residual RED->GREEN (reported reproduction): a description already sitting under a DIFFERENT id must not be mistaken for the approved AC — the targeted id is replaced, the other id is untouched', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-801'
+  setComments({ 801: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'comportamento nuovo' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  gh2.seed('42', 'AC-1: comportamento vecchio\nAC-2: comportamento nuovo')
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  const body = gh2.body('42')
+  assert.match(body, /AC-1\*\*: comportamento nuovo|AC-1: comportamento nuovo/, 'AC-1 now carries the approved description')
+  assert.doesNotMatch(body, /vecchio/, 'the old AC-1 definition is REPLACED, not left dangling alongside the new one')
+  assert.match(body, /AC-2.*comportamento nuovo|comportamento nuovo.*\n.*AC-2/s)
+  const ac2Lines = body.split('\n').filter(l => l.includes('AC-2'))
+  assert.equal(ac2Lines.length, 1)
+  assert.match(ac2Lines[0], /comportamento nuovo/, 'AC-2 is untouched — it always said this')
+})
+
+test('Finding 6 residual: an id sharing a common prefix (AC-1 vs AC-10) is never conflated — only the exact targeted id is replaced', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-802'
+  setComments({ 802: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'updated' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  gh2.seed('42', 'AC-1: old\nAC-10: something else entirely')
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  const body = gh2.body('42')
+  assert.match(body, /AC-10: something else entirely/, 'AC-10 must survive completely untouched')
+  const ac1Line = body.split('\n').find(l => /^AC-1[:*\s-]/.test(l) || l.includes('**AC-1**'))
+  assert.match(ac1Line, /updated/)
+  assert.doesNotMatch(ac1Line ?? '', /AC-10/)
+})
+
+test('Finding 6 residual: one decision that both REPLACES an existing AC and ADDS a genuinely new one applies both correctly, in one real edit, leaving an unrelated third AC byte-identical', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-803'
+  setComments({ 803: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'replaced text' }, { id: 'AC-99', description: 'brand new requirement' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  gh2.seed('42', 'AC-1: original text\nAC-5: never touched by this decision')
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  const body = gh2.body('42')
+  assert.doesNotMatch(body, /original text/)
+  assert.match(body, /replaced text/)
+  assert.match(body, /AC-99.*brand new requirement/)
+  assert.match(body, /AC-5: never touched by this decision/, 'a THIRD, uninvolved AC survives byte-identical')
+})
+
+test('Finding 6 residual: retry — a second decision approving the SAME (id, description) the card already carries is applied without a second real edit call', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1'), scopeChange('sc-2')] })
+  const gh2 = newFakeGh2()
+  gh2.seed('42', 'AC-1: old')
+  const hash1 = scopeBaselineHashOf([scopeChange('sc-1'), scopeChange('sc-2')])
+  setComments({ 804: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'new text' }] } }], hash1)) })
+  const out1 = applyScopeDecisions({ dir, decisionRef: 'https://github.com/foomakers/pair/pull/7#issuecomment-804', repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out1.applied, true, JSON.stringify(out1))
+  const editCallsAfterFirst = gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'edit').length
+  assert.equal(editCallsAfterFirst, 1)
+  // sc-2, a DIFFERENT decision, approves the exact same (id, description) — already satisfied
+  const stillPending = [scopeChange('sc-2')]
+  const hash2 = scopeBaselineHashOf(stillPending)
+  setComments({ 805: comment('rucka', decisionBody([{ id: 'sc-2', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'new text' }] } }], hash2)) })
+  const out2 = applyScopeDecisions({ dir, decisionRef: 'https://github.com/foomakers/pair/pull/7#issuecomment-805', repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out2.applied, true, JSON.stringify(out2))
+  const editCallsAfterSecond = gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'edit').length
+  assert.equal(editCallsAfterSecond, 1, 'the card already satisfied AC-1 — no second real edit was issued')
+})
+
+test('Finding 6 residual: an id the card carries MORE THAN ONCE is ambiguous — refused outright, never guessed, never marked extended', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-806'
+  setComments({ 806: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'resolved' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  gh2.seed('42', 'AC-1: first definition\nAC-1: second, conflicting definition')
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out.applied, false, JSON.stringify(out))
+  assert.match(out.results[0].reason, /ambiguous-ac-id:AC-1/)
+  assert.equal(gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'edit').length, 0, 'an ambiguous card is never edited')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.next.scopeChanges.map(c => c.id), ['sc-1'], 'stays pending — never silently marked extended')
+})
+
+test('Finding 6 residual: a readback that does not confirm the approved id/description is refused — the decision is never marked extended on an edit that did not really take', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-807'
+  setComments({ 807: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'the approved text' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  gh2.seed('42', 'AC-1: old text')
+  // view #1 reads the current body (succeeds); view #2 is the CONFIRMING readback after the edit —
+  // that one fails, never the initial read and never the edit itself.
+  process.env.FAKE_GH2_FAIL_VIEW_CALL_INDEX = '2'
+  let out
+  try {
+    out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  } finally {
+    delete process.env.FAKE_GH2_FAIL_VIEW_CALL_INDEX
+  }
+  assert.equal(out.applied, false, JSON.stringify(out))
+  assert.match(out.results[0].reason, /gh-issue-view-readback-failed/)
+  assert.equal(gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'edit').length, 1, 'the edit itself DID happen — only its confirmation failed')
+})
+
+// ── Finding 6 residual: new-card creation is idempotent across a lost response / failed publish ──
+test('Finding 6 residual RED->GREEN (reported reproduction): a create whose LOCAL response is lost (the issue really was created remotely) reconciles onto that SAME issue — never a second card', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-810'
+  const approvedDelta = { title: 'Follow-up for sc-1', ac: [{ id: 'AC-1', description: 'deferred requirement' }] }
+  setComments({ 810: comment('rucka', decisionBody([{ id: 'sc-1', action: 'new-card', approvedDelta }], hash)) })
+  const gh2 = newFakeGh2()
+  process.env.FAKE_GH2_LOSE_CREATE_RESPONSE = '1'
+  let out
+  try {
+    out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  } finally {
+    delete process.env.FAKE_GH2_LOSE_CREATE_RESPONSE
+  }
+  assert.equal(out.applied, true, JSON.stringify(out), 'the create actually landed remotely — reconciliation recovers it within this same attempt')
+  assert.equal(Object.keys(gh2.allIssues()).length, 1, 'exactly ONE issue exists — the lost response never caused a second create')
+  assert.equal(gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'create').length, 1)
+})
+
+test('Finding 6 residual: a transient readback failure right after a real create recovers on retry onto the SAME issue — never a second create call', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-811'
+  const approvedDelta = { title: 'Follow-up for sc-1 (readback flake)', ac: [{ id: 'AC-1', description: 'x' }] }
+  setComments({ 811: comment('rucka', decisionBody([{ id: 'sc-1', action: 'new-card', approvedDelta }], hash)) })
+  const gh2 = newFakeGh2()
+  process.env.FAKE_GH2_FAIL_VIEW = '1'
+  let first
+  try {
+    first = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  } finally {
+    delete process.env.FAKE_GH2_FAIL_VIEW
+  }
+  assert.equal(first.applied, false, JSON.stringify(first), 'the confirming readback failed — not applied yet')
+  assert.equal(Object.keys(gh2.allIssues()).length, 1, 'the create itself DID land')
+  const second = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(second.applied, true, JSON.stringify(second))
+  assert.equal(Object.keys(gh2.allIssues()).length, 1, 'still exactly one issue — the retry reconciled, it did not create another')
+  assert.equal(gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'create').length, 1)
+})
+
+test('Finding 6 residual RED->GREEN (reported reproduction): the remote effect succeeds but the ENCLOSING publish fails (a held lock) — a real restart-and-retry reuses the SAME created issue, never a second one, and the decision completes on retry', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-812'
+  const approvedDelta = { title: 'Follow-up for sc-1 (publish flake)', ac: [{ id: 'AC-1', description: 'x' }] }
+  setComments({ 812: comment('rucka', decisionBody([{ id: 'sc-1', action: 'new-card', approvedDelta }], hash)) })
+  const gh2 = newFakeGh2()
+  const lockDir = join(dir, '.lock')
+  mkdirSync(lockDir)
+  try {
+    const first = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin, lockWaitMs: 50 })
+    assert.equal(first.applied, false, JSON.stringify(first))
+    assert.equal(Object.keys(gh2.allIssues()).length, 1, 'the card WAS created for real before the publish lock was even hit')
+  } finally {
+    rmdirSync(lockDir)
+  }
+  // a genuine SECOND call — restart and retry of the SAME decision, lock now released
+  const second = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(second.applied, true, JSON.stringify(second))
+  assert.equal(Object.keys(gh2.allIssues()).length, 1, 'the retry reused the already-created issue, never creating a second one')
+  assert.equal(gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'create').length, 1)
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.next.scopeChanges?.filter(c => (c.status ?? 'pending') === 'pending').map(c => c.id) ?? [], [], 'sc-1 was resolved to deferred — nothing is left pending')
+})
+
+test('Finding 6 residual RED->GREEN (reported reproduction): a foreign issue that merely SHARES the approved title is never adopted as this decision\'s effect — reconciliation matches only the hidden decision marker', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-813'
+  const approvedDelta = { title: 'Duplicate-looking title', ac: [{ id: 'AC-1', description: 'x' }] }
+  setComments({ 813: comment('rucka', decisionBody([{ id: 'sc-1', action: 'new-card', approvedDelta }], hash)) })
+  const gh2 = newFakeGh2()
+  gh2.seed('9500', 'an unrelated issue that happens to share the title, filed by someone else', approvedDelta.title)
+  process.env.FAKE_GH2_FAIL_CREATE = '1' // the create call itself fails cleanly — nothing new was created
+  let out
+  try {
+    out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  } finally {
+    delete process.env.FAKE_GH2_FAIL_CREATE
+  }
+  assert.equal(out.applied, false, JSON.stringify(out), 'nothing was ever created, and the foreign same-titled issue must never be adopted')
+  assert.match(out.results[0].reason, /gh-issue-create-uncertain:new-card-remote-outcome-uncertain/)
+  assert.equal(Object.keys(gh2.allIssues()).length, 1, 'only the pre-existing foreign issue exists — nothing was created or adopted')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.next.scopeChanges.map(c => c.id), ['sc-1'], 'sc-1 stays pending — the foreign issue was never mistaken for this decision\'s effect')
 })
 
 test('parseScopeDecisionComment / scopeBaselineHashOf: canonical, order-independent, and every malformed shape is a typed rejection', () => {

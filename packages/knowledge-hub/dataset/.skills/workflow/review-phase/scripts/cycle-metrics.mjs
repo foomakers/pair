@@ -50,13 +50,23 @@ function sumUsage(a, b) {
 
 // A re-observation of the SAME (executionId, kind) updates it; a provider cumulative usage sample
 // REPLACES the prior one; a delta-marked sample (`usage.isDelta: true`) is SUMMED — but only ONCE
-// per unique `eventId` (US-479 remediation, Finding 3.B): a lost-response retry replays the exact
-// same event, and applying it twice would double the total. The dedup key is (executionId,
-// eventId), never eventId alone (two different executions could reuse an id) and never content
-// alone (S7: two real executions may report identical usage).
-export function mergeObservations(raw) {
+// per unique `eventId` (US-479 remediation, Finding 3.B, and residual): a lost-response retry
+// replays the exact same event, and applying it twice would double the total. The dedup key is
+// (executionId, eventId), never eventId alone (two different executions could reuse an id) and
+// never content alone (S7: two real executions may report identical usage).
+//
+// The dedup ledger does NOT survive inside a single call's return value — a merged usage-observed
+// observation only carries its SUMMED total, not which eventIds contributed to it. Across a
+// checkpoint/restart, `raw` on the NEXT call is `[...priorMergedObservations, ...newRawEvents]`:
+// without an externally-persisted ledger, a replayed eventId looks unseen again and gets summed a
+// second time (residual: 100+200 -> checkpoint -> replay of the FIRST delta -> 400, not 300). The
+// caller (cycle-runtime.mjs) persists the returned `appliedDeltaEventIds` in ITS OWN checkpoint —
+// the existing durable path — and passes it back in as `priorLedger` on the next tick; this
+// function introduces no independent execution authority, only extends the ledger it already kept
+// in-memory into something that can be handed back on the next call.
+export function mergeObservations(raw, priorLedger = {}) {
   const byKey = new Map()
-  const appliedDeltaEventIds = new Map() // executionId -> Set(eventId already summed)
+  const appliedDeltaEventIds = new Map(Object.entries(priorLedger ?? {}).map(([execId, ids]) => [execId, new Set(ids)]))
   const errors = []
   for (const r of raw ?? []) {
     const n = normalizeObservation(r)
@@ -68,7 +78,7 @@ export function mergeObservations(raw) {
     const existing = byKey.get(key)
     if (!existing) {
       byKey.set(key, n)
-      if (n.usage?.isDelta) {
+      if (n.usage?.isDelta && n.eventId) {
         const seen = appliedDeltaEventIds.get(n.executionId) ?? new Set()
         seen.add(n.eventId)
         appliedDeltaEventIds.set(n.executionId, seen)
@@ -85,7 +95,8 @@ export function mergeObservations(raw) {
     }
     byKey.set(key, n)
   }
-  return { observations: [...byKey.values()], errors }
+  const appliedLedger = Object.fromEntries([...appliedDeltaEventIds.entries()].filter(([, ids]) => ids.size).map(([execId, ids]) => [execId, [...ids].sort()]))
+  return { observations: [...byKey.values()], errors, appliedDeltaEventIds: appliedLedger }
 }
 
 // ── shared cost allocation (S7) ──────────────────────────────────────────────────────────────
@@ -249,14 +260,23 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   }
   const startEvents = new Map(merged.filter(o => o.kind === 'step-started').map(o => [o.executionId, o]))
   const finishEvents = merged.filter(o => o.kind === 'step-finished' || o.kind === 'step-failed' || o.kind === 'step-cancelled')
+  const finishByExec = new Map()
+  for (const f of finishEvents) if (!finishByExec.has(f.executionId)) finishByExec.set(f.executionId, f)
   // US-479 remediation (Finding 2): observedAt/occurredAt are epoch-ms NUMBERS (S7) — `toEpochMs`
   // accepts that or a validated ISO string, never `Date.parse` on a number (NaN, then a crash).
-  const intervals = finishEvents.map(f => {
-    const s = startEvents.get(f.executionId)
-    if (!s) return null
-    return { startMs: toEpochMs(s.observedAt ?? s.occurredAt), endMs: toEpochMs(f.observedAt ?? f.occurredAt) }
+  // US-479 remediation (Finding 4, residual): a start with NO finish (in progress, or a result that
+  // never arrived) and a finish with NO matching start are BOTH explicit missing-timing evidence —
+  // an execution absent from the interval list entirely was invisible to `reduceTime`, so it could
+  // never flag `time.incomplete` or push 'timing' into `missingSources`; an all-zero silence read
+  // as full coverage. Every execution seen on EITHER side gets one interval, with the missing side
+  // left `null` — `reduceTime`'s own known/flagged split then reports it honestly.
+  const timedIds = new Set([...startEvents.keys(), ...finishByExec.keys()])
+  const intervals = [...timedIds].map(id => {
+    const s = startEvents.get(id)
+    const f = finishByExec.get(id)
+    return { startMs: s ? toEpochMs(s.observedAt ?? s.occurredAt) : null, endMs: f ? toEpochMs(f.observedAt ?? f.occurredAt) : null }
   })
-  const time = reduceTime(intervals.filter(Boolean))
+  const time = reduceTime(intervals)
   const usage = reduceUsage(merged)
   // US-479 remediation (Finding 4): the shared-batch allocation formula (allocateSharedCost) is
   // wired into the real reducer path — labeled distinctly from directly-measured tokens (S7).

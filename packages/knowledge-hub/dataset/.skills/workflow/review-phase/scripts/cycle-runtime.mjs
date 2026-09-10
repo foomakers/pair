@@ -12,15 +12,24 @@
 //   node <skill dir>/scripts/cycle-runtime.mjs observe --dir <abs> --journal <path> [--usage <path>]
 //        --repository <owner/name> --story <id> --branch <b> [--pr <n>] [--runId <id>]
 //        [--interval-ms 5000] [--grace-ms 30000] [--max-ticks <n>]
+//        [--dispatchStats <json>] [--sharedCost <json>]
 //     → tails ONLY the named sources on the interval, merges idempotently, reduces metrics,
 //       writes metrics.json/metrics.md atomically, prints one concise progress line per tick.
 //       Stops after a durable terminal result AND reconciliation of declared sources (or the grace
 //       period elapses — finalize partial, allow a later `reconcile`), or on SIGINT/SIGTERM.
+//       `--dispatchStats` (US-479 remediation, Finding 4 residual) is the host's OWN launch-recipe
+//       counters ({redirects, engineRecoveries, administrativeDispatches, nestedDispatches}, any
+//       integer subset) — this is data no journal/usage line encodes, so it can only ever come from
+//       the host that actually dispatched; `--sharedCost` ({tokens, admittedIds}) is the shared-
+//       batch allocation input. Both persist in the checkpoint: a later tick/finalize that omits
+//       them keeps the last host-supplied values, never silently reverting to a fabricated zero.
 //
-//   node <skill dir>/scripts/cycle-runtime.mjs reconcile --dir <abs> --journal <path> [--usage <path>] (same story flags)
+//   node <skill dir>/scripts/cycle-runtime.mjs reconcile --dir <abs> --journal <path> [--usage <path>]
+//        (same story flags, same --dispatchStats/--sharedCost)
 //     → ONE tick, no loop — for a resumed/interrupted observe.
 //
-//   node <skill dir>/scripts/cycle-runtime.mjs finalize --dir <abs> --repo <owner/name> --pr <n> (same story flags)
+//   node <skill dir>/scripts/cycle-runtime.mjs finalize --dir <abs> --repo <owner/name> --pr <n>
+//        (same story flags, same --dispatchStats/--sharedCost)
 //     → the final reduce+write, `completeness` reported honestly (never claims a source it never saw).
 import { existsSync, statSync, openSync, readSync, closeSync, readFileSync, writeFileSync, renameSync, realpathSync } from 'node:fs'
 import { join, basename, dirname } from 'node:path'
@@ -93,13 +102,20 @@ export function usageRecordToObservation(record, { runId, storyId, observedAt })
 
 // ── checkpoint: offsets + accumulated observations, atomic ──────────────────────────────────
 const CHECKPOINT_NAME = '.runtime-checkpoint.json'
+// US-479 remediation (Finding 3, residual): `appliedDeltaEventIds` is the dedup ledger
+// `mergeObservations` needs seeded back in on every tick — without it, a delta replayed after a
+// restart looks unseen again and is summed a second time. US-479 remediation (Finding 4, residual):
+// `dispatchStats`/`sharedCost` are the host's own admin counters/allocation input — carried here so
+// a tick that doesn't re-supply them (or a `finalize` running after the observer stopped) still
+// reports the last host-supplied values, never silently reverting to null.
+const CHECKPOINT_DEFAULTS = { journalOffset: 0, usageOffset: 0, observations: [], revision: 0, terminalObservedAt: null, appliedDeltaEventIds: {}, dispatchStats: null, sharedCost: null }
 export function readCheckpoint(dir) {
   const p = join(dir, CHECKPOINT_NAME)
-  if (!existsSync(p)) return { journalOffset: 0, usageOffset: 0, observations: [], revision: 0, terminalObservedAt: null }
+  if (!existsSync(p)) return { ...CHECKPOINT_DEFAULTS }
   try {
-    return { journalOffset: 0, usageOffset: 0, observations: [], revision: 0, terminalObservedAt: null, ...JSON.parse(readFileSync(p, 'utf8')) }
+    return { ...CHECKPOINT_DEFAULTS, ...JSON.parse(readFileSync(p, 'utf8')) }
   } catch {
-    return { journalOffset: 0, usageOffset: 0, observations: [], revision: 0, terminalObservedAt: null }
+    return { ...CHECKPOINT_DEFAULTS }
   }
 }
 export function writeCheckpoint(dir, checkpoint) {
@@ -119,7 +135,7 @@ export function shouldStop({ terminalObservedAt, usageReconciled, cancelled, gra
 }
 
 // ── one tick: validate source -> merge idempotently -> reduce -> persist ────────────────────
-export function runtimeTick({ dir, journalPath, usagePath, runId, storyId, repository, story, branch, pr, checkpoint, now }) {
+export function runtimeTick({ dir, journalPath, usagePath, runId, storyId, repository, story, branch, pr, checkpoint, now, dispatchStats, sharedCost }) {
   const errors = []
   const j = journalPath ? tailJournalFile({ path: journalPath, offset: checkpoint.journalOffset ?? 0 }) : { records: [], newOffset: checkpoint.journalOffset ?? 0, malformed: [], rotated: false }
   for (const line of j.malformed) errors.push({ error: 'malformed-journal-record', source: journalPath, line })
@@ -139,11 +155,27 @@ export function runtimeTick({ dir, journalPath, usagePath, runId, storyId, repos
     newUsageOffset = u.newOffset
   }
   const priorObservations = checkpoint.observations ?? []
-  const { observations: combined } = mergeObservations([...priorObservations, ...journalObs, ...usageObs])
-  const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: combined, revision: (checkpoint.revision ?? 0) + 1, asOf: new Date(now).toISOString() })
+  // US-479 remediation (Finding 3, residual): the dedup ledger from the LAST tick is seeded back in
+  // — the only way a delta event replayed after a restart is still recognized as already-applied.
+  const { observations: combined, appliedDeltaEventIds } = mergeObservations([...priorObservations, ...journalObs, ...usageObs], checkpoint.appliedDeltaEventIds ?? {})
+  // US-479 remediation (Finding 4, residual): a tick that doesn't re-supply the host's admin
+  // counters/allocation input keeps the last ones this run actually received — never silently
+  // reverting real, previously-known values back to null.
+  const effectiveDispatchStats = dispatchStats ?? checkpoint.dispatchStats ?? undefined
+  const effectiveSharedCost = sharedCost ?? checkpoint.sharedCost ?? undefined
+  const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: combined, revision: (checkpoint.revision ?? 0) + 1, asOf: new Date(now).toISOString(), dispatchStats: effectiveDispatchStats, sharedCost: effectiveSharedCost })
   const writeResult = writeMetrics({ dir, view })
   const terminalObs = journalObs.find(o => o.kind === 'run-terminal')
-  const newCheckpoint = { journalOffset: j.newOffset, usageOffset: newUsageOffset, observations: combined, revision: writeResult.written ? view.snapshot.revision : checkpoint.revision, terminalObservedAt: terminalObs ? now : (checkpoint.terminalObservedAt ?? null) }
+  const newCheckpoint = {
+    journalOffset: j.newOffset,
+    usageOffset: newUsageOffset,
+    observations: combined,
+    appliedDeltaEventIds,
+    revision: writeResult.written ? view.snapshot.revision : checkpoint.revision,
+    terminalObservedAt: terminalObs ? now : (checkpoint.terminalObservedAt ?? null),
+    dispatchStats: effectiveDispatchStats ?? null,
+    sharedCost: effectiveSharedCost ?? null,
+  }
   return { view, writeResult, checkpoint: newCheckpoint, errors, terminalObserved: !!terminalObs, journalRotated: j.rotated }
 }
 
@@ -183,12 +215,15 @@ export function buildEntryCapsule({ dir, repo, story, pr, workflowVersion, polic
 // Readiness is claimed only AFTER the candidate summary is read back (S8): a ready view whose
 // publish fails or cannot be confirmed is reported as `failed-publication` (reason
 // `publication-pending`), never a fabricated `ready-for-merge` with no durable evidence.
-export function finalizeMetrics({ dir, repository, story, branch, pr, runId, publish }) {
+export function finalizeMetrics({ dir, repository, story, branch, pr, runId, publish, dispatchStats, sharedCost }) {
   const checkpoint = readCheckpoint(dir)
   // US-479 remediation (Finding 4): completeness is the reducer's OWN honest derivation (every
   // observed execution has matching usage, timing coverage is full) — "an observation exists" was
   // never proof every declared source was actually reconciled, and this no longer overrides it.
-  const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: checkpoint.observations ?? [], revision: (checkpoint.revision ?? 0) + 1, asOf: new Date().toISOString() })
+  // US-479 remediation (Finding 4, residual): the host's admin counters/allocation, carried through
+  // the checkpoint when this finalize call doesn't itself supply them — the observer may already
+  // have stopped by the time finalize runs, and its last-known values must still reach the summary.
+  const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: checkpoint.observations ?? [], revision: (checkpoint.revision ?? 0) + 1, asOf: new Date().toISOString(), dispatchStats: dispatchStats ?? checkpoint.dispatchStats ?? undefined, sharedCost: sharedCost ?? checkpoint.sharedCost ?? undefined })
   if (Number.isInteger(pr) && publish) {
     const marker = `<!-- pair:synthesis #${story} PR#${pr} -->`
     const outcome = publishSummary({ view, marker, pr, repo: repository, ...publish })
@@ -219,7 +254,7 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-export async function runObserveLoop({ dir, journalPath, usagePath, runId, storyId, repository, story, branch, pr, intervalMs = 5000, graceMs = 30000, maxTicks = Infinity, sleepFn = sleep, nowFn = () => Date.now(), onTick = () => {}, signal }) {
+export async function runObserveLoop({ dir, journalPath, usagePath, runId, storyId, repository, story, branch, pr, intervalMs = 5000, graceMs = 30000, maxTicks = Infinity, sleepFn = sleep, nowFn = () => Date.now(), onTick = () => {}, signal, dispatchStats, sharedCost }) {
   let checkpoint = readCheckpoint(dir)
   let ticks = 0
   let cancelled = false
@@ -230,7 +265,7 @@ export async function runObserveLoop({ dir, journalPath, usagePath, runId, story
   try {
     for (;;) {
       const now = nowFn()
-      const result = runtimeTick({ dir, journalPath, usagePath, runId, storyId, repository, story, branch, pr, checkpoint, now })
+      const result = runtimeTick({ dir, journalPath, usagePath, runId, storyId, repository, story, branch, pr, checkpoint, now, dispatchStats, sharedCost })
       checkpoint = result.checkpoint
       ticks++
       onTick(result)
@@ -258,18 +293,18 @@ async function main(argv) {
     need('dir', 'repository', 'story', 'branch')
     const checkpoint = readCheckpoint(opts.dir)
     const now = Date.now()
-    const result = runtimeTick({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, checkpoint, now })
+    const result = runtimeTick({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, checkpoint, now, dispatchStats: opts.dispatchStats ? JSON.parse(opts.dispatchStats) : undefined, sharedCost: opts.sharedCost ? JSON.parse(opts.sharedCost) : undefined })
     writeCheckpoint(opts.dir, result.checkpoint)
     return { out: { written: result.writeResult.written, errors: result.errors, terminalObserved: result.terminalObserved }, code: 0 }
   }
   if (cmd === 'observe') {
     need('dir', 'repository', 'story', 'branch')
-    const res = await runObserveLoop({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, intervalMs: opts['interval-ms'] ? Number(opts['interval-ms']) : 5000, graceMs: opts['grace-ms'] ? Number(opts['grace-ms']) : 30000, maxTicks: opts['max-ticks'] ? Number(opts['max-ticks']) : Infinity, onTick: r => process.stdout.write(`tick: revision=${r.view.snapshot.revision} terminal=${r.terminalObserved}\n`) })
+    const res = await runObserveLoop({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, intervalMs: opts['interval-ms'] ? Number(opts['interval-ms']) : 5000, graceMs: opts['grace-ms'] ? Number(opts['grace-ms']) : 30000, maxTicks: opts['max-ticks'] ? Number(opts['max-ticks']) : Infinity, dispatchStats: opts.dispatchStats ? JSON.parse(opts.dispatchStats) : undefined, sharedCost: opts.sharedCost ? JSON.parse(opts.sharedCost) : undefined, onTick: r => process.stdout.write(`tick: revision=${r.view.snapshot.revision} terminal=${r.terminalObserved}\n`) })
     return { out: res, code: 0 }
   }
   if (cmd === 'finalize') {
     need('dir', 'repo', 'pr')
-    const out = finalizeMetrics({ dir: opts.dir, repository: opts.repo, story: opts.story, branch: opts.branch, pr: Number(opts.pr), runId: opts.runId, publish: { listComments, findByMarker, upsert } })
+    const out = finalizeMetrics({ dir: opts.dir, repository: opts.repo, story: opts.story, branch: opts.branch, pr: Number(opts.pr), runId: opts.runId, publish: { listComments, findByMarker, upsert }, dispatchStats: opts.dispatchStats ? JSON.parse(opts.dispatchStats) : undefined, sharedCost: opts.sharedCost ? JSON.parse(opts.sharedCost) : undefined })
     return { out: { completeness: out.view.snapshot.completeness, written: out.writeResult.written, publication: out.view.publication }, code: out.writeResult.written ? 0 : 1 }
   }
   throw new Error(`unknown command: ${cmd} (expected entry | observe | reconcile | finalize)`)

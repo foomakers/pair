@@ -298,6 +298,52 @@ fixed test-first, no scope change:
 Every other reported quantity's known/partial coverage was already exact, derived from the durable
 handoffs alone.
 
+## Amendment 2026-09-10 (d) — four residual gaps in findings 3/4/6, closed against HEAD `99431a3c`
+
+An independent verification of `99431a3c` found four residual cases where amendment (c)'s fixes were
+real but incomplete — not new requirements, the same three findings' original AC:
+
+1. **Finding 3 residual — dedup lost across checkpoint/resume.** `mergeObservations` deduped delta
+   usage events correctly WITHIN one call, but its `(executionId, eventId)` ledger lived only in that
+   call's local `Map` — a checkpoint round trip (persist merged observations, reload, replay an
+   upstream-resent delta) had no record of which events already contributed, so a replayed delta
+   summed a second time (100+200 → checkpoint → replay of the first → 400, not 300). Fixed:
+   `mergeObservations(raw, priorLedger)` now takes and returns the ledger explicitly;
+   `cycle-runtime.mjs`'s checkpoint persists `appliedDeltaEventIds` and reseeds it on every tick —
+   the SAME existing checkpoint file, no second execution authority.
+2. **Finding 4 residual — false completeness, and admin counters never reaching the real path.** An
+   execution started with usage but no result (or a result with no observed start) was invisible to
+   `reduceTime`'s interval list entirely, so `time.incomplete` stayed `false` and `completeness`
+   claimed `'complete'` with a genuinely unresolved execution. Fixed: every execution seen on either
+   side now gets one interval, with the missing side left `null`, so `reduceTime`'s own known/flagged
+   split reports it honestly. Separately, `dispatchStats`/`sharedCost` were accepted by
+   `reduceCycleMetrics` but never forwarded by `runtimeTick`, `finalizeMetrics`, or the CLI — the only
+   tests exercising them called the reducer directly, proving nothing about the host wiring. Fixed:
+   both flow through `runtimeTick` → the checkpoint (so a later tick/finalize that omits them keeps
+   the last host-supplied values) → the CLI's `--dispatchStats`/`--sharedCost` JSON flags.
+3. **Finding 6 residual — non-semantic AC readback.** `extendCard` matched an approved AC by
+   INDEPENDENT substring `includes()` of id and description — a description already sitting under a
+   DIFFERENT id satisfied the check, so a real requested change (e.g. AC-1's description replaced by
+   text AC-2 already carried) produced zero edit and a false success, or duplicated AC-1 under a
+   second definition when the text was novel. Fixed: AC lines are now parsed by exact id (never a
+   substring — `AC-1` is never conflated with `AC-10`), a targeted id is replaced in place (its old
+   definition removed, never left dangling), a genuinely new id is appended, and an id the card
+   carries more than once is refused outright — never guessed, never marked extended.
+4. **Finding 6 residual — new-card creation not idempotent after a successful remote effect.**
+   `createTargetIssue` created the destination issue BEFORE the decision's own handoff was durably
+   recorded, with no way to recognize its own prior effect on retry — a lost response, a failed
+   confirming readback, or the enclosing `publish()` failing (a held lock) after a real creation could
+   all lead a retry to create a second issue. Fixed: a durable per-(decisionRef, scope id) ledger is
+   written BEFORE the remote call; a retry that finds `created` reuses that URL (re-verified, never
+   blindly trusted); a retry that finds an unresolved `creating` attempt reconciles by searching for a
+   HIDDEN marker this decision's own attempt would have embedded in the issue body — never by title,
+   so a foreign issue that merely shares the approved title is never adopted; a local create failure
+   immediately attempts the same reconciliation before reporting anything, since a local failure never
+   proves the remote call didn't land. No new orchestrator: the ledger is a plain atomic temp+rename
+   JSON file in the same run directory, exactly like the existing checkpoint/handoff files.
+
+Tested against a fake `gh` boundary only; no real card was touched or created by this remediation.
+
 ## Consequences
 
 ### Benefits

@@ -86,6 +86,37 @@ test('Finding 3.B RED->GREEN: the SAME delta usage event (identical executionId 
   assert.equal(outOfOrder.observations[0].usage.inputTokens, 140)
 })
 
+test('Finding 3 residual RED->GREEN: the dedup ledger survives across a checkpoint/restart round trip — 100+200 -> ledger -> replay of the FIRST delta = 300, never 400; a new distinct delta after restart = 350; a second restart replaying the SAME two again still = 350', () => {
+  const d1 = { eventId: 'd1', kind: 'usage-observed', runId: 'r1', sourceRef: 's1', executionId: 'x1', usage: { inputTokens: 100, isDelta: true } }
+  const d2 = { eventId: 'd2', kind: 'usage-observed', runId: 'r1', sourceRef: 's1', executionId: 'x1', usage: { inputTokens: 200, isDelta: true } }
+  // tick 1: both distinct deltas observed together — 300, and a ledger naming both is returned
+  const tick1 = mergeObservations([d1, d2])
+  assert.equal(tick1.observations[0].usage.inputTokens, 300)
+  assert.deepEqual(tick1.appliedDeltaEventIds, { x1: ['d1', 'd2'] })
+  // "checkpoint": only the MERGED observations + the ledger are persisted (never the raw deltas) —
+  // exactly what cycle-runtime.mjs's checkpoint.json carries. Resume replays d1 (a lost-response
+  // retry of the SAME event) WITHOUT feeding the ledger back in — this is the reported regression.
+  const resumeWithoutLedger = mergeObservations([...tick1.observations, d1])
+  assert.equal(resumeWithoutLedger.observations[0].usage.inputTokens, 400, '(documents the residual bug when the ledger is dropped, e.g. a caller that ignores it)')
+  // the ACTUAL fix: the persisted ledger is seeded back in on resume
+  const tick2 = mergeObservations([...tick1.observations, d1], tick1.appliedDeltaEventIds)
+  assert.equal(tick2.observations[0].usage.inputTokens, 300, 'replay of an already-applied delta after restart stays a no-op')
+  assert.deepEqual(tick2.appliedDeltaEventIds, { x1: ['d1', 'd2'] })
+  // a genuinely NEW delta (d3) after the restart still sums on top
+  const d3 = { eventId: 'd3', kind: 'usage-observed', runId: 'r1', sourceRef: 's1', executionId: 'x1', usage: { inputTokens: 50, isDelta: true } }
+  const tick3 = mergeObservations([...tick2.observations, d3], tick2.appliedDeltaEventIds)
+  assert.equal(tick3.observations[0].usage.inputTokens, 350)
+  assert.deepEqual(tick3.appliedDeltaEventIds, { x1: ['d1', 'd2', 'd3'] })
+  // ANOTHER restart, replaying d1 AND d2 again — still 350, never re-summed
+  const tick4 = mergeObservations([...tick3.observations, d1, d2], tick3.appliedDeltaEventIds)
+  assert.equal(tick4.observations[0].usage.inputTokens, 350)
+  // the SAME eventId used by a DIFFERENT execution is its own, unrelated identity — never confluated
+  const otherExecSameEventId = { eventId: 'd1', kind: 'usage-observed', runId: 'r1', sourceRef: 's1', executionId: 'x2', usage: { inputTokens: 999, isDelta: true } }
+  const tick5 = mergeObservations([...tick4.observations, otherExecSameEventId], tick4.appliedDeltaEventIds)
+  const byExec = Object.fromEntries(tick5.observations.filter(o => o.kind === 'usage-observed').map(o => [o.executionId, o.usage.inputTokens]))
+  assert.deepEqual(byExec, { x1: 350, x2: 999 })
+})
+
 test('Finding 3.A RED->GREEN: reduceUsage denominator counts every OBSERVED execution (step-started/finished), not only ones that reported usage — B is explicitly missing, never invisible', () => {
   const obs = [
     { eventId: 'a-start', executionId: 'A', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-started', sourceRef: 'journal' },
@@ -286,6 +317,31 @@ test('Finding 4: byRole aggregates usage tokens by the role an observation actua
   const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '292', branch: 'b', observations: obs, sharedCost: { tokens: 11, admittedIds: ['292', '100', '5'] } })
   assert.deepEqual(new Set(view.usage.byRole), new Set([{ role: 'reviewer', tokens: 200 }, { role: 'green', tokens: 50 }]))
   assert.equal(view.usage.sharedOverhead, 4, 'story 292 sorts alongside 100 for the +1 remainder share (DT-21 formula)')
+})
+
+test('Finding 4 residual RED->GREEN (reported reproduction): an execution started with usage present but NO result is real timing coverage loss — time.incomplete must be true and completeness partial, never a silent complete', () => {
+  const { dir } = runDir()
+  const obs = [
+    { eventId: 'a-s', executionId: 'A', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-started', sourceRef: 'journal', observedAt: 1000 },
+    { eventId: 'a-u', executionId: 'A', runId: 'r1', phase: 'p', attempt: 1, kind: 'usage-observed', sourceRef: 'usage', usage: { inputTokens: 10 } },
+    // A never reports a result — no step-finished/failed/cancelled at all
+  ]
+  const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', observations: obs })
+  assert.equal(view.execution.startedWithoutResult, 1)
+  assert.equal(view.time.elapsedMs, null, 'no interval could ever be closed')
+  assert.equal(view.time.incomplete, true, 'a start with no finish IS missing timing coverage — the prior bug reported this as false')
+  assert.equal(view.snapshot.completeness, 'partial', 'an unresolved execution must never read as complete')
+  assert.deepEqual(view.snapshot.missingSources, ['timing'])
+  // the symmetric case — a finish arrives with NO matching start — is equally incomplete, never dropped
+  const orphanFinish = [{ eventId: 'z-f', executionId: 'Z', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-finished', sourceRef: 'journal', observedAt: 2000 }]
+  const view2 = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', observations: orphanFinish })
+  assert.equal(view2.time.incomplete, true)
+  assert.equal(view2.snapshot.completeness, 'partial')
+  // a FULLY resolved execution alongside it still reports complete once every source reconciles
+  const resolved = [...obs, { eventId: 'a-f', executionId: 'A', runId: 'r1', phase: 'p', attempt: 1, kind: 'step-finished', sourceRef: 'journal', observedAt: 1500 }]
+  const view3 = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', observations: resolved })
+  assert.equal(view3.time.incomplete, false)
+  assert.equal(view3.snapshot.completeness, 'complete')
 })
 
 test('writeMetrics: atomic write, revision-guarded — a stale revision never overwrites a newer persisted view', () => {

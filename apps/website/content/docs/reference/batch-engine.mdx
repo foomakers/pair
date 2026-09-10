@@ -229,13 +229,21 @@ read back and confirmed — until then delivery is `failed-publication` even whe
 converged. A confirmation-only republish is not a new semantic revision; human text written after
 the comment's owned section survives every republish.
 
-**Residual limit at `4.0.0`:** `execution.redirects` / `engineRecoveries` / `startedWithoutResult` /
-`administrativeDispatches` / `nestedDispatches` are derived from an optional `dispatchStats` input
-to `reduceCycleMetrics` — real counts when the host supplies it, explicit `null` (never a claimed
-zero) when it does not. `usage.byRole` and `sharedOverhead` are real once usage observations carry
-a `role`/`parentExecutionId`; `dispatches` and `startedWithoutResult` are derived from observed
-executions themselves and need no external input. Every quantity's known/partial coverage is exact;
-none of these are placeholders presented as measurements.
+**Residual limit at `4.0.0`:** `execution.redirects` / `engineRecoveries` / `administrativeDispatches` /
+`nestedDispatches` are derived from an optional `--dispatchStats` JSON input the host's own launch
+recipe supplies to `cycle-runtime.mjs`'s `observe`/`reconcile`/`finalize` (no journal/usage line
+encodes this — only the host that actually dispatched knows it); real counts when supplied, explicit
+`null` (never a claimed zero) when absent. It persists in the runtime checkpoint, so a later tick or
+a `finalize` run after the observer stopped still reports the last host-supplied values, never
+silently reverting to null. `usage.sharedOverhead` works the same way via `--sharedCost`. `usage.byRole`
+is real once usage observations carry a `role`; `dispatches`/`startedWithoutResult` are derived from
+observed executions themselves and need no external input. Every quantity's known/partial coverage
+is exact; none of these are placeholders presented as measurements. Timing/completeness account for
+an execution observed on only one side (started with no result, or a result with no observed start)
+as genuine missing coverage — `time.incomplete` and `snapshot.completeness: 'partial'` — never a
+silent `complete` from an unresolved execution. Delta-usage dedup (`(executionId, eventId)`) survives
+a checkpoint/restart round trip: the applied-event ledger is itself persisted and reseeded on resume,
+so a replayed delta stays a no-op across a real process restart, not only within one reducer call.
 
 A supplied `entryCapsules` map (per story id) is accepted and schema-validated (workflow major,
 schema version, story, PR, the 40-hex reviewed head) — but it is a cache hint, NEVER approval: the

@@ -300,15 +300,116 @@ function verifyExistingIssue({ ghBin, repo, targetIssueUrl }) {
   return { url: data.url, number: data.number }
 }
 
+// US-479 remediation (Finding 6, residual): an AC line is `<id>: <description>` on its own line,
+// optionally bulleted/bolded (both a human-authored `AC-1: old` and our own `- **AC-1**: new` match).
+// The id token is captured to its FULL word boundary — `AC-10` is never mistaken for a prefix match
+// against `AC-1` — and every match keeps its exact position, so a targeted line can be replaced
+// in place without disturbing any other AC or human prose around it.
+const AC_LINE_RE = /^[ \t]*(?:[-*][ \t]*)?(?:\*\*)?(AC-[\w.-]*\w)(?:\*\*)?[ \t]*:[ \t]*(.*)$/gm
+function parseAcEntries(body) {
+  const byId = new Map()
+  let m
+  AC_LINE_RE.lastIndex = 0
+  while ((m = AC_LINE_RE.exec(String(body ?? '')))) {
+    const entry = { id: m[1], description: m[2].trim(), start: m.index, end: m.index + m[0].length }
+    byId.set(m[1], [...(byId.get(m[1]) ?? []), entry])
+  }
+  return byId
+}
+const renderAcLine = (id, description) => `- **${id}**: ${description}`
+
+// A single stable id for "the effect new-card authorizes" — the same (decisionRef, scope proposal
+// id) pair always maps to the same key, recoverable after a restart with nothing but the run dir.
+const newCardKey = (decisionRef, scopeId) => sha256(`${decisionRef} ${scopeId}`).replace(/^sha256:/, '').slice(0, 32)
+const newCardMarker = key => `<!-- pair:scope-decision:${key} -->`
+const ledgerPath = (dir, key) => join(dir, `.scope-new-card-${key}.json`)
+function readLedger(dir, key) {
+  const p = ledgerPath(dir, key)
+  if (!existsSync(p)) return null
+  try {
+    return JSON.parse(readFileSync(p, 'utf8'))
+  } catch {
+    return null
+  }
+}
+function writeLedger(dir, key, data) {
+  const p = ledgerPath(dir, key)
+  const tmp = join(dir, `.tmp-scope-new-card-${key}-${process.pid}-${Date.now()}.json`)
+  writeFileSync(tmp, JSON.stringify(data))
+  renameSync(tmp, p)
+}
+// A local process crash between recording `creating` and learning the `gh issue create` outcome
+// leaves the remote result genuinely unknown. Reconciliation searches ONLY by the hidden marker
+// this decision's OWN attempt would have embedded — a foreign issue sharing the approved title
+// never carries it, so it is never mistaken for this decision's effect.
+function reconcileCreatedIssue({ ghBin, repo, key }) {
+  const marker = newCardMarker(key)
+  const r = spawnSync(ghBin, ['issue', 'list', '--repo', repo, '--search', marker, '--json', 'number,url,title,body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
+  if (r.error || r.status !== 0) return { error: `gh-issue-list-failed:${(r.stderr || r.error?.message || '').trim()}` }
+  let rows
+  try {
+    rows = JSON.parse(r.stdout)
+  } catch {
+    return { error: 'gh-issue-list-invalid-json' }
+  }
+  const matches = (Array.isArray(rows) ? rows : []).filter(x => typeof x.body === 'string' && x.body.includes(marker))
+  if (matches.length !== 1) return { error: matches.length ? 'new-card-reconciliation-ambiguous' : 'new-card-remote-outcome-uncertain' }
+  return { url: matches[0].url, number: matches[0].number, title: matches[0].title }
+}
+
 // S5 new-card, no existing targetIssueUrl: explicit authorization to create means an approved
-// TITLE (never inferred), plus the AC payload. Creates via `gh issue create`, then reads the
-// created issue back and confirms the title stuck before trusting the returned backlink.
-function createTargetIssue({ ghBin, repo, title, ac }) {
-  const body = ac.map(a => `- **${a.id}**: ${a.description}`).join('\n')
+// TITLE (never inferred), plus the AC payload. Creates via `gh issue create` — embedding a hidden,
+// decision-specific marker in the body — then reads the created issue back and confirms the title
+// stuck before trusting the returned backlink. US-479 remediation (Finding 6, residual): the create
+// is bound to a durable ledger keyed by (decisionRef, scope id) BEFORE the remote call, so a retry
+// after a successful create but a lost/failed response (or a failed downstream publish) reconciles
+// onto the SAME issue instead of creating a second one; a genuinely uncertain outcome (no local
+// record of success, nothing found on reconciliation) is refused explicitly, never guessed.
+function createTargetIssue({ ghBin, repo, dir, decisionRef, scopeId, title, ac }) {
+  const key = newCardKey(decisionRef, scopeId)
+  const existing = readLedger(dir, key)
+  if (existing?.status === 'created' && existing.url) {
+    const v = spawnSync(ghBin, ['issue', 'view', existing.url, '--json', 'number,url,title,body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
+    if (v.error || v.status !== 0) return { error: `gh-issue-create-readback-failed:${(v.stderr || v.error?.message || '').trim()}` }
+    let data
+    try {
+      data = JSON.parse(v.stdout)
+    } catch {
+      return { error: 'gh-issue-create-readback-invalid-json' }
+    }
+    if (data.title !== title || typeof data.body !== 'string' || !data.body.includes(newCardMarker(key))) return { error: 'gh-issue-create-readback-mismatch' }
+    return { url: data.url, number: data.number }
+  }
+  if (existing?.status === 'creating') {
+    const rec = reconcileCreatedIssue({ ghBin, repo, key })
+    if (rec.error) return { error: rec.error }
+    if (rec.title !== title) return { error: 'gh-issue-create-readback-mismatch' }
+    writeLedger(dir, key, { status: 'created', url: rec.url, decisionRef, scopeId, title })
+    return { url: rec.url, number: rec.number }
+  }
+  writeLedger(dir, key, { status: 'creating', decisionRef, scopeId, title })
+  const marker = newCardMarker(key)
+  const body = `${marker}\n${ac.map(a => `- **${a.id}**: ${a.description}`).join('\n')}`
   const r = spawnSync(ghBin, ['issue', 'create', '--repo', repo, '--title', title, '--body', body], { encoding: 'utf8', env: cleanGitEnv(process.env) })
-  if (r.error || r.status !== 0) return { error: `gh-issue-create-failed:${(r.stderr || r.error?.message || '').trim()}` }
+  if (r.error || r.status !== 0) {
+    // A local failure here does NOT prove the remote call never landed — a lost response looks
+    // identical locally to a genuine failure. Reconcile ONCE, immediately, before reporting
+    // anything: the ledger stays `creating` either way (never a status that would let a LATER
+    // retry create fresh on a guess), so an unresolved outcome is retried by reconciling again,
+    // never by blindly calling create a second time.
+    const rec = reconcileCreatedIssue({ ghBin, repo, key })
+    if (!rec.error) {
+      if (rec.title !== title) return { error: 'gh-issue-create-readback-mismatch' }
+      writeLedger(dir, key, { status: 'created', url: rec.url, decisionRef, scopeId, title })
+      return { url: rec.url, number: rec.number }
+    }
+    return { error: `gh-issue-create-uncertain:${rec.error}` }
+  }
   const url = r.stdout.trim().split('\n').pop()
   if (!ISSUE_URL_RE.test(url)) return { error: 'gh-issue-create-no-url' }
+  // The remote effect is now KNOWN to exist — recorded before the local confirming view, so a lost
+  // or failed readback never leaves this decision's own retry uncertain about its own creation.
+  writeLedger(dir, key, { status: 'created', url, decisionRef, scopeId, title })
   const v = spawnSync(ghBin, ['issue', 'view', url, '--json', 'number,url,title,body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
   if (v.error || v.status !== 0) return { error: 'gh-issue-create-readback-failed' }
   let data
@@ -322,24 +423,51 @@ function createTargetIssue({ ghBin, repo, title, ac }) {
 }
 
 // S5 extend-current-card: the approved AC are written into the CURRENT card and read back before
-// the decision is trusted as applied — a card can go from "extended" (label) to actually extended
-// only through this round trip. Idempotent within a call: content already present is not re-appended.
+// the decision is trusted as applied. US-479 remediation (Finding 6, residual): matching is by
+// EXACT AC id — never independent substring `includes` of id and description, which let a real
+// description already sitting under a DIFFERENT id (e.g. AC-2) be mistaken for AC-1's own approved
+// text. A pre-existing AC is replaced in place (its old definition removed, not left dangling
+// alongside a new one); a genuinely new id is appended; an id the card carries more than once is
+// AMBIGUOUS and refused outright — never guessed which definition to replace. Idempotent: a body
+// whose targeted ids already carry exactly their approved description, once each, is not re-edited.
 function extendCard({ ghBin, repo, story, ac }) {
   const read = spawnSync(ghBin, ['issue', 'view', String(story), '--repo', repo, '--json', 'body', '-q', '.body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
   if (read.error || read.status !== 0) return { error: `gh-issue-view-failed:${(read.stderr || read.error?.message || '').trim()}` }
   const currentBody = read.stdout
-  const already = ac.every(a => currentBody.includes(a.id) && currentBody.includes(a.description))
-  if (!already) {
-    const marker = '## Scope extension (US-479 S5)'
-    const lines = ac.map(a => `- **${a.id}**: ${a.description}`).join('\n')
-    const nextBody = currentBody.includes(marker) ? currentBody.replace(marker, `${marker}\n${lines}`) : `${currentBody}\n\n${marker}\n${lines}\n`
+  const byId = parseAcEntries(currentBody)
+  for (const a of ac) if ((byId.get(a.id) ?? []).length > 1) return { error: `ambiguous-ac-id:${a.id}` }
+  const isSatisfied = a => {
+    const existing = byId.get(a.id) ?? []
+    return existing.length === 1 && existing[0].description === a.description
+  }
+  const needsWork = ac.filter(a => !isSatisfied(a))
+  if (needsWork.length) {
+    const replacements = []
+    const toAppend = []
+    for (const a of needsWork) {
+      const existing = byId.get(a.id) ?? []
+      if (existing.length === 1) replacements.push({ start: existing[0].start, end: existing[0].end, text: renderAcLine(a.id, a.description) })
+      else toAppend.push(a)
+    }
+    replacements.sort((x, y) => y.start - x.start)
+    let nextBody = currentBody
+    for (const rep of replacements) nextBody = nextBody.slice(0, rep.start) + rep.text + nextBody.slice(rep.end)
+    if (toAppend.length) {
+      const marker = '## Scope extension (US-479 S5)'
+      const lines = toAppend.map(a => renderAcLine(a.id, a.description)).join('\n')
+      nextBody = nextBody.includes(marker) ? nextBody.replace(marker, `${marker}\n${lines}`) : `${nextBody}\n\n${marker}\n${lines}\n`
+    }
     const edit = spawnSync(ghBin, ['issue', 'edit', String(story), '--repo', repo, '--body', nextBody], { encoding: 'utf8', env: cleanGitEnv(process.env) })
     if (edit.error || edit.status !== 0) return { error: `gh-issue-edit-failed:${(edit.stderr || edit.error?.message || '').trim()}` }
   }
   const readback = spawnSync(ghBin, ['issue', 'view', String(story), '--repo', repo, '--json', 'body', '-q', '.body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
   if (readback.error || readback.status !== 0) return { error: `gh-issue-view-readback-failed:${(readback.stderr || readback.error?.message || '').trim()}` }
   const written = readback.stdout
-  if (!ac.every(a => written.includes(a.id) && written.includes(a.description))) return { error: 'gh-issue-edit-readback-mismatch' }
+  const writtenById = parseAcEntries(written)
+  for (const a of ac) {
+    const existing = writtenById.get(a.id) ?? []
+    if (existing.length !== 1 || existing[0].description !== a.description) return { error: `gh-issue-edit-readback-mismatch:${a.id}` }
+  }
   return { body: written }
 }
 
@@ -400,7 +528,7 @@ export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer = '
         }
         results.push({ id: dec.id, applied: true, status: 'deferred', targetIssueUrl: v.url, approvedDelta: dec.approvedDelta })
       } else if (dec.approvedDelta?.title && Array.isArray(dec.approvedDelta.ac) && dec.approvedDelta.ac.length) {
-        const created = createTargetIssue({ ghBin, repo, title: dec.approvedDelta.title, ac: dec.approvedDelta.ac })
+        const created = createTargetIssue({ ghBin, repo, dir, decisionRef, scopeId: dec.id, title: dec.approvedDelta.title, ac: dec.approvedDelta.ac })
         if (created.error) {
           results.push({ id: dec.id, applied: false, reason: created.error })
           continue

@@ -178,6 +178,82 @@ test('Finding 3 (adapter, real duplicate source line): the usage SOURCE itself c
   assert.equal(tick2.view.usage.observedTotalTokens, 125)
 })
 
+test('Finding 3 residual RED->GREEN (reported reproduction): the dedup ledger survives a REAL checkpoint write+read round trip across separate ticks — a delta replayed after the checkpoint is reloaded from disk stays a no-op, through the real adapter, not just the pure reducer', () => {
+  const { dir, root } = runDir()
+  const file = join(dir, 'd.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') } }))
+  publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.0' })
+  const journal = journalFile(root, [{ key: 'prepare', agentId: 'ag1', started: true, result: { status: 'ok' } }])
+  const usagePath = join(root, 'usage.jsonl')
+  const d1 = { key: 'prepare', agentId: 'ag1', eventId: 'd1', usage: { inputTokens: 100, isDelta: true } }
+  const d2 = { key: 'prepare', agentId: 'ag1', eventId: 'd2', usage: { inputTokens: 200, isDelta: true } }
+  writeFileSync(usagePath, JSON.stringify(d1) + '\n' + JSON.stringify(d2) + '\n')
+  const tick1 = runtimeTick({ dir, journalPath: journal, usagePath, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now: 1 })
+  assert.equal(tick1.view.usage.observedTotalTokens, 300)
+  writeCheckpoint(dir, tick1.checkpoint) // REAL file write — the reported bug is specifically about what survives this
+  // "resume": the checkpoint is RE-READ from disk (a fresh process, not the in-memory object), and
+  // the usage source re-delivers d1+d2 from the start (an upstream redelivery/rotation) — this is
+  // the exact residual reproduction: 100+200 -> checkpoint -> replay of d1(+d2) must stay 300.
+  const reloaded = readCheckpoint(dir)
+  const resumeCheckpoint = { ...reloaded, usageOffset: 0 }
+  const tick2 = runtimeTick({ dir, journalPath: journal, usagePath, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: resumeCheckpoint, now: 2 })
+  assert.equal(tick2.view.usage.observedTotalTokens, 300, 'a replayed delta after a real checkpoint reload must not double to 400')
+  writeCheckpoint(dir, tick2.checkpoint)
+  // a genuinely NEW delta after the restart still sums on top
+  appendFileSync(usagePath, JSON.stringify({ key: 'prepare', agentId: 'ag1', eventId: 'd3', usage: { inputTokens: 50, isDelta: true } }) + '\n')
+  const tick3 = runtimeTick({ dir, journalPath: journal, usagePath, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now: 3 })
+  assert.equal(tick3.view.usage.observedTotalTokens, 350)
+  writeCheckpoint(dir, tick3.checkpoint)
+  // a SECOND restart, replaying all three from the start again — still 350
+  const secondResume = { ...readCheckpoint(dir), usageOffset: 0 }
+  const tick4 = runtimeTick({ dir, journalPath: journal, usagePath, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: secondResume, now: 4 })
+  assert.equal(tick4.view.usage.observedTotalTokens, 350, 'a second restart replaying the same events again must still not double-count')
+})
+
+test('Finding 4 residual RED->GREEN: dispatchStats/sharedCost supplied to runtimeTick reach the real reduced view AND persist in the checkpoint — a LATER tick that omits them keeps the last host-supplied values, never reverting to null', () => {
+  const { dir, root } = runDir()
+  const file = join(dir, 'd.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '292', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') } }))
+  publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.0' })
+  const journal = journalFile(root, [{ key: 'prepare', agentId: 'ag1', started: true, result: { status: 'ok' } }])
+  const dispatchStats = { redirects: 2, engineRecoveries: 1, administrativeDispatches: 0, nestedDispatches: 3 }
+  const sharedCost = { tokens: 11, admittedIds: ['292', '100', '5'] }
+  const tick1 = runtimeTick({ dir, journalPath: journal, runId: 'run-1', storyId: '292', repository: 'foomakers/pair', story: '292', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now: 1, dispatchStats, sharedCost })
+  assert.deepEqual({ redirects: tick1.view.execution.redirects, engineRecoveries: tick1.view.execution.engineRecoveries, administrativeDispatches: tick1.view.execution.administrativeDispatches, nestedDispatches: tick1.view.execution.nestedDispatches }, dispatchStats, 'the host-launch-recipe counters reached the view through the REAL tick, not a direct reducer call')
+  assert.equal(tick1.view.usage.sharedOverhead, 4)
+  assert.deepEqual(tick1.checkpoint.dispatchStats, dispatchStats, 'persisted in the checkpoint')
+  assert.deepEqual(tick1.checkpoint.sharedCost, sharedCost)
+  writeCheckpoint(dir, tick1.checkpoint)
+  // a LATER tick that does NOT re-supply them must still report the last known values
+  const tick2 = runtimeTick({ dir, journalPath: journal, runId: 'run-1', storyId: '292', repository: 'foomakers/pair', story: '292', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now: 2 })
+  assert.deepEqual({ redirects: tick2.view.execution.redirects, engineRecoveries: tick2.view.execution.engineRecoveries, administrativeDispatches: tick2.view.execution.administrativeDispatches, nestedDispatches: tick2.view.execution.nestedDispatches }, dispatchStats, 'a tick that omits dispatchStats must not silently revert real counters to null')
+  assert.equal(tick2.view.usage.sharedOverhead, 4)
+  writeCheckpoint(dir, tick2.checkpoint)
+  // finalize (a separate real path, may run after the observer already stopped) still sees them
+  const finalized = finalizeMetrics({ dir, repository: 'foomakers/pair', story: '292', branch: 'b', pr: 7, runId: 'run-1', publish: null })
+  assert.deepEqual({ redirects: finalized.view.execution.redirects, engineRecoveries: finalized.view.execution.engineRecoveries }, { redirects: 2, engineRecoveries: 1 })
+  assert.equal(finalized.view.usage.sharedOverhead, 4)
+})
+
+test('CLI: reconcile/finalize accept --dispatchStats/--sharedCost as JSON and wire them into the real reduced view — proving the CLI itself forwards them, not only the JS function', () => {
+  const { dir, root } = runDir()
+  const file = join(dir, 'd.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '292', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') } }))
+  publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.0' })
+  const journal = journalFile(root, [{ key: 'prepare', agentId: 'ag1', started: true, result: { status: 'ok' } }])
+  const dispatchStatsJson = JSON.stringify({ redirects: 5, engineRecoveries: 2, administrativeDispatches: 1, nestedDispatches: 0 })
+  const r = spawnSync('node', [CLI, 'reconcile', '--dir', dir, '--repository', 'foomakers/pair', '--story', '292', '--branch', 'b', '--journal', journal, '--pr', '7', '--dispatchStats', dispatchStatsJson], { encoding: 'utf8' })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const metrics = JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8'))
+  assert.deepEqual({ redirects: metrics.execution.redirects, engineRecoveries: metrics.execution.engineRecoveries, administrativeDispatches: metrics.execution.administrativeDispatches, nestedDispatches: metrics.execution.nestedDispatches }, { redirects: 5, engineRecoveries: 2, administrativeDispatches: 1, nestedDispatches: 0 })
+  // finalize, run separately (no --dispatchStats this time), must still see the persisted values
+  const ghDir = fakeGhDir()
+  const fin = spawnSync('node', [CLI, 'finalize', '--dir', dir, '--repo', 'foomakers/pair', '--story', '292', '--branch', 'b', '--pr', '7'], { encoding: 'utf8', env: { ...process.env, PATH: `${ghDir}:${process.env.PATH}` } })
+  assert.equal(fin.status, 0, fin.stdout + fin.stderr)
+  const finalMetrics = JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8'))
+  assert.equal(finalMetrics.execution.redirects, 5, 'finalize kept the last CLI-supplied dispatchStats from the checkpoint')
+})
+
 test('DT-18/24: one runtime tick validates sources, merges idempotently, reduces metrics, writes atomically and reports errors visibly', () => {
   const { dir, root } = runDir()
   const file = join(dir, 'd.json')
