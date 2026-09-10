@@ -311,6 +311,21 @@ test('resolve: every `next` carries the PR the cycle is bound to once a handoff 
   assert.equal(resolve({ dir: d2, workflowVersion: V, policy: POLICY, entry: 'fresh' }).next.pr, undefined)
 })
 
+test('resolve: every verify `next` carries priorFindings — every id the cycle has seen with its latest severity — so a resumed coordinator can judge transitions and severity changes', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r0-1'), finding('r0-2', { severity: 'Minor' })] })
+  redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1', 'r0-2'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r1-g1' })
+  redVerify(dir, 'r1-g1', {})
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('d'), evidenceLedger: [] })
+  let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'verify')
+  assert.deepEqual(r.next.priorFindings, [{ id: 'r0-1', severity: 'Major' }, { id: 'r0-2', severity: 'Minor' }])
+  review(dir, 'r1', { mode: 're-review', readiness: { ready: false }, inputsDigest: 'd1', findings: [finding('r0-1', { transition: 'resolved', blocking: false }), finding('r0-2', { severity: 'Major', severityEvidence: 'new failure case' }), finding('r1-3', { kind: 'question', severity: 'Questions', blocking: false })] })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: 'd2' })
+  assert.equal(r.next.inputsChanged, true)
+  assert.deepEqual(r.next.priorFindings, [{ id: 'r0-1', severity: 'Major' }, { id: 'r0-2', severity: 'Major' }, { id: 'r1-3', severity: 'Questions' }], 'latest severity wins, questions included')
+})
+
 test('resolve: budgets, escalations and breaches are blocked outcomes — never a clean review', () => {
   const { dir } = runDir()
   review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r0-1')], custody: { verified: false, contractBreach: true } })

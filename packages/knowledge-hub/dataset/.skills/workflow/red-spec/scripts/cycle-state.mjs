@@ -201,6 +201,13 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     const plan = p?.groupId ? planFor(p.round) : undefined
     return plan?.groups?.find(g => g.groupId === p.groupId)
   }
+  // Every finding id the cycle has ever seen, with its latest severity — the coordinator seeds its
+  // identity checks from this on a resume (its own memory is per-run).
+  const priorFindings = () => {
+    const seen = new Map()
+    for (const r of reviews) for (const f of r.data.findings ?? []) if (f?.id) seen.set(f.id, { id: f.id, severity: f.severity })
+    return [...seen.values()]
+  }
   const findingsByIds = ids => {
     const pool = new Map()
     for (const r of reviews) for (const f of r.data.findings ?? []) if (f?.id) pool.set(f.id, f)
@@ -227,7 +234,7 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     if (d.status === 'ok' && d.gatesPassed === true && Number.isInteger(d.prNumber) && SHA_RE.test(String(d.outputHead ?? ''))) {
       // A revised acceptance contract (a0-rev<m>) was implemented after a review: the next
       // verification is a re-review of the prior findings + the delta, never a second first review.
-      if (lastReview) return { step: 'verify', mode: 're-review', phase: `r${(phaseParts(lastReview.phase)?.round ?? 0) + 1}`, round: (phaseParts(lastReview.phase)?.round ?? 0) + 1, attempt: 1, base: lastReview.data.reviewedHead, prior: lastReview.name, openIds: (lastReview.data.findings ?? []).filter(isBlocking).map(f => f.id), pr: d.prNumber }
+      if (lastReview) return { step: 'verify', mode: 're-review', phase: `r${(phaseParts(lastReview.phase)?.round ?? 0) + 1}`, round: (phaseParts(lastReview.phase)?.round ?? 0) + 1, attempt: 1, base: lastReview.data.reviewedHead, prior: lastReview.name, openIds: (lastReview.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: priorFindings(), pr: d.prNumber }
       return { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1, base: d.outputHead, pr: d.prNumber }
     }
     // A red gate or a failed build is the implementer's to fix on the SAME seal — once. The
@@ -245,7 +252,7 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     const nextGroup = groups[idx + 1]
     if (nextGroup) return { step: 'prepare', mode: 'remediation', phase: nextGroup.groupId, round: parts.round, attempt: 1, base: d.outputHead, group: nextGroup, findings: findingsByIds(nextGroup.findings), plan }
     const prior = lastReview
-    return { step: 'verify', mode: 're-review', phase: `r${parts.round}`, round: parts.round, attempt: byPhase('review-phase', `r${parts.round}`).length + 1, base: prior?.data.reviewedHead, prior: prior?.name, openIds: (prior?.data.findings ?? []).filter(isBlocking).map(f => f.id) }
+    return { step: 'verify', mode: 're-review', phase: `r${parts.round}`, round: parts.round, attempt: byPhase('review-phase', `r${parts.round}`).length + 1, base: prior?.data.reviewedHead, prior: prior?.name, openIds: (prior?.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: priorFindings() }
   }
   if (last.skill === 'review-phase') {
     if (d.custody?.contractBreach === true) return blocked('failed-custody', { phase: last.phase, breaches: d.custody.breaches })
@@ -254,10 +261,10 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     const round = parts.round ?? 0
     if (!blocking.length) {
       if (d.readiness?.ready === true) {
-        if (ctx.head && SHA_RE.test(ctx.head) && ctx.head !== d.reviewedHead) return { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], headMoved: true }
+        if (ctx.head && SHA_RE.test(ctx.head) && ctx.head !== d.reviewedHead) return { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], priorFindings: priorFindings(), headMoved: true }
         return { step: 'done', reviewedHead: d.reviewedHead, round, verdict: d.verdict }
       }
-      return { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], headMoved: true, detail: 'readiness not confirmed on the remote head' }
+      return { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], priorFindings: priorFindings(), headMoved: true, detail: 'readiness not confirmed on the remote head' }
     }
     if (d.needsHumanDecision === true && d.humanDecisionKind === 'history-rewrite') return blocked('escalate', { detail: 'history-rewrite decision', findings: blocking })
     if (blocking.every(f => f.external === true)) return blocked('escalate', { detail: 'external blockers need a human disposition or a read-back-verified correction', findings: blocking })
@@ -319,7 +326,9 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   // from the last reviewed head. Sealed contracts and GREEN commits stay trusted.
   if (last.skill === 'review-phase' && ((inputs && last.data.inputsDigest && last.data.inputsDigest !== inputs) || (acHash && last.data.acHash && last.data.acHash !== acHash)) && next.step !== 'blocked') {
     const round = phaseParts(last.phase)?.round ?? 0
-    next = { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: last.data.reviewedHead, prior: last.name, openIds: (last.data.findings ?? []).filter(isBlocking).map(f => f.id), inputsChanged: true, invalidated: handoffs.filter(h => h.skill === 'review-phase').map(h => h.name) }
+    const seen = new Map()
+    for (const r of handoffs.filter(h => h.skill === 'review-phase')) for (const f of r.data.findings ?? []) if (f?.id) seen.set(f.id, { id: f.id, severity: f.severity })
+    next = { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: last.data.reviewedHead, prior: last.name, openIds: (last.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: [...seen.values()], inputsChanged: true, invalidated: handoffs.filter(h => h.skill === 'review-phase').map(h => h.name) }
   }
   // The PR the cycle is bound to travels with EVERY next: a coordinator resuming a fresh-path card
   // (no prNumber in its args) learns it from here — a verification dispatched without it would

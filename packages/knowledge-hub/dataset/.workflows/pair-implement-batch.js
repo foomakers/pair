@@ -449,7 +449,7 @@ const RUN_ID = PARSED.runId
 // The coordinator's own version, returned with every result and handed to every phase skill so
 // each handoff records which coordinator produced it. Bump on any change to the dispatch
 // contract (skill names, argument names, statuses).
-const WORKFLOW_VERSION = '3.0.5'
+const WORKFLOW_VERSION = '3.0.6'
 
 // ── Pipeline configuration: what makes this engine reusable ─────────────────
 // Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved
@@ -847,6 +847,10 @@ const NEXT_SCHEMA = {
     // not declare is dropped by the harness before the coordinator sees it — `pr` was, and a
     // fresh-path resume then had no PR to verify against (canary run 11, 3.0.4).
     pr: { type: 'integer' },
+    // Every finding id the cycle has seen with its latest severity: the coordinator's identity and
+    // severity-change checks are seeded from it on a resume — its own memory is per-run, and
+    // without the seed a prior finding arriving as `resolved` read as an invented one (canary run 11).
+    priorFindings: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, severity: { type: 'string' } }, required: ['id'] } },
   },
   required: ['step'],
 }
@@ -1510,6 +1514,8 @@ async function driveStory(story) {
     else if (stage === 'implement') res = await implement(next)
     else if (stage === 'green') res = await green(next)
     else {
+      // Seed the finding memory from the durable state before judging the verifier's transitions.
+      for (const f of next.priorFindings ?? []) if (f && FINDING_ID_RE.test(String(f.id ?? '')) && !known.has(f.id)) known.set(f.id, { severity: f.severity })
       const required = pendingRequiredFindings
       res = await verify(next, required)
     }

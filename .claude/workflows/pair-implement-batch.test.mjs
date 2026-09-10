@@ -1,4 +1,4 @@
-// Dry-run harness for pair-implement-batch.js (engine 3.0.5, US-479): executes the workflow
+// Dry-run harness for pair-implement-batch.js (engine 3.0.6, US-479): executes the workflow
 // source with stubbed `agent`/`parallel` (the sandbox primitives) and asserts the coordinator's
 // contract — four judgment stages dispatched by skill name with typed arguments, a `next`-driven
 // state machine that never derives a transition of its own, fail-closed validation of every typed
@@ -259,10 +259,10 @@ test('TC-11: a resumed PR with a clean verification is ONE dispatch — the fina
 test('TC-11: every dispatch is a configured skill + typed arguments + the engine version, run directory and policy', async () => {
   const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] })
   const { result, calls } = await runWorkflow({ args: { cards: [STORY], runId: 'run-42' }, dispatch: stdDispatch({ review }) })
-  assert.equal(result.workflowVersion, '3.0.5')
+  assert.equal(result.workflowVersion, '3.0.6')
   for (const c of calls.slice(1)) {
     assert.match(c.prompt, /^Invoke \*\*\/pair-workflow-(red-spec|red-verify|implement-phase|green-fix|review-phase)\*\* for story #292 with \$run=run-42 \$story=292 \$branch=feat\/#292-x \$worktree=\.\.\/pair-worktrees\/292 \$base=origin\/main \$stacked=false/, c.opts.label)
-    assert.ok(c.prompt.includes('$workflowVersion=3.0.5'), `${c.opts.label} was not told the workflow version`)
+    assert.ok(c.prompt.includes('$workflowVersion=3.0.6'), `${c.opts.label} was not told the workflow version`)
     assert.ok(c.prompt.includes('$policy={"maxFixRounds":3,"redRepairs":1,"greenRetries":1,"reviewers":1}'), `${c.opts.label} was not told the policy`)
     assert.match(c.prompt, /\$inputs=[0-9a-f]{16}/, `${c.opts.label} was not told the effective-inputs digest`)
     assert.match(c.prompt, /\$entry=(fresh|pr)/)
@@ -437,6 +437,19 @@ test('TC-14: every `next.<field>` the coordinator reads is declared in NEXT_SCHE
   const missing = [...read].filter(k => !declared.has(k) && !['length', 'map', 'filter', 'some', 'every', 'find', 'findIndex', 'entries', 'push', 'includes', 'slice', 'join', 'test', 'toLowerCase', 'trim', 'sort', 'reduce', 'values', 'keys', 'has', 'get', 'set', 'add', 'delete', 'exec', 'replace', 'split', 'startsWith', 'match'].includes(k))
   assert.deepEqual(missing, [], `next fields read but undeclared in NEXT_SCHEMA: ${missing.join(', ')}`)
   assert.ok(declared.has('pr') && declared.has('contract') && declared.has('openIds'))
+})
+
+test('TC-05 / TC-06: on a resume the coordinator judges transitions and severity changes against the priorFindings the cycle state hands it — a prior finding may arrive resolved, a prior severity change still needs evidence, an invented id is still refused (canary run 11, r1-5)', async () => {
+  const redirect = { status: 'redirect', next: { step: 'verify', mode: 're-review', phase: 'r2', round: 2, attempt: 1, base: HEAD, prior: 'r1-review-phase', openIds: ['r0-1'], priorFindings: [{ id: 'r0-1', severity: 'Major' }, { id: 'r1-5', severity: 'Questions' }], pr: 483 } }
+  const drive = review => runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-fix-test-author' ? redirect : o.agentType === 'pair-reviewer' ? review : {}) })
+  const ok = await drive({ verdict: 'Approved', findings: [finding({ id: 'r0-1', transition: 'resolved' }), finding({ id: 'r1-5', severity: 'Questions', kind: 'question', transition: 'resolved' })] })
+  assert.equal(ok.result.batch[0].status, 'ready-for-merge', JSON.stringify(ok.result.batch[0]))
+  const promoted = await drive({ verdict: 'Rework', findings: [finding({ id: 'r0-1', severity: 'Blocker', transition: 'open' })] })
+  assert.equal(promoted.result.batch[0].status, 'failed-verify')
+  assert.match(promoted.result.batch[0].reason, /severity changed Major -> Blocker without severityEvidence/)
+  const invented = await drive({ verdict: 'Approved', findings: [finding({ id: 'r0-1', transition: 'resolved' }), finding({ id: 'r1-9', transition: 'resolved' })] })
+  assert.equal(invented.result.batch[0].status, 'failed-verify')
+  assert.match(invented.result.batch[0].reason, /r1-9: a new finding cannot arrive as resolved/)
 })
 
 test('TC-05: a completed cycle resumed with the same inputs performs no new judgment — the verifier redirects straight to done', async () => {
@@ -766,10 +779,10 @@ test('TC-14: pipeline.reviewers is a positive integer threaded to the verifier a
   assert.match(await expectThrow({ args: { cards: [STORY], pipeline: { reviewers: 0 } } }), /reviewers/)
 })
 
-test('TC-14: the result carries workflowVersion 3.0.5 and every status row is one of the documented set; ready rows carry reviewedHead + verdict', async () => {
+test('TC-14: the result carries workflowVersion 3.0.6 and every status row is one of the documented set; ready rows carry reviewedHead + verdict', async () => {
   const STATUSES = new Set(['ready-for-merge', 'escalate', 'failed-preparation', 'failed-contract', 'failed-seal', 'failed-implement', 'failed-fix', 'failed-verify', 'failed-custody', 'failed-resume', 'incompatible'])
   const { result } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch() })
-  assert.equal(result.workflowVersion, '3.0.5')
+  assert.equal(result.workflowVersion, '3.0.6')
   for (const row of result.batch) {
     assert.equal(row.id, STORY.id)
     assert.ok(STATUSES.has(row.status), row.status)
@@ -916,7 +929,7 @@ test('an EXPLICIT empty list stays a legal no-op — no agent, no contract', asy
   assert.equal(calls.length, 0)
   assert.deepEqual(result.batch, [])
   assert.match(result.note, /Empty batch/)
-  assert.equal(result.workflowVersion, '3.0.5')
+  assert.equal(result.workflowVersion, '3.0.6')
 })
 test('a bare array, a JSON string, `cards` and the `stories` alias all drive the batch; both lists together throw', async () => {
   for (const args of [[STORY], JSON.stringify({ stories: [STORY] }), { cards: [STORY] }, { stories: [STORY] }, { cards: [STORY], stories: undefined }, { stories: [STORY], cards: null }]) {
