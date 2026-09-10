@@ -16,7 +16,16 @@ const FAKE_GH_DIR = _mk(_join(_tmp(), 'fake-gh-'))
 _wf(_join(FAKE_GH_DIR, 'gh'), `#!/usr/bin/env node
 const a = process.argv.slice(2)
 if (a[0] === 'issue' && a[1] === 'view') { if (process.env.FAKE_GH_FAIL) { process.stderr.write('HTTP 502'); process.exit(1) } process.stdout.write('card body of #' + a[2] + (process.env.FAKE_GH_BODY_SUFFIX || '')); process.exit(0) }
-process.stderr.write('unexpected gh call'); process.exit(1)
+if (a[0] === 'api') {
+  const m = /issues\\/comments\\/(\\d+)$/.exec(a[1] || '')
+  if (m) {
+    const comments = JSON.parse(process.env.FAKE_GH_COMMENTS_JSON || '{}')
+    const c = comments[m[1]]
+    if (!c) { process.stderr.write('HTTP 404'); process.exit(1) }
+    process.stdout.write(JSON.stringify(c)); process.exit(0)
+  }
+}
+process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(1)
 `)
 _ch(_join(FAKE_GH_DIR, 'gh'), 0o755)
 process.env.PAIR_GH_BIN = _join(FAKE_GH_DIR, 'gh')
@@ -29,7 +38,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, cycleCounters } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
 const V = '3.0.0'
@@ -733,6 +742,120 @@ test('T-19 (DT-33): migrate-inspect reads schema-2 evidence read-only — it nev
   const r = spawnSync('node', [CLI, 'migrate-inspect', '--dir', d2], { encoding: 'utf8' })
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.equal(JSON.parse(r.stdout).next, 'resume')
+})
+
+// ── US-479 T-22: separate scope queue, developer decision gate (DT-12..17/27) ─────────────
+const scopeChange = (id, extra = {}) => ({ id, type: 'new-requirement', proposal: `proposal text for ${id}`, status: 'pending', discoveredAtReviewId: 'r0', baselineEvidenceRefs: [], ...extra })
+const setComments = map => {
+  process.env.FAKE_GH_COMMENTS_JSON = JSON.stringify(map)
+}
+const decisionBody = (decisions, hash) => '```json\n' + JSON.stringify({ schemaVersion: 1, scopeBaselineHash: hash, decisions }) + '\n```'
+const comment = (login, body, { type = 'User', issue = 7 } = {}) => ({ user: { login, type }, issue_url: `https://api.github.com/repos/foomakers/pair/issues/${issue}`, body })
+
+test('T-22 (DT-12/13): a technically converged review with pending scope proposals returns awaiting-scope-decision, never `done` and never a fix plan/severity count for the proposals', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1'), scopeChange('sc-2')] })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.status, 'blocked')
+  assert.equal(r.next.step, 'blocked')
+  assert.equal(r.next.reason, 'awaiting-scope-decision')
+  assert.equal(r.next.qualityState, 'converged')
+  assert.deepEqual(r.next.scopeChanges.map(c => c.id), ['sc-1', 'sc-2'])
+  // a real Major defect present too: the proposals never enter the fix plan and the round still
+  // remediates the defect first — quality convergence gates scope, not the reverse
+  const { dir: d2 } = runDir()
+  review(d2, 'r0', { readiness: { ready: false }, findings: [finding('r0-1')], scopeChanges: [scopeChange('sc-1')] })
+  const r2 = resolve({ dir: d2, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r2.next.step, 'prepare')
+  assert.equal(r2.next.mode, 'remediation')
+  assert.equal(r2.next.findings.every(f => !f.id.startsWith('sc-')), true, 'no scope proposal id ever enters a fix plan')
+})
+
+test('T-22 (DT-14): an authenticated ignore decision preserves quality evidence, records the rationale, never touches source/severity — readiness follows once every proposal is dispositioned', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const pending = [scopeChange('sc-1')]
+  const hash = scopeBaselineHashOf(pending)
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-501'
+  setComments({ 501: comment('rucka', decisionBody([{ id: 'sc-1', action: 'ignore', rationale: 'already covered by AC-3' }], hash)) })
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.status, 'completed')
+  assert.equal(r.next.step, 'done')
+  const written = JSON.parse(readFileSync(join(dir, 'r0-review-phase.attempt-2.json'), 'utf8'))
+  assert.equal(written.recordType, 'decision')
+  assert.deepEqual({ status: written.scopeChanges[0].status, rationale: written.scopeChanges[0].decisionRationale }, { status: 'ignored', rationale: 'already covered by AC-3' })
+  // idempotent: the SAME decisionRef replayed is a no-op, never a second handoff
+  const again = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V })
+  assert.deepEqual(again, { applied: true, reason: 'already-applied' })
+  assert.equal(existsSync(join(dir, 'r0-review-phase.attempt-3.json')), false)
+})
+
+test('T-22 (DT-16): extend-current-card names exact new AC, bumps scopeEpoch exactly once and opens a targeted remediation round on the SAME cycle — resolved AC are not re-litigated', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-502'
+  setComments({ 502: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-99', description: 'the new requirement' }] } }], hash)) })
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase, round: r.next.round }, { step: 'prepare', mode: 'remediation', phase: 'r1-g1', round: 1 })
+  assert.deepEqual(r.next.findings.map(f => f.id), ['AC-99'])
+  assert.equal(r.next.scopeEpoch, 2)
+  // a repeated resolve before red-spec responds is idempotent — same next, no duplicate dispatch
+  const r2 = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r2.next, r.next)
+  // once red-spec starts the round, resolve stops re-offering the extension trigger
+  redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['AC-99'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r1-g1' }, { predecessor: 'r0-review-phase.attempt-2' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'validate')
+})
+
+test('T-22 (DT-17): bot comments, an unauthorized login, a stale baseline, a duplicate id and an unknown action are all refused — a partial decision leaves the undecided proposal pending', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1'), scopeChange('sc-2')] })
+  const pending = [scopeChange('sc-1'), scopeChange('sc-2')]
+  const hash = scopeBaselineHashOf(pending)
+  const attempt = (id, c, extra = {}) => applyScopeDecisions({ dir, decisionRef: `https://github.com/foomakers/pair/pull/7#issuecomment-${id}`, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ...extra })
+  setComments({
+    601: comment('some-bot[bot]', decisionBody([{ id: 'sc-1', action: 'ignore', rationale: 'x' }], hash), { type: 'Bot' }),
+    602: comment('random-user', decisionBody([{ id: 'sc-1', action: 'ignore', rationale: 'x' }], hash)),
+    603: comment('rucka', decisionBody([{ id: 'sc-1', action: 'ignore', rationale: 'x' }], 'sha256:' + '0'.repeat(64))),
+    604: comment('rucka', decisionBody([{ id: 'sc-1', action: 'ignore', rationale: 'a' }, { id: 'sc-1', action: 'ignore', rationale: 'b' }], hash)),
+    605: comment('rucka', decisionBody([{ id: 'sc-1', action: 'waive' }], hash)),
+    606: comment('rucka', decisionBody([{ id: 'sc-1', action: 'ignore', rationale: 'only this one, sc-2 stays pending' }], hash)),
+  })
+  assert.equal(attempt(601).applied, false)
+  assert.equal(attempt(601).reason, 'author-not-a-user')
+  assert.equal(attempt(602).applied, false)
+  assert.match(attempt(602).reason, /author-not-authorized/)
+  assert.equal(attempt(603).applied, false)
+  assert.equal(attempt(603).reason, 'stale-baseline')
+  assert.equal(attempt(604).applied, false)
+  assert.match(attempt(604).reason, /duplicate-id/)
+  assert.equal(attempt(605).applied, false)
+  assert.match(attempt(605).reason, /unknown-action/)
+  // none of the rejected attempts wrote anything
+  assert.equal(readHandoffs(dir).filter(h => h.skill === 'review-phase').length, 1)
+  const partial = attempt(606)
+  assert.equal(partial.applied, true, JSON.stringify(partial))
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.reason, 'awaiting-scope-decision')
+  assert.deepEqual(r.next.scopeChanges.map(c => c.id), ['sc-2'])
+})
+
+test('parseScopeDecisionComment / scopeBaselineHashOf: canonical, order-independent, and every malformed shape is a typed rejection', () => {
+  assert.deepEqual([...SCOPE_DECISION_ACTIONS].sort(), ['extend-current-card', 'ignore', 'new-card'])
+  const a = scopeBaselineHashOf([scopeChange('sc-2'), scopeChange('sc-1'), { id: 'sc-3', status: 'ignored' }])
+  const b = scopeBaselineHashOf([scopeChange('sc-1'), scopeChange('sc-2')])
+  assert.equal(a, b, 'already-resolved proposals and row order never change the pending baseline')
+  assert.match(parseScopeDecisionComment('no fences here').error, /no-fenced-json/)
+  assert.match(parseScopeDecisionComment('```json\nnot json\n```').error, /invalid-json/)
+  assert.match(parseScopeDecisionComment('```json\n{"schemaVersion":2,"scopeBaselineHash":"x","decisions":[]}\n```').error, /schemaVersion-invalid/)
+  assert.match(parseScopeDecisionComment('```json\n{"schemaVersion":1,"decisions":[]}\n```').error, /scopeBaselineHash-missing/)
+  assert.match(parseScopeDecisionComment('```json\n{"schemaVersion":1,"scopeBaselineHash":"x","decisions":[{"id":"sc-1","action":"ignore","extraKey":true}]}\n```').error, /unknown-key:extraKey/)
 })
 
 // ── US-479 T-21: same-cycle revision, effective remediation counters (DT-04..08) ──────────

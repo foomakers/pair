@@ -29,6 +29,12 @@
 //   node … migrate-inspect --dir <run/story dir>   → { compatibleEvidenceRefs, missingDimensions, ambiguity, next }
 //     Read-only (US-479 T-19, S10): never rewrites schema-2 evidence, never fabricates a counter.
 //
+//   node … apply-scope-decisions --dir <dir> --decision-ref <PR comment URL> --repo <owner/name> --pr <n> [--maintainer <login>]
+//     → { applied, reason?, results?, path? }   (US-479 T-22, S5)
+//     Reads the ACTUAL PR comment through `gh`; verifies author type=User and login in the
+//     authorized set; applies ignore | new-card | extend-current-card mechanically and persists a
+//     `recordType: decision` review-phase handoff. Idempotent on the same decisionRef.
+//
 //   node … test-identity --cwd <worktree> --command <cmd> [--env-keys K1,K2] [--toolchain <s>]
 //     → { identity, parts, reusable, missing }     a cached test result is valid ONLY for this identity
 import { createHash } from 'node:crypto'
@@ -53,6 +59,7 @@ export const SCOPE_CHANGE_STATUSES = ['pending', 'ignored', 'extended', 'deferre
 // amendment 2026-09-10). All four are non-ready: a caller already halts on any status it does not
 // recognise, so this list is documentation the conformance tests pin, not a new caller branch.
 export const NEW_PUBLIC_STATUSES = ['awaiting-scope-decision', 'failed-publication', 'interrupted', 'abandoned']
+export const SCOPE_DECISION_ACTIONS = ['ignore', 'new-card', 'extend-current-card']
 const SHA_RE = /^[0-9a-f]{40}$/
 // A gap's reproducer command is an executable reference, never shell code pasted into an unsafe
 // eval (S3) — the same hostile-value shape the coordinator already refuses in card/pipeline fields.
@@ -224,6 +231,143 @@ export function cardHash({ story, ghBin = process.env.PAIR_GH_BIN || 'gh' }) {
   return { acHash: sha256(r.stdout) }
 }
 
+// ── scope decisions (US-479 T-22, S5) ──────────────────────────────────────────────────────
+// Canonical hash of the CURRENTLY pending scope proposals — the "did the packet the maintainer
+// read still match what exists now" check. Sorted, so two spellings of the same set hash alike.
+export function scopeBaselineHashOf(scopeChanges) {
+  const pending = (scopeChanges ?? [])
+    .filter(c => (c?.status ?? 'pending') === 'pending')
+    .map(c => ({ id: c.id, proposal: c.proposal }))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  return sha256(canonical(pending))
+}
+
+const DECISION_ALLOWED_KEYS = new Set(['id', 'action', 'rationale', 'targetIssueUrl', 'approvedDelta'])
+// One fenced JSON object, schemaVersion 1, decisions[] with no unknown key/action/duplicate id —
+// a caller-supplied author string is NEVER trusted here; that check happens in applyScopeDecisions.
+export function parseScopeDecisionComment(body) {
+  const m = /```json\s*([\s\S]*?)```/.exec(String(body ?? ''))
+  if (!m) return { error: 'no-fenced-json' }
+  let payload
+  try {
+    payload = JSON.parse(m[1])
+  } catch {
+    return { error: 'invalid-json' }
+  }
+  if (!payload || typeof payload !== 'object') return { error: 'invalid-json' }
+  if (payload.schemaVersion !== 1) return { error: `schemaVersion-invalid:${payload.schemaVersion}` }
+  if (typeof payload.scopeBaselineHash !== 'string' || !payload.scopeBaselineHash) return { error: 'scopeBaselineHash-missing' }
+  if (!Array.isArray(payload.decisions)) return { error: 'decisions-not-an-array' }
+  const seenIds = new Set()
+  const decisions = []
+  for (const raw of payload.decisions) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { error: 'decision-not-an-object' }
+    for (const k of Object.keys(raw)) if (!DECISION_ALLOWED_KEYS.has(k)) return { error: `unknown-key:${k}` }
+    if (typeof raw.id !== 'string' || !raw.id) return { error: 'decision-id-missing' }
+    if (!SCOPE_DECISION_ACTIONS.includes(raw.action)) return { error: `unknown-action:${raw.action}` }
+    if (seenIds.has(raw.id)) return { error: `duplicate-id:${raw.id}` }
+    seenIds.add(raw.id)
+    decisions.push(raw)
+  }
+  return { schemaVersion: 1, scopeBaselineHash: payload.scopeBaselineHash, decisions }
+}
+
+const COMMENT_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:pull|issues)\/(\d+)#issuecomment-(\d+)$/
+
+// Reads the ACTUAL PR comment through `gh` (never a caller-supplied author string), verifies it is
+// a `User` in the authorized maintainer set, applies exact approved payloads mechanically — no
+// planner agent — and persists the result as a `recordType: decision` review-phase handoff via the
+// ordinary `publish`. Idempotent: a decisionRef already applied is a no-op, not a duplicate write.
+export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer = 'rucka', ghBin = process.env.PAIR_GH_BIN || 'gh', workflowVersion, lockWaitMs = 5000 }) {
+  const handoffs = readHandoffs(dir)
+  const reviews = handoffs.filter(h => h.data && h.skill === 'review-phase')
+  if (!reviews.length) return { applied: false, reason: 'no-review-evidence' }
+  if (reviews.some(r => r.data.decisionRef === decisionRef)) return { applied: true, reason: 'already-applied' }
+  const seen = new Map()
+  for (const r of reviews) for (const c of r.data.scopeChanges ?? []) if (c?.id) seen.set(c.id, c)
+  const pending = [...seen.values()].filter(c => (c.status ?? 'pending') === 'pending')
+  if (!pending.length) return { applied: false, reason: 'no-pending-scope-changes' }
+  const m = COMMENT_URL_RE.exec(String(decisionRef ?? ''))
+  if (!m) return { applied: false, reason: 'decisionRef-invalid' }
+  const [, owner, repoName, prNum] = m
+  if (`${owner}/${repoName}` !== repo) return { applied: false, reason: 'decisionRef-repo-mismatch' }
+  if (Number(prNum) !== Number(pr)) return { applied: false, reason: 'decisionRef-pr-mismatch' }
+  const r = spawnSync(ghBin, ['api', `repos/${repo}/issues/comments/${m[4]}`], { encoding: 'utf8', env: cleanGitEnv(process.env) })
+  if (r.error || r.status !== 0) return { applied: false, reason: `gh-api-failed:${(r.stderr || r.error?.message || '').trim()}` }
+  let comment
+  try {
+    comment = JSON.parse(r.stdout)
+  } catch {
+    return { applied: false, reason: 'gh-api-invalid-json' }
+  }
+  if (comment?.user?.type !== 'User') return { applied: false, reason: 'author-not-a-user' }
+  if (comment.user.login !== maintainer) return { applied: false, reason: `author-not-authorized:${comment.user.login}` }
+  if (!new RegExp(`/issues/${prNum}$`).test(String(comment.issue_url ?? ''))) return { applied: false, reason: 'decisionRef-pr-mismatch' }
+  const parsed = parseScopeDecisionComment(comment.body)
+  if (parsed.error) return { applied: false, reason: parsed.error }
+  const currentHash = scopeBaselineHashOf(pending)
+  if (parsed.scopeBaselineHash !== currentHash) return { applied: false, reason: 'stale-baseline' }
+  const byId = new Map(pending.map(c => [c.id, c]))
+  const results = []
+  for (const dec of parsed.decisions) {
+    const target = byId.get(dec.id)
+    if (!target) {
+      results.push({ id: dec.id, applied: false, reason: 'unknown-id' })
+      continue
+    }
+    if (dec.action === 'ignore') {
+      if (!dec.rationale) {
+        results.push({ id: dec.id, applied: false, reason: 'rationale-missing' })
+        continue
+      }
+      results.push({ id: dec.id, applied: true, status: 'ignored', rationale: dec.rationale })
+    } else if (dec.action === 'new-card') {
+      if (!dec.targetIssueUrl && !dec.approvedDelta) {
+        results.push({ id: dec.id, applied: false, reason: 'payload-insufficient' })
+        continue
+      }
+      results.push({ id: dec.id, applied: true, status: 'deferred', targetIssueUrl: dec.targetIssueUrl, approvedDelta: dec.approvedDelta })
+    } else if (dec.action === 'extend-current-card') {
+      if (!dec.approvedDelta || !Array.isArray(dec.approvedDelta.ac) || !dec.approvedDelta.ac.length) {
+        results.push({ id: dec.id, applied: false, reason: 'approvedDelta-missing' })
+        continue
+      }
+      results.push({ id: dec.id, applied: true, status: 'extended', approvedDelta: dec.approvedDelta })
+    }
+  }
+  if (!results.some(x => x.applied)) return { applied: false, reason: 'no-decision-applied', results }
+  const updatedScopeChanges = [...seen.values()].map(c => {
+    const res = results.find(x => x.id === c.id && x.applied)
+    return res ? { ...c, status: res.status, decisionRef, ...(res.rationale ? { decisionRationale: res.rationale } : {}), ...(res.targetIssueUrl ? { targetIssueUrl: res.targetIssueUrl } : {}), ...(res.approvedDelta ? { approvedDelta: res.approvedDelta } : {}) } : c
+  })
+  const extension = results.find(x => x.applied && x.status === 'extended')
+  const lastReview = reviews[reviews.length - 1]
+  const draft = {
+    run: lastReview.data.run,
+    story: lastReview.data.story,
+    pr: lastReview.data.pr ?? Number(pr),
+    branch: lastReview.data.branch,
+    phase: lastReview.phase,
+    skill: 'review-phase',
+    inputHead: lastReview.data.inputHead,
+    recordType: 'decision',
+    reviewedHead: lastReview.data.reviewedHead,
+    verdict: lastReview.data.verdict,
+    custody: lastReview.data.custody,
+    readiness: lastReview.data.readiness,
+    findings: lastReview.data.findings,
+    scopeChanges: updatedScopeChanges,
+    decisionRef,
+    scopeEpoch: extension ? (lastReview.data.scopeEpoch ?? 1) + 1 : lastReview.data.scopeEpoch,
+    ...(extension ? { scopeExtension: extension.approvedDelta } : {}),
+  }
+  const tmp = join(dir, `.scope-decision-${Date.now()}-${Math.random().toString(36).slice(2)}.json`)
+  writeFileSync(tmp, JSON.stringify(draft))
+  const attempt = handoffs.filter(h => h.phase === lastReview.phase && h.skill === 'review-phase').length + 1
+  const out = publish({ dir, file: tmp, phase: lastReview.phase, skill: 'review-phase', workflowVersion: workflowVersion ?? lastReview.data.workflowVersion, attempt, predecessor: lastReview.name, lockWaitMs, ghBin })
+  return { applied: !!out.published, reason: out.published ? undefined : out.reason, results, path: out.path }
+}
+
 export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, pr, lockWaitMs = 5000, ghBin }) {
   let data
   try {
@@ -345,6 +489,15 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     for (const r of reviews) for (const f of r.data.findings ?? []) if (f?.id) seen.set(f.id, { id: f.id, severity: f.severity })
     return [...seen.values()]
   }
+  // Every scope proposal the cycle has ever seen, latest status wins — a `recordType: decision`
+  // handoff (applyScopeDecisions) is a review-phase record too, so its updated status is the one
+  // seen on resume (US-479 T-22, S5).
+  const scopeChangesSeen = () => {
+    const seen = new Map()
+    for (const r of reviews) for (const c of r.data.scopeChanges ?? []) if (c?.id) seen.set(c.id, c)
+    return [...seen.values()]
+  }
+  const pendingScopeChanges = () => scopeChangesSeen().filter(c => (c.status ?? 'pending') === 'pending')
   const findingsByIds = ids => {
     const pool = new Map()
     for (const r of reviews) for (const f of r.data.findings ?? []) if (f?.id) pool.set(f.id, f)
@@ -441,6 +594,19 @@ export function deriveNext(handoffs, policy, ctx = {}) {
       const remote = String(d.readiness?.remoteHead ?? '').toLowerCase()
       if (d.readiness?.ready === true && SHA_RE.test(remote) && remote === String(d.reviewedHead).toLowerCase()) {
         if (ctx.head && SHA_RE.test(ctx.head) && ctx.head !== d.reviewedHead) return { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], priorFindings: priorFindings(), headMoved: true }
+        // US-479 T-22 (S5): a just-APPLIED extend-current-card decision (this exact handoff, not
+        // yet acted on) opens a targeted remediation for its approved delta — on the SAME cycle,
+        // before any `done`. Reusing the ordinary remediation path (T-20/T-21) rather than a
+        // parallel one keeps validation, counters and budgets uniform.
+        if (d.recordType === 'decision' && d.scopeExtension && !byPhase('red-spec', `r${round + 1}-g1`).length) {
+          const ac = Array.isArray(d.scopeExtension.ac) ? d.scopeExtension.ac : []
+          const findings = ac.map((item, i) => ({ id: item.id ?? `sc-ext-r${round + 1}-${i + 1}`, severity: 'Major', location: 'card', description: item.description ?? item.id ?? 'approved scope extension', recommendation: 'implement the approved AC', blocking: true, transition: 'open', kind: 'defect' }))
+          return { step: 'prepare', mode: 'remediation', phase: `r${round + 1}-g1`, round: round + 1, attempt: 1, base: d.reviewedHead, findings, scopeEpoch: d.scopeEpoch }
+        }
+        // Quality is converged, but pending scope proposals still need the maintainer's explicit
+        // ignore/extend-current-card/new-card decision (S2/S5) — never auto-absorbed, never `done`.
+        const pending = pendingScopeChanges()
+        if (pending.length) return blocked('awaiting-scope-decision', { qualityState: 'converged', reviewedHead: d.reviewedHead, scopeChanges: pending })
         return { step: 'done', reviewedHead: d.reviewedHead, round, verdict: d.verdict }
       }
       return { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], priorFindings: priorFindings(), headMoved: true, detail: SHA_RE.test(remote) ? 'readiness not confirmed on the remote head' : 'readiness not bound to a 40-hex remote head' }
@@ -517,13 +683,16 @@ export function cycleCounters(handoffs) {
       if (h.data.gatesPassed === true) succeededRounds.add(0)
     }
   }
-  const reviews = list.filter(h => h.skill === 'review-phase')
+  // A mechanical `recordType: decision|migration` record (US-479 T-19 S1, T-22 S5) is not a new
+  // review EXECUTION — it fabricates no verdict, so it never inflates reviewExecutions/reviewBatches.
+  const allReviews = list.filter(h => h.skill === 'review-phase')
+  const reviews = allReviews.filter(h => (h.data.recordType ?? 'judgment') === 'judgment')
   const reviewExecutions = reviews.length
   const reviewPhasesSeen = new Set(reviews.map(h => h.phase))
   const reviewBatches = reviewPhasesSeen.size
   const completedReviewRounds = new Set()
-  for (const phase of reviewPhasesSeen) {
-    const ofPhase = reviews.filter(h => h.phase === phase)
+  for (const phase of new Set(allReviews.map(h => h.phase))) {
+    const ofPhase = allReviews.filter(h => h.phase === phase)
     const last = ofPhase[ofPhase.length - 1]
     if (last.data.partial !== true) completedReviewRounds.add(phaseParts(phase)?.round ?? 0)
   }
@@ -704,6 +873,11 @@ if (isMain()) {
       need('json')
       process.stdout.write(JSON.stringify({ inputsDigest: inputsDigest(JSON.parse(opts.json)) }) + '\n')
       process.exit(0)
+    } else if (cmd === 'apply-scope-decisions') {
+      need('dir', 'decision-ref', 'repo', 'pr')
+      out = applyScopeDecisions({ dir: opts.dir, decisionRef: opts['decision-ref'], repo: opts.repo, pr: Number(opts.pr), maintainer: opts.maintainer, workflowVersion: opts.workflowVersion })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.applied ? 0 : 1)
     } else if (cmd === 'migrate-inspect') {
       need('dir')
       out = migrateInspect({ dir: opts.dir })
@@ -716,7 +890,7 @@ if (isMain()) {
       out = testIdentity({ cwd: opts.cwd, command: opts.command, env, toolchain: opts.toolchain ?? `node ${process.version}` })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
-    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | migrate-inspect | test-identity)`)
+    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | migrate-inspect | apply-scope-decisions | test-identity)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)

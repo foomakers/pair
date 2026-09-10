@@ -1448,7 +1448,10 @@ async function driveStory(story) {
   }
   const result = (status, extra = {}) => ({ story, prNumber: pr ?? undefined, status, acceptedFindings: accepted, metrics: { ...storyMetrics, wallMs: 'unknown', tokens: 'unknown' }, ...extra })
   const blockedResult = n => {
-    const map = { 'failed-preparation': 'failed-preparation', 'failed-contract': 'failed-contract', 'failed-seal': 'failed-seal', 'failed-implement': 'failed-implement', 'failed-fix': 'failed-fix', 'failed-custody': 'failed-custody', escalate: 'escalate', 'failed-resume': 'failed-resume' }
+    // US-479 T-22 (S5) / ADR-024 amendment 2026-09-10: the four new non-ready statuses pass
+    // through unmapped — never silently coerced to failed-resume, which would make a clean
+    // technical convergence with pending scope proposals look like an engine failure.
+    const map = { 'failed-preparation': 'failed-preparation', 'failed-contract': 'failed-contract', 'failed-seal': 'failed-seal', 'failed-implement': 'failed-implement', 'failed-fix': 'failed-fix', 'failed-custody': 'failed-custody', escalate: 'escalate', 'failed-resume': 'failed-resume', 'awaiting-scope-decision': 'awaiting-scope-decision', 'failed-publication': 'failed-publication', interrupted: 'interrupted', abandoned: 'abandoned' }
     return result(map[n.reason] ?? 'failed-resume', { reason: n.detail ?? n.reason, budget: n.budget, refusal: n.refusal, findings: n.findings ?? n.rejection, phase: n.phase })
   }
 
@@ -1636,7 +1639,7 @@ const batch = results.filter(Boolean).map((r) => ({ id: r.story?.id, ...r }))
 // The note describes what ACTUALLY happened: a card ADVANCED only if it reached a PR the human can
 // act on (`ready-for-merge` or `escalate`); everything else is named by the status it carries.
 const died = STORIES.length - batch.length
-const ADVANCED = new Set(['ready-for-merge', 'escalate'])
+const ADVANCED = new Set(['ready-for-merge', 'escalate', 'awaiting-scope-decision'])
 const advanced = batch.filter((r) => ADVANCED.has(r.status))
 const failedRows = batch.filter((r) => !ADVANCED.has(r.status))
 const tally = (rows) =>
