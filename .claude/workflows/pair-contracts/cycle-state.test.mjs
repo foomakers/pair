@@ -29,7 +29,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, cycleCounters } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
 const V = '3.0.0'
@@ -733,6 +733,50 @@ test('T-19 (DT-33): migrate-inspect reads schema-2 evidence read-only — it nev
   const r = spawnSync('node', [CLI, 'migrate-inspect', '--dir', d2], { encoding: 'utf8' })
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.equal(JSON.parse(r.stdout).next, 'resume')
+})
+
+// ── US-479 T-21: same-cycle revision, effective remediation counters (DT-04..08) ──────────
+test('T-21 (DT-06/07): cycleCounters — a round is ATTEMPTED as soon as a green-fix starts (fixed or not), COMPLETED only once it has a successful correction AND a non-partial review since; two groups and two tier reviewers of the same round count once', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'r1-g1')
+  redVerify(dir, 'r1-g1')
+  // an interrupted/failed attempt: attempted, never completed, replay stays the same
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: false, needsHumanDecision: false, outputHead: SHA('d'), evidenceLedger: [], reason: 'crashed mid-fix' })
+  let c = cycleCounters(readHandoffs(dir))
+  assert.deepEqual([c.attemptedCycles, c.completedCycles], [1, 0])
+  const c2 = cycleCounters(readHandoffs(dir))
+  assert.deepEqual(c2, c, 'identical replay is idempotent')
+  // a real fix: still attempted=1 (same round), still not completed until a review lands
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('e'), evidenceLedger: [] }, { attempt: 2 })
+  handoff(dir, 'r1-g2', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('f'), evidenceLedger: [] })
+  c = cycleCounters(readHandoffs(dir))
+  assert.deepEqual([c.attemptedCycles, c.completedCycles], [1, 0], 'still round 1 only — two groups, one round')
+  // two tier reviewers of round 1: reviewExecutions=2, reviewBatches=1, completedCycles=1
+  handoff(dir, 'r1', 'review-phase', { reviewer: 1, partial: true, reviewedHead: SHA('f'), verdict: 'x', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: false } })
+  handoff(dir, 'r1', 'review-phase', { reviewer: 2, partial: false, reviewedHead: SHA('f'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('f') } }, { attempt: 2 })
+  c = cycleCounters(readHandoffs(dir))
+  assert.deepEqual(c, { attemptedCycles: 1, completedCycles: 1, reviewExecutions: 2, reviewBatches: 1, contractRevisions: 0, preparationRepairs: 0, implementationRetries: 0 })
+  // a genuine second remediation round (a NEW green-fix after the completed review) becomes 2
+  handoff(dir, 'r2-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('g'), evidenceLedger: [] })
+  c = cycleCounters(readHandoffs(dir))
+  assert.equal(c.attemptedCycles, 2)
+})
+
+test('T-21 (DT-08): the escalation budget bounds COMPLETED corrective cycles, never the raw round counter — a head-moved re-review that bumps `round` without any green-fix does not spend the budget a real remediation earns', () => {
+  const { dir } = runDir()
+  // round 1: a real, completed remediation cycle
+  review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r0-1')] })
+  redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r1-g1' })
+  redVerify(dir, 'r1-g1', {})
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('d'), evidenceLedger: [] })
+  review(dir, 'r1', { mode: 're-review', readiness: { ready: true, remoteHead: SHA('d') }, reviewedHead: SHA('d'), findings: [finding('r0-1', { transition: 'resolved', blocking: false })] })
+  // the remote head moves before the coordinator reads readiness back: a metadata-only re-review,
+  // round bumps to 2, but NO green-fix ever runs for it — a NEW real defect is then found there
+  review(dir, 'r2', { mode: 're-review', readiness: { ready: false }, reviewedHead: SHA('d'), findings: [finding('r2-1')] })
+  const r = resolve({ dir, workflowVersion: V, policy: { ...POLICY, maxFixRounds: 2 }, entry: 'pr', pr: 7 })
+  // old (round-based) behaviour would escalate here (round 2 >= maxFixRounds 2); completedCycles is
+  // only 1 (round 1), so this routes to remediation instead
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase }, { step: 'prepare', mode: 'remediation', phase: 'r3-g1' })
 })
 
 // ── US-479 T-20: real-authority preparation, closed repair feedback (DT-01/02/03) ──────────

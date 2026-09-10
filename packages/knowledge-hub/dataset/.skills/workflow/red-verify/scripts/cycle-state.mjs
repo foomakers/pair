@@ -447,7 +447,10 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     }
     if (d.needsHumanDecision === true && d.humanDecisionKind === 'history-rewrite') return blocked('escalate', { detail: 'history-rewrite decision', findings: blocking })
     if (blocking.every(f => f.external === true)) return blocked('escalate', { detail: 'external blockers need a human disposition or a read-back-verified correction', findings: blocking })
-    if (round >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', findings: blocking })
+    // US-479 T-21 (S4): the budget bounds COMPLETED corrective cycles, never the raw round
+    // counter — a metadata-only re-review (inputsChanged, a moved head) bumps `round` without any
+    // actual fix and must not spend the budget a real remediation earns.
+    if (cycleCounters(list).completedCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', findings: blocking })
     const atf = blocking.filter(f => f.kind === 'approved-test-failing')
     const gaps = blocking.filter(f => f.kind === 'contract-gap')
     // Every blocking finding is an approved test still failing ⇒ GREEN again on the SAME seals,
@@ -467,6 +470,67 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     return { step: 'prepare', mode: 'remediation', phase: `r${round + 1}-g1`, round: round + 1, attempt: 1, base: d.reviewedHead, findings: blocking }
   }
   return blocked('failed-resume', { detail: `unknown last skill ${last.skill}` })
+}
+
+// ── counters (US-479 T-21, S4) ──────────────────────────────────────────────────────────────
+// Pure derived view over the handoffs — never a second store, never consulted by `deriveNext`.
+// Definitions (stated here since S4 does not pin every edge case, so a reader can audit them):
+//   - a "cycle" is keyed by round 0 (the initial contract, ONLY when a genuine a0-rev<m>
+//     correction exists — a plain a0 implementation is not a remediation) or round n>=1.
+//   - attemptedCycles: rounds where a corrective implementation actually STARTED (any green-fix
+//     dispatch, fixed or not — an interrupted or failed attempt still spent the round; a plain
+//     re-review with no green-fix and no a0-rev<m> implementation is not an attempt at all).
+//   - completedCycles: of those, the ones with at least one SUCCESSFUL correction (`fixed: true`,
+//     or an a0-rev<m> implementation with `gatesPassed: true`) whose round has since seen a
+//     COMPLETE review pass (its last handoff for that phase is not `partial`) — multiple
+//     groups/commits/tier reviewers of the same round/phase count once.
+//   - reviewExecutions: every review-phase handoff published (raw count, partial included).
+//   - reviewBatches: distinct review PHASES dispatched (one batch = every reviewer of one phase).
+//   - contractRevisions: distinct red-spec phases that are a revision (`-rev<m>`, m>1).
+//   - preparationRepairs: red-spec attempts beyond the first on the SAME non-revision phase.
+//   - implementationRetries: implement-phase attempts beyond the first on the same phase.
+export function cycleCounters(handoffs) {
+  const list = handoffs.filter(h => h.data)
+  const attemptedRounds = new Set()
+  const succeededRounds = new Set()
+  const attemptsByPhase = new Map()
+  const revisionPhases = new Set()
+  let preparationRepairs = 0
+  let implementationRetries = 0
+  for (const h of list) {
+    const parts = phaseParts(h.phase) ?? {}
+    const key = `${h.skill}:${h.phase}`
+    const n = (attemptsByPhase.get(key) ?? 0) + 1
+    attemptsByPhase.set(key, n)
+    if (h.skill === 'red-spec') {
+      if ((parts.revision ?? 1) > 1) {
+        if (n === 1) revisionPhases.add(h.phase)
+      } else if (n > 1) preparationRepairs++
+    }
+    if (h.skill === 'implement-phase' && n > 1) implementationRetries++
+    if (h.skill === 'green-fix' && (parts.round ?? 0) >= 1) {
+      attemptedRounds.add(parts.round)
+      if (h.data.fixed === true) succeededRounds.add(parts.round)
+    }
+    if (h.skill === 'implement-phase' && parts.kind === 'initial' && (parts.revision ?? 1) > 1 && h.data.status === 'ok') {
+      attemptedRounds.add(0)
+      if (h.data.gatesPassed === true) succeededRounds.add(0)
+    }
+  }
+  const reviews = list.filter(h => h.skill === 'review-phase')
+  const reviewExecutions = reviews.length
+  const reviewPhasesSeen = new Set(reviews.map(h => h.phase))
+  const reviewBatches = reviewPhasesSeen.size
+  const completedReviewRounds = new Set()
+  for (const phase of reviewPhasesSeen) {
+    const ofPhase = reviews.filter(h => h.phase === phase)
+    const last = ofPhase[ofPhase.length - 1]
+    if (last.data.partial !== true) completedReviewRounds.add(phaseParts(phase)?.round ?? 0)
+  }
+  const attemptedCycles = attemptedRounds.size
+  let completedCycles = 0
+  for (const round of succeededRounds) if (completedReviewRounds.has(round)) completedCycles++
+  return { attemptedCycles, completedCycles, reviewExecutions, reviewBatches, contractRevisions: revisionPhases.size, preparationRepairs, implementationRetries }
 }
 
 export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story }) {
@@ -526,7 +590,7 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   if (knownPr !== undefined && next && typeof next === 'object' && next.pr === undefined) next = { ...next, pr: knownPr }
   const status = next.step === 'done' ? 'completed' : next.step === 'blocked' ? 'blocked' : 'in-progress'
   const nextFindingSeq = handoffs.filter(h => h.skill === 'review-phase').reduce((m, h) => Math.max(m, ...(h.data.findings ?? []).map(f => Number(/-(\d+)$/.exec(String(f.id ?? ''))?.[1] ?? 0))), 0) + 1
-  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion }
+  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs) }
 }
 
 // ── migration (US-479 T-19, S10) ───────────────────────────────────────────────────────────

@@ -29,7 +29,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, cycleCounters } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
 const V = '3.0.0'
@@ -733,6 +733,120 @@ test('T-19 (DT-33): migrate-inspect reads schema-2 evidence read-only — it nev
   const r = spawnSync('node', [CLI, 'migrate-inspect', '--dir', d2], { encoding: 'utf8' })
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.equal(JSON.parse(r.stdout).next, 'resume')
+})
+
+// ── US-479 T-21: same-cycle revision, effective remediation counters (DT-04..08) ──────────
+test('T-21 (DT-06/07): cycleCounters — a round is ATTEMPTED as soon as a green-fix starts (fixed or not), COMPLETED only once it has a successful correction AND a non-partial review since; two groups and two tier reviewers of the same round count once', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'r1-g1')
+  redVerify(dir, 'r1-g1')
+  // an interrupted/failed attempt: attempted, never completed, replay stays the same
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: false, needsHumanDecision: false, outputHead: SHA('d'), evidenceLedger: [], reason: 'crashed mid-fix' })
+  let c = cycleCounters(readHandoffs(dir))
+  assert.deepEqual([c.attemptedCycles, c.completedCycles], [1, 0])
+  const c2 = cycleCounters(readHandoffs(dir))
+  assert.deepEqual(c2, c, 'identical replay is idempotent')
+  // a real fix: still attempted=1 (same round), still not completed until a review lands
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('e'), evidenceLedger: [] }, { attempt: 2 })
+  handoff(dir, 'r1-g2', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('f'), evidenceLedger: [] })
+  c = cycleCounters(readHandoffs(dir))
+  assert.deepEqual([c.attemptedCycles, c.completedCycles], [1, 0], 'still round 1 only — two groups, one round')
+  // two tier reviewers of round 1: reviewExecutions=2, reviewBatches=1, completedCycles=1
+  handoff(dir, 'r1', 'review-phase', { reviewer: 1, partial: true, reviewedHead: SHA('f'), verdict: 'x', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: false } })
+  handoff(dir, 'r1', 'review-phase', { reviewer: 2, partial: false, reviewedHead: SHA('f'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('f') } }, { attempt: 2 })
+  c = cycleCounters(readHandoffs(dir))
+  assert.deepEqual(c, { attemptedCycles: 1, completedCycles: 1, reviewExecutions: 2, reviewBatches: 1, contractRevisions: 0, preparationRepairs: 0, implementationRetries: 0 })
+  // a genuine second remediation round (a NEW green-fix after the completed review) becomes 2
+  handoff(dir, 'r2-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('g'), evidenceLedger: [] })
+  c = cycleCounters(readHandoffs(dir))
+  assert.equal(c.attemptedCycles, 2)
+})
+
+test('T-21 (DT-08): the escalation budget bounds COMPLETED corrective cycles, never the raw round counter — a head-moved re-review that bumps `round` without any green-fix does not spend the budget a real remediation earns', () => {
+  const { dir } = runDir()
+  // round 1: a real, completed remediation cycle
+  review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r0-1')] })
+  redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r1-g1' })
+  redVerify(dir, 'r1-g1', {})
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('d'), evidenceLedger: [] })
+  review(dir, 'r1', { mode: 're-review', readiness: { ready: true, remoteHead: SHA('d') }, reviewedHead: SHA('d'), findings: [finding('r0-1', { transition: 'resolved', blocking: false })] })
+  // the remote head moves before the coordinator reads readiness back: a metadata-only re-review,
+  // round bumps to 2, but NO green-fix ever runs for it — a NEW real defect is then found there
+  review(dir, 'r2', { mode: 're-review', readiness: { ready: false }, reviewedHead: SHA('d'), findings: [finding('r2-1')] })
+  const r = resolve({ dir, workflowVersion: V, policy: { ...POLICY, maxFixRounds: 2 }, entry: 'pr', pr: 7 })
+  // old (round-based) behaviour would escalate here (round 2 >= maxFixRounds 2); completedCycles is
+  // only 1 (round 1), so this routes to remediation instead
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase }, { step: 'prepare', mode: 'remediation', phase: 'r3-g1' })
+})
+
+// ── US-479 T-20: real-authority preparation, closed repair feedback (DT-01/02/03) ──────────
+test('T-20 (DT-02): a red-verify rejection that declares TWO identified mechanisms must close both in ONE answer — one closed and the other only named is refused before the write (canary run 3: two Markdown rewriters split across successive rejections)', () => {
+  const { dir } = runDir()
+  const base = { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-verify', inputHead: SHA('a'), verified: false, sealed: false, contractHash: `sha256:${'1'.repeat(64)}` }
+  const gap = (mechanismId, rowId, extra = {}) => ({ rowId, mechanismId, location: 'src/a.ts:1', severity: 'Major', description: 'drift', recommendation: 'fix', closureAssertions: [{ id: `${rowId}-ca1`, command: `pnpm test -t ${rowId}`, expected: 'pass' }], ...extra })
+  // only ONE of the two declared mechanisms is actually closed by a finding
+  let f = writeDraft(dir, { ...base, mechanismsIdentified: ['link-rewriter', 'skill-reference-rewriter'], findings: [gap('link-rewriter', 'r-1')] })
+  let out = publish({ dir, file: f, phase: 'r1-g1', skill: 'red-verify', workflowVersion: V })
+  assert.equal(out.published, false)
+  assert.match(out.reason, /mechanism-not-enumerated:skill-reference-rewriter/)
+  assert.equal(existsSync(join(dir, 'r1-g1-red-verify.json')), false)
+  // a finding for a mechanism NOT declared is refused the other way
+  f = writeDraft(dir, { ...base, mechanismsIdentified: ['link-rewriter'], findings: [gap('link-rewriter', 'r-1'), gap('skill-reference-rewriter', 'r-2')] })
+  out = publish({ dir, file: f, phase: 'r1-g1', skill: 'red-verify', workflowVersion: V })
+  assert.equal(out.published, false)
+  assert.match(out.reason, /mechanism-undeclared:skill-reference-rewriter/)
+  // both declared, both closed — one answer, published
+  f = writeDraft(dir, { ...base, mechanismsIdentified: ['link-rewriter', 'skill-reference-rewriter'], findings: [gap('link-rewriter', 'r-1'), gap('skill-reference-rewriter', 'r-2')] })
+  out = publish({ dir, file: f, phase: 'r1-g1', skill: 'red-verify', workflowVersion: V })
+  assert.equal(out.published, true, JSON.stringify(out))
+})
+
+test('T-20 (DT-01): a gap naming a mechanism is closed only by executable closure assertions or an explicitly approved non-applicability — a prose-only claim, an empty assertion list, or a reproducer command carrying shell syntax are all refused before the write', () => {
+  const { dir } = runDir()
+  const base = { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-verify', inputHead: SHA('a'), verified: false, sealed: false, contractHash: `sha256:${'1'.repeat(64)}` }
+  const bad = (finding, match) => {
+    const f = writeDraft(dir, { ...base, findings: [finding] })
+    const out = publish({ dir, file: f, phase: 'a0', skill: 'red-verify', workflowVersion: V })
+    assert.equal(out.published, false, JSON.stringify(finding))
+    assert.match(out.reason, match, JSON.stringify(finding))
+  }
+  // prose-only: a mechanism named but no closure assertion at all (the hand-built-twin failure mode)
+  bad({ rowId: 'r-1', mechanismId: 'installer-symlink', location: 'x', severity: 'Major', description: 'a hand-built alias twin, never run through the real installer', recommendation: 'reproduce it for real' }, /mechanism-incompletely-closed:installer-symlink/)
+  bad({ rowId: 'r-1', mechanismId: 'installer-symlink', closureAssertions: [] }, /mechanism-incompletely-closed:installer-symlink/)
+  bad({ rowId: 'r-1', mechanismId: 'installer-symlink', closureAssertions: [{ id: 'ca1', expected: 'pass' }] }, /closureAssertion-invalid:installer-symlink/, 'missing command/testRef')
+  const CA = { closureAssertions: [{ id: 'ca1', command: 'pnpm test -t r-1', expected: 'pass' }] }
+  bad({ rowId: 'r-1', mechanismId: 'installer-symlink', ...CA, reproducer: { command: 'pnpm test; rm -rf /' } }, /reproducer-command-unsafe:installer-symlink/)
+  bad({ rowId: 'r-1', mechanismId: 'installer-symlink', ...CA, reproducer: { command: '' } }, /reproducer-invalid:installer-symlink/)
+  // an explicitly approved non-applicability closes it WITHOUT an assertion
+  const ok = writeDraft(dir, { ...base, findings: [{ rowId: 'r-1', mechanismId: 'installer-symlink', location: 'x', severity: 'Minor', description: 'cannot occur on this producer', recommendation: 'n/a', applicability: 'not-applicable', applicabilityRationale: 'the producer only ever receives absolute paths here' }] })
+  assert.equal(publish({ dir, file: ok, phase: 'a0', skill: 'red-verify', workflowVersion: V }).published, true)
+})
+
+test('T-20 (DT-03): a repair must verify every PRIOR closure assertion first — a repair naming only one of two rejected rows is refused; naming both publishes; stable rowIds replay identically', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] } })
+  const rejection = [
+    { rowId: 'row-1', mechanismId: 'link-rewriter', location: 'a', severity: 'Major', description: 'gap A', recommendation: 'x', closureAssertions: [{ id: 'row-1-ca', command: 'pnpm test -t row-1', expected: 'pass' }] },
+    { rowId: 'row-2', mechanismId: 'skill-reference-rewriter', location: 'b', severity: 'Major', description: 'gap B', recommendation: 'y', closureAssertions: [{ id: 'row-2-ca', command: 'pnpm test -t row-2', expected: 'pass' }] },
+  ]
+  redVerify(dir, 'r1-g1', { verified: false, findings: rejection, sealed: false, snapshot: undefined }, { predecessor: 'r1-g1-red-spec' })
+  // repair naming only row-1 in changedRows: refused before the write
+  let f = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: '/abs/r1-g1-red-contract.json', contractHash: `sha256:${'3'.repeat(64)}`, changedRows: ['row-1'] })
+  let out = publish({ dir, file: f, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, attempt: 2, predecessor: 'r1-g1-red-verify' })
+  assert.equal(out.published, false)
+  assert.equal(out.reason, 'repair-incomplete:row-2')
+  assert.equal(existsSync(join(dir, 'r1-g1-red-spec.attempt-2.json')), false)
+  // both rows named: publishes
+  f = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: '/abs/r1-g1-red-contract.json', contractHash: `sha256:${'3'.repeat(64)}`, changedRows: ['row-1', 'row-2'] })
+  out = publish({ dir, file: f, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, attempt: 2, predecessor: 'r1-g1-red-verify' })
+  assert.equal(out.published, true, JSON.stringify(out))
+  assert.deepEqual(JSON.parse(readFileSync(join(dir, 'r1-g1-red-spec.attempt-2.json'), 'utf8')).changedRows, ['row-1', 'row-2'])
+  // a rejection with no rowId/mechanismId (legacy shape) never triggers the completeness gate
+  const { dir: d2 } = runDir()
+  redSpec(d2, 'a0')
+  redVerify(d2, 'a0', { verified: false, findings: [{ location: 'x', severity: 'Minor', description: 'd', recommendation: 'r' }], sealed: false, snapshot: undefined }, { predecessor: 'a0-red-spec' })
+  const f2 = writeDraft(d2, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: '/abs/a0-red-contract.json', contractHash: `sha256:${'4'.repeat(64)}` })
+  assert.equal(publish({ dir: d2, file: f2, phase: 'a0', skill: 'red-spec', workflowVersion: V, attempt: 2, predecessor: 'a0-red-verify' }).published, true)
 })
 
 test('T-19: the schema-3 taxonomy is exactly the enums S2/S5 name — no extra or missing value slips in unnoticed', () => {
