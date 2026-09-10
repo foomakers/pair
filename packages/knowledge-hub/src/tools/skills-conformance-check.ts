@@ -59,8 +59,8 @@
  * Runnable as a CLI via `ts-node src/tools/skills-conformance-check.ts`
  * (package script `skills:conformance`). Exit 0 = conformant, Exit 1 = violations.
  */
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
-import { basename, dirname, join, relative, resolve, sep } from 'path'
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'fs'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'path'
 
 const ROOT = join(__dirname, '..', '..')
 const SKILLS_DIR = join(ROOT, 'dataset', '.skills')
@@ -935,18 +935,92 @@ function isSkillLocalScriptTarget(target: string): boolean {
   return /^(\.\/)?scripts\//.test(target)
 }
 
-/** Every regular file under a skill's `scripts/`, RECURSIVELY, as paths relative to it. */
-function collectLocalScriptFiles(scriptsDir: string): string[] {
-  const files: string[] = []
+/**
+ * Whether `abs` is the directory `root` or lives inside it, decided on the RESOLVED
+ * path — never by looking for `..` in the spelling, which would refuse the legal
+ * `scripts/lib/../helper.mjs` while a symlinked-looking escape slipped through.
+ */
+function isWithin(root: string, abs: string): boolean {
+  const rel = relative(root, abs)
+  return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel))
+}
+
+/**
+ * What a path IS once symlinks are followed — and never a throw.
+ *
+ * `readdirSync(…, { withFileTypes: true })` and `existsSync` disagree about symlinks in
+ * opposite directions: the dirent reports lstat semantics (a symlink is neither
+ * `isFile()` nor `isDirectory()`, so a symlinked script is silently dropped), while
+ * `existsSync` follows the link (so a DANGLING one reads as absent and skips a whole
+ * skill). `statSync` follows too, but throws `ENOENT` on a dangling entry — an unhandled
+ * exception there takes the entire conformance run down with no report at all. Following
+ * inside a `try` is the only reading that keeps both halves: a linked file is compared,
+ * an entry that resolves to nothing is `unresolvable` and gets named.
+ */
+type EntryKind = 'file' | 'directory' | 'unresolvable'
+
+function resolvedKind(path: string): EntryKind {
+  try {
+    const st = statSync(path)
+    if (st.isDirectory()) return 'directory'
+    if (st.isFile()) return 'file'
+    return 'unresolvable'
+  } catch {
+    return 'unresolvable'
+  }
+}
+
+/** Whether a path exists as an entry of ANY kind, a dangling symlink included. */
+function entryExists(path: string): boolean {
+  try {
+    lstatSync(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** One entry of a skill's `scripts/` tree: a comparable file, or one nothing can read. */
+interface LocalScriptEntry {
+  /** Path relative to the skill's `scripts/` directory. */
+  rel: string
+  kind: 'file' | 'unresolvable'
+}
+
+/**
+ * Every entry under a skill's `scripts/`, RECURSIVELY, with symlinks FOLLOWED.
+ *
+ * A linked file or sub-directory really ships with the skill, so it is walked like any
+ * other; an entry that resolves to nothing is returned as `unresolvable` rather than
+ * dropped, because silence over a shipped artifact is the one answer the mirror guard
+ * may not give. Directories are visited once by resolved path, so a symlink cycle
+ * cannot spin the walk.
+ */
+function collectLocalScriptEntries(scriptsDir: string): LocalScriptEntry[] {
+  const entries: LocalScriptEntry[] = []
+  const visited = new Set<string>()
   const walk = (dir: string, prefix: string): void => {
+    const key = resolvedRealPath(dir)
+    if (visited.has(key)) return
+    visited.add(key)
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const rel = prefix === '' ? e.name : join(prefix, e.name)
-      if (e.isDirectory()) walk(join(dir, e.name), rel)
-      else if (e.isFile()) files.push(rel)
+      const kind = resolvedKind(join(dir, e.name))
+      if (kind === 'directory') walk(join(dir, e.name), rel)
+      else entries.push({ rel, kind })
     }
   }
   walk(scriptsDir, '')
-  return files.sort()
+  return entries.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0))
+}
+
+/** The cycle key of a directory: its real path, or its own path when that cannot be read. */
+function resolvedRealPath(dir: string): string {
+  try {
+    return realpathSync(dir)
+  } catch {
+    return dir
+  }
 }
 
 /** Index of the first differing byte of two buffers, for a diagnostic that keeps both sides. */
@@ -967,6 +1041,21 @@ function checkLinkedLocalScripts(skill: SkillDir, skillsDir: string): string[] {
     const withoutFragment = target.split('#')[0] as string
     if (!isSkillLocalScriptTarget(withoutFragment)) continue
     const abs = resolve(skill.dir, withoutFragment)
+    const scriptsRoot = join(skill.dir, 'scripts')
+    // The `scripts/` prefix CLAIMS the target, so this check owes it an answer even when
+    // the path resolves — `checkLinks` accepts an escape precisely because it resolves,
+    // under a sibling skill or at the skill root. The boundary is the skill's OWN
+    // scripts/ directory (not the skill folder): a link that leaves it is a script this
+    // skill does not ship, and packaging or moving the skill alone breaks it.
+    if (!isWithin(scriptsRoot, abs)) {
+      errors.push(
+        `${join(skill.rel, 'SKILL.md')}: links "${target}" as a skill-local script but it ` +
+          `resolves to ${relative(skillsDir, abs)}, OUTSIDE the skill's own ` +
+          `${join(skill.rel, 'scripts')} directory. A skill must ship the scripts it links ` +
+          `inside its own scripts/ directory, so it stays portable as one folder.`,
+      )
+      continue
+    }
     if (existsSync(abs)) continue
     errors.push(
       `${join(skill.rel, 'SKILL.md')}: links "${target}" but no such skill-local script ` +
@@ -1013,14 +1102,19 @@ function compareInstalledTwin(
 /** AC 2: every dataset skill-local script has a byte-identical twin at its mirrored path. */
 function checkMirroredLocalScripts(skill: SkillDir, installedSkillsDir: string): string[] {
   const scriptsDir = join(skill.dir, 'scripts')
-  if (!existsSync(scriptsDir)) return []
-  // A `scripts` entry that is not a directory would make the walk below throw and take the
-  // whole gate down with no report — the dataset-side twin of the unreadable-twin class,
-  // answered the same way: name the path, keep checking the rest of the corpus.
-  if (!statSync(scriptsDir).isDirectory()) {
+  // `entryExists`, not `existsSync`: the latter FOLLOWS the link, so a dangling `scripts`
+  // symlink reads as "this skill has no scripts" and its whole twin half disappears
+  // without a word.
+  if (!entryExists(scriptsDir)) return []
+  // A `scripts` entry that is not a directory — a file, or a symlink resolving to nothing
+  // — would make the walk below throw and take the whole gate down with no report. The
+  // dataset-side twin of the unreadable-twin class, answered the same way: name the path,
+  // keep checking the rest of the corpus.
+  if (resolvedKind(scriptsDir) !== 'directory') {
     return [
-      `${join(skill.rel, 'scripts')}: expected the skill's scripts/ directory but found a ` +
-        `non-directory entry. Skill-local scripts live in a scripts/ folder inside the skill.`,
+      `${join(skill.rel, 'scripts')}: expected the skill's scripts/ directory but found an ` +
+        `entry that is not one (a file, or a symlink that resolves to nothing). Skill-local ` +
+        `scripts live in a scripts/ folder inside the skill.`,
     ]
   }
   if (skill.depth < ENTRY_DEPTH) {
@@ -1035,14 +1129,34 @@ function checkMirroredLocalScripts(skill: SkillDir, installedSkillsDir: string):
   }
   // A dataset-only checkout has nothing to compare against: skip, never report the corpus missing.
   if (!existsSync(installedSkillsDir)) return []
+  return compareScriptsTree(skill, scriptsDir, installedSkillsDir)
+}
 
+/** Every entry of one skill's `scripts/` tree against its twin under the installed root. */
+function compareScriptsTree(
+  skill: SkillDir,
+  scriptsDir: string,
+  installedSkillsDir: string,
+): string[] {
   const errors: string[] = []
   const installedDir = installedSkillDirName(skill.rel)
-  for (const file of collectLocalScriptFiles(scriptsDir)) {
-    const installedRel = join(installedDir, 'scripts', file)
+  for (const entry of collectLocalScriptEntries(scriptsDir)) {
+    const datasetRel = join(skill.rel, 'scripts', entry.rel)
+    // Neither a file nor a directory once followed: a dangling symlink, a socket, a
+    // device. It cannot be compared and it cannot ship — but it is named, because the
+    // one answer a mirror guard may never give over a dataset entry is silence.
+    if (entry.kind === 'unresolvable') {
+      errors.push(
+        `${datasetRel}: skill-local script entry cannot be read — it resolves to nothing ` +
+          `(a dangling symlink) or is not a regular file. An entry that cannot be compared ` +
+          `is never assumed identical to its installed twin.`,
+      )
+      continue
+    }
+    const installedRel = join(installedDir, 'scripts', entry.rel)
     const error = compareInstalledTwin(
-      join(skill.rel, 'scripts', file),
-      join(scriptsDir, file),
+      datasetRel,
+      join(scriptsDir, entry.rel),
       installedRel,
       join(installedSkillsDir, installedRel),
     )
