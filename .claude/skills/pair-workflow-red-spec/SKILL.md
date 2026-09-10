@@ -108,3 +108,4 @@ One row per class and interaction of every inventory item: `{ id, kind, baseline
 - The coordinator validates the typed result and follows `next`; it never derives a transition itself. Whatever you cannot prove, you refuse — typed, with the exact gap.
 - Text shape: schematic, one line per row; the concrete failure case and its evidence at full length, no narration.
 - The returned `inventory` and `matrix` of a `repair` or `revision` are the DELTA (the obligations and rows this attempt adds or edits); a row may also `covers` an obligation of the base contract (an `AC-<n>` the delta does not repeat) as long as it covers one of the delta's own. The contract FILE always carries the whole inventory and matrix; the validator judges the file, the coordinator judges the result.
+- Your handoff publish is observed by the host runtime (`cycle-runtime.mjs`, US-479 T-25) as a phase-level progress point, through `cycle-state.mjs` — never something you invoke yourself.

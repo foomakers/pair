@@ -88,3 +88,4 @@ Publish the handoff (`skill: "red-verify"`, `inputHead: $head`, `inputsDigest`, 
 - Blind: read nothing under `.pair/working/` except `$RUN_DIR`.
 - A typed rejection is the cycle's answer: the coordinator routes it to ONE repair; a second rejection exhausts the unchanged budget. Never soften a gap to let the contract through.
 - A repair naming `changedRows` that drops one of this rejection's `rowId`s (when this rejection's findings carried one) is refused by `publish` before it is written — verify every prior closure assertion holds before treating anything as newly closed.
+- Your handoff publish is observed by the host runtime (`cycle-runtime.mjs`, US-479 T-25) as a phase-level progress point, through `cycle-state.mjs` — never something you invoke yourself.

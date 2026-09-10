@@ -81,3 +81,4 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVer
 - A `mode: test` group never reaches this skill: the guard is the fix, and the final verifier checks it directly on the sealed head.
 - Do NOT post any other PR comment; the final verifier publishes the synthesis. Never merge.
 - Blind: read nothing under `.pair/working/` except the checkpoint, `$reviewLog` and `$RUN_DIR`.
+- Your handoff publish is observed by the host runtime (`cycle-runtime.mjs`, US-479 T-25) as a phase-level progress point, through `cycle-state.mjs` — never something you invoke yourself.
