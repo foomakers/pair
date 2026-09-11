@@ -548,7 +548,15 @@ transcripts in a shape the reducer does not read. Every T-8 token figure would h
 - `dispatch-stats` derives the four admin counters from the engine's own returned result;
   `nestedDispatches` stays `null` because that result genuinely does not carry it. `finalize`
   reconciles a late tail itself when given the sources, and a repeat that finds nothing new is
-  idempotent (exit 0). Cache categories are rendered beside the aggregate, never added into it.
+  idempotent (exit 0). Cache categories are rendered beside the aggregate.
+
+**Correction 2026-09-11 (amendment h) to the bullet above:** "cache categories … never added into
+it" was wrong about this provider and is retired. For Anthropic, `input_tokens` EXCLUDES cache reads
+and cache creation, so a request's billed total is
+`input_tokens + cache_read_input_tokens + cache_creation_input_tokens + output_tokens`. The rule that
+survives is the real one: an aggregate is never counted together with its own details, and the
+adapter states `totalTokens` with its accounting label (`anthropic-exclusive-input`) so a producer
+whose input is already inclusive is not summed the same way.
 
 ### Host launch recipe (superseding amendment (b)'s)
 

@@ -550,11 +550,13 @@ test('B4 (end to end): the host tick reads the transcripts itself and the metric
   const journalPath = journalFile(root, STD_JOURNAL)
   const tick = runtimeTick({ dir, journalPath, usagePath: join(dir, 'usage.jsonl'), transcriptsDir: tdir, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now: T0 + 60_000 })
   const u = tick.view.usage
-  // the cache categories are reported in full but are NOT folded into the aggregate: the total is
-  // the billed input+output, and cache read/write stay their own named quantities (no aggregate and
-  // subcategory counted twice)
-  assert.equal(u.observedTotalTokens, STD_TOTAL.inputTokens + STD_TOTAL.outputTokens)
-  assert.notEqual(u.observedTotalTokens, STD_TOTAL.inputTokens + STD_TOTAL.outputTokens + STD_TOTAL.cacheReadTokens + STD_TOTAL.cacheWriteTokens)
+  // AMENDED by US-479 F3: this test previously asserted the total was input+output with the cache
+  // categories excluded. That was wrong about THIS provider, not a design choice — Anthropic's
+  // `input_tokens` excludes cache reads and cache creation, so the billed total is the sum of all
+  // four. The categories are still reported separately (no aggregate counted with its details);
+  // what changed is which number the aggregate is.
+  assert.equal(u.observedTotalTokens, STD_TOTAL.inputTokens + STD_TOTAL.outputTokens + STD_TOTAL.cacheReadTokens + STD_TOTAL.cacheWriteTokens)
+  assert.notEqual(u.observedTotalTokens, STD_TOTAL.inputTokens + STD_TOTAL.outputTokens)
   assert.equal(u.inputTokens, STD_TOTAL.inputTokens)
   assert.equal(u.outputTokens, STD_TOTAL.outputTokens)
   assert.equal(u.cacheReadTokens, STD_TOTAL.cacheReadTokens)
@@ -566,7 +568,7 @@ test('B4 (end to end): the host tick reads the transcripts itself and the metric
   assert.equal(tick.view.snapshot.completeness, 'complete')
   assert.deepEqual(u.incompleteExecutionIds, [])
   const md = readFileSync(join(dir, 'metrics.md'), 'utf8')
-  assert.match(md, /Tokens: 856 \(coverage 2\/2\) — in 16, out 840, cache read 3000, cache write 1500/)
+  assert.match(md, /Tokens: 5356 \(coverage 2\/2\) — in 16, out 840, cache read 3000, cache write 1500/)
   assert.equal(JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8')).usage.outputTokens, 840)
 })
 
@@ -600,7 +602,11 @@ test('B4 (end to end): a restart with the SAME checkpoint, a rotation, and a re-
   assert.equal(restarted.view.usage.outputTokens, 840)
 })
 
-test('B4 (end to end): three clocks stay distinct — the interval is widened by the message span, never narrowed, and an end is not claimed before the host observed a terminal result', () => {
+// AMENDED by US-479 F4: this test used to pin `endMs = max(hostObservation, messageSpan)`, which
+// turned the observer's read instant into exact active time (an hour of import lag measured as an
+// hour of work). The host observation is an upper bound on elapsed and no evidence of duration; it
+// is now reported separately and only demonstrated spans are measured.
+test('B4 (end to end): three clocks stay distinct — only the demonstrated span is work, and an end is not claimed before the host observed a terminal result', () => {
   const { root, dir } = runDir()
   seedCycle(dir)
   const tdir = transcripts(root, [STD_SPECS[0]])
@@ -613,11 +619,13 @@ test('B4 (end to end): three clocks stay distinct — the interval is widened by
   seedCycle(dir2)
   const tdir2 = transcripts(root2, [STD_SPECS[0]])
   const closed = runtimeTick({ dir: dir2, journalPath: journalFile(root2, [STD_JOURNAL[0], STD_JOURNAL[1]]), usagePath: join(dir2, 'usage.jsonl'), transcriptsDir: tdir2, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir2), now: T0 + 60_000 })
-  // start = the earliest evidence (the first message), end = the latest (the host's observation):
-  // the measured span is never shrunk by preferring the more flattering clock
+  // the demonstrated work is the message span (T0 .. T0+11s); the read instant is reported as the
+  // observation clock and never as duration
   assert.equal(closed.view.time.startedAt, new Date(T0).toISOString())
-  assert.equal(closed.view.time.lastObservedAt, new Date(T0 + 60_000).toISOString())
-  assert.equal(closed.view.time.agentMs, 60_000)
+  assert.equal(closed.view.time.lastDemonstratedAt, new Date(T0 + 11_000).toISOString())
+  assert.equal(closed.view.time.agentMs, 11_000)
+  assert.equal(closed.view.time.activeWallMs, 11_000)
+  assert.equal(closed.view.time.observation.lastObservedAt, new Date(T0 + 60_000).toISOString())
   assert.equal(closed.view.time.incomplete, false)
 })
 
@@ -643,7 +651,7 @@ test('B4 (end to end, CLI): the last agent`s usage arrives AFTER the observer st
   assert.equal(view.snapshot.completeness, 'complete')
   const comments = JSON.parse(readFileSync(join(ghDir, 'state.json'), 'utf8'))
   assert.equal(comments.length, 1, 'one synthesis comment, upserted')
-  assert.match(comments[0].body, /tokens 856 \(in 16 · out 840 · cache read 3000 · cache write 1500; known 2\/2\)/)
+  assert.match(comments[0].body, /tokens 5356 \(in 16 · out 840 · cache read 3000 · cache write 1500; known 2\/2\)/)
   // a repeat reconciles nothing new and still updates exactly the same comment
   const fin2 = spawnSync('node', [CLI, 'finalize', '--dir', dir, '--repo', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7', '--runId', 'run-1', '--journal', journalPath, '--usage', usagePath, '--transcripts', late], { encoding: 'utf8', env })
   assert.equal(fin2.status, 0, fin2.stdout + fin2.stderr)
@@ -675,4 +683,113 @@ test('B4 (CLI): the host admin counters are DERIVED from the engine result the h
   assert.equal(tick.view.execution.engineRecoveries, 2)
   assert.equal(tick.view.execution.administrativeDispatches, 1)
   assert.equal(tick.view.execution.nestedDispatches, null, 'a counter the host cannot observe stays null, never 0')
+})
+
+// ── US-479 F2/F3/F4 (independent audit of 64e5ddd1) ──────────────────────────────────────────
+// One fixture family for the three measurement causes: a source that can SHRINK (F2), the
+// provider's own token semantics (F3), and the three clocks (F4).
+const twoRequests = [
+  { agentId: 'aaa1', agentType: 'pair-reviewer', requests: [
+    { requestId: 'q1', at: T0, input: 100, cacheWrite: 20, cacheRead: 30, outputs: [1, 10] },
+    { requestId: 'q2', at: T0 + 10_000, input: 200, cacheWrite: 40, cacheRead: 60, outputs: [2, 20] },
+  ] },
+]
+// Anthropic's own accounting: `input_tokens` EXCLUDES cache reads and cache creation, so the
+// billed input of this fixture is 300 + 90 + 60 and the total is 480 — not 330.
+const F3_TOTAL = 300 + 30 + 60 + 90
+
+test('F3: the adapter normalizes the provider`s accounting — cache read and cache creation are NOT inside input_tokens, so the total is 480, and byRole agrees', () => {
+  const { root, dir } = runDir()
+  seedCycle(dir)
+  const tick = runtimeTick({ dir, journalPath: journalFile(root, [STD_JOURNAL[0], STD_JOURNAL[1]]), usagePath: join(dir, 'usage.jsonl'), transcriptsDir: transcripts(root, twoRequests), runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now: T0 + 60_000 })
+  const u = tick.view.usage
+  assert.deepEqual({ input: u.inputTokens, out: u.outputTokens, cw: u.cacheWriteTokens, cr: u.cacheReadTokens }, { input: 300, out: 30, cw: 60, cr: 90 })
+  assert.equal(u.observedTotalTokens, F3_TOTAL)
+  assert.deepEqual(u.byRole, [{ role: 'pair-reviewer', tokens: F3_TOTAL }])
+  assert.equal(u.accountingBasis, 'leaf-exclusive')
+  assert.match(readFileSync(join(dir, 'metrics.md'), 'utf8'), /Tokens: 480 /)
+})
+
+test('F2: a request already observed survives a TRUNCATED transcript, a later new request is counted exactly once, and the loss of the source is reported — never a silently smaller total', () => {
+  const { root, dir } = runDir()
+  seedCycle(dir)
+  const tdir = transcripts(root, twoRequests)
+  const journalPath = journalFile(root, [STD_JOURNAL[0], STD_JOURNAL[1]])
+  const usagePath = join(dir, 'usage.jsonl')
+  const args = { dir, journalPath, usagePath, transcriptsDir: tdir, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7 }
+  const t1 = runtimeTick({ ...args, checkpoint: readCheckpoint(dir), now: T0 + 60_000 })
+  writeCheckpoint(dir, t1.checkpoint)
+  assert.equal(t1.view.usage.observedTotalTokens, F3_TOTAL)
+  assert.equal(t1.view.snapshot.completeness, 'complete')
+  // the transcript is truncated: q1 is gone from the file entirely
+  const p = join(tdir, 'agent-aaa1.jsonl')
+  const kept = readFileSync(p, 'utf8').trim().split('\n').filter(l => !/"q1"/.test(l))
+  writeFileSync(p, kept.join('\n') + '\n')
+  const t2 = runtimeTick({ ...args, checkpoint: readCheckpoint(dir), now: T0 + 70_000 })
+  writeCheckpoint(dir, t2.checkpoint)
+  assert.equal(t2.view.usage.observedTotalTokens, F3_TOTAL, 'consumption already observed is never erased by its source disappearing')
+  assert.deepEqual(t2.view.usage.truncatedExecutionIds, [`run-1:${KEY(1)}:aaa1`])
+  assert.ok(t2.view.snapshot.missingSources.includes('usage-source-truncated'), JSON.stringify(t2.view.snapshot))
+  assert.equal(t2.view.snapshot.completeness, 'partial', 'the uncertainty reaches the snapshot')
+  // a genuinely NEW request arrives after the rotation: counted once, on top of what is known
+  appendFileSync(p, assistantBlocks({ agentId: 'aaa1', requestId: 'q3', at: T0 + 20_000, input: 7, cacheWrite: 0, cacheRead: 0, outputs: [3] }).map(l => JSON.stringify(l)).join('\n') + '\n')
+  const t3 = runtimeTick({ ...args, checkpoint: readCheckpoint(dir), now: T0 + 80_000 })
+  writeCheckpoint(dir, t3.checkpoint)
+  assert.equal(t3.view.usage.observedTotalTokens, F3_TOTAL + 7 + 3)
+  const t4 = runtimeTick({ ...args, checkpoint: readCheckpoint(dir), now: T0 + 90_000 })
+  assert.equal(t4.view.usage.observedTotalTokens, F3_TOTAL + 7 + 3, 'a replay adds nothing')
+  // and a restart with NO checkpoint at all rebuilds the same totals from the durable ledger
+  const restarted = runtimeTick({ ...args, checkpoint: { ...readCheckpoint(dir), journalOffset: 0, usageOffset: 0, observations: [] }, now: T0 + 100_000 })
+  assert.equal(restarted.view.usage.observedTotalTokens, F3_TOTAL + 7 + 3)
+})
+
+test('F2: a block that arrives out of order or duplicated never lowers an output already observed, and an inconsistent request does not erase the valid evidence beside it', () => {
+  const { root, dir } = runDir()
+  const tdir = transcripts(root, twoRequests)
+  const journalPath = journalFile(root, [STD_JOURNAL[0], STD_JOURNAL[1]])
+  const out = join(dir, 'usage.jsonl')
+  const first = extractUsage({ transcriptsDir: tdir, journalPath, out, runId: 'run-1' })
+  assert.equal(first.records[0].usage.outputTokens, 30)
+  // the file is rewritten with q2's blocks in reverse order and block 0 duplicated
+  const p = join(tdir, 'agent-aaa1.jsonl')
+  const lines = readFileSync(p, 'utf8').trim().split('\n').map(l => JSON.parse(l))
+  const q2 = lines.filter(l => l.requestId === 'q2')
+  writeFileSync(p, [...lines.filter(l => l.requestId !== 'q2'), ...q2.reverse(), q2[q2.length - 1]].map(l => JSON.stringify(l)).join('\n') + '\n')
+  const second = extractUsage({ transcriptsDir: tdir, journalPath, out, runId: 'run-1' })
+  assert.equal(second.records[0].usage.outputTokens, 30, 'the highest block still wins, and the duplicate adds nothing')
+  assert.equal(second.records[0].usage.inputTokens, 300)
+})
+
+test('F4: the observer`s read instant is not work — the demonstrated span is the message span, the read clock is reported separately, and a replay at a later clock does not change the work', () => {
+  const { root, dir } = runDir()
+  seedCycle(dir)
+  const tdir = transcripts(root, twoRequests) // messages 10:00:00 .. 10:00:11
+  const journalPath = journalFile(root, [STD_JOURNAL[0], STD_JOURNAL[1]])
+  const base = { dir, journalPath, usagePath: join(dir, 'usage.jsonl'), transcriptsDir: tdir, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7 }
+  const readLate = Date.parse('2026-09-11T11:00:00.000Z')
+  const t = runtimeTick({ ...base, checkpoint: readCheckpoint(dir), now: readLate })
+  const span = Date.parse('2026-09-11T10:00:11.000Z') - T0
+  assert.equal(t.view.time.agentMs, span, 'only demonstrated work is time')
+  assert.equal(t.view.time.activeWallMs, span)
+  assert.equal(t.view.time.elapsedMs, span)
+  assert.notEqual(t.view.time.agentMs, readLate - T0)
+  assert.equal(t.view.time.observation.lastObservedAt, new Date(readLate).toISOString())
+  assert.equal(t.view.time.observation.source, 'host-observation')
+  // the SAME evidence read an hour later still describes the same work
+  const { root: root2, dir: dir2 } = runDir()
+  seedCycle(dir2)
+  const later = runtimeTick({ ...base, dir: dir2, usagePath: join(dir2, 'usage.jsonl'), transcriptsDir: transcripts(root2, twoRequests), journalPath: journalFile(root2, [STD_JOURNAL[0], STD_JOURNAL[1]]), checkpoint: readCheckpoint(dir2), now: readLate + 3_600_000 })
+  assert.equal(later.view.time.agentMs, t.view.time.agentMs)
+  assert.equal(later.view.time.activeWallMs, t.view.time.activeWallMs)
+})
+
+test('F4: a journal with no timestamps and no transcript yields NO duration at all — an unknown interval is incomplete, never the tick clock', () => {
+  const { root, dir } = runDir()
+  seedCycle(dir)
+  const t = runtimeTick({ dir, journalPath: journalFile(root, [STD_JOURNAL[0], STD_JOURNAL[1]]), runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now: T0 + 3_600_000 })
+  assert.equal(t.view.time.agentMs, null)
+  assert.equal(t.view.time.activeWallMs, null)
+  assert.equal(t.view.time.elapsedMs, null)
+  assert.equal(t.view.time.incomplete, true)
+  assert.ok(t.view.snapshot.missingSources.includes('timing'))
 })

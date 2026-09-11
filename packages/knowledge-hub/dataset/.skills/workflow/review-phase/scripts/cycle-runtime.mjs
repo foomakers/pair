@@ -93,7 +93,12 @@ export function tailJournalFile({ path, offset = 0 }) {
 export function journalRecordToObservation(record, { runId, storyId, observedAt }) {
   if (!record || typeof record !== 'object' || !record.key) return { error: 'record-missing-key' }
   const executionId = record.executionId || `${runId}:${record.key}:${record.agentId ?? ''}`
-  const base = { eventId: `${executionId}:${record.result === undefined || record.result === null ? 'started' : 'result'}`, executionId, parentExecutionId: record.parentExecutionId, role: record.role, runId, storyId, phase: record.phase ?? record.key, attempt: Number.isInteger(record.attempt) ? record.attempt : 1, sourceRef: 'journal', observedAt }
+  // US-479 F4: the harness journal carries NO time of its own. `observedAt` is then the instant the
+  // host READ the file — an upper bound on elapsed, and no evidence at all of work. It is labelled
+  // here so the reducer can never mistake it for an execution boundary (an hour of import lag was
+  // being reported as an hour of exact active time).
+  const recordTime = record.observedAt ?? record.timestamp
+  const base = { eventId: `${executionId}:${record.result === undefined || record.result === null ? 'started' : 'result'}`, executionId, parentExecutionId: record.parentExecutionId, role: record.role, runId, storyId, phase: record.phase ?? record.key, attempt: Number.isInteger(record.attempt) ? record.attempt : 1, sourceRef: 'journal', observedAt: recordTime ?? observedAt, timeSource: recordTime === undefined || recordTime === null ? 'host-observation' : 'record', hostObservedAt: observedAt }
   if (record.result === undefined || record.result === null) return { ...base, kind: 'step-started' }
   if (record.terminal === true) return { ...base, kind: 'run-terminal' }
   const cancelled = record.result?.cancelled === true
@@ -127,8 +132,92 @@ export function usageRecordToObservation(record, { runId, storyId, observedAt })
 // the first block loses the output. Blocks that DISAGREE on the fixed fields are not a shape this
 // reduction understands: that request contributes nothing and is reported, never averaged.
 const ASSISTANT_USAGE_FIELDS = ['input_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens']
+// US-479 F3 — the PROVIDER's accounting, documented so nobody re-derives it by guess: for Anthropic
+// `input_tokens` EXCLUDES both cache reads and cache creation, so the billed input of a request is
+// `input_tokens + cache_read_input_tokens + cache_creation_input_tokens` and the request total adds
+// `output_tokens`. The adapter therefore states `totalTokens` itself and labels the scheme; a
+// producer whose `input_tokens` is already inclusive must NOT be summed this way, which is exactly
+// why the label travels with the number instead of being assumed downstream.
+export const USAGE_ACCOUNTING = 'anthropic-exclusive-input'
+const LEDGER_SUFFIX = '.ledger.json'
+export function readUsageLedger(out) {
+  const p = `${out}${LEDGER_SUFFIX}`
+  if (!existsSync(p)) return { version: 1, executions: {} }
+  try {
+    const d = JSON.parse(readFileSync(p, 'utf8'))
+    return d && typeof d === 'object' && d.executions ? d : { version: 1, executions: {} }
+  } catch {
+    return { version: 1, executions: {} }
+  }
+}
+function writeUsageLedger(out, ledger) {
+  const p = `${out}${LEDGER_SUFFIX}`
+  const tmp = `${p}.tmp-${process.pid}-${Date.now()}`
+  writeFileSync(tmp, JSON.stringify(ledger))
+  renameSync(tmp, p)
+}
+
+// US-479 F2 — a transcript is a SOURCE, not the state. It can be truncated or rotated under the
+// observer, and rebuilding the cumulative from whatever the file happens to hold now silently
+// deletes consumption that was already observed and charged (330 -> 220, reported `complete`). The
+// durable state is this per-REQUEST ledger: a request already seen keeps its value for good, a
+// later block of the same request may only raise its output, a genuinely new request is added once,
+// and a request that disappears from the source is reported as lost evidence — never as less cost.
+function mergeTranscriptIntoLedger(prior, observed) {
+  const requests = { ...(prior?.requests ?? {}) }
+  let truncated = 0
+  for (const [id, r] of Object.entries(observed.requests)) {
+    const prev = requests[id]
+    if (!prev) {
+      requests[id] = r
+      continue
+    }
+    requests[id] = {
+      fixed: prev.fixed,
+      // out-of-order and duplicated blocks never lower an output already observed
+      block: Math.max(prev.block, r.block),
+      output: r.block > prev.block ? r.output : Math.max(prev.output, r.block === prev.block ? r.output : 0),
+      complete: prev.complete || r.complete,
+      // once a request contradicted itself it stays flagged: the doubt is not undone by a re-read
+      inconsistent: prev.inconsistent || r.inconsistent || prev.fixed.some((v, i) => v !== r.fixed[i]),
+    }
+  }
+  for (const id of Object.keys(prior?.requests ?? {})) if (!(id in observed.requests)) truncated++
+  const union = (a, b) => [...new Set([...(a ?? []), ...(b ?? [])])].sort()
+  return {
+    requests,
+    truncated,
+    models: union(prior?.models, observed.models),
+    efforts: union(prior?.efforts, observed.efforts),
+    role: observed.role ?? prior?.role,
+    spawnDepth: observed.spawnDepth ?? prior?.spawnDepth,
+    // message time only ever widens: a truncated source must not move the start forward
+    firstMessageAt: [prior?.firstMessageAt, observed.firstMessageAt].filter(v => Number.isInteger(v)).sort((a, b) => a - b)[0] ?? null,
+    lastMessageAt: [prior?.lastMessageAt, observed.lastMessageAt].filter(v => Number.isInteger(v)).sort((a, b) => b - a)[0] ?? null,
+  }
+}
+function totalsFromLedger(entry) {
+  const usage = { inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, requests: 0, partialRequests: 0, inconsistentRequests: 0, truncatedRequests: entry.truncated ?? 0 }
+  for (const r of Object.values(entry.requests ?? {})) {
+    usage.requests++
+    if (r.inconsistent) {
+      usage.inconsistentRequests++
+      continue
+    }
+    if (!r.complete) usage.partialRequests++
+    usage.inputTokens += r.fixed[0]
+    usage.cacheWriteTokens += r.fixed[1]
+    usage.cacheReadTokens += r.fixed[2]
+    usage.outputTokens += r.output
+  }
+  // F3: the total this provider actually bills, stated rather than left to a downstream fallback.
+  usage.totalTokens = usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens + usage.outputTokens
+  usage.accounting = USAGE_ACCOUNTING
+  usage.accountingBasis = 'leaf-exclusive'
+  return usage
+}
 function readTranscript(path) {
-  const requests = new Map()
+  const requests = {}
   const models = new Set()
   const efforts = new Set()
   const errors = []
@@ -158,9 +247,9 @@ function readTranscript(path) {
     if (rec.effort) efforts.add(String(rec.effort))
     const block = Number.isInteger(rec.apiBlockIndex) ? rec.apiBlockIndex : 0
     const fixed = ASSISTANT_USAGE_FIELDS.map(k => Number(u[k] ?? 0))
-    const cur = requests.get(rec.requestId)
+    const cur = requests[rec.requestId]
     if (!cur) {
-      requests.set(rec.requestId, { fixed, block, output: Number(u.output_tokens ?? 0), complete: u && rec.message.stop_reason != null, inconsistent: false })
+      requests[rec.requestId] = { fixed, block, output: Number(u.output_tokens ?? 0), complete: rec.message.stop_reason != null, inconsistent: false }
       continue
     }
     if (cur.fixed.some((v, i) => v !== fixed[i])) {
@@ -173,22 +262,7 @@ function readTranscript(path) {
     }
     if (rec.message.stop_reason != null) cur.complete = true
   }
-  const usage = { inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, requests: 0, partialRequests: 0, inconsistentRequests: 0 }
-  for (const r of requests.values()) {
-    usage.requests++
-    if (r.inconsistent) {
-      usage.inconsistentRequests++
-      continue
-    }
-    // An observed cost is never discarded: an INCOMPLETE request still contributes what the
-    // provider already charged — it simply does not become complete by having usage.
-    if (!r.complete) usage.partialRequests++
-    usage.inputTokens += r.fixed[0]
-    usage.cacheWriteTokens += r.fixed[1]
-    usage.cacheReadTokens += r.fixed[2]
-    usage.outputTokens += r.output
-  }
-  return { usage, models: [...models].sort(), efforts: [...efforts].sort(), firstMessageAt, lastMessageAt, errors }
+  return { requests, models: [...models].sort(), efforts: [...efforts].sort(), firstMessageAt, lastMessageAt, errors }
 }
 
 export function extractUsage({ transcriptsDir, journalPath, out, runId, storyId }) {
@@ -209,8 +283,11 @@ export function extractUsage({ transcriptsDir, journalPath, out, runId, storyId 
       byAgent.set(rec.agentId, { key: prior.key, terminal: prior.terminal || rec.result !== undefined })
     }
   const files = existsSync(transcriptsDir) ? readdirSync(transcriptsDir).filter(f => /^agent-.+\.jsonl$/.test(f)).sort() : []
+  // US-479 F2: the ledger is the durable state; the transcripts are only this tick's evidence.
+  const ledger = out ? readUsageLedger(out) : { version: 1, executions: {} }
   const records = []
   const unattributed = []
+  const truncated = []
   const seenAgents = new Set()
   for (const f of files) {
     const agentId = f.slice('agent-'.length, -'.jsonl'.length)
@@ -225,13 +302,21 @@ export function extractUsage({ transcriptsDir, journalPath, out, runId, storyId 
       } catch {
         errors.push({ error: 'malformed-transcript-meta', source: metaPath })
       }
+    ledger.executions[agentId] = mergeTranscriptIntoLedger(ledger.executions[agentId], { ...t, role: meta.agentType, spawnDepth: meta.spawnDepth })
+  }
+  // An execution whose transcript is gone entirely keeps everything the ledger already holds: the
+  // cost was observed and charged. What is lost is the SOURCE, and that is what gets reported.
+  for (const [agentId, entry] of Object.entries(ledger.executions)) {
     const known = byAgent.get(agentId)
     if (!known) unattributed.push(agentId)
-    // The identity is the JOURNAL's, so the usage lands on the execution the journal already
-    // reported. A transcript the journal does not know is a real cost with no dispatch identity:
-    // it keeps its own id under an explicit `unattributed` phase — never folded into a sibling,
-    // and never given an invented parent.
+    const sourcePresent = seenAgents.has(agentId)
+    const lostRequests = (entry.truncated ?? 0) + (sourcePresent ? 0 : Object.keys(entry.requests ?? {}).length)
+    // The identity is the JOURNAL's, so the usage lands on the execution the journal reported. A
+    // transcript the journal does not know keeps its own id under an explicit `unattributed`
+    // phase — never folded into a sibling, never given an invented parent.
     const executionId = known ? `${runId}:${known.key}:${agentId}` : `${runId}:transcript:${agentId}`
+    const usage = totalsFromLedger(entry)
+    if (lostRequests) truncated.push(executionId)
     records.push({
       eventId: `${executionId}:usage`,
       executionId,
@@ -239,27 +324,31 @@ export function extractUsage({ transcriptsDir, journalPath, out, runId, storyId 
       key: known?.key,
       phase: known ? known.key : 'unattributed',
       attribution: known ? 'journal' : 'transcript-only',
-      role: meta.agentType ?? 'unknown',
-      spawnDepth: Number.isInteger(meta.spawnDepth) ? meta.spawnDepth : undefined,
-      models: t.models,
-      efforts: t.efforts,
-      // Three different clocks, never conflated (S7): these are the PROVIDER timestamps of the
-      // messages this execution produced — an observed message SPAN, not the agent's lifetime, and
-      // `terminalObserved` says whether the host ever saw this execution actually finish.
-      messageSpan: { firstMessageAt: t.firstMessageAt === null ? null : new Date(t.firstMessageAt).toISOString(), lastMessageAt: t.lastMessageAt === null ? null : new Date(t.lastMessageAt).toISOString(), source: 'transcript', terminalObserved: !!known?.terminal },
-      complete: t.usage.inconsistentRequests === 0 && t.usage.partialRequests === 0,
-      usage: { ...t.usage, accountingBasis: 'leaf-exclusive' },
+      role: entry.role ?? 'unknown',
+      spawnDepth: Number.isInteger(entry.spawnDepth) ? entry.spawnDepth : undefined,
+      models: entry.models ?? [],
+      efforts: entry.efforts ?? [],
+      // Three different clocks, never conflated (S7, US-479 F4): these are the PROVIDER timestamps
+      // of the messages this execution produced — an observed message SPAN, not the agent's
+      // lifetime, and `terminalObserved` says whether the host ever saw this execution finish.
+      messageSpan: { firstMessageAt: entry.firstMessageAt == null ? null : new Date(entry.firstMessageAt).toISOString(), lastMessageAt: entry.lastMessageAt == null ? null : new Date(entry.lastMessageAt).toISOString(), source: 'transcript', terminalObserved: !!known?.terminal },
+      sourcePresent,
+      lostRequests,
+      complete: usage.inconsistentRequests === 0 && usage.partialRequests === 0 && !lostRequests,
+      usage: { ...usage, lostRequests },
     })
   }
-  const withoutTranscript = [...byAgent.entries()].filter(([agentId]) => !seenAgents.has(agentId)).map(([agentId, v]) => `${runId}:${v.key}:${agentId}`).sort()
-  if (out && records.length) {
+  records.sort((a, b) => (a.executionId < b.executionId ? -1 : a.executionId > b.executionId ? 1 : 0))
+  const withoutTranscript = [...byAgent.entries()].filter(([agentId]) => !(agentId in ledger.executions)).map(([agentId, v]) => `${runId}:${v.key}:${agentId}`).sort()
+  if (out) {
     mkdirSync(dirname(out), { recursive: true })
-    // Cumulative per execution: a later record REPLACES the earlier one in `mergeObservations`
-    // (it carries no `isDelta`), so a full re-read after a rotation or a restart rebuilds the same
-    // totals instead of summing them again.
-    appendFileSync(out, records.map(r => JSON.stringify(r)).join('\n') + '\n')
+    writeUsageLedger(out, ledger)
+    // Cumulative per execution, computed from the LEDGER: a later record REPLACES the earlier one
+    // in `mergeObservations` (it carries no `isDelta`), so a full re-read after a rotation, a
+    // truncation or a restart rebuilds the same totals instead of summing or losing them.
+    if (records.length) appendFileSync(out, records.map(r => JSON.stringify(r)).join('\n') + '\n')
   }
-  return { executions: records.filter(r => r.attribution === 'journal').length, records, unattributed, withoutTranscript, errors }
+  return { executions: records.filter(r => r.attribution === 'journal').length, records, unattributed, withoutTranscript, truncated: truncated.sort(), errors, ledger }
 }
 
 // ── host admin counters (US-479 B4, S4/S7) ─────────────────────────────────────────────────
@@ -329,6 +418,8 @@ export function runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId
     errors.push(...ex.errors)
     for (const id of ex.withoutTranscript) errors.push({ error: 'execution-without-transcript', executionId: id })
     for (const agentId of ex.unattributed) errors.push({ error: 'transcript-without-dispatch-identity', agentId })
+    // US-479 F2: the source shrank under the observer. The cost stays; the loss is announced.
+    for (const id of ex.truncated) errors.push({ error: 'usage-source-truncated', executionId: id })
   }
   const j = journalPath ? tailJournalFile({ path: journalPath, offset: checkpoint.journalOffset ?? 0 }) : { records: [], newOffset: checkpoint.journalOffset ?? 0, malformed: [], rotated: false }
   for (const line of j.malformed) errors.push({ error: 'malformed-journal-record', source: journalPath, line })

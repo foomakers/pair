@@ -215,6 +215,9 @@ export function reduceUsage(observations) {
     // Observed, charged, and NOT finished: an incomplete or self-inconsistent provider request
     // (US-479 B4). Its tokens are counted; its execution is named so nothing reads as settled.
     incompleteExecutionIds: countedIds.filter(id => ((usageByExec.get(id)?.partialRequests ?? 0) > 0 || (usageByExec.get(id)?.inconsistentRequests ?? 0) > 0)).sort(),
+    // US-479 F2: the SOURCE of an already-counted request disappeared (truncation, rotation). The
+    // cost stays; the execution is named so the view never reads as fully corroborated.
+    truncatedExecutionIds: countedIds.filter(id => (usageByExec.get(id)?.lostRequests ?? 0) > 0).sort(),
     accountingBasis: 'leaf-exclusive',
     byRole: [...byRoleMap.entries()].map(([role, tokens]) => ({ role, tokens })),
     sharedOverhead: null,
@@ -274,27 +277,37 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   // as full coverage. Every execution seen on EITHER side gets one interval, with the missing side
   // left `null` — `reduceTime`'s own known/flagged split then reports it honestly.
   const timedIds = new Set([...startEvents.keys(), ...finishByExec.keys()])
-  // US-479 B4 (S7): THREE clocks, never conflated. The host observes a journal record at TICK time
-  // (a coarse upper bound: the record carries none of its own); the provider timestamps the
-  // messages an execution produced (`messageSpan`, a span of real work, not the execution's
-  // lifetime). Evidence is COMBINED so the measured span can only widen: the earliest known start
-  // and the latest known end. Preferring the flattering clock on either side would shrink the
-  // measurement by silently dropping start-up or wait, which is exactly the improvement S7 forbids.
-  // And an end is claimed only where the host actually observed the execution finish — a message
-  // span alone never closes an interval.
+  // US-479 F4 (S7) — THREE clocks, and only one of them is work.
+  //   1. the HOST OBSERVATION: when the host read the journal. The harness journal carries no time
+  //      of its own, so this is an upper bound on elapsed and NO evidence of duration. Reported
+  //      separately, labelled, and never folded into active or agent time.
+  //   2. the PROVIDER MESSAGE SPAN: the timestamps of the messages an execution actually produced —
+  //      demonstrated work, and the only interval this reducer will measure.
+  //   3. a real EXECUTION BOUNDARY carried by a record itself (`timeSource: 'record'`), when a host
+  //      ever provides one.
+  // An execution with none of 2 or 3 has an UNKNOWN interval: it is flagged incomplete, never given
+  // the tick clock (an hour of import lag was reported as an hour of exact active time, F4).
   const spanByExec = new Map()
   for (const o of merged) if (o.kind === 'usage-observed' && o.messageSpan) spanByExec.set(o.executionId, o.messageSpan)
+  const demonstrated = o => (o && o.timeSource !== 'host-observation' ? toEpochMs(o.observedAt ?? o.occurredAt) : null)
   const widen = (a, b, pick) => (Number.isInteger(a) && Number.isInteger(b) ? pick(a, b) : Number.isInteger(a) ? a : Number.isInteger(b) ? b : null)
   const intervals = [...timedIds].map(id => {
     const s = startEvents.get(id)
     const f = finishByExec.get(id)
     const span = spanByExec.get(id)
-    const hostStart = s ? toEpochMs(s.observedAt ?? s.occurredAt) : null
-    const hostEnd = f ? toEpochMs(f.observedAt ?? f.occurredAt) : null
     const spanStart = span ? toEpochMs(span.firstMessageAt) : null
     const spanEnd = span ? toEpochMs(span.lastMessageAt) : null
-    return { startMs: widen(hostStart, spanStart, Math.min), endMs: f ? widen(hostEnd, spanEnd, Math.max) : null }
+    // An end is claimed only where the host actually observed the execution finish; a message span
+    // on its own never closes an interval.
+    return { startMs: widen(demonstrated(s), spanStart, Math.min), endMs: f ? widen(demonstrated(f), spanEnd, Math.max) : null }
   })
+  const hostObservedTimes = merged.map(o => toEpochMs(o.hostObservedAt ?? (o.timeSource === 'host-observation' ? o.observedAt : null))).filter(v => Number.isInteger(v))
+  const observation = {
+    firstObservedAt: hostObservedTimes.length ? new Date(Math.min(...hostObservedTimes)).toISOString() : null,
+    lastObservedAt: hostObservedTimes.length ? new Date(Math.max(...hostObservedTimes)).toISOString() : null,
+    source: 'host-observation',
+    note: 'when the host READ the sources; an upper bound on elapsed, never a measure of work',
+  }
   const time = reduceTime(intervals)
   const usage = reduceUsage(merged)
   // US-479 B2 (S10, AC-27/22): a legacy run this cycle was bound to is part of the PR's LIFETIME.
@@ -376,6 +389,7 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   // blocks disagreed keeps the cost already observed — but the snapshot it feeds is NOT complete.
   // Having usage is not being finished.
   if (usage.incompleteExecutionIds.length) missingSources.push('usage-incomplete')
+  if (usage.truncatedExecutionIds.length) missingSources.push('usage-source-truncated')
   if (lifetime.missingRuns.length) missingSources.push('legacy-lifetime')
   if (time.incomplete) missingSources.push('timing')
   const completeness = hasObservations && !missingSources.length ? 'complete' : 'partial'
@@ -389,7 +403,10 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
     lifetime,
     execution,
     usage,
-    time: { startedAt: known.length ? new Date(Math.min(...known.map(i => i.startMs))).toISOString() : null, lastObservedAt: known.length ? new Date(Math.max(...known.map(i => i.endMs))).toISOString() : null, terminalAt: delivery === 'ready-for-merge' ? asOf : null, elapsedMs: time.elapsedMs, activeWallMs: time.activeWallMs, agentMs: time.agentMs, waitMs: time.waitMs, incomplete: time.incomplete, byPhase: [] },
+    // `lastObservedAt` keeps the meaning it always had — the last DEMONSTRATED end — and
+    // `lastDemonstratedAt` says so in its name; the host's read clock lives only under
+    // `observation`, labelled, so the two can never be confused again (US-479 F4).
+    time: { startedAt: known.length ? new Date(Math.min(...known.map(i => i.startMs))).toISOString() : null, lastObservedAt: known.length ? new Date(Math.max(...known.map(i => i.endMs))).toISOString() : null, lastDemonstratedAt: known.length ? new Date(Math.max(...known.map(i => i.endMs))).toISOString() : null, terminalAt: delivery === 'ready-for-merge' ? asOf : null, elapsedMs: time.elapsedMs, activeWallMs: time.activeWallMs, agentMs: time.agentMs, waitMs: time.waitMs, incomplete: time.incomplete, observation, byPhase: [] },
     defects: { openBySeverity, closedBySeverity, late, entries: [...findingsById.values()] },
     scopeChanges: { ...scopeCounts, entries: scopeEntries },
     steps: merged,
@@ -406,8 +423,10 @@ export function renderMarkdown(view) {
   lines.push(`Cycles: ${view.cycles.completed} completed / ${view.cycles.attempted} attempted`)
   lines.push(`Reviews: ${view.execution.reviewExecutions} executions, ${view.execution.reviewBatches} batches`)
   const tok = k => (typeof view.usage[k] === 'number' ? view.usage[k] : 'unknown')
-  // The aggregate is billed input+output; the cache categories are named beside it, never added
-  // into it (US-479 B4: no aggregate and subcategory counted twice).
+  // The aggregate is the provider's billed total, stated by the adapter with its accounting label
+  // (US-479 F3: for Anthropic `input_tokens` excludes cache reads and cache creation, so all four
+  // categories are inside the total). The categories are named beside it as details — an aggregate
+  // is never counted together with its own details.
   lines.push(`Tokens: ${view.usage.observedTotalTokens ?? 'unknown'} (coverage ${view.usage.coverage.known}/${view.usage.coverage.total}) — in ${tok('inputTokens')}, out ${tok('outputTokens')}, cache read ${tok('cacheReadTokens')}, cache write ${tok('cacheWriteTokens')}`)
   if (view.usage.incompleteExecutionIds?.length) lines.push(`Incomplete provider requests in ${view.usage.incompleteExecutionIds.length} execution(s): the cost is counted, the execution is NOT settled`)
   lines.push(`Time: elapsed ${view.time.elapsedMs ?? 'unknown'}ms, active ${view.time.activeWallMs ?? 'unknown'}ms, agent ${view.time.agentMs ?? 'unknown'}ms`)
