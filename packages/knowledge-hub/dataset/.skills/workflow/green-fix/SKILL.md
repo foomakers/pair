@@ -24,6 +24,7 @@ The RED snapshot is the specification. You may change implementation inside its 
 | `$marker`          | Yes      | The PR's first-review marker `<!-- pair:first-review #<story> PR#<n> -->` — the anchor an escalation comment responds to.                 |
 | `$writeIssue`      | No       | The project's issue-filing skill (default `/write-issue`) — named only to forbid it.                                                     |
 | `$notes`           | No       | Scope directive from the card.                                                                                                           |
+| `$reconstruct`     | No       | JSON `{ fromHead, paths, riskIds }` — present only on a SECOND repair of the same regression (US-479 AC-32). Start by restoring the CONTENT of exactly `paths` as it was at `fromHead`, then rebuild. |
 
 ## Algorithm
 
@@ -72,12 +73,20 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVer
 2. If you must return `needsHumanDecision: true`, publish the escalation comment yourself — schematic: the rounds so far, the still-open findings by id, what the human must decide — with the idempotent script shipped beside this file: `node "$SKILL_DIR/scripts/pr-comment.mjs" upsert --pr $pr --marker "<!-- pair:escalation #$story PR#$pr -->" --body-file <draft.md>` (it reads back the PR's comments first and edits the existing escalation in place; the first-review comment is never touched).
 3. Publish the handoff (`skill: "green-fix"`, `inputHead: $head`, `snapshot`, `attempt`, `fixed`, `needsHumanDecision`, `outputHead`, `remediationBatchId: "r<n>"` — `<n>` is `$phase`'s round, the same value every group/commit of this round shares (US-479 T-21, S4: one batch is all dependency-ordered corrective groups from one review baseline before the next complete review) — `findings: { received, resolved }`, `evidenceLedger`, `testRuns`, `contractGaps`, `published: { escalation }`, `elapsedMs`) with `cycle-state.mjs publish … --attempt $attempt --predecessor $phase-red-verify --pr $pr` (attempt 2: predecessor `r<n>-review-phase`), run `resolve` again and return its `next`.
 
-**US-479 S11 — active regression guards.** `$regressionGuards` arrives with the group's findings: those guards are part of what you must make pass, alongside the original obligations. Fix FORWARD only — no `git revert`, reset, rebase, seal deletion or history rewrite is part of this algorithm; `lastCleanReviewedHead` is a behavioural baseline, not a target to check out. Preserve every guard and every sealed byte, and never declare the batch complete: only the independent review that closes the original findings AND discharges every active risk does that.
+**US-479 S11 — active regression guards.** `$regressionGuards` arrives with the group's findings: those guards are part of what you must make pass, alongside the original obligations. Fix FORWARD only — no `git revert`, reset, rebase, force-push, seal deletion or history rewrite is ever part of this algorithm, and `lastCleanReviewedHead` is never checked out as the branch position. It is a source of CONTENT, which is a different thing: see `$reconstruct` below. Preserve every guard and every sealed byte, and never declare the batch complete: only the independent review that closes the original findings AND discharges every active risk does that.
 
 **US-479 S12 — no production work without the complete seal.** Start only from a sealed contract
 whose applicable matrix rows are present and validated: if the seal is missing, partial, or its rows
 were reduced after validation, stop and return the typed refusal instead of coding. You may never
 edit, weaken or drop a sealed row — including a regression guard — to make your change pass.
+
+**US-479 S13 — `$reconstruct`: rebuild, do not stack another patch.** When this argument is present, this group already failed once to repair its own regression, and patching the current content again would carry the previous mistake forward. Start over instead:
+
+1. restore the content of exactly `paths` as it was at `fromHead` (`git show <fromHead>:<path>` into the working tree, or the equivalent) — those paths and nothing else, in your worktree only;
+2. rebuild the fix from there, carrying the group's obligations and every guard in `riskIds`;
+3. commit FORWARD on the current head.
+
+This is a CONTENT operation. The branch stays where it is, the sealed snapshot stays an ancestor, every sealed test byte stays identical, published reviews stay valid — `verify-chain` proves all of it. Nothing specified is lost by starting over: the contract you hold IS the inventory of what must work again, and the guards make the old defect impossible to reintroduce silently. If restoring the content cannot be confined to `paths` — a consumer outside them breaks, or the rebuild would grow past your `fixScope` — stop and return the typed refusal with what you found; do not restore partially and do not widen the scope yourself.
 
 ## Output Format
 

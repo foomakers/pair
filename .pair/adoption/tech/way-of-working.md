@@ -64,6 +64,17 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   matrix before the seal; implementation cannot begin without it; the final review samples the sealed
   rows rather than being the first control to discover an illegal transition. A composed green chain
   is necessary and not sufficient.
+- **Reconstruction after a failed repair (ADR-024, amendment 2026-09-11 p; US-479 S13/AC-32):** a
+  group that has already failed once to repair its own regression does not patch the same base
+  again: it restores the CONTENT of its own `allowedPaths` at `lastCleanReviewedHead`, rebuilds
+  carrying the batch's obligations and every active guard, and commits FORWARD. Restoring content is
+  not rewriting history — no revert, reset, rebase or force-push, the snapshot stays an ancestor and
+  the seals stay byte-identical. A path a later round has already built on refuses instead
+  (`reconstruction-overlaps-later-work`), and a reconstruction as expensive as rebuilding the batch
+  is a replan through the existing preparation path.
+- **Reintroduction (ADR-024, amendment 2026-09-11 o; US-479 S13/AC-31):** reopening a discharged
+  risk is a RESTORATION of its prior ledger entry — every field immutable. A defect that reappears
+  through later work is a new risk with a new identity, not a reopening.
 - **Regression-risk rewind (ADR-024, amendment 2026-09-11 k; US-479 S11/AC-29):** a defect a review
   proves was INTRODUCED by a remediation invalidates that remediation and sends the cycle back to the
   same batch's preparation, carrying every unresolved finding and every active guard in one complete

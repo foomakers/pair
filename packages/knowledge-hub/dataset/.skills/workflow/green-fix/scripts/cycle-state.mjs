@@ -1393,6 +1393,32 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       if (producers.size !== 1)
         return blocked('escalate', { refusal: 'regression-lineage-ambiguous', detail: `regression lineage: ${producers.size} group(s) of ${batch} produced ${[...failingHeads].join(', ')} — the producing group must be unique before a repair can be scoped`, findings: blocking, regressionRisks: activeRisks })
       const phase = [...producers][0]
+      // US-479 AC-32 (S13): a group that has ALREADY failed to repair its own regression does not
+      // stack another patch on a base the guard has proven bad. The next attempt restores the
+      // CONTENT of that group's allowed paths at the behavioural baseline and rebuilds carrying the
+      // obligations and the guards — committed FORWARD. No Git history operation is part of it:
+      // `lastCleanReviewedHead` is read as a source of content, never checked out as the branch.
+      const ofBatch = activeRisks.filter(x => String(x.introducedByRemediationBatchId) === batch)
+      const priorRepairs = list.filter(h => h.skill === 'red-spec' && h.phase === phase && h.data.regressionRepairOf === batch).length
+      const paths = groupOf(phase)?.allowedPaths ?? []
+      let reconstruct
+      if (priorRepairs >= 1 && paths.length) {
+        // Restoring a path a LATER round has already built on would break consumers this batch's
+        // contract does not cover. The algorithm never decides that trade: it refuses, a human does.
+        const batchRound = phaseParts(phase)?.round ?? 0
+        const overlapping = new Set()
+        for (const h of list.filter(x => x.skill === 'red-spec'))
+          for (const g of h.data.plan?.groups ?? []) {
+            const gr = phaseParts(g.groupId ?? '')?.round
+            if (gr === undefined || gr <= batchRound) continue
+            if (!list.some(x => x.skill === 'green-fix' && x.phase === g.groupId && SHA_RE.test(String(x.data.outputHead ?? '')))) continue
+            for (const p of g.allowedPaths ?? []) if (paths.includes(p)) overlapping.add(p)
+          }
+        if (overlapping.size)
+          return blocked('escalate', { refusal: 'reconstruction-overlaps-later-work', detail: `reconstructing ${phase} would restore ${[...overlapping].sort().join(', ')}, which a later round has already built on — a human decides before any content is restored`, findings: blocking, regressionRisks: activeRisks })
+        const baselines = [...new Set(ofBatch.map(x => String(x.lastCleanReviewedHead)))]
+        if (baselines.length === 1) reconstruct = { fromHead: baselines[0], paths, riskIds: ofBatch.map(x => x.riskId) }
+      }
       const carried = new Map()
       for (const f of blocking) carried.set(f.id, f)
       for (const r of activeRisks) {
@@ -1410,6 +1436,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
         regressionRisks: activeRisks,
         regressionRepairOf: batch,
         group: groupOf(phase),
+        ...(reconstruct ? { reconstruct } : {}),
         detail: `regression-risk rewind of ${batch}: ${activeRisks.length} active guard(s) plus every unresolved finding, fixed forward on the current head`,
       }
     }

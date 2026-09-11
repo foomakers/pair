@@ -918,3 +918,35 @@ there is no prior entry at all, and the immutable-field check applies to a prior
 rather than only an active one, with the cited obligations added to it. The positive control that
 keeps the two cases apart is part of the matrix: the same defect on a later batch's head must take
 the `none -> active` path and receive its own id.
+
+## Amendment 2026-09-11 (p) — restoring content is not rewriting history (US-479 S13/AC-32)
+
+Until now green-fix read `lastCleanReviewedHead` as "a behavioural baseline, **not a target to check
+out**". That wording collapsed two different things, and the stricter half was never required:
+
+1. **rewriting history** — `git revert`, reset, rebase, force-push — which invalidates the sealed
+   snapshot's ancestry, breaks custody and voids published reviews. Forbidden, unchanged;
+2. **restoring content and rebuilding** — taking the group's own files as they were at the baseline,
+   rebuilding the fix, and committing FORWARD. The branch never moves, the snapshot stays an
+   ancestor, sealed test bytes stay identical, `verify-chain` stays green. Git cannot tell whether a
+   commit's content was reached incrementally or rebuilt, and nothing in the custody model depends
+   on it.
+
+Forbidding (2) with (1) forced every failed repair to patch a base the guard had just proven bad, so
+each round carried the previous round's mistake forward. From this amendment, a group that has
+already failed once to repair its OWN regression is dispatched with a reconstruction directive:
+restore the content of exactly that group's `allowedPaths` at `lastCleanReviewedHead`, rebuild
+carrying the batch's obligations and every active guard, commit forward.
+
+Three properties make this safe rather than lossy. The corrective contract IS the inventory of what
+must work again, so nothing *specified* is lost by starting over — only work no obligation was
+verifying. The regression travels as an executable reproducer plus closure assertions, so the defect
+cannot re-enter silently: it is a test, not a memory. And the producing group and its scope are
+derived from persisted history (S11/F-RR-05), so the restore surface is exact and an ambiguous
+provenance refuses before anything is touched.
+
+The cost decides the scope. The guard's own files are the reconstruction surface and the group's
+`allowedPaths` the upper bound; a reconstruction that would cost what rebuilding the batch costs is
+a replan through the existing preparation path, not a repair; and a path a LATER round has already
+built on is refused outright (`reconstruction-overlaps-later-work`) — restoring it would break
+consumers this batch's contract does not cover, and that trade is a human's to make.

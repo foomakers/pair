@@ -3085,3 +3085,64 @@ test('AC-31 (DT-40, positive control): the SAME defect on a LATER batch`s head i
   const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.deepEqual(r.activeRegressionRisks.map(x => x.riskId), [stored.riskId])
 })
+
+// ── US-479 AC-32 / DT-41 (S13): a failed repair reconstructs, it does not stack another patch ──
+// Correcting a defect on a base that still holds the previous mistake produces patch upon patch.
+// When a group has already failed once to repair its OWN regression, the next attempt starts from
+// the behavioural baseline: restore the content of that group's allowedPaths at
+// `lastCleanReviewedHead` and rebuild carrying the obligations and the guards. A content operation,
+// committed FORWARD — never a Git history operation.
+function failedRepairOf(dir, riskId) {
+  // the same batch prepared again as a repair, fixed forward to H2 — but the guard still fails
+  matchingRepair(dir, riskId)
+  return review(dir, 'r2', {
+    mode: 're-review',
+    reviewedHead: H2,
+    verdict: 'CHANGES-REQUESTED',
+    readiness: { ready: false },
+    invalidatedBatchId: 'r1',
+    findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'still closed' }), regressionFinding()],
+  })
+}
+
+test('AC-32 (DT-41): the FIRST repair of a regression carries no reconstruction directive', () => {
+  const { dir } = runDir()
+  provenRisk(dir)
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'prepare')
+  assert.equal(r.next.regressionRepairOf, 'r1')
+  assert.equal(r.next.reconstruct, undefined, 'patching first is right: the base is not yet proven bad')
+})
+
+test('AC-32 (DT-41): after a repair that did NOT cure it, the next attempt is dispatched to RECONSTRUCT from the baseline', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  failedRepairOf(dir, riskId)
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'prepare', JSON.stringify({ step: r.next.step, reason: r.next.reason, detail: r.next.detail }))
+  assert.equal(r.next.phase, 'r1-g1', 'the same producing group, derived from history')
+  assert.ok(r.next.reconstruct, 'the second attempt on the same risk reconstructs instead of stacking')
+  assert.equal(r.next.reconstruct.fromHead, H0, 'the behavioural baseline is the content source')
+  assert.deepEqual(r.next.reconstruct.paths, ['src/a.ts'], 'exactly the producing group`s allowed paths, nothing else')
+  assert.deepEqual(r.next.reconstruct.riskIds, [riskId], 'the guards the rebuilt code is measured against')
+  // it stays a forward fix: the branch position is untouched and the base is the current head
+  assert.equal(r.next.base, H2, 'the work goes forward on the current head — the baseline is content, not a checkout')
+})
+
+test('AC-32 (DT-41): when a LATER round has worked on the same paths, reconstruction refuses instead of restoring', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  matchingRepair(dir, riskId) // the first repair, fixed forward to H2
+  // a later batch r2 then builds on the very file the reconstruction would restore
+  redSpec(dir, 'r2-g1', { plan: { groups: [{ groupId: 'r2-g1', findings: ['r2-1'], owner: 'b', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r2-g1', remediationBatchId: 'r2' })
+  redVerify(dir, 'r2-g1', { remediationBatchId: 'r2' })
+  handoff(dir, 'r2-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('7'), evidenceLedger: [], remediationBatchId: 'r2' })
+  // and the review at that head observes the ORIGINAL regression is still there
+  review(dir, 'r3', { mode: 're-review', reviewedHead: SHA('7'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), regressionFinding()] })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'blocked')
+  assert.equal(r.next.reason, 'escalate')
+  assert.equal(r.next.refusal, 'reconstruction-overlaps-later-work')
+  assert.match(r.next.detail, /src\/a\.ts/)
+  assert.deepEqual(r.activeRegressionRisks.map(x => x.riskId), [riskId], 'the risk stays active and untouched')
+})

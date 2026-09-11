@@ -883,6 +883,10 @@ const NEXT_SCHEMA = {
     // contract, together with the batch the rewind repairs.
     regressionRisks: { type: 'array', items: { type: 'object' } },
     regressionRepairOf: { type: 'string' },
+    // US-479 AC-32 (S13): the reconstruction directive a second repair of the same regression
+    // carries — the exact paths whose CONTENT is restored at `fromHead`, and the guards the rebuilt
+    // code is measured against. A content operation, committed forward; never a Git history one.
+    reconstruct: { type: 'object' },
     // The PR the cycle is bound to. A structured-output schema is STRICT: a field the schema does
     // not declare is dropped by the harness before the coordinator sees it — `pr` was, and a
     // fresh-path resume then had no PR to verify against (canary run 11, 3.0.4).
@@ -1581,7 +1585,7 @@ async function driveStory(story) {
   // ── The four stages, each a SKILL invoked by name with typed arguments ─────────────────────
   const prepare = n =>
     agentRetry(
-      invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.regressionRepairOf ? ` $regressionRepairOf=${n.regressionRepairOf}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${notesArg()}`),
+      invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.regressionRepairOf ? ` $regressionRepairOf=${n.regressionRepairOf}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${notesArg()}`),
       withModel('red', { agentType: 'pair-fix-test-author', phase: 'Prepare', label: `prepare:${tag} ${n.phase}${n.mode === 'repair' ? ' repair' : n.mode === 'revision' ? ' revision' : ''}`, effort: 'high', schema: PREPARE_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || isContradiction(r) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && /-g1$/.test(n.phase), ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
     )

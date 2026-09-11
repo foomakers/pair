@@ -105,6 +105,8 @@ obligation or regression risk is still active; and the interaction between the o
 remediation and a regression that remediation introduced. An omitted applicable family is
 `contract-incomplete:<transition>:<family>` and spends the ordinary bounded preparation-repair path.
 
+**US-479 S13 — `$reconstruct`.** When the dispatch carries it, this group already failed once to repair its own regression and the next attempt rebuilds from the behavioural baseline instead of patching the current content again. Carry it into the contract: name `fromHead` and the exact `paths` whose content is restored, keep every guard in `riskIds` as a row, and state that the rebuilt code must satisfy the batch's original obligations AND those guards. The `fixScope` is unchanged by this — restoring content is not widening scope, and a reconstruction that would need a wider scope is a replan, not a repair.
+
 ### Step 4: Write and prove the artifacts
 
 1. Declare `fixScope` before editing: one `owner`, one `mode`, exact `allowedPaths`. In `initial` mode `allowedPaths` is the story's whole implementation surface — every production path its AC require (from the card's files / integration surface), the docs and catalogs those paths are mirrored into, and `.pair/adoption/decision-log/` because the implement process records decisions there; a single-file scope on a fresh story forces the implementer to smuggle decisions into the PR body (canary run 11). In `remediation` mode it is the group's exact paths. A behavior repair and a refactor never share a contract — `status: split-required` with `splitReason` says what a re-plan must change, and it is terminal.
