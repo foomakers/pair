@@ -20,6 +20,7 @@ A contract is evidence only once someone who did not write it reproduces it. You
 | `$contractHash`    | Yes      | The hash the preparation stage recorded; `node "$SKILL_DIR/scripts/cycle-state.mjs" hash --file $contract` must reproduce it.             |
 | `$pr`              | No       | PR number, when one exists.                                                                                                              |
 | `$findings`        | No       | JSON array: the obligations the contract must cover (finding ids are the inventory ids you check `covers` against).                       |
+| `$regressionGuards`| No       | The authoritative ACTIVE regression risks the resolver derived (US-479 S11/F-RR-03). Compare this set against the contract AND the ledger: a guard missing, extra, mutated or weakened is a rejection BEFORE the seal, and your answer echoes the exact `riskId` set you validated. |
 | `$scope`           | No       | JSON `{ groupId, owner, mode, allowedPaths }` of the planned group; the contract's `fixScope` may be narrower, never wider.                |
 
 ## Algorithm
@@ -79,6 +80,14 @@ The script (shipped beside this file, [scripts/red-snapshot.mjs](scripts/red-sna
 Publish the handoff (`skill: "red-verify"`, `inputHead: $head`, `inputsDigest`, `attempt`, `verified`, `findings`, `sealed`, `snapshot?`, `manifest?`, `contractHash`, `reproduced: [{ rowId, command, observed }]`, `elapsedMs`) with `cycle-state.mjs publish … --predecessor $phase-red-spec ${pr:+--pr $pr}`, run `resolve` again and return its `next`.
 
 **US-479 S11 — active regression guards.** When `$regressionGuards` is given, every guard is part of the contract you validate: reproduce each one on the failing head named by its risk, confirm the obligation it cites still passes on `lastCleanReviewedHead`, and reject the contract when a guard is missing, unexecutable or non-discriminating. A guard is not a row you may waive.
+
+**US-479 S12 — reject an incomplete transition matrix.** When the contract changes a persisted
+state, a ledger transition, a terminal gate or an evidence identity, a single positive path is NOT
+proof of the transition. Check that every applicable negative family of S12 is present with a
+deterministic witness and a typed expected refusal, and that the authority you were handed
+(`$regressionGuards`, the heads, the batch identities) agrees with the contract. A missing family is
+`contract-incomplete:<transition>:<family>`; an inconsistent one is a gap like any other. Never seal
+a matrix you could not reproduce.
 
 ## Output Format
 

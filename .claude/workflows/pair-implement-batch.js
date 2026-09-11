@@ -1207,6 +1207,9 @@ function hasPreparedContract(r, { needPlan = false, ids = [], mode } = {}) {
 const VALIDATE_SCHEMA = {
   type: 'object',
   properties: {
+    // US-479 F-RR-03: the verifier echoes the guard set it validated. A field this schema does not
+    // declare is dropped by the harness, so the equality check below would be unenforceable.
+    regressionGuards: { type: 'array', items: { type: 'string' } },
     status: { type: 'string', enum: ['verified', 'rejected', REDIRECT_STATUS] },
     verified: { type: 'boolean' },
     findings: { type: 'array', items: { type: 'object' } },
@@ -1580,7 +1583,7 @@ async function driveStory(story) {
     )
   const validate = n =>
     agentRetry(
-      invoke(SK.redVerify, `${common()} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''} $head=${n.base} $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths })}` : ''}`),
+      invoke(SK.redVerify, `${common()} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''} $head=${n.base} $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths })}` : ''}`),
       withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Validate', label: `validate:${tag} ${n.phase}`, effort: 'high', schema: VALIDATE_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasValidation(r),
     )
@@ -1712,6 +1715,15 @@ async function driveStory(story) {
       }
     } else if (stage === 'validate') {
       if (!hasValidation(res)) return result('failed-contract', { reason: 'the validation stage returned no usable verdict', phase: next.phase })
+      // US-479 F-RR-03 (S12/AC-30): the independent verifier must have validated EXACTLY the guard
+      // set the resolver derived — one missing, one extra or one renamed and the contract is
+      // incomplete, before the seal is trusted by anybody downstream.
+      if (next.regressionRisks?.length) {
+        const expected = [...new Set(next.regressionRisks.map(r => String(r.riskId)))].sort()
+        const echoed = [...new Set((Array.isArray(res.regressionGuards) ? res.regressionGuards : []).map(String))].sort()
+        if (expected.length !== echoed.length || expected.some((id, i) => id !== echoed[i]))
+          return result('failed-contract', { reason: `contract-incomplete:${next.phase}:regression-guards (expected ${expected.join(', ') || 'none'}, validated ${echoed.join(', ') || 'none'})`, phase: next.phase })
+      }
       if (res.verified === true && !hasSeal(res)) return result('failed-seal', { reason: res.reason ?? 'the contract was verified but not sealed', phase: next.phase })
       if (res.verified === true && res.contractHash && res.contractHash !== next.contract.hash) return result('failed-seal', { reason: `the sealed contract hash ${res.contractHash} is not the prepared ${next.contract.hash}`, phase: next.phase })
     } else if (stage === 'implement') {

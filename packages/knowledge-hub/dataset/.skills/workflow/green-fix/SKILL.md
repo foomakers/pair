@@ -74,6 +74,11 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVer
 
 **US-479 S11 — active regression guards.** `$regressionGuards` arrives with the group's findings: those guards are part of what you must make pass, alongside the original obligations. Fix FORWARD only — no `git revert`, reset, rebase, seal deletion or history rewrite is part of this algorithm; `lastCleanReviewedHead` is a behavioural baseline, not a target to check out. Preserve every guard and every sealed byte, and never declare the batch complete: only the independent review that closes the original findings AND discharges every active risk does that.
 
+**US-479 S12 — no production work without the complete seal.** Start only from a sealed contract
+whose applicable matrix rows are present and validated: if the seal is missing, partial, or its rows
+were reduced after validation, stop and return the typed refusal instead of coding. You may never
+edit, weaken or drop a sealed row — including a regression guard — to make your change pass.
+
 ## Output Format
 
 `{ status: fixed | failed | human, fixed, needsHumanDecision, outputHead, evidenceLedger: [{ claim, oracle, probe, observed }], contractGaps?, reason?, next }`. `evidenceLedger` is `[]` only when the fix made no empirical or boundary claim.

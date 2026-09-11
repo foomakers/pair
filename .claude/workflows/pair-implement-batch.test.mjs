@@ -1382,3 +1382,37 @@ test('B1: the coordinator is fail-closed on the evidence too — a contradiction
     assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-contract-verifier').length, 0, missing)
   }
 })
+
+// ── US-479 F-RR-03 (DT-39.4/5): the SAME derived guard set reaches all four participants ───────
+test('F-RR-03: the validate dispatch carries $regressionGuards, and NEXT_SCHEMA declares it for every step that needs it', () => {
+  const validate = SRC.slice(SRC.indexOf('const validate = n =>'), SRC.indexOf('const implement = n =>'))
+  assert.match(validate, /\$regressionGuards=/, 'red-verify is dispatched without the authoritative guard set')
+  const next = SRC.slice(SRC.indexOf('const NEXT_SCHEMA'), SRC.indexOf('const REDIRECT_STATUS'))
+  assert.match(next, /regressionRisks:/)
+  const validateSchema = SRC.slice(SRC.indexOf('const VALIDATE_SCHEMA'), SRC.indexOf('const IMPLEMENT_SCHEMA'))
+  assert.match(validateSchema, /regressionGuards:/, 'the verifier`s echo of the guard set is dropped by the harness unless declared')
+})
+
+test('F-RR-03: a verifier that returns a guard set different from the dispatched one is refused before the seal is trusted', async () => {
+  const guards = [{ riskId: 'risk:aaaaaaaaaaaaaaaa' }, { riskId: 'risk:bbbbbbbbbbbbbbbb' }]
+  const withNext = { step: 'validate', mode: 'remediation', phase: 'r1-g1', round: 1, attempt: 1, base: HEAD, contract: { path: '/main/.pair/working/runs/r/292/r1-g1-red-contract.json', hash: SHA256('1'), revision: 1 }, regressionRisks: guards }
+  for (const [label, echoed] of [
+    ['missing', ['risk:aaaaaaaaaaaaaaaa']],
+    ['extra', ['risk:aaaaaaaaaaaaaaaa', 'risk:bbbbbbbbbbbbbbbb', 'risk:cccccccccccccccc']],
+    ['none', []],
+  ]) {
+    let author = 0
+    const { result } = await runWorkflow({
+      args: { cards: [STORY] },
+      dispatch: (p, o) => {
+        if (o.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+        if (o.agentType === 'pair-fix-test-author') return author++ === 0 ? { next: withNext } : {}
+        if (o.agentType === 'pair-red-contract-verifier') return { verified: true, findings: [], sealed: true, snapshot: SNAP, contractHash: SHA256('1'), regressionGuards: echoed }
+        if (o.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
+        return {}
+      },
+    })
+    assert.equal(result.batch[0].status, 'failed-contract', label)
+    assert.match(result.batch[0].reason, /contract-incomplete:r1-g1:regression-guards/, label)
+  }
+})

@@ -72,6 +72,11 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVer
 3. **Text shape** of the PR body: schematic, one decision per line, no narration of the diff; everything a blind reviewer needs (rationale, decisions, ADR links) goes there — the reviewer cannot see the checkpoint.
 4. Read back `prNumber`, `url` and the pushed head (`git rev-parse origin/$branch`, 40-hex). Publish the handoff (`skill: "implement-phase"`, `inputHead: $head`, `snapshot`, `status: ok`, `gatesPassed`, `prNumber`, `url`, `outputHead`, `checkpointPath`, `tasks`, `testRuns: [{ command, identity, exitCode }]`, `addedTests`, `contractGaps`, `elapsedMs`) with `cycle-state.mjs publish … --predecessor a0-red-verify --pr <prNumber>` (the PR just created or updated — the envelope carries it even when the dispatch had none), run `resolve` again and return its `next`.
 
+**US-479 S12 — no production work without the complete seal.** Start only from a sealed contract
+whose applicable matrix rows are present and validated: if the seal is missing, partial, or its rows
+were reduced after validation, stop and return the typed refusal instead of coding. You may never
+edit, weaken or drop a sealed row — including a regression guard — to make your change pass.
+
 ## Output Format
 
 `{ status: ok | failed, gatesPassed, branch, checkpointPath, prNumber, url, outputHead, summary, reason?, next }`. `gatesPassed: false` with `status: ok` means published but red: the cycle state routes ONE retry on the same seal (`$attempt=2`), then `failed-implement`.

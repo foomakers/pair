@@ -102,6 +102,13 @@ Every finding is CONCRETE: `id` (`r<n>-<k>`, or `r<n>-<letter>-<k>` when `$revie
 
 To DISCHARGE a risk you must be the independent review bound to the EXACT new head: execute its closure assertions, show the cited obligation passing, confirm the batch's original findings are closed, re-test the affected boundaries, then publish the same `riskId` with `state: 'discharged'`, `dischargedHead` equal to the head you reviewed and `dischargedByReviewId`. A reintroduction reopens the risk on the same stable finding and returns to the same remediation path; it is not a new discovery. `ready`, a converged summary and any scope escalation are impossible while one risk is active.
 
+**US-479 S12 — sample the sealed matrix, do not reinvent it.** The sealed contract already names
+the transition's positive and negative rows: execute them and the changed interactions on the exact
+head. You are not the first control expected to discover a fundamental illegal transition — that is
+the contract's job upstream. A further variant of a root cause already contracted stays that same
+finding id; a genuinely distinct defect needs its own deterministic witness, independent cause and
+separate impact before it is reported as new.
+
 ## Output Format
 
 `{ status: reviewed, verdict, reviewedHead, findings: [{ id, location, severity, description, recommendation, kind, transition, blocking, nonActionable?, disposition?, external?, evidence?, groupId?, rowId?, severityEvidence?, missedUpstream? }], scopeChanges?: [{ id, type, proposal, baselineEvidenceRefs, discoveredAtReviewId, status }], custody: { verified, contractBreach, breaches? }, readiness: { ready, remoteHead }, published: { firstReview?, escalation?, scopeDecisionPacket? }, tier, passes, needsHumanDecision?, humanDecisionKind?, partial?, reviewer?, next }`.

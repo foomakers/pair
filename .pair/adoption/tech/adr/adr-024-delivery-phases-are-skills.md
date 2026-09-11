@@ -795,3 +795,50 @@ validation, so any second attempt of a phase collided on the handoff name; and t
 `next` hard-coded `attempt: 1`. Both now follow what the phase has already seen. A GREEN that follows
 a regression repair is verified as the NEXT review round; an ordinary approved-test retry keeps the
 round's own re-review, unchanged.
+
+## Amendment 2026-09-11 (l) — US-479 S12/AC-30: one transition authority, and the negative matrix upstream
+
+The independent review of `cc221a83` found that T-29's positive chain was proved while its ILLEGAL
+transitions were not contracted at all. Six consolidated root causes are closed together here. No new
+agent, stage or budget; the rewind remains a workflow-state transition and never a Git operation.
+
+1. **Risk transition integrity.** `regressionTransitionErrors` is the single authority every
+   regression payload passes through in `publish`, and it reads the PERSISTED ledger and history.
+   A discharge requires a prior `active` entry for the same derived `riskId`
+   (`regression-risk-transition-invalid:<riskId>:missing-active-predecessor`), a matching regression
+   repair whose GREEN actually fixed and whose output head IS the reviewed head
+   (`:missing-matching-repair`, `discharge-head-mismatch`), byte-equal immutable evidence
+   (`:immutable-field-mismatch:<field>` over reproducer, closure assertions, boundaries, batch, both
+   heads and the cited obligations) and the batch's own obligations carried and confirmed closed in
+   that very review (`:original-finding-not-closed:<id>`). The risk state, the finding transition and
+   the derived blocking flag are ONE validated transition (`:finding-transition-incoherent`), not
+   three caller-controlled state machines.
+2. **Qualification authority.** An active claim is cross-bound to history: the failing head must be
+   an output the named batch actually produced (a `reviewedHead` is what someone looked at, never
+   what a remediation built), it must be the head this review read, the baseline must be a head this
+   run reviewed with the cited obligation not open there, `originEvidence` must agree with the risk
+   and `invalidatedBatchId` must be the same batch. Schema-valid but mutually inconsistent claims are
+   refused (`regression-qualification-invalid:<finding>:<why>`).
+3. **Guard propagation.** The derived active set now reaches red-spec, the INDEPENDENT red-verify
+   (new `$regressionGuards` input), green-fix and the review. The verifier echoes the set it
+   validated and the coordinator enforces exact set equality before the seal is trusted —
+   `contract-incomplete:<phase>:regression-guards`.
+4. **Human-decision precedence.** A mandatory human escalation (a history rewrite) is evaluated
+   BEFORE the automatic rewind: an active risk can no longer hide or consume it. A plain scope
+   proposal keeps no such precedence and still waits behind every quality risk.
+5. **Batch/group lineage.** The repaired group is DERIVED from the group whose GREEN produced the
+   failing head, with that group's own owner and allowed paths — never a hard-coded `-g1`. Ambiguous
+   provenance is `regression-lineage-ambiguous` rather than a guess, and one canonical parser
+   (`phaseParts`) replaces the local round regexes.
+6. **Scoped counters.** Completion is evaluated per batch lineage: the review that closes a batch is
+   the non-partial one after that batch's last fix which shows every one of the batch's own
+   obligations resolved, with no active risk it introduced. A later unrelated dirty review can
+   neither reopen nor erase an earlier completed batch; `invalidatedRemediations` counts only batch
+   identities the history can resolve (the no-op `|| true` filter is gone); and the derived ledger is
+   computed once per resolution and shared by the next step, the counters and the returned matrix.
+
+Upstream, `pair-workflow-red-spec` now owns the S12 matrix for any changed persisted transition,
+`pair-workflow-red-verify` rejects an incomplete or inconsistent one before the seal,
+`implement-phase`/`green-fix` refuse production work without the complete seal and may not reduce a
+sealed row, and `review-phase` samples the sealed matrix instead of being the first control expected
+to discover a fundamental illegal transition.

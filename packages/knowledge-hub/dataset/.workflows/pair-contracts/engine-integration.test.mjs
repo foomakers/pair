@@ -672,8 +672,13 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
       const attempt = Number(arg(prompt, 'attempt') ?? 1)
       return through(phase, 'red-spec', prepared(phase, mode, { groupId: phase, remediationBatchId: `r${/^r(\d+)/.exec(phase)?.[1] ?? 0}`, ...(arg(prompt, 'regressionRepairOf') ? { regressionRepairOf: arg(prompt, 'regressionRepairOf'), regressionGuards: guards.map(g => g.riskId) } : {}), plan: { groups: [{ groupId: phase, findings: (jsonArg(prompt, 'findings') ?? []).map(f => f.id), owner: 'installer', mode: 'behavioral', allowedPaths: ['src/a.ts'], oracle: 'installer', dependsOn: [] }], carried: [] } }), { attempt })
     }
-    if (opts.agentType === 'pair-red-contract-verifier')
-      return through(phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: H('e'), contractHash: arg(prompt, 'contractHash'), remediationBatchId: `r${/^r(\d+)/.exec(phase)?.[1] ?? 0}` }, { predecessor: `${phase}-red-spec`, attempt: Number(arg(prompt, 'attempt') ?? 1) })
+    if (opts.agentType === 'pair-red-contract-verifier') {
+      // US-479 F-RR-03: the independent verifier receives the authoritative guard set and echoes
+      // exactly what it validated; the coordinator refuses any other set before the seal is trusted.
+      const guards = jsonArg(prompt, 'regressionGuards')
+      if (guards) guardPrompts.push({ phase: `validate:${phase}`, guards: guards.map(g => g.riskId) })
+      return through(phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: H('e'), contractHash: arg(prompt, 'contractHash'), remediationBatchId: `r${/^r(\d+)/.exec(phase)?.[1] ?? 0}`, ...(guards ? { regressionGuards: guards.map(g => g.riskId) } : {}) }, { predecessor: `${phase}-red-spec`, attempt: Number(arg(prompt, 'attempt') ?? 1) })
+    }
     if (opts.agentType === 'pair-implementer' && opts.label?.startsWith('implement:')) return through(phase, 'implement-phase', { status: 'ok', gatesPassed: true, branch: 'feature/US-482', prNumber: 483, url: 'https://x/pr/483', outputHead: H0, checkpointPath: 'x.md' })
     if (opts.agentType === 'pair-implementer') {
       const guards = jsonArg(prompt, 'regressionGuards')
@@ -733,9 +738,12 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
   assert.equal(rewind.counters.invalidatedRemediations, 1)
   assert.equal(rewind.counters.completedCycles, 0, 'an invalidated remediation is attempted, not completed')
   // the single complete contract and the fix both received every active guard
-  assert.deepEqual(guardPrompts.map(g => g.phase), ['r1-g1', 'green:r1-g1'])
+  // F-RR-03: the SAME derived set reached all four participants — preparation, independent
+  // validation, the fix and (through the ledger it reads) the final review
+  assert.deepEqual(guardPrompts.map(g => g.phase), ['r1-g1', 'validate:r1-g1', 'green:r1-g1'])
   assert.equal(guardPrompts[0].guards.length, 1)
   assert.deepEqual(guardPrompts[0].guards, guardPrompts[1].guards)
+  assert.deepEqual(guardPrompts[1].guards, guardPrompts[2].guards)
   // the ordinary path, no new stage and no new agent
   assert.deepEqual(dispatched.filter(l => !/^contract:/.test(l)), [
     'prepare:#482 a0',

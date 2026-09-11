@@ -2353,7 +2353,10 @@ const GUARD = {
   affectedBoundaryRefs: ['installer:copyDirectoryWithTransforms', 'gate:checkSkillLocalScripts'],
 }
 const risk = (extra = {}) => ({ introducedByRemediationBatchId: 'r1', lastCleanReviewedHead: H0, firstFailingHead: H1, ...GUARD, state: 'active', ...extra })
-const regressionFinding = (id = 'r1-9', extra = {}) => finding(id, { origin: 'introduced-by-remediation', originEvidence: { baselineHead: H0, failingHead: H1, reproducer: GUARD.reproducerRef }, regressionRisk: risk(), obligationIds: ['AC-7'], ...extra })
+const regressionFinding = (id = 'r1-9', extra = {}) => {
+  const rr = extra.regressionRisk ?? risk()
+  return finding(id, { origin: 'introduced-by-remediation', obligationIds: ['AC-7'], ...extra, regressionRisk: rr, originEvidence: extra.originEvidence ?? { baselineHead: rr.lastCleanReviewedHead, failingHead: rr.firstFailingHead, reproducer: rr.reproducerRef } })
+}
 // H0 reviewed clean, remediation batch r1 fixes r0-1 and produces H1.
 function cleanThenRemediated(dir) {
   redSpec(dir, 'a0', { mode: 'initial' })
@@ -2574,4 +2577,279 @@ test('T-29 (S11): a discharge is refused unless it is bound to the EXACT reviewe
   const supplied = publish({ dir, file: m, phase: 'r2', skill: 'review-phase', workflowVersion: V })
   assert.equal(supplied.published, false)
   assert.match(supplied.reason, /activeRegressionRisks-not-storable/)
+})
+
+// ── US-479 S12 / AC-30 / DT-39: the negative transition matrix of the regression-risk ledger ──
+// One authority validates every transition against the PERSISTED ledger. "Latest entry wins" is
+// not a validation: a payload that never had an active predecessor, or that mutates the immutable
+// evidence it is supposed to discharge, is refused BEFORE the write.
+const rrDraft = (dir, fields) => {
+  const file = join(mkdtempSync(join(tmpdir(), 'rr-draft-')), 'draft.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r2', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: H2, verdict: 'APPROVED', custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: H2 }, mode: 're-review', ...fields }))
+  return file
+}
+const dischargedFinding = (extra = {}, riskExtra = {}) =>
+  finding('r1-9', {
+    transition: 'resolved',
+    blocking: false,
+    evidence: 'guard green at H2',
+    origin: 'introduced-by-remediation',
+    obligationIds: ['AC-7'],
+    originEvidence: { baselineHead: H0, failingHead: H1, reproducer: GUARD.reproducerRef },
+    regressionRisk: risk({ state: 'discharged', dischargedHead: H2, dischargedByReviewId: 'r2-review-phase', ...riskExtra }),
+    ...extra,
+  })
+// The matching regression repair: the same batch prepared again and fixed FORWARD to H2.
+function matchingRepair(dir, riskId, { outputHead = H2, fixed = true } = {}) {
+  redSpec(dir, 'r1-g1', { groupId: 'r1-g1', remediationBatchId: 'r1', regressionRepairOf: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed, needsHumanDecision: false, outputHead, evidenceLedger: [], remediationBatchId: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+}
+function provenRisk(dir) {
+  cleanThenRemediated(dir)
+  reviewOf(dir, 'r1', { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed by r1' }), regressionFinding()], invalidatedBatchId: 'r1' })
+  return JSON.parse(readFileSync(join(dir, 'r1-review-phase.json'), 'utf8')).findings.find(f => f.id === 'r1-9').regressionRisk.riskId
+}
+
+test('AC-30 (normative RED): a review that jumps straight to `discharged` with no active predecessor is refused before any write, and nothing at all moves', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  const before = { handoffs: readdirSync(dir).filter(f => f.endsWith('.json')).sort(), digests: digestDir(dir), counters: resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).counters }
+  const out = publish({ dir, file: rrDraft(dir, { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), dischargedFinding()] }), phase: 'r2', skill: 'review-phase', workflowVersion: V })
+  assert.equal(out.published, false)
+  assert.match(out.reason, /^regression-risk-transition-invalid:risk:[0-9a-f]{16}:missing-active-predecessor$/)
+  const after = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(readdirSync(dir).filter(f => f.endsWith('.json')).sort(), before.handoffs, 'no new handoff')
+  assert.deepEqual(digestDir(dir), before.digests, 'seals and history byte-identical')
+  assert.notEqual(after.next.step, 'done')
+  assert.deepEqual(after.counters, before.counters, 'no counter moved')
+  assert.deepEqual(after.activeRegressionRisks, [], 'no risk was fabricated')
+  assert.equal(after.counters.dischargedRegressionRisks, 0)
+  assert.equal(after.counters.regressionRepairs, 0)
+})
+
+test('F-RR-01: a discharge with no matching completed regression repair is refused', () => {
+  const { dir } = runDir()
+  provenRisk(dir)
+  const before = digestDir(dir)
+  const out = publish({ dir, file: rrDraft(dir, { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), dischargedFinding()] }), phase: 'r2', skill: 'review-phase', workflowVersion: V })
+  assert.equal(out.published, false)
+  assert.match(out.reason, /missing-matching-repair/)
+  assert.deepEqual(digestDir(dir), before)
+})
+
+test('F-RR-01: a repair that did not FIX, or whose head is not the reviewed head, is not a matching repair', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  matchingRepair(dir, riskId, { fixed: false })
+  assert.match(publish({ dir, file: rrDraft(dir, { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), dischargedFinding()] }), phase: 'r2', skill: 'review-phase', workflowVersion: V }).reason, /missing-matching-repair/)
+  const { dir: dir2 } = runDir()
+  const riskId2 = provenRisk(dir2)
+  matchingRepair(dir2, riskId2, { outputHead: SHA('7') })
+  assert.match(publish({ dir: dir2, file: rrDraft(dir2, { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), dischargedFinding()] }), phase: 'r2', skill: 'review-phase', workflowVersion: V }).reason, /discharge-head-mismatch|missing-matching-repair/)
+})
+
+test('F-RR-01: a discharge that MUTATES any immutable field of the active entry is refused, field by field', () => {
+  const mutations = [
+    ['reproducerRef', { reproducerRef: 'pnpm exec vitest run other.test.ts' }],
+    ['closureAssertions', { closureAssertions: [{ id: 'ca-2', command: 'pnpm exec vitest run other.test.ts', expected: 'pass' }] }],
+    ['affectedBoundaryRefs', { affectedBoundaryRefs: ['installer:other'] }],
+    ['introducedByRemediationBatchId', { introducedByRemediationBatchId: 'r0' }],
+    ['lastCleanReviewedHead', { lastCleanReviewedHead: SHA('8') }],
+    ['firstFailingHead', { firstFailingHead: SHA('8') }],
+  ]
+  for (const [field, riskExtra] of mutations) {
+    const { dir } = runDir()
+    const riskId = provenRisk(dir)
+    matchingRepair(dir, riskId)
+    const before = digestDir(dir)
+    const out = publish({ dir, file: rrDraft(dir, { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), dischargedFinding({}, riskExtra)] }), phase: 'r2', skill: 'review-phase', workflowVersion: V })
+    assert.equal(out.published, false, field)
+    assert.match(out.reason, new RegExp(`immutable-field-mismatch:${field}|missing-active-predecessor`), `${field}: ${out.reason}`)
+    assert.deepEqual(digestDir(dir), before, field)
+  }
+  // the obligation the risk cites is immutable too
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  matchingRepair(dir, riskId)
+  const out = publish({ dir, file: rrDraft(dir, { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), dischargedFinding({ obligationIds: ['AC-9'] })] }), phase: 'r2', skill: 'review-phase', workflowVersion: V })
+  assert.equal(out.published, false)
+  assert.match(out.reason, /immutable-field-mismatch:obligationIds/)
+})
+
+test('F-RR-01: a discharge is refused while the batch`s ORIGINAL finding is not carried and confirmed closed', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  matchingRepair(dir, riskId)
+  // r0-1 omitted entirely
+  assert.match(publish({ dir, file: rrDraft(dir, { findings: [dischargedFinding()] }), phase: 'r2', skill: 'review-phase', workflowVersion: V }).reason, /original-finding-not-closed:r0-1/)
+  // r0-1 carried but still open
+  assert.match(publish({ dir, file: rrDraft(dir, { findings: [finding('r0-1'), dischargedFinding()] }), phase: 'r2', skill: 'review-phase', workflowVersion: V }).reason, /original-finding-not-closed:r0-1/)
+})
+
+test('F-RR-01: state, transition and blocking are ONE transition — an incoherent triple is refused', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  matchingRepair(dir, riskId)
+  // discharged but the finding still says open
+  assert.match(publish({ dir, file: rrDraft(dir, { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), dischargedFinding({ transition: 'open', blocking: true })] }), phase: 'r2', skill: 'review-phase', workflowVersion: V }).reason, /finding-transition-incoherent/)
+  // an ACTIVE risk on a finding declared resolved
+  const { dir: dir2 } = runDir()
+  cleanThenRemediated(dir2)
+  const f = join(dir2, 'draft-active.json')
+  writeFileSync(f, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: H1, verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 're-review', invalidatedBatchId: 'r1', findings: [regressionFinding('r1-9', { transition: 'resolved', blocking: false, evidence: 'x' })] }))
+  assert.match(publish({ dir: dir2, file: f, phase: 'r1', skill: 'review-phase', workflowVersion: V }).reason, /finding-transition-incoherent/)
+})
+
+test('F-RR-01 (positive): active -> matching repair -> exact-head review discharges the SAME risk, empties the active matrix and keeps history', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  matchingRepair(dir, riskId)
+  const out = publish({ dir, file: rrDraft(dir, { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed at H2' }), dischargedFinding()] }), phase: 'r2', skill: 'review-phase', workflowVersion: V })
+  assert.equal(out.published, true, JSON.stringify(out))
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.activeRegressionRisks, [])
+  assert.equal(r.counters.dischargedRegressionRisks, 1)
+  assert.equal(JSON.parse(readFileSync(out.path, 'utf8')).findings.find(f => f.id === 'r1-9').regressionRisk.riskId, riskId)
+  assert.equal(r.next.step, 'done')
+  assert.ok(readHandoffs(dir).some(h => h.name === 'r1-review-phase'), 'the invalidating review is still in history')
+})
+
+test('F-RR-02: a qualification whose baseline, failing head, origin evidence or invalidated batch disagrees with persisted history is refused', () => {
+  const cases = [
+    ['baseline-not-reviewed-clean', { lastCleanReviewedHead: SHA('5') }, {}, {}],
+    // a head the batch never produced is BOTH not-from-batch and not-this-review: either typed
+    // refusal is the same illegal claim, refused before the write
+    ['failing-head-not-current-review|firstFailingHead-not-from-batch', { firstFailingHead: SHA('6') }, {}, {}],
+    ['origin-evidence-mismatch', {}, { originEvidence: { baselineHead: SHA('5'), failingHead: H1, reproducer: GUARD.reproducerRef } }, {}],
+    ['origin-evidence-mismatch', {}, { originEvidence: { baselineHead: H0, failingHead: H1, reproducer: 'pnpm exec vitest run something-else.test.ts' } }, {}],
+    ['invalidated-batch-mismatch', {}, {}, { invalidatedBatchId: 'r0' }],
+  ]
+  for (const [expected, riskExtra, findingExtra, envelopeExtra] of cases) {
+    const { dir } = runDir()
+    cleanThenRemediated(dir)
+    const before = digestDir(dir)
+    const f = join(mkdtempSync(join(tmpdir(), 'rr-draft-')), 'draft.json')
+    writeFileSync(f, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: H1, verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 're-review', invalidatedBatchId: 'r1', findings: [regressionFinding('r1-9', { ...findingExtra, regressionRisk: risk(riskExtra) })], ...envelopeExtra }))
+    const out = publish({ dir, file: f, phase: 'r1', skill: 'review-phase', workflowVersion: V })
+    assert.equal(out.published, false, expected)
+    assert.match(out.reason, new RegExp(expected), `${expected}: ${out.reason}`)
+    assert.deepEqual(digestDir(dir), before, expected)
+  }
+})
+
+test('F-RR-02: the failing head must be one the named batch actually PRODUCED — a reviewedHead of any handoff is not a batch output', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  // H0 is the head review r0 read back; it is not an output of batch r1
+  const f = join(mkdtempSync(join(tmpdir(), 'rr-draft-')), 'draft.json')
+  writeFileSync(f, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: H0, verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 're-review', invalidatedBatchId: 'r1', findings: [regressionFinding('r1-9', { regressionRisk: risk({ lastCleanReviewedHead: H1, firstFailingHead: H0 }) })] }))
+  const out = publish({ dir, file: f, phase: 'r1', skill: 'review-phase', workflowVersion: V })
+  assert.equal(out.published, false)
+  assert.match(out.reason, /firstFailingHead-not-from-batch|baseline-not-reviewed-clean/)
+})
+
+test('F-RR-04: a mandatory human decision is evaluated BEFORE the automatic rewind — escalation wins, nothing is prepared or discharged', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  reviewOf(dir, 'r1', { needsHumanDecision: true, humanDecisionKind: 'history-rewrite', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()], invalidatedBatchId: 'r1' })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'blocked')
+  assert.equal(r.next.reason, 'escalate')
+  assert.match(r.next.detail, /history-rewrite/)
+  assert.equal(r.activeRegressionRisks.length, 1, 'the risk stays active and untouched')
+  assert.notEqual(r.next.step, 'prepare')
+  assert.equal(r.counters.dischargedRegressionRisks, 0)
+})
+
+test('F-RR-04: a plain scope proposal does NOT take precedence — the rewind still happens and quality risks are closed first', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  reviewOf(dir, 'r1', { scopeChanges: [{ id: 'sc-1', type: 'new-requirement', status: 'pending', description: 'later' }], findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()], invalidatedBatchId: 'r1' })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, batch: r.next.regressionRepairOf }, { step: 'prepare', mode: 'remediation', batch: 'r1' })
+})
+
+test('F-RR-05: the rewind targets the group that actually PRODUCED the failing head, with that group`s own scope — never a hard-coded -g1', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { mode: 'initial' })
+  redVerify(dir, 'a0')
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: H0 })
+  review(dir, 'r0', { reviewedHead: H0, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1'), finding('r0-2')] })
+  // batch r1 with TWO groups; g2 is the one that produces the failing head
+  const plan = { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g1-owner', mode: 'behavioral', allowedPaths: ['src/one.ts'] }, { groupId: 'r1-g2', findings: ['r0-2'], owner: 'g2-owner', mode: 'behavioral', allowedPaths: ['src/two.ts'] }], carried: [] }
+  redSpec(dir, 'r1-g1', { plan, groupId: 'r1-g1', remediationBatchId: 'r1' })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1' })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('4'), evidenceLedger: [], remediationBatchId: 'r1' })
+  redSpec(dir, 'r1-g2', { groupId: 'r1-g2', remediationBatchId: 'r1' })
+  redVerify(dir, 'r1-g2', { remediationBatchId: 'r1' })
+  handoff(dir, 'r1-g2', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H1, evidenceLedger: [], remediationBatchId: 'r1' })
+  reviewOf(dir, 'r1', { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), finding('r0-2', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()], invalidatedBatchId: 'r1' })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.phase, 'r1-g2', 'the producing group, derived from the head it produced')
+  assert.equal(r.next.group.owner, 'g2-owner')
+  assert.deepEqual(r.next.group.allowedPaths, ['src/two.ts'])
+  assert.equal(r.next.attempt, 2)
+  // restart keeps the same lineage
+  assert.deepEqual(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next, r.next)
+})
+
+test('F-RR-05: an ambiguous group provenance is a typed refusal, never a guess', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { mode: 'initial' })
+  redVerify(dir, 'a0')
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: H0 })
+  review(dir, 'r0', { reviewedHead: H0, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1'), finding('r0-2')] })
+  const plan = { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'o', mode: 'behavioral', allowedPaths: ['src/one.ts'] }, { groupId: 'r1-g2', findings: ['r0-2'], owner: 'o', mode: 'behavioral', allowedPaths: ['src/two.ts'] }], carried: [] }
+  // BOTH groups report the same output head: the provenance of the failing head is not unique
+  for (const g of ['r1-g1', 'r1-g2']) {
+    redSpec(dir, g, g === 'r1-g1' ? { plan, groupId: g, remediationBatchId: 'r1' } : { groupId: g, remediationBatchId: 'r1' })
+    redVerify(dir, g, { remediationBatchId: 'r1' })
+    handoff(dir, g, 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H1, evidenceLedger: [], remediationBatchId: 'r1' })
+  }
+  reviewOf(dir, 'r1', { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), finding('r0-2', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()], invalidatedBatchId: 'r1' })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'blocked')
+  assert.match(String(r.next.refusal ?? r.next.reason), /regression-lineage-ambiguous|escalate/)
+  assert.match(r.next.detail ?? '', /lineage/)
+})
+
+test('F-RR-06: completion is scoped to the batch lineage — a later unrelated dirty review cannot reopen a completed earlier batch', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  // r1 closes clean at H1
+  review(dir, 'r1', { mode: 're-review', reviewedHead: H1, verdict: 'APPROVED', readiness: { ready: true, remoteHead: H1 }, findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' })] })
+  assert.equal(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).counters.completedCycles, 1)
+  // a later, unrelated round finds a NEW defect: r1 stays completed
+  handoff(dir, 'r2-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: '/abs/c.json', contractHash: `sha256:${'1'.repeat(64)}`, groupId: 'r2-g1', remediationBatchId: 'r2', plan: { groups: [{ groupId: 'r2-g1', findings: ['r1-1'], owner: 'o', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] } })
+  handoff(dir, 'r2-g1', 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, remediationBatchId: 'r2' })
+  handoff(dir, 'r2-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H2, evidenceLedger: [], remediationBatchId: 'r2' })
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r2-1')] })
+  const after = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(after.counters.completedCycles, 1, 'r1 stays completed; r2 is not')
+  assert.equal(after.counters.invalidatedRemediations, 0)
+})
+
+test('F-RR-06: an invalidated batch is completed exactly ONCE, after its own discharge — and only its own', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  const invalidated = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(invalidated.counters.completedCycles, 0)
+  assert.equal(invalidated.counters.invalidatedRemediations, 1)
+  matchingRepair(dir, riskId)
+  publish({ dir, file: rrDraft(dir, { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed at H2' }), dischargedFinding()] }), phase: 'r2', skill: 'review-phase', workflowVersion: V })
+  const closed = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(closed.counters.completedCycles, 1)
+  assert.equal(closed.counters.invalidatedRemediations, 1, 'the invalidation is history, counted once')
+  // a replay of the very same resolve duplicates nothing
+  assert.deepEqual(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).counters, closed.counters)
+})
+
+test('F-RR-06: invalidatedRemediations counts only batch identities the history can resolve', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  // a review naming a batch that never existed is not a countable invalidation
+  review(dir, 'r1', { mode: 're-review', reviewedHead: H1, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r9', findings: [finding('r1-1')] })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.counters.invalidatedRemediations, 0, 'r9 is not a batch this run ever had')
 })

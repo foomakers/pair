@@ -336,3 +336,28 @@ and a scope decision can neither waive nor discharge one. Four derived counters 
 — reach the step metrics and the one PR summary, with active and historical views separated. An
 invalidated remediation is an *attempted* batch; its round becomes a completed cycle only once a
 review closes the original findings and leaves no active risk. `maxFixRounds` is reused as it stands.
+
+## Illegal transitions are contracted, not discovered late (US-479 S12)
+
+A change to a persisted state, a ledger transition, a terminal gate or an evidence identity is
+contracted with its **whole finite matrix** before any production edit: the positive path plus every
+applicable negative family — a direct jump to a terminal state without its predecessor, a missing
+predecessor or matching repair, mutation of immutable evidence, a payload that disagrees with
+persisted history, an event bound to another head/finding/batch/run, replay and restart, a stale
+writer, an authority omitted from one participant, a mandatory human decision combined with an
+otherwise automatic transition, a multi-group batch whose producing group differs, convergence with
+something still active, and the interaction between a finding, its remediation and a regression that
+remediation introduced.
+
+The preparation owns the matrix; the independent verifier receives the same authoritative state and
+guard set the resolver holds and rejects an incomplete or inconsistent matrix before the seal
+(`contract-incomplete:<transition>:<family>`); implementation refuses to start without the complete
+seal and may not reduce a sealed row; the final review samples the sealed rows and the changed
+interactions. One green end-to-end chain is necessary and never sufficient.
+
+For the regression-risk ledger specifically, one authority validates every transition against the
+persisted ledger: a discharge needs its active predecessor, a matching repair whose fix produced the
+exact reviewed head, byte-equal immutable evidence and the batch's own obligations closed in that
+same review, and the risk state, finding transition and blocking flag must describe one transition.
+The repaired group is derived from the group that produced the failing head — never assumed to be
+`-g1` — and ambiguous provenance is a typed refusal.

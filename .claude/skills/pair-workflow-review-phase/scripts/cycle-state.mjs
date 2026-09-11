@@ -940,28 +940,16 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   }
   // US-479 T-29 (S11): the risk identity is derived HERE, and the claim is checked against what
   // this run actually did — the named batch must exist and the failing head must be one it produced.
+  // US-479 S12/AC-30: ONE authority decides every regression-risk transition, reading the persisted
+  // ledger and history. The riskId is derived here; nothing is written when a transition is illegal.
   if (skill === 'review-phase' && Array.isArray(data.findings) && data.findings.some(f => f?.regressionRisk)) {
     const existing = readHandoffs(dir)
-    const batchHeads = new Map()
-    for (const h of existing) {
-      const batch = h.data?.remediationBatchId ?? (phaseParts(h.phase)?.round ? `r${phaseParts(h.phase).round}` : undefined)
-      if (!batch) continue
-      const heads = batchHeads.get(batch) ?? new Set()
-      for (const head of [h.data?.outputHead, h.data?.reviewedHead]) if (SHA_RE.test(String(head ?? ''))) heads.add(String(head))
-      batchHeads.set(batch, heads)
+    const transitionErrs = regressionTransitionErrors({ handoffs: existing, data, pr })
+    if (transitionErrs.length) return { published: false, reason: transitionErrs[0], errors: transitionErrs }
+    data = {
+      ...data,
+      findings: data.findings.map(f => (f?.regressionRisk ? { ...f, regressionRisk: { ...f.regressionRisk, riskId: riskIdOf({ story: data.story, pr: data.pr ?? pr, findingId: f.id, batchId: f.regressionRisk.introducedByRemediationBatchId }) } } : f)),
     }
-    const findings = []
-    for (const f of data.findings) {
-      if (!f?.regressionRisk) {
-        findings.push(f)
-        continue
-      }
-      const batch = f.regressionRisk.introducedByRemediationBatchId
-      if (!batchHeads.has(batch)) return { published: false, reason: `regression-batch-unknown:${batch}`, finding: f.id }
-      if (!batchHeads.get(batch).has(String(f.regressionRisk.firstFailingHead))) return { published: false, reason: `firstFailingHead-not-from-batch:${f.id}`, batch }
-      findings.push({ ...f, regressionRisk: { ...f.regressionRisk, riskId: riskIdOf({ story: data.story, pr: data.pr ?? pr, findingId: f.id, batchId: batch }) } })
-    }
-    data = { ...data, findings }
   }
   if (pr !== undefined) {
     if (!Number.isInteger(pr) || pr <= 0) return { published: false, reason: 'pr-invalid', pr }
@@ -1012,11 +1000,125 @@ export function regressionRiskLedger(handoffs) {
     for (const f of h.data.findings ?? []) {
       const rr = f?.regressionRisk
       if (!rr?.riskId) continue
-      byId.set(rr.riskId, { ...rr, findingId: f.id, reviewName: h.name, reviewedHead: h.data.reviewedHead })
+      // The obligation the risk cites travels WITH it: it is immutable evidence, not decoration.
+      byId.set(rr.riskId, { ...rr, findingId: f.id, obligationIds: f.obligationIds, transition: f.transition, reviewName: h.name, reviewedHead: h.data.reviewedHead })
     }
   return [...byId.values()].sort((a, b) => (a.riskId < b.riskId ? -1 : a.riskId > b.riskId ? 1 : 0))
 }
 export const activeRegressionRisks = handoffs => regressionRiskLedger(handoffs).filter(r => r.state === 'active')
+
+// ── the ONE regression-risk transition authority (US-479 S12/AC-30) ────────────────────────
+// Every create, re-observation and discharge of a risk goes through this function, and it reads the
+// PERSISTED ledger and history — never the caller's own claims about them. "Latest entry wins" is
+// not a validation: a payload may be perfectly schema-valid and still describe a transition that
+// never had a predecessor, mutate the evidence it claims to discharge, or disagree with the clean
+// review and GREEN heads this run actually recorded.
+//
+// What a BATCH produced is its green-fix/implement output heads — a `reviewedHead` is what someone
+// looked at, never what a remediation built.
+function batchLineage(list) {
+  const byBatch = new Map()
+  for (const h of list) {
+    if (h.skill !== 'green-fix' && h.skill !== 'implement-phase') continue
+    const parts = phaseParts(h.phase)
+    const batch = h.data.remediationBatchId ?? (parts?.round ? `r${parts.round}` : undefined)
+    if (!batch || !SHA_RE.test(String(h.data.outputHead ?? ''))) continue
+    const entry = byBatch.get(batch) ?? { heads: new Set(), byHead: new Map() }
+    entry.heads.add(String(h.data.outputHead))
+    const groups = entry.byHead.get(String(h.data.outputHead)) ?? new Set()
+    groups.add(parts?.groupId ?? h.phase)
+    entry.byHead.set(String(h.data.outputHead), groups)
+    byBatch.set(batch, entry)
+  }
+  return byBatch
+}
+// The obligations a batch was created to close: the ids its own preparation received.
+function batchObligations(list, batch) {
+  const ids = new Set()
+  for (const h of list) {
+    if (h.skill !== 'red-spec') continue
+    const parts = phaseParts(h.phase)
+    const its = h.data.remediationBatchId ?? (parts?.round ? `r${parts.round}` : undefined)
+    if (its !== batch || h.data.regressionRepairOf) continue
+    for (const g of h.data.plan?.groups ?? []) if (g.groupId && phaseParts(g.groupId)?.groupId?.startsWith(`${batch}-`)) for (const id of g.findings ?? []) ids.add(id)
+    for (const id of h.data.findings?.received ?? []) ids.add(id)
+  }
+  return [...ids]
+}
+// A matching regression repair: the same batch prepared again as a repair, and a GREEN that
+// actually fixed, whose output head is the head the discharging review read.
+function matchingRepairFor(list, batch, head) {
+  const repaired = list.filter(h => h.skill === 'red-spec' && h.data.regressionRepairOf === batch).map(h => h.phase)
+  if (!repaired.length) return null
+  return list.find(h => h.skill === 'green-fix' && repaired.includes(h.phase) && h.data.fixed === true && String(h.data.outputHead) === String(head)) ?? null
+}
+const sameEvidence = (a, b) => canonical(a ?? null) === canonical(b ?? null)
+
+export function regressionTransitionErrors({ handoffs, data, pr }) {
+  const errs = []
+  const list = (handoffs ?? []).filter(h => h.data)
+  const ledger = new Map(regressionRiskLedger(list).map(r => [r.riskId, r]))
+  const lineage = batchLineage(list)
+  const reviews = list.filter(h => h.skill === 'review-phase' && (h.data.recordType ?? 'judgment') === 'judgment')
+  for (const f of data.findings ?? []) {
+    const rr = f?.regressionRisk
+    if (!rr) continue
+    const batch = String(rr.introducedByRemediationBatchId ?? '')
+    const riskId = riskIdOf({ story: data.story, pr: data.pr ?? pr, findingId: f.id, batchId: batch })
+    const prior = ledger.get(riskId)
+    const bad = (kind, detail) => errs.push(`regression-risk-transition-invalid:${riskId}:${kind}${detail ? `:${detail}` : ''}`)
+    const unqualified = (kind, detail) => errs.push(`regression-qualification-invalid:${f.id}:${kind}${detail ? `:${detail}` : ''}`)
+    // ONE transition, not three independent state machines: the risk state, the finding transition
+    // and the derived blocking flag must describe the same thing.
+    if (rr.state === 'active' && f.transition !== undefined && f.transition !== 'open') bad('finding-transition-incoherent', `${f.transition}`)
+    if (rr.state === 'discharged' && !['resolved', 'superseded'].includes(String(f.transition))) bad('finding-transition-incoherent', `${f.transition}`)
+    if (rr.state === 'discharged' && f.blocking === true) bad('finding-transition-incoherent', 'blocking')
+    if (rr.state === 'active') {
+      // ── F-RR-02: the claim is cross-bound to authoritative history, never trusted for shape ──
+      const heads = lineage.get(batch)
+      if (!heads) unqualified('regression-batch-unknown', batch)
+      else if (!heads.heads.has(String(rr.firstFailingHead))) unqualified('firstFailingHead-not-from-batch', batch)
+      if (data.reviewedHead !== undefined && String(rr.firstFailingHead) !== String(data.reviewedHead)) unqualified('failing-head-not-current-review')
+      // The baseline must be a head this run REVIEWED, and the obligation the risk cites must not
+      // have been open there — otherwise "it used to pass" is the reviewer's word, not evidence.
+      const baseline = reviews.filter(h => String(h.data.reviewedHead) === String(rr.lastCleanReviewedHead))
+      if (!baseline.length) unqualified('baseline-not-reviewed-clean')
+      else if (baseline.some(h => (h.data.findings ?? []).some(x => isBlocking(x) && (x.obligationIds ?? []).some(o => (f.obligationIds ?? []).includes(o))))) unqualified('baseline-not-reviewed-clean', 'obligation-open-at-baseline')
+      const oe = f.originEvidence
+      if (oe && (String(oe.baselineHead ?? '') !== String(rr.lastCleanReviewedHead) || String(oe.failingHead ?? '') !== String(rr.firstFailingHead) || (oe.reproducer !== undefined && String(oe.reproducer) !== String(rr.reproducerRef)))) unqualified('origin-evidence-mismatch')
+      if (data.invalidatedBatchId !== undefined && String(data.invalidatedBatchId) !== batch) unqualified('invalidated-batch-mismatch', `${data.invalidatedBatchId}!=${batch}`)
+      if (prior && prior.state === 'active') {
+        for (const [field, value] of [['reproducerRef', rr.reproducerRef], ['closureAssertions', rr.closureAssertions], ['affectedBoundaryRefs', rr.affectedBoundaryRefs], ['lastCleanReviewedHead', rr.lastCleanReviewedHead]])
+          if (!sameEvidence(prior[field], value)) bad('immutable-field-mismatch', field)
+      }
+      continue
+    }
+    // ── F-RR-01: a discharge is a transition FROM a persisted active entry, with its own repair ──
+    if (!prior || prior.state !== 'active') {
+      bad('missing-active-predecessor')
+      continue
+    }
+    for (const [field, value] of [
+      ['reproducerRef', rr.reproducerRef],
+      ['closureAssertions', rr.closureAssertions],
+      ['affectedBoundaryRefs', rr.affectedBoundaryRefs],
+      ['introducedByRemediationBatchId', rr.introducedByRemediationBatchId],
+      ['lastCleanReviewedHead', rr.lastCleanReviewedHead],
+      ['firstFailingHead', rr.firstFailingHead],
+    ])
+      if (!sameEvidence(prior[field], value)) bad('immutable-field-mismatch', field)
+    if (!sameEvidence(prior.obligationIds, f.obligationIds)) bad('immutable-field-mismatch', 'obligationIds')
+    const repair = matchingRepairFor(list, batch, data.reviewedHead)
+    if (!repair) bad('missing-matching-repair', batch)
+    else if (String(rr.dischargedHead) !== String(repair.data.outputHead)) errs.push(`discharge-head-mismatch:${f.id}`)
+    // The batch's ORIGINAL obligations must be carried in this very review and confirmed closed.
+    for (const id of batchObligations(list, batch)) {
+      const carried = (data.findings ?? []).find(x => x.id === id)
+      if (!carried || isBlocking(carried) || !['resolved', 'superseded'].includes(String(carried.transition))) bad('original-finding-not-closed', id)
+    }
+  }
+  return errs
+}
 
 // ── resolve ────────────────────────────────────────────────────────────────────────────────
 const blocked = (reason, extra = {}) => ({ step: 'blocked', reason, ...extra })
@@ -1065,6 +1167,8 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     return plan?.groups?.find(g => g.groupId === p.groupId)
   }
   // Every finding the cycle has ever seen, by id — the rewind carries the real entries, not copies.
+  // One derived view per resolution, shared by every reader (US-479 F-RR-06).
+  const activeRisksOf = () => (ctx.ledger ? ctx.ledger.filter(r => r.state === 'active') : activeRegressionRisks(list))
   const findingsById = () => {
     const m = new Map()
     for (const h of list.filter(x => x.skill === 'review-phase')) for (const f of h.data.findings ?? []) if (f?.id) m.set(f.id, f)
@@ -1168,7 +1272,9 @@ export function deriveNext(handoffs, policy, ctx = {}) {
         detail: `revision of ${targetPhase}: ${(d.conflictingRowIds ?? []).join(', ')} contradict the obligation raised by ${last.phase}`,
       }
     }
-    if (d.status === 'red') return { step: 'validate', mode: d.mode, phase: last.phase, round: parts.round, attempt: last.attempt, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined }
+    // US-479 F-RR-03: the INDEPENDENT verifier receives the same derived guard set the resolver
+    // holds — it cannot check a contract against authority it was never given.
+    if (d.status === 'red') return { step: 'validate', mode: d.mode, phase: last.phase, round: parts.round, attempt: last.attempt, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined, ...(activeRisksOf().length ? { regressionRisks: activeRisksOf() } : {}) }
     // A refusal whose cause is OUTSIDE the cycle — a dirty worktree, a moved head — is retryable
     // once a human clears it: the same phase, the next attempt. A refusal the cycle owns
     // (`unprovable`, `split-required`) is terminal at once; a second identical external refusal too
@@ -1187,7 +1293,7 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     if (parts.kind === 'initial') return { step: 'implement', mode: parts.revision > 1 ? 'revision' : 'initial', phase: last.phase, round: 0, attempt: byPhase('implement-phase', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), pr: list.map(h => h.data.pr).find(x => Number.isInteger(x)) }
     // The GREEN attempt follows what this phase has already seen: a batch prepared again after a
     // regression rewind (US-479 T-29) fixes forward as attempt n+1, never over its own handoff.
-    return { step: 'green', mode: parts.revision > 1 ? 'revision' : 'remediation', phase: last.phase, round: parts.round, attempt: byPhase('green-fix', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupOf(last.phase)?.findings), ...(activeRegressionRisks(list).length ? { regressionRisks: activeRegressionRisks(list) } : {}) }
+    return { step: 'green', mode: parts.revision > 1 ? 'revision' : 'remediation', phase: last.phase, round: parts.round, attempt: byPhase('green-fix', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupOf(last.phase)?.findings), ...(activeRisksOf().length ? { regressionRisks: activeRisksOf() } : {}) }
   }
   if (last.skill === 'implement-phase') {
     if (d.status === 'ok' && d.gatesPassed === true && Number.isInteger(d.prNumber) && SHA_RE.test(String(d.outputHead ?? ''))) {
@@ -1246,12 +1352,30 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     // branch and head, one complete corrective contract carrying every original unresolved finding
     // and every active guard. `lastCleanReviewedHead` is only the behavioural baseline; no Git
     // revert, reset, rebase or seal deletion is part of this, and a new run cannot erase it.
-    const activeRisks = activeRegressionRisks(list)
+    const activeRisks = activeRisksOf()
+    // US-479 F-RR-04: a mandatory human decision — a history rewrite, a missing authority, a safety
+    // question — is answered by a human BEFORE any automatic transition. An active regression risk
+    // must never hide or consume that request, so this precedes the rewind. (A plain scope proposal
+    // is NOT such a request: it stays behind the closure of every quality risk.)
+    if (d.needsHumanDecision === true && d.humanDecisionKind === 'history-rewrite') return blocked('escalate', { detail: 'history-rewrite decision requested by the review — a human decides before any automatic rewind', findings: blocking, regressionRisks: activeRisks })
     if (activeRisks.length) {
       if (cycleCounters(list).completedCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', detail: 'an active regression risk remains and the remediation budget is spent', findings: blocking, regressionRisks: activeRisks })
       // The earliest introducing batch is repaired first; every active risk travels with it.
-      const batch = [...new Set(activeRisks.map(r => String(r.introducedByRemediationBatchId)))].sort((a, b) => (phaseParts(`${a}-g1`)?.round ?? 0) - (phaseParts(`${b}-g1`)?.round ?? 0))[0]
-      const phase = `${batch}-g1`
+      const roundOf = b => phaseParts(`${b}-g1`)?.round ?? 0
+      const batch = [...new Set(activeRisks.map(r => String(r.introducedByRemediationBatchId)))].sort((a, b) => roundOf(a) - roundOf(b))[0]
+      // US-479 F-RR-05: the group to repair is the one that actually PRODUCED the failing head —
+      // derived from persisted history, never assumed to be `-g1`. Ambiguous provenance is a typed
+      // refusal: guessing the owner and the allowed paths would hand the fix the wrong scope.
+      const failingHeads = new Set(activeRisks.filter(r => String(r.introducedByRemediationBatchId) === batch).map(r => String(r.firstFailingHead)))
+      const producers = new Set()
+      for (const h of list)
+        if ((h.skill === 'green-fix' || h.skill === 'implement-phase') && failingHeads.has(String(h.data.outputHead ?? '')) && !h.data.regressionRepairOf) {
+          const gid = phaseParts(h.phase)?.groupId
+          if (gid && gid.startsWith(`${batch}-`)) producers.add(gid)
+        }
+      if (producers.size !== 1)
+        return blocked('escalate', { refusal: 'regression-lineage-ambiguous', detail: `regression lineage: ${producers.size} group(s) of ${batch} produced ${[...failingHeads].join(', ')} — the producing group must be unique before a repair can be scoped`, findings: blocking, regressionRisks: activeRisks })
+      const phase = [...producers][0]
       const carried = new Map()
       for (const f of blocking) carried.set(f.id, f)
       for (const r of activeRisks) {
@@ -1341,7 +1465,7 @@ export function deriveNext(handoffs, policy, ctx = {}) {
 //   - contractRevisions: distinct red-spec phases that are a revision (`-rev<m>`, m>1).
 //   - preparationRepairs: red-spec attempts beyond the first on the SAME non-revision phase.
 //   - implementationRetries: implement-phase attempts beyond the first on the same phase.
-export function cycleCounters(allHandoffs) {
+export function cycleCounters(allHandoffs, precomputedLedger) {
   const handoffs = (allHandoffs ?? []).filter(h => h?.data?.recordType !== 'migration')
   const list = handoffs.filter(h => h.data)
   const attemptedRounds = new Set()
@@ -1390,20 +1514,33 @@ export function cycleCounters(allHandoffs) {
   // US-479 T-29 (S11): a batch a review named `invalidatedBatchId` is an ATTEMPTED remediation, not
   // a completed one. It becomes completed only once a later review closes its original findings and
   // leaves no active risk it introduced — which is exactly what the closing review proves.
+  // US-479 F-RR-06: a batch identity only counts when the HISTORY can resolve it — a review naming
+  // a batch this run never had invalidates nothing. One canonical parser, no local regex.
+  const knownBatch = b => list.some(h => String(h.data.remediationBatchId ?? '') === String(b) || phaseParts(h.phase)?.groupId?.startsWith(`${b}-`) === true)
   const invalidatedBatches = new Set()
-  for (const h of reviews) if (h.data.invalidatedBatchId) invalidatedBatches.add(String(h.data.invalidatedBatchId))
-  const ledger = regressionRiskLedger(list)
+  for (const h of reviews) if (h.data.invalidatedBatchId && knownBatch(h.data.invalidatedBatchId)) invalidatedBatches.add(String(h.data.invalidatedBatchId))
+  const ledger = precomputedLedger ?? regressionRiskLedger(list)
   const activeRisks = ledger.filter(r => r.state === 'active')
   const unresolvedBatches = new Set(activeRisks.map(r => String(r.introducedByRemediationBatchId)))
-  const lastReview = reviews[reviews.length - 1]
-  const lastReviewClean = !!lastReview && !(lastReview.data.findings ?? []).some(isBlocking)
-  const roundOfBatch = b => Number(/^r(\d+)$/.exec(String(b))?.[1] ?? NaN)
   const attemptedCycles = attemptedRounds.size
+  // Completion is evaluated PER BATCH LINEAGE, not from a global latest-review flag: a later,
+  // unrelated dirty review can neither reopen nor erase a batch that was already closed clean.
+  const seqOf = h => (Number.isInteger(h.data?.seq) ? h.data.seq : 0)
   let completedCycles = 0
   for (const round of succeededRounds) {
-    if (!completedReviewRounds.has(round)) continue
     const batch = `r${round}`
-    if (invalidatedBatches.has(batch) && (unresolvedBatches.has(batch) || !lastReviewClean)) continue
+    const lastFix = Math.max(0, ...list.filter(h => h.skill === 'green-fix' && (phaseParts(h.phase)?.round ?? -1) === round).map(seqOf))
+    // The review that closed THIS batch: non-partial, after its last fix, leaving none of the
+    // batch's OWN obligations blocking. A brand-new defect found there belongs to the next batch —
+    // it does not reopen the one just closed (US-479 F-RR-06).
+    const obligations = new Set(batchObligations(list, batch))
+    const closesObligations = h => [...obligations].every(id => {
+      const f = (h.data.findings ?? []).find(x => x.id === id)
+      return !!f && !isBlocking(f) && ['resolved', 'superseded'].includes(String(f.transition))
+    })
+    const closing = reviews.find(h => h.data.partial !== true && seqOf(h) > lastFix && closesObligations(h))
+    if (!closing) continue
+    if (unresolvedBatches.has(batch)) continue
     completedCycles++
   }
   return {
@@ -1414,7 +1551,7 @@ export function cycleCounters(allHandoffs) {
     contractRevisions: revisionPhases.size,
     preparationRepairs,
     implementationRetries,
-    invalidatedRemediations: [...invalidatedBatches].filter(b => Number.isInteger(roundOfBatch(b)) || true).length,
+    invalidatedRemediations: invalidatedBatches.size,
     regressionRepairs: regressionRepairPhases.size,
     activeRegressionRisks: activeRisks.length,
     dischargedRegressionRisks: ledger.filter(r => r.state === 'discharged').length,
@@ -1466,7 +1603,10 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
           siblingContradictionKeys.push(h.data.contradictionKey)
     }
   }
-  let next = deriveNext(handoffs, policy, { entry, head, siblingContradictionKeys, predecessors: predecessorEvidence(dir) })
+  // US-479 F-RR-06: the derived ledger is computed ONCE per resolution and handed to every reader
+  // — the next step, the counters and the returned active matrix all see the same view.
+  const ledger = regressionRiskLedger(handoffs)
+  let next = deriveNext(handoffs, policy, { entry, head, siblingContradictionKeys, predecessors: predecessorEvidence(dir), ledger })
   const names = handoffs.map(h => h.name)
   // Changed effective inputs invalidate REVIEW evidence: prior findings + the delta are re-validated
   // from the last reviewed head. Sealed contracts and GREEN commits stay trusted.
@@ -1494,7 +1634,7 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   const predecessorRuns = [...new Set(handoffs.filter(h => h.data?.recordType === 'migration').flatMap(h => (h.data.predecessorRuns ?? []).map(r => r.runId)))].sort()
   const status = next.step === 'done' ? 'completed' : next.step === 'blocked' ? 'blocked' : 'in-progress'
   const nextFindingSeq = handoffs.filter(h => h.skill === 'review-phase').reduce((m, h) => Math.max(m, ...(h.data.findings ?? []).map(f => Number(/-(\d+)$/.exec(String(f.id ?? ''))?.[1] ?? 0))), 0) + 1
-  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs), predecessorRuns, activeRegressionRisks: activeRegressionRisks(handoffs) }
+  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs, ledger), predecessorRuns, activeRegressionRisks: ledger.filter(r => r.state === 'active') }
 }
 
 // ── migration (US-479 T-19, S10) ───────────────────────────────────────────────────────────

@@ -897,6 +897,12 @@ const t29Finding = (id, rr) => ({ id, severity: 'Major', location: 'x', descript
 
 test('T-29 (DT-38): the four S11 counters reach the metrics view and the PR summary, with the active matrix separated from the historical one', () => {
   const { dir } = runDir()
+  // the batch must be one the HISTORY can resolve: an invalidation of a batch that never existed
+  // counts nothing (US-479 F-RR-06)
+  writeFileSync(
+    join(dir, 'r1-g1-green-fix.json'),
+    JSON.stringify({ run: 'v9', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'green-fix', inputHead: SHA40('a'), fixed: true, needsHumanDecision: false, outputHead: SHA40('1'), evidenceLedger: [], remediationBatchId: 'r1', schemaVersion: 3, workflowVersion: '4.0.0', seq: 0 }),
+  )
   writeFileSync(
     join(dir, 'r1-review-phase.json'),
     JSON.stringify({ run: 'v9', story: '42', pr: 7, branch: 'b', phase: 'r1', skill: 'review-phase', inputHead: SHA40('a'), reviewedHead: SHA40('1'), verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 're-review', invalidatedBatchId: 'r1', findings: [t29Finding('r1-9', t29Risk())], schemaVersion: 3, workflowVersion: '4.0.0', seq: 1 }),

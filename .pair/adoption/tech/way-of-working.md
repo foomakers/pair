@@ -56,6 +56,14 @@ Resolution order, the split-tool routing and why the fallback is never the authe
 
 ## Review Convergence
 
+- **Negative transition matrix before implementation (ADR-024, amendment 2026-09-11 l; US-479
+  S12/AC-30):** a task that creates or changes a persisted state, a ledger transition, a terminal
+  gate or an evidence identity contracts the whole finite matrix upstream — the positive path plus
+  every applicable negative family, each with a deterministic witness and a typed expected refusal.
+  The independent verifier receives the same authority the resolver holds and rejects an incomplete
+  matrix before the seal; implementation cannot begin without it; the final review samples the sealed
+  rows rather than being the first control to discover an illegal transition. A composed green chain
+  is necessary and not sufficient.
 - **Regression-risk rewind (ADR-024, amendment 2026-09-11 k; US-479 S11/AC-29):** a defect a review
   proves was INTRODUCED by a remediation invalidates that remediation and sends the cycle back to the
   same batch's preparation, carrying every unresolved finding and every active guard in one complete

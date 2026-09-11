@@ -83,6 +83,28 @@ One row per class and interaction of every inventory item: `{ id, kind, baseline
 - Row ids are stable: a `repair` or `revision` keeps every existing id and changed row unchanged; it adds rows or edits only the rows the rejection / gap names, and lists them under `changedRows`. **A repair's `changedRows` must name every `rowId`/`mechanismId` the rejection you are answering carried** (US-479 T-20, S3) — `publish` refuses the handoff before the write when one is missing (`repair-incomplete:<id>`), so a genuinely new counterexample never displaces verifying a prior gap first.
 - Scope is inherited: a `repair` or `revision` keeps the `fixScope` of the contract it repairs or revises — the same `mode`, every `allowedPaths` entry — and may only ADD paths. The sealer refuses a narrowed scope (`fixScope-narrowed`); a0-rev2 in canary run 11 shrank a0 to one production file and left the implementer no home for its decision log or convention page.
 
+**US-479 S12 — the finite transition matrix.** When the obligation you are contracting creates or
+changes a PERSISTED workflow state, a ledger transition, a terminal gate or an evidence identity,
+the contract MUST carry that transition's whole matrix, not only its happy path. For each changed
+transition name: the authoritative source state and where it is read; the accepted event and its
+identity; the historical predecessor evidence the transition requires; the exact next state and its
+persistent effects; the immutable fields later transitions must preserve; the forbidden transitions
+and their typed refusal; replay, retry, restart and stale-writer behaviour; the terminal
+preconditions; the metric effects; and the witness, control, boundary and interaction rows that
+prove each one.
+
+Every APPLICABLE negative family is mandatory, not reviewer advice: a direct jump to a terminal or
+discharged state without its predecessor; a missing predecessor or matching remediation evidence;
+mutation of an immutable identity, reproducer, closure assertion, obligation or boundary field; a
+payload that is schema-valid but disagrees with persisted history; an event bound to another head,
+finding, batch, run or scope epoch; a duplicate or replayed event and a restart; a stale writer after
+newer evidence; an authority or guard omitted from one producer, validator or consumer; a mandatory
+human-decision or escalation event combined with an otherwise automatic transition; a multi-group
+remediation whose round, batch, group and producing head differ; convergence attempted while an
+obligation or regression risk is still active; and the interaction between the original finding, its
+remediation and a regression that remediation introduced. An omitted applicable family is
+`contract-incomplete:<transition>:<family>` and spends the ordinary bounded preparation-repair path.
+
 ### Step 4: Write and prove the artifacts
 
 1. Declare `fixScope` before editing: one `owner`, one `mode`, exact `allowedPaths`. In `initial` mode `allowedPaths` is the story's whole implementation surface — every production path its AC require (from the card's files / integration surface), the docs and catalogs those paths are mirrored into, and `.pair/adoption/decision-log/` because the implement process records decisions there; a single-file scope on a fresh story forces the implementer to smuggle decisions into the PR body (canary run 11). In `remediation` mode it is the group's exact paths. A behavior repair and a refactor never share a contract — `status: split-required` with `splitReason` says what a re-plan must change, and it is terminal.
