@@ -3146,3 +3146,109 @@ test('AC-32 (DT-41): when a LATER round has worked on the same paths, reconstruc
   assert.match(r.next.detail, /src\/a\.ts/)
   assert.deepEqual(r.activeRegressionRisks.map(x => x.riskId), [riskId], 'the risk stays active and untouched')
 })
+
+// ── US-479 T-27 (DT-05): independent groups serialize by the plan, never by an invented dependency ──
+const twoGroupPlan = (deps = {}) => ({
+  groups: [
+    { groupId: 'r1-g1', findings: ['r0-1'], owner: 'installer', mode: 'behavioral', allowedPaths: ['src/a.ts'], ...(deps['r1-g1'] ? { dependsOn: deps['r1-g1'] } : {}) },
+    { groupId: 'r1-g2', findings: ['r0-2'], owner: 'gate', mode: 'behavioral', allowedPaths: ['src/b.ts'], ...(deps['r1-g2'] ? { dependsOn: deps['r1-g2'] } : {}) },
+  ],
+  carried: [],
+})
+function twoGroupRound(dir, deps = {}) {
+  redSpec(dir, 'a0', { mode: 'initial' })
+  redVerify(dir, 'a0')
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: SHA('0') })
+  review(dir, 'r0', { reviewedHead: SHA('0'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1'), finding('r0-2', { location: 'src/b.ts:1' })] })
+  redSpec(dir, 'r1-g1', { plan: twoGroupPlan(deps), groupId: 'r1-g1', remediationBatchId: 'r1' })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1' })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('1'), evidenceLedger: [], remediationBatchId: 'r1' })
+}
+
+test('DT-05: a second INDEPENDENT group runs after the first with no dependency between them — the plan order, not an invented dependsOn', () => {
+  const { dir } = runDir()
+  twoGroupRound(dir)
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'prepare')
+  assert.equal(r.next.phase, 'r1-g2', 'the independent group is next; nothing blocks it')
+  assert.equal(r.next.group.owner, 'gate', 'it carries its OWN ownership, not the first group`s')
+  assert.deepEqual(r.next.group.allowedPaths, ['src/b.ts'], 'and its own paths: two groups of a batch never share a write surface')
+  assert.equal(r.next.group.dependsOn, undefined, 'no dependency was invented')
+})
+
+test('DT-05: a DECLARED dependency is honoured whatever order the plan lists the groups in', () => {
+  const { dir } = runDir()
+  // g1 depends on g2: the plan lists g1 first, but g2 must be prepared before it
+  redSpec(dir, 'a0', { mode: 'initial' })
+  redVerify(dir, 'a0')
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: SHA('0') })
+  review(dir, 'r0', { reviewedHead: SHA('0'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1'), finding('r0-2')] })
+  const plan = twoGroupPlan({ 'r1-g1': ['r1-g2'] })
+  redSpec(dir, 'r1-g2', { plan, groupId: 'r1-g2', remediationBatchId: 'r1' })
+  redVerify(dir, 'r1-g2', { remediationBatchId: 'r1' })
+  handoff(dir, 'r1-g2', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('1'), evidenceLedger: [], remediationBatchId: 'r1' })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.phase, 'r1-g1', 'the dependent group follows the one it depends on')
+})
+
+// ── US-479 T-27 (DT-07): a crash between the fix and its review moves no completion counter ──────
+test('DT-07: after a crash the batch is ATTEMPTED not completed; the complete review makes it 1; an identical replay stays 1', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir) // r1 fixed r0-1 and produced H1 — then the process died before any review
+  const crashed = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(crashed.counters.attemptedCycles, 1, 'the batch was attempted')
+  assert.equal(crashed.counters.completedCycles, 0, 'nothing completed it: no review has run')
+  assert.equal(crashed.next.step, 'verify', 'the resume asks for the review that never happened')
+  // the review the crash interrupted now runs and closes the batch
+  review(dir, 'r1', { mode: 're-review', reviewedHead: H1, verdict: 'APPROVED', readiness: { ready: true, remoteHead: H1 }, findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' })] })
+  const done = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(done.counters.completedCycles, 1)
+  // replaying the SAME resolution changes nothing: the counters are derived, never accumulated
+  const replay = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(replay.counters, done.counters, 'an identical replay is not a second cycle')
+})
+
+test('DT-07: a REAL second remediation after the review is the second completed cycle', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  review(dir, 'r1', { mode: 're-review', reviewedHead: H1, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), finding('r1-1')] })
+  redSpec(dir, 'r2-g1', { plan: { groups: [{ groupId: 'r2-g1', findings: ['r1-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r2-g1', remediationBatchId: 'r2' })
+  redVerify(dir, 'r2-g1', { remediationBatchId: 'r2' })
+  handoff(dir, 'r2-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H2, evidenceLedger: [], remediationBatchId: 'r2' })
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'APPROVED', readiness: { ready: true, remoteHead: H2 }, findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), finding('r1-1', { transition: 'resolved', blocking: false, evidence: 'closed' })] })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.counters.completedCycles, 2, 'two real remediations, each closed by its own review')
+  assert.equal(r.counters.attemptedCycles, 2)
+})
+
+// ── US-479 T-27 (DT-13): quality first, then ONE consolidated scope halt ─────────────────────────
+const proposal = (id, extra = {}) => ({ id, type: 'scope-extension', proposal: `extend for ${id}`, baselineEvidenceRefs: ['x'], discoveredAtReviewId: 'r0', status: 'pending', ...extra })
+
+test('DT-13: open defects alongside scope proposals fix the defects first — no scope halt yet', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { mode: 'initial' })
+  redVerify(dir, 'a0')
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: SHA('0') })
+  review(dir, 'r0', { reviewedHead: SHA('0'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1')], scopeChanges: [proposal('sc-1'), proposal('sc-2')] })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'prepare', 'a pending proposal never defers a real defect')
+  assert.notEqual(r.next.reason, 'awaiting-scope-decision')
+})
+
+test('DT-13: once quality has converged the proposals halt the cycle ONCE, together, and never reach `done`', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { mode: 'initial' })
+  redVerify(dir, 'a0')
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: SHA('0') })
+  review(dir, 'r0', { reviewedHead: SHA('0'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1')], scopeChanges: [proposal('sc-1'), proposal('sc-2')] })
+  redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r1-g1', remediationBatchId: 'r1' })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1' })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H1, evidenceLedger: [], remediationBatchId: 'r1' })
+  review(dir, 'r1', { mode: 're-review', reviewedHead: H1, verdict: 'APPROVED', readiness: { ready: true, remoteHead: H1 }, findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' })] })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'blocked')
+  assert.equal(r.next.reason, 'awaiting-scope-decision')
+  assert.equal(r.next.qualityState, 'converged')
+  assert.deepEqual(r.next.scopeChanges.map(c => c.id).sort(), ['sc-1', 'sc-2'], 'ONE halt carrying every pending proposal, not one halt each')
+  assert.notEqual(r.status, 'completed', 'a pending scope decision is never `done`')
+})

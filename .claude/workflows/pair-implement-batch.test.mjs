@@ -1457,3 +1457,73 @@ test('V2 (F-RR-03): a review that executed a guard set different from the dispat
     assert.match(result.batch[0].reason, /contract-incomplete:r1:regression-guards/, label)
   }
 })
+
+// ── US-479 T-27 (DT-10): a resume trusts the durable STATE, never a capsule, and never loops ─────
+// The entry capsule is a cache hint from the host wiring. This sandbox cannot confirm its claim, so
+// it is validated and then ignored for dispatch: readiness always comes from the dispatched phase's
+// own `cycle-state.mjs resolve`. A capsule that is stale, or plainly wrong, must therefore change
+// nothing — and a durable state that keeps disagreeing with the dispatched step must stop, not spin.
+const CAPSULE = { workflowVersion: '4.0.0', schemaVersion: 3, run: 'run-1', story: '292', next: { step: 'done' } }
+
+test('DT-10: a STALE capsule claiming the cycle is done cannot bypass the actual state — the same dispatches happen either way', async () => {
+  const dispatch = (p, o) => {
+    if (o.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (o.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
+    return {}
+  }
+  const withoutCapsule = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch })
+  const withCapsule = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], entryCapsules: { 292: CAPSULE } }, dispatch })
+  assert.deepEqual(stageLabels(withCapsule.calls), stageLabels(withoutCapsule.calls), 'the capsule changed no dispatch')
+  assert.equal(withCapsule.result.batch[0].status, withoutCapsule.result.batch[0].status)
+  assert.notEqual(withCapsule.result.batch[0].status, 'done', 'a capsule is never an approval')
+})
+
+test('DT-10: a capsule carrying an unknown key or a missing required field is refused before any agent runs', async () => {
+  for (const [label, capsules] of [
+    ['unknown key', { 292: { ...CAPSULE, somethingElse: 1 } }],
+    ['partial capsule', { 292: { workflowVersion: '4.0.0', schemaVersion: 3, run: 'run-1' } }],
+    ['not an object', { 292: 'done' }],
+  ]) {
+    let dispatched = 0
+    await assert.rejects(
+      () => runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], entryCapsules: capsules }, dispatch: () => ((dispatched += 1), {}) }),
+      /entryCapsules/,
+      label,
+    )
+    assert.equal(dispatched, 0, `${label}: no agent may run before the args are valid`)
+  }
+})
+
+test('DT-10: a durable state that keeps redirecting stops as failed-resume instead of looping forever', async () => {
+  let n = 0
+  const { result, calls } = await runWorkflow({
+    args: { cards: [{ ...STORY, prNumber: 7 }] },
+    dispatch: (p, o) => {
+      if (o.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      // every dispatch answers with a redirect to a DIFFERENT step, so the self-redirect guard is
+      // not what stops this: only the consecutive-redirect budget can
+      n += 1
+      const steps = [
+        { step: 'green', mode: 'remediation', phase: 'r1-g1', round: 1, attempt: 1, base: HEAD, contract: { path: '/main/.pair/working/runs/r/292/r1-g1-red-contract.json', hash: SHA256('1'), snapshot: SNAP } },
+        { step: 'verify', mode: 're-review', phase: `r${n + 1}`, round: n + 1, attempt: 1, base: HEAD, prior: 'r1-review-phase', openIds: [] },
+      ]
+      return { status: 'redirect', next: steps[n % 2] }
+    },
+  })
+  assert.equal(result.batch[0].status, 'failed-resume')
+  assert.match(result.batch[0].reason, /three consecutive redirects/)
+  assert.ok(calls.length < 10, `the loop is bounded, not spinning (${calls.length} dispatches)`)
+})
+
+test('DT-10: a stage that redirects to the very step it was dispatched for is refused, not re-dispatched', async () => {
+  const { result } = await runWorkflow({
+    args: { cards: [{ ...STORY, prNumber: 7 }] },
+    dispatch: (p, o) => {
+      if (o.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (o.agentType === 'pair-reviewer') return { status: 'redirect', next: { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1, base: HEAD } }
+      return {}
+    },
+  })
+  assert.equal(result.batch[0].status, 'failed-resume')
+  assert.match(result.batch[0].reason, /redirected to itself/)
+})

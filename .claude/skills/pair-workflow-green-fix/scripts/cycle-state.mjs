@@ -1172,7 +1172,12 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     const sealed = latestOf('red-verify', phase, x => x.sealed === true)
     return spec ? { path: spec.data.contractPath, hash: spec.data.contractHash, revision: phaseParts(phase)?.revision ?? 1, ...(sealed ? { snapshot: sealed.data.snapshot } : {}) } : undefined
   }
-  const planFor = round => list.find(h => h.skill === 'red-spec' && h.phase === `r${round}-g1` && h.data.plan)?.data.plan
+  // US-479 T-27 (DT-05): the batch plan belongs to the ROUND, not to `-g1`. It is published by the
+  // first group actually prepared, and that is not `-g1` whenever `-g1` depends on a sibling. Looking
+  // only at `r<n>-g1` lost the plan entirely in that case: `nextGroup` became undefined and the cycle
+  // skipped every remaining group straight to the review, while `groupOf` handed the dispatch no
+  // scope or ownership at all. Same hard-coded `-g1` assumption F-RR-05 removed from the rewind.
+  const planFor = round => list.find(h => h.skill === 'red-spec' && phaseParts(h.phase)?.groupId?.startsWith(`r${round}-g`) === true && h.data.plan)?.data.plan
   const groupOf = phase => {
     const p = phaseParts(phase)
     const plan = p?.groupId ? planFor(p.round) : undefined
