@@ -700,9 +700,58 @@ function median(sorted) {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
 }
 
-// `entries`: one persisted metrics view per admitted PR/story identity (already deduped by the
-// caller — repository+PR, or repository+story+branch before a PR exists — one record per identity;
-// a mixed-version PR folds all its scope epochs/runs into ONE entry with `workflow.mixedVersions`).
+// US-479 T-26 (S9, DT-26): ONE cohort entry per admitted identity, folded HERE rather than assumed
+// of the caller. A delivery is identified by repository+PR once a PR exists, and by
+// repository+story+branch before it does — so the same PR measured in two run directories (a
+// resume, a scope extension, a fresh directory) is one delivery, and the pre-PR record aliases onto
+// the PR that later appeared. Without this every rate moved with how many directories happened to
+// measure the same work. The folded entry keeps the WHOLE history: the union of run ids and
+// predecessors, the union of workflow versions (two versions measuring one PR IS a mixed-version
+// delivery), and the worst completeness of the group — the view with the most known runs supplies
+// every other field, since it is the one that saw the most of the delivery.
+export function foldCohortIdentities(entries) {
+  const list = (entries ?? []).filter(e => e && typeof e === 'object')
+  const idOf = e => e.identity ?? {}
+  const aliasKey = e => `${idOf(e).repository ?? ''}\u0000${idOf(e).storyId ?? ''}\u0000${idOf(e).branch ?? ''}`
+  const prKey = pr => `pr\u0000${pr}`
+  // A pre-PR record and the PR it became share repository+story+branch: resolve that alias first.
+  const prByAlias = new Map()
+  for (const e of list) if (idOf(e).prNumber != null) prByAlias.set(aliasKey(e), `${idOf(e).repository ?? ''}\u0000${prKey(idOf(e).prNumber)}`)
+  const keyOf = e => (idOf(e).prNumber != null ? `${idOf(e).repository ?? ''}\u0000${prKey(idOf(e).prNumber)}` : (prByAlias.get(aliasKey(e)) ?? aliasKey(e)))
+  const groups = new Map()
+  for (const e of list) {
+    const k = keyOf(e)
+    groups.set(k, [...(groups.get(k) ?? []), e])
+  }
+  const runsKnown = e => new Set([...(idOf(e).runIds ?? []), ...(idOf(e).predecessorRuns ?? [])]).size
+  const WORST = ['complete', 'partial', 'unknown']
+  const out = []
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      out.push(group[0])
+      continue
+    }
+    // The most complete view of the delivery supplies the fields; ties go to the latest record.
+    const main = group.reduce((best, e) => (runsKnown(e) >= runsKnown(best) ? e : best), group[0])
+    const versions = [...new Set(group.flatMap(e => e.workflow?.versions ?? []))].sort()
+    const completeness = group.map(e => e.snapshot?.completeness ?? 'complete').reduce((w, c) => (WORST.indexOf(c) > WORST.indexOf(w) ? c : w), 'complete')
+    out.push({
+      ...main,
+      identity: {
+        ...idOf(main),
+        prNumber: group.map(e => idOf(e).prNumber).find(x => x != null) ?? null,
+        runIds: [...new Set(group.flatMap(e => idOf(e).runIds ?? []))].sort(),
+        predecessorRuns: [...new Set(group.flatMap(e => idOf(e).predecessorRuns ?? []))].sort(),
+      },
+      workflow: { ...(main.workflow ?? {}), versions, mixedVersions: versions.length > 1 || group.some(e => e.workflow?.mixedVersions === true) },
+      ...(main.snapshot ? { snapshot: { ...main.snapshot, completeness } } : { snapshot: { completeness } }),
+    })
+  }
+  return out
+}
+
+// `entries`: one persisted metrics view per admitted PR/story identity — `foldCohortIdentities`
+// above establishes that, and the CLI applies it before any rate is computed.
 export function aggregateCohort(entries) {
   const N = entries.length
   // US-479 F6: a resumed PR's cycles and cost belong to its WHOLE known history. Reading
@@ -787,7 +836,8 @@ export function main(argv) {
     need('inputs', 'out')
     const manifest = JSON.parse(readFileSync(opts.inputs, 'utf8'))
     const entries = (manifest.entries ?? manifest).map(e => (e.metricsPath ? JSON.parse(readFileSync(e.metricsPath, 'utf8')) : e))
-    const cohort = aggregateCohort(entries)
+    // US-479 T-26 (DT-26): fold to one entry per identity BEFORE any rate is computed.
+    const cohort = aggregateCohort(foldCohortIdentities(entries))
     mkdirSync(opts.out, { recursive: true })
     writeFileSync(join(opts.out, 'cohort.json'), JSON.stringify(cohort, null, 2) + '\n')
     writeFileSync(join(opts.out, 'cohort.md'), `# Cohort report\n\nN=${cohort.n}, completed=${(cohort.completedRate ?? 0) * 100}%, mean cycles=${cohort.meanCompletedCycles ?? 'n/a'}\n`)

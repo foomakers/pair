@@ -22,6 +22,7 @@ import {
   HUMAN_BOUNDARY,
   writeMetrics,
   aggregateCohort,
+  foldCohortIdentities,
 } from '../../skills/pair-workflow-review-phase/scripts/cycle-metrics.mjs'
 import { publish } from '../../skills/pair-workflow-review-phase/scripts/cycle-state.mjs'
 import { findByMarker, withMarker } from '../../skills/pair-workflow-review-phase/scripts/pr-comment.mjs'
@@ -928,4 +929,69 @@ test('T-29 (DT-38): the four S11 counters reach the metrics view and the PR summ
   assert.deepEqual(done.regressions.active, [])
   assert.deepEqual(done.regressions.historical.map(r => r.riskId), ['risk:aaaaaaaaaaaaaaaa'])
   assert.match(renderMarkdown(done), /Regression risks: 0 active, 1 discharged/)
+})
+
+// ── US-479 T-26 / DT-26: one cohort entry per IDENTITY, not per run directory ──────────────────
+// `aggregateCohort` documents that its input is already one record per admitted identity. Nothing
+// enforced it: the aggregate CLI passed the manifest straight through, so the same PR measured in
+// two run directories — a resume, a scope extension, a fresh directory — counted twice and moved
+// every rate. Folding happens HERE, before any rate is computed.
+const cohortEntry = (identity, extra = {}) => ({
+  identity: { repository: 'foomakers/pair', storyId: '42', prNumber: null, branch: 'feature/x', runIds: ['run-1'], predecessorRuns: [], scopeEpoch: 1, ...identity },
+  workflow: { name: 'pair-implement-batch', versions: ['4.0.0'], mixedVersions: false },
+  outcome: { cohortState: 'completed' },
+  cycles: { completed: 2 },
+  usage: { observedTotalTokens: 100 },
+  snapshot: { completeness: 'complete' },
+  ...extra,
+})
+
+test('DT-26: the same PR measured in two run directories folds into ONE entry, scope extension included', () => {
+  const a = cohortEntry({ prNumber: 7, runIds: ['run-1'] })
+  const b = cohortEntry({ prNumber: 7, runIds: ['run-2'], predecessorRuns: ['run-1'], scopeEpoch: 2 }, { cycles: { completed: 3 } })
+  const folded = foldCohortIdentities([a, b])
+  assert.equal(folded.length, 1, 'one PR is one delivery, however many directories measured it')
+  assert.equal(folded[0].identity.prNumber, 7)
+  assert.deepEqual([...folded[0].identity.runIds].sort(), ['run-1', 'run-2'], 'the folded entry knows the whole history')
+  // and the rates see one delivery, not two
+  assert.equal(aggregateCohort(folded).n, 1)
+  assert.equal(aggregateCohort([a, b]).n, 2, 'control: unfolded input is exactly the defect')
+})
+
+test('DT-26: a pre-PR identity aliases onto the PR that later appeared, and folds once', () => {
+  const beforePr = cohortEntry({ prNumber: null, branch: 'feature/US-42', runIds: ['run-1'] })
+  const withPr = cohortEntry({ prNumber: 9, branch: 'feature/US-42', runIds: ['run-2'], predecessorRuns: ['run-1'] })
+  const folded = foldCohortIdentities([beforePr, withPr])
+  assert.equal(folded.length, 1, 'the same delivery before and after its PR existed is one delivery')
+  assert.equal(folded[0].identity.prNumber, 9, 'the PR identity wins once it exists')
+})
+
+test('DT-26: genuinely different deliveries are never folded', () => {
+  const one = cohortEntry({ prNumber: 7, storyId: '42' })
+  const two = cohortEntry({ prNumber: 8, storyId: '43', branch: 'feature/y' })
+  const three = cohortEntry({ prNumber: null, storyId: '44', branch: 'feature/z' })
+  assert.equal(foldCohortIdentities([one, two, three]).length, 3)
+  // another repository with the same PR number is another delivery
+  assert.equal(foldCohortIdentities([one, cohortEntry({ prNumber: 7, repository: 'other/repo' })]).length, 2)
+})
+
+test('DT-26: a mixed-version delivery stays mixed through the fold, and a partial run keeps the cohort partial', () => {
+  const v400 = cohortEntry({ prNumber: 7, runIds: ['run-1'] })
+  const v311 = cohortEntry({ prNumber: 7, runIds: ['run-2'] }, { workflow: { name: 'pair-implement-batch', versions: ['3.0.11'], mixedVersions: false } })
+  const [folded] = foldCohortIdentities([v400, v311])
+  assert.equal(folded.workflow.mixedVersions, true, 'two versions measured the same PR: the delivery IS mixed')
+  assert.deepEqual([...folded.workflow.versions].sort(), ['3.0.11', '4.0.0'])
+  // an archived run that could not be read keeps the folded entry partial
+  const partial = cohortEntry({ prNumber: 8, runIds: ['run-3'] }, { snapshot: { completeness: 'partial' } })
+  const complete = cohortEntry({ prNumber: 8, runIds: ['run-4'] })
+  assert.equal(aggregateCohort(foldCohortIdentities([partial, complete])).lifetimeCoverage, 'partial')
+})
+
+test('DT-26: a zero denominator returns null rather than a fabricated rate', () => {
+  const cohort = aggregateCohort(foldCohortIdentities([]))
+  assert.equal(cohort.n, 0)
+  assert.equal(cohort.completedRate, null)
+  assert.equal(cohort.settled.completedRate, null)
+  assert.equal(cohort.meanCompletedCycles, null)
+  assert.equal(cohort.costPerCompletedDelivery, null)
 })
