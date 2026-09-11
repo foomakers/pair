@@ -1769,7 +1769,10 @@ test('T-21 (DT-06/07): cycleCounters — a round is ATTEMPTED as soon as a green
   // regressionRepairs, activeRegressionRisks, dischargedRegressionRisks to every-step metrics").
   // An exhaustive assertion cannot survive a mandated addition, so the four keys are pinned here
   // at their values for this fixture — the assertion stays exhaustive and nothing is weakened.
-  assert.deepEqual(c, { attemptedCycles: 1, completedCycles: 1, reviewExecutions: 2, reviewBatches: 1, contractRevisions: 0, preparationRepairs: 0, implementationRetries: 0, invalidatedRemediations: 0, regressionRepairs: 0, activeRegressionRisks: 0, dischargedRegressionRisks: 0 })
+  // AMENDED again by US-479 DR-01: the budget needed a counter of CONCLUDED cycles distinct from
+  // completed ones, so the exhaustive set gains `spentCycles`. This round concluded (a fix, then a
+  // non-partial review) and also closed, so both are 1. No existing expectation is weakened.
+  assert.deepEqual(c, { attemptedCycles: 1, spentCycles: 1, completedCycles: 1, reviewExecutions: 2, reviewBatches: 1, contractRevisions: 0, preparationRepairs: 0, implementationRetries: 0, invalidatedRemediations: 0, regressionRepairs: 0, activeRegressionRisks: 0, dischargedRegressionRisks: 0 })
   // a genuine second remediation round (a NEW green-fix after the completed review) becomes 2
   handoff(dir, 'r2-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('g'), evidenceLedger: [] })
   c = cycleCounters(readHandoffs(dir))
@@ -3345,4 +3348,81 @@ test('DT-27: a scope proposal can never carry a severity or an origin — it is 
   assert.equal(out.published, false)
   assert.match(out.reason, /scopeChange-severity-forbidden/)
   assert.deepEqual(digestDir(dir), before)
+})
+
+// ── DR-01 (delta review of 8a2fd59e): a FAILING remediation must still spend the budget ─────────
+// F-RR-06 made completion mean "a review closed every one of this batch's own obligations". That is
+// the right meaning for a QUALITY metric and the wrong one for a BUDGET: when a remediation keeps
+// failing, no review ever closes the obligation, so the budget was never spent and the cycle looped
+// until the engine's blunt dispatch ceiling killed it — instead of escalating to a human after three
+// rounds, which is exactly what the budget exists for. The two questions are now separate counters:
+// `completedCycles` is how many corrective cycles CLOSED, `spentCycles` is how many were CONCLUDED
+// — a real fix followed by its review, whatever that review decided.
+function failingRound(dir, round, openId = 'r0-1') {
+  const phase = `r${round}-g1`
+  redSpec(dir, phase, { plan: { groups: [{ groupId: phase, findings: [openId], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: phase, remediationBatchId: `r${round}` })
+  redVerify(dir, phase, { remediationBatchId: `r${round}` })
+  handoff(dir, phase, 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA(String(round)), evidenceLedger: [], remediationBatchId: `r${round}` })
+  // the fix reports success, the independent review disagrees: the obligation is STILL open
+  review(dir, `r${round}`, { mode: 're-review', reviewedHead: SHA(String(round)), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding(openId)] })
+}
+
+test('DR-01: three remediation rounds that all FAIL spend the budget and escalate — they do not loop', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { mode: 'initial' })
+  redVerify(dir, 'a0')
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: SHA('0') })
+  review(dir, 'r0', { reviewedHead: SHA('0'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1')] })
+  const policy = { ...POLICY, maxFixRounds: 3 }
+  const steps = []
+  for (const round of [1, 2, 3]) {
+    failingRound(dir, round)
+    const r = resolve({ dir, workflowVersion: V, policy, entry: 'pr', pr: 7 })
+    steps.push({ round, step: r.next.step, reason: r.next.reason, budget: r.next.budget, spent: r.counters.spentCycles, completed: r.counters.completedCycles })
+  }
+  assert.deepEqual(
+    steps.map(s => s.spent),
+    [1, 2, 3],
+    'each concluded round spends one, whatever the review decided',
+  )
+  assert.deepEqual(steps.map(s => s.completed), [0, 0, 0], 'and none of them COMPLETED: nothing was ever closed')
+  assert.deepEqual({ step: steps[0].step, step2: steps[1].step }, { step: 'prepare', step2: 'prepare' }, 'the first two rounds keep going')
+  assert.deepEqual({ step: steps[2].step, reason: steps[2].reason, budget: steps[2].budget }, { step: 'blocked', reason: 'escalate', budget: 'maxFixRounds' }, 'the third exhausts the budget and asks a human')
+})
+
+test('DR-01: a metadata-only re-review spends nothing — no fix, no budget (T-21 stays true)', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { mode: 'initial' })
+  redVerify(dir, 'a0')
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: SHA('0') })
+  review(dir, 'r0', { reviewedHead: SHA('0'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1')] })
+  // three re-reviews of the SAME head with no remediation in between
+  for (const round of [1, 2, 3]) review(dir, `r${round}`, { mode: 're-review', reviewedHead: SHA('0'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1')] })
+  const r = resolve({ dir, workflowVersion: V, policy: { ...POLICY, maxFixRounds: 3 }, entry: 'pr', pr: 7 })
+  assert.equal(r.counters.spentCycles, 0, 'a round number that moved without a fix is not a spent cycle')
+  assert.notEqual(r.next.reason, 'escalate')
+})
+
+test('DR-01 (control): a batch closed clean stays completed when a later unrelated review is dirty (F-RR-06 stays true)', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  review(dir, 'r1', { mode: 're-review', reviewedHead: H1, verdict: 'APPROVED', readiness: { ready: true, remoteHead: H1 }, findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' })] })
+  const closed = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(closed.counters.completedCycles, 1)
+  // a later review finds something NEW: it belongs to the next batch and cannot reopen this one
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H1, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r2-9')] })
+  const after = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(after.counters.completedCycles, 1, 'a closed batch stays closed')
+  assert.equal(after.counters.spentCycles, 1)
+})
+
+test('DR-01 (converse): a batch whose ONLY preparation is a repair is not completed by an unrelated review', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  // the repair of r1 — the only red-spec of r1 carrying `regressionRepairOf`, so the batch has no
+  // obligation set of its own; an empty set must not make every later review a closing one
+  matchingRepair(dir, riskId)
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r2-9')] })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.counters.completedCycles, 0, 'nothing was proven closed: an empty obligation set closes nothing')
 })

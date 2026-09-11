@@ -1379,7 +1379,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     // is NOT such a request: it stays behind the closure of every quality risk.)
     if (d.needsHumanDecision === true && d.humanDecisionKind === 'history-rewrite') return blocked('escalate', { detail: 'history-rewrite decision requested by the review — a human decides before any automatic rewind', findings: blocking, regressionRisks: activeRisks })
     if (activeRisks.length) {
-      if (cycleCounters(list).completedCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', detail: 'an active regression risk remains and the remediation budget is spent', findings: blocking, regressionRisks: activeRisks })
+      if (cycleCounters(list).spentCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', detail: 'an active regression risk remains and the remediation budget is spent', findings: blocking, regressionRisks: activeRisks })
       // The earliest introducing batch is repaired first; every active risk travels with it.
       const roundOf = b => phaseParts(`${b}-g1`)?.round ?? 0
       const batch = [...new Set(activeRisks.map(r => String(r.introducedByRemediationBatchId)))].sort((a, b) => roundOf(a) - roundOf(b))[0]
@@ -1475,7 +1475,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     // US-479 T-21 (S4): the budget bounds COMPLETED corrective cycles, never the raw round
     // counter — a metadata-only re-review (inputsChanged, a moved head) bumps `round` without any
     // actual fix and must not spend the budget a real remediation earns.
-    if (cycleCounters(list).completedCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', findings: blocking })
+    if (cycleCounters(list).spentCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', findings: blocking })
     const atf = blocking.filter(f => f.kind === 'approved-test-failing')
     const gaps = blocking.filter(f => f.kind === 'contract-gap')
     // Every blocking finding is an approved test still failing ⇒ GREEN again on the SAME seals,
@@ -1594,6 +1594,18 @@ export function cycleCounters(allHandoffs, precomputedLedger) {
   // the ONE publication order. Comparing raw `seq` values instead treated a missing seq as 0, so on
   // a migrated run no review could ever be "after" the last fix and no cycle completed.
   const orderOf = h => list.indexOf(h)
+  // US-479 DR-01: the BUDGET counts CONCLUDED corrective cycles, not successful ones. A round that
+  // produced a real fix and then received its review has spent a round whatever that review decided
+  // — and a remediation that keeps failing is exactly when the budget must stop the cycle and ask a
+  // human. Reading `completedCycles` for this made the budget unreachable in its own failure mode:
+  // a batch nobody ever closed never counted, so the cycle looped until the engine's blunt dispatch
+  // ceiling killed it. `completedCycles` stays what it says: how many corrective cycles CLOSED.
+  const roundsWithFix = new Set(list.filter(h => h.skill === 'green-fix').map(h => phaseParts(h.phase)?.round).filter(r => Number.isInteger(r) && r > 0))
+  let spentCycles = 0
+  for (const round of roundsWithFix) {
+    const lastFix = Math.max(...list.filter(h => h.skill === 'green-fix' && (phaseParts(h.phase)?.round ?? -1) === round).map(orderOf))
+    if (reviews.some(h => h.data.partial !== true && orderOf(h) > lastFix)) spentCycles++
+  }
   let completedCycles = 0
   for (const round of succeededRounds) {
     const batch = `r${round}`
@@ -1602,10 +1614,19 @@ export function cycleCounters(allHandoffs, precomputedLedger) {
     // batch's OWN obligations blocking. A brand-new defect found there belongs to the next batch —
     // it does not reopen the one just closed (US-479 F-RR-06).
     const obligations = new Set(batchObligations(list, batch))
-    const closesObligations = h => [...obligations].every(id => {
-      const f = (h.data.findings ?? []).find(x => x.id === id)
-      return !!f && !isBlocking(f) && ['resolved', 'superseded'].includes(String(f.transition))
-    })
+    // US-479 DR-01 (converse): an EMPTY obligation set closes VACUOUSLY — a batch whose only
+    // preparation is a repair (its obligations belong to the batch being repaired) would then be
+    // "completed" by any later review at all, a dirty one included. When the history does not say
+    // which obligations this batch owned, the only proof left is that the closing review found
+    // nothing open at all; when it does say, each of them must be closed by name. T-21's original
+    // rule — a successful correction and a non-partial review since — still holds in both shapes.
+    const closesObligations = h =>
+      obligations.size
+        ? [...obligations].every(id => {
+            const f = (h.data.findings ?? []).find(x => x.id === id)
+            return !!f && !isBlocking(f) && ['resolved', 'superseded'].includes(String(f.transition))
+          })
+        : !(h.data.findings ?? []).some(isBlocking)
     const closing = reviews.find(h => h.data.partial !== true && orderOf(h) > lastFix && closesObligations(h))
     if (!closing) continue
     if (unresolvedBatches.has(batch)) continue
@@ -1613,6 +1634,7 @@ export function cycleCounters(allHandoffs, precomputedLedger) {
   }
   return {
     attemptedCycles,
+    spentCycles,
     completedCycles,
     reviewExecutions,
     reviewBatches,
