@@ -916,6 +916,10 @@ const nextDefect = n => {
   if (n.base !== undefined && !SHA40.test(String(n.base))) return 'base is not a 40-hex head'
   // A validate/implement/green dereferences the contract it is bound to: a next without one is a
   // typed refusal, never a TypeError reported as a dead agent (T-9 review, t9-5).
+  // US-479 F1 residual: a repair or a revision is BUILT ON a contract — a `prepare` without one is
+  // a revision with no base, which is a typed refusal here too, not a dispatch.
+  if (n.step === 'prepare' && (n.mode === 'repair' || n.mode === 'revision') && (!n.contract || typeof n.contract !== 'object' || !String(n.contract.path ?? '').trim() || !SHA256_RE.test(String(n.contract.hash ?? ''))))
+    return `${n.mode} without a complete contract descriptor`
   if (['validate', 'implement', 'green'].includes(n.step)) {
     if (!n.contract || typeof n.contract !== 'object' || !String(n.contract.path ?? '').trim()) return `${n.step} without contract.path`
     if (n.step !== 'validate' && !SHA40.test(String(n.contract.snapshot ?? ''))) return `${n.step} without a 40-hex contract.snapshot`

@@ -142,7 +142,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, predecessorEvidence, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
 const V = '3.0.0'
@@ -2192,4 +2192,145 @@ test('F1: a contradiction published BEFORE the key was stamped is history, not a
   assert.equal(publish({ dir, file, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, pr: 7, attempt: 2 }).published, true)
   const fresh = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, story: '42', runsRoot })
   assert.deepEqual({ step: fresh.next.step, mode: fresh.next.mode, phase: fresh.next.phase, run: fresh.next.predecessorRunId }, { step: 'prepare', mode: 'revision', phase: 'a0-rev4', run: 'v4' })
+})
+
+// ── US-479 F1 residual (independent verification of 82de9dce): the predecessor's identity is a
+// COHERENT SET of necessary proofs — a sealed red-verify alone does not make a revision routable ──
+function legacySealedChain(root, runId = 'v4', { hash = `sha256:${'1'.repeat(64)}`, phase = 'a0-rev3' } = {}) {
+  const d = join(root, '.pair', 'working', 'runs', runId, '42')
+  mkdirSync(d, { recursive: true })
+  const base = { schemaVersion: 2, workflowVersion: '3.0.13', run: runId, story: '42', pr: 7, branch: 'b', phase, inputHead: SHA('a') }
+  writeFileSync(join(d, `${phase}-red-spec.json`), JSON.stringify({ ...base, skill: 'red-spec', status: 'red', mode: 'revision', contractPath: join(d, `${phase}-red-contract.json`), contractHash: hash, seq: 1 }, null, 2) + '\n')
+  writeFileSync(join(d, `${phase}-red-verify.json`), JSON.stringify({ ...base, skill: 'red-verify', verified: true, sealed: true, snapshot: SHA('e'), contractHash: hash, seq: 2 }, null, 2) + '\n')
+  return d
+}
+function boundCycle(root, legacyDir, runId = 'v5') {
+  const dir = join(root, '.pair', 'working', 'runs', runId, '42')
+  mkdirSync(dir, { recursive: true })
+  const out = migrateAcknowledge({ dir, legacyDirs: [legacyDir], workflowVersion: V, story: '42', pr: 7, run: runId, branch: 'b', inputHead: SHA('a') })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  return dir
+}
+function publishContradiction(dir, extra = {}) {
+  const file = join(dir, `draft-${Math.random().toString(36).slice(2)}.json`)
+  writeFileSync(file, JSON.stringify({ run: 'v5', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'contradiction', mode: 'remediation', revisionReason: 'contradicts-approved-authority', predecessorContractHash: `sha256:${'1'.repeat(64)}`, conflictingRowIds: ['R33', 'R34'], changedRows: ['R33', 'R34'], counterexample: CX, findings: { received: ['r0-1'], covered: [] }, ...extra }))
+  return publish({ dir, file, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, pr: 7 })
+}
+const resolveBound = (dir, runsRoot) => resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, story: '42', runsRoot })
+
+test('F1 residual: spec AND verify intact — the revision is routed with a complete, hash-consistent contract descriptor and its provenance', () => {
+  const root = mkdtempSync(join(tmpdir(), 'f1r-'))
+  const runsRoot = join(root, '.pair', 'working', 'runs')
+  const legacy = legacySealedChain(root)
+  const dir = boundCycle(root, legacy)
+  assert.equal(publishContradiction(dir).published, true)
+  const n = resolveBound(dir, runsRoot).next
+  assert.deepEqual({ step: n.step, mode: n.mode, phase: n.phase, run: n.predecessorRunId, phaseOf: n.predecessorPhase }, { step: 'prepare', mode: 'revision', phase: 'a0-rev4', run: 'v4', phaseOf: 'a0-rev3' })
+  assert.equal(n.contract.path, join(legacy, 'a0-rev3-red-contract.json'))
+  assert.equal(n.contract.hash, `sha256:${'1'.repeat(64)}`)
+  assert.equal(n.contract.snapshot, SHA('e'))
+  assert.deepEqual(n.revalidate, ['scopeEpoch', 'scopeBaselineHash', 'findings-origin'])
+})
+
+test('F1 residual: the red-spec that carries the contract descriptor is a NECESSARY proof — altered, absent, or disagreeing on the hash, the contradiction is refused rather than routed without a base', () => {
+  const cases = [
+    [
+      'spec altered after the acknowledgment (verify intact)',
+      legacy => writeFileSync(join(legacy, 'a0-rev3-red-spec.json'), readFileSync(join(legacy, 'a0-rev3-red-spec.json'), 'utf8').replace('"mode": "revision"', '"mode": "initial"')),
+      /predecessor-evidence-changed|predecessor-evidence-incomplete/,
+    ],
+    ['spec absent', legacy => rmSync(join(legacy, 'a0-rev3-red-spec.json')), /predecessor-evidence-changed|predecessor-evidence-incomplete/],
+    [
+      'the descriptor names another contract hash',
+      legacy => {
+        const p = join(legacy, 'a0-rev3-red-spec.json')
+        const d = JSON.parse(readFileSync(p, 'utf8'))
+        d.contractHash = `sha256:${'7'.repeat(64)}`
+        writeFileSync(p, JSON.stringify(d, null, 2) + '\n')
+      },
+      /predecessor-evidence/,
+    ],
+    [
+      'the descriptor carries no contract path',
+      legacy => {
+        const p = join(legacy, 'a0-rev3-red-spec.json')
+        const d = JSON.parse(readFileSync(p, 'utf8'))
+        delete d.contractPath
+        writeFileSync(p, JSON.stringify(d, null, 2) + '\n')
+      },
+      /predecessor-evidence/,
+    ],
+  ]
+  for (const [name, tamper, expected] of cases) {
+    const root = mkdtempSync(join(tmpdir(), 'f1r-'))
+    const runsRoot = join(root, '.pair', 'working', 'runs')
+    const legacy = legacySealedChain(root)
+    const dir = boundCycle(root, legacy)
+    const digestBefore = digestDir(legacy)
+    // the contradiction is published BEFORE the tamper for the hash/path cases too: publish must
+    // still stamp a key, and the refusal must come from the route, never from a silent success
+    assert.equal(publishContradiction(dir).published, true, name)
+    tamper(legacy)
+    const n = resolveBound(dir, runsRoot).next
+    assert.equal(n.step, 'blocked', name)
+    assert.equal(n.refusal, 'contradiction-unresolvable', name)
+    assert.match(n.detail, expected, `${name}: ${n.detail}`)
+    // a refusal never routes a revision, and never touches the legacy
+    assert.equal(n.contract, undefined, name)
+    if (name === 'spec absent') assert.equal(digestDir(legacy).length, digestBefore.length - 1, name)
+    else assert.notDeepEqual(digestDir(legacy), digestBefore, `${name}: the tamper is what the test measures`)
+  }
+})
+
+test('F1 residual: an altered or absent red-VERIFY is refused too — the two proofs are checked separately, not one standing for the other', () => {
+  for (const [name, tamper] of [
+    ['verify absent', legacy => rmSync(join(legacy, 'a0-rev3-red-verify.json'))],
+    ['verify altered', legacy => writeFileSync(join(legacy, 'a0-rev3-red-verify.json'), readFileSync(join(legacy, 'a0-rev3-red-verify.json'), 'utf8').replace('"sealed": true', '"sealed": false'))],
+  ]) {
+    const root = mkdtempSync(join(tmpdir(), 'f1r-'))
+    const runsRoot = join(root, '.pair', 'working', 'runs')
+    const legacy = legacySealedChain(root)
+    const dir = boundCycle(root, legacy)
+    assert.equal(publishContradiction(dir).published, true, name)
+    tamper(legacy)
+    const n = resolveBound(dir, runsRoot).next
+    assert.equal(n.step, 'blocked', name)
+    assert.equal(n.refusal, 'contradiction-unresolvable', name)
+    assert.equal(n.contract, undefined, name)
+  }
+})
+
+test('F1 residual: the same rule applies to the CURRENT run — a sealed verify whose red-spec was never published routes nothing', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { mode: 'initial', contractHash: `sha256:${'9'.repeat(64)}` })
+  redVerify(dir, 'a0', { contractHash: `sha256:${'9'.repeat(64)}` })
+  // a seal for a phase that has no red-spec of its own: the descriptor does not exist
+  handoff(dir, 'a0-rev2', 'red-verify', { verified: true, sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}` })
+  review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r0-1')] })
+  contradiction(dir, 'r1-g1')
+  const n = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next
+  assert.equal(n.step, 'blocked')
+  assert.equal(n.refusal, 'contradiction-unresolvable')
+  assert.match(n.detail, /contract-descriptor-missing/)
+})
+
+test('F1 residual: a descriptor whose digest still MATCHES the acknowledgment but whose contract hash disagrees is refused with that exact reason — the discrepancy is semantic, not just a moved byte', () => {
+  const root = mkdtempSync(join(tmpdir(), 'f1r-'))
+  const runsRoot = join(root, '.pair', 'working', 'runs')
+  const legacy = legacySealedChain(root)
+  // the disagreement exists BEFORE the acknowledgment, so every digest is valid afterwards
+  const p = join(legacy, 'a0-rev3-red-spec.json')
+  const spec = JSON.parse(readFileSync(p, 'utf8'))
+  spec.contractHash = `sha256:${'7'.repeat(64)}`
+  writeFileSync(p, JSON.stringify(spec, null, 2) + '\n')
+  const dir = boundCycle(root, legacy)
+  const before = digestDir(legacy)
+  assert.equal(predecessorEvidence(dir)[0].changed, null, 'every recorded digest still matches')
+  assert.equal(publishContradiction(dir).published, true)
+  const n = resolveBound(dir, runsRoot).next
+  assert.equal(n.step, 'blocked')
+  assert.equal(n.refusal, 'contradiction-unresolvable')
+  assert.match(n.detail, /predecessor-evidence-incomplete:v4\/a0-rev3:contract-descriptor-hash-mismatch:sha256:7{64}/)
+  assert.equal(n.contract, undefined)
+  assert.deepEqual(digestDir(legacy), before, 'nothing in the legacy was rewritten')
 })

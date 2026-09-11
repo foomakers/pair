@@ -651,6 +651,11 @@ node "$SKILL/scripts/cycle-runtime.mjs" dispatch-stats --result "$WF_RESULT" --s
 node "$SKILL/scripts/cycle-runtime.mjs" finalize --dir "$RUN_DIR" --repo "$REPO" --story "$STORY" --branch "$BRANCH" --pr "$PR" --runId "$RUN_ID" --journal "$TRANSCRIPTS/journal.jsonl" --transcripts "$TRANSCRIPTS" --usage "$RUN_DIR/usage.jsonl" --dispatchStats "$STATS"
 ```
 
+When a cycle is RESUMED, the observation is started with `--since <ISO>` so the terminal result of
+the PREVIOUS invocation cannot close the new one (US-479 F8 residual). It is opt-in on purpose: the
+host writes the marker as soon as the run returns, which can precede the observer's first tick, so
+defaulting it would make the ordinary path reject its own run's terminal result.
+
 `$SKILL` is the installed `pair-workflow-review-phase` directory. `$TRANSCRIPTS` is the workflow
 run's own directory (`~/.claude/projects/<project slug>/<session id>/subagents/workflows/<wf id>/`),
 known once the Workflow tool returns its id. `$WF_RESULT` is the file the host wrote the workflow's
@@ -664,3 +669,45 @@ The same commands and the same methodology are used for BOTH sides of a paired m
 baseline runs its own engine from its own checkout in its own session, and the extractor is run from
 this checkout against that session's transcript directory, so the baseline engine is never modified
 to be measured.
+
+## Amendment 2026-09-11 (i) — the five residuals of F1/F2/F4/F6/F8
+
+An independent verification of `82de9dce` confirmed F3, F5 and F7 closed and found that five of the
+eight findings were only partly corrected. Same ids, same causes, no new requirements: what was
+missing was the verification of the ALTERNATIVES inside invariants already approved.
+
+- **F1** — a contract's identity is a COHERENT SET of necessary proofs. The lookup returned on the
+  first sealed `red-verify`, so a predecessor whose `red-spec` had been excluded by the digest check
+  routed `prepare/revision` with no `contract` field at all. `contractProofs` now requires the
+  sealed verify AND the descriptor of the same phase AND their agreement on the hash;
+  `evidence-incomplete` / `predecessor-evidence-incomplete:<run>/<phase>:<why>` is refused rather
+  than routed. The route builds the descriptor from the two proofs it validated, and the coordinator
+  refuses a `repair`/`revision` `next` without a complete descriptor as a second, independent guard.
+- **F2** — the ledger separates the last ACCEPTED evidence from a later divergent observation. A
+  contradicting block used to drop the request entirely (490 → 330), deleting cost already charged.
+  The accepted value stands, the conflicting observation is kept as `divergent` (deduplicated, never
+  merged), the request is flagged, and `usage.totalBasis: 'lower-bound'` plus
+  `usage-inconsistent` carry the doubt to the snapshot, the lifetime and the PR summary.
+- **F4** — a message SPAN is not an execution DURATION. One complete message spans zero
+  milliseconds and proves nothing about how long the execution took. `agentMs`/`activeWallMs`/
+  `elapsedMs` are measured only from real execution boundaries (`timeSource: 'record'`); without
+  them the duration is unknown and the timing coverage partial, while the span is reported as
+  `time.messageSpan` with its own basis and an explicit lower-bound note. No estimate, and no
+  return to the tick clock. **Consequence to state plainly: with transcripts alone this engine
+  measures cost, not duration — AC-14 cannot be argued from a span.**
+- **F6** — the CURRENT run is a contributor like any other. Its partial coverage was not propagated,
+  so a run with two executions and usage for one reported a complete lifetime of 300. Now its
+  incompleteness lands in `lifetime.partialRuns`, the totals become `lower-bound`, the cohort
+  inherits both, and `costPerCompletedDelivery.lowerBound` says so. A certain ZERO requires proof
+  that nothing was dispatched here (no observation and no handoff beyond migration records);
+  otherwise zero observations mean UNKNOWN, not zero.
+- **F8** — a finalization is idempotent, not a freeze. The revision is now derived from what is
+  actually persisted (`max(persisted, checkpoint) + 1`), so a stale writer computes a lower number
+  and is refused while a genuine reconciliation computes a higher one; and the post-finalize guard
+  compares a `viewFingerprint` instead of the mere existence of a finalization, so a late usage tail
+  is reconciled into a higher revision on the SAME comment, an unconfirmed publication is still
+  retried, and a repeat with nothing new is a no-op that exits 0.
+
+Verified as interactions, not only as units: migration → revision; transcript → checkpoint →
+restart → reducer; lifetime → cohort → summary; recipe → observer → terminal result → finalize.
+511 workflows tests. Still no live canary, and #479 is not complete.

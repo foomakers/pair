@@ -120,7 +120,9 @@ test('F7: the recipe documented in ADR-024 runs, line for line, through the real
   const view = JSON.parse(readFileSync(join(f.dir, 'metrics.json'), 'utf8'))
   // the provider's own accounting (F3), the demonstrated span (F4) and the bound predecessor (F6)
   assert.equal(view.usage.observedTotalTokens, 10 + 20 + 30 + 40)
-  assert.equal(view.time.agentMs, 1000)
+  // AMENDED by US-479 F4 residual: a transcript proves a message SPAN, not an execution duration.
+  assert.equal(view.time.messageSpan.totalMs, 1000)
+  assert.equal(view.time.agentMs, null)
   assert.deepEqual(view.identity.predecessorRuns, ['v4'])
   assert.equal(view.lifetime.usage.observedTotalTokens, 500 + 100)
   assert.equal(view.lifetime.cycles.completed, 1)
@@ -175,7 +177,10 @@ test('F8: a terminal result with NO usage source stops on the grace period and r
   assert.equal(JSON.parse(readFileSync(join(f.dir, 'metrics.json'), 'utf8')).snapshot.completeness, 'partial')
 })
 
-test('F8: nothing written after `finalize` can overwrite the finalized view', () => {
+// AMENDED by US-479 F8 residual: the guard is no longer "a finalization exists" — that froze the
+// metrics and refused a legitimate late reconciliation. It is now "this write carries no new
+// evidence", which is what a stale writer actually is.
+test('F8: a tick after `finalize` carrying NO new evidence changes nothing', () => {
   const f = fixture()
   const { res } = runRecipe(f)
   assert.equal(res.status, 0, res.stderr)
@@ -183,6 +188,111 @@ test('F8: nothing written after `finalize` can overwrite the finalized view', ()
   const CLI = join(SKILL_DIR, 'scripts/cycle-runtime.mjs')
   const late = spawnSync('node', [CLI, 'reconcile', '--dir', f.dir, '--repository', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7', '--runId', 'v5', '--journal', join(f.transcripts, 'journal.jsonl'), '--transcripts', f.transcripts, '--usage', join(f.dir, 'usage.jsonl')], { encoding: 'utf8' })
   assert.equal(late.status, 0, late.stderr)
-  assert.match(late.stdout, /finalized/)
+  assert.match(late.stdout, /no-new-evidence/)
   assert.deepEqual(JSON.parse(readFileSync(join(f.dir, 'metrics.json'), 'utf8')), finalized)
+})
+
+// ── US-479 F8 residual: finalize is IDEMPOTENT, not a freeze ─────────────────────────────────
+// "No late write" means a stale writer never wins — not that the metrics can never be revised
+// again. A legitimate reconciliation must produce a HIGHER revision, consistent across the
+// checkpoint, the file and the one PR comment.
+const CLI = join(SKILL_DIR, 'scripts/cycle-runtime.mjs')
+const RUNTIME_ARGS = f => ['--dir', f.dir, '--repository', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7', '--runId', 'v5', '--journal', join(f.transcripts, 'journal.jsonl'), '--transcripts', f.transcripts, '--usage', join(f.dir, 'usage.jsonl')]
+const FINALIZE_ARGS = f => ['--dir', f.dir, '--repo', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7', '--runId', 'v5', '--journal', join(f.transcripts, 'journal.jsonl'), '--transcripts', f.transcripts, '--usage', join(f.dir, 'usage.jsonl')]
+const saved = f => JSON.parse(readFileSync(join(f.dir, 'metrics.json'), 'utf8'))
+const comments = gh => JSON.parse(readFileSync(gh.state, 'utf8'))
+/** A second, genuinely new provider request appended to the transcript after the fact. */
+const lateRequest = (f, { requestId = 'q2', output = 10 } = {}) =>
+  writeFileSync(
+    join(f.transcripts, 'agent-a1.jsonl'),
+    readFileSync(join(f.transcripts, 'agent-a1.jsonl'), 'utf8') +
+      [0, 1].map(i => JSON.stringify({ agentId: 'a1', type: 'assistant', apiBlockIndex: i, requestId, effort: 'high', timestamp: new Date(T0 + 60_000 + i * 1000).toISOString(), message: { role: 'assistant', model: 'claude-opus-5', stop_reason: i === 1 ? 'end_turn' : null, usage: { input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: i === 1 ? output : 1 } } })).join('\n') +
+      '\n',
+  )
+
+test('F8 residual: finalize with nothing new is idempotent — same revision, same comment, no second publication', () => {
+  const f = fixture()
+  const gh = fakeGh()
+  const env = { ...process.env, PATH: `${gh.dir}:${process.env.PATH}` }
+  const first = spawnSync('node', [CLI, 'finalize', ...FINALIZE_ARGS(f)], { encoding: 'utf8', env })
+  assert.equal(first.status, 0, first.stderr)
+  const afterFirst = saved(f)
+  const second = spawnSync('node', [CLI, 'finalize', ...FINALIZE_ARGS(f)], { encoding: 'utf8', env })
+  assert.equal(second.status, 0, second.stderr)
+  assert.deepEqual(saved(f).snapshot.revision, afterFirst.snapshot.revision)
+  assert.equal(saved(f).usage.observedTotalTokens, afterFirst.usage.observedTotalTokens)
+  assert.equal(comments(gh).length, 1)
+  assert.match(second.stdout, /no-new-evidence|"written":false/)
+})
+
+test('F8 residual: a usage tail that arrives AFTER finalize is reconciled into a HIGHER revision, consistent across the file, the checkpoint and the same PR comment', () => {
+  const f = fixture()
+  const gh = fakeGh()
+  const env = { ...process.env, PATH: `${gh.dir}:${process.env.PATH}` }
+  assert.equal(spawnSync('node', [CLI, 'reconcile', ...RUNTIME_ARGS(f)], { encoding: 'utf8', env }).status, 0)
+  assert.equal(spawnSync('node', [CLI, 'finalize', ...FINALIZE_ARGS(f)], { encoding: 'utf8', env }).status, 0)
+  const before = saved(f)
+  assert.equal(before.usage.observedTotalTokens, 100)
+  const commentBefore = comments(gh)[0]
+  // a real new request lands after the finalization
+  lateRequest(f)
+  const again = spawnSync('node', [CLI, 'finalize', ...FINALIZE_ARGS(f)], { encoding: 'utf8', env })
+  assert.equal(again.status, 0, again.stderr)
+  const after = saved(f)
+  assert.equal(after.usage.observedTotalTokens, 110, 'the late tail is reconciled, not refused')
+  assert.ok(after.snapshot.revision > before.snapshot.revision, `${after.snapshot.revision} must exceed ${before.snapshot.revision}`)
+  const checkpoint = JSON.parse(readFileSync(join(f.dir, '.runtime-checkpoint.json'), 'utf8'))
+  assert.ok(checkpoint.revision >= before.snapshot.revision, 'the checkpoint does not lag the file it wrote')
+  // the SAME comment carries the new numbers
+  assert.equal(comments(gh).length, 1)
+  assert.equal(comments(gh)[0].id, commentBefore.id)
+  assert.match(comments(gh)[0].body, /tokens 110/)
+})
+
+test('F8 residual: a failed publication retries — unchanged data republishes the same view, new data raises the revision', () => {
+  const f = fixture()
+  const broken = mkdtempSync(join(tmpdir(), 'gh-broken-'))
+  writeFileSync(join(broken, 'gh'), '#!/bin/sh\nexit 1\n')
+  chmodSync(join(broken, 'gh'), 0o755)
+  const failed = spawnSync('node', [CLI, 'finalize', ...FINALIZE_ARGS(f)], { encoding: 'utf8', env: { ...process.env, PATH: `${broken}:${process.env.PATH}` } })
+  assert.equal(JSON.parse(readFileSync(join(f.dir, 'metrics.json'), 'utf8')).publication.state !== 'confirmed', true, failed.stdout)
+  const gh = fakeGh()
+  const env = { ...process.env, PATH: `${gh.dir}:${process.env.PATH}` }
+  const retry = spawnSync('node', [CLI, 'finalize', ...FINALIZE_ARGS(f)], { encoding: 'utf8', env })
+  assert.equal(retry.status, 0, retry.stderr)
+  assert.equal(saved(f).publication.state, 'confirmed', 'the retry publishes the same evidence')
+  assert.equal(comments(gh).length, 1)
+  const revisionAfterRetry = saved(f).snapshot.revision
+  lateRequest(f, { requestId: 'q3', output: 5 })
+  assert.equal(spawnSync('node', [CLI, 'finalize', ...FINALIZE_ARGS(f)], { encoding: 'utf8', env }).status, 0)
+  assert.equal(saved(f).usage.observedTotalTokens, 105)
+  assert.ok(saved(f).snapshot.revision > revisionAfterRetry)
+  assert.equal(comments(gh).length, 1)
+})
+
+test('F8 residual: a terminal marker from the PREVIOUS invocation does not close a resumed observation', () => {
+  const f = fixture()
+  assert.equal(spawnSync('node', [CLI, 'mark-terminal', '--dir', f.dir, '--result', f.wfResult, '--story', '42'], { encoding: 'utf8' }).status, 0)
+  // a new invocation starts AFTER that marker: it must observe, not exit on a stale terminal
+  const resumed = spawnSync('node', [CLI, 'observe', ...RUNTIME_ARGS(f), '--interval-ms', '10', '--grace-ms', '100', '--max-ticks', '3', '--since', new Date(Date.now() + 1000).toISOString()], { encoding: 'utf8' })
+  assert.equal(resumed.status, 0, resumed.stderr)
+  assert.equal(JSON.parse(resumed.stdout.trim().split('\n').pop()).stopReason, 'max-ticks', 'the previous marker did not end this invocation')
+})
+
+test('F8 residual: an OLD observer cannot overwrite the revision a later reconciliation wrote', () => {
+  const f = fixture()
+  const gh = fakeGh()
+  const env = { ...process.env, PATH: `${gh.dir}:${process.env.PATH}` }
+  assert.equal(spawnSync('node', [CLI, 'reconcile', ...RUNTIME_ARGS(f)], { encoding: 'utf8', env }).status, 0)
+  const staleCheckpoint = JSON.parse(readFileSync(join(f.dir, '.runtime-checkpoint.json'), 'utf8'))
+  lateRequest(f)
+  assert.equal(spawnSync('node', [CLI, 'finalize', ...FINALIZE_ARGS(f)], { encoding: 'utf8', env }).status, 0)
+  const current = saved(f)
+  assert.equal(current.usage.observedTotalTokens, 110)
+  // the old observer comes back with its own, older checkpoint
+  writeFileSync(join(f.dir, '.runtime-checkpoint.json'), JSON.stringify(staleCheckpoint))
+  const old = spawnSync('node', [CLI, 'reconcile', ...RUNTIME_ARGS(f)], { encoding: 'utf8', env })
+  assert.equal(old.status, 0, old.stderr)
+  assert.equal(saved(f).snapshot.revision, current.snapshot.revision, 'the persisted revision did not go backwards')
+  assert.equal(saved(f).usage.observedTotalTokens, 110)
 })

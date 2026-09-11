@@ -171,19 +171,38 @@ export function predecessorEvidence(dir) {
   return runs
 }
 
+// US-479 F1 residual — a contract's identity is a COHERENT SET of necessary proofs, not one of
+// them. The sealed `red-verify` proves the rows were independently approved; the `red-spec` of the
+// SAME phase carries the descriptor a revision is built on (its path, its hash). A sealed verify
+// whose spec is absent, excluded by a digest discrepancy, or disagreeing about the hash is an
+// INCOMPLETE identity: the route would hand the revision no base at all (the residual — `resolve`
+// returned `prepare/revision a0-rev4` with no `contract` field whatsoever). Refused, and named.
+function contractProofs(handoffs, contractHash) {
+  const of = (skill, pred) => (handoffs ?? []).filter(h => h.skill === skill && h.data && pred(h)).pop()
+  const sealed = of('red-verify', h => h.data.verified === true && h.data.sealed === true && h.data.contractHash === contractHash)
+  if (!sealed) return null
+  const spec = of('red-spec', h => h.phase === sealed.phase)
+  if (!spec) return { phase: sealed.phase, incomplete: 'contract-descriptor-missing' }
+  if (!String(spec.data.contractPath ?? '').trim()) return { phase: sealed.phase, incomplete: 'contract-descriptor-missing' }
+  if (spec.data.contractHash !== contractHash) return { phase: sealed.phase, incomplete: `contract-descriptor-hash-mismatch:${spec.data.contractHash ?? 'absent'}` }
+  return { phase: sealed.phase, spec, sealed }
+}
+
 // The ONE resolution a contradiction's target goes through: the current cycle first, then the
-// proven identities of the runs this cycle was bound to. Returns the phase, where it was proven,
-// and what the legacy evidence cannot supply — or the discrepancy that makes it unusable.
+// proven identities of the runs this cycle was bound to. Returns the phase, the two proofs behind
+// it, where it was proven and what the legacy evidence cannot supply — or the reason it is unusable.
 export function resolveSealedContract({ handoffs, predecessors = [], contractHash }) {
-  const own = sealedContractPhase(handoffs, contractHash)
-  if (own) return { phase: own, origin: 'current', runId: undefined, missingDimensions: [] }
+  const own = contractProofs(handoffs, contractHash)
+  if (own?.incomplete) return { error: `evidence-incomplete:${own.phase}:${own.incomplete}` }
+  if (own) return { phase: own.phase, origin: 'current', spec: own.spec, sealed: own.sealed, missingDimensions: [] }
   for (const p of predecessors) {
-    const phase = sealedContractPhase(p.handoffs, contractHash)
-    if (!phase) continue
-    return { phase, origin: 'predecessor', runId: p.runId, dir: p.dir, handoffs: p.handoffs, missingDimensions: p.inspection?.missingDimensions ?? [] }
+    const found = contractProofs(p.handoffs, contractHash)
+    if (!found) continue
+    // A predecessor whose necessary proof was excluded by the digest check is not a target: the
+    // discrepancy that removed it is named, so the answer is never a silent "not found".
+    if (found.incomplete) return { error: `predecessor-evidence-incomplete:${p.runId}/${found.phase}:${found.incomplete}${p.changed ? ` (after ${p.changed})` : ''}` }
+    return { phase: found.phase, origin: 'predecessor', runId: p.runId, dir: p.dir, handoffs: p.handoffs, spec: found.spec, sealed: found.sealed, missingDimensions: p.inspection?.missingDimensions ?? [] }
   }
-  // A named predecessor whose files no longer match their recorded digests cannot be searched at
-  // all: say which, rather than reporting a clean "not found".
   const discrepancy = predecessors.find(p => p.changed)
   return discrepancy ? { error: `predecessor-evidence-changed:${discrepancy.changed}` } : null
 }
@@ -1027,12 +1046,9 @@ export function deriveNext(handoffs, policy, ctx = {}) {
       const lineOf = hs => hs.filter(h => h.phase === line || h.phase.startsWith(`${line}-rev`))
       const lineRevision = [...lineOf(list), ...(target.origin === 'predecessor' ? lineOf(target.handoffs ?? []) : [])].reduce((m, h) => Math.max(m, phaseParts(h.phase)?.revision ?? 1), 1)
       const targetParts = phaseParts(targetPhase) ?? {}
-      // The contract descriptor comes from wherever it was actually proven.
-      const predecessorContract = () => {
-        const spec = (target.handoffs ?? []).filter(h => h.skill === 'red-spec' && h.phase === targetPhase).pop()
-        const sealed = (target.handoffs ?? []).filter(h => h.skill === 'red-verify' && h.phase === targetPhase && h.data.sealed === true).pop()
-        return spec ? { path: spec.data.contractPath, hash: spec.data.contractHash, revision: targetParts.revision ?? 1, ...(sealed ? { snapshot: sealed.data.snapshot } : {}) } : undefined
-      }
+      // The descriptor comes from the two proofs `resolveSealedContract` already validated together
+      // — never re-searched, so the route cannot disagree with the identity check.
+      const resolvedContract = { path: target.spec.data.contractPath, hash: target.spec.data.contractHash, revision: targetParts.revision ?? 1, snapshot: target.sealed.data.snapshot }
       return {
         step: 'prepare',
         mode: 'revision',
@@ -1041,7 +1057,7 @@ export function deriveNext(handoffs, policy, ctx = {}) {
         round: targetParts.round ?? 0,
         attempt: 1,
         base: d.inputHead,
-        contract: target.origin === 'predecessor' ? predecessorContract() : contractOf(targetPhase),
+        contract: resolvedContract,
         group: groupOf(line),
         ...(target.origin === 'predecessor' ? { predecessorRunId: target.runId, predecessorPhase: targetPhase } : {}),
         // What the legacy evidence never carried is RE-DERIVED, never inherited (S10).

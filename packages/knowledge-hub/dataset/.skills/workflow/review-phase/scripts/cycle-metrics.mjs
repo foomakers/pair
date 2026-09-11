@@ -218,6 +218,10 @@ export function reduceUsage(observations) {
     // US-479 F2: the SOURCE of an already-counted request disappeared (truncation, rotation). The
     // cost stays; the execution is named so the view never reads as fully corroborated.
     truncatedExecutionIds: countedIds.filter(id => (usageByExec.get(id)?.lostRequests ?? 0) > 0).sort(),
+    // US-479 F2 residual: a later observation contradicted an accepted one. The accepted value is
+    // kept and the execution is named — the total below is a LOWER BOUND, never a complete one.
+    inconsistentExecutionIds: countedIds.filter(id => (usageByExec.get(id)?.inconsistentRequests ?? 0) > 0 || (usageByExec.get(id)?.unacceptedRequests ?? 0) > 0).sort(),
+    totalBasis: countedIds.some(id => usageByExec.get(id)?.totalBasis === 'lower-bound') || relevantIds.length !== countedIds.length ? 'lower-bound' : 'complete',
     accountingBasis: 'leaf-exclusive',
     byRole: [...byRoleMap.entries()].map(([role, tokens]) => ({ role, tokens })),
     sharedOverhead: null,
@@ -295,17 +299,24 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   const spanByExec = new Map()
   for (const o of merged) if (o.kind === 'usage-observed' && o.messageSpan) spanByExec.set(o.executionId, o.messageSpan)
   const demonstrated = o => (o && o.timeSource !== 'host-observation' ? toEpochMs(o.observedAt ?? o.occurredAt) : null)
-  const widen = (a, b, pick) => (Number.isInteger(a) && Number.isInteger(b) ? pick(a, b) : Number.isInteger(a) ? a : Number.isInteger(b) ? b : null)
-  const intervals = [...timedIds].map(id => {
-    const s = startEvents.get(id)
-    const f = finishByExec.get(id)
-    const span = spanByExec.get(id)
-    const spanStart = span ? toEpochMs(span.firstMessageAt) : null
-    const spanEnd = span ? toEpochMs(span.lastMessageAt) : null
-    // An end is claimed only where the host actually observed the execution finish; a message span
-    // on its own never closes an interval.
-    return { startMs: widen(demonstrated(s), spanStart, Math.min), endMs: f ? widen(demonstrated(f), spanEnd, Math.max) : null }
+  // US-479 F4 residual: ONLY a real execution boundary measures a duration. A provider message
+  // span is a different quantity — one complete message spans zero milliseconds and proves nothing
+  // about how long the execution took (no start of generation, no startup, no real end). It is
+  // reported on its own basis, as a lower bound on work, and an execution without real boundaries
+  // has an UNKNOWN interval that makes the timing coverage partial.
+  const intervals = [...timedIds].map(id => ({ startMs: demonstrated(startEvents.get(id)), endMs: demonstrated(finishByExec.get(id)) }))
+  const spans = [...spanByExec.values()].map(sp => {
+    const a = toEpochMs(sp.firstMessageAt)
+    const b = toEpochMs(sp.lastMessageAt)
+    return Number.isInteger(a) && Number.isInteger(b) && b >= a ? b - a : null
   })
+  const knownSpans = spans.filter(v => Number.isInteger(v))
+  const messageSpan = {
+    totalMs: knownSpans.length ? knownSpans.reduce((x, y) => x + y, 0) : null,
+    executions: knownSpans.length,
+    basis: 'provider-message-span',
+    note: 'first to last provider message; a LOWER BOUND on work, never the execution duration',
+  }
   const hostObservedTimes = merged.map(o => toEpochMs(o.hostObservedAt ?? (o.timeSource === 'host-observation' ? o.observedAt : null))).filter(v => Number.isInteger(v))
   const observation = {
     firstObservedAt: hostObservedTimes.length ? new Date(Math.min(...hostObservedTimes)).toISOString() : null,
@@ -342,19 +353,35 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
     if (typeof v === 'number' && Number.isFinite(v)) acc[k].total += v
     else acc[k].known = false
   }
-  // The CURRENT cycle's own contribution. A cycle that observed NO execution at all contributes a
-  // certain zero — there is nothing there yet. A cycle that observed executions whose usage or
-  // timing is missing contributes an UNKNOWN: absence of evidence is not evidence of zero.
-  const currentUsageEmpty = (usage.coverage?.total ?? 0) === 0
-  const currentTimeEmpty = intervals.length === 0
-  for (const k of lifetimeUsageKeys) addDimension(k, currentUsageEmpty ? 0 : usage[k])
-  for (const k of lifetimeTimeKeys) addDimension(k, currentTimeEmpty ? 0 : time[k])
+  // US-479 F6 residual — the CURRENT cycle is a contributor like any other, with its own coverage.
+  // A certain ZERO requires proof that nothing was dispatched here: no observation AND no handoff
+  // that implies an execution (a directory holding only migration records is exactly that). Once a
+  // real handoff shows work happened, zero observations mean the cost is UNKNOWN — absence of
+  // evidence is not evidence of zero, which is what the residual turned a partial run into.
+  const executionHandoffs = list.filter(h => (h.data?.recordType ?? 'judgment') !== 'migration')
+  const nothingDispatchedHere = merged.length === 0 && executionHandoffs.length === 0
+  const currentUsageKnown = nothingDispatchedHere || (usage.coverage?.total ?? 0) > 0
+  const currentTimeKnown = nothingDispatchedHere || intervals.length > 0
+  for (const k of lifetimeUsageKeys) addDimension(k, nothingDispatchedHere ? 0 : currentUsageKnown ? usage[k] : undefined)
+  for (const k of lifetimeTimeKeys) addDimension(k, nothingDispatchedHere ? 0 : currentTimeKnown ? time[k] : undefined)
+  // Whatever is unresolved about THIS run makes the lifetime partial and its totals lower bounds,
+  // exactly as a partial predecessor does.
+  const currentPartial =
+    !nothingDispatchedHere &&
+    // work happened here and its cost or its duration is simply not known
+    (!currentUsageKnown ||
+      !currentTimeKnown ||
+      usage.missingExecutionIds.length > 0 ||
+      usage.incompleteExecutionIds.length > 0 ||
+      (usage.truncatedExecutionIds?.length ?? 0) > 0 ||
+      (usage.inconsistentExecutionIds?.length ?? 0) > 0 ||
+      usage.totalBasis === 'lower-bound')
   const lifetime = {
     predecessorRuns: predecessorRecords.map(r => ({ runId: r.runId, metricsPath: r.metricsPath ?? null })),
     foldedRuns: [],
     missingRuns: [],
     invalidRuns: [],
-    partialRuns: [],
+    partialRuns: currentPartial && runId ? [runId] : [],
     unknownDimensions: [],
     cycles: { attempted: counters.attemptedCycles, completed: counters.completedCycles },
     usage: {},
@@ -387,7 +414,8 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
       continue
     }
     lifetime.foldedRuns.push(r.runId)
-    if (prior.snapshot?.completeness === 'partial') lifetime.partialRuns.push(r.runId)
+    // A predecessor's own lower bound is inherited: it was not a complete total there either.
+    if (prior.snapshot?.completeness === 'partial' || prior.usage?.totalBasis === 'lower-bound') lifetime.partialRuns.push(r.runId)
     lifetime.cycles.attempted += prior.cycles?.attempted ?? 0
     lifetime.cycles.completed += prior.cycles?.completed ?? 0
     for (const k of lifetimeUsageKeys) addDimension(k, prior.usage?.[k])
@@ -396,6 +424,8 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   for (const k of lifetimeUsageKeys) lifetime.usage[k] = acc[k].known ? acc[k].total : null
   for (const k of lifetimeTimeKeys) lifetime.time[k] = acc[k].known ? acc[k].total : null
   lifetime.unknownDimensions = [...lifetimeUsageKeys, ...lifetimeTimeKeys].filter(k => !acc[k].known)
+  // The word that keeps a known quantity from reading as a complete one (US-479 F2/F6 residual).
+  lifetime.usage.totalBasis = lifetime.partialRuns.length || lifetime.missingRuns.length || lifetime.invalidRuns.length || lifetime.unknownDimensions.length ? 'lower-bound' : 'complete'
   lifetime.foldedRuns.sort()
   lifetime.missingRuns.sort()
   lifetime.invalidRuns.sort()
@@ -405,6 +435,7 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   // itself partial — while `unknownDimensions` is per-DIMENSION, naming exactly which quantity no
   // source could supply. Either one makes the snapshot partial; neither invents a value.
   if (lifetime.missingRuns.length || lifetime.invalidRuns.length || lifetime.partialRuns.length) lifetime.coverage = 'partial'
+  lifetime.partialRuns = [...new Set(lifetime.partialRuns)].sort()
   // US-479 remediation (Finding 4): the shared-batch allocation formula (allocateSharedCost) is
   // wired into the real reducer path — labeled distinctly from directly-measured tokens (S7).
   if (sharedCost && Array.isArray(sharedCost.admittedIds) && sharedCost.admittedIds.length) {
@@ -445,6 +476,7 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   // Having usage is not being finished.
   if (usage.incompleteExecutionIds.length) missingSources.push('usage-incomplete')
   if (usage.truncatedExecutionIds.length) missingSources.push('usage-source-truncated')
+  if (usage.inconsistentExecutionIds.length) missingSources.push('usage-inconsistent')
   if (lifetime.predecessorRuns.length && (lifetime.coverage === 'partial' || lifetime.unknownDimensions.length)) missingSources.push('legacy-lifetime')
   if (time.incomplete) missingSources.push('timing')
   const completeness = hasObservations && !missingSources.length ? 'complete' : 'partial'
@@ -461,7 +493,7 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
     // `lastObservedAt` keeps the meaning it always had — the last DEMONSTRATED end — and
     // `lastDemonstratedAt` says so in its name; the host's read clock lives only under
     // `observation`, labelled, so the two can never be confused again (US-479 F4).
-    time: { startedAt: known.length ? new Date(Math.min(...known.map(i => i.startMs))).toISOString() : null, lastObservedAt: known.length ? new Date(Math.max(...known.map(i => i.endMs))).toISOString() : null, lastDemonstratedAt: known.length ? new Date(Math.max(...known.map(i => i.endMs))).toISOString() : null, terminalAt: delivery === 'ready-for-merge' ? asOf : null, elapsedMs: time.elapsedMs, activeWallMs: time.activeWallMs, agentMs: time.agentMs, waitMs: time.waitMs, incomplete: time.incomplete, observation, byPhase: [] },
+    time: { startedAt: known.length ? new Date(Math.min(...known.map(i => i.startMs))).toISOString() : null, lastObservedAt: known.length ? new Date(Math.max(...known.map(i => i.endMs))).toISOString() : null, lastDemonstratedAt: known.length ? new Date(Math.max(...known.map(i => i.endMs))).toISOString() : null, terminalAt: delivery === 'ready-for-merge' ? asOf : null, elapsedMs: time.elapsedMs, activeWallMs: time.activeWallMs, agentMs: time.agentMs, waitMs: time.waitMs, incomplete: time.incomplete, messageSpan, observation, byPhase: [] },
     defects: { openBySeverity, closedBySeverity, late, entries: [...findingsById.values()] },
     scopeChanges: { ...scopeCounts, entries: scopeEntries },
     steps: merged,
@@ -484,7 +516,7 @@ export function renderMarkdown(view) {
   // is never counted together with its own details.
   lines.push(`Tokens: ${view.usage.observedTotalTokens ?? 'unknown'} (coverage ${view.usage.coverage.known}/${view.usage.coverage.total}) — in ${tok('inputTokens')}, out ${tok('outputTokens')}, cache read ${tok('cacheReadTokens')}, cache write ${tok('cacheWriteTokens')}`)
   if (view.usage.incompleteExecutionIds?.length) lines.push(`Incomplete provider requests in ${view.usage.incompleteExecutionIds.length} execution(s): the cost is counted, the execution is NOT settled`)
-  lines.push(`Time: elapsed ${view.time.elapsedMs ?? 'unknown'}ms, active ${view.time.activeWallMs ?? 'unknown'}ms, agent ${view.time.agentMs ?? 'unknown'}ms`)
+  lines.push(`Time: elapsed ${view.time.elapsedMs ?? 'unknown'}ms, active ${view.time.activeWallMs ?? 'unknown'}ms, agent ${view.time.agentMs ?? 'unknown'}ms${spanClause(view.time)}`)
   if (view.scopeChanges.entries.length) lines.push(`Scope proposals: ${view.scopeChanges.pending} pending, ${view.scopeChanges.ignored} ignored, ${view.scopeChanges.extended} extended, ${view.scopeChanges.deferred} deferred`)
   if (view.lifetime?.predecessorRuns?.length) {
     const lu = view.lifetime.usage
@@ -549,7 +581,7 @@ export function renderPrSummary(view) {
   lines.push('')
   const cov = view.usage.coverage
   const tk = k => (typeof view.usage[k] === 'number' ? view.usage[k] : 'unknown')
-  lines.push(`**4. Cost / time** — tokens ${view.usage.observedTotalTokens ?? 'unknown'} (in ${tk('inputTokens')} · out ${tk('outputTokens')} · cache read ${tk('cacheReadTokens')} · cache write ${tk('cacheWriteTokens')}; known ${cov.known}/${cov.total}${view.usage.missingExecutionIds.length ? `; missing: ${view.usage.missingExecutionIds.join(', ')}` : ''}${view.usage.incompleteExecutionIds?.length ? `; unfinished provider requests in ${view.usage.incompleteExecutionIds.length} execution(s)` : ''}) · elapsed ${view.time.elapsedMs ?? 'unknown'}ms · active ${view.time.activeWallMs ?? 'unknown'}ms · agent ${view.time.agentMs ?? 'unknown'}ms · wait ${view.time.waitMs ?? 'unknown'}ms`)
+  lines.push(`**4. Cost / time** — tokens ${view.usage.observedTotalTokens ?? 'unknown'} (in ${tk('inputTokens')} · out ${tk('outputTokens')} · cache read ${tk('cacheReadTokens')} · cache write ${tk('cacheWriteTokens')}; known ${cov.known}/${cov.total}${view.usage.missingExecutionIds.length ? `; missing: ${view.usage.missingExecutionIds.join(', ')}` : ''}${view.usage.incompleteExecutionIds?.length ? `; unfinished provider requests in ${view.usage.incompleteExecutionIds.length} execution(s)` : ''}) · elapsed ${view.time.elapsedMs ?? 'unknown'}ms · active ${view.time.activeWallMs ?? 'unknown'}ms · agent ${view.time.agentMs ?? 'unknown'}ms · wait ${view.time.waitMs ?? 'unknown'}ms${spanClause(view.time)}`)
   // US-479 B2: what this PR cost across every run it actually had — never silently reduced to the
   // current run directory, and explicitly partial when a predecessor persisted no metrics.
   if (view.lifetime?.predecessorRuns?.length)
@@ -593,6 +625,13 @@ export function publishSummary({ view, marker, pr, repo, listComments, findByMar
   const readback = findByMarker(after, marker).hits.find(h => h.id === result.id)
   if (!readback || !readback.body.startsWith(marker)) return { published: false, publication: { ...base, commentId: result.id ?? null, url: result.url ?? null, state: 'failed', lastError: 'readback-mismatch' } }
   return { published: true, publication: { ...base, commentId: result.id, url: result.url, state: 'confirmed', lastError: null } }
+}
+
+// The message span is shown with its basis and never as a duration (US-479 F4 residual).
+function spanClause(time) {
+  const span = time?.messageSpan
+  if (!span || span.totalMs == null) return ''
+  return ` · message span >= ${span.totalMs}ms (${span.basis}, lower bound over ${span.executions} execution(s))`
 }
 
 // Every reason a lifetime is not fully corroborated, named where the number is shown (US-479 F6).
@@ -656,7 +695,7 @@ export function aggregateCohort(entries) {
     sampleCount: readyCycles.length,
     histogram: readyCycles.reduce((h, c) => ((h[c] = (h[c] ?? 0) + 1), h), {}),
     allWorkTokens: knownTokenEntries ? allTokens : null,
-    costPerCompletedDelivery: completed && knownTokenEntries ? { value: allTokens / completed, lowerBound: knownTokenEntries < N } : null,
+    costPerCompletedDelivery: completed && knownTokenEntries ? { value: allTokens / completed, lowerBound: knownTokenEntries < N || lifetimeCoverage !== 'complete' || entries.some(e => e.lifetime?.usage?.totalBasis === 'lower-bound') } : null,
     lifetimeCoverage,
   }
 }

@@ -681,9 +681,14 @@ test('F6: the cohort is computed on the PR`s whole known history — moving to a
   assert.equal(resumed.lifetime.cycles.completed, 2)
   const cohort = aggregateCohort([resumed])
   assert.equal(cohort.meanCompletedCycles, 2, 'the cohort reads the whole history, not the fresh directory')
-  assert.equal(cohort.allWorkTokens, 100)
-  assert.deepEqual(cohort.costPerCompletedDelivery, { value: 100, lowerBound: false })
-  assert.equal(cohort.lifetimeCoverage, 'complete')
+  // AMENDED by US-479 F6 residual: this run dispatched a review and reported no telemetry at all.
+  // That is an UNKNOWN cost, not a zero, so the lifetime total is unavailable and the coverage says
+  // so — the cycle history, which is what this test pins, is unaffected.
+  assert.equal(resumed.lifetime.usage.observedTotalTokens, null)
+  assert.equal(resumed.lifetime.usage.totalBasis, 'lower-bound')
+  assert.equal(cohort.allWorkTokens, null)
+  assert.equal(cohort.costPerCompletedDelivery, null)
+  assert.equal(cohort.lifetimeCoverage, 'partial')
 })
 
 test('F6: a cohort entry whose lifetime is partial is labelled, and an unknown total never becomes a zero denominator', () => {
@@ -697,4 +702,77 @@ test('F6: a cohort entry whose lifetime is partial is labelled, and an unknown t
   assert.equal(cohort.allWorkTokens, null, 'unknown is not zero')
   assert.equal(cohort.costPerCompletedDelivery, null)
   assert.equal(cohort.lifetimeCoverage, 'partial')
+})
+
+// ── US-479 F6 residual: the CURRENT run is a contributor like any other ───────────────────────
+const obsOf = (executionId, usage) => [
+  { eventId: `${executionId}:s`, executionId, runId: 'v9', storyId: '42', phase: 'r0', attempt: 1, kind: 'step-started', sourceRef: 'journal', observedAt: 1000, timeSource: 'record' },
+  { eventId: `${executionId}:f`, executionId, runId: 'v9', storyId: '42', phase: 'r0', attempt: 1, kind: 'step-finished', sourceRef: 'journal', observedAt: 2000, timeSource: 'record' },
+  ...(usage ? [{ eventId: `${executionId}:u`, executionId, runId: 'v9', storyId: '42', phase: 'r0', attempt: 1, kind: 'usage-observed', sourceRef: 'usage', observedAt: 1500, usage }] : []),
+]
+const KNOWN_100 = { totalTokens: 100, inputTokens: 100, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }
+const predRef = p => ({ runId: p.runId, dir: p.dir, metricsPath: p.metricsPath, handoffs: [{ name: 'r0-review-phase.json', sha256: `sha256:${'2'.repeat(64)}` }] })
+
+function lifetimeCase({ currentPartial, predecessor }) {
+  const { root, dir } = runDir()
+  const refs = []
+  if (predecessor === 'complete') refs.push(predRef(legacyMetrics(root, 'v3', { ...V1, usage: { observedTotalTokens: 200, inputTokens: 200, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } })))
+  if (predecessor === 'partial') refs.push(predRef(legacyMetrics(root, 'v3', { ...V1, snapshot: { completeness: 'partial', missingSources: ['usage'] }, usage: { observedTotalTokens: 200, inputTokens: 200, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null } })))
+  if (predecessor === 'missing') refs.push(predRef(legacyMetrics(root, 'v3', undefined)))
+  migrationRecord(dir, 'm0', refs)
+  reviewRecord(dir, 'r0', { verdict: 'APPROVED', findings: [], readiness: { ready: true, remoteHead: SHA40('c') } }, 2)
+  // two executions; usage for one of them only when the current run is partial
+  const observations = [...obsOf('a', KNOWN_100), ...obsOf('b', currentPartial ? null : KNOWN_100)]
+  const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations })
+  return { view, cohort: aggregateCohort([view]) }
+}
+
+test('F6 residual: an execution of the CURRENT run whose usage never arrived makes the lifetime and the cohort partial — the known quantity is a lower bound, not a total', () => {
+  const { view, cohort } = lifetimeCase({ currentPartial: true, predecessor: 'complete' })
+  assert.deepEqual(view.usage.coverage, { known: 1, total: 2 })
+  assert.equal(view.snapshot.completeness, 'partial')
+  assert.equal(view.lifetime.usage.observedTotalTokens, 300, 'what is known is kept')
+  assert.equal(view.lifetime.usage.totalBasis, 'lower-bound', 'and is not presented as complete')
+  assert.equal(view.lifetime.coverage, 'partial')
+  assert.ok(view.lifetime.partialRuns.includes('v9'), JSON.stringify(view.lifetime.partialRuns))
+  assert.equal(cohort.lifetimeCoverage, 'partial')
+  assert.equal(cohort.allWorkTokens, 300)
+  assert.equal(cohort.costPerCompletedDelivery.lowerBound, true)
+  assert.match(renderPrSummary(view), /coverage \*\*partial\*\*/)
+})
+
+test('F6 residual: the full matrix — current {complete, partial} x predecessor {complete, partial, missing}', () => {
+  // `cost: null` where the total itself is unknown: there is no cost per delivery to qualify.
+  const expected = [
+    [false, 'complete', { total: 400, basis: 'complete', coverage: 'complete', cost: { value: 400, lowerBound: false } }],
+    [false, 'partial', { total: 400, basis: 'lower-bound', coverage: 'partial', cost: { value: 400, lowerBound: true } }],
+    [false, 'missing', { total: null, basis: 'lower-bound', coverage: 'partial', cost: null }],
+    [true, 'complete', { total: 300, basis: 'lower-bound', coverage: 'partial', cost: { value: 300, lowerBound: true } }],
+    [true, 'partial', { total: 300, basis: 'lower-bound', coverage: 'partial', cost: { value: 300, lowerBound: true } }],
+    [true, 'missing', { total: null, basis: 'lower-bound', coverage: 'partial', cost: null }],
+  ]
+  for (const [currentPartial, predecessor, want] of expected) {
+    const label = `current ${currentPartial ? 'partial' : 'complete'} x predecessor ${predecessor}`
+    const { view, cohort } = lifetimeCase({ currentPartial, predecessor })
+    assert.equal(view.lifetime.usage.observedTotalTokens, want.total, label)
+    assert.equal(view.lifetime.usage.totalBasis, want.basis, label)
+    assert.equal(view.lifetime.coverage, want.coverage, label)
+    assert.equal(cohort.lifetimeCoverage, want.coverage, label)
+    assert.deepEqual(cohort.costPerCompletedDelivery, want.cost, label)
+  }
+})
+
+test('F6 residual: a run directory with only a migration record contributes a CERTAIN zero, while a run that dispatched work and reported no usage contributes an UNKNOWN', () => {
+  const { root, dir } = runDir()
+  const pred = predRef(legacyMetrics(root, 'v3', { ...V1, usage: { observedTotalTokens: 200, inputTokens: 200, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } }))
+  migrationRecord(dir, 'm0', [pred])
+  const onlyMigration = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations: [] })
+  assert.equal(onlyMigration.lifetime.usage.observedTotalTokens, 200, 'nothing was dispatched here: a certain zero adds nothing')
+  assert.equal(onlyMigration.lifetime.usage.totalBasis, 'complete')
+  // the same directory, once a real review handoff proves an execution happened with no telemetry
+  reviewRecord(dir, 'r0', { verdict: 'APPROVED', findings: [], readiness: { ready: true, remoteHead: SHA40('c') } }, 2)
+  const dispatched = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations: [] })
+  assert.equal(dispatched.lifetime.usage.observedTotalTokens, null, 'work happened and its cost is unknown — not zero')
+  assert.equal(dispatched.lifetime.usage.totalBasis, 'lower-bound')
+  assert.equal(dispatched.lifetime.coverage, 'partial')
 })

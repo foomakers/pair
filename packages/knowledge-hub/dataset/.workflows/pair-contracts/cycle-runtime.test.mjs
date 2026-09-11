@@ -20,8 +20,10 @@ import {
   finalizeMetrics,
   extractUsage,
   dispatchStatsFromResult,
+  readUsageLedger,
 } from '../../skills/pair-workflow-review-phase/scripts/cycle-runtime.mjs'
 import { publish } from '../../skills/pair-workflow-review-phase/scripts/cycle-state.mjs'
+import { reduceCycleMetrics } from '../../skills/pair-workflow-review-phase/scripts/cycle-metrics.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-review-phase/scripts/cycle-runtime.mjs', import.meta.url))
 const SHA = c => c.repeat(40)
@@ -506,10 +508,15 @@ test('B4: blocks of ONE request that disagree on the fixed fields are an error, 
   const res = extractUsage({ transcriptsDir: tdir, journalPath: journalFile(root, STD_JOURNAL), out, runId: 'run-1' })
   assert.ok(res.errors.some(e => e.error === 'usage-request-inconsistent' && e.requestId === 'req_a1'), JSON.stringify(res.errors))
   const rec = JSON.parse(readFileSync(out, 'utf8').trim().split('\n')[0])
-  // req_a1 is the inconsistent one (cache write 1000, input 10, output 500); req_a2 is untouched
-  assert.equal(rec.usage.cacheWriteTokens, 0, 'the disagreeing request contributes nothing, not an average')
-  assert.equal(rec.usage.inputTokens, 2, 'only the consistent request counts')
-  assert.equal(rec.usage.outputTokens, 40)
+  // AMENDED by US-479 F2 residual: this test used to assert the disagreeing request contributes
+  // NOTHING. That deleted consumption already charged. The last ACCEPTED observation of req_a1
+  // stands (cache write 1000, input 10, output 500), the divergence is recorded and flagged, and
+  // the total is a lower bound — no value is averaged and none is guessed.
+  assert.equal(rec.usage.cacheWriteTokens, 1000)
+  assert.equal(rec.usage.inputTokens, 12)
+  assert.equal(rec.usage.outputTokens, 540)
+  assert.equal(rec.usage.inconsistentRequests, 1)
+  assert.equal(rec.usage.totalBasis, 'lower-bound')
   assert.equal(rec.usage.inconsistentRequests, 1)
   assert.equal(rec.complete, false)
 })
@@ -565,7 +572,10 @@ test('B4 (end to end): the host tick reads the transcripts itself and the metric
   assert.deepEqual(u.missingExecutionIds, [])
   assert.deepEqual(u.byRole.map(r => r.role).sort(), ['pair-fix-test-author', 'pair-reviewer'])
   assert.deepEqual(tick.view.workflow.models, ['claude-opus-5'], 'models come from the transcripts actually observed')
-  assert.equal(tick.view.snapshot.completeness, 'complete')
+  // AMENDED by US-479 F4 residual: the cost is complete, the duration is not measurable from a
+  // transcript — `timing` is the only reason this snapshot is partial.
+  assert.deepEqual(tick.view.snapshot.missingSources, ['timing'])
+  assert.equal(tick.view.usage.totalBasis, 'complete')
   assert.deepEqual(u.incompleteExecutionIds, [])
   const md = readFileSync(join(dir, 'metrics.md'), 'utf8')
   assert.match(md, /Tokens: 5356 \(coverage 2\/2\) — in 16, out 840, cache read 3000, cache write 1500/)
@@ -619,14 +629,13 @@ test('B4 (end to end): three clocks stay distinct — only the demonstrated span
   seedCycle(dir2)
   const tdir2 = transcripts(root2, [STD_SPECS[0]])
   const closed = runtimeTick({ dir: dir2, journalPath: journalFile(root2, [STD_JOURNAL[0], STD_JOURNAL[1]]), usagePath: join(dir2, 'usage.jsonl'), transcriptsDir: tdir2, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir2), now: T0 + 60_000 })
-  // the demonstrated work is the message span (T0 .. T0+11s); the read instant is reported as the
-  // observation clock and never as duration
-  assert.equal(closed.view.time.startedAt, new Date(T0).toISOString())
-  assert.equal(closed.view.time.lastDemonstratedAt, new Date(T0 + 11_000).toISOString())
-  assert.equal(closed.view.time.agentMs, 11_000)
-  assert.equal(closed.view.time.activeWallMs, 11_000)
+  // AMENDED by US-479 F4 residual: the message span is a lower bound on work, not the duration.
+  // Without real execution boundaries the duration stays unknown, and the read instant is only
+  // ever the observation clock.
+  assert.equal(closed.view.time.messageSpan.totalMs, 11_000)
+  assert.equal(closed.view.time.agentMs, null)
   assert.equal(closed.view.time.observation.lastObservedAt, new Date(T0 + 60_000).toISOString())
-  assert.equal(closed.view.time.incomplete, false)
+  assert.equal(closed.view.time.incomplete, true)
 })
 
 test('B4 (end to end, CLI): the last agent`s usage arrives AFTER the observer stopped — finalize reconciles it from the real sources into the SAME PR comment, idempotently', () => {
@@ -648,7 +657,11 @@ test('B4 (end to end, CLI): the last agent`s usage arrives AFTER the observer st
   const view = JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8'))
   assert.equal(view.usage.outputTokens, 840, 'the late tail completed the same snapshot')
   assert.deepEqual(view.usage.missingExecutionIds, [])
-  assert.equal(view.snapshot.completeness, 'complete')
+  // AMENDED by US-479 F4 residual: the USAGE dimension is now complete (nothing missing, no
+  // contradiction, no lost source); `timing` is the only one that is not, because a transcript
+  // cannot measure an execution's duration.
+  assert.equal(view.usage.totalBasis, 'complete')
+  assert.deepEqual(view.snapshot.missingSources, ['timing'])
   const comments = JSON.parse(readFileSync(join(ghDir, 'state.json'), 'utf8'))
   assert.equal(comments.length, 1, 'one synthesis comment, upserted')
   assert.match(comments[0].body, /tokens 5356 \(in 16 · out 840 · cache read 3000 · cache write 1500; known 2\/2\)/)
@@ -720,7 +733,10 @@ test('F2: a request already observed survives a TRUNCATED transcript, a later ne
   const t1 = runtimeTick({ ...args, checkpoint: readCheckpoint(dir), now: T0 + 60_000 })
   writeCheckpoint(dir, t1.checkpoint)
   assert.equal(t1.view.usage.observedTotalTokens, F3_TOTAL)
-  assert.equal(t1.view.snapshot.completeness, 'complete')
+  // AMENDED by US-479 F4 residual: a transcript proves cost, not duration — the timing dimension
+  // is unknown here, so the snapshot is partial for THAT reason and for no other.
+  assert.deepEqual(t1.view.snapshot.missingSources, ['timing'])
+  assert.equal(t1.view.usage.totalBasis, 'complete')
   // the transcript is truncated: q1 is gone from the file entirely
   const p = join(tdir, 'agent-aaa1.jsonl')
   const kept = readFileSync(p, 'utf8').trim().split('\n').filter(l => !/"q1"/.test(l))
@@ -731,6 +747,7 @@ test('F2: a request already observed survives a TRUNCATED transcript, a later ne
   assert.deepEqual(t2.view.usage.truncatedExecutionIds, [`run-1:${KEY(1)}:aaa1`])
   assert.ok(t2.view.snapshot.missingSources.includes('usage-source-truncated'), JSON.stringify(t2.view.snapshot))
   assert.equal(t2.view.snapshot.completeness, 'partial', 'the uncertainty reaches the snapshot')
+  assert.equal(t2.view.usage.totalBasis, 'lower-bound')
   // a genuinely NEW request arrives after the rotation: counted once, on top of what is known
   appendFileSync(p, assistantBlocks({ agentId: 'aaa1', requestId: 'q3', at: T0 + 20_000, input: 7, cacheWrite: 0, cacheRead: 0, outputs: [3] }).map(l => JSON.stringify(l)).join('\n') + '\n')
   const t3 = runtimeTick({ ...args, checkpoint: readCheckpoint(dir), now: T0 + 80_000 })
@@ -768,19 +785,21 @@ test('F4: the observer`s read instant is not work — the demonstrated span is t
   const base = { dir, journalPath, usagePath: join(dir, 'usage.jsonl'), transcriptsDir: tdir, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7 }
   const readLate = Date.parse('2026-09-11T11:00:00.000Z')
   const t = runtimeTick({ ...base, checkpoint: readCheckpoint(dir), now: readLate })
+  // AMENDED by US-479 F4 residual: the message span is NOT the execution duration. The span is
+  // reported on its own basis; the duration stays unknown without real boundaries.
   const span = Date.parse('2026-09-11T10:00:11.000Z') - T0
-  assert.equal(t.view.time.agentMs, span, 'only demonstrated work is time')
-  assert.equal(t.view.time.activeWallMs, span)
-  assert.equal(t.view.time.elapsedMs, span)
-  assert.notEqual(t.view.time.agentMs, readLate - T0)
+  assert.equal(t.view.time.messageSpan.totalMs, span)
+  assert.equal(t.view.time.agentMs, null, 'a span does not measure an execution')
+  assert.equal(t.view.time.activeWallMs, null)
+  assert.equal(t.view.time.elapsedMs, null)
   assert.equal(t.view.time.observation.lastObservedAt, new Date(readLate).toISOString())
   assert.equal(t.view.time.observation.source, 'host-observation')
   // the SAME evidence read an hour later still describes the same work
   const { root: root2, dir: dir2 } = runDir()
   seedCycle(dir2)
   const later = runtimeTick({ ...base, dir: dir2, usagePath: join(dir2, 'usage.jsonl'), transcriptsDir: transcripts(root2, twoRequests), journalPath: journalFile(root2, [STD_JOURNAL[0], STD_JOURNAL[1]]), checkpoint: readCheckpoint(dir2), now: readLate + 3_600_000 })
+  assert.equal(later.view.time.messageSpan.totalMs, t.view.time.messageSpan.totalMs)
   assert.equal(later.view.time.agentMs, t.view.time.agentMs)
-  assert.equal(later.view.time.activeWallMs, t.view.time.activeWallMs)
 })
 
 test('F4: a journal with no timestamps and no transcript yields NO duration at all — an unknown interval is incomplete, never the tick clock', () => {
@@ -792,4 +811,139 @@ test('F4: a journal with no timestamps and no transcript yields NO duration at a
   assert.equal(t.view.time.elapsedMs, null)
   assert.equal(t.view.time.incomplete, true)
   assert.ok(t.view.snapshot.missingSources.includes('timing'))
+})
+
+// ── US-479 F2 residual (independent verification of 82de9dce): the last ACCEPTED evidence of a
+// request survives a later block that contradicts it ────────────────────────────────────────────
+// q1 = 160, q2 = 320, q3 = 10 under this provider's accounting (input + cache + output).
+const F2_SPECS = [
+  { agentId: 'aaa1', agentType: 'pair-reviewer', requests: [
+    { requestId: 'q1', at: T0, input: 100, cacheWrite: 20, cacheRead: 30, outputs: [10] },
+    { requestId: 'q2', at: T0 + 1000, input: 200, cacheWrite: 40, cacheRead: 60, outputs: [20] },
+    { requestId: 'q3', at: T0 + 2000, input: 5, cacheWrite: 0, cacheRead: 0, outputs: [5] },
+  ] },
+]
+const F2_ACQUIRED = { inputTokens: 305, outputTokens: 35, cacheWriteTokens: 60, cacheReadTokens: 90, total: 490 }
+// A LATER block of q1 whose FIXED fields diverge — not a duplicate, not a reorder: a contradiction
+// about the same request, where nothing says which value is the true one.
+const divergentQ1 = (tdir, { input = 999 } = {}) =>
+  appendFileSync(join(tdir, 'agent-aaa1.jsonl'), assistantBlocks({ agentId: 'aaa1', requestId: 'q1', at: T0 + 5000, input, cacheWrite: 20, cacheRead: 30, outputs: [10, 10] }).map(l => JSON.stringify(l)).join('\n') + '\n')
+
+test('F2 residual: a later block that CONTRADICTS an accepted request keeps every category already acquired, marks the total a lower bound, and never guesses which value was right', () => {
+  const { root, dir } = runDir()
+  const tdir = transcripts(root, F2_SPECS)
+  const journalPath = journalFile(root, [STD_JOURNAL[0], STD_JOURNAL[1]])
+  const out = join(dir, 'usage.jsonl')
+  const first = extractUsage({ transcriptsDir: tdir, journalPath, out, runId: 'run-1' })
+  assert.equal(first.records[0].usage.totalTokens, F2_ACQUIRED.total)
+  divergentQ1(tdir)
+  const after = extractUsage({ transcriptsDir: tdir, journalPath, out, runId: 'run-1' }).records[0]
+  assert.deepEqual(
+    { inputTokens: after.usage.inputTokens, outputTokens: after.usage.outputTokens, cacheWriteTokens: after.usage.cacheWriteTokens, cacheReadTokens: after.usage.cacheReadTokens },
+    { inputTokens: F2_ACQUIRED.inputTokens, outputTokens: F2_ACQUIRED.outputTokens, cacheWriteTokens: F2_ACQUIRED.cacheWriteTokens, cacheReadTokens: F2_ACQUIRED.cacheReadTokens },
+    'no category loses the evidence it had',
+  )
+  assert.equal(after.usage.totalTokens, F2_ACQUIRED.total)
+  assert.equal(after.usage.inconsistentRequests, 1)
+  assert.equal(after.usage.totalBasis, 'lower-bound', 'a known quantity is not a complete total')
+  assert.equal(after.complete, false)
+  // the divergence is recorded, not merged into a number
+  const ledger = readUsageLedger(out)
+  assert.equal(ledger.executions.aaa1.requests.q1.inconsistent, true)
+  assert.deepEqual(ledger.executions.aaa1.requests.q1.accepted.fixed, [100, 20, 30])
+  assert.ok(ledger.executions.aaa1.requests.q1.divergent?.length, 'the conflicting observation is kept as evidence')
+})
+
+test('F2 residual: the acquired value survives a CHECKPOINT and a restart before the contradiction arrives, and a new independent request after it is still counted exactly once', () => {
+  const { root, dir } = runDir()
+  seedCycle(dir)
+  const tdir = transcripts(root, F2_SPECS)
+  const journalPath = journalFile(root, [STD_JOURNAL[0], STD_JOURNAL[1]])
+  const usagePath = join(dir, 'usage.jsonl')
+  const args = { dir, journalPath, usagePath, transcriptsDir: tdir, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7 }
+  const t1 = runtimeTick({ ...args, checkpoint: readCheckpoint(dir), now: T0 + 60_000 })
+  writeCheckpoint(dir, t1.checkpoint)
+  assert.equal(t1.view.usage.observedTotalTokens, F2_ACQUIRED.total)
+  divergentQ1(tdir)
+  // a fresh process: no in-memory state, only the durable ledger and checkpoint
+  const t2 = runtimeTick({ ...args, checkpoint: { ...readCheckpoint(dir), journalOffset: 0, usageOffset: 0, observations: [] }, now: T0 + 70_000 })
+  writeCheckpoint(dir, t2.checkpoint)
+  assert.equal(t2.view.usage.observedTotalTokens, F2_ACQUIRED.total)
+  assert.ok(t2.view.snapshot.missingSources.includes('usage-inconsistent'), JSON.stringify(t2.view.snapshot.missingSources))
+  assert.equal(t2.view.snapshot.completeness, 'partial')
+  assert.deepEqual(t2.view.usage.inconsistentExecutionIds, [`run-1:${KEY(1)}:aaa1`])
+  // a genuinely new request after the contradiction
+  appendFileSync(join(tdir, 'agent-aaa1.jsonl'), assistantBlocks({ agentId: 'aaa1', requestId: 'q4', at: T0 + 9000, input: 1, cacheWrite: 0, cacheRead: 0, outputs: [1] }).map(l => JSON.stringify(l)).join('\n') + '\n')
+  const t3 = runtimeTick({ ...args, checkpoint: readCheckpoint(dir), now: T0 + 80_000 })
+  writeCheckpoint(dir, t3.checkpoint)
+  assert.equal(t3.view.usage.observedTotalTokens, F2_ACQUIRED.total + 2)
+  const t4 = runtimeTick({ ...args, checkpoint: readCheckpoint(dir), now: T0 + 90_000 })
+  assert.equal(t4.view.usage.observedTotalTokens, F2_ACQUIRED.total + 2, 'the replayed contradiction adds and removes nothing')
+})
+
+test('F2 residual: a request that is INCOHERENT from its first observation has no accepted value — it contributes nothing and says so, instead of a plausible number', () => {
+  const { root, dir } = runDir()
+  const tdir = transcripts(root, [{ agentId: 'aaa1', agentType: 'pair-reviewer', requests: [{ requestId: 'q1', at: T0, input: 100, cacheWrite: 20, cacheRead: 30, outputs: [10] }] }])
+  // two blocks of the SAME request, written together, disagreeing on the fixed fields
+  writeFileSync(
+    join(tdir, 'agent-aaa1.jsonl'),
+    [...assistantBlocks({ agentId: 'aaa1', requestId: 'qX', at: T0, input: 7, cacheWrite: 0, cacheRead: 0, outputs: [1] }), ...assistantBlocks({ agentId: 'aaa1', requestId: 'qX', at: T0 + 10, input: 900, cacheWrite: 0, cacheRead: 0, outputs: [2] })].map(l => JSON.stringify(l)).join('\n') + '\n',
+  )
+  const out = join(dir, 'usage.jsonl')
+  const r = extractUsage({ transcriptsDir: tdir, journalPath: journalFile(root, [STD_JOURNAL[0], STD_JOURNAL[1]]), out, runId: 'run-1' }).records[0]
+  assert.equal(r.usage.inputTokens, 7, 'the FIRST accepted observation stands; the divergence does not replace it')
+  assert.equal(r.usage.inconsistentRequests, 1)
+  assert.equal(r.usage.unacceptedRequests, 0)
+  assert.equal(r.usage.totalBasis, 'lower-bound')
+})
+
+// ── US-479 F4 residual: a message SPAN is not an execution DURATION ───────────────────────────
+const oneMessage = [{ agentId: 'aaa1', agentType: 'pair-reviewer', requests: [{ requestId: 'q1', at: T0, input: 100, cacheWrite: 0, cacheRead: 0, outputs: [100] }] }]
+
+test('F4 residual: one complete message proves a span of zero, not an execution of zero — the duration stays UNKNOWN and the span is reported on its own basis', () => {
+  const { root, dir } = runDir()
+  seedCycle(dir)
+  const t = runtimeTick({ dir, journalPath: journalFile(root, [STD_JOURNAL[0], STD_JOURNAL[1]]), usagePath: join(dir, 'usage.jsonl'), transcriptsDir: transcripts(root, oneMessage), runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now: T0 + 3_600_000 })
+  assert.equal(t.view.usage.observedTotalTokens, 200, 'the cost is measured')
+  assert.equal(t.view.time.agentMs, null, 'the duration is not')
+  assert.equal(t.view.time.activeWallMs, null)
+  assert.equal(t.view.time.elapsedMs, null)
+  assert.equal(t.view.time.incomplete, true)
+  assert.ok(t.view.snapshot.missingSources.includes('timing'))
+  assert.deepEqual(t.view.time.messageSpan, { totalMs: 0, executions: 1, basis: 'provider-message-span', note: 'first to last provider message; a LOWER BOUND on work, never the execution duration' })
+  assert.match(readFileSync(join(dir, 'metrics.md'), 'utf8'), /agent unknownms.*message span >= 0ms/)
+})
+
+test('F4 residual: several messages give a span greater than zero — still a lower bound, still not the duration', () => {
+  const { root, dir } = runDir()
+  seedCycle(dir)
+  const t = runtimeTick({ dir, journalPath: journalFile(root, [STD_JOURNAL[0], STD_JOURNAL[1]]), usagePath: join(dir, 'usage.jsonl'), transcriptsDir: transcripts(root, twoRequests), runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now: T0 + 3_600_000 })
+  assert.equal(t.view.time.messageSpan.totalMs, 11_000)
+  assert.equal(t.view.time.agentMs, null)
+  assert.equal(t.view.time.incomplete, true)
+})
+
+test('F4 residual: with REAL execution boundaries the duration is measured, and one boundary alone is not enough', () => {
+  const { dir } = runDir()
+  const rec = (executionId, kind, at) => ({ eventId: `${executionId}:${kind}`, executionId, runId: 'r1', phase: 'p', attempt: 1, kind, sourceRef: 'journal', observedAt: at, timeSource: 'record' })
+  const both = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', observations: [rec('x1', 'step-started', 1000), rec('x1', 'step-finished', 4000)] })
+  assert.equal(both.time.agentMs, 3000)
+  assert.equal(both.time.activeWallMs, 3000)
+  assert.equal(both.time.incomplete, false)
+  const oneSide = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', observations: [rec('x1', 'step-started', 1000), rec('x1', 'step-finished', 4000), rec('x2', 'step-started', 2000)] })
+  assert.equal(oneSide.time.agentMs, 3000, 'the execution that HAS both boundaries is still measured')
+  assert.equal(oneSide.time.incomplete, true, 'the one that does not makes the coverage partial')
+})
+
+test('F4 residual: replaying the same evidence at different observation instants changes neither the span nor the duration', () => {
+  const results = [T0 + 60_000, T0 + 3_600_000, T0 + 7_200_000].map(now => {
+    const { root, dir } = runDir()
+    seedCycle(dir)
+    return runtimeTick({ dir, journalPath: journalFile(root, [STD_JOURNAL[0], STD_JOURNAL[1]]), usagePath: join(dir, 'usage.jsonl'), transcriptsDir: transcripts(root, twoRequests), runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now }).view
+  })
+  for (const v of results) {
+    assert.equal(v.time.messageSpan.totalMs, results[0].time.messageSpan.totalMs)
+    assert.equal(v.time.agentMs, results[0].time.agentMs)
+  }
+  assert.notEqual(results[0].time.observation.lastObservedAt, results[1].time.observation.lastObservedAt, 'only the observation clock moves')
 })

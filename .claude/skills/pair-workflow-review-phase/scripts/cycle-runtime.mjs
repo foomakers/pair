@@ -29,7 +29,7 @@
 //   node <skill dir>/scripts/cycle-runtime.mjs observe --dir <abs> --journal <path> [--usage <path>]
 //        [--transcripts <dir>]
 //        --repository <owner/name> --story <id> --branch <b> [--pr <n>] [--runId <id>]
-//        [--interval-ms 5000] [--grace-ms 30000] [--max-ticks <n>]
+//        [--interval-ms 5000] [--grace-ms 30000] [--max-ticks <n>] [--since <ISO>]
 //        [--dispatchStats <json>] [--sharedCost <json>]
 //     → tails ONLY the named sources on the interval, merges idempotently, reduces metrics,
 //       writes metrics.json/metrics.md atomically, prints one concise progress line per tick.
@@ -172,19 +172,23 @@ function mergeTranscriptIntoLedger(prior, observed) {
   const requests = { ...(prior?.requests ?? {}) }
   let truncated = 0
   for (const [id, r] of Object.entries(observed.requests)) {
-    const prev = requests[id]
-    if (!prev) {
+    const was = requests[id]
+    if (!was) {
       requests[id] = r
       continue
     }
+    // US-479 F2 residual: `accepted` is the last COHERENT evidence for this request. A later
+    // observation that disagrees about the fixed fields does not say which value is true, so it
+    // never replaces the accepted one and never erases it — it is recorded as `divergent` and the
+    // request is flagged. Discarding the request (the residual) deleted cost already charged.
+    const agrees = was.accepted.fixed.every((v, i) => v === r.accepted.fixed[i])
+    const divergent = [...(was.divergent ?? []), ...(r.divergent ?? []), ...(agrees ? [] : [r.accepted])]
     requests[id] = {
-      fixed: prev.fixed,
       // out-of-order and duplicated blocks never lower an output already observed
-      block: Math.max(prev.block, r.block),
-      output: r.block > prev.block ? r.output : Math.max(prev.output, r.block === prev.block ? r.output : 0),
-      complete: prev.complete || r.complete,
-      // once a request contradicted itself it stays flagged: the doubt is not undone by a re-read
-      inconsistent: prev.inconsistent || r.inconsistent || prev.fixed.some((v, i) => v !== r.fixed[i]),
+      accepted: agrees && r.accepted.block >= was.accepted.block ? { ...r.accepted, output: Math.max(was.accepted.output, r.accepted.output) } : was.accepted,
+      complete: was.complete || r.complete,
+      inconsistent: was.inconsistent || r.inconsistent || !agrees,
+      divergent: dedupeDivergent(divergent),
     }
   }
   for (const id of Object.keys(prior?.requests ?? {})) if (!(id in observed.requests)) truncated++
@@ -201,24 +205,42 @@ function mergeTranscriptIntoLedger(prior, observed) {
     lastMessageAt: [prior?.lastMessageAt, observed.lastMessageAt].filter(v => Number.isInteger(v)).sort((a, b) => b - a)[0] ?? null,
   }
 }
+// The conflicting observations are kept as evidence, deduplicated by their own content — a replay
+// of the same contradiction adds nothing, and no value is ever merged into another.
+function dedupeDivergent(list) {
+  const seen = new Set()
+  const out = []
+  for (const d of list ?? []) {
+    const key = `${d.fixed.join(',')}|${d.output}|${d.block}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(d)
+  }
+  return out
+}
 function totalsFromLedger(entry) {
-  const usage = { inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, requests: 0, partialRequests: 0, inconsistentRequests: 0, truncatedRequests: entry.truncated ?? 0 }
+  const usage = { inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, requests: 0, partialRequests: 0, inconsistentRequests: 0, unacceptedRequests: 0, truncatedRequests: entry.truncated ?? 0 }
   for (const r of Object.values(entry.requests ?? {})) {
     usage.requests++
-    if (r.inconsistent) {
-      usage.inconsistentRequests++
+    if (r.inconsistent) usage.inconsistentRequests++
+    if (!r.accepted) {
+      usage.unacceptedRequests++
       continue
     }
     if (!r.complete) usage.partialRequests++
-    usage.inputTokens += r.fixed[0]
-    usage.cacheWriteTokens += r.fixed[1]
-    usage.cacheReadTokens += r.fixed[2]
-    usage.outputTokens += r.output
+    usage.inputTokens += r.accepted.fixed[0]
+    usage.cacheWriteTokens += r.accepted.fixed[1]
+    usage.cacheReadTokens += r.accepted.fixed[2]
+    usage.outputTokens += r.accepted.output
   }
   // F3: the total this provider actually bills, stated rather than left to a downstream fallback.
   usage.totalTokens = usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens + usage.outputTokens
   usage.accounting = USAGE_ACCOUNTING
   usage.accountingBasis = 'leaf-exclusive'
+  // US-479 F2 residual: a KNOWN quantity is not a complete total. Anything unresolved about this
+  // execution — a contradiction, an unfinished request, a source that shrank — makes every number
+  // above a lower bound, and that word travels with them all the way to the summary.
+  usage.totalBasis = usage.inconsistentRequests || usage.partialRequests || usage.unacceptedRequests || usage.truncatedRequests ? 'lower-bound' : 'complete'
   return usage
 }
 function readTranscript(path) {
@@ -252,18 +274,19 @@ function readTranscript(path) {
     if (rec.effort) efforts.add(String(rec.effort))
     const block = Number.isInteger(rec.apiBlockIndex) ? rec.apiBlockIndex : 0
     const fixed = ASSISTANT_USAGE_FIELDS.map(k => Number(u[k] ?? 0))
+    const output = Number(u.output_tokens ?? 0)
     const cur = requests[rec.requestId]
     if (!cur) {
-      requests[rec.requestId] = { fixed, block, output: Number(u.output_tokens ?? 0), complete: rec.message.stop_reason != null, inconsistent: false }
+      requests[rec.requestId] = { accepted: { fixed, block, output }, complete: rec.message.stop_reason != null, inconsistent: false, divergent: [] }
       continue
     }
-    if (cur.fixed.some((v, i) => v !== fixed[i])) {
+    if (cur.accepted.fixed.some((v, i) => v !== fixed[i])) {
       if (!cur.inconsistent) errors.push({ error: 'usage-request-inconsistent', source: path, requestId: rec.requestId })
       cur.inconsistent = true
-    }
-    if (block >= cur.block) {
-      cur.block = block
-      cur.output = Number(u.output_tokens ?? 0)
+      // the FIRST accepted observation stands; the divergence is recorded, not applied
+      cur.divergent = dedupeDivergent([...(cur.divergent ?? []), { fixed, block, output }])
+    } else if (block >= cur.accepted.block) {
+      cur.accepted = { fixed, block, output }
     }
     if (rec.message.stop_reason != null) cur.complete = true
   }
@@ -437,8 +460,14 @@ export function readTerminalMarker(dir) {
     return null
   }
 }
-// `finalize` publishes the one durable view of the cycle. A tick that lands afterwards must not
-// overwrite it: the marker below is what makes "no late write" checkable rather than hoped for.
+// `finalize` publishes the one durable view of the cycle. "No late write" means a STALE WRITER
+// never wins — not that the metrics are frozen for good (US-479 F8 residual: a usage tail arriving
+// after the finalization was refused, and the PR comment kept a total everyone knew was wrong).
+// Two mechanisms, each answering its own question:
+//   - the REVISION is derived from what is actually persisted, so an old observer computes a lower
+//     number and `writeMetrics` refuses it, while a genuine reconciliation computes a higher one;
+//   - the FINGERPRINT below says whether a write carries new evidence at all, so a repeat with
+//     nothing new is idempotent instead of churning the file and the comment.
 const FINALIZED_NAME = '.finalized.json'
 export function readFinalized(dir) {
   const p = join(dir, FINALIZED_NAME)
@@ -449,10 +478,48 @@ export function readFinalized(dir) {
     return null
   }
 }
-function writeFinalized(dir, view) {
+// Everything a reader would notice: the measured quantities, their coverage and the handoff digest.
+// Deliberately NOT the revision or the timestamps — those change on every tick by construction.
+export function viewFingerprint(view) {
+  const u = view.usage ?? {}
+  return JSON.stringify({
+    total: u.observedTotalTokens ?? null,
+    input: u.inputTokens ?? null,
+    output: u.outputTokens ?? null,
+    cacheRead: u.cacheReadTokens ?? null,
+    cacheWrite: u.cacheWriteTokens ?? null,
+    basis: u.totalBasis ?? null,
+    coverage: u.coverage ?? null,
+    missing: u.missingExecutionIds ?? [],
+    incomplete: u.incompleteExecutionIds ?? [],
+    truncated: u.truncatedExecutionIds ?? [],
+    inconsistent: u.inconsistentExecutionIds ?? [],
+    cycles: view.cycles ?? null,
+    quality: view.outcome?.quality ?? null,
+    delivery: view.outcome?.delivery ?? null,
+    digest: view.snapshot?.sourceDigest ?? null,
+  })
+}
+function persistedRevision(dir) {
+  const p = join(dir, 'metrics.json')
+  if (!existsSync(p)) return 0
+  try {
+    const d = JSON.parse(readFileSync(p, 'utf8'))
+    return Number.isInteger(d?.snapshot?.revision) ? d.snapshot.revision : 0
+  } catch {
+    return 0
+  }
+}
+// A revision must exceed everything already written, not just what THIS process remembers: the
+// finalize pre-tick could not advance the checkpoint, so its own reduce recomputed the revision the
+// file already had and `writeMetrics` refused it as stale (the residual).
+function nextRevision(dir, checkpoint) {
+  return Math.max(persistedRevision(dir), checkpoint?.revision ?? 0) + 1
+}
+function writeFinalized(dir, view, publicationState) {
   const p = join(dir, FINALIZED_NAME)
   const tmp = join(dir, `.tmp-finalized-${process.pid}-${Date.now()}.json`)
-  writeFileSync(tmp, JSON.stringify({ revision: view.snapshot.revision, sourceDigest: view.snapshot.sourceDigest, asOf: view.snapshot.asOf }, null, 2) + '\n')
+  writeFileSync(tmp, JSON.stringify({ revision: view.snapshot.revision, sourceDigest: view.snapshot.sourceDigest, asOf: view.snapshot.asOf, fingerprint: viewFingerprint(view), publicationState: publicationState ?? null }, null, 2) + '\n')
   renameSync(tmp, p)
 }
 
@@ -466,7 +533,7 @@ export function shouldStop({ terminalObservedAt, usageReconciled, cancelled, gra
 }
 
 // ── one tick: validate source -> merge idempotently -> reduce -> persist ────────────────────
-export function runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId, storyId, repository, story, branch, pr, checkpoint, now, dispatchStats, sharedCost }) {
+export function runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId, storyId, repository, story, branch, pr, checkpoint, now, dispatchStats, sharedCost, terminalSince }) {
   const errors = []
   // US-479 B4: the host journal carries no cost at all, so when the transcripts are named the tick
   // PRODUCES the usage source before tailing it — the same deterministic reader, re-run each tick,
@@ -505,20 +572,23 @@ export function runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId
   // reverting real, previously-known values back to null.
   const effectiveDispatchStats = dispatchStats ?? checkpoint.dispatchStats ?? undefined
   const effectiveSharedCost = sharedCost ?? checkpoint.sharedCost ?? undefined
-  const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: combined, revision: (checkpoint.revision ?? 0) + 1, asOf: new Date(now).toISOString(), dispatchStats: effectiveDispatchStats, sharedCost: effectiveSharedCost })
-  // US-479 F8: once finalize has published, a later tick reconciles nothing over it.
+  const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: combined, revision: nextRevision(dir, checkpoint), asOf: new Date(now).toISOString(), dispatchStats: effectiveDispatchStats, sharedCost: effectiveSharedCost })
+  // US-479 F8: after a finalization a tick that carries NO new evidence changes nothing; one that
+  // does is a legitimate reconciliation and writes a higher revision.
   const finalized = readFinalized(dir)
-  const writeResult = finalized ? { written: false, reason: 'finalized', finalizedRevision: finalized.revision } : writeMetrics({ dir, view })
+  const writeResult = finalized && finalized.fingerprint === viewFingerprint(view) ? { written: false, reason: 'no-new-evidence', finalizedRevision: finalized.revision } : writeMetrics({ dir, view })
   // The terminal signal is the HOST's recorded result (or, if a host ever emits one, a journal
   // record that says so) — never the observation that every agent seen so far has returned.
-  const marker = readTerminalMarker(dir)
+  const rawMarker = readTerminalMarker(dir)
+  const marker = rawMarker && terminalSince && rawMarker.observedAt < terminalSince ? null : rawMarker
   const terminalObs = journalObs.find(o => o.kind === 'run-terminal')
   const newCheckpoint = {
     journalOffset: j.newOffset,
     usageOffset: newUsageOffset,
     observations: combined,
     appliedDeltaEventIds,
-    revision: writeResult.written ? view.snapshot.revision : checkpoint.revision,
+    // The checkpoint never lags the file it wrote, so the next revision is monotonic either way.
+    revision: writeResult.written ? view.snapshot.revision : Math.max(checkpoint.revision ?? 0, persistedRevision(dir)),
     terminalObservedAt: terminalObs || marker ? (checkpoint.terminalObservedAt ?? now) : (checkpoint.terminalObservedAt ?? null),
     dispatchStats: effectiveDispatchStats ?? null,
     sharedCost: effectiveSharedCost ?? null,
@@ -577,7 +647,13 @@ export function finalizeMetrics({ dir, repository, story, branch, pr, runId, pub
   // US-479 remediation (Finding 4, residual): the host's admin counters/allocation, carried through
   // the checkpoint when this finalize call doesn't itself supply them — the observer may already
   // have stopped by the time finalize runs, and its last-known values must still reach the summary.
-  const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: checkpoint.observations ?? [], revision: (checkpoint.revision ?? 0) + 1, asOf: new Date().toISOString(), dispatchStats: dispatchStats ?? checkpoint.dispatchStats ?? undefined, sharedCost: sharedCost ?? checkpoint.sharedCost ?? undefined })
+  const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: checkpoint.observations ?? [], revision: nextRevision(dir, checkpoint), asOf: new Date().toISOString(), dispatchStats: dispatchStats ?? checkpoint.dispatchStats ?? undefined, sharedCost: sharedCost ?? checkpoint.sharedCost ?? undefined })
+  // US-479 F8 residual: a repeat with nothing new AND a publication already confirmed is a no-op —
+  // but an unconfirmed publication is still owed a retry, and new evidence is still owed a higher
+  // revision. Freezing on the mere existence of a finalization was the defect.
+  const priorFinal = readFinalized(dir)
+  if (priorFinal && priorFinal.fingerprint === viewFingerprint(view) && priorFinal.publicationState === 'confirmed')
+    return { view, writeResult: { written: false, reason: 'no-new-evidence', finalizedRevision: priorFinal.revision } }
   if (Number.isInteger(pr) && publish) {
     const marker = `<!-- pair:synthesis #${story} PR#${pr} -->`
     const outcome = publishSummary({ view, marker, pr, repo: repository, ...publish })
@@ -590,8 +666,8 @@ export function finalizeMetrics({ dir, repository, story, branch, pr, runId, pub
     view.publication = { ...view.publication, state: Number.isInteger(pr) ? view.publication.state : 'not-applicable' }
   }
   const writeResult = writeMetrics({ dir, view })
-  // US-479 F8: from here on this view is THE finalized one; a later tick refuses to write over it.
-  if (writeResult.written) writeFinalized(dir, view)
+  // From here on this view is THE finalized one; a later tick with the same evidence is a no-op.
+  if (writeResult.written) writeFinalized(dir, view, view.publication?.state ?? null)
   return { view, writeResult }
 }
 
@@ -610,10 +686,16 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-export async function runObserveLoop({ dir, journalPath, usagePath, transcriptsDir, runId, storyId, repository, story, branch, pr, intervalMs = 5000, graceMs = 30000, maxTicks = Infinity, sleepFn = sleep, nowFn = () => Date.now(), onTick = () => {}, signal, dispatchStats, sharedCost }) {
+export async function runObserveLoop({ dir, journalPath, usagePath, transcriptsDir, runId, storyId, repository, story, branch, pr, intervalMs = 5000, graceMs = 30000, maxTicks = Infinity, since, sleepFn = sleep, nowFn = () => Date.now(), onTick = () => {}, signal, dispatchStats, sharedCost }) {
   let checkpoint = readCheckpoint(dir)
   let ticks = 0
   let cancelled = false
+  // US-479 F8 residual: a resumed cycle must not be closed by the terminal result of the PREVIOUS
+  // invocation. The host says so explicitly with `--since`: an OPT-IN, because defaulting it to
+  // this process's own start makes the ordinary recipe racy — the host writes the marker as soon as
+  // the run returns, which can be before this loop's first tick, and the observation would then
+  // reject its own run's terminal result and never stop.
+  const terminalSince = since
   const onSignal = () => {
     cancelled = true
   }
@@ -621,7 +703,7 @@ export async function runObserveLoop({ dir, journalPath, usagePath, transcriptsD
   try {
     for (;;) {
       const now = nowFn()
-      const result = runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId, storyId, repository, story, branch, pr, checkpoint, now, dispatchStats, sharedCost })
+      const result = runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId, storyId, repository, story, branch, pr, checkpoint, now, dispatchStats, sharedCost, terminalSince })
       checkpoint = result.checkpoint
       ticks++
       onTick(result)
@@ -663,7 +745,7 @@ async function main(argv) {
   }
   if (cmd === 'observe') {
     need('dir', 'repository', 'story', 'branch')
-    const res = await runObserveLoop({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, intervalMs: opts['interval-ms'] ? Number(opts['interval-ms']) : 5000, graceMs: opts['grace-ms'] ? Number(opts['grace-ms']) : 30000, maxTicks: opts['max-ticks'] ? Number(opts['max-ticks']) : Infinity, dispatchStats: jsonArg(opts.dispatchStats), sharedCost: jsonArg(opts.sharedCost), onTick: r => process.stdout.write(`tick: revision=${r.view.snapshot.revision} terminal=${r.terminalObserved}\n`) })
+    const res = await runObserveLoop({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, intervalMs: opts['interval-ms'] ? Number(opts['interval-ms']) : 5000, graceMs: opts['grace-ms'] ? Number(opts['grace-ms']) : 30000, maxTicks: opts['max-ticks'] ? Number(opts['max-ticks']) : Infinity, since: opts.since, dispatchStats: jsonArg(opts.dispatchStats), sharedCost: jsonArg(opts.sharedCost), onTick: r => process.stdout.write(`tick: revision=${r.view.snapshot.revision} terminal=${r.terminalObserved}\n`) })
     return { out: res, code: 0 }
   }
   if (cmd === 'finalize') {
@@ -671,7 +753,9 @@ async function main(argv) {
     const out = finalizeMetrics({ dir: opts.dir, repository: opts.repo, story: opts.story, branch: opts.branch, pr: Number(opts.pr), runId: opts.runId, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, publish: { listComments, findByMarker, upsert }, dispatchStats: jsonArg(opts.dispatchStats), sharedCost: jsonArg(opts.sharedCost) })
     // US-479 B4: a repeat finalize that finds nothing new writes nothing — that is the idempotent
     // outcome the recipe relies on, not a failure. Only a real write failure is a non-zero exit.
-    const idempotent = out.writeResult.written || out.writeResult.reason === 'stale-revision'
+    // `no-new-evidence` and `stale-revision` are both successful no-ops: the persisted view is
+    // already the right one. Only a real write failure is a non-zero exit.
+    const idempotent = out.writeResult.written || out.writeResult.reason === 'stale-revision' || out.writeResult.reason === 'no-new-evidence'
     return { out: { completeness: out.view.snapshot.completeness, written: out.writeResult.written, reason: out.writeResult.reason, publication: out.view.publication }, code: idempotent ? 0 : 1 }
   }
   if (cmd === 'mark-terminal') {
