@@ -2445,9 +2445,18 @@ test('T-29 (DT-37): convergence, scope escalation and readiness are impossible w
     verdict: 'APPROVED',
     readiness: { ready: true, remoteHead: H1 },
     scopeChanges: [{ id: 'sc-1', type: 'new-requirement', status: 'pending', description: 'a proposal' }],
-    findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), regressionFinding('r1-9', { blocking: false, transition: 'open' })],
+    findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), regressionFinding('r1-9')],
     invalidatedBatchId: 'r1',
   })
+  // AMENDED by US-479 DR-10: this used to publish the risk on a NON-blocking finding, to prove the
+  // derivation refuses to converge even then. That payload is now refused one step earlier — an
+  // active risk is by definition an open blocker — so the defence is asserted in BOTH places: the
+  // write is rejected, and the derivation still refuses to converge on the legal payload below.
+  const nonBlocking = join(mkdtempSync(join(tmpdir(), 'dt37-')), 'draft.json')
+  writeFileSync(nonBlocking, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r2', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: H1, verdict: 'APPROVED', custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: H1 }, mode: 're-review', invalidatedBatchId: 'r1', findings: [regressionFinding('r1-9', { blocking: false, transition: 'open' })] }))
+  const refused = publish({ dir, file: nonBlocking, phase: 'r2', skill: 'review-phase', workflowVersion: V })
+  assert.equal(refused.published, false, 'an active risk on a non-blocking finding is not writable')
+  assert.match(refused.reason, /finding-transition-incoherent/)
   const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.notEqual(r.next.step, 'done')
   assert.notEqual(r.next.reason, 'awaiting-scope-decision')
@@ -3505,4 +3514,56 @@ test('DR-03 (control): genuinely disjoint paths still reconstruct — the guard 
   assert.equal(next.step, 'prepare', JSON.stringify({ step: next.step, refusal: next.refusal, detail: next.detail }))
   assert.ok(next.reconstruct, 'nothing later touched src/a.ts: the reconstruction stands')
   assert.deepEqual(next.reconstruct.paths, ['src/a.ts'])
+})
+
+// ── DR-06 / DR-10 (delta review): the remaining asymmetries of the S12 matrix ───────────────────
+test('DR-06: ANY mandatory human decision beats the automatic rewind — not only a history rewrite', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  reviewOf(dir, 'r1', { needsHumanDecision: true, findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()], invalidatedBatchId: 'r1' })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'blocked', JSON.stringify({ step: r.next.step, phase: r.next.phase }))
+  assert.equal(r.next.reason, 'escalate')
+  assert.equal(r.activeRegressionRisks.length, 1, 'the risk stays active and untouched')
+})
+
+test('DR-10: an ACTIVE risk on a non-blocking finding is an incoherent triple, like its mirror image', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  const before = digestDir(dir)
+  const f = join(mkdtempSync(join(tmpdir(), 'dr10-')), 'draft.json')
+  writeFileSync(f, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: H1, verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 're-review', invalidatedBatchId: 'r1', findings: [regressionFinding('r1-9', { blocking: false })] }))
+  const out = publish({ dir, file: f, phase: 'r1', skill: 'review-phase', workflowVersion: V })
+  assert.equal(out.published, false)
+  assert.match(out.reason, /finding-transition-incoherent/)
+  assert.deepEqual(digestDir(dir), before)
+})
+
+test('DR-10: a review that raises a regression must NAME the batch it invalidates', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  const before = digestDir(dir)
+  const f = join(mkdtempSync(join(tmpdir(), 'dr10-')), 'draft.json')
+  // no invalidatedBatchId at all: the ledger would show an active risk whose batch nothing counts
+  writeFileSync(f, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: H1, verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 're-review', findings: [regressionFinding()] }))
+  const out = publish({ dir, file: f, phase: 'r1', skill: 'review-phase', workflowVersion: V })
+  assert.equal(out.published, false)
+  assert.match(out.reason, /invalidated-batch-missing/)
+  assert.deepEqual(digestDir(dir), before)
+})
+
+// ── DR-09: `regressionGuards` is a hard engine gate, so the skills must declare it as output ────
+test('DR-09: red-verify and review-phase declare `regressionGuards` in their Output Format', () => {
+  const root = fileURLToPath(new URL('../../..', import.meta.url))
+  for (const rel of [
+    '.claude/skills/pair-workflow-red-verify/SKILL.md',
+    '.claude/skills/pair-workflow-review-phase/SKILL.md',
+    'packages/knowledge-hub/dataset/.skills/workflow/red-verify/SKILL.md',
+    'packages/knowledge-hub/dataset/.skills/workflow/review-phase/SKILL.md',
+  ]) {
+    const md = readFileSync(join(root, rel), 'utf8')
+    const section = md.slice(md.indexOf('## Output Format'))
+    assert.ok(section.length, `${rel}: no Output Format section`)
+    assert.match(section.split('\n').slice(0, 6).join('\n'), /regressionGuards/, `${rel}: the coordinator fails the run when the echo is missing, so the canonical output line must carry it`)
+  }
 })

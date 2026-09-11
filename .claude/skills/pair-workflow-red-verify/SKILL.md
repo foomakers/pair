@@ -91,7 +91,7 @@ a matrix you could not reproduce.
 
 ## Output Format
 
-`{ status: verified | rejected, verified, findings: [{ rowId?, mechanismId?, location, severity, description, recommendation, closureAssertions?, reproducer?, applicability? }], mechanismsIdentified?, sealed, snapshot?, manifest?, contractHash, reason?, next }`.
+`{ status: verified | rejected, verified, findings: [{ rowId?, mechanismId?, location, severity, description, recommendation, closureAssertions?, reproducer?, applicability? }], mechanismsIdentified?, sealed, snapshot?, manifest?, contractHash, regressionGuards?, reason?, next }`.
 
 ## Notes
 

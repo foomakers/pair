@@ -1071,6 +1071,9 @@ export function regressionTransitionErrors({ handoffs, data, pr }) {
     // ONE transition, not three independent state machines: the risk state, the finding transition
     // and the derived blocking flag must describe the same thing.
     if (rr.state === 'active' && f.transition !== undefined && f.transition !== 'open') bad('finding-transition-incoherent', `${f.transition}`)
+    // US-479 DR-10: the mirror of the discharged case below — an ACTIVE risk is by definition an open
+    // blocker, so a non-blocking finding carrying one is the same incoherent triple, not a lesser one.
+    if (rr.state === 'active' && f.blocking !== true) bad('finding-transition-incoherent', 'not-blocking')
     if (rr.state === 'discharged' && !['resolved', 'superseded'].includes(String(f.transition))) bad('finding-transition-incoherent', `${f.transition}`)
     if (rr.state === 'discharged' && f.blocking === true) bad('finding-transition-incoherent', 'blocking')
     if (rr.state === 'active') {
@@ -1097,6 +1100,10 @@ export function regressionTransitionErrors({ handoffs, data, pr }) {
       else if (baseline.some(h => (h.data.findings ?? []).some(x => isBlocking(x) && (x.obligationIds ?? []).some(o => (f.obligationIds ?? []).includes(o))))) unqualified('baseline-not-reviewed-clean', 'obligation-open-at-baseline')
       const oe = f.originEvidence
       if (oe && (String(oe.baselineHead ?? '') !== String(rr.lastCleanReviewedHead) || String(oe.failingHead ?? '') !== String(rr.firstFailingHead) || (oe.reproducer !== undefined && String(oe.reproducer) !== String(rr.reproducerRef)))) unqualified('origin-evidence-mismatch')
+      // US-479 DR-10: a FIRST observation must name the batch it invalidates — otherwise the ledger
+      // carries an active risk whose batch no counter ever marks as an attempted remediation. A
+      // re-observation or a reopening does not repeat it: that batch was named when the risk was raised.
+      if (data.invalidatedBatchId === undefined && !prior) unqualified('invalidated-batch-missing', batch)
       if (data.invalidatedBatchId !== undefined && String(data.invalidatedBatchId) !== batch) unqualified('invalidated-batch-mismatch', `${data.invalidatedBatchId}!=${batch}`)
       if (reObservation) {
         for (const [field, value] of [['reproducerRef', rr.reproducerRef], ['closureAssertions', rr.closureAssertions], ['affectedBoundaryRefs', rr.affectedBoundaryRefs], ['lastCleanReviewedHead', rr.lastCleanReviewedHead], ['firstFailingHead', rr.firstFailingHead]])
@@ -1377,7 +1384,10 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     // question — is answered by a human BEFORE any automatic transition. An active regression risk
     // must never hide or consume that request, so this precedes the rewind. (A plain scope proposal
     // is NOT such a request: it stays behind the closure of every quality risk.)
-    if (d.needsHumanDecision === true && d.humanDecisionKind === 'history-rewrite') return blocked('escalate', { detail: 'history-rewrite decision requested by the review — a human decides before any automatic rewind', findings: blocking, regressionRisks: activeRisks })
+    // US-479 DR-06: ANY mandatory human decision comes before the automatic rewind. Keying on one
+    // `humanDecisionKind` let a review that asked for a human without naming a kind be overridden by
+    // the very transition the request was meant to hold. The kind, when given, only says WHY.
+    if (d.needsHumanDecision === true) return blocked('escalate', { detail: `${d.humanDecisionKind ?? 'human'} decision requested by the review — a human decides before any automatic rewind`, findings: blocking, regressionRisks: activeRisks })
     if (activeRisks.length) {
       if (cycleCounters(list).spentCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', detail: 'an active regression risk remains and the remediation budget is spent', findings: blocking, regressionRisks: activeRisks })
       // The earliest introducing batch is repaired first; every active risk travels with it.
@@ -1484,7 +1494,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       }
       return { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], priorFindings: priorFindings(), headMoved: true, detail: SHA_RE.test(remote) ? 'readiness not confirmed on the remote head' : 'readiness not bound to a 40-hex remote head' }
     }
-    if (d.needsHumanDecision === true && d.humanDecisionKind === 'history-rewrite') return blocked('escalate', { detail: 'history-rewrite decision', findings: blocking })
+    if (d.needsHumanDecision === true) return blocked('escalate', { detail: `${d.humanDecisionKind ?? 'human'} decision`, findings: blocking })
     if (blocking.every(f => f.external === true)) return blocked('escalate', { detail: 'external blockers need a human disposition or a read-back-verified correction', findings: blocking })
     // US-479 T-21 (S4): the budget bounds COMPLETED corrective cycles, never the raw round
     // counter — a metadata-only re-review (inputsChanged, a moved head) bumps `round` without any
@@ -1584,12 +1594,6 @@ export function cycleCounters(allHandoffs, precomputedLedger) {
   const reviewExecutions = reviews.length
   const reviewPhasesSeen = new Set(reviews.map(h => h.phase))
   const reviewBatches = reviewPhasesSeen.size
-  const completedReviewRounds = new Set()
-  for (const phase of new Set(allReviews.map(h => h.phase))) {
-    const ofPhase = allReviews.filter(h => h.phase === phase)
-    const last = ofPhase[ofPhase.length - 1]
-    if (last.data.partial !== true) completedReviewRounds.add(phaseParts(phase)?.round ?? 0)
-  }
   // US-479 T-29 (S11): a batch a review named `invalidatedBatchId` is an ATTEMPTED remediation, not
   // a completed one. It becomes completed only once a later review closes its original findings and
   // leaves no active risk it introduced — which is exactly what the closing review proves.

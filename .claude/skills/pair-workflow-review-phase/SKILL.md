@@ -117,7 +117,7 @@ separate impact before it is reported as new.
 
 ## Output Format
 
-`{ status: reviewed, verdict, reviewedHead, findings: [{ id, location, severity, description, recommendation, kind, transition, blocking, nonActionable?, disposition?, external?, evidence?, groupId?, rowId?, severityEvidence?, missedUpstream? }], scopeChanges?: [{ id, type, proposal, baselineEvidenceRefs, discoveredAtReviewId, status }], custody: { verified, contractBreach, breaches? }, readiness: { ready, remoteHead }, published: { firstReview?, escalation?, scopeDecisionPacket? }, tier, passes, needsHumanDecision?, humanDecisionKind?, partial?, reviewer?, next }`.
+`{ status: reviewed, verdict, reviewedHead, findings: [{ id, location, severity, description, recommendation, kind, transition, blocking, nonActionable?, disposition?, external?, evidence?, groupId?, rowId?, severityEvidence?, missedUpstream? }], scopeChanges?: [{ id, type, proposal, baselineEvidenceRefs, discoveredAtReviewId, status }], custody: { verified, contractBreach, breaches? }, readiness: { ready, remoteHead }, published: { firstReview?, escalation?, scopeDecisionPacket? }, tier, passes, needsHumanDecision?, humanDecisionKind?, partial?, reviewer?, regressionGuards?, next }`.
 
 ## Notes
 
