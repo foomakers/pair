@@ -57,6 +57,7 @@
         "pair-contracts/cycle-metrics.test.mjs",
         "pair-contracts/cycle-runtime.test.mjs",
         "pair-contracts/engine-integration.test.mjs",
+        "pair-contracts/recipe.test.mjs",
         "pair-contracts/pr-comment.test.mjs",
         "pair-contracts/engine-boundaries.test.mjs"
       ],

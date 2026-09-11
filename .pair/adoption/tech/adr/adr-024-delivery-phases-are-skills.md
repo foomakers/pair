@@ -590,3 +590,77 @@ directory, so the baseline engine is never modified to be measured.
   fabricated, not inferred.
 - T-8 itself is unchanged by this amendment: no scenario was run, and the six paired scenarios
   still require the separate baseline session.
+
+## Amendment 2026-09-11 (h) — the eight findings of the independent audit of `64e5ddd1`
+
+An independent audit of the B1/B4/B2 candidate reproduced eight defects through the real
+entrypoints. They are closed here as ONE remediation grouped by cause, before any canary. No
+scenario was launched, no seal retired, no finding waived, no budget raised.
+
+**F1 (B1 x B2) — a legacy seal's identity now reaches the resolver.** A contradiction naming a
+contract sealed in the predecessor run that an acknowledgment had just bound was
+`contradiction-unresolvable`: the reference was listed and never used. `predecessorEvidence` reads
+the bound run's handoffs, verifying each file against the sha256 the acknowledgment recorded, and
+`resolveSealedContract` searches the current cycle first and those proven identities second. The
+legacy directory stays non-executable and byte-identical; the successor continues the HISTORICAL
+succession line (`a0-rev3` → `a0-rev4`), carries `predecessorRunId`/`predecessorPhase`, and receives
+`revalidate` — the dimensions `migrate-inspect` reports as missing are re-derived by the revision,
+never inherited. An unsealed hash, or one whose file moved since, stays unresolvable and says which.
+
+**F2 — a truncated transcript no longer deletes observed cost.** The cumulative was rebuilt from
+whatever the source held; the durable state is now a per-request ledger beside `usage.jsonl`.
+
+**F3 — the provider's accounting is normalized.** For Anthropic `input_tokens` excludes cache reads
+and cache creation, so the adapter states `totalTokens` with the label
+`anthropic-exclusive-input`. Amendment (g)'s "cache … never added into it" is retired; the surviving
+rule is that an aggregate is never counted together with its own details.
+
+**F4 — the observer's read instant is no longer active time.** Journal observations carry
+`timeSource`; only demonstrated boundaries are measured; the read clock is reported under
+`time.observation`, labelled.
+
+**F5 — a migration record is not a judgment in the reducer either.** Migration-only is
+`not-evaluated`; a blocking review followed by an acknowledgment stays `not-converged`.
+
+**F6 — the lifetime is a union by verified identity, validated and honestly incomplete.**
+Overlapping acknowledgments fold once; imports are validated (schema, story, PR); uncertainty
+propagates per dimension; `aggregateCohort` reads the lifetime, so a new run directory cannot
+improve a PR's cycles or cost.
+
+**F7/F8 — the recipe is executed, not only written.** A test extracts the bash block of this ADR
+and runs every command through the CLI on a fixture, so a missing flag fails the suite instead of
+the canary. And the observer's stop is bound to the host's REAL terminal result
+(`mark-terminal --result`), never to a flag invented in the journal nor to the inference that all
+agents observed so far have returned; the recipe owns the observer's PID, waits only for it, and a
+tick after `finalize` cannot overwrite the finalized view.
+
+### Host launch recipe (superseding amendment (g)'s)
+
+Executable as written: `pair-contracts/recipe.test.mjs` extracts this exact block, substitutes the
+variables with a fixture and runs every line through the CLI, so a missing flag fails the suite
+instead of the canary.
+
+```bash
+node "$SKILL/scripts/cycle-runtime.mjs" entry --dir "$RUN_DIR" --repo "$REPO" --story "$STORY" --pr "$PR" --workflowVersion "$WORKFLOW_VERSION"
+node "$SKILL/scripts/cycle-state.mjs" migrate-acknowledge --dir "$RUN_DIR" --legacy "$LEGACY_DIR" --workflowVersion "$WORKFLOW_VERSION" --story "$STORY" --run "$RUN_ID" --head "$HEAD" --pr "$PR"
+node "$SKILL/scripts/cycle-runtime.mjs" observe --dir "$RUN_DIR" --repository "$REPO" --story "$STORY" --branch "$BRANCH" --pr "$PR" --runId "$RUN_ID" --journal "$TRANSCRIPTS/journal.jsonl" --transcripts "$TRANSCRIPTS" --usage "$RUN_DIR/usage.jsonl" --interval-ms 50 --grace-ms 2000 &
+OBSERVER_PID=$!
+node "$SKILL/scripts/cycle-runtime.mjs" mark-terminal --dir "$RUN_DIR" --result "$WF_RESULT" --story "$STORY"
+wait "$OBSERVER_PID"
+node "$SKILL/scripts/cycle-runtime.mjs" dispatch-stats --result "$WF_RESULT" --story "$STORY" --out "$STATS"
+node "$SKILL/scripts/cycle-runtime.mjs" finalize --dir "$RUN_DIR" --repo "$REPO" --story "$STORY" --branch "$BRANCH" --pr "$PR" --runId "$RUN_ID" --journal "$TRANSCRIPTS/journal.jsonl" --transcripts "$TRANSCRIPTS" --usage "$RUN_DIR/usage.jsonl" --dispatchStats "$STATS"
+```
+
+`$SKILL` is the installed `pair-workflow-review-phase` directory. `$TRANSCRIPTS` is the workflow
+run's own directory (`~/.claude/projects/<project slug>/<session id>/subagents/workflows/<wf id>/`),
+known once the Workflow tool returns its id. `$WF_RESULT` is the file the host wrote the workflow's
+returned result to — that file, and nothing in the journal, is what ends the observation:
+`mark-terminal` records the host's REAL terminal result, the observer stops after reconciling its
+tail (or after the grace period, reporting partial), and the recipe waits for that ONE process by
+the pid it owns. The `migrate-acknowledge` line belongs only to a run directory that continues an
+older one. After `finalize` no late tick can overwrite the finalized view.
+
+The same commands and the same methodology are used for BOTH sides of a paired measurement: the
+baseline runs its own engine from its own checkout in its own session, and the extractor is run from
+this checkout against that session's transcript directory, so the baseline engine is never modified
+to be measured.

@@ -9,7 +9,12 @@
 //       reference, PR/story/branch, expectedHead, scopeBaselineHash, last handoff identity, typed
 //       next step) — a cache hint, never approval. `telemetry` names what this host can observe.
 //
-//   node <skill dir>/scripts/cycle-runtime.mjs dispatch-stats --result <workflow result.json> --story <id>
+//   node <skill dir>/scripts/cycle-runtime.mjs mark-terminal --dir <abs> --result <workflow result.json> --story <id>
+//     → records the HOST's own terminal result for this run (`.run-terminal.json`), the signal
+//       `observe` stops on. The harness journal has no end-of-run record and is never modified;
+//       the end of a run is never inferred from the agents observed so far (US-479 F8).
+//
+//   node <skill dir>/scripts/cycle-runtime.mjs dispatch-stats --result <workflow result.json> --story <id> [--out <file>]
 //     → the four host admin counters {redirects, engineRecoveries, administrativeDispatches,
 //       nestedDispatches} read out of the engine's OWN returned result — the launch recipe pipes
 //       this straight into `--dispatchStats`. What the result does not carry stays null.
@@ -398,6 +403,59 @@ export function writeCheckpoint(dir, checkpoint) {
   renameSync(tmp, p)
 }
 
+// ── the run's terminal result (US-479 F8) ───────────────────────────────────────────────────
+// The harness journal has no end-of-run record: it reports each agent's start and result, and the
+// last one having returned is NOT proof the workflow finished — the coordinator may still dispatch.
+// The real terminal result exists on the HOST, in the value the Workflow tool returned, so the
+// recipe records it here rather than a flag being invented inside the journal (whose bytes stay
+// exactly as the harness wrote them). This file is owned by the run directory: one marker, written
+// once per terminal result, read by every tick.
+const TERMINAL_NAME = '.run-terminal.json'
+export function markTerminal({ dir, result, story, now = Date.now() }) {
+  const row = (result?.batch ?? []).find(r => String(r?.id ?? r?.story?.id ?? '') === String(story))
+  const marker = {
+    observedAt: new Date(now).toISOString(),
+    story: story === undefined ? null : String(story),
+    status: row?.status ?? null,
+    workflowVersion: result?.workflowVersion ?? null,
+    note: 'the host`s own terminal result for this run; the journal carries no end-of-run record',
+  }
+  mkdirSync(dir, { recursive: true })
+  const p = join(dir, TERMINAL_NAME)
+  const tmp = join(dir, `.tmp-terminal-${process.pid}-${Date.now()}.json`)
+  writeFileSync(tmp, JSON.stringify(marker, null, 2) + '\n')
+  renameSync(tmp, p)
+  return { marked: true, path: p, marker }
+}
+export function readTerminalMarker(dir) {
+  const p = join(dir, TERMINAL_NAME)
+  if (!existsSync(p)) return null
+  try {
+    const d = JSON.parse(readFileSync(p, 'utf8'))
+    return d && typeof d === 'object' && d.observedAt ? d : null
+  } catch {
+    return null
+  }
+}
+// `finalize` publishes the one durable view of the cycle. A tick that lands afterwards must not
+// overwrite it: the marker below is what makes "no late write" checkable rather than hoped for.
+const FINALIZED_NAME = '.finalized.json'
+export function readFinalized(dir) {
+  const p = join(dir, FINALIZED_NAME)
+  if (!existsSync(p)) return null
+  try {
+    return JSON.parse(readFileSync(p, 'utf8'))
+  } catch {
+    return null
+  }
+}
+function writeFinalized(dir, view) {
+  const p = join(dir, FINALIZED_NAME)
+  const tmp = join(dir, `.tmp-finalized-${process.pid}-${Date.now()}.json`)
+  writeFileSync(tmp, JSON.stringify({ revision: view.snapshot.revision, sourceDigest: view.snapshot.sourceDigest, asOf: view.snapshot.asOf }, null, 2) + '\n')
+  renameSync(tmp, p)
+}
+
 // ── stop condition (S7): terminal + reconciled, or the grace period, or an explicit cancel ──
 export function shouldStop({ terminalObservedAt, usageReconciled, cancelled, graceMs = 30000, now }) {
   if (cancelled) return { stop: true, reason: 'cancelled' }
@@ -448,7 +506,12 @@ export function runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId
   const effectiveDispatchStats = dispatchStats ?? checkpoint.dispatchStats ?? undefined
   const effectiveSharedCost = sharedCost ?? checkpoint.sharedCost ?? undefined
   const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: combined, revision: (checkpoint.revision ?? 0) + 1, asOf: new Date(now).toISOString(), dispatchStats: effectiveDispatchStats, sharedCost: effectiveSharedCost })
-  const writeResult = writeMetrics({ dir, view })
+  // US-479 F8: once finalize has published, a later tick reconciles nothing over it.
+  const finalized = readFinalized(dir)
+  const writeResult = finalized ? { written: false, reason: 'finalized', finalizedRevision: finalized.revision } : writeMetrics({ dir, view })
+  // The terminal signal is the HOST's recorded result (or, if a host ever emits one, a journal
+  // record that says so) — never the observation that every agent seen so far has returned.
+  const marker = readTerminalMarker(dir)
   const terminalObs = journalObs.find(o => o.kind === 'run-terminal')
   const newCheckpoint = {
     journalOffset: j.newOffset,
@@ -456,11 +519,11 @@ export function runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId
     observations: combined,
     appliedDeltaEventIds,
     revision: writeResult.written ? view.snapshot.revision : checkpoint.revision,
-    terminalObservedAt: terminalObs ? now : (checkpoint.terminalObservedAt ?? null),
+    terminalObservedAt: terminalObs || marker ? (checkpoint.terminalObservedAt ?? now) : (checkpoint.terminalObservedAt ?? null),
     dispatchStats: effectiveDispatchStats ?? null,
     sharedCost: effectiveSharedCost ?? null,
   }
-  return { view, writeResult, checkpoint: newCheckpoint, errors, terminalObserved: !!terminalObs, journalRotated: j.rotated }
+  return { view, writeResult, checkpoint: newCheckpoint, errors, terminalObserved: !!terminalObs || !!marker, terminalMarker: marker, journalRotated: j.rotated }
 }
 
 // ── entry (S1, S7): a cache hint the phase re-validates, never approval ─────────────────────
@@ -527,6 +590,8 @@ export function finalizeMetrics({ dir, repository, story, branch, pr, runId, pub
     view.publication = { ...view.publication, state: Number.isInteger(pr) ? view.publication.state : 'not-applicable' }
   }
   const writeResult = writeMetrics({ dir, view })
+  // US-479 F8: from here on this view is THE finalized one; a later tick refuses to write over it.
+  if (writeResult.written) writeFinalized(dir, view)
   return { view, writeResult }
 }
 
@@ -571,6 +636,14 @@ export async function runObserveLoop({ dir, journalPath, usagePath, transcriptsD
   }
 }
 
+// A CLI value that may be inline JSON or the PATH of a file holding it — the recipe writes
+// `dispatch-stats --out` to a file and hands that same file to `finalize` (US-479 F7).
+function jsonArg(value) {
+  if (value === undefined || value === null || value === '') return undefined
+  if (existsSync(value)) return JSON.parse(readFileSync(value, 'utf8'))
+  return JSON.parse(value)
+}
+
 async function main(argv) {
   const { cmd, opts } = parseCli(argv)
   const need = (...ks) => {
@@ -584,33 +657,45 @@ async function main(argv) {
     need('dir', 'repository', 'story', 'branch')
     const checkpoint = readCheckpoint(opts.dir)
     const now = Date.now()
-    const result = runtimeTick({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, checkpoint, now, dispatchStats: opts.dispatchStats ? JSON.parse(opts.dispatchStats) : undefined, sharedCost: opts.sharedCost ? JSON.parse(opts.sharedCost) : undefined })
+    const result = runtimeTick({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, checkpoint, now, dispatchStats: jsonArg(opts.dispatchStats), sharedCost: jsonArg(opts.sharedCost) })
     writeCheckpoint(opts.dir, result.checkpoint)
-    return { out: { written: result.writeResult.written, errors: result.errors, terminalObserved: result.terminalObserved }, code: 0 }
+    return { out: { written: result.writeResult.written, reason: result.writeResult.reason, errors: result.errors, terminalObserved: result.terminalObserved }, code: 0 }
   }
   if (cmd === 'observe') {
     need('dir', 'repository', 'story', 'branch')
-    const res = await runObserveLoop({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, intervalMs: opts['interval-ms'] ? Number(opts['interval-ms']) : 5000, graceMs: opts['grace-ms'] ? Number(opts['grace-ms']) : 30000, maxTicks: opts['max-ticks'] ? Number(opts['max-ticks']) : Infinity, dispatchStats: opts.dispatchStats ? JSON.parse(opts.dispatchStats) : undefined, sharedCost: opts.sharedCost ? JSON.parse(opts.sharedCost) : undefined, onTick: r => process.stdout.write(`tick: revision=${r.view.snapshot.revision} terminal=${r.terminalObserved}\n`) })
+    const res = await runObserveLoop({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, intervalMs: opts['interval-ms'] ? Number(opts['interval-ms']) : 5000, graceMs: opts['grace-ms'] ? Number(opts['grace-ms']) : 30000, maxTicks: opts['max-ticks'] ? Number(opts['max-ticks']) : Infinity, dispatchStats: jsonArg(opts.dispatchStats), sharedCost: jsonArg(opts.sharedCost), onTick: r => process.stdout.write(`tick: revision=${r.view.snapshot.revision} terminal=${r.terminalObserved}\n`) })
     return { out: res, code: 0 }
   }
   if (cmd === 'finalize') {
     need('dir', 'repo', 'pr')
-    const out = finalizeMetrics({ dir: opts.dir, repository: opts.repo, story: opts.story, branch: opts.branch, pr: Number(opts.pr), runId: opts.runId, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, publish: { listComments, findByMarker, upsert }, dispatchStats: opts.dispatchStats ? JSON.parse(opts.dispatchStats) : undefined, sharedCost: opts.sharedCost ? JSON.parse(opts.sharedCost) : undefined })
+    const out = finalizeMetrics({ dir: opts.dir, repository: opts.repo, story: opts.story, branch: opts.branch, pr: Number(opts.pr), runId: opts.runId, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, publish: { listComments, findByMarker, upsert }, dispatchStats: jsonArg(opts.dispatchStats), sharedCost: jsonArg(opts.sharedCost) })
     // US-479 B4: a repeat finalize that finds nothing new writes nothing — that is the idempotent
     // outcome the recipe relies on, not a failure. Only a real write failure is a non-zero exit.
     const idempotent = out.writeResult.written || out.writeResult.reason === 'stale-revision'
     return { out: { completeness: out.view.snapshot.completeness, written: out.writeResult.written, reason: out.writeResult.reason, publication: out.view.publication }, code: idempotent ? 0 : 1 }
   }
+  if (cmd === 'mark-terminal') {
+    // US-479 F8: the host hands the observer the workflow's OWN returned result. Nothing is added
+    // to the journal, and the end of the run is never inferred from the agents seen so far.
+    need('dir', 'result', 'story')
+    return { out: markTerminal({ dir: opts.dir, result: JSON.parse(readFileSync(opts.result, 'utf8')), story: opts.story }), code: 0 }
+  }
   if (cmd === 'dispatch-stats') {
     need('result', 'story')
-    return { out: dispatchStatsFromResult({ result: JSON.parse(readFileSync(opts.result, 'utf8')), story: opts.story }), code: 0 }
+    const stats = dispatchStatsFromResult({ result: JSON.parse(readFileSync(opts.result, 'utf8')), story: opts.story })
+    // `--out` makes the recipe a pipeline instead of a copy-paste: finalize reads this same file.
+    if (opts.out) {
+      mkdirSync(dirname(opts.out), { recursive: true })
+      writeFileSync(opts.out, JSON.stringify(stats) + '\n')
+    }
+    return { out: stats, code: 0 }
   }
   if (cmd === 'usage-extract') {
     need('transcripts', 'journal', 'out', 'runId')
     const res = extractUsage({ transcriptsDir: opts.transcripts, journalPath: opts.journal, out: opts.out, runId: opts.runId, storyId: opts.story })
     return { out: { executions: res.executions, unattributed: res.unattributed, withoutTranscript: res.withoutTranscript, errors: res.errors }, code: 0 }
   }
-  throw new Error(`unknown command: ${cmd} (expected entry | observe | reconcile | finalize | usage-extract | dispatch-stats)`)
+  throw new Error(`unknown command: ${cmd} (expected entry | observe | reconcile | finalize | usage-extract | dispatch-stats | mark-terminal)`)
 }
 
 const isMain = () => {

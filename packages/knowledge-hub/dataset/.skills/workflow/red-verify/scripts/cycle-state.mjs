@@ -128,6 +128,66 @@ export function sealedContractPhase(handoffs, contractHash) {
   const sealed = (handoffs ?? []).filter(h => h.skill === 'red-verify' && h.data && h.data.verified === true && h.data.sealed === true && h.data.contractHash === contractHash)
   return sealed.length ? sealed[sealed.length - 1].phase : undefined
 }
+// US-479 F1 — the PREDECESSOR's proven evidence, read through the acknowledgment that bound it.
+// A legacy run directory is never executable (`resolve` refuses its first pre-schema-3 handoff, and
+// that refusal stays), but the identities it PROVED are still facts: `a0-rev3` was sealed there,
+// under that contract hash, on that succession line. Without this, a contradiction naming that hash
+// was `contradiction-unresolvable` even though the acknowledgment listed the run right beside it.
+//
+// Reuse is limited and checked: only handoffs whose sha256 still matches the digest the
+// acknowledgment recorded are usable — a file that moved since is not evidence, it is a discrepancy
+// (`predecessor-evidence-changed`). Nothing is copied forward: no verdict, no finding, no counter.
+// What the legacy evidence cannot supply is reported by `migrate-inspect` as missing dimensions and
+// travels to the successor as `revalidate`, so it is re-derived rather than inherited.
+export function predecessorEvidence(dir) {
+  const runs = []
+  for (const h of readHandoffs(dir))
+    if (h.data?.recordType === 'migration')
+      for (const r of h.data.predecessorRuns ?? []) {
+        if (!r?.runId || !r.dir || runs.some(x => x.runId === r.runId)) continue
+        const handoffs = []
+        let changed = null
+        for (const entry of r.handoffs ?? []) {
+          const file = join(r.dir, entry.name)
+          if (!existsSync(file)) {
+            changed = changed ?? `${r.runId}/${entry.name}:absent`
+            continue
+          }
+          const digest = `sha256:${createHash('sha256').update(readFileSync(file)).digest('hex')}`
+          if (digest !== entry.sha256) {
+            changed = changed ?? `${r.runId}/${entry.name}`
+            continue
+          }
+          const m = NAME_RE.exec(entry.name)
+          if (!m) continue
+          try {
+            handoffs.push({ file, name: `${m[1]}-${m[2]}`, phase: m[1], skill: m[2], attempt: m[3] ? Number(m[3]) : 1, data: JSON.parse(readFileSync(file, 'utf8')) })
+          } catch {
+            changed = changed ?? `${r.runId}/${entry.name}:not-json`
+          }
+        }
+        runs.push({ runId: r.runId, dir: r.dir, handoffs, changed, inspection: r.inspection ?? migrateInspect({ dir: r.dir }) })
+      }
+  return runs
+}
+
+// The ONE resolution a contradiction's target goes through: the current cycle first, then the
+// proven identities of the runs this cycle was bound to. Returns the phase, where it was proven,
+// and what the legacy evidence cannot supply — or the discrepancy that makes it unusable.
+export function resolveSealedContract({ handoffs, predecessors = [], contractHash }) {
+  const own = sealedContractPhase(handoffs, contractHash)
+  if (own) return { phase: own, origin: 'current', runId: undefined, missingDimensions: [] }
+  for (const p of predecessors) {
+    const phase = sealedContractPhase(p.handoffs, contractHash)
+    if (!phase) continue
+    return { phase, origin: 'predecessor', runId: p.runId, dir: p.dir, handoffs: p.handoffs, missingDimensions: p.inspection?.missingDimensions ?? [] }
+  }
+  // A named predecessor whose files no longer match their recorded digests cannot be searched at
+  // all: say which, rather than reporting a clean "not found".
+  const discrepancy = predecessors.find(p => p.changed)
+  return discrepancy ? { error: `predecessor-evidence-changed:${discrepancy.changed}` } : null
+}
+
 // One canonical key per (succession line, contractual obligation): the set of conflicting rows,
 // deduplicated and sorted, so id order, the raising group and the successor's own hash are all
 // irrelevant to it. Stamped by `publish`, never spelled by an agent (the acHash lesson, 3.0.12).
@@ -804,7 +864,8 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   // US-479 B1 (S3): the contradiction's budget key is derived HERE from the verified sealed
   // identity of the contract it names — never from a value the agent spelled.
   if (skill === 'red-spec' && data.status === 'contradiction') {
-    const line = successionLineOf(sealedContractPhase(readHandoffs(dir), data.predecessorContractHash))
+    const target = resolveSealedContract({ handoffs: readHandoffs(dir), predecessors: predecessorEvidence(dir), contractHash: data.predecessorContractHash })
+    const line = successionLineOf(target?.phase)
     data = { ...data, contradictionLine: line ?? null, contradictionKey: contradictionKeyOf({ line, conflictingRowIds: data.conflictingRowIds }) }
   }
   if (pr !== undefined) {
@@ -935,10 +996,14 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     // assumed to be the current group's own contract; the predecessor seal and every row the
     // contradiction does not name stay exactly as they are (the sealer enforces that separately).
     if (d.status === 'contradiction') {
-      const targetPhase = sealedContractPhase(list, d.predecessorContractHash)
+      // US-479 F1: the target is resolved in the current cycle FIRST and then among the proven
+      // identities of the runs this cycle was bound to — so a seal that lives in the legacy run the
+      // acknowledgment named is usable, while an unsealed or digest-changed one still is not.
+      const target = resolveSealedContract({ handoffs: list, predecessors: ctx.predecessors ?? [], contractHash: d.predecessorContractHash })
+      const targetPhase = target?.phase
       const line = successionLineOf(targetPhase)
       if (!targetPhase || !line || !d.contradictionKey)
-        return blocked('failed-preparation', { refusal: 'contradiction-unresolvable', detail: `no sealed contract identifies ${d.predecessorContractHash ?? 'the named predecessor'}`, phase: last.phase, findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined })
+        return blocked('failed-preparation', { refusal: 'contradiction-unresolvable', detail: target?.error ?? `no sealed contract identifies ${d.predecessorContractHash ?? 'the named predecessor'}`, phase: last.phase, findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined })
       // ONE revision per contradiction per obligation and succession line (US-479 B1 decision 2).
       // Counted over this cycle AND every sibling run of the same PR, so a new runId cannot buy a
       // second attempt; an equivalent contradiction after it is a human escalation, not autotuning.
@@ -946,8 +1011,18 @@ export function deriveNext(handoffs, policy, ctx = {}) {
       const siblingSame = (ctx.siblingContradictionKeys ?? []).filter(k => k === d.contradictionKey).length
       if (priorSame + siblingSame >= 1)
         return blocked('escalate', { budget: 'contradictionRevisions', detail: `the same contractual obligation on line ${line} already spent its one successor revision — a human decides the next step`, phase: last.phase, conflictingRowIds: d.conflictingRowIds, findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined })
-      const lineRevision = list.filter(h => h.phase === line || h.phase.startsWith(`${line}-rev`)).reduce((m, h) => Math.max(m, phaseParts(h.phase)?.revision ?? 1), 1)
+      // The successor continues the HISTORICAL line: the revision number counts the phases of that
+      // line wherever they were proven, so a legacy `a0-rev3` is followed by `a0-rev4` and never by
+      // a fresh `a0-rev2` that would pretend the history did not happen.
+      const lineOf = hs => hs.filter(h => h.phase === line || h.phase.startsWith(`${line}-rev`))
+      const lineRevision = [...lineOf(list), ...(target.origin === 'predecessor' ? lineOf(target.handoffs ?? []) : [])].reduce((m, h) => Math.max(m, phaseParts(h.phase)?.revision ?? 1), 1)
       const targetParts = phaseParts(targetPhase) ?? {}
+      // The contract descriptor comes from wherever it was actually proven.
+      const predecessorContract = () => {
+        const spec = (target.handoffs ?? []).filter(h => h.skill === 'red-spec' && h.phase === targetPhase).pop()
+        const sealed = (target.handoffs ?? []).filter(h => h.skill === 'red-verify' && h.phase === targetPhase && h.data.sealed === true).pop()
+        return spec ? { path: spec.data.contractPath, hash: spec.data.contractHash, revision: targetParts.revision ?? 1, ...(sealed ? { snapshot: sealed.data.snapshot } : {}) } : undefined
+      }
       return {
         step: 'prepare',
         mode: 'revision',
@@ -956,8 +1031,11 @@ export function deriveNext(handoffs, policy, ctx = {}) {
         round: targetParts.round ?? 0,
         attempt: 1,
         base: d.inputHead,
-        contract: contractOf(targetPhase),
+        contract: target.origin === 'predecessor' ? predecessorContract() : contractOf(targetPhase),
         group: groupOf(line),
+        ...(target.origin === 'predecessor' ? { predecessorRunId: target.runId, predecessorPhase: targetPhase } : {}),
+        // What the legacy evidence never carried is RE-DERIVED, never inherited (S10).
+        ...(target.missingDimensions?.length ? { revalidate: target.missingDimensions } : {}),
         changedRows: d.changedRows,
         // The remediation that raised it is remembered so the route back is explicit, never lost.
         contradictionFor: { phase: last.phase, findings: d.findings?.received ?? [] },
@@ -1193,7 +1271,7 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
           siblingContradictionKeys.push(h.data.contradictionKey)
     }
   }
-  let next = deriveNext(handoffs, policy, { entry, head, siblingContradictionKeys })
+  let next = deriveNext(handoffs, policy, { entry, head, siblingContradictionKeys, predecessors: predecessorEvidence(dir) })
   const names = handoffs.map(h => h.name)
   // Changed effective inputs invalidate REVIEW evidence: prior findings + the delta are re-validated
   // from the last reviewed head. Sealed contracts and GREEN commits stay trusted.

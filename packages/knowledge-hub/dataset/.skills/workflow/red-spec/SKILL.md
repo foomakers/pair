@@ -32,6 +32,10 @@ Prepare the executable acceptance contract a change must satisfy, before any age
 | `$rejection`       | repair   | JSON array: the validator's findings on the rejected contract. Every row it names is MANDATORY in the repaired contract.                        |
 | `$contract`        | repair / revision | Absolute path of the contract being repaired or revised; `$contractHash` its recorded hash.                                          |
 | `$revision`        | revision | The revision number `m` of `$phase`.                                                                                                          |
+| `$changedRows`     | revision (contradiction) | The EXACT rows the successor may change — the `conflictingRowIds` of the contradiction that routed you here. Do not widen it.        |
+| `$contradictionFor`| revision (contradiction) | `{ phase, findings }` of the remediation that raised the contradiction: the obligation you are unblocking, still open.               |
+| `$revalidate`      | No       | Identity dimensions the predecessor's evidence never carried (US-479 F1, S10) — `scopeEpoch`, `scopeBaselineHash`, `findings-origin`. Re-DERIVE each from the authority; never inherit or assume one. |
+| `$predecessorRun`  | No       | `{ runId, phase }` when the contract you revise was sealed in an EARLIER run directory bound by a migration acknowledgment. Read it there, read-only; never edit, move or re-seal it. |
 | `$notes`           | No       | Scope directive from the card; it overrides the issue body where they conflict.                                                               |
 | `$workflowVersion` | Yes      | The coordinator's version; every handoff records it.                                                                                          |
 
@@ -91,7 +95,7 @@ One row per class and interaction of every inventory item: `{ id, kind, baseline
    | `changedRows` | what the revision must change: it must cover every `conflictingRowIds` entry |
    | `counterexample` | `{ command, cwd?, fixtureRef?, expected, actual }` — the run that proves the collision, no shell syntax |
 
-   Prose never becomes this evidence: `revisionReason` on any other status is refused (`revisionReason-without-contradiction`), and a `split-required` with a long `splitReason` stays terminal. ONE successor revision per obligation per succession line: an equivalent contradiction after it escalates to a human, and a new `runId` does not reset that. Never waive the finding, never retire or edit the predecessor seal — the successor stands beside it.
+   Prose never becomes this evidence: `revisionReason` on any other status is refused (`revisionReason-without-contradiction`), and a `split-required` with a long `splitReason` stays terminal. ONE successor revision per obligation per succession line: an equivalent contradiction after it escalates to a human, and a new `runId` does not reset that. Never waive the finding, never retire or edit the predecessor seal — the successor stands beside it. The sealed contract you name may live in an EARLIER run directory that a migration acknowledgment bound to this cycle (US-479 F1): the cycle state resolves it there, continues the historical succession line (`a0-rev3` is followed by `a0-rev4`), hands you `$predecessorRun` and `$revalidate`, and leaves that directory byte-identical. Nothing is inherited from it but the identity you were pointed at.
 2. Modify ONLY test source, fixtures and committed oracle rows. Never production source, docs, adoption, configuration, generated assets. Never commit, push, post, label, create a card or merge.
 3. Run every changed test at the base: a `baseline: red` artifact records its exact failing `command` and `observed` failure; a `baseline: pass` control records its passing command and output. A `kind: fixture` artifact names the RED test that `consumedBy` it.
 4. Hash every artifact: `sha256sum <file>` ⇒ `sha256:<digest>`.
