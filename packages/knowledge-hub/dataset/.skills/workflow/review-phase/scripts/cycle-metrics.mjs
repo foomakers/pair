@@ -740,8 +740,25 @@ export function foldCohortIdentities(entries) {
     // A view that already knows every run of the group folded the whole history itself (that is
     // what a migration acknowledgment establishes): its numbers ARE the numbers, and combining
     // anything into them would double count.
-    const covering = group.find(e => [...allRuns].every(r => runsOf(e).has(r)))
-    const main = covering ?? group.reduce((best, e) => (runsKnown(e) >= runsKnown(best) ? e : best), group[0])
+    // US-479 F-3: combining three fields and taking every OTHER field from a `main` picked by a
+    // last-wins tie-break left the fold dependent on manifest order — two views of one PR could
+    // report `completed` or `running`, and the cohort `completedRate` 1 or 0, purely by listing
+    // order. `main` is now chosen by a TOTAL order over the views themselves: the one that knows the
+    // most runs, then the furthest along, then the one that observed the most spend (usage events
+    // are additive and idempotent, so a larger observed total is a more complete reading of the same
+    // run), then the run ids. Same set of views in, same entry out.
+    const ranked = [...group].sort((x, y) => {
+      const num = (e, path) => path.split('.').reduce((v, k) => v?.[k], e) ?? 0
+      return (
+        runsKnown(y) - runsKnown(x) ||
+        num(y, 'cycles.attempted') - num(x, 'cycles.attempted') ||
+        num(y, 'cycles.completed') - num(x, 'cycles.completed') ||
+        num(y, 'usage.observedTotalTokens') - num(x, 'usage.observedTotalTokens') ||
+        ([...runsOf(x)].sort().join() < [...runsOf(y)].sort().join() ? -1 : 1)
+      )
+    })
+    const covering = ranked.find(e => [...allRuns].every(r => runsOf(e).has(r)))
+    const main = covering ?? ranked[0]
     const versions = [...new Set(group.flatMap(e => e.workflow?.versions ?? []))].sort()
     const worstOf = vs => vs.reduce((w, c) => (WORST.indexOf(c) > WORST.indexOf(w) ? c : w), 'complete')
     // Without a covering view nobody saw the whole delivery, and no acknowledgment reconciles the
@@ -757,8 +774,12 @@ export function foldCohortIdentities(entries) {
       const disjoint = group.every((e, i) => group.every((o, j) => i === j || ![...runsOf(e)].some(r => runsOf(o).has(r))))
       const tokens = known.length ? (disjoint ? known.reduce((s, t) => s + t, 0) : Math.max(...known)) : null
       const cycles = Math.max(...group.map(e => cyclesOf(e) ?? 0))
+      // Every cycle count is combined, not only `completed`: taking `attempted` from one view and
+      // `completed` from the maximum produced entries claiming more closed cycles than attempted.
+      const attempted = Math.max(...group.map(e => e.cycles?.attempted ?? 0))
+      const spent = Math.max(...group.map(e => e.cycles?.spent ?? 0))
       combined = {
-        cycles: { ...(main.cycles ?? {}), completed: cycles },
+        cycles: { ...(main.cycles ?? {}), attempted, spent, completed: cycles },
         usage: { ...(main.usage ?? {}), observedTotalTokens: tokens },
         ...(main.lifetime ? { lifetime: { ...main.lifetime, cycles: { ...(main.lifetime.cycles ?? {}), completed: cycles }, usage: { ...(main.lifetime.usage ?? {}), observedTotalTokens: tokens }, coverage: 'partial' } } : {}),
       }

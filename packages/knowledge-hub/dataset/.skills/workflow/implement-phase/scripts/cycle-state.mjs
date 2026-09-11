@@ -1430,17 +1430,24 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
         //  - scopes are paths, and `allowedPaths` legitimately carries directories. `src/` and
         //    `src/a.ts` are the same surface; plain equality saw two unrelated strings and would
         //    have restored a whole tree over someone's work.
-        const producerFix = Math.max(-1, ...list.filter(x => x.skill === 'green-fix' && phaseParts(x.phase)?.groupId === phase).map(x => list.indexOf(x)))
+        // US-479 F-2: "after the producing group's own fix" is the wrong clock. Groups of a batch fix
+        // in order, and the review that raises a regression must read the CURRENT head, so the
+        // derived producer is always the LAST group that produced one — every earlier sibling had a
+        // lower index and was invisible, though its work is after the baseline and a restore would
+        // delete it. The baseline is the clock: everything published after the review that proved
+        // `lastCleanReviewedHead` clean is work this restore could destroy.
+        const baselineHead = String(ofBatch[0]?.lastCleanReviewedHead ?? '')
+        const baselineAt = Math.max(-1, ...list.filter(x => x.skill === 'review-phase' && String(x.data.reviewedHead ?? '') === baselineHead).map(x => list.indexOf(x)))
         const touches = (a, b) => {
           const na = String(a).replace(/\/+$/, '')
           const nb = String(b).replace(/\/+$/, '')
           return na === nb || na.startsWith(`${nb}/`) || nb.startsWith(`${na}/`)
         }
-        const landedAfterProducer = gid => list.some(x => x.skill === 'green-fix' && phaseParts(x.phase)?.groupId === gid && SHA_RE.test(String(x.data.outputHead ?? '')) && list.indexOf(x) > producerFix)
+        const landedAfterBaseline = gid => list.some(x => x.skill === 'green-fix' && phaseParts(x.phase)?.groupId === gid && SHA_RE.test(String(x.data.outputHead ?? '')) && list.indexOf(x) > baselineAt)
         const overlapping = new Set()
         for (const h of list.filter(x => x.skill === 'red-spec'))
           for (const g of h.data.plan?.groups ?? []) {
-            if (!g.groupId || g.groupId === phase || !landedAfterProducer(g.groupId)) continue
+            if (!g.groupId || g.groupId === phase || !landedAfterBaseline(g.groupId)) continue
             for (const p of g.allowedPaths ?? []) if (paths.some(own => touches(own, p))) overlapping.add(p)
           }
         if (overlapping.size)
@@ -1618,11 +1625,21 @@ export function cycleCounters(allHandoffs, precomputedLedger) {
   // human. Reading `completedCycles` for this made the budget unreachable in its own failure mode:
   // a batch nobody ever closed never counted, so the cycle looped until the engine's blunt dispatch
   // ceiling killed it. `completedCycles` stays what it says: how many corrective cycles CLOSED.
-  const roundsWithFix = new Set(list.filter(h => h.skill === 'green-fix').map(h => phaseParts(h.phase)?.round).filter(r => Number.isInteger(r) && r > 0))
+  // US-479 F-1: counting ROUND NUMBERS made the budget unreachable wherever a corrective loop stays
+  // inside one round — and two engine shapes do exactly that: the regression rewind repairs at the
+  // producing group's OWN phase (`r1-g1`, attempt n+1), and a contract gap revises the same group as
+  // `<group>-rev<n>`. Both keep round 1 forever, so the set stayed {1} and `maxFixRounds` never
+  // fired. A corrective cycle is a FIX followed by the review that judged it, whatever phase either
+  // carries: walk the non-partial reviews in publication order and count each one that has at least
+  // one green-fix since the last counted review. Two groups of one round share their review and
+  // therefore spend one, which is what T-21 already required.
   let spentCycles = 0
-  for (const round of roundsWithFix) {
-    const lastFix = Math.max(...list.filter(h => h.skill === 'green-fix' && (phaseParts(h.phase)?.round ?? -1) === round).map(orderOf))
-    if (reviews.some(h => h.data.partial !== true && orderOf(h) > lastFix)) spentCycles++
+  let lastCounted = -1
+  for (const r of reviews.filter(h => h.data.partial !== true)) {
+    const at = orderOf(r)
+    if (!list.some(h => h.skill === 'green-fix' && orderOf(h) > lastCounted && orderOf(h) < at)) continue
+    spentCycles++
+    lastCounted = at
   }
   let completedCycles = 0
   for (const round of succeededRounds) {

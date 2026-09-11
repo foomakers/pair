@@ -2543,22 +2543,27 @@ test('T-29 (DT-38): replay, restart and repeated discovery reuse the SAME risk i
   assert.deepEqual(two.next.regressionRisks.map(x => x.riskId).sort(), two.activeRegressionRisks.map(x => x.riskId).sort())
 })
 
+// US-479 F-1 note: this history concludes THREE corrective cycles (r1, its repair, r3), which a
+// budget of three now legitimately stops — `spentCycles` counts concluded cycles, not successful
+// ones. The subject here is the riskId semantics of a reintroduction, so the budget is taken out of
+// the question rather than the assertions being changed.
+const REOPEN_POLICY = { ...POLICY, maxFixRounds: 9 }
 test('T-29 (DT-38): a reintroduction after discharge REOPENS the same risk id and is not a new discovery', () => {
   const { dir } = runDir()
   cleanThenRemediated(dir)
   reviewOf(dir, 'r1', { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), regressionFinding()], invalidatedBatchId: 'r1' })
-  const id = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).activeRegressionRisks[0].riskId
+  const id = resolve({ dir, workflowVersion: V, policy: REOPEN_POLICY, entry: 'pr', pr: 7 }).activeRegressionRisks[0].riskId
   redSpec(dir, 'r1-g1', { groupId: 'r1-g1', remediationBatchId: 'r1', regressionRepairOf: 'r1', regressionGuards: [id] }, { attempt: 2 })
   redVerify(dir, 'r1-g1', { remediationBatchId: 'r1', regressionGuards: [id] }, { attempt: 2 })
   handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H2, evidenceLedger: [], remediationBatchId: 'r1' }, { attempt: 2 })
   review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'APPROVED', readiness: { ready: true, remoteHead: H2 }, findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), finding('r1-9', { transition: 'resolved', blocking: false, evidence: 'green', origin: 'introduced-by-remediation', obligationIds: ['AC-7'], originEvidence: { baselineHead: H0, failingHead: H1, reproducer: GUARD.reproducerRef }, regressionRisk: risk({ state: 'discharged', dischargedHead: H2, dischargedByReviewId: 'r2-review-phase' }) })] })
-  assert.deepEqual(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).activeRegressionRisks, [])
+  assert.deepEqual(resolve({ dir, workflowVersion: V, policy: REOPEN_POLICY, entry: 'pr', pr: 7 }).activeRegressionRisks, [])
   // a later round reintroduces it: the SAME id comes back active
   handoff(dir, 'r3-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: '/abs/c.json', contractHash: `sha256:${'1'.repeat(64)}`, groupId: 'r3-g1', remediationBatchId: 'r3' })
   handoff(dir, 'r3-g1', 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, remediationBatchId: 'r3' })
   handoff(dir, 'r3-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('3'), evidenceLedger: [], remediationBatchId: 'r3' })
   review(dir, 'r4', { mode: 're-review', reviewedHead: SHA('3'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [regressionFinding('r1-9', { regressionRisk: risk({ introducedByRemediationBatchId: 'r3', lastCleanReviewedHead: H2, firstFailingHead: SHA('3') }) })], invalidatedBatchId: 'r3' })
-  const back = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  const back = resolve({ dir, workflowVersion: V, policy: REOPEN_POLICY, entry: 'pr', pr: 7 })
   // S11 keys `riskId` on PR + stable finding id + INTRODUCING batch, so a reintroduction by a
   // later batch is a new risk ENTRY for the same finding: the finding id is what stays stable, and
   // that is why this is a reopen rather than a new discovery. The r1 risk stays discharged in the
