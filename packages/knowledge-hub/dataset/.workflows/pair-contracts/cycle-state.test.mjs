@@ -142,7 +142,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
 const V = '3.0.0'
@@ -1863,4 +1863,307 @@ test('T-19: the schema-3 taxonomy is exactly the enums S2/S5 name — no extra o
   assert.deepEqual([...RECORD_TYPES].sort(), ['decision', 'judgment', 'migration'])
   assert.deepEqual([...SCOPE_CHANGE_TYPES].sort(), ['new-requirement', 'scope-extension'])
   assert.deepEqual([...SCOPE_CHANGE_STATUSES].sort(), ['deferred', 'extended', 'ignored', 'pending'])
+})
+
+// ── US-479 B1 (S3, AC-08, DT-04): a preparation that hits a CONTRADICTION with sealed rows
+// routes a minimal successor revision in the same cycle — it is not a terminal refusal ──────────
+const CX = { command: 'pnpm exec vitest run src/a.test.ts -t R33', expected: 'R33 passes under the installer-derived rule', actual: 'R33 fails: the alias directory is never installed' }
+// The contradiction as red-spec publishes it: the typed evidence S3 enumerates, nothing else.
+const contradiction = (dir, phase, extra = {}, opts) =>
+  handoff(
+    dir,
+    phase,
+    'red-spec',
+    {
+      status: 'contradiction',
+      mode: 'remediation',
+      revisionReason: 'contradicts-approved-authority',
+      predecessorContractHash: `sha256:${'1'.repeat(64)}`,
+      conflictingRowIds: ['R33', 'R34'],
+      changedRows: ['R33', 'R34'],
+      counterexample: CX,
+      findings: { received: ['r5-11'], covered: [] },
+      ...extra,
+    },
+    opts,
+  )
+// A sealed initial chain a0 -> a0-rev2 -> a0-rev3, then a remediation round whose preparation
+// discovers that closing its finding would break two SEALED rows of a0-rev3.
+function sealedInitialChain(dir, { hash = `sha256:${'1'.repeat(64)}` } = {}) {
+  redSpec(dir, 'a0', { mode: 'initial', contractHash: `sha256:${'9'.repeat(64)}` })
+  redVerify(dir, 'a0', { contractHash: `sha256:${'9'.repeat(64)}` })
+  redSpec(dir, 'a0-rev2', { mode: 'revision', contractHash: `sha256:${'8'.repeat(64)}` })
+  redVerify(dir, 'a0-rev2', { contractHash: `sha256:${'8'.repeat(64)}` })
+  redSpec(dir, 'a0-rev3', { mode: 'revision', contractPath: '/abs/a0-rev3-red-contract.json', contractHash: hash })
+  redVerify(dir, 'a0-rev3', { contractHash: hash, snapshot: SHA('e') })
+  handoff(dir, 'a0-rev3', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: SHA('c') })
+  review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r5-11')] })
+}
+
+test('B1 (DT-04): a complete contradiction routes prepare/revision on the SUCCESSOR of the contract identified by its hash — not the current group contract — and carries the exact changed rows', () => {
+  const { dir } = runDir()
+  sealedInitialChain(dir)
+  contradiction(dir, 'r1-g1')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.status, 'in-progress')
+  assert.deepEqual(
+    { step: r.next.step, mode: r.next.mode, phase: r.next.phase, revision: r.next.revision },
+    { step: 'prepare', mode: 'revision', phase: 'a0-rev4', revision: 4 },
+    JSON.stringify(r.next),
+  )
+  assert.deepEqual(r.next.changedRows, ['R33', 'R34'])
+  assert.equal(r.next.contract.path, '/abs/a0-rev3-red-contract.json', 'the revision is based on the contradicted contract')
+  // the route back to the remediation that raised it is explicit, never lost
+  assert.deepEqual(r.next.contradictionFor, { phase: 'r1-g1', findings: ['r5-11'] })
+})
+
+test('B1: the succession line is resolved from the VERIFIED sealed identity — an unresolvable predecessor hash is a typed refusal, never a guessed target', () => {
+  const { dir } = runDir()
+  sealedInitialChain(dir)
+  contradiction(dir, 'r1-g1', { predecessorContractHash: `sha256:${'7'.repeat(64)}` })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'blocked')
+  assert.equal(r.next.reason, 'failed-preparation')
+  assert.equal(r.next.refusal, 'contradiction-unresolvable')
+})
+
+test('B1: a contract hash that was PREPARED but never sealed is not a verified identity', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { mode: 'initial', contractHash: `sha256:${'1'.repeat(64)}` }) // no red-verify seal
+  review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r5-11')] })
+  contradiction(dir, 'r1-g1')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.refusal, 'contradiction-unresolvable')
+})
+
+test('B1 (budget): ONE revision per contradiction per obligation and succession line — an equivalent second contradiction escalates, and reordered ids, a different raising group and a different successor hash do not reset it', () => {
+  const { dir } = runDir()
+  sealedInitialChain(dir)
+  contradiction(dir, 'r1-g1')
+  const first = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(first.next.phase, 'a0-rev4')
+  // the revision happened: prepared, sealed, implemented, re-reviewed, and the same conflict returns
+  redSpec(dir, 'a0-rev4', { mode: 'revision', contractHash: `sha256:${'5'.repeat(64)}`, changedRows: ['R33', 'R34'] })
+  redVerify(dir, 'a0-rev4', { contractHash: `sha256:${'5'.repeat(64)}`, snapshot: SHA('f') })
+  handoff(dir, 'a0-rev4', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: SHA('d') })
+  review(dir, 'r1', { mode: 're-review', readiness: { ready: false }, reviewedHead: SHA('d'), findings: [finding('r5-11')] })
+  // same rows, other order, a DIFFERENT group, and now naming the NEW successor's hash
+  contradiction(dir, 'r2-g3', { conflictingRowIds: ['R34', 'R33'], changedRows: ['R34', 'R33'], predecessorContractHash: `sha256:${'5'.repeat(64)}` })
+  const second = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(second.next.step, 'blocked')
+  assert.equal(second.next.reason, 'escalate')
+  assert.equal(second.next.budget, 'contradictionRevisions')
+})
+
+test('B1 (budget): the key is stamped by publish, not spelled by the agent — equivalent contradictions share it and an unrelated row set does not', () => {
+  const { dir } = runDir()
+  sealedInitialChain(dir)
+  const a = contradiction(dir, 'r1-g1')
+  const keyA = JSON.parse(readFileSync(a.path, 'utf8')).contradictionKey
+  assert.match(String(keyA), /^sha256:[0-9a-f]{64}$/)
+  const { dir: dir2 } = runDir()
+  sealedInitialChain(dir2)
+  const b = contradiction(dir2, 'r4-g2', { conflictingRowIds: ['R34', 'R33'], changedRows: ['R33', 'R34'] })
+  assert.equal(JSON.parse(readFileSync(b.path, 'utf8')).contradictionKey, keyA, 'order and raising group do not change the key')
+  const { dir: dir3 } = runDir()
+  sealedInitialChain(dir3)
+  const c = contradiction(dir3, 'r1-g1', { conflictingRowIds: ['R40'], changedRows: ['R40'] })
+  assert.notEqual(JSON.parse(readFileSync(c.path, 'utf8')).contradictionKey, keyA)
+})
+
+test('B1 (budget): a sibling run directory of the same PR cannot reset the contradiction budget by changing runId', () => {
+  const root = mkdtempSync(join(tmpdir(), 'cycle-'))
+  const runsRoot = join(root, '.pair', 'working', 'runs')
+  const older = join(runsRoot, 'v4', '42')
+  const newer = join(runsRoot, 'v5', '42')
+  for (const d of [older, newer]) mkdirSync(d, { recursive: true })
+  sealedInitialChain(older)
+  contradiction(older, 'r1-g1')
+  sealedInitialChain(newer)
+  contradiction(newer, 'r1-g1')
+  const r = resolve({ dir: newer, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, runsRoot, story: '42' })
+  assert.equal(r.next.step, 'blocked')
+  assert.equal(r.next.budget, 'contradictionRevisions')
+})
+
+test('B1: the typed evidence is validated BEFORE the write — an incomplete contradiction is refused, and the old prose never becomes typed evidence by itself', () => {
+  const { dir } = runDir()
+  sealedInitialChain(dir)
+  const bad = (fields, expected) => {
+    const file = join(dir, `tmp-bad-${Math.random().toString(36).slice(2)}.json`)
+    writeFileSync(
+      file,
+      JSON.stringify({
+        run: 'run-1',
+        story: '42',
+        pr: 7,
+        branch: 'feature/US-42',
+        phase: 'r1-g1',
+        skill: 'red-spec',
+        inputHead: SHA('a'),
+        status: 'contradiction',
+        mode: 'remediation',
+        revisionReason: 'contradicts-approved-authority',
+        predecessorContractHash: `sha256:${'1'.repeat(64)}`,
+        conflictingRowIds: ['R33', 'R34'],
+        changedRows: ['R33', 'R34'],
+        counterexample: CX,
+        ...fields,
+      }),
+    )
+    const out = publish({ dir, file, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V })
+    assert.equal(out.published, false, `expected a refusal for ${expected}`)
+    assert.match(out.reason, new RegExp(expected))
+    assert.equal(existsSync(join(dir, 'r1-g1-red-spec.json')), false, 'nothing was written')
+  }
+  bad({ counterexample: undefined }, 'counterexample-missing')
+  bad({ counterexample: { ...CX, command: 'pnpm test && rm -rf /' } }, 'counterexample-command-unsafe')
+  bad({ counterexample: { ...CX, actual: '' } }, 'counterexample-actual-missing')
+  bad({ predecessorContractHash: 'a0-rev3' }, 'predecessorContractHash-invalid')
+  bad({ conflictingRowIds: [] }, 'conflictingRowIds-invalid')
+  bad({ changedRows: ['R33'] }, 'changedRows-incomplete:R34')
+  bad({ revisionReason: 'because the rows disagree' }, 'revisionReason-invalid')
+  // the prose refusal of 3.0.x carries none of this: it cannot be promoted by adding the reason alone
+  bad({ status: 'split-required', splitReason: 'R33 and R34 collide' }, 'revisionReason-without-contradiction')
+})
+
+test('B1: split-required WITHOUT the typed evidence stays terminal — the old refusal is unchanged', () => {
+  const { dir } = runDir()
+  sealedInitialChain(dir)
+  handoff(dir, 'r1-g1', 'red-spec', { status: 'split-required', mode: 'remediation', splitReason: 'a behavior repair and a refactor never share a contract' })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'blocked')
+  assert.equal(r.next.reason, 'failed-preparation')
+  assert.equal(r.next.refusal, 'split-required')
+})
+
+test('B1 (boundary): red-spec publishes `findings: { received, covered }` — its own documented envelope shape, not the review shape; a malformed one is still refused', () => {
+  const { dir } = runDir()
+  const ok = redSpec(dir, 'a0', { findings: { received: ['AC-1'], covered: ['AC-1'] } })
+  assert.equal(JSON.parse(readFileSync(ok.path, 'utf8')).findings.received[0], 'AC-1')
+  const file = join(dir, 'tmp-bad-findings.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', findings: { received: [''], covered: [] } }))
+  const out = publish({ dir, file, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V })
+  assert.equal(out.published, false)
+  assert.equal(out.reason, 'findings-received-invalid')
+  // the review shape is unchanged for the skill that actually uses it
+  const rf = join(dir, 'tmp-bad-review.json')
+  writeFileSync(rf, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r9', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'x', findings: { received: [] }, custody: {}, readiness: {} }))
+  assert.equal(publish({ dir, file: rf, phase: 'r9', skill: 'review-phase', workflowVersion: V }).reason, 'findings-not-an-array')
+})
+
+// ── US-479 B2 (S10, AC-27, DT-33): legacy evidence is inspected, acknowledged and BOUND — never
+// executed, never rewritten, and never silently dropped from the lifetime totals ────────────────
+const sha256File = p => _hash('sha256').update(readFileSync(p)).digest('hex')
+const digestDir = d =>
+  readdirSync(d)
+    .filter(f => f.endsWith('.json'))
+    .sort()
+    .map(f => `${f}:${sha256File(join(d, f))}`)
+// A legacy (schema-2 / 3.0.x) run directory, written by hand exactly as the older engine left it.
+function legacyRun(root, runId, { schemaVersion = 2, workflowVersion = '3.0.10', metrics } = {}) {
+  const d = join(root, '.pair', 'working', 'runs', runId, '42')
+  mkdirSync(d, { recursive: true })
+  writeFileSync(
+    join(d, 'r0-review-phase.json'),
+    JSON.stringify({ run: runId, story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [{ id: 'r0-1', severity: 'Major', location: 'x', description: 'd', recommendation: 'r', blocking: true, transition: 'open', kind: 'defect' }], custody: { verified: true, contractBreach: false }, readiness: { ready: false }, schemaVersion, workflowVersion, seq: 1 }, null, 2) + '\n',
+  )
+  if (metrics) writeFileSync(join(d, 'metrics.json'), JSON.stringify(metrics, null, 2) + '\n')
+  return d
+}
+const LEGACY_METRICS = { schemaVersion: 1, identity: { canonicalRunId: 'v4', runIds: ['v4'] }, cycles: { attempted: 2, completed: 1 }, usage: { observedTotalTokens: 1200, inputTokens: 200, outputTokens: 1000, cacheReadTokens: 50, cacheWriteTokens: 25 } }
+
+test('B2 (DT-33): migrate-acknowledge leaves every legacy file byte-identical, records verified digests, and writes exactly ONE record however many times it runs', () => {
+  const root = mkdtempSync(join(tmpdir(), 'b2-'))
+  const legacy = legacyRun(root, 'v4', { metrics: LEGACY_METRICS })
+  const before = digestDir(legacy)
+  const fresh = join(root, '.pair', 'working', 'runs', 'v5', '42')
+  mkdirSync(fresh, { recursive: true })
+  const first = migrateAcknowledge({ dir: fresh, legacyDirs: [legacy], workflowVersion: V, story: '42', pr: 7, run: 'v5', branch: 'b', inputHead: SHA('a') })
+  assert.equal(first.applied, true, JSON.stringify(first))
+  assert.deepEqual(digestDir(legacy), before, 'the legacy evidence is untouched')
+  const rec = JSON.parse(readFileSync(first.path, 'utf8'))
+  assert.equal(rec.recordType, 'migration')
+  assert.equal(rec.predecessorRuns.length, 1)
+  assert.equal(rec.predecessorRuns[0].runId, 'v4')
+  assert.equal(rec.predecessorRuns[0].inspection.next, 'migration-acknowledgment-required')
+  assert.match(rec.predecessorRuns[0].handoffs[0].sha256, /^sha256:[0-9a-f]{64}$/)
+  assert.equal(rec.predecessorRuns[0].metricsPath, join(legacy, 'metrics.json'))
+  // no invented approval and no invented counter
+  for (const k of ['verdict', 'readiness', 'reviewedHead', 'findings', 'cycles', 'usage']) assert.equal(rec[k], undefined, `${k} must not be fabricated by a migration`)
+  const again = migrateAcknowledge({ dir: fresh, legacyDirs: [legacy], workflowVersion: V, story: '42', pr: 7, run: 'v5', branch: 'b', inputHead: SHA('a') })
+  assert.equal(again.applied, false)
+  assert.equal(again.reason, 'already-acknowledged')
+  assert.equal(readdirSync(fresh).filter(f => /migration|review-phase/.test(f)).length, 1)
+})
+
+test('B2: a legacy file that CHANGED since it was acknowledged is refused — the digests are verified, not decorative', () => {
+  const root = mkdtempSync(join(tmpdir(), 'b2-'))
+  const legacy = legacyRun(root, 'v4')
+  const fresh = join(root, '.pair', 'working', 'runs', 'v5', '42')
+  mkdirSync(fresh, { recursive: true })
+  assert.equal(migrateAcknowledge({ dir: fresh, legacyDirs: [legacy], workflowVersion: V, story: '42', pr: 7, run: 'v5', branch: 'b', inputHead: SHA('a') }).applied, true)
+  const f = join(legacy, 'r0-review-phase.json')
+  writeFileSync(f, readFileSync(f, 'utf8').replace('CHANGES-REQUESTED', 'APPROVED'))
+  const out = migrateAcknowledge({ dir: fresh, legacyDirs: [legacy], workflowVersion: V, story: '42', pr: 7, run: 'v5', branch: 'b', inputHead: SHA('a') })
+  assert.equal(out.applied, false)
+  assert.match(out.reason, /^predecessor-evidence-changed/)
+})
+
+test('B2: transitive predecessors are carried — acknowledging v4 from v5 keeps v3, which v4 itself acknowledged', () => {
+  const root = mkdtempSync(join(tmpdir(), 'b2-'))
+  const v3 = legacyRun(root, 'v3')
+  const v4 = join(root, '.pair', 'working', 'runs', 'v4', '42')
+  mkdirSync(v4, { recursive: true })
+  migrateAcknowledge({ dir: v4, legacyDirs: [v3], workflowVersion: V, story: '42', pr: 7, run: 'v4', branch: 'b', inputHead: SHA('a') })
+  const v5 = join(root, '.pair', 'working', 'runs', 'v5', '42')
+  mkdirSync(v5, { recursive: true })
+  const out = migrateAcknowledge({ dir: v5, legacyDirs: [v4], workflowVersion: V, story: '42', pr: 7, run: 'v5', branch: 'b', inputHead: SHA('a') })
+  assert.equal(out.applied, true)
+  assert.deepEqual(JSON.parse(readFileSync(out.path, 'utf8')).predecessorRuns.map(r => r.runId).sort(), ['v3', 'v4'])
+})
+
+test('B2: the record is evidence, not a review — it confers no readiness, spends no review execution, and the cycle still starts where it would have', () => {
+  const root = mkdtempSync(join(tmpdir(), 'b2-'))
+  const legacy = legacyRun(root, 'v4')
+  const fresh = join(root, '.pair', 'working', 'runs', 'v5', '42')
+  mkdirSync(fresh, { recursive: true })
+  migrateAcknowledge({ dir: fresh, legacyDirs: [legacy], workflowVersion: V, story: '42', pr: 7, run: 'v5', branch: 'b', inputHead: SHA('a') })
+  const r = resolve({ dir: fresh, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, story: '42' })
+  assert.equal(r.status, 'in-progress')
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase }, { step: 'verify', mode: 'first', phase: 'r0', round: 0 }.step ? { step: 'verify', mode: 'first', phase: 'r0' } : {}, JSON.stringify(r.next))
+  assert.equal(r.counters.reviewExecutions, 0, 'a migration is not a review execution')
+  assert.deepEqual(r.predecessorRuns, ['v4'], 'the reference survives into the resume')
+  // and a SECOND resume still carries it
+  assert.deepEqual(resolve({ dir: fresh, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, story: '42' }).predecessorRuns, ['v4'])
+})
+
+test('B2: the legacy run directory itself is never adopted for execution — it stays incompatible, and nothing there is rewritten by the acknowledgment', () => {
+  const root = mkdtempSync(join(tmpdir(), 'b2-'))
+  const legacy = legacyRun(root, 'v4')
+  const before = digestDir(legacy)
+  const fresh = join(root, '.pair', 'working', 'runs', 'v5', '42')
+  mkdirSync(fresh, { recursive: true })
+  migrateAcknowledge({ dir: fresh, legacyDirs: [legacy], workflowVersion: V, story: '42', pr: 7, run: 'v5', branch: 'b', inputHead: SHA('a') })
+  assert.equal(resolve({ dir: legacy, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, story: '42' }).status, 'incompatible')
+  assert.deepEqual(digestDir(legacy), before)
+  assert.equal(migrateInspect({ dir: legacy }).next, 'migration-acknowledgment-required')
+})
+
+test('B2 (CLI): migrate-acknowledge runs from the shell the launch recipe uses, is idempotent there too, and never touches the legacy directory', () => {
+  const root = mkdtempSync(join(tmpdir(), 'b2-cli-'))
+  const legacy = legacyRun(root, 'v4', { metrics: LEGACY_METRICS })
+  const before = digestDir(legacy)
+  const fresh = join(root, '.pair', 'working', 'runs', 'v5', '42')
+  mkdirSync(fresh, { recursive: true })
+  const cli = fileURLToPath(new URL('../../skills/pair-workflow-review-phase/scripts/cycle-state.mjs', import.meta.url))
+  const run = () => spawnSync('node', [cli, 'migrate-acknowledge', '--dir', fresh, '--legacy', legacy, '--workflowVersion', V, '--story', '42', '--run', 'v5', '--head', SHA('a'), '--pr', '7', '--branch', 'b'], { encoding: 'utf8' })
+  const first = run()
+  assert.equal(first.status, 0, first.stdout + first.stderr)
+  assert.equal(JSON.parse(first.stdout).applied, true)
+  const second = run()
+  assert.equal(second.status, 0, 'an already-acknowledged binding is a success, not a failure')
+  assert.equal(JSON.parse(second.stdout).reason, 'already-acknowledged')
+  assert.deepEqual(digestDir(legacy), before)
+  assert.equal(readdirSync(fresh).filter(f => f.endsWith('.json')).length, 1)
 })

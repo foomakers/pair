@@ -517,3 +517,64 @@ test('CLI: reduce/write/aggregate print JSON; an unknown command exits 2', () =>
   r = spawnSync('node', [CLI, 'frobnicate'], { encoding: 'utf8' })
   assert.equal(r.status, 2)
 })
+
+// ── US-479 B2 (S9/S10, AC-27/22): the lifetime of a PR spans the runs it actually had ──────────
+test('B2: a bound predecessor run with persisted metrics is FOLDED into the lifetime totals — a new run directory is not a clean new PR', () => {
+  const root = mkdtempSync(join(tmpdir(), 'lifetime-'))
+  const legacy = join(root, '.pair', 'working', 'runs', 'v4', '42')
+  mkdirSync(legacy, { recursive: true })
+  writeFileSync(join(legacy, 'metrics.json'), JSON.stringify({ schemaVersion: 1, identity: { canonicalRunId: 'v4' }, cycles: { attempted: 2, completed: 1 }, usage: { observedTotalTokens: 1200, inputTokens: 200, outputTokens: 1000, cacheReadTokens: 50, cacheWriteTokens: 25 } }))
+  const dir = join(root, '.pair', 'working', 'runs', 'v5', '42')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(
+    join(dir, 'm0-review-phase.json'),
+    JSON.stringify({ run: 'v5', story: '42', pr: 7, branch: 'b', phase: 'm0', skill: 'review-phase', inputHead: 'a'.repeat(40), recordType: 'migration', migrationKey: `sha256:${'1'.repeat(64)}`, predecessorRuns: [{ runId: 'v4', dir: legacy, metricsPath: join(legacy, 'metrics.json'), handoffs: [{ name: 'r0-review-phase.json', sha256: `sha256:${'2'.repeat(64)}` }] }], schemaVersion: 3, workflowVersion: '4.0.0', seq: 1 }),
+  )
+  const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v5', observations: [] })
+  assert.deepEqual(view.identity.predecessorRuns, ['v4'])
+  assert.deepEqual(view.identity.runIds, ['v5', 'v4'])
+  assert.equal(view.lifetime.coverage, 'complete')
+  assert.deepEqual(view.lifetime.foldedRuns, ['v4'])
+  assert.deepEqual(view.lifetime.missingRuns, [])
+  assert.equal(view.lifetime.cycles.completed, 1, 'the completed cycle already measured is not lost')
+  assert.equal(view.lifetime.cycles.attempted, 2)
+  assert.equal(view.lifetime.usage.outputTokens, 1000)
+  assert.equal(view.lifetime.usage.observedTotalTokens, 1200)
+  // the CURRENT cycle's own numbers are untouched — the lifetime is additional, never a rewrite
+  assert.equal(view.cycles.completed, 0)
+  assert.equal(view.usage.observedTotalTokens, null)
+  const md = renderMarkdown(view)
+  assert.match(md, /Lifetime \(incl\. 1 predecessor run: v4\) — cycles 1 completed \/ 2 attempted · tokens 1200 · coverage complete/)
+})
+
+test('B2: a bound predecessor whose metrics were never persisted leaves the lifetime EXPLICITLY partial — never a silently smaller total', () => {
+  const root = mkdtempSync(join(tmpdir(), 'lifetime-'))
+  const dir = join(root, '.pair', 'working', 'runs', 'v5', '42')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(
+    join(dir, 'm0-review-phase.json'),
+    JSON.stringify({ run: 'v5', story: '42', pr: 7, branch: 'b', phase: 'm0', skill: 'review-phase', inputHead: 'a'.repeat(40), recordType: 'migration', migrationKey: `sha256:${'1'.repeat(64)}`, predecessorRuns: [{ runId: 'v3', dir: join(root, 'gone'), metricsPath: null, handoffs: [{ name: 'r0-review-phase.json', sha256: `sha256:${'2'.repeat(64)}` }] }], schemaVersion: 3, workflowVersion: '4.0.0', seq: 1 }),
+  )
+  const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v5', observations: [] })
+  assert.equal(view.lifetime.coverage, 'partial')
+  assert.deepEqual(view.lifetime.missingRuns, ['v3'])
+  assert.ok(view.snapshot.missingSources.includes('legacy-lifetime'))
+  assert.equal(view.snapshot.completeness, 'partial')
+  assert.match(renderMarkdown(view), /partial/i)
+})
+
+test('B2: the PR summary states the lifetime across every bound run — the reader never sees only the current run directory', () => {
+  const root = mkdtempSync(join(tmpdir(), 'lifetime-'))
+  const legacy = join(root, '.pair', 'working', 'runs', 'v4', '42')
+  mkdirSync(legacy, { recursive: true })
+  writeFileSync(join(legacy, 'metrics.json'), JSON.stringify({ schemaVersion: 1, cycles: { attempted: 2, completed: 1 }, usage: { observedTotalTokens: 1200, inputTokens: 200, outputTokens: 1000 } }))
+  const dir = join(root, '.pair', 'working', 'runs', 'v5', '42')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(
+    join(dir, 'm0-review-phase.json'),
+    JSON.stringify({ run: 'v5', story: '42', pr: 7, branch: 'b', phase: 'm0', skill: 'review-phase', inputHead: 'a'.repeat(40), recordType: 'migration', migrationKey: `sha256:${'1'.repeat(64)}`, predecessorRuns: [{ runId: 'v4', dir: legacy, metricsPath: join(legacy, 'metrics.json'), handoffs: [{ name: 'r0-review-phase.json', sha256: `sha256:${'2'.repeat(64)}` }] }], schemaVersion: 3, workflowVersion: '4.0.0', seq: 1 }),
+  )
+  const body = renderPrSummary(reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v5', observations: [] }))
+  assert.match(body, /Lifetime across 2 run\(s\) \(v5, v4\)/)
+  assert.match(body, /cycles 1 completed \/ 2 attempted · tokens 1200 · coverage \*\*complete\*\*/)
+})

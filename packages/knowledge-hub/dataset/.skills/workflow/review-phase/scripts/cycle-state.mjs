@@ -26,6 +26,13 @@
 //   node … hash --file <contract.json>            → { contractHash }   (canonical, volatile fields excluded)
 //   node … inputs --json '<effective inputs>'      → { inputsDigest }
 //   node … ac-hash --story <id>                    → { acHash }        canonical sha256 of the card body (gh issue view)
+//   node … migrate-acknowledge --dir <new run/story dir> --legacy <legacy dir>[,<dir>...]
+//        --workflowVersion <v> --story <id> --run <runId> --head <40-hex> [--pr <n>] [--branch <b>]
+//     → { applied, migrationKey, predecessorRuns }   (US-479 B2, S10)
+//     Binds a NEW run directory to the legacy run(s) it continues — transitively — with verified
+//     per-file digests and migrate-inspect's finding. Read-only on the legacy directory; writes no
+//     counter, token, verdict or approval; idempotent (`already-acknowledged`).
+//
 //   node … migrate-inspect --dir <run/story dir>   → { compatibleEvidenceRefs, missingDimensions, ambiguity, next }
 //     Read-only (US-479 T-19, S10): never rewrites schema-2 evidence, never fabricates a counter.
 //
@@ -39,7 +46,7 @@
 //     → { identity, parts, reusable, missing }     a cached test result is valid ONLY for this identity
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { join, basename } from 'node:path'
+import { join, basename, dirname } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -75,8 +82,11 @@ const SHA_RE = /^[0-9a-f]{40}$/
 // A gap's reproducer command is an executable reference, never shell code pasted into an unsafe
 // eval (S3) — the same hostile-value shape the coordinator already refuses in card/pipeline fields.
 const SHELL_METACHAR_RE = /[;&|`]|\$\(|\.\.\//
-const PHASE_RE = /^(a0(?:-rev\d+)?|r\d+(?:-g\d+(?:-rev\d+)?)?)$/
-const NAME_RE = /^(a0(?:-rev\d+)?|r\d+(?:-g\d+(?:-rev\d+)?)?)-(red-spec|red-verify|implement-phase|green-fix|review-phase)(?:\.attempt-(\d+))?\.json$/
+// `m<n>` is a RECORD-ONLY phase (US-479 B2, S10): a migration acknowledgment is durable evidence
+// about where this cycle came from, never a position in the cycle. `phaseParts` returns null for it
+// and `deriveNext`/`cycleCounters` skip it, so it can never be read as a step, a review or readiness.
+const PHASE_RE = /^(a0(?:-rev\d+)?|r\d+(?:-g\d+(?:-rev\d+)?)?|m\d+)$/
+const NAME_RE = /^(a0(?:-rev\d+)?|r\d+(?:-g\d+(?:-rev\d+)?)?|m\d+)-(red-spec|red-verify|implement-phase|green-fix|review-phase)(?:\.attempt-(\d+))?\.json$/
 
 const sha256 = s => `sha256:${createHash('sha256').update(s).digest('hex')}`
 // Canonical JSON: sorted keys at every level, so two spellings of one object hash alike.
@@ -164,7 +174,7 @@ export function envelopeErrors(data, { phase, skill }) {
   if (data.inputHead !== undefined && !SHA_RE.test(String(data.inputHead))) errs.push('inputHead-not-a-sha')
   if (!PHASE_RE.test(String(phase))) errs.push(`phase-invalid:${phase}`)
   if (!SKILLS.includes(skill)) errs.push(`skill-unknown:${skill}`)
-  for (const k of REQUIRED_BY_SKILL[skill] ?? []) if (data[k] === undefined) errs.push(`missing-field:${k}`)
+  if (data.recordType !== 'migration') for (const k of REQUIRED_BY_SKILL[skill] ?? []) if (data[k] === undefined) errs.push(`missing-field:${k}`)
   if (data.phase !== undefined && data.skill !== undefined && (String(data.phase) !== String(phase) || String(data.skill) !== String(skill))) errs.push('identity-mismatch')
   if (data.scopeEpoch !== undefined && (!Number.isInteger(data.scopeEpoch) || data.scopeEpoch < 1)) errs.push('scopeEpoch-invalid')
   if (data.scopeBaselineHash !== undefined && !/^sha256:[0-9a-f]{64}$/.test(String(data.scopeBaselineHash))) errs.push('scopeBaselineHash-invalid')
@@ -221,6 +231,20 @@ export function envelopeErrors(data, { phase, skill }) {
         }
       }
     }
+  }
+  // US-479 B2 (S10, AC-27): a migration acknowledgment is EVIDENCE, not a judgment. It names its
+  // predecessors with verified digests and carries no verdict, head, finding or readiness — the
+  // shapes that would let it be mistaken for a review or confer readiness are refused outright.
+  if (data.recordType === 'migration') {
+    for (const k of ['verdict', 'readiness', 'reviewedHead', 'findings', 'custody']) if (data[k] !== undefined) errs.push(`migration-must-not-carry:${k}`)
+    const runs = data.predecessorRuns
+    if (!Array.isArray(runs) || !runs.length) errs.push('predecessorRuns-missing')
+    else
+      for (const r of runs) {
+        if (!r || typeof r !== 'object' || !String(r.runId ?? '').trim()) errs.push('predecessorRun-invalid')
+        else if (!Array.isArray(r.handoffs) || r.handoffs.some(h => !h || !h.name || !/^sha256:[0-9a-f]{64}$/.test(String(h.sha256 ?? '')))) errs.push(`predecessorRun-digests-invalid:${r.runId}`)
+      }
+    if (!/^sha256:[0-9a-f]{64}$/.test(String(data.migrationKey ?? ''))) errs.push('migrationKey-invalid')
   }
   // US-479 B1 (S3): the contradiction answer carries EXECUTABLE evidence or it is not published.
   // Validated here, before the atomic write, exactly like every other schema-3 field — so a
@@ -846,7 +870,8 @@ const isBlocking = f => f && f.blocking === true && f.transition !== 'resolved' 
 const EXTERNAL_REFUSALS = new Set(['dirty', 'stale'])
 
 export function deriveNext(handoffs, policy, ctx = {}) {
-  const list = handoffs.filter(h => h.data)
+  // US-479 B2: a migration acknowledgment is evidence about provenance, never a cycle position.
+  const list = handoffs.filter(h => h.data && h.data.recordType !== 'migration')
   if (!list.length) return ctx.entry === 'pr' ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
   const last = list[list.length - 1]
   const d = last.data
@@ -1075,7 +1100,8 @@ export function deriveNext(handoffs, policy, ctx = {}) {
 //   - contractRevisions: distinct red-spec phases that are a revision (`-rev<m>`, m>1).
 //   - preparationRepairs: red-spec attempts beyond the first on the SAME non-revision phase.
 //   - implementationRetries: implement-phase attempts beyond the first on the same phase.
-export function cycleCounters(handoffs) {
+export function cycleCounters(allHandoffs) {
+  const handoffs = (allHandoffs ?? []).filter(h => h?.data?.recordType !== 'migration')
   const list = handoffs.filter(h => h.data)
   const attemptedRounds = new Set()
   const succeededRounds = new Set()
@@ -1190,9 +1216,12 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   // key its markers on `PR#null` (canary run 11, finding r1-5).
   const knownPr = handoffs.map(h => h.data.pr ?? h.data.prNumber).find(x => Number.isInteger(x) && x > 0) ?? (Number.isInteger(Number(pr)) && Number(pr) > 0 ? Number(pr) : undefined)
   if (knownPr !== undefined && next && typeof next === 'object' && next.pr === undefined) next = { ...next, pr: knownPr }
+  // US-479 B2: the provenance binding travels with EVERY resolve — a resumed cycle never forgets
+  // which runs it continues, and a reader never mistakes it for a clean new PR.
+  const predecessorRuns = [...new Set(handoffs.filter(h => h.data?.recordType === 'migration').flatMap(h => (h.data.predecessorRuns ?? []).map(r => r.runId)))].sort()
   const status = next.step === 'done' ? 'completed' : next.step === 'blocked' ? 'blocked' : 'in-progress'
   const nextFindingSeq = handoffs.filter(h => h.skill === 'review-phase').reduce((m, h) => Math.max(m, ...(h.data.findings ?? []).map(f => Number(/-(\d+)$/.exec(String(f.id ?? ''))?.[1] ?? 0))), 0) + 1
-  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs) }
+  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs), predecessorRuns }
 }
 
 // ── migration (US-479 T-19, S10) ───────────────────────────────────────────────────────────
@@ -1220,6 +1249,82 @@ export function migrateInspect({ dir }) {
   const missingDimensions = legacyCount && !compatibleEvidenceRefs.length ? ['scopeEpoch', 'scopeBaselineHash', 'findings-origin'] : []
   const next = ambiguity.length ? 'blocked' : legacyCount && !compatibleEvidenceRefs.length ? 'migration-acknowledgment-required' : compatibleEvidenceRefs.length ? 'resume' : 'fresh-cycle'
   return { compatibleEvidenceRefs, missingDimensions, ambiguity, next }
+}
+
+// ── migration acknowledgment (US-479 B2, S10, AC-27) ───────────────────────────────────────
+// A run directory written by an older engine is LEGACY evidence: `resolve` refuses it (its first
+// pre-schema-3 handoff is enough) and no record on top can make it executable — the supported
+// shape is a NEW run directory started BESIDE it. What was missing is the BINDING: without it the
+// new cycle presents as a clean PR and the lifetime metrics silently lose everything already
+// measured, which is exactly what S10 forbids ("bind predecessor run references; missing older
+// logs yield partial lifetime metrics, not a clean new PR").
+//
+// This writes that binding, once: a `recordType: migration` record naming every predecessor —
+// transitively, so a chain v3 -> v4 -> v5 keeps v3 — with `migrate-inspect`'s read-only finding, a
+// verified sha256 per legacy handoff and the path of any metrics the predecessor already persisted.
+// It reads the legacy directory and writes NOTHING into it. It fabricates no counter, no token, no
+// verdict and no approval: the record is refused by the envelope validator if it carries any.
+export function migrateAcknowledge({ dir, legacyDirs = [], workflowVersion, story, pr, run, branch, inputHead, lockWaitMs = 5000 }) {
+  const digestOf = p => `sha256:${createHash('sha256').update(readFileSync(p)).digest('hex')}`
+  const collect = (legacyDir, seen) => {
+    const real = existsSync(legacyDir) ? legacyDir : null
+    if (!real) return { error: `predecessor-missing:${legacyDir}` }
+    const runId = basename(dirname(real))
+    if (seen.has(runId)) return { runs: [] }
+    seen.add(runId)
+    const files = readdirSync(real).filter(f => NAME_RE.test(f)).sort()
+    const handoffs = files.map(f => ({ name: f, sha256: digestOf(join(real, f)) }))
+    const parsed = files.map(f => {
+      try {
+        return JSON.parse(readFileSync(join(real, f), 'utf8'))
+      } catch {
+        return null
+      }
+    })
+    const metricsPath = existsSync(join(real, 'metrics.json')) ? join(real, 'metrics.json') : null
+    const runs = [
+      {
+        runId,
+        dir: real,
+        handoffs,
+        metricsPath,
+        schemaVersions: [...new Set(parsed.map(d => d?.schemaVersion).filter(v => v !== undefined))].sort(),
+        workflowVersions: [...new Set(parsed.map(d => d?.workflowVersion).filter(Boolean))].sort(),
+        inspection: migrateInspect({ dir: real }),
+      },
+    ]
+    // transitive: whatever THIS predecessor itself acknowledged is still a predecessor of ours
+    for (const d of parsed) if (d?.recordType === 'migration') for (const p of d.predecessorRuns ?? []) if (!seen.has(p.runId)) { seen.add(p.runId); runs.push(p) }
+    return { runs }
+  }
+  const seen = new Set()
+  const predecessorRuns = []
+  for (const l of legacyDirs) {
+    const got = collect(l, seen)
+    if (got.error) return { applied: false, reason: got.error }
+    predecessorRuns.push(...got.runs)
+  }
+  if (!predecessorRuns.length) return { applied: false, reason: 'no-predecessors' }
+  predecessorRuns.sort((a, b) => (a.runId < b.runId ? -1 : a.runId > b.runId ? 1 : 0))
+  const migrationKey = `sha256:${createHash('sha256').update(predecessorRuns.map(r => `${r.runId}\u0000${(r.handoffs ?? []).map(h => `${h.name}:${h.sha256}`).join(',')}`).join('\u0000')).digest('hex')}`
+  const existing = readHandoffs(dir).filter(h => h.data?.recordType === 'migration')
+  for (const e of existing) {
+    if (e.data.migrationKey === migrationKey) return { applied: false, reason: 'already-acknowledged', path: e.file, migrationKey }
+    // the same predecessors under different digests: the evidence this cycle was bound to moved
+    const priorById = new Map((e.data.predecessorRuns ?? []).map(r => [r.runId, r]))
+    for (const r of predecessorRuns) {
+      const prior = priorById.get(r.runId)
+      if (prior && JSON.stringify(prior.handoffs) !== JSON.stringify(r.handoffs)) return { applied: false, reason: `predecessor-evidence-changed:${r.runId}`, path: e.file }
+    }
+  }
+  const n = existing.length
+  const phase = `m${n}`
+  const draft = { run, story, pr, branch, phase, skill: 'review-phase', inputHead, recordType: 'migration', migrationKey, predecessorRuns, acknowledgedAt: new Date().toISOString() }
+  const tmp = join(dir, `.migration-${Date.now()}-${Math.random().toString(36).slice(2)}.json`)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(tmp, JSON.stringify(draft))
+  const out = publish({ dir, file: tmp, phase, skill: 'review-phase', workflowVersion, pr, lockWaitMs })
+  return { applied: !!out.published, reason: out.published ? undefined : out.reason, path: out.path, migrationKey, predecessorRuns: predecessorRuns.map(r => r.runId) }
 }
 
 // ── test identity ──────────────────────────────────────────────────────────────────────────
@@ -1316,6 +1421,14 @@ if (isMain()) {
       out = migrateInspect({ dir: opts.dir })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
+    } else if (cmd === 'migrate-acknowledge') {
+      // US-479 B2: bind a NEW run directory to the legacy run(s) it continues. Read-only on the
+      // legacy evidence; `--legacy` repeats, and `,` separates several in one value.
+      need('dir', 'legacy', 'workflowVersion', 'story', 'run', 'head')
+      const legacyDirs = String(opts.legacy).split(',').map(x => x.trim()).filter(Boolean)
+      out = migrateAcknowledge({ dir: opts.dir, legacyDirs, workflowVersion: opts.workflowVersion, story: opts.story, pr: opts.pr ? Number(opts.pr) : undefined, run: opts.run, branch: opts.branch, inputHead: opts.head })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.applied || out.reason === 'already-acknowledged' ? 0 : 1)
     } else if (cmd === 'test-identity') {
       need('cwd', 'command')
       const keys = (opts['env-keys'] ?? 'CI,NODE_ENV,TZ').split(',').filter(Boolean)

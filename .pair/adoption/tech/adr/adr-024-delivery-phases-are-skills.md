@@ -224,6 +224,17 @@ commit on `feature/US-479-delivery-workflow-to-be` / PR #480:
   awaiting-scope-decision → authenticated extension → targeted remediation → done → confirmed
   summary) replayed through the real script entrypoints, `pair-contracts/engine-integration.test.mjs`.
   Full regression suite green at `76fa55aa`. The paid live canary (T-8) was NOT run.
+  **Corrected 2026-09-11 (amendment g):** this lifecycle did NOT cover DT-04's contradiction
+  recovery, nor DT-19/22/30 on real usage sources — the T-8 preflight found both. Read the T-27
+  claim as "the composed lifecycle above", never as "DT-01–34".
+
+**Correction 2026-09-11 (amendment g):** T-21's line above cited DT-04..08; DT-04's first clause
+("conflicting sealed rows route revision in same cycle") was neither implemented nor tested until
+amendment (g). The host launch recipe below named `--usage "$USAGE_PATH"` as though a source
+existed; it did not until amendment (g) added the producer. And `usage.byRole` / the admin counters
+were recorded as host limitations — they are not: `byRole` comes from the transcripts' own
+`meta.agentType` and the admin counters from the engine's returned result. The one real remaining
+limit is parent/child attribution deeper than one spawn level.
 
 **Host launch recipe** (the coordinator's shell executor, never the Workflow sandbox, never a
 phase skill itself):
@@ -453,3 +464,121 @@ skill it belongs to.
 | Only `ready-for-merge` advances in `pair-loop` | `seal-invalidated` and `stale-history-decision` cards were re-driven every iteration. |
 | Rebase never repaired; custody by script | The custody/history-decision layer had become a second engine that repaired in place what the design can refuse. |
 | One frozen plan per round, indices into the received set | A finding could be left out of remediation without anyone noticing. |
+
+## Amendment 2026-09-11 (g) — US-479 B1/B2/B4: the three gaps the T-8 preflight found
+
+The T-8 preflight (read-only, no paid run) compared the engine at `65ece7dc` against #479's own
+S3/S9/S10 and found three deterministic gaps. All three are closed here, before any canary. No
+scenario was launched, no seal retired, no finding waived.
+
+### B1 — a contradiction with sealed rows routes a successor revision (S3, AC-08, DT-04)
+
+S3 requires it literally: "predecessor contract hash + conflicting row IDs + authoritative
+counterexample produce `revisionReason=contradicts-approved-authority`. `deriveNext` chooses
+existing preparation `mode=revision`, same canonical cycle, exact `changedRows`." The engine routed
+every such preparation to `blocked('failed-preparation')` instead — the state canary v4 run 18b
+ended in, with the correct route spelled out in its own `splitReason`.
+
+- `contradiction` is a typed red-spec ANSWER, separate from `split-required` (still terminal).
+- Its evidence is validated before the atomic write: `revisionReason`, `predecessorContractHash`,
+  a non-empty `conflictingRowIds`, `changedRows` covering all of them, and an executable
+  `counterexample` with no shell syntax. `revisionReason` on any other status is refused, so a
+  3.0.x prose `splitReason` can never be promoted into a validated one.
+- The target is resolved from the VERIFIED sealed identity behind the hash (a `red-verify` that
+  both verified and sealed it), never assumed to be the current group's contract; an unsealed or
+  unknown hash is `contradiction-unresolvable`.
+- The route is `prepare / mode=revision` on `<succession line>-rev<m+1>`, based on the contradicted
+  contract, carrying the exact rows and `contradictionFor` (the phase and finding ids that raised
+  it). The predecessor seal is untouched — the successor stands beside it.
+- **Budget:** ONE successor revision per obligation per succession line. `publish` stamps
+  `contradictionKey` itself from the sealed line plus the deduplicated sorted row ids, so id order,
+  the raising group and the successor's hash are irrelevant; `resolve` feeds in the keys already
+  spent by every sibling run of the same story/PR, so a new `runId` buys nothing. An equivalent
+  contradiction after the first is `escalate` / `budget: contradictionRevisions`. No other budget
+  moved.
+
+Also corrected at the boundary this exposed: `envelopeErrors` validated red-spec's documented
+`findings: { received, covered }` envelope against the REVIEW findings shape and refused it.
+
+### B2 — legacy evidence is bound, not executed (S10, AC-27, DT-33)
+
+The specification does not ask for an executable schema-2 resume, and `resolve` is right to refuse
+one. What was missing is the BINDING: `migrate-inspect` was read-only and correct, but nothing
+consumed it, nothing recorded it, and a new run directory therefore presented as a clean PR whose
+lifetime totals silently dropped everything already measured — the outcome S10 forbids.
+
+- `cycle-state.mjs migrate-acknowledge` writes ONE `recordType: migration` record binding the new
+  run to the legacy run(s) it continues, transitively (v3 → v4 → v5 keeps v3), with a verified
+  sha256 per legacy handoff, `migrate-inspect`'s finding and the path of any metrics the
+  predecessor persisted. It reads the legacy directory and writes nothing into it; it is
+  idempotent (`already-acknowledged`) and refuses `predecessor-evidence-changed` when a bound file
+  moved.
+- The record is evidence, not a judgment: the envelope validator refuses a migration carrying
+  `verdict`, `readiness`, `reviewedHead`, `findings` or `custody`; it lives on a record-only phase
+  (`m<n>`), `deriveNext` and `cycleCounters` skip it, so it confers no readiness and spends no
+  review execution.
+- Consumers: `resolve` returns `predecessorRuns` on every resume, and `reduceCycleMetrics` FOLDS
+  each bound predecessor's persisted metrics into a `lifetime` section (cycles + usage), naming any
+  predecessor without persisted metrics in `lifetime.missingRuns` and pushing `legacy-lifetime`
+  into `missingSources` so the snapshot reads partial. Both renderers show it.
+
+### B4 — the usage adapter the recipe assumed (S7, AC-20/21/25)
+
+`observe --usage "$USAGE_PATH"` had no producer: the harness journal carries only
+`{started|result, key, agentId}` — no tokens, no timestamps — while the cost lives in the per-agent
+transcripts in a shape the reducer does not read. Every T-8 token figure would have been `unknown`.
+
+- `cycle-runtime.mjs usage-extract` joins transcripts to the journal on `agentId`. Deterministic
+  file reading: no provider API, no LLM, and no message CONTENT — usage, timing, model, effort and
+  role metadata only.
+- The provider's accounting, measured on the run-18b transcripts and not assumed: inside one
+  `requestId` the input and cache fields REPEAT per `apiBlockIndex` while `output_tokens` GROWS,
+  and only the last block carries a non-null `stop_reason`. A request contributes its fixed fields
+  once and its final block's output. Blocks that disagree contribute nothing and are reported —
+  never an average. A request with no `stop_reason` keeps the cost already charged but does not
+  become complete: its execution is named in `usage.incompleteExecutionIds` and the snapshot reads
+  partial.
+- Records are cumulative per execution, so re-read, rotation and restart rebuild the same totals.
+  A transcript with no dispatch identity keeps its cost under an explicit `unattributed` phase with
+  no invented parent; a journal execution with no transcript stays in `missingExecutionIds`.
+- **Three clocks, never conflated:** the host observes journal records at TICK time (a coarse upper
+  bound), the provider timestamps the messages. Intervals COMBINE them so the measured span can
+  only widen — earliest known start, latest known end — and an end is claimed only where a terminal
+  result was actually observed. Neither clock is preferred for being the flattering one.
+- `dispatch-stats` derives the four admin counters from the engine's own returned result;
+  `nestedDispatches` stays `null` because that result genuinely does not carry it. `finalize`
+  reconciles a late tail itself when given the sources, and a repeat that finds nothing new is
+  idempotent (exit 0). Cache categories are rendered beside the aggregate, never added into it.
+
+### Host launch recipe (superseding amendment (b)'s)
+
+```bash
+node <skill>/scripts/cycle-runtime.mjs entry --dir "$RUN_DIR" --repo "$REPO" --story "$STORY" --pr "$PR"
+# a run directory that continues an older one is BOUND to it first, read-only:
+node <skill>/scripts/cycle-state.mjs migrate-acknowledge --dir "$RUN_DIR" --legacy "$LEGACY_DIR" \
+  --workflowVersion 4.0.0 --story "$STORY" --run "$RUN_ID" --head "$HEAD" --pr "$PR"
+# TRANSCRIPTS is the workflow run's own directory, known once the Workflow tool returns its id:
+#   ~/.claude/projects/<project slug>/<session id>/subagents/workflows/<wf id>/
+node <skill>/scripts/cycle-runtime.mjs observe --dir "$RUN_DIR" --repository "$REPO" --story "$STORY" \
+  --branch "$BRANCH" --pr "$PR" --runId "$RUN_ID" --journal "$TRANSCRIPTS/journal.jsonl" \
+  --transcripts "$TRANSCRIPTS" --usage "$RUN_DIR/usage.jsonl" &
+# after the run returns, its own result supplies the admin counters:
+node <skill>/scripts/cycle-runtime.mjs dispatch-stats --result "$WF_RESULT" --story "$STORY" > "$STATS"
+node <skill>/scripts/cycle-runtime.mjs finalize --dir "$RUN_DIR" --repo "$REPO" --story "$STORY" \
+  --branch "$BRANCH" --pr "$PR" --runId "$RUN_ID" --journal "$TRANSCRIPTS/journal.jsonl" \
+  --transcripts "$TRANSCRIPTS" --usage "$RUN_DIR/usage.jsonl" --dispatchStats "$(cat "$STATS")"
+```
+
+The same commands, with the same `--transcripts` methodology, are used for BOTH sides of a paired
+measurement. The baseline side runs its own engine from its own checkout in its own session (a
+phase skill is dispatched by NAME and resolves against the session's installed skills); the
+extractor is a host script and is run from this checkout against that session's transcript
+directory, so the baseline engine is never modified to be measured.
+
+### Still open, honestly
+
+- Parent/child attribution deeper than one spawn level: the transcripts carry no parent link, so a
+  nested execution's tokens are counted under its own identity and never attributed upward. Not
+  fabricated, not inferred.
+- T-8 itself is unchanged by this amendment: no scenario was run, and the six paired scenarios
+  still require the separate baseline session.

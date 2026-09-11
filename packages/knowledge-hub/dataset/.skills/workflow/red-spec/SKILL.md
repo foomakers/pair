@@ -1,11 +1,11 @@
 ---
-name: pair-workflow-red-spec
+name: red-spec
 description: "Stage 1 of the delivery workflow — preparation: owns the authoritative inventory (AC or finding → producer/grammar → inputs, representations, consumers → equivalence classes and interactions → executable evidence), the grouping of a remediation round and the executable acceptance contract — discriminating witnesses that are RED against the unfixed base, positive/already-correct controls that may pass, stable row ids — writing ONLY tests and consumed fixtures before any production edit, in initial (fresh story), remediation, repair (verifier rejection) and revision (contract gap) modes. Resolves the durable cycle state first and redirects when another step is due. Never touches production source. Dispatched by the batch engine (pair-implement-batch)."
 version: 0.2.0
 author: Foomakers
 ---
 
-# /pair-workflow-red-spec — The Contract Comes First, From Someone Who Will Not Implement It
+# /red-spec — The Contract Comes First, From Someone Who Will Not Implement It
 
 Prepare the executable acceptance contract a change must satisfy, before any agent that can edit source sees the task. You inventory what each obligation really is, group a round's findings by owner, write the tests that discriminate, and hand one typed contract to an independent validator. The implementer cannot author its own specification; you write it, a verifier reproduces and seals it.
 

@@ -297,6 +297,46 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   })
   const time = reduceTime(intervals)
   const usage = reduceUsage(merged)
+  // US-479 B2 (S10, AC-27/22): a legacy run this cycle was bound to is part of the PR's LIFETIME.
+  // Whatever it already persisted is folded in; whatever it did not is named and leaves the
+  // lifetime explicitly partial — "missing older logs yield partial lifetime metrics, not a clean
+  // new PR". Nothing is read from the legacy directory except its own metrics file, and nothing is
+  // written back to it.
+  const predecessorRecords = handoffs.filter(h => h.data?.recordType === 'migration').flatMap(h => h.data.predecessorRuns ?? [])
+  const predecessorRuns = [...new Set(predecessorRecords.map(r => r.runId).filter(Boolean))].sort()
+  const lifetimeUsageKeys = ['observedTotalTokens', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens']
+  const lifetime = {
+    predecessorRuns: predecessorRecords.map(r => ({ runId: r.runId, metricsPath: r.metricsPath ?? null })),
+    foldedRuns: [],
+    missingRuns: [],
+    cycles: { attempted: counters.attemptedCycles, completed: counters.completedCycles },
+    usage: Object.fromEntries(lifetimeUsageKeys.map(k => [k, usage[k] ?? null])),
+    coverage: 'complete',
+  }
+  for (const r of predecessorRecords) {
+    let prior = null
+    if (r.metricsPath && existsSync(r.metricsPath))
+      try {
+        prior = JSON.parse(readFileSync(r.metricsPath, 'utf8'))
+      } catch {
+        prior = null
+      }
+    if (!prior) {
+      if (!lifetime.missingRuns.includes(r.runId)) lifetime.missingRuns.push(r.runId)
+      continue
+    }
+    lifetime.foldedRuns.push(r.runId)
+    lifetime.cycles.attempted += prior.cycles?.attempted ?? 0
+    lifetime.cycles.completed += prior.cycles?.completed ?? 0
+    for (const k of lifetimeUsageKeys) {
+      const v = prior.usage?.[k]
+      if (typeof v !== 'number') continue
+      lifetime.usage[k] = (lifetime.usage[k] ?? 0) + v
+    }
+  }
+  lifetime.foldedRuns.sort()
+  lifetime.missingRuns.sort()
+  if (lifetime.missingRuns.length) lifetime.coverage = 'partial'
   // US-479 remediation (Finding 4): the shared-batch allocation formula (allocateSharedCost) is
   // wired into the real reducer path — labeled distinctly from directly-measured tokens (S7).
   if (sharedCost && Array.isArray(sharedCost.admittedIds) && sharedCost.admittedIds.length) {
@@ -336,15 +376,17 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   // blocks disagreed keeps the cost already observed — but the snapshot it feeds is NOT complete.
   // Having usage is not being finished.
   if (usage.incompleteExecutionIds.length) missingSources.push('usage-incomplete')
+  if (lifetime.missingRuns.length) missingSources.push('legacy-lifetime')
   if (time.incomplete) missingSources.push('timing')
   const completeness = hasObservations && !missingSources.length ? 'complete' : 'partial'
   return {
     schemaVersion: METRICS_SCHEMA_VERSION,
-    identity: { repository, storyId: story, prNumber: Number.isInteger(pr) ? pr : null, branch, canonicalRunId: runId ?? null, runIds: runId ? [runId] : [], scopeEpoch: lastReview?.data.scopeEpoch ?? 1 },
+    identity: { repository, storyId: story, prNumber: Number.isInteger(pr) ? pr : null, branch, canonicalRunId: runId ?? null, runIds: [...(runId ? [runId] : []), ...predecessorRuns.filter(r => r !== runId)], predecessorRuns, scopeEpoch: lastReview?.data.scopeEpoch ?? 1 },
     workflow: { name: 'pair-implement-batch', versions, sourceShas: [], artifactDigests: [], models: [...new Set(merged.flatMap(o => (Array.isArray(o.models) ? o.models : [])))].sort(), mixedVersions: versions.length > 1 },
     snapshot: { revision, asOf, sourceDigest: sha256(canonical(list.map(h => h.name))), completeness, missingSources },
     outcome: { quality, delivery, cohortState: delivery === 'ready-for-merge' ? 'completed' : delivery === 'in-progress' ? 'running' : 'blocked', reason: delivery === 'awaiting-scope-decision' ? 'human-scope' : null, qualityConvergedHead: quality === 'converged' ? lastReview?.data.reviewedHead ?? null : null, reviewedHead: lastReview?.data.reviewedHead ?? null },
     cycles: { attempted: counters.attemptedCycles, completed: counters.completedCycles, perScopeEpoch: [] },
+    lifetime,
     execution,
     usage,
     time: { startedAt: known.length ? new Date(Math.min(...known.map(i => i.startMs))).toISOString() : null, lastObservedAt: known.length ? new Date(Math.max(...known.map(i => i.endMs))).toISOString() : null, terminalAt: delivery === 'ready-for-merge' ? asOf : null, elapsedMs: time.elapsedMs, activeWallMs: time.activeWallMs, agentMs: time.agentMs, waitMs: time.waitMs, incomplete: time.incomplete, byPhase: [] },
@@ -370,6 +412,10 @@ export function renderMarkdown(view) {
   if (view.usage.incompleteExecutionIds?.length) lines.push(`Incomplete provider requests in ${view.usage.incompleteExecutionIds.length} execution(s): the cost is counted, the execution is NOT settled`)
   lines.push(`Time: elapsed ${view.time.elapsedMs ?? 'unknown'}ms, active ${view.time.activeWallMs ?? 'unknown'}ms, agent ${view.time.agentMs ?? 'unknown'}ms`)
   if (view.scopeChanges.entries.length) lines.push(`Scope proposals: ${view.scopeChanges.pending} pending, ${view.scopeChanges.ignored} ignored, ${view.scopeChanges.extended} extended, ${view.scopeChanges.deferred} deferred`)
+  if (view.lifetime?.predecessorRuns?.length) {
+    const lu = view.lifetime.usage
+    lines.push(`Lifetime (incl. ${view.lifetime.predecessorRuns.length} predecessor run${view.lifetime.predecessorRuns.length > 1 ? 's' : ''}: ${view.lifetime.predecessorRuns.map(r => r.runId).join(', ')}) — cycles ${view.lifetime.cycles.completed} completed / ${view.lifetime.cycles.attempted} attempted · tokens ${lu.observedTotalTokens ?? 'unknown'} · coverage ${view.lifetime.coverage}${view.lifetime.missingRuns.length ? ` (no persisted metrics for ${view.lifetime.missingRuns.join(', ')})` : ''}`)
+  }
   lines.push(`Snapshot: revision ${view.snapshot.revision}, completeness ${view.snapshot.completeness}`)
   return lines.join('\n') + '\n'
 }
@@ -430,6 +476,10 @@ export function renderPrSummary(view) {
   const cov = view.usage.coverage
   const tk = k => (typeof view.usage[k] === 'number' ? view.usage[k] : 'unknown')
   lines.push(`**4. Cost / time** — tokens ${view.usage.observedTotalTokens ?? 'unknown'} (in ${tk('inputTokens')} · out ${tk('outputTokens')} · cache read ${tk('cacheReadTokens')} · cache write ${tk('cacheWriteTokens')}; known ${cov.known}/${cov.total}${view.usage.missingExecutionIds.length ? `; missing: ${view.usage.missingExecutionIds.join(', ')}` : ''}${view.usage.incompleteExecutionIds?.length ? `; unfinished provider requests in ${view.usage.incompleteExecutionIds.length} execution(s)` : ''}) · elapsed ${view.time.elapsedMs ?? 'unknown'}ms · active ${view.time.activeWallMs ?? 'unknown'}ms · agent ${view.time.agentMs ?? 'unknown'}ms · wait ${view.time.waitMs ?? 'unknown'}ms`)
+  // US-479 B2: what this PR cost across every run it actually had — never silently reduced to the
+  // current run directory, and explicitly partial when a predecessor persisted no metrics.
+  if (view.lifetime?.predecessorRuns?.length)
+    lines.push(`   *Lifetime across ${view.lifetime.predecessorRuns.length + 1} run(s) (${[view.identity.canonicalRunId, ...view.lifetime.predecessorRuns.map(r => r.runId)].filter(Boolean).join(', ')})* — cycles ${view.lifetime.cycles.completed} completed / ${view.lifetime.cycles.attempted} attempted · tokens ${view.lifetime.usage.observedTotalTokens ?? 'unknown'} · coverage **${view.lifetime.coverage}**${view.lifetime.missingRuns.length ? ` (no persisted metrics for ${view.lifetime.missingRuns.join(', ')})` : ''}`)
   lines.push('')
   const late = view.defects.late
   lines.push(`**5. Late defects** (by origin) — preexisting-missed ${late.preexistingMissed} · introduced-by-remediation ${late.introducedByRemediation} · unknown ${late.unknown}`)

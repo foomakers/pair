@@ -73,7 +73,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 
-import { publish, resolve, applyScopeDecisions, scopeBaselineHashOf } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { publish, resolve, applyScopeDecisions, scopeBaselineHashOf, readHandoffs, cycleCounters } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 import { reduceCycleMetrics } from '../../skills/pair-workflow-review-phase/scripts/cycle-metrics.mjs'
 import { finalizeMetrics, buildEntryCapsule } from '../../skills/pair-workflow-review-phase/scripts/cycle-runtime.mjs'
 import { listComments, findByMarker, upsert } from '../../skills/pair-workflow-review-phase/scripts/pr-comment.mjs'
@@ -294,4 +294,142 @@ test('Finding 5 RED->GREEN: buildEntryCapsule\'s real output is accepted by WF\'
   writeFileSync(join(badDir, 'r0-review-phase.json'), '{not json')
   const bad = buildEntryCapsule({ dir: badDir, repo: 'foomakers/pair', story: '503', workflowVersion: V })
   assert.equal(bad.capsule, null, 'malformed evidence never becomes a capsule claiming known state')
+})
+
+// ── US-479 B1 (S3, AC-08, DT-04): the contradiction route, END TO END through the REAL parts ────
+// The typed answer of the preparation stage -> the REAL coordinator source (its schema, its
+// validation, its dispatch loop) -> the REAL durable authority (publish + resolve on real handoff
+// files) -> the successor revision it derives -> an independent validation simulated only AT THE
+// BOUNDARY (the verifier's verdict) -> the successor seal -> implementation -> re-review, and back
+// to the remediation that raised it. Nothing here calls `resolve` directly to make a point.
+test('B1 (DT-04): a contradiction with sealed rows routes a successor revision through the real coordinator and the real cycle state, preserves the predecessor seal, and returns to the remediation that raised it', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'b1-chain-'))
+  const dir = join(root, '.pair', 'working', 'runs', 'b1', '482')
+  mkdirSync(dir, { recursive: true })
+  const SRC = readFileSync(new URL('../pair-implement-batch.js', import.meta.url), 'utf8').replace(/^export /gm, '')
+  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
+  const H = c => c.repeat(40)
+  const D = c => `sha256:${c.repeat(64)}`
+  const arg = (p, n) => {
+    const q = new RegExp(`\\$${n}="((?:[^"\\\\]|\\\\.)*)"`).exec(p)
+    if (q) return JSON.parse(`"${q[1]}"`)
+    const m = new RegExp(`\\$${n}=(\\S+)`).exec(p)
+    return m ? m[1] : undefined
+  }
+  const jsonArg = (p, n) => {
+    const i = p.indexOf(`$${n}=`)
+    if (i < 0) return undefined
+    const start = i + n.length + 2
+    const open = p[start]
+    const close = open === '[' ? ']' : '}'
+    let depth = 0
+    for (let j = start; j < p.length; j++) {
+      if (p[j] === open) depth++
+      else if (p[j] === close && --depth === 0) return JSON.parse(p.slice(start, j + 1))
+    }
+    return undefined
+  }
+  const V = '4.0.0'
+  const POLICY = { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 }
+  // Every stage answer goes through the REAL publish, and its `next` through the REAL resolve.
+  let seq = 0
+  const through = (phase, skill, fields, { predecessor } = {}) => {
+    const file = join(dir, `draft-${++seq}.json`)
+    writeFileSync(file, JSON.stringify({ run: 'b1', story: '482', pr: 483, branch: 'feature/US-482', phase, skill, inputHead: H('a'), ...fields }))
+    const out = publish({ dir, file, phase, skill, workflowVersion: V, predecessor, pr: 483 })
+    assert.equal(out.published, true, `${phase}-${skill}: ${JSON.stringify(out)}`)
+    const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh', pr: 483, story: '482' })
+    return { inputHead: H('a'), ...fields, next: r.next }
+  }
+  const dispatched = []
+  const logs = []
+  const agent = async (prompt, opts) => {
+    dispatched.push(opts.label)
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: { $meta: { source: 't.md', sourceHash: D('0'), generatedAt: 'x' }, vocabulary: { verdictOptions: ['APPROVED', 'CHANGES-REQUESTED'], severities: ['Critical', 'Major', 'Minor', 'Questions'] }, severityRanks: { Critical: 4, Major: 3, Minor: 2, Questions: 1 }, schema: { type: 'object', properties: { verdict: { type: 'string', enum: ['APPROVED', 'CHANGES-REQUESTED'] }, findings: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, severity: { type: 'string', enum: ['Critical', 'Major', 'Minor', 'Questions'] }, location: { type: 'string' }, description: { type: 'string' }, recommendation: { type: 'string' } }, required: ['id', 'severity', 'location', 'description', 'recommendation'] } } }, required: ['verdict', 'findings'] } } }
+    const phase = arg(prompt, 'phase')
+    const mode = arg(prompt, 'mode')
+    if (opts.agentType === 'pair-fix-test-author') {
+      // The ONE contradiction: the remediation of r0-1 cannot be contracted without rewriting two
+      // rows the sealed a0 contract already approved.
+      if (phase === 'r1-g1')
+        return through('r1-g1', 'red-spec', {
+          status: 'contradiction',
+          mode: 'remediation',
+          revisionReason: 'contradicts-approved-authority',
+          predecessorContractHash: D('1'),
+          conflictingRowIds: ['R33', 'R34'],
+          changedRows: ['R33', 'R34'],
+          counterexample: { command: 'pnpm exec vitest run -t R33', cwd: '.', expected: 'R33 passes under the installer-derived rule', actual: 'R33 fails: the alias directory never ships' },
+          findings: { received: ['r0-1'], covered: [] },
+        })
+      const isRevision = mode === 'revision'
+      const rows = jsonArg(prompt, 'changedRows')
+      if (isRevision) assert.deepEqual(rows, ['R33', 'R34'], 'the revision is dispatched with the exact rows the contradiction named')
+      const hash = isRevision ? D('2') : D('1')
+      return through(phase, 'red-spec', {
+        status: 'red',
+        mode,
+        sourceOfTruth: 'the installer pipeline',
+        inventory: [{ id: isRevision ? 'R33' : 'AC-1', producer: 'installer', inputs: ['x'], representations: ['y'], consumers: ['z'], classes: ['supported', 'invalid'] }],
+        fixScope: { owner: 'installer', mode: 'behavioral', allowedPaths: ['src/a.ts'] },
+        matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'c', oracle: 'pnpm test', expected: 'e', covers: [isRevision ? 'R33' : 'AC-1'] }],
+        redTests: [{ file: 'a.test.ts', kind: 'test', baseline: 'red', sha256: D('3'), command: 'pnpm exec vitest run a.test.ts', observed: 'FAIL 1 test' }],
+        testExempt: false,
+        contractPath: join(dir, `${phase}-red-contract.json`),
+        contractHash: hash,
+        ...(isRevision ? { revision: Number(arg(prompt, 'revision')), changedRows: rows } : {}),
+      })
+    }
+    if (opts.agentType === 'pair-red-contract-verifier')
+      // independent validation, simulated only at this boundary: the verdict and the successor seal
+      return through(phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: phase === 'a0' ? H('b') : H('c'), contractHash: arg(prompt, 'contractHash') }, { predecessor: `${phase}-red-spec` })
+    if (opts.agentType === 'pair-implementer')
+      return through(phase, 'implement-phase', { status: 'ok', gatesPassed: true, branch: 'feature/US-482', prNumber: 483, url: 'https://x/pr/483', outputHead: phase === 'a0' ? H('d') : H('e'), checkpointPath: 'x.md' })
+    if (opts.agentType === 'pair-reviewer') {
+      const round = Number(/^r(\d+)/.exec(phase)[1])
+      const head = round === 0 ? H('d') : H('e')
+      const findings = round === 0 ? [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: true, transition: 'open' }] : [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: false, transition: 'resolved', evidence: 'the successor rows pass at this head' }]
+      return through(phase, 'review-phase', { reviewedHead: head, verdict: round === 0 ? 'CHANGES-REQUESTED' : 'APPROVED', findings, custody: { verified: true, contractBreach: false }, readiness: { ready: round > 0, remoteHead: head }, mode: round === 0 ? 'first' : 're-review', partial: false, tier: 'risk:green', passes: ['general'], published: { firstReview: round === 0, synthesis: round > 0 } })
+    }
+    return {}
+  }
+  const result = await new AsyncFunction('args', 'agent', 'parallel', 'log', SRC)(
+    { cards: [{ id: '482', title: 'Conformance', branch: 'feature/US-482' }], runId: 'b1' },
+    agent,
+    fns => Promise.all(fns.map(f => Promise.resolve().then(f).catch(e => { throw e }))),
+    m => logs.push(m),
+  )
+  assert.ok(result.batch[0], `no result: ${JSON.stringify(result.note)} ${logs.join(' | ')}`)
+  assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+  // the route: the contradiction did NOT end the card, and the successor revision was prepared,
+  // independently validated, sealed and implemented before the re-review
+  assert.deepEqual(dispatched.filter(l => !/^contract:/.test(l)), [
+    'prepare:#482 a0',
+    'validate:#482 a0',
+    'implement:#482',
+    'verify:#482 r0',
+    'prepare:#482 r1-g1',
+    'prepare:#482 a0-rev2 revision',
+    'validate:#482 a0-rev2',
+    'implement:#482',
+    'verify:#482 r1',
+  ])
+  const names = readHandoffs(dir).map(h => h.name)
+  assert.deepEqual(names, ['a0-red-spec', 'a0-red-verify', 'a0-implement-phase', 'r0-review-phase', 'r1-g1-red-spec', 'a0-rev2-red-spec', 'a0-rev2-red-verify', 'a0-rev2-implement-phase', 'r1-review-phase'])
+  // the predecessor seal is untouched: the successor is a NEW snapshot beside it, never a rewrite
+  const a0Seal = JSON.parse(readFileSync(join(dir, 'a0-red-verify.json'), 'utf8'))
+  const revSeal = JSON.parse(readFileSync(join(dir, 'a0-rev2-red-verify.json'), 'utf8'))
+  assert.equal(a0Seal.snapshot, H('b'))
+  assert.equal(a0Seal.contractHash, D('1'))
+  assert.notEqual(revSeal.snapshot, a0Seal.snapshot)
+  // the contradiction's budget key was stamped by the script, from the sealed identity
+  const cx = JSON.parse(readFileSync(join(dir, 'r1-g1-red-spec.json'), 'utf8'))
+  assert.equal(cx.contradictionLine, 'a0')
+  assert.match(String(cx.contradictionKey), /^sha256:[0-9a-f]{64}$/)
+  // one contract revision, and the finding that raised it is closed by the re-review — not waived
+  const counters = cycleCounters(readHandoffs(dir))
+  assert.equal(counters.contractRevisions, 1)
+  const lastReview = JSON.parse(readFileSync(join(dir, 'r1-review-phase.json'), 'utf8'))
+  assert.equal(lastReview.findings[0].id, 'r0-1')
+  assert.equal(lastReview.findings[0].transition, 'resolved')
 })

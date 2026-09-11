@@ -869,6 +869,10 @@ const NEXT_SCHEMA = {
     findings: { type: 'array', items: { type: 'object' } },
     rejection: { type: 'array', items: { type: 'object' } },
     refusal: { type: 'string' },
+    // US-479 B1 (S3): the successor revision changes EXACTLY these rows, and remembers the
+    // remediation that raised the contradiction so the route back is never lost.
+    changedRows: { type: 'array', items: { type: 'string' } },
+    contradictionFor: { type: 'object' },
     // The PR the cycle is bound to. A structured-output schema is STRICT: a field the schema does
     // not declare is dropped by the harness before the coordinator sees it — `pr` was, and a
     // fresh-path resume then had no PR to verify against (canary run 11, 3.0.4).
@@ -958,7 +962,7 @@ const PLAN_SCHEMA = {
 const PREPARE_SCHEMA = {
   type: 'object',
   properties: {
-    status: { type: 'string', enum: ['red', 'stale', 'split-required', 'unprovable', 'dirty', REDIRECT_STATUS] },
+    status: { type: 'string', enum: ['red', 'stale', 'split-required', 'unprovable', 'dirty', 'contradiction', REDIRECT_STATUS] },
     mode: { type: 'string', enum: ['initial', 'remediation', 'repair', 'revision'] },
     inputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     sourceOfTruth: { type: 'string' },
@@ -1015,6 +1019,14 @@ const PREPARE_SCHEMA = {
     },
     testExempt: { type: 'boolean' },
     exemptionRationale: { type: 'string' },
+    // US-479 B1 (S3, AC-08): the typed evidence of a CONTRADICTION with already-sealed rows. The
+    // durable state validates it again before the write; declared here because a field this schema
+    // does not name is dropped by the harness before the coordinator ever sees it (3.0.5).
+    revisionReason: { type: 'string', enum: ['contradicts-approved-authority'] },
+    predecessorContractHash: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' },
+    conflictingRowIds: { type: 'array', items: { type: 'string' } },
+    counterexample: { type: 'object', properties: { command: { type: 'string' }, cwd: { type: 'string' }, fixtureRef: { type: 'string' }, expected: { type: 'string' }, actual: { type: 'string' } }, required: ['command', 'expected', 'actual'] },
+    changedRows: { type: 'array', items: { type: 'string' } },
     contractPath: { type: 'string' },
     contractHash: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' },
     plan: PLAN_SCHEMA,
@@ -1027,6 +1039,28 @@ const PREPARE_SCHEMA = {
 }
 const PREPARE_REFUSALS = new Set(['stale', 'split-required', 'unprovable', 'dirty'])
 const isPrepareRefusal = r => !!r && PREPARE_REFUSALS.has(r.status)
+// US-479 B1 (S3): a contradiction is an ANSWER — the preparation proved its obligation cannot be
+// contracted without changing rows an INDEPENDENTLY APPROVED contract already sealed. It carries
+// executable evidence or it is nothing: the coordinator checks the shape it can see (the durable
+// state re-validates it against the sealed identity before the write), so prose can never buy a
+// revision. `split-required` is a different answer and stays terminal.
+const SHELL_UNSAFE = /[;&|`]|\$\(|\.\.\//
+const contradictionDefect = r => {
+  if (r.revisionReason !== 'contradicts-approved-authority') return 'revisionReason must be contradicts-approved-authority'
+  if (!SHA256_RE.test(String(r.predecessorContractHash ?? ''))) return 'predecessorContractHash is not a sha256 digest'
+  const rows = r.conflictingRowIds
+  if (!Array.isArray(rows) || !rows.length || rows.some(x => typeof x !== 'string' || !x.trim())) return 'conflictingRowIds is empty'
+  const changed = new Set(Array.isArray(r.changedRows) ? r.changedRows : [])
+  const missing = rows.filter(x => !changed.has(x))
+  if (missing.length) return `changedRows does not cover ${missing.join(',')}`
+  const cx = r.counterexample
+  if (!cx || typeof cx !== 'object' || Array.isArray(cx)) return 'no counterexample'
+  if (typeof cx.command !== 'string' || !cx.command.trim()) return 'the counterexample has no command'
+  if (SHELL_UNSAFE.test(cx.command)) return 'the counterexample command carries shell syntax'
+  for (const k of ['expected', 'actual']) if (typeof cx[k] !== 'string' || !cx[k].trim()) return `the counterexample has no ${k}`
+  return null
+}
+const isContradiction = r => !!r && r.status === 'contradiction'
 // The persisted contract lives in the MAIN checkout's run directory while later stages `cd` into
 // the story worktree, so the path is ABSOLUTE by design (repository-relative is accepted and
 // resolves against the main checkout).
@@ -1501,9 +1535,9 @@ async function driveStory(story) {
   // ── The four stages, each a SKILL invoked by name with typed arguments ─────────────────────
   const prepare = n =>
     agentRetry(
-      invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${notesArg()}`),
+      invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${notesArg()}`),
       withModel('red', { agentType: 'pair-fix-test-author', phase: 'Prepare', label: `prepare:${tag} ${n.phase}${n.mode === 'repair' ? ' repair' : n.mode === 'revision' ? ' revision' : ''}`, effort: 'high', schema: PREPARE_SCHEMA }),
-      r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && /-g1$/.test(n.phase), ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
+      r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || isContradiction(r) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && /-g1$/.test(n.phase), ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
     )
   const validate = n =>
     agentRetry(
@@ -1625,6 +1659,11 @@ async function driveStory(story) {
     // ── Stage-specific validation of the typed evidence ─────────────────────────────────────
     if (stage === 'prepare') {
       if (isPrepareRefusal(res)) return result('failed-preparation', { reason: res.reason ?? res.splitReason ?? res.status, refusal: res.status, phase: next.phase, findings: next.findings })
+      if (isContradiction(res)) {
+        const defect = contradictionDefect(res)
+        if (defect) return result('failed-preparation', { reason: `contradiction evidence is incomplete: ${defect}`, refusal: 'contradiction', phase: next.phase, findings: next.findings })
+        log(`${tag} ${next.phase}: the obligation contradicts sealed rows ${res.conflictingRowIds.join(', ')} of ${res.predecessorContractHash} — the cycle state routes the successor revision`)
+      } else
       if (!hasPreparedContract(res, { needPlan: next.mode === 'remediation' && /-g1$/.test(next.phase), ids: (next.findings ?? []).map(f => f.id), mode: next.mode })) return result('failed-preparation', { reason: 'the preparation stage returned no usable contract', phase: next.phase })
       if (next.mode === 'remediation' && res.plan) {
         const carried = (res.plan.carried ?? []).map(c => ({ ...(next.findings ?? []).find(f => f.id === c.finding), external: true, disposition: `Outside the repository — ${c.disposition}` }))

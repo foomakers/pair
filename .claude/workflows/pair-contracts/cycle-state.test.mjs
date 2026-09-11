@@ -142,7 +142,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
 const V = '3.0.0'
@@ -2050,4 +2050,120 @@ test('B1 (boundary): red-spec publishes `findings: { received, covered }` — it
   const rf = join(dir, 'tmp-bad-review.json')
   writeFileSync(rf, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r9', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'x', findings: { received: [] }, custody: {}, readiness: {} }))
   assert.equal(publish({ dir, file: rf, phase: 'r9', skill: 'review-phase', workflowVersion: V }).reason, 'findings-not-an-array')
+})
+
+// ── US-479 B2 (S10, AC-27, DT-33): legacy evidence is inspected, acknowledged and BOUND — never
+// executed, never rewritten, and never silently dropped from the lifetime totals ────────────────
+const sha256File = p => _hash('sha256').update(readFileSync(p)).digest('hex')
+const digestDir = d =>
+  readdirSync(d)
+    .filter(f => f.endsWith('.json'))
+    .sort()
+    .map(f => `${f}:${sha256File(join(d, f))}`)
+// A legacy (schema-2 / 3.0.x) run directory, written by hand exactly as the older engine left it.
+function legacyRun(root, runId, { schemaVersion = 2, workflowVersion = '3.0.10', metrics } = {}) {
+  const d = join(root, '.pair', 'working', 'runs', runId, '42')
+  mkdirSync(d, { recursive: true })
+  writeFileSync(
+    join(d, 'r0-review-phase.json'),
+    JSON.stringify({ run: runId, story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [{ id: 'r0-1', severity: 'Major', location: 'x', description: 'd', recommendation: 'r', blocking: true, transition: 'open', kind: 'defect' }], custody: { verified: true, contractBreach: false }, readiness: { ready: false }, schemaVersion, workflowVersion, seq: 1 }, null, 2) + '\n',
+  )
+  if (metrics) writeFileSync(join(d, 'metrics.json'), JSON.stringify(metrics, null, 2) + '\n')
+  return d
+}
+const LEGACY_METRICS = { schemaVersion: 1, identity: { canonicalRunId: 'v4', runIds: ['v4'] }, cycles: { attempted: 2, completed: 1 }, usage: { observedTotalTokens: 1200, inputTokens: 200, outputTokens: 1000, cacheReadTokens: 50, cacheWriteTokens: 25 } }
+
+test('B2 (DT-33): migrate-acknowledge leaves every legacy file byte-identical, records verified digests, and writes exactly ONE record however many times it runs', () => {
+  const root = mkdtempSync(join(tmpdir(), 'b2-'))
+  const legacy = legacyRun(root, 'v4', { metrics: LEGACY_METRICS })
+  const before = digestDir(legacy)
+  const fresh = join(root, '.pair', 'working', 'runs', 'v5', '42')
+  mkdirSync(fresh, { recursive: true })
+  const first = migrateAcknowledge({ dir: fresh, legacyDirs: [legacy], workflowVersion: V, story: '42', pr: 7, run: 'v5', branch: 'b', inputHead: SHA('a') })
+  assert.equal(first.applied, true, JSON.stringify(first))
+  assert.deepEqual(digestDir(legacy), before, 'the legacy evidence is untouched')
+  const rec = JSON.parse(readFileSync(first.path, 'utf8'))
+  assert.equal(rec.recordType, 'migration')
+  assert.equal(rec.predecessorRuns.length, 1)
+  assert.equal(rec.predecessorRuns[0].runId, 'v4')
+  assert.equal(rec.predecessorRuns[0].inspection.next, 'migration-acknowledgment-required')
+  assert.match(rec.predecessorRuns[0].handoffs[0].sha256, /^sha256:[0-9a-f]{64}$/)
+  assert.equal(rec.predecessorRuns[0].metricsPath, join(legacy, 'metrics.json'))
+  // no invented approval and no invented counter
+  for (const k of ['verdict', 'readiness', 'reviewedHead', 'findings', 'cycles', 'usage']) assert.equal(rec[k], undefined, `${k} must not be fabricated by a migration`)
+  const again = migrateAcknowledge({ dir: fresh, legacyDirs: [legacy], workflowVersion: V, story: '42', pr: 7, run: 'v5', branch: 'b', inputHead: SHA('a') })
+  assert.equal(again.applied, false)
+  assert.equal(again.reason, 'already-acknowledged')
+  assert.equal(readdirSync(fresh).filter(f => /migration|review-phase/.test(f)).length, 1)
+})
+
+test('B2: a legacy file that CHANGED since it was acknowledged is refused — the digests are verified, not decorative', () => {
+  const root = mkdtempSync(join(tmpdir(), 'b2-'))
+  const legacy = legacyRun(root, 'v4')
+  const fresh = join(root, '.pair', 'working', 'runs', 'v5', '42')
+  mkdirSync(fresh, { recursive: true })
+  assert.equal(migrateAcknowledge({ dir: fresh, legacyDirs: [legacy], workflowVersion: V, story: '42', pr: 7, run: 'v5', branch: 'b', inputHead: SHA('a') }).applied, true)
+  const f = join(legacy, 'r0-review-phase.json')
+  writeFileSync(f, readFileSync(f, 'utf8').replace('CHANGES-REQUESTED', 'APPROVED'))
+  const out = migrateAcknowledge({ dir: fresh, legacyDirs: [legacy], workflowVersion: V, story: '42', pr: 7, run: 'v5', branch: 'b', inputHead: SHA('a') })
+  assert.equal(out.applied, false)
+  assert.match(out.reason, /^predecessor-evidence-changed/)
+})
+
+test('B2: transitive predecessors are carried — acknowledging v4 from v5 keeps v3, which v4 itself acknowledged', () => {
+  const root = mkdtempSync(join(tmpdir(), 'b2-'))
+  const v3 = legacyRun(root, 'v3')
+  const v4 = join(root, '.pair', 'working', 'runs', 'v4', '42')
+  mkdirSync(v4, { recursive: true })
+  migrateAcknowledge({ dir: v4, legacyDirs: [v3], workflowVersion: V, story: '42', pr: 7, run: 'v4', branch: 'b', inputHead: SHA('a') })
+  const v5 = join(root, '.pair', 'working', 'runs', 'v5', '42')
+  mkdirSync(v5, { recursive: true })
+  const out = migrateAcknowledge({ dir: v5, legacyDirs: [v4], workflowVersion: V, story: '42', pr: 7, run: 'v5', branch: 'b', inputHead: SHA('a') })
+  assert.equal(out.applied, true)
+  assert.deepEqual(JSON.parse(readFileSync(out.path, 'utf8')).predecessorRuns.map(r => r.runId).sort(), ['v3', 'v4'])
+})
+
+test('B2: the record is evidence, not a review — it confers no readiness, spends no review execution, and the cycle still starts where it would have', () => {
+  const root = mkdtempSync(join(tmpdir(), 'b2-'))
+  const legacy = legacyRun(root, 'v4')
+  const fresh = join(root, '.pair', 'working', 'runs', 'v5', '42')
+  mkdirSync(fresh, { recursive: true })
+  migrateAcknowledge({ dir: fresh, legacyDirs: [legacy], workflowVersion: V, story: '42', pr: 7, run: 'v5', branch: 'b', inputHead: SHA('a') })
+  const r = resolve({ dir: fresh, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, story: '42' })
+  assert.equal(r.status, 'in-progress')
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase }, { step: 'verify', mode: 'first', phase: 'r0', round: 0 }.step ? { step: 'verify', mode: 'first', phase: 'r0' } : {}, JSON.stringify(r.next))
+  assert.equal(r.counters.reviewExecutions, 0, 'a migration is not a review execution')
+  assert.deepEqual(r.predecessorRuns, ['v4'], 'the reference survives into the resume')
+  // and a SECOND resume still carries it
+  assert.deepEqual(resolve({ dir: fresh, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, story: '42' }).predecessorRuns, ['v4'])
+})
+
+test('B2: the legacy run directory itself is never adopted for execution — it stays incompatible, and nothing there is rewritten by the acknowledgment', () => {
+  const root = mkdtempSync(join(tmpdir(), 'b2-'))
+  const legacy = legacyRun(root, 'v4')
+  const before = digestDir(legacy)
+  const fresh = join(root, '.pair', 'working', 'runs', 'v5', '42')
+  mkdirSync(fresh, { recursive: true })
+  migrateAcknowledge({ dir: fresh, legacyDirs: [legacy], workflowVersion: V, story: '42', pr: 7, run: 'v5', branch: 'b', inputHead: SHA('a') })
+  assert.equal(resolve({ dir: legacy, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, story: '42' }).status, 'incompatible')
+  assert.deepEqual(digestDir(legacy), before)
+  assert.equal(migrateInspect({ dir: legacy }).next, 'migration-acknowledgment-required')
+})
+
+test('B2 (CLI): migrate-acknowledge runs from the shell the launch recipe uses, is idempotent there too, and never touches the legacy directory', () => {
+  const root = mkdtempSync(join(tmpdir(), 'b2-cli-'))
+  const legacy = legacyRun(root, 'v4', { metrics: LEGACY_METRICS })
+  const before = digestDir(legacy)
+  const fresh = join(root, '.pair', 'working', 'runs', 'v5', '42')
+  mkdirSync(fresh, { recursive: true })
+  const cli = fileURLToPath(new URL('../../skills/pair-workflow-review-phase/scripts/cycle-state.mjs', import.meta.url))
+  const run = () => spawnSync('node', [cli, 'migrate-acknowledge', '--dir', fresh, '--legacy', legacy, '--workflowVersion', V, '--story', '42', '--run', 'v5', '--head', SHA('a'), '--pr', '7', '--branch', 'b'], { encoding: 'utf8' })
+  const first = run()
+  assert.equal(first.status, 0, first.stdout + first.stderr)
+  assert.equal(JSON.parse(first.stdout).applied, true)
+  const second = run()
+  assert.equal(second.status, 0, 'an already-acknowledged binding is a success, not a failure')
+  assert.equal(JSON.parse(second.stdout).reason, 'already-acknowledged')
+  assert.deepEqual(digestDir(legacy), before)
+  assert.equal(readdirSync(fresh).filter(f => f.endsWith('.json')).length, 1)
 })
