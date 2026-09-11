@@ -731,10 +731,38 @@ export function foldCohortIdentities(entries) {
       out.push(group[0])
       continue
     }
-    // The most complete view of the delivery supplies the fields; ties go to the latest record.
-    const main = group.reduce((best, e) => (runsKnown(e) >= runsKnown(best) ? e : best), group[0])
+    // US-479 DR-05: picking "the view that knows the most runs" and taking every number from it
+    // DISCARDS the other view whenever no single one covers the history — two unlinked directories
+    // measuring one PR both know one run, so the tie fell to manifest order and a real token spend
+    // vanished from an entry still claiming `complete`. Nothing here may depend on input order.
+    const runsOf = e => new Set([...(idOf(e).runIds ?? []), ...(idOf(e).predecessorRuns ?? [])])
+    const allRuns = new Set(group.flatMap(e => [...runsOf(e)]))
+    // A view that already knows every run of the group folded the whole history itself (that is
+    // what a migration acknowledgment establishes): its numbers ARE the numbers, and combining
+    // anything into them would double count.
+    const covering = group.find(e => [...allRuns].every(r => runsOf(e).has(r)))
+    const main = covering ?? group.reduce((best, e) => (runsKnown(e) >= runsKnown(best) ? e : best), group[0])
     const versions = [...new Set(group.flatMap(e => e.workflow?.versions ?? []))].sort()
-    const completeness = group.map(e => e.snapshot?.completeness ?? 'complete').reduce((w, c) => (WORST.indexOf(c) > WORST.indexOf(w) ? c : w), 'complete')
+    const worstOf = vs => vs.reduce((w, c) => (WORST.indexOf(c) > WORST.indexOf(w) ? c : w), 'complete')
+    // Without a covering view nobody saw the whole delivery, and no acknowledgment reconciles the
+    // parts: the entry says `partial` whatever its members claimed.
+    const completeness = covering ? (covering.snapshot?.completeness ?? 'complete') : worstOf([...group.map(e => e.snapshot?.completeness ?? 'complete'), 'partial'])
+    let combined = {}
+    if (!covering) {
+      const cyclesOf = e => e.lifetime?.cycles?.completed ?? e.cycles?.completed
+      const tokensOf = e => e.lifetime?.usage?.observedTotalTokens ?? e.usage?.observedTotalTokens
+      const known = group.map(tokensOf).filter(t => t != null)
+      // Disjoint run sets are distinct executions, so their spends add up. When two views share a
+      // run, adding would count it twice — the largest known total is then the honest lower bound.
+      const disjoint = group.every((e, i) => group.every((o, j) => i === j || ![...runsOf(e)].some(r => runsOf(o).has(r))))
+      const tokens = known.length ? (disjoint ? known.reduce((s, t) => s + t, 0) : Math.max(...known)) : null
+      const cycles = Math.max(...group.map(e => cyclesOf(e) ?? 0))
+      combined = {
+        cycles: { ...(main.cycles ?? {}), completed: cycles },
+        usage: { ...(main.usage ?? {}), observedTotalTokens: tokens },
+        ...(main.lifetime ? { lifetime: { ...main.lifetime, cycles: { ...(main.lifetime.cycles ?? {}), completed: cycles }, usage: { ...(main.lifetime.usage ?? {}), observedTotalTokens: tokens }, coverage: 'partial' } } : {}),
+      }
+    }
     out.push({
       ...main,
       identity: {
@@ -744,6 +772,7 @@ export function foldCohortIdentities(entries) {
         predecessorRuns: [...new Set(group.flatMap(e => idOf(e).predecessorRuns ?? []))].sort(),
       },
       workflow: { ...(main.workflow ?? {}), versions, mixedVersions: versions.length > 1 || group.some(e => e.workflow?.mixedVersions === true) },
+      ...combined,
       ...(main.snapshot ? { snapshot: { ...main.snapshot, completeness } } : { snapshot: { completeness } }),
     })
   }

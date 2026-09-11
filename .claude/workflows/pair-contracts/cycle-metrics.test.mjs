@@ -1020,3 +1020,62 @@ test('DT-22: the usage tail that arrives after the verdict completes coverage an
   assert.deepEqual(replayed.coverage, after.coverage)
   assert.equal(replayed.observedTotalTokens, after.observedTotalTokens, 'an identical tail replayed changes no total')
 })
+
+// ── DR-05 (delta review): folding must not discard the view it did not pick ─────────────────────
+// The fold kept the member with the most known runs and took every number from it alone. When two
+// run directories measure one PR and neither is linked to the other — the "fresh directory" case
+// DT-26 names — both know exactly one run, so the tie was broken by manifest order and one view's
+// cycles and token spend simply vanished, while the folded entry still claimed `complete`.
+// Nothing here may depend on input order, and a fold that could not see the whole history has to
+// say so.
+const foldable = (runIds, { cycles = 2, tokens = 1000, predecessorRuns = [], completeness = 'complete' } = {}) => ({
+  identity: { repository: 'foomakers/pair', storyId: '42', prNumber: 7, branch: 'feature/x', runIds, predecessorRuns, scopeEpoch: 1 },
+  workflow: { name: 'pair-implement-batch', versions: ['4.0.0'], mixedVersions: false },
+  outcome: { cohortState: 'completed' },
+  cycles: { completed: cycles },
+  usage: { observedTotalTokens: tokens },
+  snapshot: { completeness },
+})
+
+test('DR-05: two UNLINKED views of one PR keep both spends and are honest that neither saw everything', () => {
+  const a = foldable(['run-1'], { cycles: 2, tokens: 1000 })
+  const b = foldable(['run-2'], { cycles: 3, tokens: 4000 })
+  const [folded] = foldCohortIdentities([a, b])
+  assert.equal(folded.usage.observedTotalTokens, 5000, 'disjoint runs are distinct executions: their spend adds up, none is dropped')
+  assert.equal(folded.cycles.completed, 3, 'the most cycles any view could prove')
+  assert.equal(folded.snapshot.completeness, 'partial', 'no view covered the whole history, and the entry must say so')
+  assert.deepEqual(folded.identity.runIds, ['run-1', 'run-2'])
+})
+
+test('DR-05: the fold does not depend on the order of the manifest', () => {
+  const a = foldable(['run-1'], { cycles: 2, tokens: 1000 })
+  const b = foldable(['run-2'], { cycles: 3, tokens: 4000 })
+  const [x] = foldCohortIdentities([a, b])
+  const [y] = foldCohortIdentities([b, a])
+  assert.deepEqual(
+    { tokens: x.usage.observedTotalTokens, cycles: x.cycles.completed, coverage: x.snapshot.completeness },
+    { tokens: y.usage.observedTotalTokens, cycles: y.cycles.completed, coverage: y.snapshot.completeness },
+  )
+  // and the cohort rates built on it are equally stable
+  assert.deepEqual(aggregateCohort(foldCohortIdentities([a, b])), aggregateCohort(foldCohortIdentities([b, a])))
+})
+
+test('DR-05: a view that CONTAINS the other is the whole history — that one is kept, and stays complete', () => {
+  const partial = foldable(['run-1'], { cycles: 2, tokens: 1000 })
+  const whole = foldable(['run-2'], { cycles: 5, tokens: 6000, predecessorRuns: ['run-1'] })
+  for (const order of [[partial, whole], [whole, partial]]) {
+    const [folded] = foldCohortIdentities(order)
+    assert.equal(folded.cycles.completed, 5, 'the linked view already folded its predecessor exactly once')
+    assert.equal(folded.usage.observedTotalTokens, 6000, 'so its total is the total — adding the other would double count')
+    assert.equal(folded.snapshot.completeness, 'complete')
+  }
+})
+
+test('DR-05: views that OVERLAP without either containing the other cannot be added — the known part is a lower bound', () => {
+  const a = foldable(['run-1', 'run-2'], { cycles: 2, tokens: 1000 })
+  const b = foldable(['run-2', 'run-3'], { cycles: 4, tokens: 4000 })
+  const [folded] = foldCohortIdentities([a, b])
+  assert.equal(folded.usage.observedTotalTokens, 4000, 'run-2 is in both: adding would count it twice, so the larger known total stands')
+  assert.equal(folded.cycles.completed, 4)
+  assert.equal(folded.snapshot.completeness, 'partial', 'an overlap nobody reconciled is not a complete measurement')
+})
