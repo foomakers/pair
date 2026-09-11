@@ -18,6 +18,8 @@ import {
   runtimeTick,
   runObserveLoop,
   finalizeMetrics,
+  extractUsage,
+  dispatchStatsFromResult,
 } from '../../skills/pair-workflow-review-phase/scripts/cycle-runtime.mjs'
 import { publish } from '../../skills/pair-workflow-review-phase/scripts/cycle-state.mjs'
 
@@ -375,4 +377,302 @@ test('CLI: entry/reconcile/finalize print JSON; observe runs a bounded real loop
   assert.equal(JSON.parse(r.stdout).publication.state, 'confirmed')
   r = spawnSync('node', [CLI, 'bogus'], { encoding: 'utf8' })
   assert.equal(r.status, 2)
+})
+
+// ── US-479 B4 (S7, AC-20/21/25): the host usage ADAPTER — real transcripts to metrics ─────────
+// The fixture below is the REAL harness shape, anonymized: a workflow journal (`started`/`result`
+// keyed by `key` + `agentId`, NO tokens and NO timestamps) beside one `agent-<id>.jsonl` transcript
+// per execution, whose `assistant` records carry `message.usage`, `message.model`, `timestamp`,
+// `requestId` and `apiBlockIndex`, and one `agent-<id>.meta.json` with `{agentType, spawnDepth}`.
+// No message content is reproduced here — the adapter never reads any.
+const KEY = n => `v2:${String(n).repeat(64)}`
+// Inside ONE requestId the provider repeats the input/cache fields on every block and grows
+// `output_tokens`; only the block carrying a non-null `stop_reason` completes the request.
+function assistantBlocks({ agentId, requestId, at, input, cacheWrite, cacheRead, outputs, model = 'claude-opus-5', effort = 'high', complete = true }) {
+  return outputs.map((out, i) => ({
+    parentUuid: `${requestId}-${i}`,
+    isSidechain: true,
+    agentId,
+    type: 'assistant',
+    apiBlockIndex: i,
+    requestId,
+    effort,
+    attributionAgent: 'pair-fix-test-author',
+    timestamp: new Date(at + i * 1000).toISOString(),
+    message: {
+      role: 'assistant',
+      model,
+      stop_reason: i === outputs.length - 1 && complete ? 'end_turn' : null,
+      usage: { input_tokens: input, cache_creation_input_tokens: cacheWrite, cache_read_input_tokens: cacheRead, cache_creation: { ephemeral_5m_input_tokens: cacheWrite, ephemeral_1h_input_tokens: 0 }, output_tokens: out },
+    },
+  }))
+}
+function transcripts(root, specs) {
+  const dir = join(root, 'wf_fixture')
+  mkdirSync(dir, { recursive: true })
+  for (const s of specs) {
+    writeFileSync(join(dir, `agent-${s.agentId}.meta.json`), JSON.stringify({ agentType: s.agentType, spawnDepth: s.spawnDepth ?? 1 }))
+    const lines = []
+    for (const r of s.requests) lines.push(...assistantBlocks({ agentId: s.agentId, ...r }))
+    // user/attachment records exist in the real file and carry no usage — the adapter skips them
+    lines.splice(1, 0, { agentId: s.agentId, type: 'user', timestamp: new Date(s.requests[0].at).toISOString(), uuid: 'u1' })
+    writeFileSync(join(dir, `agent-${s.agentId}.jsonl`), lines.map(l => JSON.stringify(l)).join('\n') + '\n')
+  }
+  return dir
+}
+const T0 = Date.parse('2026-09-11T10:00:00.000Z')
+// One reviewer (2 requests, one of them 3 blocks) and one author (1 request, 2 blocks).
+const STD_SPECS = [
+  { agentId: 'aaa1', agentType: 'pair-reviewer', requests: [{ requestId: 'req_a1', at: T0, input: 10, cacheWrite: 1000, cacheRead: 0, outputs: [1, 8, 500] }, { requestId: 'req_a2', at: T0 + 10_000, input: 2, cacheWrite: 0, cacheRead: 1000, outputs: [1, 40] }] },
+  { agentId: 'bbb2', agentType: 'pair-fix-test-author', requests: [{ requestId: 'req_b1', at: T0 + 20_000, input: 4, cacheWrite: 500, cacheRead: 2000, outputs: [2, 300] }] },
+]
+// expected, computed by hand from the fixture: per request the fixed fields count ONCE and the
+// output is the last block's value.  reviewer: in 10+2, write 1000, read 1000, out 500+40=540
+//                                       author: in 4,     write 500,  read 2000, out 300
+const STD_TOTAL = { inputTokens: 16, cacheWriteTokens: 1500, cacheReadTokens: 3000, outputTokens: 840 }
+const STD_JOURNAL = [
+  { type: 'started', key: KEY(1), agentId: 'aaa1' },
+  { type: 'result', key: KEY(1), agentId: 'aaa1', result: { status: 'reviewed' } },
+  { type: 'started', key: KEY(2), agentId: 'bbb2' },
+  { type: 'result', key: KEY(2), agentId: 'bbb2', result: { status: 'red' } },
+]
+
+test('B4: usage-extract turns real transcripts into one cumulative record per execution — per request the fixed fields count once and the output is the last block, never the naive per-message sum nor the first block', () => {
+  const { root, dir } = runDir()
+  const tdir = transcripts(root, STD_SPECS)
+  const journalPath = journalFile(root, STD_JOURNAL)
+  const out = join(dir, 'usage.jsonl')
+  const res = extractUsage({ transcriptsDir: tdir, journalPath, out, runId: 'run-1' })
+  assert.equal(res.executions, 2)
+  const records = readFileSync(out, 'utf8').trim().split('\n').map(l => JSON.parse(l))
+  assert.equal(records.length, 2)
+  const total = k => records.reduce((s, r) => s + r.usage[k], 0)
+  assert.deepEqual({ inputTokens: total('inputTokens'), cacheWriteTokens: total('cacheWriteTokens'), cacheReadTokens: total('cacheReadTokens'), outputTokens: total('outputTokens') }, STD_TOTAL)
+  // the two wrong reductions this invariant exists to exclude
+  assert.notEqual(total('outputTokens'), 1 + 8 + 500 + 1 + 40 + 2 + 300, 'naive per-message sum')
+  assert.notEqual(total('outputTokens'), 1 + 1 + 2, 'first block only')
+  assert.notEqual(total('cacheReadTokens'), 1000 + 1000 + 2000 + 2000, 'cache read repeated per block')
+  // identity is the journal's, not the transcript's: the same executionId the journal observation uses
+  assert.deepEqual(records.map(r => r.executionId).sort(), [`run-1:${KEY(1)}:aaa1`, `run-1:${KEY(2)}:bbb2`])
+  // role, model and effort come from data that is actually present
+  const reviewer = records.find(r => r.executionId.includes('aaa1'))
+  assert.equal(reviewer.role, 'pair-reviewer')
+  assert.deepEqual(reviewer.models, ['claude-opus-5'])
+  assert.deepEqual(reviewer.efforts, ['high'])
+  assert.equal(reviewer.usage.requests, 2)
+})
+
+test('B4: an execution the journal knows with NO transcript stays explicitly missing, and a transcript the journal does not know keeps its cost under an explicit unattributed identity', () => {
+  const { root, dir } = runDir()
+  const tdir = transcripts(root, [STD_SPECS[0], { agentId: 'ccc3', agentType: 'pair-implementer', spawnDepth: 2, requests: [{ requestId: 'req_c1', at: T0 + 30_000, input: 1, cacheWrite: 7, cacheRead: 11, outputs: [5] }] }])
+  const journalPath = journalFile(root, STD_JOURNAL) // knows aaa1 and bbb2; bbb2 has no transcript
+  const out = join(dir, 'usage.jsonl')
+  const res = extractUsage({ transcriptsDir: tdir, journalPath, out, runId: 'run-1' })
+  const records = readFileSync(out, 'utf8').trim().split('\n').map(l => JSON.parse(l))
+  const nested = records.find(r => r.agentId === 'ccc3')
+  assert.ok(nested, 'the unattributable transcript is not silently dropped — its cost is real')
+  assert.equal(nested.phase, 'unattributed')
+  assert.equal(nested.attribution, 'transcript-only')
+  assert.equal(nested.parentExecutionId, undefined, 'no parent is invented')
+  assert.deepEqual(res.unattributed, ['ccc3'])
+  // and the journal execution with no transcript is reported, never given a plausible number
+  assert.deepEqual(res.withoutTranscript, [`run-1:${KEY(2)}:bbb2`])
+  assert.equal(records.some(r => r.executionId.includes('bbb2')), false)
+})
+
+test('B4: a request whose last block has no stop_reason is INCOMPLETE — its observed cost is kept, and having usage does not make it complete', () => {
+  const { root, dir } = runDir()
+  const specs = [{ agentId: 'aaa1', agentType: 'pair-reviewer', requests: [{ requestId: 'req_a1', at: T0, input: 10, cacheWrite: 1000, cacheRead: 0, outputs: [1, 8], complete: false }] }]
+  const tdir = transcripts(root, specs)
+  const journalPath = journalFile(root, [STD_JOURNAL[0]])
+  const out = join(dir, 'usage.jsonl')
+  extractUsage({ transcriptsDir: tdir, journalPath, out, runId: 'run-1' })
+  const rec = JSON.parse(readFileSync(out, 'utf8').trim())
+  assert.equal(rec.usage.outputTokens, 8, 'the cost already observed is not thrown away')
+  assert.equal(rec.usage.partialRequests, 1)
+  assert.equal(rec.usage.requests, 1)
+  assert.equal(rec.complete, false)
+})
+
+test('B4: blocks of ONE request that disagree on the fixed fields are an error, never a plausible sum or an average', () => {
+  const { root, dir } = runDir()
+  const tdir = transcripts(root, [STD_SPECS[0]])
+  const p = join(tdir, 'agent-aaa1.jsonl')
+  const lines = readFileSync(p, 'utf8').trim().split('\n').map(l => JSON.parse(l))
+  const second = lines.find(l => l.type === 'assistant' && l.requestId === 'req_a1' && l.apiBlockIndex === 1)
+  second.message.usage.cache_read_input_tokens = 999999
+  writeFileSync(p, lines.map(l => JSON.stringify(l)).join('\n') + '\n')
+  const out = join(dir, 'usage.jsonl')
+  const res = extractUsage({ transcriptsDir: tdir, journalPath: journalFile(root, STD_JOURNAL), out, runId: 'run-1' })
+  assert.ok(res.errors.some(e => e.error === 'usage-request-inconsistent' && e.requestId === 'req_a1'), JSON.stringify(res.errors))
+  const rec = JSON.parse(readFileSync(out, 'utf8').trim().split('\n')[0])
+  // req_a1 is the inconsistent one (cache write 1000, input 10, output 500); req_a2 is untouched
+  assert.equal(rec.usage.cacheWriteTokens, 0, 'the disagreeing request contributes nothing, not an average')
+  assert.equal(rec.usage.inputTokens, 2, 'only the consistent request counts')
+  assert.equal(rec.usage.outputTokens, 40)
+  assert.equal(rec.usage.inconsistentRequests, 1)
+  assert.equal(rec.complete, false)
+})
+
+test('B4: re-reading, rotation and truncation never lose or double a cost already observed', () => {
+  const { root, dir } = runDir()
+  const tdir = transcripts(root, STD_SPECS)
+  const journalPath = journalFile(root, STD_JOURNAL)
+  const out = join(dir, 'usage.jsonl')
+  const totals = () => {
+    const recs = readFileSync(out, 'utf8').trim().split('\n').map(l => JSON.parse(l))
+    const last = new Map()
+    for (const r of recs) last.set(r.executionId, r) // cumulative: the last record of an execution wins
+    return [...last.values()].reduce((s, r) => s + r.usage.outputTokens, 0)
+  }
+  extractUsage({ transcriptsDir: tdir, journalPath, out, runId: 'run-1' })
+  assert.equal(totals(), 840)
+  extractUsage({ transcriptsDir: tdir, journalPath, out, runId: 'run-1' }) // full re-read
+  assert.equal(totals(), 840, 'a replay is cumulative, never summed twice')
+  // the transcript is truncated and rewritten from scratch (rotation): the totals are rebuilt
+  const p = join(tdir, 'agent-bbb2.jsonl')
+  writeFileSync(p, readFileSync(p, 'utf8'))
+  extractUsage({ transcriptsDir: tdir, journalPath, out, runId: 'run-1' })
+  assert.equal(totals(), 840)
+})
+
+// ── B4 end to end: transcripts + journal -> the REAL tick -> metrics.json / metrics.md -> PR summary
+function seedCycle(dir) {
+  const file = join(dir, 'draft.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') }, mode: 'first' }))
+  assert.equal(publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.0' }).published, true)
+}
+
+test('B4 (end to end): the host tick reads the transcripts itself and the metrics view carries the real totals, roles, models and an honest completeness', () => {
+  const { root, dir } = runDir()
+  seedCycle(dir)
+  const tdir = transcripts(root, STD_SPECS)
+  const journalPath = journalFile(root, STD_JOURNAL)
+  const tick = runtimeTick({ dir, journalPath, usagePath: join(dir, 'usage.jsonl'), transcriptsDir: tdir, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now: T0 + 60_000 })
+  const u = tick.view.usage
+  // the cache categories are reported in full but are NOT folded into the aggregate: the total is
+  // the billed input+output, and cache read/write stay their own named quantities (no aggregate and
+  // subcategory counted twice)
+  assert.equal(u.observedTotalTokens, STD_TOTAL.inputTokens + STD_TOTAL.outputTokens)
+  assert.notEqual(u.observedTotalTokens, STD_TOTAL.inputTokens + STD_TOTAL.outputTokens + STD_TOTAL.cacheReadTokens + STD_TOTAL.cacheWriteTokens)
+  assert.equal(u.inputTokens, STD_TOTAL.inputTokens)
+  assert.equal(u.outputTokens, STD_TOTAL.outputTokens)
+  assert.equal(u.cacheReadTokens, STD_TOTAL.cacheReadTokens)
+  assert.equal(u.cacheWriteTokens, STD_TOTAL.cacheWriteTokens)
+  assert.deepEqual(u.coverage, { known: 2, total: 2 })
+  assert.deepEqual(u.missingExecutionIds, [])
+  assert.deepEqual(u.byRole.map(r => r.role).sort(), ['pair-fix-test-author', 'pair-reviewer'])
+  assert.deepEqual(tick.view.workflow.models, ['claude-opus-5'], 'models come from the transcripts actually observed')
+  assert.equal(tick.view.snapshot.completeness, 'complete')
+  assert.deepEqual(u.incompleteExecutionIds, [])
+  const md = readFileSync(join(dir, 'metrics.md'), 'utf8')
+  assert.match(md, /Tokens: 856 \(coverage 2\/2\) — in 16, out 840, cache read 3000, cache write 1500/)
+  assert.equal(JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8')).usage.outputTokens, 840)
+})
+
+test('B4 (end to end): an incomplete request keeps its cost AND makes the snapshot partial — never a complete view built on an unfinished request', () => {
+  const { root, dir } = runDir()
+  seedCycle(dir)
+  const specs = [{ ...STD_SPECS[0], requests: [{ ...STD_SPECS[0].requests[0], complete: false }] }, STD_SPECS[1]]
+  const tick = runtimeTick({ dir, journalPath: journalFile(root, STD_JOURNAL), usagePath: join(dir, 'usage.jsonl'), transcriptsDir: transcripts(root, specs), runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now: T0 + 60_000 })
+  assert.equal(tick.view.usage.outputTokens, 500 + 300, 'the observed cost is kept')
+  assert.deepEqual(tick.view.usage.incompleteExecutionIds, [`run-1:${KEY(1)}:aaa1`])
+  assert.equal(tick.view.snapshot.completeness, 'partial')
+  assert.ok(tick.view.snapshot.missingSources.includes('usage-incomplete'), JSON.stringify(tick.view.snapshot.missingSources))
+})
+
+test('B4 (end to end): a restart with the SAME checkpoint, a rotation, and a re-read from zero all land on the same totals — never doubled, never lost', () => {
+  const { root, dir } = runDir()
+  seedCycle(dir)
+  const tdir = transcripts(root, STD_SPECS)
+  const journalPath = journalFile(root, STD_JOURNAL)
+  const usagePath = join(dir, 'usage.jsonl')
+  const args = { dir, journalPath, usagePath, transcriptsDir: tdir, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7 }
+  let cp = readCheckpoint(dir)
+  const t1 = runtimeTick({ ...args, checkpoint: cp, now: T0 + 60_000 })
+  writeCheckpoint(dir, t1.checkpoint)
+  const t2 = runtimeTick({ ...args, checkpoint: readCheckpoint(dir), now: T0 + 70_000 })
+  assert.equal(t2.view.usage.observedTotalTokens, t1.view.usage.observedTotalTokens, 'a second tick re-extracts and replaces, it does not sum')
+  writeCheckpoint(dir, t2.checkpoint)
+  // the observer dies and restarts with NO checkpoint offsets, re-reading everything from zero
+  const restarted = runtimeTick({ ...args, checkpoint: { ...readCheckpoint(dir), journalOffset: 0, usageOffset: 0 }, now: T0 + 80_000 })
+  assert.equal(restarted.view.usage.observedTotalTokens, t1.view.usage.observedTotalTokens)
+  assert.equal(restarted.view.usage.outputTokens, 840)
+})
+
+test('B4 (end to end): three clocks stay distinct — the interval is widened by the message span, never narrowed, and an end is not claimed before the host observed a terminal result', () => {
+  const { root, dir } = runDir()
+  seedCycle(dir)
+  const tdir = transcripts(root, [STD_SPECS[0]])
+  // the host sees `started` on this tick; the transcript's first message is EARLIER than the tick
+  const openJournal = journalFile(root, [STD_JOURNAL[0]])
+  const open = runtimeTick({ dir, journalPath: openJournal, usagePath: join(dir, 'usage.jsonl'), transcriptsDir: tdir, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now: T0 + 60_000 })
+  assert.equal(open.view.time.elapsedMs, null, 'an execution the host never saw finish has no measured span')
+  assert.equal(open.view.time.incomplete, true)
+  const { root: root2, dir: dir2 } = runDir()
+  seedCycle(dir2)
+  const tdir2 = transcripts(root2, [STD_SPECS[0]])
+  const closed = runtimeTick({ dir: dir2, journalPath: journalFile(root2, [STD_JOURNAL[0], STD_JOURNAL[1]]), usagePath: join(dir2, 'usage.jsonl'), transcriptsDir: tdir2, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir2), now: T0 + 60_000 })
+  // start = the earliest evidence (the first message), end = the latest (the host's observation):
+  // the measured span is never shrunk by preferring the more flattering clock
+  assert.equal(closed.view.time.startedAt, new Date(T0).toISOString())
+  assert.equal(closed.view.time.lastObservedAt, new Date(T0 + 60_000).toISOString())
+  assert.equal(closed.view.time.agentMs, 60_000)
+  assert.equal(closed.view.time.incomplete, false)
+})
+
+test('B4 (end to end, CLI): the last agent`s usage arrives AFTER the observer stopped — finalize reconciles it from the real sources into the SAME PR comment, idempotently', () => {
+  const { root, dir } = runDir()
+  seedCycle(dir)
+  const tdir = transcripts(root, [STD_SPECS[0]])
+  const journalPath = journalFile(root, STD_JOURNAL)
+  const usagePath = join(dir, 'usage.jsonl')
+  const ghDir = fakeGhDir()
+  const env = { ...process.env, PATH: `${ghDir}:${process.env.PATH}` }
+  // the observer ran while only the reviewer had produced anything: partial, and it stops
+  const rec = spawnSync('node', [CLI, 'reconcile', '--dir', dir, '--repository', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7', '--runId', 'run-1', '--journal', journalPath, '--usage', usagePath, '--transcripts', tdir], { encoding: 'utf8', env })
+  assert.equal(rec.status, 0, rec.stdout + rec.stderr)
+  assert.equal(JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8')).snapshot.completeness, 'partial', 'the author never reported: partial, not complete')
+  // the author's transcript lands late, after the observer is gone
+  const late = transcripts(root, STD_SPECS)
+  const fin1 = spawnSync('node', [CLI, 'finalize', '--dir', dir, '--repo', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7', '--runId', 'run-1', '--journal', journalPath, '--usage', usagePath, '--transcripts', late], { encoding: 'utf8', env })
+  assert.equal(fin1.status, 0, fin1.stdout + fin1.stderr)
+  const view = JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8'))
+  assert.equal(view.usage.outputTokens, 840, 'the late tail completed the same snapshot')
+  assert.deepEqual(view.usage.missingExecutionIds, [])
+  assert.equal(view.snapshot.completeness, 'complete')
+  const comments = JSON.parse(readFileSync(join(ghDir, 'state.json'), 'utf8'))
+  assert.equal(comments.length, 1, 'one synthesis comment, upserted')
+  assert.match(comments[0].body, /tokens 856 \(in 16 · out 840 · cache read 3000 · cache write 1500; known 2\/2\)/)
+  // a repeat reconciles nothing new and still updates exactly the same comment
+  const fin2 = spawnSync('node', [CLI, 'finalize', '--dir', dir, '--repo', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7', '--runId', 'run-1', '--journal', journalPath, '--usage', usagePath, '--transcripts', late], { encoding: 'utf8', env })
+  assert.equal(fin2.status, 0, fin2.stdout + fin2.stderr)
+  const after = JSON.parse(readFileSync(join(ghDir, 'state.json'), 'utf8'))
+  assert.equal(after.length, 1)
+  assert.equal(after[0].id, comments[0].id)
+  assert.equal(JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8')).usage.outputTokens, 840, 'not doubled by the repeat')
+})
+
+test('B4 (CLI): the host admin counters are DERIVED from the engine result the host already has — never hand-written JSON', () => {
+  const { root, dir } = runDir()
+  const resultPath = join(root, 'wf-result.json')
+  writeFileSync(
+    resultPath,
+    JSON.stringify({
+      workflowVersion: '4.0.0',
+      batch: [{ id: '42', status: 'ready-for-merge', metrics: { dispatches: 9, retries: 2, redirects: 3 } }],
+      metrics: { dispatches: 11, retries: 2, redirects: 3, perDispatch: [{ label: 'contract:code-review' }, { label: 'prepare:#42 a0' }, { label: 'verify:#42 r0' }] },
+    }),
+  )
+  const out = spawnSync('node', [CLI, 'dispatch-stats', '--result', resultPath, '--story', '42'], { encoding: 'utf8' })
+  assert.equal(out.status, 0, out.stdout + out.stderr)
+  const stats = JSON.parse(out.stdout)
+  assert.deepEqual(stats, { redirects: 3, engineRecoveries: 2, administrativeDispatches: 1, nestedDispatches: null })
+  // and it flows through the real tick into the metrics view
+  seedCycle(dir)
+  const tick = runtimeTick({ dir, journalPath: journalFile(root, STD_JOURNAL), usagePath: join(dir, 'usage.jsonl'), transcriptsDir: transcripts(root, STD_SPECS), runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, checkpoint: readCheckpoint(dir), now: T0 + 60_000, dispatchStats: stats })
+  assert.equal(tick.view.execution.redirects, 3)
+  assert.equal(tick.view.execution.engineRecoveries, 2)
+  assert.equal(tick.view.execution.administrativeDispatches, 1)
+  assert.equal(tick.view.execution.nestedDispatches, null, 'a counter the host cannot observe stays null, never 0')
 })

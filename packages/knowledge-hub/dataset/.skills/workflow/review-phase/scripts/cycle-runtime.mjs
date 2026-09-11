@@ -9,7 +9,20 @@
 //       reference, PR/story/branch, expectedHead, scopeBaselineHash, last handoff identity, typed
 //       next step) — a cache hint, never approval. `telemetry` names what this host can observe.
 //
+//   node <skill dir>/scripts/cycle-runtime.mjs dispatch-stats --result <workflow result.json> --story <id>
+//     → the four host admin counters {redirects, engineRecoveries, administrativeDispatches,
+//       nestedDispatches} read out of the engine's OWN returned result — the launch recipe pipes
+//       this straight into `--dispatchStats`. What the result does not carry stays null.
+//
+//   node <skill dir>/scripts/cycle-runtime.mjs usage-extract --transcripts <dir> --journal <path>
+//        --out <usage.jsonl> --runId <id> [--story <id>]
+//     → joins the host's per-agent transcripts to the journal on `agentId` and writes ONE
+//       cumulative usage record per execution. Deterministic file reading only: no provider API,
+//       no LLM, and no message CONTENT is read — usage, timing, model, effort and role metadata
+//       only. `observe`/`reconcile`/`finalize` run it themselves when given `--transcripts`.
+//
 //   node <skill dir>/scripts/cycle-runtime.mjs observe --dir <abs> --journal <path> [--usage <path>]
+//        [--transcripts <dir>]
 //        --repository <owner/name> --story <id> --branch <b> [--pr <n>] [--runId <id>]
 //        [--interval-ms 5000] [--grace-ms 30000] [--max-ticks <n>]
 //        [--dispatchStats <json>] [--sharedCost <json>]
@@ -31,7 +44,7 @@
 //   node <skill dir>/scripts/cycle-runtime.mjs finalize --dir <abs> --repo <owner/name> --pr <n>
 //        (same story flags, same --dispatchStats/--sharedCost)
 //     → the final reduce+write, `completeness` reported honestly (never claims a source it never saw).
-import { existsSync, statSync, openSync, readSync, closeSync, readFileSync, writeFileSync, renameSync, realpathSync } from 'node:fs'
+import { existsSync, statSync, openSync, readSync, closeSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, readdirSync, renameSync, realpathSync } from 'node:fs'
 import { join, basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { reduceCycleMetrics, writeMetrics, mergeObservations, publishSummary } from './cycle-metrics.mjs'
@@ -97,7 +110,178 @@ export function usageRecordToObservation(record, { runId, storyId, observedAt })
   if (!record || typeof record !== 'object' || (!record.key && !record.executionId)) return { error: 'record-missing-key' }
   const executionId = record.executionId || `${runId}:${record.key}:${record.agentId ?? ''}`
   const eventId = record.eventId || `${executionId}:usage`
-  return { eventId, executionId, parentExecutionId: record.parentExecutionId, role: record.role, runId, storyId, phase: record.phase ?? record.key ?? 'unknown', attempt: Number.isInteger(record.attempt) ? record.attempt : 1, kind: 'usage-observed', sourceRef: 'usage', observedAt, usage: record.usage ?? record }
+  return { eventId, executionId, parentExecutionId: record.parentExecutionId, role: record.role, runId, storyId, phase: record.phase ?? record.key ?? 'unknown', attempt: Number.isInteger(record.attempt) ? record.attempt : 1, kind: 'usage-observed', sourceRef: 'usage', observedAt, models: record.models, efforts: record.efforts, attribution: record.attribution, messageSpan: record.messageSpan, usage: record.usage ?? record }
+}
+
+// ── usage adapter (US-479 B4, S7, AC-20/25): host transcripts -> usage records ──────────────
+// The workflow journal records WHICH executions ran (`key` + `agentId`) and nothing about their
+// cost: no tokens, no timestamps. The cost lives in the harness's per-agent transcripts, in a
+// different shape. This is the missing PRODUCER for `--usage`: a deterministic file reader that
+// joins the two on `agentId` — no network, no provider API, no LLM, and it never reads message
+// CONTENT, only the usage/timing/model metadata each `assistant` record carries.
+//
+// The provider's own accounting, measured not assumed: inside ONE `requestId` the input and cache
+// fields are REPEATED identically on every `apiBlockIndex` while `output_tokens` GROWS, and the
+// last block carries a non-null `stop_reason`. So a request contributes its fixed fields once and
+// its final block's output — summing every message inflates output and cache reads, keeping only
+// the first block loses the output. Blocks that DISAGREE on the fixed fields are not a shape this
+// reduction understands: that request contributes nothing and is reported, never averaged.
+const ASSISTANT_USAGE_FIELDS = ['input_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens']
+function readTranscript(path) {
+  const requests = new Map()
+  const models = new Set()
+  const efforts = new Set()
+  const errors = []
+  let firstMessageAt = null
+  let lastMessageAt = null
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
+    if (!line.trim()) continue
+    let rec
+    try {
+      rec = JSON.parse(line)
+    } catch {
+      errors.push({ error: 'malformed-transcript-record', source: path })
+      continue
+    }
+    if (rec.type !== 'assistant' || !rec.requestId || !rec.message || typeof rec.message !== 'object') continue
+    const u = rec.message.usage
+    if (!u || typeof u !== 'object') {
+      errors.push({ error: 'assistant-record-without-usage', source: path, requestId: rec.requestId })
+      continue
+    }
+    const at = Date.parse(rec.timestamp ?? '')
+    if (Number.isInteger(at)) {
+      if (firstMessageAt === null || at < firstMessageAt) firstMessageAt = at
+      if (lastMessageAt === null || at > lastMessageAt) lastMessageAt = at
+    }
+    if (rec.message.model) models.add(String(rec.message.model))
+    if (rec.effort) efforts.add(String(rec.effort))
+    const block = Number.isInteger(rec.apiBlockIndex) ? rec.apiBlockIndex : 0
+    const fixed = ASSISTANT_USAGE_FIELDS.map(k => Number(u[k] ?? 0))
+    const cur = requests.get(rec.requestId)
+    if (!cur) {
+      requests.set(rec.requestId, { fixed, block, output: Number(u.output_tokens ?? 0), complete: u && rec.message.stop_reason != null, inconsistent: false })
+      continue
+    }
+    if (cur.fixed.some((v, i) => v !== fixed[i])) {
+      if (!cur.inconsistent) errors.push({ error: 'usage-request-inconsistent', source: path, requestId: rec.requestId })
+      cur.inconsistent = true
+    }
+    if (block >= cur.block) {
+      cur.block = block
+      cur.output = Number(u.output_tokens ?? 0)
+    }
+    if (rec.message.stop_reason != null) cur.complete = true
+  }
+  const usage = { inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, requests: 0, partialRequests: 0, inconsistentRequests: 0 }
+  for (const r of requests.values()) {
+    usage.requests++
+    if (r.inconsistent) {
+      usage.inconsistentRequests++
+      continue
+    }
+    // An observed cost is never discarded: an INCOMPLETE request still contributes what the
+    // provider already charged — it simply does not become complete by having usage.
+    if (!r.complete) usage.partialRequests++
+    usage.inputTokens += r.fixed[0]
+    usage.cacheWriteTokens += r.fixed[1]
+    usage.cacheReadTokens += r.fixed[2]
+    usage.outputTokens += r.output
+  }
+  return { usage, models: [...models].sort(), efforts: [...efforts].sort(), firstMessageAt, lastMessageAt, errors }
+}
+
+export function extractUsage({ transcriptsDir, journalPath, out, runId, storyId }) {
+  const errors = []
+  // the journal's OWN identity for each execution — the join key, and the only terminal proof
+  const byAgent = new Map()
+  if (journalPath && existsSync(journalPath))
+    for (const line of readFileSync(journalPath, 'utf8').split('\n')) {
+      if (!line.trim()) continue
+      let rec
+      try {
+        rec = JSON.parse(line)
+      } catch {
+        continue // a partial last line is the tailer's business, not the adapter's
+      }
+      if (!rec.key || !rec.agentId) continue
+      const prior = byAgent.get(rec.agentId) ?? { key: rec.key, terminal: false }
+      byAgent.set(rec.agentId, { key: prior.key, terminal: prior.terminal || rec.result !== undefined })
+    }
+  const files = existsSync(transcriptsDir) ? readdirSync(transcriptsDir).filter(f => /^agent-.+\.jsonl$/.test(f)).sort() : []
+  const records = []
+  const unattributed = []
+  const seenAgents = new Set()
+  for (const f of files) {
+    const agentId = f.slice('agent-'.length, -'.jsonl'.length)
+    seenAgents.add(agentId)
+    const t = readTranscript(join(transcriptsDir, f))
+    errors.push(...t.errors)
+    const metaPath = join(transcriptsDir, `agent-${agentId}.meta.json`)
+    let meta = {}
+    if (existsSync(metaPath))
+      try {
+        meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+      } catch {
+        errors.push({ error: 'malformed-transcript-meta', source: metaPath })
+      }
+    const known = byAgent.get(agentId)
+    if (!known) unattributed.push(agentId)
+    // The identity is the JOURNAL's, so the usage lands on the execution the journal already
+    // reported. A transcript the journal does not know is a real cost with no dispatch identity:
+    // it keeps its own id under an explicit `unattributed` phase — never folded into a sibling,
+    // and never given an invented parent.
+    const executionId = known ? `${runId}:${known.key}:${agentId}` : `${runId}:transcript:${agentId}`
+    records.push({
+      eventId: `${executionId}:usage`,
+      executionId,
+      agentId,
+      key: known?.key,
+      phase: known ? known.key : 'unattributed',
+      attribution: known ? 'journal' : 'transcript-only',
+      role: meta.agentType ?? 'unknown',
+      spawnDepth: Number.isInteger(meta.spawnDepth) ? meta.spawnDepth : undefined,
+      models: t.models,
+      efforts: t.efforts,
+      // Three different clocks, never conflated (S7): these are the PROVIDER timestamps of the
+      // messages this execution produced — an observed message SPAN, not the agent's lifetime, and
+      // `terminalObserved` says whether the host ever saw this execution actually finish.
+      messageSpan: { firstMessageAt: t.firstMessageAt === null ? null : new Date(t.firstMessageAt).toISOString(), lastMessageAt: t.lastMessageAt === null ? null : new Date(t.lastMessageAt).toISOString(), source: 'transcript', terminalObserved: !!known?.terminal },
+      complete: t.usage.inconsistentRequests === 0 && t.usage.partialRequests === 0,
+      usage: { ...t.usage, accountingBasis: 'leaf-exclusive' },
+    })
+  }
+  const withoutTranscript = [...byAgent.entries()].filter(([agentId]) => !seenAgents.has(agentId)).map(([agentId, v]) => `${runId}:${v.key}:${agentId}`).sort()
+  if (out && records.length) {
+    mkdirSync(dirname(out), { recursive: true })
+    // Cumulative per execution: a later record REPLACES the earlier one in `mergeObservations`
+    // (it carries no `isDelta`), so a full re-read after a rotation or a restart rebuilds the same
+    // totals instead of summing them again.
+    appendFileSync(out, records.map(r => JSON.stringify(r)).join('\n') + '\n')
+  }
+  return { executions: records.filter(r => r.attribution === 'journal').length, records, unattributed, withoutTranscript, errors }
+}
+
+// ── host admin counters (US-479 B4, S4/S7) ─────────────────────────────────────────────────
+// The four execution counters no journal or transcript encodes: they exist only in the engine
+// result the host already holds when the run returns. Derived here, from that file, so the recipe
+// hands the observer REAL values instead of a JSON somebody would have to write by hand. What the
+// result genuinely does not carry stays `null` — never a fabricated 0 (S7).
+export function dispatchStatsFromResult({ result, story }) {
+  if (!result || typeof result !== 'object') return { redirects: null, engineRecoveries: null, administrativeDispatches: null, nestedDispatches: null }
+  const row = (result.batch ?? []).find(r => String(r?.id ?? r?.story?.id ?? '') === String(story))
+  const m = row?.metrics ?? result.metrics ?? {}
+  const asInt = v => (Number.isInteger(v) ? v : null)
+  const perDispatch = Array.isArray(result.metrics?.perDispatch) ? result.metrics.perDispatch : []
+  return {
+    redirects: asInt(m.redirects),
+    // an agent that died and was re-dispatched with the same prompt is the engine recovering
+    engineRecoveries: asInt(m.retries),
+    // the batch-wide contract generator: the only dispatch that judges nothing
+    administrativeDispatches: perDispatch.length ? perDispatch.filter(d => /^contract:/.test(String(d?.label ?? ''))).length : null,
+    // the engine result does not report sub-agent nesting: unknown, and said so
+    nestedDispatches: null,
+  }
 }
 
 // ── checkpoint: offsets + accumulated observations, atomic ──────────────────────────────────
@@ -135,8 +319,17 @@ export function shouldStop({ terminalObservedAt, usageReconciled, cancelled, gra
 }
 
 // ── one tick: validate source -> merge idempotently -> reduce -> persist ────────────────────
-export function runtimeTick({ dir, journalPath, usagePath, runId, storyId, repository, story, branch, pr, checkpoint, now, dispatchStats, sharedCost }) {
+export function runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId, storyId, repository, story, branch, pr, checkpoint, now, dispatchStats, sharedCost }) {
   const errors = []
+  // US-479 B4: the host journal carries no cost at all, so when the transcripts are named the tick
+  // PRODUCES the usage source before tailing it — the same deterministic reader, re-run each tick,
+  // appending one cumulative record per execution (replace-on-merge, never summed twice).
+  if (transcriptsDir && usagePath) {
+    const ex = extractUsage({ transcriptsDir, journalPath, out: usagePath, runId, storyId })
+    errors.push(...ex.errors)
+    for (const id of ex.withoutTranscript) errors.push({ error: 'execution-without-transcript', executionId: id })
+    for (const agentId of ex.unattributed) errors.push({ error: 'transcript-without-dispatch-identity', agentId })
+  }
   const j = journalPath ? tailJournalFile({ path: journalPath, offset: checkpoint.journalOffset ?? 0 }) : { records: [], newOffset: checkpoint.journalOffset ?? 0, malformed: [], rotated: false }
   for (const line of j.malformed) errors.push({ error: 'malformed-journal-record', source: journalPath, line })
   const journalObs = j.records.map(r => journalRecordToObservation(r, { runId, storyId, observedAt: now })).filter(o => {
@@ -215,7 +408,14 @@ export function buildEntryCapsule({ dir, repo, story, pr, workflowVersion, polic
 // Readiness is claimed only AFTER the candidate summary is read back (S8): a ready view whose
 // publish fails or cannot be confirmed is reported as `failed-publication` (reason
 // `publication-pending`), never a fabricated `ready-for-merge` with no durable evidence.
-export function finalizeMetrics({ dir, repository, story, branch, pr, runId, publish, dispatchStats, sharedCost }) {
+export function finalizeMetrics({ dir, repository, story, branch, pr, runId, publish, dispatchStats, sharedCost, journalPath, usagePath, transcriptsDir }) {
+  // US-479 B4: the last agent's usage often lands AFTER the observer stopped. When finalize is
+  // given the sources it reconciles them itself, in ONE tick — the same reader, no new judgment,
+  // no LLM: a tail that arrives late completes the same snapshot instead of being lost.
+  if (journalPath || usagePath || transcriptsDir) {
+    const pre = runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId, storyId: story, repository, story, branch, pr, checkpoint: readCheckpoint(dir), now: Date.now(), dispatchStats, sharedCost })
+    writeCheckpoint(dir, pre.checkpoint)
+  }
   const checkpoint = readCheckpoint(dir)
   // US-479 remediation (Finding 4): completeness is the reducer's OWN honest derivation (every
   // observed execution has matching usage, timing coverage is full) — "an observation exists" was
@@ -254,7 +454,7 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-export async function runObserveLoop({ dir, journalPath, usagePath, runId, storyId, repository, story, branch, pr, intervalMs = 5000, graceMs = 30000, maxTicks = Infinity, sleepFn = sleep, nowFn = () => Date.now(), onTick = () => {}, signal, dispatchStats, sharedCost }) {
+export async function runObserveLoop({ dir, journalPath, usagePath, transcriptsDir, runId, storyId, repository, story, branch, pr, intervalMs = 5000, graceMs = 30000, maxTicks = Infinity, sleepFn = sleep, nowFn = () => Date.now(), onTick = () => {}, signal, dispatchStats, sharedCost }) {
   let checkpoint = readCheckpoint(dir)
   let ticks = 0
   let cancelled = false
@@ -265,7 +465,7 @@ export async function runObserveLoop({ dir, journalPath, usagePath, runId, story
   try {
     for (;;) {
       const now = nowFn()
-      const result = runtimeTick({ dir, journalPath, usagePath, runId, storyId, repository, story, branch, pr, checkpoint, now, dispatchStats, sharedCost })
+      const result = runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId, storyId, repository, story, branch, pr, checkpoint, now, dispatchStats, sharedCost })
       checkpoint = result.checkpoint
       ticks++
       onTick(result)
@@ -293,21 +493,33 @@ async function main(argv) {
     need('dir', 'repository', 'story', 'branch')
     const checkpoint = readCheckpoint(opts.dir)
     const now = Date.now()
-    const result = runtimeTick({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, checkpoint, now, dispatchStats: opts.dispatchStats ? JSON.parse(opts.dispatchStats) : undefined, sharedCost: opts.sharedCost ? JSON.parse(opts.sharedCost) : undefined })
+    const result = runtimeTick({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, checkpoint, now, dispatchStats: opts.dispatchStats ? JSON.parse(opts.dispatchStats) : undefined, sharedCost: opts.sharedCost ? JSON.parse(opts.sharedCost) : undefined })
     writeCheckpoint(opts.dir, result.checkpoint)
     return { out: { written: result.writeResult.written, errors: result.errors, terminalObserved: result.terminalObserved }, code: 0 }
   }
   if (cmd === 'observe') {
     need('dir', 'repository', 'story', 'branch')
-    const res = await runObserveLoop({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, intervalMs: opts['interval-ms'] ? Number(opts['interval-ms']) : 5000, graceMs: opts['grace-ms'] ? Number(opts['grace-ms']) : 30000, maxTicks: opts['max-ticks'] ? Number(opts['max-ticks']) : Infinity, dispatchStats: opts.dispatchStats ? JSON.parse(opts.dispatchStats) : undefined, sharedCost: opts.sharedCost ? JSON.parse(opts.sharedCost) : undefined, onTick: r => process.stdout.write(`tick: revision=${r.view.snapshot.revision} terminal=${r.terminalObserved}\n`) })
+    const res = await runObserveLoop({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, intervalMs: opts['interval-ms'] ? Number(opts['interval-ms']) : 5000, graceMs: opts['grace-ms'] ? Number(opts['grace-ms']) : 30000, maxTicks: opts['max-ticks'] ? Number(opts['max-ticks']) : Infinity, dispatchStats: opts.dispatchStats ? JSON.parse(opts.dispatchStats) : undefined, sharedCost: opts.sharedCost ? JSON.parse(opts.sharedCost) : undefined, onTick: r => process.stdout.write(`tick: revision=${r.view.snapshot.revision} terminal=${r.terminalObserved}\n`) })
     return { out: res, code: 0 }
   }
   if (cmd === 'finalize') {
     need('dir', 'repo', 'pr')
-    const out = finalizeMetrics({ dir: opts.dir, repository: opts.repo, story: opts.story, branch: opts.branch, pr: Number(opts.pr), runId: opts.runId, publish: { listComments, findByMarker, upsert }, dispatchStats: opts.dispatchStats ? JSON.parse(opts.dispatchStats) : undefined, sharedCost: opts.sharedCost ? JSON.parse(opts.sharedCost) : undefined })
-    return { out: { completeness: out.view.snapshot.completeness, written: out.writeResult.written, publication: out.view.publication }, code: out.writeResult.written ? 0 : 1 }
+    const out = finalizeMetrics({ dir: opts.dir, repository: opts.repo, story: opts.story, branch: opts.branch, pr: Number(opts.pr), runId: opts.runId, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, publish: { listComments, findByMarker, upsert }, dispatchStats: opts.dispatchStats ? JSON.parse(opts.dispatchStats) : undefined, sharedCost: opts.sharedCost ? JSON.parse(opts.sharedCost) : undefined })
+    // US-479 B4: a repeat finalize that finds nothing new writes nothing — that is the idempotent
+    // outcome the recipe relies on, not a failure. Only a real write failure is a non-zero exit.
+    const idempotent = out.writeResult.written || out.writeResult.reason === 'stale-revision'
+    return { out: { completeness: out.view.snapshot.completeness, written: out.writeResult.written, reason: out.writeResult.reason, publication: out.view.publication }, code: idempotent ? 0 : 1 }
   }
-  throw new Error(`unknown command: ${cmd} (expected entry | observe | reconcile | finalize)`)
+  if (cmd === 'dispatch-stats') {
+    need('result', 'story')
+    return { out: dispatchStatsFromResult({ result: JSON.parse(readFileSync(opts.result, 'utf8')), story: opts.story }), code: 0 }
+  }
+  if (cmd === 'usage-extract') {
+    need('transcripts', 'journal', 'out', 'runId')
+    const res = extractUsage({ transcriptsDir: opts.transcripts, journalPath: opts.journal, out: opts.out, runId: opts.runId, storyId: opts.story })
+    return { out: { executions: res.executions, unattributed: res.unattributed, withoutTranscript: res.withoutTranscript, errors: res.errors }, code: 0 }
+  }
+  throw new Error(`unknown command: ${cmd} (expected entry | observe | reconcile | finalize | usage-extract | dispatch-stats)`)
 }
 
 const isMain = () => {

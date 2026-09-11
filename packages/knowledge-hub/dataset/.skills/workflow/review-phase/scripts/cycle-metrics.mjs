@@ -212,6 +212,9 @@ export function reduceUsage(observations) {
     cacheWriteTokens: known.some(u => u.cacheWriteTokens != null) ? known.reduce((s, u) => s + (u.cacheWriteTokens ?? 0), 0) : null,
     coverage: { known: relevantIds.length - missingExecutionIds.length, total: relevantIds.length },
     missingExecutionIds,
+    // Observed, charged, and NOT finished: an incomplete or self-inconsistent provider request
+    // (US-479 B4). Its tokens are counted; its execution is named so nothing reads as settled.
+    incompleteExecutionIds: countedIds.filter(id => ((usageByExec.get(id)?.partialRequests ?? 0) > 0 || (usageByExec.get(id)?.inconsistentRequests ?? 0) > 0)).sort(),
     accountingBasis: 'leaf-exclusive',
     byRole: [...byRoleMap.entries()].map(([role, tokens]) => ({ role, tokens })),
     sharedOverhead: null,
@@ -271,10 +274,26 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   // as full coverage. Every execution seen on EITHER side gets one interval, with the missing side
   // left `null` — `reduceTime`'s own known/flagged split then reports it honestly.
   const timedIds = new Set([...startEvents.keys(), ...finishByExec.keys()])
+  // US-479 B4 (S7): THREE clocks, never conflated. The host observes a journal record at TICK time
+  // (a coarse upper bound: the record carries none of its own); the provider timestamps the
+  // messages an execution produced (`messageSpan`, a span of real work, not the execution's
+  // lifetime). Evidence is COMBINED so the measured span can only widen: the earliest known start
+  // and the latest known end. Preferring the flattering clock on either side would shrink the
+  // measurement by silently dropping start-up or wait, which is exactly the improvement S7 forbids.
+  // And an end is claimed only where the host actually observed the execution finish — a message
+  // span alone never closes an interval.
+  const spanByExec = new Map()
+  for (const o of merged) if (o.kind === 'usage-observed' && o.messageSpan) spanByExec.set(o.executionId, o.messageSpan)
+  const widen = (a, b, pick) => (Number.isInteger(a) && Number.isInteger(b) ? pick(a, b) : Number.isInteger(a) ? a : Number.isInteger(b) ? b : null)
   const intervals = [...timedIds].map(id => {
     const s = startEvents.get(id)
     const f = finishByExec.get(id)
-    return { startMs: s ? toEpochMs(s.observedAt ?? s.occurredAt) : null, endMs: f ? toEpochMs(f.observedAt ?? f.occurredAt) : null }
+    const span = spanByExec.get(id)
+    const hostStart = s ? toEpochMs(s.observedAt ?? s.occurredAt) : null
+    const hostEnd = f ? toEpochMs(f.observedAt ?? f.occurredAt) : null
+    const spanStart = span ? toEpochMs(span.firstMessageAt) : null
+    const spanEnd = span ? toEpochMs(span.lastMessageAt) : null
+    return { startMs: widen(hostStart, spanStart, Math.min), endMs: f ? widen(hostEnd, spanEnd, Math.max) : null }
   })
   const time = reduceTime(intervals)
   const usage = reduceUsage(merged)
@@ -313,12 +332,16 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   // exists" is not proof every declared source was actually reconciled.
   const missingSources = []
   if (usage.missingExecutionIds.length) missingSources.push('usage')
+  // US-479 B4: an execution whose provider request never completed (no `stop_reason`) or whose
+  // blocks disagreed keeps the cost already observed — but the snapshot it feeds is NOT complete.
+  // Having usage is not being finished.
+  if (usage.incompleteExecutionIds.length) missingSources.push('usage-incomplete')
   if (time.incomplete) missingSources.push('timing')
   const completeness = hasObservations && !missingSources.length ? 'complete' : 'partial'
   return {
     schemaVersion: METRICS_SCHEMA_VERSION,
     identity: { repository, storyId: story, prNumber: Number.isInteger(pr) ? pr : null, branch, canonicalRunId: runId ?? null, runIds: runId ? [runId] : [], scopeEpoch: lastReview?.data.scopeEpoch ?? 1 },
-    workflow: { name: 'pair-implement-batch', versions, sourceShas: [], artifactDigests: [], models: [], mixedVersions: versions.length > 1 },
+    workflow: { name: 'pair-implement-batch', versions, sourceShas: [], artifactDigests: [], models: [...new Set(merged.flatMap(o => (Array.isArray(o.models) ? o.models : [])))].sort(), mixedVersions: versions.length > 1 },
     snapshot: { revision, asOf, sourceDigest: sha256(canonical(list.map(h => h.name))), completeness, missingSources },
     outcome: { quality, delivery, cohortState: delivery === 'ready-for-merge' ? 'completed' : delivery === 'in-progress' ? 'running' : 'blocked', reason: delivery === 'awaiting-scope-decision' ? 'human-scope' : null, qualityConvergedHead: quality === 'converged' ? lastReview?.data.reviewedHead ?? null : null, reviewedHead: lastReview?.data.reviewedHead ?? null },
     cycles: { attempted: counters.attemptedCycles, completed: counters.completedCycles, perScopeEpoch: [] },
@@ -340,7 +363,11 @@ export function renderMarkdown(view) {
   lines.push('')
   lines.push(`Cycles: ${view.cycles.completed} completed / ${view.cycles.attempted} attempted`)
   lines.push(`Reviews: ${view.execution.reviewExecutions} executions, ${view.execution.reviewBatches} batches`)
-  lines.push(`Tokens: ${view.usage.observedTotalTokens ?? 'unknown'} (coverage ${view.usage.coverage.known}/${view.usage.coverage.total})`)
+  const tok = k => (typeof view.usage[k] === 'number' ? view.usage[k] : 'unknown')
+  // The aggregate is billed input+output; the cache categories are named beside it, never added
+  // into it (US-479 B4: no aggregate and subcategory counted twice).
+  lines.push(`Tokens: ${view.usage.observedTotalTokens ?? 'unknown'} (coverage ${view.usage.coverage.known}/${view.usage.coverage.total}) — in ${tok('inputTokens')}, out ${tok('outputTokens')}, cache read ${tok('cacheReadTokens')}, cache write ${tok('cacheWriteTokens')}`)
+  if (view.usage.incompleteExecutionIds?.length) lines.push(`Incomplete provider requests in ${view.usage.incompleteExecutionIds.length} execution(s): the cost is counted, the execution is NOT settled`)
   lines.push(`Time: elapsed ${view.time.elapsedMs ?? 'unknown'}ms, active ${view.time.activeWallMs ?? 'unknown'}ms, agent ${view.time.agentMs ?? 'unknown'}ms`)
   if (view.scopeChanges.entries.length) lines.push(`Scope proposals: ${view.scopeChanges.pending} pending, ${view.scopeChanges.ignored} ignored, ${view.scopeChanges.extended} extended, ${view.scopeChanges.deferred} deferred`)
   lines.push(`Snapshot: revision ${view.snapshot.revision}, completeness ${view.snapshot.completeness}`)
@@ -401,7 +428,8 @@ export function renderPrSummary(view) {
   lines.push(`**3. Cycles** — completed ${view.cycles.completed} / attempted ${view.cycles.attempted} · review batches ${view.execution.reviewBatches} · review executions ${view.execution.reviewExecutions} · retries ${view.execution.retries} · redirects ${view.execution.redirects} · contract revisions ${view.execution.contractRevisions} · preparation repairs ${view.execution.preparationRepairs} · admin/engine recoveries ${view.execution.engineRecoveries}`)
   lines.push('')
   const cov = view.usage.coverage
-  lines.push(`**4. Cost / time** — tokens ${view.usage.observedTotalTokens ?? 'unknown'} (known ${cov.known}/${cov.total}${view.usage.missingExecutionIds.length ? `; missing: ${view.usage.missingExecutionIds.join(', ')}` : ''}) · elapsed ${view.time.elapsedMs ?? 'unknown'}ms · active ${view.time.activeWallMs ?? 'unknown'}ms · agent ${view.time.agentMs ?? 'unknown'}ms · wait ${view.time.waitMs ?? 'unknown'}ms`)
+  const tk = k => (typeof view.usage[k] === 'number' ? view.usage[k] : 'unknown')
+  lines.push(`**4. Cost / time** — tokens ${view.usage.observedTotalTokens ?? 'unknown'} (in ${tk('inputTokens')} · out ${tk('outputTokens')} · cache read ${tk('cacheReadTokens')} · cache write ${tk('cacheWriteTokens')}; known ${cov.known}/${cov.total}${view.usage.missingExecutionIds.length ? `; missing: ${view.usage.missingExecutionIds.join(', ')}` : ''}${view.usage.incompleteExecutionIds?.length ? `; unfinished provider requests in ${view.usage.incompleteExecutionIds.length} execution(s)` : ''}) · elapsed ${view.time.elapsedMs ?? 'unknown'}ms · active ${view.time.activeWallMs ?? 'unknown'}ms · agent ${view.time.agentMs ?? 'unknown'}ms · wait ${view.time.waitMs ?? 'unknown'}ms`)
   lines.push('')
   const late = view.defects.late
   lines.push(`**5. Late defects** (by origin) — preexisting-missed ${late.preexistingMissed} · introduced-by-remediation ${late.introducedByRemediation} · unknown ${late.unknown}`)
