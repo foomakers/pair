@@ -1527,3 +1527,46 @@ test('DT-10: a stage that redirects to the very step it was dispatched for is re
   assert.equal(result.batch[0].status, 'failed-resume')
   assert.match(result.batch[0].reason, /redirected to itself/)
 })
+
+// ── DR-04 (delta review): a batch plan is owed by the preparation that PLANS, not by `-g1` ──────
+// `needPlan` keyed on the phase ending in `-g1`. After F-RR-05 the regression rewind dispatches a
+// repair at the DERIVED producing group, which may be `r1-g1` or `r1-g2`, so whether a repair had
+// to return a full batch plan depended on that group's number. Landing on `-g1` demanded a plan
+// that red-spec's own contract says it does not produce when it is handed a `$scope` — the run
+// would have died as failed-preparation. The plan is owed by the preparation that plans the round:
+// the one dispatched WITHOUT a scope.
+// NOTE: the end-to-end case below is a positive CONTROL, not a witness — it passes with and
+// without the fix, because this harness cannot drive the rewind far enough to reach the refusal.
+// The discriminating check is the structural one that follows it.
+test('DR-04 (control): a regression repair landing on `-g1` completes its preparation', async () => {
+  const repairNext = { step: 'prepare', mode: 'remediation', phase: 'r1-g1', round: 1, attempt: 2, base: HEAD, regressionRepairOf: 'r1', group: { groupId: 'r1-g1', owner: 'installer', mode: 'behavioral', allowedPaths: ['src/a.ts'] }, findings: [finding({ id: 'r1-9' })] }
+  let author = 0
+  let redirected = false
+  const { result } = await runWorkflow({
+    args: { cards: [{ ...STORY, prNumber: 7 }] },
+    dispatch: (p, o) => {
+      if (o.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (o.agentType === 'pair-reviewer' && !redirected) {
+        redirected = true
+        return { status: 'redirect', next: repairNext }
+      }
+      if (o.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
+      if (o.agentType === 'pair-fix-test-author') {
+        author += 1
+        // a conforming red-spec handed a $scope returns a contract and NO plan
+        return { status: 'red', contract: { path: '/main/.pair/working/runs/r/292/r1-g1-red-contract.json', hash: SHA256('1'), revision: 1 }, findings: { received: ['r1-9'], covered: ['r1-9'] } }
+      }
+      if (o.agentType === 'pair-red-contract-verifier') return { verified: true, findings: [], sealed: true, snapshot: SNAP, contractHash: SHA256('1') }
+      if (o.agentType === 'pair-implementer') return { status: 'fixed', fixed: true, needsHumanDecision: false, outputHead: HEAD, evidenceLedger: [] }
+      return {}
+    },
+  })
+  assert.notEqual(result.batch[0].status, 'failed-preparation', `the repair was refused for a missing plan: ${result.batch[0].reason}`)
+  assert.ok(author > 0, 'the repair preparation actually ran')
+})
+
+test('DR-04: the preparation that PLANS a round — dispatched with no scope — still owes a valid plan', () => {
+  const src = SRC.slice(SRC.indexOf('const prepare = n =>'), SRC.indexOf('const validate = n =>'))
+  assert.doesNotMatch(src, /-g1\$/, 'the plan requirement must not key on the group number')
+  assert.match(src, /needPlan:[^,]*!n\.group/, 'it keys on the absence of a dispatched scope, as red-spec`s own contract states')
+})
