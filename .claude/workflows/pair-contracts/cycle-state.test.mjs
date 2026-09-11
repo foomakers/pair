@@ -3252,3 +3252,97 @@ test('DT-13: once quality has converged the proposals halt the cycle ONCE, toget
   assert.deepEqual(r.next.scopeChanges.map(c => c.id).sort(), ['sc-1', 'sc-2'], 'ONE halt carrying every pending proposal, not one halt each')
   assert.notEqual(r.status, 'completed', 'a pending scope decision is never `done`')
 })
+
+// ── US-479 T-27 (DT-15): a new-card decision needs a real destination, or nothing moves ─────────
+// `new-card` is the only decision that creates an effect outside this repository's cycle. It is
+// applied only with an explicit approved payload or an existing issue this script VERIFIED through
+// `gh`. A decision that has neither is not applied — and an unapplied proposal stays PENDING, never
+// silently deferred, so the cycle keeps halting for it instead of walking past it.
+test('DT-15: new-card with neither an approved payload nor a target URL is not applied, and the proposal stays PENDING', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-777'
+  setComments({ 777: comment('rucka', decisionBody([{ id: 'sc-1', action: 'new-card', rationale: 'later' }], hash)) })
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V })
+  assert.equal(out.results?.find(r => r.id === 'sc-1')?.applied, false, JSON.stringify(out))
+  assert.equal(out.results.find(r => r.id === 'sc-1').reason, 'payload-insufficient')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.reason, 'awaiting-scope-decision', 'an unapplied decision leaves the halt standing')
+  assert.deepEqual(r.next.scopeChanges.map(c => c.status ?? 'pending'), ['pending'], 'pending, never deferred')
+})
+
+test('DT-15: a target URL that does not verify is refused — an unreachable destination is not a link', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-778'
+  // an issue in ANOTHER repository is not this cycle's destination, whatever it contains
+  setComments({ 778: comment('rucka', decisionBody([{ id: 'sc-1', action: 'new-card', rationale: 'tracked elsewhere', targetIssueUrl: 'https://github.com/other/repo/issues/12' }], hash)) })
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V })
+  assert.equal(out.results.find(r => r.id === 'sc-1').applied, false)
+  assert.match(out.results.find(r => r.id === 'sc-1').reason, /targetIssueUrl-repo-mismatch|gh-issue-view/)
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.reason, 'awaiting-scope-decision')
+})
+
+// ── US-479 T-27 (DT-27): a decided origin carries the replay that decided it ────────────────────
+// `preexisting-missed` and `introduced-by-remediation` are claims about WHEN a defect began, and
+// both are decided by replaying the reproducer at the baseline head — never by file age, blame or
+// the reviewer's confidence. `unknown` is the honest answer when the baseline cannot be replayed,
+// and it needs no evidence precisely because it claims nothing.
+const originDraft = (dir, findings) => {
+  const file = join(mkdtempSync(join(tmpdir(), 'origin-')), 'draft.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: H1, verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 're-review', findings }))
+  return file
+}
+
+test('DT-27: an origin claimed as DECIDED without its replay evidence is refused before the write', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  const before = digestDir(dir)
+  for (const origin of ['preexisting-missed', 'introduced-by-remediation']) {
+    const out = publish({ dir, file: originDraft(dir, [finding('r1-1', { origin })]), phase: 'r1', skill: 'review-phase', workflowVersion: V })
+    assert.equal(out.published, false, origin)
+    assert.match(out.reason, /finding-originEvidence-missing|regressionRisk-missing/, `${origin}: ${out.reason}`)
+  }
+  assert.deepEqual(digestDir(dir), before, 'an undecidable claim writes nothing')
+})
+
+test('DT-27: `unknown` is the honest answer when the baseline cannot be replayed — it needs no evidence and is an ordinary finding', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  const out = publish({ dir, file: originDraft(dir, [finding('r1-1', { origin: 'unknown' })]), phase: 'r1', skill: 'review-phase', workflowVersion: V })
+  assert.equal(out.published, true, JSON.stringify(out))
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.activeRegressionRisks, [], 'an unknown origin is never a regression risk')
+  assert.equal(r.next.step, 'prepare', 'it is remediated as the ordinary defect it is')
+})
+
+test('DT-27: a baseline-failing defect is `preexisting-missed` — evidence, no risk, no invalidated batch', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  const out = publish({
+    dir,
+    file: originDraft(dir, [finding('r1-1', { origin: 'preexisting-missed', originEvidence: { baselineHead: H0, failingHead: H1, reproducer: 'pnpm exec vitest run src/a.test.ts -t old' } })]),
+    phase: 'r1',
+    skill: 'review-phase',
+    workflowVersion: V,
+  })
+  assert.equal(out.published, true, JSON.stringify(out))
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.activeRegressionRisks, [], 'a defect that already failed at the baseline invalidates no remediation')
+  assert.equal(r.counters.invalidatedRemediations, 0)
+})
+
+test('DT-27: a scope proposal can never carry a severity or an origin — it is not a defect', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  const before = digestDir(dir)
+  const file = join(mkdtempSync(join(tmpdir(), 'origin-')), 'draft.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: H1, verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 're-review', findings: [], scopeChanges: [{ id: 'sc-1', type: 'scope-extension', proposal: 'do more', baselineEvidenceRefs: ['x'], status: 'pending', severity: 'Major' }] }))
+  const out = publish({ dir, file, phase: 'r1', skill: 'review-phase', workflowVersion: V })
+  assert.equal(out.published, false)
+  assert.match(out.reason, /scopeChange-severity-forbidden/)
+  assert.deepEqual(digestDir(dir), before)
+})

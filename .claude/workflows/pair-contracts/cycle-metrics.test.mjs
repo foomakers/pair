@@ -995,3 +995,28 @@ test('DT-26: a zero denominator returns null rather than a fabricated rate', () 
   assert.equal(cohort.meanCompletedCycles, null)
   assert.equal(cohort.costPerCompletedDelivery, null)
 })
+
+// ── US-479 T-27 (DT-22): a late usage tail COMPLETES coverage without inventing an execution ────
+// The last agent's usage often lands after the verdict. When it does, it must fill the gap it was
+// always counted against — the denominator was already 2 — rather than register as a third
+// execution. Otherwise a delivery gets more expensive the later its accounting arrives.
+test('DT-22: the usage tail that arrives after the verdict completes coverage and leaves the execution count alone', () => {
+  const started = [
+    { kind: 'usage-observed', runId: 'r1', sourceRef: 's1', executionId: 'e1', usage: { inputTokens: 100, outputTokens: 50 } },
+    { kind: 'usage-observed', runId: 'r1', sourceRef: 's2', executionId: 'e2', usage: {} },
+  ]
+  const before = reduceUsage(started)
+  assert.deepEqual(before.coverage, { known: 1, total: 2 })
+  assert.deepEqual(before.missingExecutionIds, ['e2'])
+  assert.equal(before.observedTotalTokens, 150)
+  // the tail for the very execution that was missing
+  const tail = { kind: 'usage-observed', runId: 'r1', sourceRef: 's2', executionId: 'e2', usage: { inputTokens: 40, outputTokens: 10 } }
+  const after = reduceUsage(mergeObservations([...started, tail]).observations)
+  assert.deepEqual(after.coverage, { known: 2, total: 2 }, 'the gap is filled; the denominator never grew')
+  assert.deepEqual(after.missingExecutionIds, [], 'nothing is missing any more')
+  assert.equal(after.observedTotalTokens, 200)
+  // and replaying the tail is not a third execution nor a second charge
+  const replayed = reduceUsage(mergeObservations([...started, tail, tail]).observations)
+  assert.deepEqual(replayed.coverage, after.coverage)
+  assert.equal(replayed.observedTotalTokens, after.observedTotalTokens, 'an identical tail replayed changes no total')
+})
