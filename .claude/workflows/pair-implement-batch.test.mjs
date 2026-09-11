@@ -73,6 +73,9 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3 } = {}) {
     const contractPath = `/main/.pair/working/runs/${run}/${id}/${phase}-red-contract.json`
     if (opts.agentType === 'pair-fix-test-author') {
       if (['stale', 'split-required', 'unprovable', 'dirty'].includes(res.status)) return res
+      // US-479 B1: a contradiction is an ANSWER with typed evidence and its own `next` — the real
+      // cycle state derives that route; the fixture carries it verbatim.
+      if (res.status === 'contradiction') return res
       const findings = jsonArg(prompt, 'findings') ?? []
       const scope = jsonArg(prompt, 'scope')
       const ids = findings.length ? findings.map(f => f.id) : ['AC-1']
@@ -152,6 +155,10 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3 } = {}) {
       const full = { status: 'reviewed', reviewedHead, custody: { verified: true, contractBreach: false }, readiness: { ready: blocking.length === 0, remoteHead: reviewedHead }, published: { firstReview: mode === 'first', synthesis: blocking.length === 0 && round > 0 }, tier: 'risk:green', passes: ['general'], ...res, findings }
       for (const f of findings) s.prior.set(f.id, f)
       s.lastReviewHead = reviewedHead
+      // The real authority (cycle-state.mjs) routes an implementation that follows ANY review to a
+      // re-review, never to a second first review — the simulator mirrors that here rather than
+      // only on the contract-gap path (US-479 B1: a successor revision is implemented after r0).
+      s.lastReviewRound = round
       if (res.next) full.next = res.next
       else if (full.custody.contractBreach) full.next = { step: 'blocked', reason: 'failed-custody', phase }
       else if (!blocking.length) full.next = full.readiness.ready ? { step: 'done', reviewedHead, round, verdict: full.verdict } : { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: reviewedHead, headMoved: true }
@@ -163,7 +170,6 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3 } = {}) {
         full.next = (s.greens[g] ?? 0) <= 1 ? { step: 'green', mode: 'retry', phase: g, round, attempt: (s.greens[g] ?? 0) + 1, base: HEAD, contract: { path: `/main/.pair/working/runs/${run}/${id}/${g}-red-contract.json`, hash: SHA256('1'), snapshot: SNAP }, findings: blocking } : { step: 'blocked', reason: 'failed-fix', budget: 'greenRetries', findings: blocking }
       } else if (blocking.some(f => f.kind === 'contract-gap' && f.groupId)) {
         const g = blocking.find(f => f.kind === 'contract-gap').groupId
-        s.lastReviewRound = round
         full.next = { step: 'prepare', mode: 'revision', phase: `${g}-rev2`, revision: 2, round, attempt: 1, base: reviewedHead, findings: blocking.filter(f => f.groupId === g), contract: { path: `/main/.pair/working/runs/${run}/${id}/${g}-red-contract.json`, hash: SHA256('1'), snapshot: SNAP } }
       } else full.next = { step: 'prepare', mode: 'remediation', phase: `r${round + 1}-g1`, round: round + 1, attempt: 1, base: reviewedHead, findings: blocking }
       return full
@@ -1304,4 +1310,75 @@ test('a required (carried-in P3) finding measured on another head fails before a
   const same = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7, requiredFindings: [{ ...req, observedHead: HEAD }] }] }, dispatch: stdDispatch() })
   assert.equal(same.result.batch[0].status, 'ready-for-merge')
   assert.match(same.calls[1].prompt, /\$required=\[\{"observedHead":"a{40}"/)
+})
+
+// ── US-479 B1 (S3, AC-08): the coordinator carries the contradiction evidence and follows the
+// successor-revision route instead of ending the card ──────────────────────────────────────────
+test('B1: PREPARE_SCHEMA and NEXT_SCHEMA declare every field the contradiction route travels on — an undeclared field is dropped by the harness before the coordinator sees it (3.0.5)', () => {
+  const prepare = SRC.slice(SRC.indexOf('const PREPARE_SCHEMA'), SRC.indexOf('const PREPARE_REFUSALS'))
+  assert.match(prepare, /enum: \['red', 'stale', 'split-required', 'unprovable', 'dirty', 'contradiction', REDIRECT_STATUS\]/)
+  for (const f of ['revisionReason', 'predecessorContractHash', 'conflictingRowIds', 'counterexample', 'changedRows']) assert.ok(new RegExp(`\\b${f}:`).test(prepare), `PREPARE_SCHEMA drops ${f}`)
+  const next = SRC.slice(SRC.indexOf('const NEXT_SCHEMA'), SRC.indexOf('const REDIRECT_STATUS'))
+  for (const f of ['changedRows', 'contradictionFor']) assert.ok(new RegExp(`\\b${f}:`).test(next), `NEXT_SCHEMA drops ${f}`)
+})
+
+test('B1 (DT-04): a contradiction is not a refusal — the coordinator follows the successor revision, dispatches it with its revision number and exact changed rows, and the cycle returns to the remediation that raised it', async () => {
+  let author = 0
+  const { result, calls } = await runWorkflow({
+    args: { cards: [STORY] },
+    dispatch: (p, o) => {
+      if (o.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (o.agentType === 'pair-reviewer') return author <= 2 ? { verdict: 'Changes-requested', findings: [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'd', recommendation: 'r', kind: 'defect' }] } : { verdict: 'Approved', findings: [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'd', recommendation: 'r', kind: 'defect', transition: 'resolved', blocking: false, evidence: 'fixed' }] }
+      if (o.agentType === 'pair-fix-test-author') {
+        author++
+        // the FIRST remediation preparation discovers the contradiction with the sealed a0 rows
+        if (author === 2)
+          return {
+            status: 'contradiction',
+            mode: 'remediation',
+            inputHead: HEAD,
+            revisionReason: 'contradicts-approved-authority',
+            predecessorContractHash: SHA256('1'),
+            conflictingRowIds: ['R33', 'R34'],
+            changedRows: ['R33', 'R34'],
+            counterexample: { command: 'pnpm exec vitest run -t R33', expected: 'passes', actual: 'fails' },
+            next: { step: 'prepare', mode: 'revision', phase: 'a0-rev2', revision: 2, round: 0, attempt: 1, base: HEAD, contract: { path: '/main/.pair/working/runs/r/292/a0-red-contract.json', hash: SHA256('1'), revision: 1 }, changedRows: ['R33', 'R34'], contradictionFor: { phase: 'r1-g1', findings: ['r0-1'] } },
+          }
+        return {}
+      }
+      return {}
+    },
+  })
+  const authors = calls.filter(c => c.opts.agentType === 'pair-fix-test-author')
+  assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+  assert.ok(authors.some(c => /prepare:#292 a0-rev2 revision/.test(c.opts.label)), stageLabels(calls).join(' | '))
+  const revisionCall = authors.find(c => /a0-rev2/.test(c.opts.label))
+  assert.match(revisionCall.prompt, /\$revision=2/)
+  assert.match(revisionCall.prompt, /\$changedRows=\["R33","R34"\]/)
+  assert.match(revisionCall.prompt, /\$contract="[^"]*a0-red-contract\.json"/)
+})
+
+test('B1: the coordinator is fail-closed on the evidence too — a contradiction missing its counterexample or conflicting rows never reaches the revision route', async () => {
+  for (const missing of ['counterexample', 'conflictingRowIds', 'predecessorContractHash', 'revisionReason']) {
+    let author = 0
+    const evidence = {
+      status: 'contradiction',
+      mode: 'initial',
+      inputHead: HEAD,
+      revisionReason: 'contradicts-approved-authority',
+      predecessorContractHash: SHA256('1'),
+      conflictingRowIds: ['R33'],
+      changedRows: ['R33'],
+      counterexample: { command: 'pnpm test', expected: 'passes', actual: 'fails' },
+      next: { step: 'prepare', mode: 'revision', phase: 'a0-rev2', revision: 2, round: 0, attempt: 1, base: HEAD, contract: { path: '/main/x/a0-red-contract.json', hash: SHA256('1'), revision: 1 } },
+    }
+    delete evidence[missing]
+    const { result, calls } = await runWorkflow({
+      args: { cards: [STORY] },
+      dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-fix-test-author' ? (author++ === 0 ? evidence : {}) : {}),
+    })
+    assert.equal(result.batch[0].status, 'failed-preparation', missing)
+    assert.match(result.batch[0].reason, /contradiction evidence/i, missing)
+    assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-contract-verifier').length, 0, missing)
+  }
 })

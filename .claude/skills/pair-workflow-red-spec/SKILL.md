@@ -79,7 +79,19 @@ One row per class and interaction of every inventory item: `{ id, kind, baseline
 
 ### Step 4: Write and prove the artifacts
 
-1. Declare `fixScope` before editing: one `owner`, one `mode`, exact `allowedPaths`. In `initial` mode `allowedPaths` is the story's whole implementation surface — every production path its AC require (from the card's files / integration surface), the docs and catalogs those paths are mirrored into, and `.pair/adoption/decision-log/` because the implement process records decisions there; a single-file scope on a fresh story forces the implementer to smuggle decisions into the PR body (canary run 11). In `remediation` mode it is the group's exact paths. A behavior repair and a refactor never share a contract — `status: split-required` with `splitReason` says what a re-plan must change.
+1. Declare `fixScope` before editing: one `owner`, one `mode`, exact `allowedPaths`. In `initial` mode `allowedPaths` is the story's whole implementation surface — every production path its AC require (from the card's files / integration surface), the docs and catalogs those paths are mirrored into, and `.pair/adoption/decision-log/` because the implement process records decisions there; a single-file scope on a fresh story forces the implementer to smuggle decisions into the PR body (canary run 11). In `remediation` mode it is the group's exact paths. A behavior repair and a refactor never share a contract — `status: split-required` with `splitReason` says what a re-plan must change, and it is terminal.
+
+   **A contradiction is a different answer.** When the obligation you were handed cannot be given a witness at this head WITHOUT breaking rows an already-sealed contract approved — you proved it, you did not suspect it — answer `status: contradiction` instead. It is not a refusal: the cycle state routes ONE minimal successor revision of the contract you name, in the same canonical cycle, and you are dispatched again as `mode: revision` on `<line>-rev<m+1>` with `$changedRows` and `$contradictionFor`. It carries executable evidence or `publish` refuses it before the write:
+
+   | field | meaning |
+   | --- | --- |
+   | `revisionReason` | exactly `contradicts-approved-authority` |
+   | `predecessorContractHash` | the `contractHash` of the SEALED contract whose rows you contradict — resolved against the real seal, so a hash no `red-verify` ever sealed is `contradiction-unresolvable` |
+   | `conflictingRowIds` | every row of that contract the correct behavior breaks — non-empty |
+   | `changedRows` | what the revision must change: it must cover every `conflictingRowIds` entry |
+   | `counterexample` | `{ command, cwd?, fixtureRef?, expected, actual }` — the run that proves the collision, no shell syntax |
+
+   Prose never becomes this evidence: `revisionReason` on any other status is refused (`revisionReason-without-contradiction`), and a `split-required` with a long `splitReason` stays terminal. ONE successor revision per obligation per succession line: an equivalent contradiction after it escalates to a human, and a new `runId` does not reset that. Never waive the finding, never retire or edit the predecessor seal — the successor stands beside it.
 2. Modify ONLY test source, fixtures and committed oracle rows. Never production source, docs, adoption, configuration, generated assets. Never commit, push, post, label, create a card or merge.
 3. Run every changed test at the base: a `baseline: red` artifact records its exact failing `command` and `observed` failure; a `baseline: pass` control records its passing command and output. A `kind: fixture` artifact names the RED test that `consumedBy` it.
 4. Hash every artifact: `sha256sum <file>` ⇒ `sha256:<digest>`.
@@ -95,12 +107,14 @@ One row per class and interaction of every inventory item: `{ id, kind, baseline
      --workflowVersion $workflowVersion --attempt <n> [--predecessor <phase>-<skill>] ${pr:+--pr $pr}
    ```
 
-   A refusal (`stale`, `split-required`, `unprovable`, `dirty`) is published too, with `reason` — it is the cycle's answer, not a dead agent. `dirty` and `stale` name a cause OUTSIDE the cycle: once a human clears it the same phase is dispatched again as the next attempt (once); `unprovable` and `split-required` are terminal at once.
+   A refusal (`stale`, `split-required`, `unprovable`, `dirty`) is published too, with `reason` — it is the cycle's answer, not a dead agent. `dirty` and `stale` name a cause OUTSIDE the cycle: once a human clears it the same phase is dispatched again as the next attempt (once); `unprovable` and `split-required` are terminal at once. A `contradiction` (Step 4.1) is published the same way and is NOT terminal — it routes the successor revision.
 3. Run `resolve` again (Step 0 command) and return its `next`.
 
 ## Output Format
 
-`{ status: red | stale | split-required | unprovable | dirty, mode, inputHead, sourceOfTruth, inventory, fixScope: { owner, mode, allowedPaths }, matrix, redTests: [{ file, kind, baseline, sha256, command?, observed?, consumedBy? }], testExempt, exemptionRationale?, contractPath, contractHash, plan?, changedRows?, reconciled?, preserved?, reason?, splitReason?, next }` — `contractPath` absolute, under `/.pair/working/runs/`.
+`{ status: red | stale | split-required | unprovable | dirty | contradiction, mode, inputHead, sourceOfTruth, inventory, fixScope: { owner, mode, allowedPaths }, matrix, redTests: [{ file, kind, baseline, sha256, command?, observed?, consumedBy? }], testExempt, exemptionRationale?, contractPath, contractHash, plan?, changedRows?, reconciled?, preserved?, reason?, splitReason?, next }` — `contractPath` absolute, under `/.pair/working/runs/`.
+
+A `contradiction` carries `revisionReason`, `predecessorContractHash`, `conflictingRowIds`, `changedRows` and `counterexample` instead of a contract (Step 4.1); `contractPath`/`contractHash` are absent, because nothing was written.
 
 ## Notes
 

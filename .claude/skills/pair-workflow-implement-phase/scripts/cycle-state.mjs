@@ -50,6 +50,14 @@ export const METRICS_SCHEMA_VERSION = 1
 export const SKILLS = ['red-spec', 'red-verify', 'implement-phase', 'green-fix', 'review-phase']
 export const STEPS = ['prepare', 'validate', 'implement', 'green', 'verify', 'done', 'blocked']
 export const PREPARE_REFUSALS = ['stale', 'split-required', 'unprovable', 'dirty']
+// US-479 B1 (S3, AC-08, DT-04): a preparation that discovers its obligation cannot be contracted
+// WITHOUT contradicting rows of an already-sealed contract answers `contradiction` — a typed
+// evidence-bearing answer that routes a minimal successor revision in the same canonical cycle,
+// NOT a refusal. `split-required` (a behavior repair and a refactor cannot share one contract)
+// stays what it was: terminal. The two are different findings about the cycle and never convert
+// into one another — prose alone can never become the typed evidence (envelopeErrors below).
+export const PREPARE_STATUSES = ['red', ...PREPARE_REFUSALS, 'contradiction']
+export const REVISION_REASONS = ['contradicts-approved-authority']
 // Schema-3 taxonomy (US-479 T-19, S1/S2/S5) — the ONE spelling every handoff and comment must use.
 export const FINDING_TRANSITIONS = ['open', 'resolved', 'superseded', 'human']
 // US-479 T-24 (S2/S9, AC-23): late-defect origin — never inferred from file age or LLM confidence,
@@ -96,6 +104,29 @@ export function phaseParts(phase) {
   return { kind: m[2] ? 'group' : 'review', round: Number(m[1]), group: m[2] ? Number(m[2]) : undefined, revision: m[3] ? Number(m[3]) : 1, groupId: m[2] ? `r${m[1]}-g${m[2]}` : undefined }
 }
 
+// ── contradiction identity (US-479 B1, S3) ─────────────────────────────────────────────────
+// The succession LINE of a contract phase — the identity every revision of it inherits. `a0`,
+// `a0-rev4` and any later successor share the line `a0`; `r1-g1-rev2` shares `r1-g1`. It is stable
+// across revisions and independent of any contract hash, so a budget keyed on it cannot be reset by
+// sealing a new successor, renaming the run or raising the same conflict from another group.
+export const successionLineOf = phase => phaseParts(phase)?.groupId
+// The VERIFIED identity behind a contract hash: only a red-verify that both verified AND sealed it
+// proves the rows a contradiction claims to contradict exist as independently approved rows. A
+// merely PREPARED hash is not an identity — the target is never guessed from the current group.
+export function sealedContractPhase(handoffs, contractHash) {
+  if (!/^sha256:[0-9a-f]{64}$/.test(String(contractHash ?? ''))) return undefined
+  const sealed = (handoffs ?? []).filter(h => h.skill === 'red-verify' && h.data && h.data.verified === true && h.data.sealed === true && h.data.contractHash === contractHash)
+  return sealed.length ? sealed[sealed.length - 1].phase : undefined
+}
+// One canonical key per (succession line, contractual obligation): the set of conflicting rows,
+// deduplicated and sorted, so id order, the raising group and the successor's own hash are all
+// irrelevant to it. Stamped by `publish`, never spelled by an agent (the acHash lesson, 3.0.12).
+export function contradictionKeyOf({ line, conflictingRowIds }) {
+  if (!line || !Array.isArray(conflictingRowIds) || !conflictingRowIds.length) return null
+  const rows = [...new Set(conflictingRowIds.map(String))].sort().join('\u0000')
+  return `sha256:${createHash('sha256').update(`${line}\u0000${rows}`).digest('hex')}`
+}
+
 // ── handoffs ───────────────────────────────────────────────────────────────────────────────
 export function readHandoffs(dir) {
   if (!existsSync(dir)) return []
@@ -140,7 +171,15 @@ export function envelopeErrors(data, { phase, skill }) {
   if (data.firstReviewHead !== undefined && !SHA_RE.test(String(data.firstReviewHead))) errs.push('firstReviewHead-invalid')
   if (data.remediationBatchId !== undefined && (typeof data.remediationBatchId !== 'string' || data.remediationBatchId === '')) errs.push('remediationBatchId-invalid')
   if (data.recordType !== undefined && !RECORD_TYPES.includes(data.recordType)) errs.push(`recordType-invalid:${data.recordType}`)
-  if (data.findings !== undefined) {
+  // red-spec's envelope carries `findings: { received, covered }` — the obligation ids it was
+  // handed and the ids its contract covers — NOT review findings (its SKILL.md step 2). Validating
+  // it against the review shape refused every preparation that reported what it received
+  // (`findings-not-an-array`), which is how a contradiction carrying its origin ids was refused.
+  if (data.findings !== undefined && skill === 'red-spec' && !Array.isArray(data.findings)) {
+    const f = data.findings
+    if (!f || typeof f !== 'object') errs.push('findings-not-an-object')
+    else for (const k of ['received', 'covered']) if (f[k] !== undefined && (!Array.isArray(f[k]) || f[k].some(x => typeof x !== 'string' || !x.trim()))) errs.push(`findings-${k}-invalid`)
+  } else if (data.findings !== undefined) {
     if (!Array.isArray(data.findings)) errs.push('findings-not-an-array')
     else {
       for (const f of data.findings) {
@@ -180,6 +219,35 @@ export function envelopeErrors(data, { phase, skill }) {
           for (const id of declared) if (!named.has(id)) errs.push(`mechanism-not-enumerated:${id}`)
           for (const id of named) if (!declared.has(id)) errs.push(`mechanism-undeclared:${id}`)
         }
+      }
+    }
+  }
+  // US-479 B1 (S3): the contradiction answer carries EXECUTABLE evidence or it is not published.
+  // Validated here, before the atomic write, exactly like every other schema-3 field — so a
+  // preparation can never hand the cycle a revision route backed by prose.
+  if (skill === 'red-spec') {
+    if (data.status !== undefined && !PREPARE_STATUSES.includes(data.status)) errs.push(`status-invalid:${data.status}`)
+    const isContradiction = data.status === 'contradiction'
+    // The 3.0.x refusal (`split-required` + a prose `splitReason`) is NOT this evidence: naming the
+    // reason on another status is refused rather than silently promoted (no fabricated validation).
+    if (data.revisionReason !== undefined && !isContradiction) errs.push('revisionReason-without-contradiction')
+    if (isContradiction) {
+      if (!REVISION_REASONS.includes(data.revisionReason)) errs.push(`revisionReason-invalid:${data.revisionReason ?? 'missing'}`)
+      if (!/^sha256:[0-9a-f]{64}$/.test(String(data.predecessorContractHash ?? ''))) errs.push('predecessorContractHash-invalid')
+      const rows = data.conflictingRowIds
+      if (!Array.isArray(rows) || !rows.length || rows.some(r => typeof r !== 'string' || !r.trim())) errs.push('conflictingRowIds-invalid')
+      else {
+        // The revision may only change what the contradiction names — and must name all of it.
+        const changed = new Set(Array.isArray(data.changedRows) ? data.changedRows : [])
+        const missing = rows.filter(r => !changed.has(r))
+        if (missing.length) errs.push(`changedRows-incomplete:${missing.join(',')}`)
+      }
+      const cx = data.counterexample
+      if (!cx || typeof cx !== 'object' || Array.isArray(cx)) errs.push('counterexample-missing')
+      else {
+        if (typeof cx.command !== 'string' || !cx.command.trim()) errs.push('counterexample-command-missing')
+        else if (SHELL_METACHAR_RE.test(cx.command)) errs.push('counterexample-command-unsafe')
+        for (const k of ['expected', 'actual']) if (typeof cx[k] !== 'string' || !cx[k].trim()) errs.push(`counterexample-${k}-missing`)
       }
     }
   }
@@ -709,6 +777,12 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       }
     }
   }
+  // US-479 B1 (S3): the contradiction's budget key is derived HERE from the verified sealed
+  // identity of the contract it names — never from a value the agent spelled.
+  if (skill === 'red-spec' && data.status === 'contradiction') {
+    const line = successionLineOf(sealedContractPhase(readHandoffs(dir), data.predecessorContractHash))
+    data = { ...data, contradictionLine: line ?? null, contradictionKey: contradictionKeyOf({ line, conflictingRowIds: data.conflictingRowIds }) }
+  }
   if (pr !== undefined) {
     if (!Number.isInteger(pr) || pr <= 0) return { published: false, reason: 'pr-invalid', pr }
     if (data.pr !== undefined && data.pr !== null && Number(data.pr) !== pr) return { published: false, reason: 'pr-mismatch', stated: data.pr, pr }
@@ -830,6 +904,42 @@ export function deriveNext(handoffs, policy, ctx = {}) {
   }
 
   if (last.skill === 'red-spec') {
+    // US-479 B1 (S3, AC-08, DT-04): a CONTRADICTION with sealed rows is not a dead end — it routes
+    // the minimal successor revision of the contract it names, in the same canonical cycle. The
+    // target is resolved from the VERIFIED sealed identity of `predecessorContractHash`, never
+    // assumed to be the current group's own contract; the predecessor seal and every row the
+    // contradiction does not name stay exactly as they are (the sealer enforces that separately).
+    if (d.status === 'contradiction') {
+      const targetPhase = sealedContractPhase(list, d.predecessorContractHash)
+      const line = successionLineOf(targetPhase)
+      if (!targetPhase || !line || !d.contradictionKey)
+        return blocked('failed-preparation', { refusal: 'contradiction-unresolvable', detail: `no sealed contract identifies ${d.predecessorContractHash ?? 'the named predecessor'}`, phase: last.phase, findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined })
+      // ONE revision per contradiction per obligation and succession line (US-479 B1 decision 2).
+      // Counted over this cycle AND every sibling run of the same PR, so a new runId cannot buy a
+      // second attempt; an equivalent contradiction after it is a human escalation, not autotuning.
+      const priorSame = list.filter(h => h !== last && h.skill === 'red-spec' && h.data.status === 'contradiction' && h.data.contradictionKey === d.contradictionKey).length
+      const siblingSame = (ctx.siblingContradictionKeys ?? []).filter(k => k === d.contradictionKey).length
+      if (priorSame + siblingSame >= 1)
+        return blocked('escalate', { budget: 'contradictionRevisions', detail: `the same contractual obligation on line ${line} already spent its one successor revision — a human decides the next step`, phase: last.phase, conflictingRowIds: d.conflictingRowIds, findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined })
+      const lineRevision = list.filter(h => h.phase === line || h.phase.startsWith(`${line}-rev`)).reduce((m, h) => Math.max(m, phaseParts(h.phase)?.revision ?? 1), 1)
+      const targetParts = phaseParts(targetPhase) ?? {}
+      return {
+        step: 'prepare',
+        mode: 'revision',
+        phase: `${line}-rev${lineRevision + 1}`,
+        revision: lineRevision + 1,
+        round: targetParts.round ?? 0,
+        attempt: 1,
+        base: d.inputHead,
+        contract: contractOf(targetPhase),
+        group: groupOf(line),
+        changedRows: d.changedRows,
+        // The remediation that raised it is remembered so the route back is explicit, never lost.
+        contradictionFor: { phase: last.phase, findings: d.findings?.received ?? [] },
+        findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined,
+        detail: `revision of ${targetPhase}: ${(d.conflictingRowIds ?? []).join(', ')} contradict the obligation raised by ${last.phase}`,
+      }
+    }
     if (d.status === 'red') return { step: 'validate', mode: d.mode, phase: last.phase, round: parts.round, attempt: last.attempt, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined }
     // A refusal whose cause is OUTSIDE the cycle — a dirty worktree, a moved head — is retryable
     // once a human clears it: the same phase, the next attempt. A refusal the cycle owns
@@ -1044,7 +1154,20 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
     if (pr !== undefined && h.data.pr !== undefined && h.data.pr !== null && String(h.data.pr) !== String(pr)) return { status: 'incompatible', reason: 'pr-mismatch', workflowVersion }
   }
   const last = handoffs[handoffs.length - 1]
-  let next = deriveNext(handoffs, policy, { entry, head })
+  // US-479 B1: the contradiction budget belongs to the CYCLE, not to one run directory — every
+  // sibling run of the same story/PR hands in the keys it already spent, so starting a new runId
+  // can never buy a second successor revision for the same obligation.
+  const siblingContradictionKeys = []
+  if (runsRoot && story && existsSync(runsRoot)) {
+    for (const r of readdirSync(runsRoot)) {
+      const other = join(runsRoot, r, String(story))
+      if (other === dir || !existsSync(other)) continue
+      for (const h of readHandoffs(other))
+        if (h.data && h.skill === 'red-spec' && h.data.status === 'contradiction' && h.data.contradictionKey && (pr === undefined || h.data.pr === undefined || h.data.pr === null || String(h.data.pr) === String(pr)))
+          siblingContradictionKeys.push(h.data.contradictionKey)
+    }
+  }
+  let next = deriveNext(handoffs, policy, { entry, head, siblingContradictionKeys })
   const names = handoffs.map(h => h.name)
   // Changed effective inputs invalidate REVIEW evidence: prior findings + the delta are re-validated
   // from the last reviewed head. Sealed contracts and GREEN commits stay trusted.

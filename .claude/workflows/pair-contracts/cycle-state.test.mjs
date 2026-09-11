@@ -1864,3 +1864,190 @@ test('T-19: the schema-3 taxonomy is exactly the enums S2/S5 name — no extra o
   assert.deepEqual([...SCOPE_CHANGE_TYPES].sort(), ['new-requirement', 'scope-extension'])
   assert.deepEqual([...SCOPE_CHANGE_STATUSES].sort(), ['deferred', 'extended', 'ignored', 'pending'])
 })
+
+// ── US-479 B1 (S3, AC-08, DT-04): a preparation that hits a CONTRADICTION with sealed rows
+// routes a minimal successor revision in the same cycle — it is not a terminal refusal ──────────
+const CX = { command: 'pnpm exec vitest run src/a.test.ts -t R33', expected: 'R33 passes under the installer-derived rule', actual: 'R33 fails: the alias directory is never installed' }
+// The contradiction as red-spec publishes it: the typed evidence S3 enumerates, nothing else.
+const contradiction = (dir, phase, extra = {}, opts) =>
+  handoff(
+    dir,
+    phase,
+    'red-spec',
+    {
+      status: 'contradiction',
+      mode: 'remediation',
+      revisionReason: 'contradicts-approved-authority',
+      predecessorContractHash: `sha256:${'1'.repeat(64)}`,
+      conflictingRowIds: ['R33', 'R34'],
+      changedRows: ['R33', 'R34'],
+      counterexample: CX,
+      findings: { received: ['r5-11'], covered: [] },
+      ...extra,
+    },
+    opts,
+  )
+// A sealed initial chain a0 -> a0-rev2 -> a0-rev3, then a remediation round whose preparation
+// discovers that closing its finding would break two SEALED rows of a0-rev3.
+function sealedInitialChain(dir, { hash = `sha256:${'1'.repeat(64)}` } = {}) {
+  redSpec(dir, 'a0', { mode: 'initial', contractHash: `sha256:${'9'.repeat(64)}` })
+  redVerify(dir, 'a0', { contractHash: `sha256:${'9'.repeat(64)}` })
+  redSpec(dir, 'a0-rev2', { mode: 'revision', contractHash: `sha256:${'8'.repeat(64)}` })
+  redVerify(dir, 'a0-rev2', { contractHash: `sha256:${'8'.repeat(64)}` })
+  redSpec(dir, 'a0-rev3', { mode: 'revision', contractPath: '/abs/a0-rev3-red-contract.json', contractHash: hash })
+  redVerify(dir, 'a0-rev3', { contractHash: hash, snapshot: SHA('e') })
+  handoff(dir, 'a0-rev3', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: SHA('c') })
+  review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r5-11')] })
+}
+
+test('B1 (DT-04): a complete contradiction routes prepare/revision on the SUCCESSOR of the contract identified by its hash — not the current group contract — and carries the exact changed rows', () => {
+  const { dir } = runDir()
+  sealedInitialChain(dir)
+  contradiction(dir, 'r1-g1')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.status, 'in-progress')
+  assert.deepEqual(
+    { step: r.next.step, mode: r.next.mode, phase: r.next.phase, revision: r.next.revision },
+    { step: 'prepare', mode: 'revision', phase: 'a0-rev4', revision: 4 },
+    JSON.stringify(r.next),
+  )
+  assert.deepEqual(r.next.changedRows, ['R33', 'R34'])
+  assert.equal(r.next.contract.path, '/abs/a0-rev3-red-contract.json', 'the revision is based on the contradicted contract')
+  // the route back to the remediation that raised it is explicit, never lost
+  assert.deepEqual(r.next.contradictionFor, { phase: 'r1-g1', findings: ['r5-11'] })
+})
+
+test('B1: the succession line is resolved from the VERIFIED sealed identity — an unresolvable predecessor hash is a typed refusal, never a guessed target', () => {
+  const { dir } = runDir()
+  sealedInitialChain(dir)
+  contradiction(dir, 'r1-g1', { predecessorContractHash: `sha256:${'7'.repeat(64)}` })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'blocked')
+  assert.equal(r.next.reason, 'failed-preparation')
+  assert.equal(r.next.refusal, 'contradiction-unresolvable')
+})
+
+test('B1: a contract hash that was PREPARED but never sealed is not a verified identity', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { mode: 'initial', contractHash: `sha256:${'1'.repeat(64)}` }) // no red-verify seal
+  review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r5-11')] })
+  contradiction(dir, 'r1-g1')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.refusal, 'contradiction-unresolvable')
+})
+
+test('B1 (budget): ONE revision per contradiction per obligation and succession line — an equivalent second contradiction escalates, and reordered ids, a different raising group and a different successor hash do not reset it', () => {
+  const { dir } = runDir()
+  sealedInitialChain(dir)
+  contradiction(dir, 'r1-g1')
+  const first = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(first.next.phase, 'a0-rev4')
+  // the revision happened: prepared, sealed, implemented, re-reviewed, and the same conflict returns
+  redSpec(dir, 'a0-rev4', { mode: 'revision', contractHash: `sha256:${'5'.repeat(64)}`, changedRows: ['R33', 'R34'] })
+  redVerify(dir, 'a0-rev4', { contractHash: `sha256:${'5'.repeat(64)}`, snapshot: SHA('f') })
+  handoff(dir, 'a0-rev4', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: SHA('d') })
+  review(dir, 'r1', { mode: 're-review', readiness: { ready: false }, reviewedHead: SHA('d'), findings: [finding('r5-11')] })
+  // same rows, other order, a DIFFERENT group, and now naming the NEW successor's hash
+  contradiction(dir, 'r2-g3', { conflictingRowIds: ['R34', 'R33'], changedRows: ['R34', 'R33'], predecessorContractHash: `sha256:${'5'.repeat(64)}` })
+  const second = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(second.next.step, 'blocked')
+  assert.equal(second.next.reason, 'escalate')
+  assert.equal(second.next.budget, 'contradictionRevisions')
+})
+
+test('B1 (budget): the key is stamped by publish, not spelled by the agent — equivalent contradictions share it and an unrelated row set does not', () => {
+  const { dir } = runDir()
+  sealedInitialChain(dir)
+  const a = contradiction(dir, 'r1-g1')
+  const keyA = JSON.parse(readFileSync(a.path, 'utf8')).contradictionKey
+  assert.match(String(keyA), /^sha256:[0-9a-f]{64}$/)
+  const { dir: dir2 } = runDir()
+  sealedInitialChain(dir2)
+  const b = contradiction(dir2, 'r4-g2', { conflictingRowIds: ['R34', 'R33'], changedRows: ['R33', 'R34'] })
+  assert.equal(JSON.parse(readFileSync(b.path, 'utf8')).contradictionKey, keyA, 'order and raising group do not change the key')
+  const { dir: dir3 } = runDir()
+  sealedInitialChain(dir3)
+  const c = contradiction(dir3, 'r1-g1', { conflictingRowIds: ['R40'], changedRows: ['R40'] })
+  assert.notEqual(JSON.parse(readFileSync(c.path, 'utf8')).contradictionKey, keyA)
+})
+
+test('B1 (budget): a sibling run directory of the same PR cannot reset the contradiction budget by changing runId', () => {
+  const root = mkdtempSync(join(tmpdir(), 'cycle-'))
+  const runsRoot = join(root, '.pair', 'working', 'runs')
+  const older = join(runsRoot, 'v4', '42')
+  const newer = join(runsRoot, 'v5', '42')
+  for (const d of [older, newer]) mkdirSync(d, { recursive: true })
+  sealedInitialChain(older)
+  contradiction(older, 'r1-g1')
+  sealedInitialChain(newer)
+  contradiction(newer, 'r1-g1')
+  const r = resolve({ dir: newer, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, runsRoot, story: '42' })
+  assert.equal(r.next.step, 'blocked')
+  assert.equal(r.next.budget, 'contradictionRevisions')
+})
+
+test('B1: the typed evidence is validated BEFORE the write — an incomplete contradiction is refused, and the old prose never becomes typed evidence by itself', () => {
+  const { dir } = runDir()
+  sealedInitialChain(dir)
+  const bad = (fields, expected) => {
+    const file = join(dir, `tmp-bad-${Math.random().toString(36).slice(2)}.json`)
+    writeFileSync(
+      file,
+      JSON.stringify({
+        run: 'run-1',
+        story: '42',
+        pr: 7,
+        branch: 'feature/US-42',
+        phase: 'r1-g1',
+        skill: 'red-spec',
+        inputHead: SHA('a'),
+        status: 'contradiction',
+        mode: 'remediation',
+        revisionReason: 'contradicts-approved-authority',
+        predecessorContractHash: `sha256:${'1'.repeat(64)}`,
+        conflictingRowIds: ['R33', 'R34'],
+        changedRows: ['R33', 'R34'],
+        counterexample: CX,
+        ...fields,
+      }),
+    )
+    const out = publish({ dir, file, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V })
+    assert.equal(out.published, false, `expected a refusal for ${expected}`)
+    assert.match(out.reason, new RegExp(expected))
+    assert.equal(existsSync(join(dir, 'r1-g1-red-spec.json')), false, 'nothing was written')
+  }
+  bad({ counterexample: undefined }, 'counterexample-missing')
+  bad({ counterexample: { ...CX, command: 'pnpm test && rm -rf /' } }, 'counterexample-command-unsafe')
+  bad({ counterexample: { ...CX, actual: '' } }, 'counterexample-actual-missing')
+  bad({ predecessorContractHash: 'a0-rev3' }, 'predecessorContractHash-invalid')
+  bad({ conflictingRowIds: [] }, 'conflictingRowIds-invalid')
+  bad({ changedRows: ['R33'] }, 'changedRows-incomplete:R34')
+  bad({ revisionReason: 'because the rows disagree' }, 'revisionReason-invalid')
+  // the prose refusal of 3.0.x carries none of this: it cannot be promoted by adding the reason alone
+  bad({ status: 'split-required', splitReason: 'R33 and R34 collide' }, 'revisionReason-without-contradiction')
+})
+
+test('B1: split-required WITHOUT the typed evidence stays terminal — the old refusal is unchanged', () => {
+  const { dir } = runDir()
+  sealedInitialChain(dir)
+  handoff(dir, 'r1-g1', 'red-spec', { status: 'split-required', mode: 'remediation', splitReason: 'a behavior repair and a refactor never share a contract' })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'blocked')
+  assert.equal(r.next.reason, 'failed-preparation')
+  assert.equal(r.next.refusal, 'split-required')
+})
+
+test('B1 (boundary): red-spec publishes `findings: { received, covered }` — its own documented envelope shape, not the review shape; a malformed one is still refused', () => {
+  const { dir } = runDir()
+  const ok = redSpec(dir, 'a0', { findings: { received: ['AC-1'], covered: ['AC-1'] } })
+  assert.equal(JSON.parse(readFileSync(ok.path, 'utf8')).findings.received[0], 'AC-1')
+  const file = join(dir, 'tmp-bad-findings.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', findings: { received: [''], covered: [] } }))
+  const out = publish({ dir, file, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V })
+  assert.equal(out.published, false)
+  assert.equal(out.reason, 'findings-received-invalid')
+  // the review shape is unchanged for the skill that actually uses it
+  const rf = join(dir, 'tmp-bad-review.json')
+  writeFileSync(rf, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r9', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'x', findings: { received: [] }, custody: {}, readiness: {} }))
+  assert.equal(publish({ dir, file: rf, phase: 'r9', skill: 'review-phase', workflowVersion: V }).reason, 'findings-not-an-array')
+})
