@@ -9,7 +9,8 @@
 //       reference, PR/story/branch, expectedHead, scopeBaselineHash, last handoff identity, typed
 //       next step) — a cache hint, never approval. `telemetry` names what this host can observe.
 //
-//   node <skill dir>/scripts/cycle-runtime.mjs mark-terminal --dir <abs> --result <workflow result.json> --story <id>
+//   node <skill dir>/scripts/cycle-runtime.mjs mark-terminal --dir <abs> --result <workflow result.json>
+//        --story <id> [--invocation <id>]
 //     → records the HOST's own terminal result for this run (`.run-terminal.json`), the signal
 //       `observe` stops on. The harness journal has no end-of-run record and is never modified;
 //       the end of a run is never inferred from the agents observed so far (US-479 F8).
@@ -29,7 +30,7 @@
 //   node <skill dir>/scripts/cycle-runtime.mjs observe --dir <abs> --journal <path> [--usage <path>]
 //        [--transcripts <dir>]
 //        --repository <owner/name> --story <id> --branch <b> [--pr <n>] [--runId <id>]
-//        [--interval-ms 5000] [--grace-ms 30000] [--max-ticks <n>] [--since <ISO>]
+//        [--interval-ms 5000] [--grace-ms 30000] [--max-ticks <n>] [--invocation <id>] [--since <ISO>]
 //        [--dispatchStats <json>] [--sharedCost <json>]
 //     → tails ONLY the named sources on the interval, merges idempotently, reduces metrics,
 //       writes metrics.json/metrics.md atomically, prints one concise progress line per tick.
@@ -431,7 +432,7 @@ const CHECKPOINT_NAME = '.runtime-checkpoint.json'
 // `dispatchStats`/`sharedCost` are the host's own admin counters/allocation input — carried here so
 // a tick that doesn't re-supply them (or a `finalize` running after the observer stopped) still
 // reports the last host-supplied values, never silently reverting to null.
-const CHECKPOINT_DEFAULTS = { journalOffset: 0, usageOffset: 0, observations: [], revision: 0, terminalObservedAt: null, appliedDeltaEventIds: {}, dispatchStats: null, sharedCost: null }
+const CHECKPOINT_DEFAULTS = { journalOffset: 0, usageOffset: 0, observations: [], revision: 0, terminalObservedAt: null, terminal: null, appliedDeltaEventIds: {}, dispatchStats: null, sharedCost: null }
 export function readCheckpoint(dir) {
   const p = join(dir, CHECKPOINT_NAME)
   if (!existsSync(p)) return { ...CHECKPOINT_DEFAULTS }
@@ -456,10 +457,17 @@ export function writeCheckpoint(dir, checkpoint) {
 // exactly as the harness wrote them). This file is owned by the run directory: one marker, written
 // once per terminal result, read by every tick.
 const TERMINAL_NAME = '.run-terminal.json'
-export function markTerminal({ dir, result, story, now = Date.now() }) {
+export function markTerminal({ dir, result, story, invocation, now = Date.now() }) {
   const row = (result?.batch ?? []).find(r => String(r?.id ?? r?.story?.id ?? '') === String(story))
   const marker = {
     observedAt: new Date(now).toISOString(),
+    // US-479 F8-A residual: the terminal belongs to ONE invocation of the run. A timestamp cannot
+    // express that — the host writes the marker as soon as the run returns, which may precede the
+    // observer's first tick, so any threshold chosen after startup either races the marker or
+    // accepts the previous invocation's. The identity is carried explicitly instead, in the marker
+    // AND in the checkpoint, so a new invocation in the same run directory is never closed by an
+    // earlier terminal result.
+    invocation: invocation === undefined ? null : String(invocation),
     story: story === undefined ? null : String(story),
     status: row?.status ?? null,
     workflowVersion: result?.workflowVersion ?? null,
@@ -500,27 +508,55 @@ export function readFinalized(dir) {
     return null
   }
 }
-// Everything a reader would notice: the measured quantities, their coverage and the handoff digest.
-// Deliberately NOT the revision or the timestamps — those change on every tick by construction.
+// US-479 F8-C residual — the fingerprint is the PUBLISHED SEMANTIC STATE, not a hand-picked subset.
+// Listing the interesting fields meant every unlisted one (the host admin counters, the timing and
+// its coverage, the lifetime evidence, the models and roles) could change without being noticed:
+// a real update was mistaken for a heartbeat and the file and the comment kept a stale number.
+// The rule is inverted — everything the view publishes is in, and only genuinely VOLATILE fields
+// are excluded: the revision itself, the reduce timestamp, the host's read clock, the terminal
+// heartbeat, and the publication bookkeeping (whose state is checked separately).
+const VOLATILE_PATHS = [
+  ['snapshot', 'revision'],
+  ['snapshot', 'asOf'],
+  ['time', 'observation'],
+  ['time', 'terminalAt'],
+  ['publication'],
+]
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (value && typeof value === 'object')
+    return `{${Object.keys(value)
+      .sort()
+      .map(k => `${JSON.stringify(k)}:${canonicalJson(value[k])}`)
+      .join(',')}}`
+  return JSON.stringify(value === undefined ? null : value)
+}
 export function viewFingerprint(view) {
-  const u = view.usage ?? {}
-  return JSON.stringify({
-    total: u.observedTotalTokens ?? null,
-    input: u.inputTokens ?? null,
-    output: u.outputTokens ?? null,
-    cacheRead: u.cacheReadTokens ?? null,
-    cacheWrite: u.cacheWriteTokens ?? null,
-    basis: u.totalBasis ?? null,
-    coverage: u.coverage ?? null,
-    missing: u.missingExecutionIds ?? [],
-    incomplete: u.incompleteExecutionIds ?? [],
-    truncated: u.truncatedExecutionIds ?? [],
-    inconsistent: u.inconsistentExecutionIds ?? [],
-    cycles: view.cycles ?? null,
-    quality: view.outcome?.quality ?? null,
-    delivery: view.outcome?.delivery ?? null,
-    digest: view.snapshot?.sourceDigest ?? null,
-  })
+  const copy = JSON.parse(JSON.stringify(view ?? null))
+  for (const path of VOLATILE_PATHS) {
+    let node = copy
+    for (const key of path.slice(0, -1)) node = node?.[key]
+    if (node && typeof node === 'object') delete node[path[path.length - 1]]
+  }
+  // The published observation list carries the HOST's read clock on every entry — the heartbeat,
+  // which ticks whether or not anything happened. It is dropped, while a timestamp that is a real
+  // execution boundary (`timeSource: 'record'`) stays: that one IS evidence, and a change in it
+  // must register as new.
+  for (const step of Array.isArray(copy?.steps) ? copy.steps : []) {
+    if (!step || typeof step !== 'object') continue
+    delete step.hostObservedAt
+    if (step.timeSource !== 'record') delete step.observedAt
+  }
+  return canonicalJson(copy)
+}
+export function readPersistedView(dir) {
+  const p = join(dir, 'metrics.json')
+  if (!existsSync(p)) return null
+  try {
+    return JSON.parse(readFileSync(p, 'utf8'))
+  } catch {
+    return null
+  }
 }
 function persistedRevision(dir) {
   const p = join(dir, 'metrics.json')
@@ -535,8 +571,11 @@ function persistedRevision(dir) {
 // A revision must exceed everything already written, not just what THIS process remembers: the
 // finalize pre-tick could not advance the checkpoint, so its own reduce recomputed the revision the
 // file already had and `writeMetrics` refused it as stale (the residual).
-function nextRevision(dir, checkpoint) {
-  return Math.max(persistedRevision(dir), checkpoint?.revision ?? 0) + 1
+function nextRevision(dir) {
+  // The base is the file's own revision. Folding in the checkpoint's (a writer's private memory)
+  // let a stale writer claim a number above content it had never seen (US-479 F8-B residual);
+  // freshness is now judged by `writeMetrics` on the evidence itself.
+  return persistedRevision(dir) + 1
 }
 function writeFinalized(dir, view, publicationState) {
   const p = join(dir, FINALIZED_NAME)
@@ -555,7 +594,7 @@ export function shouldStop({ terminalObservedAt, usageReconciled, cancelled, gra
 }
 
 // ── one tick: validate source -> merge idempotently -> reduce -> persist ────────────────────
-export function runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId, storyId, repository, story, branch, pr, checkpoint, now, dispatchStats, sharedCost, terminalSince }) {
+export function runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId, storyId, repository, story, branch, pr, checkpoint, now, dispatchStats, sharedCost, terminalSince, invocation }) {
   const errors = []
   // US-479 B4: the host journal carries no cost at all, so when the transcripts are named the tick
   // PRODUCES the usage source before tailing it — the same deterministic reader, re-run each tick,
@@ -594,7 +633,7 @@ export function runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId
   // reverting real, previously-known values back to null.
   const effectiveDispatchStats = dispatchStats ?? checkpoint.dispatchStats ?? undefined
   const effectiveSharedCost = sharedCost ?? checkpoint.sharedCost ?? undefined
-  const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: combined, revision: nextRevision(dir, checkpoint), asOf: new Date(now).toISOString(), dispatchStats: effectiveDispatchStats, sharedCost: effectiveSharedCost })
+  const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: combined, revision: nextRevision(dir), asOf: new Date(now).toISOString(), dispatchStats: effectiveDispatchStats, sharedCost: effectiveSharedCost })
   // US-479 F8: after a finalization a tick that carries NO new evidence changes nothing; one that
   // does is a legitimate reconciliation and writes a higher revision.
   const finalized = readFinalized(dir)
@@ -602,7 +641,22 @@ export function runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId
   // The terminal signal is the HOST's recorded result (or, if a host ever emits one, a journal
   // record that says so) — never the observation that every agent seen so far has returned.
   const rawMarker = readTerminalMarker(dir)
-  const marker = rawMarker && terminalSince && rawMarker.observedAt < terminalSince ? null : rawMarker
+  // The marker is THIS invocation's when the ids agree; a marker written by an engine that did not
+  // record one is still honoured (compatibility), and `--since` remains available as a coarser
+  // fallback for a host that has no invocation id to give.
+  const ownsMarker = m => !!m && (invocation === undefined || m.invocation == null || String(m.invocation) === String(invocation))
+  const marker = ownsMarker(rawMarker) && !(terminalSince && rawMarker.observedAt < terminalSince) ? rawMarker : null
+  // The same rule applies to the terminal the CHECKPOINT remembers: it survives across
+  // invocations, and that is exactly how the previous run's terminal closed the next one.
+  const ownsCarried = c => !!c && (invocation === undefined || c.invocation == null || String(c.invocation) === String(invocation))
+  const sinceMs = terminalSince ? Date.parse(terminalSince) : null
+  const beforeSince = at => Number.isInteger(sinceMs) && Number.isFinite(Number(at)) && Number(at) < sinceMs
+  const carriedRaw = checkpoint.terminal ?? (checkpoint.terminalObservedAt != null ? { invocation: null, observedAt: checkpoint.terminalObservedAt } : null)
+  // `--since` is the coarser fallback and must apply to the terminal the CHECKPOINT remembers as
+  // well: filtering only the marker on disk left the previous invocation's terminal alive in the
+  // checkpoint, which closed the next observation after a single tick (US-479 F8-A residual).
+  const carried = ownsCarried(carriedRaw) && !beforeSince(carriedRaw?.observedAt) ? carriedRaw : null
+  const carriedAt = carried?.observedAt ?? null
   const terminalObs = journalObs.find(o => o.kind === 'run-terminal')
   const newCheckpoint = {
     journalOffset: j.newOffset,
@@ -611,7 +665,8 @@ export function runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId
     appliedDeltaEventIds,
     // The checkpoint never lags the file it wrote, so the next revision is monotonic either way.
     revision: writeResult.written ? view.snapshot.revision : Math.max(checkpoint.revision ?? 0, persistedRevision(dir)),
-    terminalObservedAt: terminalObs || marker ? (checkpoint.terminalObservedAt ?? now) : (checkpoint.terminalObservedAt ?? null),
+    terminalObservedAt: terminalObs || marker ? (carriedAt ?? now) : carriedAt,
+    terminal: terminalObs || marker ? { invocation: marker?.invocation ?? (invocation === undefined ? null : String(invocation)), observedAt: carriedAt ?? now } : (carried ?? null),
     dispatchStats: effectiveDispatchStats ?? null,
     sharedCost: effectiveSharedCost ?? null,
   }
@@ -669,13 +724,17 @@ export function finalizeMetrics({ dir, repository, story, branch, pr, runId, pub
   // US-479 remediation (Finding 4, residual): the host's admin counters/allocation, carried through
   // the checkpoint when this finalize call doesn't itself supply them — the observer may already
   // have stopped by the time finalize runs, and its last-known values must still reach the summary.
-  const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: checkpoint.observations ?? [], revision: nextRevision(dir, checkpoint), asOf: new Date().toISOString(), dispatchStats: dispatchStats ?? checkpoint.dispatchStats ?? undefined, sharedCost: sharedCost ?? checkpoint.sharedCost ?? undefined })
+  const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: checkpoint.observations ?? [], revision: nextRevision(dir), asOf: new Date().toISOString(), dispatchStats: dispatchStats ?? checkpoint.dispatchStats ?? undefined, sharedCost: sharedCost ?? checkpoint.sharedCost ?? undefined })
   // US-479 F8 residual: a repeat with nothing new AND a publication already confirmed is a no-op —
   // but an unconfirmed publication is still owed a retry, and new evidence is still owed a higher
   // revision. Freezing on the mere existence of a finalization was the defect.
   const priorFinal = readFinalized(dir)
-  if (priorFinal && priorFinal.fingerprint === viewFingerprint(view) && priorFinal.publicationState === 'confirmed')
-    return { view, writeResult: { written: false, reason: 'no-new-evidence', finalizedRevision: priorFinal.revision } }
+  if (priorFinal && priorFinal.fingerprint === viewFingerprint(view) && priorFinal.publicationState === 'confirmed') {
+    // Return what is actually on disk and confirmed: a freshly reduced view carries a revision and
+    // a publication state that were never written, and reporting those would be a lie of omission.
+    const persisted = readPersistedView(dir)
+    return { view: persisted ?? view, writeResult: { written: false, reason: 'no-new-evidence', finalizedRevision: priorFinal.revision } }
+  }
   if (Number.isInteger(pr) && publish) {
     const marker = `<!-- pair:synthesis #${story} PR#${pr} -->`
     const outcome = publishSummary({ view, marker, pr, repo: repository, ...publish })
@@ -708,15 +767,16 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-export async function runObserveLoop({ dir, journalPath, usagePath, transcriptsDir, runId, storyId, repository, story, branch, pr, intervalMs = 5000, graceMs = 30000, maxTicks = Infinity, since, sleepFn = sleep, nowFn = () => Date.now(), onTick = () => {}, signal, dispatchStats, sharedCost }) {
+export async function runObserveLoop({ dir, journalPath, usagePath, transcriptsDir, runId, storyId, repository, story, branch, pr, intervalMs = 5000, graceMs = 30000, maxTicks = Infinity, since, invocation, sleepFn = sleep, nowFn = () => Date.now(), onTick = () => {}, signal, dispatchStats, sharedCost }) {
   let checkpoint = readCheckpoint(dir)
   let ticks = 0
-  let cancelled = false
-  // US-479 F8 residual: a resumed cycle must not be closed by the terminal result of the PREVIOUS
-  // invocation. The host says so explicitly with `--since`: an OPT-IN, because defaulting it to
-  // this process's own start makes the ordinary recipe racy — the host writes the marker as soon as
-  // the run returns, which can be before this loop's first tick, and the observation would then
-  // reject its own run's terminal result and never stop.
+  // An ALREADY-aborted signal never fires the event, so the flag starts from its state — otherwise
+  // a caller that aborted before the call was ignored entirely.
+  let cancelled = signal?.aborted === true
+  // US-479 F8-A residual: which terminal result belongs to THIS observation is answered by the
+  // invocation id the host passes to both `mark-terminal` and here (see runtimeTick). `--since`
+  // remains a coarser fallback for a host with no id to give; it is opt-in because a threshold
+  // chosen after startup races the marker the host writes as soon as the run returns.
   const terminalSince = since
   const onSignal = () => {
     cancelled = true
@@ -725,7 +785,7 @@ export async function runObserveLoop({ dir, journalPath, usagePath, transcriptsD
   try {
     for (;;) {
       const now = nowFn()
-      const result = runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId, storyId, repository, story, branch, pr, checkpoint, now, dispatchStats, sharedCost, terminalSince })
+      const result = runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId, storyId, repository, story, branch, pr, checkpoint, now, dispatchStats, sharedCost, terminalSince, invocation })
       checkpoint = result.checkpoint
       ticks++
       onTick(result)
@@ -767,7 +827,7 @@ async function main(argv) {
   }
   if (cmd === 'observe') {
     need('dir', 'repository', 'story', 'branch')
-    const res = await runObserveLoop({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, intervalMs: opts['interval-ms'] ? Number(opts['interval-ms']) : 5000, graceMs: opts['grace-ms'] ? Number(opts['grace-ms']) : 30000, maxTicks: opts['max-ticks'] ? Number(opts['max-ticks']) : Infinity, since: opts.since, dispatchStats: jsonArg(opts.dispatchStats), sharedCost: jsonArg(opts.sharedCost), onTick: r => process.stdout.write(`tick: revision=${r.view.snapshot.revision} terminal=${r.terminalObserved}\n`) })
+    const res = await runObserveLoop({ dir: opts.dir, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, runId: opts.runId, storyId: opts.story, repository: opts.repository, story: opts.story, branch: opts.branch, pr: opts.pr ? Number(opts.pr) : undefined, intervalMs: opts['interval-ms'] ? Number(opts['interval-ms']) : 5000, graceMs: opts['grace-ms'] ? Number(opts['grace-ms']) : 30000, maxTicks: opts['max-ticks'] ? Number(opts['max-ticks']) : Infinity, since: opts.since, invocation: opts.invocation, dispatchStats: jsonArg(opts.dispatchStats), sharedCost: jsonArg(opts.sharedCost), onTick: r => process.stdout.write(`tick: revision=${r.view.snapshot.revision} terminal=${r.terminalObserved}\n`) })
     return { out: res, code: 0 }
   }
   if (cmd === 'finalize') {
@@ -778,13 +838,14 @@ async function main(argv) {
     // `no-new-evidence` and `stale-revision` are both successful no-ops: the persisted view is
     // already the right one. Only a real write failure is a non-zero exit.
     const idempotent = out.writeResult.written || out.writeResult.reason === 'stale-revision' || out.writeResult.reason === 'no-new-evidence'
-    return { out: { completeness: out.view.snapshot.completeness, written: out.writeResult.written, reason: out.writeResult.reason, publication: out.view.publication }, code: idempotent ? 0 : 1 }
+    // The revision reported is the one on disk: a no-op returns the persisted, confirmed view.
+    return { out: { completeness: out.view.snapshot.completeness, revision: out.view.snapshot.revision, written: out.writeResult.written, reason: out.writeResult.reason, publication: out.view.publication }, code: idempotent ? 0 : 1 }
   }
   if (cmd === 'mark-terminal') {
     // US-479 F8: the host hands the observer the workflow's OWN returned result. Nothing is added
     // to the journal, and the end of the run is never inferred from the agents seen so far.
     need('dir', 'result', 'story')
-    return { out: markTerminal({ dir: opts.dir, result: JSON.parse(readFileSync(opts.result, 'utf8')), story: opts.story }), code: 0 }
+    return { out: markTerminal({ dir: opts.dir, result: JSON.parse(readFileSync(opts.result, 'utf8')), story: opts.story, invocation: opts.invocation }), code: 0 }
   }
   if (cmd === 'dispatch-stats') {
     need('result', 'story')

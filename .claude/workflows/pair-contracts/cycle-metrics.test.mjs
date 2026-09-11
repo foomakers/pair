@@ -533,7 +533,11 @@ test('B2: a bound predecessor run with persisted metrics is FOLDED into the life
   const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v5', observations: [] })
   assert.deepEqual(view.identity.predecessorRuns, ['v4'])
   assert.deepEqual(view.identity.runIds, ['v5', 'v4'])
-  assert.equal(view.lifetime.coverage, 'complete')
+  // AMENDED by US-479 F6 residual: coverage is per dimension, so a predecessor that recorded no
+  // timing leaves that dimension unknown and the lifetime partial — `unknownDimensions` names it.
+  assert.equal(view.lifetime.coverage, 'partial')
+  assert.equal(view.lifetime.usage.coverage, 'complete')
+  assert.equal(view.lifetime.time.coverage, 'unknown')
   assert.deepEqual(view.lifetime.foldedRuns, ['v4'])
   assert.deepEqual(view.lifetime.missingRuns, [])
   assert.equal(view.lifetime.cycles.completed, 1, 'the completed cycle already measured is not lost')
@@ -544,7 +548,7 @@ test('B2: a bound predecessor run with persisted metrics is FOLDED into the life
   assert.equal(view.cycles.completed, 0)
   assert.equal(view.usage.observedTotalTokens, null)
   const md = renderMarkdown(view)
-  assert.match(md, /Lifetime \(incl\. 1 predecessor run: v4\) — cycles 1 completed \/ 2 attempted · tokens 1200 · agent unknownms · coverage complete \(unknown: agentMs, activeWallMs\)/)
+  assert.match(md, /Lifetime \(incl\. 1 predecessor run: v4\) — cycles 1 completed \/ 2 attempted · tokens 1200 · agent unknownms · coverage partial \(unknown: agentMs, activeWallMs; tokens \*\*complete\*\*, timing \*\*unknown\*\*\)/)
 })
 
 test('B2: a bound predecessor whose metrics were never persisted leaves the lifetime EXPLICITLY partial — never a silently smaller total', () => {
@@ -576,7 +580,7 @@ test('B2: the PR summary states the lifetime across every bound run — the read
   )
   const body = renderPrSummary(reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v5', observations: [] }))
   assert.match(body, /Lifetime across 2 run\(s\) \(v5, v4\)/)
-  assert.match(body, /cycles 1 completed \/ 2 attempted · tokens 1200 · agent unknownms · coverage \*\*complete\*\* \(unknown: cacheReadTokens, cacheWriteTokens, agentMs, activeWallMs\)/)
+  assert.match(body, /cycles 1 completed \/ 2 attempted · tokens 1200 · agent unknownms · coverage \*\*partial\*\* \(unknown: cacheReadTokens, cacheWriteTokens, agentMs, activeWallMs; tokens \*\*unknown\*\*, timing \*\*unknown\*\*\)/)
 })
 
 // ── US-479 F5/F6 (independent audit of 64e5ddd1) ─────────────────────────────────────────────
@@ -775,4 +779,113 @@ test('F6 residual: a run directory with only a migration record contributes a CE
   assert.equal(dispatched.lifetime.usage.observedTotalTokens, null, 'work happened and its cost is unknown — not zero')
   assert.equal(dispatched.lifetime.usage.totalBasis, 'lower-bound')
   assert.equal(dispatched.lifetime.coverage, 'partial')
+})
+
+// ── US-479 F6 residual (verification of dbf6d472): lifetime coverage is PER DIMENSION ─────────
+const tRec = (executionId, kind, at) => ({ eventId: `${executionId}:${kind}`, executionId, runId: 'v9', storyId: '42', phase: 'r0', attempt: 1, kind, sourceRef: 'journal', observedAt: at, timeSource: 'record' })
+const uRec = (executionId, usage) => ({ eventId: `${executionId}:u`, executionId, runId: 'v9', storyId: '42', phase: 'r0', attempt: 1, kind: 'usage-observed', sourceRef: 'usage', observedAt: 1500, usage })
+const U100 = { totalTokens: 100, inputTokens: 100, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }
+const PRED_FULL = { ...V1, snapshot: { completeness: 'complete', missingSources: [] }, usage: { observedTotalTokens: 200, inputTokens: 200, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }, time: { agentMs: 1000, activeWallMs: 1000, incomplete: false } }
+const PRED_PARTIAL = { ...PRED_FULL, snapshot: { completeness: 'partial', missingSources: ['usage'] }, usage: { ...PRED_FULL.usage, totalBasis: 'lower-bound' } }
+
+// current usage: both executions report; current timing: A closed, B never finished.
+function dimCase({ usage: usageMode, timing: timingMode, predecessor }) {
+  const { root, dir } = runDir()
+  const refs = []
+  if (predecessor === 'complete') refs.push(predRef(legacyMetrics(root, 'v3', PRED_FULL)))
+  if (predecessor === 'partial') refs.push(predRef(legacyMetrics(root, 'v3', PRED_PARTIAL)))
+  if (predecessor === 'missing') refs.push(predRef(legacyMetrics(root, 'v3', undefined)))
+  migrationRecord(dir, 'm0', refs)
+  reviewRecord(dir, 'r0', { verdict: 'APPROVED', findings: [], readiness: { ready: true, remoteHead: SHA40('c') } }, 2)
+  const observations = [
+    tRec('a', 'step-started', 1000),
+    tRec('a', 'step-finished', 2000),
+    uRec('a', U100),
+    tRec('b', 'step-started', 1000),
+    ...(timingMode === 'complete' ? [tRec('b', 'step-finished', 2000)] : []),
+    ...(usageMode === 'complete' ? [uRec('b', U100)] : []),
+  ]
+  const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations })
+  return { view, cohort: aggregateCohort([view]) }
+}
+
+test('F6 residual: usage complete and timing partial in the SAME run — the token total stays complete and usable, the duration is a lower bound, and each dimension keeps its own identity', () => {
+  const { view, cohort } = dimCase({ usage: 'complete', timing: 'partial', predecessor: 'complete' })
+  assert.equal(view.usage.coverage.known, 2)
+  assert.equal(view.time.incomplete, true)
+  assert.deepEqual(view.snapshot.missingSources, ['legacy-lifetime', 'timing'])
+  // the two dimensions are reported apart
+  assert.equal(view.lifetime.usage.coverage, 'complete')
+  assert.equal(view.lifetime.usage.totalBasis, 'complete')
+  assert.equal(view.lifetime.usage.observedTotalTokens, 400)
+  assert.equal(view.lifetime.time.coverage, 'partial')
+  assert.equal(view.lifetime.time.totalBasis, 'lower-bound')
+  assert.equal(view.lifetime.time.agentMs, 2000, 'the known durations are kept, as a lower bound')
+  assert.deepEqual(view.lifetime.partialRunsByDimension, { usage: [], timing: ['v9'] })
+  assert.deepEqual(view.lifetime.partialRuns, ['v9'])
+  assert.equal(view.lifetime.coverage, 'partial')
+  // the cohort propagates the incompleteness but the token cost stays usable
+  assert.equal(cohort.lifetimeCoverage, 'partial')
+  assert.deepEqual(cohort.lifetimeCoverageByDimension, { usage: 'complete', timing: 'partial' })
+  assert.equal(cohort.allWorkTokens, 400)
+  assert.deepEqual(cohort.costPerCompletedDelivery, { value: 400, lowerBound: false })
+  // and both renderings say which basis each number has
+  assert.match(renderMarkdown(view), /agent 2000ms \(lower bound\)/)
+  assert.match(renderPrSummary(view), /timing \*\*partial\*\*/)
+})
+
+test('F6 residual: the full matrix — usage {complete, partial} x timing {complete, partial} x predecessor {complete, partial, missing}', () => {
+  const cases = [
+    ['complete', 'complete', 'complete', { u: 'complete', t: 'complete', tokens: 400, ms: 3000, cost: { value: 400, lowerBound: false } }],
+    ['complete', 'complete', 'partial', { u: 'partial', t: 'complete', tokens: 400, ms: 3000, cost: { value: 400, lowerBound: true } }],
+    ['complete', 'complete', 'missing', { u: 'unknown', t: 'unknown', tokens: null, ms: null, cost: null }],
+    ['complete', 'partial', 'complete', { u: 'complete', t: 'partial', tokens: 400, ms: 2000, cost: { value: 400, lowerBound: false } }],
+    ['complete', 'partial', 'partial', { u: 'partial', t: 'partial', tokens: 400, ms: 2000, cost: { value: 400, lowerBound: true } }],
+    ['complete', 'partial', 'missing', { u: 'unknown', t: 'unknown', tokens: null, ms: null, cost: null }],
+    ['partial', 'complete', 'complete', { u: 'partial', t: 'complete', tokens: 300, ms: 3000, cost: { value: 300, lowerBound: true } }],
+    ['partial', 'complete', 'partial', { u: 'partial', t: 'complete', tokens: 300, ms: 3000, cost: { value: 300, lowerBound: true } }],
+    ['partial', 'complete', 'missing', { u: 'unknown', t: 'unknown', tokens: null, ms: null, cost: null }],
+    ['partial', 'partial', 'complete', { u: 'partial', t: 'partial', tokens: 300, ms: 2000, cost: { value: 300, lowerBound: true } }],
+    ['partial', 'partial', 'partial', { u: 'partial', t: 'partial', tokens: 300, ms: 2000, cost: { value: 300, lowerBound: true } }],
+    ['partial', 'partial', 'missing', { u: 'unknown', t: 'unknown', tokens: null, ms: null, cost: null }],
+  ]
+  for (const [usage, timing, predecessor, want] of cases) {
+    const label = `usage ${usage} x timing ${timing} x predecessor ${predecessor}`
+    const { view, cohort } = dimCase({ usage, timing, predecessor })
+    assert.equal(view.lifetime.usage.coverage, want.u, `${label} usage coverage`)
+    assert.equal(view.lifetime.time.coverage, want.t, `${label} timing coverage`)
+    assert.equal(view.lifetime.usage.observedTotalTokens, want.tokens, `${label} tokens`)
+    assert.equal(view.lifetime.time.agentMs, want.ms, `${label} agentMs`)
+    assert.deepEqual(cohort.costPerCompletedDelivery, want.cost, `${label} cost`)
+    assert.deepEqual(cohort.lifetimeCoverageByDimension, { usage: want.u, timing: want.t }, label)
+  }
+})
+
+test('F6 residual: a run with only migration records contributes a certain zero in BOTH dimensions; an execution handoff with no usage and no boundaries makes both unknown', () => {
+  const { root, dir } = runDir()
+  migrationRecord(dir, 'm0', [predRef(legacyMetrics(root, 'v3', PRED_FULL))])
+  const only = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations: [] })
+  assert.deepEqual({ u: only.lifetime.usage.coverage, t: only.lifetime.time.coverage }, { u: 'complete', t: 'complete' })
+  assert.equal(only.lifetime.usage.observedTotalTokens, 200)
+  assert.equal(only.lifetime.time.agentMs, 1000)
+  reviewRecord(dir, 'r0', { verdict: 'APPROVED', findings: [], readiness: { ready: true, remoteHead: SHA40('c') } }, 2)
+  const dispatched = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations: [] })
+  assert.deepEqual({ u: dispatched.lifetime.usage.coverage, t: dispatched.lifetime.time.coverage }, { u: 'unknown', t: 'unknown' })
+  assert.equal(dispatched.lifetime.usage.observedTotalTokens, null)
+  assert.equal(dispatched.lifetime.time.agentMs, null)
+  assert.ok(dispatched.lifetime.unknownDimensions.includes('agentMs'), JSON.stringify(dispatched.lifetime.unknownDimensions))
+})
+
+test('F6 residual: an execution that reported usage but never a finish leaves the duration a lower bound — never converted to zero', () => {
+  const { root, dir } = runDir()
+  migrationRecord(dir, 'm0', [predRef(legacyMetrics(root, 'v3', PRED_FULL))])
+  reviewRecord(dir, 'r0', { verdict: 'APPROVED', findings: [], readiness: { ready: true, remoteHead: SHA40('c') } }, 2)
+  const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations: [tRec('a', 'step-started', 1000), uRec('a', U100)] })
+  // the ONLY execution of this run has no closed boundary, so this run knows no duration at all:
+  // the lifetime duration is UNKNOWN, and the predecessor's 1000ms is never passed off as the total
+  assert.equal(view.lifetime.time.coverage, 'unknown')
+  assert.equal(view.lifetime.time.agentMs, null, 'the predecessor`s known duration is not the total')
+  assert.ok(view.lifetime.unknownDimensions.includes('agentMs'))
+  assert.equal(view.lifetime.usage.coverage, 'complete')
+  assert.equal(view.lifetime.usage.observedTotalTokens, 300)
 })

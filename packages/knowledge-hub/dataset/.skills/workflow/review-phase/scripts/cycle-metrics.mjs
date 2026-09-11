@@ -222,6 +222,12 @@ export function reduceUsage(observations) {
     // kept and the execution is named — the total below is a LOWER BOUND, never a complete one.
     inconsistentExecutionIds: countedIds.filter(id => (usageByExec.get(id)?.inconsistentRequests ?? 0) > 0 || (usageByExec.get(id)?.unacceptedRequests ?? 0) > 0).sort(),
     totalBasis: countedIds.some(id => usageByExec.get(id)?.totalBasis === 'lower-bound') || relevantIds.length !== countedIds.length ? 'lower-bound' : 'complete',
+    // US-479 F8-B residual: what this view knows PER EXECUTION. A higher revision number proves
+    // nothing about freshness, so `writeMetrics` compares this instead: a candidate that knows
+    // less than what is already persisted is a stale writer, not a reconciliation.
+    perExecution: countedIds
+      .map(id => ({ executionId: id, totalTokens: totalOf(usageByExec.get(id)), requests: usageByExec.get(id)?.requests ?? null }))
+      .sort((a, b) => (a.executionId < b.executionId ? -1 : a.executionId > b.executionId ? 1 : 0)),
     accountingBasis: 'leaf-exclusive',
     byRole: [...byRoleMap.entries()].map(([role, tokens]) => ({ role, tokens })),
     sharedOverhead: null,
@@ -331,10 +337,30 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   // lifetime explicitly partial — "missing older logs yield partial lifetime metrics, not a clean
   // new PR". Nothing is read from the legacy directory except its own metrics file, and nothing is
   // written back to it.
-  // US-479 F6: the predecessors are a SET keyed by verified run identity — iterating the references
-  // folded a run named by two overlapping acknowledgments twice (400 tokens for 100+200, three
-  // completed cycles for two). Later references of the same runId may only add detail, never a
-  // second contribution.
+  // The predecessors are a SET keyed by verified run identity (US-479 F6): iterating the references
+  // folded a run named by two overlapping acknowledgments twice. A dimension is a SUM only while
+  // every contributor knows it — one unknown makes the sum unknown, and an `unknown` never becomes
+  // a 0 because another source happens to know a 0.
+  // US-479 F6 residual — coverage is propagated PER DIMENSION. A run can report every token and
+  // still have an open execution: usage complete, timing not. Collapsing the two lost the identity
+  // of the incomplete one and presented the sum of the KNOWN durations as the whole duration.
+  //   complete = every contributor supplied it
+  //   partial  = a known quantity that is a LOWER BOUND (a contributor is still open)
+  //   unknown  = no contributor could supply it at all
+  // A certain ZERO still requires proof that nothing was dispatched here: no observation and no
+  // handoff beyond migration records.
+  const executionHandoffs = list.filter(h => (h.data?.recordType ?? 'judgment') !== 'migration')
+  const nothingDispatchedHere = merged.length === 0 && executionHandoffs.length === 0
+  const currentUsageKnown = nothingDispatchedHere || (usage.coverage?.total ?? 0) > 0
+  const currentTimeKnown = nothingDispatchedHere || intervals.some(i => Number.isInteger(i.startMs) && Number.isInteger(i.endMs))
+  const currentUsagePartial =
+    !nothingDispatchedHere &&
+    (usage.missingExecutionIds.length > 0 ||
+      usage.incompleteExecutionIds.length > 0 ||
+      (usage.truncatedExecutionIds?.length ?? 0) > 0 ||
+      (usage.inconsistentExecutionIds?.length ?? 0) > 0 ||
+      usage.totalBasis === 'lower-bound')
+  const currentTimePartial = !nothingDispatchedHere && time.incomplete === true
   const predecessorById = new Map()
   for (const h of handoffs.filter(x => x.data?.recordType === 'migration'))
     for (const r of h.data.predecessorRuns ?? []) {
@@ -344,45 +370,24 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
     }
   const predecessorRecords = [...predecessorById.values()].sort((a, b) => (a.runId < b.runId ? -1 : a.runId > b.runId ? 1 : 0))
   const predecessorRuns = predecessorRecords.map(r => r.runId)
-  const lifetimeUsageKeys = ['observedTotalTokens', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens']
-  const lifetimeTimeKeys = ['agentMs', 'activeWallMs']
-  // A dimension is a SUM only while every contributor knows it: one unknown makes the sum unknown.
-  // An `unknown` never silently becomes a 0 just because another source happens to know a 0.
-  const acc = Object.fromEntries([...lifetimeUsageKeys, ...lifetimeTimeKeys].map(k => [k, { total: 0, known: true }]))
+  const DIMENSIONS = { usage: ['observedTotalTokens', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens'], timing: ['agentMs', 'activeWallMs'] }
+  const acc = Object.fromEntries(Object.values(DIMENSIONS).flat().map(k => [k, { total: 0, known: true }]))
   const addDimension = (k, v) => {
     if (typeof v === 'number' && Number.isFinite(v)) acc[k].total += v
     else acc[k].known = false
   }
-  // US-479 F6 residual — the CURRENT cycle is a contributor like any other, with its own coverage.
-  // A certain ZERO requires proof that nothing was dispatched here: no observation AND no handoff
-  // that implies an execution (a directory holding only migration records is exactly that). Once a
-  // real handoff shows work happened, zero observations mean the cost is UNKNOWN — absence of
-  // evidence is not evidence of zero, which is what the residual turned a partial run into.
-  const executionHandoffs = list.filter(h => (h.data?.recordType ?? 'judgment') !== 'migration')
-  const nothingDispatchedHere = merged.length === 0 && executionHandoffs.length === 0
-  const currentUsageKnown = nothingDispatchedHere || (usage.coverage?.total ?? 0) > 0
-  const currentTimeKnown = nothingDispatchedHere || intervals.length > 0
-  for (const k of lifetimeUsageKeys) addDimension(k, nothingDispatchedHere ? 0 : currentUsageKnown ? usage[k] : undefined)
-  for (const k of lifetimeTimeKeys) addDimension(k, nothingDispatchedHere ? 0 : currentTimeKnown ? time[k] : undefined)
-  // Whatever is unresolved about THIS run makes the lifetime partial and its totals lower bounds,
-  // exactly as a partial predecessor does.
-  const currentPartial =
-    !nothingDispatchedHere &&
-    // work happened here and its cost or its duration is simply not known
-    (!currentUsageKnown ||
-      !currentTimeKnown ||
-      usage.missingExecutionIds.length > 0 ||
-      usage.incompleteExecutionIds.length > 0 ||
-      (usage.truncatedExecutionIds?.length ?? 0) > 0 ||
-      (usage.inconsistentExecutionIds?.length ?? 0) > 0 ||
-      usage.totalBasis === 'lower-bound')
+  for (const k of DIMENSIONS.usage) addDimension(k, nothingDispatchedHere ? 0 : currentUsageKnown ? usage[k] : undefined)
+  for (const k of DIMENSIONS.timing) addDimension(k, nothingDispatchedHere ? 0 : currentTimeKnown ? time[k] : undefined)
+  const partialByDimension = { usage: currentUsagePartial && runId ? [runId] : [], timing: currentTimePartial && runId ? [runId] : [] }
   const lifetime = {
     predecessorRuns: predecessorRecords.map(r => ({ runId: r.runId, metricsPath: r.metricsPath ?? null })),
     foldedRuns: [],
     missingRuns: [],
     invalidRuns: [],
-    partialRuns: currentPartial && runId ? [runId] : [],
+    partialRuns: [],
+    partialRunsByDimension: partialByDimension,
     unknownDimensions: [],
+    lowerBoundDimensions: [],
     cycles: { attempted: counters.attemptedCycles, completed: counters.completedCycles },
     usage: {},
     time: {},
@@ -408,34 +413,37 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
     if (!prior) {
       if (invalid === 'missing') lifetime.missingRuns.push(r.runId)
       else lifetime.invalidRuns.push(r.runId)
-      // A predecessor whose evidence cannot be read leaves EVERY dimension unknown: its real
-      // numbers are not zero, they are unavailable.
-      for (const k of [...lifetimeUsageKeys, ...lifetimeTimeKeys]) acc[k].known = false
+      // Unreadable evidence leaves EVERY dimension unknown: its real numbers are unavailable, not 0.
+      for (const k of Object.values(DIMENSIONS).flat()) acc[k].known = false
       continue
     }
     lifetime.foldedRuns.push(r.runId)
-    // A predecessor's own lower bound is inherited: it was not a complete total there either.
-    if (prior.snapshot?.completeness === 'partial' || prior.usage?.totalBasis === 'lower-bound') lifetime.partialRuns.push(r.runId)
+    // Each dimension inherits the predecessor's own doubt about THAT dimension.
+    const priorUsagePartial = prior.usage?.totalBasis === 'lower-bound' || (prior.snapshot?.missingSources ?? []).some(m => String(m).startsWith('usage'))
+    const priorTimePartial = prior.time?.incomplete === true || (prior.snapshot?.missingSources ?? []).includes('timing')
+    if (priorUsagePartial) partialByDimension.usage.push(r.runId)
+    if (priorTimePartial) partialByDimension.timing.push(r.runId)
     lifetime.cycles.attempted += prior.cycles?.attempted ?? 0
     lifetime.cycles.completed += prior.cycles?.completed ?? 0
-    for (const k of lifetimeUsageKeys) addDimension(k, prior.usage?.[k])
-    for (const k of lifetimeTimeKeys) addDimension(k, prior.time?.[k])
+    for (const k of DIMENSIONS.usage) addDimension(k, prior.usage?.[k])
+    for (const k of DIMENSIONS.timing) addDimension(k, prior.time?.[k])
   }
-  for (const k of lifetimeUsageKeys) lifetime.usage[k] = acc[k].known ? acc[k].total : null
-  for (const k of lifetimeTimeKeys) lifetime.time[k] = acc[k].known ? acc[k].total : null
-  lifetime.unknownDimensions = [...lifetimeUsageKeys, ...lifetimeTimeKeys].filter(k => !acc[k].known)
-  // The word that keeps a known quantity from reading as a complete one (US-479 F2/F6 residual).
-  lifetime.usage.totalBasis = lifetime.partialRuns.length || lifetime.missingRuns.length || lifetime.invalidRuns.length || lifetime.unknownDimensions.length ? 'lower-bound' : 'complete'
+  for (const k of DIMENSIONS.usage) lifetime.usage[k] = acc[k].known ? acc[k].total : null
+  for (const k of DIMENSIONS.timing) lifetime.time[k] = acc[k].known ? acc[k].total : null
+  lifetime.unknownDimensions = Object.values(DIMENSIONS).flat().filter(k => !acc[k].known)
+  // One verdict per dimension, keeping the identity of the one that is incomplete.
+  const verdict = (keys, partials) => (keys.some(k => !acc[k].known) ? 'unknown' : partials.length ? 'partial' : 'complete')
+  lifetime.usage.coverage = verdict(DIMENSIONS.usage, partialByDimension.usage)
+  lifetime.time.coverage = verdict(DIMENSIONS.timing, partialByDimension.timing)
+  lifetime.usage.totalBasis = lifetime.usage.coverage === 'complete' ? 'complete' : 'lower-bound'
+  lifetime.time.totalBasis = lifetime.time.coverage === 'complete' ? 'complete' : 'lower-bound'
+  lifetime.lowerBoundDimensions = [...(lifetime.usage.coverage === 'partial' ? DIMENSIONS.usage : []), ...(lifetime.time.coverage === 'partial' ? DIMENSIONS.timing : [])]
+  for (const d of ['usage', 'timing']) partialByDimension[d] = [...new Set(partialByDimension[d])].sort()
+  lifetime.partialRuns = [...new Set([...partialByDimension.usage, ...partialByDimension.timing])].sort()
   lifetime.foldedRuns.sort()
   lifetime.missingRuns.sort()
   lifetime.invalidRuns.sort()
-  lifetime.partialRuns.sort()
-  // Two independent kinds of incompleteness, reported separately instead of collapsed into one
-  // flag (US-479 F6): `coverage` is about the RUNS — every predecessor imported and none of them
-  // itself partial — while `unknownDimensions` is per-DIMENSION, naming exactly which quantity no
-  // source could supply. Either one makes the snapshot partial; neither invents a value.
-  if (lifetime.missingRuns.length || lifetime.invalidRuns.length || lifetime.partialRuns.length) lifetime.coverage = 'partial'
-  lifetime.partialRuns = [...new Set(lifetime.partialRuns)].sort()
+  if (lifetime.missingRuns.length || lifetime.invalidRuns.length || lifetime.partialRuns.length || lifetime.unknownDimensions.length) lifetime.coverage = 'partial'
   // US-479 remediation (Finding 4): the shared-batch allocation formula (allocateSharedCost) is
   // wired into the real reducer path — labeled distinctly from directly-measured tokens (S7).
   if (sharedCost && Array.isArray(sharedCost.admittedIds) && sharedCost.admittedIds.length) {
@@ -517,6 +525,7 @@ export function renderMarkdown(view) {
   lines.push(`Tokens: ${view.usage.observedTotalTokens ?? 'unknown'} (coverage ${view.usage.coverage.known}/${view.usage.coverage.total}) — in ${tok('inputTokens')}, out ${tok('outputTokens')}, cache read ${tok('cacheReadTokens')}, cache write ${tok('cacheWriteTokens')}`)
   if (view.usage.incompleteExecutionIds?.length) lines.push(`Incomplete provider requests in ${view.usage.incompleteExecutionIds.length} execution(s): the cost is counted, the execution is NOT settled`)
   lines.push(`Time: elapsed ${view.time.elapsedMs ?? 'unknown'}ms, active ${view.time.activeWallMs ?? 'unknown'}ms, agent ${view.time.agentMs ?? 'unknown'}ms${spanClause(view.time)}`)
+  if (view.lifetime?.predecessorRuns?.length) lines.push(`Lifetime basis — tokens ${view.lifetime.usage.coverage}, timing ${view.lifetime.time.coverage}: agent ${view.lifetime.time.agentMs ?? 'unknown'}ms${view.lifetime.time.coverage === 'partial' ? ' (lower bound)' : ''}, tokens ${view.lifetime.usage.observedTotalTokens ?? 'unknown'}${view.lifetime.usage.coverage === 'partial' ? ' (lower bound)' : ''}`)
   if (view.scopeChanges.entries.length) lines.push(`Scope proposals: ${view.scopeChanges.pending} pending, ${view.scopeChanges.ignored} ignored, ${view.scopeChanges.extended} extended, ${view.scopeChanges.deferred} deferred`)
   if (view.lifetime?.predecessorRuns?.length) {
     const lu = view.lifetime.usage
@@ -527,6 +536,22 @@ export function renderMarkdown(view) {
 }
 
 // ── persistence: atomic, revision-checked ───────────────────────────────────────────────────
+// A candidate REGRESSES when the persisted view already knows more about some execution than the
+// candidate does: an execution it has lost, or one whose measured total it would lower. Totals are
+// never merged (that would invent a quantity and lose request identity and categories) — the stale
+// writer is simply refused, and re-reading its source produces a superset next time.
+export function evidenceRegression(prior, candidate) {
+  const priorRows = prior?.usage?.perExecution
+  if (!Array.isArray(priorRows) || !priorRows.length) return null
+  const now = new Map((candidate?.usage?.perExecution ?? []).map(r => [r.executionId, r]))
+  for (const row of priorRows) {
+    const mine = now.get(row.executionId)
+    if (!mine) return `execution-lost:${row.executionId}`
+    if (typeof row.totalTokens === 'number' && (typeof mine.totalTokens !== 'number' || mine.totalTokens < row.totalTokens)) return `execution-regressed:${row.executionId}`
+    if (Number.isInteger(row.requests) && Number.isInteger(mine.requests) && mine.requests < row.requests) return `requests-regressed:${row.executionId}`
+  }
+  return null
+}
 export function writeMetrics({ dir, view }) {
   mkdirSync(dir, { recursive: true })
   const jsonPath = join(dir, 'metrics.json')
@@ -538,6 +563,11 @@ export function writeMetrics({ dir, view }) {
       prior = null
     }
     if (prior && Number.isInteger(prior.snapshot?.revision) && prior.snapshot.revision >= view.snapshot.revision) return { written: false, reason: 'stale-revision', priorRevision: prior.snapshot.revision }
+    // US-479 F8-B residual: freshness is checked against the EVIDENCE, never inferred from a
+    // revision number — a writer holding an old snapshot could read the new revision and overwrite
+    // newer content with a numerically higher one.
+    const regression = prior ? evidenceRegression(prior, view) : null
+    if (regression) return { written: false, reason: `stale-evidence:${regression}`, priorRevision: prior.snapshot?.revision ?? null }
   }
   const tmpJson = join(dir, `.tmp-metrics-${process.pid}-${Date.now()}.json`)
   writeFileSync(tmpJson, JSON.stringify(view, null, 2) + '\n')
@@ -641,6 +671,7 @@ function lifetimeCaveats(l) {
   if (l.invalidRuns.length) parts.push(`unusable evidence for ${l.invalidRuns.join(', ')}`)
   if (l.partialRuns.length) parts.push(`${l.partialRuns.join(', ')} was itself partial`)
   if (l.unknownDimensions.length) parts.push(`unknown: ${l.unknownDimensions.join(', ')}`)
+  parts.push(`tokens **${l.usage.coverage}**, timing **${l.time.coverage}**`)
   return parts.length ? ` (${parts.join('; ')})` : ''
 }
 
@@ -671,6 +702,13 @@ export function aggregateCohort(entries) {
   const tokensOf = e => (e.lifetime?.predecessorRuns?.length ? e.lifetime.usage?.observedTotalTokens : e.usage.observedTotalTokens) ?? null
   const coverages = entries.map(e => (e.lifetime?.predecessorRuns?.length ? e.lifetime.coverage : e.snapshot?.completeness) ?? 'complete')
   const lifetimeCoverage = coverages.some(c => c !== 'complete') ? 'partial' : 'complete'
+  // US-479 F6 residual: each dimension keeps its own verdict, so a partial DURATION never
+  // disqualifies a complete token cost and vice versa.
+  const worst = d => {
+    const vs = entries.map(e => (d === 'usage' ? e.lifetime?.usage?.coverage : e.lifetime?.time?.coverage) ?? 'complete')
+    return vs.includes('unknown') ? 'unknown' : vs.includes('partial') ? 'partial' : 'complete'
+  }
+  const lifetimeCoverageByDimension = { usage: worst('usage'), timing: worst('timing') }
   const by = state => entries.filter(e => e.outcome.cohortState === state).length
   const completed = by('completed')
   const blocked = by('blocked')
@@ -695,8 +733,10 @@ export function aggregateCohort(entries) {
     sampleCount: readyCycles.length,
     histogram: readyCycles.reduce((h, c) => ((h[c] = (h[c] ?? 0) + 1), h), {}),
     allWorkTokens: knownTokenEntries ? allTokens : null,
-    costPerCompletedDelivery: completed && knownTokenEntries ? { value: allTokens / completed, lowerBound: knownTokenEntries < N || lifetimeCoverage !== 'complete' || entries.some(e => e.lifetime?.usage?.totalBasis === 'lower-bound') } : null,
+    // The cost is a token quantity: only the USAGE dimension qualifies it.
+    costPerCompletedDelivery: completed && knownTokenEntries ? { value: allTokens / completed, lowerBound: knownTokenEntries < N || lifetimeCoverageByDimension.usage !== 'complete' } : null,
     lifetimeCoverage,
+    lifetimeCoverageByDimension,
   }
 }
 

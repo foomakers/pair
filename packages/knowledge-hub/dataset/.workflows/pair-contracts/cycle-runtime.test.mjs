@@ -16,11 +16,12 @@ import {
   writeCheckpoint,
   shouldStop,
   runtimeTick,
-  runObserveLoop,
   finalizeMetrics,
   extractUsage,
   dispatchStatsFromResult,
   readUsageLedger,
+  markTerminal,
+  runObserveLoop,
 } from '../../skills/pair-workflow-review-phase/scripts/cycle-runtime.mjs'
 import { publish } from '../../skills/pair-workflow-review-phase/scripts/cycle-state.mjs'
 import { reduceCycleMetrics } from '../../skills/pair-workflow-review-phase/scripts/cycle-metrics.mjs'
@@ -962,4 +963,152 @@ test('F2 residual (found by the reviewer`s own fixture): a ledger persisted by t
   assert.equal(r.records[0].usage.totalTokens, F2_ACQUIRED.total, 'the old ledger contributes its q1 and the transcript the rest, each once')
   assert.equal(r.records[0].usage.inconsistentRequests, 0)
   assert.equal(r.records[0].usage.totalBasis, 'complete')
+})
+
+// ── US-479 F8 residuals (verification of dbf6d472) ───────────────────────────────────────────
+const WF_RESULT = (status = 'ready-for-merge') => ({ workflowVersion: '4.0.0', batch: [{ id: '42', status, metrics: { dispatches: 1, retries: 0, redirects: 1 } }], metrics: { perDispatch: [] } })
+function observeFixture({ tokens = 100 } = {}) {
+  const { root, dir } = runDir()
+  seedCycle(dir)
+  const journalPath = journalFile(root, [STD_JOURNAL[0], STD_JOURNAL[1]])
+  const tdir = transcripts(root, [{ agentId: 'aaa1', agentType: 'pair-reviewer', requests: [{ requestId: 'q1', at: T0, input: tokens, cacheWrite: 0, cacheRead: 0, outputs: [1, 0] }] }])
+  return { root, dir, journalPath, tdir, usagePath: join(dir, 'usage.jsonl') }
+}
+const CHECKPOINT_EMPTY = { journalOffset: 0, usageOffset: 0, observations: [], revision: 0 }
+const loopArgs = f => ({ dir: f.dir, journalPath: f.journalPath, usagePath: f.usagePath, transcriptsDir: f.tdir, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, maxTicks: 3, sleepFn: async () => {} })
+
+test('F8-A residual: a terminal result CONSUMED by a previous invocation does not close the next one — the identity travels in the marker AND in the checkpoint', async () => {
+  const f = observeFixture()
+  markTerminal({ dir: f.dir, story: '42', result: WF_RESULT(), invocation: 'wf_first' })
+  const first = await runObserveLoop({ ...loopArgs(f), invocation: 'wf_first', nowFn: () => T0 + 1000 })
+  assert.equal(first.stopReason, 'terminal-reconciled')
+  assert.ok(first.checkpoint.terminal?.invocation === 'wf_first', JSON.stringify(first.checkpoint.terminal))
+  // a NEW invocation in the same run directory: neither the marker nor the checkpoint closes it
+  const second = await runObserveLoop({ ...loopArgs(f), invocation: 'wf_second', nowFn: () => T0 + 2000 })
+  assert.equal(second.stopReason, 'max-ticks', JSON.stringify({ stop: second.stopReason, ticks: second.ticks }))
+  assert.equal(second.ticks, 3)
+  // once the host records THIS invocation's result, it ends normally
+  markTerminal({ dir: f.dir, story: '42', result: WF_RESULT(), invocation: 'wf_second' })
+  const third = await runObserveLoop({ ...loopArgs(f), invocation: 'wf_second', nowFn: () => T0 + 3000 })
+  assert.equal(third.stopReason, 'terminal-reconciled')
+})
+
+test('F8-A residual: a marker written BEFORE the first tick of its own invocation still closes it — no clock race', async () => {
+  const f = observeFixture()
+  markTerminal({ dir: f.dir, story: '42', result: WF_RESULT(), invocation: 'wf_only', now: T0 - 60_000 })
+  const out = await runObserveLoop({ ...loopArgs(f), invocation: 'wf_only', nowFn: () => T0 })
+  assert.equal(out.stopReason, 'terminal-reconciled')
+  assert.equal(out.ticks, 1)
+})
+
+test('F8-A residual: a RESUME of the same invocation still sees its own terminal result, and failure / grace / cancel each end it', async () => {
+  const f = observeFixture()
+  markTerminal({ dir: f.dir, story: '42', result: WF_RESULT('failed-preparation'), invocation: 'wf_x' })
+  const a = await runObserveLoop({ ...loopArgs(f), invocation: 'wf_x', nowFn: () => T0 + 1000 })
+  assert.equal(a.stopReason, 'terminal-reconciled', 'a failed workflow is terminal too')
+  const resumed = await runObserveLoop({ ...loopArgs(f), invocation: 'wf_x', nowFn: () => T0 + 2000 })
+  assert.equal(resumed.stopReason, 'terminal-reconciled', 'the same invocation resumes onto its own terminal')
+  // grace: terminal recorded, the declared usage source never appears
+  const g = observeFixture()
+  markTerminal({ dir: g.dir, story: '42', result: WF_RESULT(), invocation: 'wf_g' })
+  let clock = T0
+  const grace = await runObserveLoop({ ...loopArgs(g), usagePath: join(g.dir, 'never.jsonl'), transcriptsDir: undefined, invocation: 'wf_g', graceMs: 100, maxTicks: 50, nowFn: () => (clock += 60) })
+  assert.equal(grace.stopReason, 'terminal-partial-usage')
+  // cancel
+  const c = observeFixture()
+  const ac = new AbortController()
+  ac.abort()
+  const cancelled = await runObserveLoop({ ...loopArgs(c), invocation: 'wf_c', signal: ac.signal, nowFn: () => T0 })
+  assert.equal(cancelled.stopReason, 'cancelled')
+})
+
+// Two collectors of the same run with their OWN usage source: one still on the old cumulative
+// file, one on the newer. Exactly the shape the review reproduced — the stale writer's source
+// really is stale, so nothing re-reads its way out of the problem.
+const usageSource = (dir, name, total) => {
+  const p = join(dir, name)
+  writeFileSync(p, JSON.stringify({ key: KEY(1), agentId: 'aaa1', usage: { totalTokens: total, inputTokens: total, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } }) + '\n')
+  return p
+}
+const collectorArgs = (f, usagePath) => ({ dir: f.dir, journalPath: f.journalPath, usagePath, runId: 'run-1', storyId: '42', repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7 })
+
+test('F8-B residual: a writer still holding a STALE snapshot and a stale source cannot overwrite newer evidence by carrying a higher revision', () => {
+  const f = observeFixture()
+  const stale = usageSource(f.dir, 'usage-a.jsonl', 100)
+  const fresh = usageSource(f.dir, 'usage-b.jsonl', 200)
+  // collector A observes 100 and keeps its own checkpoint
+  const a1 = runtimeTick({ ...collectorArgs(f, stale), checkpoint: readCheckpoint(f.dir), now: T0 + 1000 })
+  assert.equal(a1.view.usage.observedTotalTokens, 100)
+  assert.equal(a1.writeResult.written, true)
+  // collector B observes 200 and persists it
+  const b = runtimeTick({ ...collectorArgs(f, fresh), checkpoint: { ...CHECKPOINT_EMPTY }, now: T0 + 2000 })
+  assert.equal(b.view.usage.observedTotalTokens, 200)
+  assert.equal(b.writeResult.written, true)
+  const persisted = JSON.parse(readFileSync(join(f.dir, 'metrics.json'), 'utf8'))
+  assert.equal(persisted.usage.observedTotalTokens, 200)
+  // collector A returns on its own stale checkpoint and its own stale source, at EOF
+  const a2 = runtimeTick({ ...collectorArgs(f, stale), checkpoint: a1.checkpoint, now: T0 + 3000 })
+  assert.equal(a2.view.usage.observedTotalTokens, 100, 'its own view really is the old one')
+  assert.equal(a2.writeResult.written, false, JSON.stringify(a2.writeResult))
+  assert.match(a2.writeResult.reason, /stale-evidence/)
+  const after = JSON.parse(readFileSync(join(f.dir, 'metrics.json'), 'utf8'))
+  assert.equal(after.usage.observedTotalTokens, 200, 'the newer content survived')
+  assert.equal(after.snapshot.revision, persisted.snapshot.revision, 'and its revision did not go backwards')
+})
+
+test('F8-B residual: the fresh writer after the old one writes, the same writer retrying is a no-op, and a restart with no checkpoint re-reads a superset and writes', () => {
+  const f = observeFixture()
+  const stale = usageSource(f.dir, 'usage-a.jsonl', 100)
+  const fresh = usageSource(f.dir, 'usage-b.jsonl', 200)
+  const old = runtimeTick({ ...collectorArgs(f, stale), checkpoint: readCheckpoint(f.dir), now: T0 + 1000 })
+  writeCheckpoint(f.dir, old.checkpoint)
+  assert.equal(old.writeResult.written, true)
+  // the fresher writer goes AFTER the older one: allowed, and it raises the revision
+  const newer = runtimeTick({ ...collectorArgs(f, fresh), checkpoint: { ...CHECKPOINT_EMPTY }, now: T0 + 2000 })
+  assert.equal(newer.writeResult.written, true)
+  assert.equal(JSON.parse(readFileSync(join(f.dir, 'metrics.json'), 'utf8')).usage.observedTotalTokens, 200)
+  // the same fresh writer again, nothing new in its source
+  const retry = runtimeTick({ ...collectorArgs(f, fresh), checkpoint: newer.checkpoint, now: T0 + 3000 })
+  assert.equal(retry.view.usage.observedTotalTokens, 200)
+  assert.equal(JSON.parse(readFileSync(join(f.dir, 'metrics.json'), 'utf8')).usage.observedTotalTokens, 200)
+  // a restart with no checkpoint on the FRESH source re-reads everything: a superset, so it writes
+  const restarted = runtimeTick({ ...collectorArgs(f, fresh), checkpoint: { ...CHECKPOINT_EMPTY }, now: T0 + 4000 })
+  assert.equal(restarted.view.usage.observedTotalTokens, 200)
+  assert.equal(restarted.writeResult.written, true)
+})
+
+test('F8-B residual: the same total under a DIFFERENT request identity is not a regression, and a lower total for a known execution is', () => {
+  const f = observeFixture()
+  const first = usageSource(f.dir, 'usage-a.jsonl', 200)
+  const a = runtimeTick({ ...collectorArgs(f, first), checkpoint: readCheckpoint(f.dir), now: T0 + 1000 })
+  assert.equal(a.writeResult.written, true)
+  // a second execution the persisted view never knew: more evidence, not less
+  const other = join(f.dir, 'usage-c.jsonl')
+  writeFileSync(
+    other,
+    [
+      JSON.stringify({ key: KEY(1), agentId: 'aaa1', usage: { totalTokens: 200, inputTokens: 200, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } }),
+      JSON.stringify({ key: KEY(2), agentId: 'bbb2', usage: { totalTokens: 200, inputTokens: 0, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0 } }),
+    ].join('\n') + '\n',
+  )
+  const c = runtimeTick({ ...collectorArgs(f, other), checkpoint: { ...CHECKPOINT_EMPTY }, now: T0 + 2000 })
+  assert.equal(c.writeResult.written, true)
+  assert.equal(c.view.usage.observedTotalTokens, 400)
+  // and a writer that knows LESS about aaa1 is refused, even with a fresh revision available
+  const lower = usageSource(f.dir, 'usage-d.jsonl', 50)
+  const d = runtimeTick({ ...collectorArgs(f, lower), checkpoint: { ...CHECKPOINT_EMPTY }, now: T0 + 3000 })
+  assert.equal(d.writeResult.written, false)
+  assert.match(d.writeResult.reason, /stale-evidence/)
+  assert.equal(JSON.parse(readFileSync(join(f.dir, 'metrics.json'), 'utf8')).usage.observedTotalTokens, 400)
+})
+
+test('F8-A residual: `--since` alone also protects a new invocation — the previous terminal survives in the CHECKPOINT, not only on disk', async () => {
+  const f = observeFixture()
+  markTerminal({ dir: f.dir, story: '42', result: WF_RESULT(), now: T0 + 2000 })
+  const first = await runObserveLoop({ ...loopArgs(f), nowFn: () => T0 + 3000 })
+  assert.equal(first.stopReason, 'terminal-reconciled')
+  assert.ok(first.checkpoint.terminalObservedAt, 'the first loop really consumed it')
+  const second = await runObserveLoop({ ...loopArgs(f), since: new Date(T0 + 4000).toISOString(), nowFn: () => T0 + 5000 })
+  assert.equal(second.stopReason, 'max-ticks', JSON.stringify({ stop: second.stopReason, ticks: second.ticks }))
+  assert.equal(second.ticks, 3)
 })

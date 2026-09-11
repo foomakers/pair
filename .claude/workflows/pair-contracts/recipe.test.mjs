@@ -8,7 +8,7 @@
 for (const k of Object.keys(process.env)) if (/^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX|NAMESPACE|CEILING_DIRECTORIES|IMPLICIT_WORK_TREE|DISCOVERY_ACROSS_FILESYSTEM)$/.test(k)) delete process.env[k]
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, existsSync, chmodSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, appendFileSync, mkdirSync, readFileSync, existsSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -108,6 +108,7 @@ function runRecipe(f, { gh = fakeGh() } = {}) {
       BRANCH: 'b',
       HEAD: H('a'),
       WORKFLOW_VERSION: '4.0.0',
+      WF_ID: 'wf_fixture',
     },
   })
   return { res, gh }
@@ -295,4 +296,99 @@ test('F8 residual: an OLD observer cannot overwrite the revision a later reconci
   assert.equal(old.status, 0, old.stderr)
   assert.equal(saved(f).snapshot.revision, current.snapshot.revision, 'the persisted revision did not go backwards')
   assert.equal(saved(f).usage.observedTotalTokens, 110)
+})
+
+// ── US-479 F8-C residual: the fingerprint is the PUBLISHED semantic state ─────────────────────
+const finalizeWith = (f, gh, extra = []) => spawnSync('node', [CLI, 'finalize', ...FINALIZE_ARGS(f), ...extra], { encoding: 'utf8', env: { ...process.env, PATH: `${gh.dir}:${process.env.PATH}` } })
+
+test('F8-C residual: a change in a HOST ADMIN counter alone is new evidence — the file, the checkpoint and the one comment all move together', () => {
+  const f = fixture()
+  const gh = fakeGh()
+  const one = finalizeWith(f, gh, ['--dispatchStats', '{"redirects":1}'])
+  assert.equal(one.status, 0, one.stderr)
+  assert.equal(saved(f).execution.redirects, 1)
+  const firstRevision = saved(f).snapshot.revision
+  const two = finalizeWith(f, gh, ['--dispatchStats', '{"redirects":2}'])
+  assert.equal(two.status, 0, two.stderr)
+  assert.equal(saved(f).execution.redirects, 2, 'the published metric changed, so it was written')
+  assert.ok(saved(f).snapshot.revision > firstRevision)
+  assert.equal(JSON.parse(readFileSync(join(f.dir, '.runtime-checkpoint.json'), 'utf8')).dispatchStats.redirects, 2)
+  assert.equal(comments(gh).length, 1)
+  assert.match(comments(gh)[0].body, /redirects 2/)
+})
+
+test('F8-C residual: a genuinely identical finalize is a no-op that returns the PERSISTED, confirmed view — not a fresh one that was never written', () => {
+  const f = fixture()
+  const gh = fakeGh()
+  assert.equal(finalizeWith(f, gh).status, 0)
+  const persisted = saved(f)
+  const again = finalizeWith(f, gh)
+  assert.equal(again.status, 0, again.stderr)
+  const out = JSON.parse(again.stdout.trim().split('\n').pop())
+  assert.match(again.stdout, /no-new-evidence/)
+  assert.equal(out.revision, persisted.snapshot.revision, 'the returned revision is the persisted one')
+  assert.equal(out.publication.state, persisted.publication.state)
+  assert.deepEqual(saved(f), persisted)
+  assert.equal(comments(gh).length, 1)
+})
+
+test('F8-C residual: new tokens, different timing coverage, and different lifetime evidence are each new evidence on their own', () => {
+  // (a) tokens only
+  const a = fixture()
+  const ghA = fakeGh()
+  assert.equal(finalizeWith(a, ghA).status, 0)
+  const beforeA = saved(a).snapshot.revision
+  lateRequest(a)
+  assert.equal(finalizeWith(a, ghA).status, 0)
+  assert.equal(saved(a).usage.observedTotalTokens, 110)
+  assert.ok(saved(a).snapshot.revision > beforeA)
+  // (b) timing coverage only: a boundary-bearing journal record closes what was open
+  const b = fixture()
+  const ghB = fakeGh()
+  assert.equal(finalizeWith(b, ghB).status, 0)
+  const beforeB = saved(b)
+  assert.equal(beforeB.time.incomplete, true, 'a transcript alone leaves the duration unknown')
+  appendFileSync(join(b.transcripts, 'journal.jsonl'), JSON.stringify({ type: 'started', key: 'k1', agentId: 'a1', observedAt: T0 }) + '\n' + JSON.stringify({ type: 'result', key: 'k1', agentId: 'a1', observedAt: T0 + 5000, result: { status: 'reviewed' } }) + '\n')
+  assert.equal(finalizeWith(b, ghB).status, 0)
+  assert.equal(saved(b).time.agentMs, 5000, 'a real boundary measures the duration')
+  assert.ok(saved(b).snapshot.revision > beforeB.snapshot.revision)
+  assert.equal(comments(ghB).length, 1)
+  // (c) lifetime evidence only: the predecessor's own metrics change. The predecessor has to be
+  // BOUND first — that is what makes it a contributor at all.
+  const c = fixture()
+  const ghC = fakeGh()
+  assert.equal(
+    spawnSync('node', [STATE_CLI, 'migrate-acknowledge', '--dir', c.dir, '--legacy', c.legacy, '--workflowVersion', '4.0.0', '--story', '42', '--run', 'v5', '--head', H('a'), '--pr', '7'], { encoding: 'utf8' }).status,
+    0,
+  )
+  assert.equal(finalizeWith(c, ghC).status, 0)
+  assert.equal(saved(c).lifetime.usage.observedTotalTokens, 500 + 100)
+  const beforeC = saved(c)
+  const pred = join(c.legacy, 'metrics.json')
+  const predView = JSON.parse(readFileSync(pred, 'utf8'))
+  predView.usage.observedTotalTokens = 900
+  predView.usage.inputTokens = 800
+  writeFileSync(pred, JSON.stringify(predView))
+  assert.equal(finalizeWith(c, ghC).status, 0)
+  assert.equal(saved(c).lifetime.usage.observedTotalTokens, 900 + 100)
+  assert.ok(saved(c).snapshot.revision > beforeC.snapshot.revision)
+})
+
+test('F8-C residual: the same token TOTAL with a different request identity or different categories is new evidence, not a heartbeat', () => {
+  const f = fixture()
+  const gh = fakeGh()
+  assert.equal(finalizeWith(f, gh).status, 0)
+  const before = saved(f)
+  assert.equal(before.usage.observedTotalTokens, 100)
+  // the same 100 tokens, redistributed across the categories and under a different request id
+  writeFileSync(
+    join(f.transcripts, 'agent-a1.jsonl'),
+    [0, 1].map(i => JSON.stringify({ agentId: 'a1', type: 'assistant', apiBlockIndex: i, requestId: 'qOTHER', effort: 'high', timestamp: new Date(T0 + i * 1000).toISOString(), message: { role: 'assistant', model: 'claude-opus-5', stop_reason: i === 1 ? 'end_turn' : null, usage: { input_tokens: 5, cache_creation_input_tokens: 25, cache_read_input_tokens: 30, output_tokens: i === 1 ? 40 : 1 } } })).join('\n') + '\n',
+  )
+  assert.equal(finalizeWith(f, gh).status, 0)
+  const after = saved(f)
+  assert.equal(after.usage.observedTotalTokens, 100 + 100, 'the ledger keeps both requests: identity is not a total')
+  assert.notDeepEqual(after.usage, before.usage)
+  assert.ok(after.snapshot.revision > before.snapshot.revision)
+  assert.equal(comments(gh).length, 1)
 })

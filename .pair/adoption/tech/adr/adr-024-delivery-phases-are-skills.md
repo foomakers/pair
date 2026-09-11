@@ -643,18 +643,20 @@ instead of the canary.
 ```bash
 node "$SKILL/scripts/cycle-runtime.mjs" entry --dir "$RUN_DIR" --repo "$REPO" --story "$STORY" --pr "$PR" --workflowVersion "$WORKFLOW_VERSION"
 node "$SKILL/scripts/cycle-state.mjs" migrate-acknowledge --dir "$RUN_DIR" --legacy "$LEGACY_DIR" --workflowVersion "$WORKFLOW_VERSION" --story "$STORY" --run "$RUN_ID" --head "$HEAD" --pr "$PR"
-node "$SKILL/scripts/cycle-runtime.mjs" observe --dir "$RUN_DIR" --repository "$REPO" --story "$STORY" --branch "$BRANCH" --pr "$PR" --runId "$RUN_ID" --journal "$TRANSCRIPTS/journal.jsonl" --transcripts "$TRANSCRIPTS" --usage "$RUN_DIR/usage.jsonl" --interval-ms 50 --grace-ms 2000 &
+node "$SKILL/scripts/cycle-runtime.mjs" observe --dir "$RUN_DIR" --repository "$REPO" --story "$STORY" --branch "$BRANCH" --pr "$PR" --runId "$RUN_ID" --journal "$TRANSCRIPTS/journal.jsonl" --transcripts "$TRANSCRIPTS" --usage "$RUN_DIR/usage.jsonl" --invocation "$WF_ID" --interval-ms 50 --grace-ms 2000 &
 OBSERVER_PID=$!
-node "$SKILL/scripts/cycle-runtime.mjs" mark-terminal --dir "$RUN_DIR" --result "$WF_RESULT" --story "$STORY"
+node "$SKILL/scripts/cycle-runtime.mjs" mark-terminal --dir "$RUN_DIR" --result "$WF_RESULT" --story "$STORY" --invocation "$WF_ID"
 wait "$OBSERVER_PID"
 node "$SKILL/scripts/cycle-runtime.mjs" dispatch-stats --result "$WF_RESULT" --story "$STORY" --out "$STATS"
 node "$SKILL/scripts/cycle-runtime.mjs" finalize --dir "$RUN_DIR" --repo "$REPO" --story "$STORY" --branch "$BRANCH" --pr "$PR" --runId "$RUN_ID" --journal "$TRANSCRIPTS/journal.jsonl" --transcripts "$TRANSCRIPTS" --usage "$RUN_DIR/usage.jsonl" --dispatchStats "$STATS"
 ```
 
-When a cycle is RESUMED, the observation is started with `--since <ISO>` so the terminal result of
-the PREVIOUS invocation cannot close the new one (US-479 F8 residual). It is opt-in on purpose: the
-host writes the marker as soon as the run returns, which can precede the observer's first tick, so
-defaulting it would make the ordinary path reject its own run's terminal result.
+`$WF_ID` is the workflow run id the Workflow tool returns — the same id `$TRANSCRIPTS` is derived
+from. It is the INVOCATION identity: `mark-terminal` stamps it and `observe` accepts only its own
+invocation's terminal result, in the marker and in the checkpoint alike, so a new invocation in the
+same run directory is never closed by an earlier one and a marker written before the first tick
+still closes its own (US-479 F8-A residual). `--since <ISO>` remains available as a coarser
+fallback for a host with no id to give; it now filters the checkpoint's terminal too.
 
 `$SKILL` is the installed `pair-workflow-review-phase` directory. `$TRANSCRIPTS` is the workflow
 run's own directory (`~/.claude/projects/<project slug>/<session id>/subagents/workflows/<wf id>/`),
@@ -711,3 +713,29 @@ missing was the verification of the ALTERNATIVES inside invariants already appro
 Verified as interactions, not only as units: migration → revision; transcript → checkpoint →
 restart → reducer; lifetime → cohort → summary; recipe → observer → terminal result → finalize.
 511 workflows tests. Still no live canary, and #479 is not complete.
+
+## Amendment 2026-09-11 (j) — F6 and F8 residuals: per-dimension coverage, invocation identity, evidence freshness, semantic fingerprint
+
+- **F6** — lifetime coverage is propagated PER DIMENSION. A run can report every token and still
+  have an open execution; collapsing usage and timing into one verdict lost the identity of the
+  incomplete one and presented the sum of the KNOWN durations as the whole duration.
+  `lifetime.usage.coverage` and `lifetime.time.coverage` are each `complete | partial | unknown`,
+  with `partialRunsByDimension`, `lowerBoundDimensions` and per-dimension `totalBasis`; the cohort
+  carries `lifetimeCoverageByDimension`, and `costPerCompletedDelivery.lowerBound` is qualified by
+  the USAGE dimension alone, so a partial duration never disqualifies a complete token cost. A
+  certain zero still requires proof that nothing was dispatched.
+- **F8-A** — the terminal result belongs to an INVOCATION, and that identity now travels in the
+  marker AND in the checkpoint. A timestamp could not express it: the host writes the marker as soon
+  as the run returns, so any threshold chosen after startup either races it or accepts the previous
+  invocation's. `--since` is kept as a coarser fallback and now filters the checkpoint too.
+- **F8-B** — freshness is judged on the EVIDENCE, never on a revision number. `nextRevision` no
+  longer folds in the writer's own checkpoint, and `writeMetrics` refuses `stale-evidence` when the
+  persisted view already knows more about an execution than the candidate does. Totals are never
+  merged: identity, categories and request counts are preserved by refusing, not by averaging.
+- **F8-C** — the fingerprint is the PUBLISHED semantic state minus genuinely volatile fields (the
+  revision, the reduce timestamp, the host read clock — including the per-observation heartbeat —
+  the terminal heartbeat and the publication bookkeeping). Listing the interesting fields meant a
+  real change in an unlisted one (a host admin counter, the timing coverage, the lifetime evidence)
+  was mistaken for a heartbeat. A true no-op now returns the PERSISTED, confirmed view.
+
+527 workflows tests; full quality gate green. No live canary, and #479 is not complete.
