@@ -1002,8 +1002,18 @@ export function deriveNext(handoffs, policy, ctx = {}) {
       const target = resolveSealedContract({ handoffs: list, predecessors: ctx.predecessors ?? [], contractHash: d.predecessorContractHash })
       const targetPhase = target?.phase
       const line = successionLineOf(targetPhase)
-      if (!targetPhase || !line || !d.contradictionKey)
-        return blocked('failed-preparation', { refusal: 'contradiction-unresolvable', detail: target?.error ?? `no sealed contract identifies ${d.predecessorContractHash ?? 'the named predecessor'}`, phase: last.phase, findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined })
+      if (!targetPhase || !line || !d.contradictionKey) {
+        // Three different causes, never collapsed into one message: the discrepancy that made a
+        // predecessor unsearchable, a hash nothing ever sealed, or a handoff published before this
+        // engine stamped the key — the last is history, like every pre-3.0.12 acHash, and the cycle
+        // answers again under the current engine rather than having its key back-filled here.
+        const detail = target?.error
+          ? target.error
+          : !targetPhase || !line
+            ? `no sealed contract identifies ${d.predecessorContractHash ?? 'the named predecessor'}`
+            : 'contradiction-key-unstamped: this handoff predates the key `publish` now stamps — re-answer the same phase under this engine'
+        return blocked('failed-preparation', { refusal: 'contradiction-unresolvable', detail, phase: last.phase, findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined })
+      }
       // ONE revision per contradiction per obligation and succession line (US-479 B1 decision 2).
       // Counted over this cycle AND every sibling run of the same PR, so a new runId cannot buy a
       // second attempt; an equivalent contradiction after it is a human escalation, not autotuning.

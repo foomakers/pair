@@ -2167,3 +2167,29 @@ test('B2 (CLI): migrate-acknowledge runs from the shell the launch recipe uses, 
   assert.deepEqual(digestDir(legacy), before)
   assert.equal(readdirSync(fresh).filter(f => f.endsWith('.json')).length, 1)
 })
+
+test('F1: a contradiction published BEFORE the key was stamped is history, not a missing seal — the refusal says which, and a fresh answer under this engine routes', () => {
+  const root = mkdtempSync(join(tmpdir(), 'f1-unstamped-'))
+  const runsRoot = join(root, '.pair', 'working', 'runs')
+  const legacy = join(runsRoot, 'v4', '42')
+  const dir = join(runsRoot, 'v5', '42')
+  for (const d of [legacy, dir]) mkdirSync(d, { recursive: true })
+  const hash = `sha256:${'1'.repeat(64)}`
+  writeFileSync(join(legacy, 'a0-rev3-red-spec.json'), JSON.stringify({ schemaVersion: 2, workflowVersion: '3.0.13', run: 'v4', story: '42', pr: 7, branch: 'b', skill: 'red-spec', phase: 'a0-rev3', inputHead: SHA('a'), status: 'red', contractPath: '/abs/a0-rev3.json', contractHash: hash, seq: 1 }))
+  writeFileSync(join(legacy, 'a0-rev3-red-verify.json'), JSON.stringify({ schemaVersion: 2, workflowVersion: '3.0.13', run: 'v4', story: '42', pr: 7, branch: 'b', skill: 'red-verify', phase: 'a0-rev3', inputHead: SHA('a'), verified: true, sealed: true, snapshot: SHA('e'), contractHash: hash, seq: 2 }))
+  assert.equal(migrateAcknowledge({ dir, legacyDirs: [legacy], workflowVersion: V, story: '42', pr: 7, run: 'v5', branch: 'b', inputHead: SHA('a') }).applied, true)
+  // a handoff exactly as an older engine left it: complete evidence, no stamped key
+  writeFileSync(
+    join(dir, 'r1-g1-red-spec.json'),
+    JSON.stringify({ run: 'v5', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'contradiction', mode: 'remediation', revisionReason: 'contradicts-approved-authority', predecessorContractHash: hash, conflictingRowIds: ['R33'], changedRows: ['R33'], counterexample: CX, contradictionKey: null, contradictionLine: null, schemaVersion: 3, workflowVersion: V, seq: 2 }),
+  )
+  const stale = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, story: '42', runsRoot })
+  assert.equal(stale.next.refusal, 'contradiction-unresolvable')
+  assert.match(stale.next.detail, /contradiction-key-unstamped/)
+  // the same answer, re-published under THIS engine, routes the successor on the historical line
+  const file = join(dir, 'draft.json')
+  writeFileSync(file, JSON.stringify({ run: 'v5', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'contradiction', mode: 'remediation', revisionReason: 'contradicts-approved-authority', predecessorContractHash: hash, conflictingRowIds: ['R33'], changedRows: ['R33'], counterexample: CX }))
+  assert.equal(publish({ dir, file, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, pr: 7, attempt: 2 }).published, true)
+  const fresh = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, story: '42', runsRoot })
+  assert.deepEqual({ step: fresh.next.step, mode: fresh.next.mode, phase: fresh.next.phase, run: fresh.next.predecessorRunId }, { step: 'prepare', mode: 'revision', phase: 'a0-rev4', run: 'v4' })
+})
