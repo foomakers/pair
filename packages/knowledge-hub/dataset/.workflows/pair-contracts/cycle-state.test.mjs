@@ -3430,11 +3430,15 @@ test('DR-01 (control): a batch closed clean stays completed when a later unrelat
   assert.equal(after.counters.spentCycles, 1)
 })
 
-test('DR-01 (converse): a batch whose ONLY preparation is a repair is not completed by an unrelated review', () => {
+// NOTE (US-479 F-4): this is a CONTROL, not a witness. The second delta review established that it
+// passes with and without the empty-obligations branch, because its fixture's batch DOES have an
+// obligation set (`cleanThenRemediated` publishes r1-g1 with a plan naming r0-1) — `completedCycles`
+// is 0 here because the risk is still active, not because of that branch. The branch itself stays as
+// a fail-closed guard: no reachable history produces an empty obligation set for a batch with a
+// repair, and if one ever did, closing it vacuously is the worse failure.
+test('DR-01 (control): an active risk keeps its batch from completing, whatever a later review says', () => {
   const { dir } = runDir()
   const riskId = provenRisk(dir)
-  // the repair of r1 — the only red-spec of r1 carrying `regressionRepairOf`, so the batch has no
-  // obligation set of its own; an empty set must not make every later review a closing one
   matchingRepair(dir, riskId)
   review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r2-9')] })
   const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
@@ -3567,8 +3571,10 @@ test('DR-09: red-verify and review-phase declare `regressionGuards` in their Out
     'packages/knowledge-hub/dataset/.skills/workflow/review-phase/SKILL.md',
   ]) {
     const md = readFileSync(join(root, rel), 'utf8')
-    const section = md.slice(md.indexOf('## Output Format'))
-    assert.ok(section.length, `${rel}: no Output Format section`)
+    const at = md.indexOf('## Output Format')
+    // `slice(-1)` on a miss yields the last character, which is truthy: the guard below never fired.
+    assert.ok(at >= 0, `${rel}: no Output Format section`)
+    const section = md.slice(at)
     assert.match(section.split('\n').slice(0, 6).join('\n'), /regressionGuards/, `${rel}: the coordinator fails the run when the echo is missing, so the canonical output line must carry it`)
   }
 })

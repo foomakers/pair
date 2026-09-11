@@ -1079,3 +1079,34 @@ test('DR-05: views that OVERLAP without either containing the other cannot be ad
   assert.equal(folded.cycles.completed, 4)
   assert.equal(folded.snapshot.completeness, 'partial', 'an overlap nobody reconciled is not a complete measurement')
 })
+
+// ── F-5 / F-6 (second delta review): an honest floor stays a floor, and `spent` folds like the rest ─
+test('F-5: a cohort built on overlapping views reports its cost as a LOWER BOUND, not as the spend', () => {
+  const overlapping = [
+    { identity: { repository: 'foomakers/pair', storyId: '42', prNumber: 7, branch: 'b', runIds: ['run-1', 'run-2'], predecessorRuns: [] }, workflow: { versions: ['4.0.0'] }, outcome: { cohortState: 'completed' }, cycles: { attempted: 1, completed: 1 }, usage: { observedTotalTokens: 1000 }, snapshot: { completeness: 'complete' } },
+    { identity: { repository: 'foomakers/pair', storyId: '42', prNumber: 7, branch: 'b', runIds: ['run-2', 'run-3'], predecessorRuns: [] }, workflow: { versions: ['4.0.0'] }, outcome: { cohortState: 'completed' }, cycles: { attempted: 1, completed: 1 }, usage: { observedTotalTokens: 4000 }, snapshot: { completeness: 'complete' } },
+  ]
+  const [folded] = foldCohortIdentities(overlapping)
+  assert.equal(folded.usage.observedTotalTokens, 4000, 'run-2 is in both views: adding would charge it twice')
+  assert.equal(folded.usage.lowerBound, true, 'so the total is a floor, and the entry says so')
+  const cohort = aggregateCohort(foldCohortIdentities(overlapping))
+  assert.equal(cohort.costPerCompletedDelivery.lowerBound, true, 'and the cost the cohort reports is a floor too')
+  // a DISJOINT fold is an exact sum, and must not be marked a floor by association
+  const disjoint = [
+    { ...overlapping[0], identity: { ...overlapping[0].identity, runIds: ['run-1'] } },
+    { ...overlapping[1], identity: { ...overlapping[1].identity, runIds: ['run-2'] } },
+  ]
+  const [added] = foldCohortIdentities(disjoint)
+  assert.equal(added.usage.observedTotalTokens, 5000)
+  assert.equal(added.usage.lowerBound, undefined, 'distinct executions add up exactly')
+})
+
+test('F-6: a resumed PR folds `spent` across its predecessors, like attempted and completed', () => {
+  const src = readFileSync(CLI, 'utf8')
+  const at = src.indexOf('lifetime.cycles.attempted +=')
+  const until = src.indexOf('for (const k of DIMENSIONS.usage) addDimension', at)
+  assert.ok(at > 0 && until > at, 'the predecessor fold moved — this test must be re-pointed, not deleted')
+  const loop = src.slice(at, until)
+  assert.match(loop, /lifetime\.cycles\.spent \+=/, 'a counter exposed in the lifetime view must be folded with the others, or a resume reports one run`s number beside two runs` numbers')
+  assert.match(loop, /lifetime\.cycles\.completed \+=/)
+})

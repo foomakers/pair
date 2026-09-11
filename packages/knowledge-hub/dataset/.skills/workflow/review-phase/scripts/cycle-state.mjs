@@ -1451,7 +1451,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
             for (const p of g.allowedPaths ?? []) if (paths.some(own => touches(own, p))) overlapping.add(p)
           }
         if (overlapping.size)
-          return blocked('escalate', { refusal: 'reconstruction-overlaps-later-work', detail: `reconstructing ${phase} would restore ${[...overlapping].sort().join(', ')}, which a later round has already built on — a human decides before any content is restored`, findings: blocking, regressionRisks: activeRisks })
+          return blocked('escalate', { refusal: 'reconstruction-overlaps-later-work', detail: `reconstructing ${phase} would restore ${paths.join(', ')} at the baseline, overwriting ${[...overlapping].sort().join(', ')} which work after that baseline owns — a human decides before any content is restored`, findings: blocking, regressionRisks: activeRisks })
         const baselines = [...new Set(ofBatch.map(x => String(x.lastCleanReviewedHead)))]
         if (baselines.length === 1) reconstruct = { fromHead: baselines[0], paths, riskIds: ofBatch.map(x => x.riskId) }
       }
@@ -1501,7 +1501,6 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       }
       return { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], priorFindings: priorFindings(), headMoved: true, detail: SHA_RE.test(remote) ? 'readiness not confirmed on the remote head' : 'readiness not bound to a 40-hex remote head' }
     }
-    if (d.needsHumanDecision === true) return blocked('escalate', { detail: `${d.humanDecisionKind ?? 'human'} decision`, findings: blocking })
     if (blocking.every(f => f.external === true)) return blocked('escalate', { detail: 'external blockers need a human disposition or a read-back-verified correction', findings: blocking })
     // US-479 T-21 (S4): the budget bounds COMPLETED corrective cycles, never the raw round
     // counter — a metadata-only re-review (inputsChanged, a moved head) bumps `round` without any

@@ -425,6 +425,10 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
     if (priorUsagePartial) partialByDimension.usage.push(r.runId)
     if (priorTimePartial) partialByDimension.timing.push(r.runId)
     lifetime.cycles.attempted += prior.cycles?.attempted ?? 0
+    // US-479 F-6: `spent` is exposed beside the other two, so it has to be folded with them —
+    // otherwise a resumed PR shows a lifetime `attempted`/`completed` next to a current-run-only
+    // `spent`, which is exactly the resume case the lifetime view exists for.
+    lifetime.cycles.spent += prior.cycles?.spent ?? 0
     lifetime.cycles.completed += prior.cycles?.completed ?? 0
     for (const k of DIMENSIONS.usage) addDimension(k, prior.usage?.[k])
     for (const k of DIMENSIONS.timing) addDimension(k, prior.time?.[k])
@@ -773,6 +777,9 @@ export function foldCohortIdentities(entries) {
       // run, adding would count it twice — the largest known total is then the honest lower bound.
       const disjoint = group.every((e, i) => group.every((o, j) => i === j || ![...runsOf(e)].some(r => runsOf(o).has(r))))
       const tokens = known.length ? (disjoint ? known.reduce((s, t) => s + t, 0) : Math.max(...known)) : null
+      // Overlapping views cannot be added without charging a shared run twice, so the largest known
+      // total is a FLOOR, not the spend. Say so on the entry — the cohort reads it (US-479 F-5).
+      const tokensAreFloor = known.length > 0 && !disjoint
       const cycles = Math.max(...group.map(e => cyclesOf(e) ?? 0))
       // Every cycle count is combined, not only `completed`: taking `attempted` from one view and
       // `completed` from the maximum produced entries claiming more closed cycles than attempted.
@@ -780,7 +787,7 @@ export function foldCohortIdentities(entries) {
       const spent = Math.max(...group.map(e => e.cycles?.spent ?? 0))
       combined = {
         cycles: { ...(main.cycles ?? {}), attempted, spent, completed: cycles },
-        usage: { ...(main.usage ?? {}), observedTotalTokens: tokens },
+        usage: { ...(main.usage ?? {}), observedTotalTokens: tokens, ...(tokensAreFloor ? { lowerBound: true } : {}) },
         ...(main.lifetime ? { lifetime: { ...main.lifetime, cycles: { ...(main.lifetime.cycles ?? {}), completed: cycles }, usage: { ...(main.lifetime.usage ?? {}), observedTotalTokens: tokens }, coverage: 'partial' } } : {}),
       }
     }
@@ -845,7 +852,12 @@ export function aggregateCohort(entries) {
     histogram: readyCycles.reduce((h, c) => ((h[c] = (h[c] ?? 0) + 1), h), {}),
     allWorkTokens: knownTokenEntries ? allTokens : null,
     // The cost is a token quantity: only the USAGE dimension qualifies it.
-    costPerCompletedDelivery: completed && knownTokenEntries ? { value: allTokens / completed, lowerBound: knownTokenEntries < N || lifetimeCoverageByDimension.usage !== 'complete' } : null,
+    // US-479 F-5: `lowerBound` read only the LIFETIME usage coverage, which a folded entry without a
+    // lifetime never sets — so a fold that fell back to the largest known total (overlapping views,
+    // where adding would double count) was reported as an exact cost. The fold marks that total as a
+    // floor on the entry itself, and it is read here. Dimensions stay separate: a partial DURATION
+    // still says nothing about the token cost (US-479 F6).
+    costPerCompletedDelivery: completed && knownTokenEntries ? { value: allTokens / completed, lowerBound: knownTokenEntries < N || lifetimeCoverageByDimension.usage !== 'complete' || entries.some(e => e.usage?.lowerBound === true) } : null,
     lifetimeCoverage,
     lifetimeCoverageByDimension,
   }

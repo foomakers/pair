@@ -950,3 +950,34 @@ The cost decides the scope. The guard's own files are the reconstruction surface
 a replan through the existing preparation path, not a repair; and a path a LATER round has already
 built on is refused outright (`reconstruction-overlaps-later-work`) — restoring it would break
 consumers this batch's contract does not cover, and that trade is a human's to make.
+
+## Amendment 2026-09-11 (q) — what two delta reviews changed in (l), (n), (o) and (p)
+
+Two independent delta reviews of the S11–S13 work found ten and then ten findings. Three of the
+second set were Major and each corrected a rule stated in an earlier amendment, so those statements
+are superseded here rather than left standing.
+
+- **Supersedes (l)#4 and (o)'s escalation wording.** "A mandatory human escalation (a history
+  rewrite) is evaluated BEFORE the automatic rewind" was implemented as a check on one
+  `humanDecisionKind`, so a review that asked for a human WITHOUT naming a kind was overridden by
+  the very transition the request existed to hold. The rule is: ANY `needsHumanDecision: true`
+  precedes every automatic transition; the kind only says why.
+- **Supersedes (p)'s "a LATER round".** The reconstruction guard's subject is not a later ROUND. It
+  is everything published after the review that proved `lastCleanReviewedHead` clean — which
+  includes sibling groups of the same batch, whose fixes land BEFORE the producing group's own and
+  were therefore invisible to a guard keyed on the producer's fix. It also compares path scopes by
+  containment, since `allowedPaths` carries directories as well as files.
+- **Supersedes (m)/(n)'s budget reading.** The remediation budget does not count COMPLETED cycles.
+  A remediation that keeps failing completes nothing, so reading completions made `maxFixRounds`
+  unreachable in its own failure mode. It counts CONCLUDED cycles — a fix followed by the review
+  that judged it — and that count is phase-independent, because two engine shapes loop inside one
+  round: the regression rewind (which repairs at the producing group's own phase) and a contract gap
+  (which revises the same group as `<group>-rev<n>`).
+
+One process note worth recording, because it is the reason the second review was needed. The first
+round of fixes was written and then tested by the same author, and each test confirmed the shape its
+author had in mind rather than attacking the defect class: all three Major findings were "fixed for
+the case I imagined". The second round inverted the order — an independent agent derived the
+witnesses from what the engine actually produces, before any fix existed — and that is how the
+contract-gap revision loop was found at all. For a defect class rather than a single case, the
+witness should not be written by whoever writes the fix.
