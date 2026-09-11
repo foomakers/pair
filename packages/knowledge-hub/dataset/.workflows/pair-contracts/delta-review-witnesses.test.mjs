@@ -399,3 +399,73 @@ test('F-3 (control): a view that CONTAINS the other is the whole history — its
     assert.equal(folded.snapshot.completeness, whole.snapshot.completeness)
   }
 })
+
+// ── DR2-03 / DR2-04 (third delta review): what a "concluded corrective cycle" actually is ───────
+// Counting green-fix handoffs was the third wrong key in a row. A contract gap on the INITIAL
+// contract revises `a0-rev<n>` and its work is dispatched to implement-phase, not green-fix, so that
+// loop was uncounted; and a greenRetries retry on the SAME seal was counted, silently spending a
+// budget the story says is separate. The invariant is neither the phase nor the skill: a corrective
+// cycle is a NEWLY SEALED contract that produced work and was judged by a non-partial review.
+// Two groups of one round share that review and spend one; a retry reuses the seal and spends none.
+const budget3 = { ...POLICY, maxFixRounds: 3 }
+
+test('DR2-03 (witness): a contract gap that keeps revising the INITIAL contract must exhaust the budget too', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { mode: 'initial' })
+  redVerify(dir, 'a0')
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: H0 })
+  review(dir, 'r0', { reviewedHead: H0, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1', { kind: 'contract-gap', groupId: 'a0' })] })
+  // each iteration: a NEW sealed a0-rev<n>, implemented, then judged — a concluded corrective cycle
+  const heads = [H1, H2, SHA('3'), SHA('4'), SHA('5')]
+  for (let i = 0; i < heads.length; i++) {
+    const n = resolve({ dir, workflowVersion: V, policy: budget3, entry: 'pr', pr: 7 }).next
+    if (n.step !== 'prepare') break
+    const phase = n.phase
+    redSpec(dir, phase, { mode: 'revision', status: 'red', groupId: 'a0' })
+    redVerify(dir, phase)
+    handoff(dir, phase, 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: heads[i] })
+    review(dir, `r${i + 1}`, { mode: 're-review', reviewedHead: heads[i], verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1', { kind: 'contract-gap', groupId: 'a0' })] })
+  }
+  const r = resolve({ dir, workflowVersion: V, policy: budget3, entry: 'pr', pr: 7 })
+  assert.deepEqual(
+    { step: r.next.step, reason: r.next.reason, budget: r.next.budget },
+    { step: 'blocked', reason: 'escalate', budget: 'maxFixRounds' },
+    `the a0 revision loop must spend the budget like any other; counters ${JSON.stringify(r.counters)}`,
+  )
+})
+
+test('DR2-04 (witness): a greenRetries retry on the SAME seal spends no maxFixRounds unit', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { mode: 'initial' })
+  redVerify(dir, 'a0')
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: H0 })
+  review(dir, 'r0', { reviewedHead: H0, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1')] })
+  redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r1-g1', remediationBatchId: 'r1' })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1' })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H1, evidenceLedger: [], remediationBatchId: 'r1' })
+  review(dir, 'r1', { mode: 're-review', reviewedHead: H1, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1', { kind: 'approved-test-failing', groupId: 'r1-g1' })] })
+  const afterFirst = resolve({ dir, workflowVersion: V, policy: budget3, entry: 'pr', pr: 7 })
+  assert.equal(afterFirst.counters.spentCycles, 1, 'one sealed contract, judged once')
+  // the retry the engine now dispatches is on the SAME seal — greenRetries bounds it, not maxFixRounds
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H2, evidenceLedger: [], remediationBatchId: 'r1' }, { attempt: 2 })
+  review(dir, 'r1', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1')] }, { attempt: 2 })
+  const afterRetry = resolve({ dir, workflowVersion: V, policy: budget3, entry: 'pr', pr: 7 })
+  assert.equal(afterRetry.counters.spentCycles, 1, 'the same seal retried is the same corrective cycle — greenRetries owns that bound')
+})
+
+test('DR2-03/04 (control): two groups of ONE round still spend exactly one', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { mode: 'initial' })
+  redVerify(dir, 'a0')
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: H0 })
+  review(dir, 'r0', { reviewedHead: H0, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1'), finding('r0-2')] })
+  const plan = { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }, { groupId: 'r1-g2', findings: ['r0-2'], owner: 'b', mode: 'behavioral', allowedPaths: ['src/b.ts'] }], carried: [] }
+  for (const [g, head] of [['r1-g1', H1], ['r1-g2', H2]]) {
+    redSpec(dir, g, { plan, groupId: g, remediationBatchId: 'r1' })
+    redVerify(dir, g, { remediationBatchId: 'r1' })
+    handoff(dir, g, 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: head, evidenceLedger: [], remediationBatchId: 'r1' })
+  }
+  review(dir, 'r1', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1'), finding('r0-2')] })
+  const r = resolve({ dir, workflowVersion: V, policy: budget3, entry: 'pr', pr: 7 })
+  assert.equal(r.counters.spentCycles, 1, 'two sealed groups, ONE review: one corrective cycle (T-21)')
+})

@@ -751,6 +751,7 @@ export function foldCohortIdentities(entries) {
     // most runs, then the furthest along, then the one that observed the most spend (usage events
     // are additive and idempotent, so a larger observed total is a more complete reading of the same
     // run), then the run ids. Same set of views in, same entry out.
+    const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
     const ranked = [...group].sort((x, y) => {
       const num = (e, path) => path.split('.').reduce((v, k) => v?.[k], e) ?? 0
       return (
@@ -758,7 +759,11 @@ export function foldCohortIdentities(entries) {
         num(y, 'cycles.attempted') - num(x, 'cycles.attempted') ||
         num(y, 'cycles.completed') - num(x, 'cycles.completed') ||
         num(y, 'usage.observedTotalTokens') - num(x, 'usage.observedTotalTokens') ||
-        ([...runsOf(x)].sort().join() < [...runsOf(y)].sort().join() ? -1 : 1)
+        cmp([...runsOf(x)].sort().join(), [...runsOf(y)].sort().join()) ||
+        // US-479 DR2-01: the last term must be able to return 0 AND to separate views that tie on
+        // everything above — otherwise the sort falls back to input position and the fold depends on
+        // manifest order. A canonical serialisation is both.
+        cmp(JSON.stringify(x), JSON.stringify(y))
       )
     })
     const covering = ranked.find(e => [...allRuns].every(r => runsOf(e).has(r)))
@@ -770,7 +775,11 @@ export function foldCohortIdentities(entries) {
     const completeness = covering ? (covering.snapshot?.completeness ?? 'complete') : worstOf([...group.map(e => e.snapshot?.completeness ?? 'complete'), 'partial'])
     let combined = {}
     if (!covering) {
-      const cyclesOf = e => e.lifetime?.cycles?.completed ?? e.cycles?.completed
+      // US-479 DR2-02: read all three counts from the SAME place per view. Taking `completed` from a
+      // lifetime beside `attempted` from a current run produced entries claiming more completed
+      // cycles than attempted — and a cycle completed without being spent.
+      const countOf = (e, k) => (e.lifetime?.cycles ? e.lifetime.cycles[k] : e.cycles?.[k]) ?? 0
+      const cyclesOf = e => countOf(e, 'completed')
       const tokensOf = e => e.lifetime?.usage?.observedTotalTokens ?? e.usage?.observedTotalTokens
       const known = group.map(tokensOf).filter(t => t != null)
       // Disjoint run sets are distinct executions, so their spends add up. When two views share a
@@ -779,16 +788,18 @@ export function foldCohortIdentities(entries) {
       const tokens = known.length ? (disjoint ? known.reduce((s, t) => s + t, 0) : Math.max(...known)) : null
       // Overlapping views cannot be added without charging a shared run twice, so the largest known
       // total is a FLOOR, not the spend. Say so on the entry — the cohort reads it (US-479 F-5).
-      const tokensAreFloor = known.length > 0 && !disjoint
+      // US-479 DR2-06: a floor is a floor however it arose — an overlap that cannot be added, or a
+      // run whose spend was never measured at all. Both leave part of the delivery outside the total.
+      const tokensAreFloor = known.length > 0 && (!disjoint || known.length < group.length)
       const cycles = Math.max(...group.map(e => cyclesOf(e) ?? 0))
       // Every cycle count is combined, not only `completed`: taking `attempted` from one view and
       // `completed` from the maximum produced entries claiming more closed cycles than attempted.
-      const attempted = Math.max(...group.map(e => e.cycles?.attempted ?? 0))
-      const spent = Math.max(...group.map(e => e.cycles?.spent ?? 0))
+      const attempted = Math.max(...group.map(e => countOf(e, 'attempted')))
+      const spent = Math.max(...group.map(e => countOf(e, 'spent')))
       combined = {
         cycles: { ...(main.cycles ?? {}), attempted, spent, completed: cycles },
         usage: { ...(main.usage ?? {}), observedTotalTokens: tokens, ...(tokensAreFloor ? { lowerBound: true } : {}) },
-        ...(main.lifetime ? { lifetime: { ...main.lifetime, cycles: { ...(main.lifetime.cycles ?? {}), completed: cycles }, usage: { ...(main.lifetime.usage ?? {}), observedTotalTokens: tokens }, coverage: 'partial' } } : {}),
+        ...(main.lifetime ? { lifetime: { ...main.lifetime, cycles: { ...(main.lifetime.cycles ?? {}), attempted, spent, completed: cycles }, usage: { ...(main.lifetime.usage ?? {}), observedTotalTokens: tokens }, coverage: 'partial' } } : {}),
       }
     }
     out.push({

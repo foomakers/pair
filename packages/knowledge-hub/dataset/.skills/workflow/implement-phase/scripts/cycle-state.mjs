@@ -1604,19 +1604,20 @@ export function cycleCounters(allHandoffs, precomputedLedger) {
   // human. Reading `completedCycles` for this made the budget unreachable in its own failure mode:
   // a batch nobody ever closed never counted, so the cycle looped until the engine's blunt dispatch
   // ceiling killed it. `completedCycles` stays what it says: how many corrective cycles CLOSED.
-  // US-479 F-1: counting ROUND NUMBERS made the budget unreachable wherever a corrective loop stays
-  // inside one round — and two engine shapes do exactly that: the regression rewind repairs at the
-  // producing group's OWN phase (`r1-g1`, attempt n+1), and a contract gap revises the same group as
-  // `<group>-rev<n>`. Both keep round 1 forever, so the set stayed {1} and `maxFixRounds` never
-  // fired. A corrective cycle is a FIX followed by the review that judged it, whatever phase either
-  // carries: walk the non-partial reviews in publication order and count each one that has at least
-  // one green-fix since the last counted review. Two groups of one round share their review and
-  // therefore spend one, which is what T-21 already required.
+  // US-479 DR2-03/DR2-04 — the third wrong key in a row, so this one is stated as an invariant
+  // rather than a list of shapes. Counting ROUND NUMBERS missed every loop that stays in one round;
+  // counting GREEN-FIX handoffs missed the initial contract's revision loop (`a0-rev<n>`, whose work
+  // goes to implement-phase) and wrongly charged a greenRetries retry, which the story bounds
+  // separately. A concluded corrective cycle is neither a phase nor a skill: it is a NEWLY SEALED
+  // contract that was judged by a non-partial review. A retry reuses the seal and spends nothing;
+  // two groups of one round share the review and spend one (T-21); the initial contract itself is
+  // not corrective, so only its revisions count.
+  const correctiveSeal = h => h.skill === 'red-verify' && h.data.sealed === true && !(phaseParts(h.phase)?.kind === 'initial' && (phaseParts(h.phase)?.revision ?? 1) === 1)
   let spentCycles = 0
   let lastCounted = -1
   for (const r of reviews.filter(h => h.data.partial !== true)) {
     const at = orderOf(r)
-    if (!list.some(h => h.skill === 'green-fix' && orderOf(h) > lastCounted && orderOf(h) < at)) continue
+    if (!list.some(h => correctiveSeal(h) && orderOf(h) > lastCounted && orderOf(h) < at)) continue
     spentCycles++
     lastCounted = at
   }

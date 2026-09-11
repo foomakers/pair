@@ -1011,3 +1011,35 @@ return is a report of what it had to overwrite.
 
 Four defects left the codebase with the guard, and the ten tests that encoded them went with it.
 That is the trade: a capability that decides less, and a human decision where the evidence lives.
+
+## Amendment 2026-09-11 (s) — correcting (q), and what the budget actually counts
+
+The third independent review checked amendment (q) against the code and found three of its
+statements unsupported. Correcting them here rather than leaving them to be believed.
+
+- **(q) said the concluded-cycle count is "phase-independent".** True, and beside the point: it was
+  SKILL-dependent, keyed on `green-fix` handoffs. The initial contract's revision loop (`a0-rev<n>`)
+  dispatches its work to `implement-phase`, so that loop spent nothing and `maxFixRounds` never fired
+  on it — the third instance of the same defect class in three rounds. The count is now keyed on
+  neither: **a concluded corrective cycle is a newly SEALED contract judged by a non-partial
+  review.** A `greenRetries` retry reuses the seal and spends nothing, which also repairs a
+  collateral (q) never disclosed: the previous key silently charged such a retry to `maxFixRounds`,
+  a budget US-479 keeps separate from `redRepairs` and `greenRetries`. Two groups of one round share
+  their review and spend one, as T-21 requires, and the initial contract is not corrective, so only
+  its revisions count.
+- **(q) said "ANY `needsHumanDecision: true` precedes every automatic transition".** It precedes
+  every automatic transition of a COMPLETE review. The check sits after the custody breach check and
+  after the multi-reviewer gate, so a PARTIAL review asking for a human dispatches the next reviewer
+  of the pass first. That is the correct behaviour — a half-finished review is not yet a request —
+  but it is not what the amendment said.
+- **Commit `3b817d2b` claimed its cycle-count change "removes entries claiming more completed cycles
+  than attempted".** It did not: `completed` was read from a lifetime view while `attempted` and
+  `spent` came from the current run, so the incoherence survived and the hunk was a null mutation —
+  reverting it broke no test. All three counts now come from one reading per view, and the folded
+  lifetime carries the same three.
+
+Two further corrections of the same kind, in the cohort fold: the comparator's last term could never
+return 0, so it was not a total order and the fold still fell back to manifest position (the "same
+set of views in, same entry out" claim was false when two views tied); and a floor was marked only
+for overlapping views, not for a disjoint fold containing a run whose spend was never measured —
+half a delivery unmeasured, reported as an exact cost.

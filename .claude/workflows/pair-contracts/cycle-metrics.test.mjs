@@ -1110,3 +1110,50 @@ test('F-6: a resumed PR folds `spent` across its predecessors, like attempted an
   assert.match(loop, /lifetime\.cycles\.spent \+=/, 'a counter exposed in the lifetime view must be folded with the others, or a resume reports one run`s number beside two runs` numbers')
   assert.match(loop, /lifetime\.cycles\.completed \+=/)
 })
+
+// ── DR2-01/02/06/08 (third delta review): the fold, stated as properties rather than cases ──────
+const view = (runIds, extra = {}) => ({
+  identity: { repository: 'foomakers/pair', storyId: '42', prNumber: 7, branch: 'b', runIds, predecessorRuns: [], scopeEpoch: 1 },
+  workflow: { name: 'pair-implement-batch', versions: ['4.0.0'], mixedVersions: false },
+  outcome: { cohortState: 'completed' },
+  cycles: { attempted: 1, spent: 1, completed: 1 },
+  usage: { observedTotalTokens: 1000 },
+  time: { agentMs: 2000 },
+  snapshot: { completeness: 'complete' },
+  ...extra,
+})
+
+test('DR2-01: views that TIE on every sorted key still fold to the same entry either way round', () => {
+  const early = view(['run-2'], { time: { agentMs: 2000 } })
+  const late = view(['run-2'], { time: { agentMs: 8000 } })
+  assert.deepEqual(foldCohortIdentities([early, late]), foldCohortIdentities([late, early]), 'a comparator that never returns 0 is not a total order, and the fold falls back to input position')
+})
+
+test('DR2-02: a folded entry`s cycle counts come from ONE reading — never `completed` from a lifetime beside `attempted` from a run', () => {
+  const withLifetime = view(['run-2'], { cycles: { attempted: 0, spent: 0, completed: 0 }, lifetime: { cycles: { attempted: 2, spent: 2, completed: 2 }, usage: { observedTotalTokens: 3000 }, predecessorRuns: [{ runId: 'run-1' }], coverage: 'complete' } })
+  const fresh = view(['run-3'], { cycles: { attempted: 1, spent: 0, completed: 0 }, usage: { observedTotalTokens: 500 } })
+  const [folded] = foldCohortIdentities([withLifetime, fresh])
+  assert.ok(folded.cycles.completed <= folded.cycles.attempted, `completed ${folded.cycles.completed} of attempted ${folded.cycles.attempted}`)
+  assert.ok(folded.cycles.spent <= folded.cycles.attempted, 'and a cycle cannot complete without being spent')
+})
+
+test('DR2-06: a disjoint fold with an UNMEASURED run reports its cost as a lower bound', () => {
+  const measured = view(['run-4'], { usage: { observedTotalTokens: 1000 } })
+  const unmeasured = view(['run-5'], { usage: { observedTotalTokens: null } })
+  const [folded] = foldCohortIdentities([measured, unmeasured])
+  assert.equal(folded.usage.lowerBound, true, 'half the delivery was never measured: 1000 is a floor, not the spend')
+  const cohort = aggregateCohort(foldCohortIdentities([measured, unmeasured]))
+  assert.equal(cohort.costPerCompletedDelivery?.lowerBound, true)
+})
+
+test('DR2-08: the folded lifetime agrees with the folded entry — all three counts, not just completed', () => {
+  const a = view(['run-1'], { cycles: { attempted: 1, spent: 1, completed: 1 }, lifetime: { cycles: { attempted: 1, spent: 1, completed: 1 }, usage: { observedTotalTokens: 1000 }, predecessorRuns: [], coverage: 'complete' } })
+  const b = view(['run-2'], { cycles: { attempted: 3, spent: 3, completed: 2 }, lifetime: { cycles: { attempted: 3, spent: 3, completed: 2 }, usage: { observedTotalTokens: 4000 }, predecessorRuns: [], coverage: 'complete' } })
+  const [folded] = foldCohortIdentities([a, b])
+  if (folded.lifetime)
+    assert.deepEqual(
+      { a: folded.lifetime.cycles.attempted, s: folded.lifetime.cycles.spent, c: folded.lifetime.cycles.completed },
+      { a: folded.cycles.attempted, s: folded.cycles.spent, c: folded.cycles.completed },
+      'two readings of one delivery inside one entry must not disagree',
+    )
+})
