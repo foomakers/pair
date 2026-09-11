@@ -1408,16 +1408,30 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       const paths = groupOf(phase)?.allowedPaths ?? []
       let reconstruct
       if (priorRepairs >= 1 && paths.length) {
-        // Restoring a path a LATER round has already built on would break consumers this batch's
+        // Restoring a path someone else has already built on would break consumers this batch's
         // contract does not cover. The algorithm never decides that trade: it refuses, a human does.
-        const batchRound = phaseParts(phase)?.round ?? 0
+        //
+        // US-479 DR-02/DR-03 — what the guard has to see, and what it used to miss:
+        //  - work is LATER when it landed after the producing group's own fix. That is every
+        //    sibling group of the same batch too, not only a following round: a round BEFORE the
+        //    baseline is already inside `lastCleanReviewedHead`, so restoring cannot harm it;
+        //  - a group's GREEN is published at its PHASE, which is `<group>-rev<n>` whenever that
+        //    group went through a contract revision. Identity is parsed, never string-compared;
+        //  - scopes are paths, and `allowedPaths` legitimately carries directories. `src/` and
+        //    `src/a.ts` are the same surface; plain equality saw two unrelated strings and would
+        //    have restored a whole tree over someone's work.
+        const producerFix = Math.max(-1, ...list.filter(x => x.skill === 'green-fix' && phaseParts(x.phase)?.groupId === phase).map(x => list.indexOf(x)))
+        const touches = (a, b) => {
+          const na = String(a).replace(/\/+$/, '')
+          const nb = String(b).replace(/\/+$/, '')
+          return na === nb || na.startsWith(`${nb}/`) || nb.startsWith(`${na}/`)
+        }
+        const landedAfterProducer = gid => list.some(x => x.skill === 'green-fix' && phaseParts(x.phase)?.groupId === gid && SHA_RE.test(String(x.data.outputHead ?? '')) && list.indexOf(x) > producerFix)
         const overlapping = new Set()
         for (const h of list.filter(x => x.skill === 'red-spec'))
           for (const g of h.data.plan?.groups ?? []) {
-            const gr = phaseParts(g.groupId ?? '')?.round
-            if (gr === undefined || gr <= batchRound) continue
-            if (!list.some(x => x.skill === 'green-fix' && x.phase === g.groupId && SHA_RE.test(String(x.data.outputHead ?? '')))) continue
-            for (const p of g.allowedPaths ?? []) if (paths.includes(p)) overlapping.add(p)
+            if (!g.groupId || g.groupId === phase || !landedAfterProducer(g.groupId)) continue
+            for (const p of g.allowedPaths ?? []) if (paths.some(own => touches(own, p))) overlapping.add(p)
           }
         if (overlapping.size)
           return blocked('escalate', { refusal: 'reconstruction-overlaps-later-work', detail: `reconstructing ${phase} would restore ${[...overlapping].sort().join(', ')}, which a later round has already built on — a human decides before any content is restored`, findings: blocking, regressionRisks: activeRisks })

@@ -3426,3 +3426,83 @@ test('DR-01 (converse): a batch whose ONLY preparation is a repair is not comple
   const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.equal(r.counters.completedCycles, 0, 'nothing was proven closed: an empty obligation set closes nothing')
 })
+
+// ── DR-02/DR-03 (delta review): the reconstruction guard must see the work it would destroy ─────
+// Restoring a path at the baseline deletes whatever was built on it since. The guard that refuses
+// to do that was comparing phases and paths as plain strings, so three real shapes slipped past it:
+// a group whose GREEN landed on a revision phase, a directory scope containing the file scope of
+// another group, and a sibling group of the SAME batch that already produced its fix.
+// The same fixture as `provenRisk`, with the producing group's own scope parameterised.
+function provenRiskWithPaths(dir, allowedPaths) {
+  redSpec(dir, 'a0', { mode: 'initial' })
+  redVerify(dir, 'a0')
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: H0 })
+  review(dir, 'r0', { reviewedHead: H0, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1')] })
+  redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths }], carried: [] }, groupId: 'r1-g1', remediationBatchId: 'r1' })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1' })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H1, evidenceLedger: [], remediationBatchId: 'r1' })
+  reviewOf(dir, 'r1', { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed by r1' }), regressionFinding()], invalidatedBatchId: 'r1' })
+  return JSON.parse(readFileSync(join(dir, 'r1-review-phase.json'), 'utf8')).findings.find(f => f.id === 'r1-9').regressionRisk.riskId
+}
+function laterRoundWork(dir, { phase = 'r2-g1', groupId = 'r2-g1', paths = ['src/a.ts'], head = SHA('7') } = {}) {
+  redSpec(dir, groupId, { plan: { groups: [{ groupId, findings: ['r2-1'], owner: 'b', mode: 'behavioral', allowedPaths: paths }], carried: [] }, groupId, remediationBatchId: groupId.split('-')[0] })
+  redVerify(dir, groupId, { remediationBatchId: groupId.split('-')[0] })
+  handoff(dir, phase, 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: head, evidenceLedger: [], remediationBatchId: groupId.split('-')[0] })
+}
+function reconstructionNext(dir) {
+  review(dir, 'r3', { mode: 're-review', reviewedHead: SHA('7'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), regressionFinding()] })
+  return resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next
+}
+
+test('DR-02: a later group whose GREEN landed on a REVISION phase is still later work — the guard sees it', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  matchingRepair(dir, riskId)
+  // r2-g1 went through a contract revision, so its GREEN is published at r2-g1-rev2
+  laterRoundWork(dir, { phase: 'r2-g1-rev2', groupId: 'r2-g1', paths: ['src/a.ts'] })
+  const next = reconstructionNext(dir)
+  assert.equal(next.step, 'blocked', JSON.stringify({ step: next.step, reconstruct: next.reconstruct }))
+  assert.equal(next.refusal, 'reconstruction-overlaps-later-work')
+  assert.match(next.detail, /src\/a\.ts/)
+})
+
+test('DR-03: a DIRECTORY scope contains the file a later group wrote — containment is an overlap', () => {
+  // the producing group owns `src/`, the later group owns `src/a.ts` inside it
+  const { dir } = runDir()
+  const riskId = provenRiskWithPaths(dir, ['src/'])
+  matchingRepair(dir, riskId)
+  laterRoundWork(dir, { paths: ['src/a.ts'] })
+  const next = reconstructionNext(dir)
+  assert.equal(next.step, 'blocked', JSON.stringify({ step: next.step, reconstruct: next.reconstruct }))
+  assert.equal(next.refusal, 'reconstruction-overlaps-later-work')
+  // and the other way round: the later group owns the directory containing the producing file
+  const { dir: d2 } = runDir()
+  const rid2 = provenRiskWithPaths(d2, ['src/a.ts'])
+  matchingRepair(d2, rid2)
+  laterRoundWork(d2, { paths: ['src/'] })
+  const n2 = reconstructionNext(d2)
+  assert.equal(n2.step, 'blocked', JSON.stringify({ step: n2.step, reconstruct: n2.reconstruct }))
+  assert.equal(n2.refusal, 'reconstruction-overlaps-later-work')
+})
+
+test('DR-03: a SIBLING group of the same batch that already produced its fix is later work too', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir) // producing group r1-g1, paths ['src/a.ts']
+  matchingRepair(dir, riskId)
+  // r1-g2 — same batch, same paths, its own GREEN already landed
+  laterRoundWork(dir, { phase: 'r1-g2', groupId: 'r1-g2', paths: ['src/a.ts'], head: SHA('7') })
+  const next = reconstructionNext(dir)
+  assert.equal(next.step, 'blocked', JSON.stringify({ step: next.step, reconstruct: next.reconstruct }))
+  assert.equal(next.refusal, 'reconstruction-overlaps-later-work')
+})
+
+test('DR-03 (control): genuinely disjoint paths still reconstruct — the guard is not a blanket refusal', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir) // r1-g1 owns src/a.ts
+  matchingRepair(dir, riskId)
+  laterRoundWork(dir, { paths: ['docs/readme.md'] })
+  const next = reconstructionNext(dir)
+  assert.equal(next.step, 'prepare', JSON.stringify({ step: next.step, refusal: next.refusal, detail: next.detail }))
+  assert.ok(next.reconstruct, 'nothing later touched src/a.ts: the reconstruction stands')
+  assert.deepEqual(next.reconstruct.paths, ['src/a.ts'])
+})
