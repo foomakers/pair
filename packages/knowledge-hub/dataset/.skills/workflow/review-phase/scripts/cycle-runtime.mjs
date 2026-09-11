@@ -150,10 +150,28 @@ export function readUsageLedger(out) {
   if (!existsSync(p)) return { version: 1, executions: {} }
   try {
     const d = JSON.parse(readFileSync(p, 'utf8'))
-    return d && typeof d === 'object' && d.executions ? d : { version: 1, executions: {} }
+    if (!d || typeof d !== 'object' || !d.executions) return { version: 1, executions: {} }
+    return { ...d, executions: Object.fromEntries(Object.entries(d.executions).map(([id, e]) => [id, normalizeLedgerEntry(e)])) }
   } catch {
     return { version: 1, executions: {} }
   }
+}
+// A ledger persisted before `accepted`/`divergent` existed carried the request's values inline. It
+// is READ into the current shape rather than crashing or being discarded: the consumption it
+// records was really observed, and losing it is the very thing F2 exists to prevent.
+function normalizeLedgerEntry(entry) {
+  if (!entry || typeof entry !== 'object') return { requests: {} }
+  const requests = {}
+  for (const [id, r] of Object.entries(entry.requests ?? {})) {
+    if (!r || typeof r !== 'object') continue
+    if (r.accepted && Array.isArray(r.accepted.fixed)) {
+      requests[id] = { ...r, divergent: r.divergent ?? [] }
+      continue
+    }
+    if (!Array.isArray(r.fixed)) continue
+    requests[id] = { accepted: { fixed: r.fixed, block: Number.isInteger(r.block) ? r.block : 0, output: Number(r.output ?? 0) }, complete: r.complete === true, inconsistent: r.inconsistent === true, divergent: [] }
+  }
+  return { ...entry, requests }
 }
 function writeUsageLedger(out, ledger) {
   const p = `${out}${LEDGER_SUFFIX}`
@@ -181,6 +199,10 @@ function mergeTranscriptIntoLedger(prior, observed) {
     // observation that disagrees about the fixed fields does not say which value is true, so it
     // never replaces the accepted one and never erases it — it is recorded as `divergent` and the
     // request is flagged. Discarding the request (the residual) deleted cost already charged.
+    if (!was.accepted || !r.accepted) {
+      requests[id] = r.accepted ? r : was
+      continue
+    }
     const agrees = was.accepted.fixed.every((v, i) => v === r.accepted.fixed[i])
     const divergent = [...(was.divergent ?? []), ...(r.divergent ?? []), ...(agrees ? [] : [r.accepted])]
     requests[id] = {

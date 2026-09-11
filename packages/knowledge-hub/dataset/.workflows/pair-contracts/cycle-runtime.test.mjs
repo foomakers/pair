@@ -947,3 +947,19 @@ test('F4 residual: replaying the same evidence at different observation instants
   }
   assert.notEqual(results[0].time.observation.lastObservedAt, results[1].time.observation.lastObservedAt, 'only the observation clock moves')
 })
+
+test('F2 residual (found by the reviewer`s own fixture): a ledger persisted by the PREVIOUS shape is read into the current one — never a crash, and never a lost total', () => {
+  const { root, dir } = runDir()
+  const tdir = transcripts(root, F2_SPECS)
+  const out = join(dir, 'usage.jsonl')
+  // exactly the shape the earlier engine wrote: values inline, no `accepted`/`divergent`
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(
+    `${out}.ledger.json`,
+    JSON.stringify({ version: 1, executions: { aaa1: { requests: { q1: { fixed: [100, 20, 30], block: 0, output: 10, complete: true, inconsistent: false } }, truncated: 0, models: [], efforts: [], role: 'pair-reviewer', firstMessageAt: T0, lastMessageAt: T0 } } }),
+  )
+  const r = extractUsage({ transcriptsDir: tdir, journalPath: journalFile(root, [STD_JOURNAL[0], STD_JOURNAL[1]]), out, runId: 'run-1' })
+  assert.equal(r.records[0].usage.totalTokens, F2_ACQUIRED.total, 'the old ledger contributes its q1 and the transcript the rest, each once')
+  assert.equal(r.records[0].usage.inconsistentRequests, 0)
+  assert.equal(r.records[0].usage.totalBasis, 'complete')
+})
