@@ -544,7 +544,7 @@ test('B2: a bound predecessor run with persisted metrics is FOLDED into the life
   assert.equal(view.cycles.completed, 0)
   assert.equal(view.usage.observedTotalTokens, null)
   const md = renderMarkdown(view)
-  assert.match(md, /Lifetime \(incl\. 1 predecessor run: v4\) — cycles 1 completed \/ 2 attempted · tokens 1200 · coverage complete/)
+  assert.match(md, /Lifetime \(incl\. 1 predecessor run: v4\) — cycles 1 completed \/ 2 attempted · tokens 1200 · agent unknownms · coverage complete \(unknown: agentMs, activeWallMs\)/)
 })
 
 test('B2: a bound predecessor whose metrics were never persisted leaves the lifetime EXPLICITLY partial — never a silently smaller total', () => {
@@ -576,5 +576,125 @@ test('B2: the PR summary states the lifetime across every bound run — the read
   )
   const body = renderPrSummary(reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v5', observations: [] }))
   assert.match(body, /Lifetime across 2 run\(s\) \(v5, v4\)/)
-  assert.match(body, /cycles 1 completed \/ 2 attempted · tokens 1200 · coverage \*\*complete\*\*/)
+  assert.match(body, /cycles 1 completed \/ 2 attempted · tokens 1200 · agent unknownms · coverage \*\*complete\*\* \(unknown: cacheReadTokens, cacheWriteTokens, agentMs, activeWallMs\)/)
+})
+
+// ── US-479 F5/F6 (independent audit of 64e5ddd1) ─────────────────────────────────────────────
+const SHA40 = c => c.repeat(40)
+const migrationRecord = (dir, phase, runs) =>
+  writeFileSync(
+    join(dir, `${phase}-review-phase.json`),
+    JSON.stringify({ run: 'v9', story: '42', pr: 7, branch: 'b', phase, skill: 'review-phase', inputHead: SHA40('a'), recordType: 'migration', migrationKey: `sha256:${'1'.repeat(64)}`, predecessorRuns: runs, schemaVersion: 3, workflowVersion: '4.0.0', seq: Number(phase.slice(1)) + 1 }),
+  )
+const reviewRecord = (dir, phase, extra, seq) =>
+  writeFileSync(
+    join(dir, `${phase}-review-phase.json`),
+    JSON.stringify({ run: 'v9', story: '42', pr: 7, branch: 'b', phase, skill: 'review-phase', inputHead: SHA40('a'), reviewedHead: SHA40('c'), verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 'first', schemaVersion: 3, workflowVersion: '4.0.0', seq, ...extra }),
+  )
+const legacyMetrics = (root, runId, metrics) => {
+  const d = join(root, '.pair', 'working', 'runs', runId, '42')
+  mkdirSync(d, { recursive: true })
+  if (metrics !== undefined) writeFileSync(join(d, 'metrics.json'), typeof metrics === 'string' ? metrics : JSON.stringify(metrics))
+  return { dir: d, runId, metricsPath: join(d, 'metrics.json') }
+}
+const V1 = { schemaVersion: 1, identity: { storyId: '42', prNumber: 7, canonicalRunId: 'v3' }, snapshot: { completeness: 'complete', missingSources: [] }, cycles: { attempted: 2, completed: 1 }, usage: { observedTotalTokens: 100, inputTokens: 100, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }, time: { agentMs: 5000, activeWallMs: 5000 } }
+const V2 = { schemaVersion: 1, identity: { storyId: '42', prNumber: 7, canonicalRunId: 'v4' }, snapshot: { completeness: 'complete', missingSources: [] }, cycles: { attempted: 1, completed: 1 }, usage: { observedTotalTokens: 200, inputTokens: 200, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }, time: { agentMs: 7000, activeWallMs: 7000 } }
+
+test('F5: a migration record is not a review in the REDUCER either — migration alone is not-evaluated, and a blocking review followed by a migration is still not-converged', () => {
+  const { root, dir } = runDir()
+  const pred = legacyMetrics(root, 'v3', V1)
+  migrationRecord(dir, 'm0', [{ runId: 'v3', dir: pred.dir, metricsPath: pred.metricsPath, handoffs: [{ name: 'r0-review-phase.json', sha256: `sha256:${'2'.repeat(64)}` }] }])
+  const only = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations: [] })
+  assert.equal(only.outcome.quality, 'not-evaluated')
+  assert.equal(only.outcome.reviewedHead, null)
+  assert.equal(only.outcome.qualityConvergedHead, null)
+  assert.notEqual(only.outcome.cohortState, 'completed')
+  assert.equal(only.execution.reviewExecutions, 0)
+  // a real review with a blocking finding, THEN a migration record: the verdict still stands
+  reviewRecord(dir, 'r0', { findings: [{ id: 'r0-1', severity: 'Major', location: 'x', description: 'd', recommendation: 'r', blocking: true, transition: 'open', kind: 'defect' }] }, 2)
+  migrationRecord(dir, 'm1', [{ runId: 'v3', dir: pred.dir, metricsPath: pred.metricsPath, handoffs: [{ name: 'r0-review-phase.json', sha256: `sha256:${'2'.repeat(64)}` }] }])
+  const after = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations: [] })
+  assert.equal(after.outcome.quality, 'not-converged')
+  assert.equal(after.outcome.reviewedHead, SHA40('c'))
+  assert.equal(after.execution.reviewExecutions, 1)
+})
+
+test('F6: overlapping and transitive acknowledgments fold each predecessor EXACTLY once — by verified identity, not by iterating references', () => {
+  const { root, dir } = runDir()
+  const v3 = legacyMetrics(root, 'v3', V1)
+  const v4 = legacyMetrics(root, 'v4', V2)
+  const ref = p => ({ runId: p.runId, dir: p.dir, metricsPath: p.metricsPath, handoffs: [{ name: 'r0-review-phase.json', sha256: `sha256:${'2'.repeat(64)}` }] })
+  migrationRecord(dir, 'm0', [ref(v3)])
+  migrationRecord(dir, 'm1', [ref(v3), ref(v4)])
+  const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations: [] })
+  assert.deepEqual(view.lifetime.foldedRuns, ['v3', 'v4'])
+  assert.deepEqual(view.identity.predecessorRuns, ['v3', 'v4'])
+  assert.equal(view.lifetime.usage.observedTotalTokens, 300)
+  assert.equal(view.lifetime.cycles.completed, 2)
+  assert.equal(view.lifetime.cycles.attempted, 3)
+  assert.equal(view.lifetime.time.agentMs, 12_000, 'demonstrated predecessor time folds too')
+})
+
+test('F6: a predecessor that was itself PARTIAL makes the lifetime partial, and a dimension it never knew stays unknown instead of becoming zero', () => {
+  const { root, dir } = runDir()
+  const partial = legacyMetrics(root, 'v3', { ...V1, snapshot: { completeness: 'partial', missingSources: ['usage'] }, usage: { observedTotalTokens: 100, inputTokens: 100, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null }, time: {} })
+  const complete = legacyMetrics(root, 'v4', V2)
+  const ref = p => ({ runId: p.runId, dir: p.dir, metricsPath: p.metricsPath, handoffs: [{ name: 'r0-review-phase.json', sha256: `sha256:${'2'.repeat(64)}` }] })
+  migrationRecord(dir, 'm0', [ref(partial), ref(complete)])
+  const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations: [] })
+  assert.equal(view.lifetime.coverage, 'partial')
+  assert.deepEqual(view.lifetime.partialRuns, ['v3'])
+  // v4 knows a zero and v3 knows nothing: the SUM is unknown, never v4's zero presented as the total
+  assert.equal(view.lifetime.usage.outputTokens, null)
+  assert.equal(view.lifetime.usage.cacheReadTokens, null)
+  assert.ok(view.lifetime.unknownDimensions.includes('outputTokens'), JSON.stringify(view.lifetime.unknownDimensions))
+  assert.equal(view.lifetime.usage.observedTotalTokens, 300, 'the dimension both sources DO know still adds up')
+  assert.equal(view.lifetime.time.agentMs, null, 'an unknown predecessor time is not zero')
+  assert.ok(view.snapshot.missingSources.includes('legacy-lifetime'))
+  assert.equal(view.snapshot.completeness, 'partial')
+})
+
+test('F6: an imported metrics file that is unreadable, of another schema, or about another PR is refused as evidence — it never counts and never claims to', () => {
+  const { root, dir } = runDir()
+  const broken = legacyMetrics(root, 'v1', '{ not json')
+  const wrongSchema = legacyMetrics(root, 'v2', { ...V1, schemaVersion: 99 })
+  const wrongPr = legacyMetrics(root, 'v3', { ...V1, identity: { storyId: '42', prNumber: 999 } })
+  const absent = legacyMetrics(root, 'v4', undefined)
+  const ref = p => ({ runId: p.runId, dir: p.dir, metricsPath: p.metricsPath, handoffs: [{ name: 'r0-review-phase.json', sha256: `sha256:${'2'.repeat(64)}` }] })
+  migrationRecord(dir, 'm0', [ref(broken), ref(wrongSchema), ref(wrongPr), ref(absent)])
+  const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations: [] })
+  assert.deepEqual(view.lifetime.foldedRuns, [])
+  assert.deepEqual(view.lifetime.invalidRuns, ['v1', 'v2', 'v3'])
+  assert.deepEqual(view.lifetime.missingRuns, ['v4'])
+  assert.equal(view.lifetime.coverage, 'partial')
+  assert.equal(view.lifetime.usage.observedTotalTokens, null, 'nothing was imported, so nothing is claimed')
+})
+
+test('F6: the cohort is computed on the PR`s whole known history — moving to a new run directory cannot improve its cycles or its cost per delivery', () => {
+  const { root, dir } = runDir()
+  const v3 = legacyMetrics(root, 'v3', { ...V1, cycles: { attempted: 3, completed: 2 } })
+  migrationRecord(dir, 'm0', [{ runId: 'v3', dir: v3.dir, metricsPath: v3.metricsPath, handoffs: [{ name: 'r0-review-phase.json', sha256: `sha256:${'2'.repeat(64)}` }] }])
+  reviewRecord(dir, 'r0', { verdict: 'APPROVED', findings: [], readiness: { ready: true, remoteHead: SHA40('c') } }, 2)
+  const resumed = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations: [] })
+  assert.equal(resumed.outcome.cohortState, 'completed')
+  assert.equal(resumed.cycles.completed, 0, 'the CURRENT run directory did one review and no remediation')
+  assert.equal(resumed.lifetime.cycles.completed, 2)
+  const cohort = aggregateCohort([resumed])
+  assert.equal(cohort.meanCompletedCycles, 2, 'the cohort reads the whole history, not the fresh directory')
+  assert.equal(cohort.allWorkTokens, 100)
+  assert.deepEqual(cohort.costPerCompletedDelivery, { value: 100, lowerBound: false })
+  assert.equal(cohort.lifetimeCoverage, 'complete')
+})
+
+test('F6: a cohort entry whose lifetime is partial is labelled, and an unknown total never becomes a zero denominator', () => {
+  const { root, dir } = runDir()
+  const unknown = legacyMetrics(root, 'v3', { ...V1, snapshot: { completeness: 'partial', missingSources: ['usage'] }, usage: { observedTotalTokens: null, inputTokens: null, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null } })
+  migrationRecord(dir, 'm0', [{ runId: 'v3', dir: unknown.dir, metricsPath: unknown.metricsPath, handoffs: [{ name: 'r0-review-phase.json', sha256: `sha256:${'2'.repeat(64)}` }] }])
+  reviewRecord(dir, 'r0', { verdict: 'APPROVED', findings: [], readiness: { ready: true, remoteHead: SHA40('c') } }, 2)
+  const view = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations: [] })
+  const cohort = aggregateCohort([view])
+  assert.equal(view.lifetime.usage.observedTotalTokens, null)
+  assert.equal(cohort.allWorkTokens, null, 'unknown is not zero')
+  assert.equal(cohort.costPerCompletedDelivery, null)
+  assert.equal(cohort.lifetimeCoverage, 'partial')
 })

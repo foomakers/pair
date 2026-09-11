@@ -230,7 +230,12 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   const list = handoffs.filter(h => h.data)
   const counters = cycleCounters(handoffs)
   const versions = [...new Set(list.map(h => h.data.workflowVersion).filter(Boolean))]
-  const reviews = list.filter(h => h.skill === 'review-phase')
+  // US-479 F5: a `recordType: migration` handoff rides on the review-phase skill because that is
+  // where the envelope lives — it is NOT a review. `deriveNext`/`cycleCounters` already skip it;
+  // the reducer did not, so a run directory holding only an acknowledgment reported
+  // `quality: converged` with zero review executions and a null reviewed head. Judgments only.
+  // A `recordType: decision` record IS a real human act and keeps every effect it had.
+  const reviews = list.filter(h => h.skill === 'review-phase' && h.data.recordType !== 'migration')
   const lastReview = reviews[reviews.length - 1]
   const findingsById = new Map()
   for (const r of reviews) for (const f of r.data.findings ?? []) if (f?.id) findingsById.set(f.id, f)
@@ -315,41 +320,91 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   // lifetime explicitly partial — "missing older logs yield partial lifetime metrics, not a clean
   // new PR". Nothing is read from the legacy directory except its own metrics file, and nothing is
   // written back to it.
-  const predecessorRecords = handoffs.filter(h => h.data?.recordType === 'migration').flatMap(h => h.data.predecessorRuns ?? [])
-  const predecessorRuns = [...new Set(predecessorRecords.map(r => r.runId).filter(Boolean))].sort()
+  // US-479 F6: the predecessors are a SET keyed by verified run identity — iterating the references
+  // folded a run named by two overlapping acknowledgments twice (400 tokens for 100+200, three
+  // completed cycles for two). Later references of the same runId may only add detail, never a
+  // second contribution.
+  const predecessorById = new Map()
+  for (const h of handoffs.filter(x => x.data?.recordType === 'migration'))
+    for (const r of h.data.predecessorRuns ?? []) {
+      if (!r?.runId) continue
+      const prior = predecessorById.get(r.runId)
+      predecessorById.set(r.runId, prior ? { ...prior, ...r, handoffs: prior.handoffs ?? r.handoffs } : r)
+    }
+  const predecessorRecords = [...predecessorById.values()].sort((a, b) => (a.runId < b.runId ? -1 : a.runId > b.runId ? 1 : 0))
+  const predecessorRuns = predecessorRecords.map(r => r.runId)
   const lifetimeUsageKeys = ['observedTotalTokens', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens']
+  const lifetimeTimeKeys = ['agentMs', 'activeWallMs']
+  // A dimension is a SUM only while every contributor knows it: one unknown makes the sum unknown.
+  // An `unknown` never silently becomes a 0 just because another source happens to know a 0.
+  const acc = Object.fromEntries([...lifetimeUsageKeys, ...lifetimeTimeKeys].map(k => [k, { total: 0, known: true }]))
+  const addDimension = (k, v) => {
+    if (typeof v === 'number' && Number.isFinite(v)) acc[k].total += v
+    else acc[k].known = false
+  }
+  // The CURRENT cycle's own contribution. A cycle that observed NO execution at all contributes a
+  // certain zero — there is nothing there yet. A cycle that observed executions whose usage or
+  // timing is missing contributes an UNKNOWN: absence of evidence is not evidence of zero.
+  const currentUsageEmpty = (usage.coverage?.total ?? 0) === 0
+  const currentTimeEmpty = intervals.length === 0
+  for (const k of lifetimeUsageKeys) addDimension(k, currentUsageEmpty ? 0 : usage[k])
+  for (const k of lifetimeTimeKeys) addDimension(k, currentTimeEmpty ? 0 : time[k])
   const lifetime = {
     predecessorRuns: predecessorRecords.map(r => ({ runId: r.runId, metricsPath: r.metricsPath ?? null })),
     foldedRuns: [],
     missingRuns: [],
+    invalidRuns: [],
+    partialRuns: [],
+    unknownDimensions: [],
     cycles: { attempted: counters.attemptedCycles, completed: counters.completedCycles },
-    usage: Object.fromEntries(lifetimeUsageKeys.map(k => [k, usage[k] ?? null])),
+    usage: {},
+    time: {},
     coverage: 'complete',
   }
   for (const r of predecessorRecords) {
+    // Foreign evidence is VALIDATED before it counts: readable, this metrics schema, and about this
+    // same story/PR. Anything else is refused and named — never trusted for being parseable.
     let prior = null
-    if (r.metricsPath && existsSync(r.metricsPath))
+    let invalid = null
+    if (!r.metricsPath || !existsSync(r.metricsPath)) invalid = 'missing'
+    else
       try {
-        prior = JSON.parse(readFileSync(r.metricsPath, 'utf8'))
+        const parsed = JSON.parse(readFileSync(r.metricsPath, 'utf8'))
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) invalid = 'not-an-object'
+        else if (parsed.schemaVersion !== METRICS_SCHEMA_VERSION) invalid = `schema:${parsed.schemaVersion}`
+        else if (parsed.identity?.storyId !== undefined && String(parsed.identity.storyId) !== String(story)) invalid = 'story-mismatch'
+        else if (parsed.identity?.prNumber != null && Number.isInteger(pr) && Number(parsed.identity.prNumber) !== Number(pr)) invalid = 'pr-mismatch'
+        else prior = parsed
       } catch {
-        prior = null
+        invalid = 'unreadable'
       }
     if (!prior) {
-      if (!lifetime.missingRuns.includes(r.runId)) lifetime.missingRuns.push(r.runId)
+      if (invalid === 'missing') lifetime.missingRuns.push(r.runId)
+      else lifetime.invalidRuns.push(r.runId)
+      // A predecessor whose evidence cannot be read leaves EVERY dimension unknown: its real
+      // numbers are not zero, they are unavailable.
+      for (const k of [...lifetimeUsageKeys, ...lifetimeTimeKeys]) acc[k].known = false
       continue
     }
     lifetime.foldedRuns.push(r.runId)
+    if (prior.snapshot?.completeness === 'partial') lifetime.partialRuns.push(r.runId)
     lifetime.cycles.attempted += prior.cycles?.attempted ?? 0
     lifetime.cycles.completed += prior.cycles?.completed ?? 0
-    for (const k of lifetimeUsageKeys) {
-      const v = prior.usage?.[k]
-      if (typeof v !== 'number') continue
-      lifetime.usage[k] = (lifetime.usage[k] ?? 0) + v
-    }
+    for (const k of lifetimeUsageKeys) addDimension(k, prior.usage?.[k])
+    for (const k of lifetimeTimeKeys) addDimension(k, prior.time?.[k])
   }
+  for (const k of lifetimeUsageKeys) lifetime.usage[k] = acc[k].known ? acc[k].total : null
+  for (const k of lifetimeTimeKeys) lifetime.time[k] = acc[k].known ? acc[k].total : null
+  lifetime.unknownDimensions = [...lifetimeUsageKeys, ...lifetimeTimeKeys].filter(k => !acc[k].known)
   lifetime.foldedRuns.sort()
   lifetime.missingRuns.sort()
-  if (lifetime.missingRuns.length) lifetime.coverage = 'partial'
+  lifetime.invalidRuns.sort()
+  lifetime.partialRuns.sort()
+  // Two independent kinds of incompleteness, reported separately instead of collapsed into one
+  // flag (US-479 F6): `coverage` is about the RUNS — every predecessor imported and none of them
+  // itself partial — while `unknownDimensions` is per-DIMENSION, naming exactly which quantity no
+  // source could supply. Either one makes the snapshot partial; neither invents a value.
+  if (lifetime.missingRuns.length || lifetime.invalidRuns.length || lifetime.partialRuns.length) lifetime.coverage = 'partial'
   // US-479 remediation (Finding 4): the shared-batch allocation formula (allocateSharedCost) is
   // wired into the real reducer path — labeled distinctly from directly-measured tokens (S7).
   if (sharedCost && Array.isArray(sharedCost.admittedIds) && sharedCost.admittedIds.length) {
@@ -390,7 +445,7 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   // Having usage is not being finished.
   if (usage.incompleteExecutionIds.length) missingSources.push('usage-incomplete')
   if (usage.truncatedExecutionIds.length) missingSources.push('usage-source-truncated')
-  if (lifetime.missingRuns.length) missingSources.push('legacy-lifetime')
+  if (lifetime.predecessorRuns.length && (lifetime.coverage === 'partial' || lifetime.unknownDimensions.length)) missingSources.push('legacy-lifetime')
   if (time.incomplete) missingSources.push('timing')
   const completeness = hasObservations && !missingSources.length ? 'complete' : 'partial'
   return {
@@ -433,7 +488,7 @@ export function renderMarkdown(view) {
   if (view.scopeChanges.entries.length) lines.push(`Scope proposals: ${view.scopeChanges.pending} pending, ${view.scopeChanges.ignored} ignored, ${view.scopeChanges.extended} extended, ${view.scopeChanges.deferred} deferred`)
   if (view.lifetime?.predecessorRuns?.length) {
     const lu = view.lifetime.usage
-    lines.push(`Lifetime (incl. ${view.lifetime.predecessorRuns.length} predecessor run${view.lifetime.predecessorRuns.length > 1 ? 's' : ''}: ${view.lifetime.predecessorRuns.map(r => r.runId).join(', ')}) — cycles ${view.lifetime.cycles.completed} completed / ${view.lifetime.cycles.attempted} attempted · tokens ${lu.observedTotalTokens ?? 'unknown'} · coverage ${view.lifetime.coverage}${view.lifetime.missingRuns.length ? ` (no persisted metrics for ${view.lifetime.missingRuns.join(', ')})` : ''}`)
+    lines.push(`Lifetime (incl. ${view.lifetime.predecessorRuns.length} predecessor run${view.lifetime.predecessorRuns.length > 1 ? 's' : ''}: ${view.lifetime.predecessorRuns.map(r => r.runId).join(', ')}) — cycles ${view.lifetime.cycles.completed} completed / ${view.lifetime.cycles.attempted} attempted · tokens ${lu.observedTotalTokens ?? 'unknown'} · agent ${view.lifetime.time.agentMs ?? 'unknown'}ms · coverage ${view.lifetime.coverage}${lifetimeCaveats(view.lifetime)}`)
   }
   lines.push(`Snapshot: revision ${view.snapshot.revision}, completeness ${view.snapshot.completeness}`)
   return lines.join('\n') + '\n'
@@ -498,7 +553,7 @@ export function renderPrSummary(view) {
   // US-479 B2: what this PR cost across every run it actually had — never silently reduced to the
   // current run directory, and explicitly partial when a predecessor persisted no metrics.
   if (view.lifetime?.predecessorRuns?.length)
-    lines.push(`   *Lifetime across ${view.lifetime.predecessorRuns.length + 1} run(s) (${[view.identity.canonicalRunId, ...view.lifetime.predecessorRuns.map(r => r.runId)].filter(Boolean).join(', ')})* — cycles ${view.lifetime.cycles.completed} completed / ${view.lifetime.cycles.attempted} attempted · tokens ${view.lifetime.usage.observedTotalTokens ?? 'unknown'} · coverage **${view.lifetime.coverage}**${view.lifetime.missingRuns.length ? ` (no persisted metrics for ${view.lifetime.missingRuns.join(', ')})` : ''}`)
+    lines.push(`   *Lifetime across ${view.lifetime.predecessorRuns.length + 1} run(s) (${[view.identity.canonicalRunId, ...view.lifetime.predecessorRuns.map(r => r.runId)].filter(Boolean).join(', ')})* — cycles ${view.lifetime.cycles.completed} completed / ${view.lifetime.cycles.attempted} attempted · tokens ${view.lifetime.usage.observedTotalTokens ?? 'unknown'} · agent ${view.lifetime.time.agentMs ?? 'unknown'}ms · coverage **${view.lifetime.coverage}**${lifetimeCaveats(view.lifetime)}`)
   lines.push('')
   const late = view.defects.late
   lines.push(`**5. Late defects** (by origin) — preexisting-missed ${late.preexistingMissed} · introduced-by-remediation ${late.introducedByRemediation} · unknown ${late.unknown}`)
@@ -540,6 +595,16 @@ export function publishSummary({ view, marker, pr, repo, listComments, findByMar
   return { published: true, publication: { ...base, commentId: result.id, url: result.url, state: 'confirmed', lastError: null } }
 }
 
+// Every reason a lifetime is not fully corroborated, named where the number is shown (US-479 F6).
+function lifetimeCaveats(l) {
+  const parts = []
+  if (l.missingRuns.length) parts.push(`no persisted metrics for ${l.missingRuns.join(', ')}`)
+  if (l.invalidRuns.length) parts.push(`unusable evidence for ${l.invalidRuns.join(', ')}`)
+  if (l.partialRuns.length) parts.push(`${l.partialRuns.join(', ')} was itself partial`)
+  if (l.unknownDimensions.length) parts.push(`unknown: ${l.unknownDimensions.join(', ')}`)
+  return parts.length ? ` (${parts.join('; ')})` : ''
+}
+
 // ── aggregate (S9) ───────────────────────────────────────────────────────────────────────────
 // Percentile (nearest-rank) over a SORTED numeric array.
 function nearestRank(sorted, pct) {
@@ -558,6 +623,15 @@ function median(sorted) {
 // a mixed-version PR folds all its scope epochs/runs into ONE entry with `workflow.mixedVersions`).
 export function aggregateCohort(entries) {
   const N = entries.length
+  // US-479 F6: a resumed PR's cycles and cost belong to its WHOLE known history. Reading
+  // `e.cycles`/`e.usage` measured only the current run directory, so starting a fresh directory
+  // made a PR look cheaper and faster than it was. `lifetime` already folds every bound
+  // predecessor exactly once, with its own coverage — so it is the cohort's input when present,
+  // and its coverage travels with the numbers instead of being lost.
+  const cyclesOf = e => e.lifetime?.cycles?.completed ?? e.cycles.completed
+  const tokensOf = e => (e.lifetime?.predecessorRuns?.length ? e.lifetime.usage?.observedTotalTokens : e.usage.observedTotalTokens) ?? null
+  const coverages = entries.map(e => (e.lifetime?.predecessorRuns?.length ? e.lifetime.coverage : e.snapshot?.completeness) ?? 'complete')
+  const lifetimeCoverage = coverages.some(c => c !== 'complete') ? 'partial' : 'complete'
   const by = state => entries.filter(e => e.outcome.cohortState === state).length
   const completed = by('completed')
   const blocked = by('blocked')
@@ -565,9 +639,9 @@ export function aggregateCohort(entries) {
   const running = by('running')
   const interrupted = by('interrupted')
   const settledDenominator = completed + blocked + abandoned
-  const readyCycles = entries.filter(e => e.outcome.cohortState === 'completed').map(e => e.cycles.completed).sort((a, b) => a - b)
-  const allTokens = entries.reduce((s, e) => s + (e.usage.observedTotalTokens ?? 0), 0)
-  const knownTokenEntries = entries.filter(e => e.usage.observedTotalTokens != null).length
+  const readyCycles = entries.filter(e => e.outcome.cohortState === 'completed').map(cyclesOf).sort((a, b) => a - b)
+  const allTokens = entries.reduce((s, e) => s + (tokensOf(e) ?? 0), 0)
+  const knownTokenEntries = entries.filter(e => tokensOf(e) != null).length
   return {
     n: N,
     completedRate: N ? completed / N : null,
@@ -583,6 +657,7 @@ export function aggregateCohort(entries) {
     histogram: readyCycles.reduce((h, c) => ((h[c] = (h[c] ?? 0) + 1), h), {}),
     allWorkTokens: knownTokenEntries ? allTokens : null,
     costPerCompletedDelivery: completed && knownTokenEntries ? { value: allTokens / completed, lowerBound: knownTokenEntries < N } : null,
+    lifetimeCoverage,
   }
 }
 
