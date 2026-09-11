@@ -1421,6 +1421,10 @@ const VERIFY_SCHEMA = {
   properties: {
     ...REVIEW_SCHEMA_BASE.properties,
     status: { type: 'string', enum: ['reviewed', REDIRECT_STATUS] },
+    // US-479 V2 (F-RR-03): the review echoes the active guard set it EXECUTED on this head. The
+    // review is the participant that discharges, so inferring the set from the ledger instead of
+    // receiving and confirming it cost a whole wasted rewind.
+    regressionGuards: { type: 'array', items: { type: 'string' } },
     reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
     findings: {
@@ -1603,7 +1607,7 @@ async function driveStory(story) {
     agentRetry(
       invoke(
         SK.reviewPhase,
-        `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}`,
+        `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}`,
       ),
       withModel('reviewer', { agentType: 'pair-reviewer', phase: 'Verify', label: `verify:${tag} ${n.phase}${n.reviewer > 1 ? ` reviewer ${n.reviewer}` : ''}`, effort: 'high', schema: VERIFY_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasReviewEvidence(r),
@@ -1748,6 +1752,14 @@ async function driveStory(story) {
       pendingRequiredFindings = []
       const errs = findingErrors(res, next.openIds, { history: resuming && next.mode === 'first' })
       if (errs.length) return result('failed-verify', { reason: errs.join('; '), phase: next.phase })
+      // US-479 V2 (F-RR-03): exact set equality at the fourth boundary too — a guard the review did
+      // not execute cannot be discharged by it, and one it invented is not in the ledger.
+      if (next.regressionRisks?.length) {
+        const expected = [...new Set(next.regressionRisks.map(r => String(r.riskId)))].sort()
+        const executed = [...new Set((Array.isArray(res.regressionGuards) ? res.regressionGuards : []).map(String))].sort()
+        if (expected.length !== executed.length || expected.some((id, i) => id !== executed[i]))
+          return result('failed-verify', { reason: `contract-incomplete:${next.phase}:regression-guards (expected ${expected.join(', ') || 'none'}, executed ${executed.join(', ') || 'none'})`, phase: next.phase })
+      }
       for (const f of res.findings) known.set(f.id, f)
       accept(res.findings.filter(f => !f.blocking && f.transition !== 'resolved').map(f => ({ ...compactFinding(f), disposition: f.disposition || (f.nonActionable ? 'By design (see description)' : f.transition === 'human' ? 'Human disposition' : f.kind === 'question' ? 'Question for the human' : `Below severity floor (${SEVERITY_FLOOR?.name}) — carried to the merge gate unfixed`) })))
       if (res.custody.contractBreach === true) return result('failed-custody', { reason: 'GREEN escaped its sealed contract', findings: res.custody.breaches ?? [], phase: next.phase })

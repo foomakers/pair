@@ -688,6 +688,9 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
     }
     if (opts.agentType === 'pair-reviewer') {
       const pass = reviewPass++
+      // US-479 V2 (F-RR-03): the review receives the active guard set and echoes what it executed
+      const reviewGuards = jsonArg(prompt, 'regressionGuards')
+      if (reviewGuards) guardPrompts.push({ phase: `review:${phase}`, guards: reviewGuards.map(g => g.riskId) })
       const open = { id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate reads a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: true, transition: 'open' }
       const closed = { ...open, blocking: false, transition: 'resolved', evidence: 'closed by the remediation' }
       if (pass === 0) return through('r0', 'review-phase', { reviewedHead: H0, verdict: 'CHANGES-REQUESTED', findings: [open], custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 'first', partial: false, tier: 'risk:green', passes: ['general'], published: { firstReview: true } })
@@ -709,6 +712,7 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
       return through('r2', 'review-phase', {
         reviewedHead: H2,
         verdict: 'APPROVED',
+        ...(reviewGuards ? { regressionGuards: reviewGuards.map(g => g.riskId) } : {}),
         mode: 're-review',
         partial: false,
         custody: { verified: true, contractBreach: false },
@@ -740,10 +744,11 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
   // the single complete contract and the fix both received every active guard
   // F-RR-03: the SAME derived set reached all four participants — preparation, independent
   // validation, the fix and (through the ledger it reads) the final review
-  assert.deepEqual(guardPrompts.map(g => g.phase), ['r1-g1', 'validate:r1-g1', 'green:r1-g1'])
+  // F-RR-03 / V2: the SAME derived set reached ALL FOUR participants — preparation, independent
+  // validation, the fix and the review that discharges it
+  assert.deepEqual(guardPrompts.map(g => g.phase), ['r1-g1', 'validate:r1-g1', 'green:r1-g1', 'review:r2'])
   assert.equal(guardPrompts[0].guards.length, 1)
-  assert.deepEqual(guardPrompts[0].guards, guardPrompts[1].guards)
-  assert.deepEqual(guardPrompts[1].guards, guardPrompts[2].guards)
+  for (let i = 1; i < guardPrompts.length; i++) assert.deepEqual(guardPrompts[i].guards, guardPrompts[0].guards, guardPrompts[i].phase)
   // the ordinary path, no new stage and no new agent
   assert.deepEqual(dispatched.filter(l => !/^contract:/.test(l)), [
     'prepare:#482 a0',

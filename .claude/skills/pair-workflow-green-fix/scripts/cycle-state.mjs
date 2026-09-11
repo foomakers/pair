@@ -1078,7 +1078,13 @@ export function regressionTransitionErrors({ handoffs, data, pr }) {
       const heads = lineage.get(batch)
       if (!heads) unqualified('regression-batch-unknown', batch)
       else if (!heads.heads.has(String(rr.firstFailingHead))) unqualified('firstFailingHead-not-from-batch', batch)
-      if (data.reviewedHead !== undefined && String(rr.firstFailingHead) !== String(data.reviewedHead)) unqualified('failing-head-not-current-review')
+      // US-479 V1 (F-RR-02): `firstFailingHead` is where the regression FIRST appeared. Only the
+      // FIRST observation has to name the head it is reviewing; a re-observation on a later head
+      // must keep that original head, and validating it as the current one forced every
+      // re-observation to rewrite the origin evidence — so a later discharge would have certified
+      // as "first failing" a head that never was.
+      const reObservation = !!prior && prior.state === 'active'
+      if (!reObservation && data.reviewedHead !== undefined && String(rr.firstFailingHead) !== String(data.reviewedHead)) unqualified('failing-head-not-current-review')
       // The baseline must be a head this run REVIEWED, and the obligation the risk cites must not
       // have been open there — otherwise "it used to pass" is the reviewer's word, not evidence.
       const baseline = reviews.filter(h => String(h.data.reviewedHead) === String(rr.lastCleanReviewedHead))
@@ -1087,8 +1093,8 @@ export function regressionTransitionErrors({ handoffs, data, pr }) {
       const oe = f.originEvidence
       if (oe && (String(oe.baselineHead ?? '') !== String(rr.lastCleanReviewedHead) || String(oe.failingHead ?? '') !== String(rr.firstFailingHead) || (oe.reproducer !== undefined && String(oe.reproducer) !== String(rr.reproducerRef)))) unqualified('origin-evidence-mismatch')
       if (data.invalidatedBatchId !== undefined && String(data.invalidatedBatchId) !== batch) unqualified('invalidated-batch-mismatch', `${data.invalidatedBatchId}!=${batch}`)
-      if (prior && prior.state === 'active') {
-        for (const [field, value] of [['reproducerRef', rr.reproducerRef], ['closureAssertions', rr.closureAssertions], ['affectedBoundaryRefs', rr.affectedBoundaryRefs], ['lastCleanReviewedHead', rr.lastCleanReviewedHead]])
+      if (reObservation) {
+        for (const [field, value] of [['reproducerRef', rr.reproducerRef], ['closureAssertions', rr.closureAssertions], ['affectedBoundaryRefs', rr.affectedBoundaryRefs], ['lastCleanReviewedHead', rr.lastCleanReviewedHead], ['firstFailingHead', rr.firstFailingHead]])
           if (!sameEvidence(prior[field], value)) bad('immutable-field-mismatch', field)
       }
       continue
@@ -1329,7 +1335,9 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     // judged at the old head. An ordinary approved-test retry keeps the round's own re-review.
     const repaired = list.some(h => h.skill === 'red-spec' && h.phase === last.phase && h.data.regressionRepairOf)
     const reviewRound = repaired ? parts.round + 1 : parts.round
-    return { step: 'verify', mode: 're-review', phase: `r${reviewRound}`, round: reviewRound, attempt: byPhase('review-phase', `r${reviewRound}`).length + 1, base: prior?.data.reviewedHead, prior: prior?.name, openIds: (prior?.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: priorFindings() }
+    // US-479 V2 (F-RR-03): the review is the participant that DISCHARGES, so it receives the same
+    // derived guard set red-spec, red-verify and green-fix received — never left to infer it.
+    return { step: 'verify', mode: 're-review', phase: `r${reviewRound}`, round: reviewRound, attempt: byPhase('review-phase', `r${reviewRound}`).length + 1, base: prior?.data.reviewedHead, prior: prior?.name, openIds: (prior?.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: priorFindings(), ...(activeRisksOf().length ? { regressionRisks: activeRisksOf() } : {}) }
   }
   if (last.skill === 'review-phase') {
     if (d.custody?.contractBreach === true) return blocked('failed-custody', { phase: last.phase, breaches: d.custody.breaches })
@@ -1369,7 +1377,9 @@ export function deriveNext(handoffs, policy, ctx = {}) {
       const failingHeads = new Set(activeRisks.filter(r => String(r.introducedByRemediationBatchId) === batch).map(r => String(r.firstFailingHead)))
       const producers = new Set()
       for (const h of list)
-        if ((h.skill === 'green-fix' || h.skill === 'implement-phase') && failingHeads.has(String(h.data.outputHead ?? '')) && !h.data.regressionRepairOf) {
+        // US-479 V3: no marker filter here — a repair's own GREEN is exactly the producer when the
+        // repair is what introduced the next regression. Provenance is the head, never the label.
+        if ((h.skill === 'green-fix' || h.skill === 'implement-phase') && failingHeads.has(String(h.data.outputHead ?? ''))) {
           const gid = phaseParts(h.phase)?.groupId
           if (gid && gid.startsWith(`${batch}-`)) producers.add(gid)
         }
@@ -1525,11 +1535,14 @@ export function cycleCounters(allHandoffs, precomputedLedger) {
   const attemptedCycles = attemptedRounds.size
   // Completion is evaluated PER BATCH LINEAGE, not from a global latest-review flag: a later,
   // unrelated dirty review can neither reopen nor erase a batch that was already closed clean.
-  const seqOf = h => (Number.isInteger(h.data?.seq) ? h.data.seq : 0)
+  // US-479 V4 (F-RR-06): `readHandoffs` already sorts by seq, then mtime, then attempt — that is
+  // the ONE publication order. Comparing raw `seq` values instead treated a missing seq as 0, so on
+  // a migrated run no review could ever be "after" the last fix and no cycle completed.
+  const orderOf = h => list.indexOf(h)
   let completedCycles = 0
   for (const round of succeededRounds) {
     const batch = `r${round}`
-    const lastFix = Math.max(0, ...list.filter(h => h.skill === 'green-fix' && (phaseParts(h.phase)?.round ?? -1) === round).map(seqOf))
+    const lastFix = Math.max(-1, ...list.filter(h => h.skill === 'green-fix' && (phaseParts(h.phase)?.round ?? -1) === round).map(orderOf))
     // The review that closed THIS batch: non-partial, after its last fix, leaving none of the
     // batch's OWN obligations blocking. A brand-new defect found there belongs to the next batch —
     // it does not reopen the one just closed (US-479 F-RR-06).
@@ -1538,7 +1551,7 @@ export function cycleCounters(allHandoffs, precomputedLedger) {
       const f = (h.data.findings ?? []).find(x => x.id === id)
       return !!f && !isBlocking(f) && ['resolved', 'superseded'].includes(String(f.transition))
     })
-    const closing = reviews.find(h => h.data.partial !== true && seqOf(h) > lastFix && closesObligations(h))
+    const closing = reviews.find(h => h.data.partial !== true && orderOf(h) > lastFix && closesObligations(h))
     if (!closing) continue
     if (unresolvedBatches.has(batch)) continue
     completedCycles++

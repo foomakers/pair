@@ -2518,13 +2518,13 @@ test('T-29 (DT-38): replay, restart and repeated discovery reuse the SAME risk i
   redSpec(dir, 'r1-g1', { groupId: 'r1-g1', remediationBatchId: 'r1', regressionRepairOf: 'r1', regressionGuards: [id] }, { attempt: 2 })
   redVerify(dir, 'r1-g1', { remediationBatchId: 'r1', regressionGuards: [id] }, { attempt: 2 })
   handoff(dir, 'r1-g1', 'green-fix', { fixed: false, needsHumanDecision: false, outputHead: H2, evidenceLedger: [], remediationBatchId: 'r1' }, { attempt: 2 })
-  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [regressionFinding('r1-9', { regressionRisk: risk({ firstFailingHead: H2 }) })], invalidatedBatchId: 'r1' })
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [regressionFinding('r1-9')], invalidatedBatchId: 'r1' })
   const repeated = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.deepEqual(repeated.activeRegressionRisks.map(x => x.riskId), [id], 'one risk, still the same id')
   assert.equal(repeated.counters.invalidatedRemediations, 1, 'the same batch invalidated twice is one invalidated remediation')
   assert.equal(repeated.counters.activeRegressionRisks, 1)
   // a DIFFERENT regression from the same batch is its own risk
-  review(dir, 'r3', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [regressionFinding('r1-9', { regressionRisk: risk({ firstFailingHead: H2 }) }), regressionFinding('r1-10', { regressionRisk: risk({ firstFailingHead: H2 }) })], invalidatedBatchId: 'r1' })
+  review(dir, 'r3', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [regressionFinding('r1-9'), regressionFinding('r1-10', { regressionRisk: risk({ firstFailingHead: H2 }) })], invalidatedBatchId: 'r1' })
   const two = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.equal(two.activeRegressionRisks.length, 2)
   assert.equal(new Set(two.activeRegressionRisks.map(x => x.riskId)).size, 2)
@@ -2852,4 +2852,99 @@ test('F-RR-06: invalidatedRemediations counts only batch identities the history 
   review(dir, 'r1', { mode: 're-review', reviewedHead: H1, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r9', findings: [finding('r1-1')] })
   const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.equal(r.counters.invalidatedRemediations, 0, 'r9 is not a batch this run ever had')
+})
+
+// ── US-479 V1 (F-RR-02): a re-observation must not be forced to rewrite the origin evidence ────
+// `firstFailingHead` is the head where the regression FIRST appeared. Validating it as the head of
+// the current review made every re-observation rewrite it — losing H1 and letting a later discharge
+// certify as "first failing" a head that never was. The current-head rule belongs to the FIRST
+// observation only; afterwards the field is immutable like the rest of the origin evidence.
+test('V1 (F-RR-02): re-observing an ALREADY ACTIVE risk on a new head keeps firstFailingHead untouched and is accepted', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  // a repair that does NOT cure the regression: the batch is prepared again and fixed to H2
+  matchingRepair(dir, riskId)
+  const out = publish({
+    dir,
+    file: rrDraft(dir, { phase: 'r2', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'still closed' }), regressionFinding()] }),
+    phase: 'r2',
+    skill: 'review-phase',
+    workflowVersion: V,
+  })
+  assert.equal(out.published, true, JSON.stringify(out))
+  const stored = JSON.parse(readFileSync(out.path, 'utf8')).findings.find(f => f.id === 'r1-9').regressionRisk
+  assert.equal(stored.riskId, riskId, 'the same stable id')
+  assert.equal(stored.firstFailingHead, H1, 'the head where it FIRST failed is preserved, not rewritten to H2')
+  assert.equal(stored.state, 'active')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.activeRegressionRisks.length, 1)
+  assert.equal(r.activeRegressionRisks[0].firstFailingHead, H1)
+})
+
+test('V1 (F-RR-02): on the ACTIVE branch firstFailingHead is immutable — a re-observation that rewrites it is refused', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  matchingRepair(dir, riskId)
+  const before = digestDir(dir)
+  const out = publish({
+    dir,
+    file: rrDraft(dir, { phase: 'r2', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding('r1-9', { regressionRisk: risk({ firstFailingHead: H2 }) })] }),
+    phase: 'r2',
+    skill: 'review-phase',
+    workflowVersion: V,
+  })
+  assert.equal(out.published, false)
+  assert.match(out.reason, /immutable-field-mismatch:firstFailingHead/)
+  assert.deepEqual(digestDir(dir), before)
+})
+
+test('V1 (F-RR-02): the FIRST observation still has to name the head it is reviewing', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  // no predecessor yet: a claim whose failing head is not this review's head is unqualified
+  const out = publish({
+    dir,
+    file: rrDraft(dir, { phase: 'r1', reviewedHead: H1, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [regressionFinding('r1-9', { regressionRisk: risk({ lastCleanReviewedHead: H1, firstFailingHead: H0 }) })] }),
+    phase: 'r1',
+    skill: 'review-phase',
+    workflowVersion: V,
+  })
+  assert.equal(out.published, false)
+  assert.match(out.reason, /failing-head-not-current-review|firstFailingHead-not-from-batch/)
+})
+
+// ── US-479 V3 (F-RR-05): a repair's own GREEN is a legitimate producer of a NEW failing head ────
+test('V3 (F-RR-05): when a repair`s GREEN carries its repair marker, the producing group is still resolved — not zero producers', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  redSpec(dir, 'r1-g1', { groupId: 'r1-g1', remediationBatchId: 'r1', regressionRepairOf: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  // the repair's own GREEN records that it WAS a repair, and it produced H2
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H2, evidenceLedger: [], remediationBatchId: 'r1', regressionRepairOf: 'r1' }, { attempt: 2 })
+  // the review at H2 discharges the FIRST risk and raises a new one introduced by the repair
+  // itself, so the only active risk's failing head is the repair's own output — no older head can
+  // mask which group produced it
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), dischargedFinding(), regressionFinding('r1-10', { regressionRisk: risk({ lastCleanReviewedHead: H0, firstFailingHead: H2 }) })] })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'prepare', JSON.stringify({ step: r.next.step, refusal: r.next.refusal, detail: r.next.detail }))
+  assert.equal(r.next.phase, 'r1-g1')
+  assert.equal(r.next.regressionRepairOf, 'r1')
+})
+
+// ── US-479 V4 (F-RR-06): one ordering rule, so a run without `seq` is not silently uncountable ──
+test('V4 (F-RR-06): handoffs written without `seq` still yield a completed cycle — publication order, not a raw seq comparison', () => {
+  const root = mkdtempSync(join(tmpdir(), 'v4-'))
+  const dir = join(root, '.pair', 'working', 'runs', 'legacy', '42')
+  mkdirSync(dir, { recursive: true })
+  const write = (name, data) => writeFileSync(join(dir, name), JSON.stringify({ run: 'legacy', story: '42', pr: 7, branch: 'b', inputHead: SHA('a'), schemaVersion: 3, workflowVersion: V, ...data }, null, 2) + '\n')
+  // exactly the shape a migrated run has: no `seq` on any handoff
+  write('r0-review-phase.json', { phase: 'r0', skill: 'review-phase', reviewedHead: H0, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1')], custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 'first' })
+  write('r1-g1-red-spec.json', { phase: 'r1-g1', skill: 'red-spec', status: 'red', mode: 'remediation', contractPath: '/abs/c.json', contractHash: `sha256:${'1'.repeat(64)}`, groupId: 'r1-g1', remediationBatchId: 'r1', plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'o', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] } })
+  write('r1-g1-red-verify.json', { phase: 'r1-g1', skill: 'red-verify', verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, remediationBatchId: 'r1' })
+  write('r1-g1-green-fix.json', { phase: 'r1-g1', skill: 'green-fix', fixed: true, needsHumanDecision: false, outputHead: H1, evidenceLedger: [], remediationBatchId: 'r1' })
+  write('r1-review-phase.json', { phase: 'r1', skill: 'review-phase', reviewedHead: H1, verdict: 'APPROVED', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' })], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: H1 }, mode: 're-review' })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.counters.completedCycles, 1, 'the closing review is recognised by publication order, with or without seq')
+  assert.equal(r.counters.attemptedCycles, 1)
+  assert.equal(r.next.step, 'done')
 })

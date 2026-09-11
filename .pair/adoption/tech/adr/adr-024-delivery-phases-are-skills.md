@@ -842,3 +842,30 @@ Upstream, `pair-workflow-red-spec` now owns the S12 matrix for any changed persi
 `implement-phase`/`green-fix` refuse production work without the complete seal and may not reduce a
 sealed row, and `review-phase` samples the sealed matrix instead of being the first control expected
 to discover a fundamental illegal transition.
+
+## Amendment 2026-09-11 (m) — the four variants the delta review of `7b539e69` found (V1–V4)
+
+Variants of the same frozen root causes, not new findings.
+
+- **V1 (F-RR-02).** `firstFailingHead` was validated as the head of the CURRENT review on the active
+  branch, and was not in that branch's immutable set — so re-observing a still-active risk was only
+  possible by rewriting the origin evidence, losing the head where the regression first appeared and
+  letting a later discharge certify as "first failing" a head that never was. The current-head rule
+  now applies to the FIRST observation only; afterwards `firstFailingHead` is immutable like the
+  reproducer, the closure assertions, the boundaries and the baseline.
+- **V2 (F-RR-03).** The guard set reached red-spec, red-verify and green-fix but not the REVIEW —
+  the one participant that must execute the guards and discharge them. It is now dispatched with
+  `$regressionGuards`, declared in `VERIFY_SCHEMA` and in review-phase's inputs, echoed as the set
+  actually executed, and checked for exact set equality: `contract-incomplete:<phase>:regression-guards`.
+  The old behaviour was fail-safe and cost a whole wasted rewind, which is precisely the cost S12
+  moves upstream.
+- **V3 (F-RR-05).** The producing-group derivation excluded handoffs carrying a repair marker. A
+  repair's own GREEN is exactly the producer when that repair introduced the next regression, so
+  provenance is decided by the head it produced, never by a label.
+- **V4 (F-RR-06).** `cycleCounters` compared raw `seq` values and treated a missing one as 0, while
+  `readHandoffs` treats it as `+Infinity`: on a migrated run without `seq` no review could be "after"
+  the last fix and no cycle ever completed. There is now ONE ordering — the publication order
+  `readHandoffs` already establishes.
+
+One T-29 fixture was corrected with them: it re-observed a risk by rewriting `firstFailingHead` to
+the head under review, the exact behaviour V1 forbids. Its assertions are unchanged.

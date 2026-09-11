@@ -1416,3 +1416,44 @@ test('F-RR-03: a verifier that returns a guard set different from the dispatched
     assert.match(result.batch[0].reason, /contract-incomplete:r1-g1:regression-guards/, label)
   }
 })
+
+// ── US-479 V2 (F-RR-03): the FOURTH participant receives the matrix too ───────────────────────
+// The review is the one that must EXECUTE the active guards on the exact head. Leaving it to infer
+// them "from the ledger it reads" is fail-safe but costs a whole wasted round: the risk stays
+// active and the cycle rewinds again — exactly the cost S12 moves upstream.
+test('V2 (F-RR-03): the verify dispatch carries $regressionGuards and VERIFY_SCHEMA declares the echo', () => {
+  const verify = SRC.slice(SRC.indexOf('const verify = (n, required) =>'), SRC.indexOf('// Verified P3 evidence'))
+  assert.match(verify, /\$regressionGuards=/, 'the review is dispatched without the guards it must execute')
+  const verifySchema = SRC.slice(SRC.indexOf('const VERIFY_SCHEMA'), SRC.indexOf('const hasReviewEvidence'))
+  assert.match(verifySchema, /regressionGuards:/, 'the echo is dropped by the harness unless declared')
+})
+
+test('V2 (F-RR-03): a review that executed a guard set different from the dispatched one is refused, and never reaches done', async () => {
+  const guards = [{ riskId: 'risk:aaaaaaaaaaaaaaaa' }, { riskId: 'risk:bbbbbbbbbbbbbbbb' }]
+  const verifyNext = { step: 'verify', mode: 're-review', phase: 'r1', round: 1, attempt: 1, base: HEAD, regressionRisks: guards }
+  const open = { id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'd', recommendation: 'r', kind: 'defect' }
+  for (const [label, echoed] of [
+    ['missing', ['risk:aaaaaaaaaaaaaaaa']],
+    ['extra', ['risk:aaaaaaaaaaaaaaaa', 'risk:bbbbbbbbbbbbbbbb', 'risk:cccccccccccccccc']],
+    ['none', undefined],
+  ]) {
+    let green = 0
+    let pass = 0
+    const { result } = await runWorkflow({
+      args: { cards: [STORY] },
+      dispatch: (p, o) => {
+        if (o.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+        if (o.agentType === 'pair-implementer' && o.label?.startsWith('green:')) return green++ === 0 ? { next: verifyNext } : {}
+        if (o.agentType === 'pair-reviewer') {
+          // the first review opens a remediation round so the fix — and then the guarded review —
+          // actually run; the second is the one that claims to have executed the guards
+          if (pass++ === 0) return { verdict: 'Changes-requested', findings: [open] }
+          return { verdict: 'Approved', findings: [{ ...open, blocking: false, transition: 'resolved', evidence: 'closed' }], ...(echoed ? { regressionGuards: echoed } : {}) }
+        }
+        return {}
+      },
+    })
+    assert.equal(result.batch[0].status, 'failed-verify', `${label}: ${result.batch[0].reason}`)
+    assert.match(result.batch[0].reason, /contract-incomplete:r1:regression-guards/, label)
+  }
+})
