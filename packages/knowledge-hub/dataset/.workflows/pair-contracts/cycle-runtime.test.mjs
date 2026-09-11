@@ -1112,3 +1112,82 @@ test('F8-A residual: `--since` alone also protects a new invocation — the prev
   assert.equal(second.stopReason, 'max-ticks', JSON.stringify({ stop: second.stopReason, ticks: second.ticks }))
   assert.equal(second.ticks, 3)
 })
+
+// ── US-479 T-27 (DT-32): the host CLI at the real filesystem boundary ──────────────────────────
+// AC-07/15/25: the consuming skill is installed and invoked on its own, from wherever the host put
+// it — including a path with spaces, which is ordinary on macOS and Windows and is exactly what an
+// unquoted argument breaks on. Unknown input is refused explicitly rather than half-executed, a
+// journal belonging to someone else contributes nothing, and files this CLI does not own are left
+// exactly as they were.
+function spacedRunDir() {
+  const root = mkdtempSync(join(tmpdir(), 'runtime spaced-'))
+  const dir = join(root, 'my project', '.pair', 'working', 'runs', 'run-1', '42')
+  mkdirSync(dir, { recursive: true })
+  return { root, dir }
+}
+const publishedReview = dir => {
+  const file = join(dir, 'd.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') } }))
+  publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.0' })
+}
+
+test('DT-32: the host CLI works on a run directory whose path contains spaces', () => {
+  const { root, dir } = spacedRunDir()
+  assert.ok(dir.includes(' '), 'the fixture must actually exercise a spaced path')
+  publishedReview(dir)
+  const r = spawnSync('node', [CLI, 'entry', '--dir', dir, '--repo', 'foomakers/pair', '--story', '42', '--workflowVersion', '4.0.0'], { encoding: 'utf8' })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.equal(out.capsule.story, '42', 'the spaced path resolved to THIS story')
+  assert.equal(out.capsule.run, 'run-1')
+  assert.equal(out.telemetry.fsAvailable, true, 'the filesystem under a spaced path is readable, not silently unavailable')
+  // the handoff published UNDER the spaced path was actually read back: the cycle resolves to done
+  assert.equal(out.capsule.next.step, 'done', 'a handoff under a spaced path is read, not silently missed')
+  assert.equal(out.capsule.pr, 7)
+  // and an observe tick over a journal that also lives under a spaced path
+  const journal = join(root, 'my project', 'journal.jsonl')
+  writeFileSync(journal, JSON.stringify({ key: 'prepare', agentId: 'ag1', started: true, result: { status: 'ok' }, terminal: true }) + '\n')
+  const o = spawnSync('node', [CLI, 'observe', '--dir', dir, '--repository', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7', '--journal', journal, '--interval-ms', '5', '--max-ticks', '20'], { encoding: 'utf8', timeout: 5000 })
+  assert.equal(o.status, 0, o.stdout + o.stderr)
+})
+
+test('DT-32: unknown flags and malformed arguments are refused explicitly — never half-executed', () => {
+  const { dir } = runDir()
+  publishedReview(dir)
+  const before = readdirSync(dir).sort()
+  // a flag with no value at all
+  const dangling = spawnSync('node', [CLI, 'entry', '--dir', dir, '--repo', 'foomakers/pair', '--story', '42', '--workflowVersion', '4.0.0', '--nope'], { encoding: 'utf8' })
+  assert.notEqual(dangling.status, 0)
+  assert.match(dangling.stdout + dangling.stderr, /bad argument/)
+  // a required option missing entirely
+  const missing = spawnSync('node', [CLI, 'entry', '--dir', dir], { encoding: 'utf8' })
+  assert.notEqual(missing.status, 0)
+  assert.match(missing.stdout + missing.stderr, /required/)
+  // a positional that is not a command
+  const bogus = spawnSync('node', [CLI, 'not-a-command', '--dir', dir], { encoding: 'utf8' })
+  assert.notEqual(bogus.status, 0)
+  assert.match(bogus.stdout + bogus.stderr, /unknown command/)
+  assert.deepEqual(readdirSync(dir).sort(), before, 'a refused invocation writes nothing into the run directory')
+})
+
+test('DT-32: a FOREIGN journal is not this cycle`s evidence, and files the CLI does not own are untouched', () => {
+  const { root, dir } = runDir()
+  publishedReview(dir)
+  // something else's file, sitting in the same directory
+  const bystander = join(dir, 'maintainer-notes.md')
+  writeFileSync(bystander, '# notes a human wrote\n')
+  const journal = journalFile(root, [
+    { key: 'prepare', agentId: 'ag1', started: true, result: { status: 'ok' }, terminal: true },
+    // a record from ANOTHER run and ANOTHER story
+    { key: 'prepare', agentId: 'foreign-1', runId: 'run-99', story: '999', started: true, result: { status: 'ok' } },
+  ])
+  const r = spawnSync('node', [CLI, 'observe', '--dir', dir, '--repository', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7', '--journal', journal, '--interval-ms', '5', '--max-ticks', '20'], { encoding: 'utf8', timeout: 5000 })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const metricsPath = join(dir, 'metrics.json')
+  if (existsSync(metricsPath)) {
+    const metrics = JSON.parse(readFileSync(metricsPath, 'utf8'))
+    assert.equal(String(metrics.identity?.storyId ?? '42'), '42', 'the metrics belong to THIS story')
+    assert.ok(!JSON.stringify(metrics).includes('run-99'), 'a foreign run never enters this cycle`s metrics')
+  }
+  assert.equal(readFileSync(bystander, 'utf8'), '# notes a human wrote\n', 'a file the CLI does not own is left exactly as it was')
+})
