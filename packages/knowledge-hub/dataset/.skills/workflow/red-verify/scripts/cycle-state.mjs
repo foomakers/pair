@@ -1083,7 +1083,12 @@ export function regressionTransitionErrors({ handoffs, data, pr }) {
       // must keep that original head, and validating it as the current one forced every
       // re-observation to rewrite the origin evidence — so a later discharge would have certified
       // as "first failing" a head that never was.
-      const reObservation = !!prior && prior.state === 'active'
+      // US-479 AC-31 (S13): a prior entry in ANY state means this is not a first observation. A
+      // discharged batch produces no further head, so a defect seen afterwards was produced by a
+      // LATER batch — a different `riskId`, the ordinary `none -> active` path. Reopening an
+      // EXISTING id therefore means one thing only: a discharge that should not have been granted.
+      // That is a RESTORATION of the prior entry, so every field of it is immutable.
+      const reObservation = !!prior
       if (!reObservation && data.reviewedHead !== undefined && String(rr.firstFailingHead) !== String(data.reviewedHead)) unqualified('failing-head-not-current-review')
       // The baseline must be a head this run REVIEWED, and the obligation the risk cites must not
       // have been open there — otherwise "it used to pass" is the reviewer's word, not evidence.
@@ -1096,6 +1101,7 @@ export function regressionTransitionErrors({ handoffs, data, pr }) {
       if (reObservation) {
         for (const [field, value] of [['reproducerRef', rr.reproducerRef], ['closureAssertions', rr.closureAssertions], ['affectedBoundaryRefs', rr.affectedBoundaryRefs], ['lastCleanReviewedHead', rr.lastCleanReviewedHead], ['firstFailingHead', rr.firstFailingHead]])
           if (!sameEvidence(prior[field], value)) bad('immutable-field-mismatch', field)
+        if (!sameEvidence(prior.obligationIds, f.obligationIds)) bad('immutable-field-mismatch', 'obligationIds')
       }
       continue
     }

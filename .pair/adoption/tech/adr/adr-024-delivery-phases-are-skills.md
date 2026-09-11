@@ -891,3 +891,30 @@ the head under review, the exact behaviour V1 forbids. Its assertions are unchan
   distinct field, leaving the original origin intact? — is a contract question for story #479 and is
   deliberately NOT decided here. Until it is answered the transition stays unvalidated; this
   amendment records the gap, it does not close it.
+
+## Amendment 2026-09-11 (o) — the reintroduction transition, decided and closed (US-479 S13/AC-31)
+
+Amendment (n) left `discharged -> active` open as a contract question. It is now decided, and the
+answer is narrower than either option that amendment posed — because the evidence, not a preference,
+settles it.
+
+`riskId` is derived from story, PR, finding id and introducing batch. A discharged batch produces no
+further heads, so a defect observed after its discharge was produced by a LATER batch. Attributing
+that observation to the original batch is already refused (`firstFailingHead-not-from-batch`), and
+attributing it to the batch that actually produced the failing head yields a different `riskId` —
+the ordinary `none -> active` path, already validated. Two consequences follow:
+
+- a defect that reappears because later work reintroduced it is a NEW risk with a new identity, not
+  a reopening. This is the common case and needed no new rule;
+- `discharged -> active` on an existing id is legitimate in exactly one case: correcting a discharge
+  that should not have been granted, where the evidence never changed and only the verdict was
+  wrong. A reopening is therefore a RESTORATION of the prior entry, and every field of it is
+  immutable — the defect identity (`reproducerRef`, `closureAssertions`, `affectedBoundaryRefs`,
+  the cited `obligationIds`) and its observation window (`lastCleanReviewedHead`,
+  `firstFailingHead`, and `introducedByRemediationBatchId` through the id itself) alike.
+
+Implementation: the first-observation rule (`failing-head-not-current-review`) now applies only when
+there is no prior entry at all, and the immutable-field check applies to a prior entry in ANY state
+rather than only an active one, with the cited obligations added to it. The positive control that
+keeps the two cases apart is part of the matrix: the same defect on a later batch's head must take
+the `none -> active` path and receive its own id.

@@ -2987,3 +2987,101 @@ test('R1 (F-RR-03): with no active risk no verification dispatch invents the fie
   assert.equal(r.next.regressionRisks, undefined)
   assert.deepEqual(r.activeRegressionRisks, [])
 })
+
+// ── US-479 AC-31 / DT-40 (S13): `discharged -> active` is the one transition never validated ────
+// A discharged batch produces no further heads, so a defect seen afterwards was produced by a LATER
+// batch — attributing it to the original one is already refused, and attributing it to the batch
+// that really produced the head yields a different riskId through the ordinary `none -> active`
+// path. A reopening of an existing id therefore means one thing only: a discharge that should not
+// have been granted. It is a RESTORATION of the prior entry, so every field of it is immutable.
+const H3 = SHA('3')
+function dischargedRisk(dir) {
+  const riskId = provenRisk(dir)
+  matchingRepair(dir, riskId)
+  const out = publish({ dir, file: rrDraft(dir, { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed at H2' }), dischargedFinding()] }), phase: 'r2', skill: 'review-phase', workflowVersion: V })
+  assert.equal(out.published, true, `fixture: the discharge itself must be legal — ${out.reason}`)
+  return riskId
+}
+// A later review that reopens the risk, reading the same head the discharge was bound to.
+const reopenDraft = (dir, riskExtra = {}, findingExtra = {}) =>
+  rrDraft(dir, {
+    phase: 'r3',
+    reviewedHead: H2,
+    verdict: 'CHANGES-REQUESTED',
+    readiness: { ready: false },
+    findings: [regressionFinding('r1-9', { ...findingExtra, regressionRisk: risk({ ...riskExtra }) })],
+  })
+
+test('AC-31 (DT-40): reopening a discharged risk with ANY field of the prior entry mutated is refused before the write', () => {
+  const mutations = [
+    ['reproducerRef', { reproducerRef: 'pnpm exec vitest run other.test.ts' }],
+    ['closureAssertions', { closureAssertions: [{ id: 'ca-9', command: 'pnpm exec vitest run other.test.ts', expected: 'pass' }] }],
+    ['affectedBoundaryRefs', { affectedBoundaryRefs: ['installer:somethingElse'] }],
+    ['lastCleanReviewedHead', { lastCleanReviewedHead: H2 }],
+    ['firstFailingHead', { firstFailingHead: H2 }],
+  ]
+  for (const [field, riskExtra] of mutations) {
+    const { dir } = runDir()
+    dischargedRisk(dir)
+    const before = digestDir(dir)
+    const out = publish({ dir, file: reopenDraft(dir, riskExtra), phase: 'r3', skill: 'review-phase', workflowVersion: V })
+    assert.equal(out.published, false, `${field} was accepted`)
+    assert.match(out.reason, new RegExp(`immutable-field-mismatch:${field}`), `${field}: ${out.reason}`)
+    assert.deepEqual(digestDir(dir), before, `${field}: the run directory must be byte-identical`)
+  }
+  // the obligation the risk cites is part of the identity too
+  const { dir } = runDir()
+  dischargedRisk(dir)
+  const out = publish({ dir, file: reopenDraft(dir, {}, { obligationIds: ['AC-99'] }), phase: 'r3', skill: 'review-phase', workflowVersion: V })
+  assert.equal(out.published, false)
+  assert.match(out.reason, /immutable-field-mismatch:obligationIds/)
+})
+
+test('AC-31 (DT-40): an exact restoration of the prior entry IS accepted, keeps the identity and adds no new discovery', () => {
+  const { dir } = runDir()
+  const riskId = dischargedRisk(dir)
+  const beforeCounters = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).counters
+  const out = publish({ dir, file: reopenDraft(dir), phase: 'r3', skill: 'review-phase', workflowVersion: V })
+  assert.equal(out.published, true, JSON.stringify(out))
+  const stored = JSON.parse(readFileSync(out.path, 'utf8')).findings.find(f => f.id === 'r1-9').regressionRisk
+  assert.equal(stored.riskId, riskId, 'the same stable id — a reopening is not a second identity')
+  assert.equal(stored.firstFailingHead, H1, 'the origin evidence is restored, not rewritten')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.activeRegressionRisks.map(x => x.riskId), [riskId], 'the risk is active again')
+  assert.equal(r.counters.dischargedRegressionRisks, 0, 'it is no longer discharged')
+  assert.equal(r.counters.activeRegressionRisks, 1)
+  assert.equal(r.counters.attemptedCycles, beforeCounters.attemptedCycles, 'a reopening is not a new cycle')
+  assert.notEqual(r.next.step, 'done', 'an active risk keeps the cycle open')
+})
+
+test('AC-31 (DT-40, positive control): the SAME defect on a LATER batch`s head is a NEW risk, not a reopening', () => {
+  const { dir } = runDir()
+  const riskId = dischargedRisk(dir)
+  // a later batch r3 fixes something else and produces H3
+  redSpec(dir, 'r3-g1', { plan: { groups: [{ groupId: 'r3-g1', findings: ['r2-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r3-g1', remediationBatchId: 'r3' })
+  redVerify(dir, 'r3-g1', { remediationBatchId: 'r3' })
+  handoff(dir, 'r3-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H3, evidenceLedger: [], remediationBatchId: 'r3' })
+  // attributing the reappearance to the ORIGINAL batch is refused: r1 never produced H3
+  const wrong = publish({
+    dir,
+    file: rrDraft(dir, { phase: 'r3', reviewedHead: H3, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [regressionFinding('r1-9', { regressionRisk: risk({ lastCleanReviewedHead: H2, firstFailingHead: H3 }) })] }),
+    phase: 'r3',
+    skill: 'review-phase',
+    workflowVersion: V,
+  })
+  assert.equal(wrong.published, false)
+  assert.match(wrong.reason, /firstFailingHead-not-from-batch|immutable-field-mismatch/)
+  // attributing it to the batch that actually produced H3 is the ordinary `none -> active` path
+  const right = publish({
+    dir,
+    file: rrDraft(dir, { phase: 'r3', reviewedHead: H3, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r3', findings: [regressionFinding('r3-9', { regressionRisk: risk({ introducedByRemediationBatchId: 'r3', lastCleanReviewedHead: H2, firstFailingHead: H3 }) })] }),
+    phase: 'r3',
+    skill: 'review-phase',
+    workflowVersion: V,
+  })
+  assert.equal(right.published, true, JSON.stringify(right))
+  const stored = JSON.parse(readFileSync(right.path, 'utf8')).findings.find(f => f.id === 'r3-9').regressionRisk
+  assert.notEqual(stored.riskId, riskId, 'a different introducing batch is a different risk')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.activeRegressionRisks.map(x => x.riskId), [stored.riskId])
+})
