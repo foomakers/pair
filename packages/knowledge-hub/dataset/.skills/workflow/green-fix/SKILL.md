@@ -24,7 +24,7 @@ The RED snapshot is the specification. You may change implementation inside its 
 | `$marker`          | Yes      | The PR's first-review marker `<!-- pair:first-review #<story> PR#<n> -->` — the anchor an escalation comment responds to.                 |
 | `$writeIssue`      | No       | The project's issue-filing skill (default `/write-issue`) — named only to forbid it.                                                     |
 | `$notes`           | No       | Scope directive from the card.                                                                                                           |
-| `$reconstruct`     | No       | JSON `{ fromHead, paths, riskIds }` — present only on a SECOND repair of the same regression (US-479 AC-32). Start by restoring the CONTENT of exactly `paths` as it was at `fromHead`, then rebuild. |
+| `$reconstruct`     | No       | JSON `{ fromHead, rollbackTo, paths, riskIds }` — present only when a MAINTAINER named a round to roll back to (US-479 AC-32). Start by restoring the CONTENT of exactly `paths` as it was at `fromHead`, then rebuild. |
 
 ## Algorithm
 
@@ -80,13 +80,13 @@ whose applicable matrix rows are present and validated: if the seal is missing, 
 were reduced after validation, stop and return the typed refusal instead of coding. You may never
 edit, weaken or drop a sealed row — including a regression guard — to make your change pass.
 
-**US-479 S13 — `$reconstruct`: rebuild, do not stack another patch.** When this argument is present, this group already failed once to repair its own regression, and patching the current content again would carry the previous mistake forward. Start over instead:
+**US-479 S13 — `$reconstruct`: rebuild from the round a human chose.** This argument appears only because a maintainer read the escalation and decided to roll back to `rollbackTo` rather than keep patching. They own that call — you do not re-litigate it, and the workflow did not infer it. Start over from there:
 
 1. restore the content of exactly `paths` as it was at `fromHead` (`git show <fromHead>:<path>` into the working tree, or the equivalent) — those paths and nothing else, in your worktree only;
 2. rebuild the fix from there, carrying the group's obligations and every guard in `riskIds`;
 3. commit FORWARD on the current head.
 
-This is a CONTENT operation. The branch stays where it is, the sealed snapshot stays an ancestor, every sealed test byte stays identical, published reviews stay valid — `verify-chain` proves all of it. Nothing specified is lost by starting over: the contract you hold IS the inventory of what must work again, and the guards make the old defect impossible to reintroduce silently. If restoring the content cannot be confined to `paths` — a consumer outside them breaks, or the rebuild would grow past your `fixScope` — stop and return the typed refusal with what you found; do not restore partially and do not widen the scope yourself.
+This is a CONTENT operation. The branch stays where it is, the sealed snapshot stays an ancestor, every sealed test byte stays identical, published reviews stay valid — `verify-chain` proves all of it. Nothing specified is lost by starting over: the contract you hold IS the inventory of what must work again, and the guards make the old defect impossible to reintroduce silently. If restoring the content cannot be confined to `paths` — a consumer outside them breaks, or the rebuild would grow past your `fixScope` — stop and return the typed refusal with what you found; do not restore partially and do not widen the scope yourself. Report what you had to overwrite: the maintainer who named the round is entitled to know what it cost.
 
 ## Output Format
 

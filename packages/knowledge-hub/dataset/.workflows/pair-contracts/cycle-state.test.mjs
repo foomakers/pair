@@ -3131,39 +3131,6 @@ test('AC-32 (DT-41): the FIRST repair of a regression carries no reconstruction 
   assert.equal(r.next.reconstruct, undefined, 'patching first is right: the base is not yet proven bad')
 })
 
-test('AC-32 (DT-41): after a repair that did NOT cure it, the next attempt is dispatched to RECONSTRUCT from the baseline', () => {
-  const { dir } = runDir()
-  const riskId = provenRisk(dir)
-  failedRepairOf(dir, riskId)
-  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
-  assert.equal(r.next.step, 'prepare', JSON.stringify({ step: r.next.step, reason: r.next.reason, detail: r.next.detail }))
-  assert.equal(r.next.phase, 'r1-g1', 'the same producing group, derived from history')
-  assert.ok(r.next.reconstruct, 'the second attempt on the same risk reconstructs instead of stacking')
-  assert.equal(r.next.reconstruct.fromHead, H0, 'the behavioural baseline is the content source')
-  assert.deepEqual(r.next.reconstruct.paths, ['src/a.ts'], 'exactly the producing group`s allowed paths, nothing else')
-  assert.deepEqual(r.next.reconstruct.riskIds, [riskId], 'the guards the rebuilt code is measured against')
-  // it stays a forward fix: the branch position is untouched and the base is the current head
-  assert.equal(r.next.base, H2, 'the work goes forward on the current head — the baseline is content, not a checkout')
-})
-
-test('AC-32 (DT-41): when a LATER round has worked on the same paths, reconstruction refuses instead of restoring', () => {
-  const { dir } = runDir()
-  const riskId = provenRisk(dir)
-  matchingRepair(dir, riskId) // the first repair, fixed forward to H2
-  // a later batch r2 then builds on the very file the reconstruction would restore
-  redSpec(dir, 'r2-g1', { plan: { groups: [{ groupId: 'r2-g1', findings: ['r2-1'], owner: 'b', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r2-g1', remediationBatchId: 'r2' })
-  redVerify(dir, 'r2-g1', { remediationBatchId: 'r2' })
-  handoff(dir, 'r2-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('7'), evidenceLedger: [], remediationBatchId: 'r2' })
-  // and the review at that head observes the ORIGINAL regression is still there
-  review(dir, 'r3', { mode: 're-review', reviewedHead: SHA('7'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), regressionFinding()] })
-  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
-  assert.equal(r.next.step, 'blocked')
-  assert.equal(r.next.reason, 'escalate')
-  assert.equal(r.next.refusal, 'reconstruction-overlaps-later-work')
-  assert.match(r.next.detail, /src\/a\.ts/)
-  assert.deepEqual(r.activeRegressionRisks.map(x => x.riskId), [riskId], 'the risk stays active and untouched')
-})
-
 // ── US-479 T-27 (DT-05): independent groups serialize by the plan, never by an invented dependency ──
 const twoGroupPlan = (deps = {}) => ({
   groups: [
@@ -3472,59 +3439,6 @@ function reconstructionNext(dir) {
   return resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next
 }
 
-test('DR-02: a later group whose GREEN landed on a REVISION phase is still later work — the guard sees it', () => {
-  const { dir } = runDir()
-  const riskId = provenRisk(dir)
-  matchingRepair(dir, riskId)
-  // r2-g1 went through a contract revision, so its GREEN is published at r2-g1-rev2
-  laterRoundWork(dir, { phase: 'r2-g1-rev2', groupId: 'r2-g1', paths: ['src/a.ts'] })
-  const next = reconstructionNext(dir)
-  assert.equal(next.step, 'blocked', JSON.stringify({ step: next.step, reconstruct: next.reconstruct }))
-  assert.equal(next.refusal, 'reconstruction-overlaps-later-work')
-  assert.match(next.detail, /src\/a\.ts/)
-})
-
-test('DR-03: a DIRECTORY scope contains the file a later group wrote — containment is an overlap', () => {
-  // the producing group owns `src/`, the later group owns `src/a.ts` inside it
-  const { dir } = runDir()
-  const riskId = provenRiskWithPaths(dir, ['src/'])
-  matchingRepair(dir, riskId)
-  laterRoundWork(dir, { paths: ['src/a.ts'] })
-  const next = reconstructionNext(dir)
-  assert.equal(next.step, 'blocked', JSON.stringify({ step: next.step, reconstruct: next.reconstruct }))
-  assert.equal(next.refusal, 'reconstruction-overlaps-later-work')
-  // and the other way round: the later group owns the directory containing the producing file
-  const { dir: d2 } = runDir()
-  const rid2 = provenRiskWithPaths(d2, ['src/a.ts'])
-  matchingRepair(d2, rid2)
-  laterRoundWork(d2, { paths: ['src/'] })
-  const n2 = reconstructionNext(d2)
-  assert.equal(n2.step, 'blocked', JSON.stringify({ step: n2.step, reconstruct: n2.reconstruct }))
-  assert.equal(n2.refusal, 'reconstruction-overlaps-later-work')
-})
-
-test('DR-03: a SIBLING group of the same batch that already produced its fix is later work too', () => {
-  const { dir } = runDir()
-  const riskId = provenRisk(dir) // producing group r1-g1, paths ['src/a.ts']
-  matchingRepair(dir, riskId)
-  // r1-g2 — same batch, same paths, its own GREEN already landed
-  laterRoundWork(dir, { phase: 'r1-g2', groupId: 'r1-g2', paths: ['src/a.ts'], head: SHA('7') })
-  const next = reconstructionNext(dir)
-  assert.equal(next.step, 'blocked', JSON.stringify({ step: next.step, reconstruct: next.reconstruct }))
-  assert.equal(next.refusal, 'reconstruction-overlaps-later-work')
-})
-
-test('DR-03 (control): genuinely disjoint paths still reconstruct — the guard is not a blanket refusal', () => {
-  const { dir } = runDir()
-  const riskId = provenRisk(dir) // r1-g1 owns src/a.ts
-  matchingRepair(dir, riskId)
-  laterRoundWork(dir, { paths: ['docs/readme.md'] })
-  const next = reconstructionNext(dir)
-  assert.equal(next.step, 'prepare', JSON.stringify({ step: next.step, refusal: next.refusal, detail: next.detail }))
-  assert.ok(next.reconstruct, 'nothing later touched src/a.ts: the reconstruction stands')
-  assert.deepEqual(next.reconstruct.paths, ['src/a.ts'])
-})
-
 // ── DR-06 / DR-10 (delta review): the remaining asymmetries of the S12 matrix ───────────────────
 test('DR-06: ANY mandatory human decision beats the automatic rewind — not only a history rewrite', () => {
   const { dir } = runDir()
@@ -3577,4 +3491,62 @@ test('DR-09: red-verify and review-phase declare `regressionGuards` in their Out
     const section = md.slice(at)
     assert.match(section.split('\n').slice(0, 6).join('\n'), /regressionGuards/, `${rel}: the coordinator fails the run when the echo is missing, so the canonical output line must carry it`)
   }
+})
+
+// ── AC-32, after the third review: two declared modes, and the choice is a human's ─────────────
+// Deciding by itself whether restoring content was safe cost four defects in three rounds, and
+// getting it wrong deletes real work. The workflow no longer decides: the default patches forward
+// as it always did, and a human who has read the escalation may name the round to roll back to.
+// Nothing below vetoes anything — that is the point.
+const rollback = (dir, to) => resolve({ dir, workflowVersion: V, policy: { ...POLICY, rollbackTo: to }, entry: 'pr', pr: 7 }).next
+
+test('AC-32: with no round named, a failed repair just patches forward — no directive, whatever the history', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  matchingRepair(dir, riskId)
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  const next = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next
+  assert.equal(next.step, 'prepare')
+  assert.equal(next.reconstruct, undefined, 'the default is the behaviour that always existed')
+  assert.equal(next.rollbackRefusal, undefined)
+})
+
+test('AC-32: a named round resolves to the head history recorded for it, and the work still goes FORWARD', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  matchingRepair(dir, riskId)
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  const next = rollback(dir, 'r0')
+  assert.equal(next.step, 'prepare')
+  assert.deepEqual(
+    { from: next.reconstruct?.fromHead, to: next.reconstruct?.rollbackTo, paths: next.reconstruct?.paths, risks: next.reconstruct?.riskIds },
+    { from: H0, to: 'r0', paths: ['src/a.ts'], risks: [riskId] },
+    'the head of the named round, the producing group`s own scope, and the guards it must satisfy',
+  )
+  assert.equal(next.base, H2, 'the branch stays where it is: restoring is content, the commit is forward')
+})
+
+test('AC-32: a round the history cannot resolve yields NO directive and says so — never a guessed head', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  matchingRepair(dir, riskId)
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  const next = rollback(dir, 'r9')
+  assert.equal(next.reconstruct, undefined)
+  assert.equal(next.rollbackRefusal, 'rollback-round-unknown:r9')
+  assert.equal(next.step, 'prepare', 'and the cycle still proceeds — a bad parameter is not a dead end')
+})
+
+test('AC-32: overlapping work does NOT veto a named rollback — the human who named it owns that call', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  matchingRepair(dir, riskId)
+  // another group wrote the very same path after the baseline: under the old guard this refused
+  redSpec(dir, 'r2-g1', { plan: { groups: [{ groupId: 'r2-g1', findings: ['r2-1'], owner: 'b', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r2-g1', remediationBatchId: 'r2' })
+  redVerify(dir, 'r2-g1', { remediationBatchId: 'r2' })
+  handoff(dir, 'r2-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('7'), evidenceLedger: [], remediationBatchId: 'r2' })
+  review(dir, 'r3', { mode: 're-review', reviewedHead: SHA('7'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  const next = rollback(dir, 'r0')
+  assert.ok(next.reconstruct, 'the directive is emitted: the algorithm reports, it does not veto')
+  assert.equal(next.reconstruct.fromHead, H0)
 })

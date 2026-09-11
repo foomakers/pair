@@ -268,7 +268,7 @@ function parseBatchArgs(raw) {
     if (!s || typeof s !== 'object' || Array.isArray(s))
       throw new Error(`implement-batch: ${listKey}[${i}] is not an object: ${JSON.stringify(s)}.`)
     // The CARD's key set is validated like every other caller-facing object.
-    rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'requiredFindings', 'prNumber'], `${listKey}[${i}]`)
+    rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'requiredFindings', 'prNumber', 'rollbackTo'], `${listKey}[${i}]`)
     // Same rule as the sibling engine.
     if (s.id !== undefined && s.id !== null && typeof s.id !== 'string' && typeof s.id !== 'number')
       throw new Error(
@@ -327,6 +327,10 @@ function parseBatchArgs(raw) {
     constrain(s.base, 'base', isRef, 'a valid git ref')
     constrain(s.title, 'title', isProse, 'plain text (no backtick, no `$(`, no newline)')
     constrain(s.notes, 'notes', isProse, 'plain text (no backtick, no `$(`, no newline)')
+    // US-479 AC-32: the round a maintainer chose to roll back to. A phase id and nothing else — it
+    // is compared against persisted phases, and an unresolvable one yields a typed refusal, never a
+    // guessed head. Shaped like a phase so it can never carry shell syntax into a command.
+    constrain(s.rollbackTo, 'rollbackTo', v => /^(a0(-rev\d+)?|r\d+(-g\d+(-rev\d+)?)?)$/.test(v), 'a phase id such as `a0`, `r2` or `r2-g1`')
     // A verified P3 result must not disappear merely because a later independent reviewer
     // sampled a different portion of the same head. A different head is not "probably close
     // enough": that would turn old evidence into a new specification without rerunning its
@@ -1540,7 +1544,9 @@ async function driveStory(story) {
   const reviewLog = `${PIPELINE.auditLogDir}/${story.id}.md`
   const firstReviewMarker = () => `<!-- pair:first-review #${story.id} PR#${pr} -->`
   const synthesisMarker = () => `<!-- pair:synthesis #${story.id} PR#${pr} -->`
-  const policy = { maxFixRounds: MAX_FIX_ROUNDS, redRepairs: MAX_RED_CONTRACT_REPAIRS, greenRetries: MAX_GREEN_RETRIES, reviewers: PIPELINE.reviewers }
+  // US-479 AC-32: `rollbackTo` is the maintainer's call, taken per card after its budget escalated
+  // and they read the dossier — the engine never infers it and has no default for it.
+  const policy = { maxFixRounds: MAX_FIX_ROUNDS, redRepairs: MAX_RED_CONTRACT_REPAIRS, greenRetries: MAX_GREEN_RETRIES, reviewers: PIPELINE.reviewers, ...(story.rollbackTo ? { rollbackTo: story.rollbackTo } : {}) }
   const inputs = effectiveInputs(story)
   const storyMetrics = { dispatches: 0, retries: 0, redirects: 0 }
   const common = () =>

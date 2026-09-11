@@ -981,3 +981,33 @@ the case I imagined". The second round inverted the order — an independent age
 witnesses from what the engine actually produces, before any fix existed — and that is how the
 contract-gap revision loop was found at all. For a defect class rather than a single case, the
 witness should not be written by whoever writes the fix.
+
+## Amendment 2026-09-11 (r) — AC-32 stops deciding: two modes, and the maintainer picks the round
+
+Supersedes (p) and the AC-32 half of (q). The reconstruction itself was never the problem — the
+GUARD beside it was. Establishing *who wrote these paths after which head*, across contract
+revisions, directory scopes, sibling groups fixing in order, and migrated ledgers whose baseline
+review is not even in this run directory, produced four defects across three independent review
+rounds. Every one of them had the same shape: closed for the case its author pictured, open for the
+neighbouring case from the same producer. And the failure is not cheap — a wrong guard deletes work
+nobody asked it to touch.
+
+So the workflow no longer decides. There are two modes:
+
+- **patch (default).** What always existed: the rewind fixes forward on the current head. AC-32 is
+  not in play, and no directive is emitted.
+- **rollback.** A maintainer names the round (`rollbackTo`, a phase id, per card). The head of that
+  round is resolved from persisted history — the output of its last fix, or the head its review read
+  — and the producing group's own `allowedPaths` are restored to that content and rebuilt, carrying
+  the batch's obligations and every active guard. The commit still goes FORWARD; no Git history
+  operation is part of it. An unresolvable round emits no directive and a typed refusal
+  (`rollback-round-unknown:<round>`), never a guessed head.
+
+The choice is ordinarily made after the budget escalates — three concluded corrective cycles — when
+the maintainer has the cycle's own evidence in front of them. Nothing in the algorithm vetoes a
+rollback: overlapping work no longer blocks it, because the person who named the round owns that
+call and is better placed to make it than a heuristic over `allowedPaths`. What the fixer owes in
+return is a report of what it had to overwrite.
+
+Four defects left the codebase with the guard, and the ten tests that encoded them went with it.
+That is the trade: a capability that decides less, and a human decision where the evidence lives.

@@ -1408,52 +1408,31 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       if (producers.size !== 1)
         return blocked('escalate', { refusal: 'regression-lineage-ambiguous', detail: `regression lineage: ${producers.size} group(s) of ${batch} produced ${[...failingHeads].join(', ')} — the producing group must be unique before a repair can be scoped`, findings: blocking, regressionRisks: activeRisks })
       const phase = [...producers][0]
-      // US-479 AC-32 (S13): a group that has ALREADY failed to repair its own regression does not
-      // stack another patch on a base the guard has proven bad. The next attempt restores the
-      // CONTENT of that group's allowed paths at the behavioural baseline and rebuilds carrying the
-      // obligations and the guards — committed FORWARD. No Git history operation is part of it:
-      // `lastCleanReviewedHead` is read as a source of content, never checked out as the branch.
+      // US-479 AC-32 (S13), simplified after three review rounds: the workflow no longer DECIDES
+      // whether restoring content is safe, nor where to restore it from. Establishing that — who
+      // wrote these paths after which head, across revisions, directories, sibling groups and
+      // migrated ledgers — produced four defects in three rounds, and getting it wrong deletes real
+      // work. The default is what always existed: fix forward on the current head.
+      //
+      // A human may instead name the round to roll back to (`policy.rollbackTo`, e.g. `r2` or `a0`)
+      // — ordinarily after the budget has escalated and they have read the dossier. The head of that
+      // round is resolved from persisted history: the output of its last fix, or the head its review
+      // read. The producing group's own `allowedPaths` are the restore surface, its obligations and
+      // guards travel with it, and the work still goes FORWARD on the current head. Nothing here
+      // vetoes anything and nothing is inferred: an unresolvable round yields no directive and says
+      // why, rather than guessing a head.
       const ofBatch = activeRisks.filter(x => String(x.introducedByRemediationBatchId) === batch)
-      const priorRepairs = list.filter(h => h.skill === 'red-spec' && h.phase === phase && h.data.regressionRepairOf === batch).length
       const paths = groupOf(phase)?.allowedPaths ?? []
       let reconstruct
-      if (priorRepairs >= 1 && paths.length) {
-        // Restoring a path someone else has already built on would break consumers this batch's
-        // contract does not cover. The algorithm never decides that trade: it refuses, a human does.
-        //
-        // US-479 DR-02/DR-03 — what the guard has to see, and what it used to miss:
-        //  - work is LATER when it landed after the producing group's own fix. That is every
-        //    sibling group of the same batch too, not only a following round: a round BEFORE the
-        //    baseline is already inside `lastCleanReviewedHead`, so restoring cannot harm it;
-        //  - a group's GREEN is published at its PHASE, which is `<group>-rev<n>` whenever that
-        //    group went through a contract revision. Identity is parsed, never string-compared;
-        //  - scopes are paths, and `allowedPaths` legitimately carries directories. `src/` and
-        //    `src/a.ts` are the same surface; plain equality saw two unrelated strings and would
-        //    have restored a whole tree over someone's work.
-        // US-479 F-2: "after the producing group's own fix" is the wrong clock. Groups of a batch fix
-        // in order, and the review that raises a regression must read the CURRENT head, so the
-        // derived producer is always the LAST group that produced one — every earlier sibling had a
-        // lower index and was invisible, though its work is after the baseline and a restore would
-        // delete it. The baseline is the clock: everything published after the review that proved
-        // `lastCleanReviewedHead` clean is work this restore could destroy.
-        const baselineHead = String(ofBatch[0]?.lastCleanReviewedHead ?? '')
-        const baselineAt = Math.max(-1, ...list.filter(x => x.skill === 'review-phase' && String(x.data.reviewedHead ?? '') === baselineHead).map(x => list.indexOf(x)))
-        const touches = (a, b) => {
-          const na = String(a).replace(/\/+$/, '')
-          const nb = String(b).replace(/\/+$/, '')
-          return na === nb || na.startsWith(`${nb}/`) || nb.startsWith(`${na}/`)
-        }
-        const landedAfterBaseline = gid => list.some(x => x.skill === 'green-fix' && phaseParts(x.phase)?.groupId === gid && SHA_RE.test(String(x.data.outputHead ?? '')) && list.indexOf(x) > baselineAt)
-        const overlapping = new Set()
-        for (const h of list.filter(x => x.skill === 'red-spec'))
-          for (const g of h.data.plan?.groups ?? []) {
-            if (!g.groupId || g.groupId === phase || !landedAfterBaseline(g.groupId)) continue
-            for (const p of g.allowedPaths ?? []) if (paths.some(own => touches(own, p))) overlapping.add(p)
-          }
-        if (overlapping.size)
-          return blocked('escalate', { refusal: 'reconstruction-overlaps-later-work', detail: `reconstructing ${phase} would restore ${paths.join(', ')} at the baseline, overwriting ${[...overlapping].sort().join(', ')} which work after that baseline owns — a human decides before any content is restored`, findings: blocking, regressionRisks: activeRisks })
-        const baselines = [...new Set(ofBatch.map(x => String(x.lastCleanReviewedHead)))]
-        if (baselines.length === 1) reconstruct = { fromHead: baselines[0], paths, riskIds: ofBatch.map(x => x.riskId) }
+      let rollbackRefusal
+      if (policy.rollbackTo) {
+        const want = String(policy.rollbackTo)
+        const fixes = list.filter(h => h.skill === 'green-fix' || h.skill === 'implement-phase').filter(h => phaseParts(h.phase)?.groupId === want || `r${phaseParts(h.phase)?.round}` === want)
+        const reviews = list.filter(h => h.skill === 'review-phase' && (`r${phaseParts(h.phase)?.round}` === want || phaseParts(h.phase)?.groupId === want))
+        const head = [...fixes].reverse().map(h => h.data.outputHead).find(x => SHA_RE.test(String(x ?? ''))) ?? [...reviews].reverse().map(h => h.data.reviewedHead).find(x => SHA_RE.test(String(x ?? '')))
+        if (!head) rollbackRefusal = `rollback-round-unknown:${want}`
+        else if (!paths.length) rollbackRefusal = `rollback-scope-unknown:${phase}`
+        else reconstruct = { fromHead: String(head), rollbackTo: want, paths, riskIds: ofBatch.map(x => x.riskId) }
       }
       const carried = new Map()
       for (const f of blocking) carried.set(f.id, f)
@@ -1473,6 +1452,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
         regressionRepairOf: batch,
         group: groupOf(phase),
         ...(reconstruct ? { reconstruct } : {}),
+        ...(rollbackRefusal ? { rollbackRefusal } : {}),
         detail: `regression-risk rewind of ${batch}: ${activeRisks.length} active guard(s) plus every unresolved finding, fixed forward on the current head`,
       }
     }
