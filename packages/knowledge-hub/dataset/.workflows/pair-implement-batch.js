@@ -879,6 +879,10 @@ const NEXT_SCHEMA = {
     predecessorRunId: { type: 'string' },
     predecessorPhase: { type: 'string' },
     revalidate: { type: 'array', items: { type: 'string' } },
+    // US-479 T-29 (S11): every ACTIVE regression guard travels into the ONE complete corrective
+    // contract, together with the batch the rewind repairs.
+    regressionRisks: { type: 'array', items: { type: 'object' } },
+    regressionRepairOf: { type: 'string' },
     // The PR the cycle is bound to. A structured-output schema is STRICT: a field the schema does
     // not declare is dropped by the harness before the coordinator sees it — `pr` was, and a
     // fresh-path resume then had no PR to verify against (canary run 11, 3.0.4).
@@ -1300,6 +1304,28 @@ const FINDING_ORCHESTRATION = {
   severityEvidence: { type: 'string' },
   missedUpstream: { type: 'boolean' },
   evidence: { type: 'string' },
+  // US-479 T-29 (S11): a regression the reviewer proves was INTRODUCED by a remediation. Declared
+  // here because a field this schema does not name is dropped by the harness before the
+  // coordinator ever sees it (3.0.5) — and the durable state validates every proof again.
+  origin: { type: 'string', enum: ['preexisting-missed', 'introduced-by-remediation', 'unknown'] },
+  originEvidence: { type: 'object' },
+  obligationIds: { type: 'array', items: { type: 'string' } },
+  regressionRisk: {
+    type: 'object',
+    properties: {
+      riskId: { type: 'string' },
+      introducedByRemediationBatchId: { type: 'string' },
+      lastCleanReviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+      firstFailingHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+      reproducerRef: { type: 'string' },
+      closureAssertions: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, command: { type: 'string' }, testRef: { type: 'string' }, expected: { type: 'string' } }, required: ['id', 'expected'] } },
+      affectedBoundaryRefs: { type: 'array', items: { type: 'string' } },
+      state: { type: 'string', enum: ['active', 'discharged'] },
+      dischargedByReviewId: { type: 'string' },
+      dischargedHead: { type: 'string' },
+    },
+    required: ['introducedByRemediationBatchId', 'lastCleanReviewedHead', 'firstFailingHead', 'reproducerRef', 'closureAssertions', 'affectedBoundaryRefs', 'state'],
+  },
 }
 const FINDING_ID_RE = /^r\d+(-[a-z])?-\d+$/
 const TRANSITIONS = new Set(['open', 'resolved', 'superseded', 'human'])
@@ -1400,6 +1426,9 @@ const VERIFY_SCHEMA = {
     },
     custody: { type: 'object', properties: { verified: { type: 'boolean' }, contractBreach: { type: 'boolean' }, breaches: { type: 'array', items: { type: 'object' } } }, required: ['verified', 'contractBreach'] },
     readiness: { type: 'object', properties: { ready: { type: 'boolean' }, remoteHead: { type: 'string' } }, required: ['ready'] },
+    // US-479 T-29 (S11): the remediation batch this proof invalidates. A LOGICAL rewind marker —
+    // never a Git revert, reset, rebase or seal deletion.
+    invalidatedBatchId: { type: 'string' },
     published: { type: 'object', properties: { firstReview: { type: 'boolean' }, synthesis: { type: 'boolean' }, flush: { type: 'boolean' } } },
     tier: { type: 'string' },
     passes: { type: 'array', items: { type: 'string' } },
@@ -1545,13 +1574,13 @@ async function driveStory(story) {
   // ── The four stages, each a SKILL invoked by name with typed arguments ─────────────────────
   const prepare = n =>
     agentRetry(
-      invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${notesArg()}`),
+      invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.regressionRepairOf ? ` $regressionRepairOf=${n.regressionRepairOf}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${notesArg()}`),
       withModel('red', { agentType: 'pair-fix-test-author', phase: 'Prepare', label: `prepare:${tag} ${n.phase}${n.mode === 'repair' ? ' repair' : n.mode === 'revision' ? ' revision' : ''}`, effort: 'high', schema: PREPARE_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || isContradiction(r) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && /-g1$/.test(n.phase), ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
     )
   const validate = n =>
     agentRetry(
-      invoke(SK.redVerify, `${common()} $phase=${n.phase} $head=${n.base} $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths })}` : ''}`),
+      invoke(SK.redVerify, `${common()} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''} $head=${n.base} $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths })}` : ''}`),
       withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Validate', label: `validate:${tag} ${n.phase}`, effort: 'high', schema: VALIDATE_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasValidation(r),
     )
@@ -1563,7 +1592,7 @@ async function driveStory(story) {
     )
   const green = n =>
     agentRetry(
-      invoke(SK.greenFix, `${common()} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}${findingsArg(n.findings)} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $writeIssue=${SK.writeIssue}${notesArg()}`),
+      invoke(SK.greenFix, `${common()} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}${findingsArg(n.findings)}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $writeIssue=${SK.writeIssue}${notesArg()}`),
       withModel('green', { agentType: 'pair-implementer', phase: 'Implement', label: `green:${tag} ${n.phase}${n.attempt > 1 ? ` attempt ${n.attempt}` : ''}`, effort: 'high', schema: GREEN_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasGreen(r),
     )
@@ -1716,7 +1745,7 @@ async function driveStory(story) {
     if (!usableNext(res.next)) return result('failed-resume', { reason: `${stage} returned no usable next step: ${nextDefect(res.next)}`, phase: next.phase })
     // A `done` may only follow a verification whose own evidence says ready on the head it reviewed.
     // …never from a partial (non-final reviewer) review, nor from a readiness not bound to the remote head (T-9, t9-2 / t9-3).
-    if (res.next.step === 'done' && (stage !== 'verify' || res.partial === true || res.readiness.ready !== true || res.findings.some(f => f.blocking) || res.next.reviewedHead !== String(res.reviewedHead).toLowerCase() || String(res.readiness.remoteHead ?? '').toLowerCase() !== res.next.reviewedHead))
+    if (res.next.step === 'done' && (stage !== 'verify' || res.partial === true || res.readiness.ready !== true || res.findings.some(f => f.blocking) || res.findings.some(f => f.regressionRisk?.state === 'active') || res.next.reviewedHead !== String(res.reviewedHead).toLowerCase() || String(res.readiness.remoteHead ?? '').toLowerCase() !== res.next.reviewedHead))
       return result('failed-verify', { reason: 'the cycle state declared done without matching verification evidence', phase: next.phase })
     next = res.next
   }

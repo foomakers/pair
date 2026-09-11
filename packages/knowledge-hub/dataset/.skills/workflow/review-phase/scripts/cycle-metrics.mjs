@@ -21,7 +21,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { readHandoffs, cycleCounters, canonical } from './cycle-state.mjs'
+import { readHandoffs, cycleCounters, regressionRiskLedger, canonical } from './cycle-state.mjs'
 
 export const METRICS_SCHEMA_VERSION = 1
 const sha256 = s => `sha256:${createHash('sha256').update(s).digest('hex')}`
@@ -239,6 +239,7 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   const handoffs = readHandoffs(dir)
   const list = handoffs.filter(h => h.data)
   const counters = cycleCounters(handoffs)
+  const regressionLedger = regressionRiskLedger(list)
   const versions = [...new Set(list.map(h => h.data.workflowVersion).filter(Boolean))]
   // US-479 F5: a `recordType: migration` handoff rides on the review-phase skill because that is
   // where the envelope lives — it is NOT a review. `deriveNext`/`cycleCounters` already skip it;
@@ -473,6 +474,13 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
     startedWithoutResult,
     administrativeDispatches: asInt(admin.administrativeDispatches),
     nestedDispatches: asInt(admin.nestedDispatches),
+    // US-479 T-29 (S11): the four regression counters are DERIVED from the same ledger the active
+    // matrix is derived from — an invalidated remediation stays counted after its repair, and a
+    // discharged risk stays counted after it leaves the active view.
+    invalidatedRemediations: counters.invalidatedRemediations,
+    regressionRepairs: counters.regressionRepairs,
+    activeRegressionRisks: counters.activeRegressionRisks,
+    dischargedRegressionRisks: counters.dischargedRegressionRisks,
   }
   // US-479 remediation (Finding 4): `complete` is earned — every observed execution has matching
   // usage, timing coverage is full, and there IS something observed; a bare "an observation
@@ -495,6 +503,9 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
     snapshot: { revision, asOf, sourceDigest: sha256(canonical(list.map(h => h.name))), completeness, missingSources },
     outcome: { quality, delivery, cohortState: delivery === 'ready-for-merge' ? 'completed' : delivery === 'in-progress' ? 'running' : 'blocked', reason: delivery === 'awaiting-scope-decision' ? 'human-scope' : null, qualityConvergedHead: quality === 'converged' ? lastReview?.data.reviewedHead ?? null : null, reviewedHead: lastReview?.data.reviewedHead ?? null },
     cycles: { attempted: counters.attemptedCycles, completed: counters.completedCycles, perScopeEpoch: [] },
+    // Active and historical are separate views of one append-only ledger (S11): the active matrix
+    // is what blocks convergence, the historical one is the evidence that it happened.
+    regressions: { active: regressionLedger.filter(r => r.state === 'active'), historical: regressionLedger.filter(r => r.state !== 'active') },
     lifetime,
     execution,
     usage,
@@ -517,6 +528,7 @@ export function renderMarkdown(view) {
   lines.push('')
   lines.push(`Cycles: ${view.cycles.completed} completed / ${view.cycles.attempted} attempted`)
   lines.push(`Reviews: ${view.execution.reviewExecutions} executions, ${view.execution.reviewBatches} batches`)
+  if (view.regressions) lines.push(`Regression risks: ${view.execution.activeRegressionRisks} active, ${view.execution.dischargedRegressionRisks} discharged (${view.execution.invalidatedRemediations} invalidated remediation(s), ${view.execution.regressionRepairs} repair(s))`)
   const tok = k => (typeof view.usage[k] === 'number' ? view.usage[k] : 'unknown')
   // The aggregate is the provider's billed total, stated by the adapter with its accounting label
   // (US-479 F3: for Anthropic `input_tokens` excludes cache reads and cache creation, so all four
@@ -607,7 +619,7 @@ export function renderPrSummary(view) {
   lines.push('')
   lines.push(`**2. Status** — quality: **${view.outcome.quality}** · delivery: **${view.outcome.delivery}**${view.outcome.reason ? ` (${view.outcome.reason})` : ''} · gate/custody: ${view.outcome.quality === 'converged' ? 'passed' : 'pending'}`)
   lines.push('')
-  lines.push(`**3. Cycles** — completed ${view.cycles.completed} / attempted ${view.cycles.attempted} · review batches ${view.execution.reviewBatches} · review executions ${view.execution.reviewExecutions} · retries ${view.execution.retries} · redirects ${view.execution.redirects} · contract revisions ${view.execution.contractRevisions} · preparation repairs ${view.execution.preparationRepairs} · admin/engine recoveries ${view.execution.engineRecoveries}`)
+  lines.push(`**3. Cycles** — completed ${view.cycles.completed} / attempted ${view.cycles.attempted} · review batches ${view.execution.reviewBatches} · review executions ${view.execution.reviewExecutions} · retries ${view.execution.retries} · redirects ${view.execution.redirects} · contract revisions ${view.execution.contractRevisions} · preparation repairs ${view.execution.preparationRepairs} · invalidated remediations ${view.execution.invalidatedRemediations} · regression repairs ${view.execution.regressionRepairs} · active regression risks **${view.execution.activeRegressionRisks}** · discharged regression risks ${view.execution.dischargedRegressionRisks} · admin/engine recoveries ${view.execution.engineRecoveries}`)
   lines.push('')
   const cov = view.usage.coverage
   const tk = k => (typeof view.usage[k] === 'number' ? view.usage[k] : 'unknown')

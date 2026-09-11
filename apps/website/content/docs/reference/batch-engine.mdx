@@ -303,3 +303,36 @@ measured — the sealer refuses a `HEAD` that is not its base, the custody check
 that is not an ancestor — and the trusted snapshot is preserved, never reset. There is no
 card-level reset, no `supersedes` field and no SHA-scoped waiver to carry across runs; unknown
 dirty state in a worktree is reported (`dirty`), never cleaned.
+
+## Regression-risk rewind (US-479 S11)
+
+A defect the independent review proves was **introduced by a remediation** does more than reopen: it
+invalidates that remediation and sends the cycle back to the same batch's preparation.
+
+"Rewind" is a **workflow-state transition**, not a Git operation. The branch stays on its current
+head, every commit and seal stays where it is, and the fix goes **forward**. The last clean reviewed
+head is only the behavioural baseline the guard is compared against — nothing is reverted, reset,
+rebased or force-pushed, and no seal or evidence is deleted.
+
+The claim is only admissible with all of: the approved obligation it violates, an executable
+reproducer, the head where that reproducer passes, the head where it fails, the remediation batch
+that produced the failing head, closure assertions and affected boundary references. Anything less is
+an ordinary finding of `unknown` origin; a new or changed requirement stays a scope proposal.
+
+The risk then lives on the existing finding entry with a script-derived `riskId` (story/PR + stable
+finding id + introducing batch), so replay, restart and a second observation reuse it. The **active
+matrix is derived** from the ledger — never stored, never supplied by a caller. The ordinary path runs
+unchanged (preparation → red verification → green fix → independent delta review), with every active
+guard inside the one complete contract.
+
+Only an independent review bound to the **exact** new head discharges a risk: it executes the closure
+assertions, shows the obligation passing, confirms the batch's original findings closed and re-tests
+the affected boundaries. A discharged risk leaves the active matrix and stays in the append-only
+history; a reintroduction reopens the same finding rather than counting as a new discovery.
+
+`quality-converged`, scope escalation and `ready-for-merge` are impossible while any risk is active,
+and a scope decision can neither waive nor discharge one. Four derived counters —
+`invalidatedRemediations`, `regressionRepairs`, `activeRegressionRisks`, `dischargedRegressionRisks`
+— reach the step metrics and the one PR summary, with active and historical views separated. An
+invalidated remediation is an *attempted* batch; its round becomes a completed cycle only once a
+review closes the original findings and leaves no active risk. `maxFixRounds` is reused as it stands.

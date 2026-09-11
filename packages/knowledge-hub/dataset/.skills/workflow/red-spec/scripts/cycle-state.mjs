@@ -71,6 +71,10 @@ export const FINDING_TRANSITIONS = ['open', 'resolved', 'superseded', 'human']
 // only from a replay at the baseline head vs the defective head (originEvidence).
 export const FINDING_ORIGINS = ['preexisting-missed', 'introduced-by-remediation', 'unknown']
 export const RECORD_TYPES = ['decision', 'migration', 'judgment']
+// US-479 T-29 (S11, D5): a regression provably INTRODUCED by a remediation is an entry of the
+// existing finding ledger — not a fifth stage, not a second authority. Its two states are the whole
+// lifecycle; the active matrix is DERIVED from them and never stored or supplied by a caller.
+export const REGRESSION_RISK_STATES = ['active', 'discharged']
 export const SCOPE_CHANGE_TYPES = ['new-requirement', 'scope-extension']
 export const SCOPE_CHANGE_STATUSES = ['pending', 'ignored', 'extended', 'deferred']
 // New public engine statuses beyond ready-for-merge/escalate/failed-*/incompatible (ADR-024
@@ -112,6 +116,16 @@ export function phaseParts(phase) {
   const m = /^r(\d+)(?:-g(\d+)(?:-rev(\d+))?)?$/.exec(phase)
   if (!m) return null
   return { kind: m[2] ? 'group' : 'review', round: Number(m[1]), group: m[2] ? Number(m[2]) : undefined, revision: m[3] ? Number(m[3]) : 1, groupId: m[2] ? `r${m[1]}-g${m[2]}` : undefined }
+}
+
+// ── regression-risk identity (US-479 T-29, S11) ────────────────────────────────────────────
+// Deterministic from the PR the cycle is bound to, the STABLE finding id and the remediation batch
+// that introduced it. Replay, restart and a second observation of the same regression therefore
+// reuse the same id by construction; a different finding or a different introducing batch is a
+// different risk. Stamped by `publish`, never spelled by an agent (the acHash lesson, 3.0.12).
+export function riskIdOf({ story, pr, findingId, batchId }) {
+  if (!findingId || !batchId) return null
+  return `risk:${createHash('sha256').update([String(story ?? ''), String(pr ?? ''), String(findingId), String(batchId)].join('\u0000')).digest('hex').slice(0, 16)}`
 }
 
 // ── contradiction identity (US-479 B1, S3) ─────────────────────────────────────────────────
@@ -290,6 +304,39 @@ export function envelopeErrors(data, { phase, skill }) {
             for (const ca of f.closureAssertions)
               if (!ca || typeof ca !== 'object' || !ca.id || !ca.expected || (!ca.command && !ca.testRef)) errs.push(`closureAssertion-invalid:${tag}`)
         }
+        // US-479 T-29 (S11): `introduced-by-remediation` is a CLAIM with named proofs. The
+        // reviewer may make it only with a cited approved obligation, an executable reproducer, the
+        // baseline head where the guard passes, the failing head where it does not, the introducing
+        // batch and the affected boundaries. Anything less is `unknown` — an ordinary finding — and
+        // a changed or new requirement belongs to `scopeChanges`, never here.
+        if (f.origin === 'introduced-by-remediation' || f.regressionRisk !== undefined) {
+          const tag = f.id ?? '?'
+          const rr = f.regressionRisk
+          if (!rr || typeof rr !== 'object' || Array.isArray(rr)) errs.push(`regressionRisk-missing:${tag}`)
+          else {
+            if (f.origin !== 'introduced-by-remediation') errs.push(`regressionRisk-without-origin:${tag}`)
+            if (!Array.isArray(f.obligationIds) || !f.obligationIds.length) errs.push(`regression-obligation-missing:${tag}`)
+            if (!SHA_RE.test(String(rr.lastCleanReviewedHead ?? ''))) errs.push(`lastCleanReviewedHead-invalid:${tag}`)
+            if (!SHA_RE.test(String(rr.firstFailingHead ?? ''))) errs.push(`firstFailingHead-invalid:${tag}`)
+            if (SHA_RE.test(String(rr.lastCleanReviewedHead ?? '')) && rr.lastCleanReviewedHead === rr.firstFailingHead) errs.push(`regression-heads-identical:${tag}`)
+            if (typeof rr.introducedByRemediationBatchId !== 'string' || !rr.introducedByRemediationBatchId.trim()) errs.push(`introducedByRemediationBatchId-invalid:${tag}`)
+            if (typeof rr.reproducerRef !== 'string' || !rr.reproducerRef.trim()) errs.push(`reproducerRef-invalid:${tag}`)
+            else if (SHELL_METACHAR_RE.test(rr.reproducerRef)) errs.push(`reproducerRef-unsafe:${tag}`)
+            if (!Array.isArray(rr.closureAssertions) || !rr.closureAssertions.length) errs.push(`closureAssertions-missing:${tag}`)
+            else
+              for (const ca of rr.closureAssertions)
+                if (!ca || typeof ca !== 'object' || !ca.id || !ca.expected || (!ca.command && !ca.testRef)) errs.push(`closureAssertion-invalid:${tag}`)
+            if (!Array.isArray(rr.affectedBoundaryRefs) || !rr.affectedBoundaryRefs.length || rr.affectedBoundaryRefs.some(b => typeof b !== 'string' || !b.trim())) errs.push(`affectedBoundaryRefs-missing:${tag}`)
+            if (!REGRESSION_RISK_STATES.includes(rr.state)) errs.push(`regressionRisk-state-invalid:${tag}`)
+            // Only a review bound to the EXACT head it reviewed may discharge (S11): a discharge
+            // claimed for another head is not this review's to make.
+            if (rr.state === 'discharged') {
+              if (!SHA_RE.test(String(rr.dischargedHead ?? ''))) errs.push(`dischargedHead-invalid:${tag}`)
+              else if (data.reviewedHead !== undefined && String(rr.dischargedHead) !== String(data.reviewedHead)) errs.push(`discharge-head-mismatch:${tag}`)
+              if (!rr.dischargedByReviewId) errs.push(`dischargedByReviewId-missing:${tag}`)
+            }
+          }
+        }
         if (f.reproducer !== undefined) {
           if (!f.reproducer || typeof f.reproducer !== 'object' || typeof f.reproducer.command !== 'string' || !f.reproducer.command.trim()) errs.push(`reproducer-invalid:${f.mechanismId ?? f.rowId ?? '?'}`)
           else if (SHELL_METACHAR_RE.test(f.reproducer.command)) errs.push(`reproducer-command-unsafe:${f.mechanismId ?? f.rowId ?? '?'}`)
@@ -354,6 +401,10 @@ export function envelopeErrors(data, { phase, skill }) {
       }
     }
   }
+  // US-479 T-29 (S11): the active regression-risk matrix is a VIEW over the ledger. A handoff that
+  // carries its own aggregate would be a second, mutable source of truth.
+  if (data.activeRegressionRisks !== undefined) errs.push('activeRegressionRisks-not-storable')
+  if (data.invalidatedBatchId !== undefined && (typeof data.invalidatedBatchId !== 'string' || !data.invalidatedBatchId.trim())) errs.push('invalidatedBatchId-invalid')
   if (data.scopeChanges !== undefined) {
     if (!Array.isArray(data.scopeChanges)) errs.push('scopeChanges-not-an-array')
     else
@@ -887,6 +938,31 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
     const line = successionLineOf(target?.phase)
     data = { ...data, contradictionLine: line ?? null, contradictionKey: contradictionKeyOf({ line, conflictingRowIds: data.conflictingRowIds }) }
   }
+  // US-479 T-29 (S11): the risk identity is derived HERE, and the claim is checked against what
+  // this run actually did — the named batch must exist and the failing head must be one it produced.
+  if (skill === 'review-phase' && Array.isArray(data.findings) && data.findings.some(f => f?.regressionRisk)) {
+    const existing = readHandoffs(dir)
+    const batchHeads = new Map()
+    for (const h of existing) {
+      const batch = h.data?.remediationBatchId ?? (phaseParts(h.phase)?.round ? `r${phaseParts(h.phase).round}` : undefined)
+      if (!batch) continue
+      const heads = batchHeads.get(batch) ?? new Set()
+      for (const head of [h.data?.outputHead, h.data?.reviewedHead]) if (SHA_RE.test(String(head ?? ''))) heads.add(String(head))
+      batchHeads.set(batch, heads)
+    }
+    const findings = []
+    for (const f of data.findings) {
+      if (!f?.regressionRisk) {
+        findings.push(f)
+        continue
+      }
+      const batch = f.regressionRisk.introducedByRemediationBatchId
+      if (!batchHeads.has(batch)) return { published: false, reason: `regression-batch-unknown:${batch}`, finding: f.id }
+      if (!batchHeads.get(batch).has(String(f.regressionRisk.firstFailingHead))) return { published: false, reason: `firstFailingHead-not-from-batch:${f.id}`, batch }
+      findings.push({ ...f, regressionRisk: { ...f.regressionRisk, riskId: riskIdOf({ story: data.story, pr: data.pr ?? pr, findingId: f.id, batchId: batch }) } })
+    }
+    data = { ...data, findings }
+  }
   if (pr !== undefined) {
     if (!Number.isInteger(pr) || pr <= 0) return { published: false, reason: 'pr-invalid', pr }
     if (data.pr !== undefined && data.pr !== null && Number(data.pr) !== pr) return { published: false, reason: 'pr-mismatch', stated: data.pr, pr }
@@ -924,6 +1000,23 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
     return { published: true, path: target, name, seq, attempt: n }
   })
 }
+
+// ── regression-risk ledger view (US-479 T-29, S11) ─────────────────────────────────────────
+// The ACTIVE matrix, derived: every risk the ledger has ever carried, reduced to its latest state
+// in publication order, keeping only those still `active`. A discharged risk leaves this view and
+// stays in the append-only history; a reintroduction of the same finding by the same batch reuses
+// its id and comes back here, which is why a reopen is never a new discovery.
+export function regressionRiskLedger(handoffs) {
+  const byId = new Map()
+  for (const h of (handoffs ?? []).filter(x => x.data && x.skill === 'review-phase'))
+    for (const f of h.data.findings ?? []) {
+      const rr = f?.regressionRisk
+      if (!rr?.riskId) continue
+      byId.set(rr.riskId, { ...rr, findingId: f.id, reviewName: h.name, reviewedHead: h.data.reviewedHead })
+    }
+  return [...byId.values()].sort((a, b) => (a.riskId < b.riskId ? -1 : a.riskId > b.riskId ? 1 : 0))
+}
+export const activeRegressionRisks = handoffs => regressionRiskLedger(handoffs).filter(r => r.state === 'active')
 
 // ── resolve ────────────────────────────────────────────────────────────────────────────────
 const blocked = (reason, extra = {}) => ({ step: 'blocked', reason, ...extra })
@@ -970,6 +1063,12 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     const p = phaseParts(phase)
     const plan = p?.groupId ? planFor(p.round) : undefined
     return plan?.groups?.find(g => g.groupId === p.groupId)
+  }
+  // Every finding the cycle has ever seen, by id — the rewind carries the real entries, not copies.
+  const findingsById = () => {
+    const m = new Map()
+    for (const h of list.filter(x => x.skill === 'review-phase')) for (const f of h.data.findings ?? []) if (f?.id) m.set(f.id, f)
+    return m
   }
   // Every finding id the cycle has ever seen, with its latest severity — the coordinator seeds its
   // identity checks from this on a resume (its own memory is per-run).
@@ -1086,7 +1185,9 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     }
     if (d.sealed !== true) return blocked('failed-seal', { phase: last.phase, detail: d.reason })
     if (parts.kind === 'initial') return { step: 'implement', mode: parts.revision > 1 ? 'revision' : 'initial', phase: last.phase, round: 0, attempt: byPhase('implement-phase', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), pr: list.map(h => h.data.pr).find(x => Number.isInteger(x)) }
-    return { step: 'green', mode: parts.revision > 1 ? 'revision' : 'remediation', phase: last.phase, round: parts.round, attempt: 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupOf(last.phase)?.findings) }
+    // The GREEN attempt follows what this phase has already seen: a batch prepared again after a
+    // regression rewind (US-479 T-29) fixes forward as attempt n+1, never over its own handoff.
+    return { step: 'green', mode: parts.revision > 1 ? 'revision' : 'remediation', phase: last.phase, round: parts.round, attempt: byPhase('green-fix', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupOf(last.phase)?.findings), ...(activeRegressionRisks(list).length ? { regressionRisks: activeRegressionRisks(list) } : {}) }
   }
   if (last.skill === 'implement-phase') {
     if (d.status === 'ok' && d.gatesPassed === true && Number.isInteger(d.prNumber) && SHA_RE.test(String(d.outputHead ?? ''))) {
@@ -1117,7 +1218,12 @@ export function deriveNext(handoffs, policy, ctx = {}) {
       if (retry) return retry
     } else if (nextGroup) return { step: 'prepare', mode: 'remediation', phase: nextGroup.groupId, round: parts.round, attempt: 1, base: d.outputHead, group: nextGroup, findings: findingsByIds(nextGroup.findings), plan }
     const prior = lastReview
-    return { step: 'verify', mode: 're-review', phase: `r${parts.round}`, round: parts.round, attempt: byPhase('review-phase', `r${parts.round}`).length + 1, base: prior?.data.reviewedHead, prior: prior?.name, openIds: (prior?.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: priorFindings() }
+    // A GREEN that follows a REGRESSION REWIND of this batch (US-479 T-29) produced a new head:
+    // its verification is the next review round, never a second reviewer of the round already
+    // judged at the old head. An ordinary approved-test retry keeps the round's own re-review.
+    const repaired = list.some(h => h.skill === 'red-spec' && h.phase === last.phase && h.data.regressionRepairOf)
+    const reviewRound = repaired ? parts.round + 1 : parts.round
+    return { step: 'verify', mode: 're-review', phase: `r${reviewRound}`, round: reviewRound, attempt: byPhase('review-phase', `r${reviewRound}`).length + 1, base: prior?.data.reviewedHead, prior: prior?.name, openIds: (prior?.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: priorFindings() }
   }
   if (last.skill === 'review-phase') {
     if (d.custody?.contractBreach === true) return blocked('failed-custody', { phase: last.phase, breaches: d.custody.breaches })
@@ -1134,6 +1240,37 @@ export function deriveNext(handoffs, policy, ctx = {}) {
       const reviewer = Math.max(pass.length, Number.isInteger(d.reviewer) ? d.reviewer : 0) + 1
       if (reviewer <= required) return { step: 'verify', mode: d.mode ?? (round === 0 ? 'first' : 're-review'), phase: last.phase, round, attempt: byPhase('review-phase', last.phase).length + 1, reviewer, base: d.inputHead, prior: last.name, openIds: blocking.map(f => f.id), priorFindings: priorFindings(), detail: `reviewer ${reviewer} of ${required}` }
       return blocked('failed-verify', { phase: last.phase, detail: 'the last reviewer published a partial review' })
+    }
+    // US-479 T-29 (S11) — the LOGICAL rewind. A regression this review proved was introduced by a
+    // remediation sends the cycle back to THAT batch's preparation: same run, same cycle, same
+    // branch and head, one complete corrective contract carrying every original unresolved finding
+    // and every active guard. `lastCleanReviewedHead` is only the behavioural baseline; no Git
+    // revert, reset, rebase or seal deletion is part of this, and a new run cannot erase it.
+    const activeRisks = activeRegressionRisks(list)
+    if (activeRisks.length) {
+      if (cycleCounters(list).completedCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', detail: 'an active regression risk remains and the remediation budget is spent', findings: blocking, regressionRisks: activeRisks })
+      // The earliest introducing batch is repaired first; every active risk travels with it.
+      const batch = [...new Set(activeRisks.map(r => String(r.introducedByRemediationBatchId)))].sort((a, b) => (phaseParts(`${a}-g1`)?.round ?? 0) - (phaseParts(`${b}-g1`)?.round ?? 0))[0]
+      const phase = `${batch}-g1`
+      const carried = new Map()
+      for (const f of blocking) carried.set(f.id, f)
+      for (const r of activeRisks) {
+        const f = findingsById().get(r.findingId)
+        if (f) carried.set(f.id, f)
+      }
+      return {
+        step: 'prepare',
+        mode: 'remediation',
+        phase,
+        round: phaseParts(phase)?.round ?? round,
+        attempt: byPhase('red-spec', phase).length + 1,
+        base: d.reviewedHead,
+        findings: [...carried.values()],
+        regressionRisks: activeRisks,
+        regressionRepairOf: batch,
+        group: groupOf(phase),
+        detail: `regression-risk rewind of ${batch}: ${activeRisks.length} active guard(s) plus every unresolved finding, fixed forward on the current head`,
+      }
     }
     if (!blocking.length) {
       // Readiness is PROVEN only by the remote head the verifier read back at the very end: a
@@ -1213,13 +1350,17 @@ export function cycleCounters(allHandoffs) {
   const revisionPhases = new Set()
   let preparationRepairs = 0
   let implementationRetries = 0
+  // US-479 T-29 (S11): a repair of a batch invalidated by a regression is its own counter, not a
+  // preparation repair — the earlier one measures a rejected contract, this one a rewind.
+  const regressionRepairPhases = new Set()
   for (const h of list) {
     const parts = phaseParts(h.phase) ?? {}
     const key = `${h.skill}:${h.phase}`
     const n = (attemptsByPhase.get(key) ?? 0) + 1
     attemptsByPhase.set(key, n)
     if (h.skill === 'red-spec') {
-      if ((parts.revision ?? 1) > 1) {
+      if (h.data.regressionRepairOf) regressionRepairPhases.add(`${h.phase}#${n}`)
+      else if ((parts.revision ?? 1) > 1) {
         if (n === 1) revisionPhases.add(h.phase)
       } else if (n > 1) preparationRepairs++
     }
@@ -1246,10 +1387,38 @@ export function cycleCounters(allHandoffs) {
     const last = ofPhase[ofPhase.length - 1]
     if (last.data.partial !== true) completedReviewRounds.add(phaseParts(phase)?.round ?? 0)
   }
+  // US-479 T-29 (S11): a batch a review named `invalidatedBatchId` is an ATTEMPTED remediation, not
+  // a completed one. It becomes completed only once a later review closes its original findings and
+  // leaves no active risk it introduced — which is exactly what the closing review proves.
+  const invalidatedBatches = new Set()
+  for (const h of reviews) if (h.data.invalidatedBatchId) invalidatedBatches.add(String(h.data.invalidatedBatchId))
+  const ledger = regressionRiskLedger(list)
+  const activeRisks = ledger.filter(r => r.state === 'active')
+  const unresolvedBatches = new Set(activeRisks.map(r => String(r.introducedByRemediationBatchId)))
+  const lastReview = reviews[reviews.length - 1]
+  const lastReviewClean = !!lastReview && !(lastReview.data.findings ?? []).some(isBlocking)
+  const roundOfBatch = b => Number(/^r(\d+)$/.exec(String(b))?.[1] ?? NaN)
   const attemptedCycles = attemptedRounds.size
   let completedCycles = 0
-  for (const round of succeededRounds) if (completedReviewRounds.has(round)) completedCycles++
-  return { attemptedCycles, completedCycles, reviewExecutions, reviewBatches, contractRevisions: revisionPhases.size, preparationRepairs, implementationRetries }
+  for (const round of succeededRounds) {
+    if (!completedReviewRounds.has(round)) continue
+    const batch = `r${round}`
+    if (invalidatedBatches.has(batch) && (unresolvedBatches.has(batch) || !lastReviewClean)) continue
+    completedCycles++
+  }
+  return {
+    attemptedCycles,
+    completedCycles,
+    reviewExecutions,
+    reviewBatches,
+    contractRevisions: revisionPhases.size,
+    preparationRepairs,
+    implementationRetries,
+    invalidatedRemediations: [...invalidatedBatches].filter(b => Number.isInteger(roundOfBatch(b)) || true).length,
+    regressionRepairs: regressionRepairPhases.size,
+    activeRegressionRisks: activeRisks.length,
+    dischargedRegressionRisks: ledger.filter(r => r.state === 'discharged').length,
+  }
 }
 
 export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story }) {
@@ -1325,7 +1494,7 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   const predecessorRuns = [...new Set(handoffs.filter(h => h.data?.recordType === 'migration').flatMap(h => (h.data.predecessorRuns ?? []).map(r => r.runId)))].sort()
   const status = next.step === 'done' ? 'completed' : next.step === 'blocked' ? 'blocked' : 'in-progress'
   const nextFindingSeq = handoffs.filter(h => h.skill === 'review-phase').reduce((m, h) => Math.max(m, ...(h.data.findings ?? []).map(f => Number(/-(\d+)$/.exec(String(f.id ?? ''))?.[1] ?? 0))), 0) + 1
-  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs), predecessorRuns }
+  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs), predecessorRuns, activeRegressionRisks: activeRegressionRisks(handoffs) }
 }
 
 // ── migration (US-479 T-19, S10) ───────────────────────────────────────────────────────────

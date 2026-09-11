@@ -889,3 +889,37 @@ test('F6 residual: an execution that reported usage but never a finish leaves th
   assert.equal(view.lifetime.usage.coverage, 'complete')
   assert.equal(view.lifetime.usage.observedTotalTokens, 300)
 })
+
+// ── US-479 T-29 / S11: the four regression counters, separated active vs historical ───────────
+const T29_GUARD = { reproducerRef: 'pnpm exec vitest run -t AC-7', closureAssertions: [{ id: 'ca-1', command: 'pnpm exec vitest run -t AC-7', expected: 'pass' }], affectedBoundaryRefs: ['installer:copy'] }
+const t29Risk = (extra = {}) => ({ riskId: 'risk:aaaaaaaaaaaaaaaa', introducedByRemediationBatchId: 'r1', lastCleanReviewedHead: SHA40('0'), firstFailingHead: SHA40('1'), ...T29_GUARD, state: 'active', ...extra })
+const t29Finding = (id, rr) => ({ id, severity: 'Major', location: 'x', description: 'd', recommendation: 'r', blocking: rr.state === 'active', transition: rr.state === 'active' ? 'open' : 'resolved', kind: 'defect', origin: 'introduced-by-remediation', obligationIds: ['AC-7'], regressionRisk: rr })
+
+test('T-29 (DT-38): the four S11 counters reach the metrics view and the PR summary, with the active matrix separated from the historical one', () => {
+  const { dir } = runDir()
+  writeFileSync(
+    join(dir, 'r1-review-phase.json'),
+    JSON.stringify({ run: 'v9', story: '42', pr: 7, branch: 'b', phase: 'r1', skill: 'review-phase', inputHead: SHA40('a'), reviewedHead: SHA40('1'), verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 're-review', invalidatedBatchId: 'r1', findings: [t29Finding('r1-9', t29Risk())], schemaVersion: 3, workflowVersion: '4.0.0', seq: 1 }),
+  )
+  const active = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations: [] })
+  assert.equal(active.execution.invalidatedRemediations, 1)
+  assert.equal(active.execution.activeRegressionRisks, 1)
+  assert.equal(active.execution.dischargedRegressionRisks, 0)
+  assert.equal(active.execution.regressionRepairs, 0)
+  assert.deepEqual(active.regressions.active.map(r => r.riskId), ['risk:aaaaaaaaaaaaaaaa'])
+  assert.deepEqual(active.regressions.historical, [])
+  assert.match(renderMarkdown(active), /Regression risks: 1 active, 0 discharged \(1 invalidated remediation\(s\), 0 repair\(s\)\)/)
+  assert.match(renderPrSummary(active), /active regression risks \*\*1\*\*/)
+  // discharged by a later exact-head review: it leaves the active view and stays in history
+  writeFileSync(
+    join(dir, 'r2-review-phase.json'),
+    JSON.stringify({ run: 'v9', story: '42', pr: 7, branch: 'b', phase: 'r2', skill: 'review-phase', inputHead: SHA40('a'), reviewedHead: SHA40('2'), verdict: 'APPROVED', custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA40('2') }, mode: 're-review', findings: [t29Finding('r1-9', t29Risk({ state: 'discharged', dischargedHead: SHA40('2'), dischargedByReviewId: 'r2-review-phase' }))], schemaVersion: 3, workflowVersion: '4.0.0', seq: 2 }),
+  )
+  const done = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations: [] })
+  assert.equal(done.execution.activeRegressionRisks, 0)
+  assert.equal(done.execution.dischargedRegressionRisks, 1)
+  assert.equal(done.execution.invalidatedRemediations, 1, 'the invalidation is not erased by the repair')
+  assert.deepEqual(done.regressions.active, [])
+  assert.deepEqual(done.regressions.historical.map(r => r.riskId), ['risk:aaaaaaaaaaaaaaaa'])
+  assert.match(renderMarkdown(done), /Regression risks: 0 active, 1 discharged/)
+})

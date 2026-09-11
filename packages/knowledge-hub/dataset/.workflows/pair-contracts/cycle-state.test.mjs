@@ -1764,7 +1764,12 @@ test('T-21 (DT-06/07): cycleCounters — a round is ATTEMPTED as soon as a green
   handoff(dir, 'r1', 'review-phase', { reviewer: 1, partial: true, reviewedHead: SHA('f'), verdict: 'x', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: false } })
   handoff(dir, 'r1', 'review-phase', { reviewer: 2, partial: false, reviewedHead: SHA('f'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('f') } }, { attempt: 2 })
   c = cycleCounters(readHandoffs(dir))
-  assert.deepEqual(c, { attemptedCycles: 1, completedCycles: 1, reviewExecutions: 2, reviewBatches: 1, contractRevisions: 0, preparationRepairs: 0, implementationRetries: 0 })
+  // AMENDED by US-479 T-29 (S11, D5): this exhaustive equality enumerated the whole counter set,
+  // and S11 requires four more derived counters ("Add derived counters invalidatedRemediations,
+  // regressionRepairs, activeRegressionRisks, dischargedRegressionRisks to every-step metrics").
+  // An exhaustive assertion cannot survive a mandated addition, so the four keys are pinned here
+  // at their values for this fixture — the assertion stays exhaustive and nothing is weakened.
+  assert.deepEqual(c, { attemptedCycles: 1, completedCycles: 1, reviewExecutions: 2, reviewBatches: 1, contractRevisions: 0, preparationRepairs: 0, implementationRetries: 0, invalidatedRemediations: 0, regressionRepairs: 0, activeRegressionRisks: 0, dischargedRegressionRisks: 0 })
   // a genuine second remediation round (a NEW green-fix after the completed review) becomes 2
   handoff(dir, 'r2-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('g'), evidenceLedger: [] })
   c = cycleCounters(readHandoffs(dir))
@@ -2333,4 +2338,240 @@ test('F1 residual: a descriptor whose digest still MATCHES the acknowledgment bu
   assert.match(n.detail, /predecessor-evidence-incomplete:v4\/a0-rev3:contract-descriptor-hash-mismatch:sha256:7{64}/)
   assert.equal(n.contract, undefined)
   assert.deepEqual(digestDir(legacy), before, 'nothing in the legacy was rewritten')
+})
+
+// ── US-479 T-29 / S11 (D5): regression-risk rewind, guards and discharge ─────────────────────
+// "Rewind" is a workflow-state transition back to the introducing batch's remediation. The branch
+// stays on its current head, the fix goes FORWARD, and `lastCleanReviewedHead` is only the
+// behavioural baseline the guard is compared against. No Git operation is part of the algorithm.
+const H0 = SHA('0')
+const H1 = SHA('1')
+const H2 = SHA('2')
+const GUARD = {
+  reproducerRef: 'pnpm exec vitest run src/a.test.ts -t AC-7-boundary',
+  closureAssertions: [{ id: 'ca-1', command: 'pnpm exec vitest run src/a.test.ts -t AC-7-boundary', expected: 'pass' }],
+  affectedBoundaryRefs: ['installer:copyDirectoryWithTransforms', 'gate:checkSkillLocalScripts'],
+}
+const risk = (extra = {}) => ({ introducedByRemediationBatchId: 'r1', lastCleanReviewedHead: H0, firstFailingHead: H1, ...GUARD, state: 'active', ...extra })
+const regressionFinding = (id = 'r1-9', extra = {}) => finding(id, { origin: 'introduced-by-remediation', originEvidence: { baselineHead: H0, failingHead: H1, reproducer: GUARD.reproducerRef }, regressionRisk: risk(), obligationIds: ['AC-7'], ...extra })
+// H0 reviewed clean, remediation batch r1 fixes r0-1 and produces H1.
+function cleanThenRemediated(dir) {
+  redSpec(dir, 'a0', { mode: 'initial' })
+  redVerify(dir, 'a0')
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: H0 })
+  review(dir, 'r0', { reviewedHead: H0, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1')] })
+  redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r1-g1', remediationBatchId: 'r1' })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1' })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H1, evidenceLedger: [], remediationBatchId: 'r1' })
+}
+const reviewOf = (dir, phase, extra, opts) => review(dir, phase, { mode: 're-review', reviewedHead: H1, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, ...extra }, opts)
+
+test('T-29 (DT-37): a review that proves a regression introduced by batch r1 persists ONE stable active risk, invalidates that batch, and derives the SAME batch`s remediation carrying the original findings plus the risk', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  const out = reviewOf(dir, 'r1', {
+    findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed by r1' }), regressionFinding()],
+    invalidatedBatchId: 'r1',
+  })
+  const stored = JSON.parse(readFileSync(out.path, 'utf8')).findings.find(f => f.id === 'r1-9')
+  // the id is derived by the script from PR + finding + introducing batch, never spelled by an agent
+  assert.match(stored.regressionRisk.riskId, /^risk:[0-9a-f]{16}$/)
+  assert.equal(stored.regressionRisk.state, 'active')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase, batch: r.next.regressionRepairOf }, { step: 'prepare', mode: 'remediation', phase: 'r1-g1', batch: 'r1' })
+  assert.equal(r.next.attempt, 2, 'the same batch is prepared again; no new round, no new run')
+  // the single complete contract carries the original unresolved findings AND every active guard
+  assert.deepEqual(
+    r.next.regressionRisks.map(x => ({ id: x.riskId, batch: x.introducedByRemediationBatchId, guard: x.reproducerRef })),
+    [{ id: stored.regressionRisk.riskId, batch: 'r1', guard: GUARD.reproducerRef }],
+  )
+  assert.deepEqual(r.next.findings.map(f => f.id).sort(), ['r1-9'], 'r0-1 is closed; the regression is what remains open')
+  assert.deepEqual(r.activeRegressionRisks.map(x => x.riskId), [stored.regressionRisk.riskId])
+  assert.equal(r.counters.invalidatedRemediations, 1)
+  assert.equal(r.counters.completedCycles, 0, 'an invalidated remediation is attempted, never completed')
+  assert.equal(r.counters.attemptedCycles, 1)
+})
+
+test('T-29 (DT-37): the forward fix and an independent review bound to the EXACT new head discharge the risk, empty the active matrix, keep the history and allow convergence', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  reviewOf(dir, 'r1', { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), regressionFinding()], invalidatedBatchId: 'r1' })
+  const riskId = JSON.parse(readFileSync(join(dir, 'r1-review-phase.json'), 'utf8')).findings.find(f => f.id === 'r1-9').regressionRisk.riskId
+  // the same batch, prepared again, verified and fixed FORWARD to H2
+  redSpec(dir, 'r1-g1', { groupId: 'r1-g1', remediationBatchId: 'r1', regressionRepairOf: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H2, evidenceLedger: [], remediationBatchId: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  const closing = review(dir, 'r2', {
+    mode: 're-review',
+    reviewedHead: H2,
+    verdict: 'APPROVED',
+    readiness: { ready: true, remoteHead: H2 },
+    findings: [
+      finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'still closed at H2' }),
+      finding('r1-9', {
+        transition: 'resolved',
+        blocking: false,
+        evidence: 'guard green at H2',
+        origin: 'introduced-by-remediation',
+        obligationIds: ['AC-7'],
+        originEvidence: { baselineHead: H0, failingHead: H1, reproducer: GUARD.reproducerRef },
+        regressionRisk: risk({ state: 'discharged', dischargedHead: H2, dischargedByReviewId: 'r2-review-phase' }),
+      }),
+    ],
+  })
+  const dischargedRisk = JSON.parse(readFileSync(closing.path, 'utf8')).findings.find(f => f.id === 'r1-9').regressionRisk
+  assert.equal(dischargedRisk.riskId, riskId, 'the same stable id, never a new one')
+  assert.equal(dischargedRisk.state, 'discharged')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.activeRegressionRisks, [], 'the derived active matrix is empty')
+  assert.deepEqual({ step: r.next.step, head: r.next.reviewedHead }, { step: 'done', head: H2 })
+  assert.equal(r.counters.invalidatedRemediations, 1, 'the invalidation stays in history')
+  assert.equal(r.counters.regressionRepairs, 1)
+  assert.equal(r.counters.dischargedRegressionRisks, 1)
+  assert.equal(r.counters.activeRegressionRisks, 0)
+  assert.equal(r.counters.completedCycles, 1, 'the cycle completes only now')
+})
+
+test('T-29 (DT-37): convergence, scope escalation and readiness are impossible while a risk is active', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  reviewOf(dir, 'r1', {
+    verdict: 'APPROVED',
+    readiness: { ready: true, remoteHead: H1 },
+    scopeChanges: [{ id: 'sc-1', type: 'new-requirement', status: 'pending', description: 'a proposal' }],
+    findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), regressionFinding('r1-9', { blocking: false, transition: 'open' })],
+    invalidatedBatchId: 'r1',
+  })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.notEqual(r.next.step, 'done')
+  assert.notEqual(r.next.reason, 'awaiting-scope-decision')
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase }, { step: 'prepare', mode: 'remediation', phase: 'r1-g1' })
+  assert.equal(r.activeRegressionRisks.length, 1)
+})
+
+test('T-29 (DT-37): `introduced-by-remediation` is refused BEFORE the write unless every S11 proof is present and mutually consistent', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  const bad = (mutate, expected) => {
+    const f = join(dir, `draft-${Math.random().toString(36).slice(2)}.json`)
+    const findings = [mutate(regressionFinding())]
+    writeFileSync(f, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: H1, verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 're-review', findings, invalidatedBatchId: 'r1' }))
+    const out = publish({ dir, file: f, phase: 'r1', skill: 'review-phase', workflowVersion: V, attempt: 9 })
+    assert.equal(out.published, false, `expected a refusal for ${expected}`)
+    assert.match(out.reason, new RegExp(expected))
+  }
+  bad(f => ({ ...f, regressionRisk: undefined }), 'regressionRisk-missing')
+  bad(f => ({ ...f, obligationIds: undefined }), 'regression-obligation-missing')
+  bad(f => ({ ...f, regressionRisk: { ...f.regressionRisk, lastCleanReviewedHead: undefined } }), 'lastCleanReviewedHead-invalid')
+  bad(f => ({ ...f, regressionRisk: { ...f.regressionRisk, firstFailingHead: undefined } }), 'firstFailingHead-invalid')
+  bad(f => ({ ...f, regressionRisk: { ...f.regressionRisk, lastCleanReviewedHead: H1 } }), 'regression-heads-identical')
+  bad(f => ({ ...f, regressionRisk: { ...f.regressionRisk, introducedByRemediationBatchId: undefined } }), 'introducedByRemediationBatchId-invalid')
+  bad(f => ({ ...f, regressionRisk: { ...f.regressionRisk, reproducerRef: undefined } }), 'reproducerRef-invalid')
+  bad(f => ({ ...f, regressionRisk: { ...f.regressionRisk, reproducerRef: 'pnpm test && rm -rf /' } }), 'reproducerRef-unsafe')
+  bad(f => ({ ...f, regressionRisk: { ...f.regressionRisk, closureAssertions: [] } }), 'closureAssertions-missing')
+  bad(f => ({ ...f, regressionRisk: { ...f.regressionRisk, affectedBoundaryRefs: [] } }), 'affectedBoundaryRefs-missing')
+  bad(f => ({ ...f, regressionRisk: { ...f.regressionRisk, state: 'whatever' } }), 'regressionRisk-state-invalid')
+  bad(f => ({ ...f, regressionRisk: { ...f.regressionRisk, introducedByRemediationBatchId: 'r9' } }), 'regression-batch-unknown')
+  // the failing head must actually be the one the named batch produced
+  bad(f => ({ ...f, regressionRisk: { ...f.regressionRisk, firstFailingHead: SHA('7') } }), 'firstFailingHead-not-from-batch')
+  assert.equal(existsSync(join(dir, 'r1-review-phase.attempt-9.json')), false, 'nothing was written')
+})
+
+test('T-29 (DT-38): a guard that also fails on the baseline head, a changed requirement and insufficient evidence never become regressions', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  // a reviewer that cannot show the obligation passing at H0 has no regression to claim: the
+  // finding stays an ordinary defect of unknown origin, and no risk enters the matrix
+  reviewOf(dir, 'r1', { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), finding('r1-8', { origin: 'unknown' })] })
+  const unknown = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(unknown.activeRegressionRisks, [])
+  assert.deepEqual({ step: unknown.next.step, phase: unknown.next.phase }, { step: 'prepare', phase: 'r2-g1' }, 'the ordinary next round, not a rewind')
+  assert.equal(unknown.counters.invalidatedRemediations, 0)
+  // a new requirement is a scope proposal and never a risk
+  const { dir: dir2 } = runDir()
+  cleanThenRemediated(dir2)
+  reviewOf(dir2, 'r1', {
+    verdict: 'APPROVED',
+    readiness: { ready: true, remoteHead: H1 },
+    findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' })],
+    scopeChanges: [{ id: 'sc-1', type: 'new-requirement', status: 'pending', description: 'a genuinely new AC' }],
+  })
+  const scoped = resolve({ dir: dir2, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(scoped.activeRegressionRisks, [])
+  assert.equal(scoped.next.reason, 'awaiting-scope-decision')
+})
+
+test('T-29 (DT-38): replay, restart and repeated discovery reuse the SAME risk id and duplicate nothing; a distinct regression gets a distinct id', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  reviewOf(dir, 'r1', { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), regressionFinding()], invalidatedBatchId: 'r1' })
+  const first = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  const id = first.activeRegressionRisks[0].riskId
+  // a restart between persist and deriveNext: the same next step and the same id
+  const again = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(again.next, first.next)
+  assert.deepEqual(again.activeRegressionRisks, first.activeRegressionRisks)
+  // the same regression observed a second time by the next reviewer of the same head
+  redSpec(dir, 'r1-g1', { groupId: 'r1-g1', remediationBatchId: 'r1', regressionRepairOf: 'r1', regressionGuards: [id] }, { attempt: 2 })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1', regressionGuards: [id] }, { attempt: 2 })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: false, needsHumanDecision: false, outputHead: H2, evidenceLedger: [], remediationBatchId: 'r1' }, { attempt: 2 })
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [regressionFinding('r1-9', { regressionRisk: risk({ firstFailingHead: H2 }) })], invalidatedBatchId: 'r1' })
+  const repeated = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(repeated.activeRegressionRisks.map(x => x.riskId), [id], 'one risk, still the same id')
+  assert.equal(repeated.counters.invalidatedRemediations, 1, 'the same batch invalidated twice is one invalidated remediation')
+  assert.equal(repeated.counters.activeRegressionRisks, 1)
+  // a DIFFERENT regression from the same batch is its own risk
+  review(dir, 'r3', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [regressionFinding('r1-9', { regressionRisk: risk({ firstFailingHead: H2 }) }), regressionFinding('r1-10', { regressionRisk: risk({ firstFailingHead: H2 }) })], invalidatedBatchId: 'r1' })
+  const two = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(two.activeRegressionRisks.length, 2)
+  assert.equal(new Set(two.activeRegressionRisks.map(x => x.riskId)).size, 2)
+  assert.deepEqual(two.next.regressionRisks.map(x => x.riskId).sort(), two.activeRegressionRisks.map(x => x.riskId).sort())
+})
+
+test('T-29 (DT-38): a reintroduction after discharge REOPENS the same risk id and is not a new discovery', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  reviewOf(dir, 'r1', { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), regressionFinding()], invalidatedBatchId: 'r1' })
+  const id = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).activeRegressionRisks[0].riskId
+  redSpec(dir, 'r1-g1', { groupId: 'r1-g1', remediationBatchId: 'r1', regressionRepairOf: 'r1', regressionGuards: [id] }, { attempt: 2 })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1', regressionGuards: [id] }, { attempt: 2 })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H2, evidenceLedger: [], remediationBatchId: 'r1' }, { attempt: 2 })
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'APPROVED', readiness: { ready: true, remoteHead: H2 }, findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), finding('r1-9', { transition: 'resolved', blocking: false, evidence: 'green', origin: 'introduced-by-remediation', obligationIds: ['AC-7'], originEvidence: { baselineHead: H0, failingHead: H1, reproducer: GUARD.reproducerRef }, regressionRisk: risk({ state: 'discharged', dischargedHead: H2, dischargedByReviewId: 'r2-review-phase' }) })] })
+  assert.deepEqual(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).activeRegressionRisks, [])
+  // a later round reintroduces it: the SAME id comes back active
+  handoff(dir, 'r3-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: '/abs/c.json', contractHash: `sha256:${'1'.repeat(64)}`, groupId: 'r3-g1', remediationBatchId: 'r3' })
+  handoff(dir, 'r3-g1', 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, remediationBatchId: 'r3' })
+  handoff(dir, 'r3-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('3'), evidenceLedger: [], remediationBatchId: 'r3' })
+  review(dir, 'r4', { mode: 're-review', reviewedHead: SHA('3'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [regressionFinding('r1-9', { regressionRisk: risk({ introducedByRemediationBatchId: 'r3', lastCleanReviewedHead: H2, firstFailingHead: SHA('3') }) })], invalidatedBatchId: 'r3' })
+  const back = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  // S11 keys `riskId` on PR + stable finding id + INTRODUCING batch, so a reintroduction by a
+  // later batch is a new risk ENTRY for the same finding: the finding id is what stays stable, and
+  // that is why this is a reopen rather than a new discovery. The r1 risk stays discharged in the
+  // append-only history; the r3 one is active. (A reintroduction by the SAME batch reuses the id —
+  // that case is the repeated-discovery test above.)
+  assert.equal(back.activeRegressionRisks.length, 1)
+  assert.equal(back.activeRegressionRisks[0].findingId, 'r1-9', 'the same stable finding, reopened')
+  assert.equal(back.activeRegressionRisks[0].introducedByRemediationBatchId, 'r3')
+  assert.equal(back.counters.dischargedRegressionRisks, 1, 'the discharged r1 risk remains in history')
+  assert.equal(back.counters.invalidatedRemediations, 2)
+  assert.deepEqual({ step: back.next.step, phase: back.next.phase, batch: back.next.regressionRepairOf }, { step: 'prepare', phase: 'r3-g1', batch: 'r3' })
+})
+
+test('T-29 (S11): a discharge is refused unless it is bound to the EXACT reviewed head, and a caller-supplied active matrix is never accepted', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  reviewOf(dir, 'r1', { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), regressionFinding()], invalidatedBatchId: 'r1' })
+  const f = join(dir, 'draft-discharge.json')
+  const dischargeDraft = head =>
+    JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r2', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: H2, verdict: 'APPROVED', custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: H2 }, mode: 're-review', findings: [finding('r1-9', { transition: 'resolved', blocking: false, evidence: 'green', origin: 'introduced-by-remediation', obligationIds: ['AC-7'], originEvidence: { baselineHead: H0, failingHead: H1, reproducer: GUARD.reproducerRef }, regressionRisk: risk({ state: 'discharged', dischargedHead: head, dischargedByReviewId: 'r2-review-phase' }) })] })
+  writeFileSync(f, dischargeDraft(SHA('9')))
+  const wrongHead = publish({ dir, file: f, phase: 'r2', skill: 'review-phase', workflowVersion: V })
+  assert.equal(wrongHead.published, false)
+  assert.match(wrongHead.reason, /discharge-head-mismatch/)
+  // an aggregate matrix handed in by the caller is refused: the matrix is derived, never stored
+  const m = join(dir, 'draft-matrix.json')
+  writeFileSync(m, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r2', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: H2, verdict: 'APPROVED', custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: H2 }, mode: 're-review', findings: [], activeRegressionRisks: [{ riskId: 'risk:deadbeefdeadbeef' }] }))
+  const supplied = publish({ dir, file: m, phase: 'r2', skill: 'review-phase', workflowVersion: V })
+  assert.equal(supplied.published, false)
+  assert.match(supplied.reason, /activeRegressionRisks-not-storable/)
 })

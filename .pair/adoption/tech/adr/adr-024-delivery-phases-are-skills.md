@@ -739,3 +739,59 @@ restart → reducer; lifetime → cohort → summary; recipe → observer → te
   was mistaken for a heartbeat. A true no-op now returns the PERSISTED, confirmed view.
 
 527 workflows tests; full quality gate green. No live canary, and #479 is not complete.
+
+## Amendment 2026-09-11 (k) — US-479 T-29: the regression-risk rewind is a STATE transition, never a Git operation
+
+D5/S11 adds one algorithm to the existing ledger and the existing remediation loop. It introduces no
+fifth judgment stage, no new agent, no administrative round and no new budget.
+
+**Terminology, stated once so it cannot be misread.** "Rewind" and "revert" in S11 mean a
+WORKFLOW-STATE transition from review back to the introducing batch's remediation preparation. The
+branch stays on its current head, every commit and seal stays exactly where it is, and the fix goes
+FORWARD. `lastCleanReviewedHead` is only the behavioural baseline a guard is compared against — it is
+never checked out, reset to, reverted to or rebased onto. `git revert`, `git reset`, `git rebase`,
+force-push, seal deletion and evidence rewriting are NOT part of this algorithm; a maintainer may
+authorize a Git revert separately, as its own decision.
+
+**Qualification.** A reviewer may claim `origin: introduced-by-remediation` only with the approved
+obligation it violates, an executable reproducer, the `lastCleanReviewedHead` where that reproducer
+passes, the `firstFailingHead` where it fails, the `introducedByRemediationBatchId` that produced the
+failing head, closure assertions and affected boundary references. `cycle-state.mjs` validates all of
+it before the atomic write and additionally checks the claim against the run's own evidence: the
+named batch must exist and the failing head must be one that batch actually produced. Anything less
+is `origin: unknown` — an ordinary finding — and a new or changed requirement stays a `scopeChanges`
+proposal. `riskId` is derived by the script from story/PR + stable finding id + introducing batch, so
+replay, restart and a second observation reuse it by construction.
+
+**One ledger, one derived matrix.** The risk lives on the existing finding entry as
+`regressionRisk { riskId, introducedByRemediationBatchId, lastCleanReviewedHead, firstFailingHead,
+reproducerRef, closureAssertions[], affectedBoundaryRefs[], state, dischargedByReviewId?,
+dischargedHead? }`. The ACTIVE matrix is a view over the ledger's latest state per risk; a handoff
+carrying its own aggregate is refused (`activeRegressionRisks-not-storable`) because that would be a
+second, mutable authority.
+
+**The transition.** When an exact-head review proves the regression, in one atomic publish the
+review, the finding and the risk are persisted, the review names `invalidatedBatchId`, and
+`deriveNext` routes `prepare / mode=remediation` on THAT batch's own phase as its next attempt,
+carrying every original unresolved finding and every active guard into ONE complete corrective
+contract. The ordinary path then runs unchanged: preparation → red verification → green fix →
+independent delta review. Only an independent review bound to the exact new head may discharge:
+it executes the closure assertions, shows the obligation passing, confirms the batch's original
+findings closed and re-tests the affected boundaries. A discharged risk leaves the active view and
+stays in the append-only history; a reintroduction reopens it on the same stable finding and is not a
+new discovery. `quality-converged`, scope escalation and `ready-for-merge` are impossible while any
+risk is active, and a scope decision can neither waive nor discharge one.
+
+**Counters.** `invalidatedRemediations`, `regressionRepairs`, `activeRegressionRisks` and
+`dischargedRegressionRisks` are derived from the same ledger and reach the step metrics, the
+lifetime/cohort views and the one PR summary, with active and historical separated. An invalidated
+remediation is an ATTEMPTED batch: its round becomes a completed cycle only once a review closes its
+original findings and leaves no active risk it introduced. Every attempt, review execution, retry,
+token and interval still counts. `maxFixRounds` is reused as it stands — neither raised nor reset.
+
+**Two pre-existing wiring gaps were closed because the rewind cannot work without them** (both
+recorded in T-29's commit): the coordinator never passed `$attempt` to the preparation or the
+validation, so any second attempt of a phase collided on the handoff name; and the GREEN step's
+`next` hard-coded `attempt: 1`. Both now follow what the phase has already seen. A GREEN that follows
+a regression repair is verified as the NEXT review round; an ordinary approved-test retry keeps the
+round's own re-review, unchanged.

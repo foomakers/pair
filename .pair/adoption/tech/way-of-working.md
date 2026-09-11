@@ -56,6 +56,19 @@ Resolution order, the split-tool routing and why the fallback is never the authe
 
 ## Review Convergence
 
+- **Regression-risk rewind (ADR-024, amendment 2026-09-11 k; US-479 S11/AC-29):** a defect a review
+  proves was INTRODUCED by a remediation invalidates that remediation and sends the cycle back to the
+  same batch's preparation, carrying every unresolved finding and every active guard in one complete
+  corrective contract. This "rewind" is a workflow-state transition only — the branch stays on its
+  current head, the fix goes FORWARD, and `git revert`/`reset`/`rebase`/force-push and seal deletion
+  are never part of it (a maintainer may authorize a Git revert as a separate decision). The claim
+  needs the approved obligation, an executable reproducer passing on the last clean reviewed head and
+  failing on the first failing head, the introducing batch and the affected boundaries; anything less
+  is an ordinary finding of unknown origin, and a new requirement stays a scope proposal. Only an
+  independent review bound to the exact new head discharges a risk. Convergence, scope escalation and
+  ready-for-merge are impossible while the derived active matrix is non-empty; a discharged risk
+  leaves that matrix and stays in history and in the counters.
+
 - **Delivery-workflow canary:** prove a fresh workflow with a small code story
   whose tests are deterministic oracles; a prose-only regex-guard story is not a
   substitute. Keep the RED repair budget unchanged: a typed D2 refusal is valid
