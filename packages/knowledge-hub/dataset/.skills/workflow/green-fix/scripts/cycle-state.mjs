@@ -1150,7 +1150,7 @@ const isBlocking = f => f && f.blocking === true && f.transition !== 'resolved' 
 // Preparation refusals whose cause lies outside the cycle: a later dispatch can succeed unchanged.
 const EXTERNAL_REFUSALS = new Set(['dirty', 'stale'])
 
-export function deriveNext(handoffs, policy, ctx = {}) {
+function deriveNextStep(handoffs, policy, ctx = {}) {
   // US-479 B2: a migration acknowledgment is evidence about provenance, never a cycle position.
   const list = handoffs.filter(h => h.data && h.data.recordType !== 'migration')
   if (!list.length) return ctx.entry === 'pr' ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
@@ -1280,7 +1280,7 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     }
     // US-479 F-RR-03: the INDEPENDENT verifier receives the same derived guard set the resolver
     // holds — it cannot check a contract against authority it was never given.
-    if (d.status === 'red') return { step: 'validate', mode: d.mode, phase: last.phase, round: parts.round, attempt: last.attempt, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined, ...(activeRisksOf().length ? { regressionRisks: activeRisksOf() } : {}) }
+    if (d.status === 'red') return { step: 'validate', mode: d.mode, phase: last.phase, round: parts.round, attempt: last.attempt, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined }
     // A refusal whose cause is OUTSIDE the cycle — a dirty worktree, a moved head — is retryable
     // once a human clears it: the same phase, the next attempt. A refusal the cycle owns
     // (`unprovable`, `split-required`) is terminal at once; a second identical external refusal too
@@ -1299,7 +1299,7 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     if (parts.kind === 'initial') return { step: 'implement', mode: parts.revision > 1 ? 'revision' : 'initial', phase: last.phase, round: 0, attempt: byPhase('implement-phase', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), pr: list.map(h => h.data.pr).find(x => Number.isInteger(x)) }
     // The GREEN attempt follows what this phase has already seen: a batch prepared again after a
     // regression rewind (US-479 T-29) fixes forward as attempt n+1, never over its own handoff.
-    return { step: 'green', mode: parts.revision > 1 ? 'revision' : 'remediation', phase: last.phase, round: parts.round, attempt: byPhase('green-fix', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupOf(last.phase)?.findings), ...(activeRisksOf().length ? { regressionRisks: activeRisksOf() } : {}) }
+    return { step: 'green', mode: parts.revision > 1 ? 'revision' : 'remediation', phase: last.phase, round: parts.round, attempt: byPhase('green-fix', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupOf(last.phase)?.findings) }
   }
   if (last.skill === 'implement-phase') {
     if (d.status === 'ok' && d.gatesPassed === true && Number.isInteger(d.prNumber) && SHA_RE.test(String(d.outputHead ?? ''))) {
@@ -1336,8 +1336,9 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     const repaired = list.some(h => h.skill === 'red-spec' && h.phase === last.phase && h.data.regressionRepairOf)
     const reviewRound = repaired ? parts.round + 1 : parts.round
     // US-479 V2 (F-RR-03): the review is the participant that DISCHARGES, so it receives the same
-    // derived guard set red-spec, red-verify and green-fix received — never left to infer it.
-    return { step: 'verify', mode: 're-review', phase: `r${reviewRound}`, round: reviewRound, attempt: byPhase('review-phase', `r${reviewRound}`).length + 1, base: prior?.data.reviewedHead, prior: prior?.name, openIds: (prior?.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: priorFindings(), ...(activeRisksOf().length ? { regressionRisks: activeRisksOf() } : {}) }
+    // derived guard set red-spec, red-verify and green-fix received — attached for every branch by
+    // `deriveNext` (R1), never left to the reviewer to infer.
+    return { step: 'verify', mode: 're-review', phase: `r${reviewRound}`, round: reviewRound, attempt: byPhase('review-phase', `r${reviewRound}`).length + 1, base: prior?.data.reviewedHead, prior: prior?.name, openIds: (prior?.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: priorFindings() }
   }
   if (last.skill === 'review-phase') {
     if (d.custody?.contractBreach === true) return blocked('failed-custody', { phase: last.phase, breaches: d.custody.breaches })
@@ -1456,6 +1457,22 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     return { step: 'prepare', mode: 'remediation', phase: `r${round + 1}-g1`, round: round + 1, attempt: 1, base: d.reviewedHead, findings: blocking }
   }
   return blocked('failed-resume', { detail: `unknown last skill ${last.skill}` })
+}
+
+// US-479 R1 (F-RR-03): ONE attachment point for the derived guard set, not one per branch. Every
+// dispatch that has to execute the closure assertions — a preparation, its validation, a GREEN and
+// EVERY verification, including the k-th reviewer of a multi-reviewer pass and the re-review a
+// changed input forces — receives the same active matrix. A branch that already carries its own
+// (the rewind) keeps it; `blocked`/`done` are decisions, not dispatches, and are left alone.
+const GUARDED_STEPS = new Set(['prepare', 'validate', 'green', 'verify'])
+function withActiveGuards(next, active) {
+  if (!next || typeof next !== 'object' || next.regressionRisks !== undefined || !GUARDED_STEPS.has(next.step)) return next
+  return active.length ? { ...next, regressionRisks: active } : next
+}
+export function deriveNext(handoffs, policy, ctx = {}) {
+  const next = deriveNextStep(handoffs, policy, ctx)
+  const active = ctx.ledger ? ctx.ledger.filter(r => r.state === 'active') : activeRegressionRisks(handoffs.filter(h => h.data && h.data.recordType !== 'migration'))
+  return withActiveGuards(next, active)
 }
 
 // ── counters (US-479 T-21, S4) ──────────────────────────────────────────────────────────────
@@ -1635,7 +1652,10 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
     const round = phaseParts(last.phase)?.round ?? 0
     const seen = new Map()
     for (const r of handoffs.filter(h => h.skill === 'review-phase')) for (const f of r.data.findings ?? []) if (f?.id) seen.set(f.id, { id: f.id, severity: f.severity })
-    next = { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: last.data.reviewedHead, prior: last.name, openIds: (last.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: [...seen.values()], inputsChanged: true, invalidated: handoffs.filter(h => h.skill === 'review-phase').map(h => h.name) }
+    next = withActiveGuards(
+      { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: last.data.reviewedHead, prior: last.name, openIds: (last.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: [...seen.values()], inputsChanged: true, invalidated: handoffs.filter(h => h.skill === 'review-phase').map(h => h.name) },
+      ledger.filter(r => r.state === 'active'),
+    )
   }
   // The PR the cycle is bound to travels with EVERY next: a coordinator resuming a fresh-path card
   // (no prNumber in its args) learns it from here — a verification dispatched without it would

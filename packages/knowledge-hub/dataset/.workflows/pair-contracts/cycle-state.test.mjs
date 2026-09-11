@@ -2948,3 +2948,42 @@ test('V4 (F-RR-06): handoffs written without `seq` still yield a completed cycle
   assert.equal(r.counters.attemptedCycles, 1)
   assert.equal(r.next.step, 'done')
 })
+
+// ── US-479 R1 (F-RR-03): the derived guard set travels with EVERY verification dispatch ────────
+// V2 attached it to the verify that follows a GREEN. The other branches that dispatch a review —
+// the k-th reviewer of a multi-reviewer pass (the one that must discharge), and the re-review a
+// changed input forces — still dispatched a reviewer with no guards to execute, which is exactly
+// the wasted round S12 exists to remove. One attachment point, not one per branch.
+const POLICY_2R = { ...POLICY, reviewers: 2 }
+
+test('R1 (F-RR-03): the SECOND reviewer of a pass receives the same active guard set as the first', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY_2R, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, phase: r.next.phase, reviewer: r.next.reviewer }, { step: 'verify', phase: 'r1', reviewer: 2 })
+  assert.deepEqual((r.next.regressionRisks ?? []).map(x => x.riskId), [riskId], 'the reviewer that must discharge is dispatched with the guard')
+  assert.deepEqual(r.next.regressionRisks.map(x => ({ guard: x.reproducerRef, base: x.lastCleanReviewedHead, failing: x.firstFailingHead })), [{ guard: GUARD.reproducerRef, base: H0, failing: H1 }])
+})
+
+test('R1 (F-RR-03): the re-review a CHANGED INPUT forces carries the active guards too', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  const digest = `sha256:${'4'.repeat(64)}`
+  reviewOf(dir, 'r1', { inputsDigest: digest, findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed by r1' }), regressionFinding()], invalidatedBatchId: 'r1' })
+  const riskId = JSON.parse(readFileSync(join(dir, 'r1-review-phase.json'), 'utf8')).findings.find(f => f.id === 'r1-9').regressionRisk.riskId
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: `sha256:${'5'.repeat(64)}` })
+  assert.equal(r.next.inputsChanged, true, JSON.stringify({ step: r.next.step, phase: r.next.phase }))
+  assert.equal(r.next.step, 'verify')
+  assert.deepEqual((r.next.regressionRisks ?? []).map(x => x.riskId), [riskId], 'invalidating the review evidence does not drop the guard the risk still needs')
+})
+
+test('R1 (F-RR-03): with no active risk no verification dispatch invents the field', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  reviewOf(dir, 'r1', { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed by r1' })] })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY_2R, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'verify')
+  assert.equal(r.next.reviewer, 2)
+  assert.equal(r.next.regressionRisks, undefined)
+  assert.deepEqual(r.activeRegressionRisks, [])
+})

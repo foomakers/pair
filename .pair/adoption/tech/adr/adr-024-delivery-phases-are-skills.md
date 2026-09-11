@@ -869,3 +869,25 @@ Variants of the same frozen root causes, not new findings.
 
 One T-29 fixture was corrected with them: it re-observed a risk by rewriting `firstFailingHead` to
 the head under review, the exact behaviour V1 forbids. Its assertions are unchanged.
+
+## Amendment 2026-09-11 (n) — one attachment point for the guard set (R1), and one transition still unenumerated (R2)
+
+- **R1 (F-RR-03).** V2 attached the derived guard set to the verification that follows a GREEN, and
+  to that branch only. Every other branch that dispatches a review — the **k-th reviewer of a
+  multi-reviewer pass**, the one that has to discharge when `policy.reviewers > 1`, and the
+  re-review a **changed effective input** forces — dispatched a reviewer with no guards to execute,
+  reintroducing exactly the wasted round S12 exists to remove. The attachment is now a single rule
+  applied to `deriveNext`'s result: every `prepare`, `validate`, `green` and `verify` dispatch
+  carries the same active matrix, a branch that already computed its own (the rewind) keeps it, and
+  `blocked`/`done` are decisions rather than dispatches and are untouched. The per-branch spreads
+  V2 added are removed in favour of that one rule.
+- **R2 (F-RR-01) — OPEN, a contract decision, not implemented.** The single transition authority
+  enumerates `none→active`, `active→active` and `active→discharged`. It does **not** enumerate the
+  **reintroduction** `discharged→active`, which review-phase's own contract text explicitly foresees
+  ("a reintroduction reopens the risk on the same stable finding"): a later review may reopen a
+  discharged `riskId` with a different reproducer, different closure assertions and different
+  boundaries, and the latest-wins ledger view replaces the original evidence. Which evidence is
+  immutable across a reintroduction — same defect ⇒ same reproducer? a new failing head in a
+  distinct field, leaving the original origin intact? — is a contract question for story #479 and is
+  deliberately NOT decided here. Until it is answered the transition stays unvalidated; this
+  amendment records the gap, it does not close it.
