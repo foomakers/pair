@@ -245,3 +245,165 @@ describe('Azure adapter Adoption Configuration and its website twin agree (#321 
     expect(website).toBe(adapterSnippet(join(REPO_ROOT, ADAPTER_REL)))
   })
 })
+
+/**
+ * ONE act-step of a `### Step N:` section, as the skill's own grammar writes them:
+ * `<ordinal>. **<title>**: <body>` at column 0, continuation lines indented under it.
+ *
+ * The ordinal is the LITERAL numeral in the source, not the position in the array: a skill is
+ * fed to the agent as markdown text, so "step 3" is resolved by the reader against the numeral
+ * it reads — never against what a renderer would have renumbered it to.
+ */
+type ActStep = { ordinal: number; title: string; body: string }
+
+const actSteps = (section: string): ActStep[] => {
+  const steps: ActStep[] = []
+  for (const line of section.split('\n')) {
+    const head = /^(\d+)\.\s+\*\*(.+?)\*\*/.exec(line)
+    if (head) {
+      steps.push({ ordinal: Number(head[1]), title: head[2] as string, body: line })
+      continue
+    }
+    const current = steps[steps.length - 1]
+    if (current) current.body += `\n${line}`
+  }
+  return steps
+}
+
+const onlyStep = (steps: ActStep[], marker: string, label: string): ActStep => {
+  const found = steps.filter(step => step.title.includes(marker))
+  if (found.length !== 1) {
+    throw new Error(
+      `${label}: expected exactly one act-step titled "${marker}", found ${found.length} — ` +
+        `the cross-reference this guard resolves has nothing unambiguous to point at.`,
+    )
+  }
+  return found[0] as ActStep
+}
+
+/**
+ * Resolves the `## Assignment` act-step's "step N" back-reference against the list it is written
+ * in. FAILS CLOSED on every way the reference could go missing — no `## Git Workflow` step, no
+ * `## Assignment` step, no citation at all, or an ambiguous second citation — because deleting
+ * the sentence must never be a way to make this guard green.
+ */
+const citedBackReference = (
+  step4: string,
+  label: string,
+): { cited: number; gitWorkflow: number; citedStep: ActStep } => {
+  const steps = actSteps(step4)
+  const gitWorkflow = onlyStep(steps, '## Git Workflow', label)
+  const assignment = onlyStep(steps, '## Assignment', label)
+  const citations = [...assignment.body.matchAll(/\bstep (\d+)\b/gi)]
+  if (citations.length !== 1) {
+    throw new Error(
+      `${label}: the ## Assignment act-step carries ${citations.length} "step N" back-references, ` +
+        `expected exactly 1 — the separate-code-host condition must cite the step that declares it.`,
+    )
+  }
+  const cited = Number(citations[0]?.[1])
+  const citedStep = steps.find(step => step.ordinal === cited)
+  if (!citedStep) {
+    throw new Error(
+      `${label}: the ## Assignment act-step cites step ${cited}, which does not exist.`,
+    )
+  }
+  return { cited, gitWorkflow: gitWorkflow.ordinal, citedStep }
+}
+
+describe('setup-pm SKILL.md — Step 4 back-references resolve to the act-step they mean (#321)', () => {
+  const step4Of = (skillText: string): string =>
+    sectionBetween(skillText, '### Step 4: Update Way-of-Working', '### Step 5:')
+
+  it.each(skillCases)(
+    '$corpus — the ## Assignment step cites the ordinal `## Git Workflow` actually has',
+    ({ corpus, skillText }) => {
+      const { cited, gitWorkflow } = citedBackReference(step4Of(skillText), corpus)
+      // Renumbering Step 4 without re-reading its own cross-references is what broke this:
+      // two act-steps were inserted at 3 and 4, `## Git Workflow` moved 3 -> 5, and the
+      // condition kept naming 3 — which is now `## State Mapping` and declares no code-host.
+      expect(cited).toBe(gitWorkflow)
+    },
+  )
+
+  it.each(skillCases)(
+    '$corpus — the cited step is the one that declares `code-host`',
+    ({ corpus, skillText }) => {
+      // The MEANING, not just the position: for every hosts-no-code tool (Linear, Jira,
+      // filesystem) the `code-host-assignee` question is asked only if this condition fires,
+      // so the step it points at has to be the step that writes `code-host`.
+      const { citedStep } = citedBackReference(step4Of(skillText), corpus)
+      expect(normalize(citedStep.body)).toContain('code-host')
+    },
+  )
+
+  /**
+   * Guard strength, on synthetic lists rather than the real corpus — these are the states the
+   * artifact must NOT be allowed to reach, and the only way to exercise them without editing
+   * the shipped skill into a broken shape.
+   */
+  const list = (steps: string[]): string =>
+    ['### Step 4: Update Way-of-Working', '', ...steps, ''].join('\n')
+
+  const GIT_WORKFLOW_STEP = '**Act — `## Git Workflow` (only when needed)**: write `code-host`.'
+  const assignmentStep = (citation: string): string =>
+    `**Act — \`## Assignment\` (always ask)**: ${citation}`
+
+  it('a renumbering that moves `## Git Workflow` reddens the back-reference', () => {
+    // Both ordinals exist, so the ONLY thing that separates them is the renumbering itself.
+    const moved = list([
+      '1. **Act — `## State Mapping`**: write the canonical macrostate mapping.',
+      `2. ${GIT_WORKFLOW_STEP}`,
+      `3. ${assignmentStep('When step 1 just declared a separate `code-host`, also ask.')}`,
+    ])
+    const { cited, gitWorkflow } = citedBackReference(moved, 'renumbered')
+    expect(cited).not.toBe(gitWorkflow)
+  })
+
+  it('deleting the `## Git Workflow` act-step throws instead of passing', () => {
+    const deleted = list([
+      `1. ${assignmentStep('When step 1 just declared a separate `code-host`, also ask.')}`,
+    ])
+    expect(() => citedBackReference(deleted, 'deleted')).toThrow(/exactly one act-step/)
+  })
+
+  it('deleting the citation throws instead of passing', () => {
+    const silent = list([
+      `1. ${GIT_WORKFLOW_STEP}`,
+      `2. ${assignmentStep('Ask who items default to and write `default-assignee`.')}`,
+    ])
+    expect(() => citedBackReference(silent, 'silent')).toThrow(
+      /back-references, expected exactly 1/,
+    )
+  })
+
+  it('a second `step N` citation throws instead of passing', () => {
+    // The other side of the SAME fail-closed branch: zero citations and two citations reach it
+    // from opposite directions. Two is the one this repair can introduce — the fixer edits this
+    // very sentence, and mentioning a second ordinal while editing makes the reference ambiguous,
+    // at which point "the first match" would silently decide which step the condition means.
+    const ambiguous = list([
+      `1. ${GIT_WORKFLOW_STEP}`,
+      `2. ${assignmentStep(
+        'When step 1 just declared a separate `code-host` (see step 1 above), also ask.',
+      )}`,
+    ])
+    expect(() => citedBackReference(ambiguous, 'ambiguous')).toThrow(
+      /carries 2 "step N" back-references, expected exactly 1/,
+    )
+  })
+
+  it('a citation naming an ordinal the list does not contain throws instead of passing', () => {
+    // Out of range, not merely stale: both referent and citation exist as text, but the numeral
+    // resolves to nothing. Returning here instead of throwing would let `cited` compare against a
+    // `gitWorkflow` ordinal it was never read from, and an off-by-one in the ordinal lookup would
+    // downgrade this guard from fail-closed to fail-open on the whole class.
+    const outOfRange = list([
+      `1. ${GIT_WORKFLOW_STEP}`,
+      `2. ${assignmentStep('When step 7 just declared a separate `code-host`, also ask.')}`,
+    ])
+    expect(() => citedBackReference(outOfRange, 'out of range')).toThrow(
+      /cites step 7, which does not exist/,
+    )
+  })
+})
