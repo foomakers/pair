@@ -1437,7 +1437,35 @@ test('ADR-024 (u): every delivery of a rollback directive is REPORTED in the run
   assert.match(line, /until `rollbackTo` is cleared/, 'and whose job it is to end it')
 })
 
-test('ADR-024 (u): the delivery is reported even when the preparation then REFUSES — the report is owed to the dispatch, not to a happy path', async () => {
+test('ADR-024 (u): a dispatch that carries the directive and then REDIRECTS still reports it — the report is owed to the dispatch, and a redirect leaves the prepare branch entirely', async () => {
+  // The discriminating case. A refusal never lost the report — the log sat above `isPrepareRefusal`
+  // even before it was moved — but a redirect `continue`s past the whole prepare branch, so a report
+  // written after `prepare()` returned was lost exactly there. This is what "every dispatch" means.
+  const reconstruct = { fromHead: HEAD2, paths: ['src/a.ts'], riskIds: ['risk:aaaaaaaaaaaaaaaa'], notes: { obligations: [], regressions: [], worked: [] } }
+  const carrying = { step: 'prepare', mode: 'remediation', phase: 'r1-g1', round: 1, attempt: 2, base: HEAD, group: { groupId: 'r1-g1', owner: 'a', mode: 'behavioral', allowedPaths: ['src/'] }, regressionRepairOf: 'r1', reconstruct }
+  const onward = { ...carrying, phase: 'r1-g2', group: { ...carrying.group, groupId: 'r1-g2' }, reconstruct: undefined }
+  let author = 0
+  const { logs } = await runWorkflow({
+    args: { cards: [STORY] },
+    dispatch: (p, o) => {
+      if (o.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (o.agentType === 'pair-fix-test-author') {
+        author += 1
+        if (author === 1) return { next: carrying }
+        if (author === 2) return { status: 'redirect', next: onward }
+        return {}
+      }
+      if (o.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
+      return {}
+    },
+  })
+  const reports = logs.filter(m => /rollback directive delivered/.test(m))
+  assert.equal(reports.length, 1, `the redirecting dispatch carried the directive and must have reported it: ${JSON.stringify(logs.slice(0, 10))}`)
+  assert.match(reports[0], new RegExp(HEAD2), 'naming the head the maintainer chose')
+  assert.match(reports[0], /until `rollbackTo` is cleared/, 'and whose job it is to end it')
+})
+
+test('ADR-024 (u): a preparation that REFUSES keeps its own diagnosis, and the delivery is reported all the same', async () => {
   const reconstruct = { fromHead: HEAD2, paths: ['src/a.ts'], riskIds: ['risk:aaaaaaaaaaaaaaaa'], notes: { obligations: [], regressions: [], worked: [] } }
   const withNext = { step: 'prepare', mode: 'remediation', phase: 'r1-g1', round: 1, attempt: 2, base: HEAD, group: { groupId: 'r1-g1', owner: 'a', mode: 'behavioral', allowedPaths: ['src/'] }, regressionRepairOf: 'r1', reconstruct }
   let author = 0
@@ -1445,7 +1473,6 @@ test('ADR-024 (u): the delivery is reported even when the preparation then REFUS
     args: { cards: [STORY] },
     dispatch: (p, o) => {
       if (o.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      // first call hands the directive on; the dispatch that receives it then refuses
       if (o.agentType === 'pair-fix-test-author') return author++ === 0 ? { next: withNext } : { status: 'stale', reason: 'head moved' }
       if (o.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
       return {}
