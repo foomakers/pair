@@ -1046,6 +1046,10 @@ half a delivery unmeasured, reported as an exact cost.
 
 ## Amendment 2026-09-12 (t) — superseding (r): the rollback takes a head, and it is spent once
 
+> **Superseded in part by (u), below.** The head-taking half stands; the "spent once" half — and
+> every mechanism built to implement it — was withdrawn on 2026-09-12 after four consecutive
+> blocking defects. Read (u) before acting on anything in this amendment about spending.
+
 The fourth and fifth independent reviews landed on the same paragraph of (r) from opposite sides.
 It is superseded here, because it still prescribes a mechanism this codebase deleted for being
 dangerous, and (r) is the governing text a future implementer would read as current.

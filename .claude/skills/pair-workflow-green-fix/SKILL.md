@@ -24,7 +24,7 @@ The RED snapshot is the specification. You may change implementation inside its 
 | `$marker`          | Yes      | The PR's first-review marker `<!-- pair:first-review #<story> PR#<n> -->` — the anchor an escalation comment responds to.                 |
 | `$writeIssue`      | No       | The project's issue-filing skill (default `/pair-capability-write-issue`) — named only to forbid it.                                                     |
 | `$notes`           | No       | Scope directive from the card.                                                                                                           |
-| `$reconstruct`     | No       | JSON `{ fromHead, paths, riskIds, notes }` — present only when a MAINTAINER named a HEAD to roll back to (US-479 AC-32, ADL 2026-09-12), and only until that decision has been spent. Start by restoring the CONTENT of exactly `paths` as it was at `fromHead`, then rebuild. |
+| `$reconstruct`     | No       | JSON `{ fromHead, paths, riskIds, notes }` — present whenever a MAINTAINER's policy names a HEAD to roll back to (US-479 AC-32, ADR-024 (u)). It STANDS until they clear it, so it may arrive again on a later rewind: every delivery is current, and none of your work consumes it. Start by restoring the CONTENT of exactly `paths` as it was at `fromHead`, then rebuild. |
 
 ## Algorithm
 

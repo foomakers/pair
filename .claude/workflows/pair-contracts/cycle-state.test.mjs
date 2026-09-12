@@ -3492,8 +3492,8 @@ test('AC-32: with no round named, a failed repair just patches forward — no di
 test('AC-32: a named HEAD is taken as given, and the work still goes FORWARD', () => {
   const { dir } = runDir()
   // The rewind the maintainer's decision is owed to: r1 was proven to have introduced the
-  // regression and nothing has rebuilt anything yet. (A LATER rewind is DR3-04's witness: the
-  // directive is spent once the repair it was delivered to produced a head.)
+  // regression and nothing has rebuilt anything yet. A LATER rewind is owed it just the same —
+  // the directive stands until the policy stops naming the head (ADR-024 (u)).
   const riskId = provenRisk(dir)
   const next = rollback(dir, H0)
   assert.equal(next.step, 'prepare')
@@ -3557,6 +3557,22 @@ test('rollback: a head this cycle never recorded is REFUSED, and the refusal is 
   assert.equal(next.rollbackRefusal, `rollback-head-unknown:${SHA('e')}`, 'a head from nowhere is not a rollback point')
   // a value that is not a head at all is refused the same way, never parsed as a round name
   assert.match(rollbackTo(dir, 'r1-g1').rollbackRefusal ?? '', /^rollback-head-invalid:/)
+})
+
+test('rollback: a named head whose producing group has no scope to restore is REFUSED — the third typed refusal, never a guess at what to touch', () => {
+  const { dir } = runDir()
+  // the producing group was planned with no allowedPaths: there is nothing `reconstruct` could name
+  redSpec(dir, 'a0', { mode: 'initial' })
+  redVerify(dir, 'a0')
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: H0 })
+  review(dir, 'r0', { reviewedHead: H0, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1')] })
+  redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: [] }], carried: [] }, groupId: 'r1-g1', remediationBatchId: 'r1' })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1' })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H1, evidenceLedger: [], remediationBatchId: 'r1' })
+  reviewOf(dir, 'r1', { invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  const next = rollbackTo(dir, H0)
+  assert.equal(next.rollbackRefusal, 'rollback-scope-unknown:r1-g1')
+  assert.equal(next.reconstruct, undefined, 'a refusal and a directive are mutually exclusive')
 })
 
 test('ADR-024 (u): the directive STANDS while the policy names the head — whatever the repairs did, and however many rewinds later', () => {

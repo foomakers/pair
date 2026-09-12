@@ -80,7 +80,8 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   is to end it. A directive still standing later is a visible state, not a predicate misfiring.
   The notes a rebuild needs — obligations still open, regressions still live, and the decisions the
   review verified were RIGHT (`worked`) — are a VIEW over the handoffs: nobody writes them to a
-  second place and nobody deletes them. Amendments (t) and the 2026-09-12 ADLs are current here.
+  second place and nobody deletes them. Amendment (u) and the 2026-09-12 ADLs are current here; (t)
+  stands except for the spend rule (u) withdrew.
 - **Reintroduction (ADR-024, amendment 2026-09-11 o; US-479 S13/AC-31):** reopening a discharged
   risk is a RESTORATION of its prior ledger entry — every field immutable. A defect that reappears
   through later work is a new risk with a new identity, not a reopening.

@@ -1437,6 +1437,25 @@ test('ADR-024 (u): every delivery of a rollback directive is REPORTED in the run
   assert.match(line, /until `rollbackTo` is cleared/, 'and whose job it is to end it')
 })
 
+test('ADR-024 (u): the delivery is reported even when the preparation then REFUSES — the report is owed to the dispatch, not to a happy path', async () => {
+  const reconstruct = { fromHead: HEAD2, paths: ['src/a.ts'], riskIds: ['risk:aaaaaaaaaaaaaaaa'], notes: { obligations: [], regressions: [], worked: [] } }
+  const withNext = { step: 'prepare', mode: 'remediation', phase: 'r1-g1', round: 1, attempt: 2, base: HEAD, group: { groupId: 'r1-g1', owner: 'a', mode: 'behavioral', allowedPaths: ['src/'] }, regressionRepairOf: 'r1', reconstruct }
+  let author = 0
+  const { logs, result } = await runWorkflow({
+    args: { cards: [STORY] },
+    dispatch: (p, o) => {
+      if (o.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      // first call hands the directive on; the dispatch that receives it then refuses
+      if (o.agentType === 'pair-fix-test-author') return author++ === 0 ? { next: withNext } : { status: 'stale', reason: 'head moved' }
+      if (o.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
+      return {}
+    },
+  })
+  assert.ok(logs.some(m => /rollback directive delivered/.test(m)), `a refusal must not swallow the report: ${JSON.stringify(logs.slice(0, 8))}`)
+  assert.equal(result.batch[0].status, 'failed-preparation', 'and the refusal keeps its own outcome')
+  assert.match(result.batch[0].reason, /stale|head moved/, 'with its own diagnosis, not the rollback`s')
+})
+
 test('V2 (F-RR-03): the verify dispatch carries $regressionGuards and VERIFY_SCHEMA declares the echo', () => {
   const verify = SRC.slice(SRC.indexOf('const verify = (n, required) =>'), SRC.indexOf('// Verified P3 evidence'))
   assert.match(verify, /\$regressionGuards=/, 'the review is dispatched without the guards it must execute')

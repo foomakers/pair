@@ -1677,6 +1677,15 @@ async function driveStory(story) {
     // its comments on `PR#null` — refused, never dispatched (canary run 11, finding r1-5).
     if (isPosInt(next.pr)) pr = next.pr
     if ((stage === 'verify' || stage === 'green') && !isPosInt(pr)) return result('failed-resume', { reason: `${stage} needs the PR number and neither the card nor the cycle state named it`, phase: next.phase })
+    // US-479 (u): the directive's lifetime belongs to the maintainer, so every DISPATCH that carries
+    // one reports it — here, before the dispatch, so the report cannot be lost to a redirect, a
+    // refusal or any later branch. The workflow no longer infers whether their decision was carried
+    // out: four rounds of proxies for that fact each failed one staging beyond the last. What it
+    // owes instead is legibility — a directive still standing on a later rewind is visible in the
+    // run log, attributable to the policy that still names it, and cleared by the person who set it.
+    // Silence is what kept three of those four rounds invisible.
+    if (next.reconstruct?.fromHead)
+      log(`${tag} ${next.phase}: rollback directive delivered — restoring ${next.reconstruct.paths.join(', ')} at ${next.reconstruct.fromHead}. It stands until \`rollbackTo\` is cleared from the policy.`)
     if (stage === 'prepare') res = await prepare(next)
     else if (stage === 'validate') res = await validate(next)
     else if (stage === 'implement') res = await implement(next)
@@ -1721,14 +1730,6 @@ async function driveStory(story) {
       // else in this branch. It used to be computed and dropped, so a maintainer who mistyped a head
       // got an ordinary patch-forward run and never learned their directive had been discarded.
       if (next.rollbackRefusal) return result('failed-preparation', { reason: `rollback refused: ${next.rollbackRefusal}`, phase: next.phase })
-      // US-479 (u): the directive's lifetime belongs to the maintainer, so every delivery is
-      // REPORTED. The workflow no longer infers whether their decision was carried out — four
-      // rounds of proxies for that fact each failed one staging beyond the last — so what it owes
-      // instead is legibility: a directive still standing on a later rewind is visible here, in the
-      // run log, attributable to the policy that still names it, and cleared by the person who set
-      // it. Silence is what kept three of those four rounds invisible.
-      if (next.reconstruct?.fromHead)
-        log(`${tag} ${next.phase}: rollback directive delivered — restoring ${next.reconstruct.paths.join(', ')} at ${next.reconstruct.fromHead}. It stands until \`rollbackTo\` is cleared from the policy.`)
       if (isPrepareRefusal(res)) return result('failed-preparation', { reason: res.reason ?? res.splitReason ?? res.status, refusal: res.status, phase: next.phase, findings: next.findings })
       if (isContradiction(res)) {
         const defect = contradictionDefect(res)
