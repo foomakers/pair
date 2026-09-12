@@ -3618,6 +3618,38 @@ test('DR4-01 (R3): batch attribution falls back to the phase round, like every o
   assert.equal(rollbackTo(dir, H0).reconstruct, undefined, 'the rebuild happened; the phase round says which batch produced it')
 })
 
+test('DR5-01 (H): a repair that produced NOTHING spends nothing — a later unrelated repair of the batch does not consume the decision', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  assert.equal(rollbackTo(dir, H0).reconstruct?.fromHead, H0, 'the decision is delivered')
+  // The preparation that received it echoes the head — and its fixer CANNOT make it pass.
+  redSpec(dir, 'r1-g1', { groupId: 'r1-g1', remediationBatchId: 'r1', regressionRepairOf: 'r1', reconstructedFrom: H0, regressionGuards: [riskId] }, { attempt: 2 })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: false, needsHumanDecision: false, outputHead: H1, evidenceLedger: [], remediationBatchId: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  // The maintainer lets it patch forward instead: an ORDINARY repair of the same batch, no
+  // directive, which succeeds. Nothing has ever restored anything at H0.
+  redSpec(dir, 'r1-g1', { groupId: 'r1-g1', remediationBatchId: 'r1', regressionRepairOf: 'r1', regressionGuards: [riskId] }, { attempt: 3 })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1', regressionGuards: [riskId] }, { attempt: 3 })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('3'), evidenceLedger: [], remediationBatchId: 'r1', regressionGuards: [riskId] }, { attempt: 3 })
+  review(dir, 'r2', { mode: 're-review', reviewedHead: SHA('3'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  const next = rollbackTo(dir, H0)
+  assert.equal(next.reconstruct?.fromHead, H0, 'the repair the directive was handed to produced nothing: the decision is still owed')
+  assert.equal(next.rollbackNote, undefined)
+})
+
+test('DR5-Q1: a decision already honoured is spent OUT LOUD — silence is what made three rounds of this defect invisible', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  assert.ok(rollbackTo(dir, H0).reconstruct)
+  delivered(dir, riskId, H0)
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  const next = rollbackTo(dir, H0)
+  assert.equal(next.reconstruct, undefined, 'honoured once')
+  assert.equal(next.rollbackNote, `rollback-already-honoured:${H0}`, 'and the maintainer is told, instead of typing a head into nothing')
+  assert.equal(next.rollbackRefusal, undefined, 'it is not a refusal: the decision was carried out')
+  assert.equal(next.step, 'prepare')
+})
+
 test('DR4-01: the echo is a 40-hex head or the handoff does not publish — a spend can never rest on a forged field', () => {
   const { dir } = runDir()
   cleanThenRemediated(dir)

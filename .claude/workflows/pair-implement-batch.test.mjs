@@ -1424,9 +1424,13 @@ test('DR4-01: a preparation handed a rollback that does not report the head back
   assert.match(prepare, /reconstructedFrom:/, 'the preparation`s echo of the rollback head must be declared')
   assert.match(prepare, /\^\[0-9a-f\]\{40\}\$/, 'and constrained to a head, not free text')
   // The coordinator half: handed a directive, an absent or mismatched echo stops the run.
-  const at = SRC.indexOf('reconstruct-echo-missing')
+  const at = SRC.indexOf('reconstruct-echo-mismatch')
   assert.ok(at > 0, 'the coordinator must refuse a preparation that swallowed the directive')
-  assert.match(SRC.slice(at - 400, at), /failed-preparation|next\.reconstruct\?\.fromHead/, 'and refuse it as a typed failed-preparation')
+  // DR5-01 variant A: the check is TWO-SIDED, like the guard-set echo at `validate` — an echo
+  // nobody was handed is refused too, since the echo is the sole authority for spending a decision.
+  assert.match(SRC.slice(at - 600, at), /handed !== echoed/, 'both directions, not just the missing one')
+  // DR5-04: a refusal and a contradiction carry their own field set and must keep their diagnosis.
+  assert.ok(SRC.indexOf('isPrepareRefusal(res)') < at && SRC.indexOf('if (isContradiction(res)) {') < at && SRC.indexOf('hasPreparedContract(res') < at, 'the echo is checked only once a refusal, a contradiction and a missing contract have had their own diagnosis')
 })
 
 // ── US-479 V2 (F-RR-03): the FOURTH participant receives the matrix too ───────────────────────

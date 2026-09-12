@@ -893,6 +893,9 @@ const NEXT_SCHEMA = {
     // code is measured against. A content operation, committed forward; never a Git history one.
     reconstruct: { type: 'object' },
     rollbackRefusal: { type: 'string' },
+    // US-479 DR5-Q1: an honoured decision is stated, not silently dropped — `rollback-already-
+    // honoured:<sha>`. Not a refusal: the directive was carried out and the cycle proceeds.
+    rollbackNote: { type: 'string' },
     // The PR the cycle is bound to. A structured-output schema is STRICT: a field the schema does
     // not declare is dropped by the harness before the coordinator sees it — `pr` was, and a
     // fresh-path resume then had no PR to verify against (canary run 11, 3.0.4).
@@ -1726,12 +1729,6 @@ async function driveStory(story) {
       // else in this branch. It used to be computed and dropped, so a maintainer who mistyped a head
       // got an ordinary patch-forward run and never learned their directive had been discarded.
       if (next.rollbackRefusal) return result('failed-preparation', { reason: `rollback refused: ${next.rollbackRefusal}`, phase: next.phase })
-      // US-479 DR4-01: the rollback ECHO. Spending a maintainer's decision is decided on
-      // `reconstructedFrom`, so a preparation that was handed a directive and did not report the head
-      // back leaves that decision unspendable — it would be re-delivered at every later rewind, which
-      // is DR3-04 again. Demanded here exactly as the regression-guard echo is at `validate`.
-      if (next.reconstruct?.fromHead && String(res.reconstructedFrom ?? '') !== String(next.reconstruct.fromHead))
-        return result('failed-preparation', { reason: `reconstruct-echo-missing:${next.phase} (handed ${next.reconstruct.fromHead}, reported ${res.reconstructedFrom ?? 'nothing'})`, phase: next.phase })
       if (isPrepareRefusal(res)) return result('failed-preparation', { reason: res.reason ?? res.splitReason ?? res.status, refusal: res.status, phase: next.phase, findings: next.findings })
       if (isContradiction(res)) {
         const defect = contradictionDefect(res)
@@ -1743,6 +1740,22 @@ async function driveStory(story) {
       // regression repair lands on the DERIVED producing group, so keying on the number demanded a
       // plan red-spec's own contract says it does not produce when handed a scope.
       if (!hasPreparedContract(res, { needPlan: next.mode === 'remediation' && !next.group, ids: (next.findings ?? []).map(f => f.id), mode: next.mode })) return result('failed-preparation', { reason: 'the preparation stage returned no usable contract', phase: next.phase })
+      // US-479 DR4-01/DR5-04: the rollback ECHO, checked in BOTH directions like the guard-set echo
+      // at `validate` — and only once this preparation actually produced a contract. A refusal
+      // (`stale`, `dirty`, `split-required`, `unprovable`) and a contradiction are routing outcomes
+      // that carry their own field set; checking the echo before them replaced a real diagnosis with
+      // a missing-echo one, and failed a contradiction that `red-spec/SKILL.md` says carries no
+      // contract at all.
+      // Handed a directive and silent about it ⇒ the decision becomes unspendable and is
+      // re-delivered at every later rewind, which is DR3-04 again. Reporting a head nobody handed
+      // ⇒ a decision could be spent by an echo the workflow never dispatched (DR5-01 variant A),
+      // and an echo is the sole authority for spending a human's instruction.
+      {
+        const handed = String(next.reconstruct?.fromHead ?? '')
+        const echoed = String(res.reconstructedFrom ?? '')
+        if (handed !== echoed)
+          return result('failed-preparation', { reason: `reconstruct-echo-mismatch:${next.phase} (handed ${handed || 'nothing'}, reported ${echoed || 'nothing'})`, phase: next.phase })
+      }
       if (next.mode === 'remediation' && res.plan) {
         const carried = (res.plan.carried ?? []).map(c => ({ ...(next.findings ?? []).find(f => f.id === c.finding), external: true, disposition: `Outside the repository — ${c.disposition}` }))
         // Carried is a LOCATION, not acceptance: the finding stays blocking for the verifier; here it

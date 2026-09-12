@@ -70,11 +70,14 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   producing group's own `allowedPaths` are restored to that content and rebuilt, still committing
   FORWARD. The workflow neither picks the point nor vetoes the choice: it once decided whether a
   restore was safe, and four independent reviews found four defects in that decision. A head this
-  cycle never recorded is refused out loud — the refusal travels with the dispatch and reaches the
-  maintainer, rather than being computed and dropped (it does not halt the cycle; `prepare` still
-  runs). The decision is honoured exactly ONCE: the corrective preparation echoes the head it was
-  handed (`reconstructedFrom`), and the directive is spent once a later fix of that batch has built
-  from it — a head nobody was handed is never spent, and a different head is a different decision.
+  cycle never recorded is refused out loud and the run STOPS on it: the refusal travels as a field on
+  the dispatch and the coordinator ends the story `failed-preparation`, rather than the directive
+  being computed and dropped. The decision is honoured exactly ONCE: the corrective preparation
+  echoes the head it was handed (`reconstructedFrom`, checked in both directions), and the directive
+  is spent by the fix dispatched FROM that preparation — same phase, same attempt — reporting
+  `fixed`. A head nobody was handed is never spent, a different head is a different decision, and a
+  repair that produced nothing consumed nothing. A decision already carried out is not a refusal: it
+  says so (`rollback-already-honoured`) and the cycle proceeds.
   The notes a rebuild needs — obligations still open, regressions still live, and the decisions the
   review verified were RIGHT (`worked`) — are a VIEW over the handoffs: nobody writes them to a
   second place and nobody deletes them. Amendments (t) and the 2026-09-12 ADLs are current here.

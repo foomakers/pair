@@ -1049,10 +1049,12 @@ export const activeRegressionRisks = handoffs => regressionRiskLedger(handoffs).
 //
 // What a BATCH produced is its green-fix/implement output heads — a `reviewedHead` is what someone
 // looked at, never what a remediation built.
-// US-479 DR4-01: the ONE batch attribution. `remediationBatchId` is optional on a handoff, so every
-// reader that needs it falls back to the round the phase itself names; `rollbackSpent` was the
-// fourth such reader and the only one that did not, which let an omitted field resurrect a directive
-// already spent. Declared once, used by all of them.
+// US-479 DR4-01: the batch attribution shared by `batchLineage` and `rollbackSpent`.
+// `remediationBatchId` is optional on a handoff, so both fall back to the round the phase itself
+// names; `rollbackSpent` did not, which let an omitted field resurrect a directive already spent.
+// Two other readers are deliberately NOT routed through this (DR5-03 corrected the claim that they
+// were): `batchObligations` keeps the identical expression inline, and `knownBatch` answers a
+// different question — it accepts a groupId PREFIXED by the batch, which this must not do.
 const batchOf = h => h.data?.remediationBatchId ?? (phaseParts(h.phase)?.round ? `r${phaseParts(h.phase).round}` : undefined)
 function batchLineage(list) {
   const byBatch = new Map()
@@ -1461,10 +1463,18 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       // (`reconstructedFrom`, validated as a sha at publish and demanded by the coordinator) and a
       // later `green-fix` of the same batch produced a head from it. A head nobody was handed is
       // therefore never spent, and a DIFFERENT head is a different decision — always owed.
-      const rollbackSpent = (batchId, head) => {
-        const delivered = list.findIndex(h => h.skill === 'red-spec' && batchOf(h) === batchId && String(h.data.reconstructedFrom ?? '') === head)
-        return delivered >= 0 && list.slice(delivered + 1).some(h => h.skill === 'green-fix' && h.data.fixed === true && batchOf(h) === batchId)
-      }
+      // US-479 DR5-01: "produced a head FROM IT" is an identity, not an ordering. The second attempt
+      // asked only whether SOME later green-fix of the batch reported `fixed`, so a repair the
+      // directive was handed to could fail, an ordinary repair could succeed afterwards, and the
+      // decision was consumed by work that never restored anything — DR4-01's harm again, one
+      // staging further on. The spending fix must be the one dispatched FROM the echoing
+      // preparation: same phase, same attempt. That pair is what the coordinator dispatches as one
+      // unit (`$phase` + `$attempt`), so nothing downstream has to be trusted to report it.
+      const rollbackSpent = (batchId, head) =>
+        list.some(e => {
+          if (e.skill !== 'red-spec' || batchOf(e) !== batchId || String(e.data.reconstructedFrom ?? '') !== head || e.phase !== phase) return false
+          return list.some(g => g.skill === 'green-fix' && g.data.fixed === true && g.phase === e.phase && g.attempt === e.attempt)
+        })
       // The earliest introducing batch is repaired first; every active risk travels with it.
       const roundOf = b => phaseParts(`${b}-g1`)?.round ?? 0
       const batch = [...new Set(activeRisks.map(r => String(r.introducedByRemediationBatchId)))].sort((a, b) => roundOf(a) - roundOf(b))[0]
@@ -1500,6 +1510,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       const notes = rollbackNotes(list, ctx.ledger)
       let reconstruct
       let rollbackRefusal
+      let rollbackNote
       if (policy.rollbackTo) {
         const want = String(policy.rollbackTo)
         const known = list.some(h => [h.data.outputHead, h.data.reviewedHead].some(x => String(x ?? '') === want))
@@ -1517,7 +1528,10 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
         // same batch reported `fixed`. A repair that produced nothing consumed nothing, so the
         // decision is still owed. Derived from the handoffs in publication order, like every other
         // view — nobody writes a consumption flag and nobody deletes one.
-        else if (rollbackSpent(batch, want)) reconstruct = undefined
+        // US-479 DR5-Q1: spending is stated, never silent. Three rounds of this defect all looked the
+        // same from the maintainer's seat — a head typed into nothing — so an honoured decision says
+        // so. It is NOT a refusal: the directive was carried out, and the cycle proceeds.
+        else if (rollbackSpent(batch, want)) rollbackNote = `rollback-already-honoured:${want}`
         else reconstruct = { fromHead: want, paths, riskIds: ofBatch.map(x => x.riskId), notes: { obligations: notes.obligations.filter(o => o.open), regressions: notes.regressions, worked: notes.worked } }
       }
       const carried = new Map()
@@ -1539,6 +1553,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
         group: groupOf(phase),
         ...(reconstruct ? { reconstruct } : {}),
         ...(rollbackRefusal ? { rollbackRefusal } : {}),
+        ...(rollbackNote ? { rollbackNote } : {}),
         detail: `regression-risk rewind of ${batch}: ${activeRisks.length} active guard(s) plus every unresolved finding, fixed forward on the current head`,
       }
     }

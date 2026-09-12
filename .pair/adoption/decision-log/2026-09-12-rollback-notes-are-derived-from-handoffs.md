@@ -83,8 +83,12 @@ turn. The emptiness test was evaluated inside `if (activeRisks.length)`, where t
 Keying it on the batch instead then discarded a first-ever decision in silence. Re-firing is stopped
 by a SEPARATE and explicit mechanism, and it is keyed on the DECISION: the corrective preparation
 that received the head echoes it back (`reconstructedFrom`, a sha validated at publish and demanded
-by the coordinator), and the directive is spent once a later `green-fix` of that batch has produced
-a head from it. A head nobody was handed is never spent; a different head is a different decision.
+by the coordinator in both directions), and the directive is spent by the fix DISPATCHED FROM that
+preparation — same phase, same attempt — reporting `fixed`. A head nobody was handed is never spent;
+a different head is a different decision; a repair that produced nothing consumed nothing. Keying it
+on "some later fix of the batch" was the third failed form (DR5-01): the repair a directive is handed
+to can fail while an ordinary one succeeds after it, and the decision was then consumed by work that
+restored nothing. An honoured decision is stated (`rollback-already-honoured`), never silent.
 The notes remain a derived view — that part stands — but they never governed spending. See
 ADR-024 amendment (t).
 

@@ -1056,13 +1056,17 @@ last, so `a0` could resolve to `a0-rev2`'s head — the very outcome (r)'s own p
 promises never happens — and half the accepted alphabet could not be resolved at all. `rollbackTo`
 is now a 40-hex head the maintainer reads from `git log` and the workflow takes verbatim: no
 resolution step, therefore no heuristic and nothing to guess. Validation is existence — this cycle
-recorded that sha, or the directive is refused — and the refusal REACHES THE MAINTAINER, attached to
-the dispatch, rather than being computed and dropped. It does not halt the cycle: `prepare` still
-runs, because a mistyped parameter is not a dead end (an earlier draft of this amendment said the
-run stops; the code and its own test say otherwise, and this is the correction). The typed refusals
-are `rollback-head-invalid:<value>`, `rollback-head-unknown:<sha>` and
-`rollback-scope-unknown:<phase>`; **`rollback-round-unknown:<round>` no longer exists** anywhere, and
-neither does the round-name grammar it reported on. See ADL 2026-09-12
+recorded that sha, or the directive is refused — and the refusal STOPS THE RUN rather than being
+computed and dropped. Two layers, and an earlier draft of this amendment confused them: the state
+authority still derives `prepare` (a refusal is a field on the dispatch, not a dead end in
+`cycle-state.mjs` — which is what its test asserts), and the COORDINATOR then ends the story
+`failed-preparation` when it sees that field. The maintainer learns their directive was discarded
+because the run stops on it. The typed refusals are `rollback-head-invalid:<value>`,
+`rollback-head-unknown:<sha>` and `rollback-scope-unknown:<phase>`;
+**`rollback-round-unknown:<round>` no longer exists** anywhere, and neither does the round-name
+grammar it reported on. A decision already carried out is NOT a refusal: it travels as
+`rollbackNote: rollback-already-honoured:<sha>` and the cycle proceeds (DR5-Q1 — three rounds of this
+defect were invisible because an unspent head and a spent one both looked like silence). See ADL 2026-09-12
 `rollback-notes-are-derived-from-handoffs.md`.
 
 **(r) is silent on how many times the directive is emitted**, and two reviews in a row showed the
@@ -1079,11 +1083,16 @@ trace. Over-restoring is recoverable; ignoring a human decision without saying s
 
 **A rollback decision is honoured exactly once, and spending is keyed on the DECISION.** The
 corrective preparation that RECEIVES a head echoes it back as `reconstructedFrom` — a sha validated
-before the handoff is written, and demanded by the coordinator, which stops the run when a
-preparation handed a directive reports nothing or reports a different head. The directive is spent
-once a later `green-fix` of that batch has produced a head from it. Therefore: a head nobody was
-handed is never spent; a different head is a different decision and is owed; a repair that produced
-nothing consumed nothing. Batch attribution everywhere falls back to the round the phase names, so
+before the handoff is written, and checked by the coordinator in BOTH directions, as the guard-set
+echo at `validate` already was: a preparation handed a directive that reports nothing or a different
+head stops the run, and so does one that reports an echo nobody handed it, since the echo is the
+sole authority for spending a human's instruction. The directive is spent when the fix DISPATCHED
+FROM that preparation — the same phase and the same attempt, which the coordinator dispatches as one
+unit — reported `fixed`. Identity, not ordering: the third review of this rule (DR5-01) showed that
+"some later fix of the batch succeeded" lets a repair which restored nothing consume the decision,
+because the repair the directive was handed to can fail and an ordinary one succeed after it.
+Therefore: a head nobody was handed is never spent; a different head is a different decision and is
+owed; and a repair that produced nothing consumed nothing — now in the code, not only here. Batch attribution everywhere falls back to the round the phase names, so
 an omitted optional `remediationBatchId` cannot resurrect a spent directive. The echo is the only
 new datum, and nothing writes a consumption flag and nothing deletes one.
 
