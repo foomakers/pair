@@ -263,6 +263,27 @@ test('verify breach: a behavioral scope may not add a production module even ins
   rmSync(cwd2, { recursive: true, force: true })
 })
 
+test('t9c-3: a conventional doc without a documentation extension is not a module — a behavioral GREEN may add README, LICENSE or an .rst', () => {
+  // The allow-list was written as extensions (`.md`/`.mdx`/`.txt`) plus three directories, so the
+  // documents that carry no extension at all — the ones every repository has at its root — were
+  // classified as production modules. Nothing live tripped it (existing files change as `M`, and an
+  // added one is what a behavioral scope may not do), but the failure is a refusal of correct work.
+  for (const d of ['README', 'LICENSE', 'LICENCE', 'COPYING', 'CHANGELOG', 'CONTRIBUTING', 'NOTICE', 'AUTHORS', 'packages/x/README', 'docs/guide.rst', 'notes/x.adoc', 'README.rst', 'LICENSE.txt'])
+    assert.equal(isModulePath(d), false, d)
+  // The exemption is the WHOLE basename, never a prefix of one, and never an extension it resembles:
+  // a file merely starting with an exempt name, or ending in one, is production.
+  for (const m of ['readme.js', 'LICENSE.ts', 'src/license.json', 'authors.mjs', 'CHANGELOGGER', 'my-README', 'src/a.rstx'])
+    assert.equal(isModulePath(m), true, m)
+  // …and end to end: adding one under a behavioral scope verifies instead of breaching.
+  const { cwd, base } = repo()
+  redContract(cwd, { fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/'] } })
+  const s = seal({ pr: PR, phase: PHASE, base, contractPath: '.pair/working/red-draft.json', cwd })
+  rmSync(join(cwd, '.pair/working/red-draft.json'))
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n', 'src/README': 'what this package is\n', 'src/LICENSE': 'MIT\n' })
+  assert.deepEqual(verify({ pr: PR, phase: PHASE, base, cwd }).breaches, [])
+  rmSync(cwd, { recursive: true, force: true })
+})
+
 test('mode test: a guard-strength repair seals with no production paths; any production change after it is a breach', () => {
   const { cwd, base } = repo()
   redContract(cwd, { fixScope: { owner: 'guard', mode: 'test', allowedPaths: [] } })

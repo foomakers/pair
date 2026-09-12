@@ -54,12 +54,18 @@ export const isRelPath = p =>
 // manifest does not list — a listed artifact is checked by blob identity regardless of its name.
 // A production MODULE — what a `behavioral` scope may edit but never create, move or split. ONLY
 // documentation and decision evidence is exempt (an explicit allow-list, T-9 re-review t9b-2):
-// `.md` / `.mdx` / `.txt` anywhere, or anything under `.pair/adoption/`, `.pair/knowledge/`,
-// `docs/`. Everything else added or moved under a behavioral scope — a CI workflow, Terraform, a
-// migration, a Dockerfile, a JSON config, a script under `.pair/` — is a module and a breach.
+// `.md` / `.mdx` / `.txt` / `.rst` / `.adoc` anywhere, the conventional repository documents that
+// carry NO extension at all (`README`, `LICENSE`, `CHANGELOG`, `CONTRIBUTING`, `NOTICE`, `AUTHORS`
+// — t9c-3: written as extensions, the list classified exactly the documents every repository keeps
+// at its root as production, and a behavioral GREEN adding one was refused), or anything under
+// `.pair/adoption/`, `.pair/knowledge/`, `docs/`. Everything else added or moved under a behavioral
+// scope — a CI workflow, Terraform, a migration, a Dockerfile, a JSON config, a script under
+// `.pair/` — is a module and a breach. The basename match is WHOLE: `readme.js` is production.
+export const DOC_BASENAMES = /^(README|LICEN[CS]E|CHANGELOG|CONTRIBUTING|NOTICE|AUTHORS|COPYING)$/i
 export const isModulePath = p => {
   const s = String(p ?? '')
-  if (/\.(md|mdx|txt)$/i.test(s)) return false
+  if (/\.(md|mdx|txt|rst|adoc)$/i.test(s)) return false
+  if (DOC_BASENAMES.test(s.split('/').pop() ?? '')) return false
   if (/^(\.pair\/(adoption|knowledge)\/|docs\/)/.test(s)) return false
   return true
 }
