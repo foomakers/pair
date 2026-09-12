@@ -418,10 +418,21 @@ export function listSnapshots({ pr, base, cwd }) {
   return snaps
 }
 
-export function verifyChain({ pr, base, cwd }) {
+// US-479 (canary 481-v2): `expectContract` says whether the CALLER knows a contract was sealed.
+// Zero snapshots means two different things and the chain cannot tell them apart on its own: a
+// contract that was sealed and has since been rewritten away (the rebase case this breach exists
+// for), or a branch that never sealed anything — the first review of a PR with no remediation
+// round. Reported as a breach, the second killed a cycle at r0 with nothing wrong, which is the
+// failure the 2026-09-12 custody ADL names: never infer a breach from what is not there.
+// The default stays STRICT, so no existing caller is silently weakened; a caller that knows there
+// is no contract says so and gets `contract: 'none'` instead of an accusation.
+export function verifyChain({ pr, base, cwd, expectContract = true }) {
   if (!SHA_RE.test(String(base))) return { verified: false, contractBreach: true, breaches: [{ code: 'base-not-a-sha' }], snapshots: [] }
   const snaps = listSnapshots({ pr, base, cwd })
-  if (!snaps.length) return { verified: false, contractBreach: true, breaches: [{ code: 'snapshot-missing' }], snapshots: [] }
+  if (!snaps.length)
+    return expectContract
+      ? { verified: false, contractBreach: true, breaches: [{ code: 'snapshot-missing' }], snapshots: [] }
+      : { verified: true, contractBreach: false, breaches: [], snapshots: [], contract: 'none' }
   const breaches = []
   const breach = (code, extra = {}) => breaches.push({ code, ...extra })
   const head = git(['rev-parse', 'HEAD'], cwd)
@@ -542,7 +553,9 @@ if (isMain()) {
     for (const k of cmd === 'verify-chain' ? ['pr', 'base'] : ['pr', 'phase', 'base']) if (!opts[k]) throw new Error(`--${k} is required`)
     let out
     if (cmd === 'verify-chain') {
-      out = verifyChain({ pr: opts.pr, base: opts.base, cwd })
+      // US-479 (canary 481-v2): `--contract-expected false` states that this cycle has sealed nothing.
+      // Only that exact spelling relaxes the check; anything else keeps the strict default.
+      out = verifyChain({ pr: opts.pr, base: opts.base, cwd, expectContract: String(opts['contract-expected'] ?? 'true') !== 'false' })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.verified ? 0 : 1)
     } else if (cmd === 'seal') {

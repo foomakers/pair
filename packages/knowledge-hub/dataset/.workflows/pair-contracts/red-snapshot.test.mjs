@@ -549,6 +549,50 @@ test('verify-chain lists only first-parent history (t9b-3): a foreign PR seal me
   rmSync(cwd, { recursive: true, force: true })
 })
 
+test('verify-chain on a branch that never sealed anything: a breach only when a contract was EXPECTED (canary 481-v2)', () => {
+  // The first review of a PR that has had no remediation round runs against a branch carrying zero
+  // `Pair-RED-Snapshot` trailers. There is no contract, so there is nothing to violate — but the
+  // chain reported `snapshot-missing` and the coordinator read it as `failed-custody`, killing the
+  // cycle at r0 with nothing wrong. Same class as the t9c-1 ADL: custody must not infer a breach
+  // from what is not there. It is still a breach when the caller KNOWS a contract was sealed and
+  // the chain cannot find it — that is the rebase case `snapshot-missing` exists for — so the
+  // expectation comes from the caller and the default stays the strict one.
+  const { cwd, base } = repo()
+  const clean = verifyChain({ pr: PR, base, cwd, expectContract: false })
+  assert.deepEqual(
+    { verified: clean.verified, breach: clean.contractBreach, breaches: clean.breaches, snaps: clean.snapshots, contract: clean.contract },
+    { verified: true, breach: false, breaches: [], snaps: [], contract: 'none' },
+    'nothing sealed and nothing expected: there is no custody to violate',
+  )
+  // the rebase case is untouched: a caller that expects a contract still gets the breach…
+  const expecting = verifyChain({ pr: PR, base, cwd, expectContract: true })
+  assert.deepEqual(expecting.breaches, [{ code: 'snapshot-missing' }], 'an expected contract that is gone is still a breach')
+  assert.equal(expecting.verified, false)
+  // …and so does a caller that says nothing, so no existing caller is silently weakened.
+  assert.deepEqual(verifyChain({ pr: PR, base, cwd }).breaches, [{ code: 'snapshot-missing' }], 'the default is the strict one')
+  // …and through the REAL CLI, which is what the skill actually runs: the flag has to reach the
+  // parser, and the parser takes `--k v` pairs only — a bare `--no-…` switch is a `bad argument`
+  // the unit call above would never have caught.
+  const cli = (args = []) => spawnSync(process.execPath, [CLI, 'verify-chain', '--pr', String(PR), '--base', base, ...args], { cwd, encoding: 'utf8' })
+  const strict = cli()
+  assert.equal(strict.status, 1)
+  assert.deepEqual(JSON.parse(strict.stdout).breaches, [{ code: 'snapshot-missing' }], 'CLI default stays strict')
+  const relaxed = cli(['--contract-expected', 'false'])
+  assert.equal(relaxed.status, 0, relaxed.stdout + relaxed.stderr)
+  assert.deepEqual(JSON.parse(relaxed.stdout).contract, 'none')
+  // only that exact value relaxes it — a typo must not quietly disable a custody check
+  for (const v of ['False', '0', 'no', 'nope'])
+    assert.equal(JSON.parse(cli(['--contract-expected', v]).stdout).contractBreach, true, `--contract-expected ${v} must not relax the check`)
+  // a real chain is unaffected by the new argument
+  redContract(cwd, { fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/'] } })
+  const s = seal({ pr: PR, phase: PHASE, base, contractPath: '.pair/working/red-draft.json', cwd })
+  rmSync(join(cwd, '.pair/working/red-draft.json'))
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  for (const expectContract of [undefined, true, false])
+    assert.equal(verifyChain({ pr: PR, base, cwd, expectContract }).verified, true, `sealed chain verifies regardless of the expectation (${expectContract})`)
+  rmSync(cwd, { recursive: true, force: true })
+})
+
 test('verify-chain breach: a sealed test changed outside a successor snapshot, a production change out of the scope in force, an unlisted test, a missing snapshot', () => {
   const { cwd, base, head1 } = chainRepo()
   // tamper between seals: a sealed blob edited by an ordinary commit is a breach even though a revision follows
