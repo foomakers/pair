@@ -47,6 +47,12 @@ The **code host** is the tool that owns repositories, branches, pull requests an
    | GitHub       | `github`, `github-projects`, `github-enterprise`                    |
    | Azure DevOps | `azure-devops`, `azure-boards`, `azure-repos`                       |
    | GitLab       | `gitlab`, `gitlab-issues`                                          |
+   | Linear       | `linear`                                                           |
+   | Filesystem   | `filesystem`                                                       |
+
+   This table is also the **canonical token set**: the identifiers a skill's `$tool` argument accepts (`/setup-pm $tool: azure-devops`) are these, so a tracker's tokens are declared once here and every reader — argument parser and code-host comparison alike — resolves the same spellings.
+
+   **A token in this table is well-formed, not necessarily supported.** The table names every product pair can *recognize*; the KB ships an implementation guide for a subset of them. A `$tool` value outside that subset — `gitlab` today — therefore RESOLVES at Step 2.1 and then takes the **Step 2.4 HALT** with contribution instructions, exactly as an unknown spelling would fail earlier. Recognition and support are two different questions, and this table answers only the first; the `## Error Handling` section states the same rule from the other end. Said here because the resolution steps are read in order and a reader who stops at "valid token" concludes the run proceeds.
 
    Anything outside one alias row is a **different product** ⇒ the split is active (`Refs:` slot + back-link comment). An adoption never relies on prose to say "these two are the same tool" — the alias row is what makes it so.
 5. **Act**: If `code-host` names a **different** tool, resolve its access method (CLI/MCP/API) from the same section and route per the table below. **Reachable but undocumented host** — the KB ships an implementation guide for GitHub and Azure DevOps only, so a declared `gitlab`, `bitbucket` or self-hosted host has **no KB implementation guide**: **warn once and proceed best-effort** through that host's own CLI/API (the same warn-and-best-effort degradation `/write-issue` applies to a PM tool with no guide). A missing guide is **never** a HALT by itself — only an unreachable or unauthenticated host is (step 6).
