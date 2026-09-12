@@ -245,3 +245,275 @@ describe('Azure adapter Adoption Configuration and its website twin agree (#321 
     expect(website).toBe(adapterSnippet(join(REPO_ROOT, ADAPTER_REL)))
   })
 })
+
+/**
+ * `$tool` VALIDITY IS TWO-CONDITION (r1-g1). The `## Arguments` row defines the accepted values
+ * BY REFERENCE — the canonical alias table in `way-of-working-pm-resolution.md#code-host-resolution`.
+ * That table is a CODE-HOST alias table and a strict SUPERSET of what setup-pm can configure: it
+ * carries `gitlab` / `gitlab-issues`, for which no adapter ships. Membership in it therefore cannot
+ * be the whole of "valid", or `/pair-capability-setup-pm $tool: gitlab` passes Step 2.1's validity
+ * check, takes the Step 2.2 skip into Step 3 — which has no GitLab guide row — and the executor
+ * improvises a way-of-working write for an unsupported tracker, while the Step 2.4 HALT (worded for
+ * the interactive path, "if developer SELECTS") never runs.
+ *
+ * ORACLE: the alias table (products) vs the adapters on disk (`*-implementation.md`) — both
+ * DISCOVERED, never enumerated here, so the guideless set is re-derived on every run and the day a
+ * `gitlab-implementation.md` ships the gap closes by itself rather than by editing this file. The
+ * gate assertions below stay structural on purpose: the rule must be two-condition WITHOUT copying
+ * the token list back into the skill, which is the duplication the by-reference row removed.
+ */
+const CONVENTION_REL =
+  '.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md'
+
+/** Lowercased, punctuation-free — `Azure DevOps`, `azure-devops` and `azuredevops` all collapse. */
+const slug = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+/** Products of the canonical alias table, parsed from the convention itself. Fails closed. */
+const aliasProducts = (
+  conventionText: string,
+  label: string,
+): { product: string; tokens: string[] }[] => {
+  const table = sectionBetween(conventionText, '| Product', 'canonical token set')
+  const rows = table
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.startsWith('|') && !line.includes('---') && !line.includes('Equivalent'))
+    .map(line =>
+      line
+        .split('|')
+        .map(cell => cell.trim())
+        .filter(Boolean),
+    )
+    .filter(cells => cells.length === 2)
+    .map(cells => ({
+      product: cells[0] as string,
+      tokens: ((cells[1] as string).match(/`[^`]+`/g) ?? []).map(token => token.replace(/`/g, '')),
+    }))
+  if (rows.length === 0) throw new Error(`${label}: canonical alias table parsed to zero products`)
+  return rows
+}
+
+/** An alias-table product is supported iff an adapter file or its pinned H1 name matches it. */
+const productHasAdapter = (
+  product: string,
+  adapters: { file: string; tool: string }[],
+): boolean => {
+  const key = slug(product)
+  return adapters.some(
+    ({ file, tool }) =>
+      slug(file.replace('-implementation.md', '')).startsWith(key) || slug(tool).startsWith(key),
+  )
+}
+
+/** Step 2 split into its numbered items — robust to renumbering and to rewording. */
+const step2Items = (skillText: string): string[] =>
+  sectionBetween(skillText, '### Step 2: Select PM Tool', '### Step 3:')
+    .split(/\n(?=\d+\. \*\*)/)
+    .slice(1)
+
+/** Items 2.1-2.2: the validity check and the skip that routes a valid `$tool` past selection. */
+const validityGateItems = (skillText: string): string[] => {
+  const items = step2Items(skillText)
+  const selection = items.findIndex(item => item.includes('Present PM tool options'))
+  if (selection <= 0) throw new Error('Step 2: no interactive-selection item to bound the gate')
+  return items.slice(0, selection)
+}
+
+const validityGate = (skillText: string): string => validityGateItems(skillText).join('\n')
+
+/**
+ * The ONE gate item that carries the adapter condition — where the two-condition rule has to live,
+ * because a condition stated in a different item than the one that resolves the token can be read
+ * (and executed) as two independent checks. Undefined at `$base`: no item mentions a guide at all.
+ */
+const guideConditionItem = (skillText: string): string | undefined =>
+  validityGateItems(skillText).find(item => /implementation guide|adapter/.test(normalize(item)))
+
+/** `token` as a whole identifier — never a fragment of a longer one. */
+const spelledOut = (text: string, token: string): boolean =>
+  new RegExp(`(^|[^a-z0-9-])${escapeRegExp(token)}([^a-z0-9-]|$)`).test(text)
+
+const haltItem = (skillText: string): string => {
+  const item = step2Items(skillText).find(entry => entry.includes('HALT'))
+  if (!item) throw new Error('Step 2: no HALT item')
+  return item
+}
+
+const toolArgRow = (skillText: string): string => {
+  const args = sectionBetween(skillText, '## Arguments', '## Composed Skills')
+  const row = args.split('\n').find(line => line.includes('`$tool`') && line.startsWith('|'))
+  if (!row) throw new Error('## Arguments: no `$tool` row')
+  return row
+}
+
+const validityCases = CORPORA.map(({ label, adapterDir, skill }) => {
+  const adapters = adapterFiles(adapterDir).map(file => ({
+    file,
+    tool: displayName(read(join(adapterDir, file)), file),
+  }))
+  const products = aliasProducts(
+    read(join(label === 'dataset' ? DATASET : REPO_ROOT, CONVENTION_REL)),
+    label,
+  )
+  const supported = products.filter(({ product }) => productHasAdapter(product, adapters))
+  return {
+    corpus: label,
+    skillText: read(skill),
+    adapters,
+    products,
+    guideless: products.filter(({ product }) => !productHasAdapter(product, adapters)),
+    // Every spelling the table gives a product that DOES ship an adapter, and the subset of those
+    // that are NOT the product's own name. Derived from the table, never enumerated here: the day
+    // it gains a spelling, the cases below cover it without an edit to this file.
+    supportedTokens: supported.flatMap(({ product, tokens }) =>
+      tokens.map(token => ({ product, token })),
+    ),
+    aliasTokens: supported.flatMap(({ product, tokens }) =>
+      tokens.filter(token => slug(token) !== slug(product)),
+    ),
+    tokens: products.flatMap(({ tokens }) => tokens),
+  }
+})
+
+describe('setup-pm SKILL.md — $tool validity is tied to a shipped adapter (#321)', () => {
+  it.each(validityCases)(
+    '$corpus — the canonical token set is a strict superset of the adapters (oracle is non-vacuous)',
+    ({ products, adapters, guideless }) => {
+      // Guard, not a count assertion: proves both sides of the oracle were really discovered, so
+      // the rows below can never be vacuously satisfied by an empty parse.
+      expect(products.length, 'canonical alias table parsed to nothing').toBeGreaterThan(0)
+      expect(adapters.length, 'no adapters discovered on disk').toBeGreaterThan(0)
+      // Not asserted as non-empty: shipping the missing adapter is a legitimate way to empty it.
+      expect(guideless.length).toBeLessThan(products.length)
+    },
+  )
+
+  it.each(validityCases)(
+    '$corpus — Step 2 conditions validity on an implementation guide, not on the token table alone',
+    ({ skillText }) => {
+      const gate = normalize(validityGate(skillText))
+      // Condition 1 — the token resolves through the canonical alias table.
+      expect(
+        gate,
+        'the validity check does not resolve the token through the canonical table',
+      ).toMatch(/canonical|alias|way-of-working-pm-resolution/)
+      // Condition 2 — AND the resolved product actually has an adapter. Without this, `gitlab` is
+      // "valid" (it IS a canonical token) and the skip below carries it into Step 3.
+      expect(gate, 'the validity check never requires an implementation guide to exist').toMatch(
+        /implementation guide|adapter/,
+      )
+    },
+  )
+
+  it.each(validityCases)(
+    '$corpus — the Step 2 HALT is reachable from the tool-argument path, not only from selection',
+    ({ skillText }) => {
+      const halt = normalize(haltItem(skillText))
+      expect(halt, 'the HALT lost its trigger').toMatch(
+        /without an implementation guide|no implementation guide/,
+      )
+      // Worded only for the interactive path ("if developer SELECTS"), the HALT cannot fire for a
+      // token supplied as an argument — the exact hole `$tool: gitlab` falls through.
+      expect(
+        halt,
+        'the HALT is worded for the interactive path only — `$tool` never reaches it',
+      ).toMatch(/\$tool/)
+    },
+  )
+
+  it.each(validityCases)(
+    '$corpus — the tool-argument row qualifies the token table without copying it',
+    ({ skillText, tokens }) => {
+      const row = toolArgRow(skillText)
+      // The by-reference pointer stays (asserted above too) — this adds the missing qualifier, so a
+      // caller reading the row cannot conclude that every canonical token is configurable.
+      expect(row).toMatch(/way-of-working-pm-resolution\.md/)
+      expect(
+        normalize(row),
+        'the row advertises the whole canonical token set as accepted, unqualified',
+      ).toMatch(/implementation guide|adapter/)
+      // The OTHER half of by-reference, and the reason the pointer exists: the qualifier must not
+      // arrive as a pasted token list, which restores the two-place edit. Exactly one spelling
+      // survives — the illustration the row already carries (`azure-devops`); a second one means
+      // the set was copied back in. Spellings come from the table, so this cannot go stale.
+      const copied = tokens.filter(token => spelledOut(normalize(row), token))
+      expect(
+        copied.length,
+        `the $tool row spells out canonical tokens (${copied.join(', ')}) instead of pointing at ` +
+          `the table — the single source of truth becomes two the moment a tracker is added`,
+      ).toBeLessThanOrEqual(1)
+    },
+  )
+
+  it.each(validityCases)(
+    '$corpus — the guide condition is keyed on the RESOLVED PRODUCT, not on the literal token',
+    ({ skillText, aliasTokens }) => {
+      // Step 3.1 keys its rows on PRODUCTS (GitHub, Filesystem, Azure DevOps, Linear), so a rule
+      // reading "the canonical token table lists it AND an implementation guide ships for it"
+      // still breaks: `github-projects` and `azure-boards` — spellings this skill's own Step 2.3
+      // table and `## Notes` advertise — match no guide row and get swept into the Step 2.4 HALT
+      // with `gitlab`. The token must resolve to a PRODUCT first, and that has to be said in the
+      // same item as the guide condition, per the convention's "equality is per product, not per
+      // spelling".
+      const item = guideConditionItem(skillText)
+      expect(
+        item,
+        'no Step 2 item conditions validity on an implementation guide at all',
+      ).toBeDefined()
+      const rule = normalize(item as string)
+      expect(rule, 'the guide condition never resolves the token — it reads the spelling').toMatch(
+        /resolv/,
+      )
+      expect(rule, 'the guide condition is not keyed on the resolved product').toMatch(/product/)
+      // Non-vacuity: a product/spelling distinction is only observable while the table really
+      // gives some adapter-backed product a second spelling. If it stops, re-derive this guard
+      // rather than deleting the rule.
+      expect(
+        aliasTokens.length,
+        'no adapter-backed product has a non-canonical spelling in the alias table — the ' +
+          'per-product rule became unobservable, re-derive this guard',
+      ).toBeGreaterThan(0)
+    },
+  )
+
+  it.each(validityCases)(
+    '$corpus — a token whose product ships an adapter still routes to Step 3 (no over-correction)',
+    ({ skillText, supportedTokens }) => {
+      // The ordinary complement: hardening the gate must not turn `azure-boards` into a HALT.
+      expect(normalize(validityGate(skillText))).toMatch(/proceed to step 3/)
+      // ...and the omitted-`$tool` path still presents the interactive selection.
+      expect(normalize(toolArgRow(skillText))).toMatch(/if omitted/)
+      expect(step2Items(skillText).some(item => item.includes('Present PM tool options'))).toBe(
+        true,
+      )
+      // ...and no spelling of an adapter-backed product is enumerated as a HALT case: the HALT is
+      // for a product with no guide, whatever the caller spelled. Matched as a literal token, so
+      // the selection table's display name ("GitHub Projects") cannot pass for `github-projects`.
+      const halt = normalize(haltItem(skillText))
+      for (const { product, token } of supportedTokens) {
+        expect(
+          spelledOut(halt, token),
+          `${token} spells ${product}, which ships an adapter — the HALT must not name it`,
+        ).toBe(false)
+      }
+    },
+  )
+
+  it.each(validityCases)(
+    '$corpus — every canonical product with no adapter is named as taking the HALT',
+    ({ skillText, guideless }) => {
+      const notes = normalize(skillText.slice(skillText.indexOf('## Notes')))
+      const claim = notes.split(' - ').find(line => line.includes('takes the step 2.4 halt'))
+      expect(
+        claim,
+        'no line in ## Notes routes the unsupported tools to the Step 2.4 HALT',
+      ).toBeDefined()
+      for (const { product } of guideless) {
+        expect(
+          slug(claim as string),
+          `${product} is a canonical token with no adapter and is not routed to the HALT`,
+        ).toContain(slug(product))
+      }
+    },
+  )
+})
