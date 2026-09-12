@@ -272,6 +272,9 @@ export function envelopeErrors(data, { phase, skill }) {
   if (data.scopeEpoch !== undefined && (!Number.isInteger(data.scopeEpoch) || data.scopeEpoch < 1)) errs.push('scopeEpoch-invalid')
   if (data.scopeBaselineHash !== undefined && !/^sha256:[0-9a-f]{64}$/.test(String(data.scopeBaselineHash))) errs.push('scopeBaselineHash-invalid')
   if (data.firstReviewHead !== undefined && !SHA_RE.test(String(data.firstReviewHead))) errs.push('firstReviewHead-invalid')
+  // US-479 DR4-01: the rollback echo. A spend is decided on this value, so it is a 40-hex head or
+  // the handoff does not publish — never a free-text field a phase agent can shape.
+  if (data.reconstructedFrom !== undefined && !SHA_RE.test(String(data.reconstructedFrom))) errs.push('reconstructedFrom-not-a-sha')
   if (data.remediationBatchId !== undefined && (typeof data.remediationBatchId !== 'string' || data.remediationBatchId === '')) errs.push('remediationBatchId-invalid')
   if (data.recordType !== undefined && !RECORD_TYPES.includes(data.recordType)) errs.push(`recordType-invalid:${data.recordType}`)
   // red-spec's envelope carries `findings: { received, covered }` — the obligation ids it was
@@ -1046,12 +1049,17 @@ export const activeRegressionRisks = handoffs => regressionRiskLedger(handoffs).
 //
 // What a BATCH produced is its green-fix/implement output heads — a `reviewedHead` is what someone
 // looked at, never what a remediation built.
+// US-479 DR4-01: the ONE batch attribution. `remediationBatchId` is optional on a handoff, so every
+// reader that needs it falls back to the round the phase itself names; `rollbackSpent` was the
+// fourth such reader and the only one that did not, which let an omitted field resurrect a directive
+// already spent. Declared once, used by all of them.
+const batchOf = h => h.data?.remediationBatchId ?? (phaseParts(h.phase)?.round ? `r${phaseParts(h.phase).round}` : undefined)
 function batchLineage(list) {
   const byBatch = new Map()
   for (const h of list) {
     if (h.skill !== 'green-fix' && h.skill !== 'implement-phase') continue
     const parts = phaseParts(h.phase)
-    const batch = h.data.remediationBatchId ?? (parts?.round ? `r${parts.round}` : undefined)
+    const batch = batchOf(h)
     if (!batch || !SHA_RE.test(String(h.data.outputHead ?? ''))) continue
     const entry = byBatch.get(batch) ?? { heads: new Set(), byHead: new Map() }
     entry.heads.add(String(h.data.outputHead))
@@ -1445,12 +1453,17 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     if (d.needsHumanDecision === true) return blocked('escalate', { detail: `${d.humanDecisionKind ?? 'human'} decision requested by the review — a human decides before any automatic rewind`, findings: blocking, regressionRisks: activeRisks })
     if (activeRisks.length) {
       if (cycleCounters(list).spentCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', detail: 'an active regression risk remains and the remediation budget is spent', findings: blocking, regressionRisks: activeRisks })
-      // US-479 DR3-04: has the maintainer's rollback already been delivered AND acted upon? `list` is
-      // in publication order, so "acted upon" is a `green-fix` of the same batch that reported
-      // `fixed` AFTER the corrective preparation that carried the directive.
-      const rollbackSpent = batchId => {
-        const delivered = list.findIndex(h => h.skill === 'red-spec' && h.data.regressionRepairOf === batchId)
-        return delivered >= 0 && list.slice(delivered + 1).some(h => h.skill === 'green-fix' && h.data.fixed === true && String(h.data.remediationBatchId ?? '') === batchId)
+      // US-479 DR4-01: spending is keyed on the DECISION, never on the batch. The first attempt asked
+      // only whether this batch had ever been repaired — true, in the ordinary flow, long before the
+      // maintainer names anything — so a first-ever directive was silently discarded, which is worse
+      // than the re-firing it replaced: an explicit human instruction vanished without a trace.
+      // A directive is spent when the corrective preparation that RECEIVED this exact head echoed it
+      // (`reconstructedFrom`, validated as a sha at publish and demanded by the coordinator) and a
+      // later `green-fix` of the same batch produced a head from it. A head nobody was handed is
+      // therefore never spent, and a DIFFERENT head is a different decision — always owed.
+      const rollbackSpent = (batchId, head) => {
+        const delivered = list.findIndex(h => h.skill === 'red-spec' && batchOf(h) === batchId && String(h.data.reconstructedFrom ?? '') === head)
+        return delivered >= 0 && list.slice(delivered + 1).some(h => h.skill === 'green-fix' && h.data.fixed === true && batchOf(h) === batchId)
       }
       // The earliest introducing batch is repaired first; every active risk travels with it.
       const roundOf = b => phaseParts(`${b}-g1`)?.round ?? 0
@@ -1504,7 +1517,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
         // same batch reported `fixed`. A repair that produced nothing consumed nothing, so the
         // decision is still owed. Derived from the handoffs in publication order, like every other
         // view — nobody writes a consumption flag and nobody deletes one.
-        else if (rollbackSpent(batch)) reconstruct = undefined
+        else if (rollbackSpent(batch, want)) reconstruct = undefined
         else reconstruct = { fromHead: want, paths, riskIds: ofBatch.map(x => x.riskId), notes: { obligations: notes.obligations.filter(o => o.open), regressions: notes.regressions, worked: notes.worked } }
       }
       const carried = new Map()

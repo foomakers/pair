@@ -1053,6 +1053,11 @@ const PREPARE_SCHEMA = {
     changedRows: { type: 'array', items: { type: 'string' } },
     contractPath: { type: 'string' },
     contractHash: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' },
+    // US-479 DR4-01: the rollback echo — the head `$reconstruct` handed this preparation, reported
+    // back so a maintainer's decision can be spent exactly once. Declared here for the same reason
+    // every field above is: an undeclared field is dropped by the harness before the coordinator
+    // sees it, and a dropped echo makes the decision unspendable.
+    reconstructedFrom: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     plan: PLAN_SCHEMA,
     splitReason: { type: 'string' },
     reason: { type: 'string' },
@@ -1721,6 +1726,12 @@ async function driveStory(story) {
       // else in this branch. It used to be computed and dropped, so a maintainer who mistyped a head
       // got an ordinary patch-forward run and never learned their directive had been discarded.
       if (next.rollbackRefusal) return result('failed-preparation', { reason: `rollback refused: ${next.rollbackRefusal}`, phase: next.phase })
+      // US-479 DR4-01: the rollback ECHO. Spending a maintainer's decision is decided on
+      // `reconstructedFrom`, so a preparation that was handed a directive and did not report the head
+      // back leaves that decision unspendable — it would be re-delivered at every later rewind, which
+      // is DR3-04 again. Demanded here exactly as the regression-guard echo is at `validate`.
+      if (next.reconstruct?.fromHead && String(res.reconstructedFrom ?? '') !== String(next.reconstruct.fromHead))
+        return result('failed-preparation', { reason: `reconstruct-echo-missing:${next.phase} (handed ${next.reconstruct.fromHead}, reported ${res.reconstructedFrom ?? 'nothing'})`, phase: next.phase })
       if (isPrepareRefusal(res)) return result('failed-preparation', { reason: res.reason ?? res.splitReason ?? res.status, refusal: res.status, phase: next.phase, findings: next.findings })
       if (isContradiction(res)) {
         const defect = contradictionDefect(res)

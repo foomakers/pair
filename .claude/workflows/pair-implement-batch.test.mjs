@@ -1417,6 +1417,18 @@ test('F-RR-03: a verifier that returns a guard set different from the dispatched
   }
 })
 
+test('DR4-01: a preparation handed a rollback that does not report the head back is refused — an unspendable decision is DR3-04 again', () => {
+  // The schema half: an undeclared field is dropped by the harness before the coordinator sees it,
+  // so the echo would be structurally impossible to report.
+  const prepare = SRC.slice(SRC.indexOf('const PREPARE_SCHEMA'), SRC.indexOf('const VALIDATE_SCHEMA'))
+  assert.match(prepare, /reconstructedFrom:/, 'the preparation`s echo of the rollback head must be declared')
+  assert.match(prepare, /\^\[0-9a-f\]\{40\}\$/, 'and constrained to a head, not free text')
+  // The coordinator half: handed a directive, an absent or mismatched echo stops the run.
+  const at = SRC.indexOf('reconstruct-echo-missing')
+  assert.ok(at > 0, 'the coordinator must refuse a preparation that swallowed the directive')
+  assert.match(SRC.slice(at - 400, at), /failed-preparation|next\.reconstruct\?\.fromHead/, 'and refuse it as a typed failed-preparation')
+})
+
 // ── US-479 V2 (F-RR-03): the FOURTH participant receives the matrix too ───────────────────────
 // The review is the one that must EXECUTE the active guards on the exact head. Leaving it to infer
 // them "from the ledger it reads" is fail-safe but costs a whole wasted round: the risk stays

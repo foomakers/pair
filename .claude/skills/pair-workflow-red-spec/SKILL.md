@@ -105,7 +105,7 @@ obligation or regression risk is still active; and the interaction between the o
 remediation and a regression that remediation introduced. An omitted applicable family is
 `contract-incomplete:<transition>:<family>` and spends the ordinary bounded preparation-repair path.
 
-**US-479 S13 — `$reconstruct`.** When the dispatch carries it, a MAINTAINER named a head to roll back to (ADL 2026-09-12) — the workflow did not infer it and does not re-litigate it. Carry it into the contract: name `fromHead` and the exact `paths` whose content is restored, keep every guard in `riskIds` as a row, carry `notes.worked` as the decisions already known to be right, and state that the rebuilt code must satisfy the batch's original obligations AND those guards. The `fixScope` is unchanged by this — restoring content is not widening scope, and a reconstruction that would need a wider scope is a replan, not a repair.
+**US-479 S13 — `$reconstruct`.** When the dispatch carries it, a MAINTAINER named a head to roll back to (ADL 2026-09-12) — the workflow did not infer it and does not re-litigate it. Carry it into the contract: name `fromHead` and the exact `paths` whose content is restored, keep every guard in `riskIds` as a row, carry `notes.worked` as the decisions already known to be right, and state that the rebuilt code must satisfy the batch's original obligations AND those guards. The `fixScope` is unchanged by this — restoring content is not widening scope, and a reconstruction that would need a wider scope is a replan, not a repair. **Echo `fromHead` back as `reconstructedFrom`** (US-479 DR4-01): a maintainer's decision is spent exactly once, and that is decided on your echo — a preparation that swallows the directive leaves the decision unspendable and it is re-delivered at every later rewind. The coordinator stops the run when the echo is absent or names a different head.
 
 ### Step 4: Write and prove the artifacts
 
@@ -142,7 +142,7 @@ remediation and a regression that remediation introduced. An omitted applicable 
 
 ## Output Format
 
-`{ status: red | stale | split-required | unprovable | dirty | contradiction, mode, inputHead, sourceOfTruth, inventory, fixScope: { owner, mode, allowedPaths }, matrix, redTests: [{ file, kind, baseline, sha256, command?, observed?, consumedBy? }], testExempt, exemptionRationale?, contractPath, contractHash, plan?, changedRows?, reconciled?, preserved?, reason?, splitReason?, next }` — `contractPath` absolute, under `/.pair/working/runs/`.
+`{ status: red | stale | split-required | unprovable | dirty | contradiction, mode, inputHead, sourceOfTruth, inventory, fixScope: { owner, mode, allowedPaths }, matrix, redTests: [{ file, kind, baseline, sha256, command?, observed?, consumedBy? }], testExempt, exemptionRationale?, contractPath, contractHash, reconstructedFrom?, plan?, changedRows?, reconciled?, preserved?, reason?, splitReason?, next }` — `contractPath` absolute, under `/.pair/working/runs/`.
 
 A `contradiction` carries `revisionReason`, `predecessorContractHash`, `conflictingRowIds`, `changedRows` and `counterexample` instead of a contract (Step 4.1); `contractPath`/`contractHash` are absent, because nothing was written.
 

@@ -3531,6 +3531,13 @@ test('AC-32: overlapping work does NOT veto a named rollback — the human who n
 
 // ── ADL 2026-09-12: rollback takes a HEAD, its notes live in the handoff, nobody deletes them ───
 const rollbackTo = (dir, head) => resolve({ dir, workflowVersion: V, policy: { ...POLICY, rollbackTo: head }, entry: 'pr', pr: 7 }).next
+// The corrective repair a directive was actually DELIVERED to: the preparation echoes the head it
+// was handed (`reconstructedFrom`), and the fixer produces a new one from it.
+function delivered(dir, riskId, fromHead, { outputHead = H2 } = {}) {
+  redSpec(dir, 'r1-g1', { groupId: 'r1-g1', remediationBatchId: 'r1', regressionRepairOf: 'r1', reconstructedFrom: fromHead, regressionGuards: [riskId] }, { attempt: 2 })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead, evidenceLedger: [], remediationBatchId: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+}
 const workedNote = (extra = {}) => ({ id: 'w1', claim: 'the installer resolves from SKILL_DIR, not cwd', appliesTo: ['src/a.ts'], evidence: [{ id: 'we-1', command: 'pnpm exec vitest run src/a.test.ts -t resolves', expected: 'pass' }], ...extra })
 
 test('rollback: a 40-hex head this cycle recorded is taken as given — no round name, nothing to resolve', () => {
@@ -3561,8 +3568,9 @@ test('DR3-04 (M-1): the rollback is emitted ONCE — a later rewind does not res
   const first = rollbackTo(dir, H0)
   assert.equal(first.reconstruct?.fromHead, H0, 'the first rewind carries the directive the maintainer named')
   assert.equal(first.regressionRepairOf, 'r1')
-  // The corrective preparation takes it and the fixer rebuilds: H2 IS the rollback, applied.
-  matchingRepair(dir, riskId)
+  // The corrective preparation takes it — echoing the head it was handed — and the fixer rebuilds:
+  // H2 IS the rollback, applied.
+  delivered(dir, riskId, H0)
   // Rewind #2: the same risk is still live at the rebuilt head, so the cycle rewinds again.
   review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
   const second = rollbackTo(dir, H0)
@@ -3570,6 +3578,54 @@ test('DR3-04 (M-1): the rollback is emitted ONCE — a later rewind does not res
   assert.equal(second.reconstruct, undefined, 'restoring src/a.ts at H0 again would delete the rebuild that H2 is')
   assert.equal(second.rollbackRefusal, undefined, 'and this is not a refusal: the decision was honoured, once')
   assert.equal(second.base, H2, 'the work still goes forward from where the rebuild left it')
+})
+
+test('DR4-01 (R1): a decision named for the FIRST time after an ordinary repair is owed — spending is keyed on the decision, not on the batch', () => {
+  const { dir } = runDir()
+  // Rewind #1 took the DEFAULT: no head was named, so the repair patched forward and no directive
+  // was ever delivered. This is the documented primary case — a maintainer names a head after
+  // reading the escalation, i.e. after corrective repairs have already run.
+  const riskId = provenRisk(dir)
+  assert.equal(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next.reconstruct, undefined, 'no head named, no directive')
+  matchingRepair(dir, riskId)
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  // Only NOW does the maintainer name H0. Nothing has ever carried this decision.
+  const next = rollbackTo(dir, H0)
+  assert.equal(next.reconstruct?.fromHead, H0, 'a decision never delivered cannot have been spent')
+  assert.equal(next.rollbackRefusal, undefined)
+})
+
+test('DR4-01 (R2): a SECOND, different head is a new decision — honouring the first does not spend it', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  assert.equal(rollbackTo(dir, H0).reconstruct?.fromHead, H0)
+  // the corrective preparation records the head it was handed, and the fixer rebuilds from it
+  delivered(dir, riskId, H0)
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  assert.equal(rollbackTo(dir, H0).reconstruct, undefined, 'the SAME decision, already honoured, is spent')
+  assert.equal(rollbackTo(dir, H1).reconstruct?.fromHead, H1, 'a different head is a different decision, and it is owed')
+})
+
+test('DR4-01 (R3): batch attribution falls back to the phase round, like every other reader — an omitted `remediationBatchId` does not resurrect a spent directive', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  assert.ok(rollbackTo(dir, H0).reconstruct)
+  redSpec(dir, 'r1-g1', { groupId: 'r1-g1', remediationBatchId: 'r1', regressionRepairOf: 'r1', reconstructedFrom: H0, regressionGuards: [riskId] }, { attempt: 2 })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  // `remediationBatchId` is optional for green-fix (REQUIRED_BY_SKILL), and the phase still says r1
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H2, evidenceLedger: [], regressionGuards: [riskId] }, { attempt: 2 })
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  assert.equal(rollbackTo(dir, H0).reconstruct, undefined, 'the rebuild happened; the phase round says which batch produced it')
+})
+
+test('DR4-01: the echo is a 40-hex head or the handoff does not publish — a spend can never rest on a forged field', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  const f = join(mkdtempSync(join(tmpdir(), 'echo-')), 'draft.json')
+  writeFileSync(f, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'remediation', contractPath: '/abs/c.json', contractHash: `sha256:${'1'.repeat(64)}`, regressionRepairOf: 'r1', reconstructedFrom: 'H0' }))
+  const out = publish({ dir, file: f, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, attempt: 2 })
+  assert.equal(out.published, false)
+  assert.match(out.reason, /reconstructedFrom-not-a-sha/)
 })
 
 test('DR3-04 (M-1): a directive dispatched but never rebuilt is still owed — only a completed repair spends it', () => {

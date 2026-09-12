@@ -74,7 +74,19 @@ or any regression it introduced is still active. A finding that closes leaves th
 regression enters the ledger and keeps the view populated. So "the implementation made progress —
 it fixed findings of the target round without adding regressions" is not a condition anyone codes:
 it is the same read. When the last one closes the view is empty, and an empty view emits no
-directive. That is also what stops a directive from re-firing, with no separate mechanism.
+directive.
+
+**Amended 2026-09-12 (DR4-01).** This section also claimed the empty view was what stopped a
+directive from re-firing, "with no separate mechanism". That was wrong, and two reviews proved it in
+turn. The emptiness test was evaluated inside `if (activeRisks.length)`, where the view's own
+`regressions` IS that set, so it could never be true and the directive re-fired at every rewind.
+Keying it on the batch instead then discarded a first-ever decision in silence. Re-firing is stopped
+by a SEPARATE and explicit mechanism, and it is keyed on the DECISION: the corrective preparation
+that received the head echoes it back (`reconstructedFrom`, a sha validated at publish and demanded
+by the coordinator), and the directive is spent once a later `green-fix` of that batch has produced
+a head from it. A head nobody was handed is never spent; a different head is a different decision.
+The notes remain a derived view — that part stands — but they never governed spending. See
+ADR-024 amendment (t).
 
 ## Consequences
 

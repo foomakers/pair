@@ -1,4 +1,4 @@
-// Witnesses for three confirmed defects of the delivery-workflow state authority (US-479).
+// Witnesses for confirmed defects of the delivery-workflow state authority (US-479).
 //
 // These tests are RED against the current HEAD by construction. Each scenario is derived from what
 // the ENGINE actually writes — the handoff sequence `pair-implement-batch.js` dispatches from
@@ -8,11 +8,13 @@
 // an ordering the engine never generates.
 //
 //   F-1  the remediation budget never fires on a loop that stays inside one round
-//   F-2  the reconstruction overlap guard cannot see an EARLIER sibling of the same batch
 //   F-3  the cohort fold depends on manifest order and can emit an incoherent entry
 //
+// F-2 was the reconstruction overlap guard, and it has no witnesses here any more: AC-32 deleted the
+// guard rather than repairing it (ADR-024 (r)), so the shapes it could not see stopped existing.
+//
 // Controls are marked `(control)` and MUST stay green: they pin the behaviour a fix may not break
-// by simply refusing (F-1/F-2) or by discarding evidence (F-3).
+// by simply refusing (F-1) or by discarding evidence (F-3).
 for (const k of Object.keys(process.env)) if (/^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX|NAMESPACE|CEILING_DIRECTORIES|IMPLICIT_WORK_TREE|DISCOVERY_ACROSS_FILESYSTEM)$/.test(k)) delete process.env[k]
 
 import { test } from 'node:test'
