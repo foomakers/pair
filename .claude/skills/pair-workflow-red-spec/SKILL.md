@@ -105,7 +105,7 @@ obligation or regression risk is still active; and the interaction between the o
 remediation and a regression that remediation introduced. An omitted applicable family is
 `contract-incomplete:<transition>:<family>` and spends the ordinary bounded preparation-repair path.
 
-**US-479 S13 — `$reconstruct`.** When the dispatch carries it, this group already failed once to repair its own regression and the next attempt rebuilds from the behavioural baseline instead of patching the current content again. Carry it into the contract: name `fromHead` and the exact `paths` whose content is restored, keep every guard in `riskIds` as a row, and state that the rebuilt code must satisfy the batch's original obligations AND those guards. The `fixScope` is unchanged by this — restoring content is not widening scope, and a reconstruction that would need a wider scope is a replan, not a repair.
+**US-479 S13 — `$reconstruct`.** When the dispatch carries it, a MAINTAINER named a head to roll back to (ADL 2026-09-12) — the workflow did not infer it and does not re-litigate it. Carry it into the contract: name `fromHead` and the exact `paths` whose content is restored, keep every guard in `riskIds` as a row, carry `notes.worked` as the decisions already known to be right, and state that the rebuilt code must satisfy the batch's original obligations AND those guards. The `fixScope` is unchanged by this — restoring content is not widening scope, and a reconstruction that would need a wider scope is a replan, not a repair.
 
 ### Step 4: Write and prove the artifacts
 

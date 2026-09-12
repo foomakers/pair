@@ -405,6 +405,36 @@ export function envelopeErrors(data, { phase, skill }) {
   // carries its own aggregate would be a second, mutable source of truth.
   if (data.activeRegressionRisks !== undefined) errs.push('activeRegressionRisks-not-storable')
   if (data.invalidatedBatchId !== undefined && (typeof data.invalidatedBatchId !== 'string' || !data.invalidatedBatchId.trim())) errs.push('invalidatedBatchId-invalid')
+  // US-479 (ADL 2026-09-12): `worked` — the decisions a review verified CORRECT in work that may be
+  // discarded. The contract already carries what must work again (obligations) and what must not
+  // break (guards); neither says what was already right, so a rebuild repeats the discarded round's
+  // mistakes. Same grammars as the rest of the envelope: evidence is shaped exactly like
+  // `closureAssertions`, and the prose escape hatch is the bargain `nonActionable`/`disposition`
+  // already strikes — a design decision no command can demonstrate is legal, but must say why.
+  if (data.worked !== undefined) {
+    if (!Array.isArray(data.worked)) errs.push('worked-not-an-array')
+    else
+      for (const w of data.worked) {
+        if (!w || typeof w !== 'object' || Array.isArray(w)) {
+          errs.push('worked-not-an-object')
+          continue
+        }
+        const tag = w.id || '?'
+        if (!String(w.id ?? '').trim()) errs.push('worked-id-missing')
+        if (!String(w.claim ?? '').trim()) errs.push(`worked-claim-missing:${tag}`)
+        // An appunto that applies to nothing cannot reach any rebuild: it is noise, not a note.
+        if (!Array.isArray(w.appliesTo) || !w.appliesTo.length || w.appliesTo.some(p => typeof p !== 'string' || !p.trim())) errs.push(`worked-appliesTo-missing:${tag}`)
+        const hasEvidence = Array.isArray(w.evidence) && w.evidence.length
+        if (w.notVerifiable === true) {
+          if (!String(w.rationale ?? '').trim()) errs.push(`worked-rationale-missing:${tag}`)
+        } else if (!hasEvidence) errs.push(`worked-unproven:${tag}`)
+        if (hasEvidence)
+          for (const ev of w.evidence) {
+            if (!ev || typeof ev !== 'object' || !ev.id || !ev.expected || (!ev.command && !ev.testRef)) errs.push(`worked-evidence-invalid:${tag}`)
+            else if (ev.command && SHELL_METACHAR_RE.test(ev.command)) errs.push(`worked-evidence-unsafe:${tag}`)
+          }
+      }
+  }
   if (data.scopeChanges !== undefined) {
     if (!Array.isArray(data.scopeChanges)) errs.push('scopeChanges-not-an-array')
     else
@@ -1139,6 +1169,25 @@ export function regressionTransitionErrors({ handoffs, data, pr }) {
   return errs
 }
 
+// ── rollback notes (ADL 2026-09-12) ────────────────────────────────────────────────────────
+// A VIEW, not a store — like `activeRegressionRisks`. It is ACTIVE while any obligation is still
+// open or any regression is still live, and empty once they are not. So "the implementation made
+// progress — it closed findings without adding regressions" is not a condition anyone codes: a
+// finding that closes leaves the obligations, a new regression enters the ledger and keeps the view
+// populated. Nobody deletes these notes, and an empty view emits no reconstruction directive, which
+// is also what stops one from re-firing.
+export function rollbackNotes(handoffs, precomputedLedger) {
+  const list = (handoffs ?? []).filter(h => h.data && h.data.recordType !== 'migration')
+  const reviews = list.filter(h => h.skill === 'review-phase')
+  const byId = new Map()
+  for (const h of reviews) for (const f of h.data.findings ?? []) if (f?.id) byId.set(f.id, f)
+  const obligations = [...byId.values()].map(f => ({ id: f.id, severity: f.severity, open: isBlocking(f) }))
+  const regressions = (precomputedLedger ?? regressionRiskLedger(list)).filter(r => r.state === 'active')
+  const worked = []
+  for (const h of reviews) for (const w of h.data.worked ?? []) worked.push({ ...w, source: h.name })
+  return { active: obligations.some(o => o.open) || regressions.length > 0, obligations, regressions, worked }
+}
+
 // ── resolve ────────────────────────────────────────────────────────────────────────────────
 const blocked = (reason, extra = {}) => ({ step: 'blocked', reason, ...extra })
 const orderGroups = groups => {
@@ -1414,25 +1463,27 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       // migrated ledgers — produced four defects in three rounds, and getting it wrong deletes real
       // work. The default is what always existed: fix forward on the current head.
       //
-      // A human may instead name the round to roll back to (`policy.rollbackTo`, e.g. `r2` or `a0`)
-      // — ordinarily after the budget has escalated and they have read the dossier. The head of that
-      // round is resolved from persisted history: the output of its last fix, or the head its review
-      // read. The producing group's own `allowedPaths` are the restore surface, its obligations and
-      // guards travel with it, and the work still goes FORWARD on the current head. Nothing here
-      // vetoes anything and nothing is inferred: an unresolvable round yields no directive and says
-      // why, rather than guessing a head.
+      // A human may instead name the HEAD to roll back to (`policy.rollbackTo`, 40-hex) — ordinarily
+      // after the budget escalated and they read the notes. A head is taken as given: there is no
+      // resolution step, so nothing is guessed. Naming a ROUND used to be the input, and resolving
+      // it matched a non-revision name against its own revisions and kept the last, so `a0` could
+      // resolve to `a0-rev2`'s head — a head nobody named, restored over real work (ADL 2026-09-12).
+      // Validation is existence: this cycle recorded that sha, or the directive is refused out loud.
       const ofBatch = activeRisks.filter(x => String(x.introducedByRemediationBatchId) === batch)
       const paths = groupOf(phase)?.allowedPaths ?? []
+      const notes = rollbackNotes(list, ctx.ledger)
       let reconstruct
       let rollbackRefusal
       if (policy.rollbackTo) {
         const want = String(policy.rollbackTo)
-        const fixes = list.filter(h => h.skill === 'green-fix' || h.skill === 'implement-phase').filter(h => phaseParts(h.phase)?.groupId === want || `r${phaseParts(h.phase)?.round}` === want)
-        const reviews = list.filter(h => h.skill === 'review-phase' && (`r${phaseParts(h.phase)?.round}` === want || phaseParts(h.phase)?.groupId === want))
-        const head = [...fixes].reverse().map(h => h.data.outputHead).find(x => SHA_RE.test(String(x ?? ''))) ?? [...reviews].reverse().map(h => h.data.reviewedHead).find(x => SHA_RE.test(String(x ?? '')))
-        if (!head) rollbackRefusal = `rollback-round-unknown:${want}`
+        const known = list.some(h => [h.data.outputHead, h.data.reviewedHead].some(x => String(x ?? '') === want))
+        if (!SHA_RE.test(want)) rollbackRefusal = `rollback-head-invalid:${want}`
+        else if (!known) rollbackRefusal = `rollback-head-unknown:${want}`
         else if (!paths.length) rollbackRefusal = `rollback-scope-unknown:${phase}`
-        else reconstruct = { fromHead: String(head), rollbackTo: want, paths, riskIds: ofBatch.map(x => x.riskId) }
+        // An empty notes view means the round it would rebuild has nothing left open: there is
+        // nothing to reconstruct, and this is what keeps one decision from firing on every rewind.
+        else if (!notes.active) rollbackRefusal = 'rollback-nothing-to-rebuild'
+        else reconstruct = { fromHead: want, paths, riskIds: ofBatch.map(x => x.riskId), notes: { obligations: notes.obligations.filter(o => o.open), regressions: notes.regressions, worked: notes.worked } }
       }
       const carried = new Map()
       for (const f of blocking) carried.set(f.id, f)
@@ -1612,7 +1663,9 @@ export function cycleCounters(allHandoffs, precomputedLedger) {
   // contract that was judged by a non-partial review. A retry reuses the seal and spends nothing;
   // two groups of one round share the review and spend one (T-21); the initial contract itself is
   // not corrective, so only its revisions count.
-  const correctiveSeal = h => h.skill === 'red-verify' && h.data.sealed === true && !(phaseParts(h.phase)?.kind === 'initial' && (phaseParts(h.phase)?.revision ?? 1) === 1)
+  // US-479 DR3-11: `verified` too — every other seal reader requires both, and a seal the routing
+  // refuses to recognise must not spend a budget unit either.
+  const correctiveSeal = h => h.skill === 'red-verify' && h.data.sealed === true && h.data.verified === true && !(phaseParts(h.phase)?.kind === 'initial' && (phaseParts(h.phase)?.revision ?? 1) === 1)
   let spentCycles = 0
   let lastCounted = -1
   for (const r of reviews.filter(h => h.data.partial !== true)) {
@@ -1742,7 +1795,7 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   const predecessorRuns = [...new Set(handoffs.filter(h => h.data?.recordType === 'migration').flatMap(h => (h.data.predecessorRuns ?? []).map(r => r.runId)))].sort()
   const status = next.step === 'done' ? 'completed' : next.step === 'blocked' ? 'blocked' : 'in-progress'
   const nextFindingSeq = handoffs.filter(h => h.skill === 'review-phase').reduce((m, h) => Math.max(m, ...(h.data.findings ?? []).map(f => Number(/-(\d+)$/.exec(String(f.id ?? ''))?.[1] ?? 0))), 0) + 1
-  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs, ledger), predecessorRuns, activeRegressionRisks: ledger.filter(r => r.state === 'active') }
+  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs, ledger), predecessorRuns, activeRegressionRisks: ledger.filter(r => r.state === 'active'), rollbackNotes: rollbackNotes(handoffs, ledger) }
 }
 
 // ── migration (US-479 T-19, S10) ───────────────────────────────────────────────────────────

@@ -86,6 +86,17 @@ Read the PR's `risk:*` label. Declare the passes, run each once, never sample a 
 
 Every finding is CONCRETE: `id` (`r<n>-<k>`, or `r<n>-<letter>-<k>` when `$reviewer > 1`; a prior finding keeps its id), `location` (File:Line, or the card / PR body for an `external: true` finding — a location, never acceptance), `severity` ∈ {`$severities`}, `description` = the failure case (inputs/state → wrong output), `recommendation` ending `VERIFY: …; ORACLE: …; ASSERT: …`, `kind`, `transition`, `blocking` = `!nonActionable && transition ∉ {resolved, human} && kind ≠ question && rank(severity) ≥ rank($floor)` computed from `$ranks`. `nonActionable: true` ONLY when fixing would be genuinely wrong (byte-consistent with a source of truth, an existing convention, an ALREADY-EXISTING tracked story — cite its number; do not create one — or something that resolves only after merge), always with `disposition`. An `external` finding resolves only with read-back `evidence` (the exact command and what it showed) or a `transition: human` the card supplied. **DO NOT FILE NEW ISSUES**; never invoke `$writeIssue`. **History rewrite**: `needsHumanDecision: true`, `humanDecisionKind: "history-rewrite"` (any other mandatory human decision sets `needsHumanDecision: true` too — the kind only says why, and the escalation precedes every automatic transition either way). **A finding carrying an ACTIVE `regressionRisk` is `blocking: true`** (US-479 F-9): an active risk IS an open blocker, `publish` refuses the handoff otherwise, and the severity floor never applies to it — a regression a remediation introduced is not a defect the floor may carry unfixed. The DISCHARGE of that same risk is the mirror image: `transition: resolved`, `blocking: false`, and `publish` refuses it the other way round. State follows the risk, not the finding.
 
+**US-479 (ADL 2026-09-12) — `worked`: what was already RIGHT.** When this review leaves any
+obligation open or any regression active, also record the decisions you verified were correct in the
+work that may be discarded: `worked: [{ id, claim, appliesTo, evidence }]`, where `evidence` has the
+same shape as `closureAssertions` (`{ id, command | testRef, expected }`). A design decision no
+command can demonstrate is legal as `notVerifiable: true` WITH a `rationale` — the same bargain
+`nonActionable`/`disposition` strikes. The contract already says what must work again and what must
+not break; nothing says what was already right, so a rebuild from an earlier head repeats the
+discarded round's mistakes. You are the only participant who looked at the code closely enough to
+know. Ids are stable across rounds, and `appliesTo` (paths or obligation ids) must not be empty: a
+note that applies to nothing reaches no rebuild.
+
 **Scope proposals are NEVER findings (US-479 T-22, S2/S5):** something demonstrably absent from the story's baseline/adoption/supported boundary — not a violation of anything approved — is `scopeChanges[]: { id: "sc-<n>", type: "new-requirement" | "scope-extension", proposal, baselineEvidenceRefs: [the evidence it is new, not a defect], discoveredAtReviewId, status: "pending" }`. It NEVER carries `severity`, is NEVER `blocking`, NEVER enters a remediation fix plan, and is never counted as a defect. `sc-<n>` ids are assigned once, under the same lock as finding ids (max existing numeric `sc-` id + 1), and stay stable across rounds. Cite the accepted obligation a finding violates; a proposal has none — if you cannot tell which it is, keep the classification visibly unresolved rather than moving a real defect into `scopeChanges`.
 
 ### Step 5: Verdict, readiness, publication (idempotent)
@@ -117,7 +128,7 @@ separate impact before it is reported as new.
 
 ## Output Format
 
-`{ status: reviewed, verdict, reviewedHead, findings: [{ id, location, severity, description, recommendation, kind, transition, blocking, nonActionable?, disposition?, external?, evidence?, groupId?, rowId?, severityEvidence?, missedUpstream? }], scopeChanges?: [{ id, type, proposal, baselineEvidenceRefs, discoveredAtReviewId, status }], custody: { verified, contractBreach, breaches? }, readiness: { ready, remoteHead }, published: { firstReview?, escalation?, scopeDecisionPacket? }, tier, passes, needsHumanDecision?, humanDecisionKind?, partial?, reviewer?, regressionGuards?, next }`.
+`{ status: reviewed, verdict, reviewedHead, findings: [{ id, location, severity, description, recommendation, kind, transition, blocking, nonActionable?, disposition?, external?, evidence?, groupId?, rowId?, severityEvidence?, missedUpstream? }], scopeChanges?: [{ id, type, proposal, baselineEvidenceRefs, discoveredAtReviewId, status }], custody: { verified, contractBreach, breaches? }, readiness: { ready, remoteHead }, published: { firstReview?, escalation?, scopeDecisionPacket? }, tier, passes, needsHumanDecision?, humanDecisionKind?, partial?, reviewer?, regressionGuards?, worked?, next }`.
 
 ## Notes
 

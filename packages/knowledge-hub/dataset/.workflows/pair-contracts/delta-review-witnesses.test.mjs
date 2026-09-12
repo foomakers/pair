@@ -212,8 +212,7 @@ test('F-1 (control): the FIRST contract-gap revision is legitimate — a fix may
 // The reconstruction overlap guard (cycle-state.mjs ~1433-1446) asks whether other work landed
 // AFTER the producing group's own fix (`list.indexOf(x) > producerFix`).
 //
-// What the engine really produces for a SEQUENTIAL batch: `deriveNext` walks the plan's groups in
-// dependency order (~1339-1349) — g1's green-fix is followed by `prepare` of g2, and only when no
+
 // group is left does the round get its ONE review (~1359). The review therefore reads the head the
 // LAST group produced, and `regressionTransitionErrors` requires a first observation's
 // `firstFailingHead` to be exactly `data.reviewedHead` (~1095) and to be a head the batch produced
@@ -255,8 +254,7 @@ function sequentialBatch(dir, { g1Paths, g2Paths, headA = H1, headB = H2 }) {
   })
   return JSON.parse(readFileSync(join(dir, 'r1-review-phase.json'), 'utf8')).findings.find(f => f.id === 'r1-9').regressionRisk.riskId
 }
-// The first repair of the derived producing group — after it, the base is proven bad and the next
-// attempt reconstructs instead of stacking (AC-32).
+
 function firstRepairOf(dir, { phase, riskId, head, reviewPhase, reviewedHead, firstFailingHead }) {
   expectDispatch(dir, { step: 'prepare', phase }, 'the rewind targets the group that produced the failing head')
   redSpec(dir, phase, { groupId: phase, remediationBatchId: phase.split('-')[0], regressionRepairOf: phase.split('-')[0], regressionGuards: [riskId] }, { attempt: 2 })

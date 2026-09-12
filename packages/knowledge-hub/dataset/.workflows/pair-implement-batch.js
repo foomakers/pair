@@ -327,10 +327,11 @@ function parseBatchArgs(raw) {
     constrain(s.base, 'base', isRef, 'a valid git ref')
     constrain(s.title, 'title', isProse, 'plain text (no backtick, no `$(`, no newline)')
     constrain(s.notes, 'notes', isProse, 'plain text (no backtick, no `$(`, no newline)')
-    // US-479 AC-32: the round a maintainer chose to roll back to. A phase id and nothing else — it
-    // is compared against persisted phases, and an unresolvable one yields a typed refusal, never a
-    // guessed head. Shaped like a phase so it can never carry shell syntax into a command.
-    constrain(s.rollbackTo, 'rollbackTo', v => /^(a0(-rev\d+)?|r\d+(-g\d+(-rev\d+)?)?)$/.test(v), 'a phase id such as `a0`, `r2` or `r2-g1`')
+    // US-479 AC-32 (ADL 2026-09-12): the HEAD a maintainer chose to roll back to — 40-hex, read from
+    // `git log`, taken as given. A round NAME used to be the input, and resolving it guessed: `a0`
+    // matched its own revisions and kept the last, restoring a head nobody named. A sha needs no
+    // resolution at all, and 40 hex characters cannot carry shell syntax into a command.
+    constrain(s.rollbackTo, 'rollbackTo', v => /^[0-9a-f]{40}$/.test(v), 'a 40-hex commit sha')
     // A verified P3 result must not disappear merely because a later independent reviewer
     // sampled a different portion of the same head. A different head is not "probably close
     // enough": that would turn old evidence into a new specification without rerunning its
@@ -891,6 +892,7 @@ const NEXT_SCHEMA = {
     // carries — the exact paths whose CONTENT is restored at `fromHead`, and the guards the rebuilt
     // code is measured against. A content operation, committed forward; never a Git history one.
     reconstruct: { type: 'object' },
+    rollbackRefusal: { type: 'string' },
     // The PR the cycle is bound to. A structured-output schema is STRICT: a field the schema does
     // not declare is dropped by the harness before the coordinator sees it — `pr` was, and a
     // fresh-path resume then had no PR to verify against (canary run 11, 3.0.4).
@@ -1433,6 +1435,7 @@ const VERIFY_SCHEMA = {
     // review is the participant that discharges, so inferring the set from the ledger instead of
     // receiving and confirming it cost a whole wasted rewind.
     regressionGuards: { type: 'array', items: { type: 'string' } },
+    worked: { type: 'array', items: { type: 'object' } },
     reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
     findings: {
@@ -1714,6 +1717,10 @@ async function driveStory(story) {
     redirectsInARow = 0
     // ── Stage-specific validation of the typed evidence ─────────────────────────────────────
     if (stage === 'prepare') {
+      // US-479 DR3-03: a rollback the state authority refused must STOP the run, before anything
+      // else in this branch. It used to be computed and dropped, so a maintainer who mistyped a head
+      // got an ordinary patch-forward run and never learned their directive had been discarded.
+      if (next.rollbackRefusal) return result('failed-preparation', { reason: `rollback refused: ${next.rollbackRefusal}`, phase: next.phase })
       if (isPrepareRefusal(res)) return result('failed-preparation', { reason: res.reason ?? res.splitReason ?? res.status, refusal: res.status, phase: next.phase, findings: next.findings })
       if (isContradiction(res)) {
         const defect = contradictionDefect(res)

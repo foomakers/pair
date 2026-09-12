@@ -64,14 +64,16 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   matrix before the seal; implementation cannot begin without it; the final review samples the sealed
   rows rather than being the first control to discover an illegal transition. A composed green chain
   is necessary and not sufficient.
-- **Reconstruction after a failed repair (ADR-024, amendment 2026-09-11 p; US-479 S13/AC-32):** a
-  group that has already failed once to repair its own regression does not patch the same base
-  again: it restores the CONTENT of its own `allowedPaths` at `lastCleanReviewedHead`, rebuilds
-  carrying the batch's obligations and every active guard, and commits FORWARD. Restoring content is
-  not rewriting history — no revert, reset, rebase or force-push, the snapshot stays an ancestor and
-  the seals stay byte-identical. A path a later round has already built on refuses instead
-  (`reconstruction-overlaps-later-work`), and a reconstruction as expensive as rebuilding the batch
-  is a replan through the existing preparation path.
+- **Rollback is a maintainer's call, and its notes are derived (ADR-024 amendments r/s; ADL
+  2026-09-12; US-479 S13/AC-32):** the rewind fixes forward on the current head by default. A
+  maintainer may instead name the HEAD to roll back to — 40-hex, read from `git log` — and the
+  producing group's own `allowedPaths` are restored to that content and rebuilt, still committing
+  FORWARD. The workflow neither picks the point nor vetoes the choice: it once decided whether a
+  restore was safe, and four independent reviews found four defects in that decision. A head this
+  cycle never recorded is refused out loud and stops the run. The notes a rebuild needs —
+  obligations still open, regressions still live, and the decisions the review verified were RIGHT
+  (`worked`) — are a VIEW over the handoffs, active while anything is open and empty once nothing
+  is: nobody writes them to a second place and nobody deletes them.
 - **Reintroduction (ADR-024, amendment 2026-09-11 o; US-479 S13/AC-31):** reopening a discharged
   risk is a RESTORATION of its prior ledger entry — every field immutable. A defect that reappears
   through later work is a new risk with a new identity, not a reopening.

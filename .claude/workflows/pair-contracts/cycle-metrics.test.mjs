@@ -1157,3 +1157,28 @@ test('DR2-08: the folded lifetime agrees with the folded entry — all three cou
       'two readings of one delivery inside one entry must not disagree',
     )
 })
+
+// ── DR3-06/07/08 (fourth delta review): the fold's last inconsistencies ─────────────────────────
+test('DR3-06: a token total assembled from different readings is a FLOOR, like any other partial total', () => {
+  // view A knows three runs but its lifetime usage is unreadable, so its number comes from the
+  // current run alone; view B is a fresh unlinked directory. Three runs of cycles, two of tokens.
+  const a = view(['run-1', 'run-2'], { identity: { repository: 'foomakers/pair', storyId: '42', prNumber: 7, branch: 'b', runIds: ['run-1', 'run-2'], predecessorRuns: ['run-1'], scopeEpoch: 1 }, cycles: { attempted: 3, spent: 3, completed: 2 }, usage: { observedTotalTokens: 900 }, lifetime: { cycles: { attempted: 3, spent: 3, completed: 2 }, usage: { observedTotalTokens: null }, predecessorRuns: [{ runId: 'run-1' }], coverage: 'unknown' } })
+  const b = view(['run-3'], { cycles: { attempted: 1, spent: 1, completed: 1 }, usage: { observedTotalTokens: 400 } })
+  const [folded] = foldCohortIdentities([a, b])
+  assert.equal(folded.usage.lowerBound, true, 'one view`s tokens came from a different reading than its cycles: the sum is a floor')
+  assert.equal(aggregateCohort(foldCohortIdentities([a, b])).costPerCompletedDelivery?.lowerBound, true)
+})
+
+test('DR3-07: the folded lifetime cycle counts are DISCRIMINATED — not inherited from the winning view', () => {
+  // `a` wins the ranking (more runs known) but has the SMALLER counts, so inheriting main.lifetime
+  // would leave the folded lifetime disagreeing with the folded entry.
+  const a = view(['run-1', 'run-2'], { identity: { repository: 'foomakers/pair', storyId: '42', prNumber: 7, branch: 'b', runIds: ['run-1', 'run-2'], predecessorRuns: [], scopeEpoch: 1 }, cycles: { attempted: 1, spent: 1, completed: 1 }, lifetime: { cycles: { attempted: 1, spent: 1, completed: 1 }, usage: { observedTotalTokens: 1000 }, predecessorRuns: [], coverage: 'complete' } })
+  const b = view(['run-3'], { cycles: { attempted: 5, spent: 4, completed: 3 }, lifetime: { cycles: { attempted: 5, spent: 4, completed: 3 }, usage: { observedTotalTokens: 2000 }, predecessorRuns: [], coverage: 'complete' } })
+  const [folded] = foldCohortIdentities([a, b])
+  assert.ok(folded.lifetime, 'the winning view carries a lifetime, so the folded entry has one')
+  assert.deepEqual(
+    { a: folded.lifetime.cycles.attempted, s: folded.lifetime.cycles.spent, c: folded.lifetime.cycles.completed },
+    { a: folded.cycles.attempted, s: folded.cycles.spent, c: folded.cycles.completed },
+    'the two readings inside one entry must agree — and `a` alone would give 1/1/1 beside 5/4/3',
+  )
+})

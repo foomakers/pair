@@ -790,7 +790,11 @@ export function foldCohortIdentities(entries) {
       // total is a FLOOR, not the spend. Say so on the entry — the cohort reads it (US-479 F-5).
       // US-479 DR2-06: a floor is a floor however it arose — an overlap that cannot be added, or a
       // run whose spend was never measured at all. Both leave part of the delivery outside the total.
-      const tokensAreFloor = known.length > 0 && (!disjoint || known.length < group.length)
+      // US-479 DR3-06: a view whose lifetime usage is unreadable falls back to its CURRENT run, so
+      // its number covers fewer runs than its own cycles do. Summing that with another view's total
+      // yields three runs of cycles beside two of tokens — partial, however disjoint the run sets.
+      const narrowerThanItsHistory = e => (e.lifetime?.predecessorRuns?.length ?? 0) > 0 && e.lifetime?.usage?.observedTotalTokens == null
+      const tokensAreFloor = known.length > 0 && (!disjoint || known.length < group.length || group.some(narrowerThanItsHistory))
       const cycles = Math.max(...group.map(e => cyclesOf(e) ?? 0))
       // Every cycle count is combined, not only `completed`: taking `attempted` from one view and
       // `completed` from the maximum produced entries claiming more closed cycles than attempted.

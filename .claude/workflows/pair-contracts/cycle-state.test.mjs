@@ -3103,8 +3103,7 @@ test('AC-31 (DT-40, positive control): the SAME defect on a LATER batch`s head i
   assert.deepEqual(r.activeRegressionRisks.map(x => x.riskId), [stored.riskId])
 })
 
-// ── US-479 AC-32 / DT-41 (S13): a failed repair reconstructs, it does not stack another patch ──
-// Correcting a defect on a base that still holds the previous mistake produces patch upon patch.
+
 // When a group has already failed once to repair its OWN regression, the next attempt starts from
 // the behavioural baseline: restore the content of that group's allowedPaths at
 // `lastCleanReviewedHead` and rebuild carrying the obligations and the guards. A content operation,
@@ -3412,8 +3411,7 @@ test('DR-01 (control): an active risk keeps its batch from completing, whatever 
   assert.equal(r.counters.completedCycles, 0, 'nothing was proven closed: an empty obligation set closes nothing')
 })
 
-// ── DR-02/DR-03 (delta review): the reconstruction guard must see the work it would destroy ─────
-// Restoring a path at the baseline deletes whatever was built on it since. The guard that refuses
+
 // to do that was comparing phases and paths as plain strings, so three real shapes slipped past it:
 // a group whose GREEN landed on a revision phase, a directory scope containing the file scope of
 // another group, and a sibling group of the SAME batch that already produced its fix.
@@ -3428,15 +3426,6 @@ function provenRiskWithPaths(dir, allowedPaths) {
   handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H1, evidenceLedger: [], remediationBatchId: 'r1' })
   reviewOf(dir, 'r1', { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed by r1' }), regressionFinding()], invalidatedBatchId: 'r1' })
   return JSON.parse(readFileSync(join(dir, 'r1-review-phase.json'), 'utf8')).findings.find(f => f.id === 'r1-9').regressionRisk.riskId
-}
-function laterRoundWork(dir, { phase = 'r2-g1', groupId = 'r2-g1', paths = ['src/a.ts'], head = SHA('7') } = {}) {
-  redSpec(dir, groupId, { plan: { groups: [{ groupId, findings: ['r2-1'], owner: 'b', mode: 'behavioral', allowedPaths: paths }], carried: [] }, groupId, remediationBatchId: groupId.split('-')[0] })
-  redVerify(dir, groupId, { remediationBatchId: groupId.split('-')[0] })
-  handoff(dir, phase, 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: head, evidenceLedger: [], remediationBatchId: groupId.split('-')[0] })
-}
-function reconstructionNext(dir) {
-  review(dir, 'r3', { mode: 're-review', reviewedHead: SHA('7'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' }), regressionFinding()] })
-  return resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next
 }
 
 // ── DR-06 / DR-10 (delta review): the remaining asymmetries of the S12 matrix ───────────────────
@@ -3511,29 +3500,29 @@ test('AC-32: with no round named, a failed repair just patches forward — no di
   assert.equal(next.rollbackRefusal, undefined)
 })
 
-test('AC-32: a named round resolves to the head history recorded for it, and the work still goes FORWARD', () => {
+test('AC-32: a named HEAD is taken as given, and the work still goes FORWARD', () => {
   const { dir } = runDir()
   const riskId = provenRisk(dir)
   matchingRepair(dir, riskId)
   review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
-  const next = rollback(dir, 'r0')
+  const next = rollback(dir, H0)
   assert.equal(next.step, 'prepare')
   assert.deepEqual(
-    { from: next.reconstruct?.fromHead, to: next.reconstruct?.rollbackTo, paths: next.reconstruct?.paths, risks: next.reconstruct?.riskIds },
-    { from: H0, to: 'r0', paths: ['src/a.ts'], risks: [riskId] },
-    'the head of the named round, the producing group`s own scope, and the guards it must satisfy',
+    { from: next.reconstruct?.fromHead, paths: next.reconstruct?.paths, risks: next.reconstruct?.riskIds },
+    { from: H0, paths: ['src/a.ts'], risks: [riskId] },
+    'the head named verbatim, the producing group`s own scope, and the guards it must satisfy',
   )
   assert.equal(next.base, H2, 'the branch stays where it is: restoring is content, the commit is forward')
 })
 
-test('AC-32: a round the history cannot resolve yields NO directive and says so — never a guessed head', () => {
+test('AC-32: a head this cycle never recorded yields NO directive and says so — never a guessed head', () => {
   const { dir } = runDir()
   const riskId = provenRisk(dir)
   matchingRepair(dir, riskId)
   review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
-  const next = rollback(dir, 'r9')
+  const next = rollback(dir, SHA('e'))
   assert.equal(next.reconstruct, undefined)
-  assert.equal(next.rollbackRefusal, 'rollback-round-unknown:r9')
+  assert.equal(next.rollbackRefusal, `rollback-head-unknown:${SHA('e')}`)
   assert.equal(next.step, 'prepare', 'and the cycle still proceeds — a bad parameter is not a dead end')
 })
 
@@ -3546,7 +3535,84 @@ test('AC-32: overlapping work does NOT veto a named rollback — the human who n
   redVerify(dir, 'r2-g1', { remediationBatchId: 'r2' })
   handoff(dir, 'r2-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('7'), evidenceLedger: [], remediationBatchId: 'r2' })
   review(dir, 'r3', { mode: 're-review', reviewedHead: SHA('7'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
-  const next = rollback(dir, 'r0')
+  const next = rollback(dir, H0)
   assert.ok(next.reconstruct, 'the directive is emitted: the algorithm reports, it does not veto')
   assert.equal(next.reconstruct.fromHead, H0)
+})
+
+// ── ADL 2026-09-12: rollback takes a HEAD, its notes live in the handoff, nobody deletes them ───
+const rollbackTo = (dir, head) => resolve({ dir, workflowVersion: V, policy: { ...POLICY, rollbackTo: head }, entry: 'pr', pr: 7 }).next
+const workedNote = (extra = {}) => ({ id: 'w1', claim: 'the installer resolves from SKILL_DIR, not cwd', appliesTo: ['src/a.ts'], evidence: [{ id: 'we-1', command: 'pnpm exec vitest run src/a.test.ts -t resolves', expected: 'pass' }], ...extra })
+
+test('rollback: a 40-hex head this cycle recorded is taken as given — no round name, nothing to resolve', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  matchingRepair(dir, riskId)
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  const next = rollbackTo(dir, H0)
+  assert.equal(next.reconstruct?.fromHead, H0, 'the head the maintainer named, verbatim')
+  assert.deepEqual(next.reconstruct?.paths, ['src/a.ts'])
+  assert.equal(next.base, H2, 'the work still goes forward on the current head')
+})
+
+test('rollback: a head this cycle never recorded is REFUSED, and the refusal is not silent', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  matchingRepair(dir, riskId)
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  const next = rollbackTo(dir, SHA('e'))
+  assert.equal(next.reconstruct, undefined)
+  assert.equal(next.rollbackRefusal, `rollback-head-unknown:${SHA('e')}`, 'a head from nowhere is not a rollback point')
+  // a value that is not a head at all is refused the same way, never parsed as a round name
+  assert.match(rollbackTo(dir, 'r1-g1').rollbackRefusal ?? '', /^rollback-head-invalid:/)
+})
+
+test('rollbackNotes: the view is ACTIVE while an obligation is open or a regression is live, and empty after', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  const open = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(open.rollbackNotes.active, true, 'a live regression keeps the notes')
+  assert.deepEqual(open.rollbackNotes.regressions.map(r => r.riskId), [riskId])
+  // the repair cures it and the review closes everything the batch owed
+  matchingRepair(dir, riskId)
+  publish({ dir, file: rrDraft(dir, { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed at H2' }), dischargedFinding()] }), phase: 'r2', skill: 'review-phase', workflowVersion: V })
+  const done = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(done.rollbackNotes.active, false, 'progress without new regressions empties the view — nobody deleted anything')
+  assert.deepEqual(done.rollbackNotes.regressions, [])
+  assert.deepEqual(done.rollbackNotes.obligations.filter(o => o.open), [])
+})
+
+test('rollbackNotes: `worked` is carried from the review that observed the failure', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  reviewOf(dir, 'r1', { invalidatedBatchId: 'r1', worked: [workedNote()], findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.rollbackNotes.worked.map(w => w.id), ['w1'])
+  assert.equal(r.rollbackNotes.worked[0].claim, 'the installer resolves from SKILL_DIR, not cwd')
+})
+
+test('worked: an entry with no evidence and no declared reason is refused before the write', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  const before = digestDir(dir)
+  const draft = extra => {
+    const f = join(mkdtempSync(join(tmpdir(), 'worked-')), 'draft.json')
+    writeFileSync(f, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: H1, verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 're-review', findings: [finding('r0-1')], ...extra }))
+    return f
+  }
+  for (const [label, worked, re] of [
+    ['no evidence at all', [workedNote({ evidence: undefined })], /worked-unproven:w1/],
+    ['an assertion missing its expectation', [workedNote({ evidence: [{ id: 'we-1', command: 'x' }] })], /worked-evidence-invalid:w1/],
+    ['nowhere to apply it', [workedNote({ appliesTo: [] })], /worked-appliesTo-missing:w1/],
+    ['a claim with no id', [workedNote({ id: '' })], /worked-id-missing/],
+    ['unverifiable without saying why', [workedNote({ evidence: undefined, notVerifiable: true })], /worked-rationale-missing:w1/],
+  ]) {
+    const out = publish({ dir, file: draft({ worked }), phase: 'r1', skill: 'review-phase', workflowVersion: V })
+    assert.equal(out.published, false, label)
+    assert.match(out.reason, re, `${label}: ${out.reason}`)
+  }
+  assert.deepEqual(digestDir(dir), before, 'every refusal above wrote nothing')
+  // a design decision no command can demonstrate is legal WITH its reason
+  const ok = publish({ dir, file: draft({ worked: [workedNote({ evidence: undefined, notVerifiable: true, rationale: 'a naming convention; no command proves it' })] }), phase: 'r1', skill: 'review-phase', workflowVersion: V })
+  assert.equal(ok.published, true, JSON.stringify(ok))
 })

@@ -139,6 +139,7 @@
 - [Decision: Use a deterministic code canary for delivery workflow validation](.pair/adoption/decision-log/2026-09-09-deterministic-code-canary-for-delivery-workflow.md)
 - [Decision: A demonstrably new scope proposal is queued and never absorbed or carded automatically — the maintainer alone chooses ignore, extend-current-card or new-card](.pair/adoption/decision-log/2026-09-10-scope-proposals-are-a-human-decision.md)
 - [Decision: An approved `extend-current-card` delta is refused outright when the card speaks none of the recognized AC formats — fail-closed, never appended](.pair/adoption/decision-log/2026-09-10-unknown-ac-card-format-fails-closed.md)
+- [Decision: rollback takes a head, its notes live in the handoff, and nobody deletes them](.pair/adoption/decision-log/2026-09-12-rollback-notes-are-derived-from-handoffs.md)
 
 ## How-To Guides
 
