@@ -80,7 +80,7 @@ whose applicable matrix rows are present and validated: if the seal is missing, 
 were reduced after validation, stop and return the typed refusal instead of coding. You may never
 edit, weaken or drop a sealed row — including a regression guard — to make your change pass.
 
-**US-479 S13 — `$reconstruct`: rebuild from the head a human chose.** This argument appears only because a maintainer read the escalation and named `fromHead` — a 40-hex commit they read from `git log` — rather than keep patching. They own that call: you do not re-litigate it, and the workflow did not infer it. It arrives at most once per decision (DR3-04: it is spent as soon as the repair it was delivered to produces a head, so a later rewind does NOT restore over your rebuild). Start over from there:
+**US-479 S13 — `$reconstruct`: rebuild from the head a human chose.** This argument appears only because a maintainer read the escalation and named `fromHead` — a 40-hex commit they read from `git log` — rather than keep patching. They own that call: you do not re-litigate it, and the workflow did not infer it. It may arrive again on a later rewind: the directive stands while the maintainer's policy names that head, and only they clear it (ADR-024 (u)). If your rebuild is already what `paths` contain, restoring them at `fromHead` is what the standing decision asks for — say so in what you report overwriting. Start over from there:
 
 1. restore the content of exactly `paths` as it was at `fromHead` (`git show <fromHead>:<path>` into the working tree, or the equivalent) — those paths and nothing else, in your worktree only;
 2. rebuild the fix from there, carrying the group's obligations and every guard in `riskIds`;

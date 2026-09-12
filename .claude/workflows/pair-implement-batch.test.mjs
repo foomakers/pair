@@ -1417,26 +1417,26 @@ test('F-RR-03: a verifier that returns a guard set different from the dispatched
   }
 })
 
-test('DR4-01: a preparation handed a rollback that does not report the head back is refused — an unspendable decision is DR3-04 again', () => {
-  // The schema half: an undeclared field is dropped by the harness before the coordinator sees it,
-  // so the echo would be structurally impossible to report.
-  const prepare = SRC.slice(SRC.indexOf('const PREPARE_SCHEMA'), SRC.indexOf('const VALIDATE_SCHEMA'))
-  assert.match(prepare, /reconstructedFrom:/, 'the preparation`s echo of the rollback head must be declared')
-  assert.match(prepare, /\^\[0-9a-f\]\{40\}\$/, 'and constrained to a head, not free text')
-  // The coordinator half: handed a directive, an absent or mismatched echo stops the run.
-  const at = SRC.indexOf('reconstruct-echo-mismatch')
-  assert.ok(at > 0, 'the coordinator must refuse a preparation that swallowed the directive')
-  // DR5-01 variant A: the check is TWO-SIDED, like the guard-set echo at `validate` — an echo
-  // nobody was handed is refused too, since the echo is the sole authority for spending a decision.
-  assert.match(SRC.slice(at - 600, at), /handed !== echoed/, 'both directions, not just the missing one')
-  // DR5-04: a refusal and a contradiction carry their own field set and must keep their diagnosis.
-  assert.ok(SRC.indexOf('isPrepareRefusal(res)') < at && SRC.indexOf('if (isContradiction(res)) {') < at && SRC.indexOf('hasPreparedContract(res') < at, 'the echo is checked only once a refusal, a contradiction and a missing contract have had their own diagnosis')
+test('ADR-024 (u): every delivery of a rollback directive is REPORTED in the run log — the workflow no longer infers whether it was carried out, so it owes legibility instead', async () => {
+  const reconstruct = { fromHead: HEAD2, paths: ['src/a.ts', 'src/b.ts'], riskIds: ['risk:aaaaaaaaaaaaaaaa'], notes: { obligations: [], regressions: [], worked: [] } }
+  const withNext = { step: 'prepare', mode: 'remediation', phase: 'r1-g1', round: 1, attempt: 2, base: HEAD, group: { groupId: 'r1-g1', owner: 'a', mode: 'behavioral', allowedPaths: ['src/'] }, regressionRepairOf: 'r1', reconstruct }
+  let author = 0
+  const { logs } = await runWorkflow({
+    args: { cards: [STORY] },
+    dispatch: (p, o) => {
+      if (o.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (o.agentType === 'pair-fix-test-author') return author++ === 0 ? { next: withNext } : {}
+      if (o.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
+      return {}
+    },
+  })
+  const line = logs.find(m => /rollback directive delivered/.test(m))
+  assert.ok(line, `no delivery report in the run log: ${JSON.stringify(logs.slice(0, 8))}`)
+  assert.match(line, new RegExp(HEAD2), 'the head the maintainer named')
+  assert.match(line, /src\/a\.ts, src\/b\.ts/, 'and exactly what it restores')
+  assert.match(line, /until `rollbackTo` is cleared/, 'and whose job it is to end it')
 })
 
-// ── US-479 V2 (F-RR-03): the FOURTH participant receives the matrix too ───────────────────────
-// The review is the one that must EXECUTE the active guards on the exact head. Leaving it to infer
-// them "from the ledger it reads" is fail-safe but costs a whole wasted round: the risk stays
-// active and the cycle rewinds again — exactly the cost S12 moves upstream.
 test('V2 (F-RR-03): the verify dispatch carries $regressionGuards and VERIFY_SCHEMA declares the echo', () => {
   const verify = SRC.slice(SRC.indexOf('const verify = (n, required) =>'), SRC.indexOf('// Verified P3 evidence'))
   assert.match(verify, /\$regressionGuards=/, 'the review is dispatched without the guards it must execute')

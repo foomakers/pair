@@ -893,9 +893,6 @@ const NEXT_SCHEMA = {
     // code is measured against. A content operation, committed forward; never a Git history one.
     reconstruct: { type: 'object' },
     rollbackRefusal: { type: 'string' },
-    // US-479 DR5-Q1: an honoured decision is stated, not silently dropped — `rollback-already-
-    // honoured:<sha>`. Not a refusal: the directive was carried out and the cycle proceeds.
-    rollbackNote: { type: 'string' },
     // The PR the cycle is bound to. A structured-output schema is STRICT: a field the schema does
     // not declare is dropped by the harness before the coordinator sees it — `pr` was, and a
     // fresh-path resume then had no PR to verify against (canary run 11, 3.0.4).
@@ -1056,11 +1053,6 @@ const PREPARE_SCHEMA = {
     changedRows: { type: 'array', items: { type: 'string' } },
     contractPath: { type: 'string' },
     contractHash: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' },
-    // US-479 DR4-01: the rollback echo — the head `$reconstruct` handed this preparation, reported
-    // back so a maintainer's decision can be spent exactly once. Declared here for the same reason
-    // every field above is: an undeclared field is dropped by the harness before the coordinator
-    // sees it, and a dropped echo makes the decision unspendable.
-    reconstructedFrom: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     plan: PLAN_SCHEMA,
     splitReason: { type: 'string' },
     reason: { type: 'string' },
@@ -1729,6 +1721,14 @@ async function driveStory(story) {
       // else in this branch. It used to be computed and dropped, so a maintainer who mistyped a head
       // got an ordinary patch-forward run and never learned their directive had been discarded.
       if (next.rollbackRefusal) return result('failed-preparation', { reason: `rollback refused: ${next.rollbackRefusal}`, phase: next.phase })
+      // US-479 (u): the directive's lifetime belongs to the maintainer, so every delivery is
+      // REPORTED. The workflow no longer infers whether their decision was carried out — four
+      // rounds of proxies for that fact each failed one staging beyond the last — so what it owes
+      // instead is legibility: a directive still standing on a later rewind is visible here, in the
+      // run log, attributable to the policy that still names it, and cleared by the person who set
+      // it. Silence is what kept three of those four rounds invisible.
+      if (next.reconstruct?.fromHead)
+        log(`${tag} ${next.phase}: rollback directive delivered — restoring ${next.reconstruct.paths.join(', ')} at ${next.reconstruct.fromHead}. It stands until \`rollbackTo\` is cleared from the policy.`)
       if (isPrepareRefusal(res)) return result('failed-preparation', { reason: res.reason ?? res.splitReason ?? res.status, refusal: res.status, phase: next.phase, findings: next.findings })
       if (isContradiction(res)) {
         const defect = contradictionDefect(res)
@@ -1740,22 +1740,6 @@ async function driveStory(story) {
       // regression repair lands on the DERIVED producing group, so keying on the number demanded a
       // plan red-spec's own contract says it does not produce when handed a scope.
       if (!hasPreparedContract(res, { needPlan: next.mode === 'remediation' && !next.group, ids: (next.findings ?? []).map(f => f.id), mode: next.mode })) return result('failed-preparation', { reason: 'the preparation stage returned no usable contract', phase: next.phase })
-      // US-479 DR4-01/DR5-04: the rollback ECHO, checked in BOTH directions like the guard-set echo
-      // at `validate` — and only once this preparation actually produced a contract. A refusal
-      // (`stale`, `dirty`, `split-required`, `unprovable`) and a contradiction are routing outcomes
-      // that carry their own field set; checking the echo before them replaced a real diagnosis with
-      // a missing-echo one, and failed a contradiction that `red-spec/SKILL.md` says carries no
-      // contract at all.
-      // Handed a directive and silent about it ⇒ the decision becomes unspendable and is
-      // re-delivered at every later rewind, which is DR3-04 again. Reporting a head nobody handed
-      // ⇒ a decision could be spent by an echo the workflow never dispatched (DR5-01 variant A),
-      // and an echo is the sole authority for spending a human's instruction.
-      {
-        const handed = String(next.reconstruct?.fromHead ?? '')
-        const echoed = String(res.reconstructedFrom ?? '')
-        if (handed !== echoed)
-          return result('failed-preparation', { reason: `reconstruct-echo-mismatch:${next.phase} (handed ${handed || 'nothing'}, reported ${echoed || 'nothing'})`, phase: next.phase })
-      }
       if (next.mode === 'remediation' && res.plan) {
         const carried = (res.plan.carried ?? []).map(c => ({ ...(next.findings ?? []).find(f => f.id === c.finding), external: true, disposition: `Outside the repository — ${c.disposition}` }))
         // Carried is a LOCATION, not acceptance: the finding stays blocking for the verifier; here it

@@ -1099,3 +1099,62 @@ new datum, and nothing writes a consumption flag and nothing deletes one.
 Everything else in (r) stands: two modes with `patch` the default, the commit going FORWARD with no
 Git history operation, no veto on overlapping work, and the fixer's duty to report what it had to
 overwrite.
+
+## Amendment 2026-09-12 (u) — superseding (t) in one respect: the workflow stops inferring that the rollback was carried out
+
+(t) established that a rollback decision is honoured exactly once. Four implementations of "once"
+were built and four independent reviews each found a blocking defect in the one before it. The rule
+is withdrawn. What follows is why, because the failure is a specification failure and it will
+recur wherever the same shape is specified again.
+
+**The shape.** AC-32 asked the workflow to infer, from an append-only log of handoffs, whether a
+human's instruction *had been carried out*. Nothing in that log records that fact — no participant
+writes it, and no participant was ever asked to. So each implementation chose a proxy for it:
+
+1. the notes view being empty — unreachable where it was evaluated, so the directive re-fired at
+   every rewind and restored over its own rebuild;
+2. "this batch has been repaired" — true in the ordinary flow long before a maintainer names a
+   head, so a first-ever decision was discarded in silence;
+3. "the echo, plus some later fix of the batch reported `fixed`" — true when the repair the
+   directive was handed to FAILED and an ordinary one succeeded after it, so a decision was
+   consumed by work that restored nothing;
+4. "the echo, plus a fix at the same phase and attempt" — the two attempt counters are derived from
+   different populations (`byPhase('red-spec', …)` and `byPhase('green-fix', …)`) and are bumped by
+   different modelled events, so any contract repair or green retry desynchronises them permanently:
+   the decision then either re-delivers forever or is spent by a fix published before it existed.
+
+Each round's author reasoned correctly about the proxy they had just removed, and each new proxy
+failed one staging further out. Every round passed its own tests and a full green gate, because the
+fixtures held the proxy's assumption by construction. That is what happens when a specification
+demands a fact the data model does not carry: there is no proxy, only proxies that have not been
+falsified yet.
+
+**The decision.** There is no spend inference. `reconstruct` is emitted on every rewind for which
+`policy.rollbackTo` names a head this cycle recorded, and the maintainer clears `rollbackTo` when
+their decision has been carried out. The lifetime of a decision belongs to the person who made it.
+
+What the workflow owes instead is **legibility**: every delivery is reported in the run log, naming
+the head, the exact paths restored, and whose job it is to end it. A directive still standing on a
+later rewind is then a visible, attributable state — the maintainer left it set — rather than a
+predicate misfiring where nobody can see it. Silence is what kept three of the four rounds
+invisible: an unspent head and a spent one both produced no output.
+
+This is AC-32's own lesson, applied to the half it had never reached. (r) established that the
+workflow stopped deciding *whether* a restore was safe, because deciding it cost four defects in
+three rounds. It went on deciding *how many times*, and that cost four more.
+
+**What (t) keeps.** Everything that is not the spend: `rollbackTo` is a 40-hex head taken verbatim
+with no resolution step; a head this cycle never recorded is refused (`rollback-head-invalid`,
+`rollback-head-unknown`, `rollback-scope-unknown`) as a field on the dispatch, and the coordinator
+then ends the story `failed-preparation`; the commit goes FORWARD with no Git history operation;
+overlapping work does not veto; the fixer reports what it had to overwrite; and `rollbackNotes`
+remains a derived view over the handoffs.
+
+**Withdrawn with the rule:** the `reconstructedFrom` echo, its schema field, its two-sided
+coordinator check and `rollbackNote` — all of them existed only to support the inference.
+
+**The cost, recorded so the trade is legible.** Four repair rounds, four independent reviews at high
+effort, and roughly 1,300 lines of churn on this one surface, to save the maintainer from clearing
+a parameter they set. The simpler rule has a failure mode of its own — a maintainer who forgets to
+clear `rollbackTo` gets the directive again — but it is theirs, it is announced on every dispatch,
+and it does not take four reviews to see.

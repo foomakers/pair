@@ -272,9 +272,6 @@ export function envelopeErrors(data, { phase, skill }) {
   if (data.scopeEpoch !== undefined && (!Number.isInteger(data.scopeEpoch) || data.scopeEpoch < 1)) errs.push('scopeEpoch-invalid')
   if (data.scopeBaselineHash !== undefined && !/^sha256:[0-9a-f]{64}$/.test(String(data.scopeBaselineHash))) errs.push('scopeBaselineHash-invalid')
   if (data.firstReviewHead !== undefined && !SHA_RE.test(String(data.firstReviewHead))) errs.push('firstReviewHead-invalid')
-  // US-479 DR4-01: the rollback echo. A spend is decided on this value, so it is a 40-hex head or
-  // the handoff does not publish — never a free-text field a phase agent can shape.
-  if (data.reconstructedFrom !== undefined && !SHA_RE.test(String(data.reconstructedFrom))) errs.push('reconstructedFrom-not-a-sha')
   if (data.remediationBatchId !== undefined && (typeof data.remediationBatchId !== 'string' || data.remediationBatchId === '')) errs.push('remediationBatchId-invalid')
   if (data.recordType !== undefined && !RECORD_TYPES.includes(data.recordType)) errs.push(`recordType-invalid:${data.recordType}`)
   // red-spec's envelope carries `findings: { received, covered }` — the obligation ids it was
@@ -1049,12 +1046,10 @@ export const activeRegressionRisks = handoffs => regressionRiskLedger(handoffs).
 //
 // What a BATCH produced is its green-fix/implement output heads — a `reviewedHead` is what someone
 // looked at, never what a remediation built.
-// US-479 DR4-01: the batch attribution shared by `batchLineage` and `rollbackSpent`.
-// `remediationBatchId` is optional on a handoff, so both fall back to the round the phase itself
-// names; `rollbackSpent` did not, which let an omitted field resurrect a directive already spent.
-// Two other readers are deliberately NOT routed through this (DR5-03 corrected the claim that they
-// were): `batchObligations` keeps the identical expression inline, and `knownBatch` answers a
-// different question — it accepts a groupId PREFIXED by the batch, which this must not do.
+// US-479 DR4-01: the batch attribution `batchLineage` uses. `remediationBatchId` is optional on a
+// handoff, so it falls back to the round the phase itself names. Two other readers are deliberately
+// NOT routed through this: `batchObligations` keeps the identical expression inline, and
+// `knownBatch` answers a different question — it accepts a groupId PREFIXED by the batch.
 const batchOf = h => h.data?.remediationBatchId ?? (phaseParts(h.phase)?.round ? `r${phaseParts(h.phase).round}` : undefined)
 function batchLineage(list) {
   const byBatch = new Map()
@@ -1455,26 +1450,6 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     if (d.needsHumanDecision === true) return blocked('escalate', { detail: `${d.humanDecisionKind ?? 'human'} decision requested by the review — a human decides before any automatic rewind`, findings: blocking, regressionRisks: activeRisks })
     if (activeRisks.length) {
       if (cycleCounters(list).spentCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', detail: 'an active regression risk remains and the remediation budget is spent', findings: blocking, regressionRisks: activeRisks })
-      // US-479 DR4-01: spending is keyed on the DECISION, never on the batch. The first attempt asked
-      // only whether this batch had ever been repaired — true, in the ordinary flow, long before the
-      // maintainer names anything — so a first-ever directive was silently discarded, which is worse
-      // than the re-firing it replaced: an explicit human instruction vanished without a trace.
-      // A directive is spent when the corrective preparation that RECEIVED this exact head echoed it
-      // (`reconstructedFrom`, validated as a sha at publish and demanded by the coordinator) and a
-      // later `green-fix` of the same batch produced a head from it. A head nobody was handed is
-      // therefore never spent, and a DIFFERENT head is a different decision — always owed.
-      // US-479 DR5-01: "produced a head FROM IT" is an identity, not an ordering. The second attempt
-      // asked only whether SOME later green-fix of the batch reported `fixed`, so a repair the
-      // directive was handed to could fail, an ordinary repair could succeed afterwards, and the
-      // decision was consumed by work that never restored anything — DR4-01's harm again, one
-      // staging further on. The spending fix must be the one dispatched FROM the echoing
-      // preparation: same phase, same attempt. That pair is what the coordinator dispatches as one
-      // unit (`$phase` + `$attempt`), so nothing downstream has to be trusted to report it.
-      const rollbackSpent = (batchId, head) =>
-        list.some(e => {
-          if (e.skill !== 'red-spec' || batchOf(e) !== batchId || String(e.data.reconstructedFrom ?? '') !== head || e.phase !== phase) return false
-          return list.some(g => g.skill === 'green-fix' && g.data.fixed === true && g.phase === e.phase && g.attempt === e.attempt)
-        })
       // The earliest introducing batch is repaired first; every active risk travels with it.
       const roundOf = b => phaseParts(`${b}-g1`)?.round ?? 0
       const batch = [...new Set(activeRisks.map(r => String(r.introducedByRemediationBatchId)))].sort((a, b) => roundOf(a) - roundOf(b))[0]
@@ -1510,28 +1485,24 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       const notes = rollbackNotes(list, ctx.ledger)
       let reconstruct
       let rollbackRefusal
-      let rollbackNote
       if (policy.rollbackTo) {
         const want = String(policy.rollbackTo)
         const known = list.some(h => [h.data.outputHead, h.data.reviewedHead].some(x => String(x ?? '') === want))
         if (!SHA_RE.test(want)) rollbackRefusal = `rollback-head-invalid:${want}`
         else if (!known) rollbackRefusal = `rollback-head-unknown:${want}`
         else if (!paths.length) rollbackRefusal = `rollback-scope-unknown:${phase}`
-        // US-479 DR3-04 (M-1): a decision is honoured ONCE. The previous guard asked `notes.active`,
-        // which is true by construction everywhere this branch runs — it sits inside
-        // `if (activeRisks.length)`, and the view's own `regressions` is that same set — so it could
-        // never fire and the identical directive was re-emitted at every later rewind, restoring
-        // `paths` at `fromHead` over the rebuild the previous rollback had just produced. Progress
-        // could not accumulate: the cycle churned until the budget escalated.
-        // The directive is SPENT when it was delivered AND the repair it was delivered to produced a
-        // new head: a corrective preparation of this batch carried it, and a later `green-fix` of the
-        // same batch reported `fixed`. A repair that produced nothing consumed nothing, so the
-        // decision is still owed. Derived from the handoffs in publication order, like every other
-        // view — nobody writes a consumption flag and nobody deletes one.
-        // US-479 DR5-Q1: spending is stated, never silent. Three rounds of this defect all looked the
-        // same from the maintainer's seat — a head typed into nothing — so an honoured decision says
-        // so. It is NOT a refusal: the directive was carried out, and the cycle proceeds.
-        else if (rollbackSpent(batch, want)) rollbackNote = `rollback-already-honoured:${want}`
+        // US-479 (u): the workflow does NOT infer whether the decision was carried out. Nothing in
+        // the handoffs records that fact, so four rounds in a row picked a proxy for it — the view's
+        // emptiness, then "this batch was repaired", then "the echo plus some later fix", then two
+        // attempt counters that are derived independently — and each proxy failed one staging beyond
+        // the last. Either the directive was re-delivered forever, restoring over its own rebuild, or
+        // a human instruction was consumed by work that never executed it.
+        // So the directive stands while the maintainer's policy names the head, and it is THEY who
+        // clear it. The lifetime of a decision belongs to the person who made it: the cycle reports
+        // the delivery on every dispatch, and a directive that outlives its purpose is a visible,
+        // attributable state instead of a predicate nobody could see misfire. This is AC-32's own
+        // lesson — the workflow stopped deciding whether a restore was safe — applied to how MANY
+        // times, which it had never stopped deciding.
         else reconstruct = { fromHead: want, paths, riskIds: ofBatch.map(x => x.riskId), notes: { obligations: notes.obligations.filter(o => o.open), regressions: notes.regressions, worked: notes.worked } }
       }
       const carried = new Map()
@@ -1553,7 +1524,6 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
         group: groupOf(phase),
         ...(reconstruct ? { reconstruct } : {}),
         ...(rollbackRefusal ? { rollbackRefusal } : {}),
-        ...(rollbackNote ? { rollbackNote } : {}),
         detail: `regression-risk rewind of ${batch}: ${activeRisks.length} active guard(s) plus every unresolved finding, fixed forward on the current head`,
       }
     }

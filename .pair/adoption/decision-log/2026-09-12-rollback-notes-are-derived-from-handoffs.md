@@ -76,21 +76,19 @@ it fixed findings of the target round without adding regressions" is not a condi
 it is the same read. When the last one closes the view is empty, and an empty view emits no
 directive.
 
-**Amended 2026-09-12 (DR4-01).** This section also claimed the empty view was what stopped a
-directive from re-firing, "with no separate mechanism". That was wrong, and two reviews proved it in
-turn. The emptiness test was evaluated inside `if (activeRisks.length)`, where the view's own
-`regressions` IS that set, so it could never be true and the directive re-fired at every rewind.
-Keying it on the batch instead then discarded a first-ever decision in silence. Re-firing is stopped
-by a SEPARATE and explicit mechanism, and it is keyed on the DECISION: the corrective preparation
-that received the head echoes it back (`reconstructedFrom`, a sha validated at publish and demanded
-by the coordinator in both directions), and the directive is spent by the fix DISPATCHED FROM that
-preparation — same phase, same attempt — reporting `fixed`. A head nobody was handed is never spent;
-a different head is a different decision; a repair that produced nothing consumed nothing. Keying it
-on "some later fix of the batch" was the third failed form (DR5-01): the repair a directive is handed
-to can fail while an ordinary one succeeds after it, and the decision was then consumed by work that
-restored nothing. An honoured decision is stated (`rollback-already-honoured`), never silent.
-The notes remain a derived view — that part stands — but they never governed spending. See
-ADR-024 amendment (t).
+**Amended 2026-09-12, twice (DR4-01, then withdrawn by ADR-024 (u)).** This section originally
+claimed the empty view was also what stopped a directive from re-firing, "with no separate
+mechanism". That was wrong: the emptiness test was evaluated inside `if (activeRisks.length)`, where
+the view's own `regressions` IS that set, so it could never be true. Three further mechanisms were
+then built to replace it — keyed on the batch, on the echo plus any later fix, on two attempt
+counters — and an independent review found a blocking defect in each. The rule is gone: the workflow
+no longer infers that the decision was carried out, the directive stands while the maintainer's
+policy names the head, and they clear it. See ADR-024 (u) for why the shape kept failing.
+
+What this ADL established and what still stands: the notes are a DERIVED VIEW over the handoffs,
+computed like `activeRegressionRisks`, carrying the obligations still open, the regressions still
+live and the `worked` claims a review verified were right. Nobody writes them to a second place and
+nobody deletes them. They never governed spending — that was the error corrected here.
 
 ## Consequences
 

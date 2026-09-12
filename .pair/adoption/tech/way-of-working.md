@@ -72,12 +72,12 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   restore was safe, and four independent reviews found four defects in that decision. A head this
   cycle never recorded is refused out loud and the run STOPS on it: the refusal travels as a field on
   the dispatch and the coordinator ends the story `failed-preparation`, rather than the directive
-  being computed and dropped. The decision is honoured exactly ONCE: the corrective preparation
-  echoes the head it was handed (`reconstructedFrom`, checked in both directions), and the directive
-  is spent by the fix dispatched FROM that preparation — same phase, same attempt — reporting
-  `fixed`. A head nobody was handed is never spent, a different head is a different decision, and a
-  repair that produced nothing consumed nothing. A decision already carried out is not a refusal: it
-  says so (`rollback-already-honoured`) and the cycle proceeds.
+  being computed and dropped. The directive STANDS while the policy names the head, and the
+  MAINTAINER clears it (amendment (u)): the workflow does not infer whether their decision was
+  carried out — nothing in the handoffs records that, and four attempts to deduce it produced four
+  blocking defects, each failing one staging beyond the last. What it owes instead is legibility,
+  and every delivery is reported in the run log with the head, the paths restored and whose job it
+  is to end it. A directive still standing later is a visible state, not a predicate misfiring.
   The notes a rebuild needs — obligations still open, regressions still live, and the decisions the
   review verified were RIGHT (`worked`) — are a VIEW over the handoffs: nobody writes them to a
   second place and nobody deletes them. Amendments (t) and the 2026-09-12 ADLs are current here.
