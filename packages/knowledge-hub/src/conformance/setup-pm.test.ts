@@ -135,7 +135,23 @@ describe('setup-pm SKILL.md — every adapter on disk is a selectable tool (#321
         .split('\n')
         .find(line => normalize(line).includes('supported tools with implementation guides'))
       expect(claim, 'no supported-tools claim in ## Notes').toBeDefined()
-      expect(normalize(claim as string)).toContain(tool.toLowerCase())
+      // The claim line carries BOTH halves of the contract: the tools that ship an adapter, then an
+      // `Anything else (…)` sentence naming tools that take the Step 2.4 HALT. Matching the tool
+      // name anywhere on the line therefore passes when the tool appears in the EXCLUSION half —
+      // so the day a GitLab adapter lands, Step 2/Step 3 enrolment would be enforced while this
+      // case still went green on a Notes line that says GitLab halts. Split the line and hold both
+      // halves: named among the supported, absent from the excluded.
+      const claimText = normalize(claim as string)
+      const cut = claimText.indexOf('anything else')
+      const supported = cut >= 0 ? claimText.slice(0, cut) : claimText
+      const excluded = cut >= 0 ? claimText.slice(cut) : ''
+      expect(supported, `${tool} is not named among the supported tools`).toContain(
+        tool.toLowerCase(),
+      )
+      expect(
+        excluded,
+        `${tool} ships an adapter but the Notes line still excludes it`,
+      ).not.toContain(tool.toLowerCase())
     },
   )
 })
