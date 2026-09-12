@@ -245,3 +245,207 @@ describe('Azure adapter Adoption Configuration and its website twin agree (#321 
     expect(website).toBe(adapterSnippet(join(REPO_ROOT, ADAPTER_REL)))
   })
 })
+
+/**
+ * INTERNAL CROSS-REFERENCES (round-1 finding r0-1).
+ *
+ * Step 4's act-steps were renumbered — `## Git Workflow` moved from 3 to 5 and `## State
+ * Mapping` was inserted as 3 — but the `## Assignment` act-step kept saying "When step 3 just
+ * declared a separate `code-host`". Step 3 is now State Mapping, which declares no `code-host`,
+ * so on every hosts-no-code path (`linear`, `jira`, `filesystem`) the antecedent is false and
+ * `code-host-assignee` is never asked and never written — the assignee cascade then files PRs on
+ * the split code host unassigned or under the wrong identifier.
+ *
+ * Nothing on the gate could see it: the AC-4/AC-6 case slices Step 4 per act-step by NAME, so a
+ * renumber is invisible to it. These cases read the numbering itself. Both indices are DERIVED
+ * from the document — a future renumber that sweeps its own references stays green, one that
+ * does not goes red, and no literal step number is maintained here.
+ *
+ * Two claims here are about IDENTITY, not existence, and both were rebuilt after the contract
+ * validator showed the first attempt asserted less than it claimed:
+ *   - the code-host WRITER is counted, not just located — an index the Assignment antecedent is
+ *     compared against is only well-defined while exactly one act-step writes `code-host`;
+ *   - a `Step <n>.<m>` cross-reference must still name the act-step it was WRITTEN for, so a
+ *     renumber that re-points it goes red instead of staying silently green on the index alone.
+ */
+describe("setup-pm SKILL.md — Step 4's internal cross-references resolve (#321 r0-1)", () => {
+  const ASSIGNMENT = '**Act — `## Assignment`'
+  const GIT_WORKFLOW = '**Act — `## Git Workflow`'
+
+  /**
+   * The act-step that WRITES `code-host`, as opposed to the ones that read it back
+   * (`## Assignment`) or verify it (`**Verify**`). The negative lookahead is load-bearing:
+   * `## Assignment` says "write code-host-assignee", a different key — without it that act-step
+   * would count as a second writer and the uniqueness claim below could never hold.
+   */
+  const WRITES_CODE_HOST = /\bwrite code-host(?![\w-])/
+
+  /**
+   * A `Step <n>.<m>` cross-reference names an act-step by POSITION; what the author meant is the
+   * act-step's content. Pinning that content here is what makes a renumber that moves the target
+   * visible — an index-only check passes on a re-pointed reference. Fail-closed by construction:
+   * a cross-reference the document adds and this map does not pin fails the case below.
+   */
+  const REF_INTENT: Record<string, string> = {
+    // "the tool-specific fields Step 4.2 writes" — Step 4's way-of-working field list.
+    'Step 4.2': 'add or update the pm tool section with',
+    // "HALT with contribution instructions (Step 2.4)" — Step 2's no-guide HALT.
+    'Step 2.4': 'without an implementation guide',
+  }
+
+  /** The `### Step <n>:` section, ending at the next step (or at `## Output Format` for the last). */
+  const stepSection = (skillText: string, n: number): string => {
+    const next = skillText.includes(`### Step ${n + 1}:`) ? `### Step ${n + 1}:` : '## Output Format'
+    return sectionBetween(skillText, `### Step ${n}:`, next)
+  }
+
+  /** Every act-step of a step section: its ordered index and its full body. Fails CLOSED on none. */
+  const actSteps = (section: string): { index: number; body: string }[] => {
+    const steps: { index: number; body: string }[] = []
+    for (const line of section.split('\n')) {
+      const match = /^(\d+)\. /.exec(line)
+      if (match) steps.push({ index: Number(match[1]), body: line })
+      else if (steps.length > 0) {
+        const last = steps[steps.length - 1] as { body: string }
+        last.body = `${last.body}\n${line}`
+      }
+    }
+    if (steps.length === 0) throw new Error('actSteps: section carries no ordered act-step')
+    return steps
+  }
+
+  /** Ordered-list index of the act-step whose line carries `marker`. Fails CLOSED on a miss. */
+  const actStepIndex = (section: string, marker: string): number => {
+    const lines = section.split('\n').filter(line => line.includes(marker))
+    if (lines.length !== 1) {
+      throw new Error(`actStepIndex: expected exactly one act-step line for "${marker}", got ${lines.length}`)
+    }
+    const match = /^(\d+)\. /.exec(lines[0] as string)
+    if (!match) throw new Error(`actStepIndex: act-step for "${marker}" is not a numbered list item`)
+    return Number(match[1])
+  }
+
+  /** Body of the act-step carrying ordered index `index`. Fails CLOSED on absent or duplicate. */
+  const actStepBody = (section: string, index: number): string => {
+    const hits = actSteps(section).filter(step => step.index === index)
+    if (hits.length !== 1) {
+      throw new Error(`actStepBody: expected exactly one act-step numbered ${index}, got ${hits.length}`)
+    }
+    return (hits[0] as { body: string }).body
+  }
+
+  it.each(skillCases)(
+    '$corpus — the Assignment act-step points its code-host antecedent at the step that writes code-host (r0-1)',
+    ({ skillText }) => {
+      const step4 = stepSection(skillText, 4)
+      const gitIndex = actStepIndex(step4, GIT_WORKFLOW)
+      const assignment = sectionBetween(step4, ASSIGNMENT, '**Verify**')
+
+      // A numeric antecedent must name the act-step that actually writes `code-host`. Naming the
+      // section instead ("just declared in `## Git Workflow`") is equally correct and leaves no
+      // number to drift — hence "every reference agrees", not "a reference exists".
+      const referenced = [...assignment.matchAll(/\bstep (\d+)\b/gi)].map(m => Number(m[1]))
+      const wrong = referenced.filter(n => n !== gitIndex)
+      expect(
+        wrong,
+        `the Assignment act-step refers to step ${wrong.join(', ')}, but \`code-host\` is written ` +
+          `by act-step ${gitIndex} (\`## Git Workflow\`) — the condition is false on every ` +
+          `hosts-no-code path and \`code-host-assignee\` is never asked`,
+      ).toEqual([])
+    },
+  )
+
+  it.each(skillCases)(
+    '$corpus — the Assignment act-step still carries the code-host-assignee conditional (r0-1)',
+    ({ skillText }) => {
+      // Non-vacuity guard for the case above: with the clause deleted there is no antecedent to
+      // be wrong about, and "every reference agrees" would pass on a skill that stopped asking.
+      const assignment = normalize(sectionBetween(stepSection(skillText, 4), ASSIGNMENT, '**Verify**'))
+      expect(assignment).toContain('code-host-assignee')
+      expect(assignment).toMatch(/different identifier/)
+    },
+  )
+
+  it.each(skillCases)(
+    '$corpus — `## Git Workflow` is the only Step 4 act-step that writes code-host (r0-1)',
+    ({ skillText }) => {
+      // The index the case above compares against is only well-defined while EXACTLY ONE act-step
+      // writes `code-host`. Counting the writers — not just confirming the Git Workflow step is
+      // one of them — is what makes that precondition asserted: a second writer elsewhere in
+      // Step 4 makes "the step that writes code-host" ambiguous, and "just declared" false for
+      // whichever one the reader did not mean.
+      const step4 = stepSection(skillText, 4)
+      const writers = actSteps(step4)
+        .filter(step => WRITES_CODE_HOST.test(normalize(step.body)))
+        .map(step => step.index)
+      const gitIndex = actStepIndex(step4, GIT_WORKFLOW)
+      expect(
+        writers,
+        `Step 4 act-steps writing \`code-host\`: ${writers.join(', ') || 'none'} — the antecedent ` +
+          `in \`## Assignment\` is only well-defined when that is exactly act-step ${gitIndex} ` +
+          `(\`## Git Workflow\`)`,
+      ).toEqual([gitIndex])
+      // `just declared` also requires the writer to PRECEDE the act-step that reads it back.
+      expect(gitIndex).toBeLessThan(actStepIndex(step4, ASSIGNMENT))
+    },
+  )
+
+  it.each(skillCases)(
+    '$corpus — every `Step <n>.<m>` cross-reference still names the act-step it was written for (r0-1)',
+    ({ skillText }) => {
+      // The same renumber that broke the Assignment antecedent can re-point `Step 4.2` and
+      // `Step 2.4` in Edge Cases / Graceful Degradation. Index existence is not enough: after a
+      // renumber the index usually still exists and names something ELSE. So each reference is
+      // resolved to its act-step and that act-step's CONTENT is checked against what the author
+      // wrote the reference for — fixing r0-1 by renumbering goes red here instead of silent.
+      const refs = [...skillText.matchAll(/\bStep (\d+)\.(\d+)\b/g)].map(m => ({
+        ref: `Step ${m[1]}.${m[2]}`,
+        step: Number(m[1]),
+        item: Number(m[2]),
+      }))
+      expect(refs.length, 'no `Step <n>.<m>` cross-references found — regex or document drifted').toBeGreaterThan(0)
+
+      const unpinned = [...new Set(refs.map(r => r.ref))].filter(ref => !(ref in REF_INTENT))
+      expect(
+        unpinned,
+        'cross-references with no pinned intent — add what the referenced act-step must say to REF_INTENT',
+      ).toEqual([])
+
+      const dangling = refs.filter(r => !actSteps(stepSection(skillText, r.step)).some(s => s.index === r.item))
+      expect(dangling.map(r => r.ref), 'cross-references naming an act-step that does not exist').toEqual([])
+
+      const repointed = refs.filter(
+        r => !normalize(actStepBody(stepSection(skillText, r.step), r.item)).includes(REF_INTENT[r.ref] as string),
+      )
+      expect(
+        repointed.map(r => `${r.ref} (expected: "${REF_INTENT[r.ref]}")`),
+        'cross-references resolving to a DIFFERENT act-step than the one they were written for',
+      ).toEqual([])
+    },
+  )
+
+  it('Step 4 is byte-identical in both corpora (r0-1 — the mirror is re-synced, not hand-edited)', () => {
+    // Step 4 carries no skill-name token, so the `pair update` transform leaves it untouched: the
+    // dataset fix reaches the generated mirror only by re-running the transform. A hand-edit to
+    // one corpus alone shows up here as a diff.
+    const [dataset, generated] = skillCases.map(({ skillText }) => stepSection(skillText, 4))
+    expect(generated).toBe(dataset)
+  })
+
+  it('the cross-reference helpers fail closed when an act-step marker is absent (r0-1)', () => {
+    // A renamed act-step must throw, never widen to the whole section and pass vacuously — the
+    // fail-open slice this file already paid for once in the AC-4/AC-6 case.
+    const section = '### Step 4: Update Way-of-Working\n\n1. **Act — `## Something Else`**: x\n'
+    expect(() => actStepIndex(section, GIT_WORKFLOW)).toThrow(/expected exactly one act-step line/)
+    expect(() => sectionBetween(section, ASSIGNMENT, '**Verify**')).toThrow(/not found/)
+  })
+
+  it('the act-step resolver fails closed on an absent or duplicated index (r0-1)', () => {
+    // The identity check above is only as good as its resolver: a missing or duplicated ordered
+    // index must throw, never resolve to a neighbour and let a re-pointed reference pass.
+    const section = '### Step 4: Update Way-of-Working\n\n1. **Check**: x\n1. **Act**: y\n'
+    expect(() => actStepBody(section, 2)).toThrow(/expected exactly one act-step numbered 2/)
+    expect(() => actStepBody(section, 1)).toThrow(/expected exactly one act-step numbered 1/)
+    expect(() => actSteps('### Step 9: nothing ordered here\n\n- a bullet\n')).toThrow(/no ordered act-step/)
+  })
+})

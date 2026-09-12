@@ -1,0 +1,268 @@
+{
+  "$meta": {
+    "pr": "481",
+    "phase": "r1-g1",
+    "base": "643d24f56715e2fc2c12c23b5164c045c4ab8966",
+    "trailer": "Pair-RED-Snapshot: pr=481; phase=r1-g1; base=643d24f56715e2fc2c12c23b5164c045c4ab8966; manifest=.pair/red-snapshots/pr-481-r1-g1.json",
+    "artifacts": [
+      "packages/knowledge-hub/src/conformance/setup-pm.test.ts"
+    ]
+  },
+  "run": "canary-479-481-v1",
+  "story": "321",
+  "pr": 481,
+  "branch": "feature/US-321-azure-devops-setup-pm",
+  "phase": "r1-g1",
+  "mode": "repair",
+  "attempt": 2,
+  "remediationBatchId": "r1",
+  "workflowVersion": "4.0.0",
+  "status": "red",
+  "inputHead": "643d24f56715e2fc2c12c23b5164c045c4ab8966",
+  "base": "origin/main",
+  "worktree": "/Users/gianlucacarucci5/projects/pair-worktrees/321",
+  "repairOf": {
+    "contractHash": "sha256:d309cf103cddc3dc22ed1a6d8f4c3301d0dc8fb89131d949517fc5a2b7de85c6",
+    "rejection": [
+      "rv1-1",
+      "rv1-2",
+      "rv1-3"
+    ]
+  },
+  "changedRows": [
+    "artifact:redTests[0]",
+    "r1g1-05",
+    "r1g1-06",
+    "r1g1-07",
+    "r1g1-08",
+    "r1g1-11"
+  ],
+  "sourceOfTruth": "packages/knowledge-hub/dataset/.skills/capability/setup-pm/SKILL.md (authoring source of truth) — the generated corpus .claude/skills/pair-capability-setup-pm/SKILL.md is produced from it by the `pair update` transform; both are asserted, neither is assumed.",
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1"
+        ],
+        "owner": "setup-pm SKILL.md — `### Step 4: Update Way-of-Working` act-step list and its internal cross-references (both corpora)",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.skills/capability/setup-pm/SKILL.md",
+          ".claude/skills/pair-capability-setup-pm/SKILL.md"
+        ],
+        "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/setup-pm.test.ts",
+        "dependsOn": []
+      }
+    ],
+    "carried": []
+  },
+  "groupId": "r1-g1",
+  "fixScope": {
+    "owner": "setup-pm SKILL.md — `### Step 4: Update Way-of-Working` act-step list and its internal cross-references (both corpora)",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/.skills/capability/setup-pm/SKILL.md",
+      ".claude/skills/pair-capability-setup-pm/SKILL.md"
+    ]
+  },
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "The ordered act-step list of `### Step 4: Update Way-of-Working` in setup-pm/SKILL.md. Two of its act-steps form the obligation: `**Act — `## Git Workflow` (only when needed)**` WRITES `code-host`, and `**Act — `## Assignment` (always ask)**` READS it back as the antecedent that gates `code-host-assignee`. The antecedent's step number is the producer's own cross-reference to its own numbering — not a fact about any tool, and not asserted by any existing case (AC-4/AC-6 slices Step 4 by act-step NAME, so a renumber is invisible to it).",
+      "inputs": [
+        "$tool = linear (hosts no code -> `## Git Workflow` act-step runs, code-host written)",
+        "$tool = jira (hosts no code -> same)",
+        "$tool = filesystem (hosts no code -> same)",
+        "$tool = github / GitHub Projects (hosts code -> code-host omitted, antecedent correctly false)",
+        "$tool = azure-devops (hosts code -> same)"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.skills/capability/setup-pm/SKILL.md (authoring source of truth, line 107 at HEAD)",
+        ".claude/skills/pair-capability-setup-pm/SKILL.md (generated mirror, line 107 at HEAD; produced by the `pair update` transform, which rewrites skill-name tokens only — Step 4 carries none, so the two Step 4 sections are byte-identical at HEAD)"
+      ],
+      "consumers": [
+        "the agent executing /pair-capability-setup-pm — evaluates the antecedent to decide whether to ask for code-host-assignee",
+        ".pair/adoption/tech/way-of-working.md `## Assignment` -> `code-host-assignee`",
+        "the assignee cascade (ADL 2026-08-11 no-write-is-assumed, rule 11) -> /pair-capability-publish-pr and /pair-capability-write-issue — PRs on the split code host are filed unassigned or under the wrong identifier"
+      ],
+      "classes": [
+        "numeric antecedent EQUAL to the `## Git Workflow` act-step index — correct (origin/main: Git Workflow was 3, Assignment was 4, antecedent said 3)",
+        "numeric antecedent DIVERGING from it — the defect at HEAD: antecedent says `step 3`, but 3 is `## State Mapping` and code-host is written by act-step 5; the condition is false on every hosts-no-code path",
+        "NO numeric antecedent — the section named instead (`just declared in `## Git Workflow``): equally correct and cannot drift; the finding's recommendation admits it, so the oracle must too",
+        "numeric antecedent naming an index no act-step of Step 4 carries — dangling, a superset of the diverging class",
+        "document-level `Step <n>.<m>` cross-references outside Step 4 (`Step 4.2` in Edge Cases, `Step 2.4` in Graceful Degradation) — same renumber hazard, correct at HEAD",
+        "MORE THAN ONE act-step writing `code-host` — the antecedent's referent is then ambiguous and `just declared` is false for whichever writer the reader did not mean; provably absent at HEAD, and now COUNTED rather than assumed (rv1-2)"
+      ],
+      "interactions": [
+        "dataset x generated mirror: the claim must hold in BOTH corpora, and Step 4 carries no skill-name token, so the dataset fix reaches the mirror only by re-running the `pair update` transform — a hand-edit to one corpus alone is a divergence",
+        "the fix x the rest of the document: repairing r0-1 BY renumbering Step 4's act-steps moves the act-step `Step 4.2` names while its INDEX still exists — so the guard must pin cross-reference IDENTITY (the referenced act-step's content), not mere index existence, or the trade stays silent (rv1-3)",
+        "`## Git Workflow` index x `## Assignment` index: the antecedent is only well-defined while exactly one act-step writes code-host and it PRECEDES the act-step that reads it back (`just declared`) — the writer SET is enumerated and compared to `[gitIndex]`, so a second writer reddens the precondition (rv1-2)"
+      ]
+    }
+  ],
+  "matrix": [
+    {
+      "id": "r1g1-01",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset corpus — every `step <n>` reference inside the `## Assignment` act-step of Step 4 equals the derived ordered-list index of the `## Git Workflow` act-step (or there is no numeric reference).",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/setup-pm.test.ts  ::  \"'dataset' — the Assignment act-step points its code-host antecedent at the step that writes code-host (r0-1)\"",
+      "expected": "no divergent reference — []. Both indices are DERIVED from the document, so a renumber that sweeps its own references stays green and no literal step number is maintained in the guard.",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "The five `$tool` input classes collapse into ONE row because a single conditional clause governs all of them: the prose is the producer, the same sentence is read on the linear / jira / filesystem paths and correctly skipped on github / azure-devops. The equivalence is a shared grammar rule (one antecedent), not merely equal observed output."
+    },
+    {
+      "id": "r1g1-02",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "generated-root corpus — same claim on .claude/skills/pair-capability-setup-pm/SKILL.md.",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/setup-pm.test.ts  ::  \"'generated root' — the Assignment act-step points its code-host antecedent at the step that writes code-host (r0-1)\"",
+      "expected": "no divergent reference — []. The mirror's own copy of the claim is asserted, never assumed from the dataset's.",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Per-corpus row, not a duplicate: the mirror is a distinct representation the finding names explicitly, and it only tracks the dataset when the `pair update` transform is actually re-run."
+    },
+    {
+      "id": "r1g1-03",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dataset corpus — the `## Assignment` act-step still carries the `code-host-assignee` conditional (`code-host-assignee`, `different identifier`).",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/setup-pm.test.ts  ::  \"'dataset' — the Assignment act-step still carries the code-host-assignee conditional (r0-1)\"",
+      "expected": "passes at the unfixed base and must keep passing. Non-vacuity guard for r1g1-01: with the clause deleted there is no antecedent to be wrong about, so 'every reference agrees' would go green on a skill that stopped asking — deletion is not a fix.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1g1-04",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "generated-root corpus — same clause-survival claim.",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/setup-pm.test.ts  ::  \"'generated root' — the Assignment act-step still carries the code-host-assignee conditional (r0-1)\"",
+      "expected": "passes at the unfixed base and must keep passing.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1g1-05",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "dataset corpus — the SET of Step 4 act-steps whose normalized body writes `code-host` (matched by `/\\bwrite code-host(?![\\w-])/`, which excludes the `write code-host-assignee` of `## Assignment`) is exactly `[index of `## Git Workflow`]`, and that index is strictly less than the `## Assignment` index.",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/setup-pm.test.ts  ::  \"'dataset' — `## Git Workflow` is the only Step 4 act-step that writes code-host (r0-1)\"",
+      "expected": "passes at the unfixed base — writers == [5]. REPAIRED (rv1-2): the row now DEMONSTRATES the uniqueness count it claims, instead of only locating the Git Workflow writer. A second Step 4 act-step that writes `code-host` reddens it (proved: writers == [4, 5]), so the referent r1g1-01 compares against can no longer become ambiguous while this row reports the precondition as held.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1g1-06",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "generated-root corpus — same writer-set uniqueness and ordering precondition.",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/setup-pm.test.ts  ::  \"'generated root' — `## Git Workflow` is the only Step 4 act-step that writes code-host (r0-1)\"",
+      "expected": "passes at the unfixed base — writers == [5]; reddens on the same second-writer mutation, in the mirror's own copy.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1g1-07",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": "dataset corpus — every document-level `Step <n>.<m>` cross-reference (`Step 4.2`, `Step 2.4`) (a) is pinned in REF_INTENT, (b) resolves to an ordered-list item that exists in that step, and (c) that item's normalized body still contains the pinned text the reference was written for (`Step 4.2` -> 'add or update the pm tool section with'; `Step 2.4` -> 'without an implementation guide').",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/setup-pm.test.ts  ::  \"'dataset' — every `Step <n>.<m>` cross-reference still names the act-step it was written for (r0-1)\"",
+      "expected": "passes at the unfixed base and must keep passing. REPAIRED (rv1-3): the row asserts cross-reference IDENTITY, not index existence. A renumber that RE-POINTS `Step 4.2` at a different act-step — index still present — now reddens it (proved by swapping Step 4's act-steps 1 and 2), which is the trade the previous existence-only oracle left silent. A renumber that does not move a referenced act-step legitimately stays green, and an unpinned new cross-reference fails closed.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1g1-08",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": "generated-root corpus — same pinned-intent cross-reference resolution.",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/setup-pm.test.ts  ::  \"'generated root' — every `Step <n>.<m>` cross-reference still names the act-step it was written for (r0-1)\"",
+      "expected": "passes at the unfixed base and must keep passing; reddens on the same re-pointing mutation, in the mirror's own copy.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1g1-09",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": "Step 4 of the dataset SKILL.md and Step 4 of the generated mirror are byte-identical.",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/setup-pm.test.ts  ::  \"Step 4 is byte-identical in both corpora (r0-1 — the mirror is re-synced, not hand-edited)\"",
+      "expected": "passes at the unfixed base (both corpora are identically wrong) and must still pass after the fix — which is exactly what forces the mirror to be re-synced with the real `pair update` transform rather than hand-patched or forgotten.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1g1-10",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "The guard's own slicing fails CLOSED: `actStepIndex` throws when the act-step marker is absent or ambiguous, and `sectionBetween` throws on a missing boundary.",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/setup-pm.test.ts  ::  \"the cross-reference helpers fail closed when an act-step marker is absent (r0-1)\"",
+      "expected": "passes. A renamed act-step must throw, never widen to the whole section and pass vacuously — the fail-open slice this file already paid for once in the AC-4/AC-6 case.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1g1-11",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "The act-step RESOLVER the identity check depends on fails CLOSED: `actStepBody` throws on an ordered index that is absent or duplicated, and `actSteps` throws on a step section carrying no ordered act-step.",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/setup-pm.test.ts  ::  \"the act-step resolver fails closed on an absent or duplicated index (r0-1)\"",
+      "expected": "passes. ADDED with the rv1-3 repair: r1g1-07 is only as strong as the resolver that maps `Step 4.2` to an act-step body — a resolver that fell back to a neighbour, or returned nothing on an empty list, would let a re-pointed reference pass again.",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "New row rather than an edit to r1g1-10: r1g1-10 is an already-approved row about the slicing helpers and is left byte-unchanged; the new resolver is new surface introduced by this repair and gets its own stable id."
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/knowledge-hub/src/conformance/setup-pm.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:9d676f4fb0018a317f087afc1ff6cea5ae9ab2d99b74c261daefba5a56a668e7",
+      "command": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/setup-pm.test.ts",
+      "observed": "Tests 2 failed | 43 passed (45), run in /Users/gianlucacarucci5/projects/pair-worktrees/321 at 643d24f5. Both witnesses red with the same message, one per corpus: AssertionError: the Assignment act-step refers to step 3, but `code-host` is written by act-step 5 (`## Git Workflow`) — the condition is false on every hosts-no-code path and `code-host-assignee` is never asked: expected [ 3 ] to deeply equal []. Rows r1g1-03..r1g1-11 pass at this same unfixed head, and the 34 pre-existing cases are unchanged. rv1-1 repaired: this `file` is now the repository-relative path (the absolute prefix stays in the top-level `worktree` field) and contractErrors() on this contract returns []."
+    }
+  ],
+  "discriminance": {
+    "probe": "An ISOLATED copy of the repository's read surface (packages/knowledge-hub/{src,dataset,package.json,vitest.config.ts}, .claude/skills/pair-capability-setup-pm/SKILL.md, .pair/knowledge/.../project-management-tool/, apps/website/content/docs/pm-tools/azure-devops.mdx) under the scratch directory, with node_modules symlinked from the worktree. The REAL suite is executed there — `node_modules/.bin/vitest run src/conformance/setup-pm.test.ts` — against the real SKILL.md files, mutated in that copy only. No file in /Users/gianlucacarucci5/projects/pair-worktrees/321 other than the test artifact was written at any point; the isolated baseline reproduces the worktree baseline exactly (2 failed | 43 passed (45)).",
+    "results": [
+      "as-shipped (HEAD): 2 failed | 43 passed (45) — r1g1-01/02 RED, every other row green.",
+      "rv1-2 closure (a SECOND Step 4 act-step writes code-host: act-step 4 amended with 'Also **write `code-host`** for the split host here.'): 4 failed | 41 passed — r1g1-05 AND r1g1-06 now RED ('Step 4 act-steps writing `code-host`: 4, 5 — the antecedent in `## Assignment` is only well-defined when that is exactly act-step 5 (`## Git Workflow`): expected [ 4, 5 ] to deeply equal [ 5 ]'), witnesses still RED. Against the pre-repair oracle this mutation was GREEN — the gap rv1-2 named is closed.",
+      "rv1-3 closure (Step 4's act-steps 1 and 2 swapped, indices 1..7 intact, so `Step 4.2` still EXISTS but names `**Check**` instead of the field-list act-step): 4 failed | 41 passed — r1g1-07 AND r1g1-08 now RED ('cross-references resolving to a DIFFERENT act-step than the one they were written for: expected [ Array(1) ] to deeply equal []'), witnesses still RED. The pre-repair existence-only oracle was GREEN on this — the gap rv1-3 named is closed.",
+      "the renumber the reviewer replayed (`## State Mapping` 3 -> 5, `## Git Workflow` 5 -> 3): witnesses go green (3 == 3) and r1g1-07/08 stay green, because that renumber does NOT move the act-step `Step 4.2` names — a legitimate alternative fix, and r1g1-07's `expected` no longer claims otherwise. It does redden the pre-existing AC-4/AC-6 case, which slices Step 4 by act-step name boundaries.",
+      "fix A (`step 3` -> `step 5`): 45 passed (45) — the whole file green, no row left red.",
+      "fix B (antecedent names the section, no number: 'When a separate `code-host` was just declared in `## Git Workflow`'): 45 passed (45) — the second admissible fix is equally accepted, so the contract does not dictate which of the two the fixer picks."
+    ]
+  },
+  "findings": {
+    "received": [
+      "r0-1"
+    ],
+    "covered": [
+      "r0-1"
+    ]
+  },
+  "reconciled": [
+    {
+      "path": "packages/knowledge-hub/src/conformance/setup-pm.test.ts",
+      "sha256": "sha256:69c578841391e18eb50e956f67689ae2847d77945b41eb8af7c037aeb2b58ff0",
+      "note": "attempt 1's own RED artifact, left dirty in the worktree and named by both the rejected contract's redTests[0] and $rejection rv1-1 — this attempt owns it. Restored to HEAD (`git checkout --`) before re-authoring; the pre-restore working-tree sha256 recorded here matches the rejected contract byte-for-byte."
+    }
+  ],
+  "preserved": []
+}
