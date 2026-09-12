@@ -16,7 +16,7 @@ Three workflows ship:
 
 | Workflow               | What it drives                                                                                                                          |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `pair-implement-batch` | a batch of cards, each to a review-approved PR — implement, open the PR, then an independent review ↔ fix loop until it converges         |
+| `pair-implement-batch` | a batch of cards, each to a review-approved PR through four judgment stages — preparation, independent contract validation + seal, implementation, independent final verification — resuming a cycle from its first incomplete step |
 | `pair-refine-batch`    | a batch of backlog cards to Ready — classify, refine, or read-only triage. By its dispatched prompts it writes to the PM tool only and touches no file in the repo — that is process, not permission: see the note below the agent table |
 | `pair-loop`            | the unattended delivery loop — selects eligible cards via `/pair-next`, runs a dependency + mutex analysis, composes `pair-implement-batch` for the actual batch, enacts the automation policy (auto-advance) and evaluates the stop predicate. Realization for the `/pair-loop` skill in Claude Code (ADR-017 §4); elsewhere the skill takes a degraded one-card + continue-token path and this workflow never runs |
 
@@ -41,26 +41,28 @@ the install**, so they are not part of that figure. Nothing errors.
 
 Under Claude Code they are not inert, and it is worth knowing exactly what arrives.
 
-`.claude/agents/` declares three subagents, each with real tool access:
+`.claude/agents/` declares five subagents, each with real tool access:
 
 | Agent                     | Tools it declares                          | What that lets it do                                                        |
 | ------------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
-| `pair-implementer`        | `Read, Edit, Write, Bash, Grep, Glob, Skill` | write files, run commands, create worktrees, commit, push, open pull requests |
-| `pair-reviewer`           | `Read, Grep, Glob, Bash, Skill`            | read the code and run commands (`git`, `gh`); by its own instructions it does not edit, commit or merge |
+| `pair-implementer`        | `Read, Edit, Write, Bash, Grep, Glob, Skill` | write files, run commands, create worktrees, commit, push, open or update pull requests — always above a sealed acceptance contract (`/pair-workflow-implement-phase`, `/pair-workflow-green-fix`) |
+| `pair-reviewer`           | `Read, Grep, Glob, Bash, Skill`            | the independent final verifier (`/pair-workflow-review-phase`): read the code, run commands (`git`, `gh`), run the custody script, publish the marker-keyed review comments; by its own instructions it does not edit, commit or merge |
+| `pair-fix-test-author`    | `Read, Edit, Write, Bash, Grep, Glob, Skill` | the preparation owner (`/pair-workflow-red-spec`): inventory, grouping, tests and fixtures only; it cannot commit, push, post or edit production artifacts by instruction |
+| `pair-red-contract-verifier` | `Read, Grep, Glob, Bash, Skill`          | the independent validator and sealer (`/pair-workflow-red-verify`): reproduce the contract, reject with every gap or run `red-snapshot.mjs seal`; read-only apart from the seal commit the script makes |
 | `pair-contract-generator` | `Read, Write, Bash`                        | read a KB template and write the derived `*.contract.json` cache beside it    |
 
 **One more agent type arrives with no definition of ours: `general-purpose`.** `pair-refine-batch`
 spawns it at both of its stages. It is a host built-in of Claude Code, not a file `pair install`
 writes, so it is not in the table above — and that is precisely why it is worth naming here: it
 carries your tool configuration's **unrestricted** set, `Bash` included, which is wider than any
-of the three definitions above. What keeps that engine to PM-tool writes is the read-only clause
+of the shipped definitions above. What keeps that engine to PM-tool writes is the read-only clause
 in every prompt it dispatches, not a tool grant.
 
 **Read the third column as process, not as permission.** `Bash` is unrestricted wherever it is
 declared, so writing files, committing, pushing and `gh pr merge` are all technically inside the
-authority you install. What keeps `pair-reviewer` read-only and keeps merge out of every run is
-instruction — the engine's dispatched prompts and each agent's own definition — not the tool
-grant.
+authority you install. What keeps `pair-reviewer` and `pair-red-contract-verifier` read-only,
+`pair-fix-test-author` test-only, and keeps merge out of every run is instruction — the engine's
+dispatched prompts and each agent's own definition — not the tool grant.
 
 So after an `install` or `update`, your project contains definitions that — when you invoke a
 batch — can create worktrees, write files, commit, push branches and open pull requests under
@@ -94,8 +96,9 @@ per-step skills are the same ones the engine composes, and they work standalone 
 4. `/pair-process-implement` again — apply the findings, then re-review
 
 What you lose is the orchestration, not the process: parallelism across cards, the isolated
-worktree per card, the audit log that survives a context reset, and the convergence rule that
-decides when a card is done.
+worktree per card, the executable acceptance contract sealed before the implementation, the
+durable cycle state that survives a context reset, and the convergence rule that decides when a
+card is done.
 
 ## Merge is always the human gate
 
@@ -108,6 +111,253 @@ The engine ships with pair's own values as defaults, so it runs in a pair-shaped
 configuration. A project whose skills, worktree root or base branch differ passes
 `args.pipeline` to override them per key; anything left unmentioned keeps its default.
 
-An unknown key, an empty override, or a `maxParallelism` below 1 is rejected loudly rather than
-ignored — a discarded setting would run the batch on values you did not choose while reporting
-success.
+An unknown key, an empty override, a retired key or a `maxParallelism` below 1 is rejected loudly
+rather than ignored — a discarded setting would run the batch on values you did not choose while
+reporting success.
+
+### Four judgment stages, one transition authority
+
+From engine `4.0.0` (US-479, ADR-024 amendments b and the 2026-09-10 amendment) a story's cycle is four judgment dispatches,
+each a skill invoked by name with typed arguments; the workflow file carries no phase policy of
+its own and dispatches nothing mechanical:
+
+| Stage | Skill | Who | What it owns |
+| ----- | ----- | --- | ------------ |
+| 1 preparation | `/pair-workflow-red-spec` | `pair-fix-test-author` | the authoritative inventory (AC or finding → producer → inputs, representations, consumers → equivalence classes and interactions → executable evidence), the grouping of a remediation round, the executable acceptance contract — red witnesses, positive controls that may pass, stable row ids — as tests and fixtures only, before any production edit; `initial`, `remediation`, `repair` and `revision` modes |
+| 2 validation + seal | `/pair-workflow-red-verify` | `pair-red-contract-verifier` | reproduces every row and artifact at the base, re-derives the inventory from the producer, returns every gap in one typed rejection (one repair, then `failed-contract`), and on approval runs `red-snapshot.mjs seal` in the same execution |
+| 3 implementation | `/pair-workflow-implement-phase` · `/pair-workflow-green-fix` | `pair-implementer` | GREEN above the seal, inside `fixScope`, never touching a sealed test byte; the initial stage publishes the story's one PR through the configured publish-pr skill, the remediation stage updates it; an approved test that still fails returns here once on the same seal |
+| 4 final verification | `/pair-workflow-review-phase` | `pair-reviewer` | `red-snapshot.mjs verify-chain` first (a breach is terminal), then the fixers' evidence re-run, the witnesses and controls, every prior finding with an explicit transition, the delta and its consumers, cross-group interactions, the adopted risk-tier passes (general via `/pair-process-review`; security and boundary on `risk:yellow`; architecture and an adversarial second pass on `risk:red`); one verdict, the head reviewed, readiness only when the remote head equals it |
+
+Batch-level, once per run and cache-by-hash: `/pair-workflow-contract-phase` (`pair-contract-generator`,
+haiku) derives the review template's vocabulary contract. It is the **template** contract; the
+**acceptance** contract a story is judged against is the one stage 1 prepares and stage 2 seals.
+
+Every stage begins and ends with `cycle-state.mjs` — a script shipped inside each skill — which
+reads the phase handoffs under `.pair/working/runs/<runId>/<story>/` in the main checkout (never
+a worktree), publishes the stage's own handoff atomically (sequenced, predecessor-checked, a
+stale writer is refused, a held lock is never broken) and derives the **first incomplete step**.
+A stage dispatched when another step is due returns `{ status: "redirect", next }` without
+spending judgment; the coordinator follows `next`, validates every typed result and enforces the
+budgets — it never derives a transition of its own. Handoffs stay the storage authority: there is
+no register, no projector.
+
+### Resume, recovery, findings
+
+- **Same inputs, unchanged head** ⇒ the cycle continues from its first incomplete step; a
+  completed cycle is a cheap identity check (remote head equals the verified head) and no new
+  judgment. A different invocation id for the same PR finds the existing run directory
+  (`other-run`) instead of opening a second cycle; several candidate run directories are
+  `incompatible` until the caller names one.
+- **Moved head or changed relevant inputs** ⇒ the prior findings plus the delta and its
+  affected boundaries are re-validated (`re-review`), never a fresh full pass; an unrelated card
+  edit invalidates nothing.
+- **An approved witness fails on production** ⇒ back to `green-fix` on the same seal, once; a
+  second failure is `failed-fix`. **A genuine contract gap** ⇒ `red-spec` revises only the
+  affected group (`r<n>-g<k>-rev<m>`), stable row ids kept, the changed rows re-validated and
+  sealed as a successor snapshot; `verify-chain` treats the earlier seal as history. A revision
+  or repair inherits the predecessor's `fixScope` and may only add paths — the sealer refuses a
+  narrowed one (`fixScope-narrowed`, engine 3.0.8). **A
+  custody breach** ⇒ `failed-custody`, the trusted snapshot preserved, nothing reset.
+- **Findings** carry an id assigned once by the verifier that first saw them
+  (`r<round>[-<reviewer>]-<n>`), a `kind` (`defect`, `regression`, `approved-test-failing`,
+  `contract-gap`, `question`), a `transition` on every later review (`open`, `resolved`,
+  `superseded`, `human`) and `blocking`, computed from the severity floor and re-checked by the
+  coordinator; a severity change needs `severityEvidence`; a dropped, duplicated or invented id
+  fails the verification closed. An `external` finding (the card, the PR body) is a location,
+  never acceptance: it stays blocking until a human disposition or a read-back-verified
+  correction, and the story escalates rather than converging around it.
+- **Publication is idempotent**: the first review, the synthesis and an escalation are one
+  comment each, keyed by a hidden marker and edited in place through `pr-comment.mjs upsert`,
+  which reads the PR back before writing — a restart under another invocation never posts twice.
+- **Statuses** a caller may see: `ready-for-merge` (only with a 40-hex `reviewedHead` and a
+  `verdict`), `escalate`, `failed-preparation`, `failed-contract`, `failed-seal`,
+  `failed-implement`, `failed-fix`, `failed-verify`, `failed-custody`, `failed-resume`,
+  `incompatible`, and four added in `4.0.0`: `awaiting-scope-decision` (quality converged, one or
+  more scope proposals still pending a human decision), `failed-publication` (the final summary
+  could not be confirmed — retry publication only, quality evidence stays intact),
+  `interrupted` and `abandoned` (an explicit developer abandonment). `pair-loop` halts on every
+  one but the first.
+
+### Scope proposals are never defects (`4.0.0`)
+
+A finding that violates an accepted obligation (an AC, an adoption rule, a supported boundary) is
+a defect and is fixed or absorbed into the story like before. Something demonstrably **absent**
+from the baseline — a genuinely new requirement, not a violation — is instead recorded as a
+`scopeChanges[]` entry (`sc-<n>`, stable across rounds): it never carries a severity, is never
+`blocking`, never enters a remediation plan and is never counted as a defect. Once quality
+converges (zero blocking findings) with one or more proposals still `pending`, the cycle halts at
+`awaiting-scope-decision` — never `ready-for-merge` — and the reviewer posts the consolidated
+packet (`<!-- pair:scope-decision #<story> PR#<n> -->`): each proposal's evidence that it is new
+scope, the affected AC, and the three permitted choices.
+
+The maintainer's decision is applied mechanically, never generated by an agent:
+`cycle-state.mjs apply-scope-decisions --dir <run/story dir> --decision-ref <PR comment URL> --repo <owner/name> --pr <n>`
+reads the ACTUAL comment through `gh`, verifies its author is a `User` in the adopted maintainer
+set (never a caller-supplied string, never a bot), parses one fenced JSON object
+(`{schemaVersion: 1, scopeBaselineHash, decisions: [{id, action, rationale?, targetIssueUrl?, approvedDelta?}]}`,
+`action` one of `ignore | new-card | extend-current-card`), and rejects a stale baseline, a
+duplicate id, an unknown action or an unauthenticated comment outright. `ignore` and `new-card`
+disposition the proposal without touching source or severity; `extend-current-card` names the
+exact new/changed AC, bumps `scopeEpoch` exactly once, and opens a targeted remediation round for
+that delta through the ordinary pipeline — no parallel path. The whole exchange is idempotent: a
+replayed `decisionRef` is a no-op, never a duplicate epoch.
+
+`extend-current-card` resolves each approved AC against the card's ACTUAL body, in the adopted
+formats only: the colon convention (`AC-1: text`, `- **AC-1**: text`), the checkbox convention
+(`- [ ] **AC-01 — Title.** Description.`, and the title-less shape the script emits itself) and the
+delivery template's numbered `**Given** / **When** / **Then**` blocks. An id matched exactly is
+rewritten in place — its bullet, checkbox state and title preserved, the rest of the card
+byte-identical; an id defined twice, whether inside one format or across two, is `ambiguous-ac-id`
+and refused. A parser miss is never taken as proof the AC is new: an id a recognized card cannot
+match is `ac-id-unresolvable`, and a card speaking **none** of these formats is refused outright as
+`unsupported-card-format` — no edit, no `extended`, no `scopeEpoch` bump — whether or not the id
+appears in its text. Restate the AC section in an adopted format, or use `new-card`.
+
+### Metrics, host runtime and the final PR summary (`4.0.0`)
+
+Two scripts new in `4.0.0`, shipped beside `cycle-state.mjs` in `review-phase`'s (and, where
+imported, other phases') scripts folder:
+
+- **`cycle-metrics.mjs`** — a pure, schema-1 reducer over the durable handoffs plus optional
+  normalized runtime observations: cycle/review/defect/scope counts, token and time aggregation
+  (known/partial coverage, never a fabricated zero), a cohort aggregator (completion rate, mean/
+  median/p90 completed cycles), and the render/publish functions for the final summary.
+- **`cycle-runtime.mjs`** — a narrow HOST process (never the Workflow sandbox, which still has no
+  clock, filesystem or usage API): `entry` prepares a cache-hint capsule, `observe` tails ONLY the
+  journal/usage sources it is given on a 5-second default interval and updates `metrics.json`/
+  `metrics.md` at every observed boundary, stopping on a durable terminal result once reconciled
+  or after a 30-second grace period leaves it partial; `finalize` combines the last verdict with
+  the accumulated metrics and posts the ONE synthesis comment.
+
+The final summary — one comment at `<!-- pair:synthesis #<story> PR#<n> -->`, upserted, never a
+second one per run/step/scope-decision/metrics-correction — carries, in order: workflow identity/
+versions/models/reviewed head; quality vs. delivery status; effective cycles and review executions
+(retries, redirects, contract revisions kept separate); tokens and time with explicit coverage;
+late defects by origin (`preexisting-missed`, `introduced-by-remediation`, `unknown`) and a
+separate scope-proposal table; a compact schema-1 JSON tail (`sourceDigest`, `asOf`,
+`metricsRevision`, `completeness`). Readiness is reported only after that candidate summary is
+read back and confirmed — until then delivery is `failed-publication` even when quality already
+converged. A confirmation-only republish is not a new semantic revision; human text written after
+the comment's owned section survives every republish.
+
+**Residual limit at `4.0.0`:** `execution.redirects` / `engineRecoveries` / `administrativeDispatches` /
+`nestedDispatches` are derived from an optional `--dispatchStats` JSON input the host's own launch
+recipe supplies to `cycle-runtime.mjs`'s `observe`/`reconcile`/`finalize` (no journal/usage line
+encodes this — only the host that actually dispatched knows it); real counts when supplied, explicit
+`null` (never a claimed zero) when absent. It persists in the runtime checkpoint, so a later tick or
+a `finalize` run after the observer stopped still reports the last host-supplied values, never
+silently reverting to null. `usage.sharedOverhead` works the same way via `--sharedCost`. `usage.byRole`
+is real once usage observations carry a `role`; `dispatches`/`startedWithoutResult` are derived from
+observed executions themselves and need no external input. Every quantity's known/partial coverage
+is exact; none of these are placeholders presented as measurements. Timing/completeness account for
+an execution observed on only one side (started with no result, or a result with no observed start)
+as genuine missing coverage — `time.incomplete` and `snapshot.completeness: 'partial'` — never a
+silent `complete` from an unresolved execution. Delta-usage dedup (`(executionId, eventId)`) survives
+a checkpoint/restart round trip: the applied-event ledger is itself persisted and reseeded on resume,
+so a replayed delta stays a no-op across a real process restart, not only within one reducer call.
+
+A supplied `entryCapsules` map (per story id) is accepted and schema-validated (workflow major,
+schema version, story, PR, the 40-hex reviewed head) — but it is a cache hint, NEVER approval: the
+sandbox has no filesystem/network access to confirm a capsule's claim itself, so it can never skip
+a dispatch. Readiness always comes from the dispatched phase's own `cycle-state.mjs` `resolve()`
+call against the real durable state; a mismatched OR a fully matching capsule changes nothing about
+what gets dispatched (US-479 remediation, Finding 1).
+
+`model` remains a legacy global override. For a measured trial use `models`, for example
+`{ models: { green: "fable" } }`: that changes only GREEN, leaving the independent verifier,
+the preparation author and the validator on their declared models. Roles: `implementation`,
+`reviewer`, `red`, `redVerifier`, `green`. The retired roles (`planner`, `seal`, `preflight`,
+`pr`) and the retired skill keys (`pipeline.skills.remediationPlan`, `redSeal`, `p3Verify`,
+`cycleComments`, `prPhase`) are rejected with a message naming what absorbed them — never
+mapped silently.
+
+Every result carries `workflowVersion` and `metrics` (dispatches, retries, redirects; wall time
+and token counters are not exposed to a workflow script — the sandbox has no clock and no usage
+API — and are reported as `unknown`, never as zero: read both from the harness run summary), and every stage receives `$workflowVersion`, `$policy` and the effective-inputs digest so
+each handoff records which coordinator, policy and inputs produced it. An incompatible workflow
+major or schema found in a run directory is `incompatible`; prior approval is never reused or
+overwritten silently.
+
+`runId` (optional, one safe path segment) names the run directory `.pair/working/runs/<runId>/`;
+absent, each card uses `story-<id>`. The six phase skills are pipeline configuration like the
+others — `pipeline.skills.contractPhase`, `redSpec`, `redVerify`, `implementPhase`, `greenFix`,
+`reviewPhase` — and `pipeline.reviewers` (default 1, the KB tier default) is the number of
+independent final verifiers the tier requires.
+
+### Carrying verified evidence
+
+A card may pass `requiredFindings`: a compact verified observation with `observedHead`, finding
+fields, oracle, probe and observed result. The final verifier re-proves it on the same reviewed
+SHA (`kind: regression` if the defect is still present). A different SHA is `failed-verify`; old
+evidence never silently becomes a new specification.
+
+### History rewrites and rebases
+
+If a review finding can only be fixed by rewriting existing Git history, the verifier types it
+`humanDecisionKind: "history-rewrite"` and the engine escalates to a human before any RED, seal
+or GREEN. Nothing in the engine can accept or waive such a finding; the human decides out of band
+and re-runs.
+
+A rebase is never repaired. An in-flight attempt whose base moved fails closed where it is
+measured — the sealer refuses a `HEAD` that is not its base, the custody check refuses a snapshot
+that is not an ancestor — and the trusted snapshot is preserved, never reset. There is no
+card-level reset, no `supersedes` field and no SHA-scoped waiver to carry across runs; unknown
+dirty state in a worktree is reported (`dirty`), never cleaned.
+
+## Regression-risk rewind (US-479 S11)
+
+A defect the independent review proves was **introduced by a remediation** does more than reopen: it
+invalidates that remediation and sends the cycle back to the same batch's preparation.
+
+"Rewind" is a **workflow-state transition**, not a Git operation. The branch stays on its current
+head, every commit and seal stays where it is, and the fix goes **forward**. The last clean reviewed
+head is only the behavioural baseline the guard is compared against — nothing is reverted, reset,
+rebased or force-pushed, and no seal or evidence is deleted.
+
+The claim is only admissible with all of: the approved obligation it violates, an executable
+reproducer, the head where that reproducer passes, the head where it fails, the remediation batch
+that produced the failing head, closure assertions and affected boundary references. Anything less is
+an ordinary finding of `unknown` origin; a new or changed requirement stays a scope proposal.
+
+The risk then lives on the existing finding entry with a script-derived `riskId` (story/PR + stable
+finding id + introducing batch), so replay, restart and a second observation reuse it. The **active
+matrix is derived** from the ledger — never stored, never supplied by a caller. The ordinary path runs
+unchanged (preparation → red verification → green fix → independent delta review), with every active
+guard inside the one complete contract.
+
+Only an independent review bound to the **exact** new head discharges a risk: it executes the closure
+assertions, shows the obligation passing, confirms the batch's original findings closed and re-tests
+the affected boundaries. A discharged risk leaves the active matrix and stays in the append-only
+history; a reintroduction reopens the same finding rather than counting as a new discovery.
+
+`quality-converged`, scope escalation and `ready-for-merge` are impossible while any risk is active,
+and a scope decision can neither waive nor discharge one. Four derived counters —
+`invalidatedRemediations`, `regressionRepairs`, `activeRegressionRisks`, `dischargedRegressionRisks`
+— reach the step metrics and the one PR summary, with active and historical views separated. An
+invalidated remediation is an *attempted* batch; its round becomes a completed cycle only once a
+review closes the original findings and leaves no active risk. `maxFixRounds` is reused as it stands.
+
+## Illegal transitions are contracted, not discovered late (US-479 S12)
+
+A change to a persisted state, a ledger transition, a terminal gate or an evidence identity is
+contracted with its **whole finite matrix** before any production edit: the positive path plus every
+applicable negative family — a direct jump to a terminal state without its predecessor, a missing
+predecessor or matching repair, mutation of immutable evidence, a payload that disagrees with
+persisted history, an event bound to another head/finding/batch/run, replay and restart, a stale
+writer, an authority omitted from one participant, a mandatory human decision combined with an
+otherwise automatic transition, a multi-group batch whose producing group differs, convergence with
+something still active, and the interaction between a finding, its remediation and a regression that
+remediation introduced.
+
+The preparation owns the matrix; the independent verifier receives the same authoritative state and
+guard set the resolver holds and rejects an incomplete or inconsistent matrix before the seal
+(`contract-incomplete:<transition>:<family>`); implementation refuses to start without the complete
+seal and may not reduce a sealed row; the final review samples the sealed rows and the changed
+interactions. One green end-to-end chain is necessary and never sufficient.
+
+For the regression-risk ledger specifically, one authority validates every transition against the
+persisted ledger: a discharge needs its active predecessor, a matching repair whose fix produced the
+exact reviewed head, byte-equal immutable evidence and the batch's own obligations closed in that
+same review, and the risk state, finding transition and blocking flag must describe one transition.
+The repaired group is derived from the group that produced the failing head — never assumed to be
+`-g1` — and ambiguous provenance is a typed refusal.

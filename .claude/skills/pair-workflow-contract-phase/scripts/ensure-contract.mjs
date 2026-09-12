@@ -24,12 +24,12 @@
 // invalid and gets regenerated, rather than silently ranked by guess.
 //
 // CLI (used by the agent — never hand-roll hash/cache/validation):
-//   node ensure-contract.mjs check <template.md> <contract.json>
+//   node <skill dir>/scripts/ensure-contract.mjs check <template.md> <contract.json>
 //     → {"status":"fresh|stale|missing|invalid","templateHash":"sha256:..."}
-//   node ensure-contract.mjs write <template.md> <contract.json> <draft.json>
+//   node <skill dir>/scripts/ensure-contract.mjs write <template.md> <contract.json> <draft.json>
 //     → validates the draft, stamps $meta with the template hash, persists.
 //
-// NOTE: the workflow sandbox (implement-batch.js) cannot import this module (no filesystem,
+// NOTE: the workflow sandbox (pair-implement-batch.js) cannot import this module (no filesystem,
 // no imports), and it never sees the contract this module PERSISTED — only the one its
 // generator agent RETURNED. So its duplicates of these checks (`usableSchema` and its own
 // `severityRankErrors`) are not a redundant second line: they are the only validation on the
@@ -39,9 +39,9 @@
 // `severityRankErrors` from here and asserts exactly that, map by map. Keep both small, and
 // change them together.
 import { createHash } from 'node:crypto'
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, realpathSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
 export function hashContent(content) {
   return `sha256:${createHash('sha256').update(content).digest('hex')}`
@@ -259,6 +259,16 @@ export function main(argv, { log = console.log, error = console.error } = {}) {
   return 0
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Entry-point guard by REAL path: an install directory reached through a symlink (macOS's /var → /private/var,
+// a linked skills dir) makes `import.meta.url` and `process.argv[1]` spell the same file two ways, and a
+// string comparison silently turns the CLI into a no-op that exits 0. Compare realpaths, never strings.
+const isMain = () => {
+  try {
+    return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+  } catch {
+    return false
+  }
+}
+if (isMain()) {
   process.exit(main(process.argv.slice(2)))
 }

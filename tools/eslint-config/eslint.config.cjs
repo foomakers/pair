@@ -131,6 +131,11 @@ module.exports = [
       // Linting only the dataset copy would force an edit that breaks the mirror guard —
       // the two copies must stay one artifact, so they share one lint policy: none.
       'dataset/.workflows/',
+      // Scripts shipped INSIDE a skill folder (US-479): a byte-identical mirror of
+      // `.claude/skills/<skill>/scripts/` at the repo root (outside every package, unlinted),
+      // exercised by the dry-run suites under `.claude/workflows/pair-contracts/`. Same
+      // one-artifact rule as the workflows above: one lint policy for both copies — none.
+      'dataset/.skills/**/scripts/*.mjs',
     ],
   },
 ]

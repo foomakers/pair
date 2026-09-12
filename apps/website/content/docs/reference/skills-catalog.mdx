@@ -1,11 +1,11 @@
 ---
 title: Skills Catalog
-description: Complete catalog of all 44 pair skills organized by type — process, capability, and meta.
+description: Complete catalog of all 50 pair skills organized by type — process, capability, workflow, and meta.
 ---
 
-pair ships with 44 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
+pair ships with 50 skills organized into four types: **process** (lifecycle orchestration), **capability** (atomic operations), **workflow** (delivery stages dispatched by the batch engine), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
 
-> **Last updated:** 2026-08-24. Source: `packages/knowledge-hub/dataset/.skills/`
+> **Last updated:** 2026-09-08. Source: `packages/knowledge-hub/dataset/.skills/`
 
 ## Meta Skills
 
@@ -126,6 +126,19 @@ All `analyze-*` skills **analyze and report**: they propose no adoption decision
 | ----- | ------- | ----------- |
 | **checkpoint** | `/pair-capability-checkpoint` | Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) so work survives a context reset. |
 | **publish-pr** | `/pair-capability-publish-pr` | Publishes a completed story branch as a pull request: runs the quality gate, creates or updates ONE PR from the pr-template (conditional sections filled only when pertinent), copies the story's classification tags, marks it ready-for-review, updates the board state, then enters the PR state flow — registers the required `pair-review` check as pending (merge blocked from t0) and dispatches the review to a clean-context subagent. |
+
+## Workflow Skills
+
+Workflow skills are the delivery phases of the [batch engine](/docs/reference/batch-engine): one mutation boundary each, invoked by the engine during a review ↔ remediation cycle, never cascade-suggested by `/pair-next`. Each writes one handoff under `.pair/working/runs/<run>/<story>/`.
+
+| Skill | Command | Description |
+| ----- | ------- | ----------- |
+| **red-spec** | `/pair-workflow-red-spec` | Stage 1 of the delivery workflow — preparation: owns the authoritative inventory (AC or finding → producer/grammar → inputs, representations, consumers → equivalence classes and interactions → executable evidence), the grouping of a remediation round and the executable acceptance contract — discriminating witnesses that are RED against the unfixed base, positive/already-correct controls that may pass, stable row ids — writing ONLY tests and consumed fixtures before any production edit, in initial (fresh story), remediation, repair (verifier rejection) and revision (contract gap) modes. |
+| **red-verify** | `/pair-workflow-red-verify` | Stage 2 of the delivery workflow — independent contract validation and deterministic seal in one execution: reproduces every witness and control of a prepared acceptance contract against the unfixed base, re-derives the inventory's classes and interactions from the authoritative producer, checks discriminance (a witness fails for the intended defect, a control may pass, a test-only fix fails on the injected regression), fixture consumption and fixScope, emits ALL concrete gaps it found in one typed rejection with stable row ids — and, when the contract is verified, runs red-snapshot.mjs seal in the same execution and returns the snapshot. |
+| **implement-phase** | `/pair-workflow-implement-phase` | Stage 3 (initial) of the delivery workflow — implementation against the sealed acceptance contract: builds one refined story inside its persistent worktree strictly above the RED snapshot, following the project's implement process test-first, never touching a sealed test byte, verifying the tier-resolved quality gate, recording decisions, writing the checkpoint, and then publishing exactly one review-ready PR through the project's publish-pr skill in the same execution. |
+| **green-fix** | `/pair-workflow-green-fix` | Stage 3 (remediation) of the delivery workflow — implementation against a sealed remediation contract: discovers the RED snapshot from Git (never from the prompt), changes production only inside fixScope, never touches a sealed test byte, re-runs the witnesses and the tier gate, commits GREEN above the seal, updates the PR, appends the cycle log and returns an evidence ledger. |
+| **review-phase** | `/pair-workflow-review-phase` | Stage 4 of the delivery workflow — independent final verification of one exact PR head: the deterministic custody check first (red-snapshot.mjs verify / verify-chain: snapshot ancestry, sealed blobs byte-identical, no unlisted test change, fixScope respected, revisions as successors), then the fixer's evidence re-run, the approved witnesses and controls, every prior blocking finding with an explicit transition, the source delta and its directly affected consumers, cross-group interactions, the adopted risk-tier review passes (general via `/pair-process-review`, plus security / boundary / architecture lenses as the tier rises) — unioned into one finding set with stable ids, one verdict and the head it reviewed. |
+| **contract-phase** | `/pair-workflow-contract-phase` | Phase 0 of the delivery workflow: ensures the machine contract derived from a KB markdown template (verdict options, severities with explicit ranks, finding fields) is fresh — cache-by-hash via ensure-contract.mjs, regenerated only when the template changed — and returns it as the enum-locked return-value schema the reviewer is held to. |
 
 ## Skill Properties
 

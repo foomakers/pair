@@ -525,7 +525,7 @@ test('orchestration: review-approved risk:green with Auto-Advance re-reads the t
       }
       return {}
     },
-    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7 }] }),
+    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
   })
   assert.equal(advancePrompted, true)
 })
@@ -546,7 +546,7 @@ test('orchestration: a mid-run tier raise (green -> red) halts auto-advance even
       }
       return {}
     },
-    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7 }] }),
+    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
   })
   assert.equal(mergeAttempted, false)
   const haltEntry = result.log.find(l => l.id === '1' && l.reason?.includes('tier changed'))
@@ -573,6 +573,61 @@ test('orchestration: an escalated card is excluded from every subsequent iterati
   // the Select stub ever returns) and the run ends on "nothing eligible".
   assert.equal(batchCalls, 1)
   assert.equal(result.log.filter(l => l.status === 'escalate').length, 1)
+})
+
+test('orchestration: ANY non-ready status halts the card — a status outside escalate/failed-* is never re-driven (US-479 c0)', async () => {
+  // The engine emits statuses that start with neither `failed` nor `escalate` (`seal-invalidated`,
+  // `stale-history-decision`). A halt rule spelled as an allow-list of failure prefixes let those
+  // cards fall through: not halted, not parked, re-selected and re-driven on every iteration until
+  // max-iterations. The only status that may ever advance is `ready-for-merge`; everything else halts.
+  for (const status of ['seal-invalidated', 'stale-history-decision', 'some-future-status']) {
+    let batchCalls = 0
+    const { result } = await runWorkflow({
+      args: {
+        policyText: '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 3\n',
+      },
+      dispatch: (_prompt, opts) => {
+        if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+        return {}
+      },
+      workflowDispatch: () => {
+        batchCalls++
+        return { batch: [{ id: '1', status }] }
+      },
+    })
+    assert.equal(batchCalls, 1, `${status}: card was re-driven`)
+    const halted = result.log.find(l => l.id === '1' && l.excluded === true && /halted/.test(l.reason ?? ''))
+    assert.ok(halted, `${status}: no halted audit entry`)
+    assert.match(halted.reason, new RegExp(status))
+  }
+})
+
+test('orchestration: a `ready-for-merge` row without a 40-hex reviewedHead and a verdict is an INCOMPLETE handoff — halted, never advanced (US-479 AC-11)', async () => {
+  for (const row of [
+    { id: '1', status: 'ready-for-merge', prNumber: 7 },
+    { id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'abc', verdict: 'APPROVED' },
+    { id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: '' },
+    { id: '1', status: 'ready-for-merge', reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' },
+  ]) {
+    let advancePrompted = false
+    const { result } = await runWorkflow({
+      args: { policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n' },
+      dispatch: (prompt, opts) => {
+        if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+        if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
+        if (opts.phase === 'Advance') {
+          advancePrompted = true
+          return { merged: true }
+        }
+        return {}
+      },
+      workflowDispatch: () => ({ batch: [row] }),
+    })
+    assert.equal(advancePrompted, false, `${JSON.stringify(row)}: advanced on incomplete evidence`)
+    const halted = result.log.find(l => l.id === '1' && l.excluded === true && /halted/.test(l.reason ?? ''))
+    assert.ok(halted, `${JSON.stringify(row)}: no halted audit entry`)
+    assert.match(halted.reason, /reviewedHead|verdict|prNumber/)
+  }
 })
 
 test('orchestration: audit write not confirmed HALTs the run (review M5)', async () => {
@@ -637,7 +692,7 @@ test('orchestration: a gate-red merge refusal is parked, never re-driven through
     },
     workflowDispatch: () => {
       batchCalls++
-      return { batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7 }] }
+      return { batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }
     },
   })
   assert.equal(batchCalls, 1) // never re-driven on iteration 1/2 despite max-iterations: 3
@@ -655,7 +710,7 @@ test('orchestration: an unconfirmed AC8 issue comment is recorded in the audit, 
       if (opts.phase === 'Advance' && prompt.includes('Post a comment')) return { posted: false }
       return {}
     },
-    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7 }] }),
+    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
   })
   assert.ok(result.log.some(l => l.id === '1' && l.note?.includes('could not be confirmed posted')))
 })
@@ -679,7 +734,7 @@ test('orchestration: a review-approved card not covered by Auto-Advance is parke
     },
     workflowDispatch: () => {
       batchCalls++
-      return { batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7 }] }
+      return { batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }
     },
   })
   assert.equal(batchCalls, 1) // never re-driven on iteration 1/2 despite max-iterations: 3
@@ -858,7 +913,7 @@ test('orchestration: the /pair-capability-verify-quality merge prompt carries no
       if (prompt.includes('review-approved on PR')) return { merged: true }
       return {}
     },
-    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 9 }] }),
+    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 9, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
   })
   const merge = calls.find(c => c.prompt.includes('/pair-capability-verify-quality'))
   assert.ok(merge, 'the auto-advance merge prompt must have run')

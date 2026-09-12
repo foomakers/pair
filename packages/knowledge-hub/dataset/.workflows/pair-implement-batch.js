@@ -4,24 +4,25 @@ export const meta = {
   // collide with this one under an undefined winner. File name and registry name match.
   name: 'pair-implement-batch',
   description:
-    'Drive a mutex-safe batch of ready story cards, each to a review-approved PR (implement -> PR -> independent review <-> fix loop). Stops at PR-ready; NEVER merges (human gate).',
+    'Drive a mutex-safe batch of ready story cards, each to a review-approved PR through four judgment stages (preparation -> independent contract validation + seal -> implementation -> independent final verification), resuming a cycle from its first incomplete step. Stops at PR-ready; NEVER merges (human gate).',
   // NOTE: `meta` must be a PURE LITERAL — the loader parses it statically and rejects any
   // expression node. A `+`-concatenated string is a BinaryExpression and makes the whole
   // workflow UNLOADABLE: it silently disappears from the registry and only `scriptPath`
   // reports why. Keep every value here a single literal, however long the line gets
   // (.claude/workflows/ is outside the prettier gate, so no formatter will re-wrap it).
   whenToUse:
-    'REQUIRED args shape: {"cards":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} (`stories` is the accepted alias; never pass both) — a bare space-separated list of issue refs is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. Optional per card: base (the branch it stacks on), notes (scope directive), prNumber (re-enter the review loop on an existing PR). Optional per run: maxParallelism, severityFloor, model, pipeline (skill names, worktree root, audit-log dir, base branch, review-template path, maxFixRounds). Every value is validated by TYPE at parse time and a wrong one throws before any agent runs; card fields AND pipeline values are also validated by CONTENT (git refs, safe path segments, skill names) because they reach the shell commands the agents run — a value carrying shell syntax or `..` is rejected, never quoted. An unset optional key may be omitted or spelled `undefined`/`null` — all three mean absent; an EMPTY string is not one of them and throws. Pre-filter for mutex safety — no two cards may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a cold full-repo quality gate qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
+    'REQUIRED args shape: {"cards":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} (`stories` is the accepted alias; never pass both) — a bare space-separated list of issue refs is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. Optional per card: base (the branch it stacks on), notes (scope directive), prNumber (re-enter the review loop on an existing PR). Optional per run: maxParallelism, severityFloor, model, models (roles implementation | reviewer | red | redVerifier | green), runId (resume a cycle by naming its run directory), entryCapsules (map of admitted story id -> a cache hint for the host entry wiring; US-479 T-23, remediated by Finding 1 — accepted and validated, never trusted as approval, never changes dispatch behavior), pipeline (skill names, worktree root, audit-log dir, base branch, review-template path, maxFixRounds, reviewers). Engine 3.0.0 retired the planner, sealer, P3, cycle-comments and pr-phase dispatches: the keys `pipeline.skills.remediationPlan|redSeal|p3Verify|cycleComments|prPhase` and `models.planner|seal|preflight|pr` are REJECTED with a migration message, never silently mapped. Every value is validated by TYPE at parse time and a wrong one throws before any agent runs; card fields AND pipeline values are also validated by CONTENT (git refs, safe path segments, skill names) because they reach the shell commands the agents run — a value carrying shell syntax or `..` is rejected, never quoted. An unset optional key may be omitted or spelled `undefined`/`null` — all three mean absent; an EMPTY string is not one of them and throws. Pre-filter for mutex safety — no two cards may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a cold full-repo quality gate qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
   phases: [
     { title: 'Contracts', model: 'haiku' },
+    { title: 'Prepare', model: 'opus' },
+    { title: 'Validate', model: 'opus' },
     { title: 'Implement', model: 'opus' },
-    { title: 'PR', model: 'sonnet' },
-    { title: 'Review', model: 'opus' },
+    { title: 'Verify', model: 'opus' },
   ],
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// THE CONTRACT (#219 AC7) — what `pair-loop` (#250) codes against.
+// THE CONTRACT — what `pair-loop` codes against.
 // Stable. A rename here breaks a caller this repo cannot see, so treat every name
 // below as public API.
 //
@@ -34,17 +35,26 @@ export const meta = {
 //                                 // A POSITIVE integer (>= 1): `0`/negative do not name a PR,
 //                                 // and `0` would skip implement AND the probe and report an
 //                                 // unbuilt story as review-approved.
+//     requiredFindings?,         // verified P3 evidence that RED must re-prove on its exact
+//                                 // observedHead; it stays outside reviewer context.
 //   }],                           // every card VALUE is validated, not just its key set: id is one
 //                                 // path segment, branch/base are git refs, title/notes are plain
 //                                 // text. They reach shell command text an agent runs, so a value
 //                                 // carrying shell syntax or `..` is REJECTED, never quoted.
 //   maxParallelism?,              // integer >= 1; absent = unbounded fan-out
+//   runId?,                       // one safe path segment; names the handoff directory
+//                                 // `.pair/working/runs/<runId>/<story>/` every phase skill writes to.
+//                                 // Absent → `story-<id>` per card.
 //   severityFloor?,               // findings below it are carried, not fixed. It is spelled in
 //                                 // the REVIEW TEMPLATE's severity vocabulary (pipeline.reviewTemplate
 //                                 // -> contract `vocabulary.severities`), pair's own when none is
 //                                 // configured; a value outside that set THROWS rather than rank
 //                                 // against a foreign scale.
-//   model?,                       // fable | haiku | sonnet | opus
+//   model?,                       // legacy global override: fable | haiku | sonnet | opus
+//   models?,                      // role-scoped override. Keys: implementation, reviewer, red,
+//                                 // redVerifier, green. A role key wins over `model`; use this for an
+//                                 // A/B trial without changing the independent verifier or the
+//                                 // evidence chain. Retired roles (planner, seal, preflight, pr) THROW.
 //   pipeline?,                    // per-key overrides — see PIPELINE_DEFAULTS (skill names,
 //                                 // worktreeRoot, auditLogDir, baseBranch, reviewTemplate,
 //                                 // maxFixRounds). Its VALUES are validated by the SAME
@@ -67,8 +77,7 @@ export const meta = {
 // to `undefined` or `null`. All three mean ABSENT, on every optional key, at every level —
 // card fields, run options and `pipeline` overrides alike. A caller composing cards in code
 // (`{ id, title, branch, prNumber: state.prNumber }`) must not have to branch on whether a
-// field happens to be set: an explicit `undefined` on a field nobody set used to abort the
-// WHOLE batch at parse time while the sibling field beside it accepted the same spelling.
+// field happens to be set.
 // Anything ELSE that is present and wrong-typed still THROWS — the rule loosens the spelling
 // of "absent", never the type check on a value that is actually there.
 //
@@ -77,17 +86,45 @@ export const meta = {
 // analysis, because only the caller knows the file sets.
 //
 // RETURN {
+//   workflowVersion,
 //   contracts: [{ name, status }],
-//   batch:     [{ id, status, prNumber?, findings?, acceptedFindings?, story, ... }],
+//   batch:     [{ id, status, prNumber?, reviewedHead?, verdict?, findings?, acceptedFindings?,
+//                 reason?, metrics, story }],
 //   died:      [id],              // cards that never returned anything
+//   metrics:   { dispatches, retries, redirects, wallMs: 'unknown', tokens: 'unknown' }, // no clock, no usage counters in the sandbox — read both from the harness run summary
 //   note,                         // derived from the STATUSES: how many cards ADVANCED to a
 //                                 // PR (ready-for-merge/escalate) and what the rest did —
 //                                 // a batch where every card failed says so, never "ready"
 // }
 //   status ∈ ready-for-merge | escalate
-//          | failed-implement | failed-pr | failed-review | failed-fix
+//          | failed-preparation | failed-contract | failed-seal | failed-implement | failed-fix
+//          | failed-verify | failed-custody | failed-resume | incompatible
+//          | awaiting-scope-decision | failed-publication | interrupted | abandoned
+//   ONLY `ready-for-merge` may advance, and only when the row carries a 40-hex `reviewedHead`
+//   and a `verdict` — a caller MUST treat every other status — including one this list does not
+//   name yet — as halted. `escalate` and `failed-*` rows carry `reason` and the open findings.
+//   The last four (ADR-024 amendment 2026-09-10, US-479 T-19) are also non-ready: quality
+//   convergence with pending scope decisions, a publication that could not be confirmed and must
+//   only retry publication, a run stopped mid-cycle, and an explicit developer abandonment.
 //
-// NEVER `merged`. Merge is the human/policy gate on every path; auto-advance is #250's
+// FOUR JUDGMENT STAGES, ONE TRANSITION AUTHORITY. The cycle of a story is a chain of phase
+// handoffs under `.pair/working/runs/<runId>/<story>/` in the MAIN checkout. Every phase skill
+// runs `cycle-state.mjs resolve` before doing anything and after publishing its handoff, and
+// returns the typed `next` step; this file dispatches `next`, validates the typed evidence each
+// stage returns, enforces the budgets, and never derives a transition of its own. A same-input
+// resume therefore continues from the first incomplete step; a moved head or changed relevant
+// inputs re-validate the prior findings plus the delta; an incompatible workflow major or
+// ambiguous run scope is `incompatible`, never silently reused.
+//
+// REBASE IS NOT REPAIRED. There is no custody probe, no card-level reset and no
+// SHA-scoped history waiver. An in-flight attempt whose base moved fails closed where it is
+// measured — the sealer refuses a HEAD that is not its base, the custody check refuses a snapshot
+// that is not an ancestor — and the trusted snapshot is preserved, never reset. A finding whose
+// only fix is a history rewrite is a HUMAN decision: the verifier types it
+// `humanDecisionKind: 'history-rewrite'` and the engine escalates before any RED/seal/GREEN, with
+// nothing in the engine able to accept or waive it.
+//
+// NEVER `merged`. Merge is the human/policy gate on every path; auto-advance is the loop's
 // concern, never this engine's.
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -103,39 +140,25 @@ export const meta = {
 // prettier gate — keep the one-line opts style already used in this file.
 
 // ── Input ────────────────────────────────────────────────────────────────
-// args.stories = the batch of STORIES (never tasks) to drive THIS run. A batch
-// ITEM IS A STORY, not a task: each story is delivered on ONE branch with ONE
-// PR — opened the first time and UPDATED for all subsequent work on that story
-// (further tasks/features included). NEVER one-PR-per-task, and NEVER a second
-// PR for the same story: continuing a story that already has a PR reuses its
-// existing branch/{prNumber} and updates that PR (create-or-update). A second
-// PR for the same story is forbidden unless a human explicitly instructs it.
-// MUST be pre-filtered to be mutex-safe: no two stories here may touch the same
-// shared skill/file (pair-next, pair-process-review, record-decision,
-// apps/pair-cli, templates).
-// Chains advance ACROSS runs: after you merge these PRs, re-run with the next
-// batch (the now-unblocked heads). A story's dependency must be MERGED, not
-// just PR-ready, before its dependent enters a batch.
-// Each story: { id, title, branch }. Add { prNumber } to RESUME an existing PR
-// mid-review — implement+PR are skipped and the story re-enters the review<->fix
-// loop directly (drives remaining findings, incl. minor, to zero).
-// Optional { notes } = a scope directive threaded into the implement+PR prompts
-// (overrides the issue body on conflict), e.g. "resolve all findings in ONE PR,
-// do not split".
-//
-// #401: the input is validated LOUDLY. The previous version coerced an unparseable
-// string to `undefined` and fell through to `STORIES = []`, so a caller who
-// passed a bare list of refs (`args: "#234 #236"`) got a run that spawned ZERO
-// agents, exited in ~30ms and returned the SUCCESS-shaped
-// `{ batch: [], note: 'PRs are ready-for-merge or escalated…' }` — a silent
-// no-op reported as a completed batch, indistinguishable from a real run whose
-// stories all failed. An orchestrator asked to drive stories and driving none
-// must fail, not report success. An EXPLICIT empty list stays a legal no-op:
-// a caller that computed "nothing to do" is not making a mistake.
+// args.stories = the batch of STORIES (never tasks) to drive THIS run. A batch ITEM IS A STORY,
+// not a task: each story is delivered on ONE branch with ONE PR — opened the first time and
+// UPDATED for all subsequent work on that story (further tasks/features included). NEVER
+// one-PR-per-task, and NEVER a second PR for the same story: continuing a story that already
+// has a PR reuses its existing branch/{prNumber} and updates that PR (create-or-update). A
+// second PR for the same story is forbidden unless a human explicitly instructs it. MUST be
+// pre-filtered to be mutex-safe: no two stories here may touch the same shared skill/file
+// (pair-next, pair-process-review, record-decision, apps/pair-cli, templates). Chains advance
+// ACROSS runs: after you merge these PRs, re-run with the next batch (the now-unblocked heads).
+// A story's dependency must be MERGED, not just PR-ready, before its dependent enters a batch.
+// Each story: { id, title, branch }. Add { prNumber } to RESUME an existing PR mid-review —
+// implement+PR are skipped and the story re-enters the review<->fix loop directly (drives
+// remaining findings, incl. minor, to zero). Optional { notes } = a scope directive threaded
+// into the implement+PR prompts (overrides the issue body on conflict), e.g. "resolve all
+// findings in ONE PR, do not split". An orchestrator asked to drive stories and driving none
+// must fail, not report success. An EXPLICIT empty list stays a legal no-op: a caller that
+// computed "nothing to do" is not making a mistake.
 
-// Every caller-facing object validates its key SET, not just the keys it recognises. A
-// misspelled key that is merely ignored runs the batch on values nobody chose and reports
-// success — the #401 direction — and the shipped docs promise the opposite in as many words.
+// Every caller-facing object validates its key SET, not just the keys it recognises.
 function rejectUnknownKeys(obj, allowed, where) {
   for (const k of Object.keys(obj ?? {}))
     if (!allowed.includes(k))
@@ -163,10 +186,9 @@ const isRef = v => /^[A-Za-z0-9._][A-Za-z0-9._/#-]*$/.test(v) && !v.includes('..
 // command line: backtick and `$(`. Punctuation, spaces and non-ASCII stay legal — a real
 // card title ("PR state flow (gate≠review) + …") must keep working.
 const isProse = v => !/[`\r\n\x00-\x1f]/.test(v) && !v.includes('$(')
-// Must START alphanumeric, not merely be built from safe characters. `-rf` is read by the
-// shell as a FLAG rather than as the path argument it sits in, and `.` resolves to the
-// worktree ROOT — `git worktree remove --force <root>/<id>-review` on either is not
-// recoverable. Both passed the earlier charset test, which only forbade `..`. Same rule,
+// Must START alphanumeric, not merely be built from safe characters. `-rf` is read by the shell
+// as a FLAG rather than as the path argument it sits in, and `.` resolves to the worktree ROOT
+// — `git worktree remove --force <root>/<id>-review` on either is not recoverable. Same rule,
 // same spelling, in the sibling engine — held by the differential in the test file.
 const isSegment = v => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v) && !v.includes('..')
 // A RELATIVE directory/file path the agents `cd` into, create worktrees under and aim
@@ -214,31 +236,24 @@ function parseBatchArgs(raw) {
   }
   // A bare array is unambiguous — read it as the card list.
   if (Array.isArray(a)) a = { cards: a }
-  // `cards` is the generalized contract name (#219 AC7); `stories` is the pair-era alias,
-  // kept working so no existing caller breaks. Both present is an ERROR rather than a
-  // preference: silently picking one would drive a batch the caller did not describe.
+  // Both present is an ERROR rather than a preference: silently picking one would drive a batch
+  // the caller did not describe.
   if (a && typeof a === 'object' && Array.isArray(a.cards) && Array.isArray(a.stories))
     throw new Error(
       `implement-batch: \`args\` carries both \`cards\` and \`stories\`. They are the same field — ` +
         `\`cards\` is the current name, \`stories\` the accepted alias. Pass exactly one.`,
     )
   // `Object.hasOwn` + the undefined/null test, not a bare `in`: the unset-optional rule of this
-  // contract holds HERE too. `in` counted an explicitly-undefined alias key as PRESENT, so
-  // `{ cards: [...], stories: undefined }` skipped the mapping and threw "`args` must be
-  // { stories: [...] }" — telling a caller who passed a list that no list was there, and naming
+  // contract holds HERE too. `in` counted an explicitly-undefined alias key as PRESENT, so `{
+  // cards: [...], stories: undefined }` skipped the mapping and threw "`args` must be {
+  // stories: [...] }" — telling a caller who passed a list that no list was there, and naming
   // the ALIAS rather than the key they used. Its mirror image (`{ stories, cards: undefined }`)
-  // worked, which is the asymmetry the rule exists to remove. (The naming half of that same
-  // defect is closed by `listKey` just below — it survived this fix by one round.)
+  // worked, which is the asymmetry the rule exists to remove.
   const hasStories = a && typeof a === 'object' && Object.hasOwn(a, 'stories') && a.stories !== undefined && a.stories !== null
   const hasCards = a && typeof a === 'object' && Array.isArray(a.cards)
   // EVERY error below names the spelling the CALLER actually used, and indexes cards with it.
-  // The guards used to disagree: three said `stories[i]` unconditionally while the four beside
-  // them said `cards[i]`, so ONE malformed input produced two different index labels depending
-  // on which guard happened to fire — and the message a caller got for the most common mistake
-  // (`{cards: [{id, branch}]}` → "stories[0] … is missing title") named a key they had not
-  // passed and steered them to the deprecated spelling. `cards` is the default because it is
-  // the contract key; the alias is named only when the alias is what arrived. `#250` is the
-  // caller this contract is frozen for, and this text is the only guidance it ever reads.
+  // `cards` is the default because it is the contract key; the alias is named only when the
+  // alias is what arrived.
   const listKey = hasStories && !hasCards ? 'stories' : 'cards'
   if (hasCards && !hasStories) a = { ...a, stories: a.cards }
   if (!a || typeof a !== 'object' || !Array.isArray(a.stories))
@@ -252,16 +267,9 @@ function parseBatchArgs(raw) {
   const stories = a.stories.map((s, i) => {
     if (!s || typeof s !== 'object' || Array.isArray(s))
       throw new Error(`implement-batch: ${listKey}[${i}] is not an object: ${JSON.stringify(s)}.`)
-    // The CARD's key set is validated like every other caller-facing object. Without this,
-    // `prNumbr: 432` (typo) or a card carrying an invented key was dropped in silence:
-    // `resuming` stayed false, the engine ran IMPLEMENT then publishPr, and opened a SECOND
-    // PR for a story that already had one — the very thing this file forbids in as many words.
-    rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'prNumber'], `${listKey}[${i}]`)
-    // `#234` and `234` name the same story; normalize once so no prompt, worktree
-    // path or marker ever carries a stray `#`. A number is lossless and unambiguous for an
-    // issue ref and is coerced deliberately; anything else is not — `id: ['234']` and
-    // `id: true` both survived `String()` and then PASSED the safe-path-segment test as
-    // "234"/"true", naming a worktree the caller never wrote. Same rule as the sibling engine.
+    // The CARD's key set is validated like every other caller-facing object.
+    rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'requiredFindings', 'prNumber', 'rollbackTo'], `${listKey}[${i}]`)
+    // Same rule as the sibling engine.
     if (s.id !== undefined && s.id !== null && typeof s.id !== 'string' && typeof s.id !== 'number')
       throw new Error(
         `implement-batch: ${listKey}[${i}] has id of type ${Array.isArray(s.id) ? 'array' : typeof s.id}, which is not a string or a number. ` +
@@ -280,19 +288,11 @@ function parseBatchArgs(raw) {
           `an absent one would reach a shell command as \`undefined\`.`,
       )
     // Presence is not validity. Every field below is interpolated VERBATIM into command text a
-    // Bash-capable agent then runs — `git worktree add <root>/<id> -B <branch> <base>` and
-    // `git worktree remove --force <root>/<id>-review` — so a card value carries the authority
-    // of the command line it lands on. Two escapes reachable through the DOCUMENTED contract:
-    // `branch: 'x origin/main; gh pr merge 432 --squash'` renders a merge instruction into the
-    // implement prompt, defeating AC5's hardest guarantee; `id: '../../scratch'` aims a
-    // `--force` remove outside the worktree root, which is not recoverable. Rejected rather
-    // than quoted: an escaped value still RUNS, and the caller who typed something that was
-    // never a branch never learns it — the #401 direction, on the one input that can merge.
+    // Bash-capable agent then runs — `git worktree add <root>/<id> -B <branch> <base>` and `git
+    // worktree remove --force <root>/<id>-review` — so a card value carries the authority of
+    // the command line it lands on.
     const constrain = (value, key, ok, what) => {
-      // Reject a present-but-non-string value BEFORE coercing it. `String(value ?? '')` first
-      // meant `notes: {a:1}` reached the prompt as `[object Object]` and `branch: ['a','b']` as
-      // `a,b` — the coerce-instead-of-reject direction this file rejects everywhere else, and
-      // it defeats the type check a reader assumes is there.
+      // Reject a present-but-non-string value BEFORE coercing it. `String(value ??
       if (value !== undefined && value !== null && typeof value !== 'string')
         throw new Error(
           `implement-batch: ${listKey}[${i}] (#${id}) has ${key} of type ${Array.isArray(value) ? 'array' : typeof value}, which is not a string. ` +
@@ -300,14 +300,12 @@ function parseBatchArgs(raw) {
             `an array joins on commas) as if the caller had typed it. Pass a string, or omit the key.`,
         )
       const v = String(value ?? '').trim()
-      // PRESENT-BUT-EMPTY IS AN ERROR, at every level — the rule the contract block states and
-      // the one this early return used to break. `''` was read as ABSENT here while
-      // `args.severityFloor: ''` and `args.pipeline.<key>: ''` both threw for the stated reason.
-      // `base` is what it cost: a card composing `base: cfg.base ?? ''` was branched off
-      // `pipeline.baseBranch` and the whole `This story is STACKED on …` clause vanished from the
-      // implement prompt — a PR built on `origin/main` without its dependency's commits, and a
-      // review diffed against the wrong range, with nothing reported. `undefined`/`null` remain
-      // the spellings of "unset"; an empty string is a value the caller wrote.
+      // `''` was read as ABSENT here while `args.severityFloor: ''` and `args.pipeline.<key>:
+      // ''` both threw for the stated reason. ''` was branched off `pipeline.baseBranch` and
+      // the whole `This story is STACKED on …` clause vanished from the implement prompt — a PR
+      // built on `origin/main` without its dependency's commits, and a review diffed against
+      // the wrong range, with nothing reported. `undefined`/`null` remain the spellings of
+      // "unset"; an empty string is a value the caller wrote.
       if (value !== undefined && value !== null && !v)
         throw new Error(
           `implement-batch: ${listKey}[${i}]${id ? ` (#${id})` : ''} has ${key} empty — omit the key entirely (or pass \`null\`/\`undefined\`) to mean "not set". ` +
@@ -329,24 +327,62 @@ function parseBatchArgs(raw) {
     constrain(s.base, 'base', isRef, 'a valid git ref')
     constrain(s.title, 'title', isProse, 'plain text (no backtick, no `$(`, no newline)')
     constrain(s.notes, 'notes', isProse, 'plain text (no backtick, no `$(`, no newline)')
+    // US-479 AC-32 (ADL 2026-09-12): the HEAD a maintainer chose to roll back to — 40-hex, read from
+    // `git log`, taken as given. A round NAME used to be the input, and resolving it guessed: `a0`
+    // matched its own revisions and kept the last, restoring a head nobody named. A sha needs no
+    // resolution at all, and 40 hex characters cannot carry shell syntax into a command.
+    constrain(s.rollbackTo, 'rollbackTo', v => /^[0-9a-f]{40}$/.test(v), 'a 40-hex commit sha')
+    // A verified P3 result must not disappear merely because a later independent reviewer
+    // sampled a different portion of the same head. A different head is not "probably close
+    // enough": that would turn old evidence into a new specification without rerunning its
+    // oracle.
+    let requiredFindings = []
+    if (s.requiredFindings !== undefined && s.requiredFindings !== null) {
+      if (!Array.isArray(s.requiredFindings) || s.requiredFindings.length === 0)
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) requiredFindings must be a non-empty array when provided.`,
+        )
+      const requiredKeys = new Set()
+      requiredFindings = s.requiredFindings.map((finding, j) => {
+        if (!finding || typeof finding !== 'object' || Array.isArray(finding))
+          throw new Error(`implement-batch: ${listKey}[${i}] (#${id}) requiredFindings[${j}] must be an object.`)
+        rejectUnknownKeys(
+          finding,
+          ['observedHead', 'location', 'severity', 'description', 'recommendation', 'oracle', 'probe', 'observed'],
+          `${listKey}[${i}].requiredFindings[${j}]`,
+        )
+        if (typeof finding.observedHead !== 'string' || !/^[0-9a-f]{40}$/.test(finding.observedHead))
+          throw new Error(
+            `implement-batch: ${listKey}[${i}] (#${id}) requiredFindings[${j}].observedHead must be the lower-case 40-character SHA on which its oracle was measured.`,
+          )
+        const normalized = { observedHead: finding.observedHead }
+        for (const key of ['location', 'severity', 'description', 'recommendation', 'oracle', 'probe', 'observed']) {
+          const value = finding[key]
+          if (typeof value !== 'string' || !value.trim() || !isProse(value.trim()))
+            throw new Error(
+              `implement-batch: ${listKey}[${i}] (#${id}) requiredFindings[${j}].${key} must be non-empty plain text (no backtick, no \`$(\`, no newline).`,
+            )
+          normalized[key] = value.trim()
+        }
+        const key = `${normalized.observedHead}\u0000${normalized.location}\u0000${normalized.description}\u0000${normalized.recommendation}`
+        if (requiredKeys.has(key))
+          throw new Error(`implement-batch: ${listKey}[${i}] (#${id}) requiredFindings contains the same measured finding more than once.`)
+        requiredKeys.add(key)
+        return normalized
+      })
+    }
     // `prNumber` decides the ENTIRE lifecycle: an integer re-enters the review loop on the
-    // existing PR, anything else falls through to implement+publishPr. A JSON-stringified
-    // `"432"` therefore opened a second PR while the caller believed it was resuming, so a
-    // present-but-unusable value is an error rather than a silently ignored one.
-    // An UNSET optional key has ONE spelling across the whole card: `undefined`/`null` mean
-    // ABSENT here exactly as they already do in `constrain`. A bare `'prNumber' in s` made
-    // `notes: undefined` legal and `prNumber: undefined` fatal inside the SAME object, so a
-    // caller composing cards in JS (`{ id, title, branch, prNumber: state.prNumber }`, #250)
-    // lost a 20-card batch at parse time on a field nobody set. `Object.hasOwn`, not `in`:
-    // `in` walks the prototype chain.
-    // POSITIVE, not merely integral (`isPosInt`, the same predicate `posInt`/`maxParallelism`
-    // ask). `Number.isInteger(0)` is true, so `prNumber: 0` passed and then decided the
-    // lifecycle wrongly TWICE: `resuming` became true (implement + open-PR skipped) while
-    // `if (pr?.prNumber)` read the same `0` as falsy (continuation probe skipped), and the batch
-    // returned `ready-for-merge` for a card that was never implemented and has no PR. `0` is
-    // what a caller composing cards in code produces from `Number(row.pr ?? '')`, an
-    // uninitialized counter or a tracker field defaulting to 0 — the same shape as the
-    // `prNumber: undefined` defect, one value along.
+    // existing PR, anything else falls through to implement+publishPr. An UNSET optional key
+    // has ONE spelling across the whole card: `undefined`/`null` mean ABSENT here exactly as
+    // they already do in `constrain`. `Object.hasOwn`, not `in`: `in` walks the prototype
+    // chain. POSITIVE, not merely integral (`isPosInt`, the same predicate
+    // `posInt`/`maxParallelism` ask). `Number.isInteger(0)` is true, so `prNumber: 0` passed
+    // and then decided the lifecycle wrongly TWICE: `resuming` became true (implement + open-PR
+    // skipped) while `if (pr?.prNumber)` read the same `0` as falsy (continuation probe
+    // skipped), and the batch returned `ready-for-merge` for a card that was never implemented
+    // and has no PR. `0` is what a caller composing cards in code produces from `Number(row.pr
+    // ?? '')`, an uninitialized counter or a tracker field defaulting to 0 — the same shape as
+    // the `prNumber: undefined` defect, one value along.
     if (Object.hasOwn(s, 'prNumber') && s.prNumber !== undefined && s.prNumber !== null && !isPosInt(s.prNumber))
       throw new Error(
         `implement-batch: ${listKey}[${i}] (#${id}) has prNumber ${JSON.stringify(s.prNumber)}, which is not a positive integer (>= 1). ` +
@@ -365,23 +401,16 @@ function parseBatchArgs(raw) {
           `implementers in the same working tree and lose one of them. Pass each story once.`,
       )
     seenIds.set(id, i)
-    return { ...s, id }
+    return { ...s, id, requiredFindings }
   })
-  // Return the NORMALIZED container, not just the list. Reading a second option off the
-  // raw `args` was a real bug: the runtime can hand this script a JSON STRING, and
-  // `typeof args === 'object'` is false for it — so `args.severityFloor` came back
-  // undefined and the floor was silently ignored while the caller believed it was set.
-  // A batch ran with Minors still blocking and reported escalation as if the floor had
-  // been honoured. Every option must be read from the parsed object, once.
-  rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'pipeline', 'maxParallelism'], 'args')
+  // Return the NORMALIZED container, not just the list. Every option must be read from the
+  // parsed object, once.
+  rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'models', 'pipeline', 'maxParallelism', 'runId', 'entryCapsules'], 'args')
   // Reject the TYPE before anything coerces it, the same rule `constrain` applies to card
-  // fields. A whitelist bounds each of these two downstream, so the behavioural cost today is
-  // nil (`severityFloor: ['Major']` joined to "Major" and was accepted) — the cost is the
-  // invariant: "every caller value is type-checked" has to be true for a reader auditing it,
-  // and the next option added beside these inherits the pattern with no whitelist to save it.
-  // Checked HERE, at parse time, not where each is consumed: `severityFloor` is only rankable
-  // after the contract dispatch, and a wrong TYPE should not wait on an agent to be reported.
-  for (const key of ['severityFloor', 'model']) {
+  // fields. Checked HERE, at parse time, not where each is consumed: `severityFloor` is only
+  // rankable after the contract dispatch, and a wrong TYPE should not wait on an agent to be
+  // reported.
+  for (const key of ['severityFloor', 'model', 'runId']) {
     if (a[key] !== undefined && a[key] !== null && typeof a[key] !== 'string')
       throw new Error(
         `implement-batch: \`args.${key}\` has ${key} of type ${Array.isArray(a[key]) ? 'array' : typeof a[key]}, which is not a string. ` +
@@ -398,20 +427,67 @@ function parseBatchArgs(raw) {
           `An empty string is a value the caller wrote, and reading it as absent would run the batch on a setting nobody chose.`,
       )
   }
-  return { stories, severityFloor: a.severityFloor, model: a.model, pipeline: a.pipeline, maxParallelism: a.maxParallelism }
+  const modelRoles = ['implementation', 'reviewer', 'red', 'redVerifier', 'green']
+  // Engine 3.0.0 retired four dispatch roles. A caller still naming one is told what replaced it —
+  // never silently remapped, never silently dropped (two engines would be worse than one error).
+  const RETIRED_MODEL_ROLES = { planner: 'red (the preparation stage owns grouping)', seal: 'redVerifier (validation seals in the same execution)', preflight: 'reviewer (the final verifier owns custody and P3 evidence)', pr: 'implementation (implement-phase publishes the PR)' }
+  let models
+  if (a.models !== undefined && a.models !== null) {
+    if (typeof a.models !== 'object' || Array.isArray(a.models))
+      throw new Error('implement-batch: `args.models` must be an object keyed by workflow role, or be omitted.')
+    for (const role of Object.keys(a.models))
+      if (RETIRED_MODEL_ROLES[role])
+        throw new Error(`implement-batch: \`args.models.${role}\` was retired by engine 3.0.0 (ADR-024 amendment b) — its work now runs inside ${RETIRED_MODEL_ROLES[role]}. Remove the key; it is never mapped silently.`)
+    rejectUnknownKeys(a.models, modelRoles, 'args.models')
+    models = {}
+    for (const [role, value] of Object.entries(a.models)) {
+      if (typeof value !== 'string' || !value.trim())
+        throw new Error(`implement-batch: \`args.models.${role}\` must be a non-empty model name.`)
+      models[role] = value.trim()
+    }
+  }
+  const runId = a.runId === undefined || a.runId === null ? undefined : String(a.runId).trim()
+  if (runId !== undefined && !isSegment(runId))
+    throw new Error(
+      `implement-batch: \`args.runId\` ${JSON.stringify(runId)} is not a single safe path segment — it names the handoff directory under .pair/working/runs/.`,
+    )
+  // US-479 T-23 (S1), remediated (Finding 1): a STRICT optional map of admitted story id -> entry
+  // capsule — accepted and schema-validated here for forward compatibility with the host entry
+  // wiring (T-25), but never consumed as authority: this sandbox cannot confirm its claim, so it
+  // never changes dispatch behavior. Real readiness always comes from the dispatched phase's own
+  // `cycle-state.mjs resolve`.
+  let entryCapsules
+  if (a.entryCapsules !== undefined && a.entryCapsules !== null) {
+    if (typeof a.entryCapsules !== 'object' || Array.isArray(a.entryCapsules))
+      throw new Error('implement-batch: `args.entryCapsules` must be an object keyed by admitted story id, or be omitted.')
+    entryCapsules = {}
+    const CAPSULE_KEYS = ['workflowVersion', 'schemaVersion', 'run', 'story', 'pr', 'branch', 'expectedHead', 'scopeBaselineHash', 'lastHandoff', 'next']
+    for (const [id, capsule] of Object.entries(a.entryCapsules)) {
+      if (!capsule || typeof capsule !== 'object' || Array.isArray(capsule))
+        throw new Error(`implement-batch: \`args.entryCapsules.${id}\` must be an object.`)
+      rejectUnknownKeys(capsule, CAPSULE_KEYS, `args.entryCapsules.${id}`)
+      for (const req of ['workflowVersion', 'schemaVersion', 'run', 'story', 'next'])
+        if (capsule[req] === undefined || capsule[req] === null || capsule[req] === '')
+          throw new Error(`implement-batch: \`args.entryCapsules.${id}.${req}\` is required — a capsule is never partial.`)
+      entryCapsules[id] = capsule
+    }
+  }
+  return { stories, severityFloor: a.severityFloor, model: a.model, models, pipeline: a.pipeline, maxParallelism: a.maxParallelism, runId, entryCapsules }
 }
 const PARSED = parseBatchArgs(args)
+const RUN_ID = PARSED.runId
+// The coordinator's own version, returned with every result and handed to every phase skill so
+// each handoff records which coordinator produced it. Bump on any change to the dispatch
+// contract (skill names, argument names, statuses).
+const WORKFLOW_VERSION = '4.0.0'
 
-// ── Pipeline configuration: what makes this engine reusable (#219 AC1) ─────
-// Every value here was a literal spelled `pair` somewhere in a prompt. They are now
-// resolved ONCE, with pair's own values as the defaults, so two things hold at the same
-// time: an adopter whose skills are named differently drives the same engine by passing
-// `args.pipeline`, and pair's own dogfood invocation keeps working with no configuration
-// at all — the defaults ARE what the script said before.
-//
-// Resolution is per-key, not all-or-nothing: a caller overriding one skill name keeps the
-// defaults for the rest. An all-or-nothing merge would make a partial config silently
-// blank the keys it did not mention, which is the shape of failure #401 was about.
+// ── Pipeline configuration: what makes this engine reusable ─────────────────
+// Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved
+// ONCE, with pair's own values as the defaults, so two things hold at the same time: an adopter
+// whose skills are named differently drives the same engine by passing `args.pipeline`, and
+// pair's own dogfood invocation keeps working with no configuration at all — the defaults ARE
+// what the script said before. Resolution is per-key, not all-or-nothing: a caller overriding
+// one skill name keeps the defaults for the rest.
 const PIPELINE_DEFAULTS = {
   skills: {
     implement: '/pair-process-implement',
@@ -421,25 +497,37 @@ const PIPELINE_DEFAULTS = {
     checkpoint: '/pair-capability-checkpoint',
     recordDecision: '/pair-capability-record-decision',
     writeIssue: '/pair-capability-write-issue',
+    // The five phase skills of the four judgment stages (+ the batch-level template contract).
+    // The engine dispatches them BY NAME with typed arguments; every step, rule and command
+    // lives in the skill, not here. An adopter who renames them overrides the key.
+    contractPhase: '/pair-workflow-contract-phase',
+    redSpec: '/pair-workflow-red-spec',
+    redVerify: '/pair-workflow-red-verify',
+    implementPhase: '/pair-workflow-implement-phase',
+    greenFix: '/pair-workflow-green-fix',
+    reviewPhase: '/pair-workflow-review-phase',
   },
   worktreeRoot: '../pair-worktrees',
   auditLogDir: '.pair/working/reviews',
   baseBranch: 'origin/main',
-  // A FULL path, not a basename. AC1 names "the code-review-template.md contract path" as
-  // configuration, and an adopter whose KB root is not `.pair/knowledge/` (the CLI supports
-  // layout modes) could otherwise not name their template at all — and the basename then also
-  // rendered as the vocabulary label in the reviewer prompt. Path and label are now
-  // independent: the label is derived with `templateLabel()` below. The path is repo-relative
-  // (one leading `..` at most, like every other path here): a template reachable only through a
-  // deep traversal is outside the repository, and the agent handed it has `Read`/`Write`.
+  // A FULL path, not a basename. Path and label are now independent: the label is derived with
+  // `templateLabel()` below. The path is repo-relative (one leading `..` at most, like every
+  // other path here): a template reachable only through a deep traversal is outside the
+  // repository, and the agent handed it has `Read`/`Write`.
   reviewTemplate: '.pair/knowledge/guidelines/collaboration/templates/code-review-template.md',
-  // Rounds of autonomous fix<->re-review before escalating to a human. Pair's 3 is measured
-  // (see the rationale at MAX_FIX_ROUNDS below) and is the DEFAULT, not the rule: story
-  // assumption A1 lists the fix-round cap among the limits a caller configures, and once the
-  // engine ships this number is an adopter-visible contract — a review loop that converges in
-  // one round should not pay for three, and a caller who wants a longer leash should not have
-  // to fork the file to get it.
+  // Rounds of autonomous fix<->re-review before escalating to a human.
   maxFixRounds: 3,
+  // Independent final verifiers per head — the tier's reviewer count (KB default 1 at every tier;
+  // an adoption override in way-of-working's Review Tier Matrix is passed here by the caller).
+  reviewers: 1,
+}
+// Retired by engine 3.0.0 — named so the migration message can say what absorbed each one.
+const RETIRED_SKILL_KEYS = {
+  remediationPlan: 'redSpec (grouping is a step of preparation)',
+  redSeal: 'redVerify (the seal runs in the validation execution)',
+  p3Verify: 'reviewPhase (custody + evidence are the final verifier\'s first steps)',
+  cycleComments: 'reviewPhase / greenFix (probe, synthesis and flush are scripts inside those stages)',
+  prPhase: 'implementPhase (the implementer publishes the PR)',
 }
 
 // The human-readable NAME of the contract template, for the prompt sentence "using the …
@@ -454,7 +542,7 @@ function resolvePipeline(raw) {
       `implement-batch: \`args.pipeline\` must be an object; received ${JSON.stringify(raw).slice(0, 60)}. ` +
         `Omit it entirely to run on pair's defaults.`,
     )
-  rejectUnknownKeys(raw, ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate', 'maxFixRounds'], 'args.pipeline')
+  rejectUnknownKeys(raw, ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate', 'maxFixRounds', 'reviewers'], 'args.pipeline')
   // Every value below is interpolated VERBATIM into the same command text `cards[i]` values
   // are, so it is validated by the SAME predicates — `ok`/`what` are not optional. Presence is
   // not validity here either: `baseBranch` is the `<base>` argument of `git worktree add`
@@ -484,16 +572,15 @@ function resolvePipeline(raw) {
       )
     return t
   }
-  // `args.pipeline` is type-checked; its nested object was not. `Object.keys(5)` is `[]`, so
-  // `rejectUnknownKeys` passed and `Object.entries(raw.skills ?? {})` yielded nothing: a
-  // `skills: 5` (or `true`, or `[]`) was ACCEPTED and pair's own skill names ran while the
-  // caller believed they had configured theirs — the discarded-setting failure (#401) on the
-  // one key whose entire purpose is that the adopter's skills are named differently.
+  // `args.pipeline` is type-checked; its nested object was not.
   if (raw.skills !== undefined && raw.skills !== null && (typeof raw.skills !== 'object' || Array.isArray(raw.skills)))
     throw new Error(
       `implement-batch: \`args.pipeline.skills\` must be an object; received ${Array.isArray(raw.skills) ? 'array' : typeof raw.skills}. ` +
         `A non-object would be silently ignored and pair's own skill names would run instead. Omit the key to keep them deliberately.`,
     )
+  for (const k of Object.keys(raw.skills ?? {}))
+    if (RETIRED_SKILL_KEYS[k])
+      throw new Error(`implement-batch: \`args.pipeline.skills.${k}\` was retired by engine 3.0.0 (ADR-024 amendment b) — its work now runs inside ${RETIRED_SKILL_KEYS[k]}. Remove the key; a retired dispatch is never mapped silently and never re-added.`)
   rejectUnknownKeys(raw.skills, Object.keys(PIPELINE_DEFAULTS.skills), 'args.pipeline.skills')
   const skills = { ...PIPELINE_DEFAULTS.skills }
   for (const [k, v] of Object.entries(raw.skills ?? {}))
@@ -505,6 +592,7 @@ function resolvePipeline(raw) {
     baseBranch: str(raw.baseBranch, 'baseBranch', PIPELINE_DEFAULTS.baseBranch, isRef, 'a valid git ref (it is the `<base>` argument of `git worktree add`, exactly like a card\'s `base`)'),
     reviewTemplate: str(raw.reviewTemplate, 'reviewTemplate', PIPELINE_DEFAULTS.reviewTemplate, isRelPath, 'a relative path built from safe segments (at most one leading `..`)'),
     maxFixRounds: posInt(raw.maxFixRounds, 'maxFixRounds', PIPELINE_DEFAULTS.maxFixRounds),
+    reviewers: posInt(raw.reviewers, 'reviewers', PIPELINE_DEFAULTS.reviewers),
   }
 }
 // The one NUMERIC pipeline key. Rejected rather than coerced, for the same reason
@@ -522,18 +610,15 @@ function posInt(v, key, fallback) {
   return v
 }
 
-// ── Bounded fan-out (#219 AC6) ─────────────────────────────────────────────
-// `pair-loop` derives a ceiling from `tech/automation.md` (ADR-017 §6) and passes it here.
-// The bound has to live in THIS file: the sandbox `parallel` primitive is an unbounded
+// ── Bounded fan-out ────────────────────────────────────────────────────────
+// `pair-loop` derives a ceiling from `tech/automation.md` (ADR-017 §6) and passes it here. The
+// bound has to live in THIS file: the sandbox `parallel` primitive is an unbounded
 // `Promise.all`, so handing it N thunks starts N agents no matter what the caller asked for.
-//
-// Absent cap = today's behaviour, unbounded. That default is deliberate: every existing
-// caller keeps the fan-out it already has, so landing this option changes nobody's run.
+// Absent cap = today's behaviour, unbounded. That default is deliberate: every existing caller
+// keeps the fan-out it already has, so landing this option changes nobody's run.
 function parseMaxParallelism(raw) {
   if (raw === undefined || raw === null) return undefined
-  // Rejected rather than coerced. A cap that cannot be honoured must not silently become
-  // "no cap": the discarded setting is the one holding back load, so the failure would be a
-  // batch running at full width while the caller believes it is throttled (#401's shape).
+  // Rejected rather than coerced.
   if (!isPosInt(raw))
     throw new Error(
       `implement-batch: \`args.maxParallelism\` must be an integer >= 1; received ${JSON.stringify(raw)}. ` +
@@ -575,85 +660,56 @@ const REVIEW_TEMPLATE_LABEL = templateLabel(PIPELINE.reviewTemplate)
 // prior round's findings unnamed, and "the review is independent and blind" would go unguarded.
 const BLIND_PATHS = [...new Set(['.pair/working/', PIPELINE.auditLogDir])].map((p) => `\`${p}\``).join(' or ')
 
-
 const STORIES = PARSED.stories
+const ENTRY_CAPSULES = PARSED.entryCapsules ?? {}
 
 // ── Severity floor: what BLOCKS convergence, versus what is carried to the human ──
-// Measured failure. Three PRs went through three autonomous fix rounds each and their
-// findings GREW: #425 4→5, #423 4→7 (with a new Critical), #420 4→3. Convergence requires
-// ZERO actionable findings, so a single Minor keeps the loop open — and on markdown skill
-// files the supply of Minors is effectively inexhaustible (duplicated rationale between a
-// skill and its ADL, a wording ambiguity, an assertion that cannot fail independently).
-// Each round also enlarges the diff, creating fresh surface for the next round to read.
-// The loop therefore cannot terminate by fixing, only by exhausting MAX_FIX_ROUNDS.
-//
-// `severityFloor` names the lowest severity that BLOCKS. Findings below it are NOT
-// discarded and NOT silently accepted: they are carried to the merge gate in
-// `acceptedFindings` with `disposition: 'Below severity floor'`, accumulated across every
-// round of the cycle, so the human sees every one and decides. Absent → every actionable finding blocks (the previous behaviour), so
-// nothing changes for a caller that does not ask for a floor.
-//
-// The floor speaks the REVIEW's OWN vocabulary, not a table private to this file.
-// AC1 makes `pipeline.reviewTemplate` configurable and the contract generator derives
-// `vocabulary.severities` from THAT template — the same array the reviewer prompt is told to
-// answer in (`SEVERITIES`, below). Ranking against a hardcoded table instead made the engine
-// speak one language and the reviewer another, and the mismatch failed OPEN: with an adopter
-// vocabulary `Blocker|High|Medium|Low`, a `Critical` floor converged `ready-for-merge` with an
-// unfixed "auth bypass" filed as below the floor, a `Major` floor was a no-op (every adopter
-// severity hit the same fallback rank), and the adopter's own `High` was rejected as an unknown
-// floor. So: rank against the resolved vocabulary, validate the floor against that SAME set,
-// and treat a severity in neither as ABOVE every floor.
-// Prototype-free, like every rank map below it: a severity is arbitrary text from a review
-// template, so `ranks['constructor']` on a plain object returns an INHERITED function — not a
-// number, not undefined, so `?? Infinity` never fires and every `<`/`>=` comparison against it
-// is false. Measured (#432 review round 7): a `{severity: 'constructor'}` finding fell out of
-// BOTH the below-floor and the actionable set and was recorded nowhere. `Object.create(null)`
-// removes the inherited keys; `Object.hasOwn` at every read is the belt to that braces.
+// Convergence requires ZERO actionable findings, so a single Minor keeps the loop open — and on
+// markdown skill files the supply of Minors is effectively inexhaustible (duplicated rationale
+// between a skill and its ADL, a wording ambiguity, an assertion that cannot fail
+// independently). Each round also enlarges the diff, creating fresh surface for the next round
+// to read. The loop therefore cannot terminate by fixing, only by exhausting MAX_FIX_ROUNDS.
+// `severityFloor` names the lowest severity that BLOCKS. Absent → every actionable finding
+// blocks (the previous behaviour), so nothing changes for a caller that does not ask for a
+// floor. The floor speaks the REVIEW's OWN vocabulary, not a table private to this file: the
+// contract derived from the configured template supplies the severities and their explicit
+// ranks, and a floor outside that set throws rather than rank against a foreign scale. A
+// severity in neither the configured vocabulary nor pair's table blocks (rank Infinity), so an
+// unknown severity can never fall below a floor. Prototype-free, like every
+// rank map below it: a severity is arbitrary text from a review template, so
+// `ranks['constructor']` on a plain object returns an INHERITED function — not a number, not
+// undefined, so `?? Infinity` never fires and every `<`/`>=` comparison against it is false.
 const SEVERITY_RANK = Object.assign(Object.create(null), { critical: 4, blocker: 4, major: 3, minor: 2, questions: 1, question: 1, nit: 1, info: 1 })
 const normSeverity = (s) => String(s ?? '').trim().toLowerCase()
 // The rank of a CONFIGURED severity is the EXPLICIT ordinal the contract states for it
 // (`severityRanks`, higher = more severe), never the position of its name in
-// `vocabulary.severities`. Position was the round-5 fix and it reproduced the same bug one
-// carrier along: that array is whatever an LLM extracted from an arbitrary adopter template,
-// and NOTHING said it must be most-severe-first — not the generator prompt, not `mirrors`,
-// not `validateContract`. Measured at floor `High` with the (equally legitimate) ascending
-// vocabulary `Low|Medium|High|Blocker`: a `Blocker` "auth bypass" ranked BELOW the floor and
-// converged `ready-for-merge` with zero fix rounds. And the contract is hash-cached, so one
-// bad extraction persists across every later batch. Hence: ordinals are stated and validated
-// (`ensure-contract.mjs`), and when they are missing or ambiguous this engine REFUSES to rank
-// rather than guessing an order — see `parseFloor`.
-// With no contract at all there is no configured vocabulary, and pair's own table is the
-// fallback. It carries aliases (`blocker`, `nit`, `info`) that no template lists, which is why
-// it is not itself derived from DEFAULT_SEVERITIES. Where they are actually reachable, stated
-// precisely rather than as a vague "callers use them": (a) as a caller-passed `severityFloor`,
-// because `parseFloor` validates against `Object.keys(SEVERITY_RANK)` on the unconfigured path,
-// so `severityFloor: 'blocker'` is accepted and ranks with `critical`; (b) as the severity of a
-// FINDING whose reviewer answered off-vocabulary — the prompt names DEFAULT_SEVERITIES
-// (Critical|Major|Minor|Questions), so a `Blocker` coming back is a reviewer deviating from it,
-// and the alias is what keeps that finding ranked instead of falling to `Infinity`. Neither is
-// the normal path. They are kept because removing them is a BREAKING change for a floor an
-// adopter may already pass, not because the normal path needs them — and (b) is fail-safe
-// either way, since `Infinity` blocks.
-//
-// `severityRankErrors` duplicates ensure-contract.mjs's canonical check, and the duplication
-// is FORCED, not lazy: this sandbox has no filesystem and no imports, so the only contract
-// bytes that ever reach it are an agent's RETURN VALUE. The copy `ensure-contract.mjs write`
-// validated on disk is unreadable from here, and dispatching a second agent to read it back
-// would yield another unvalidated agent return value — the same trust boundary, one dispatch
-// more expensive. So this function is NOT a redundant second line: it is THE validation on
-// the path that decides the severity floor, and it may never be weaker than the canonical one.
-//
-// It WAS weaker, in exactly one way, and that cost a third occurrence of the same bug class
-// (#432 review round 7): it matched keys case-INSENSITIVELY and never rejected keys absent
-// from the vocabulary, so `{Low:0, Medium:1, Blocker:2, High:3, high:5}` collapsed the two
-// case-variants LAST-WINS — `High` became 5, `Blocker` 2 — and a `Blocker` "auth bypass"
-// converged `ready-for-merge` with zero fix rounds at a `High` floor, while the canonical
-// validator rejected the very same map. Keys are therefore matched EXACTLY, as canonical
-// does, plus one rule canonical does not need: two VOCABULARY names that normalize to the
-// same string (`High` and `high` both listed) would collapse this consumer's normalized
-// lookup map, so that vocabulary is refused too. Strictly stronger than canonical, never
-// looser — asserted by the canonical/consumer differential in the test file, which CAN
-// import the real module.
+// `vocabulary.severities`. And the contract is hash-cached, so one bad extraction persists
+// across every later batch. Hence: ordinals are stated and validated (`ensure-contract.mjs`),
+// and when they are missing or ambiguous this engine REFUSES to rank rather than guessing an
+// order — see `parseFloor`. With no contract at all there is no configured vocabulary, and
+// pair's own table is the fallback. It carries aliases (`blocker`, `nit`, `info`) that no
+// template lists, which is why it is not itself derived from DEFAULT_SEVERITIES. Where they are
+// actually reachable, stated precisely rather than as a vague "callers use them": (a) as a
+// caller-passed `severityFloor`, because `parseFloor` validates against
+// `Object.keys(SEVERITY_RANK)` on the unconfigured path, so `severityFloor: 'blocker'` is
+// accepted and ranks with `critical`; (b) as the severity of a FINDING whose reviewer answered
+// off-vocabulary — the prompt names DEFAULT_SEVERITIES (Critical|Major|Minor|Questions), so a
+// `Blocker` coming back is a reviewer deviating from it, and the alias is what keeps that
+// finding ranked instead of falling to `Infinity`. Neither is the normal path. They are kept
+// because removing them is a BREAKING change for a floor an adopter may already pass, not
+// because the normal path needs them — and (b) is fail-safe either way, since `Infinity`
+// blocks. `severityRankErrors` duplicates ensure-contract.mjs's canonical check, and the
+// duplication is FORCED, not lazy: this sandbox has no filesystem and no imports, so the only
+// contract bytes that ever reach it are an agent's RETURN VALUE. The copy `ensure-contract.mjs
+// write` validated on disk is unreadable from here, and dispatching a second agent to read it
+// back would yield another unvalidated agent return value — the same trust boundary, one
+// dispatch more expensive. So this function is NOT a redundant second line: it is THE
+// validation on the path that decides the severity floor, and it may never be weaker than the
+// canonical one. Keys are therefore matched EXACTLY, as canonical does, plus one rule canonical
+// does not need: two VOCABULARY names that normalize to the same string (`High` and `high` both
+// listed) would collapse this consumer's normalized lookup map, so that vocabulary is refused
+// too. Strictly stronger than canonical, never looser — asserted by the canonical/consumer
+// differential in the test file, which CAN import the real module.
 function severityRankErrors(names, severityRanks) {
   if (!severityRanks || typeof severityRanks !== 'object' || Array.isArray(severityRanks))
     return ['severityRanks is missing: the contract states no explicit rank per severity, and the order of `vocabulary.severities` is not a ranking']
@@ -699,15 +755,12 @@ function resolveSeverityScale(severities, severityRanks) {
   for (const n of names) ranks[normSeverity(n)] = severityRanks[n]
   return { ranks, names: [...new Set(names)], configured: true, rankError: null }
 }
-// Resolved once the contract is known — see SEVERITY_SCALE, after REVIEW_VOCAB.
-// Infinity, not a mid-tier default: a severity in NEITHER the configured vocabulary nor pair's
-// own table outranks every possible floor, so it always blocks. The previous `?? 3` claimed to
-// be fail-safe and was not — any floor of rank >= 4 sat above it. Unreachable with an unranked
-// scale (no floor can exist then), and Infinity there too for the same reason.
-// `Object.hasOwn`, not `??`: an inherited `Object.prototype` key (`constructor`, `toString`)
-// is neither null nor undefined, so `??` would hand a FUNCTION to a `<` comparison and the
-// finding would fall out of every partition. Own-key membership answers it once, for both
-// the prototype-free maps and any future one that is not.
+// Resolved once the contract is known — see SEVERITY_SCALE, after REVIEW_VOCAB. Infinity, not a
+// mid-tier default: a severity in NEITHER the configured vocabulary nor pair's own table
+// outranks every possible floor, so it always blocks. The previous `?? 3` claimed to be
+// fail-safe and was not — any floor of rank >= 4 sat above it. Unreachable with an unranked
+// scale (no floor can exist then), and Infinity there too for the same reason. Own-key
+// membership answers it once, for both the prototype-free maps and any future one that is not.
 const rankOf = (s) => {
   const map = SEVERITY_SCALE.ranks
   if (!map) return Infinity
@@ -729,18 +782,13 @@ function parseFloor(raw) {
   const key = normSeverity(v)
   // Membership, not truthiness: an explicit ordinal may legitimately be `0` (a template's
   // lowest level), and `!r` would have rejected exactly that floor as a typo.
-  // OWN-key membership: `in` walks the prototype chain, so `severityFloor: 'constructor'`
-  // passed this test and then ranked against an inherited function.
   const r = Object.hasOwn(SEVERITY_SCALE.ranks, key) ? SEVERITY_SCALE.ranks[key] : undefined
   // A floor the reviewer cannot express is a configuration error, never a silent
   // reclassification: rejecting it is what stops `Critical` from out-ranking an adopter's whole
-  // scale. A typo still throws, in either vocabulary.
-  // TWO different failures wear the same shape here, and the message decides which one an
-  // operator goes looking for. When a contract WAS derived, an unmatched floor is a caller
-  // typo. When it was NOT (the generator died, or returned nothing usable, so the run is on the
-  // loose fallback), the floor is measured against pair's own table instead of the adopter's —
-  // a correctly-spelled `High` then throws, and the old message told them to check their
-  // spelling. Naming the transient cause is what makes a re-run the obvious next step.
+  // scale. A typo still throws, in either vocabulary. TWO different failures wear the same
+  // shape here, and the message decides which one an operator goes looking for. When a contract
+  // WAS derived, an unmatched floor is a caller typo. Naming the transient cause is what makes
+  // a re-run the obvious next step.
   if (r === undefined)
     throw new Error(
       SEVERITY_SCALE.configured
@@ -753,169 +801,558 @@ function parseFloor(raw) {
   return { name: v, rank: r }
 }
 
-// `args.model` overrides the model for every AUTHORING and REVIEW agent in the run —
-// implement, PR, fix, review. Absent, each agent keeps the tier its frontmatter declares
-// (implementer/reviewer -> opus). Validated against the known set so a typo cannot be
-// swallowed: an ignored override runs the whole batch on the wrong tier while the caller
-// believes otherwise, and the result is indistinguishable from an honoured one.
-const BATCH_MODEL = (() => {
-  const v = String(PARSED.model ?? '').trim()
+// A global `model` remains for compatibility. New runs should select an explicit role in
+// `models`: A/B testing GREEN alone must not simultaneously change the adversarial reviewer,
+// RED author and P3 verifier — otherwise a result cannot say whether model or workflow caused it.
+const KNOWN_MODELS = ['fable', 'haiku', 'sonnet', 'opus']
+const validateModel = (value, where) => {
+  const v = String(value ?? '').trim()
   if (!v) return undefined
-  const known = ['fable', 'haiku', 'sonnet', 'opus']
-  if (!known.includes(v))
-    throw new Error(`implement-batch: unknown model ${JSON.stringify(v)}; expected one of ${known.join(' | ')}.`)
+  if (!KNOWN_MODELS.includes(v))
+    throw new Error(`implement-batch: unknown model ${JSON.stringify(v)} at ${where}; expected one of ${KNOWN_MODELS.join(' | ')}.`)
   return v
-})()
-// Applied to an opts object without disturbing a step's own deliberate override.
-const withModel = (opts) => (BATCH_MODEL ? { ...opts, model: BATCH_MODEL } : opts)
-// Rounds of autonomous fix<->re-review before escalating to a human. Caller-configurable
-// (`args.pipeline.maxFixRounds`); pair's own 3 is the default and the measured one. Raised
-// from 2: an escalation costs a human round-trip (read the flush, decide, re-run the batch),
-// which is strictly more expensive than one more opus fix round — and the observed
-// escalations were dominated by long tails of minor findings that a third round
-// clears. Beyond 3 the loop is usually not converging for a reason a fourth round
-// won't fix either (a design disagreement), and `needsHumanDecision` already exits
-// early for that case.
-const MAX_FIX_ROUNDS = PIPELINE.maxFixRounds
-
-// ── Step retry ─────────────────────────────────────────────────────────────
-// `agent()` returns null when the subagent dies on a terminal error or is killed
-// by the supervisor (180s without visible progress — a cold `pnpm install` or an
-// unscoped `pnpm quality-gate` in a fresh worktree qualifies). Without a retry a
-// single such death takes the whole story out of the run: driveStory returns
-// `failed-*` and the card ends the batch with no PR at all, even though the
-// worktree still holds every committed task. Each authoring step is re-entrant by
-// construction (persistent worktree + checkpoint + committed work), so a second
-// attempt RESUMES rather than restarts. One retry only: a step that dies twice is
-// a real failure, not a timeout, and further opus rounds only delay the rest of
-// the batch.
-//
-// WHAT COUNTS AS A DEAD STEP IS THE CALLER'S CALL (`isUsable`). A bare truthiness
-// test retried the NULL return and not the truthy-but-CONTENTLESS one (`{}`, a
-// truncated structured output) — and the contentless shape is the one this repo
-// actually measured on #432 (the machine slept mid-response), i.e. the retry
-// missed the exact incident it was written for while covering its rarer sibling.
-// The review step therefore passes `hasVerdict`, the SAME predicate its
-// convergence guard uses, so "did not review" means one thing at both sites: the
-// transient gets its second chance, and a step that comes back contentless twice
-// still fails closed.
-async function agentRetry(prompt, opts, isUsable = r => !!r) {
-  const first = await agent(prompt, opts)
-  if (isUsable(first)) return first
-  log(`${opts.label}: step returned nothing usable (agent died or returned an invalid shape) — retrying once`)
-  return agent(prompt, { ...opts, label: `${opts.label} retry` })
 }
-
-// Positive evidence that a review HAPPENED: a verdict is a required field of the
-// review contract, so its absence — null, `{}`, `{findings: []}`, a blank string —
-// means the reviewer did not return one. Absence of findings is not evidence.
-// ONE predicate, asked by the retry and by the convergence guard, so the two
-// cannot drift into disagreeing about what a dead reviewer is.
-const hasVerdict = r => !!r && !!String(r.verdict ?? '').trim()
+const BATCH_MODEL = validateModel(PARSED.model, 'args.model')
+const ROLE_MODELS = Object.fromEntries(
+  Object.entries(PARSED.models ?? {}).map(([role, value]) => [role, validateModel(value, `args.models.${role}`)]),
+)
+// Deliberate fixed-model utility steps do not call this helper: they are not part of a model
+// comparison and remain deterministic.
+const withModel = (role, opts) => {
+  const model = ROLE_MODELS[role] ?? BATCH_MODEL
+  return model ? { ...opts, model } : opts
+}
+// Rounds of autonomous fix<->re-review before escalating to a human. Beyond 3 the loop is
+// usually not converging for a reason a fourth round won't fix either (a design disagreement),
+// and `needsHumanDecision` already exits early for that case.
+const MAX_FIX_ROUNDS = PIPELINE.maxFixRounds
+// A rejected RED contract is still test-only and has not contaminated source or Git history.
+// More attempts turn a specification defect into an unattended loop, so the second rejection is
+// terminal before sealing or GREEN. Unchanged by decision (ADL 2026-09-09); never raised as a remedy.
+const MAX_RED_CONTRACT_REPAIRS = 1
+// An approved test failing on production returns to implementation on the SAME seal once; a second
+// failure is `failed-fix` — the contract was right, the fix was not, and a third GREEN is drift.
+const MAX_GREEN_RETRIES = 1
+// A cycle that asks for more dispatches than this in one run is looping, not converging.
+const MAX_DISPATCHES_PER_STORY = 40
 
 // ── Schemas (orchestration return-value contracts) ─────────────────────────
 // These are the compact values agents RETURN for control-flow — NOT the artifact
 // formats. The human-facing artifacts follow the KB templates, applied by the
 // agents: the PR body → `pr-template.md`, the review report → the configured review
-// template (`code-review-template.md` by default)
-// (posted as a PR comment by the reviewer), the checkpoint → `checkpoint-template.md`.
-// Where a schema field overlaps a template field it MIRRORS the template's
-// vocabulary (single source of truth) so the machine contract and the human
-// artifact cannot drift.
-const STEP_SCHEMA = {
+// template (`code-review-template.md` by default), the checkpoint → `checkpoint-template.md`.
+// Where a schema field overlaps a template field it MIRRORS the template's vocabulary.
+//
+// Every phase result carries `next`: the typed step the durable cycle state names after the
+// skill published its handoff (`cycle-state.mjs resolve`). A skill whose Step 0 found another
+// step due returns `{ status: 'redirect', next }` and nothing else — no judgment was spent.
+const STEPS = ['prepare', 'validate', 'implement', 'green', 'verify', 'done', 'blocked']
+const NEXT_SCHEMA = {
   type: 'object',
   properties: {
-    branch: { type: 'string' },
-    checkpointPath: { type: 'string' }, // checkpoint body follows checkpoint-template.md
-    gatesPassed: { type: 'boolean' },
-    summary: { type: 'string' },
+    step: { type: 'string', enum: STEPS },
+    mode: { type: 'string' },
+    phase: { type: 'string' },
+    round: { type: 'integer' },
+    attempt: { type: 'integer' },
+    revision: { type: 'integer' },
+    reviewer: { type: 'integer' },
+    base: { type: 'string' },
+    reason: { type: 'string' },
+    budget: { type: 'string' },
+    detail: { type: 'string' },
+    reviewedHead: { type: 'string' },
+    verdict: { type: 'string' },
+    prior: { type: 'string' },
+    openIds: { type: 'array', items: { type: 'string' } },
+    headMoved: { type: 'boolean' },
+    inputsChanged: { type: 'boolean' },
+    invalidated: { type: 'array', items: { type: 'string' } },
+    contract: { type: 'object' },
+    group: { type: 'object' },
+    plan: { type: 'object' },
+    findings: { type: 'array', items: { type: 'object' } },
+    rejection: { type: 'array', items: { type: 'object' } },
+    refusal: { type: 'string' },
+    // US-479 B1 (S3): the successor revision changes EXACTLY these rows, and remembers the
+    // remediation that raised the contradiction so the route back is never lost.
+    changedRows: { type: 'array', items: { type: 'string' } },
+    contradictionFor: { type: 'object' },
+    // US-479 F1 (S10): when the contradicted contract was sealed in a PREDECESSOR run, the
+    // successor names that run and phase, and the dimensions the legacy evidence never carried
+    // travel as `revalidate` — re-derived by the revision, never inherited.
+    predecessorRunId: { type: 'string' },
+    predecessorPhase: { type: 'string' },
+    revalidate: { type: 'array', items: { type: 'string' } },
+    // US-479 T-29 (S11): every ACTIVE regression guard travels into the ONE complete corrective
+    // contract, together with the batch the rewind repairs.
+    regressionRisks: { type: 'array', items: { type: 'object' } },
+    regressionRepairOf: { type: 'string' },
+    // US-479 AC-32 (S13): the reconstruction directive a second repair of the same regression
+    // carries — the exact paths whose CONTENT is restored at `fromHead`, and the guards the rebuilt
+    // code is measured against. A content operation, committed forward; never a Git history one.
+    reconstruct: { type: 'object' },
+    rollbackRefusal: { type: 'string' },
+    // The PR the cycle is bound to. A structured-output schema is STRICT: a field the schema does
+    // not declare is dropped by the harness before the coordinator sees it — `pr` was, and a
+    // fresh-path resume then had no PR to verify against (canary run 11, 3.0.4).
+    pr: { type: 'integer' },
+    // Every finding id the cycle has seen with its latest severity: the coordinator's identity and
+    // severity-change checks are seeded from it on a resume — its own memory is per-run, and
+    // without the seed a prior finding arriving as `resolved` read as an invented one (canary run 11).
+    priorFindings: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, severity: { type: 'string' } }, required: ['id'] } },
   },
-  required: ['gatesPassed'],
+  required: ['step'],
 }
-const PR_SCHEMA = {
-  // The PR BODY follows pr-template.md (authored by the agent); this is only the handle.
+const REDIRECT_STATUS = 'redirect'
+const PHASE_RE = /^(a0(?:-rev\d+)?|r\d+(?:-g\d+(?:-rev\d+)?)?)$/
+const SHA40 = /^[0-9a-f]{40}$/
+const SHA256_RE = /^sha256:[0-9a-f]{64}$/
+// Must equal cycle-state.mjs SCHEMA_VERSION (US-479 T-19/T-23) — asserted by a differential test,
+// since this sandbox cannot import that module.
+const HANDOFF_SCHEMA_VERSION = 3
+// US-479 remediation (Finding 1): `args.entryCapsules` is accepted and schema-validated (parse
+// time, below) but is NEVER an authority — this sandbox has no filesystem or network, so it can
+// never independently confirm a capsule's claim against the real cycle state. A prior design
+// short-circuited `driveStory` straight to `ready-for-merge` on a self-consistent capsule (even an
+// unapproved verdict or a fabricated `run` passed its shape check); that shortcut is removed.
+// Readiness comes ONLY from the dispatched phase's own `cycle-state.mjs resolve` redirect — the
+// SAME real, fs-backed check every story has always gone through — never a capsule bypassing it.
+// No dedicated capsule-verification agent is added: the existing dispatch already re-validates.
+const hasNext = n => !!n && typeof n === 'object' && STEPS.includes(n.step)
+// A `next` the coordinator will act on: the step is known and, for a dispatchable step, the phase
+// id has the shape the run directory expects. Anything else is `failed-resume`.
+const nextDefect = n => {
+  if (!hasNext(n)) return 'no step'
+  if (n.step === 'done') return SHA40.test(String(n.reviewedHead ?? '')) ? null : 'done without a 40-hex reviewedHead'
+  if (n.step === 'blocked') return String(n.reason ?? '').trim() ? null : 'blocked without a reason'
+  if (!PHASE_RE.test(String(n.phase ?? ''))) return `phase ${JSON.stringify(n.phase ?? null)} is not a phase id`
+  if (n.base !== undefined && !SHA40.test(String(n.base))) return 'base is not a 40-hex head'
+  // A validate/implement/green dereferences the contract it is bound to: a next without one is a
+  // typed refusal, never a TypeError reported as a dead agent (T-9 review, t9-5).
+  // US-479 F1 residual: a repair or a revision is BUILT ON a contract — a `prepare` without one is
+  // a revision with no base, which is a typed refusal here too, not a dispatch.
+  if (n.step === 'prepare' && (n.mode === 'repair' || n.mode === 'revision') && (!n.contract || typeof n.contract !== 'object' || !String(n.contract.path ?? '').trim() || !SHA256_RE.test(String(n.contract.hash ?? ''))))
+    return `${n.mode} without a complete contract descriptor`
+  if (['validate', 'implement', 'green'].includes(n.step)) {
+    if (!n.contract || typeof n.contract !== 'object' || !String(n.contract.path ?? '').trim()) return `${n.step} without contract.path`
+    if (n.step !== 'validate' && !SHA40.test(String(n.contract.snapshot ?? ''))) return `${n.step} without a 40-hex contract.snapshot`
+  }
+  return null
+}
+const usableNext = n => nextDefect(n) === null
+// A redirect is recognised by its shape; whether its `next` is usable is judged where it is followed.
+const isRedirect = r => !!r && r.status === REDIRECT_STATUS && hasNext(r.next)
+const isOtherRun = r => !!r && r.status === 'other-run' && isSegment(String(r.runId ?? ''))
+
+// ── Stage 1: preparation (red-spec) ──────────────────────────────────────────
+const FIX_SCOPE_SCHEMA = {
   type: 'object',
-  properties: { prNumber: { type: 'number' }, url: { type: 'string' } },
-  required: ['prNumber'],
+  properties: {
+    owner: { type: 'string' },
+    mode: { type: 'string', enum: ['behavioral', 'structural', 'test'] },
+    allowedPaths: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['owner', 'mode', 'allowedPaths'],
 }
+const PLAN_SCHEMA = {
+  type: 'object',
+  properties: {
+    groups: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          groupId: { type: 'string' },
+          findings: { type: 'array', items: { type: 'string' } }, // stable finding IDs
+          owner: { type: 'string' },
+          mode: { type: 'string', enum: ['behavioral', 'structural', 'test'] },
+          allowedPaths: { type: 'array', items: { type: 'string' } },
+          oracle: { type: 'string' },
+          dependsOn: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['groupId', 'findings', 'owner', 'mode', 'allowedPaths'],
+      },
+    },
+    // A finding whose correction lies OUTSIDE the repository: it stays BLOCKING until a human
+    // disposition or a read-back-verified correction — `carried` names a location, never acceptance.
+    carried: {
+      type: 'array',
+      items: { type: 'object', properties: { finding: { type: 'string' }, disposition: { type: 'string' } }, required: ['finding', 'disposition'] },
+    },
+  },
+  required: ['groups'],
+}
+const PREPARE_SCHEMA = {
+  type: 'object',
+  properties: {
+    status: { type: 'string', enum: ['red', 'stale', 'split-required', 'unprovable', 'dirty', 'contradiction', REDIRECT_STATUS] },
+    mode: { type: 'string', enum: ['initial', 'remediation', 'repair', 'revision'] },
+    inputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    sourceOfTruth: { type: 'string' },
+    // The authoritative inventory: what each obligation (AC or finding) maps to.
+    inventory: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' }, // AC-1 | <finding id>
+          producer: { type: 'string' }, // the function/grammar/command that owns the behavior
+          inputs: { type: 'array', items: { type: 'string' } },
+          representations: { type: 'array', items: { type: 'string' } },
+          consumers: { type: 'array', items: { type: 'string' } },
+          classes: { type: 'array', items: { type: 'string' } }, // equivalence classes incl. invalid/boundary
+          interactions: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['id', 'producer', 'classes'],
+      },
+    },
+    fixScope: FIX_SCOPE_SCHEMA,
+    matrix: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          kind: { type: 'string', enum: ['witness', 'control', 'boundary', 'interaction', 'not-applicable'] },
+          baseline: { type: 'string', enum: ['red', 'pass'] },
+          condition: { type: 'string' },
+          oracle: { type: 'string' },
+          expected: { type: 'string' },
+          covers: { type: 'array', items: { type: 'string' } },
+          rationale: { type: 'string' },
+        },
+        required: ['id', 'kind', 'baseline', 'condition', 'oracle', 'expected', 'covers'],
+      },
+    },
+    redTests: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          file: { type: 'string' },
+          kind: { type: 'string', enum: ['test', 'fixture'] },
+          baseline: { type: 'string', enum: ['red', 'pass'] },
+          sha256: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' },
+          command: { type: 'string' },
+          observed: { type: 'string' },
+          consumedBy: { type: 'string' },
+        },
+        required: ['file', 'sha256'],
+      },
+    },
+    testExempt: { type: 'boolean' },
+    exemptionRationale: { type: 'string' },
+    // US-479 B1 (S3, AC-08): the typed evidence of a CONTRADICTION with already-sealed rows. The
+    // durable state validates it again before the write; declared here because a field this schema
+    // does not name is dropped by the harness before the coordinator ever sees it (3.0.5).
+    revisionReason: { type: 'string', enum: ['contradicts-approved-authority'] },
+    predecessorContractHash: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' },
+    conflictingRowIds: { type: 'array', items: { type: 'string' } },
+    counterexample: { type: 'object', properties: { command: { type: 'string' }, cwd: { type: 'string' }, fixtureRef: { type: 'string' }, expected: { type: 'string' }, actual: { type: 'string' } }, required: ['command', 'expected', 'actual'] },
+    changedRows: { type: 'array', items: { type: 'string' } },
+    contractPath: { type: 'string' },
+    contractHash: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' },
+    plan: PLAN_SCHEMA,
+    splitReason: { type: 'string' },
+    reason: { type: 'string' },
+    preserved: { type: 'array', items: { type: 'string' } }, // unknown edits found and left alone
+    next: NEXT_SCHEMA,
+  },
+  required: ['status'],
+}
+const PREPARE_REFUSALS = new Set(['stale', 'split-required', 'unprovable', 'dirty'])
+const isPrepareRefusal = r => !!r && PREPARE_REFUSALS.has(r.status)
+// US-479 B1 (S3): a contradiction is an ANSWER — the preparation proved its obligation cannot be
+// contracted without changing rows an INDEPENDENTLY APPROVED contract already sealed. It carries
+// executable evidence or it is nothing: the coordinator checks the shape it can see (the durable
+// state re-validates it against the sealed identity before the write), so prose can never buy a
+// revision. `split-required` is a different answer and stays terminal.
+const SHELL_UNSAFE = /[;&|`]|\$\(|\.\.\//
+const contradictionDefect = r => {
+  if (r.revisionReason !== 'contradicts-approved-authority') return 'revisionReason must be contradicts-approved-authority'
+  if (!SHA256_RE.test(String(r.predecessorContractHash ?? ''))) return 'predecessorContractHash is not a sha256 digest'
+  const rows = r.conflictingRowIds
+  if (!Array.isArray(rows) || !rows.length || rows.some(x => typeof x !== 'string' || !x.trim())) return 'conflictingRowIds is empty'
+  const changed = new Set(Array.isArray(r.changedRows) ? r.changedRows : [])
+  const missing = rows.filter(x => !changed.has(x))
+  if (missing.length) return `changedRows does not cover ${missing.join(',')}`
+  const cx = r.counterexample
+  if (!cx || typeof cx !== 'object' || Array.isArray(cx)) return 'no counterexample'
+  if (typeof cx.command !== 'string' || !cx.command.trim()) return 'the counterexample has no command'
+  if (SHELL_UNSAFE.test(cx.command)) return 'the counterexample command carries shell syntax'
+  for (const k of ['expected', 'actual']) if (typeof cx[k] !== 'string' || !cx[k].trim()) return `the counterexample has no ${k}`
+  return null
+}
+const isContradiction = r => !!r && r.status === 'contradiction'
+// The persisted contract lives in the MAIN checkout's run directory while later stages `cd` into
+// the story worktree, so the path is ABSOLUTE by design (repository-relative is accepted and
+// resolves against the main checkout).
+// Spaces are legal (a checkout under "~/My Projects/…" is a real path) because the value travels
+// JSON-quoted as DATA in the prompt and the skills quote it on their command lines; shell
+// metacharacters, control characters and `..` are not.
+const isContractPath = p =>
+  typeof p === 'string' &&
+  !p.includes('..') &&
+  !/[`$;|&<>"'\\\r\n\x00-\x1f]/.test(p) &&
+  (isRelPath(p) || (p.startsWith('/') && /\/\.pair\/working\/runs\//.test(p)))
+const validScope = scope => {
+  if (!scope || !String(scope.owner ?? '').trim() || !['behavioral', 'structural', 'test'].includes(scope.mode) || !Array.isArray(scope.allowedPaths)) return false
+  if (scope.mode === 'test' ? scope.allowedPaths.length !== 0 : scope.allowedPaths.length === 0) return false
+  const seen = new Set()
+  for (const path of scope.allowedPaths) {
+    const file = String(path ?? '').trim()
+    if (!file || !isRelPath(file.replace(/\/$/, '')) || seen.has(file)) return false
+    seen.add(file)
+  }
+  return true
+}
+// A plan is usable only when EVERY received finding id lands in exactly one group or in `carried`,
+// every group is non-empty and well-typed, and the dependency graph is acyclic.
+const validPlan = (plan, ids) => {
+  if (!plan || !Array.isArray(plan.groups)) return false
+  const carried = plan.carried ?? []
+  if (!Array.isArray(carried)) return false
+  if (plan.groups.length === 0 && carried.length === 0) return false
+  const seen = new Set()
+  const expected = new Set(ids)
+  for (const c of carried) {
+    if (!c || typeof c.finding !== 'string' || !expected.has(c.finding) || seen.has(c.finding) || !String(c.disposition ?? '').trim()) return false
+    seen.add(c.finding)
+  }
+  const groupIds = new Set()
+  for (const g of plan.groups) {
+    if (!g || !/^r\d+-g\d+$/.test(String(g.groupId ?? '')) || groupIds.has(g.groupId)) return false
+    groupIds.add(g.groupId)
+    if (!validScope(g)) return false
+    if (!Array.isArray(g.findings) || g.findings.length === 0) return false
+    for (const id of g.findings) {
+      if (typeof id !== 'string' || !expected.has(id) || seen.has(id)) return false
+      seen.add(id)
+    }
+    if (g.dependsOn !== undefined && (!Array.isArray(g.dependsOn) || g.dependsOn.some(d => typeof d !== 'string' || !groupIds.has(d) && !plan.groups.some(x => x.groupId === d) || d === g.groupId))) return false
+  }
+  return seen.size === expected.size && orderGroups(plan.groups) !== null
+}
+function orderGroups(groups) {
+  const byId = new Map(groups.map(g => [g.groupId, g]))
+  const done = new Set()
+  const out = []
+  const visiting = new Set()
+  const visit = g => {
+    if (!g) return false
+    if (done.has(g.groupId)) return true
+    if (visiting.has(g.groupId)) return false
+    visiting.add(g.groupId)
+    for (const d of g.dependsOn ?? []) if (!visit(byId.get(d))) return false
+    visiting.delete(g.groupId)
+    done.add(g.groupId)
+    out.push(g)
+    return true
+  }
+  for (const g of groups) if (!visit(g)) return null
+  return out
+}
+const artifactKind = a => String(a?.kind ?? 'test')
+const artifactBaseline = a => String(a?.baseline ?? 'red')
+const isProvenArtifact = a => {
+  if (!String(a?.command ?? '').trim()) return false
+  const observed = String(a?.observed ?? '')
+  return artifactBaseline(a) === 'pass' ? /pass|ok|green/i.test(observed) && !/fail/i.test(observed) : /fail/i.test(observed)
+}
+// The evidence a preparation result must carry before anyone validates it: an inventory, a
+// discriminating matrix that covers every inventory item (or says why not), hashed artifacts whose
+// observed baseline matches the row they prove, a typed scope and an absolute contract path.
+function hasPreparedContract(r, { needPlan = false, ids = [], mode } = {}) {
+  if (!r || r.status !== 'red') return false
+  // The mode is the DISPATCHED one: a result claiming another mode is not the preparation asked for (t9b-4).
+  if (mode !== undefined && r.mode !== mode) return false
+  if (!SHA40.test(String(r.inputHead ?? ''))) return false
+  if (!String(r.sourceOfTruth ?? '').trim()) return false
+  if (!isContractPath(r.contractPath) || !SHA256_RE.test(String(r.contractHash ?? ''))) return false
+  if (!validScope(r.fixScope)) return false
+  if (!Array.isArray(r.inventory) || r.inventory.length === 0) return false
+  const inventoryIds = new Set()
+  for (const item of r.inventory) {
+    if (!item || !String(item.id ?? '').trim() || !String(item.producer ?? '').trim() || !Array.isArray(item.classes) || item.classes.length === 0 || inventoryIds.has(item.id)) return false
+    inventoryIds.add(item.id)
+  }
+  if (!Array.isArray(r.matrix) || r.matrix.length === 0) return false
+  // A repair or revision result is the DELTA of the contract it revises: its rows may also cover
+  // obligations of the base contract (an AC id the delta inventory does not repeat) — each row must
+  // cover at least one obligation of the delta itself; the independent validator checks the full
+  // file. An initial or remediation contract covers exactly its own inventory.
+  const delta = (mode ?? r.mode) === 'repair' || (mode ?? r.mode) === 'revision'
+  const rowIds = new Set()
+  const covered = new Set()
+  let witnesses = 0
+  for (const row of r.matrix) {
+    if (!row || !String(row.id ?? '').trim() || rowIds.has(row.id)) return false
+    rowIds.add(row.id)
+    if (!['witness', 'control', 'boundary', 'interaction', 'not-applicable'].includes(row.kind) || !['red', 'pass'].includes(row.baseline)) return false
+    if (!String(row.condition ?? '').trim() || !String(row.oracle ?? '').trim() || !String(row.expected ?? '').trim()) return false
+    if (!Array.isArray(row.covers) || row.covers.length === 0 || row.covers.some(c => typeof c !== 'string' || !c.trim())) return false
+    if (delta ? !row.covers.some(c => inventoryIds.has(c)) : row.covers.some(c => !inventoryIds.has(c))) return false
+    if (row.kind === 'not-applicable' && !String(row.rationale ?? '').trim()) return false
+    if (row.kind === 'witness' && row.baseline === 'red') witnesses++
+    for (const c of row.covers) covered.add(c)
+  }
+  if ([...inventoryIds].some(id => !covered.has(id))) return false
+  if (needPlan && !validPlan(r.plan, ids)) return false
+  if (r.testExempt === true) return !!String(r.exemptionRationale ?? '').trim()
+  if (r.testExempt !== false || !Array.isArray(r.redTests) || r.redTests.length === 0) return false
+  // Without one discriminating witness the contract cannot fail for the defect it claims to close.
+  if (witnesses === 0 && r.fixScope.mode !== 'test') return false
+  const byFile = new Map()
+  for (const a of r.redTests) {
+    const file = String(a?.file ?? '').trim()
+    if (!file || byFile.has(file) || !isRelPath(file) || !SHA256_RE.test(String(a?.sha256 ?? ''))) return false
+    if (!['test', 'fixture'].includes(artifactKind(a)) || !['red', 'pass'].includes(artifactBaseline(a))) return false
+    byFile.set(file, a)
+  }
+  return r.redTests.every(a => (artifactKind(a) === 'test' ? isProvenArtifact(a) : (() => { const c = byFile.get(String(a?.consumedBy ?? '').trim()); return !!c && artifactKind(c) === 'test' && isProvenArtifact(c) })()))
+}
+
+// ── Stage 2: independent validation + seal (red-verify) ──────────────────────
+const VALIDATE_SCHEMA = {
+  type: 'object',
+  properties: {
+    // US-479 F-RR-03: the verifier echoes the guard set it validated. A field this schema does not
+    // declare is dropped by the harness, so the equality check below would be unenforceable.
+    regressionGuards: { type: 'array', items: { type: 'string' } },
+    status: { type: 'string', enum: ['verified', 'rejected', REDIRECT_STATUS] },
+    verified: { type: 'boolean' },
+    findings: { type: 'array', items: { type: 'object' } },
+    sealed: { type: 'boolean' },
+    snapshot: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    manifest: { type: 'string' },
+    contractHash: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' },
+    reason: { type: 'string' },
+    next: NEXT_SCHEMA,
+  },
+  required: ['status'],
+}
+const hasValidation = r => !!r && typeof r.verified === 'boolean' && Array.isArray(r.findings) && (r.verified === false ? r.findings.length > 0 : true)
+const hasSeal = r => r?.sealed === true && SHA40.test(String(r.snapshot ?? ''))
+
+// ── Stage 3: implementation (implement-phase | green-fix) ────────────────────
+const IMPLEMENT_SCHEMA = {
+  type: 'object',
+  properties: {
+    status: { type: 'string', enum: ['ok', 'failed', REDIRECT_STATUS] },
+    gatesPassed: { type: 'boolean' },
+    branch: { type: 'string' },
+    checkpointPath: { type: 'string' },
+    prNumber: { type: 'number' },
+    url: { type: 'string' },
+    outputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    summary: { type: 'string' },
+    reason: { type: 'string' },
+    next: NEXT_SCHEMA,
+  },
+  required: ['status'],
+}
+const hasImplementation = r => !!r && r.status === 'ok' && r.gatesPassed === true && isPosInt(r.prNumber) && SHA40.test(String(r.outputHead ?? ''))
+const GREEN_SCHEMA = {
+  type: 'object',
+  properties: {
+    status: { type: 'string', enum: ['fixed', 'failed', 'human', REDIRECT_STATUS] },
+    fixed: { type: 'boolean' },
+    needsHumanDecision: { type: 'boolean' },
+    outputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    evidenceLedger: {
+      type: 'array',
+      items: { type: 'object', properties: { claim: { type: 'string' }, oracle: { type: 'string' }, probe: { type: 'string' }, observed: { type: 'string' } }, required: ['claim', 'oracle', 'probe', 'observed'] },
+    },
+    reason: { type: 'string' },
+    next: NEXT_SCHEMA,
+  },
+  required: ['status'],
+}
+const hasGreen = r => !!r && typeof r.fixed === 'boolean' && Array.isArray(r.evidenceLedger) && (r.fixed ? SHA40.test(String(r.outputHead ?? '')) : true)
+
+// ── Stage 4: final verification (review-phase) ──────────────────────────────
 const LOOSE_REVIEW_SCHEMA = {
   // Mirrors the configured review template: the `## Verdict`-line verdict options and the
-  // `Findings by severity` finding fields (File:Line / severity / description /
-  // recommendation). The posted report is the artifact; this is the return value.
-  // This is the loose FALLBACK skeleton: phase-0 (ensure-contract, below) derives an
-  // enum-locked version from the template via an AI-generated contract.json; when
-  // that contract is missing/stale-and-ungeneratable/malformed, this skeleton is
-  // used as-is so the run never breaks.
+  // `Findings by severity` finding fields (File:Line / severity / description / recommendation).
+  // This is the loose FALLBACK skeleton: phase-0 (ensure-contract, below) derives an enum-locked
+  // version from the template via an AI-generated contract.json; when that contract is
+  // missing/stale-and-ungeneratable/malformed, this skeleton is used as-is so the run never breaks.
   type: 'object',
   properties: {
-    // Free string mirroring the review template's `## Verdict`-line options
-    // (APPROVED / CHANGES-REQUESTED / TECH-DEBT) — NOT enum-locked here, so a
-    // template vocabulary change doesn't break validation.
-    // Control flow keys on `nonActionable` + actionable count, never on specific
-    // verdict strings.
     verdict: { type: 'string' },
+    reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     needsHumanDecision: { type: 'boolean' },
+    humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
     findings: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
-          location: { type: 'string' }, // File:Line
-          severity: { type: 'string' }, // Critical | Major | Minor | Questions per template (not enum-locked)
-          description: { type: 'string' }, // the issue and its impact
-          recommendation: { type: 'string' }, // suggested resolution
-          // true = by-design / won't-fix: fixing it would be wrong (byte-consistent
-          // with a source of truth, matches an existing convention, resolves only
-          // post-merge, etc.). Put the justification in `description`. Non-actionable
-          // findings do NOT block convergence; surfaced to the human at the merge gate.
+          location: { type: 'string' },
+          severity: { type: 'string' },
+          description: { type: 'string' },
+          recommendation: { type: 'string' },
           nonActionable: { type: 'boolean' },
-          // When nonActionable, the SPECIFIC disposition that replaces the opaque
-          // "non-actionable" label in human-facing output: exactly `Deferred to #<n>`
-          // when the finding belongs to a separate tracked story, else a concrete
-          // by-design reason (By convention … / Historical record / Forward-ref to
-          // unbuilt #<n> / Resolves after merge).
           disposition: { type: 'string' },
         },
       },
     },
   },
-  required: ['verdict'],
+  required: ['verdict', 'reviewedHead'],
 }
-const FIX_SCHEMA = {
-  type: 'object',
-  properties: { fixed: { type: 'boolean' }, needsHumanDecision: { type: 'boolean' } },
-  required: ['fixed'],
+// The orchestration fields every finding carries on top of the template's own: a stable id
+// assigned once, the policy decision (`blocking`, computed by the skill's script from the floor
+// the coordinator passed and re-checked here), the transition of a prior finding, and the KIND
+// that routes recovery (an approved test failing on production returns to GREEN; a contract gap
+// revises the affected obligation; a defect opens a round; a regression is a defect on old code).
+const FINDING_ORCHESTRATION = {
+  id: { type: 'string' },
+  blocking: { type: 'boolean' },
+  transition: { type: 'string', enum: ['open', 'resolved', 'superseded', 'human'] },
+  kind: { type: 'string', enum: ['defect', 'regression', 'approved-test-failing', 'contract-gap', 'question'] },
+  external: { type: 'boolean' },
+  groupId: { type: 'string' },
+  rowId: { type: 'string' },
+  severityEvidence: { type: 'string' },
+  missedUpstream: { type: 'boolean' },
+  evidence: { type: 'string' },
+  // US-479 T-29 (S11): a regression the reviewer proves was INTRODUCED by a remediation. Declared
+  // here because a field this schema does not name is dropped by the harness before the
+  // coordinator ever sees it (3.0.5) — and the durable state validates every proof again.
+  origin: { type: 'string', enum: ['preexisting-missed', 'introduced-by-remediation', 'unknown'] },
+  originEvidence: { type: 'object' },
+  obligationIds: { type: 'array', items: { type: 'string' } },
+  regressionRisk: {
+    type: 'object',
+    properties: {
+      riskId: { type: 'string' },
+      introducedByRemediationBatchId: { type: 'string' },
+      lastCleanReviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+      firstFailingHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+      reproducerRef: { type: 'string' },
+      closureAssertions: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, command: { type: 'string' }, testRef: { type: 'string' }, expected: { type: 'string' } }, required: ['id', 'expected'] } },
+      affectedBoundaryRefs: { type: 'array', items: { type: 'string' } },
+      state: { type: 'string', enum: ['active', 'discharged'] },
+      dischargedByReviewId: { type: 'string' },
+      dischargedHead: { type: 'string' },
+    },
+    required: ['introducedByRemediationBatchId', 'lastCleanReviewedHead', 'firstFailingHead', 'reproducerRef', 'closureAssertions', 'affectedBoundaryRefs', 'state'],
+  },
 }
-// #373: sandbox-safe continuation probe. The orchestrator has no FS/gh, so a cheap
-// agent in the worktree reports two signals used to decide whether round-0 must post
-// a fresh first review:
-//   - logExists: the persisted working log is present → an in-flight cycle to CONTINUE
-//     (silent round-0 + seeds `cycleHasRemediation` so convergence still synthesizes+cleans).
-//   - firstReviewPosted: a first-review comment already exists on the PR (PR-side
-//     corroboration). Guards the double-first-review the log-only signal can miss when
-//     the log is GONE but a first review was already posted — e.g. a converged-but-not-
-//     yet-merged PR re-entering a batch (log deleted at convergence, #373 finding 1), or
-//     a pruned/recreated worktree / out-of-band clone that lost the untracked log
-//     (#373 finding 3). Either signal suppresses a second first-review.
-const PROBE_SCHEMA = {
-  type: 'object',
-  properties: { logExists: { type: 'boolean' }, firstReviewPosted: { type: 'boolean' } },
-  required: ['logExists', 'firstReviewPosted'],
-}
+const FINDING_ID_RE = /^r\d+(-[a-z])?-\d+$/
+const TRANSITIONS = new Set(['open', 'resolved', 'superseded', 'human'])
+const KINDS = new Set(['defect', 'regression', 'approved-test-failing', 'contract-gap', 'question'])
 
 // ── Phase 0: ensure machine contracts (md template → contract.json) ────────
-// The KB markdown template is the single source of truth; the machine contract
-// is DERIVED from it by an AI generator agent (this sandbox has no filesystem
-// access, so all file work — hashing, cache check, generation, validation —
-// happens in the agent via `.claude/workflows/pair-contracts/ensure-contract.mjs`).
-// Cache-by-hash: the contract stores the template's sha256; unchanged hash →
-// reuse (no regeneration), changed hash → regenerate. Malformed/failed contract
-// → the loose skeleton above is used as-is (the run never breaks) and the
-// fallback is reported in the run result (`contracts[].status: 'fallback-loose'`).
-// The pattern is per-template and reusable: add a spec below to contract another
-// template — e.g. { name: 'pr', template: '.../pr-template.md', contract:
-// '.claude/workflows/pair-contracts/pr.contract.json', skeleton: PR_SCHEMA, mirrors: ... }
-// once the PR return value grows beyond a handle.
+// The KB markdown template is the single source of truth; the machine contract is DERIVED from it
+// by an AI generator agent (this sandbox has no filesystem access, so all file work — hashing,
+// cache check, generation, validation — happens in the agent via the `ensure-contract.mjs` script
+// that ships inside the contract-phase skill). Cache-by-hash: unchanged template → reuse (no
+// regeneration). Malformed/failed contract → the loose skeleton above is used as-is (the run never
+// breaks) and the fallback is reported in the run result (`contracts[].status: 'fallback-loose'`).
+// This is the TEMPLATE contract (review vocabulary). It is never the ACCEPTANCE contract a story
+// is judged against — that one is prepared and sealed per cycle (stages 1–2 above).
 const CONTRACT_SPECS = [
   {
     name: 'code-review',
@@ -927,21 +1364,14 @@ const CONTRACT_SPECS = [
       'The RELATIVE severity of those levels is a contract TERM, carried by the top-level `severityRanks` map (one explicit integer per severity, higher = more severe) — the consumer ranks a merge-blocking floor with it and IGNORES the order of the `severities` array entirely',
   },
 ]
-
 const CONTRACT_RESULT_SCHEMA = {
   type: 'object',
-  properties: {
-    status: { type: 'string' }, // cache-hit | regenerated | failed
-    contract: { type: 'object' }, // parsed contract.json: { $meta, vocabulary, schema }
-  },
+  properties: { status: { type: 'string' }, contract: { type: 'object' } },
   required: ['status'],
 }
-
-// Last-resort consumer-side guard (pure, value-agnostic): accept the generated
-// schema only if it keeps the structure the control flow depends on. Generic
-// contract integrity (hash, vocabulary, JSON-Schema shape) is validated by
-// ensure-contract.mjs — the canonical validator; the sandbox cannot import it,
-// so this is a deliberately minimal duplicate covering only THIS consumer's needs.
+// Last-resort consumer-side guard (pure, value-agnostic): accept the generated schema only if it
+// keeps the structure the control flow depends on. Generic contract integrity is validated by
+// ensure-contract.mjs — the canonical validator; the sandbox cannot import it.
 function usableSchema(contract) {
   try {
     const s = contract?.schema
@@ -957,443 +1387,422 @@ function usableSchema(contract) {
     return null
   }
 }
+// ── Dispatch accounting ───────────────────────────────────────────────────────
+// Every agent call is recorded with its label, role, model/effort and whether it was a retry or a
+// redirect. Token counters and wall time are NOT available to a workflow script — the sandbox has
+// no clock (a clock call is forbidden there: it would break resume) and exposes no usage — so both
+// are reported as 'unknown' here and read from the harness's own run summary; never as zero.
+const METRICS = { dispatches: [], retries: 0, redirects: 0 }
+async function dispatch(prompt, opts, { retry = false } = {}) {
+  const result = await agent(prompt, opts)
+  METRICS.dispatches.push({ label: opts.label, agentType: opts.agentType, phase: opts.phase, model: opts.model ?? 'frontmatter', effort: opts.effort, retry, usable: result !== null && result !== undefined })
+  if (retry) METRICS.retries++
+  return result
+}
+// A dead step (null, or a shape the stage cannot use) is retried ONCE with the same prompt: every
+// stage is re-entrant by construction (it resolves the durable state first), so the retry RESUMES.
+// A typed answer — a refusal, a redirect, a rejection — is never retried.
+async function agentRetry(prompt, opts, isUsable = r => !!r) {
+  const first = await dispatch(prompt, opts)
+  if (isUsable(first)) return first
+  log(`${opts.label}: step returned nothing usable (agent died or returned an invalid shape) — retrying once`)
+  return dispatch(prompt, { ...opts, label: `${opts.label} retry` }, { retry: true })
+}
 
 async function ensureContract(spec) {
-  const res = await agent(
-    `Ensure the machine contract for the \`${spec.name}\` template. Template: \`${spec.template}\`. Contract artifact: \`${spec.contract}\` (git-ignored derived cache). Use \`node .claude/workflows/pair-contracts/ensure-contract.mjs\` (\`check\`, then \`write\`) for ALL hash/cache/validation work — NEVER hand-roll hashing or freshness logic. If \`check\` reports \`fresh\`, return the cached contract file content unchanged with status \`cache-hit\`. Otherwise READ the template and generate the contract: take this skeleton schema and tighten ONLY the fields that mirror template vocabulary (${spec.mirrors}) into \`enum\`s, leaving every other field untouched: ${JSON.stringify(spec.skeleton)}. Also fill the contract's \`vocabulary\` object (e.g. verdictOptions, severities, findingFields) from the template, AND the top-level \`severityRanks\` object: every name in \`vocabulary.severities\`, spelled identically, mapped to an explicit unique integer, HIGHER = MORE SEVERE (e.g. {"Critical": 4, "Major": 3, "Minor": 2, "Questions": 1}). Derive each rank from what the template SAYS the level means — a level it describes as must-fix/merge-blocking outranks one it describes as advisory or a question — and NEVER from the order the levels happen to appear in: the consumer ignores array order, and a wrong rank silently converts a merge-blocking finding into an accepted one. If the template's levels carry no discernible relative severity, return status \`failed\` rather than inventing an order. Persist via the \`write\` command (it validates the draft and stamps the template hash), then return status \`regenerated\` plus the final contract content. Never modify the template. If generation or validation fails after one retry, return status \`failed\` with no contract.`,
+  const res = await dispatch(
+    `Invoke **${SK.contractPhase}** with $name=${spec.name} $template=${spec.template} $contract=${spec.contract} $skeleton=${JSON.stringify(spec.skeleton)} $mirrors=${JSON.stringify(spec.mirrors)} $workflowVersion=${WORKFLOW_VERSION}. The skill is the process of record: execute its steps exactly and return exactly the structured result it defines.`,
     { agentType: 'pair-contract-generator', phase: 'Contracts', label: `contract:${spec.name}`, effort: 'low', schema: CONTRACT_RESULT_SCHEMA },
   )
   const schema = usableSchema(res?.contract)
-  return {
-    name: spec.name,
-    status: schema ? (res?.status ?? 'regenerated') : 'fallback-loose',
-    contract: schema ? res.contract : null,
-    schema: schema ?? spec.skeleton,
-  }
+  return { name: spec.name, status: schema ? (res?.status ?? 'regenerated') : 'fallback-loose', contract: schema ? res.contract : null, schema: schema ?? spec.skeleton }
 }
-
-// Contracts are ensured up-front (skipped for an empty batch — nothing to drive).
+// Contracts are ensured up-front (skipped only for an empty batch — nothing to drive). US-479
+// remediation (Finding 1): a capsule-based skip of this call was removed — the sandbox cannot
+// confirm a capsule's claim, so it can never be the reason to skip real, contract-backed work.
 const contracts = STORIES.length ? await parallel(CONTRACT_SPECS.map((s) => () => ensureContract(s))) : []
 const crContract = contracts.find((c) => c.name === 'code-review')
-// Schema the reviewer returns: template-derived when the contract is usable,
-// the loose skeleton otherwise. Control flow stays value-agnostic either way.
-const REVIEW_SCHEMA = crContract?.schema ?? LOOSE_REVIEW_SCHEMA
-// Reviewer prompt vocabulary: `verdictOptions` and `severities` are CANONICAL,
-// required contract keys (ensure-contract.mjs's validateContract rejects any
-// contract missing either) — so whenever a contract IS present, both are
-// guaranteed populated and the schema (enum-locked from these same keys) and
-// the prompt text can never diverge. The hardcoded arrays below are the
-// single fallback, used ONLY in the true fallback-loose case (no usable
-// contract at all, `crContract?.contract` is null) — never a second,
-// independently-drifting vocabulary source.
+const REVIEW_SCHEMA_BASE = crContract?.schema ?? LOOSE_REVIEW_SCHEMA
+const REVIEW_FINDING_SCHEMA = REVIEW_SCHEMA_BASE.properties.findings
+// The final verifier's return: the template's verdict/finding vocabulary, the orchestration
+// evidence (reviewedHead, custody, readiness, publication) and the finding orchestration fields.
+const VERIFY_SCHEMA = {
+  ...REVIEW_SCHEMA_BASE,
+  properties: {
+    ...REVIEW_SCHEMA_BASE.properties,
+    status: { type: 'string', enum: ['reviewed', REDIRECT_STATUS] },
+    // US-479 V2 (F-RR-03): the review echoes the active guard set it EXECUTED on this head. The
+    // review is the participant that discharges, so inferring the set from the ledger instead of
+    // receiving and confirming it cost a whole wasted rewind.
+    regressionGuards: { type: 'array', items: { type: 'string' } },
+    worked: { type: 'array', items: { type: 'object' } },
+    reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
+    findings: {
+      ...REVIEW_FINDING_SCHEMA,
+      items: { ...REVIEW_FINDING_SCHEMA.items, properties: { ...(REVIEW_FINDING_SCHEMA.items?.properties ?? {}), ...FINDING_ORCHESTRATION } },
+    },
+    custody: { type: 'object', properties: { verified: { type: 'boolean' }, contractBreach: { type: 'boolean' }, breaches: { type: 'array', items: { type: 'object' } } }, required: ['verified', 'contractBreach'] },
+    readiness: { type: 'object', properties: { ready: { type: 'boolean' }, remoteHead: { type: 'string' } }, required: ['ready'] },
+    // US-479 T-29 (S11): the remediation batch this proof invalidates. A LOGICAL rewind marker —
+    // never a Git revert, reset, rebase or seal deletion.
+    invalidatedBatchId: { type: 'string' },
+    published: { type: 'object', properties: { firstReview: { type: 'boolean' }, synthesis: { type: 'boolean' }, flush: { type: 'boolean' } } },
+    tier: { type: 'string' },
+    passes: { type: 'array', items: { type: 'string' } },
+    partial: { type: 'boolean' },
+    reviewer: { type: 'integer' },
+    next: NEXT_SCHEMA,
+  },
+  // ONLY `status` is required by the schema: a stage that finds another step due returns
+  // `{ status: 'redirect', next }` and nothing else, and a schema demanding the verdict fields
+  // makes the harness reject that return and re-prompt an agent that has already finished — it
+  // stalls until the supervisor kills it, six times (canary run 11, verify r2). The EVIDENCE a
+  // real verification must carry is checked here, by `hasReviewEvidence`, never by the schema.
+  required: ['status'],
+}
+const hasVerdict = r => !!r && !!String(r.verdict ?? '').trim()
+// A `ready: true` is evidence only with the 40-hex remote head it was read against (T-9, t9-3).
+const hasReviewEvidence = r => hasVerdict(r) && SHA40.test(String(r.reviewedHead ?? '')) && Array.isArray(r.findings) && !!r.custody && typeof r.custody.contractBreach === 'boolean' && !!r.readiness && typeof r.readiness.ready === 'boolean' && (r.readiness.ready !== true || SHA40.test(String(r.readiness.remoteHead ?? '')))
+
+// Reviewer prompt vocabulary — from the contract when present, pair's own only as the fallback.
 const REVIEW_VOCAB = crContract?.contract?.vocabulary
 const DEFAULT_SEVERITIES = ['Critical', 'Major', 'Minor', 'Questions']
 const DEFAULT_VERDICTS = ['APPROVED', 'CHANGES-REQUESTED', 'TECH-DEBT']
-// ── Text shape (token cost) ────────────────────────────────────────────
-// Every artifact this loop produces is READ AGAIN: the PR body by each reviewer, each
-// fixer and the analysis agent; the log by the escalate-flush and the final synthesis.
-// Prose that restates the diff is paid on every one of those reads and carries nothing the
-// reader cannot get from the diff itself. What DOES earn its tokens is the part a reader
-// cannot reconstruct: the concrete failure case, and the evidence it is real. So the rule is
-// schematic-but-complete, never merely "shorter" — drop the narration, keep inputs -> wrong
-// output, keep the proof. Compressing evidence costs an extra review round (~250k tokens),
-// which dwarfs every word saved.
-const TEXT_SHAPE =
-  'TEXT SHAPE (mandatory): write schematically, not in prose. Tables and one-line bullets over paragraphs. ' +
-  'NEVER restate what the diff already shows (no file-by-file narration, no "I then changed X to Y"), ' +
-  'never re-explain context the reader already has, no preamble, no summary of the summary, no praise. ' +
-  'KEEP AT FULL LENGTH the two things a reader cannot reconstruct: the CONCRETE FAILURE CASE ' +
-  '(specific inputs/state -> the wrong output or the loss that follows) and the EVIDENCE it is real ' +
-  '(what you ran, what it printed). Cut narration, never evidence.'
-
-
 const SEVERITIES = (REVIEW_VOCAB?.severities ?? DEFAULT_SEVERITIES).join(', ')
 const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
-
-// The severity scale is resolved from the SAME array `SEVERITIES` above threads into the
-// reviewer prompt, so what the engine ranks and what the reviewer answers can never be two
-// different vocabularies — and its RANKING comes from the contract's explicit `severityRanks`
-// ordinals, never from that array's order. It can only be known after the contract is ensured,
-// which is why the floor is validated HERE rather than at arg-parse time: the cost is that a
-// bad floor throws one contract dispatch late, still before any card is driven.
+// The severity scale is resolved from the SAME array `SEVERITIES` threads into the verifier
+// prompt; its RANKING comes from the contract's explicit `severityRanks`, never array order.
 const SEVERITY_SCALE = resolveSeverityScale(REVIEW_VOCAB?.severities, crContract?.contract?.severityRanks)
-// Said out loud even when no floor is configured: the contract is hash-cached, so an
-// unranked one stays unranked until the template changes, and the next caller who does pass
-// a floor gets a hard stop. Better the operator sees it on the run that generated it.
 if (SEVERITY_SCALE.rankError) log(`contract:code-review: severities are NOT ranked (${SEVERITY_SCALE.rankError}) — \`severityFloor\` is unavailable until the contract is regenerated`)
-const SEVERITY_FLOOR = parseFloor(PARSED.severityFloor)
+// The floor DEFAULTS to `Minor`: Major and Minor block and drive fix rounds, Questions are carried
+// to the merge gate. An explicit `severityFloor` wins. The default is applied SOFTLY (a vocabulary
+// without `Minor`, or an unranked contract, falls back to no floor); a caller-spelled floor that
+// cannot be applied throws.
+const DEFAULT_SEVERITY_FLOOR = 'Minor'
+function defaultFloor() {
+  if (!SEVERITY_SCALE.ranks) return null
+  const key = normSeverity(DEFAULT_SEVERITY_FLOOR)
+  if (!Object.hasOwn(SEVERITY_SCALE.ranks, key)) return null
+  return { name: DEFAULT_SEVERITY_FLOOR, rank: SEVERITY_SCALE.ranks[key] }
+}
+const SEVERITY_FLOOR = String(PARSED.severityFloor ?? '').trim() ? parseFloor(PARSED.severityFloor) : defaultFloor()
+// The ranks handed to the verifier so its script can compute `blocking` under the SAME policy this
+// file re-checks — one policy, two readers, and a disagreement fails closed.
+const RANKS_ARG = SEVERITY_SCALE.ranks ? JSON.stringify(Object.fromEntries(SEVERITY_SCALE.names.map(n => [n, SEVERITY_SCALE.ranks[normSeverity(n)]]))) : '{}'
 
 // ── Isolation convention ───────────────────────────────────────────────────
-// The AUTHORING chain (implement -> PR -> fix) runs inside a dedicated, PERSISTENT
-// per-story git worktree OUTSIDE the repo, so the main working tree is never
-// touched and parallel stories never collide. The worktree persists across the
-// whole chain (implement/PR/fix share it) so the untracked checkpoint under
-// .pair/working/ survives context resets. The reviewer stays read-only (gh-based,
-// no branch switch) so it needs no worktree. Worktrees are cleaned up after merge.
-// `story.base` (optional, default `origin/main`) is the branch this story STACKS on.
-// It exists to dissolve a purely TEXTUAL mutex — two stories editing different lines
-// of the same file (`ci.yml`, root `package.json` scripts, a shared SKILL.md). Branching
-// the second story off the FIRST story's branch instead of main means the conflict is
-// resolved once, at authoring time, instead of becoming a merge conflict the human hits
-// at the gate. It does NOT let the two run concurrently: a stacked story must start from
-// a COMPLETE base, so the base story has to be PR-ready first. What it buys is that the
-// base does not have to be MERGED — the whole stack is merged in order, in one human
-// gate, instead of one gate per link in the chain.
-// Use it only for textual mutexes on small, low-risk bases: if review forces a change in
-// the base, every stacked child rebases.
-// The base a story branches off: its own `base` when it is STACKED, else the configured
-// default. One helper, because three prompts ask the question and a diff computed against
-// a different base than the branch was cut from silently reviews the wrong range.
+// The AUTHORING chain (prepare -> validate -> implement/green) runs inside a dedicated, PERSISTENT
+// per-story git worktree OUTSIDE the repo, so the main working tree is never touched and parallel
+// stories never collide. The final verifier inspects from a DETACHED throwaway worktree. Handoffs
+// and the cycle log live in the MAIN checkout (`.pair/working/runs/<runId>/<story>/`,
+// `<auditLogDir>/<story>.md`), never in a worktree that may be pruned.
+// `story.base` (optional, default `origin/main`) is the branch this story STACKS on: a stacked
+// story must start from a COMPLETE base (PR-ready), and the whole stack merges in order.
 function baseOf(story) {
   return String(story.base ?? '').trim() || PIPELINE.baseBranch
 }
-
-function wtClause(story) {
-  const base = baseOf(story)
-  return `ISOLATION (mandatory): do ALL git/file work inside a dedicated worktree at \`${PIPELINE.worktreeRoot}/${story.id}\` — create-or-reuse it: \`git worktree add ${PIPELINE.worktreeRoot}/${story.id} -B ${story.branch} ${base}\` on first setup, or \`git worktree add ${PIPELINE.worktreeRoot}/${story.id} ${story.branch}\` if the branch already has commits; if the path already exists, just \`cd\` into it. NEVER modify the repo's main working tree and NEVER switch its branch.${base === PIPELINE.baseBranch ? '' : ` This story is STACKED on \`${base}\`: that branch is its base, so its commits are already in your history and must NOT be reverted, duplicated or re-implemented — only ADD your own work on top. When you open the PR, target \`${base}\` as the PR base branch, not \`main\`, so the diff shows only this story's change.`}`
+// A deterministic digest of the effective inputs the coordinator knows: the cycle state compares
+// it with the one persisted in the last handoff, and a change re-validates the review evidence
+// (findings + delta) instead of trusting it. No crypto in this sandbox — FNV-1a over the canonical
+// string is an identity for CHANGE DETECTION, not a security primitive.
+function fnv1a(str) {
+  let h1 = 0x811c9dc5
+  let h2 = 0x01000193
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i)
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0
+    h2 = Math.imul(h2 ^ c, 0x811c9dc5) >>> 0
+  }
+  return h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')
 }
-
-// Reviewer isolation: read-only inspection in a DETACHED throwaway worktree pinned
-// to the PR's pushed head. Detached HEAD never occupies the branch, so it can't
-// collide with the authoring worktree (which holds it) or with other stories'
-// reviewers in a parallel batch — and it never touches the main checkout's branch.
-function revWtClause(story) {
-  const p = `${PIPELINE.worktreeRoot}/${story.id}-review`
-  return `ISOLATION (mandatory, read-only): NEVER switch the main checkout's branch. Inspect the code in a DETACHED throwaway worktree pinned to the PR's current pushed head: \`git worktree remove --force ${p} 2>/dev/null; git fetch origin -q; git worktree add --detach ${p} origin/${story.branch}\`, then \`cd ${p}\`. Read the code there (the untracked checkpoint is absent here — good, stay blind to it). When finished, remove it: \`git worktree remove --force ${p}\`.`
-}
-
-// #373 finding 3: the escalate-flush shared block — supersede-the-prior-flush + the manual
-// out-of-band CONVENTION + the untracked-worktree-persistence note — is identical across BOTH
-// escalation prompts (MAX_FIX_ROUNDS + needsHumanDecision). Authored ONCE here so a future
-// change to the convention or the worktree-persistence wording is made in one place and can't
-// silently diverge between the two paths (they had already drifted slightly before this).
-// Part A — PR-comment minimize/supersede. Operates ONLY on already-posted PR comments, so it
-// does NOT depend on a working log and MUST be emitted on EVERY escalation (both arms), else a
-// stale prior flush or a prior convergence's "ready for merge" synthesis is left visible next to
-// an active escalation (finding: the no-log arm previously omitted this).
-function flushMinimize(prNumber) {
-  return `FIRST minimize / mark-outdated any prior escalate-flush comment already posted on PR #${prNumber} — each flush "summarizes the rounds so far", so a new one SUPERSEDES the last; only the newest escalate-flush should stay visible (no-op if there is none). ALSO minimize / mark-outdated any prior final-remediation/synthesis comment left by an EARLIER convergence of this SAME cycle (a converged-but-unmerged PR that was re-run, found new findings and is now escalating): its "review clean / ready for merge" verdict directly contradicts an active escalation, so it must NOT stay visible alongside this flush — mirror the convergence-synthesis path (no-op if there is none), but NEVER minimize the first-review comment.`
-}
-
-// Part B — the log/out-of-band CONVENTION + untracked-worktree-persistence note. Only meaningful
-// when a working log exists (a continuing cycle), so it is emitted only on the log-backed arms.
-function flushLogConvention(story) {
-  return `CONVENTION (state it in the comment so the human/orchestrator knows): any further rework or re-review — including manual out-of-band rounds — should be funneled into THIS same working log (append), NOT posted as standalone PR comments; the next orchestrated run on this story continues the same cycle and its convergence will synthesize ONE final remediation and minimize these intermediate comments. Note too (in the comment) that this working log is an UNTRACKED file living ONLY in the persistent authoring worktree \`${PIPELINE.worktreeRoot}/${story.id}\`, so that worktree must be PRESERVED until merge — if it is pruned/recreated the audit log is lost (this flush + the first-review comment still remain on the PR, and the PR-side first-review signal still prevents a duplicate first review on the next run).`
-}
-
-// Full convention = minimize (Part A) + log/out-of-band note (Part B), for the log-backed arms.
-function flushConvention(story, prNumber) {
-  return `${flushMinimize(prNumber)} ${flushLogConvention(story)}`
-}
+const canonical = v => (Array.isArray(v) ? `[${v.map(canonical).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}` : JSON.stringify(v))
+// The engine is keyed by MAJOR: compatibility is by major (cycle-state refuses another major), and a
+// patch/minor successor must not invalidate review evidence — each bump cost one extra
+// verification dispatch on canary run 11. The fix-round BUDGET is not an input either: it bounds
+// the transitions (cycle-state reads it from $policy on every resolve), it does not change what a
+// review judged — a human extending it after an `escalate` (canary run 11, r3) must resume at the
+// revision, not pay a re-review of the same head first and then hit the new ceiling one round early.
+const effectiveInputs = story =>
+  fnv1a(canonical({ workflowMajor: WORKFLOW_VERSION.split('.')[0], story: story.id, branch: story.branch, base: baseOf(story), title: story.title, notes: story.notes ?? null, severityFloor: SEVERITY_FLOOR?.name ?? null, skills: SK, reviewTemplate: PIPELINE.reviewTemplate, reviewers: PIPELINE.reviewers }))
+// The compact finding a stage receives: identity, severity, location, the failure case and the
+// recommendation — never raw logs, never the whole review history (the run directory holds it).
+const compactFinding = f => ({ id: f.id, severity: f.severity, location: f.location, description: f.description, recommendation: f.recommendation, ...(f.kind ? { kind: f.kind } : {}), ...(f.groupId ? { groupId: f.groupId } : {}), ...(f.rowId ? { rowId: f.rowId } : {}), ...(f.external ? { external: true } : {}), ...(f.missedUpstream ? { missedUpstream: true } : {}) })
 
 // ── Per-story lifecycle ──────────────────────────────────────────────────
 async function driveStory(story) {
   const tag = `#${story.id}`
+  const worktreePath = `${PIPELINE.worktreeRoot}/${story.id}`
+  const reviewWorktreePath = `${PIPELINE.worktreeRoot}/${story.id}-review`
+  const storyBase = baseOf(story)
+  const stacked = storyBase !== PIPELINE.baseBranch
+  // One run directory per story for every phase: `args.runId` when the caller names the run, else
+  // `story-<id>`. When the directory is empty but the PR already has a cycle under another run id,
+  // the cycle state names it (`other-run`) and the story continues THERE — a new invocation id never
+  // opens a second cycle for one PR.
+  let runId = RUN_ID ?? `story-${story.id}`
+  const runDir = () => `.pair/working/runs/${runId}/${story.id}`
   const resuming = Number.isInteger(story.prNumber)
-  let pr = resuming ? { prNumber: story.prNumber } : null
-
-  if (!resuming) {
-    // 1. IMPLEMENT — fresh implementer in the story worktree; writes checkpoint.
-    const impl = await agentRetry(
-      `Implement story ${tag} ("${story.title}") on branch \`${story.branch}\`, following ${SK.implement}, the reference skills, and the task/commit templates.${story.notes ? ` SCOPE DIRECTIVE (overrides the issue body where they conflict): ${story.notes}` : ''} ${wtClause(story)} Test-first. Verify the gates with ${SK.verifyQuality} (it resolves the story's \`risk:*\` tier and runs exactly the checks CI would run for that tier — do not improvise a gate command, and do not run the whole monorepo). Record any architectural or project decision you take with ${SK.recordDecision} rather than leaving it in a commit message. On completion write the story checkpoint via ${SK.checkpoint} $mode=write (it lives in the worktree) so a fresh instance can open the PR with zero prior context. Do NOT open the PR yet. Do NOT merge.`,
-      withModel({ agentType: 'pair-implementer', phase: 'Implement', label: `impl:${tag}`, effort: 'high', schema: STEP_SCHEMA }),
-    )
-    if (!impl) return { story, status: 'failed-implement' }
-
-    // 2. OPEN PR — fresh implementer instance; resumes from checkpoint (context reset)
-    pr = await agentRetry(
-      `You are resuming story ${tag}.${story.notes ? ` SCOPE DIRECTIVE: ${story.notes}` : ''} ${wtClause(story)} Read the checkpoint (${SK.checkpoint} $mode=resume) — do not re-derive. Push the branch, then publish the PR by invoking **${SK.publishPr}**. Do NOT hand-roll the PR: that skill owns the whole sequence and a hand-rolled PR silently skips most of it — the tier-resolved quality gate, the PR body composed from \`pr-template.md\` with only the pertinent conditional sections, the story's classification tags copied onto the PR, ready-for-review, the \`pr-state:*\` label and the PR state flow, the PR-URL back-link on the story, and the story's board state moved to Review. Put everything a reviewer needs (rationale, decisions, ADR links) in the PR description — the reviewer cannot see the checkpoint. ${TEXT_SHAPE} A PR body is re-read by every reviewer and every fix round of this cycle, so its length is paid many times over: state each decision once, in a line. ONE EXPECTED SIGNAL: you are running INSIDE a subagent, so when the skill reaches its review-dispatch step it will emit \`Review: review-dispatch-required\` instead of nesting a second subagent. That is CORRECT — this orchestrator dispatches the independent review itself the moment you return. Do NOT dispatch or run a review yourself, and do NOT merge. Return the PR number.`,
-      { agentType: 'pair-implementer', phase: 'PR', label: `pr:${tag}`, model: 'sonnet', effort: 'medium', schema: PR_SCHEMA },
-    )
-    if (!pr?.prNumber) return { story, status: 'failed-pr' }
-  }
-
-  // 3. REVIEW <-> FIX loop — reviewer is independent & BLIND to the handoff.
-  //    Converges when every ACTIONABLE finding is resolved. Findings the reviewer
-  //    marks nonActionable (by-design / won't-fix, justified) don't block: they're
-  //    carried to the merge gate as `acceptedFindings` for the human to see —
-  //    ACCUMULATED over every round, not just the last one (a round-1 reviewer never
-  //    re-raises what round 0 already had accepted).
-  //    nonActionable is NOT a scope filter — "not this story's original scope" alone
-  //    never qualifies; only "fixing it would be genuinely wrong" does.
-  //
-  //    PR-COMMENT POLICY (noise reduction — the WHOLE cycle of a PR is ONE logical cycle,
-  //    #367 in-loop + #373 across-runs): regardless of how many runs / escalations /
-  //    manual out-of-band rounds it takes to converge, a PR shows AT MOST one first-review
-  //    comment + AT MOST one final remediation comment.
-  //    - The FIRST review IS posted on the PR (the independent review artifact).
-  //    - The fix<->re-review rounds are NOT commented per round; each round is appended
-  //      to a working log `.pair/working/reviews/<id>.md` (orchestrator-side audit; the
-  //      re-reviewer stays BLIND to it — it receives prior findings via the prompt). The
-  //      log is the SINGLE SOURCE OF TRUTH for cycle state ACROSS runs: its existence ==
-  //      an in-flight cycle to CONTINUE, not restart.
-  //    - CONTINUATION (#373): on a resume run a SILENT round-0 (no second first-review) is
-  //      triggered by EITHER signal — the working log still exists (an in-flight cycle) OR a
-  //      first-review comment already exists on the PR (PR-side corroboration, so a converged-
-  //      but-unmerged re-run or a lost/pruned untracked log can't produce a duplicate first
-  //      review). The PR-side signal is DETERMINISTIC: the first review emits a fixed hidden
-  //      HTML-comment marker and the probe does an EXACT substring match on it — NOT a semantic
-  //      reading of the comment's structure — so the probe can't misclassify a
-  //      non-review comment into silencing a real first review (finding 1). The probe runs
-  //      at sonnet/low (not haiku): its job orchestrates a worktree + a `gh` fetch + a
-  //      substring match, and a mis-report fails OPEN toward a duplicate first review (the
-  //      very noise this story removes), so the reliability of those tool steps is worth the
-  //      small tier bump over the cheapest model. Log existence
-  //      additionally seeds `cycleHasRemediation` so convergence still
-  //      synthesizes+cleans even if round-0 converges immediately; a first-review-only signal
-  //      (no log) does NOT seed it, so a clean round-0 adds nothing and never synths a gone log.
-  //    - At convergence ONE synthesized remediation comment is posted, written
-  //      CONTEXTUALLY to the first review (maps EVERY finding across ALL runs in the log
-  //      -> resolution + accepted dispositions + final verdict), AND any prior intermediate
-  //      comments (escalate-flush, manual out-of-band rounds, OR a prior convergence's own
-  //      final-remediation comment on a re-run→re-converge cycle) are minimized / marked
-  //      outdated so only first-review + this one remediation remain visible; the log is
-  //      then deleted.
-  //    - On escalation the log is KEPT and flushed to the PR as the continuation anchor. A
-  //      new escalate-flush SUPERSEDES the prior one (minimized/marked-outdated in place), so
-  //      repeated escalations across runs leave only the newest flush visible, not a pile. It
-  //      ALSO minimizes any prior convergence's own final-remediation comment (a converged-but-
-  //      unmerged PR re-run that now escalates) — a stale "ready for merge" verdict must not
-  //      stay visible next to an active escalation (never the first-review comment), mirroring
-  //      the convergence-synthesis minimize set.
-  //    - MANUAL OUT-OF-BAND CONVENTION (#373): if a human/orchestrator takes over rework or
-  //      re-review after an escalate, they funnel their notes into THIS same working log
-  //      (append) rather than posting standalone PR comments; the next orchestrated run
-  //      continues the cycle and its convergence synthesizes one final remediation +
-  //      minimizes the intermediates. (This is a documented CONVENTION only — standalone
-  //      reviewer/fix agents are NOT edited by #373.)
-  //    The workflow runs in a sandbox (no FS/gh), so the log existence-probe, comment
-  //    posting, and comment minimizing are all delegated to agents running in the worktree.
+  let pr = resuming ? story.prNumber : null
   const reviewLog = `${PIPELINE.auditLogDir}/${story.id}.md`
-  // #373: the first-review comment always emits this hidden HTML-comment marker verbatim
-  // (invisible in rendered markdown → no visible noise). The continuation probe detects a
-  // prior first review by an EXACT substring match on this marker, NOT by a semantic reading
-  // of the comment's structure — so the cheap sonnet/low probe makes no classification
-  // judgment and can't false-positive a non-review comment into silencing a real first
-  // review (the story's High-impact over-silencing risk). Minimized/outdated comments still
-  // match: gh returns their raw body, which still contains the marker.
-  const firstReviewMarker = `<!-- pair:first-review #${story.id} PR#${pr.prNumber} -->`
-  // #373: continuation detection. Two signals, only meaningful on a resume run (a fresh
-  // story branches from origin/main, so neither a prior cycle log nor a prior first-review
-  // comment exists): `logExists` = an in-flight cycle to continue; `firstReviewPosted` =
-  // PR-side corroboration (deterministic marker match) that a first review already went out
-  // (so we never post a second one even if the untracked log is gone — findings 1 & 3).
-  let isContinuation = false
-  let firstReviewPosted = false
-  // #401: the probe used to be gated on `resuming`, i.e. on the CALLER having passed
-  // `prNumber` in the story object. That made the duplicate-first-review guard
-  // depend on the caller's bookkeeping, and a `Workflow({resumeFromRunId})` resume
-  // replays the implement/PR agents from cache with the SAME args — so
-  // `story.prNumber` is absent, `resuming` is false, the probe never runs,
-  // `firstReviewPosted` stays false, and round-0 posts ANOTHER first review on a PR
-  // that already carries one. Observed three times on a single story across three
-  // pause/resume cycles: that story was re-reviewed from scratch each time instead of
-  // advancing through its fix rounds, and ended up the least-progressed of its batch.
-  // The gate is now the PR's existence — a fact the script knows — instead of an
-  // argument the caller must remember. One cheap sonnet/low probe per story per run
-  // costs far less than one duplicated opus/xhigh review round, and on a genuinely
-  // fresh story both signals come back false, leaving the fresh path's behaviour
-  // identical (the first review still posts).
-  if (pr?.prNumber) {
-    const probe = await agent(
-      `Story ${tag}: read-only CONTINUATION PROBE (no review, no edits). ${wtClause(story)} Report TWO booleans: (1) \`logExists\` — is the review working log \`${reviewLog}\` present in the worktree? (2) \`firstReviewPosted\` — does PR #${pr.prNumber} ALREADY carry the first-review comment? Match it DETERMINISTICALLY, not by judgment: fetch the PR comments via \`gh\` and report whether ANY comment's raw body contains the EXACT marker substring \`${firstReviewMarker}\` (the first review always emits this hidden marker verbatim; a minimized/outdated comment still counts — its raw body still contains the marker). Do NOT infer from a comment's structure or tone — it is a plain substring match. Return { logExists, firstReviewPosted }. Do NOT create, modify, or delete the log, do NOT post or minimize any comment, and do NOT run the review — this is a cheap probe to decide whether an in-flight review cycle is being CONTINUED and whether a first review was already posted.`,
-      { agentType: 'pair-implementer', phase: 'Review', label: `probe:${tag}`, model: 'sonnet', effort: 'low', schema: PROBE_SCHEMA },
-    )
-    // #373 finding 4: a failed / malformed / schema-invalid probe return yields BOTH signals
-    // false (via `?.x === true`), so round-0 falls through to a POSTED first review. This
-    // fail-open direction is deliberate: degrade toward VISIBILITY (post a review a human can
-    // see) rather than fail-silent (suppress it). The dangerous case — a genuine continuation
-    // where a total probe failure re-posts a first review — is low-probability (requires an
-    // agent/schema failure on a resume of an in-flight cycle) and self-announcing (a visible
-    // duplicate is noticed and pruned), whereas silent over-suppression of a real review is
-    // not. The deterministic marker above removes the misclassification failure mode; only a
-    // hard probe failure reaches this fallback.
-    isContinuation = probe?.logExists === true
-    firstReviewPosted = probe?.firstReviewPosted === true
-  }
-  let round = 0
-  // Remembers a reviewer's human-decision request across the one fix round we now spend
-  // before honouring it, so the escalation is deferred by a round rather than dropped.
-  let humanDecisionPending = false
-  let prevFindings = []
-  // ACCUMULATES across rounds — never reassigned. A finding accepted in round 0 (by-design, or
-  // below the floor) is not re-raised by the round-1 reviewer, because round 1 only sees the
-  // fixed code and has no memory of what the human was already told would be carried. So a
-  // per-round reassignment loses it: the card converges `ready-for-merge` with an EMPTY accepted
-  // table, the convergence prompt renders that empty table, and the merge gate is told nothing was
-  // carried. Sub-floor findings are not recoverable elsewhere either — `prevFindings = actionable`
-  // excludes them, so they never reach the fixer's working log. AC4 requires them carried, so the
-  // accumulator is the carrier of record.
+  const firstReviewMarker = () => `<!-- pair:first-review #${story.id} PR#${pr} -->`
+  const synthesisMarker = () => `<!-- pair:synthesis #${story.id} PR#${pr} -->`
+  // US-479 AC-32: `rollbackTo` is the maintainer's call, taken per card after its budget escalated
+  // and they read the dossier — the engine never infers it and has no default for it.
+  const policy = { maxFixRounds: MAX_FIX_ROUNDS, redRepairs: MAX_RED_CONTRACT_REPAIRS, greenRetries: MAX_GREEN_RETRIES, reviewers: PIPELINE.reviewers, ...(story.rollbackTo ? { rollbackTo: story.rollbackTo } : {}) }
+  const inputs = effectiveInputs(story)
+  const storyMetrics = { dispatches: 0, retries: 0, redirects: 0 }
+  const common = () =>
+    `$run=${runId} $story=${story.id} $branch=${story.branch} $worktree=${worktreePath} $base=${storyBase} $stacked=${stacked}${pr ? ` $pr=${pr}` : ''} $entry=${pr ? 'pr' : 'fresh'} $policy=${JSON.stringify(policy)} $inputs=${inputs}`
+  const invoke = (skill, args) =>
+    `Invoke **${skill}** for story ${tag} with ${args} $workflowVersion=${WORKFLOW_VERSION}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines — its Step 0 resolves the durable cycle state and returns \`{ status: "redirect", next }\` when another step is due, spending no judgment. Do NOT read ${BLIND_PATHS} except the checkpoint and the run directory \`${runDir()}/\` the skill names; that directory lives in the MAIN checkout — the working directory you were started in, before any cd — never inside a story or review worktree. Do NOT merge.`
+  const notesArg = () => (story.notes ? ` $notes=${JSON.stringify(story.notes)}` : '')
+  const findingsArg = list => (list && list.length ? ` $findings=${JSON.stringify(list.map(compactFinding))}` : '')
+
+  // Findings carried to the merge gate unfixed — by-design, human-dispositioned or below the floor —
+  // accumulate across rounds and runs; never reassigned.
   const accepted = []
-  // De-dup key: a re-review repeating a sub-floor finding nobody was asked to fix is the norm, and
-  // one finding must occupy one row of the accepted table, not one row per round it survived.
   const acceptedKeys = new Set()
-  const accept = (findings) => {
+  const accept = findings => {
     for (const f of findings) {
-      const key = `${f.location ?? ''} ${f.description ?? ''}`
+      // The delimiter is spelled as an ESCAPE, never a raw byte: the Workflow harness refuses a script
+      // carrying control characters (they would be hidden in its approval dialog), so a raw NUL makes
+      // the whole workflow undispatchable — measured on canary run 11.
+      const key = `${f.id ?? ''}\u0000${f.location ?? ''}\u0000${f.description ?? ''}`
       if (acceptedKeys.has(key)) continue
       acceptedKeys.add(key)
       accepted.push(f)
     }
   }
-  // #373: `cycleHasRemediation` tracks whether THIS CYCLE (across all runs it spans) has
-  // any remediation state to synthesize — not merely whether a fix happened this run. On a
-  // continuation (log present) it is seeded true so an immediate round-0 convergence still
-  // posts the ONE final synthesis + deletes the log (never leaves an escalate-flush as the
-  // last word). A converged-but-unmerged re-run has NO log (firstReviewPosted true,
-  // isContinuation false) → stays false, so a clean round-0 adds nothing and never tries to
-  // synth a deleted log. A fresh cycle starts false, so a clean first review stands alone (AC6).
-  let cycleHasRemediation = isContinuation
-  while (true) {
-    // #373: round-0 is the FIRST (posted) review ONLY on a genuinely fresh cycle — no
-    // in-flight log AND no first-review comment already on the PR. Either signal makes
-    // round-0 a SILENT re-review, so a PR never accrues a second first-review.
-    const first = round === 0 && !isContinuation && !firstReviewPosted
-    const review = await agentRetry(
-      `Independently review PR #${pr.prNumber} for story ${tag}, following ${SK.review}. ${revWtClause(story)} PACING (mandatory — this is what killed the previous four attempts at this review, measured): a supervisor kills any agent that goes 180 seconds without emitting a TEXT MESSAGE. Tool calls do NOT count as progress: the last stalled reviewer was calling \`sed\`/\`cat\` every ~5 seconds and was still killed, because it had not written a sentence in 200 seconds. So: after EVERY file you inspect, write ONE SHORT LINE of prose saying what you found or that it is clean — before moving to the next file. Never read two files in a row without speaking in between, and never go into a long silent analysis pass. Start by listing the changed files (\`git diff ${baseOf(story)}...origin/${story.branch} --name-only\`), say aloud the order you will take them, then go file by file, narrating as you go. Brevity is fine — one line is enough — but silence is fatal. Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read ${BLIND_PATHS}, nor any checkpoint, handoff or working log under them — they are the author's private context and this review is independent and blind to it. Report EVERY finding regardless of severity (including minor/nit), using the ${REVIEW_TEMPLATE_LABEL} vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (the CONCRETE FAILURE CASE — inputs/state -> wrong output — not a retelling of the diff), \`recommendation\` (the change, in one or two lines); verdict ∈ {${VERDICTS}}. ${TEXT_SHAPE} DO NOT FILE NEW ISSUES. This is a hard rule, and it overrides any habit of deferring work to a follow-up card: a debt you find in this diff is resolved IN PLACE, in this same PR, within this story's scope. Never invoke ${SK.writeIssue}, never write \`Deferred to #<new>\`, and never recommend "track this separately" — a finding parked in a fresh card is a finding nobody fixes, and it converts a reviewed PR into an unreviewed backlog. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG — byte-consistent with a source of truth, matching an existing convention, an ALREADY-EXISTING tracked story (cite its number; do not create one), or something that can only resolve after merge. Being outside this story's originally stated scope is NOT a reason: fix it here. Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` with a concrete reason replacing the bare label (\`By convention …\` / \`Historical record\` / \`Already tracked in #<existing>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. If a finding is SO large that fixing it here would genuinely swamp the story, say so explicitly in \`description\` and leave it ACTIONABLE — the human decides at the merge gate whether to accept the bigger PR or carve it out; that decision is not yours to pre-empt by filing a card. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (${REVIEW_TEMPLATE_LABEL} structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : prevFindings.length
-            ? `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only. Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.`
-            : `This is a RE-REVIEW on a resumed in-flight cycle (round-0 of this run carries no prior findings): do a FRESH, independent full review pass. do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only.`} Return findings and a verdict.`,
-      // effort was 'xhigh'. The measured cause of the repeated kills was NOT effort and NOT a
-      // stuck command: transcript timing showed the reviewer issuing a tool call every ~5s
-      // (97 events, mean gap 4.9s, max 49s — zero gaps over 180s) yet still killed, because
-      // the supervisor's window measures TEXT MESSAGES, not tool calls, and the agent had gone
-      // 200s without writing a sentence while reading files. The real fix is the PACING clause
-      // in the prompt (speak after every file). 'high' is kept only as margin — a lower effort
-      // shortens the silent stretches between utterances — so if a future change makes the
-      // narration reliable, restoring 'xhigh' is legitimate: it costs review depth, which is
-      // the whole point of this gate. Do not read this line as "xhigh causes stalls".
-      withModel({ agentType: 'pair-reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'high', schema: REVIEW_SCHEMA }),
-      // A review is USABLE only if it carries a verdict — the same predicate the guard below
-      // converges on. Without it the retry covered the dead reviewer (`null`) and skipped the
-      // contentless one (`{}`), which is the shape actually measured on #432.
-      hasVerdict,
-    )
-    // A DEAD reviewer is not a clean review. `agent()` returns null when the subagent
-    // dies, and `review?.findings ?? []` then yields zero findings — which the
-    // convergence test below reads as "nothing actionable remains" and returns
-    // `ready-for-merge`. That is the worst possible failure direction: a PR that was
-    // never actually reviewed is handed to the human labelled as review-approved, and
-    // on a FIRST round it is also missing the first-review comment that would make the
-    // absence visible. Distinguish "reviewed, found nothing" from "did not review":
-    // only the former may converge.
-    //
-    // MEASURED (#432): checking only for `null` was not enough. Every reviewer agent died —
-    // the machine slept mid-response — the PR carried zero comments and zero reviews, and the
-    // batch still returned `ready-for-merge`. A truthy-but-contentless return (`{}`, a
-    // truncated structured output) yields `findings ?? []` = no findings, which reads as
-    // "nothing actionable remains".
-    //
-    // So the test is inverted: a VERDICT must be present. Absence of findings is not evidence
-    // that a review happened; presence of a verdict is. Every real review emits one — it is a
-    // required field of the contract schema — so this costs a genuine clean review nothing.
-    // `hasVerdict` is the SAME function `agentRetry` was given above: the contentless return is
-    // retried once like any other dead step, and only then does it land here.
-    if (!hasVerdict(review))
-      // `acceptedFindings` travels on EVERY terminal arm, this one included. A card whose
-      // reviewer dies mid-cycle otherwise reports the by-design and below-floor findings of
-      // every earlier round as if none had been raised — and those are precisely the findings
-      // the fixer never receives, so they are recoverable from nowhere else. AC4 says an
-      // accepted finding always reaches the human; a failure is not an exception to that.
-      return { story, prNumber: pr.prNumber, status: 'failed-review', round, acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
-    const findings = review.findings ?? []
-    const allActionable = findings.filter((f) => !f.nonActionable)
-    // Below the floor: still reported, still shown to the human, just not blocking. Marked
-    // with a disposition so the merge gate can tell "we chose not to block on this" from
-    // "the reviewer judged it by-design", which are different statements.
-    // ONE predicate, two buckets — not two independent filters. `< floor` and `>= floor` are
-    // both false for a rank that is not a number (NaN, or an inherited prototype value before
-    // `Object.hasOwn` above), so the two-filter form was NOT total: such a finding landed in
-    // neither set and was recorded nowhere — not blocking, not even in `acceptedFindings`,
-    // which AC4 says never happens (#432 review round 7). Partitioning on the single
-    // below-floor test makes the complement the actionable set by construction: anything the
-    // test cannot answer YES for blocks, which is also the safe direction.
-    const belowFloor = []
-    const actionable = []
-    for (const f of allActionable)
-      (SEVERITY_FLOOR && rankOf(f.severity) < SEVERITY_FLOOR.rank ? belowFloor : actionable).push(f)
-    accept([
-      ...findings.filter((f) => f.nonActionable),
-      ...belowFloor.map((f) => ({ ...f, disposition: f.disposition || `Below severity floor (${SEVERITY_FLOOR.name}) — carried to the merge gate unfixed` })),
-    ])
-    if (belowFloor.length)
-      log(`${tag} r${round}: ${belowFloor.length} finding(s) below the ${SEVERITY_FLOOR.name} floor carried to the gate, ${actionable.length} blocking`)
-    // Converge once nothing actionable remains (by-design findings don't block).
-    if (actionable.length === 0) break
-    // `needsHumanDecision` used to escalate IMMEDIATELY, skipping the fixer entirely — even
-    // when the findings were ordinary and already decided. Measured cost: four consecutive
-    // rounds on one story and two on another produced review after review and ZERO commits,
-    // because the reviewer raised the flag and the loop went straight to the flush. The
-    // orchestrator was writing detailed fix instructions for an agent that was never invoked.
-    //
-    // A reviewer raising it is saying "one of these needs a human", not "none of these can be
-    // fixed". So spend ONE fix round on the findings first, then escalate if the reviewer
-    // still says so. `humanDecisionPending` remembers the request across that round, so the
-    // escalation still happens — it is deferred by one round, not dropped. On the second
-    // occurrence we stop: a flag raised again after a fix round is a genuine disagreement.
-    const wantsHuman = review?.needsHumanDecision === true
-    if (wantsHuman && !humanDecisionPending && round < MAX_FIX_ROUNDS) {
-      humanDecisionPending = true
-      log(`${tag} r${round}: reviewer asked for a human decision — spending one fix round on the ${actionable.length} finding(s) first, then escalating if it still stands`)
-    } else if (round >= MAX_FIX_ROUNDS || wantsHuman) {
-      // #373 finding 1: emit a PR-visible escalation UNLESS this run's round-0 ALREADY posted
-      // the first review (`first === true`) carrying these same findings. The gap this closes:
-      // a SILENT re-review that escalates with no log — a resumed PR whose prior first review
-      // exists but whose untracked working log was never written / was pruned (firstReviewPosted
-      // true, isContinuation false → cycleHasRemediation false, first false). Without the `!first`
-      // arm the new blocking concern surfaced ONLY in the batch return value and a later resume
-      // repeated the silent escalation. The log read is BEST-EFFORT: only a continuing cycle
-      // (cycleHasRemediation) has a log to anchor to; the no-log arm escalates from inline findings.
-      if (cycleHasRemediation || !first) {
-        const logClause = cycleHasRemediation
-          ? `Read the review log \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN `
-          : `No prior review working log exists (a re-review on a resumed PR whose log was never written or was pruned) — escalate from the inline findings directly. ${flushMinimize(pr.prNumber)} `
-        await agent(
-          `Story ${tag}: the review<->fix loop is escalating to a human (non-convergence or a design disagreement). ${wtClause(story)} ${logClause}post ONE fresh comment on PR #${pr.prNumber} — written as a response to the first code-review comment — summarizing${cycleHasRemediation ? ' the rounds so far (per finding: what was attempted + current state) and' : ''} the still-open actionable findings: ${JSON.stringify(actionable)}.${cycleHasRemediation ? ' Do NOT delete the log — it is the continuation anchor for this cycle.' : ''} Do NOT merge.`,
-          { agentType: 'pair-implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
-        )
-      }
-      return { story, prNumber: pr.prNumber, status: 'escalate', findings: actionable, acceptedFindings: accepted }
-    }
-
-    round++
-    prevFindings = actionable
-    cycleHasRemediation = true
-    // FIX — implementer resumes checkpoint (if present) + resolves actionable findings.
-    // Logs the round to the working review log INSTEAD of posting a per-round PR comment.
-    const fix = await agentRetry(
-      `Resume story ${tag}. ${wtClause(story)} Read the checkpoint if present (${SK.checkpoint} $mode=resume); otherwise work from the PR diff + code. Resolve EVERY one of these actionable review findings on PR #${pr.prNumber} — including minor/nit, do not defer any: ${JSON.stringify(prevFindings)}. Fix them IN PLACE, in this PR: do NOT file a follow-up issue for any of them, do NOT invoke ${SK.writeIssue}, and do NOT leave a "tracked separately" note in lieu of the fix. If a finding turns out to be genuinely larger than this story, still fix what belongs here and say plainly in the working log what remains — the human decides at the merge gate, not a new card. Follow ${SK.implement} for the change itself (test-first where a finding describes a defect), verify with ${SK.verifyQuality} (tier-resolved — do not improvise a gate command), and record any decision a finding forces with ${SK.recordDecision}. Commit and push. Then re-invoke **${SK.publishPr}**: it is create-or-update and idempotent, and re-running it is what keeps the PR body, the classification tags and the \`pr-state:*\` label in sync with the NEW head commit instead of describing the pre-fix state. As in the open-PR step it will emit \`Review: review-dispatch-required\` rather than nesting — expected: this orchestrator drives the re-review. ${TEXT_SHAPE} Re-running it REWRITES the PR body, and this is the only step that does so once a cycle is under way: rewrite it to describe the CURRENT head, do not append a round-by-round history — a body that grows by one section per fix round is re-read in full by every later reviewer of this same cycle. Do NOT post a remediation PR comment; INSTEAD append this round to the working log \`${reviewLog}\` (create it if absent) as a COMPACT TABLE under a \`## Round N\` heading — one row per finding, columns \`severity | location | what changed | commit\`. One row, one line: no paragraph per finding, and do not restate the finding's description (its location identifies it). Add prose ONLY where a fix diverged from the recommendation, and then only the reason. Only for a genuine design disagreement set needsHumanDecision instead of forcing a fix. Do NOT merge.`,
-      withModel({ agentType: 'pair-implementer', phase: 'Review', label: `fix:${tag} r${round}`, effort: 'high', schema: FIX_SCHEMA }),
-    )
-    // failed-fix: the fixer died mid-round; a partial working log may exist. Surface
-    // its path in the return so the human / next resume can find (and clean) it.
-    // Same rule as `failed-review` above: whatever was accepted before the death still travels.
-    if (!fix) return { story, prNumber: pr.prNumber, status: 'failed-fix', acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
-    if (fix.needsHumanDecision) {
-      // No guard here: reaching this line means the fix round above already ran, which set
-      // `cycleHasRemediation = true` AND had the fixer append this round to the working log.
-      // So the log always exists and the flush always fires — there is no no-log arm (unlike
-      // the MAX_FIX_ROUNDS escalation at the top of the loop, whose `cycleHasRemediation || !first`
-      // guard IS load-bearing because that path can be reached on a silent round-0 re-review).
-      await agent(
-        `Story ${tag}: escalating a design disagreement to a human. ${wtClause(story)} Read \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN post ONE fresh comment on PR #${pr.prNumber} (response to the first review) summarizing the remediation rounds so far, the still-open findings (${JSON.stringify(prevFindings)}) and the open decision. Do NOT delete the log — it is the continuation anchor for this cycle. Do NOT merge.`,
-        { agentType: 'pair-implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
-      )
-      return { story, prNumber: pr.prNumber, status: 'escalate', findings: prevFindings, acceptedFindings: accepted }
-    }
+  // US-479 T-26: a bare path reference, not a claim of durable evidence (an untracked local path
+  // alone is not proof, S8) — the actual metrics.json/metrics.md are written by cycle-runtime.mjs
+  // (RUNTIME) on the host; this sandbox has no filesystem to confirm they exist.
+  const result = (status, extra = {}) => ({ story, prNumber: pr ?? undefined, status, acceptedFindings: accepted, metrics: { ...storyMetrics, wallMs: 'unknown', tokens: 'unknown' }, metricsRef: `${runDir()}/metrics.json`, ...extra })
+  // US-479 remediation (Finding 1): NO capsule-based shortcut here. `ENTRY_CAPSULES[story.id]` is
+  // accepted and schema-validated at parse time (S1) but is deliberately UNUSED for control flow —
+  // this sandbox cannot confirm its claim, and a self-consistent capsule is not proof (an
+  // unapproved verdict, a fabricated `run`, or a stale head all passed the old shape check). Every
+  // story dispatches normally; the dispatched phase's own `resolve()` is the only real authority.
+  const blockedResult = n => {
+    // US-479 T-22 (S5) / ADR-024 amendment 2026-09-10: the four new non-ready statuses pass
+    // through unmapped — never silently coerced to failed-resume, which would make a clean
+    // technical convergence with pending scope proposals look like an engine failure.
+    const map = { 'failed-preparation': 'failed-preparation', 'failed-contract': 'failed-contract', 'failed-seal': 'failed-seal', 'failed-implement': 'failed-implement', 'failed-fix': 'failed-fix', 'failed-custody': 'failed-custody', escalate: 'escalate', 'failed-resume': 'failed-resume', 'awaiting-scope-decision': 'awaiting-scope-decision', 'failed-publication': 'failed-publication', interrupted: 'interrupted', abandoned: 'abandoned' }
+    return result(map[n.reason] ?? 'failed-resume', { reason: n.detail ?? n.reason, budget: n.budget, refusal: n.refusal, findings: n.findings ?? n.rejection, phase: n.phase })
   }
 
-  // Converged. If any remediation happened (this run OR a prior run this cycle continues),
-  // post ONE synthesized remediation comment (contextual to the first review), minimize any
-  // prior intermediate comments, and delete the working log. If the first review was already
-  // clean (fresh cycle, no remediation), the first-review comment stands alone — nothing to do.
-  if (cycleHasRemediation)
-    await agent(
-      `Story ${tag} converged: the latest independent re-review found zero actionable findings. ${wtClause(story)} Read the review log \`${reviewLog}\` — it may span MULTIPLE runs / escalations / manual rounds of this ONE cycle. Post ONE remediation comment on PR #${pr.prNumber}, written as a direct RESPONSE to the first code-review comment: render EVERY finding recorded across ALL runs in the log (plus any surfaced during remediation) as ONE MARKDOWN TABLE — columns \`round | severity | location | resolution | commit\` — one row per finding, one line per row. Then a second short table for the accepted/non-actionable findings and their dispositions (${JSON.stringify(accepted)}), and the final verdict (review clean) as a single line. ${TEXT_SHAPE} This comment is the merge-gate reader's entire view of the cycle, so it must stay COMPLETE — no finding dropped, no silent truncation; if one does not fit a row, give it a single line beneath the table. THEN minimize / mark-outdated any prior intermediate PR comments on #${pr.prNumber} — earlier escalate-flush comments, any manual out-of-band rework/re-review comments, AND any earlier final-remediation/synthesis comment left by a prior convergence of this same cycle (a converged-but-unmerged PR that was re-run, found new findings and re-converged — do NOT minimize the first review comment) — so that ONLY the first review comment and this one final remediation remain as the visible current state (if there are none to minimize, that step is a no-op). This single comment IS the durable audit of the ENTIRE review<->fix cycle across every run. Then DELETE \`${reviewLog}\`. Do NOT merge.`,
-      { agentType: 'pair-implementer', phase: 'Review', label: `synth:${tag}`, model: 'sonnet', effort: 'medium' },
+  // ── The four stages, each a SKILL invoked by name with typed arguments ─────────────────────
+  const prepare = n =>
+    agentRetry(
+      invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${n.changedRows?.length ? ` $changedRows=${JSON.stringify(n.changedRows)}` : ''}${n.contradictionFor ? ` $contradictionFor=${JSON.stringify(n.contradictionFor)}` : ''}${n.revalidate?.length ? ` $revalidate=${JSON.stringify(n.revalidate)}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${n.regressionRepairOf ? ` $regressionRepairOf=${n.regressionRepairOf}` : ''}${n.reconstruct ? ` $reconstruct=${JSON.stringify(n.reconstruct)}` : ''}${n.predecessorRunId ? ` $predecessorRun=${JSON.stringify({ runId: n.predecessorRunId, phase: n.predecessorPhase })}` : ''}${notesArg()}`),
+      withModel('red', { agentType: 'pair-fix-test-author', phase: 'Prepare', label: `prepare:${tag} ${n.phase}${n.mode === 'repair' ? ' repair' : n.mode === 'revision' ? ' revision' : ''}`, effort: 'high', schema: PREPARE_SCHEMA }),
+      r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || isContradiction(r) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && !n.group, ids: (n.findings ?? []).map(f => f.id), mode: n.mode }),
+    )
+  const validate = n =>
+    agentRetry(
+      invoke(SK.redVerify, `${common()} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''} $head=${n.base} $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths })}` : ''}`),
+      withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Validate', label: `validate:${tag} ${n.phase}`, effort: 'high', schema: VALIDATE_SCHEMA }),
+      r => isRedirect(r) || isOtherRun(r) || hasValidation(r),
+    )
+  const implement = n =>
+    agentRetry(
+      invoke(SK.implementPhase, `${common()} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt ?? 1} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)} $title=${JSON.stringify(story.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg()}`),
+      withModel('implementation', { agentType: 'pair-implementer', phase: 'Implement', label: `implement:${tag}${(n.attempt ?? 1) > 1 ? ` attempt ${n.attempt}` : ''}`, effort: 'high', schema: IMPLEMENT_SCHEMA }),
+      r => isRedirect(r) || isOtherRun(r) || (!!r && (r.status === 'ok' || r.status === 'failed') && typeof r.gatesPassed === 'boolean'),
+    )
+  const green = n =>
+    agentRetry(
+      invoke(SK.greenFix, `${common()} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}${findingsArg(n.findings)}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $writeIssue=${SK.writeIssue}${notesArg()}`),
+      withModel('green', { agentType: 'pair-implementer', phase: 'Implement', label: `green:${tag} ${n.phase}${n.attempt > 1 ? ` attempt ${n.attempt}` : ''}`, effort: 'high', schema: GREEN_SCHEMA }),
+      r => isRedirect(r) || isOtherRun(r) || hasGreen(r),
+    )
+  const verify = (n, required) =>
+    agentRetry(
+      invoke(
+        SK.reviewPhase,
+        `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}`,
+      ),
+      withModel('reviewer', { agentType: 'pair-reviewer', phase: 'Verify', label: `verify:${tag} ${n.phase}${n.reviewer > 1 ? ` reviewer ${n.reviewer}` : ''}`, effort: 'high', schema: VERIFY_SCHEMA }),
+      r => isRedirect(r) || isOtherRun(r) || hasReviewEvidence(r),
     )
 
-  // STOP at the merge boundary — human decides the merge.
-  return { story, prNumber: pr.prNumber, status: 'ready-for-merge', acceptedFindings: accepted }
+  // Verified P3 evidence a card carries in: the verifier must re-prove it on its exact head and it
+  // stays out of the verifier's independent sample otherwise. Injected once.
+  let pendingRequiredFindings = [...(story.requiredFindings ?? [])]
+  // Prior findings by id, for the identity/severity checks the coordinator makes on a re-review.
+  const known = new Map()
+
+  // The verifier applied the SAME severity policy this file holds: re-derive `blocking` from the
+  // floor and refuse a result that disagrees — a policy applied twice must agree, or fail closed.
+  const expectedBlocking = f => !f.nonActionable && f.transition !== 'resolved' && f.transition !== 'human' && f.kind !== 'question' && (!SEVERITY_FLOOR || rankOf(f.severity) >= SEVERITY_FLOOR.rank)
+  // The FIRST review of a PR-entry cycle reads the PR's earlier reviews (ids are stable across
+  // rounds AND cycles): a finding this run has never seen may arrive resolved/superseded as HISTORY,
+  // non-blocking and with read-back evidence — never as an invented closure (canary v4, run 14).
+  const findingErrors = (review, openIds, { history = false } = {}) => {
+    const errs = []
+    const ids = new Set()
+    for (const f of review.findings) {
+      if (!f || typeof f !== 'object') return ['a finding is not an object']
+      if (!FINDING_ID_RE.test(String(f.id ?? ''))) errs.push(`finding id ${JSON.stringify(f.id)} is not r<round>[-<reviewer>]-<n>`)
+      if (ids.has(f.id)) errs.push(`finding id ${f.id} is duplicated`)
+      ids.add(f.id)
+      if (!TRANSITIONS.has(f.transition)) errs.push(`finding ${f.id}: transition ${JSON.stringify(f.transition)} is not open | resolved | superseded | human`)
+      if (!KINDS.has(f.kind)) errs.push(`finding ${f.id}: kind ${JSON.stringify(f.kind)} is unknown`)
+      if (typeof f.blocking !== 'boolean') errs.push(`finding ${f.id}: blocking is not a boolean`)
+      else if (f.blocking !== expectedBlocking(f)) errs.push(`finding ${f.id}: blocking=${f.blocking} disagrees with the severity policy (floor ${SEVERITY_FLOOR?.name ?? 'none'}, severity ${f.severity}, transition ${f.transition})`)
+      if (f.external === true && f.transition === 'resolved' && !String(f.evidence ?? '').trim()) errs.push(`finding ${f.id}: an external finding is resolved only with read-back evidence`)
+      const prior = known.get(f.id)
+      if (prior && normSeverity(prior.severity) !== normSeverity(f.severity) && !String(f.severityEvidence ?? '').trim()) errs.push(`finding ${f.id}: severity changed ${prior.severity} -> ${f.severity} without severityEvidence`)
+      const carriedHistory = history && (f.transition === 'resolved' || f.transition === 'superseded') && f.blocking === false && !!String(f.evidence ?? '').trim()
+      if (!prior && f.transition !== 'open' && !carriedHistory) errs.push(`finding ${f.id}: a new finding cannot arrive as ${f.transition}${history && f.transition !== 'open' ? ' (history needs read-back evidence and blocking=false)' : ''}`)
+    }
+    for (const id of openIds ?? []) if (!ids.has(id)) errs.push(`prior open finding ${id} was dropped — every open finding needs a transition`)
+    return errs
+  }
+
+  let next = resuming ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
+  const seen = new Set()
+  let redirectsInARow = 0
+  while (true) {
+    if (next.step === 'done') return result('ready-for-merge', { reviewedHead: next.reviewedHead, verdict: next.verdict, round: next.round })
+    if (next.step === 'blocked') return blockedResult(next)
+    if (storyMetrics.dispatches >= MAX_DISPATCHES_PER_STORY) return result('failed-resume', { reason: `the cycle asked for more than ${MAX_DISPATCHES_PER_STORY} dispatches in one run — looping, not converging` })
+    const key = `${next.step}:${next.phase}:${next.mode ?? ''}:${next.attempt ?? 1}:${next.reviewer ?? 1}`
+    if (seen.has(key)) return result('failed-resume', { reason: `the cycle state asked for ${key} twice in one run` })
+    seen.add(key)
+    let res
+    let stage = next.step
+    // The PR binds the markers, the run-directory identity and the publication. A cycle state that
+    // names it (any `next.pr`) binds it here; a verification or a fix dispatched without it would key
+    // its comments on `PR#null` — refused, never dispatched (canary run 11, finding r1-5).
+    if (isPosInt(next.pr)) pr = next.pr
+    if ((stage === 'verify' || stage === 'green') && !isPosInt(pr)) return result('failed-resume', { reason: `${stage} needs the PR number and neither the card nor the cycle state named it`, phase: next.phase })
+    // US-479 (u): the directive's lifetime belongs to the maintainer, so every DISPATCH that carries
+    // one reports it — here, before the dispatch, so the report cannot be lost to a redirect, a
+    // refusal or any later branch. The workflow no longer infers whether their decision was carried
+    // out: four rounds of proxies for that fact each failed one staging beyond the last. What it
+    // owes instead is legibility — a directive still standing on a later rewind is visible in the
+    // run log, attributable to the policy that still names it, and cleared by the person who set it.
+    // Silence is what kept three of those four rounds invisible.
+    if (next.reconstruct?.fromHead)
+      log(`${tag} ${next.phase}: rollback directive delivered — restoring ${next.reconstruct.paths.join(', ')} at ${next.reconstruct.fromHead}. It stands until \`rollbackTo\` is cleared from the policy.`)
+    if (stage === 'prepare') res = await prepare(next)
+    else if (stage === 'validate') res = await validate(next)
+    else if (stage === 'implement') res = await implement(next)
+    else if (stage === 'green') res = await green(next)
+    else {
+      // Seed the finding memory from the durable state before judging the verifier's transitions.
+      for (const f of next.priorFindings ?? []) if (f && FINDING_ID_RE.test(String(f.id ?? '')) && !known.has(f.id)) known.set(f.id, { severity: f.severity })
+      const required = pendingRequiredFindings
+      res = await verify(next, required)
+    }
+    storyMetrics.dispatches = METRICS.dispatches.filter(d => d.label.includes(tag)).length
+    storyMetrics.retries = METRICS.dispatches.filter(d => d.label.includes(tag) && d.retry).length
+    // Twice dead (null, or a shape no stage can use) is the STAGE's failure — never a clean result.
+    if (!res || typeof res !== 'object')
+      return result({ prepare: 'failed-preparation', validate: 'failed-contract', implement: 'failed-implement', green: 'failed-fix', verify: 'failed-verify' }[stage], { reason: `${stage} returned nothing usable twice (agent died or returned an invalid shape)`, phase: next.phase })
+    if (isOtherRun(res)) {
+      // The PR already has a cycle under another run id: continue THERE. Re-dispatch the same step
+      // once with the adopted run id; a second `other-run` is an ambiguity the caller resolves.
+      if (runId === res.runId) return result('failed-resume', { reason: `the cycle state named the current run ${runId} as another run` })
+      log(`${tag}: cycle already lives under run ${res.runId} — continuing there`)
+      runId = res.runId
+      seen.delete(key)
+      continue
+    }
+    if (isRedirect(res)) {
+      const defect = nextDefect(res.next)
+      if (defect) return result('failed-resume', { reason: `${stage} redirected to an unusable next step: ${defect}`, phase: next.phase })
+      if (isPosInt(res.next?.pr)) pr = res.next.pr
+      // A stage that redirects to the very step it was dispatched for did not do its work: refuse
+      // to loop on it, and say so.
+      if (res.next.step === next.step && res.next.phase === next.phase) return result('failed-resume', { reason: `${stage} redirected to itself (${next.step}/${next.phase}) instead of running`, phase: next.phase })
+      storyMetrics.redirects++
+      METRICS.redirects++
+      if (++redirectsInARow > 2) return result('failed-resume', { reason: 'three consecutive redirects — the durable state and the dispatched step disagree' })
+      next = res.next
+      continue
+    }
+    redirectsInARow = 0
+    // ── Stage-specific validation of the typed evidence ─────────────────────────────────────
+    if (stage === 'prepare') {
+      // US-479 DR3-03: a rollback the state authority refused must STOP the run, before anything
+      // else in this branch. It used to be computed and dropped, so a maintainer who mistyped a head
+      // got an ordinary patch-forward run and never learned their directive had been discarded.
+      if (next.rollbackRefusal) return result('failed-preparation', { reason: `rollback refused: ${next.rollbackRefusal}`, phase: next.phase })
+      if (isPrepareRefusal(res)) return result('failed-preparation', { reason: res.reason ?? res.splitReason ?? res.status, refusal: res.status, phase: next.phase, findings: next.findings })
+      if (isContradiction(res)) {
+        const defect = contradictionDefect(res)
+        if (defect) return result('failed-preparation', { reason: `contradiction evidence is incomplete: ${defect}`, refusal: 'contradiction', phase: next.phase, findings: next.findings })
+        log(`${tag} ${next.phase}: the obligation contradicts sealed rows ${res.conflictingRowIds.join(', ')} of ${res.predecessorContractHash} — the cycle state routes the successor revision`)
+      } else
+      // US-479 DR-04: the batch plan is owed by the preparation that PLANS the round — the one
+      // dispatched with no `$scope` — never by a phase that happens to end in `-g1`. After F-RR-05 a
+      // regression repair lands on the DERIVED producing group, so keying on the number demanded a
+      // plan red-spec's own contract says it does not produce when handed a scope.
+      if (!hasPreparedContract(res, { needPlan: next.mode === 'remediation' && !next.group, ids: (next.findings ?? []).map(f => f.id), mode: next.mode })) return result('failed-preparation', { reason: 'the preparation stage returned no usable contract', phase: next.phase })
+      if (next.mode === 'remediation' && res.plan) {
+        const carried = (res.plan.carried ?? []).map(c => ({ ...(next.findings ?? []).find(f => f.id === c.finding), external: true, disposition: `Outside the repository — ${c.disposition}` }))
+        // Carried is a LOCATION, not acceptance: the finding stays blocking for the verifier; here it
+        // is only recorded so the merge-gate reader sees where it lives.
+        if (carried.length) log(`${tag} ${next.phase}: ${carried.length} finding(s) located outside the repository — they stay blocking until dispositioned by a human`)
+      }
+    } else if (stage === 'validate') {
+      if (!hasValidation(res)) return result('failed-contract', { reason: 'the validation stage returned no usable verdict', phase: next.phase })
+      // US-479 F-RR-03 (S12/AC-30): the independent verifier must have validated EXACTLY the guard
+      // set the resolver derived — one missing, one extra or one renamed and the contract is
+      // incomplete, before the seal is trusted by anybody downstream.
+      if (next.regressionRisks?.length) {
+        const expected = [...new Set(next.regressionRisks.map(r => String(r.riskId)))].sort()
+        const echoed = [...new Set((Array.isArray(res.regressionGuards) ? res.regressionGuards : []).map(String))].sort()
+        if (expected.length !== echoed.length || expected.some((id, i) => id !== echoed[i]))
+          return result('failed-contract', { reason: `contract-incomplete:${next.phase}:regression-guards (expected ${expected.join(', ') || 'none'}, validated ${echoed.join(', ') || 'none'})`, phase: next.phase })
+      }
+      if (res.verified === true && !hasSeal(res)) return result('failed-seal', { reason: res.reason ?? 'the contract was verified but not sealed', phase: next.phase })
+      if (res.verified === true && res.contractHash && res.contractHash !== next.contract.hash) return result('failed-seal', { reason: `the sealed contract hash ${res.contractHash} is not the prepared ${next.contract.hash}`, phase: next.phase })
+    } else if (stage === 'implement') {
+      if (res.status !== 'ok') return result('failed-implement', { reason: res.reason ?? 'implementation reported failure', phase: next.phase })
+      if (!isPosInt(res.prNumber) || !SHA40.test(String(res.outputHead ?? ''))) return result('failed-implement', { reason: 'implementation returned no PR number or head', phase: next.phase })
+      pr = res.prNumber
+      // A red gate is not a green implementation: the durable state routes it back to implement
+      // on the same seal (once) or blocks it — it never reaches the verifier as `ok`.
+      if (res.gatesPassed !== true) {
+        log(`${tag} ${next.phase}: implementation published ${res.outputHead} but the gate is RED — the cycle state decides the retry`)
+        if (!usableNext(res.next) || res.next.step === 'verify') return result('failed-implement', { reason: 'the gate is red and the cycle state offered no retry', phase: next.phase })
+      }
+    } else if (stage === 'green') {
+      if (res.needsHumanDecision === true) return result('escalate', { reason: res.reason ?? 'the fixer asked for a human decision', phase: next.phase, findings: next.findings })
+      if (res.fixed !== true) return result('failed-fix', { reason: res.reason ?? 'the fix did not make the contract pass', phase: next.phase, findings: next.findings })
+    } else {
+      // verify
+      if (!hasReviewEvidence(res)) return result('failed-verify', { reason: 'the final verifier returned no verdict, head, custody or readiness', phase: next.phase })
+      const reviewedHead = String(res.reviewedHead).toLowerCase()
+      const staleRequired = pendingRequiredFindings.filter(f => f.observedHead !== reviewedHead)
+      if (staleRequired.length) return result('failed-verify', { reason: 'required findings were measured on a different head', findings: staleRequired })
+      pendingRequiredFindings = []
+      const errs = findingErrors(res, next.openIds, { history: resuming && next.mode === 'first' })
+      if (errs.length) return result('failed-verify', { reason: errs.join('; '), phase: next.phase })
+      // US-479 V2 (F-RR-03): exact set equality at the fourth boundary too — a guard the review did
+      // not execute cannot be discharged by it, and one it invented is not in the ledger.
+      if (next.regressionRisks?.length) {
+        const expected = [...new Set(next.regressionRisks.map(r => String(r.riskId)))].sort()
+        const executed = [...new Set((Array.isArray(res.regressionGuards) ? res.regressionGuards : []).map(String))].sort()
+        if (expected.length !== executed.length || expected.some((id, i) => id !== executed[i]))
+          return result('failed-verify', { reason: `contract-incomplete:${next.phase}:regression-guards (expected ${expected.join(', ') || 'none'}, executed ${executed.join(', ') || 'none'})`, phase: next.phase })
+      }
+      for (const f of res.findings) known.set(f.id, f)
+      accept(res.findings.filter(f => !f.blocking && f.transition !== 'resolved').map(f => ({ ...compactFinding(f), disposition: f.disposition || (f.nonActionable ? 'By design (see description)' : f.transition === 'human' ? 'Human disposition' : f.kind === 'question' ? 'Question for the human' : `Below severity floor (${SEVERITY_FLOOR?.name}) — carried to the merge gate unfixed`) })))
+      if (res.custody.contractBreach === true) return result('failed-custody', { reason: 'GREEN escaped its sealed contract', findings: res.custody.breaches ?? [], phase: next.phase })
+      const blocking = res.findings.filter(f => f.blocking)
+      if (res.partial !== true) log(`${tag} ${next.phase}: ${res.findings.length} finding(s), ${blocking.length} blocking${res.published?.firstReview ? ', first review posted' : ''}${res.published?.synthesis ? ', synthesis published' : ''}`)
+    }
+    if (!usableNext(res.next)) return result('failed-resume', { reason: `${stage} returned no usable next step: ${nextDefect(res.next)}`, phase: next.phase })
+    // A `done` may only follow a verification whose own evidence says ready on the head it reviewed.
+    // …never from a partial (non-final reviewer) review, nor from a readiness not bound to the remote head (T-9, t9-2 / t9-3).
+    if (res.next.step === 'done' && (stage !== 'verify' || res.partial === true || res.readiness.ready !== true || res.findings.some(f => f.blocking) || res.findings.some(f => f.regressionRisk?.state === 'active') || res.next.reviewedHead !== String(res.reviewedHead).toLowerCase() || String(res.readiness.remoteHead ?? '').toLowerCase() !== res.next.reviewedHead))
+      return result('failed-verify', { reason: 'the cycle state declared done without matching verification evidence', phase: next.phase })
+    next = res.next
+  }
 }
 
 // ── Fan-out over the mutex-safe batch ────────────────────────────────────
@@ -1401,33 +1810,15 @@ const results = await boundedParallel(
   STORIES.map((s) => () => driveStory(s)),
   MAX_PARALLELISM,
 )
-// `id` is lifted to the top of each row: #250 reads it positionally-independently, and
-// reaching into `row.story.id` would couple the caller to this engine's internal shape.
 const batch = results.filter(Boolean).map((r) => ({ id: r.story?.id, ...r }))
-// The note must describe what ACTUALLY happened. The previous version stated
-// "PRs are ready-for-merge or escalated" unconditionally — so a run whose stories
-// ALL died (every agent stalled out, `parallel` returning six nulls) reported an
-// empty batch under a success-shaped sentence, indistinguishable from a completed
-// one. That is the same failure class #401 fixed for empty INPUT, reached instead
-// through total execution failure: a batch that drove nothing must say so.
-//
-// COUNTING ROWS IS NOT COUNTING PROGRESS. Branching on `batch.length` alone left the
-// failure arm unreachable for the shape that actually happens: `driveStory` returns an
-// HONEST `{status: 'failed-implement'}` row when its agents die, so `batch.length ===
-// STORIES.length` and a batch where EVERY card failed was reported as "2/2 stories
-// returned a result. PRs are ready-for-merge or escalated" — no PR existed and nothing
-// was mergeable. `batch.length` only drops when the THUNK itself returns null (a stall
-// before `driveStory` could return), which is the rarer half. So the sentence is derived
-// from the STATUSES: a card ADVANCED only if it reached a PR the human can act on
-// (`ready-for-merge` or `escalate`); everything else is named by the status it carries.
+// The note describes what ACTUALLY happened: a card ADVANCED only if it reached a PR the human can
+// act on (`ready-for-merge` or `escalate`); everything else is named by the status it carries.
 const died = STORIES.length - batch.length
-const ADVANCED = new Set(['ready-for-merge', 'escalate'])
+const ADVANCED = new Set(['ready-for-merge', 'escalate', 'awaiting-scope-decision'])
 const advanced = batch.filter((r) => ADVANCED.has(r.status))
 const failedRows = batch.filter((r) => !ADVANCED.has(r.status))
 const tally = (rows) =>
   [...new Set(rows.map((r) => r.status ?? 'unknown'))].sort().map((s) => `${rows.filter((r) => r.status === s).length} ${s}`).join(', ')
-// What did NOT advance, in the two ways it can fail — a row carrying a failure status, and a
-// card that never returned one at all. Both are named, because they are recovered differently.
 const shortfall = [
   failedRows.length ? `${failedRows.length} returned a failure status (${tally(failedRows)})` : '',
   died ? `${died} never returned a result at all (agents stalled or errored)` : '',
@@ -1437,15 +1828,13 @@ const shortfall = [
 const note = !STORIES.length
   ? 'Empty batch — nothing was requested, nothing was run.'
   : !advanced.length
-    ? `NOTHING COMPLETED: 0/${STORIES.length} cards advanced to a PR — ${shortfall}. No PR is ready to merge and nothing was escalated. Committed work in the per-story worktrees is intact — re-run to resume; check the machine's load first, since a stall means agents could not show progress within the supervisor's window.`
+    ? `NOTHING COMPLETED: 0/${STORIES.length} cards advanced to a PR — ${shortfall}. No PR is ready to merge and nothing was escalated. Committed work in the per-story worktrees and the handoffs under .pair/working/runs/ are intact — re-run with the same runId to resume from the first incomplete step.`
     : `${advanced.length}/${STORIES.length} cards advanced to a PR (${tally(advanced)})${shortfall ? `; ${shortfall}` : ''}. Those PRs are ready-for-merge or escalated; check each status. Merge is the human gate — review the list, merge, then re-run with the next mutex-safe batch.`
 return {
-  // Contract provenance per template — `fallback-loose` is the logged signal
-  // that a contract could not be derived and the loose skeleton was used (AC4).
+  workflowVersion: WORKFLOW_VERSION,
   contracts: contracts.map(({ name, status }) => ({ name, status })),
   batch,
-  // Stories that never returned anything, named so a failed run is actionable
-  // rather than merely empty.
   died: STORIES.filter((s) => !batch.some((b) => b.story?.id === s.id)).map((s) => s.id),
+  metrics: { dispatches: METRICS.dispatches.length, retries: METRICS.retries, redirects: METRICS.redirects, wallMs: 'unknown', tokens: 'unknown', perDispatch: METRICS.dispatches },
   note,
 }
