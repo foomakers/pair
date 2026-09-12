@@ -3104,23 +3104,6 @@ test('AC-31 (DT-40, positive control): the SAME defect on a LATER batch`s head i
 })
 
 
-// When a group has already failed once to repair its OWN regression, the next attempt starts from
-// the behavioural baseline: restore the content of that group's allowedPaths at
-// `lastCleanReviewedHead` and rebuild carrying the obligations and the guards. A content operation,
-// committed FORWARD — never a Git history operation.
-function failedRepairOf(dir, riskId) {
-  // the same batch prepared again as a repair, fixed forward to H2 — but the guard still fails
-  matchingRepair(dir, riskId)
-  return review(dir, 'r2', {
-    mode: 're-review',
-    reviewedHead: H2,
-    verdict: 'CHANGES-REQUESTED',
-    readiness: { ready: false },
-    invalidatedBatchId: 'r1',
-    findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'still closed' }), regressionFinding()],
-  })
-}
-
 test('AC-32 (DT-41): the FIRST repair of a regression carries no reconstruction directive', () => {
   const { dir } = runDir()
   provenRisk(dir)
@@ -3412,22 +3395,6 @@ test('DR-01 (control): an active risk keeps its batch from completing, whatever 
 })
 
 
-// to do that was comparing phases and paths as plain strings, so three real shapes slipped past it:
-// a group whose GREEN landed on a revision phase, a directory scope containing the file scope of
-// another group, and a sibling group of the SAME batch that already produced its fix.
-// The same fixture as `provenRisk`, with the producing group's own scope parameterised.
-function provenRiskWithPaths(dir, allowedPaths) {
-  redSpec(dir, 'a0', { mode: 'initial' })
-  redVerify(dir, 'a0')
-  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: H0 })
-  review(dir, 'r0', { reviewedHead: H0, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1')] })
-  redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths }], carried: [] }, groupId: 'r1-g1', remediationBatchId: 'r1' })
-  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1' })
-  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H1, evidenceLedger: [], remediationBatchId: 'r1' })
-  reviewOf(dir, 'r1', { findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed by r1' }), regressionFinding()], invalidatedBatchId: 'r1' })
-  return JSON.parse(readFileSync(join(dir, 'r1-review-phase.json'), 'utf8')).findings.find(f => f.id === 'r1-9').regressionRisk.riskId
-}
-
 // ── DR-06 / DR-10 (delta review): the remaining asymmetries of the S12 matrix ───────────────────
 test('DR-06: ANY mandatory human decision beats the automatic rewind — not only a history rewrite', () => {
   const { dir } = runDir()
@@ -3482,6 +3449,28 @@ test('DR-09: red-verify and review-phase declare `regressionGuards` in their Out
   }
 })
 
+// ── m-2: the skills that CONSUME `$reconstruct` must document the keys the resolver emits ──────
+// DR3-05 was fixed at one consumer and left stale at the other — green-fix, the participant that
+// actually performs the restore, still documented `rollbackTo` (deleted) and never mentioned
+// `notes` (new). Neither `skills:conformance` nor `docs:staleness` covers prose-vs-payload drift,
+// so the drift is asserted here, against the keys the emitting line itself carries.
+test('m-2: every phase skill documenting `$reconstruct` names exactly the keys the resolver emits', () => {
+  const root = fileURLToPath(new URL('../../..', import.meta.url))
+  const emitted = ['fromHead', 'paths', 'riskIds', 'notes']
+  const gone = ['rollbackTo']
+  for (const rel of [
+    '.claude/skills/pair-workflow-green-fix/SKILL.md',
+    '.claude/skills/pair-workflow-red-spec/SKILL.md',
+    'packages/knowledge-hub/dataset/.skills/workflow/green-fix/SKILL.md',
+    'packages/knowledge-hub/dataset/.skills/workflow/red-spec/SKILL.md',
+  ]) {
+    const md = readFileSync(join(root, rel), 'utf8')
+    assert.ok(md.includes('$reconstruct'), `${rel}: does not document the argument at all`)
+    for (const k of emitted) assert.ok(md.includes(k), `${rel}: the resolver emits \`${k}\` and the skill never names it`)
+    for (const k of gone) assert.ok(!md.includes(k), `${rel}: \`${k}\` is not emitted any more — a fixer told to read it reads nothing`)
+  }
+})
+
 // ── AC-32, after the third review: two declared modes, and the choice is a human's ─────────────
 // Deciding by itself whether restoring content was safe cost four defects in three rounds, and
 // getting it wrong deletes real work. The workflow no longer decides: the default patches forward
@@ -3502,9 +3491,10 @@ test('AC-32: with no round named, a failed repair just patches forward — no di
 
 test('AC-32: a named HEAD is taken as given, and the work still goes FORWARD', () => {
   const { dir } = runDir()
+  // The rewind the maintainer's decision is owed to: r1 was proven to have introduced the
+  // regression and nothing has rebuilt anything yet. (A LATER rewind is DR3-04's witness: the
+  // directive is spent once the repair it was delivered to produced a head.)
   const riskId = provenRisk(dir)
-  matchingRepair(dir, riskId)
-  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
   const next = rollback(dir, H0)
   assert.equal(next.step, 'prepare')
   assert.deepEqual(
@@ -3512,7 +3502,7 @@ test('AC-32: a named HEAD is taken as given, and the work still goes FORWARD', (
     { from: H0, paths: ['src/a.ts'], risks: [riskId] },
     'the head named verbatim, the producing group`s own scope, and the guards it must satisfy',
   )
-  assert.equal(next.base, H2, 'the branch stays where it is: restoring is content, the commit is forward')
+  assert.equal(next.base, H1, 'the branch stays where it is: restoring is content, the commit is forward')
 })
 
 test('AC-32: a head this cycle never recorded yields NO directive and says so — never a guessed head', () => {
@@ -3528,8 +3518,7 @@ test('AC-32: a head this cycle never recorded yields NO directive and says so �
 
 test('AC-32: overlapping work does NOT veto a named rollback — the human who named it owns that call', () => {
   const { dir } = runDir()
-  const riskId = provenRisk(dir)
-  matchingRepair(dir, riskId)
+  provenRisk(dir)
   // another group wrote the very same path after the baseline: under the old guard this refused
   redSpec(dir, 'r2-g1', { plan: { groups: [{ groupId: 'r2-g1', findings: ['r2-1'], owner: 'b', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r2-g1', remediationBatchId: 'r2' })
   redVerify(dir, 'r2-g1', { remediationBatchId: 'r2' })
@@ -3546,13 +3535,11 @@ const workedNote = (extra = {}) => ({ id: 'w1', claim: 'the installer resolves f
 
 test('rollback: a 40-hex head this cycle recorded is taken as given — no round name, nothing to resolve', () => {
   const { dir } = runDir()
-  const riskId = provenRisk(dir)
-  matchingRepair(dir, riskId)
-  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  provenRisk(dir)
   const next = rollbackTo(dir, H0)
   assert.equal(next.reconstruct?.fromHead, H0, 'the head the maintainer named, verbatim')
   assert.deepEqual(next.reconstruct?.paths, ['src/a.ts'])
-  assert.equal(next.base, H2, 'the work still goes forward on the current head')
+  assert.equal(next.base, H1, 'the work still goes forward on the current head')
 })
 
 test('rollback: a head this cycle never recorded is REFUSED, and the refusal is not silent', () => {
@@ -3565,6 +3552,36 @@ test('rollback: a head this cycle never recorded is REFUSED, and the refusal is 
   assert.equal(next.rollbackRefusal, `rollback-head-unknown:${SHA('e')}`, 'a head from nowhere is not a rollback point')
   // a value that is not a head at all is refused the same way, never parsed as a round name
   assert.match(rollbackTo(dir, 'r1-g1').rollbackRefusal ?? '', /^rollback-head-invalid:/)
+})
+
+test('DR3-04 (M-1): the rollback is emitted ONCE — a later rewind does not restore over the rebuild the first one produced', () => {
+  const { dir } = runDir()
+  // Rewind #1: the review proved r1 introduced a regression, nothing has been rebuilt yet.
+  const riskId = provenRisk(dir)
+  const first = rollbackTo(dir, H0)
+  assert.equal(first.reconstruct?.fromHead, H0, 'the first rewind carries the directive the maintainer named')
+  assert.equal(first.regressionRepairOf, 'r1')
+  // The corrective preparation takes it and the fixer rebuilds: H2 IS the rollback, applied.
+  matchingRepair(dir, riskId)
+  // Rewind #2: the same risk is still live at the rebuilt head, so the cycle rewinds again.
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  const second = rollbackTo(dir, H0)
+  assert.equal(second.step, 'prepare', 'the cycle proceeds — a spent directive is not a dead end')
+  assert.equal(second.reconstruct, undefined, 'restoring src/a.ts at H0 again would delete the rebuild that H2 is')
+  assert.equal(second.rollbackRefusal, undefined, 'and this is not a refusal: the decision was honoured, once')
+  assert.equal(second.base, H2, 'the work still goes forward from where the rebuild left it')
+})
+
+test('DR3-04 (M-1): a directive dispatched but never rebuilt is still owed — only a completed repair spends it', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  assert.ok(rollbackTo(dir, H0).reconstruct, 'owed at the first rewind')
+  // The preparation carried it, the fixer FAILED: no new head exists, so nothing was rebuilt.
+  redSpec(dir, 'r1-g1', { groupId: 'r1-g1', remediationBatchId: 'r1', regressionRepairOf: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: false, needsHumanDecision: false, outputHead: H1, evidenceLedger: [], remediationBatchId: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H1, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  assert.equal(rollbackTo(dir, H0).reconstruct?.fromHead, H0, 'a repair that produced nothing cannot have consumed the decision')
 })
 
 test('rollbackNotes: the view is ACTIVE while an obligation is open or a regression is live, and empty after', () => {
@@ -3589,6 +3606,18 @@ test('rollbackNotes: `worked` is carried from the review that observed the failu
   const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.deepEqual(r.rollbackNotes.worked.map(w => w.id), ['w1'])
   assert.equal(r.rollbackNotes.worked[0].claim, 'the installer resolves from SKILL_DIR, not cwd')
+})
+
+test('m-4: `worked` ids are stable across rounds, so a later review SUPERSEDES the earlier claim — the rebuild never sees both', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  reviewOf(dir, 'r1', { invalidatedBatchId: 'r1', worked: [workedNote()], findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  // A later review revises the SAME id: what it once called correct, it now calls wrong.
+  review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, invalidatedBatchId: 'r1', worked: [workedNote({ claim: 'it resolves from cwd — the earlier claim was WRONG' })], findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), regressionFinding()] })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.rollbackNotes.worked.map(w => w.id), ['w1'], 'one entry per id, as the obligations already are')
+  assert.equal(r.rollbackNotes.worked[0].claim, 'it resolves from cwd — the earlier claim was WRONG', 'last writer wins; a revoked claim never reaches the rebuild presented as verified')
+  assert.equal(r.rollbackNotes.worked[0].source, 'r2-review-phase', 'and it is attributed to the review that stated it')
 })
 
 test('worked: an entry with no evidence and no declared reason is refused before the write', () => {

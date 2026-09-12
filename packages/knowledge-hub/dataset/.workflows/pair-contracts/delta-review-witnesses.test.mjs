@@ -208,69 +208,6 @@ test('F-1 (control): the FIRST contract-gap revision is legitimate — a fix may
   assert.deepEqual({ step: n.step, phase: n.phase, mode: n.mode }, { step: 'prepare', phase: 'r1-g1-rev2', mode: 'revision' }, JSON.stringify(n))
 })
 
-// ══ F-2 ══════════════════════════════════════════════════════════════════════════════════════
-// The reconstruction overlap guard (cycle-state.mjs ~1433-1446) asks whether other work landed
-// AFTER the producing group's own fix (`list.indexOf(x) > producerFix`).
-//
-
-// group is left does the round get its ONE review (~1359). The review therefore reads the head the
-// LAST group produced, and `regressionTransitionErrors` requires a first observation's
-// `firstFailingHead` to be exactly `data.reviewedHead` (~1095) and to be a head the batch produced
-// (~1083). So the derived producer (~1399-1410) is the LAST group of the batch — here r1-g2.
-// Every EARLIER sibling's fix has a LOWER publication index than the producer's, so the guard never
-// sees it — although that sibling's work landed after `lastCleanReviewedHead` (H0) and restoring
-// the producer's `src/shared/` would delete it.
-function sequentialBatch(dir, { g1Paths, g2Paths, headA = H1, headB = H2 }) {
-  redSpec(dir, 'a0', { mode: 'initial' })
-  redVerify(dir, 'a0')
-  handoff(dir, 'a0', 'implement-phase', { status: 'ok', gatesPassed: true, prNumber: 7, outputHead: H0 })
-  review(dir, 'r0', { reviewedHead: H0, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r0-1'), finding('r0-2', { location: 'src/shared/other.ts:1' })] })
-  const plan = {
-    groups: [
-      { groupId: 'r1-g1', findings: ['r0-1'], owner: 'installer', mode: 'behavioral', allowedPaths: g1Paths },
-      { groupId: 'r1-g2', findings: ['r0-2'], owner: 'gate', mode: 'behavioral', allowedPaths: g2Paths },
-    ],
-    carried: [],
-  }
-  expectDispatch(dir, { step: 'prepare', phase: 'r1-g1' }, 'the round opens on its first group')
-  redSpec(dir, 'r1-g1', { plan, groupId: 'r1-g1', remediationBatchId: 'r1' })
-  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1' })
-  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: headA, evidenceLedger: [], remediationBatchId: 'r1' })
-  // the plan order, not an invented dependency: g2 follows g1 inside the SAME batch
-  expectDispatch(dir, { step: 'prepare', phase: 'r1-g2' }, 'the second group of the batch follows')
-  redSpec(dir, 'r1-g2', { groupId: 'r1-g2', remediationBatchId: 'r1' })
-  redVerify(dir, 'r1-g2', { remediationBatchId: 'r1' })
-  handoff(dir, 'r1-g2', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: headB, evidenceLedger: [], remediationBatchId: 'r1' })
-  // only now is the round reviewed — on the head the LAST group produced
-  expectDispatch(dir, { step: 'verify', phase: 'r1' }, 'the batch is complete; the round is reviewed once')
-  const rr = risk({ firstFailingHead: headB })
-  review(dir, 'r1', {
-    mode: 're-review',
-    reviewedHead: headB,
-    verdict: 'CHANGES-REQUESTED',
-    readiness: { ready: false },
-    invalidatedBatchId: 'r1',
-    findings: [closed('r0-1'), closed('r0-2'), regressionFinding('r1-9', { regressionRisk: rr })],
-  })
-  return JSON.parse(readFileSync(join(dir, 'r1-review-phase.json'), 'utf8')).findings.find(f => f.id === 'r1-9').regressionRisk.riskId
-}
-
-function firstRepairOf(dir, { phase, riskId, head, reviewPhase, reviewedHead, firstFailingHead }) {
-  expectDispatch(dir, { step: 'prepare', phase }, 'the rewind targets the group that produced the failing head')
-  redSpec(dir, phase, { groupId: phase, remediationBatchId: phase.split('-')[0], regressionRepairOf: phase.split('-')[0], regressionGuards: [riskId] }, { attempt: 2 })
-  redVerify(dir, phase, { remediationBatchId: phase.split('-')[0], regressionGuards: [riskId] }, { attempt: 2 })
-  handoff(dir, phase, 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: head, evidenceLedger: [], remediationBatchId: phase.split('-')[0], regressionGuards: [riskId] }, { attempt: 2 })
-  expectDispatch(dir, { step: 'verify', phase: reviewPhase }, 'the repair produced a head; it is reviewed')
-  review(dir, reviewPhase, {
-    mode: 're-review',
-    reviewedHead: head,
-    verdict: 'CHANGES-REQUESTED',
-    readiness: { ready: false },
-    invalidatedBatchId: phase.split('-')[0],
-    findings: [closed('r0-1'), closed('r0-2'), regressionFinding('r1-9', { regressionRisk: risk({ introducedByRemediationBatchId: phase.split('-')[0], lastCleanReviewedHead: reviewedHead, firstFailingHead }) })],
-  })
-}
-
 // ══ F-3 ══════════════════════════════════════════════════════════════════════════════════════
 // `foldCohortIdentities` (cycle-metrics.mjs ~712-780) combines exactly three things across a group
 // — `usage.observedTotalTokens`, `cycles.completed`, `snapshot.completeness`. Everything else comes

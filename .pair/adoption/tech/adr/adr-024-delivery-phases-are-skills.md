@@ -1043,3 +1043,36 @@ return 0, so it was not a total order and the fold still fell back to manifest p
 set of views in, same entry out" claim was false when two views tied); and a floor was marked only
 for overlapping views, not for a disjoint fold containing a run whose spend was never measured —
 half a delivery unmeasured, reported as an exact cost.
+
+## Amendment 2026-09-12 (t) — superseding (r): the rollback takes a head, and it is spent once
+
+The fourth and fifth independent reviews landed on the same paragraph of (r) from opposite sides.
+It is superseded here, because it still prescribes a mechanism this codebase deleted for being
+dangerous, and (r) is the governing text a future implementer would read as current.
+
+**(r) said the maintainer names the ROUND, and the head is resolved from persisted history.** That
+resolution is gone. It matched a non-revision name against all of its own revisions and kept the
+last, so `a0` could resolve to `a0-rev2`'s head — the very outcome (r)'s own paragraph above
+promises never happens — and half the accepted alphabet could not be resolved at all. `rollbackTo`
+is now a 40-hex head the maintainer reads from `git log` and the workflow takes verbatim: no
+resolution step, therefore no heuristic and nothing to guess. Validation is existence — this cycle
+recorded that sha, or the directive is refused — and the refusal STOPS the run rather than being
+computed and dropped. The typed refusals are `rollback-head-invalid:<value>` and
+`rollback-head-unknown:<sha>`; **`rollback-round-unknown:<round>` no longer exists** anywhere, and
+neither does the round-name grammar it reported on. See ADL 2026-09-12
+`rollback-notes-are-derived-from-handoffs.md`.
+
+**(r) is silent on how many times the directive is emitted**, and the fifth review (M-1) showed the
+cost of that silence: the guard meant to stop a second emission asked `notes.active`, which is true
+by construction everywhere it runs, so the identical directive re-fired at every later rewind and
+restored the paths over the rebuild the previous rollback had just produced. Progress could not
+accumulate; the cycle churned until the budget escalated. **A rollback decision is honoured once.**
+It is spent when it was delivered AND the repair it was delivered to produced a head — a corrective
+preparation of that batch carried it, and a later `green-fix` of the same batch reported `fixed`.
+A repair that produced nothing consumed nothing, so the decision is still owed. This is derived
+from the handoffs in publication order, like every other view: nothing writes a consumption flag
+and nothing deletes one.
+
+Everything else in (r) stands: two modes with `patch` the default, the commit going FORWARD with no
+Git history operation, no veto on overlapping work, and the fixer's duty to report what it had to
+overwrite.

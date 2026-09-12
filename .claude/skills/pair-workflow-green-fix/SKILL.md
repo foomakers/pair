@@ -24,7 +24,7 @@ The RED snapshot is the specification. You may change implementation inside its 
 | `$marker`          | Yes      | The PR's first-review marker `<!-- pair:first-review #<story> PR#<n> -->` — the anchor an escalation comment responds to.                 |
 | `$writeIssue`      | No       | The project's issue-filing skill (default `/pair-capability-write-issue`) — named only to forbid it.                                                     |
 | `$notes`           | No       | Scope directive from the card.                                                                                                           |
-| `$reconstruct`     | No       | JSON `{ fromHead, rollbackTo, paths, riskIds }` — present only when a MAINTAINER named a round to roll back to (US-479 AC-32). Start by restoring the CONTENT of exactly `paths` as it was at `fromHead`, then rebuild. |
+| `$reconstruct`     | No       | JSON `{ fromHead, paths, riskIds, notes }` — present only when a MAINTAINER named a HEAD to roll back to (US-479 AC-32, ADL 2026-09-12), and only until that decision has been spent. Start by restoring the CONTENT of exactly `paths` as it was at `fromHead`, then rebuild. |
 
 ## Algorithm
 
@@ -80,13 +80,14 @@ whose applicable matrix rows are present and validated: if the seal is missing, 
 were reduced after validation, stop and return the typed refusal instead of coding. You may never
 edit, weaken or drop a sealed row — including a regression guard — to make your change pass.
 
-**US-479 S13 — `$reconstruct`: rebuild from the round a human chose.** This argument appears only because a maintainer read the escalation and decided to roll back to `rollbackTo` rather than keep patching. They own that call — you do not re-litigate it, and the workflow did not infer it. Start over from there:
+**US-479 S13 — `$reconstruct`: rebuild from the head a human chose.** This argument appears only because a maintainer read the escalation and named `fromHead` — a 40-hex commit they read from `git log` — rather than keep patching. They own that call: you do not re-litigate it, and the workflow did not infer it. It arrives at most once per decision (DR3-04: it is spent as soon as the repair it was delivered to produces a head, so a later rewind does NOT restore over your rebuild). Start over from there:
 
 1. restore the content of exactly `paths` as it was at `fromHead` (`git show <fromHead>:<path>` into the working tree, or the equivalent) — those paths and nothing else, in your worktree only;
 2. rebuild the fix from there, carrying the group's obligations and every guard in `riskIds`;
-3. commit FORWARD on the current head.
+3. carry `notes` into the rebuild: `notes.obligations` are what is still owed, `notes.regressions` the live guards, and `notes.worked` the decisions a review already VERIFIED as right in the work being discarded — reuse them instead of rediscovering them, which is the whole reason the field exists;
+4. commit FORWARD on the current head.
 
-This is a CONTENT operation. The branch stays where it is, the sealed snapshot stays an ancestor, every sealed test byte stays identical, published reviews stay valid — `verify-chain` proves all of it. Nothing specified is lost by starting over: the contract you hold IS the inventory of what must work again, and the guards make the old defect impossible to reintroduce silently. If restoring the content cannot be confined to `paths` — a consumer outside them breaks, or the rebuild would grow past your `fixScope` — stop and return the typed refusal with what you found; do not restore partially and do not widen the scope yourself. Report what you had to overwrite: the maintainer who named the round is entitled to know what it cost.
+This is a CONTENT operation. The branch stays where it is, the sealed snapshot stays an ancestor, every sealed test byte stays identical, published reviews stay valid — `verify-chain` proves all of it. Nothing specified is lost by starting over: the contract you hold IS the inventory of what must work again, and the guards make the old defect impossible to reintroduce silently. If restoring the content cannot be confined to `paths` — a consumer outside them breaks, or the rebuild would grow past your `fixScope` — stop and return the typed refusal with what you found; do not restore partially and do not widen the scope yourself. Report what you had to overwrite: the maintainer who named the head is entitled to know what it cost.
 
 ## Output Format
 

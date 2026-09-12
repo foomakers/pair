@@ -1183,8 +1183,14 @@ export function rollbackNotes(handoffs, precomputedLedger) {
   for (const h of reviews) for (const f of h.data.findings ?? []) if (f?.id) byId.set(f.id, f)
   const obligations = [...byId.values()].map(f => ({ id: f.id, severity: f.severity, open: isBlocking(f) }))
   const regressions = (precomputedLedger ?? regressionRiskLedger(list)).filter(r => r.state === 'active')
-  const worked = []
-  for (const h of reviews) for (const w of h.data.worked ?? []) worked.push({ ...w, source: h.name })
+  // US-479 m-4: `worked` ids are stable across rounds — the ADL and review-phase both say so — so a
+  // later review restating an id is REVISING it, not adding a second claim. Deduped last-wins over
+  // the same publication order the obligations above already use: otherwise a claim a later review
+  // revoked reached the rebuild alongside its replacement, presented as verified-correct, which is
+  // the failure `worked` exists to prevent.
+  const workedById = new Map()
+  for (const h of reviews) for (const w of h.data.worked ?? []) if (w?.id) workedById.set(w.id, { ...w, source: h.name })
+  const worked = [...workedById.values()]
   return { active: obligations.some(o => o.open) || regressions.length > 0, obligations, regressions, worked }
 }
 
@@ -1439,6 +1445,13 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     if (d.needsHumanDecision === true) return blocked('escalate', { detail: `${d.humanDecisionKind ?? 'human'} decision requested by the review — a human decides before any automatic rewind`, findings: blocking, regressionRisks: activeRisks })
     if (activeRisks.length) {
       if (cycleCounters(list).spentCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', detail: 'an active regression risk remains and the remediation budget is spent', findings: blocking, regressionRisks: activeRisks })
+      // US-479 DR3-04: has the maintainer's rollback already been delivered AND acted upon? `list` is
+      // in publication order, so "acted upon" is a `green-fix` of the same batch that reported
+      // `fixed` AFTER the corrective preparation that carried the directive.
+      const rollbackSpent = batchId => {
+        const delivered = list.findIndex(h => h.skill === 'red-spec' && h.data.regressionRepairOf === batchId)
+        return delivered >= 0 && list.slice(delivered + 1).some(h => h.skill === 'green-fix' && h.data.fixed === true && String(h.data.remediationBatchId ?? '') === batchId)
+      }
       // The earliest introducing batch is repaired first; every active risk travels with it.
       const roundOf = b => phaseParts(`${b}-g1`)?.round ?? 0
       const batch = [...new Set(activeRisks.map(r => String(r.introducedByRemediationBatchId)))].sort((a, b) => roundOf(a) - roundOf(b))[0]
@@ -1480,9 +1493,18 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
         if (!SHA_RE.test(want)) rollbackRefusal = `rollback-head-invalid:${want}`
         else if (!known) rollbackRefusal = `rollback-head-unknown:${want}`
         else if (!paths.length) rollbackRefusal = `rollback-scope-unknown:${phase}`
-        // An empty notes view means the round it would rebuild has nothing left open: there is
-        // nothing to reconstruct, and this is what keeps one decision from firing on every rewind.
-        else if (!notes.active) rollbackRefusal = 'rollback-nothing-to-rebuild'
+        // US-479 DR3-04 (M-1): a decision is honoured ONCE. The previous guard asked `notes.active`,
+        // which is true by construction everywhere this branch runs — it sits inside
+        // `if (activeRisks.length)`, and the view's own `regressions` is that same set — so it could
+        // never fire and the identical directive was re-emitted at every later rewind, restoring
+        // `paths` at `fromHead` over the rebuild the previous rollback had just produced. Progress
+        // could not accumulate: the cycle churned until the budget escalated.
+        // The directive is SPENT when it was delivered AND the repair it was delivered to produced a
+        // new head: a corrective preparation of this batch carried it, and a later `green-fix` of the
+        // same batch reported `fixed`. A repair that produced nothing consumed nothing, so the
+        // decision is still owed. Derived from the handoffs in publication order, like every other
+        // view — nobody writes a consumption flag and nobody deletes one.
+        else if (rollbackSpent(batch)) reconstruct = undefined
         else reconstruct = { fromHead: want, paths, riskIds: ofBatch.map(x => x.riskId), notes: { obligations: notes.obligations.filter(o => o.open), regressions: notes.regressions, worked: notes.worked } }
       }
       const carried = new Map()
