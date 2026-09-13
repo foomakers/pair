@@ -32,11 +32,23 @@ run_pair install --source "$SOURCE_PATH" --offline .
 assert_dir ".claude/workflows"
 assert_dir ".claude/agents"
 
-# The engine itself, plus the helper the agents invoke. `contracts/ensure-contract.mjs` is a
-# real dependency: shipping the workflow without it produces a batch that dies in phase 0.
+# The engine itself, plus the helpers the agents invoke. Since US-479 every script ships INSIDE
+# the skill that runs it (a skill is portable as one folder): shipping a phase skill without its
+# script produces a stage that dies at its first step.
 assert_file ".claude/workflows/pair-implement-batch.js"
 assert_file ".claude/workflows/pair-refine-batch.js"
-assert_file ".claude/workflows/pair-contracts/ensure-contract.mjs"
+assert_file ".claude/skills/pair-workflow-contract-phase/scripts/ensure-contract.mjs"
+for skill in red-spec red-verify implement-phase green-fix review-phase; do
+  assert_file ".claude/skills/pair-workflow-${skill}/scripts/cycle-state.mjs"
+done
+assert_file ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs"
+assert_file ".claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs"
+assert_file ".claude/skills/pair-workflow-review-phase/scripts/pr-comment.mjs"
+assert_file ".claude/skills/pair-workflow-green-fix/scripts/pr-comment.mjs"
+# The retired stages must NOT land: a stale skill beside the live engine is a second policy.
+for skill in remediation-plan red-seal p3-verify cycle-comments pr-phase; do
+  assert_no_file ".claude/skills/pair-workflow-${skill}/SKILL.md"
+done
 
 # The DOTFILE. `pair-contracts/.gitignore` is what keeps the derived `*.contract.json` /
 # `*.draft.json` out of an adopter's git; if the installer does not carry dotfiles, their first
@@ -48,6 +60,8 @@ assert_file ".claude/workflows/pair-contracts/.gitignore"
 assert_no_file ".claude/workflows/pair-implement-batch.test.mjs"
 assert_no_file ".claude/workflows/pair-refine-batch.test.mjs"
 assert_no_file ".claude/workflows/pair-contracts/ensure-contract.test.mjs"
+assert_no_file ".claude/workflows/pair-contracts/cycle-state.test.mjs"
+assert_no_file ".claude/workflows/pair-contracts/pr-comment.test.mjs"
 
 # The workflow the registry does NOT ship. It dispatches to a personal user-level skill that is
 # in neither the dataset nor an adopter's install, so an adopter who received it would get a
@@ -56,8 +70,11 @@ assert_no_file ".claude/workflows/pair-contracts/ensure-contract.test.mjs"
 assert_no_file ".claude/workflows/pair-analyze-pr-batch.js"
 
 # Every agent type the workflow spawns must have arrived with it.
-for agent in pair-implementer pair-reviewer pair-contract-generator; do
+for agent in pair-implementer pair-reviewer pair-contract-generator pair-fix-test-author pair-red-contract-verifier; do
   assert_file ".claude/agents/${agent}.md"
+done
+for agent in pair-remediation-planner pair-red-sealer pair-fix-verifier; do
+  assert_no_file ".claude/agents/${agent}.md"
 done
 
 log_info "Test 2: the installed engine is the one that ships, not a stale copy"

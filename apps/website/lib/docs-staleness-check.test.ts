@@ -26,6 +26,9 @@ import {
   checkBatchEngineWorkflows,
   batchEngineErrors,
   checkListTargetsSamples,
+  checkCatalogFreshness,
+  parseCatalogLastUpdated,
+  newestChangeDate,
 } from './docs-staleness-check'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
@@ -650,10 +653,10 @@ describe('runAllChecks (in-process, real docs tree)', () => {
   // 5000ms test: MEASURED 1.0s locally and 17.1s on the ubuntu CI runner, actions run 34229200841 (five test
   // files sharing two cores), where vitest's default budget failed it. Same shape as
   // deploy-build-command.test.ts: an explicit budget with the measurement it came from.
-  it('reports zero drift and 44 skills against the actual repo', () => {
+  it('reports zero drift and 50 skills against the actual repo', () => {
     const { errors, skillCount } = runAllChecks(REPO_ROOT)
     expect(errors, errors.join('\n')).toHaveLength(0)
-    expect(skillCount).toBe(44)
+    expect(skillCount).toBe(50)
   }, 60_000)
 })
 
@@ -749,13 +752,71 @@ describe('generateCatalogRows + committed catalog parity (Check 2c integration)'
   const CATALOG = join(REPO_ROOT, 'apps/website/content/docs/reference/skills-catalog.mdx')
   it('derives a command + non-empty description for every dataset skill', () => {
     const rows = generateCatalogRows(SKILLS_DIR)
-    expect(rows.size).toBe(44)
+    expect(rows.size).toBe(50)
     expect(rows.get('next')?.command).toBe('/pair-next')
     for (const [, row] of rows) expect(row.description.length).toBeGreaterThan(0)
   })
   it('the committed skills-catalog rows match the dataset-derived truth (no drift)', () => {
     const rows = generateCatalogRows(SKILLS_DIR)
     const errors = checkCatalogContent(rows, readFileSync(CATALOG, 'utf-8'))
+    expect(errors, errors.join('\n')).toHaveLength(0)
+  })
+})
+
+// ── The catalog's own "Last updated" claim (q-10, independent pass over review 5190603055) ──
+// Every other catalog gate counts or compares SKILLS: the row list, the row content, the "N skills"
+// prose. None looked at the header's date, so `skills-catalog.mdx` sat on 2026-09-08 through every
+// later dataset change with the whole gate green — the page dated itself before the content it
+// describes, and the date is the one claim a reader uses to decide whether to trust the page.
+describe('checkCatalogFreshness', () => {
+  const header = (d: string) =>
+    `---\ntitle: Skills Catalog\n---\n\n> **Last updated:** ${d}. Source: \`packages/knowledge-hub/dataset/.skills/\`\n`
+
+  it('passes when the header date equals the newest source change', () => {
+    expect(checkCatalogFreshness(header('2026-09-13'), '2026-09-13')).toEqual([])
+  })
+
+  it('passes when the header date is NEWER than the newest source change', () => {
+    expect(checkCatalogFreshness(header('2026-09-20'), '2026-09-13')).toEqual([])
+  })
+
+  it('fails when the header date predates the newest source change (the q-10 defect)', () => {
+    const errors = checkCatalogFreshness(header('2026-09-08'), '2026-09-13')
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('2026-09-08')
+    expect(errors[0]).toContain('2026-09-13')
+  })
+
+  it('fails loudly when the header carries no parsable date — the check must not pass vacuously', () => {
+    expect(checkCatalogFreshness('> **Last updated:** soon.\n', '2026-09-13')).toEqual([
+      'skills-catalog.mdx has no `> **Last updated:** YYYY-MM-DD` header — the catalog freshness check cannot run',
+    ])
+  })
+
+  it('fails loudly when the source change date cannot be resolved', () => {
+    expect(checkCatalogFreshness(header('2026-09-13'), null)).toEqual([
+      'cannot resolve the last change date of packages/knowledge-hub/dataset/.skills/ from git — the catalog freshness check cannot run',
+    ])
+  })
+
+  it('parses the header date, and returns null when it is absent or malformed', () => {
+    expect(parseCatalogLastUpdated(header('2026-09-13'))).toBe('2026-09-13')
+    expect(parseCatalogLastUpdated('> **Last updated:** 13-09-2026.\n')).toBeNull()
+    expect(parseCatalogLastUpdated('no header at all')).toBeNull()
+  })
+})
+
+describe('the committed skills-catalog dates itself no earlier than its source (q-10 integration)', () => {
+  it('passes against the real git history of the dataset skills tree', () => {
+    const newest = newestChangeDate(REPO_ROOT, 'packages/knowledge-hub/dataset/.skills')
+    expect(newest, 'git could not date the dataset skills tree').toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    const errors = checkCatalogFreshness(
+      readFileSync(
+        join(REPO_ROOT, 'apps/website/content/docs/reference/skills-catalog.mdx'),
+        'utf-8',
+      ),
+      newest,
+    )
     expect(errors, errors.join('\n')).toHaveLength(0)
   })
 })

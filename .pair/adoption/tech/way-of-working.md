@@ -54,6 +54,84 @@ Resolution order, the split-tool routing and why the fallback is never the authe
 - When a bug fix or feature changes behavior covered by an existing CP, the corresponding test case MUST be updated.
 - **CP5's docs page list is machine-asserted against the filesystem** — `packages/knowledge-hub/src/conformance/docs-page-coverage.test.ts` compares it to `apps/website/content/docs/**/*.mdx`, so adding a docs page without listing it in CP5 fails CI ([ADL](../decision-log/2026-08-20-cp5-page-list-is-asserted-against-the-filesystem.md)).
 
+## Review Convergence
+
+- **Negative transition matrix before implementation (ADR-024, amendment 2026-09-11 l; US-479
+  S12/AC-30):** a task that creates or changes a persisted state, a ledger transition, a terminal
+  gate or an evidence identity contracts the whole finite matrix upstream — the positive path plus
+  every applicable negative family, each with a deterministic witness and a typed expected refusal.
+  The independent verifier receives the same authority the resolver holds and rejects an incomplete
+  matrix before the seal; implementation cannot begin without it; the final review samples the sealed
+  rows rather than being the first control to discover an illegal transition. A composed green chain
+  is necessary and not sufficient.
+- **Rollback is a maintainer's call, and its notes are derived (ADR-024 amendments r/s; ADL
+  2026-09-12; US-479 S13/AC-32):** the rewind fixes forward on the current head by default. A
+  maintainer may instead name the HEAD to roll back to — 40-hex, read from `git log` — and the
+  producing group's own `allowedPaths` are restored to that content and rebuilt, still committing
+  FORWARD. The workflow neither picks the point nor vetoes the choice: it once decided whether a
+  restore was safe, and four independent reviews found four defects in that decision. A head this
+  cycle never recorded is refused out loud and the run STOPS on it: the refusal travels as a field on
+  the dispatch and the coordinator ends the story `failed-preparation`, rather than the directive
+  being computed and dropped. The directive STANDS while the policy names the head, and the
+  MAINTAINER clears it (amendment (u)): the workflow does not infer whether their decision was
+  carried out — nothing in the handoffs records that, and four attempts to deduce it produced four
+  blocking defects, each failing one staging beyond the last. What it owes instead is legibility,
+  and every delivery is reported in the run log with the head, the paths restored and whose job it
+  is to end it. A directive still standing later is a visible state, not a predicate misfiring.
+  The notes a rebuild needs — obligations still open, regressions still live, and the decisions the
+  review verified were RIGHT (`worked`) — are a VIEW over the handoffs: nobody writes them to a
+  second place and nobody deletes them. Amendment (u) and the 2026-09-12 ADLs are current here; (t)
+  stands except for the spend rule (u) withdrew.
+- **Reintroduction (ADR-024, amendment 2026-09-11 o; US-479 S13/AC-31):** reopening a discharged
+  risk is a RESTORATION of its prior ledger entry — every field immutable. A defect that reappears
+  through later work is a new risk with a new identity, not a reopening.
+- **Regression-risk rewind (ADR-024, amendment 2026-09-11 k; US-479 S11/AC-29):** a defect a review
+  proves was INTRODUCED by a remediation invalidates that remediation and sends the cycle back to the
+  same batch's preparation, carrying every unresolved finding and every active guard in one complete
+  corrective contract. This "rewind" is a workflow-state transition only — the branch stays on its
+  current head, the fix goes FORWARD, and `git revert`/`reset`/`rebase`/force-push and seal deletion
+  are never part of it (a maintainer may authorize a Git revert as a separate decision). The claim
+  needs the approved obligation, an executable reproducer passing on the last clean reviewed head and
+  failing on the first failing head, the introducing batch and the affected boundaries; anything less
+  is an ordinary finding of unknown origin, and a new requirement stays a scope proposal. Only an
+  independent review bound to the exact new head discharges a risk. Convergence, scope escalation and
+  ready-for-merge are impossible while the derived active matrix is non-empty; a discharged risk
+  leaves that matrix and stays in history and in the counters.
+
+- **Delivery-workflow canary:** prove a fresh workflow with a small code story
+  whose tests are deterministic oracles; a prose-only regex-guard story is not a
+  substitute. Keep the RED repair budget unchanged: a typed D2 refusal is valid
+  evidence, not a reason to weaken it. Record the run/phase handoffs, first
+  review and final synthesis on the reviewed PR. See ADL
+  [2026-09-09-deterministic-code-canary-for-delivery-workflow.md](../decision-log/2026-09-09-deterministic-code-canary-for-delivery-workflow.md).
+- **Delivery workflow — four judgment stages, incremental resume (ADR-024, amendment 2026-09-09 b):**
+  the batch engine judges in four stages — preparation (inventory + executable acceptance contract,
+  before any production edit), independent contract validation with the deterministic seal in the
+  same execution, implementation, independent final verification (custody, evidence, review, tier
+  passes, one idempotent publication). Mechanical probe/seal/hash/state/comment work runs as scripts
+  inside those stages, never as its own dispatch. A same-input resume continues from the first
+  incomplete step and never re-samples a full review; an approved test failing on production returns
+  to implementation on the same seal; a real contract gap revises only the affected obligations.
+  External (card / PR-body) findings stay blocking until corrected with read-back evidence or
+  dispositioned by a human. See [adr-024](adr/adr-024-delivery-phases-are-skills.md).
+- **Baseline then delta:** the first review is complete and returns the immutable 40-character
+  head it inspected. A re-review verifies prior findings plus only the diff from that head and
+  directly changed producer/consumer boundaries; an unchanged PR surface does not create another
+  fix round. Missing or invalid review-head evidence fails closed, never converges a PR.
+- **Provisioned artifact proof:** a fix that installs, builds, publishes, names, or invokes an
+  artifact maps `producer -> published identity -> consumer` and proves the real path in a clean
+  temporary environment. The exact boundary is never stubbed, aliased, or faked. See ADL
+  [2026-08-31-review-baseline-and-provisioned-artifact-contract.md](../decision-log/2026-08-31-review-baseline-and-provisioned-artifact-contract.md).
+- **Contract inventory before a loop:** before reporting or fixing a changed contract, inventory
+  its authoritative producer, inputs, consumers and representations. A finite protocol, parser,
+  configuration or state transition gets a complete decision table of supported and
+  invalid/boundary states, with a real probe/test per row. When a row, equivalence, normalization
+  or repair depends on an external tool/service/format, prove it at that authoritative boundary;
+  an internal unit test cannot prove external semantics or that repair advice works. Re-review
+  applies the same rule only to its delta and changed boundary. See ADLs
+  [2026-09-01-review-contract-inventory-prevents-serial-findings.md](../decision-log/2026-09-01-review-contract-inventory-prevents-serial-findings.md)
+  and [2026-09-01-external-boundary-proof-prevents-false-equivalence.md](../decision-log/2026-09-01-external-boundary-proof-prevents-false-equivalence.md).
+
 ## Quality Gates
 
 - `pnpm quality-gate` is the adopted project-level quality gate command.
