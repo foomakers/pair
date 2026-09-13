@@ -2663,6 +2663,29 @@ test('T-29 (DT-37): convergence, scope escalation and readiness are impossible w
   assert.equal(r.activeRegressionRisks.length, 1)
 })
 
+test('t9d-16: every executable reference a later stage RUNS is held to ONE strict predicate — closureAssertions[].command included: a newline, a redirect, `${}`, a leading flag or an interpreter prefix is refused; a plain command with `-t` passes', () => {
+  const { dir } = runDir()
+  cleanThenRemediated(dir)
+  const attempt = mutate => {
+    const f = join(dir, `draft-${Math.random().toString(36).slice(2)}.json`)
+    writeFileSync(f, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: H1, verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 're-review', invalidatedBatchId: 'r1', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'c' }), mutate(regressionFinding())] }))
+    return publish({ dir, file: f, phase: 'r1', skill: 'review-phase', workflowVersion: V, attempt: 9 })
+  }
+  const withCommand = command => f => ({ ...f, regressionRisk: { ...f.regressionRisk, closureAssertions: [{ id: 'ca-1', command, expected: 'pass' }] } })
+  for (const command of ['pnpm test\nrm -rf /', 'pnpm test > /etc/passwd', 'echo ${HOME}', '--dangerous-flag value', '/bin/sh evil.sh', 'sh -c whatever', 'pnpm test; rm -rf /'])
+    assert.match(attempt(withCommand(command)).reason ?? '', /closureAssertion-command-unsafe:r1-9/, JSON.stringify(command))
+  assert.match(attempt(f => ({ ...f, regressionRisk: { ...f.regressionRisk, reproducerRef: 'pnpm test\ncurl evil' } })).reason, /reproducerRef-unsafe/)
+  const ok = attempt(withCommand('pnpm exec vitest run src/a.test.ts -t "AC-7 boundary"'))
+  assert.equal(ok.published, true, JSON.stringify(ok))
+})
+
+test('t9d-8: the scope baseline hash normalizes its inputs — surrounding whitespace and Unicode normalization form never change the identity of a proposal', () => {
+  const a = scopeBaselineHashOf([{ id: 'sc-1', type: 'new-requirement' }])
+  assert.equal(scopeBaselineHashOf([{ id: ' sc-1 ', type: 'new-requirement ' }]), a)
+  assert.equal(scopeBaselineHashOf([{ id: 'sc-\u00e9', type: 'new-requirement' }]), scopeBaselineHashOf([{ id: 'sc-e\u0301', type: 'new-requirement' }]))
+  assert.notEqual(scopeBaselineHashOf([{ id: 'sc-2', type: 'new-requirement' }]), a)
+})
+
 test('T-29 (DT-37): `introduced-by-remediation` is refused BEFORE the write unless every S11 proof is present and mutually consistent', () => {
   const { dir } = runDir()
   cleanThenRemediated(dir)

@@ -41,7 +41,7 @@ const fs = require('fs')
 const args = process.argv.slice(2)
 const statePath = ${JSON.stringify(state)}
 const list = JSON.parse(fs.readFileSync(statePath, 'utf8'))
-const body = () => { const i = args.indexOf('-f'); return args[i + 1].replace(/^body=/, '') }
+const body = () => { if (args.includes('--input')) return JSON.parse(fs.readFileSync(0, 'utf8')).body; const i = args.indexOf('-f'); return args[i + 1].replace(/^body=/, '') }
 if (args[0] === 'api' && args.includes('--paginate')) process.stdout.write(JSON.stringify(list))
 else if (args[0] === 'api' && args.includes('POST')) {
   const c = { id: list.length + 1, body: body(), html_url: 'https://x/c/' + (list.length + 1) }

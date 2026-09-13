@@ -20,7 +20,7 @@ const store = ${JSON.stringify(_join(FAKE_GH_DIR, 'comments.json'))}
 if (!fs.existsSync(store)) fs.writeFileSync(store, '[]')
 const list = () => JSON.parse(fs.readFileSync(store, 'utf8'))
 const save = l => fs.writeFileSync(store, JSON.stringify(l))
-const body = () => { const i = args.indexOf('-f'); return args[i + 1].replace(/^body=/, '') }
+const body = () => { if (args.includes('--input')) return JSON.parse(fs.readFileSync(0, 'utf8')).body; const i = args.indexOf('-f'); return args[i + 1].replace(/^body=/, '') }
 const issuesStore = ${JSON.stringify(_join(FAKE_GH_DIR, 'issues.json'))}
 const issueId = ref => { const m = /\\/issues\\/(\\d+)$/.exec(String(ref)); return m ? m[1] : String(ref) }
 const issues = () => fs.existsSync(issuesStore) ? JSON.parse(fs.readFileSync(issuesStore, 'utf8')) : {}

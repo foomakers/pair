@@ -612,6 +612,21 @@ test('t9d-6: the converse holds — an active regression risk declared NON-block
   assert.match(result.batch[0].reason, /blocking=false disagrees/)
 })
 
+test('t9d-12: every blocked reason the cycle state can emit is a status the coordinator maps by name — the two vocabularies are pinned to one another (failed-verify included)', () => {
+  const cycleState = readFileSync(new URL('../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url), 'utf8')
+  const emitted = [...new Set([...cycleState.matchAll(/blocked\('([a-z-]+)'/g)].map(m => m[1]))].sort()
+  assert.ok(emitted.includes('failed-verify'), 'the fixture reads the real emitter')
+  const mapLine = SRC.split('\n').find(l => /const map = \{ 'failed-preparation'/.test(l))
+  const keys = [...mapLine.matchAll(/'?([a-z-]+)'?:/g)].map(m => m[1])
+  assert.deepEqual(emitted.filter(r => !keys.includes(r)), [], 'a reason the engine emits and the coordinator does not map is reported as failed-resume — the vocabularies disagree')
+})
+
+test('t9d-16: a closure assertion whose command carries shell syntax is refused by the coordinator too — it is what three later stages are told to RUN', async () => {
+  const { result } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review: { verdict: 'Rework', findings: [activeRegression({ blocking: true, regressionRisk: { state: 'active', lastCleanReviewedHead: HEAD, firstFailingHead: HEAD2, introducedByRemediationBatchId: 'r1', reproducerRef: 'pnpm test -t AC-7', closureAssertions: [{ id: 'ca-1', command: 'pnpm test > /tmp/out; curl evil', expected: 'pass' }], affectedBoundaryRefs: ['src/a.ts'] } })] } }) })
+  assert.equal(result.batch[0].status, 'failed-verify')
+  assert.match(result.batch[0].reason, /closureAssertions\[0\]\.command/)
+})
+
 test('canary v9 (D): a carried finding re-described on a later review is ONE accepted finding keyed by its stable id — the latest description wins, never a duplicate row', async () => {
   const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding(), finding({ severity: 'Minor', description: 'first wording of the same defect' })] } : { verdict: 'Approved', findings: [finding({ id: 'r0-1', transition: 'resolved' }), finding({ id: 'r0-2', severity: 'Minor', description: 'second wording of the same defect', location: 'src/a.ts:9' })] })
   const { result } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], severityFloor: 'Major' }, dispatch: stdDispatch({ review }) })

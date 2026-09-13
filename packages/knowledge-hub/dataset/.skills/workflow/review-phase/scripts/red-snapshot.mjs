@@ -72,8 +72,11 @@ export const isModulePath = p => {
 export const isTestPath = p =>
   /(^|\/)(test|tests|__tests__|spec|fixtures?)\//.test(p) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(p)
 
-export const manifestPathFor = (pr, phase) =>
-  `.pair/red-snapshots/pr-${pr}-${String(phase).replace(/[^a-zA-Z0-9._-]/g, '-')}.json`
+// t9d-18: `pr` is a number — never interpolated raw into a path (`--pr '../../ESCAPED'` sealed outside).
+export const manifestPathFor = (pr, phase) => {
+  if (!/^\d+$/.test(String(pr))) throw new Error(`pr must be a number, got ${JSON.stringify(pr)}`)
+  return `.pair/red-snapshots/pr-${pr}-${String(phase).replace(/[^a-zA-Z0-9._-]/g, '-')}.json`
+}
 export const trailerFor = ({ pr, phase, base, manifest }) =>
   `${TRAILER_KEY}: pr=${pr}; phase=${phase}; base=${base}; manifest=${manifest}`
 
@@ -370,7 +373,7 @@ export function verify({ pr, phase, base, cwd }) {
     else if (atSnap !== atHead) breach('test-blob-changed', { path: f })
   }
 
-  const after = (git(['diff', '--name-status', `${snapshot}..HEAD`], cwd) ?? '')
+  const after = (git(['-c', 'core.quotePath=false', 'diff', '--name-status', `${snapshot}..HEAD`], cwd) ?? '')
     .split('\n')
     .filter(Boolean)
     .map(l => {
@@ -519,7 +522,7 @@ function verifyChainCore({ pr, base, cwd, expectContract = true }) {
   for (const [i, c] of contracts.entries()) {
     const end = i + 1 < contracts.length ? `${contracts[i + 1].sha}^` : head
     const manifests = new Set(contracts.map(x => x.manifest))
-    const changes = (git(['diff', '--name-status', `${c.sha}..${end}`], cwd) ?? '')
+    const changes = (git(['-c', 'core.quotePath=false', 'diff', '--name-status', `${c.sha}..${end}`], cwd) ?? '')
       .split('\n')
       .filter(Boolean)
       .map(l => {
@@ -588,6 +591,7 @@ if (isMain()) {
     const cwd = opts.cwd ?? process.cwd()
     const common = { pr: opts.pr, phase: opts.phase, base: opts.base, cwd }
     for (const k of cmd === 'verify-chain' ? ['pr', 'base'] : ['pr', 'phase', 'base']) if (!opts[k]) throw new Error(`--${k} is required`)
+    if (!/^\d+$/.test(String(opts.pr))) throw new Error(`--pr must be a number, got ${JSON.stringify(opts.pr)}`)
     let out
     if (cmd === 'verify-chain') {
       // US-479 (canary 481-v2): `--contract-expected false` states that this cycle has sealed nothing.

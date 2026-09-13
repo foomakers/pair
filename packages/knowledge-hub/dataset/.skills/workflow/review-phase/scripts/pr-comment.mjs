@@ -80,17 +80,22 @@ export function withMarker(body, marker) {
   return `${marker}\n${lines.join('\n')}`
 }
 
+// GitHub caps an issue comment at 65536 characters; a longer body is refused HERE, typed, before any
+// write — and the body travels on stdin (`--input -`), never as one argv (E2BIG above 128 KiB, and an
+// error that echoed the whole body back into the agent's context; t9d-22).
+export const MAX_COMMENT_CHARS = 65536
 export function upsert({ pr, marker, body, repo }) {
+  const full = withMarker(body, marker)
+  if (full.length > MAX_COMMENT_CHARS) return { error: 'body-too-long', length: full.length, max: MAX_COMMENT_CHARS, marker }
   const comments = listComments({ pr, repo })
   const { hits } = findByMarker(comments, marker)
   if (hits.length > 1) return { error: 'marker-ambiguous', ids: hits.map(h => h.id), marker }
-  const full = withMarker(body, marker)
   if (hits.length === 1) {
     if (hits[0].body === full) return { action: 'unchanged', id: hits[0].id, url: hits[0].url, marker }
-    const res = JSON.parse(gh(['api', '-X', 'PATCH', `${apiRepo(repo)}/issues/comments/${hits[0].id}`, '-f', `body=${full}`]))
+    const res = JSON.parse(gh(['api', '-X', 'PATCH', `${apiRepo(repo)}/issues/comments/${hits[0].id}`, '--input', '-'], { input: JSON.stringify({ body: full }) }))
     return { action: 'updated', id: res.id, url: res.html_url, marker }
   }
-  const res = JSON.parse(gh(['api', '-X', 'POST', `${apiRepo(repo)}/issues/${pr}/comments`, '-f', `body=${full}`]))
+  const res = JSON.parse(gh(['api', '-X', 'POST', `${apiRepo(repo)}/issues/${pr}/comments`, '--input', '-'], { input: JSON.stringify({ body: full }) }))
   return { action: 'created', id: res.id, url: res.html_url, marker }
 }
 

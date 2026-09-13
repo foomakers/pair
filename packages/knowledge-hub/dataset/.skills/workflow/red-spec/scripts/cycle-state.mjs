@@ -91,7 +91,10 @@ export const SCOPE_DECISION_ACTIONS = ['ignore', 'new-card', 'extend-current-car
 const SHA_RE = /^[0-9a-f]{40}$/
 // A gap's reproducer command is an executable reference, never shell code pasted into an unsafe
 // eval (S3) — the same hostile-value shape the coordinator already refuses in card/pipeline fields.
-const SHELL_METACHAR_RE = /[;&|`]|\$\(|\.\.\//
+// t9d-16: ONE strict predicate for every executable reference a later stage RUNS (reproducers,
+// counterexamples, closure assertions, worked evidence): shell metacharacters, redirects, control
+// characters, `$(`/`${`, a parent-directory hop, a leading flag and an interpreter prefix are refused.
+const SHELL_METACHAR_RE = /[;&|`<>\r\n\x00-\x1f]|\$\(|\$\{|\.\.\/|^\s*-|^\s*(?:\S*\/)?(?:sh|bash|zsh|dash|ksh)(?:\s|$)/
 // `m<n>` is a RECORD-ONLY phase (US-479 B2, S10): a migration acknowledgment is durable evidence
 // about where this cycle came from, never a position in the cycle. `phaseParts` returns null for it
 // and `deriveNext`/`cycleCounters` skip it, so it can never be read as a step, a review or readiness.
@@ -332,6 +335,8 @@ export function envelopeErrors(data, { phase, skill }) {
             else
               for (const ca of rr.closureAssertions)
                 if (!ca || typeof ca !== 'object' || !ca.id || !ca.expected || (!ca.command && !ca.testRef)) errs.push(`closureAssertion-invalid:${tag}`)
+                else if (ca.command !== undefined && SHELL_METACHAR_RE.test(String(ca.command))) errs.push(`closureAssertion-command-unsafe:${tag}`)
+                else if (ca.testRef !== undefined && SHELL_METACHAR_RE.test(String(ca.testRef))) errs.push(`closureAssertion-testRef-unsafe:${tag}`)
             if (!Array.isArray(rr.affectedBoundaryRefs) || !rr.affectedBoundaryRefs.length || rr.affectedBoundaryRefs.some(b => typeof b !== 'string' || !b.trim())) errs.push(`affectedBoundaryRefs-missing:${tag}`)
             if (!REGRESSION_RISK_STATES.includes(rr.state)) errs.push(`regressionRisk-state-invalid:${tag}`)
             // Only a review bound to the EXACT head it reviewed may discharge (S11): a discharge
@@ -553,7 +558,9 @@ export function cardHash({ story, ghBin = process.env.PAIR_GH_BIN || 'gh' }) {
 export function scopeBaselineHashOf(scopeChanges) {
   const pending = (scopeChanges ?? [])
     .filter(c => (c?.status ?? 'pending') === 'pending')
-    .map(c => ({ id: c.id, type: c.type }))
+    // t9d-8: normalized identity — NFC and trimmed — so whitespace or a composed/decomposed glyph never
+    // turns the maintainer's standing decision into `stale-baseline`.
+    .map(c => ({ id: String(c.id ?? '').normalize('NFC').trim(), type: String(c.type ?? '').normalize('NFC').trim() }))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   return sha256(canonical(pending))
 }

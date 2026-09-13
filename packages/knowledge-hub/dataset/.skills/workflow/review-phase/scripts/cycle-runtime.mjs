@@ -47,7 +47,7 @@
 //        (same story flags, same --dispatchStats/--sharedCost)
 //     → ONE tick, no loop — for a resumed/interrupted observe.
 //
-//   node <skill dir>/scripts/cycle-runtime.mjs finalize --dir <abs> --repo <owner/name> --pr <n>
+//   node <skill dir>/scripts/cycle-runtime.mjs finalize --dir <abs> --repo|--repository <owner/name> [--pr <n>]   (no --pr: publication not-applicable)
 //        (same story flags, same --dispatchStats/--sharedCost)
 //     → the final reduce+write, `completeness` reported honestly (never claims a source it never saw).
 import { existsSync, statSync, openSync, readSync, closeSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, readdirSync, renameSync, realpathSync } from 'node:fs'
@@ -817,6 +817,9 @@ function jsonArg(value) {
 
 async function main(argv) {
   const { cmd, opts } = parseCli(argv)
+  // t9d-30: one spelling everywhere — `--repo` and `--repository` are aliases on every command.
+  if (opts.repo === undefined && opts.repository !== undefined) opts.repo = opts.repository
+  if (opts.repository === undefined && opts.repo !== undefined) opts.repository = opts.repo
   const need = (...ks) => {
     for (const k of ks) if (opts[k] === undefined) throw new Error(`--${k} is required`)
   }
@@ -838,8 +841,10 @@ async function main(argv) {
     return { out: res, code: 0 }
   }
   if (cmd === 'finalize') {
-    need('dir', 'repo', 'pr')
-    const out = finalizeMetrics({ dir: opts.dir, repository: opts.repo, story: opts.story, branch: opts.branch, pr: Number(opts.pr), runId: opts.runId, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, publish: { listComments, findByMarker, upsert }, dispatchStats: jsonArg(opts.dispatchStats), sharedCost: jsonArg(opts.sharedCost) })
+    // t9d-30: `--pr` is optional — no PR yet is the documented `publication.state: not-applicable` path (S8).
+    need('dir', 'repo')
+    if (opts.pr !== undefined && !/^\d+$/.test(String(opts.pr))) throw new Error(`--pr must be a number, got ${JSON.stringify(opts.pr)}`)
+    const out = finalizeMetrics({ dir: opts.dir, repository: opts.repo, story: opts.story, branch: opts.branch, pr: opts.pr === undefined ? undefined : Number(opts.pr), runId: opts.runId, journalPath: opts.journal, usagePath: opts.usage, transcriptsDir: opts.transcripts, publish: { listComments, findByMarker, upsert }, dispatchStats: jsonArg(opts.dispatchStats), sharedCost: jsonArg(opts.sharedCost) })
     // US-479 B4: a repeat finalize that finds nothing new writes nothing — that is the idempotent
     // outcome the recipe relies on, not a failure. Only a real write failure is a non-zero exit.
     // `no-new-evidence` and `stale-revision` are both successful no-ops: the persisted view is

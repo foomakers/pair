@@ -667,6 +667,29 @@ test('t9d-9: `--run-dir` makes the contract expectation MECHANICAL — derived f
   rmSync(runDir, { recursive: true, force: true })
 })
 
+test('t9d-18: `--pr` is a number — a traversal in it never reaches a manifest path (unit and CLI)', () => {
+  assert.throws(() => manifestPathFor('../../ESCAPED', 'a0'), /pr must be a number/)
+  assert.equal(manifestPathFor('7', 'a0'), '.pair/red-snapshots/pr-7-a0.json')
+  const { cwd, base } = repo()
+  redContract(cwd, { fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/'] } })
+  const r = spawnSync(process.execPath, [CLI, 'seal', '--pr', '../../ESCAPED', '--phase', PHASE, '--base', base, '--contract', '.pair/working/red-draft.json', '--cwd', cwd], { encoding: 'utf8' })
+  assert.equal(r.status, 2, r.stdout + r.stderr)
+  assert.match(JSON.parse(r.stdout).error, /--pr/)
+  assert.equal(existsSync(join(cwd, '.pair', 'red-snapshots')), false, 'nothing was written')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('t9d-21: a non-ASCII test path changed above the seal is reported as `unlisted-test-changed` with its real name — never misclassified through git`s quoted output', () => {
+  const { cwd, base } = repo()
+  redContract(cwd, { fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/'] } })
+  const s = seal({ pr: PR, phase: PHASE, base, contractPath: '.pair/working/red-draft.json', cwd })
+  rmSync(join(cwd, '.pair/working/red-draft.json'))
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n', 'test/\u00fcn\u00efcode.test.js': 'new\n' })
+  const chain = verifyChain({ pr: PR, base, cwd })
+  assert.deepEqual(chain.breaches.map(b => `${b.code}:${b.path}`), ['unlisted-test-changed:test/\u00fcn\u00efcode.test.js'])
+  rmSync(cwd, { recursive: true, force: true })
+})
+
 test('verify-chain breach: a sealed test changed outside a successor snapshot, a production change out of the scope in force, an unlisted test, a missing snapshot', () => {
   const { cwd, base, head1 } = chainRepo()
   // tamper between seals: a sealed blob edited by an ordinary commit is a breach even though a revision follows

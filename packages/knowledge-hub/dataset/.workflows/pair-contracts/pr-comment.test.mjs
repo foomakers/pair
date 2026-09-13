@@ -48,7 +48,7 @@ const fs = require('fs')
 const args = process.argv.slice(2)
 fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(args) + '\\n')
 const state = JSON.parse(fs.readFileSync(${JSON.stringify(state)}, 'utf8'))
-const body = () => { const i = args.indexOf('-f'); return args[i + 1].replace(/^body=/, '') }
+const body = () => { if (args.includes('--input')) return JSON.parse(fs.readFileSync(0, 'utf8')).body; const i = args.indexOf('-f'); return args[i + 1].replace(/^body=/, '') }
 if (args[0] === 'api' && args.includes('--paginate')) {
   // two pages, to prove the concatenated-arrays parsing
   const mid = Math.ceil(state.length / 2)
@@ -145,6 +145,22 @@ test('t9d-3: splitPages parses concatenated --paginate arrays string-aware (brac
   assert.deepEqual(splitPages(JSON.stringify(a) + '\n' + JSON.stringify(b) + '\n'), [a, b])
   assert.deepEqual(splitPages(''), [])
   assert.throws(() => splitPages('[{"id":1'), /unterminated/i)
+})
+
+test('t9d-22: the body travels on stdin (`--input -`), never as one argv — and a body over GitHub`s 65536-character limit is a typed error before any write', () => {
+  const fake = fakeGh([{ id: 5, body: `${MARKER}\nold`, html_url: 'https://x/c/5' }])
+  let r = run(fake, 'upsert', '--pr', '7', '--marker', MARKER, '--body-file', bodyFile('new'))
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const patch = fake.calls().find(c => c.includes('PATCH'))
+  assert.ok(patch.includes('--input') && patch.includes('-'), JSON.stringify(patch))
+  assert.ok(!patch.some(a => /^body=/.test(a)), 'no body in argv')
+  assert.equal(fake.state()[0].body, `${MARKER}\nnew`)
+  r = run(fake, 'upsert', '--pr', '7', '--marker', MARKER, '--body-file', bodyFile('x'.repeat(70000)))
+  assert.equal(r.status, 1)
+  const out = JSON.parse(r.stdout)
+  assert.equal(out.error, 'body-too-long')
+  assert.ok(out.length > 65536)
+  assert.equal(fake.calls().filter(c => c.includes('PATCH') || c.includes('POST')).length, 1, 'the oversized body was never sent')
 })
 
 test('find is read-only; a malformed marker or an unknown command is a usage error (exit 2)', () => {

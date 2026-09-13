@@ -1068,7 +1068,8 @@ const isPrepareRefusal = r => !!r && PREPARE_REFUSALS.has(r.status)
 // executable evidence or it is nothing: the coordinator checks the shape it can see (the durable
 // state re-validates it against the sealed identity before the write), so prose can never buy a
 // revision. `split-required` is a different answer and stays terminal.
-const SHELL_UNSAFE = /[;&|`]|\$\(|\.\.\//
+// t9d-16: the same strict predicate cycle-state.mjs holds every executable reference to.
+const SHELL_UNSAFE = /[;&|`<>\r\n\x00-\x1f]|\$\(|\$\{|\.\.\/|^\s*-|^\s*(?:\S*\/)?(?:sh|bash|zsh|dash|ksh)(?:\s|$)/
 const contradictionDefect = r => {
   if (r.revisionReason !== 'contradicts-approved-authority') return 'revisionReason must be contradicts-approved-authority'
   if (!SHA256_RE.test(String(r.predecessorContractHash ?? ''))) return 'predecessorContractHash is not a sha256 digest'
@@ -1609,7 +1610,7 @@ async function driveStory(story) {
     // US-479 T-22 (S5) / ADR-024 amendment 2026-09-10: the four new non-ready statuses pass
     // through unmapped — never silently coerced to failed-resume, which would make a clean
     // technical convergence with pending scope proposals look like an engine failure.
-    const map = { 'failed-preparation': 'failed-preparation', 'failed-contract': 'failed-contract', 'failed-seal': 'failed-seal', 'failed-implement': 'failed-implement', 'failed-fix': 'failed-fix', 'failed-custody': 'failed-custody', escalate: 'escalate', 'failed-resume': 'failed-resume', 'awaiting-scope-decision': 'awaiting-scope-decision', 'failed-publication': 'failed-publication', interrupted: 'interrupted', abandoned: 'abandoned' }
+    const map = { 'failed-preparation': 'failed-preparation', 'failed-contract': 'failed-contract', 'failed-seal': 'failed-seal', 'failed-implement': 'failed-implement', 'failed-fix': 'failed-fix', 'failed-custody': 'failed-custody', 'failed-verify': 'failed-verify', escalate: 'escalate', 'failed-resume': 'failed-resume', 'awaiting-scope-decision': 'awaiting-scope-decision', 'failed-publication': 'failed-publication', interrupted: 'interrupted', abandoned: 'abandoned' }
     return result(map[n.reason] ?? 'failed-resume', { reason: n.detail ?? n.reason, budget: n.budget, refusal: n.refusal, findings: n.findings ?? n.rejection, phase: n.phase })
   }
 
@@ -1676,6 +1677,15 @@ async function driveStory(story) {
       if (typeof f.blocking !== 'boolean') errs.push(`finding ${f.id}: blocking is not a boolean`)
       else if (f.blocking !== expectedBlocking(f)) errs.push(`finding ${f.id}: blocking=${f.blocking} disagrees with the severity policy (floor ${SEVERITY_FLOOR?.name ?? 'none'}, severity ${f.severity}, transition ${f.transition})`)
       if (f.external === true && f.transition === 'resolved' && !String(f.evidence ?? '').trim()) errs.push(`finding ${f.id}: an external finding is resolved only with read-back evidence`)
+      // t9d-16: closure assertions are what red-verify, green-fix and the next review are told to RUN —
+      // an executable reference, never shell code; the publisher applies the same predicate.
+      const rr = f.regressionRisk
+      if (rr && typeof rr === 'object' && !Array.isArray(rr)) {
+        if (rr.reproducerRef !== undefined && SHELL_UNSAFE.test(String(rr.reproducerRef))) errs.push(`finding ${f.id}: regressionRisk.reproducerRef carries shell syntax`)
+        ;(Array.isArray(rr.closureAssertions) ? rr.closureAssertions : []).forEach((ca, i) => {
+          for (const k of ['command', 'testRef']) if (ca?.[k] !== undefined && SHELL_UNSAFE.test(String(ca[k]))) errs.push(`finding ${f.id}: regressionRisk.closureAssertions[${i}].${k} carries shell syntax`)
+        })
+      }
       const prior = known.get(f.id)
       if (prior && normSeverity(prior.severity) !== normSeverity(f.severity) && !String(f.severityEvidence ?? '').trim()) errs.push(`finding ${f.id}: severity changed ${prior.severity} -> ${f.severity} without severityEvidence`)
       const carriedHistory = history && (f.transition === 'resolved' || f.transition === 'superseded') && f.blocking === false && !!String(f.evidence ?? '').trim()

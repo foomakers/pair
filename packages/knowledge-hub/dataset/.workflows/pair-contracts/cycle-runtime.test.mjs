@@ -52,7 +52,7 @@ const fs = require('fs')
 const args = process.argv.slice(2)
 const statePath = ${JSON.stringify(state)}
 const list = JSON.parse(fs.readFileSync(statePath, 'utf8'))
-const body = () => { const i = args.indexOf('-f'); return args[i + 1].replace(/^body=/, '') }
+const body = () => { if (args.includes('--input')) return JSON.parse(fs.readFileSync(0, 'utf8')).body; const i = args.indexOf('-f'); return args[i + 1].replace(/^body=/, '') }
 if (args[0] === 'api' && args.includes('--paginate')) process.stdout.write(JSON.stringify(list))
 else if (args[0] === 'api' && args.includes('POST')) {
   const c = { id: list.reduce((m, x) => Math.max(m, x.id), 0) + 1, body: body(), html_url: 'https://x/c/1' }
@@ -410,6 +410,23 @@ test('t9d-5: a `gh` that fails is a typed `failed` publication — metrics.json 
   const again = spawnSync('node', [CLI, 'finalize', '--dir', dir, '--repo', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7', '--runId', 'run-1'], { encoding: 'utf8', env: { ...process.env, PATH: `${ghDir}:${process.env.PATH}` } })
   assert.equal(again.status, 0, again.stdout + again.stderr)
   assert.equal(JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8')).publication.state, 'confirmed')
+})
+
+test('t9d-30: one flag spelling everywhere — `--repo` and `--repository` are aliases on every command, and `finalize` without `--pr` is the documented no-PR path (publication not-applicable, exit 0)', () => {
+  const { dir } = runDir()
+  const file = join(dir, 'd.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath: '/abs/a0-red-contract.json', contractHash: `sha256:${'1'.repeat(64)}`, mode: 'initial' }))
+  publish({ dir, file, phase: 'a0', skill: 'red-spec', workflowVersion: '4.0.1' })
+  const fin = spawnSync('node', [CLI, 'finalize', '--dir', dir, '--repository', 'foomakers/pair', '--story', '42', '--branch', 'b', '--runId', 'run-1'], { encoding: 'utf8' })
+  assert.equal(fin.status, 0, fin.stdout + fin.stderr)
+  const out = JSON.parse(fin.stdout.trim().split('\n').pop())
+  assert.equal(out.publication.state, 'not-applicable')
+  assert.ok(existsSync(join(dir, 'metrics.json')))
+  assert.equal(JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8')).identity.prNumber, null)
+  const rec = spawnSync('node', [CLI, 'reconcile', '--dir', dir, '--repo', 'foomakers/pair', '--story', '42', '--branch', 'b'], { encoding: 'utf8' })
+  assert.equal(rec.status, 0, rec.stdout + rec.stderr)
+  const entry = spawnSync('node', [CLI, 'entry', '--dir', dir, '--repository', 'foomakers/pair', '--story', '42', '--workflowVersion', '4.0.1'], { encoding: 'utf8' })
+  assert.equal(entry.status, 0, entry.stdout + entry.stderr)
 })
 
 // ── finalize: honest completeness, never claims a source it never saw ───────────────────────
