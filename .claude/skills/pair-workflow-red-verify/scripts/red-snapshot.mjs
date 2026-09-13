@@ -588,6 +588,12 @@ const isMain = () => {
 if (isMain()) {
   try {
     const { cmd, opts } = parseCli(process.argv.slice(2))
+    // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
+    const FLAGS = { 'verify-chain': ['pr', 'base', 'cwd', 'contract-expected', 'run-dir'], seal: ['pr', 'phase', 'base', 'cwd', 'contract', 'root'], verify: ['pr', 'phase', 'base', 'cwd'] }
+    if (FLAGS[cmd]) {
+      const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
+      if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
+    }
     const cwd = opts.cwd ?? process.cwd()
     const common = { pr: opts.pr, phase: opts.phase, base: opts.base, cwd }
     for (const k of cmd === 'verify-chain' ? ['pr', 'base'] : ['pr', 'phase', 'base']) if (!opts[k]) throw new Error(`--${k} is required`)

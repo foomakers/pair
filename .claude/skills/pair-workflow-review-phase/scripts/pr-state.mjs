@@ -110,6 +110,12 @@ const isMain = () => {
 if (isMain()) {
   try {
     const { cmd, opts } = parseCli(process.argv.slice(2))
+    // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
+    const FLAGS = { conclude: ['pr', 'sha', 'verdict', 'repo', 'description', 'target-url'], find: ['pr', 'sha', 'repo'] }
+    if (FLAGS[cmd]) {
+      const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
+      if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
+    }
     for (const k of ['pr', 'sha']) if (!opts[k]) throw new Error(`--${k} is required`)
     if (!/^\d+$/.test(String(opts.pr))) throw new Error(`--pr must be a number, got ${JSON.stringify(opts.pr)}`)
     if (!SHA_RE.test(String(opts.sha))) throw new Error(`--sha must be a lower-case 40-hex commit, got ${JSON.stringify(opts.sha)}`)

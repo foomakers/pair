@@ -52,7 +52,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
-import { join, basename, dirname } from 'node:path'
+import { join, basename, dirname, resolve as resolvePath, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -468,6 +468,44 @@ export function envelopeErrors(data, { phase, skill }) {
 function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
+// ── path flags (t9d-20, DT-32) ───────────────────────────────────────────────────────────────
+// Every path the CLI takes is checked ONCE, before any read or write: no `..` segment anywhere
+// (`path-escape`), and a run directory (`--dir`, each `--legacy`) must REALLY live under a
+// `.pair/working/runs/` tree — a symlink pointing elsewhere is an escape (`path-outside-runs`).
+// Non-existent tails are resolved through their nearest existing ancestor, so a first `publish`
+// into a not-yet-created run directory still works.
+const hasParentHop = p => String(p ?? '').split(/[\\/]/).includes('..')
+function realish(abs) {
+  let cur = abs
+  const tail = []
+  for (;;) {
+    if (existsSync(cur)) {
+      try {
+        return join(realpathSync(cur), ...tail.reverse())
+      } catch {
+        return abs
+      }
+    }
+    const up = dirname(cur)
+    if (up === cur) return abs
+    tail.push(basename(cur))
+    cur = up
+  }
+}
+export function safeRunDir(dir) {
+  const p = String(dir ?? '').trim()
+  if (!p) return { error: 'dir-missing' }
+  if (hasParentHop(p)) return { error: 'path-escape', path: p }
+  const abs = resolvePath(p)
+  const real = realish(abs)
+  if (!real.split(sep).join('/').includes('/.pair/working/runs/')) return { error: 'path-outside-runs', path: abs, real }
+  return { path: abs, real }
+}
+export function safePath(name, p) {
+  if (p !== undefined && hasParentHop(p)) return { error: 'path-escape', flag: name, path: String(p) }
+  return { path: p }
+}
+
 // ── the run-directory mutex (US-479 T-16 / t9d-7) ──────────────────────────────────────────────
 // `mkdir <dir>/.lock` is the atomic acquire. The holder records itself inside (`owner.json`: pid,
 // host, startedAt) so a lock left by a writer the supervisor SIGKILLed (a `finally` never runs then)
@@ -1087,6 +1125,9 @@ export function discoverScopeDecisions({ dir, repo, pr, maintainer, ghBin = proc
 }
 
 export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, pr, lockWaitMs = 5000, ghBin }) {
+  const where = safeRunDir(dir)
+  if (where.error) return { published: false, reason: where.error, path: where.path }
+  if (safePath('file', file).error) return { published: false, reason: 'path-escape', path: String(file) }
   let data
   try {
     data = JSON.parse(readFileSync(file, 'utf8'))
@@ -1902,6 +1943,8 @@ export function cycleCounters(allHandoffs, precomputedLedger) {
 }
 
 export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story }) {
+  const where = safeRunDir(dir)
+  if (where.error) return { status: 'invalid', reason: where.error, path: where.path, workflowVersion }
   const handoffs = readHandoffs(dir)
   const bad = handoffs.find(h => h.invalid)
   if (bad) return { status: 'invalid', reason: bad.invalid, workflowVersion }
@@ -1911,11 +1954,13 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
     // or schema are LEGACY evidence: never adopted, never overwritten, listed so the caller knows a
     // fresh cycle is starting beside them (an explicit runId is how a maintainer starts it).
     const legacyRuns = []
-    if (pr !== undefined && runsRoot && story && existsSync(runsRoot)) {
+    // t9d-11: the scan is by STORY; a PR, when known, narrows it — a fresh-entry card (no PR yet) must
+    // still find the cycle that already exists beside it, or two siblings make every resume ambiguous.
+    if (runsRoot && story && existsSync(runsRoot)) {
       const candidates = readdirSync(runsRoot).filter(r => {
         const other = join(runsRoot, r, String(story))
         if (other === dir || !existsSync(other)) return false
-        const hs = readHandoffs(other).filter(h => h.data && (h.data.pr === undefined || String(h.data.pr) === String(pr)))
+        const hs = readHandoffs(other).filter(h => h.data && (pr === undefined || h.data.pr === undefined || String(h.data.pr) === String(pr)))
         if (!hs.length) return false
         const compatibleRun = hs.every(h => h.data.schemaVersion === SCHEMA_VERSION && compatible(workflowVersion, h.data.workflowVersion))
         if (!compatibleRun) legacyRuns.push(r)
@@ -2140,6 +2185,30 @@ const isMain = () => {
 if (isMain()) {
   try {
     const { cmd, opts } = parseCli(process.argv.slice(2))
+    // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
+    const FLAGS = {
+      resolve: ['acHash', 'dir', 'entry', 'head', 'inputs', 'policy', 'pr', 'runsRoot', 'story', 'workflowVersion'],
+      publish: ['attempt', 'dir', 'file', 'phase', 'pr', 'predecessor', 'skill', 'workflowVersion'],
+      hash: ['file'],
+      'ac-hash': ['story'],
+      inputs: ['json'],
+      'apply-scope-decisions': ['decision-ref', 'dir', 'maintainer', 'pr', 'repo', 'workflowVersion'],
+      'migrate-inspect': ['dir'],
+      'migrate-acknowledge': ['branch', 'dir', 'head', 'legacy', 'pr', 'run', 'story', 'workflowVersion'],
+      'test-identity': ['command', 'cwd', 'env-keys', 'toolchain'],
+    }
+    if (FLAGS[cmd]) {
+      const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
+      if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
+    }
+    // t9d-20: path flags are checked before anything runs.
+    if (opts.dir !== undefined && FLAGS[cmd]?.includes('dir')) {
+      const where = safeRunDir(opts.dir)
+      if (where.error) throw new Error(`${where.error}: --dir ${opts.dir}`)
+    }
+    for (const k of ['file', 'legacy', 'runsRoot', 'cwd'])
+      if (opts[k] !== undefined)
+        for (const one of String(opts[k]).split(',')) if (hasParentHop(one)) throw new Error(`path-escape: --${k} ${one}`)
     const need = (...ks) => {
       for (const k of ks) if (opts[k] === undefined) throw new Error(`--${k} is required`)
     }

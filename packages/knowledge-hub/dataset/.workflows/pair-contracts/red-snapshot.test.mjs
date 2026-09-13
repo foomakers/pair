@@ -670,6 +670,14 @@ test('t9d-9: `--run-dir` makes the contract expectation MECHANICAL — derived f
   rmSync(runDir, { recursive: true, force: true })
 })
 
+test('t9d-19 (DT-32): an unknown flag is refused before anything runs', () => {
+  const { cwd, base } = repo()
+  const r = spawnSync(process.execPath, [CLI, 'verify-chain', '--pr', String(PR), '--base', base, '--bogusFlag', 'pwned'], { cwd, encoding: 'utf8' })
+  assert.equal(r.status, 2, r.stdout + r.stderr)
+  assert.match(JSON.parse(r.stdout).error, /unknown flag.*--bogusFlag/)
+  rmSync(cwd, { recursive: true, force: true })
+})
+
 test('t9d-18: `--pr` is a number — a traversal in it never reaches a manifest path (unit and CLI)', () => {
   assert.throws(() => manifestPathFor('../../ESCAPED', 'a0'), /pr must be a number/)
   assert.equal(manifestPathFor('7', 'a0'), '.pair/red-snapshots/pr-7-a0.json')

@@ -56,7 +56,7 @@ import { fileURLToPath } from 'node:url'
 import { reduceCycleMetrics, writeMetrics, mergeObservations, publishSummary, readTerminalMarker } from './cycle-metrics.mjs'
 export { readTerminalMarker }
 import { listComments, findByMarker, upsert } from './pr-comment.mjs'
-import { resolve as resolveCycleState, readHandoffs, SCHEMA_VERSION } from './cycle-state.mjs'
+import { resolve as resolveCycleState, readHandoffs, SCHEMA_VERSION, safeRunDir, safePath } from './cycle-state.mjs'
 
 // ── journal tailing (S7): explicit sources only, complete JSONL records, tolerant of a partial
 // last line, rotation/truncation detected by a shrunk size, replay is idempotent via the offset ──
@@ -820,6 +820,30 @@ async function main(argv) {
   // t9d-30: one spelling everywhere — `--repo` and `--repository` are aliases on every command.
   if (opts.repo === undefined && opts.repository !== undefined) opts.repo = opts.repository
   if (opts.repository === undefined && opts.repo !== undefined) opts.repository = opts.repo
+  // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
+  const SOURCES = ['branch', 'dir', 'dispatchStats', 'journal', 'pr', 'repo', 'repository', 'runId', 'sharedCost', 'story', 'transcripts', 'usage']
+  const FLAGS = {
+    entry: ['dir', 'policy', 'pr', 'repo', 'repository', 'story', 'workflowVersion'],
+    reconcile: SOURCES,
+    observe: [...SOURCES, 'grace-ms', 'interval-ms', 'invocation', 'since', 'max-ticks'],
+    finalize: SOURCES,
+    'mark-terminal': ['dir', 'invocation', 'result', 'story'],
+    'dispatch-stats': ['out', 'result', 'story'],
+    'usage-extract': ['journal', 'out', 'runId', 'story', 'transcripts'],
+  }
+  if (FLAGS[cmd]) {
+    const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
+    if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
+  }
+  // t9d-20: `--dir` must really live under a `.pair/working/runs/` tree; every other path flag is `..`-free.
+  if (opts.dir !== undefined && FLAGS[cmd]?.includes('dir')) {
+    const where = safeRunDir(opts.dir)
+    if (where.error) throw new Error(`${where.error}: --dir ${opts.dir}`)
+  }
+  for (const k of ['journal', 'usage', 'transcripts', 'out', 'result']) {
+    const chk = safePath(k, opts[k])
+    if (chk.error) throw new Error(`path-escape: --${k} ${opts[k]}`)
+  }
   const need = (...ks) => {
     for (const k of ks) if (opts[k] === undefined) throw new Error(`--${k} is required`)
   }

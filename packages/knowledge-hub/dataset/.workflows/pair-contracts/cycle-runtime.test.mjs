@@ -4,7 +4,7 @@
 // imports resolve nowhere in the dataset tree — execute this suite via `pnpm workflows:test`, never in place there.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, appendFileSync, mkdirSync, readFileSync, existsSync, readdirSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, appendFileSync, mkdirSync, readFileSync, existsSync, readdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -1267,6 +1267,30 @@ test('DT-32: unknown flags and malformed arguments are refused explicitly — ne
   assert.notEqual(bogus.status, 0)
   assert.match(bogus.stdout + bogus.stderr, /unknown command/)
   assert.deepEqual(readdirSync(dir).sort(), before, 'a refused invocation writes nothing into the run directory')
+})
+
+test('t9d-19 / t9d-20 (DT-32): an unknown flag is refused; `--dir` with a parent hop or a symlink out of `.pair/working/runs`, or a `--journal`/`--transcripts`/`--out` with a parent hop, is a typed path refusal — nothing written', () => {
+  const { root, dir } = runDir()
+  publishedReview(dir)
+  const cli = (...args) => spawnSync('node', [CLI, ...args], { encoding: 'utf8' })
+  let r = cli('reconcile', '--dir', dir, '--repository', 'foomakers/pair', '--story', '42', '--branch', 'b', '--bogusFlag', 'pwned')
+  assert.notEqual(r.status, 0)
+  assert.match(r.stdout + r.stderr, /unknown flag.*--bogusFlag/)
+  r = cli('reconcile', '--dir', `${dir}/../../../../../secret`, '--repository', 'foomakers/pair', '--story', '42', '--branch', 'b')
+  assert.notEqual(r.status, 0)
+  assert.match(r.stdout + r.stderr, /path-escape/)
+  assert.equal(existsSync(join(root, 'secret')), false)
+  const outside = mkdtempSync(join(tmpdir(), 'outside-'))
+  const link = join(root, '.pair', 'working', 'runs', 'run-1', 'linked')
+  symlinkSync(outside, link)
+  r = cli('reconcile', '--dir', link, '--repository', 'foomakers/pair', '--story', '42', '--branch', 'b')
+  assert.notEqual(r.status, 0)
+  assert.match(r.stdout + r.stderr, /path-outside-runs/)
+  assert.deepEqual(readdirSync(outside), [])
+  r = cli('reconcile', '--dir', dir, '--repository', 'foomakers/pair', '--story', '42', '--branch', 'b', '--journal', `${root}/../journal.jsonl`)
+  assert.match(r.stdout + r.stderr, /path-escape/)
+  r = cli('dispatch-stats', '--result', join(root, 'wf.json'), '--story', '42', '--out', `${root}/../stats.json`)
+  assert.match(r.stdout + r.stderr, /path-escape/)
 })
 
 test('DT-32: a FOREIGN journal is not this cycle`s evidence, and files the CLI does not own are untouched', () => {

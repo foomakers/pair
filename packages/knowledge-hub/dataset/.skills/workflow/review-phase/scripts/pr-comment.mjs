@@ -122,6 +122,12 @@ const isMain = () => {
 if (isMain()) {
   try {
     const { cmd, opts } = parseCli(process.argv.slice(2))
+    // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
+    const FLAGS = { upsert: ['pr', 'marker', 'body-file', 'repo'], find: ['pr', 'marker', 'repo'] }
+    if (FLAGS[cmd]) {
+      const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
+      if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
+    }
     for (const k of ['pr', 'marker']) if (!opts[k]) throw new Error(`--${k} is required`)
     if (!/^<!--\s*pair:[a-z-]+ #\S+ PR#\d+(?: run:[A-Za-z0-9][A-Za-z0-9._-]*)?\s*-->$/.test(opts.marker)) throw new Error(`marker must look like <!-- pair:<kind> #<story> PR#<n> [run:<runId>] -->, got ${JSON.stringify(opts.marker)}`)
     let out

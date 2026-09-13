@@ -146,7 +146,7 @@ process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(1)
 }
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync, rmdirSync, utimesSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync, rmdirSync, utimesSync, symlinkSync } from 'node:fs'
 import { tmpdir, hostname } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -631,6 +631,47 @@ test('resolve: changed effective inputs invalidate the review evidence only — 
   assert.deepEqual({ step: r.next.step, mode: r.next.mode }, { step: 'verify', mode: 're-review' })
   assert.deepEqual(r.next.invalidated, ['r0-review-phase'])
   assert.equal(r.next.inputsChanged, true)
+})
+
+test('t9d-11: with an empty run directory and NO PR yet, other run directories of the same story are still searched — a fresh-entry card never starts a second cycle beside an existing one', () => {
+  const { root, dir } = runDir()
+  const runs = join(root, '.pair', 'working', 'runs')
+  const other = join(runs, 'run-0', '42')
+  mkdirSync(other, { recursive: true })
+  redSpec(other, 'a0')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh', runsRoot: runs, story: '42' })
+  assert.deepEqual({ status: r.status, runId: r.runId }, { status: 'other-run', runId: 'run-0' })
+  const unrelated = resolve({ dir: join(runs, 'run-1', '43'), workflowVersion: V, policy: POLICY, entry: 'fresh', runsRoot: runs, story: '43' })
+  assert.equal(unrelated.status, 'empty', 'another story`s runs are never adopted')
+})
+
+test('t9d-19 / t9d-20 (DT-32): an unknown flag is refused before anything runs; a `--dir` (or `--legacy`, `--file`) with a parent hop or a symlink out of `.pair/working/runs` is a typed path refusal — never a write elsewhere', () => {
+  const { root, dir } = runDir()
+  const draft = join(dir, 'draft.json')
+  writeFileSync(draft, JSON.stringify({ run: 'run-1', story: '42', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red' }))
+  const cli = (...args) => spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8' })
+  let r = cli('resolve', '--dir', dir, '--workflowVersion', V, '--entry', 'pr', '--pr', '7', '--bogusFlag', 'pwned')
+  assert.equal(r.status, 2, r.stdout)
+  assert.match(JSON.parse(r.stdout).error, /unknown flag.*--bogusFlag/)
+  r = cli('publish', '--dir', `${dir}/../../../../../secret`, '--file', draft, '--phase', 'a0', '--skill', 'red-spec', '--workflowVersion', V)
+  assert.equal(r.status, 2, r.stdout)
+  assert.match(JSON.parse(r.stdout).error, /path-escape/)
+  assert.equal(existsSync(join(root, 'secret')), false)
+  const outside = mkdtempSync(join(tmpdir(), 'outside-'))
+  const link = join(root, '.pair', 'working', 'runs', 'run-1', 'linked')
+  symlinkSync(outside, link)
+  r = cli('publish', '--dir', link, '--file', draft, '--phase', 'a0', '--skill', 'red-spec', '--workflowVersion', V)
+  assert.equal(r.status, 2, r.stdout)
+  assert.match(JSON.parse(r.stdout).error, /path-outside-runs/)
+  assert.deepEqual(readdirSync(outside), [], 'nothing was written through the symlink')
+  r = cli('publish', '--dir', dir, '--file', `${dir}/../other/draft.json`, '--phase', 'a0', '--skill', 'red-spec', '--workflowVersion', V)
+  assert.match(JSON.parse(r.stdout).error, /path-escape/)
+  r = cli('migrate-acknowledge', '--dir', dir, '--legacy', `${dir}/../legacy`, '--workflowVersion', V, '--story', '42', '--run', 'run-1', '--head', SHA('a'))
+  assert.match(JSON.parse(r.stdout).error, /path-escape/)
+  // the JS entry point refuses the same way
+  assert.deepEqual(publish({ dir: `${dir}/../x`, file: draft, phase: 'a0', skill: 'red-spec', workflowVersion: V }).reason, 'path-escape')
+  // and a legitimate absolute run directory still publishes
+  assert.equal(publish({ dir, file: draft, phase: 'a0', skill: 'red-spec', workflowVersion: V }).published, true)
 })
 
 test('resolve: with an empty run directory and a PR, other run directories of the same story are searched — one match is adopted, several are ambiguous', () => {

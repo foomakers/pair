@@ -121,6 +121,14 @@ test('degradation is reported, never faked: a status POST the token cannot make 
   assert.equal(r.status, 1)
 })
 
+test('t9d-19 (DT-32): an unknown flag is refused before any call to gh', () => {
+  const fake = fakeGh()
+  const r = run(fake, 'find', '--pr', '7', '--sha', SHA, '--bogusFlag', 'pwned')
+  assert.equal(r.status, 2)
+  assert.match(out(r).error, /unknown flag.*--bogusFlag/)
+  assert.equal(fake.calls().length, 0)
+})
+
 test('conclude is idempotent: the same conclusion on a head that already carries it changes nothing and reports `unchanged`; find is read-only', () => {
   const fake = fakeGh({ labels: ['pr-state:ready-to-merge'] })
   writeFileSync(join(fake.dir, 'state.json'), JSON.stringify({ labels: ['pr-state:ready-to-merge'], statuses: [{ sha: SHA, state: 'success', context: 'pair-review', description: 'd' }] }))

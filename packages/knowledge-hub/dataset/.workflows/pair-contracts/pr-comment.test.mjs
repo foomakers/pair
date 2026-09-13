@@ -150,6 +150,14 @@ test('t9d-3: splitPages parses concatenated --paginate arrays string-aware (brac
   assert.throws(() => splitPages('[{"id":1'), /unterminated/i)
 })
 
+test('t9d-19 (DT-32): an unknown flag is refused before any call to gh', () => {
+  const fake = fakeGh([])
+  const r = run(fake, 'find', '--pr', '7', '--marker', MARKER, '--bogusFlag', 'pwned')
+  assert.equal(r.status, 2)
+  assert.match(JSON.parse(r.stdout).error, /unknown flag.*--bogusFlag/)
+  assert.equal(fake.calls().length, 0)
+})
+
 test('t9d-22: the body travels on stdin (`--input -`), never as one argv — and a body over GitHub`s 65536-character limit is a typed error before any write', () => {
   const fake = fakeGh([{ id: 5, body: `${MARKER}\nold`, html_url: 'https://x/c/5' }])
   let r = run(fake, 'upsert', '--pr', '7', '--marker', MARKER, '--body-file', bodyFile('new'))
