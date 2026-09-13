@@ -78,7 +78,7 @@ The script (shipped beside this file, [scripts/red-snapshot.mjs](scripts/red-sna
 
 ### Step 6: Persist and hand off
 
-Publish the handoff (`skill: "red-verify"`, `inputHead: $head`, `inputsDigest`, `attempt`, `verified`, `findings`, `sealed`, `snapshot?`, `manifest?`, `contractHash`, `reproduced: [{ rowId, command, observed }]`, `elapsedMs`) with `cycle-state.mjs publish … --predecessor $phase-red-spec ${pr:+--pr $pr}`, run `resolve` again and return its `next`.
+Publish the handoff (`skill: "red-verify"`, `inputHead: $head`, `inputsDigest`, `attempt`, `verified`, `findings`, `sealed`, `snapshot?`, `manifest?`, `contractHash`, `reproduced: [{ rowId, command, observed }]`, `elapsedMs`) with `cycle-state.mjs publish … --predecessor $phase-red-spec ${pr:+--pr $pr}`, run `resolve` again and return its `next` **verbatim** — copy the whole object the script printed; never retype, summarize or drop a field it carries because another field in your answer already seems to say the same thing (e.g. `contract`, next to a `contractHash` you also state). The orchestrator checks the object's shape, not your restatement of it; a hand-reconstructed `next` missing one field is refused as unusable.
 
 **US-479 S11 — active regression guards.** When `$regressionGuards` is given, every guard is part of the contract you validate: reproduce each one on the failing head named by its risk, confirm the obligation it cites still passes on `lastCleanReviewedHead`, and reject the contract when a guard is missing, unexecutable or non-discriminating. A guard is not a row you may waive.
 

@@ -139,7 +139,7 @@ remediation and a regression that remediation introduced. An omitted applicable 
    ```
 
    A refusal (`stale`, `split-required`, `unprovable`, `dirty`) is published too, with `reason` — it is the cycle's answer, not a dead agent. `dirty` and `stale` name a cause OUTSIDE the cycle: once a human clears it the same phase is dispatched again as the next attempt (once); `unprovable` and `split-required` are terminal at once. A `contradiction` (Step 4.1) is published the same way and is NOT terminal — it routes the successor revision.
-3. Run `resolve` again (Step 0 command) and return its `next`.
+3. Run `resolve` again (Step 0 command) and return its `next` **verbatim** — copy the whole object the script printed; never retype, summarize or drop a field it carries because another field in your answer already seems to say the same thing (e.g. `contract`, next to a `contractHash` you also state). The orchestrator checks the object's shape, not your restatement of it; a hand-reconstructed `next` missing one field is refused as unusable.
 
 ## Output Format
 
