@@ -438,6 +438,36 @@ persisted body; no real card was touched or created by this remediation.
 - `models.redMapper` no longer exists (`models.planner` replaces it); `historyDecision` and `custodyReset` are unknown card keys.
 - The defect history that used to live as comments in the workflow file is recorded once, in the appendix below; the file describes behaviour only.
 
+## Adoption Impact
+
+The template requires this section and it was missing (q-10, independent pass over review
+5190603055) — the ADR is the record, and this is where it says which adoption files must carry the
+rules an agent actually reads:
+
+- **`.pair/adoption/tech/way-of-working.md` § Review Convergence** — every rule of this ADR that a
+  cycle must obey is stated there, not read out of this file: the negative transition matrix before
+  implementation (amendment l), rollback as a maintainer's call with derived notes (r/s), the
+  reintroduction transition (o), the regression-risk rewind (k) and the four judgment stages with
+  incremental resume (b). **Rule**: an amendment here that changes what a cycle may do updates that
+  section in the same commit, or the rule does not exist for any agent.
+- **`.pair/adoption/tech/way-of-working.md` § Assignment / § Quality Gates** — the principals and
+  the tier gate the phases resolve at run time (assignee cascade for the scope-decision principal,
+  the review tier matrix the review set is declared from). No delivery-phase value is hard-coded in
+  a shipped script; adoption is where it is declared.
+- **`.pair/adoption/decision-log/`** — each per-decision detail this ADR delegates is its own ADL,
+  not prose here: human-only scope decisions and their identity, the unknown-AC-format refusal,
+  derived rollback notes, custody never inferring a breach, the run-directory lock, the final
+  reviewer's check/label authority and `finalize`, the card transport's accepted debt, and the
+  author-blind PR-comment matching. Adding one regenerates `.pair/llms.txt`.
+- **No change to `tech-stack.md`, `architecture.md` or `infrastructure.md`** — the phases ship as
+  skills + workflow assets in the existing dataset registries; this ADR adds no dependency, service
+  or deployment surface. Recorded so a future reader does not go looking for one.
+
+Beyond adoption (derived, listed for completeness, gated by tests): the `workflow/` skill category
+in `packages/knowledge-hub/dataset/.pair/knowledge/skills-guide.md`, and
+`apps/website/content/docs/reference/batch-engine.mdx`, whose claims about what installs and where
+are read back from the registries by the docs-staleness gate.
+
 ## References
 
 - Story #479, PR #480 — one branch, one squash-merge together with the 2026-09-08 hardening (`7b559003`).
