@@ -148,6 +148,7 @@
 - [Decision: when no host runtime is present, the final reviewer runs `finalize` — the synthesis is still the script's, never the reviewer's prose](.pair/adoption/decision-log/2026-09-13-the-final-reviewer-finalizes-when-no-host-runtime-is-present.md)
 - [Decision: T-8 is reduced — the paired 2.0.0 vs 4.0.0 measurement is not run, and the full-cycle canary evidence stands in its place](.pair/adoption/decision-log/2026-09-13-the-paired-baseline-measurement-is-not-run.md)
 - [Decision: the run-directory lock records its owner, breaks a dead writer's lock and refuses a stale live one out loud](.pair/adoption/decision-log/2026-09-13-the-run-directory-lock-has-an-owner-and-a-staleness-rule.md)
+- [Decision: the scope-baseline hash is published to the reviewer — a consumer-only hash is a question nobody can answer](.pair/adoption/decision-log/2026-09-13-the-scope-baseline-hash-has-a-producer-the-reviewer-can-run.md)
 - [Decision: the scope-decision principal is read from adoption — never a login literal in shipped code](.pair/adoption/decision-log/2026-09-13-the-scope-decision-principal-is-read-from-adoption.md)
 
 ## How-To Guides

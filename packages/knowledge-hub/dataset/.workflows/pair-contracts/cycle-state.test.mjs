@@ -992,6 +992,45 @@ test('T-22 (DT-12/13): a technically converged review with pending scope proposa
   assert.equal(r2.next.findings.every(f => !f.id.startsWith('sc-')), true, 'no scope proposal id ever enters a fix plan')
 })
 
+// ── t9d-8: the packet's baseline hash needs a PRODUCER, not only a consumer ─────────────────────
+// `apply-scope-decisions` refuses the maintainer's comment without `scopeBaselineHash`
+// (`scopeBaselineHash-missing`) and refuses a wrong one (`stale-baseline`), and the reviewer is the
+// only participant who authors the packet the maintainer copies that shape from. So the value must
+// be obtainable: published on the blocking `resolve` AND printed by a command, both over the same
+// pending union the consumer checks against (ADL 2026-09-13 — t9d-8).
+test('t9d-8: `resolve`s awaiting-scope-decision payload publishes `scopeBaselineHash`, `scope-baseline` prints the same value from the run directory alone, and the consumer accepts what either producer printed', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1'), scopeChange('sc-2')] })
+  const expected = scopeBaselineHashOf([scopeChange('sc-1'), scopeChange('sc-2')])
+  // half 1 — the blocked payload carries the hash next to the proposals it asks about
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.reason, 'awaiting-scope-decision')
+  assert.equal(r.next.scopeBaselineHash, expected, 'the packet asks the maintainer for a hash the reviewer was never given')
+  // half 2 — the standalone producer, for the PR-scoped packet a later cycle re-edits without a
+  // resolve round: the run directory is the only input
+  const cli = spawnSync(process.execPath, [CLI, 'scope-baseline', '--dir', dir], { encoding: 'utf8' })
+  assert.equal(cli.status, 0, cli.stdout + cli.stderr)
+  assert.deepEqual(JSON.parse(cli.stdout), { scopeBaselineHash: expected, scopeChanges: [{ id: 'sc-1', type: 'new-requirement' }, { id: 'sc-2', type: 'new-requirement' }] })
+  // end to end: the consumer accepts the value the producers printed
+  setComments({ 701: comment('rucka', decisionBody([{ id: 'sc-1', action: 'ignore', rationale: 'covered' }, { id: 'sc-2', action: 'ignore', rationale: 'covered' }], r.next.scopeBaselineHash)) })
+  const out = applyScopeDecisions({ dir, decisionRef: 'https://github.com/foomakers/pair/pull/7#issuecomment-701', repo: 'foomakers/pair', pr: 7, workflowVersion: V })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  // a fully dispositioned set has no baseline left to quote — the producer reports the empty set
+  const after = JSON.parse(spawnSync(process.execPath, [CLI, 'scope-baseline', '--dir', dir], { encoding: 'utf8' }).stdout)
+  assert.deepEqual(after, { scopeBaselineHash: scopeBaselineHashOf([]), scopeChanges: [] })
+  rmSync(dir, { recursive: true, force: true })
+})
+
+test('t9d-8: the CLI surface and the review-phase prose agree with the code — `scope-baseline` is a named command with checked flags, and the SKILL (installed + dataset) points the reviewer at that producer', () => {
+  const src = readFileSync(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url), 'utf8')
+  assert.match(src, /unknown command: \$\{cmd\} \(expected [^)]*\bscope-baseline\b/, 'a command the vocabulary line does not name is undiscoverable')
+  const bad = spawnSync(process.execPath, [CLI, 'scope-baseline', '--dir', '.', '--nope', 'x'], { encoding: 'utf8' })
+  assert.match(JSON.parse(bad.stdout).error, /unknown flag\(s\) for scope-baseline/, 'a producer outside the FLAGS map accepts typos silently')
+  const read = rel => readFileSync(new URL(rel, import.meta.url), 'utf8')
+  for (const md of ['../../skills/pair-workflow-review-phase/SKILL.md', '../../../packages/knowledge-hub/dataset/.skills/workflow/review-phase/SKILL.md'])
+    assert.match(read(md), /scope-baseline --dir/, `${md} asks the reviewer for scopeBaselineHash without naming its producer`)
+})
+
 test('t9d-17: the authorized principal is READ FROM ADOPTION — `code-host-assignee`, else `default-assignee` (way-of-working.md); `--maintainer` overrides; unresolvable ⇒ typed refusal, nothing written; no login is a literal in shipped code', () => {
   const src = readFileSync(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url), 'utf8')
   assert.equal(/maintainer\s*=\s*'[a-z]+'/.test(src), false, 'no hard-coded principal in the script')

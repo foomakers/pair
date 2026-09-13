@@ -603,6 +603,31 @@ export function scopeBaselineHashOf(scopeChanges) {
   return sha256(canonical(pending))
 }
 
+// t9d-8: ONE union of the scope proposals a cycle has seen — latest status wins, a `recordType:
+// decision` record included — read by the consumer (`applyScopeDecisions`/`discoverScopeDecisions`)
+// AND by the hash producer below, so the baseline a packet quotes and the baseline it is checked
+// against can never be computed two different ways.
+function pendingScopeOf(dir) {
+  const handoffs = readHandoffs(dir)
+  const reviews = handoffs.filter(h => h.data && h.skill === 'review-phase')
+  const seen = new Map()
+  for (const r of reviews) for (const c of r.data.scopeChanges ?? []) if (c?.id) seen.set(c.id, c)
+  // `seen` is every proposal (any status) — the consumer rewrites the WHOLE set when it applies a
+  // decision; `pending` is the subset the baseline hash is computed over.
+  return { handoffs, reviews, seen, pending: [...seen.values()].filter(c => (c.status ?? 'pending') === 'pending') }
+}
+
+// t9d-8: the PRODUCER of the one field the maintainer's decision comment cannot omit
+// (`scopeBaselineHash-missing`) and cannot get wrong (`stale-baseline`). The reviewer authors the
+// packet the maintainer copies that shape from, so the value has to be obtainable: `resolve`
+// publishes it on `awaiting-scope-decision`, and this command answers from the run directory alone
+// for the PR-scoped packet a later cycle re-edits without a resolve round (ADL 2026-09-13). The
+// identity pairs are returned next to the hash — what was hashed, never the wording.
+export function pendingScopeBaseline({ dir }) {
+  const { pending } = pendingScopeOf(dir)
+  return { scopeBaselineHash: scopeBaselineHashOf(pending), scopeChanges: pending.map(c => ({ id: String(c.id ?? '').normalize('NFC').trim(), type: String(c.type ?? '').normalize('NFC').trim() })) }
+}
+
 const DECISION_ALLOWED_KEYS = new Set(['id', 'action', 'rationale', 'targetIssueUrl', 'approvedDelta'])
 // One fenced JSON object, schemaVersion 1, decisions[] with no unknown key/action/duplicate id —
 // a caller-supplied author string is NEVER trusted here; that check happens in applyScopeDecisions.
@@ -964,13 +989,9 @@ export function resolveMaintainer({ dir, maintainer }) {
 }
 
 export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer, ghBin = process.env.PAIR_GH_BIN || 'gh', workflowVersion, lockWaitMs = 5000 }) {
-  const handoffs = readHandoffs(dir)
-  const reviews = handoffs.filter(h => h.data && h.skill === 'review-phase')
+  const { handoffs, reviews, seen, pending } = pendingScopeOf(dir)
   if (!reviews.length) return { applied: false, reason: 'no-review-evidence' }
   if (reviews.some(r => r.data.decisionRef === decisionRef)) return { applied: true, reason: 'already-applied' }
-  const seen = new Map()
-  for (const r of reviews) for (const c of r.data.scopeChanges ?? []) if (c?.id) seen.set(c.id, c)
-  const pending = [...seen.values()].filter(c => (c.status ?? 'pending') === 'pending')
   if (!pending.length) return { applied: false, reason: 'no-pending-scope-changes' }
   const who = resolveMaintainer({ dir, maintainer })
   if (who.error) return { applied: false, reason: who.error }
@@ -1081,12 +1102,9 @@ export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer, gh
 // a comment that is not decision-shaped is not a candidate, and one that fails a check is
 // reported with its reason, not retried into acceptance.
 export function discoverScopeDecisions({ dir, repo, pr, maintainer, ghBin = process.env.PAIR_GH_BIN || 'gh', workflowVersion, lockWaitMs = 5000 }) {
-  const handoffs = readHandoffs(dir)
-  const reviews = handoffs.filter(h => h.data && h.skill === 'review-phase')
+  const { reviews, pending } = pendingScopeOf(dir)
   if (!reviews.length) return { applied: false, reason: 'no-review-evidence', discovered: [] }
-  const seen = new Map()
-  for (const r of reviews) for (const c of r.data.scopeChanges ?? []) if (c?.id) seen.set(c.id, c)
-  if (![...seen.values()].some(c => (c.status ?? 'pending') === 'pending')) return { applied: false, reason: 'no-pending-scope-changes', discovered: [] }
+  if (!pending.length) return { applied: false, reason: 'no-pending-scope-changes', discovered: [] }
   if (typeof repo !== 'string' || !/^[^/\s]+\/[^/\s]+$/.test(repo)) return { applied: false, reason: 'repo-invalid', discovered: [] }
   if (!Number.isInteger(Number(pr)) || Number(pr) <= 0) return { applied: false, reason: 'pr-invalid', discovered: [] }
   const who = resolveMaintainer({ dir, maintainer })
@@ -1753,7 +1771,9 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
         // Quality is converged, but pending scope proposals still need the maintainer's explicit
         // ignore/extend-current-card/new-card decision (S2/S5) — never auto-absorbed, never `done`.
         const pending = pendingScopeChanges()
-        if (pending.length) return blocked('awaiting-scope-decision', { qualityState: 'converged', reviewedHead: d.reviewedHead, scopeChanges: pending })
+        // t9d-8: the hash the packet must quote travels WITH the proposals it is computed over —
+        // the reviewer never recomputes (or invents) the value `apply-scope-decisions` will check.
+        if (pending.length) return blocked('awaiting-scope-decision', { qualityState: 'converged', reviewedHead: d.reviewedHead, scopeChanges: pending, scopeBaselineHash: scopeBaselineHashOf(pending) })
         return { step: 'done', reviewedHead: d.reviewedHead, round, verdict: d.verdict }
       }
       return { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], priorFindings: priorFindings(), headMoved: true, detail: SHA_RE.test(remote) ? 'readiness not confirmed on the remote head' : 'readiness not bound to a 40-hex remote head' }
@@ -2193,6 +2213,7 @@ if (isMain()) {
       'ac-hash': ['story'],
       inputs: ['json'],
       'apply-scope-decisions': ['decision-ref', 'dir', 'maintainer', 'pr', 'repo', 'workflowVersion'],
+      'scope-baseline': ['dir'],
       'migrate-inspect': ['dir'],
       'migrate-acknowledge': ['branch', 'dir', 'head', 'legacy', 'pr', 'run', 'story', 'workflowVersion'],
       'test-identity': ['command', 'cwd', 'env-keys', 'toolchain'],
@@ -2247,6 +2268,14 @@ if (isMain()) {
         : discoverScopeDecisions({ dir: opts.dir, repo: opts.repo, pr: Number(opts.pr), maintainer: opts.maintainer, workflowVersion: opts.workflowVersion })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.applied ? 0 : 1)
+    } else if (cmd === 'scope-baseline') {
+      // t9d-8: the value the reviewer prints into the scope-decision packet and the maintainer
+      // echoes back verbatim — the producer for the one field `apply-scope-decisions` refuses the
+      // comment without. Read-only, no PR read, no `gh`.
+      need('dir')
+      out = pendingScopeBaseline({ dir: opts.dir })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(0)
     } else if (cmd === 'migrate-inspect') {
       need('dir')
       out = migrateInspect({ dir: opts.dir })
@@ -2267,7 +2296,7 @@ if (isMain()) {
       out = testIdentity({ cwd: opts.cwd, command: opts.command, env, toolchain: opts.toolchain ?? `node ${process.version}` })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
-    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | migrate-inspect | apply-scope-decisions | test-identity)`)
+    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | migrate-inspect | apply-scope-decisions | scope-baseline | test-identity)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)
