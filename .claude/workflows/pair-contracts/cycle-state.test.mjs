@@ -2060,6 +2060,35 @@ test('B1 (boundary): red-spec publishes `findings: { received, covered }` — it
   assert.equal(publish({ dir, file: rf, phase: 'r9', skill: 'review-phase', workflowVersion: V }).reason, 'findings-not-an-array')
 })
 
+// ── canary v9 (E/F/G): the SKILL text and the executable it documents cannot drift ─────────────
+// green-fix's handoff `findings` is the ARRAY publish requires (an object is `findings-not-an-array`,
+// which refused a real GREEN in canary v9); every documented publish line names `--workflowVersion`
+// (publish requires it); the shell-metacharacter filter on `worked[].evidence[].command` is stated
+// where `worked` is described. Both corpora — installed and dataset source.
+test('canary v9 (E/F/G): green-fix findings are an array, every documented publish line carries --workflowVersion, worked evidence names its command filter', () => {
+  const read = rel => readFileSync(new URL(rel, import.meta.url), 'utf8')
+  const corpora = skill => [read(`../../skills/pair-workflow-${skill}/SKILL.md`), read(`../../../packages/knowledge-hub/dataset/.skills/workflow/${skill}/SKILL.md`)]
+  for (const skill of ['red-spec', 'red-verify', 'implement-phase', 'green-fix', 'review-phase'])
+    for (const text of corpora(skill)) {
+      const lines = text.split('\n').filter(l => /cycle-state\.mjs.{0,3} publish/.test(l))
+      assert.ok(lines.length, `${skill}: no documented publish line`)
+      for (const l of lines) assert.match(l + (text.split('\n')[text.split('\n').indexOf(l) + 1] ?? ''), /--workflowVersion \$workflowVersion/, `${skill}: publish line omits --workflowVersion: ${l.slice(0, 160)}`)
+    }
+  for (const text of corpora('green-fix')) {
+    assert.doesNotMatch(text, /findings: \{ received, resolved \}/, 'green-fix still documents the object shape publish refuses')
+    assert.match(text, /`findings: \[\{ id, transition/, 'green-fix does not document the array shape')
+  }
+  for (const text of corpora('review-phase')) assert.match(text, /worked-evidence-unsafe/, 'review-phase does not name the shell-metacharacter refusal on worked evidence')
+  // the executable side of E: the object shape IS refused for green-fix, the array shape is accepted
+  const { dir } = runDir()
+  const bad = join(dir, 'tmp-green-obj.json')
+  writeFileSync(bad, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'green-fix', inputHead: SHA('a'), fixed: true, findings: { received: ['r0-1'], resolved: ['r0-1'] } }))
+  assert.equal(publish({ dir, file: bad, phase: 'r1-g1', skill: 'green-fix', workflowVersion: V }).reason, 'findings-not-an-array')
+  const good = join(dir, 'tmp-green-arr.json')
+  writeFileSync(good, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'green-fix', inputHead: SHA('a'), fixed: true, findings: [{ id: 'r0-1', transition: 'resolved' }] }))
+  assert.equal(publish({ dir, file: good, phase: 'r1-g1', skill: 'green-fix', workflowVersion: V }).published, true)
+})
+
 // ── US-479 B2 (S10, AC-27, DT-33): legacy evidence is inspected, acknowledged and BOUND — never
 // executed, never rewritten, and never silently dropped from the lifetime totals ────────────────
 const sha256File = p => _hash('sha256').update(readFileSync(p)).digest('hex')
