@@ -1447,7 +1447,9 @@ const VERIFY_SCHEMA = {
     // US-479 T-29 (S11): the remediation batch this proof invalidates. A LOGICAL rewind marker —
     // never a Git revert, reset, rebase or seal deletion.
     invalidatedBatchId: { type: 'string' },
-    published: { type: 'object', properties: { firstReview: { type: 'boolean' }, synthesis: { type: 'boolean' }, flush: { type: 'boolean' } } },
+    // t9d-24: the final non-partial reviewer concludes the required `pair-review` status and the ONE
+    // `pr-state:*` label (pr-state.mjs conclude) — declared here or the harness drops the report.
+    published: { type: 'object', properties: { firstReview: { type: 'boolean' }, synthesis: { type: 'boolean' }, flush: { type: 'boolean' }, reviewCheck: { type: 'string' }, prState: { type: 'string' } } },
     // canary v9 (A): who produced metrics.json / the synthesis for this run — the reviewer itself
     // (`cycle-runtime.mjs finalize`, no host runtime present) or a present host runtime. Declared
     // here or the harness drops it, exactly as it once dropped `regressionGuards`.
@@ -1818,7 +1820,7 @@ async function driveStory(story) {
       if (res.custody.contractBreach === true) return result('failed-custody', { reason: 'GREEN escaped its sealed contract', findings: res.custody.breaches ?? [], phase: next.phase })
       const blocking = res.findings.filter(f => f.blocking)
       if (res.metrics && typeof res.metrics === 'object' && !Array.isArray(res.metrics)) metricsEvidence = res.metrics
-      if (res.partial !== true) log(`${tag} ${next.phase}: ${res.findings.length} finding(s), ${blocking.length} blocking${res.published?.firstReview ? ', first review posted' : ''}${res.published?.synthesis ? ', synthesis published' : ''}`)
+      if (res.partial !== true) log(`${tag} ${next.phase}: ${res.findings.length} finding(s), ${blocking.length} blocking${res.published?.firstReview ? ', first review posted' : ''}${res.published?.synthesis ? ', synthesis published' : ''}${res.published?.reviewCheck ? `, pair-review ${res.published.reviewCheck}` : ''}${res.published?.prState ? ` / ${res.published.prState}` : ''}`)
       // canary v9 (A) / ADR-024 S8: the reviewer that OWNED the synthesis (no host runtime) and could
       // not confirm it by read-back has converged on quality, not on delivery — `failed-publication`,
       // retry publication only (`cycle-runtime.mjs finalize`), never a ready-for-merge with no

@@ -621,6 +621,15 @@ test('canary v9 (D): a carried finding re-described on a later review is ONE acc
   assert.equal(result.batch[0].acceptedFindings[0].location, 'src/a.ts:9')
 })
 
+test('t9d-24: the final reviewer concludes the required check and the state label — VERIFY_SCHEMA declares `published.reviewCheck` / `published.prState` (or the harness drops them) and the run log reports them', async () => {
+  const verifySchema = SRC.slice(SRC.indexOf('const VERIFY_SCHEMA'), SRC.indexOf('const hasReviewEvidence'))
+  assert.match(verifySchema, /reviewCheck: \{ type: 'string'/, 'published.reviewCheck undeclared')
+  assert.match(verifySchema, /prState: \{ type: 'string'/, 'published.prState undeclared')
+  const { result, logs } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review: { verdict: 'Approved', findings: [], published: { firstReview: true, reviewCheck: 'success', prState: 'pr-state:ready-to-merge' } } }) })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.ok(logs.some(l => /pair-review success/.test(l) && /pr-state:ready-to-merge/.test(l)), JSON.stringify(logs.filter(l => /finding\(s\)/.test(l))))
+})
+
 test('canary v9 (A): metricsRef is evidence, not a promise — the path is reported only when the final verifier says metrics.json was written (by itself, or owned by a present host runtime); otherwise `absent`; a reviewer that owned the synthesis and could not confirm it is failed-publication, never ready-for-merge', async () => {
   const verifySchema = SRC.slice(SRC.indexOf('const VERIFY_SCHEMA'), SRC.indexOf('const hasReviewEvidence'))
   assert.match(verifySchema, /metrics: \{ type: 'object'/, 'VERIFY_SCHEMA declares `metrics` — without it the harness drops the field (as happened to regressionGuards)')

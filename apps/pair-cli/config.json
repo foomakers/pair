@@ -60,6 +60,7 @@
         "pair-contracts/engine-integration.test.mjs",
         "pair-contracts/recipe.test.mjs",
         "pair-contracts/pr-comment.test.mjs",
+        "pair-contracts/pr-state.test.mjs",
         "pair-contracts/engine-boundaries.test.mjs"
       ],
       "targets": [{ "path": ".claude/workflows/", "mode": "canonical" }],

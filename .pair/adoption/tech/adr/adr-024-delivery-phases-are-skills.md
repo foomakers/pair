@@ -1198,3 +1198,32 @@ one commit per defect, each test-first:
   the same path in a new commit; the chain reads seals from Git history, not from the path, so
   this is a naming collision only — a run-scoped path would be a `red-snapshot.mjs` contract
   change and is left for a separate decision.
+
+## Amendment 2026-09-13 (w) — T-9 fourth round: the engine concludes the check it registers, and its deterministic core hardens
+
+Recorded after review 5190603055 on `61703560`. Append-only; (v) stands. The `4.0.1` contract
+gains fields, none of the existing ones change meaning:
+
+- **The final reviewer concludes `pair-review` and the `pr-state:*` label.** See
+  [ADL 2026-09-13](../../decision-log/2026-09-13-the-final-reviewer-concludes-the-pair-review-check-and-the-pr-state-label.md):
+  `review-phase` Step 5.7 runs `pr-state.mjs conclude` (the KB mapping of `pr-state.sh`) as the
+  last non-partial reviewer; a non-decision publishes nothing. The review result carries
+  `published.reviewCheck` and `published.prState`; merge stays outside the engine.
+- **The scope-decision principal is adoption's.** See
+  [ADL 2026-09-13](../../decision-log/2026-09-13-the-scope-decision-principal-is-read-from-adoption.md):
+  `code-host-assignee`, else `default-assignee`; `--maintainer` overrides; unresolvable is
+  `maintainer-unresolved:*`, fail closed.
+- **The run-directory lock has an owner and a staleness rule.** See
+  [ADL 2026-09-13](../../decision-log/2026-09-13-the-run-directory-lock-has-an-owner-and-a-staleness-rule.md):
+  a dead writer's lock is broken and reported (`brokeStaleLock`), a live one past the bound is the
+  typed refusal `stale-lock`.
+- **Custody:** `verify-chain --run-dir` derives the contract expectation from the sealed
+  `red-verify` handoffs; `--contract-expected false` beside one is `contract-expected-refused`.
+- **Metrics:** the reducer reads the host's terminal marker — `outcome.delivery` is the engine's
+  typed status (`escalate`, `failed-*`, `interrupted`, `abandoned`), never `in-progress` for a run
+  that ended; a transport failure in `finalize` is `publication.state: failed` with the local view
+  written first and a non-zero exit after.
+- **Validators agree:** the coordinator's `blocking` policy exempts an active regression risk
+  exactly as the publisher mandates it; the `green` step carries the maintainer's `reconstruct`
+  directive and the coordinator dispatches `$reconstruct` to the fixer.
+- **`pr-comment.mjs`** splits `--paginate` pages string-aware.
