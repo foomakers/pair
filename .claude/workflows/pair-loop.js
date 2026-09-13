@@ -634,8 +634,8 @@ while (true) {
     // M1: an escalated or failed card must STOP advancing, never be re-driven
     // through the full pipeline again on the next iteration.
     // US-479 c0: the rule is a DENY-list of one, not an allow-list of failure prefixes. The engine
-    // emits statuses that start with neither `failed` nor `escalate` (`seal-invalidated`,
-    // `stale-history-decision`, and whatever a later engine version adds); under the prefix test
+    // emits statuses that start with neither `failed` nor `escalate` (`incompatible`, `interrupted`,
+    // `abandoned`, `awaiting-scope-decision`, and whatever a later engine version adds); under the prefix test
     // those cards fell through — not halted, not parked — and were re-selected and re-driven on
     // every iteration up to max-iterations. `ready-for-merge` is the only status that may advance.
     if (outcome.status !== 'ready-for-merge') {

@@ -1239,3 +1239,13 @@ gains fields, none of the existing ones change meaning:
   for that one review, post-hoc vocabulary validation, floor/ranks agreement for the first review)
   is designed but not landed in `4.0.1`; it touches the vocabulary constants, the reviewer's Step 0
   and four test suites, and is left for its own commit.
+- **Supersession notes (t9d-32, t9d-33), so no retired rule stands as current:** in Decision §2 the
+  `red-snapshot.mjs` locations `red-seal/` and `p3-verify/` are superseded by
+  `pair-workflow-red-verify/scripts/` and `pair-workflow-review-phase/scripts/` (the install smoke
+  test asserts the retired skills do NOT exist); in §6 the status `failed-red-contract` is
+  superseded by `failed-contract` (the only spelling the engine emits); `pair-loop`'s halt
+  rationale now cites current non-`failed`/`escalate` statuses. The S7 surfaces the card names —
+  a `telemetry` batch argument and `observe --publish-pr true` — were never shipped and are
+  superseded: token/usage evidence enters through `cycle-runtime.mjs observe --journal/--usage/
+  --transcripts` (T-25), and publication is `finalize`'s (S8); `parseBatchArgs` keeps rejecting
+  `telemetry` as an unknown key by design.

@@ -2,6 +2,9 @@
 // synthesizes the `pr-state:*` label (T-9 fourth round, t9d-24). `gh` is the transport; a recorder
 // stands in for it on PATH so the exact REST calls (status POST, label swap, read-back) are proven.
 // The network boundary itself (GitHub) is exercised by the live canary, never stubbed here as proof.
+// RUNS FROM `.claude/workflows` ONLY (t9d-31): the canonical copy under packages/knowledge-hub/dataset/.workflows/
+// is byte-identical and excluded from the install (apps/pair-cli/config.json), but its `../../skills/pair-workflow-*`
+// imports resolve nowhere in the dataset tree — execute this suite via `pnpm workflows:test`, never in place there.
 for (const k of Object.keys(process.env)) if (/^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX|NAMESPACE|CEILING_DIRECTORIES|IMPLICIT_WORK_TREE|DISCOVERY_ACROSS_FILESYSTEM)$/.test(k)) delete process.env[k]
 import { test } from 'node:test'
 import assert from 'node:assert/strict'

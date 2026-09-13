@@ -6,6 +6,9 @@
 // remediation round 2 for the approved delta -> final review -> done, with metrics/publication
 // correct at every step. This is the deterministic replay T-27 asks for; the PAID live canary
 // (T-8) is a separate, not-yet-executed step this test does not claim to be.
+// RUNS FROM `.claude/workflows` ONLY (t9d-31): the canonical copy under packages/knowledge-hub/dataset/.workflows/
+// is byte-identical and excluded from the install (apps/pair-cli/config.json), but its `../../skills/pair-workflow-*`
+// imports resolve nowhere in the dataset tree — execute this suite via `pnpm workflows:test`, never in place there.
 for (const k of Object.keys(process.env)) if (/^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX|NAMESPACE|CEILING_DIRECTORIES|IMPLICIT_WORK_TREE|DISCOVERY_ACROSS_FILESYSTEM)$/.test(k)) delete process.env[k]
 import { mkdtempSync as _mk, writeFileSync as _wf, chmodSync as _ch } from 'node:fs'
 import { tmpdir as _tmp } from 'node:os'

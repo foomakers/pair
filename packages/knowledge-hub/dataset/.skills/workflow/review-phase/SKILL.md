@@ -30,6 +30,7 @@ Judge the whole result on its own merits, adversarially, from the story (accepta
 | `$prior`            | re-review | Name of the previous review handoff (`r<n-1>-review-phase`) in `$RUN_DIR`; `$openIds` the ids it left open — every one needs a transition. |
 | `$headMoved`, `$inputsChanged` | No | `true` when the remote head moved after the last verification / when the effective inputs changed: re-validate every prior finding plus the delta; never a fresh full pass. |
 | `$required`         | No       | JSON: verified prior evidence a card carries in (`observedHead`, oracle, probe, observed) — re-prove it on this exact head.               |
+| `$regressionGuards` | No       | JSON: the authoritative ACTIVE regression risks derived from the ledger (US-479 F-RR-03) — execute every closure assertion on the exact head and echo the set as `regressionGuards`; a set that differs from the dispatched one is refused. |
 
 ## Algorithm
 

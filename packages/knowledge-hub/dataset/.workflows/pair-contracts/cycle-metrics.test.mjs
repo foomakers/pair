@@ -1,4 +1,7 @@
 // Tests for cycle-metrics.mjs — the deterministic metrics reducer (US-479 T-24, S6/S7/S9).
+// RUNS FROM `.claude/workflows` ONLY (t9d-31): the canonical copy under packages/knowledge-hub/dataset/.workflows/
+// is byte-identical and excluded from the install (apps/pair-cli/config.json), but its `../../skills/pair-workflow-*`
+// imports resolve nowhere in the dataset tree — execute this suite via `pnpm workflows:test`, never in place there.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, existsSync, readdirSync } from 'node:fs'

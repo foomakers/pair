@@ -5,6 +5,9 @@
 // terminal result to the observer it started in the background. This suite extracts the bash block
 // from the ADR itself, substitutes a fixture, and runs every line through the real CLI — so the
 // document and the executables cannot drift again.
+// RUNS FROM `.claude/workflows` ONLY (t9d-31): the canonical copy under packages/knowledge-hub/dataset/.workflows/
+// is byte-identical and excluded from the install (apps/pair-cli/config.json), but its `../../skills/pair-workflow-*`
+// imports resolve nowhere in the dataset tree — execute this suite via `pnpm workflows:test`, never in place there.
 for (const k of Object.keys(process.env)) if (/^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX|NAMESPACE|CEILING_DIRECTORIES|IMPLICIT_WORK_TREE|DISCOVERY_ACROSS_FILESYSTEM)$/.test(k)) delete process.env[k]
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
