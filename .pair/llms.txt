@@ -141,6 +141,7 @@
 - [Decision: An approved `extend-current-card` delta is refused outright when the card speaks none of the recognized AC formats — fail-closed, never appended](.pair/adoption/decision-log/2026-09-10-unknown-ac-card-format-fails-closed.md)
 - [Decision: custody never infers a breach from what it cannot see](.pair/adoption/decision-log/2026-09-12-custody-never-infers-a-breach-from-what-it-cannot-see.md)
 - [Decision: rollback takes a head, its notes live in the handoff, and nobody deletes them](.pair/adoption/decision-log/2026-09-12-rollback-notes-are-derived-from-handoffs.md)
+- [Decision: PR-comment marker matching stays author-blind — the planting risk is accepted, recorded, with an exit path](.pair/adoption/decision-log/2026-09-13-pr-comment-marker-matching-stays-author-blind.md)
 - [Decision: a scope decision is keyed by the proposal's id and type — never its wording — and the cycle discovers it on the PR before asking again](.pair/adoption/decision-log/2026-09-13-scope-decision-identity-is-the-proposal-id.md)
 - [Decision: tech debt — the engine's card transport is Claude Code + GitHub (`gh`) for now, recorded with its exit path](.pair/adoption/decision-log/2026-09-13-tech-debt-card-transport-is-claude-code-plus-github-for-now.md)
 - [Decision: the final reviewer of a cycle concludes the required `pair-review` check and the `pr-state:*` label — merge stays outside the engine](.pair/adoption/decision-log/2026-09-13-the-final-reviewer-concludes-the-pair-review-check-and-the-pr-state-label.md)

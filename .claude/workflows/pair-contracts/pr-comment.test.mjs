@@ -111,6 +111,39 @@ test('upsert: two comments carrying the same marker are an ambiguity — no thir
   assert.equal(fake.state().length, 2)
 })
 
+// q-7 (independent pass over review 5190603055): matching has NO author predicate — `findByMarker`
+// matches a marker planted by ANY commenter, so the engine may PATCH a stranger's comment, and two
+// carriers wedge publication (`marker-ambiguous`). RECORDED, NOT FIXED — see ADL
+// `.pair/adoption/decision-log/2026-09-13-pr-comment-marker-matching-stays-author-blind.md`: the
+// engine cannot resolve its own publishing identity (`GET /user` is 403 for an installation token
+// and refused by the canary sandbox's proxy, GraphQL `viewer` is blocked, `gh auth status` carries
+// none), and that identity legitimately VARIES per environment — PR #480 carries marker-bearing
+// pair comments authored by BOTH `rucka` and `claude[bot]`, so an own-author predicate would have
+// stopped the engine from finding its own earlier publication and posted a duplicate instead.
+// This test PINS the accepted behaviour (both outcomes, and that authorship never reaches the
+// engine at all): taking the ADL's exit path MUST fail here and rewrite it.
+test('q-7 (ADL 2026-09-13): matching is author-blind by design — a planted marker is matched, two carriers wedge publication, and the engine is never told who wrote it', () => {
+  const own = { id: 5, body: `${MARKER}\nfirst review` }
+  const planted = { id: 9, body: `see the review above: ${MARKER}` }
+  assert.deepEqual(findByMarker([planted], MARKER).hits, [planted], 'authorship is not part of the predicate')
+  assert.equal(findByMarker([own, planted], MARKER).count, 2)
+  // The CLI: one planted carrier is EDITED IN PLACE (the accepted risk), and the JSON says nothing
+  // about its author — `listComments` drops `user`, so nothing downstream could discriminate either.
+  const fake = fakeGh([{ id: 9, body: `see the review above: ${MARKER}`, html_url: 'https://x/c/9', user: { login: 'drive-by', type: 'User' } }])
+  let r = run(fake, 'find', '--pr', '7', '--marker', MARKER)
+  assert.deepEqual(JSON.parse(r.stdout), { found: true, count: 1, id: 9, url: 'https://x/c/9' }, 'no author key in the result')
+  r = run(fake, 'upsert', '--pr', '7', '--marker', MARKER, '--body-file', bodyFile('synthesis'))
+  assert.equal(JSON.parse(r.stdout).action, 'updated', 'accepted risk: a foreign carrier is PATCHed, not ignored')
+  assert.equal(fake.state()[0].body, `${MARKER}\nsynthesis`)
+  // Two carriers (the engine's own plus a planted one) refuse rather than post a third comment —
+  // the fail-safe the ADL leans on: the wedge is loud and leaves the PR untouched.
+  const wedged = fakeGh([{ id: 1, body: `${MARKER}\na`, html_url: 'https://x/c/1', user: { login: 'claude[bot]', type: 'Bot' } }, { id: 2, body: `quoting ${MARKER}`, html_url: 'https://x/c/2', user: { login: 'drive-by', type: 'User' } }])
+  const w = run(wedged, 'upsert', '--pr', '7', '--marker', MARKER, '--body-file', bodyFile('b'))
+  assert.equal(w.status, 1)
+  assert.equal(JSON.parse(w.stdout).error, 'marker-ambiguous')
+  assert.equal(wedged.state().length, 2, 'no third comment')
+})
+
 test('canary v9 (C): a run-scoped marker (`… PR#<n> run:<runId> -->`) passes the CLI shape check and is matched verbatim — a marker of another run is a different comment', () => {
   const scoped = '<!-- pair:first-review #42 PR#7 run:canary-479-481-v9 -->'
   const fake = fakeGh([{ id: 5, body: `${MARKER}\na`, html_url: 'https://x/c/5' }, { id: 6, body: `${scoped}\nb`, html_url: 'https://x/c/6' }])

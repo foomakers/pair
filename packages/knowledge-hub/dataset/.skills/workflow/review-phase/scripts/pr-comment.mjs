@@ -18,6 +18,10 @@
 //   node <skill dir>/scripts/pr-comment.mjs find --pr <n> --marker '<!-- pair:… -->' [--repo owner/name]
 //     Read-only: { found, id?, url?, count }.
 //
+// Matching is AUTHOR-BLIND (q-7): any commenter can put the marker in a body, so a foreign carrier
+// is edited in place and two carriers refuse (`marker-ambiguous`). Accepted, with the identity
+// evidence and the exit path, in ADL 2026-09-13-pr-comment-marker-matching-stays-author-blind.md;
+// pinned by the `q-7 (ADL 2026-09-13)` test — do not "fix" it here without taking that exit path.
 // `gh` is the only transport; it is resolved from PATH so a test can stand a recorder in its place.
 import { readFileSync, realpathSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
