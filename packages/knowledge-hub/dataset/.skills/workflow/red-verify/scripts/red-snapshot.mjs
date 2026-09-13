@@ -34,7 +34,7 @@
 // A rebase is never repaired (US-479 c1): a snapshot that is no longer an ancestor is simply
 // `snapshot-missing`, and the attempt fails closed.
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -426,7 +426,37 @@ export function listSnapshots({ pr, base, cwd }) {
 // failure the 2026-09-12 custody ADL names: never infer a breach from what is not there.
 // The default stays STRICT, so no existing caller is silently weakened; a caller that knows there
 // is no contract says so and gets `contract: 'none'` instead of an accusation.
-export function verifyChain({ pr, base, cwd, expectContract = true }) {
+// t9d-9: the assertion "this cycle has sealed nothing" is answerable from the run directory — a
+// sealed `red-verify` handoff there means a contract exists. With `--run-dir` the expectation is
+// DERIVED from that evidence; a caller's `--contract-expected false` beside a sealed handoff is a
+// typed breach (`contract-expected-refused`) and the strict walk runs anyway. Without `--run-dir`
+// the previous behaviour is unchanged.
+export function sealedHandoffsIn(runDir) {
+  if (!runDir || !existsSync(runDir)) return []
+  const out = []
+  for (const f of readdirSync(runDir)) {
+    if (!f.endsWith('.json') || f.startsWith('.')) continue
+    try {
+      const d = JSON.parse(readFileSync(join(runDir, f), 'utf8'))
+      if (d && d.skill === 'red-verify' && d.sealed === true) out.push(f)
+    } catch {}
+  }
+  return out.sort()
+}
+export function verifyChain({ pr, base, cwd, expectContract, runDir }) {
+  if (runDir === undefined) return verifyChainCore({ pr, base, cwd, expectContract: expectContract ?? true })
+  const sealed = sealedHandoffsIn(runDir)
+  const derived = sealed.length > 0
+  const out = verifyChainCore({ pr, base, cwd, expectContract: derived })
+  out.contractExpectation = { source: 'run-dir', runDir, sealedHandoffs: sealed, expectContract: derived }
+  if (expectContract === false && derived) {
+    out.breaches = [{ code: 'contract-expected-refused', sealedHandoffs: sealed }, ...(out.breaches ?? [])]
+    out.verified = false
+    out.contractBreach = true
+  }
+  return out
+}
+function verifyChainCore({ pr, base, cwd, expectContract = true }) {
   if (!SHA_RE.test(String(base))) return { verified: false, contractBreach: true, breaches: [{ code: 'base-not-a-sha' }], snapshots: [] }
   const snaps = listSnapshots({ pr, base, cwd })
   // US-479 (canary 481-v5): `expectContract: false` is a statement about THIS cycle — it has sealed
@@ -562,7 +592,9 @@ if (isMain()) {
     if (cmd === 'verify-chain') {
       // US-479 (canary 481-v2): `--contract-expected false` states that this cycle has sealed nothing.
       // Only that exact spelling relaxes the check; anything else keeps the strict default.
-      out = verifyChain({ pr: opts.pr, base: opts.base, cwd, expectContract: String(opts['contract-expected'] ?? 'true') !== 'false' })
+      // t9d-9: `--run-dir <run/story dir>` derives the expectation from the sealed handoffs there; the flag
+      // is then a claim the script checks, never a bypass.
+      out = verifyChain({ pr: opts.pr, base: opts.base, cwd, expectContract: String(opts['contract-expected'] ?? 'true') !== 'false', runDir: opts['run-dir'] })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.verified ? 0 : 1)
     } else if (cmd === 'seal') {

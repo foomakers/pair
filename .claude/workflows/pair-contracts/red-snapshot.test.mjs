@@ -627,6 +627,46 @@ test('verify-chain on a branch that never sealed anything: a breach only when a 
   rmSync(cwd, { recursive: true, force: true })
 })
 
+test('t9d-9: `--run-dir` makes the contract expectation MECHANICAL — derived from the sealed red-verify handoffs in the run directory; `--contract-expected false` beside a sealed handoff is refused, never a custody bypass', () => {
+  const { cwd, base } = repo()
+  redContract(cwd, { fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/'] } })
+  const s = seal({ pr: PR, phase: PHASE, base, contractPath: '.pair/working/red-draft.json', cwd })
+  rmSync(join(cwd, '.pair/working/red-draft.json'))
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  // a real breach: a sealed test edited by an ordinary commit
+  writeFileSync(join(cwd, 'test/a.test.js'), 'it("tampered", () => {})\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'tamper')
+  const runDir = mkdtempSync(join(tmpdir(), 'run-dir-'))
+  // no sealed handoff in THIS cycle's run directory ⇒ derived `none`: history, not a breach
+  const fresh = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.deepEqual({ verified: fresh.verified, contract: fresh.contract, expected: fresh.contractExpectation?.expectContract }, { verified: true, contract: 'none', expected: false })
+  // a sealed red-verify handoff exists ⇒ derived strict, whatever the caller asserts
+  writeFileSync(join(runDir, 'r1-g1-red-verify.json'), JSON.stringify({ run: 'run-1', story: '42', phase: 'r1-g1', skill: 'red-verify', verified: true, sealed: true }))
+  const derived = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.equal(derived.verified, false)
+  assert.ok(derived.breaches.some(b => b.code === 'test-blob-changed'), 'the strict walk ran')
+  assert.deepEqual(derived.contractExpectation.sealedHandoffs, ['r1-g1-red-verify.json'])
+  const refused = verifyChain({ pr: PR, base, cwd, runDir, expectContract: false })
+  assert.equal(refused.verified, false)
+  assert.equal(refused.contractBreach, true)
+  assert.ok(refused.breaches.some(b => b.code === 'contract-expected-refused' && b.sealedHandoffs[0] === 'r1-g1-red-verify.json'), JSON.stringify(refused.breaches))
+  assert.ok(refused.breaches.some(b => b.code === 'test-blob-changed'), 'the flag never short-circuits the walk')
+  // through the REAL CLI
+  const cli = (...args) => spawnSync(process.execPath, [CLI, 'verify-chain', '--pr', String(PR), '--base', base, '--run-dir', runDir, ...args], { cwd, encoding: 'utf8' })
+  const r = cli('--contract-expected', 'false')
+  assert.equal(r.status, 1, r.stdout + r.stderr)
+  assert.ok(JSON.parse(r.stdout).breaches.some(b => b.code === 'contract-expected-refused'))
+  rmSync(join(runDir, 'r1-g1-red-verify.json'))
+  const ok = cli('--contract-expected', 'false')
+  assert.equal(ok.status, 0, ok.stdout + ok.stderr)
+  assert.equal(JSON.parse(ok.stdout).contract, 'none')
+  // without --run-dir nothing changes for existing callers
+  assert.equal(verifyChain({ pr: PR, base, cwd, expectContract: false }).verified, true)
+  rmSync(cwd, { recursive: true, force: true })
+  rmSync(runDir, { recursive: true, force: true })
+})
+
 test('verify-chain breach: a sealed test changed outside a successor snapshot, a production change out of the scope in force, an unlisted test, a missing snapshot', () => {
   const { cwd, base, head1 } = chainRepo()
   // tamper between seals: a sealed blob edited by an ordinary commit is a breach even though a revision follows
