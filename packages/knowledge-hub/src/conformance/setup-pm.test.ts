@@ -100,6 +100,61 @@ const adapterCases = CORPORA.flatMap(({ label, adapterDir, skill }) =>
 
 const skillCases = CORPORA.map(({ label, skill }) => ({ corpus: label, skillText: read(skill) }))
 
+/**
+ * The phrase that introduces the exclusion sentence of the `## Notes` supported-tools claim.
+ * LOAD-BEARING PROSE: the claim line carries both halves of ONE contract — the tools that ship
+ * an adapter, then an `Anything else (…)` sentence naming the tools that take the Step 2.4 HALT
+ * — and this phrase is the only thing that tells the two halves apart.
+ */
+const EXCLUSION_MARKER = 'anything else'
+
+/**
+ * The `## Notes` supported-tools claim line. FAILS CLOSED on both ways it can go missing.
+ *
+ * `indexOf` returns -1 on a miss and `slice(-1)` WIDENS to the file's last character instead of
+ * narrowing to nothing — so the `notes.length > 0` guard this replaces could never fire: it
+ * asserted the length of a 1-character string. The claim assertion below it did fail closed, but
+ * on a coincidence (a 1-character haystack holds no claim line), not on the missing section.
+ */
+const notesClaim = (skillText: string, label: string): string => {
+  const at = skillText.indexOf('## Notes')
+  if (at === -1) throw new Error(`${label}: no ## Notes section`)
+  const claim = skillText
+    .slice(at)
+    .split('\n')
+    .find(line => normalize(line).includes('supported tools with implementation guides'))
+  if (!claim) throw new Error(`${label}: no supported-tools claim line in ## Notes`)
+  return claim
+}
+
+/**
+ * Splits the claim into its supported half and its excluded half, and FAILS CLOSED when the
+ * exclusion sentence is not there to split on.
+ *
+ * Falling back to "the whole line is the supported half" is the vacuity this guard exists to
+ * prevent, one level up: the tool name would again match anywhere on the line, INCLUDING the
+ * exclusion half, so a shipped GitLab adapter would be enforced in Step 2 and Step 3 while this
+ * case went green on a Notes line saying GitLab halts. A prose reword of the phrase is exactly
+ * what the enrolment recipe in this file's header invites, and nothing in SKILL.md marks the
+ * phrase as load-bearing — so the guard says so itself, here, instead of silently widening.
+ */
+const supportedClaimHalves = (
+  claimLine: string,
+  label: string,
+): { supported: string; excluded: string } => {
+  const claimText = normalize(claimLine)
+  const cut = claimText.indexOf(EXCLUSION_MARKER)
+  if (cut === -1) {
+    throw new Error(
+      `${label}: the Notes supported-tools claim has no "${EXCLUSION_MARKER}" exclusion sentence ` +
+        `to split on — the supported and excluded halves cannot be told apart, and matching the ` +
+        `tool name against the whole line would pass on a line that EXCLUDES the tool. Restore ` +
+        `the phrase, or teach this guard the new one.`,
+    )
+  }
+  return { supported: claimText.slice(0, cut), excluded: claimText.slice(cut) }
+}
+
 describe('setup-pm SKILL.md — every adapter on disk is a selectable tool (#321)', () => {
   it('discovers adapters from disk in both corpora', () => {
     // Not a count assertion — a non-empty guard, so the data-driven cases below can never
@@ -128,23 +183,10 @@ describe('setup-pm SKILL.md — every adapter on disk is a selectable tool (#321
 
   it.each(adapterCases)(
     '$corpus — the Notes supported-tools line names $tool (AC-1)',
-    ({ tool, skillText }) => {
-      const notes = skillText.slice(skillText.indexOf('## Notes'))
-      expect(notes.length, 'no ## Notes section').toBeGreaterThan(0)
-      const claim = notes
-        .split('\n')
-        .find(line => normalize(line).includes('supported tools with implementation guides'))
-      expect(claim, 'no supported-tools claim in ## Notes').toBeDefined()
-      // The claim line carries BOTH halves of the contract: the tools that ship an adapter, then an
-      // `Anything else (…)` sentence naming tools that take the Step 2.4 HALT. Matching the tool
-      // name anywhere on the line therefore passes when the tool appears in the EXCLUSION half —
-      // so the day a GitLab adapter lands, Step 2/Step 3 enrolment would be enforced while this
-      // case still went green on a Notes line that says GitLab halts. Split the line and hold both
-      // halves: named among the supported, absent from the excluded.
-      const claimText = normalize(claim as string)
-      const cut = claimText.indexOf('anything else')
-      const supported = cut >= 0 ? claimText.slice(0, cut) : claimText
-      const excluded = cut >= 0 ? claimText.slice(cut) : ''
+    ({ corpus, tool, skillText }) => {
+      // Both halves of the contract are held: named among the supported, absent from the excluded.
+      // The split itself fails closed in `supportedClaimHalves` — see the synthetic rows below.
+      const { supported, excluded } = supportedClaimHalves(notesClaim(skillText, corpus), corpus)
       expect(supported, `${tool} is not named among the supported tools`).toContain(
         tool.toLowerCase(),
       )
@@ -154,6 +196,68 @@ describe('setup-pm SKILL.md — every adapter on disk is a selectable tool (#321
       ).not.toContain(tool.toLowerCase())
     },
   )
+
+  /**
+   * Guard strength for the claim-line split, on synthetic lines rather than the real corpus —
+   * the states the artifact must NOT be allowed to reach, exercised without editing the shipped
+   * skill into a broken shape (the technique the Step 4 back-reference block below already uses).
+   */
+  const claimLine = (supported: string, exclusion: string): string =>
+    `- Supported tools with implementation guides: ${supported} — the same tools the Step 2 table ` +
+    `offers, and exactly the adapters shipped in [project-management-tool/](../README.md). ` +
+    exclusion
+
+  const SUPPORTED = '**GitHub Projects**, **Filesystem**'
+  const EXCLUSION = 'Anything else (Jira, GitLab) takes the Step 2.4 HALT.'
+
+  it('a reworded exclusion sentence throws instead of matching the whole line', () => {
+    // The precise edit this file's own enrolment recipe invites. Falling back to the whole line
+    // reports a tool named ONLY in the exclusion half as supported: with a gitlab adapter on
+    // disk, the two Notes cases go green on a claim line that says GitLab halts.
+    const reworded = claimLine(SUPPORTED, 'Everything else (Jira, GitLab) takes the Step 2.4 HALT.')
+    expect(() => supportedClaimHalves(reworded, 'reworded')).toThrow(
+      /no "anything else" exclusion sentence/,
+    )
+  })
+
+  it('a claim line with no exclusion sentence at all throws instead of matching the whole line', () => {
+    // The other direction into the same branch: deleted rather than reworded.
+    expect(() => supportedClaimHalves(claimLine(SUPPORTED, ''), 'no exclusion')).toThrow(
+      /supported and excluded halves cannot be told apart/,
+    )
+  })
+
+  it('a tool named only in the excluded half never reaches the supported half', () => {
+    const { supported, excluded } = supportedClaimHalves(
+      claimLine(SUPPORTED, EXCLUSION),
+      'excluded only',
+    )
+    expect(supported).not.toContain('gitlab')
+    expect(excluded).toContain('gitlab')
+  })
+
+  it('a tool named in both halves is still held excluded', () => {
+    // Half-enrolled: the Step 2 row, the Step 3 link and the supported list all landed, but the
+    // exclusion sentence was never cleaned up. Holding only the supported half would go green.
+    const { supported, excluded } = supportedClaimHalves(
+      claimLine(`${SUPPORTED}, **GitLab**`, EXCLUSION),
+      'both halves',
+    )
+    expect(supported).toContain('gitlab')
+    expect(excluded).toContain('gitlab')
+  })
+
+  it('a missing ## Notes section throws instead of passing', () => {
+    expect(() => notesClaim('# Skill\n\n## Arguments\n\nno notes at all.\n', 'no notes')).toThrow(
+      /no ## Notes section/,
+    )
+  })
+
+  it('a ## Notes section carrying no supported-tools claim throws instead of passing', () => {
+    expect(() =>
+      notesClaim('# Skill\n\n## Notes\n\n- something else entirely.\n', 'no claim'),
+    ).toThrow(/no supported-tools claim line/)
+  })
 })
 
 describe('setup-pm SKILL.md — the tool-agnostic contract holds (#321)', () => {

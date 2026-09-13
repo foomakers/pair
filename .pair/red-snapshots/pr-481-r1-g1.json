@@ -1,0 +1,231 @@
+{
+  "$meta": {
+    "pr": "481",
+    "phase": "r1-g1",
+    "base": "f7d4eb34f00bf5c1d8d6e3425c8368736b1e4ada",
+    "trailer": "Pair-RED-Snapshot: pr=481; phase=r1-g1; base=f7d4eb34f00bf5c1d8d6e3425c8368736b1e4ada; manifest=.pair/red-snapshots/pr-481-r1-g1.json",
+    "artifacts": [
+      "packages/knowledge-hub/src/conformance/setup-pm.test.ts"
+    ]
+  },
+  "run": "canary-479-481-v9",
+  "story": 321,
+  "pr": 481,
+  "branch": "feature/US-321-azure-devops-setup-pm",
+  "phase": "r1-g1",
+  "skill": "red-spec",
+  "mode": "remediation",
+  "remediationBatchId": "r1",
+  "status": "red",
+  "inputHead": "f7d4eb34f00bf5c1d8d6e3425c8368736b1e4ada",
+  "inputsDigest": "310215aeec23edc8",
+  "workflowVersion": "4.0.0",
+  "attempt": 1,
+  "sourceOfTruth": "packages/knowledge-hub/src/conformance/setup-pm.test.ts — the supported/excluded split of the ## Notes supported-tools claim, and the claim-line resolution three lines above it. Authority for the claim's two-half grammar is the claim line itself in both corpora (.claude/skills/pair-capability-setup-pm/SKILL.md:163 and packages/knowledge-hub/dataset/.skills/capability/setup-pm/SKILL.md:163); authority for the fail-closed convention is this file's own siblings (sectionBetween, onlyStep, citedBackReference).",
+  "s12Applicability": "not-applicable — r0-1 changes no persisted workflow state, ledger transition, terminal gate or evidence identity. The producer is a markdown conformance guard over two doc corpora; it has no transition matrix, so no S12 negative family applies. Recorded rather than silently omitted.",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "supported/excluded split of the ## Notes supported-tools claim in packages/knowledge-hub/src/conformance/setup-pm.test.ts (base lines 145-147: `const cut = claimText.indexOf('anything else')`, `supported = cut >= 0 ? slice(0,cut) : claimText`, `excluded = cut >= 0 ? slice(cut) : ''`), together with the claim-line resolution immediately above it (base lines 132-137: `skillText.slice(skillText.indexOf('## Notes'))` + `notes.length > 0`).",
+      "inputs": [
+        "the normalized ## Notes supported-tools claim line of each corpus's setup-pm SKILL.md",
+        "the tool display name read from each adapter's pinned H1 (`# <Name> - Complete Implementation Guide`)",
+        "the adapter set discovered from disk (`*-implementation.md`) in each corpus"
+      ],
+      "representations": [
+        "dataset corpus (authoring source of truth): packages/knowledge-hub/dataset/.skills/capability/setup-pm/SKILL.md",
+        "generated root mirror: .claude/skills/pair-capability-setup-pm/SKILL.md",
+        "adapter dirs: .pair/knowledge/guidelines/collaboration/project-management-tool/ and its dataset twin",
+        "documented command: `pnpm vitest run src/conformance/setup-pm.test.ts` from packages/knowledge-hub"
+      ],
+      "consumers": [
+        "the `$corpus — the Notes supported-tools line names $tool (AC-1)` it.each cases (one per adapter per corpus: 8 today, 10 with a 5th adapter)"
+      ],
+      "classes": [
+        "marker present, tool named in the supported half only — PASS (the real corpus today, all 4 adapters x 2 corpora)",
+        "marker present, tool named in the exclusion half only — FAIL (the AC-7 fifth-adapter contract)",
+        "marker present, tool named in neither half — FAIL (not enrolled at all)",
+        "marker present, tool named in BOTH halves — FAIL (half-enrolled: supported list updated, exclusion sentence never cleaned up)",
+        "marker ABSENT (reworded), tool named on the line — THE DEFECT: fails open, supported widens to the whole line and the exclusion half is matched as if supported",
+        "marker ABSENT (deleted), tool named on the line — same fail-open branch, reached by deletion instead of reword",
+        "no ## Notes section — `slice(-1)` widens to the file's last character, so the `notes.length > 0` guard can never fire; the class does fail closed, but on the downstream claim assertion (a coincidence: a 1-char haystack holds no claim line), not on the missing section",
+        "## Notes present, no supported-tools claim line — FAIL (guarded by the claim assertion)"
+      ],
+      "interactions": [
+        "adapter discovery x claim split: the marker's absence is a property of the LINE, not of a tool, so it invalidates the claim for every tool in the discovered adapter set at once — the fail-closed semantics the file's siblings already have (sectionBetween throws, the whole scoped assertion dies)"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "packages/knowledge-hub/src/conformance/setup-pm.test.ts",
+    "mode": "test",
+    "allowedPaths": []
+  },
+  "fixScopeRationale": "Guard-strength: production is already correct at this head (43/43 green on the unmodified corpora, and the corpora carry no drift — the 4 shipped adapters are each enrolled in Step 2, Step 3 and the Notes supported half, with the exclusion sentence intact). r0-1 is a fail-open branch inside the GUARD, so the whole correction lands in test source, which is red-spec's surface and nobody else's. No production path can close it, hence `allowedPaths: []`: green-fix changes nothing in production, re-runs the witnesses and the tier gate, and commits GREEN above the seal.",
+  "matrix": [
+    {
+      "id": "r0-1-w1",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "Isolated copy of f7d4eb34 (detached throwaway worktree): `gitlab-implementation.md` carrying the pinned H1 placed in BOTH adapter corpora, AND the Notes exclusion sentence's leading phrase reworded `Anything else (Jira, GitLab)` -> `Everything else (Jira, GitLab)` in both SKILL.md corpora. This is the finding's own failure case verbatim.",
+      "oracle": "the `$corpus — the Notes supported-tools line names 'GitLab' (AC-1)` case for each corpus; `pnpm vitest run src/conformance/setup-pm.test.ts` in packages/knowledge-hub",
+      "expected": "Both GitLab cases FAIL closed with `the Notes supported-tools claim has no \"anything else\" exclusion sentence to split on`; whole-file run 14 failed / 41 passed. Measured against the UNHARDENED guard at the same head and the same injection: 4 failed / 45 passed with both GitLab cases passing VACUOUSLY. The other 8 Notes cases (4 enrolled tools x 2 corpora) also fail on the marker, because marker absence is a property of the line, not of a tool.",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "mode: test — the witness passes against the current source (no injection) and fails against the injected regression in the isolated copy; both runs are recorded here rather than in the redTests[] entry's `observed`, which stays scoped to its single passing run."
+    },
+    {
+      "id": "r0-1-w2",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "Isolated copy of f7d4eb34: the Notes exclusion phrase reworded in both corpora, adapter set UNTOUCHED (the 4 shipped adapters, no 5th). The reword alone, caught at the moment it is made.",
+      "oracle": "all 8 `the Notes supported-tools line names $tool (AC-1)` cases (4 tools x 2 corpora); same command",
+      "expected": "8 failed / 41 passed, every failure diagnosed on the missing marker. Measured against the UNHARDENED guard at the same head and the same reword: 43 passed / 43 — completely SILENT. This is the row that matters most: at base the reword was harmless-looking and only became a live vacuity later, when an adapter shipped; the hardened guard refuses the reword itself, so the fail-open state can no longer be reached and then sat in.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-i1",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": "The w1 injection (5th adapter on disk in both corpora + reworded phrase) — the smallest cross-product where the disk-discovered adapter set feeds the claim split.",
+      "oracle": "the count and identity of failing Notes cases in the w1 run",
+      "expected": "ALL 10 Notes cases fail (5 tools x 2 corpora), not only the 2 for the unenrolled tool: the split marker's absence invalidates the claim for every discovered tool at once. Total 14 = 10 Notes + Step 2 GitLab x2 + Step 3 GitLab x2.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-b1",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "Committed synthetic claim line whose exclusion phrase is reworded (marker absent, tool still named in the exclusion half) — the states the artifact must not reach, exercised without editing the shipped skill into a broken shape.",
+      "oracle": "`a reworded exclusion sentence throws instead of matching the whole line`",
+      "expected": "PASS — `supportedClaimHalves` throws matching /no \"anything else\" exclusion sentence/.",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Same technique the file's citedBackReference block already uses for its five fail-closed rows; this is the durable committed guard, where w1/w2 are the real-corpus proof that it closes the reported hole."
+    },
+    {
+      "id": "r0-1-b2",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "Committed synthetic claim line with NO exclusion sentence at all — the same fail-open branch reached by deletion rather than reword.",
+      "oracle": "`a claim line with no exclusion sentence at all throws instead of matching the whole line`",
+      "expected": "PASS — throws matching /supported and excluded halves cannot be told apart/.",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Not a duplicate of b1: deletion and reword enter the branch from opposite directions, exactly as the sibling citation guard separates zero citations from two."
+    },
+    {
+      "id": "r0-1-b3",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "Committed synthetic claim line naming the tool in BOTH halves (supported list updated, exclusion sentence never cleaned up) — the half-enrolled state.",
+      "oracle": "`a tool named in both halves is still held excluded`",
+      "expected": "PASS — the supported half contains the name AND the excluded half contains it, so the real-corpus case's `not.toContain` on the excluded half still reddens. Holding only the supported half would go green here.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-b4",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "No ## Notes section: (a) committed synthetic input to `notesClaim`; (b) isolated copy of f7d4eb34 with the dataset corpus's `## Notes` heading renamed to `## Remarks`.",
+      "oracle": "`a missing ## Notes section throws instead of passing`; and the 4 dataset Notes cases in the real-corpus probe",
+      "expected": "PASS — throws `no ## Notes section`. Real-corpus probe: 4 failed / 45 passed, each diagnosed `dataset: no ## Notes section`. The UNHARDENED guard at the same head also failed 4, but on the downstream `no supported-tools claim in ## Notes` assertion — right outcome, wrong reason: its `notes.length > 0` guard asserted the length of the 1-character string `slice(-1)` returns and could never fire.",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Same producer, same indexOf-returns--1 hazard family, three lines above the reported branch, inside the group's own owner and needing no wider scope. Included as a boundary (not a witness): the class already fails closed at base, so this hardens the diagnosis, it does not close a vacuity."
+    },
+    {
+      "id": "r0-1-b5",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "Committed synthetic ## Notes section present but carrying no supported-tools claim line.",
+      "oracle": "`a ## Notes section carrying no supported-tools claim throws instead of passing`",
+      "expected": "PASS — throws matching /no supported-tools claim line/.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "Committed synthetic claim line, marker INTACT, tool named only in the exclusion half — the positive case for the split itself.",
+      "oracle": "`a tool named only in the excluded half never reaches the supported half`",
+      "expected": "PASS — the supported half does not contain the name, the excluded half does. This is the behaviour commit f7d4eb34 introduced and that r0-1 says fails open on a reword; the row pins it so the repair cannot trade it away.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "Isolated copy of f7d4eb34 with the hardened guard: `gitlab-implementation.md` in both corpora, exclusion phrase INTACT — the AC-7 fifth-adapter contract the r0 review recorded as working (note w-1, evidence w-1-c).",
+      "oracle": "the whole file; the identity of the failing cases",
+      "expected": "EXACTLY the same 6 cases fail as w-1-c recorded — Step 2 Available x2, Step 3 link x2, Notes line x2 — at 6 failed / 49 passed (w-1-c saw 6 failed / 43 passed; the +6 passed are this contract's new synthetic rows). The hardening must not disturb the AC-7 contract, and does not.",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "The regression control for the r0 review's own 'what worked' note. An equal total would not have proved this, so the failing SET is pinned by name, not the count."
+    },
+    {
+      "id": "r0-1-c3",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "The unmodified branch at f7d4eb34 with the hardened guard — no injection anywhere.",
+      "oracle": "`pnpm vitest run src/conformance/setup-pm.test.ts` in packages/knowledge-hub; and `pnpm vitest run src/conformance/` for the neighbours that share `normalize`/`sectionBetween`",
+      "expected": "49 passed / 49 for the file (43 pre-existing cases all still green, plus this contract's 6 synthetic rows); 4004 passed / 40 files for the whole conformance suite. Production needs no change for this contract to be satisfied, which is what `fixScope.mode: test` asserts.",
+      "covers": [
+        "r0-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/knowledge-hub/src/conformance/setup-pm.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:576ae4b7dc21cd53bbf6e1c53dd1dc6094a1b12420cd229420c8660fd4a6283d",
+      "command": "pnpm vitest run src/conformance/setup-pm.test.ts",
+      "cwd": "packages/knowledge-hub",
+      "observed": "49 passed (49)"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1"
+        ],
+        "owner": "packages/knowledge-hub/src/conformance/setup-pm.test.ts",
+        "mode": "test",
+        "allowedPaths": [],
+        "oracle": "pnpm vitest run src/conformance/setup-pm.test.ts (cwd packages/knowledge-hub)",
+        "dependsOn": []
+      }
+    ],
+    "carried": []
+  },
+  "findings": {
+    "received": [
+      "r0-1"
+    ],
+    "covered": [
+      "r0-1"
+    ]
+  },
+  "reconciled": [],
+  "preserved": []
+}
