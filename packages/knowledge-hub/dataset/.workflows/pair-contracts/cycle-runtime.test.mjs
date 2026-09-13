@@ -367,6 +367,51 @@ test('canary v9 (A): `finalize` CLI on a run directory holding only handoffs (no
   assert.equal(JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8')).outcome.delivery, 'ready-for-merge')
 })
 
+// ── t9d-4 / t9d-5 (T-9 fourth round): the finalizer tells the truth about a failed run and a dead transport ──
+const reviewWithOpenMajor = dir => {
+  const file = join(dir, 'd.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [{ id: 'r0-1', severity: 'Major', blocking: true, transition: 'open', location: 'x.js:1', description: 'd', head: SHA('c') }], custody: { verified: true, contractBreach: false }, readiness: { ready: false, blockers: ['r0-1'] }, attempt: 1, reviewer: 'x', partial: false, mode: 'full', tier: 'green', passes: ['general'], scopeChanges: [] }))
+  publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.1' })
+}
+test('t9d-4: the host`s terminal marker (`escalate`, `failed-*`, `interrupted`, `abandoned`) is the delivery outcome finalize reports — never `in-progress` for a run that ended', () => {
+  const { dir } = runDir()
+  reviewWithOpenMajor(dir)
+  const wf = join(dir, 'wf.json')
+  writeFileSync(wf, JSON.stringify({ workflowVersion: '4.0.1', batch: [{ id: '42', status: 'escalate', reason: 'open Major' }] }))
+  assert.equal(spawnSync('node', [CLI, 'mark-terminal', '--dir', dir, '--result', wf, '--story', '42'], { encoding: 'utf8' }).status, 0)
+  const ghDir = fakeGhDir()
+  const r = spawnSync('node', [CLI, 'finalize', '--dir', dir, '--repo', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7', '--runId', 'run-1'], { encoding: 'utf8', env: { ...process.env, PATH: `${ghDir}:${process.env.PATH}` } })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const view = JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8'))
+  assert.deepEqual({ quality: view.outcome.quality, delivery: view.outcome.delivery, cohortState: view.outcome.cohortState }, { quality: 'not-converged', delivery: 'escalate', cohortState: 'blocked' })
+  assert.match(readFileSync(join(dir, 'metrics.md'), 'utf8'), /Delivery: \*\*escalate\*\*/)
+  const posted = JSON.parse(readFileSync(join(ghDir, 'state.json'), 'utf8'))
+  assert.match(posted[0].body, /delivery: \*\*escalate\*\*/)
+})
+
+test('t9d-5: a `gh` that fails is a typed `failed` publication — metrics.json IS written first (delivery `failed-publication`, lastError names the transport), then finalize exits non-zero', () => {
+  const { dir } = runDir()
+  const file = join(dir, 'd.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, blockers: [] }, attempt: 1, reviewer: 'x', partial: false, mode: 'full', tier: 'green', passes: ['general'], scopeChanges: [] }))
+  publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.1' })
+  const dead = mkdtempSync(join(tmpdir(), 'gh-dead-'))
+  writeFileSync(join(dead, 'gh'), '#!/bin/sh\necho "HTTP 502" >&2\nexit 1\n')
+  chmodSync(join(dead, 'gh'), 0o755)
+  const r = spawnSync('node', [CLI, 'finalize', '--dir', dir, '--repo', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7', '--runId', 'run-1'], { encoding: 'utf8', env: { ...process.env, PATH: `${dead}:${process.env.PATH}` } })
+  assert.equal(r.status, 1, r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout.trim().split('\n').pop())
+  assert.equal(out.written, true, JSON.stringify(out))
+  assert.equal(out.publication.state, 'failed')
+  assert.match(out.publication.lastError, /gh api .*failed.*HTTP 502/)
+  const view = JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8'))
+  assert.deepEqual({ delivery: view.outcome.delivery, reason: view.outcome.reason, state: view.publication.state }, { delivery: 'failed-publication', reason: 'publication-pending', state: 'failed' })
+  // the retry is still owed: a later finalize with a working transport publishes and confirms
+  const ghDir = fakeGhDir()
+  const again = spawnSync('node', [CLI, 'finalize', '--dir', dir, '--repo', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7', '--runId', 'run-1'], { encoding: 'utf8', env: { ...process.env, PATH: `${ghDir}:${process.env.PATH}` } })
+  assert.equal(again.status, 0, again.stdout + again.stderr)
+  assert.equal(JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8')).publication.state, 'confirmed')
+})
+
 // ── finalize: honest completeness, never claims a source it never saw ───────────────────────
 test('finalize: honest completeness — partial with no prior observations; a lone observation missing its counterpart/usage is STILL partial (Finding 4: an observation existing is not proof every declared source was reconciled); complete only once start+finish+usage all agree', () => {
   const { dir } = runDir()

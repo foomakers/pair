@@ -235,8 +235,40 @@ export function reduceUsage(observations) {
 }
 
 // ── the main reducer ─────────────────────────────────────────────────────────────────────────
-export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations = [], revision = 1, asOf = null, dispatchStats, sharedCost }) {
+// ── the run's terminal result (US-479 F8) ────────────────────────────────────────────────────
+// The harness journal has no end-of-run record; the HOST records the workflow's own result in the
+// run directory (`cycle-runtime.mjs mark-terminal`). The reducer reads it here so the delivery
+// outcome is the engine's actual typed status (S6), never `in-progress` for a run that ended (t9d-4).
+export const TERMINAL_NAME = '.run-terminal.json'
+export function readTerminalMarker(dir) {
+  const p = join(dir, TERMINAL_NAME)
+  if (!existsSync(p)) return null
+  try {
+    const d = JSON.parse(readFileSync(p, 'utf8'))
+    return d && typeof d === 'object' && d.observedAt ? d : null
+  } catch {
+    return null
+  }
+}
+// The typed delivery enum a terminal marker may carry (pair-implement-batch STATUSES). `ready-for-merge`
+// is deliberately absent: readiness is proven by the handoffs (and a confirmed publication), never by
+// the host's claim alone. An unknown status is not invented into the enum.
+const TERMINAL_DELIVERY = ['escalate', 'failed-preparation', 'failed-contract', 'failed-seal', 'failed-implement', 'failed-fix', 'failed-verify', 'failed-custody', 'failed-resume', 'incompatible', 'awaiting-scope-decision', 'failed-publication', 'interrupted', 'abandoned']
+export function applyTerminalOutcome({ delivery, terminal }) {
+  const status = terminal && typeof terminal === 'object' ? terminal.status : undefined
+  if (!TERMINAL_DELIVERY.includes(status) || delivery === 'empty') return { delivery, reason: delivery === 'awaiting-scope-decision' ? 'human-scope' : null }
+  return { delivery: status, reason: `terminal:${status}` }
+}
+const cohortStateOf = delivery => (delivery === 'ready-for-merge' ? 'completed' : delivery === 'in-progress' ? 'running' : delivery === 'interrupted' || delivery === 'abandoned' ? delivery : 'blocked')
+
+export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations = [], revision = 1, asOf = null, dispatchStats, sharedCost, terminal }) {
   const handoffs = readHandoffs(dir)
+  // The marker is this story's when it names one; a caller that already resolved ownership
+  // (cycle-runtime's tick, by invocation id) passes it explicitly, `null` meaning "none".
+  if (terminal === undefined) {
+    const m = readTerminalMarker(dir)
+    terminal = m && (m.story == null || story === undefined || String(m.story) === String(story)) ? m : null
+  }
   const list = handoffs.filter(h => h.data)
   const counters = cycleCounters(handoffs)
   const regressionLedger = regressionRiskLedger(list)
@@ -272,7 +304,9 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   const quality = !lastReview ? 'not-evaluated' : blocking.length === 0 ? 'converged' : 'not-converged'
   // Pending scope always wins over a bare readiness.ready — deriveNext never reaches `done` while
   // a proposal is undecided (US-479 T-22, S5), so the metrics view must not claim ready-for-merge either.
-  const delivery = !last ? 'empty' : quality === 'converged' && scopeCounts.pending > 0 ? 'awaiting-scope-decision' : last.skill === 'review-phase' && last.data.readiness?.ready === true ? 'ready-for-merge' : last.data.recordType === 'decision' ? 'awaiting-scope-decision' : 'in-progress'
+  const handoffDelivery = !last ? 'empty' : quality === 'converged' && scopeCounts.pending > 0 ? 'awaiting-scope-decision' : last.skill === 'review-phase' && last.data.readiness?.ready === true ? 'ready-for-merge' : last.data.recordType === 'decision' ? 'awaiting-scope-decision' : 'in-progress'
+  // t9d-4: the host's terminal marker is the engine's real status; it overrides the handoff-only derivation.
+  const { delivery, reason: deliveryReason } = applyTerminalOutcome({ delivery: handoffDelivery, terminal })
   const { observations: merged } = mergeObservations(observations)
   const timeByPhase = new Map()
   for (const o of merged) {
@@ -505,7 +539,7 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
     identity: { repository, storyId: story, prNumber: Number.isInteger(pr) ? pr : null, branch, canonicalRunId: runId ?? null, runIds: [...(runId ? [runId] : []), ...predecessorRuns.filter(r => r !== runId)], predecessorRuns, scopeEpoch: lastReview?.data.scopeEpoch ?? 1 },
     workflow: { name: 'pair-implement-batch', versions, sourceShas: [], artifactDigests: [], models: [...new Set(merged.flatMap(o => (Array.isArray(o.models) ? o.models : [])))].sort(), mixedVersions: versions.length > 1 },
     snapshot: { revision, asOf, sourceDigest: sha256(canonical(list.map(h => h.name))), completeness, missingSources },
-    outcome: { quality, delivery, cohortState: delivery === 'ready-for-merge' ? 'completed' : delivery === 'in-progress' ? 'running' : 'blocked', reason: delivery === 'awaiting-scope-decision' ? 'human-scope' : null, qualityConvergedHead: quality === 'converged' ? lastReview?.data.reviewedHead ?? null : null, reviewedHead: lastReview?.data.reviewedHead ?? null },
+    outcome: { quality, delivery, cohortState: cohortStateOf(delivery), reason: deliveryReason, qualityConvergedHead: quality === 'converged' ? lastReview?.data.reviewedHead ?? null : null, reviewedHead: lastReview?.data.reviewedHead ?? null },
     cycles: { attempted: counters.attemptedCycles, spent: counters.spentCycles, completed: counters.completedCycles, perScopeEpoch: [] },
     // Active and historical are separate views of one append-only ledger (S11): the active matrix
     // is what blocks convergence, the historical one is the evidence that it happened.

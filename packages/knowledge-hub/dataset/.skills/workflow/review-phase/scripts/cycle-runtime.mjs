@@ -53,7 +53,8 @@
 import { existsSync, statSync, openSync, readSync, closeSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, readdirSync, renameSync, realpathSync } from 'node:fs'
 import { join, basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { reduceCycleMetrics, writeMetrics, mergeObservations, publishSummary } from './cycle-metrics.mjs'
+import { reduceCycleMetrics, writeMetrics, mergeObservations, publishSummary, readTerminalMarker } from './cycle-metrics.mjs'
+export { readTerminalMarker }
 import { listComments, findByMarker, upsert } from './pr-comment.mjs'
 import { resolve as resolveCycleState, readHandoffs, SCHEMA_VERSION } from './cycle-state.mjs'
 
@@ -480,16 +481,7 @@ export function markTerminal({ dir, result, story, invocation, now = Date.now() 
   renameSync(tmp, p)
   return { marked: true, path: p, marker }
 }
-export function readTerminalMarker(dir) {
-  const p = join(dir, TERMINAL_NAME)
-  if (!existsSync(p)) return null
-  try {
-    const d = JSON.parse(readFileSync(p, 'utf8'))
-    return d && typeof d === 'object' && d.observedAt ? d : null
-  } catch {
-    return null
-  }
-}
+// `readTerminalMarker` lives in cycle-metrics.mjs (the reducer reads the marker itself, t9d-4) and is re-exported above.
 // `finalize` publishes the one durable view of the cycle. "No late write" means a STALE WRITER
 // never wins — not that the metrics are frozen for good (US-479 F8 residual: a usage tail arriving
 // after the finalization was refused, and the PR comment kept a total everyone knew was wrong).
@@ -633,11 +625,6 @@ export function runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId
   // reverting real, previously-known values back to null.
   const effectiveDispatchStats = dispatchStats ?? checkpoint.dispatchStats ?? undefined
   const effectiveSharedCost = sharedCost ?? checkpoint.sharedCost ?? undefined
-  const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: combined, revision: nextRevision(dir), asOf: new Date(now).toISOString(), dispatchStats: effectiveDispatchStats, sharedCost: effectiveSharedCost })
-  // US-479 F8: after a finalization a tick that carries NO new evidence changes nothing; one that
-  // does is a legitimate reconciliation and writes a higher revision.
-  const finalized = readFinalized(dir)
-  const writeResult = finalized && finalized.fingerprint === viewFingerprint(view) ? { written: false, reason: 'no-new-evidence', finalizedRevision: finalized.revision } : writeMetrics({ dir, view })
   // The terminal signal is the HOST's recorded result (or, if a host ever emits one, a journal
   // record that says so) — never the observation that every agent seen so far has returned.
   const rawMarker = readTerminalMarker(dir)
@@ -646,6 +633,12 @@ export function runtimeTick({ dir, journalPath, usagePath, transcriptsDir, runId
   // fallback for a host that has no invocation id to give.
   const ownsMarker = m => !!m && (invocation === undefined || m.invocation == null || String(m.invocation) === String(invocation))
   const marker = ownsMarker(rawMarker) && !(terminalSince && rawMarker.observedAt < terminalSince) ? rawMarker : null
+  // t9d-4: the owned marker is the delivery outcome's evidence; `null` says none (never a re-read).
+  const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: combined, revision: nextRevision(dir), asOf: new Date(now).toISOString(), dispatchStats: effectiveDispatchStats, sharedCost: effectiveSharedCost, terminal: marker })
+  // US-479 F8: after a finalization a tick that carries NO new evidence changes nothing; one that
+  // does is a legitimate reconciliation and writes a higher revision.
+  const finalized = readFinalized(dir)
+  const writeResult = finalized && finalized.fingerprint === viewFingerprint(view) ? { written: false, reason: 'no-new-evidence', finalizedRevision: finalized.revision } : writeMetrics({ dir, view })
   // The same rule applies to the terminal the CHECKPOINT remembers: it survives across
   // invocations, and that is exactly how the previous run's terminal closed the next one.
   const ownsCarried = c => !!c && (invocation === undefined || c.invocation == null || String(c.invocation) === String(invocation))
@@ -743,7 +736,15 @@ export function finalizeMetrics({ dir, repository, story, branch, pr, runId, pub
   }
   if (Number.isInteger(pr) && publish) {
     const marker = synthesisMarker({ story, pr, runId })
-    const outcome = publishSummary({ view, marker, pr, repo: repository, ...publish })
+    // t9d-5: a transport failure (`gh` non-zero, network, auth) is a typed `failed` publication —
+    // the local view is written first and the caller sees `lastError`; it never escapes as a crash
+    // that leaves the run directory without metrics.json.
+    let outcome
+    try {
+      outcome = publishSummary({ view, marker, pr, repo: repository, ...publish })
+    } catch (e) {
+      outcome = { published: false, publication: { marker, metricsRevision: view.snapshot.revision, sourceDigest: view.snapshot.sourceDigest, commentId: null, url: null, state: 'failed', lastError: `transport: ${e?.message ?? String(e)}` } }
+    }
     view.publication = outcome.publication
     if (!outcome.published && view.outcome.delivery === 'ready-for-merge') {
       view.outcome.delivery = 'failed-publication'
@@ -845,7 +846,8 @@ async function main(argv) {
     // already the right one. Only a real write failure is a non-zero exit.
     const idempotent = out.writeResult.written || out.writeResult.reason === 'stale-revision' || out.writeResult.reason === 'no-new-evidence'
     // The revision reported is the one on disk: a no-op returns the persisted, confirmed view.
-    return { out: { completeness: out.view.snapshot.completeness, revision: out.view.snapshot.revision, written: out.writeResult.written, reason: out.writeResult.reason, publication: out.view.publication }, code: idempotent ? 0 : 1 }
+    // t9d-5: a failed publication is reported AFTER the local write, as a non-zero exit — the retry is owed.
+    return { out: { completeness: out.view.snapshot.completeness, revision: out.view.snapshot.revision, written: out.writeResult.written, reason: out.writeResult.reason, publication: out.view.publication }, code: idempotent && out.view.publication?.state !== 'failed' ? 0 : 1 }
   }
   if (cmd === 'mark-terminal') {
     // US-479 F8: the host hands the observer the workflow's OWN returned result. Nothing is added

@@ -385,6 +385,29 @@ test('aggregateCohort: N=0 returns null rates, never 0% success; a mix of known/
   assert.equal(withTokens.costPerCompletedDelivery.lowerBound, true)
 })
 
+// ── t9d-4: the terminal marker maps onto the typed delivery enum ─────────────────────────────
+test('t9d-4: reduceCycleMetrics maps the host`s terminal status onto delivery/cohortState — escalate/failed-* blocked, interrupted/abandoned their own states; a ready terminal never overrides handoff evidence', () => {
+  const { dir } = runDir()
+  const file = join(dir, 'd.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [{ id: 'r0-1', severity: 'Major', blocking: true, transition: 'open', location: 'x.js:1', description: 'd', head: SHA('c') }], custody: { verified: true, contractBreach: false }, readiness: { ready: false, blockers: ['r0-1'] }, attempt: 1, reviewer: 'x', partial: false, mode: 'full', tier: 'green', passes: ['general'], scopeChanges: [] }))
+  publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.1' })
+  const base = { dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'run-1' }
+  const outcome = terminal => { const o = reduceCycleMetrics({ ...base, terminal }).outcome; return { delivery: o.delivery, cohortState: o.cohortState, reason: o.reason } }
+  assert.deepEqual(outcome(undefined), { delivery: 'in-progress', cohortState: 'running', reason: null })
+  assert.deepEqual(outcome({ status: 'escalate' }), { delivery: 'escalate', cohortState: 'blocked', reason: 'terminal:escalate' })
+  assert.deepEqual(outcome({ status: 'failed-fix' }), { delivery: 'failed-fix', cohortState: 'blocked', reason: 'terminal:failed-fix' })
+  assert.deepEqual(outcome({ status: 'interrupted' }), { delivery: 'interrupted', cohortState: 'interrupted', reason: 'terminal:interrupted' })
+  assert.deepEqual(outcome({ status: 'abandoned' }), { delivery: 'abandoned', cohortState: 'abandoned', reason: 'terminal:abandoned' })
+  // a terminal that claims ready over handoffs that do not prove it: the handoffs win (fail-closed)
+  assert.deepEqual(outcome({ status: 'ready-for-merge' }), { delivery: 'in-progress', cohortState: 'running', reason: null })
+  // an unknown status is not invented into the enum
+  assert.deepEqual(outcome({ status: 'frobnicated' }), { delivery: 'in-progress', cohortState: 'running', reason: null })
+  // the CLI reads the marker from the run directory itself
+  writeFileSync(join(dir, '.run-terminal.json'), JSON.stringify({ observedAt: new Date().toISOString(), story: '42', status: 'escalate' }))
+  const r = spawnSync('node', [CLI, 'reduce', '--dir', dir, '--repository', 'foomakers/pair', '--story', '42', '--branch', 'b'], { encoding: 'utf8' })
+  assert.equal(JSON.parse(r.stdout).outcome.delivery, 'escalate')
+})
+
 // ── US-479 T-26: PR summary persistence (DT-25/26/28/29/30) ─────────────────────────────────
 // An in-memory comment store standing in for `gh`, using pr-comment.mjs's OWN pure withMarker/
 // findByMarker so the merge/ambiguity semantics tested here are the real ones, never a re-implementation.
