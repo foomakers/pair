@@ -28,9 +28,19 @@
  * to relax the assertion. An adapter whose H1 does not carry the pinned form fails loudly for
  * the same reason: a silently-unparsed name would make every claim below vacuously true.
  *
- * Every assertion in this file was injection-tested — the claim was deleted from the artifact
- * and the assertion confirmed to redden — per the vacuous-assertion lesson recorded in
- * `pm-tool-adapter-contract.test.ts`.
+ * Every assertion in this file was injection-tested — per the vacuous-assertion lesson recorded
+ * in `pm-tool-adapter-contract.test.ts`. TWO injections, not one: the claim DELETED from the
+ * artifact, and the claim REWORDED with the prose around it left alone. Deletion alone is not
+ * enough. The AC-4 field declaration passed the deletion sweep and still went green on a reworded
+ * normative clause, because `team` and `area path` also occur in the rationale sentence that
+ * follows it — rewording is how a prose document is actually maintained, so a scoped assertion
+ * must be anchored on the DECLARATION, never on a substring its own justification repeats.
+ *
+ * AND THE SCOPE'S OWN BOUNDARY IS PART OF THE CLAIM. The first anchoring cut the declaration at
+ * "the next colon", which is only as narrow as the punctuation the rationale happens to use: a
+ * clause reworded to end in a period, with a colon left anywhere in the sentence after it, put
+ * the justification back inside the slice and the suite back to all-green. A boundary asserted
+ * only for the punctuation the artifact ships today is not asserted at all.
  */
 import { describe, expect, it } from 'vitest'
 import { readFileSync, readdirSync } from 'fs'
@@ -260,6 +270,66 @@ describe('setup-pm SKILL.md — every adapter on disk is a selectable tool (#321
   })
 })
 
+/** The lead-in of the per-tool field declaration inside Step 4's field list. */
+const AZURE_FIELD_LEAD = 'for azure devops'
+
+/**
+ * Where the normative clause ENDS: the first sentence-or-separator boundary after the lead.
+ *
+ * Deliberately NOT "the next colon". `indexOf(':', from)` finds the first colon ANYWHERE after
+ * the lead, and nothing about that colon says it is the declaration's own separator — so on a
+ * bullet whose clause ends in a period and whose rationale carries a colon later on, the slice
+ * silently absorbs the rationale and the guard reads the justification again. See the two
+ * synthetic rows below for the exact prose that restores the defect.
+ */
+const AZURE_DECLARATION_END = /[.:]/
+
+/**
+ * The Azure DevOps field DECLARATION inside Step 4's field list — the `<fields>` half of the
+ * bullet's `For Azure DevOps <fields>: <why>` form, with everything from the clause's own
+ * terminator onwards cut off — and FAILING CLOSED on every way those two halves could stop
+ * being tellable apart.
+ *
+ * Asserting over the whole bullet is vacuous: its rationale repeats both field names ("an item
+ * outside the area paths the team's board is configured for"), so `toContain('area path')` and
+ * `toContain('team')` were answered by the justification and stayed green — 49/49 — after the
+ * normative clause was reworded to "For Azure DevOps nothing extra is needed", on a Step 4 that
+ * no longer tells the skill to write anything. Deleting the bullet did redden; rewording it did
+ * not, and rewording is the maintenance mode of a prose skill document.
+ *
+ * CUTTING AT THE CLAUSE'S TERMINATOR, NOT AT THE NEXT COLON, is the second half of the same
+ * lesson: a boundary defined as "the next colon" is only as narrow as the punctuation the
+ * rationale happens to use. Reword the clause to "For Azure DevOps nothing extra is needed."
+ * and put a colon anywhere in the sentence that follows, and a colon-seeking cut hands back
+ * the rationale — 56/56 green on a Step 4 that again tells the skill to write nothing.
+ */
+const azureFieldDeclaration = (fieldList: string, label: string): string => {
+  const declarations = fieldList
+    .split('\n')
+    .filter(line => normalize(line).includes(AZURE_FIELD_LEAD))
+  if (declarations.length !== 1) {
+    throw new Error(
+      `${label}: the Step 4 field list carries ${declarations.length} "For Azure DevOps" field ` +
+        `declarations, expected exactly 1 — there is no one normative clause for this guard to ` +
+        `read, and falling back to the whole field list would pass on prose that merely mentions ` +
+        `the fields. Restore the single declaration, or teach this guard the new shape.`,
+    )
+  }
+  const bullet = normalize(declarations[0] as string)
+  const from = bullet.indexOf(AZURE_FIELD_LEAD)
+  const terminator = AZURE_DECLARATION_END.exec(bullet.slice(from))
+  if (!terminator) {
+    throw new Error(
+      `${label}: the "For Azure DevOps" field declaration has no ":" separating what the skill ` +
+        `must write from why, and no "." ending it either — declaration and rationale cannot be ` +
+        `told apart, and matching the whole bullet is the exact vacuity this split exists to ` +
+        `prevent. Restore the "For Azure DevOps <fields>: <why>" form, or teach this guard the ` +
+        `new one.`,
+    )
+  }
+  return bullet.slice(from, from + terminator.index)
+}
+
 describe('setup-pm SKILL.md — the tool-agnostic contract holds (#321)', () => {
   it.each(skillCases)(
     '$corpus — the tool argument row points at the canonical token table, never copies it',
@@ -297,7 +367,7 @@ describe('setup-pm SKILL.md — the tool-agnostic contract holds (#321)', () => 
 
   it.each(skillCases)(
     '$corpus — Step 4 writes the fields the Azure adapter reads back (AC-4/AC-6)',
-    ({ skillText }) => {
+    ({ corpus, skillText }) => {
       const step4 = sectionBetween(skillText, '### Step 4: Update Way-of-Working', '### Step 5:')
       // SCOPED PER ACT-STEP, not over the whole of Step 4. The injection sweep caught the
       // unscoped version passing vacuously: `team` and `area path` also occur in the AC-6
@@ -309,11 +379,18 @@ describe('setup-pm SKILL.md — the tool-agnostic contract holds (#321)', () => 
       const REPORT = '**Act — report what could not be resolved**'
       const GIT_WORKFLOW = '**Act — `## Git Workflow`'
 
-      // AC-4: team + area path are what `--area` on every create is taken from, and they are
-      // named in the field list the skill writes — not merely somewhere in the step.
-      const fields = normalize(sectionBetween(step4, FIELDS, STATE_MAPPING))
-      expect(fields).toContain('area path')
-      expect(fields).toContain('team')
+      // AC-4: team + area path are what `--area` on every create is taken from, and the field
+      // list DECLARES them as the fields to write — not merely mentions them somewhere in the
+      // bullet. Scoped to the declaration half, because the rationale that follows the colon
+      // repeats both names and was answering for the claim: see the synthetic rows below.
+      const declaration = azureFieldDeclaration(
+        sectionBetween(step4, FIELDS, STATE_MAPPING),
+        corpus,
+      )
+      expect(declaration, 'the Azure field declaration does not name the area path').toContain(
+        'area path',
+      )
+      expect(declaration, 'the Azure field declaration does not name the team').toContain('team')
 
       // AC-4: a `## State Mapping` section built from real WORK ITEM states. The skill stays
       // tool-agnostic — it links the schema rather than copying state literals into itself.
@@ -331,6 +408,161 @@ describe('setup-pm SKILL.md — the tool-agnostic contract holds (#321)', () => 
       expect(reportClaim).toMatch(/never silently omit/)
     },
   )
+
+  /**
+   * Guard strength for the field-declaration split, on synthetic bullets rather than the real
+   * corpus — the states the artifact must NOT be allowed to reach, exercised without editing the
+   * shipped skill into a broken shape (the technique the claim-halves and back-reference blocks
+   * in this file already use).
+   */
+  const RATIONALE =
+    'each work-item create passes `--area`, and an item outside the area paths the ' +
+    "team's board is configured for is created, assigned and absent from the view the team " +
+    'actually reads.'
+
+  const fieldsStep = (...azureSentences: string[]): string =>
+    [
+      '2. **Act**: Add or update the PM tool section with:',
+      '   - Tool name and version/tier',
+      ...azureSentences.map(
+        sentence =>
+          "   - **Every field the selected tool's adapter reads back from this file** — its " +
+          '`### Adoption Configuration` snippet is the schema, so nothing tool-specific is ' +
+          `enumerated here. ${sentence}`,
+      ),
+      '   - Reference to implementation guide',
+    ].join('\n')
+
+  it('the shipped declaration shape names both fields', () => {
+    // The positive control for the split: the form both corpora ship today still passes.
+    const shipped = fieldsStep(
+      `For Azure DevOps that is the **team and its area path**: ${RATIONALE}`,
+    )
+    const declaration = azureFieldDeclaration(shipped, 'shipped')
+    expect(declaration).toContain('area path')
+    expect(declaration).toContain('team')
+  })
+
+  it('a reworded declaration reddens even though the rationale still names both fields', () => {
+    // The precise edit that went green at 49/49: the normative clause is gone, its justification
+    // is not — and the justification is where `team` and `area path` were being read from.
+    const reworded = fieldsStep(`For Azure DevOps nothing extra is needed: ${RATIONALE}`)
+    // The bullet as a whole still carries both names, so an unscoped assertion is satisfied...
+    expect(normalize(reworded)).toContain('area path')
+    expect(normalize(reworded)).toContain('team')
+    // ...and the declaration carries neither, which is what makes the real case red.
+    const declaration = azureFieldDeclaration(reworded, 'reworded')
+    expect(declaration).not.toContain('area path')
+    expect(declaration).not.toContain('team')
+  })
+
+  it('a sentence-form declaration that does name both fields still passes', () => {
+    // The second positive control, for the boundary rather than the split: a clause that ends in
+    // a PERIOD and does declare the two fields is conformant prose, not a defect. Tightening the
+    // boundary must not turn a correct rewording red — that is how a guard gets relaxed later.
+    const sentenceForm = fieldsStep(
+      `For Azure DevOps write the **team and its area path**. Each work-item create passes ` +
+        '`--area`, and an item outside those area paths is invisible to the board.',
+    )
+    const declaration = azureFieldDeclaration(sentenceForm, 'sentence form')
+    expect(declaration).toBe('for azure devops write the team and its area path')
+    expect(declaration).toContain('area path')
+    expect(declaration).toContain('team')
+  })
+
+  it('a clause ending in a period reddens even when a colon appears later in the rationale', () => {
+    // THE COLON-BOUNDARY HOLE, and why "cut at the next colon" was not the fix. `indexOf(':',
+    // from)` takes the first colon ANYWHERE after the lead, and nothing about that colon says it
+    // is the declaration's own separator — so this bullet (clause terminated by a period, colon
+    // parked inside the rationale) handed the whole justification back and reported 56/56 green
+    // on the same "nothing extra is needed" wording the deletion-and-reword sweep was built for.
+    const periodClause = fieldsStep(
+      'For Azure DevOps nothing extra is needed. Each work-item create passes `--area`, and an ' +
+        "item outside the area paths the team's board is configured for is created, assigned and " +
+        'absent from the view the team actually reads: that is the risk.',
+    )
+    const bullet = normalize(periodClause)
+    // A colon IS present after the lead, so a colon-seeking cut finds one...
+    expect(bullet.slice(bullet.indexOf(AZURE_FIELD_LEAD))).toContain(':')
+    // ...and what it would hand back names both fields — the whole-bullet vacuity, restored.
+    expect(bullet).toContain('area path')
+    expect(bullet).toContain('team')
+    // The clause's OWN terminator is the period, so the declaration names neither field.
+    const declaration = azureFieldDeclaration(periodClause, 'period clause')
+    expect(declaration).toBe('for azure devops nothing extra is needed')
+    expect(declaration).not.toContain('area path')
+    expect(declaration).not.toContain('team')
+  })
+
+  it('a second period-terminated clause reddens too — the class, not one sentence', () => {
+    // A less minimal instance of the same class, so the row is shown to cover the CLASS and not
+    // the one sentence the counterexample happened to use: different rationale, colon in a
+    // different place, same defect — a Step 4 that declares nothing to write.
+    const variant = fieldsStep(
+      'For Azure DevOps nothing extra is needed. An item outside the area paths the ' +
+        "team's board is configured for is still perfectly fine: each work-item create passes " +
+        '`--area` regardless.',
+    )
+    const declaration = azureFieldDeclaration(variant, 'period clause, variant')
+    expect(declaration).toBe('for azure devops nothing extra is needed')
+    expect(declaration).not.toContain('area path')
+    expect(declaration).not.toContain('team')
+  })
+
+  it('a declaration naming only one of the two fields reddens', () => {
+    // Half the contract: `--area` has a value and nothing says whose team's board it belongs to.
+    const partial = fieldsStep(`For Azure DevOps that is the **area path**: ${RATIONALE}`)
+    const declaration = azureFieldDeclaration(partial, 'area path only')
+    expect(declaration).toContain('area path')
+    expect(declaration).not.toContain('team')
+  })
+
+  it('a declaration with no rationale separator throws instead of matching the bullet', () => {
+    // Names BOTH fields and still throws: with no colon the guard cannot tell which half it is
+    // reading, and widening to the bullet is how the rationale started answering for the claim.
+    const unsplittable = fieldsStep(
+      'For Azure DevOps the team and its area path are read back from the adapter snippet',
+    )
+    expect(() => azureFieldDeclaration(unsplittable, 'no separator')).toThrow(
+      /has no ":" separating what the skill must write from why/,
+    )
+  })
+
+  it('deleting the declaration throws instead of passing', () => {
+    expect(() => azureFieldDeclaration(fieldsStep(), 'deleted')).toThrow(
+      /carries 0 "For Azure DevOps" field declarations/,
+    )
+  })
+
+  it('a second declaration throws instead of silently reading the first', () => {
+    // Half-finished edit: a new bullet supersedes the old one and neither was removed, so "the
+    // first match" would quietly decide which of two contradictory clauses is the normative one.
+    const ambiguous = fieldsStep(
+      `For Azure DevOps that is the **team and its area path**: ${RATIONALE}`,
+      'For Azure DevOps nothing extra is needed: the adapter snippet is the schema.',
+    )
+    expect(() => azureFieldDeclaration(ambiguous, 'ambiguous')).toThrow(
+      /carries 2 "For Azure DevOps" field declarations/,
+    )
+  })
+
+  it('a Step 4 whose field-list act-step is gone fails closed on the slice', () => {
+    // The cheapest way to make this case vacuous is to delete the step it slices. `sectionBetween`
+    // throws rather than widening to the whole of Step 4, where both field names also occur.
+    const step4 = [
+      '### Step 4: Update Way-of-Working',
+      '',
+      '1. **Check**: read the file.',
+      '',
+    ].join('\n')
+    expect(() =>
+      sectionBetween(
+        step4,
+        '**Act**: Add or update the PM tool section with:',
+        '**Act — `## State Mapping`',
+      ),
+    ).toThrow(/"\*\*Act\*\*: Add or update the PM tool section with:" not found/)
+  })
 })
 
 describe('Azure adapter Adoption Configuration and its website twin agree (#321 AC-5)', () => {

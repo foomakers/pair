@@ -1,0 +1,405 @@
+{
+  "$meta": {
+    "pr": "481",
+    "phase": "r1-g1",
+    "base": "b733e06cdc2aab7b2895e87e56bd5caabbe757cb",
+    "trailer": "Pair-RED-Snapshot: pr=481; phase=r1-g1; base=b733e06cdc2aab7b2895e87e56bd5caabbe757cb; manifest=.pair/red-snapshots/pr-481-r1-g1.json",
+    "artifacts": [
+      "packages/knowledge-hub/src/conformance/setup-pm.test.ts"
+    ]
+  },
+  "run": "canary-479-481-v10",
+  "story": 321,
+  "pr": 481,
+  "branch": "feature/US-321-azure-devops-setup-pm",
+  "phase": "r1-g1",
+  "skill": "red-spec",
+  "mode": "repair",
+  "remediationBatchId": "r1",
+  "groupId": "r1-g1",
+  "attempt": 2,
+  "status": "red",
+  "inputHead": "b733e06cdc2aab7b2895e87e56bd5caabbe757cb",
+  "inputsDigest": "310215aeec23edc8",
+  "workflowVersion": "4.0.1",
+  "repairOf": {
+    "contractHash": "sha256:ae4f45e3d5988350f9648fafb46f3236d2de6b00bcecd51e27db84b15ca7003b",
+    "rejection": [
+      "r1-g1-v1"
+    ],
+    "rejectionRowIds": [
+      "r0-1-W1",
+      "r0-1-I1"
+    ],
+    "rejectionMechanismIds": [
+      "azureFieldDeclaration-colon-boundary"
+    ],
+    "gapReproduced": "At b733e06c with the attempt-1 artifact applied and the rejection's period-terminated clause written into BOTH corpora: 'Test Files 1 passed (1); Tests 56 passed (56)' — green on a Step 4 declaring 'nothing extra is needed'. The rejection is correct and is the defect this repair closes."
+  },
+  "sourceOfTruth": "packages/knowledge-hub/dataset/.skills/capability/setup-pm/SKILL.md — `### Step 4: Update Way-of-Working`, act-step 2 (`**Act**: Add or update the PM tool section with:`), the per-tool field bullet whose normative clause reads `For Azure DevOps that is the **team and its area path**: <rationale>` (line 102 at b733e06c). The dataset is the authoring source; `.claude/skills/pair-capability-setup-pm/SKILL.md` is its generated mirror and the second representation of the same claim. The obligation itself is AC-4 (Step 4 writes the fields the Azure adapter reads back) / AC-6 of card #321, as carried by finding r0-1.",
+  "fixScope": {
+    "owner": "packages/knowledge-hub conformance guard for setup-pm/SKILL.md (src/conformance/setup-pm.test.ts)",
+    "mode": "test",
+    "allowedPaths": []
+  },
+  "testExempt": false,
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "`azureFieldDeclaration(fieldList, label)` in packages/knowledge-hub/src/conformance/setup-pm.test.ts, and specifically ITS DECLARATION BOUNDARY (`AZURE_DECLARATION_END = /[.:]/`, applied at `bullet.slice(from)`) — the declaration/rationale split that the `'$corpus — Step 4 writes the fields the Azure adapter reads back (AC-4/AC-6)'` case reads the AC-4 claim through. It owns the behaviour the finding is about: deciding WHICH half of the Step 4 field bullet the AC-4 assertion is allowed to be satisfied by. Before this contract no such producer existed — the case applied `toContain` to the whole normalized bullet, so its own rationale sentence answered for the normative clause. Attempt 1 introduced the split but defined its end as `bullet.indexOf(':', from)` — the first colon ANYWHERE after the lead, which is a property of the rationale's punctuation and not of the declaration; the boundary is therefore part of the producer, not an implementation detail of it.",
+      "inputs": [
+        "the Step 4 field-list act-step slice, per corpus: sectionBetween(step4, '**Act**: Add or update the PM tool section with:', '**Act — `## State Mapping`') where step4 = sectionBetween(skillText, '### Step 4: Update Way-of-Working', '### Step 5:')",
+        "synthetic field-list act-steps built in-test by `fieldsStep(...azureSentences)` — the states the shipped artifact must not be allowed to reach"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.skills/capability/setup-pm/SKILL.md (authoring source; the bullet is line 102 at b733e06c)",
+        ".claude/skills/pair-capability-setup-pm/SKILL.md (generated mirror; same bullet, line 102)",
+        "synthetic bullets built by `fieldsStep` inside the test"
+      ],
+      "consumers": [
+        "the it.each(skillCases) case '$corpus — Step 4 writes the fields the Azure adapter reads back (AC-4/AC-6)' (both corpora)",
+        "npx vitest run src/conformance/setup-pm.test.ts (cwd packages/knowledge-hub)",
+        "the package test gate (turbo run test --filter @pair/knowledge-hub) and the pre-push quality gate"
+      ],
+      "classes": [
+        "C-shipped: declaration names BOTH fields and a `: <rationale>` follows — the form both corpora ship ⇒ satisfied",
+        "C-rest-of-case: the same case's AC-4 `## State Mapping` and AC-6 report-step assertions, unchanged by this contract ⇒ satisfied",
+        "C-sentence-form (ADDED BY THIS REPAIR): the declaration names BOTH fields and is terminated by a PERIOD rather than a colon — conformant prose in sentence form ⇒ must stay satisfied, so the boundary tightening does not make a correct rewording red",
+        "W-reword: declaration reworded so it names NEITHER field, rationale untouched and still naming both, colon still terminating the clause ⇒ must redden (the finding's counterexample)",
+        "B-period-boundary (ADDED BY THIS REPAIR — the class the rejection named): exactly ONE declaration, a colon IS present after the lead, yet it does not terminate the normative clause — the clause ends in a period and the colon sits inside the rationale that follows ⇒ must redden. Neither the W-reword rows (a colon-preserving reword) nor B-no-separator (no colon at all) reach it: it is the intermediate state between them, and it is the state that restores the whole-bullet vacuity.",
+        "B-partial: declaration names exactly one of the two fields ⇒ must redden (half the contract: `--area` has a value, nothing says whose team's board it belongs to)",
+        "B-no-separator: a `For Azure DevOps` sentence with NO clause terminator at all — neither `:` nor `.` — even one naming both fields ⇒ must throw, never widen to the bullet",
+        "B-deleted: no `For Azure DevOps` declaration in the field list at all ⇒ must throw (fail closed)",
+        "B-ambiguous: two `For Azure DevOps` declarations in the field list ⇒ must throw, never silently read the first",
+        "B-slice-gone: the field-list act-step itself is absent, so the slice cannot be taken ⇒ sectionBetween throws, never widens to the whole of Step 4 (where both field names also occur, in the AC-6 report step)"
+      ],
+      "interactions": [
+        "W-reword x both representations: the colon-preserving reworded clause applied to the dataset SKILL.md AND its generated mirror — the real end-to-end artifact path, not a synthetic line",
+        "B-period-boundary x both representations (ADDED BY THIS REPAIR): the period-terminated clause with a colon in the rationale, applied to both corpora — the rejection's own VERIFY recipe, end-to-end",
+        "B-deleted x both representations: the whole bullet deleted from both corpora (the injection that already reddened before this contract) must keep reddening",
+        "producer weakening x every synthetic row: a fixer that widens the split (cut at end-of-bullet), narrows the boundary back to `the next colon`, or relaxes the arity guard must redden the rows that name those states"
+      ]
+    }
+  ],
+  "matrix": [
+    {
+      "id": "r0-1-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "C-shipped, on a synthetic bullet in the form both corpora ship: `For Azure DevOps that is the **team and its area path**: <rationale>`.",
+      "oracle": "npx vitest run src/conformance/setup-pm.test.ts -t 'the shipped declaration shape names both fields' (cwd packages/knowledge-hub)",
+      "expected": "PASS — azureFieldDeclaration returns 'for azure devops that is the team and its area path', which contains both 'area path' and 'team'. Positive control for the split itself: the shape the artifact ships is not collateral damage of the tightening.",
+      "observed": "ran that oracle at b733e06c with this repair applied: 'Tests 1 passed | 58 skipped (59)'",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-C2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "C-rest-of-case: the AC-4 `## State Mapping` assertions and the AC-6 report-step assertions of the SAME case, on the unmodified corpora.",
+      "oracle": "npx vitest run src/conformance/setup-pm.test.ts -t 'Step 4 writes the fields the Azure adapter reads back' (cwd packages/knowledge-hub)",
+      "expected": "PASS in both corpora — this contract changes only which text the AC-4 field assertion is scoped to; the state-mapping and report-step halves of the case are untouched and must not move.",
+      "observed": "ran that oracle at b733e06c with this repair applied: 'Tests 2 passed | 57 skipped (59)' — both corpus variants",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-C3",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "C-sentence-form, synthetic (ADDED BY THIS REPAIR): a conformant declaration in sentence form — `For Azure DevOps write the **team and its area path**. Each work-item create passes \\`--area\\`, and an item outside those area paths is invisible to the board.` The clause ends in a PERIOD and DOES name both fields.",
+      "oracle": "npx vitest run src/conformance/setup-pm.test.ts -t 'a sentence-form declaration that does name both fields still passes' (cwd packages/knowledge-hub)",
+      "expected": "PASS — the declaration is exactly 'for azure devops write the team and its area path' and contains both 'area path' and 'team'. This is the bound on the repair: cutting at the clause's own terminator must not redden a rewording that is CORRECT, which is how an over-strict guard gets relaxed by the next author. Reddens under injection R6 (boundary narrowed back to the next colon, which here swallows the rationale and returns a longer string than the clause).",
+      "observed": "ran that oracle at b733e06c with this repair applied: 'Tests 1 passed | 58 skipped (59)'. Under injection R6 in the isolated copy this row is one of the 3 that redden.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-W1",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "W-reword, synthetic: the exact counterexample of finding r0-1 — `For Azure DevOps nothing extra is needed: <rationale>` where the rationale still says 'the area paths the team's board is configured for'. The row asserts BOTH halves of the discrimination: the whole bullet still contains 'area path' and 'team' (so an unscoped assertion is satisfied) AND the declaration contains neither. UNCHANGED IN SUBSTANCE BY THIS REPAIR; it was never wrong — it was INCOMPLETE, and rows r0-1-B7/B8/I2 are the completion the rejection required.",
+      "oracle": "npx vitest run src/conformance/setup-pm.test.ts -t 'a reworded declaration reddens even though the rationale still names both fields' (cwd packages/knowledge-hub)",
+      "expected": "PASS on the current producer. FAILS on injected regression R3 (the slice widened to the whole bullet), because the widened declaration contains both field names again — proving the row depends on the split and not on the prose.",
+      "observed": "ran that oracle at b733e06c with this repair applied: 'Tests 1 passed | 58 skipped (59)'. Injection R3 in the isolated copy: 'Tests 5 failed | 54 passed (59)', this row among them.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-B7",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "B-period-boundary, synthetic (ADDED BY THIS REPAIR — the rejection's class): `For Azure DevOps nothing extra is needed. Each work-item create passes \\`--area\\`, and an item outside the area paths the team's board is configured for is created, assigned and absent from the view the team actually reads: that is the risk.` — one declaration, a colon present after the lead, and that colon is NOT the clause's separator. The row asserts all three facts that make the class distinct: a colon IS found after the lead (so a colon-seeking cut returns something), what it would return names both fields, and the clause's own terminator is the period so the declaration names NEITHER.",
+      "oracle": "npx vitest run src/conformance/setup-pm.test.ts -t 'a clause ending in a period reddens even when a colon appears later in the rationale' (cwd packages/knowledge-hub)",
+      "expected": "PASS on the repaired producer: azureFieldDeclaration returns exactly 'for azure devops nothing extra is needed', containing neither 'area path' nor 'team'. FAILS on injected regression R6 (`AZURE_DECLARATION_END.exec(...)` narrowed back to `/:/ .exec(...)`, i.e. attempt 1's `indexOf(':', from)`) — which is what makes this row the discriminating one for the rejection, not a restatement of r0-1-W1.",
+      "observed": "ran that oracle at b733e06c with this repair applied: 'Tests 1 passed | 58 skipped (59)'. Injection R6 in the isolated copy: 'Tests 3 failed | 56 passed (59)', this row among them. Injection R3 (slice widened): also reddens.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-B8",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "B-period-boundary, second and less minimal instance (ADDED BY THIS REPAIR, closure assertion r1-g1-v1-ca2): `For Azure DevOps nothing extra is needed. An item outside the area paths the team's board is configured for is still perfectly fine: each work-item create passes \\`--area\\` regardless.` — different rationale, colon in a different position, same class. Present so the class is shown to be covered rather than the one sentence the counterexample happened to use.",
+      "oracle": "npx vitest run src/conformance/setup-pm.test.ts -t 'a second period-terminated clause reddens too' (cwd packages/knowledge-hub)",
+      "expected": "PASS on the repaired producer — declaration is 'for azure devops nothing extra is needed', naming neither field. FAILS under injection R6.",
+      "observed": "ran that oracle at b733e06c with this repair applied: 'Tests 1 passed | 58 skipped (59)'. Injection R6 in the isolated copy: among the 3 reddened rows.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-I1",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": "W-reword x both representations: the normative clause reworded to `For Azure DevOps nothing extra is needed: each` in BOTH the dataset SKILL.md and the generated mirror, rationale untouched, nothing else changed — run end-to-end against the real artifacts in an isolated copy of the repo. Kept as the REGRESSION BOUND of this repair (closure assertion r1-g1-v1-ca3): the colon-preserving class must not stop reddening in exchange for catching the period class.",
+      "oracle": "npx vitest run src/conformance/setup-pm.test.ts (cwd <isolated copy>/packages/knowledge-hub), after injection R1 rewrites both corpora; the case under judgement is '$corpus — Step 4 writes the fields the Azure adapter reads back (AC-4/AC-6)'.",
+      "expected": "The AC-4/AC-6 case FAILS for BOTH corpora — 'Tests 2 failed | 57 passed (59)' — and PASSES on the unmodified branch. Before any contract the same injection left the suite at 'Tests 49 passed (49)'.",
+      "observed": "isolated copy of b733e06c with this repair applied, injection R1: 'Tests 2 failed | 57 passed (59)', the two failures being the dataset and generated-root AC-4/AC-6 cases. Unmodified corpora, same artifact: 'Tests 59 passed (59)'.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-I2",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": "B-period-boundary x both representations (ADDED BY THIS REPAIR — closure assertion r1-g1-v1-ca1, the rejection's own VERIFY recipe): the shipped clause replaced in BOTH the dataset SKILL.md and the generated mirror by `For Azure DevOps nothing extra is needed. Each work-item create passes \\`--area\\`, and an item outside the area paths the team's board is configured for is created, assigned and absent from the view the team actually reads: that is the risk.` — byte-identical rationale except its final period becoming ': that is the risk.'; nothing else changed. The class asserted against the REAL artifacts, not a synthetic line, because that is where attempt 1 went green.",
+      "oracle": "npx vitest run src/conformance/setup-pm.test.ts (cwd <isolated copy>/packages/knowledge-hub), after injection R7 rewrites both corpora; the case under judgement is '$corpus — Step 4 writes the fields the Azure adapter reads back (AC-4/AC-6)'.",
+      "expected": "The AC-4/AC-6 case FAILS for BOTH corpora, with \"the Azure field declaration does not name the area path: expected 'for azure devops nothing extra is nee…' to contain 'area path'\". With attempt 1's contract the same injection left the suite at 'Tests 56 passed (56)' — that gap is what this row closes.",
+      "observed": "isolated copy of b733e06c, ATTEMPT 1 artifact, injection R7: 'Test Files 1 passed (1); Tests 56 passed (56)' — the rejection reproduced. Same copy, THIS repair, injection R7: 'Tests 2 failed | 57 passed (59)', FAIL on both 'dataset' and 'generated root' AC-4/AC-6 cases. Injection R8 (the ca2 variant written into both corpora): also 'Tests 2 failed | 57 passed (59)', same two cases. Unmodified corpora: 'Tests 59 passed (59)'.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-B1",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "B-partial, synthetic: `For Azure DevOps that is the **area path**: <rationale>` — the declaration names the area path and never the team.",
+      "oracle": "npx vitest run src/conformance/setup-pm.test.ts -t 'a declaration naming only one of the two fields reddens' (cwd packages/knowledge-hub)",
+      "expected": "PASS on the current producer (declaration contains 'area path', does not contain 'team'), FAILS under injected regression R3 — so the row proves the half-contract state is distinguishable, which a whole-bullet match never could.",
+      "observed": "ran that oracle at b733e06c with this repair applied: 'Tests 1 passed | 58 skipped (59)'. Injection R3 in the isolated copy: among the 5 reddened rows.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-B2",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "B-no-separator, synthetic: `For Azure DevOps the team and its area path are read back from the adapter snippet` — both field names present, and no clause terminator at all (neither `:` nor `.`) to tell the normative half from the justification.",
+      "oracle": "npx vitest run src/conformance/setup-pm.test.ts -t 'a declaration with no rationale separator throws instead of matching the bullet' (cwd packages/knowledge-hub)",
+      "expected": "azureFieldDeclaration THROWS /has no \":\" separating what the skill must write from why/ — it fails closed rather than falling back to the bullet, even though the bullet would have satisfied the assertion. The message is extended by this repair ('…, and no \".\" ending it either') and still matches the row's pinned substring. FAILS under injected regression R3b (the fail-closed branch removed).",
+      "observed": "ran that oracle at b733e06c with this repair applied: 'Tests 1 passed | 58 skipped (59)'. Injection R3b in the isolated copy: 'Tests 1 failed | 58 passed (59)', exactly this row.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-B3",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "B-deleted, synthetic: a field list with no `For Azure DevOps` declaration at all (fieldsStep() with zero azure sentences).",
+      "oracle": "npx vitest run src/conformance/setup-pm.test.ts -t 'deleting the declaration throws instead of passing' (cwd packages/knowledge-hub)",
+      "expected": "THROWS /carries 0 \"For Azure DevOps\" field declarations/. FAILS under injected regression R5 (`declarations.length !== 1` -> `> 1`, i.e. the arity guard stops failing closed on a deletion).",
+      "observed": "ran that oracle at b733e06c with this repair applied: 'Tests 1 passed | 58 skipped (59)'. Injection R5 in the isolated copy: 'Tests 1 failed | 58 passed (59)', exactly this row.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-B4",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "B-ambiguous, synthetic: two `For Azure DevOps` bullets — the shipped clause plus a superseding one that was never cleaned up (the half-finished edit).",
+      "oracle": "npx vitest run src/conformance/setup-pm.test.ts -t 'a second declaration throws instead of silently reading the first' (cwd packages/knowledge-hub)",
+      "expected": "THROWS /carries 2 \"For Azure DevOps\" field declarations/ — 'the first match' never gets to decide which of two contradictory clauses is normative. FAILS under injected regression R4 (`!== 1` -> `< 1`).",
+      "observed": "ran that oracle at b733e06c with this repair applied: 'Tests 1 passed | 58 skipped (59)'. Injection R4 in the isolated copy: 'Tests 1 failed | 58 passed (59)', exactly this row.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-B5",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "B-slice-gone, synthetic: a Step 4 that no longer carries the `**Act**: Add or update the PM tool section with:` act-step — the cheapest way to make a scoped assertion vacuous is to delete the thing it slices.",
+      "oracle": "npx vitest run src/conformance/setup-pm.test.ts -t 'a Step 4 whose field-list act-step is gone fails closed on the slice' (cwd packages/knowledge-hub)",
+      "expected": "sectionBetween THROWS /\"\\*\\*Act\\*\\*: Add or update the PM tool section with:\" not found/ rather than widening to the whole of Step 4 — where 'team' and 'area path' both occur again in the AC-6 report act-step, which is precisely how the unscoped version of this case once passed with the AC-4 claim deleted.",
+      "observed": "ran that oracle at b733e06c with this repair applied: 'Tests 1 passed | 58 skipped (59)'",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-B6",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "B-deleted x both representations: the whole `**Every field the selected tool's adapter reads back…**` bullet deleted from the dataset SKILL.md and its generated mirror — the injection that ALREADY reddened before this contract, kept as a no-regression row (closure assertion r1-g1-v1-ca3, injection R2).",
+      "oracle": "npx vitest run src/conformance/setup-pm.test.ts (cwd <isolated copy>/packages/knowledge-hub) with that line removed from both corpora; case '$corpus — Step 4 writes the fields the Azure adapter reads back (AC-4/AC-6)'.",
+      "expected": "Still 'Tests 2 failed | 57 passed (59)' — fail-closed with the teaching message ('carries 0 \"For Azure DevOps\" field declarations, expected exactly 1 …') instead of a bare toContain miss. The deletion class must not stop reddening in exchange for catching the reword or the period class.",
+      "observed": "isolated copy of b733e06c with this repair applied, injection R2: 'Tests 2 failed | 57 passed (59)', both failures the AC-4/AC-6 case with the 0-declarations throw for 'dataset' and 'generated root'.",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-NA1",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "condition": "US-479 S12 finite transition matrix (direct-jump-to-terminal, missing predecessor evidence, immutable-field mutation, schema-valid-but-history-contradicting payload, foreign-head/finding/batch/run binding, replay/restart, stale writer, omitted authority, human-decision combined with automatic transition, multi-group batch divergence, convergence with an obligation still open, finding x remediation x regression interaction).",
+      "oracle": "re-derivable by inspection of the producer: azureFieldDeclaration is a pure string function over markdown read from disk, called only from a vitest case; grep for a state store, event, ledger or head binding in its inputs and consumers returns nothing.",
+      "expected": "NOT APPLICABLE — no family of the matrix applies.",
+      "rationale": "The obligation creates and changes no PERSISTED workflow state, no ledger transition, no terminal gate and no evidence identity: r0-1 is a guard-strength defect in one in-repo test assertion over a static markdown artifact, and this repair narrows that assertion's text boundary. The producer has no state to read or write, accepts no event, has no predecessor evidence, carries no identity that a later transition must preserve, and its only consumer is a test runner invocation. There is nothing for a direct jump, a replay, a stale writer or a foreign-head binding to be a transition OF. The transition matrix of THIS cycle's own remediation ledger is the workflow's, not this obligation's, and is out of this group's scope (fixScope.mode = test, allowedPaths = []).",
+      "covers": [
+        "r0-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/knowledge-hub/src/conformance/setup-pm.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:84848945d2263c90a8144ec13115625abce6ac68c1ecfc662fc9aa0934192d46",
+      "command": "npx vitest run src/conformance/setup-pm.test.ts (cwd /home/claude/pair-worktrees/321/packages/knowledge-hub, HEAD b733e06cdc2aab7b2895e87e56bd5caabbe757cb, after prettier --write)",
+      "observed": "Test Files 1 passed (1); Tests 59 passed (59)"
+    }
+  ],
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1"
+        ],
+        "owner": "packages/knowledge-hub conformance guard for setup-pm/SKILL.md (src/conformance/setup-pm.test.ts)",
+        "mode": "test",
+        "allowedPaths": [],
+        "oracle": "npx vitest run src/conformance/setup-pm.test.ts (cwd packages/knowledge-hub)",
+        "dependsOn": []
+      }
+    ],
+    "carried": []
+  },
+  "changedRows": [
+    "r0-1-W1",
+    "r0-1-I1",
+    "azureFieldDeclaration-colon-boundary",
+    "r0-1-C3",
+    "r0-1-B7",
+    "r0-1-B8",
+    "r0-1-I2"
+  ],
+  "changedRowsNote": "r0-1-W1 and r0-1-I1 are the rows the rejection named: their CONDITION is narrowed in wording to say explicitly that they cover the colon-PRESERVING reword only, and r0-1-I1 is restated as the regression bound of this repair (ca3). `azureFieldDeclaration-colon-boundary` is the rejection's mechanismId — answered by replacing `bullet.indexOf(':', from)` with the first `[.:]` terminator after the lead (`AZURE_DECLARATION_END`), which is now named as part of the producer in inventory[0]. r0-1-C3/B7/B8/I2 are the added rows for the added classes C-sentence-form and B-period-boundary. Every other row keeps its id, kind, condition, oracle and expected semantics; their `observed` strings were RE-RUN at this head rather than carried over, because the suite total moved 56 -> 59 and a stale count would be false evidence — r0-1-B2's `expected` additionally records that the fail-closed message is extended ('…, and no \".\" ending it either') while still matching the substring the row pins.",
+  "reconciled": [
+    {
+      "path": "packages/knowledge-hub/src/conformance/setup-pm.test.ts",
+      "sha256": "sha256:021b03a12244087fcd6920b236173815d8609d9a173510ecb03bc25da3fc8722",
+      "note": "attempt 1's own artifact of THIS phase, recorded in the predecessor contract's redTests at the same digest; restored with `git checkout --` for a deterministic start and re-authored by this attempt."
+    }
+  ],
+  "preserved": [],
+  "findings": {
+    "received": [
+      "r0-1"
+    ],
+    "covered": [
+      "r0-1"
+    ]
+  },
+  "injections": [
+    {
+      "id": "R1",
+      "class": "W-reword (colon-preserving), both representations",
+      "where": "isolated copy of the repo (hard requirement of mode: test — production was never edited)",
+      "edit": "perl -0pi -e 's/For Azure DevOps that is the \\*\\*team and its area path\\*\\*: each/For Azure DevOps nothing extra is needed: each/' on packages/knowledge-hub/dataset/.skills/capability/setup-pm/SKILL.md and .claude/skills/pair-capability-setup-pm/SKILL.md",
+      "beforeAnyContract": "Tests 49 passed (49) — the original hole",
+      "afterThisRepair": "Tests 2 failed | 57 passed (59) — both AC-4/AC-6 cases"
+    },
+    {
+      "id": "R2",
+      "class": "B-deleted, both representations",
+      "where": "isolated copy",
+      "edit": "delete the `**Every field the selected tool's adapter reads back from this file**` bullet from both corpora",
+      "afterThisRepair": "Tests 2 failed | 57 passed (59) — both AC-4/AC-6 cases, 0-declarations throw"
+    },
+    {
+      "id": "R7",
+      "class": "B-period-boundary, both representations (the rejection's counterexample)",
+      "where": "isolated copy",
+      "edit": "replace the shipped clause with `For Azure DevOps nothing extra is needed. Each work-item create passes \\`--area\\`, and an item outside the area paths the team's board is configured for is created, assigned and absent from the view the team actually reads: that is the risk.` in both corpora",
+      "beforeThisRepair": "Test Files 1 passed (1); Tests 56 passed (56) — the gap the rejection reported, reproduced",
+      "afterThisRepair": "Tests 2 failed | 57 passed (59) — both AC-4/AC-6 cases"
+    },
+    {
+      "id": "R8",
+      "class": "B-period-boundary, second instance, both representations (ca2)",
+      "where": "isolated copy",
+      "edit": "replace the shipped clause with `For Azure DevOps nothing extra is needed. An item outside the area paths the team's board is configured for is still perfectly fine: each work-item create passes \\`--area\\` regardless.` in both corpora",
+      "afterThisRepair": "Tests 2 failed | 57 passed (59) — both AC-4/AC-6 cases"
+    },
+    {
+      "id": "R3",
+      "class": "producer weakening — the slice widens to the whole bullet",
+      "where": "isolated copy of the test file",
+      "edit": "return bullet.slice(from, from + terminator.index) -> return bullet.slice(from)",
+      "afterThisRepair": "Tests 5 failed | 54 passed (59) — r0-1-W1, r0-1-C3, r0-1-B7, r0-1-B8, r0-1-B1"
+    },
+    {
+      "id": "R3b",
+      "class": "producer weakening — the no-terminator fail-closed branch is removed",
+      "where": "isolated copy of the test file",
+      "edit": "if (!terminator) { -> if (false as boolean) {",
+      "afterThisRepair": "Tests 1 failed | 58 passed (59) — r0-1-B2"
+    },
+    {
+      "id": "R4",
+      "class": "producer weakening — the arity guard tolerates a second declaration",
+      "where": "isolated copy of the test file",
+      "edit": "if (declarations.length !== 1) -> if (declarations.length < 1)",
+      "afterThisRepair": "Tests 1 failed | 58 passed (59) — r0-1-B4"
+    },
+    {
+      "id": "R5",
+      "class": "producer weakening — the arity guard stops failing closed on a deletion",
+      "where": "isolated copy of the test file",
+      "edit": "if (declarations.length !== 1) -> if (declarations.length > 1)",
+      "afterThisRepair": "Tests 1 failed | 58 passed (59) — r0-1-B3"
+    },
+    {
+      "id": "R6",
+      "class": "producer weakening — the boundary narrows back to attempt 1's `the next colon` (THE rejection's mechanism)",
+      "where": "isolated copy of the test file",
+      "edit": "const terminator = AZURE_DECLARATION_END.exec(bullet.slice(from)) -> const terminator = /:/.exec(bullet.slice(from))",
+      "afterThisRepair": "Tests 3 failed | 56 passed (59) — r0-1-C3, r0-1-B7, r0-1-B8. This is the proof the added rows discriminate the rejection's mechanism and are not a restatement of r0-1-W1, which stays green under R6."
+    }
+  ],
+  "closureAssertions": [
+    {
+      "id": "r1-g1-v1-ca1",
+      "status": "closed",
+      "evidence": "Injection R7 (period clause with a colon in the rationale) written into BOTH corpora of an isolated copy of b733e06c: with attempt 1's artifact 'Test Files 1 passed (1); Tests 56 passed (56)' (gap reproduced); with this repair 'Tests 2 failed | 57 passed (59)', FAIL on both \"'dataset' — Step 4 writes the fields the Azure adapter reads back (AC-4/AC-6)\" and \"'generated root' — …\". Unmodified corpora with this repair: 'Tests 59 passed (59)'."
+    },
+    {
+      "id": "r1-g1-v1-ca2",
+      "status": "closed",
+      "evidence": "Injection R8 (the second, less minimal instance) into both corpora: 'Tests 2 failed | 57 passed (59)', the same two AC-4/AC-6 cases. Its synthetic twin is row r0-1-B8."
+    },
+    {
+      "id": "r1-g1-v1-ca3",
+      "status": "closed",
+      "evidence": "Regression bound held: injection R1 (colon-preserving reword) 'Tests 2 failed | 57 passed (59)'; injection R2 (bullet deletion) 'Tests 2 failed | 57 passed (59)'; unmodified corpora 'Tests 59 passed (59)'. The totals moved from 56 to 59 because this repair adds three synthetic rows; the reddening set is unchanged (the two AC-4/AC-6 cases)."
+    }
+  ],
+  "preservedGuards": [
+    "w-1 (Notes supported/excluded split fails closed), w-2 (adapter set discovered from disk), w-3 (Step 4 back-reference resolves by meaning), w-4 (AC-5 website twin byte-identical), w-6 (dataset -> mirror differs only by the name transform): all still hold at b733e06c with this repair applied — 'Tests 59 passed (59)' on this file, 'Test Files 49 passed (49) / Tests 4951 passed (4951)' across @pair/knowledge-hub, 'ts:check' exit 0, 'prettier --check' clean, and 'pnpm skills:conformance: PASS — 44 skills conformant'."
+  ]
+}
