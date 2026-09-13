@@ -31,17 +31,28 @@ export function gh(args, { input } = {}) {
 
 const apiRepo = repo => (repo ? `repos/${repo}` : 'repos/{owner}/{repo}')
 
-export function listComments({ pr, repo }) {
-  const out = gh(['api', '--paginate', `${apiRepo(repo)}/issues/${pr}/comments`])
-  // --paginate concatenates pages as consecutive JSON arrays; split them safely.
+// `--paginate` concatenates pages as consecutive top-level JSON arrays. Split them STRING-AWARE: a `[`
+// or `]` inside a JSON string (any commenter can write `arr[0` in a body) is text, not structure
+// (t9d-4th round, t9d-3 — the naive counter hid pages and made `upsert` post duplicates).
+export function splitPages(out) {
   const pages = []
   let depth = 0
   let start = -1
+  let inString = false
+  let escaped = false
   for (let i = 0; i < out.length; i++) {
     const c = out[i]
-    if (c === '[' && depth === 0) start = i
-    if (c === '[') depth++
-    else if (c === ']') {
+    if (inString) {
+      if (escaped) escaped = false
+      else if (c === '\\') escaped = true
+      else if (c === '"') inString = false
+      continue
+    }
+    if (c === '"') inString = true
+    else if (c === '[') {
+      if (depth === 0) start = i
+      depth++
+    } else if (c === ']') {
       depth--
       if (depth === 0 && start >= 0) {
         pages.push(JSON.parse(out.slice(start, i + 1)))
@@ -49,7 +60,13 @@ export function listComments({ pr, repo }) {
       }
     }
   }
-  return pages.flat().map(c => ({ id: c.id, body: String(c.body ?? ''), url: c.html_url }))
+  if (inString || depth !== 0 || start >= 0) throw new Error('unterminated JSON page in gh --paginate output')
+  return pages
+}
+
+export function listComments({ pr, repo }) {
+  const out = gh(['api', '--paginate', `${apiRepo(repo)}/issues/${pr}/comments`])
+  return splitPages(out).flat().map(c => ({ id: c.id, body: String(c.body ?? ''), url: c.html_url }))
 }
 
 export function findByMarker(comments, marker) {

@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { findByMarker, withMarker } from '../../skills/pair-workflow-review-phase/scripts/pr-comment.mjs'
+import { findByMarker, withMarker, splitPages } from '../../skills/pair-workflow-review-phase/scripts/pr-comment.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-review-phase/scripts/pr-comment.mjs', import.meta.url))
 const MARKER = '<!-- pair:first-review #42 PR#7 -->'
@@ -118,6 +118,33 @@ test('canary v9 (C): a run-scoped marker (`… PR#<n> run:<runId> -->`) passes t
   assert.deepEqual(JSON.parse(r.stdout), { found: false, count: 0 })
   r = run(fake, 'find', '--pr', '7', '--marker', '<!-- pair:first-review #42 PR#7 run:$(id) -->')
   assert.equal(r.status, 2, 'a run id carrying shell syntax is not a marker')
+})
+
+test('t9d-3: a bracket inside ANY comment body (`arr[0`, a stray `]`) never hides a page — the marked comment is found and upsert edits it, never posts a duplicate', () => {
+  // page 1 holds an unbalanced `[` AND the marked comment; page 2 holds a stray `]` and an escaped quote
+  const fake = fakeGh([
+    { id: 1, body: 'see arr[0 for details', html_url: 'https://x/c/1' },
+    { id: 2, body: `${MARKER}\nfirst review`, html_url: 'https://x/c/2' },
+    { id: 3, body: 'closing ] bracket and a quote \\" inside', html_url: 'https://x/c/3' },
+    { id: 4, body: '[[nested [ and "]" in a string', html_url: 'https://x/c/4' },
+  ])
+  let r = run(fake, 'find', '--pr', '7', '--marker', MARKER)
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.deepEqual(JSON.parse(r.stdout), { found: true, count: 1, id: 2, url: 'https://x/c/2' })
+  r = run(fake, 'upsert', '--pr', '7', '--marker', MARKER, '--body-file', bodyFile('second wording'))
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.equal(JSON.parse(r.stdout).action, 'updated')
+  assert.equal(fake.state().length, 4, 'no duplicate comment')
+  assert.equal(fake.state()[1].body, `${MARKER}\nsecond wording`)
+})
+
+test('t9d-3: splitPages parses concatenated --paginate arrays string-aware (brackets and escapes inside JSON strings are text)', () => {
+  const a = [{ id: 1, body: 'x[' }, { id: 2, body: ']]"\\' }]
+  const b = [{ id: 3, body: '\\"[' }]
+  assert.deepEqual(splitPages(JSON.stringify(a) + JSON.stringify(b)), [a, b])
+  assert.deepEqual(splitPages(JSON.stringify(a) + '\n' + JSON.stringify(b) + '\n'), [a, b])
+  assert.deepEqual(splitPages(''), [])
+  assert.throws(() => splitPages('[{"id":1'), /unterminated/i)
 })
 
 test('find is read-only; a malformed marker or an unknown command is a usage error (exit 2)', () => {
