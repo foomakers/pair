@@ -108,6 +108,18 @@ test('upsert: two comments carrying the same marker are an ambiguity — no thir
   assert.equal(fake.state().length, 2)
 })
 
+test('canary v9 (C): a run-scoped marker (`… PR#<n> run:<runId> -->`) passes the CLI shape check and is matched verbatim — a marker of another run is a different comment', () => {
+  const scoped = '<!-- pair:first-review #42 PR#7 run:canary-479-481-v9 -->'
+  const fake = fakeGh([{ id: 5, body: `${MARKER}\na`, html_url: 'https://x/c/5' }, { id: 6, body: `${scoped}\nb`, html_url: 'https://x/c/6' }])
+  let r = run(fake, 'find', '--pr', '7', '--marker', scoped)
+  assert.equal(r.status, 0, r.stdout)
+  assert.deepEqual(JSON.parse(r.stdout), { found: true, count: 1, id: 6, url: 'https://x/c/6' })
+  r = run(fake, 'find', '--pr', '7', '--marker', '<!-- pair:first-review #42 PR#7 run:canary-479-481-v8 -->')
+  assert.deepEqual(JSON.parse(r.stdout), { found: false, count: 0 })
+  r = run(fake, 'find', '--pr', '7', '--marker', '<!-- pair:first-review #42 PR#7 run:$(id) -->')
+  assert.equal(r.status, 2, 'a run id carrying shell syntax is not a marker')
+})
+
 test('find is read-only; a malformed marker or an unknown command is a usage error (exit 2)', () => {
   const fake = fakeGh([{ id: 5, body: `${MARKER}\na`, html_url: 'https://x/c/5' }])
   let r = run(fake, 'find', '--pr', '7', '--marker', MARKER)

@@ -705,6 +705,12 @@ export function buildEntryCapsule({ dir, repo, story, pr, workflowVersion, polic
   return { capsule, telemetry: { ...telemetry, capability: 'known-state' } }
 }
 
+// The ONE synthesis marker, run-scoped when the run is known (canary v9, C): it must be the byte
+// sequence the coordinator hands the reviewer as `$synthesisMarker`, so `finalize` edits the comment
+// of THIS cycle and a later cycle on the same PR never overwrites it. Without a run id the legacy
+// PR-scoped marker is kept byte for byte.
+export const synthesisMarker = ({ story, pr, runId }) => `<!-- pair:synthesis #${story} PR#${pr}${runId ? ` run:${runId}` : ''} -->`
+
 // ── finalize (S8): last reduce+write, then the PR summary — deterministic, zero model tokens ──
 // Readiness is claimed only AFTER the candidate summary is read back (S8): a ready view whose
 // publish fails or cannot be confirmed is reported as `failed-publication` (reason
@@ -736,7 +742,7 @@ export function finalizeMetrics({ dir, repository, story, branch, pr, runId, pub
     return { view: persisted ?? view, writeResult: { written: false, reason: 'no-new-evidence', finalizedRevision: priorFinal.revision } }
   }
   if (Number.isInteger(pr) && publish) {
-    const marker = `<!-- pair:synthesis #${story} PR#${pr} -->`
+    const marker = synthesisMarker({ story, pr, runId })
     const outcome = publishSummary({ view, marker, pr, repo: repository, ...publish })
     view.publication = outcome.publication
     if (!outcome.published && view.outcome.delivery === 'ready-for-merge') {

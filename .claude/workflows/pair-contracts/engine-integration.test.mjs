@@ -248,7 +248,7 @@ test('T-27: one composed lifecycle — initial build, a real defect + a scope pr
   assert.equal(finalized.view.publication.state, 'confirmed', JSON.stringify(finalized.view.publication))
   assert.equal(finalized.view.outcome.delivery, 'ready-for-merge')
   const posted = JSON.parse(readFileSync(join(FAKE_GH_DIR, 'comments.json'), 'utf8')).find(c => c.id === finalized.view.publication.commentId)
-  assert.match(posted.body, /pair:synthesis #479 PR#480/)
+  assert.match(posted.body, /^<!-- pair:synthesis #479 PR#480 run:canary-479-replay -->/, 'the synthesis is keyed by the run that produced it (canary v9, C)')
   assert.match(posted.body, /machine-readable summary/i)
   assert.match(posted.body, /sc-1/)
 

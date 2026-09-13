@@ -5,6 +5,10 @@
 // agent: the read-back BEFORE the write is what makes a lost response safe to retry.
 //
 //   node <skill dir>/scripts/pr-comment.mjs upsert --pr <n> --marker '<!-- pair:… -->' --body-file <md> [--repo owner/name]
+//     A marker is `<!-- pair:<kind> #<story> PR#<n> -->` or, run-scoped, `<!-- pair:<kind> #<story> PR#<n> run:<runId> -->`
+//     (canary v9: the first review, the synthesis and an escalation belong to ONE cycle — a later cycle
+//     on the same PR posts its own, never edits the previous cycle's in place; the scope-decision
+//     packet stays PR-scoped because its `sc-` ids and the maintainer's answer outlive cycles).
 //     Reads the PR's issue comments back (gh api, paginated), finds the ONE whose body contains the
 //     marker verbatim, and EDITS it in place; posts a new comment only when no comment carries the
 //     marker. The marker is forced to be line 1 of the body. Prints
@@ -97,7 +101,7 @@ if (isMain()) {
   try {
     const { cmd, opts } = parseCli(process.argv.slice(2))
     for (const k of ['pr', 'marker']) if (!opts[k]) throw new Error(`--${k} is required`)
-    if (!/^<!--\s*pair:[a-z-]+ #\S+ PR#\d+\s*-->$/.test(opts.marker)) throw new Error(`marker must look like <!-- pair:<kind> #<story> PR#<n> -->, got ${JSON.stringify(opts.marker)}`)
+    if (!/^<!--\s*pair:[a-z-]+ #\S+ PR#\d+(?: run:[A-Za-z0-9][A-Za-z0-9._-]*)?\s*-->$/.test(opts.marker)) throw new Error(`marker must look like <!-- pair:<kind> #<story> PR#<n> [run:<runId>] -->, got ${JSON.stringify(opts.marker)}`)
     let out
     if (cmd === 'upsert') {
       if (!opts['body-file']) throw new Error('--body-file <md> is required')

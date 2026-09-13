@@ -17,6 +17,7 @@ import {
   shouldStop,
   runtimeTick,
   finalizeMetrics,
+  synthesisMarker,
   extractUsage,
   dispatchStatsFromResult,
   readUsageLedger,
@@ -69,6 +70,11 @@ else if (args[0] === 'api' && args.includes('POST')) {
   chmodSync(join(dir, 'gh'), 0o755)
   return dir
 }
+
+test('canary v9 (C): the synthesis marker finalize publishes under carries the run id — the same PR measured by a later run gets its own comment, never an edit of the previous run\'s', () => {
+  assert.equal(synthesisMarker({ story: '42', pr: 7, runId: 'canary-479-481-v9' }), '<!-- pair:synthesis #42 PR#7 run:canary-479-481-v9 -->')
+  assert.equal(synthesisMarker({ story: 42, pr: '7' }), '<!-- pair:synthesis #42 PR#7 -->', 'no run id: the legacy PR-scoped marker, byte for byte')
+})
 
 test('cycle-runtime.mjs ships byte-identical inside review-phase (installed and dataset)', () => {
   const read = rel => readFileSync(new URL(rel, import.meta.url), 'utf8')

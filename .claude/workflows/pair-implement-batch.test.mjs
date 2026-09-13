@@ -281,9 +281,9 @@ test('TC-11: every dispatch is a configured skill + typed arguments + the engine
   assert.match(byLabel('prepare:#292 a0'), /\$mode=initial \$phase=a0 \$title="T" \$workflowVersion/)
   assert.match(byLabel('validate:#292 a0'), /\$phase=a0 \$head=a{40} \$contract=\"\/main\/\.pair\/working\/runs\/run-42\/292\/a0-red-contract\.json\" \$contractHash=sha256:1{64}/)
   assert.match(byLabel('implement:#292'), /\$snapshot=c{40} \$contract=\"\/main\/.*\$implementSkill=\/pair-process-implement \$verifyQuality=\/pair-capability-verify-quality \$recordDecision=\/pair-capability-record-decision \$checkpoint=\/pair-capability-checkpoint \$publishPr=\/pair-capability-publish-pr/)
-  assert.match(byLabel('verify:#292 r0'), /\$pr=7 .*\$phase=r0 \$mode=first \$head=a{40} \$worktree=\.\.\/pair-worktrees\/292-review \$reviewLog=\.pair\/working\/reviews\/292\.md \$marker="<!-- pair:first-review #292 PR#7 -->" \$synthesisMarker="<!-- pair:synthesis #292 PR#7 -->" \$template=code-review-template\.md .*\$floor=Minor \$ranks=\{"Blocker":3,"Major":2,"Minor":1\} \$attempt=1 \$reviewer=1 \$reviewers=1 \$reviewSkill=\/pair-process-review \$writeIssue=\/pair-capability-write-issue/)
+  assert.match(byLabel('verify:#292 r0'), /\$pr=7 .*\$phase=r0 \$mode=first \$head=a{40} \$worktree=\.\.\/pair-worktrees\/292-review \$reviewLog=\.pair\/working\/reviews\/292\.md \$marker="<!-- pair:first-review #292 PR#7 run:run-42 -->" \$synthesisMarker="<!-- pair:synthesis #292 PR#7 run:run-42 -->" \$template=code-review-template\.md .*\$floor=Minor \$ranks=\{"Blocker":3,"Major":2,"Minor":1\} \$attempt=1 \$reviewer=1 \$reviewers=1 \$reviewSkill=\/pair-process-review \$writeIssue=\/pair-capability-write-issue/)
   assert.match(byLabel('prepare:#292 r1-g1'), /\$mode=remediation \$phase=r1-g1 \$head=a{40} \$findings=\[\{"id":"r0-1","severity":"Major","location":"src\/a\.ts:1","description":"wrong output on the empty form","recommendation":"handle it","kind":"defect"\}\]/)
-  assert.match(byLabel('green:#292 r1-g1'), /\$phase=r1-g1 \$head=a{40} \$attempt=1 \$snapshot=c{40} \$contract=\"\/main\/.*\$findings=\[.*\$reviewLog=\.pair\/working\/reviews\/292\.md \$marker="<!-- pair:first-review #292 PR#7 -->" \$writeIssue=/)
+  assert.match(byLabel('green:#292 r1-g1'), /\$phase=r1-g1 \$head=a{40} \$attempt=1 \$snapshot=c{40} \$contract=\"\/main\/.*\$findings=\[.*\$reviewLog=\.pair\/working\/reviews\/292\.md \$marker="<!-- pair:first-review #292 PR#7 run:run-42 -->" \$writeIssue=/)
   assert.match(byLabel('verify:#292 r1'), /\$mode=re-review \$head=a{40} .*\$prior=r0-review-phase \$openIds=\["r0-1"\]/)
 })
 
@@ -395,12 +395,25 @@ test('TC-05: a resumed PR whose durable state is mid-remediation redirects the e
   assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
 })
 
+test('canary v9 (C): the first-review and synthesis markers carry the RUN id — a new cycle on the same PR never edits the previous cycle\'s comments in place, while every dispatch of one run shares one marker', async () => {
+  const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [finding({ id: 'r0-1', transition: 'resolved' })] })
+  const v8 = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], runId: 'canary-v8' }, dispatch: stdDispatch({ review }) })
+  const v9 = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], runId: 'canary-v9' }, dispatch: stdDispatch({ review }) })
+  const markersOf = calls => calls.filter(c => c.opts.agentType === 'pair-reviewer' || c.opts.agentType === 'pair-implementer').map(c => arg(c.prompt, 'marker'))
+  assert.deepEqual([...new Set(markersOf(v8.calls))], ['<!-- pair:first-review #292 PR#7 run:canary-v8 -->'], 'one run, one first-review marker across verify r0, green and verify r1')
+  assert.deepEqual([...new Set(markersOf(v9.calls))], ['<!-- pair:first-review #292 PR#7 run:canary-v9 -->'])
+  const synth = calls => calls.filter(c => c.opts.agentType === 'pair-reviewer').map(c => arg(c.prompt, 'synthesisMarker'))
+  assert.deepEqual([...new Set(synth(v8.calls))], ['<!-- pair:synthesis #292 PR#7 run:canary-v8 -->'])
+  assert.deepEqual([...new Set(synth(v9.calls))], ['<!-- pair:synthesis #292 PR#7 run:canary-v9 -->'])
+  assert.notEqual(markersOf(v8.calls)[0], markersOf(v9.calls)[0])
+})
+
 test('TC-05: a fresh-path card resumed mid-cycle binds the PR from the cycle state — markers never read PR#null; a verification with no PR anywhere is failed-resume (canary run 11, r1-5)', async () => {
   const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-fix-test-author' ? { status: 'redirect', next: { step: 'verify', mode: 're-review', phase: 'r1', round: 1, attempt: 1, base: HEAD, prior: 'r0-review-phase', openIds: [], pr: 483, inputsChanged: true } } : o.agentType === 'pair-reviewer' ? { verdict: 'Approved', findings: [] } : {}) })
   assert.equal(result.batch[0].status, 'ready-for-merge')
   assert.equal(result.batch[0].prNumber, 483)
   const verify = calls.find(c => c.opts.agentType === 'pair-reviewer').prompt
-  assert.match(verify, /\$pr=483 .*\$marker="<!-- pair:first-review #292 PR#483 -->" \$synthesisMarker="<!-- pair:synthesis #292 PR#483 -->"/)
+  assert.match(verify, /\$pr=483 .*\$marker="<!-- pair:first-review #292 PR#483 run:story-292 -->" \$synthesisMarker="<!-- pair:synthesis #292 PR#483 run:story-292 -->"/)
   assert.doesNotMatch(verify, /PR#null|PR#undefined/)
   const noPr = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-fix-test-author' ? { status: 'redirect', next: { step: 'verify', mode: 're-review', phase: 'r1', round: 1, attempt: 1, base: HEAD } } : {}) })
   assert.equal(noPr.result.batch[0].status, 'failed-resume')

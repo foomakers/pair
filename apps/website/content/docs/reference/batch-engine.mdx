@@ -167,8 +167,12 @@ no register, no projector.
   never acceptance: it stays blocking until a human disposition or a read-back-verified
   correction, and the story escalates rather than converging around it.
 - **Publication is idempotent**: the first review, the synthesis and an escalation are one
-  comment each, keyed by a hidden marker and edited in place through `pr-comment.mjs upsert`,
-  which reads the PR back before writing — a restart under another invocation never posts twice.
+  comment each PER RUN, keyed by a hidden marker that carries the run id
+  (`<!-- pair:first-review #<story> PR#<n> run:<runId> -->`, from `4.0.1`) and edited in place
+  through `pr-comment.mjs upsert`, which reads the PR back before writing — a restart under
+  another invocation never posts twice, and a later cycle on the same PR posts its own comments
+  instead of overwriting the previous cycle's. The scope-decision packet stays PR-scoped: its
+  `sc-` ids and the maintainer's answer outlive cycles.
 - **Statuses** a caller may see: `ready-for-merge` (only with a 40-hex `reviewedHead` and a
   `verdict`), `escalate`, `failed-preparation`, `failed-contract`, `failed-seal`,
   `failed-implement`, `failed-fix`, `failed-verify`, `failed-custody`, `failed-resume`,
@@ -229,7 +233,7 @@ imported, other phases') scripts folder:
   or after a 30-second grace period leaves it partial; `finalize` combines the last verdict with
   the accumulated metrics and posts the ONE synthesis comment.
 
-The final summary — one comment at `<!-- pair:synthesis #<story> PR#<n> -->`, upserted, never a
+The final summary — one comment at `<!-- pair:synthesis #<story> PR#<n> run:<runId> -->`, upserted, never a
 second one per run/step/scope-decision/metrics-correction — carries, in order: workflow identity/
 versions/models/reviewed head; quality vs. delivery status; effective cycles and review executions
 (retries, redirects, contract revisions kept separate); tokens and time with explicit coverage;

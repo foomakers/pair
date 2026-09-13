@@ -1545,8 +1545,15 @@ async function driveStory(story) {
   const resuming = Number.isInteger(story.prNumber)
   let pr = resuming ? story.prNumber : null
   const reviewLog = `${PIPELINE.auditLogDir}/${story.id}.md`
-  const firstReviewMarker = () => `<!-- pair:first-review #${story.id} PR#${pr} -->`
-  const synthesisMarker = () => `<!-- pair:synthesis #${story.id} PR#${pr} -->`
+  // Markers carry the RUN id (canary v9, C): a PR lives through several cycles, and a marker keyed
+  // on story+PR alone made a new cycle's r0 EDIT the previous cycle's first review in place
+  // (comment 5598044184). Within one run every dispatch shares the marker, so upsert-by-marker stays
+  // a restart-safe edit; across runs each cycle owns its own comments. The scope-decision packet is
+  // deliberately NOT run-scoped: it is the maintainer's standing question, keyed by stable `sc-` ids
+  // that survive cycles (canary v9, B), so a later cycle edits the one packet rather than posting a
+  // second. `runId` is a `let`: an `other-run` adoption re-keys the markers with it.
+  const firstReviewMarker = () => `<!-- pair:first-review #${story.id} PR#${pr} run:${runId} -->`
+  const synthesisMarker = () => `<!-- pair:synthesis #${story.id} PR#${pr} run:${runId} -->`
   // US-479 AC-32: `rollbackTo` is the maintainer's call, taken per card after its budget escalated
   // and they read the dossier — the engine never infers it and has no default for it.
   const policy = { maxFixRounds: MAX_FIX_ROUNDS, redRepairs: MAX_RED_CONTRACT_REPAIRS, greenRetries: MAX_GREEN_RETRIES, reviewers: PIPELINE.reviewers, ...(story.rollbackTo ? { rollbackTo: story.rollbackTo } : {}) }
