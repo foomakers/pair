@@ -199,7 +199,12 @@ function stdDispatch({ contractResult = { status: 'cache-hit', contract: validCo
   let pass = 0
   return (prompt, opts) => {
     if (opts.agentType === 'pair-contract-generator') return contractResult
-    if (opts.agentType === 'pair-reviewer') return typeof review === 'function' ? review(pass++, prompt) : review
+    if (opts.agentType === 'pair-reviewer') {
+      const r = typeof review === 'function' ? review(pass++, prompt) : review
+      // t9d-2: the FIRST review dispatch of a run carries `$contractSpec` and brings the template
+      // contract back (`templateContract`), exactly as the contract-phase skill would return it.
+      return prompt.includes('$contractSpec=') && contractResult != null && r && typeof r === 'object' ? { templateContract: contractResult, ...r } : r
+    }
     return {}
   }
 }
@@ -234,12 +239,14 @@ async function expectThrow({ args }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // TC-11 — dispatch shape: four logical judgment stages, nothing mechanical dispatched
 // ═══════════════════════════════════════════════════════════════════════════
-test('TC-11 golden trace: a fresh story with a clean first verification is FOUR judgment dispatches (plus the batch-level template contract)', async () => {
+test('TC-11 golden trace: a fresh story with a clean first verification is FOUR judgment dispatches — and nothing else (the template contract rides on the first review, t9d-2)', async () => {
   const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch() })
   assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.deepEqual(labels(calls), ['contract:code-review', 'prepare:#292 a0', 'validate:#292 a0', 'implement:#292', 'verify:#292 r0'])
-  assert.deepEqual([...new Set(calls.map(c => c.opts.agentType))].sort(), ['pair-contract-generator', 'pair-fix-test-author', 'pair-implementer', 'pair-red-contract-verifier', 'pair-reviewer'])
-  assert.deepEqual(calls.map(c => c.opts.phase), ['Contracts', 'Prepare', 'Validate', 'Implement', 'Verify'])
+  // t9d-2 / AC-06 (S7): NO generator-only dispatch — the first review dispatch resolves the template contract
+  assert.deepEqual(labels(calls), ['prepare:#292 a0', 'validate:#292 a0', 'implement:#292', 'verify:#292 r0'])
+  assert.deepEqual([...new Set(calls.map(c => c.opts.agentType))].sort(), ['pair-fix-test-author', 'pair-implementer', 'pair-red-contract-verifier', 'pair-reviewer'])
+  assert.deepEqual(calls.map(c => c.opts.phase), ['Prepare', 'Validate', 'Implement', 'Verify'])
+  assert.match(calls[3].prompt, /\$contractSpec=\{/, 'the first review dispatch carries the contract spec')
 })
 
 test('TC-11 golden trace: one fix round on one group adds exactly four dispatches — prepare, validate(+seal), green, final verification', async () => {
@@ -250,7 +257,7 @@ test('TC-11 golden trace: one fix round on one group adds exactly four dispatche
   const all = labels(calls).join(' ')
   for (const gone of ['plan:', 'probe:', 'red-seal:', 'preflight:', 'synth:', 'flush:', 'pr:', 'red-spec:', 'red-verify:', 'fix:', 'rev:'])
     assert.ok(!all.includes(gone), `a retired dispatch label survives: ${gone}`)
-  assert.equal(result.metrics.dispatches, 9)
+  assert.equal(result.metrics.dispatches, 8)
   assert.equal(result.metrics.tokens, 'unknown', 'token counters are not exposed to the script — reported unknown, never zero')
 })
 
@@ -258,8 +265,8 @@ test('TC-11: a resumed PR with a clean verification is ONE dispatch — the fina
   const { result, calls } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch() })
   assert.equal(result.batch[0].status, 'ready-for-merge')
   assert.deepEqual(stageLabels(calls), ['verify:#292 r0'])
-  assert.match(calls[1].prompt, /\$mode=first/)
-  assert.match(calls[1].prompt, /\$entry=pr/)
+  assert.match(calls[0].prompt, /\$mode=first/)
+  assert.match(calls[0].prompt, /\$entry=pr/)
 })
 
 test('TC-11: every dispatch is a configured skill + typed arguments + the engine version, run directory and policy', async () => {
@@ -281,7 +288,7 @@ test('TC-11: every dispatch is a configured skill + typed arguments + the engine
   assert.match(byLabel('prepare:#292 a0'), /\$mode=initial \$phase=a0 \$title="T" \$workflowVersion/)
   assert.match(byLabel('validate:#292 a0'), /\$phase=a0 \$head=a{40} \$contract=\"\/main\/\.pair\/working\/runs\/run-42\/292\/a0-red-contract\.json\" \$contractHash=sha256:1{64}/)
   assert.match(byLabel('implement:#292'), /\$snapshot=c{40} \$contract=\"\/main\/.*\$implementSkill=\/pair-process-implement \$verifyQuality=\/pair-capability-verify-quality \$recordDecision=\/pair-capability-record-decision \$checkpoint=\/pair-capability-checkpoint \$publishPr=\/pair-capability-publish-pr/)
-  assert.match(byLabel('verify:#292 r0'), /\$pr=7 .*\$phase=r0 \$mode=first \$head=a{40} \$worktree=\.\.\/pair-worktrees\/292-review \$reviewLog=\.pair\/working\/reviews\/292\.md \$marker="<!-- pair:first-review #292 PR#7 run:run-42 -->" \$synthesisMarker="<!-- pair:synthesis #292 PR#7 run:run-42 -->" \$template=code-review-template\.md .*\$floor=Minor \$ranks=\{"Blocker":3,"Major":2,"Minor":1\} \$attempt=1 \$reviewer=1 \$reviewers=1 \$reviewSkill=\/pair-process-review \$writeIssue=\/pair-capability-write-issue/)
+  assert.match(byLabel('verify:#292 r0'), /\$pr=7 .*\$phase=r0 \$mode=first \$head=a{40} \$worktree=\.\.\/pair-worktrees\/292-review \$reviewLog=\.pair\/working\/reviews\/292\.md \$marker="<!-- pair:first-review #292 PR#7 run:run-42 -->" \$synthesisMarker="<!-- pair:synthesis #292 PR#7 run:run-42 -->" \$template=code-review-template\.md .*\$floor=Minor \$ranks=\{[^}]+\} \$attempt=1 \$reviewer=1 \$reviewers=1 \$reviewSkill=\/pair-process-review \$writeIssue=\/pair-capability-write-issue/)
   assert.match(byLabel('prepare:#292 r1-g1'), /\$mode=remediation \$phase=r1-g1 \$head=a{40} \$findings=\[\{"id":"r0-1","severity":"Major","location":"src\/a\.ts:1","description":"wrong output on the empty form","recommendation":"handle it","kind":"defect"\}\]/)
   assert.match(byLabel('green:#292 r1-g1'), /\$phase=r1-g1 \$head=a{40} \$attempt=1 \$snapshot=c{40} \$contract=\"\/main\/.*\$findings=\[.*\$reviewLog=\.pair\/working\/reviews\/292\.md \$marker="<!-- pair:first-review #292 PR#7 run:run-42 -->" \$writeIssue=/)
   assert.match(byLabel('verify:#292 r1'), /\$mode=re-review \$head=a{40} .*\$prior=r0-review-phase \$openIds=\["r0-1"\]/)
@@ -290,7 +297,7 @@ test('TC-11: every dispatch is a configured skill + typed arguments + the engine
 test('TC-11: the workflow source dispatches ONLY skill invocations — no free-form prompt, no shell, no retired rule or role', () => {
   const code = SRC.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
   const dispatches = [...code.matchAll(/\b(?:agent(?:Retry)?|dispatch)\(\s*\n?\s*([^\n,]+)/g)].map(m => m[1].trim()).filter(d => d !== 'prompt')
-  assert.equal(dispatches.length, 6, `expected the five stage dispatches plus the template contract, found ${dispatches.length}`)
+  assert.equal(dispatches.length, 5, `expected the five stage dispatches and nothing else (the template contract rides on the first review, t9d-2), found ${dispatches.length}`)
   for (const d of dispatches) assert.match(d, /^(invoke\(|`Invoke \*\*\$\{SK\.[a-zA-Z]+\}\*\*)/, `a dispatch is not a skill invocation: ${d}`)
   for (const gone of ['PACING', 'TEXT SHAPE', 'CONTRACT INVENTORY', 'FINITE-STATE', 'SEALED RED SNAPSHOT', 'CONVERGENCE SWEEP', 'DO NOT FILE NEW ISSUES', 'ISOLATION (mandatory', 'sha256sum', 'git diff-tree', "'pair-remediation-planner'", "'pair-red-sealer'", "'pair-fix-verifier'", "'/pair-workflow-remediation-plan'", "'/pair-workflow-red-seal'", "'/pair-workflow-p3-verify'", "'/pair-workflow-cycle-comments'", "'/pair-workflow-pr-phase'"])
     assert.equal(code.includes(gone), false, `${gone} is still spelled in the workflow code`)
@@ -388,7 +395,7 @@ test('TC-05: a resumed PR whose durable state is mid-remediation redirects the e
   const { result, calls } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch })
   assert.equal(result.batch[0].status, 'ready-for-merge')
   assert.deepEqual(stageLabels(calls), ['verify:#292 r0', 'green:#292 r1-g1', 'verify:#292 r1'])
-  assert.match(calls[2].prompt, /\$snapshot=c{40}/)
+  assert.match(calls[1].prompt, /\$snapshot=c{40}/)
   assert.equal(result.batch[0].metrics.redirects, 1)
   assert.equal(result.metrics.redirects, 1)
   // the cheap identity/redirect entry spent no fix-test-author or planner dispatch
@@ -442,7 +449,7 @@ test('TC-14: the effective-inputs digest is keyed by the engine MAJOR — a patc
     const calls = []
     const agent = async (prompt, opts) => { calls.push(prompt); return opts.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : { status: 'stale', reason: 'x' } }
     await new AsyncFunction('args', 'agent', 'parallel', 'log', code)({ cards: [STORY] }, agent, fns => Promise.all(fns.map(f => f())), () => {})
-    return /\$inputs=([0-9a-f]{16})/.exec(calls[1])[1]
+    return /\$inputs=([0-9a-f]{16})/.exec(calls[0])[1]
   }
   assert.equal(await digestOf(SRC), await digestOf(src), 'same major, same digest')
   assert.notEqual(await digestOf(SRC), await digestOf(SRC.replace(/const WORKFLOW_VERSION = '4\.0\.\d+'/, "const WORKFLOW_VERSION = '5.0.0'")), 'another major, another digest')
@@ -496,9 +503,9 @@ test('TC-05: when the run directory is empty but the PR already has a cycle unde
   }
   const { result, calls } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], runId: 'run-new' }, dispatch })
   assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.match(calls[1].prompt, /\$run=run-new /)
-  assert.match(calls[2].prompt, /\$run=canary-5 /)
-  assert.ok(calls[2].prompt.includes('.pair/working/runs/canary-5/292/'))
+  assert.match(calls[0].prompt, /\$run=run-new /)
+  assert.match(calls[1].prompt, /\$run=canary-5 /)
+  assert.ok(calls[1].prompt.includes('.pair/working/runs/canary-5/292/'))
 })
 
 test('TC-05: an `other-run` naming the current run, three redirects in a row, or the same step asked twice are `failed-resume` — never a loop, never a clean review', async () => {
@@ -637,7 +644,7 @@ test('canary v9 (D): a carried finding re-described on a later review is ONE acc
 })
 
 test('t9d-24: the final reviewer concludes the required check and the state label — VERIFY_SCHEMA declares `published.reviewCheck` / `published.prState` (or the harness drops them) and the run log reports them', async () => {
-  const verifySchema = SRC.slice(SRC.indexOf('const VERIFY_SCHEMA'), SRC.indexOf('const hasReviewEvidence'))
+  const verifySchema = SRC.slice(SRC.indexOf('VERIFY_SCHEMA = {'), SRC.indexOf('const hasVerdict'))
   assert.match(verifySchema, /reviewCheck: \{ type: 'string'/, 'published.reviewCheck undeclared')
   assert.match(verifySchema, /prState: \{ type: 'string'/, 'published.prState undeclared')
   const { result, logs } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review: { verdict: 'Approved', findings: [], published: { firstReview: true, reviewCheck: 'success', prState: 'pr-state:ready-to-merge' } } }) })
@@ -646,7 +653,7 @@ test('t9d-24: the final reviewer concludes the required check and the state labe
 })
 
 test('canary v9 (A): metricsRef is evidence, not a promise — the path is reported only when the final verifier says metrics.json was written (by itself, or owned by a present host runtime); otherwise `absent`; a reviewer that owned the synthesis and could not confirm it is failed-publication, never ready-for-merge', async () => {
-  const verifySchema = SRC.slice(SRC.indexOf('const VERIFY_SCHEMA'), SRC.indexOf('const hasReviewEvidence'))
+  const verifySchema = SRC.slice(SRC.indexOf('VERIFY_SCHEMA = {'), SRC.indexOf('const hasVerdict'))
   assert.match(verifySchema, /metrics: \{ type: 'object'/, 'VERIFY_SCHEMA declares `metrics` — without it the harness drops the field (as happened to regressionGuards)')
   // the reviewer ran `cycle-runtime.mjs finalize` itself (no host runtime present) and read the synthesis back
   const own = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], runId: 'v9' }, dispatch: stdDispatch({ review: { verdict: 'Approved', findings: [], metrics: { owner: 'review-phase', written: true, revision: 1, completeness: 'partial' }, published: { firstReview: true, synthesis: true } } }) })
@@ -683,7 +690,7 @@ test('TC-12: a moved head after a clean verification re-verifies the delta (neve
   assert.equal(result.batch[0].status, 'ready-for-merge')
   assert.equal(result.batch[0].reviewedHead, HEAD2)
   assert.deepEqual(stageLabels(calls), ['verify:#292 r0', 'verify:#292 r1'])
-  assert.match(calls[2].prompt, /\$mode=re-review .*\$headMoved=true/)
+  assert.match(calls[1].prompt, /\$mode=re-review .*\$headMoved=true/)
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -736,7 +743,7 @@ test('TC-10: a rejected contract goes back to preparation ONCE carrying the reje
   })
   assert.equal(once.result.batch[0].status, 'ready-for-merge')
   assert.deepEqual(stageLabels(once.calls), ['prepare:#292 a0', 'validate:#292 a0', 'prepare:#292 a0 repair', 'validate:#292 a0', 'implement:#292', 'verify:#292 r0'])
-  assert.match(once.calls[3].prompt, /\$mode=repair \$phase=a0 .*\$rejection=\[\{"location":"fixture\.test\.ts:3"/)
+  assert.match(once.calls[2].prompt, /\$mode=repair \$phase=a0 .*\$rejection=\[\{"location":"fixture\.test\.ts:3"/)
   const twice = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-red-contract-verifier' ? { verified: false, findings: [rejection] } : {}) })
   assert.equal(twice.result.batch[0].status, 'failed-contract')
   assert.equal(twice.result.batch[0].budget, 'redRepairs')
@@ -861,13 +868,13 @@ test('t9b-4: the delta rule of a preparation result follows the DISPATCHED mode 
 
 test('finding history across cycles (canary v4): the FIRST review of a PR-entry cycle may carry resolved/superseded findings of the PR\'s earlier reviews — non-blocking, with read-back evidence — and the cycle continues into remediation; without evidence, or in a fresh-path cycle, an unknown id still cannot arrive as resolved', async () => {
   const history = { id: 'r3-9', severity: 'Major', kind: 'defect', transition: 'resolved', blocking: false, location: 'src/a.ts:1', description: 'fixed earlier', recommendation: '-', evidence: 'verified against the producer at this head: all four cells pass' }
-  const review = pass => (pass === 0 ? { verdict: 'CHANGES-REQUESTED', findings: [history, finding({ id: 'r5-11', severity: 'Major' })] } : { verdict: 'Approved', findings: [] })
+  const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [history, finding({ id: 'r5-11', severity: 'Major' })] } : { verdict: 'Approved', findings: [] })
   const carried = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review }) })
   assert.equal(carried.result.batch[0].status, 'ready-for-merge', JSON.stringify(carried.result.batch[0]))
   assert.deepEqual(stageLabels(carried.calls).slice(0, 3), ['verify:#292 r0', 'prepare:#292 r1-g1', 'validate:#292 r1-g1'])
-  const noEvidence = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'CHANGES-REQUESTED', findings: [{ ...history, evidence: '' }, finding({ id: 'r5-11' })] } : { verdict: 'Approved', findings: [] }) }) })
+  const noEvidence = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'Rework', findings: [{ ...history, evidence: '' }, finding({ id: 'r5-11' })] } : { verdict: 'Approved', findings: [] }) }) })
   assert.equal(noEvidence.result.batch[0].status, 'failed-verify')
-  const fresh = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'CHANGES-REQUESTED', findings: [history, finding({ id: 'r0-1' })] } : { verdict: 'Approved', findings: [] }) }) })
+  const fresh = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'Rework', findings: [history, finding({ id: 'r0-1' })] } : { verdict: 'Approved', findings: [] }) }) })
   assert.equal(fresh.result.batch[0].status, 'failed-verify')
 })
 
@@ -913,8 +920,8 @@ test('TC-14: `models` routes the five live roles independently; `model` stays th
 
 test('TC-14: pipeline.reviewers is a positive integer threaded to the verifier and the policy', async () => {
   const { calls } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], pipeline: { reviewers: 2 } }, dispatch: stdDispatch() })
-  assert.match(calls[1].prompt, /"reviewers":2\}/)
-  assert.match(calls[1].prompt, /\$reviewer=1 \$reviewers=2/)
+  assert.match(calls[0].prompt, /"reviewers":2\}/)
+  assert.match(calls[0].prompt, /\$reviewer=1 \$reviewers=2/)
   assert.match(await expectThrow({ args: { cards: [STORY], pipeline: { reviewers: 0 } } }), /reviewers/)
 })
 
@@ -972,13 +979,13 @@ test('TC-14: the result carries workflowVersion 4.0.1 and every status row is on
 // ═══════════════════════════════════════════════════════════════════════════
 // TC-16 — fixed-trace cost accounting
 // ═══════════════════════════════════════════════════════════════════════════
-test('TC-16: fixed traces — cold path 5 dispatches (was 5 + probe on 2.0.0), one-fix path 9 (was 13), unchanged resume 1 identity dispatch with zero fresh review', async () => {
+test('TC-16: fixed traces — cold path 4 dispatches (was 5 with the generator), one-fix path 8 (was 9), unchanged resume 1 identity dispatch with zero fresh review', async () => {
   const cold = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch() })
-  assert.equal(cold.result.metrics.dispatches, 5)
+  assert.equal(cold.result.metrics.dispatches, 4)
   const oneFix = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] }) }) })
-  assert.equal(oneFix.result.metrics.dispatches, 9)
+  assert.equal(oneFix.result.metrics.dispatches, 8)
   const resume = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : { status: 'redirect', next: { step: 'done', reviewedHead: HEAD, round: 1, verdict: 'Approved' } }) })
-  assert.equal(resume.result.metrics.dispatches, 2)
+  assert.equal(resume.result.metrics.dispatches, 1)
   assert.equal(resume.result.metrics.redirects, 1)
   assert.equal(resume.result.batch[0].status, 'ready-for-merge')
   for (const r of [cold, oneFix, resume]) {
@@ -1057,7 +1064,8 @@ test('Finding 1: a MIXED batch dispatches BOTH stories normally — a capsule fo
   assert.equal(normal.status, 'ready-for-merge')
   assert.ok(calls.some(c => c.prompt.includes('story #292')), 'story 292 dispatched for real — the capsule never skipped it')
   assert.ok(calls.some(c => c.prompt.includes('story #293')))
-  assert.ok(calls.some(c => c.opts.agentType === 'pair-contract-generator'), 'the batch-wide contract call always runs — no capsule-based skip')
+  assert.equal(calls.some(c => c.opts.agentType === 'pair-contract-generator'), false, 't9d-2: no generator-only dispatch')
+  assert.ok(calls.some(c => c.opts.agentType === 'pair-reviewer' && /\$contractSpec=/.test(c.prompt)), 'the first review dispatch resolves the template contract')
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1067,8 +1075,10 @@ test('TC-15: every dispatched payload carries identities, references and compact
   const bigLedger = Array.from({ length: 40 }, (_, i) => ({ claim: `claim ${i}`, oracle: 'o', probe: 'p', observed: 'x'.repeat(200) }))
   const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding({ evidence: 'y'.repeat(2000), description: 'wrong output on the empty form' })] } : { verdict: 'Approved', findings: [] })
   const { calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-reviewer' ? review(o.label === 'verify:#292 r0' ? 0 : 1) : o.label?.startsWith('green:') ? { evidenceLedger: bigLedger } : {}) })
-  for (const c of calls.slice(1)) {
-    assert.ok(c.prompt.length < 3500, `${c.opts.label}: ${c.prompt.length} chars — a payload this size is carrying evidence, not references`)
+  for (const c of calls) {
+    // t9d-2: `$contractSpec` is the template-contract spec (paths + the loose skeleton), a reference the first review resolves — not evidence
+    const measured = c.prompt.replace(/ \$contractSpec=\{.*?\}(?= \$[a-zA-Z]|$)/, '')
+    assert.ok(measured.length < 3500, `${c.opts.label}: ${measured.length} chars — a payload this size is carrying evidence, not references`)
     assert.doesNotMatch(c.prompt, /evidenceLedger|\$ledger=|"observed":|"evidence":/, `${c.opts.label}: raw evidence reached a prompt`)
     assert.doesNotMatch(c.prompt, /"inventory":|"matrix":|"redTests":/, `${c.opts.label}: a contract was re-serialized into a prompt instead of referenced by path + hash`)
   }
@@ -1133,13 +1143,24 @@ test('floor: canonical/consumer differential — the engine duplicate of severit
 // ═══════════════════════════════════════════════════════════════════════════
 // Template contract (phase 0)
 // ═══════════════════════════════════════════════════════════════════════════
-test('phase 0: a valid contract drives the verifier schema and vocabulary; a malformed or failed one falls back to the loose skeleton and the run never breaks', async () => {
-  const good = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch() })
+test('phase 0 (t9d-2): the FIRST review dispatch resolves the template contract (`$contractSpec` → `templateContract`); from the next review on the schema is enum-locked and the vocabulary is the template`s; a malformed or failed one falls back to the loose skeleton and the run never breaks', async () => {
+  const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [finding({ id: 'r0-1', transition: 'resolved', blocking: false, evidence: 'fixed' })] })
+  const good = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review }) })
+  assert.equal(good.result.batch[0].status, 'ready-for-merge', JSON.stringify(good.result.batch[0]))
   assert.deepEqual(good.result.contracts, [{ name: 'code-review', status: 'cache-hit' }])
-  const verify = good.calls.find(c => c.opts.agentType === 'pair-reviewer')
-  assert.deepEqual(verify.opts.schema.properties.verdict.enum, ['Approved', 'Rework'])
-  assert.match(verify.prompt, /\$severities="Blocker, Major, Minor" \$verdicts="Approved, Rework"/)
+  const [first, second] = good.calls.filter(c => c.opts.agentType === 'pair-reviewer')
+  assert.match(first.prompt, /\$contractSpec=\{"name":"code-review","template":/, 'the first review carries the spec')
+  assert.ok(first.opts.schema.properties.templateContract, 'VERIFY_SCHEMA declares templateContract or the harness drops it')
+  assert.equal(first.opts.schema.properties.verdict.enum, undefined, 'the first review is dispatched with the loose skeleton — validated post hoc')
+  assert.doesNotMatch(second.prompt, /\$contractSpec=/, 'resolved once per run')
+  assert.deepEqual(second.opts.schema.properties.verdict.enum, ['Approved', 'Rework'])
+  assert.match(second.prompt, /\$severities="Blocker, Major, Minor" \$verdicts="Approved, Rework"/)
+  const verify = second
   assert.ok(verify.opts.schema.properties.custody && verify.opts.schema.properties.findings.items.properties.blocking, 'orchestration fields layered on the template contract')
+  // post hoc: a first review whose verdict is outside the vocabulary it brought back is refused
+  const off = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review: { verdict: 'Ship it', findings: [] } }) })
+  assert.equal(off.result.batch[0].status, 'failed-verify')
+  assert.match(off.result.batch[0].reason, /not in the template vocabulary/)
   for (const bad of [{ status: 'failed' }, { status: 'regenerated', contract: { schema: { type: 'string' } } }, null]) {
     const r = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ contractResult: bad, review: { verdict: 'APPROVED', findings: [] } }) })
     assert.deepEqual(r.result.contracts, [{ name: 'code-review', status: 'fallback-loose' }])
@@ -1400,7 +1421,7 @@ test('a required (carried-in P3) finding measured on another head fails before a
   assert.equal(stale.result.batch[0].status, 'failed-verify')
   const same = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7, requiredFindings: [{ ...req, observedHead: HEAD }] }] }, dispatch: stdDispatch() })
   assert.equal(same.result.batch[0].status, 'ready-for-merge')
-  assert.match(same.calls[1].prompt, /\$required=\[\{"observedHead":"a{40}"/)
+  assert.match(same.calls[0].prompt, /\$required=\[\{"observedHead":"a{40}"/)
 })
 
 // ── US-479 B1 (S3, AC-08): the coordinator carries the contradiction evidence and follows the
@@ -1598,7 +1619,7 @@ test('ADR-024 (u): a preparation that REFUSES keeps its own diagnosis, and the d
 test('V2 (F-RR-03): the verify dispatch carries $regressionGuards and VERIFY_SCHEMA declares the echo', () => {
   const verify = SRC.slice(SRC.indexOf('const verify = (n, required) =>'), SRC.indexOf('// Verified P3 evidence'))
   assert.match(verify, /\$regressionGuards=/, 'the review is dispatched without the guards it must execute')
-  const verifySchema = SRC.slice(SRC.indexOf('const VERIFY_SCHEMA'), SRC.indexOf('const hasReviewEvidence'))
+  const verifySchema = SRC.slice(SRC.indexOf('VERIFY_SCHEMA = {'), SRC.indexOf('const hasVerdict'))
   assert.match(verifySchema, /regressionGuards:/, 'the echo is dropped by the harness unless declared')
 })
 

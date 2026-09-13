@@ -31,6 +31,7 @@ Judge the whole result on its own merits, adversarially, from the story (accepta
 | `$headMoved`, `$inputsChanged` | No | `true` when the remote head moved after the last verification / when the effective inputs changed: re-validate every prior finding plus the delta; never a fresh full pass. |
 | `$required`         | No       | JSON: verified prior evidence a card carries in (`observedHead`, oracle, probe, observed) — re-prove it on this exact head.               |
 | `$regressionGuards` | No       | JSON: the authoritative ACTIVE regression risks derived from the ledger (US-479 F-RR-03) — execute every closure assertion on the exact head and echo the set as `regressionGuards`; a set that differs from the dispatched one is refused. |
+| `$contractSpec`     | No       | JSON `{ name, template, contract, skeleton, mirrors, contractSkill, workflowVersion }` — present on the FIRST review dispatch of a run only (t9d-2, AC-06): resolve the template contract in Step 0 by invoking `/contract-phase` with exactly those arguments (cache-by-hash: a fresh cache is a file read) and return its output as `templateContract: { status, contract }`. Take `$severities`/`$verdicts` and the ranks for `blocking` from `contract.vocabulary` / `contract.severityRanks` — the prompt's defaults and `$ranks` are placeholders then; `$floor` is the name to apply. |
 
 ## Algorithm
 
@@ -47,6 +48,7 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVer
 - `status: other-run` ⇒ return `{ status: "other-run", runId }`. `incompatible | invalid` ⇒ return `{ status: "redirect", next: { step: "blocked", reason: "failed-resume", detail: <reason> } }`.
 - `next` is `blocked` with `reason: awaiting-scope-decision` ⇒ BEFORE redirecting, discover the decision the maintainer may already have posted on the PR (canary v9, B — a fresh run directory does not remember it): `REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"; node "$SKILL_DIR/scripts/cycle-state.mjs" apply-scope-decisions --dir "$RUN_DIR" --repo "$REPO" --pr $pr --workflowVersion $workflowVersion` (no `--decision-ref`: the script reads the PR's comments back and applies every decision-shaped one through the same authenticated path, oldest first), then run `resolve` again and act on THAT `next`. You never author a decision.
 - `next.step` is not `verify`, or `next.phase` is not `$phase` ⇒ return `{ status: "redirect", next }` verbatim. Spend no judgment. When `next` names THIS dispatch (`verify`, `$phase`) — `inputsChanged` or `headMoved` included — you ARE the step: continue, never return a redirect to yourself.
+- `$contractSpec` given ⇒ BEFORE any judgment, invoke `/contract-phase` with it and keep the returned contract: its `vocabulary` and `severityRanks` are what you review and rank against, and `templateContract` goes into your result (Step 5.6 publish does not need it; the coordinator adopts it and validates THIS review's verdict against it post hoc). Missing or failed ⇒ return `templateContract: { status: "failed" }` and review with the prompt's default vocabulary.
 - Otherwise continue; `next.attempt` is your attempt number.
 - `next.step: done` on a completed cycle whose remote head still equals its `reviewedHead` is returned as a redirect too: a cheap identity check, no judgment, no publication.
 
@@ -134,7 +136,7 @@ separate impact before it is reported as new.
 
 ## Output Format
 
-`{ status: reviewed, verdict, reviewedHead, findings: [{ id, location, severity, description, recommendation, kind, transition, blocking, nonActionable?, disposition?, external?, evidence?, groupId?, rowId?, severityEvidence?, missedUpstream? }], scopeChanges?: [{ id, type, proposal, baselineEvidenceRefs, discoveredAtReviewId, status }], custody: { verified, contractBreach, breaches? }, readiness: { ready, remoteHead }, published: { firstReview?, synthesis?, escalation?, scopeDecisionPacket?, reviewCheck?, prState? }, metrics?: { owner, written, revision?, completeness? }, tier, passes, needsHumanDecision?, humanDecisionKind?, partial?, reviewer?, regressionGuards?, worked?, next }`.
+`{ status: reviewed, verdict, reviewedHead, findings: [{ id, location, severity, description, recommendation, kind, transition, blocking, nonActionable?, disposition?, external?, evidence?, groupId?, rowId?, severityEvidence?, missedUpstream? }], scopeChanges?: [{ id, type, proposal, baselineEvidenceRefs, discoveredAtReviewId, status }], custody: { verified, contractBreach, breaches? }, readiness: { ready, remoteHead }, published: { firstReview?, synthesis?, escalation?, scopeDecisionPacket?, reviewCheck?, prState? }, metrics?: { owner, written, revision?, completeness? }, templateContract?: { status, contract? }, tier, passes, needsHumanDecision?, humanDecisionKind?, partial?, reviewer?, regressionGuards?, worked?, next }`.
 
 ## Notes
 

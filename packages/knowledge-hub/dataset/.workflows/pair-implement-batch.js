@@ -1410,82 +1410,49 @@ async function agentRetry(prompt, opts, isUsable = r => !!r) {
   return dispatch(prompt, { ...opts, label: `${opts.label} retry` }, { retry: true })
 }
 
-async function ensureContract(spec) {
-  const res = await dispatch(
-    `Invoke **${SK.contractPhase}** with $name=${spec.name} $template=${spec.template} $contract=${spec.contract} $skeleton=${JSON.stringify(spec.skeleton)} $mirrors=${JSON.stringify(spec.mirrors)} $workflowVersion=${WORKFLOW_VERSION}. The skill is the process of record: execute its steps exactly and return exactly the structured result it defines.`,
-    { agentType: 'pair-contract-generator', phase: 'Contracts', label: `contract:${spec.name}`, effort: 'low', schema: CONTRACT_RESULT_SCHEMA },
-  )
-  const schema = usableSchema(res?.contract)
-  return { name: spec.name, status: schema ? (res?.status ?? 'regenerated') : 'fallback-loose', contract: schema ? res.contract : null, schema: schema ?? spec.skeleton }
+// t9d-2 / AC-06 (S7): NO generator-only dispatch. The template contract is resolved by the FIRST
+// review dispatch of the run: it carries `$contractSpec`, invokes the contract-phase skill
+// (`ensure-contract.mjs check` is cache-by-hash — a fresh cache is a file read, no generation) and
+// returns `templateContract: { status, contract }`. Until then the reviewer is dispatched with the
+// loose skeleton and that ONE review is validated post hoc against the vocabulary it brought back;
+// every later review is enum-locked. A batch that never reaches a review dispatches nothing for
+// the contract. The sandbox cannot read the cache itself, so this is where the check belongs.
+const CONTRACT = { spec: CONTRACT_SPECS[0], status: 'unresolved', contract: null }
+let crContract = null
+const contractSpecArg = () => ({ name: CONTRACT.spec.name, template: CONTRACT.spec.template, contract: CONTRACT.spec.contract, skeleton: CONTRACT.spec.skeleton, mirrors: CONTRACT.spec.mirrors, contractSkill: SK.contractPhase, workflowVersion: WORKFLOW_VERSION })
+function adoptTemplateContract(tc, tag) {
+  if (CONTRACT.status !== 'unresolved') return
+  const schema = usableSchema(tc?.contract)
+  if (schema) {
+    crContract = { name: CONTRACT.spec.name, status: tc.status, contract: tc.contract, schema }
+    CONTRACT.status = tc.status === 'cache-hit' ? 'cache-hit' : 'regenerated'
+    CONTRACT.contract = tc.contract
+  } else {
+    crContract = null
+    CONTRACT.status = 'fallback-loose'
+  }
+  // A caller floor the resolved vocabulary cannot express is a configuration error for the whole batch:
+  // recorded here, reported by this story, and re-thrown once every story has returned (never swallowed
+  // as one died card).
+  try {
+    recomputeVocabulary()
+  } catch (e) {
+    CONTRACT.fatal = e
+    throw e
+  }
+  log(`${tag} contract:${CONTRACT.spec.name}: ${CONTRACT.status} — resolved by the first review dispatch (no generator-only dispatch, AC-06)`)
 }
-// Contracts are ensured up-front (skipped only for an empty batch — nothing to drive). US-479
-// remediation (Finding 1): a capsule-based skip of this call was removed — the sandbox cannot
-// confirm a capsule's claim, so it can never be the reason to skip real, contract-backed work.
-const contracts = STORIES.length ? await parallel(CONTRACT_SPECS.map((s) => () => ensureContract(s))) : []
-const crContract = contracts.find((c) => c.name === 'code-review')
-const REVIEW_SCHEMA_BASE = crContract?.schema ?? LOOSE_REVIEW_SCHEMA
-const REVIEW_FINDING_SCHEMA = REVIEW_SCHEMA_BASE.properties.findings
-// The final verifier's return: the template's verdict/finding vocabulary, the orchestration
-// evidence (reviewedHead, custody, readiness, publication) and the finding orchestration fields.
-const VERIFY_SCHEMA = {
-  ...REVIEW_SCHEMA_BASE,
-  properties: {
-    ...REVIEW_SCHEMA_BASE.properties,
-    status: { type: 'string', enum: ['reviewed', REDIRECT_STATUS] },
-    // US-479 V2 (F-RR-03): the review echoes the active guard set it EXECUTED on this head. The
-    // review is the participant that discharges, so inferring the set from the ledger instead of
-    // receiving and confirming it cost a whole wasted rewind.
-    regressionGuards: { type: 'array', items: { type: 'string' } },
-    worked: { type: 'array', items: { type: 'object' } },
-    reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
-    humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
-    findings: {
-      ...REVIEW_FINDING_SCHEMA,
-      items: { ...REVIEW_FINDING_SCHEMA.items, properties: { ...(REVIEW_FINDING_SCHEMA.items?.properties ?? {}), ...FINDING_ORCHESTRATION } },
-    },
-    custody: { type: 'object', properties: { verified: { type: 'boolean' }, contractBreach: { type: 'boolean' }, breaches: { type: 'array', items: { type: 'object' } } }, required: ['verified', 'contractBreach'] },
-    readiness: { type: 'object', properties: { ready: { type: 'boolean' }, remoteHead: { type: 'string' } }, required: ['ready'] },
-    // US-479 T-29 (S11): the remediation batch this proof invalidates. A LOGICAL rewind marker —
-    // never a Git revert, reset, rebase or seal deletion.
-    invalidatedBatchId: { type: 'string' },
-    // t9d-24: the final non-partial reviewer concludes the required `pair-review` status and the ONE
-    // `pr-state:*` label (pr-state.mjs conclude) — declared here or the harness drops the report.
-    published: { type: 'object', properties: { firstReview: { type: 'boolean' }, synthesis: { type: 'boolean' }, flush: { type: 'boolean' }, reviewCheck: { type: 'string' }, prState: { type: 'string' } } },
-    // canary v9 (A): who produced metrics.json / the synthesis for this run — the reviewer itself
-    // (`cycle-runtime.mjs finalize`, no host runtime present) or a present host runtime. Declared
-    // here or the harness drops it, exactly as it once dropped `regressionGuards`.
-    metrics: { type: 'object', properties: { owner: { type: 'string', enum: ['review-phase', 'host'] }, written: { type: 'boolean' }, revision: { type: 'integer' }, completeness: { type: 'string' } } },
-    tier: { type: 'string' },
-    passes: { type: 'array', items: { type: 'string' } },
-    partial: { type: 'boolean' },
-    reviewer: { type: 'integer' },
-    next: NEXT_SCHEMA,
-  },
-  // ONLY `status` is required by the schema: a stage that finds another step due returns
-  // `{ status: 'redirect', next }` and nothing else, and a schema demanding the verdict fields
-  // makes the harness reject that return and re-prompt an agent that has already finished — it
-  // stalls until the supervisor kills it, six times (canary run 11, verify r2). The EVIDENCE a
-  // real verification must carry is checked here, by `hasReviewEvidence`, never by the schema.
-  required: ['status'],
+// The one review dispatched before the vocabulary was known is checked against it afterwards.
+function vocabularyErrors(res) {
+  if (!REVIEW_VOCAB) return null
+  if (Array.isArray(REVIEW_VOCAB.verdictOptions) && !REVIEW_VOCAB.verdictOptions.includes(res.verdict)) return `verdict ${JSON.stringify(res.verdict)} is not in the template vocabulary (${VERDICTS})`
+  // A severity outside the vocabulary is NOT refused here: `rankOf` already treats it as outranking
+  // every floor (it always blocks — the fail-safe that stood before), and control flow keys on
+  // `blocking`, never on the label.
+  return null
 }
-const hasVerdict = r => !!r && !!String(r.verdict ?? '').trim()
-// A `ready: true` is evidence only with the 40-hex remote head it was read against (T-9, t9-3).
-const hasReviewEvidence = r => hasVerdict(r) && SHA40.test(String(r.reviewedHead ?? '')) && Array.isArray(r.findings) && !!r.custody && typeof r.custody.contractBreach === 'boolean' && !!r.readiness && typeof r.readiness.ready === 'boolean' && (r.readiness.ready !== true || SHA40.test(String(r.readiness.remoteHead ?? '')))
-
-// Reviewer prompt vocabulary — from the contract when present, pair's own only as the fallback.
-const REVIEW_VOCAB = crContract?.contract?.vocabulary
 const DEFAULT_SEVERITIES = ['Critical', 'Major', 'Minor', 'Questions']
 const DEFAULT_VERDICTS = ['APPROVED', 'CHANGES-REQUESTED', 'TECH-DEBT']
-const SEVERITIES = (REVIEW_VOCAB?.severities ?? DEFAULT_SEVERITIES).join(', ')
-const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
-// The severity scale is resolved from the SAME array `SEVERITIES` threads into the verifier
-// prompt; its RANKING comes from the contract's explicit `severityRanks`, never array order.
-const SEVERITY_SCALE = resolveSeverityScale(REVIEW_VOCAB?.severities, crContract?.contract?.severityRanks)
-if (SEVERITY_SCALE.rankError) log(`contract:code-review: severities are NOT ranked (${SEVERITY_SCALE.rankError}) — \`severityFloor\` is unavailable until the contract is regenerated`)
-// The floor DEFAULTS to `Minor`: Major and Minor block and drive fix rounds, Questions are carried
-// to the merge gate. An explicit `severityFloor` wins. The default is applied SOFTLY (a vocabulary
-// without `Minor`, or an unranked contract, falls back to no floor); a caller-spelled floor that
-// cannot be applied throws.
 const DEFAULT_SEVERITY_FLOOR = 'Minor'
 function defaultFloor() {
   if (!SEVERITY_SCALE.ranks) return null
@@ -1493,10 +1460,79 @@ function defaultFloor() {
   if (!Object.hasOwn(SEVERITY_SCALE.ranks, key)) return null
   return { name: DEFAULT_SEVERITY_FLOOR, rank: SEVERITY_SCALE.ranks[key] }
 }
-const SEVERITY_FLOOR = String(PARSED.severityFloor ?? '').trim() ? parseFloor(PARSED.severityFloor) : defaultFloor()
-// The ranks handed to the verifier so its script can compute `blocking` under the SAME policy this
-// file re-checks — one policy, two readers, and a disagreement fails closed.
-const RANKS_ARG = SEVERITY_SCALE.ranks ? JSON.stringify(Object.fromEntries(SEVERITY_SCALE.names.map(n => [n, SEVERITY_SCALE.ranks[normSeverity(n)]]))) : '{}'
+let REVIEW_SCHEMA_BASE, REVIEW_FINDING_SCHEMA, VERIFY_SCHEMA, REVIEW_VOCAB, SEVERITIES, VERDICTS, SEVERITY_SCALE, SEVERITY_FLOOR, RANKS_ARG
+// Computed from pair's own vocabulary until the first review resolves the template contract, then
+// recomputed from it (t9d-2). Every reader below takes the CURRENT binding at call time.
+function recomputeVocabulary() {
+  REVIEW_SCHEMA_BASE = crContract?.schema ?? LOOSE_REVIEW_SCHEMA
+  REVIEW_FINDING_SCHEMA = REVIEW_SCHEMA_BASE.properties.findings
+  // The final verifier's return: the template's verdict/finding vocabulary, the orchestration
+  // evidence (reviewedHead, custody, readiness, publication) and the finding orchestration fields.
+  VERIFY_SCHEMA = {
+    ...REVIEW_SCHEMA_BASE,
+    properties: {
+      ...REVIEW_SCHEMA_BASE.properties,
+      status: { type: 'string', enum: ['reviewed', REDIRECT_STATUS] },
+      // US-479 V2 (F-RR-03): the review echoes the active guard set it EXECUTED on this head. The
+      // review is the participant that discharges, so inferring the set from the ledger instead of
+      // receiving and confirming it cost a whole wasted rewind.
+      regressionGuards: { type: 'array', items: { type: 'string' } },
+      worked: { type: 'array', items: { type: 'object' } },
+      reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+      humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
+      findings: {
+        ...REVIEW_FINDING_SCHEMA,
+        items: { ...REVIEW_FINDING_SCHEMA.items, properties: { ...(REVIEW_FINDING_SCHEMA.items?.properties ?? {}), ...FINDING_ORCHESTRATION } },
+      },
+      custody: { type: 'object', properties: { verified: { type: 'boolean' }, contractBreach: { type: 'boolean' }, breaches: { type: 'array', items: { type: 'object' } } }, required: ['verified', 'contractBreach'] },
+      readiness: { type: 'object', properties: { ready: { type: 'boolean' }, remoteHead: { type: 'string' } }, required: ['ready'] },
+      // US-479 T-29 (S11): the remediation batch this proof invalidates. A LOGICAL rewind marker —
+      // never a Git revert, reset, rebase or seal deletion.
+      invalidatedBatchId: { type: 'string' },
+      // t9d-24: the final non-partial reviewer concludes the required `pair-review` status and the ONE
+      // `pr-state:*` label (pr-state.mjs conclude) — declared here or the harness drops the report.
+      published: { type: 'object', properties: { firstReview: { type: 'boolean' }, synthesis: { type: 'boolean' }, flush: { type: 'boolean' }, reviewCheck: { type: 'string' }, prState: { type: 'string' } } },
+      // t9d-2: the template contract the FIRST review dispatch resolved (`$contractSpec`) — declared or dropped.
+      templateContract: { type: 'object', properties: { status: { type: 'string' }, contract: { type: 'object' } } },
+      // canary v9 (A): who produced metrics.json / the synthesis for this run — the reviewer itself
+      // (`cycle-runtime.mjs finalize`, no host runtime present) or a present host runtime. Declared
+      // here or the harness drops it, exactly as it once dropped `regressionGuards`.
+      metrics: { type: 'object', properties: { owner: { type: 'string', enum: ['review-phase', 'host'] }, written: { type: 'boolean' }, revision: { type: 'integer' }, completeness: { type: 'string' } } },
+      tier: { type: 'string' },
+      passes: { type: 'array', items: { type: 'string' } },
+      partial: { type: 'boolean' },
+      reviewer: { type: 'integer' },
+      next: NEXT_SCHEMA,
+    },
+    // ONLY `status` is required by the schema: a stage that finds another step due returns
+    // `{ status: 'redirect', next }` and nothing else, and a schema demanding the verdict fields
+    // makes the harness reject that return and re-prompt an agent that has already finished — it
+    // stalls until the supervisor kills it, six times (canary run 11, verify r2). The EVIDENCE a
+    // real verification must carry is checked here, by `hasReviewEvidence`, never by the schema.
+    required: ['status'],
+  }
+  // A `ready: true` is evidence only with the 40-hex remote head it was read against (T-9, t9-3).
+
+  // Reviewer prompt vocabulary — from the contract when present, pair's own only as the fallback.
+  REVIEW_VOCAB = crContract?.contract?.vocabulary
+  SEVERITIES = (REVIEW_VOCAB?.severities ?? DEFAULT_SEVERITIES).join(', ')
+  VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
+  // The severity scale is resolved from the SAME array `SEVERITIES` threads into the verifier
+  // prompt; its RANKING comes from the contract's explicit `severityRanks`, never array order.
+  SEVERITY_SCALE = resolveSeverityScale(REVIEW_VOCAB?.severities, crContract?.contract?.severityRanks)
+  if (crContract && SEVERITY_SCALE.rankError) log(`contract:code-review: severities are NOT ranked (${SEVERITY_SCALE.rankError}) — \`severityFloor\` is unavailable until the contract is regenerated`)
+  // The floor DEFAULTS to `Minor`: Major and Minor block and drive fix rounds, Questions are carried
+  // to the merge gate. An explicit `severityFloor` wins. The default is applied SOFTLY (a vocabulary
+  // without `Minor`, or an unranked contract, falls back to no floor); a caller-spelled floor that
+  // cannot be applied throws.
+  SEVERITY_FLOOR = String(PARSED.severityFloor ?? '').trim() ? parseFloor(PARSED.severityFloor) : defaultFloor()
+  // The ranks handed to the verifier so its script can compute `blocking` under the SAME policy this
+  // file re-checks — one policy, two readers, and a disagreement fails closed.
+  RANKS_ARG = SEVERITY_SCALE.ranks ? JSON.stringify(Object.fromEntries(SEVERITY_SCALE.names.map(n => [n, SEVERITY_SCALE.ranks[normSeverity(n)]]))) : '{}'
+}
+recomputeVocabulary()
+const hasVerdict = r => !!r && !!String(r.verdict ?? '').trim()
+const hasReviewEvidence = r => hasVerdict(r) && SHA40.test(String(r.reviewedHead ?? '')) && Array.isArray(r.findings) && !!r.custody && typeof r.custody.contractBreach === 'boolean' && !!r.readiness && typeof r.readiness.ready === 'boolean' && (r.readiness.ready !== true || SHA40.test(String(r.readiness.remoteHead ?? '')))
 
 // ── Isolation convention ───────────────────────────────────────────────────
 // The AUTHORING chain (prepare -> validate -> implement/green) runs inside a dedicated, PERSISTENT
@@ -1643,7 +1679,7 @@ async function driveStory(story) {
     agentRetry(
       invoke(
         SK.reviewPhase,
-        `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}`,
+        `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}${CONTRACT.status === 'unresolved' ? ` $contractSpec=${JSON.stringify(contractSpecArg())}` : ''}`,
       ),
       withModel('reviewer', { agentType: 'pair-reviewer', phase: 'Verify', label: `verify:${tag} ${n.phase}${n.reviewer > 1 ? ` reviewer ${n.reviewer}` : ''}`, effort: 'high', schema: VERIFY_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasReviewEvidence(r),
@@ -1721,6 +1757,7 @@ async function driveStory(story) {
     // Silence is what kept three of those four rounds invisible.
     if (next.reconstruct?.fromHead)
       log(`${tag} ${next.phase}: rollback directive delivered — restoring ${next.reconstruct.paths.join(', ')} at ${next.reconstruct.fromHead}. It stands until \`rollbackTo\` is cleared from the policy.`)
+    let contractPending = false
     if (stage === 'prepare') res = await prepare(next)
     else if (stage === 'validate') res = await validate(next)
     else if (stage === 'implement') res = await implement(next)
@@ -1729,6 +1766,7 @@ async function driveStory(story) {
       // Seed the finding memory from the durable state before judging the verifier's transitions.
       for (const f of next.priorFindings ?? []) if (f && FINDING_ID_RE.test(String(f.id ?? '')) && !known.has(f.id)) known.set(f.id, { severity: f.severity })
       const required = pendingRequiredFindings
+      contractPending = CONTRACT.status === 'unresolved'
       res = await verify(next, required)
     }
     storyMetrics.dispatches = METRICS.dispatches.filter(d => d.label.includes(tag)).length
@@ -1811,6 +1849,13 @@ async function driveStory(story) {
     } else {
       // verify
       if (!hasReviewEvidence(res)) return result('failed-verify', { reason: 'the final verifier returned no verdict, head, custody or readiness', phase: next.phase })
+      // t9d-2: the first review of the run brought the template contract back — adopt it, then hold THIS
+      // review (dispatched loose) to the vocabulary it resolved.
+      if (contractPending) {
+        adoptTemplateContract(res.templateContract, tag)
+        const vocab = vocabularyErrors(res)
+        if (vocab) return result('failed-verify', { reason: vocab, phase: next.phase })
+      }
       const reviewedHead = String(res.reviewedHead).toLowerCase()
       const staleRequired = pendingRequiredFindings.filter(f => f.observedHead !== reviewedHead)
       if (staleRequired.length) return result('failed-verify', { reason: 'required findings were measured on a different head', findings: staleRequired })
@@ -1852,6 +1897,7 @@ const results = await boundedParallel(
   STORIES.map((s) => () => driveStory(s)),
   MAX_PARALLELISM,
 )
+if (CONTRACT.fatal) throw CONTRACT.fatal
 const batch = results.filter(Boolean).map((r) => ({ id: r.story?.id, ...r }))
 // The note describes what ACTUALLY happened: a card ADVANCED only if it reached a PR the human can
 // act on (`ready-for-merge` or `escalate`); everything else is named by the status it carries.
@@ -1874,7 +1920,7 @@ const note = !STORIES.length
     : `${advanced.length}/${STORIES.length} cards advanced to a PR (${tally(advanced)})${shortfall ? `; ${shortfall}` : ''}. Those PRs are ready-for-merge or escalated; check each status. Merge is the human gate — review the list, merge, then re-run with the next mutex-safe batch.`
 return {
   workflowVersion: WORKFLOW_VERSION,
-  contracts: contracts.map(({ name, status }) => ({ name, status })),
+  contracts: [{ name: CONTRACT.spec.name, status: CONTRACT.status }],
   batch,
   died: STORIES.filter((s) => !batch.some((b) => b.story?.id === s.id)).map((s) => s.id),
   metrics: { dispatches: METRICS.dispatches.length, retries: METRICS.retries, redirects: METRICS.redirects, wallMs: 'unknown', tokens: 'unknown', perDispatch: METRICS.dispatches },

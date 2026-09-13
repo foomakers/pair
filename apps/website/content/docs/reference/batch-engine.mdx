@@ -128,9 +128,13 @@ its own and dispatches nothing mechanical:
 | 3 implementation | `/pair-workflow-implement-phase` · `/pair-workflow-green-fix` | `pair-implementer` | GREEN above the seal, inside `fixScope`, never touching a sealed test byte; the initial stage publishes the story's one PR through the configured publish-pr skill, the remediation stage updates it; an approved test that still fails returns here once on the same seal |
 | 4 final verification | `/pair-workflow-review-phase` | `pair-reviewer` | `red-snapshot.mjs verify-chain` first (a breach is terminal), then the fixers' evidence re-run, the witnesses and controls, every prior finding with an explicit transition, the delta and its consumers, cross-group interactions, the adopted risk-tier passes (general via `/pair-process-review`; security and boundary on `risk:yellow`; architecture and an adversarial second pass on `risk:red`); one verdict, the head reviewed, readiness only when the remote head equals it; as the last non-partial reviewer it concludes the required `pair-review` commit status and the ONE `pr-state:*` label (`pr-state.mjs conclude`, the KB mapping) — merge stays a human's |
 
-Batch-level, once per run and cache-by-hash: `/pair-workflow-contract-phase` (`pair-contract-generator`,
-haiku) derives the review template's vocabulary contract. It is the **template** contract; the
-**acceptance** contract a story is judged against is the one stage 1 prepares and stage 2 seals.
+Once per run and cache-by-hash, the review template's vocabulary contract is resolved by the **first
+review dispatch** (`$contractSpec` → the reviewer invokes `/pair-workflow-contract-phase`, whose
+`ensure-contract.mjs check` reads a fresh cache without generating anything, and returns
+`templateContract`) — no generator-only dispatch (AC-06, S7). That first review runs on the loose
+skeleton and is validated against the vocabulary it brought back; every later review is enum-locked. It
+is the **template** contract; the **acceptance** contract a story is judged against is the one stage 1
+prepares and stage 2 seals.
 
 **Transport constraint (recorded as tech debt, ADL 2026-09-13):** every card and PR write the engine
 performs goes through the GitHub CLI (`gh issue view|edit|create`, `gh api …/comments|statuses|labels`),

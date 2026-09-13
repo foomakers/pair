@@ -1249,3 +1249,10 @@ gains fields, none of the existing ones change meaning:
   superseded: token/usage evidence enters through `cycle-runtime.mjs observe --journal/--usage/
   --transcripts` (T-25), and publication is `finalize`'s (S8); `parseBatchArgs` keeps rejecting
   `telemetry` as an unknown key by design.
+- **Closing the open item above (t9d-2), landed in `4.0.1`:** the template contract is resolved by
+  the FIRST review dispatch of the run (`$contractSpec`; the reviewer invokes the contract-phase skill
+  and returns `templateContract`), never by a generator-only dispatch. The vocabulary constants are
+  recomputed at adoption; the one review dispatched loose is validated against the vocabulary it
+  brought back (verdict ∈ options; an unknown severity keeps blocking, as before); a caller floor the
+  template cannot express fails the batch at adoption with the same message it failed with before.
+  Dispatch counts: cold 4 (was 5), one fix round 8 (was 9), resumed PR 1 (was 2).
