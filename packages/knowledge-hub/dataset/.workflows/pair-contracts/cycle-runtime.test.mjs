@@ -339,6 +339,34 @@ test('runObserveLoop: an abort signal stops the loop immediately, mid-poll — n
   assert.equal(ticks, 3)
 })
 
+// ── canary v9 (A): no host runtime ever ran — the final reviewer runs `finalize` itself ──────
+// The launch recipe is documentation the Workflow sandbox cannot execute; on canary v9 the r1
+// APPROVED verdict existed only in the run directory and the PR never saw a synthesis. The
+// fallback the review-phase skill now documents is THIS command on a run directory that holds
+// handoffs and nothing else (no checkpoint, no terminal marker): it must write metrics.json,
+// publish the run-scoped synthesis and confirm it by read-back, in one call, exit 0.
+test('canary v9 (A): `finalize` CLI on a run directory holding only handoffs (no host runtime marker) writes metrics.json and publishes + confirms the run-scoped synthesis', () => {
+  const { dir } = runDir()
+  const file = join(dir, 'd.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') } }))
+  publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.1' })
+  assert.equal(existsSync(join(dir, '.runtime-checkpoint.json')), false, 'precondition: no observer ever ran here')
+  assert.equal(existsSync(join(dir, '.run-terminal.json')), false, 'precondition: no host marked a terminal result here')
+  const ghDir = fakeGhDir()
+  const r = spawnSync('node', [CLI, 'finalize', '--dir', dir, '--repo', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7', '--runId', 'canary-479-481-v9'], { encoding: 'utf8', env: { ...process.env, PATH: `${ghDir}:${process.env.PATH}` } })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout.trim().split('\n').pop())
+  assert.equal(out.written, true)
+  assert.equal(out.publication.state, 'confirmed', JSON.stringify(out))
+  assert.equal(out.completeness, 'partial', 'no usage source was ever given: honest, never fabricated')
+  assert.ok(existsSync(join(dir, 'metrics.json')))
+  assert.ok(existsSync(join(dir, '.finalized.json')))
+  const posted = JSON.parse(readFileSync(join(ghDir, 'state.json'), 'utf8'))
+  assert.equal(posted.length, 1)
+  assert.match(posted[0].body, /^<!-- pair:synthesis #42 PR#7 run:canary-479-481-v9 -->/)
+  assert.equal(JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8')).outcome.delivery, 'ready-for-merge')
+})
+
 // ── finalize: honest completeness, never claims a source it never saw ───────────────────────
 test('finalize: honest completeness — partial with no prior observations; a lone observation missing its counterpart/usage is STILL partial (Finding 4: an observation existing is not proof every declared source was reconciled); complete only once start+finish+usage all agree', () => {
   const { dir } = runDir()

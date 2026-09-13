@@ -1448,6 +1448,10 @@ const VERIFY_SCHEMA = {
     // never a Git revert, reset, rebase or seal deletion.
     invalidatedBatchId: { type: 'string' },
     published: { type: 'object', properties: { firstReview: { type: 'boolean' }, synthesis: { type: 'boolean' }, flush: { type: 'boolean' } } },
+    // canary v9 (A): who produced metrics.json / the synthesis for this run — the reviewer itself
+    // (`cycle-runtime.mjs finalize`, no host runtime present) or a present host runtime. Declared
+    // here or the harness drops it, exactly as it once dropped `regressionGuards`.
+    metrics: { type: 'object', properties: { owner: { type: 'string', enum: ['review-phase', 'host'] }, written: { type: 'boolean' }, revision: { type: 'integer' }, completeness: { type: 'string' } } },
     tier: { type: 'string' },
     passes: { type: 'array', items: { type: 'string' } },
     partial: { type: 'boolean' },
@@ -1586,10 +1590,14 @@ async function driveStory(story) {
       }
     }
   }
-  // US-479 T-26: a bare path reference, not a claim of durable evidence (an untracked local path
-  // alone is not proof, S8) — the actual metrics.json/metrics.md are written by cycle-runtime.mjs
-  // (RUNTIME) on the host; this sandbox has no filesystem to confirm they exist.
-  const result = (status, extra = {}) => ({ story, prNumber: pr ?? undefined, status, acceptedFindings: accepted, metrics: { ...storyMetrics, wallMs: 'unknown', tokens: 'unknown' }, metricsRef: `${runDir()}/metrics.json`, ...extra })
+  // US-479 T-26 / canary v9 (A): `metricsRef` is EVIDENCE, never a promise. This sandbox has no
+  // filesystem, so the path is reported only when the final verifier said metrics.json exists —
+  // written by its own `cycle-runtime.mjs finalize` (no host runtime present) or owned by a host
+  // runtime it found present (`.runtime-checkpoint.json` / `.run-terminal.json`); otherwise the
+  // result says `absent` instead of naming a file nobody wrote (canary v9 pointed at one).
+  let metricsEvidence = null
+  const metricsRef = () => (metricsEvidence && (metricsEvidence.written === true || metricsEvidence.owner === 'host') ? `${runDir()}/metrics.json` : 'absent')
+  const result = (status, extra = {}) => ({ story, prNumber: pr ?? undefined, status, acceptedFindings: accepted, metrics: { ...storyMetrics, wallMs: 'unknown', tokens: 'unknown' }, metricsRef: metricsRef(), ...extra })
   // US-479 remediation (Finding 1): NO capsule-based shortcut here. `ENTRY_CAPSULES[story.id]` is
   // accepted and schema-validated at parse time (S1) but is deliberately UNUSED for control flow —
   // this sandbox cannot confirm its claim, and a self-consistent capsule is not proof (an
@@ -1806,7 +1814,14 @@ async function driveStory(story) {
       accept(res.findings.filter(f => !f.blocking && f.transition !== 'resolved').map(f => ({ ...compactFinding(f), disposition: f.disposition || (f.nonActionable ? 'By design (see description)' : f.transition === 'human' ? 'Human disposition' : f.kind === 'question' ? 'Question for the human' : `Below severity floor (${SEVERITY_FLOOR?.name}) — carried to the merge gate unfixed`) })))
       if (res.custody.contractBreach === true) return result('failed-custody', { reason: 'GREEN escaped its sealed contract', findings: res.custody.breaches ?? [], phase: next.phase })
       const blocking = res.findings.filter(f => f.blocking)
+      if (res.metrics && typeof res.metrics === 'object' && !Array.isArray(res.metrics)) metricsEvidence = res.metrics
       if (res.partial !== true) log(`${tag} ${next.phase}: ${res.findings.length} finding(s), ${blocking.length} blocking${res.published?.firstReview ? ', first review posted' : ''}${res.published?.synthesis ? ', synthesis published' : ''}`)
+      // canary v9 (A) / ADR-024 S8: the reviewer that OWNED the synthesis (no host runtime) and could
+      // not confirm it by read-back has converged on quality, not on delivery — `failed-publication`,
+      // retry publication only (`cycle-runtime.mjs finalize`), never a ready-for-merge with no
+      // synthesis on the PR. A reviewer that claimed nothing about ownership is judged as before.
+      if (usableNext(res.next) && res.next.step === 'done' && res.metrics?.owner === 'review-phase' && res.published?.synthesis !== true)
+        return result('failed-publication', { reason: 'the cycle converged but the final synthesis could not be confirmed on the PR — retry publication only (cycle-runtime.mjs finalize); quality evidence stays intact', reviewedHead, verdict: res.verdict, phase: next.phase })
     }
     if (!usableNext(res.next)) return result('failed-resume', { reason: `${stage} returned no usable next step: ${nextDefect(res.next)}`, phase: next.phase })
     // A `done` may only follow a verification whose own evidence says ready on the head it reviewed.

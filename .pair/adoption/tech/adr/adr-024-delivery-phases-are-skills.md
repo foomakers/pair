@@ -1162,3 +1162,39 @@ effort, and roughly 1,300 lines of churn on this one surface, to save the mainta
 a parameter they set. The simpler rule has a failure mode of its own — a maintainer who forgets to
 clear `rollbackTo` gets the directive again — but it is theirs, it is announced on every dispatch,
 and it does not take four reviews to see.
+
+## Amendment 2026-09-13 (v) — canary v9 defects: `4.0.1`, run-scoped markers, decisions that survive a cycle, a synthesis that reaches the PR
+
+Canary v9 (PR #481, run `canary-479-481-v9`) converged on quality (r1 APPROVED) and delivered
+nothing visible: no synthesis, no metrics, the previous cycle's first review overwritten, the
+maintainer's standing scope decision refused. Fixed on the save branch `canary-479-v9-fixes-wip`,
+one commit per defect, each test-first:
+
+- **Version.** `WORKFLOW_VERSION` `4.0.0` → `4.0.1`; `SCHEMA_VERSION` stays `3`. `compatible()`
+  is major-only, so every `4.0.0` run directory resumes unchanged.
+- **Markers are run-scoped.** First review, synthesis and escalation are
+  `<!-- pair:<kind> #<story> PR#<n> run:<runId> -->`: one cycle's comments are never edited by the
+  next cycle on the same PR (comment 5598044184 was). Within a run the marker is constant, so
+  upsert-by-marker remains restart-safe. The scope-decision packet stays PR-scoped on purpose —
+  its `sc-` ids and the maintainer's answer outlive cycles. `pr-comment.mjs` accepts the optional
+  suffix; `cycle-runtime.mjs finalize` builds the same marker from `--runId`.
+- **A scope decision is keyed by proposal identity and discovered on the PR.** See
+  [ADL 2026-09-13](../../decision-log/2026-09-13-scope-decision-identity-is-the-proposal-id.md):
+  `scopeBaselineHashOf` hashes `{ id, type }`, and `apply-scope-decisions` with no
+  `--decision-ref` reads the PR's comments back and applies every decision-shaped one through the
+  unchanged authenticated path; review-phase runs it before declaring `awaiting-scope-decision`.
+- **The synthesis reaches the PR without a host process.** See
+  [ADL 2026-09-13](../../decision-log/2026-09-13-the-final-reviewer-finalizes-when-no-host-runtime-is-present.md):
+  the host launch recipe above remains the recipe when a host runs it; when nothing does (the
+  Workflow sandbox cannot), the final reviewer runs `cycle-runtime.mjs finalize` itself after its
+  converging publish. The coordinator's `metricsRef` is evidence (`absent` unless a reviewer
+  reported the file written or a host runtime present), and a reviewer that owned the synthesis
+  and could not confirm it ends the story `failed-publication`.
+- **Accepted findings** are one row per stable id (latest wording wins); the SKILL text of the
+  phase skills now states what `publish` actually requires (`findings` array for green-fix,
+  `--workflowVersion` on every publish line, the shell-metacharacter filter on `worked` evidence).
+- **Documented, unchanged:** the RED snapshot manifest path `.pair/red-snapshots/pr-<n>-<phase>.json`
+  and the phase ids (`r1-g1`, …) are reused across cycles of one PR. A later cycle's seal writes
+  the same path in a new commit; the chain reads seals from Git history, not from the path, so
+  this is a naming collision only — a run-scoped path would be a `red-snapshot.mjs` contract
+  change and is left for a separate decision.

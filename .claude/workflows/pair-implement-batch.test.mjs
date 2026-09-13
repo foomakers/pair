@@ -599,6 +599,29 @@ test('canary v9 (D): a carried finding re-described on a later review is ONE acc
   assert.equal(result.batch[0].acceptedFindings[0].location, 'src/a.ts:9')
 })
 
+test('canary v9 (A): metricsRef is evidence, not a promise — the path is reported only when the final verifier says metrics.json was written (by itself, or owned by a present host runtime); otherwise `absent`; a reviewer that owned the synthesis and could not confirm it is failed-publication, never ready-for-merge', async () => {
+  const verifySchema = SRC.slice(SRC.indexOf('const VERIFY_SCHEMA'), SRC.indexOf('const hasReviewEvidence'))
+  assert.match(verifySchema, /metrics: \{ type: 'object'/, 'VERIFY_SCHEMA declares `metrics` — without it the harness drops the field (as happened to regressionGuards)')
+  // the reviewer ran `cycle-runtime.mjs finalize` itself (no host runtime present) and read the synthesis back
+  const own = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], runId: 'v9' }, dispatch: stdDispatch({ review: { verdict: 'Approved', findings: [], metrics: { owner: 'review-phase', written: true, revision: 1, completeness: 'partial' }, published: { firstReview: true, synthesis: true } } }) })
+  assert.equal(own.result.batch[0].status, 'ready-for-merge')
+  assert.equal(own.result.batch[0].metricsRef, '.pair/working/runs/v9/292/metrics.json')
+  assert.ok(own.logs.some(l => /synthesis published/.test(l)))
+  // a host runtime owns the files: the reference stands, the synthesis is the host's to publish
+  const host = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], runId: 'v9' }, dispatch: stdDispatch({ review: { verdict: 'Approved', findings: [], metrics: { owner: 'host', written: false }, published: { firstReview: true, synthesis: false } } }) })
+  assert.equal(host.result.batch[0].status, 'ready-for-merge')
+  assert.equal(host.result.batch[0].metricsRef, '.pair/working/runs/v9/292/metrics.json')
+  // no evidence at all: the result names no file that may not exist
+  const none = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], runId: 'v9' }, dispatch: stdDispatch() })
+  assert.equal(none.result.batch[0].status, 'ready-for-merge')
+  assert.equal(none.result.batch[0].metricsRef, 'absent')
+  // the reviewer owned the synthesis and its read-back failed: quality converged, delivery did not
+  const failed = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], runId: 'v9' }, dispatch: stdDispatch({ review: { verdict: 'Approved', findings: [], metrics: { owner: 'review-phase', written: true, revision: 1, completeness: 'partial' }, published: { firstReview: true, synthesis: false } } }) })
+  assert.equal(failed.result.batch[0].status, 'failed-publication')
+  assert.match(failed.result.batch[0].reason, /synthesis/)
+  assert.equal(failed.result.batch[0].reviewedHead, HEAD)
+})
+
 test('TC-12: `done` is accepted only from a verification whose evidence says ready on the head it reviewed — a moved remote head or a blocking finding cannot be declared done', async () => {
   const notReady = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review: { verdict: 'Approved', findings: [], readiness: { ready: false, remoteHead: HEAD2 }, next: { step: 'done', reviewedHead: HEAD, round: 0, verdict: 'Approved' } } }) })
   assert.equal(notReady.result.batch[0].status, 'failed-verify')

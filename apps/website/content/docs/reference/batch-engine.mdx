@@ -236,7 +236,14 @@ imported, other phases') scripts folder:
   journal/usage sources it is given on a 5-second default interval and updates `metrics.json`/
   `metrics.md` at every observed boundary, stopping on a durable terminal result once reconciled
   or after a 30-second grace period leaves it partial; `finalize` combines the last verdict with
-  the accumulated metrics and posts the ONE synthesis comment.
+  the accumulated metrics and posts the ONE synthesis comment. From `4.0.1` (canary v9), when no
+  host runtime is present — no `.runtime-checkpoint.json` / `.run-terminal.json` in the run
+  directory, the case whenever the Workflow sandbox alone drives the cycle — the final reviewer
+  runs `finalize` itself after its converging publish: same script, same marker, metrics reduced
+  from the handoffs alone (completeness `partial`, never fabricated). The engine result's
+  `metricsRef` names `metrics.json` only on that evidence (or a present host runtime) and is
+  `absent` otherwise; a reviewer that owned the synthesis and could not confirm it by read-back
+  ends the story `failed-publication`, not `ready-for-merge`.
 
 The final summary — one comment at `<!-- pair:synthesis #<story> PR#<n> run:<runId> -->`, upserted, never a
 second one per run/step/scope-decision/metrics-correction — carries, in order: workflow identity/
