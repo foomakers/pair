@@ -37,6 +37,9 @@
 //     Read-only (US-479 T-19, S10): never rewrites schema-2 evidence, never fabricates a counter.
 //
 //   node … apply-scope-decisions --dir <dir> --decision-ref <PR comment URL> --repo <owner/name> --pr <n> [--maintainer <login>]
+//   node … apply-scope-decisions --dir <dir> --repo <owner/name> --pr <n> [--maintainer <login>]   (no --decision-ref: DISCOVER)
+//     → reads the PR's comments back and applies every decision-shaped one, oldest first — how a
+//       cycle honours a decision the maintainer already posted before asking again (canary v9, B).
 //     → { applied, reason?, results?, path? }   (US-479 T-22, S5)
 //     Reads the ACTUAL PR comment through `gh`; verifies author type=User and login in the
 //     authorized set; applies ignore | new-card | extend-current-card mechanically and persists a
@@ -493,10 +496,15 @@ export function cardHash({ story, ghBin = process.env.PAIR_GH_BIN || 'gh' }) {
 // ── scope decisions (US-479 T-22, S5) ──────────────────────────────────────────────────────
 // Canonical hash of the CURRENTLY pending scope proposals — the "did the packet the maintainer
 // read still match what exists now" check. Sorted, so two spellings of the same set hash alike.
+// The identity of a proposal is its `id` + `type`, NEVER its wording (canary v9, B; ADL
+// 2026-09-13): `sc-<n>` ids are stable across rounds and cycles, but every cycle's reviewer
+// re-authors the proposal text in a fresh run directory, and a hash over the text turned the
+// maintainer's standing `ignore` into `stale-baseline` on the very next cycle. The SET is still
+// the baseline — a decision on {sc-1} does not cover a packet that grew to {sc-1, sc-2}.
 export function scopeBaselineHashOf(scopeChanges) {
   const pending = (scopeChanges ?? [])
     .filter(c => (c?.status ?? 'pending') === 'pending')
-    .map(c => ({ id: c.id, proposal: c.proposal }))
+    .map(c => ({ id: c.id, type: c.type }))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   return sha256(canonical(pending))
 }
@@ -928,6 +936,56 @@ export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer = '
   const attempt = handoffs.filter(h => h.phase === lastReview.phase && h.skill === 'review-phase').length + 1
   const out = publish({ dir, file: tmp, phase: lastReview.phase, skill: 'review-phase', workflowVersion: workflowVersion ?? lastReview.data.workflowVersion, attempt, predecessor: lastReview.name, lockWaitMs, ghBin })
   return { applied: !!out.published, reason: out.published ? undefined : out.reason, results, path: out.path }
+}
+
+// DISCOVERY (canary v9, B): the maintainer's decision lives on the PR, not in the run directory —
+// a new cycle (fresh run dir) must find it there before it declares `awaiting-scope-decision` and
+// asks the same question again. Reads the PR's comment list through `gh`, keeps the ones that
+// PARSE as a decision comment (one fenced JSON, schemaVersion 1, decisions[]), and hands each to
+// `applyScopeDecisions` oldest first — every authentication, baseline and payload check stays
+// there, unchanged; this only supplies the `decisionRef`. Never a planner, never an inference:
+// a comment that is not decision-shaped is not a candidate, and one that fails a check is
+// reported with its reason, not retried into acceptance.
+export function discoverScopeDecisions({ dir, repo, pr, maintainer = 'rucka', ghBin = process.env.PAIR_GH_BIN || 'gh', workflowVersion, lockWaitMs = 5000 }) {
+  const handoffs = readHandoffs(dir)
+  const reviews = handoffs.filter(h => h.data && h.skill === 'review-phase')
+  if (!reviews.length) return { applied: false, reason: 'no-review-evidence', discovered: [] }
+  const seen = new Map()
+  for (const r of reviews) for (const c of r.data.scopeChanges ?? []) if (c?.id) seen.set(c.id, c)
+  if (![...seen.values()].some(c => (c.status ?? 'pending') === 'pending')) return { applied: false, reason: 'no-pending-scope-changes', discovered: [] }
+  if (typeof repo !== 'string' || !/^[^/\s]+\/[^/\s]+$/.test(repo)) return { applied: false, reason: 'repo-invalid', discovered: [] }
+  if (!Number.isInteger(Number(pr)) || Number(pr) <= 0) return { applied: false, reason: 'pr-invalid', discovered: [] }
+  const r = spawnSync(ghBin, ['api', '--paginate', `repos/${repo}/issues/${Number(pr)}/comments`], { encoding: 'utf8', env: cleanGitEnv(process.env) })
+  if (r.error || r.status !== 0) return { applied: false, reason: `gh-api-failed:${(r.stderr || r.error?.message || '').trim()}`, discovered: [] }
+  // --paginate concatenates pages as consecutive JSON arrays.
+  const comments = []
+  try {
+    let depth = 0
+    let start = -1
+    for (let i = 0; i < r.stdout.length; i++) {
+      const ch = r.stdout[i]
+      if (ch === '[' && depth === 0) start = i
+      if (ch === '[') depth++
+      else if (ch === ']' && --depth === 0 && start >= 0) {
+        comments.push(...JSON.parse(r.stdout.slice(start, i + 1)))
+        start = -1
+      }
+    }
+  } catch {
+    return { applied: false, reason: 'gh-api-invalid-json', discovered: [] }
+  }
+  const candidates = comments
+    .filter(c => c && Number.isInteger(c.id) && typeof c.body === 'string' && !parseScopeDecisionComment(c.body).error)
+    .sort((a, b) => a.id - b.id)
+  if (!candidates.length) return { applied: false, reason: 'no-decision-comment', discovered: [] }
+  const discovered = []
+  for (const c of candidates) {
+    const decisionRef = `https://github.com/${repo}/pull/${Number(pr)}#issuecomment-${c.id}`
+    const out = applyScopeDecisions({ dir, decisionRef, repo, pr: Number(pr), maintainer, ghBin, workflowVersion, lockWaitMs })
+    discovered.push({ decisionRef, applied: !!out.applied, ...(out.reason ? { reason: out.reason } : {}), ...(out.results ? { results: out.results } : {}) })
+    if (out.reason === 'no-pending-scope-changes') break
+  }
+  return { applied: discovered.some(d => d.applied && d.reason !== 'already-applied'), discovered }
 }
 
 export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, pr, lockWaitMs = 5000, ghBin }) {
@@ -2006,8 +2064,11 @@ if (isMain()) {
       process.stdout.write(JSON.stringify({ inputsDigest: inputsDigest(JSON.parse(opts.json)) }) + '\n')
       process.exit(0)
     } else if (cmd === 'apply-scope-decisions') {
-      need('dir', 'decision-ref', 'repo', 'pr')
-      out = applyScopeDecisions({ dir: opts.dir, decisionRef: opts['decision-ref'], repo: opts.repo, pr: Number(opts.pr), maintainer: opts.maintainer, workflowVersion: opts.workflowVersion })
+      need('dir', 'repo', 'pr')
+      // No --decision-ref: discover the maintainer's decision on the PR itself (canary v9, B).
+      out = opts['decision-ref']
+        ? applyScopeDecisions({ dir: opts.dir, decisionRef: opts['decision-ref'], repo: opts.repo, pr: Number(opts.pr), maintainer: opts.maintainer, workflowVersion: opts.workflowVersion })
+        : discoverScopeDecisions({ dir: opts.dir, repo: opts.repo, pr: Number(opts.pr), maintainer: opts.maintainer, workflowVersion: opts.workflowVersion })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.applied ? 0 : 1)
     } else if (cmd === 'migrate-inspect') {

@@ -178,7 +178,7 @@ test('T-27: one composed lifecycle — initial build, a real defect + a scope pr
   assert.equal(metricsAtGate.scopeChanges.pending, 1)
 
   // ── the maintainer's authenticated extend-current-card decision, applied mechanically ──────
-  const pendingScope = [{ id: 'sc-1', proposal: 'add a related capability', status: 'pending' }]
+  const pendingScope = [{ id: 'sc-1', type: 'new-requirement', proposal: 'add a related capability', status: 'pending' }] // identity = id + type (canary v9, B)
   const decisionRef = 'https://github.com/foomakers/pair/pull/480#issuecomment-9001'
   // The card carries its acceptance criteria in an ADOPTED dialect: `extend-current-card` fails
   // closed on a card whose AC it cannot read (ADL 2026-09-10), so a lifecycle that really applies

@@ -200,7 +200,12 @@ reads the ACTUAL comment through `gh`, verifies its author is a `User` in the ad
 set (never a caller-supplied string, never a bot), parses one fenced JSON object
 (`{schemaVersion: 1, scopeBaselineHash, decisions: [{id, action, rationale?, targetIssueUrl?, approvedDelta?}]}`,
 `action` one of `ignore | new-card | extend-current-card`), and rejects a stale baseline, a
-duplicate id, an unknown action or an unauthenticated comment outright. `ignore` and `new-card`
+duplicate id, an unknown action or an unauthenticated comment outright. From `4.0.1` the
+`scopeBaselineHash` covers the pending proposals' **ids and types**, never their wording (a new
+cycle's reviewer re-authors the text in a fresh run directory, which used to stale the
+maintainer's standing decision), and the same command with `--decision-ref` omitted
+**discovers** the decision on the PR: the reviewer runs it before declaring
+`awaiting-scope-decision`, so a decision already posted is applied instead of asked again. `ignore` and `new-card`
 disposition the proposal without touching source or severity; `extend-current-card` names the
 exact new/changed AC, bumps `scopeEpoch` exactly once, and opens a targeted remediation round for
 that delta through the ordinary pipeline — no parallel path. The whole exchange is idempotent: a

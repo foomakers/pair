@@ -24,6 +24,13 @@ if (a[0] === 'api') {
     if (!c) { process.stderr.write('HTTP 404'); process.exit(1) }
     process.stdout.write(JSON.stringify(c)); process.exit(0)
   }
+  // discovery (canary v9, B): the PR's comment list, as gh api --paginate repos/<r>/issues/<n>/comments returns it
+  const l = /repos\\/([^/]+\\/[^/]+)\\/issues\\/(\\d+)\\/comments$/.exec(a.find(x => /\\/comments$/.test(x)) || '')
+  if (l && a.includes('--paginate')) {
+    const comments = JSON.parse(process.env.FAKE_GH_COMMENTS_JSON || '{}')
+    const list = Object.entries(comments).filter(([, c]) => new RegExp('/issues/' + l[2] + '$').test(c.issue_url || '')).map(([id, c]) => ({ id: Number(id), body: c.body, user: c.user, html_url: 'https://github.com/' + l[1] + '/pull/' + l[2] + '#issuecomment-' + id }))
+    process.stdout.write(JSON.stringify(list)); process.exit(0)
+  }
 }
 process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(1)
 `)
@@ -142,7 +149,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, predecessorEvidence, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, predecessorEvidence, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions, discoverScopeDecisions } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
 const V = '3.0.0'
@@ -932,6 +939,62 @@ test('T-22 (DT-16 / Finding 6 fix): extend-current-card names exact new AC, bump
   redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['AC-99'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r1-g1' }, { predecessor: 'r0-review-phase.attempt-2' })
   r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.equal(r.next.step, 'validate')
+})
+
+test('canary v9 (B): the scope baseline hash is the proposal IDENTITY (id + type), never its wording — a decision posted on one cycle\'s packet is honoured when the next cycle re-authors the same proposal in a fresh run directory', () => {
+  assert.equal(scopeBaselineHashOf([scopeChange('sc-1', { proposal: 'first wording' })]), scopeBaselineHashOf([scopeChange('sc-1', { proposal: 'a completely re-authored proposal' })]), 'wording is not identity')
+  assert.notEqual(scopeBaselineHashOf([scopeChange('sc-1')]), scopeBaselineHashOf([scopeChange('sc-2')]))
+  assert.notEqual(scopeBaselineHashOf([scopeChange('sc-1')]), scopeBaselineHashOf([scopeChange('sc-1', { type: 'scope-extension' })]))
+  assert.notEqual(scopeBaselineHashOf([scopeChange('sc-1')]), scopeBaselineHashOf([scopeChange('sc-1'), scopeChange('sc-2')]), 'the SET the maintainer read is still the baseline')
+  // cycle 1 posted the packet; the maintainer answered `ignore` with THAT packet's hash
+  const hashThen = scopeBaselineHashOf([scopeChange('sc-1', { proposal: 'first wording' })])
+  setComments({ 901: comment('rucka', decisionBody([{ id: 'sc-1', action: 'ignore', rationale: 'out of scope for this card' }], hashThen)) })
+  // cycle 2: a fresh run directory, the same sc-1 re-described by a new reviewer
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1', { proposal: 'a completely re-authored proposal' })] })
+  const out = applyScopeDecisions({ dir, decisionRef: 'https://github.com/foomakers/pair/pull/7#issuecomment-901', repo: 'foomakers/pair', pr: 7, workflowVersion: V })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  assert.equal(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next.step, 'done')
+})
+
+test('canary v9 (B): the cycle DISCOVERS the maintainer\'s existing decision from the PR before declaring awaiting-scope-decision — no decision-ref to hand in, bots/strangers/prose skipped with their reason, other PRs never read, idempotent, and the CLI does it with --decision-ref omitted', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1'), scopeChange('sc-2')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1'), scopeChange('sc-2')])
+  setComments({
+    950: comment('rucka', 'looks good so far, no decision here'),
+    951: comment('some-bot[bot]', decisionBody([{ id: 'sc-1', action: 'ignore', rationale: 'x' }], hash), { type: 'Bot' }),
+    952: comment('random-user', decisionBody([{ id: 'sc-1', action: 'ignore', rationale: 'x' }], hash)),
+    953: comment('rucka', decisionBody([{ id: 'sc-1', action: 'ignore', rationale: 'covered by AC-3' }, { id: 'sc-2', action: 'ignore', rationale: 'not wanted' }], hash)),
+    954: comment('rucka', decisionBody([{ id: 'sc-9', action: 'ignore', rationale: 'x' }], hash), { issue: 8 }),
+  })
+  assert.equal(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next.reason, 'awaiting-scope-decision')
+  const out = discoverScopeDecisions({ dir, repo: 'foomakers/pair', pr: 7, workflowVersion: V })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  assert.deepEqual(
+    out.discovered.map(d => [d.decisionRef.split('-').pop(), d.applied, d.reason ?? null]),
+    [['951', false, 'author-not-a-user'], ['952', false, 'author-not-authorized:random-user'], ['953', true, null]],
+    'every decision-shaped comment of THIS PR is tried oldest first; prose is not a candidate; PR #8 is never read',
+  )
+  assert.equal(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next.step, 'done')
+  const again = discoverScopeDecisions({ dir, repo: 'foomakers/pair', pr: 7, workflowVersion: V })
+  assert.deepEqual({ applied: again.applied, reason: again.reason }, { applied: false, reason: 'no-pending-scope-changes' })
+  // the CLI: `apply-scope-decisions` with no --decision-ref IS discovery (what review-phase Step 0 / Step 5 run)
+  const { dir: d2 } = runDir()
+  review(d2, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1'), scopeChange('sc-2')] })
+  const cli = spawnSync(process.execPath, [fileURLToPath(new URL('../../skills/pair-workflow-review-phase/scripts/cycle-state.mjs', import.meta.url)), 'apply-scope-decisions', '--dir', d2, '--repo', 'foomakers/pair', '--pr', '7', '--workflowVersion', V], { encoding: 'utf8' })
+  assert.equal(cli.status, 0, cli.stdout + cli.stderr)
+  const parsed = JSON.parse(cli.stdout.trim().split('\n').pop())
+  assert.equal(parsed.applied, true)
+  assert.equal(parsed.discovered.filter(d => d.applied).length, 1)
+  assert.equal(resolve({ dir: d2, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next.step, 'done')
+  // with nothing decided on the PR, discovery says so and the cycle stays awaiting-scope-decision
+  setComments({ 960: comment('rucka', 'thinking about it') })
+  const { dir: d3 } = runDir()
+  review(d3, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const none = discoverScopeDecisions({ dir: d3, repo: 'foomakers/pair', pr: 7, workflowVersion: V })
+  assert.deepEqual({ applied: none.applied, reason: none.reason, discovered: none.discovered }, { applied: false, reason: 'no-decision-comment', discovered: [] })
+  assert.equal(resolve({ dir: d3, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next.reason, 'awaiting-scope-decision')
 })
 
 test('T-22 (DT-17): bot comments, an unauthorized login, a stale baseline, a duplicate id and an unknown action are all refused — a partial decision leaves the undecided proposal pending', () => {
