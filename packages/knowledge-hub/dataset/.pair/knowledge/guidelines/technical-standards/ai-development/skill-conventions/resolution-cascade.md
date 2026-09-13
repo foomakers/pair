@@ -2,6 +2,8 @@
 
 The generic priority order a skill uses to decide **how much work it still needs to do**, before running its full algorithm: an explicit argument wins over existing adoption, which wins over a fresh assessment. Three paths, always evaluated in order, each following **check → skip → act → verify**.
 
+This cascade resolves a **value the project declares**. A skill choosing between execution mechanisms the *harness* owns follows [harness realization](harness-realization.md) instead — the tiers there are established by probing the session, not by reading adoption.
+
 Paths A and B each end in an approval round. Both are qualified **here**, once, for every skill that follows this cascade — a skill inheriting them restates nothing and only qualifies its own local rounds. See [approval rounds](approval-rounds.md) for the `$approval` signal, its default (`interactive` — an omitted argument changes nothing) and the reporting obligation that survives `auto`.
 
 ## Path A — Argument Override

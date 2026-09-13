@@ -2,11 +2,11 @@
 
 ## Date
 
-2026-07-11 (amended 2026-07-18, 2026-08-13)
+2026-07-11 (amended 2026-07-18, 2026-08-13, 2026-08-28)
 
 ## Status
 
-Active (amended 2026-08-13 — the execution layer now SHIPS in the dataset; the "not part of the shipped dataset/KB" clause below no longer holds. See `2026-08-13-the-agent-execution-layer-ships.md`)
+Active (amended 2026-08-13 — the execution layer now SHIPS in the dataset; the "not part of the shipped dataset/KB" clause below no longer holds. See `2026-08-13-the-agent-execution-layer-ships.md`. Amended 2026-08-28 — the Context section's factual claim about other assistants is corrected; see the note there and [ADR-021](../tech/adr/adr-021-fan-out-three-realizations.md) §7.)
 
 ## Category
 
@@ -14,7 +14,11 @@ Process / Tooling Decision
 
 ## Context
 
-Executing Pair's own backlog in parallel (dogfood) needs an orchestration mechanism above the skills: something that drives a story through implement → PR → independent review → fix while keeping merge a human gate. Claude Code offers two primitives — **typed subagents** (`.claude/agents/*.md`) and a **Workflow** DSL (`.claude/workflows/*.js`) — that other assistants (e.g. Codex) do not have.
+Executing Pair's own backlog in parallel (dogfood) needs an orchestration mechanism above the skills: something that drives a story through implement → PR → independent review → fix while keeping merge a human gate. Claude Code offers two primitives — **typed subagents** (`.claude/agents/*.md`) and a **Workflow** DSL (`.claude/workflows/*.js`) — ~~that other assistants (e.g. Codex) do not have~~.
+
+> **Corrected 2026-08-28 (#441).** The struck clause is factually wrong for Codex, and was wrong at the time it was written rather than merely overtaken: a capability probe of `codex-cli 0.149.0` (2026-08-22) found a **default-on** multi-agent toolset (`spawn_agent`, `wait_agent`, `send_input`, `resume_agent`, `close_agent`), a second **default-off** one behind `multi_agent_v2` with a configurable tool namespace, and `subagent_start`/`subagent_stop` hooks — while a third fan-out mechanism (`enable_fanout`) had already been withdrawn. Codex has subagent primitives.
+>
+> What survives the correction is the narrower and more useful claim this record was really making: the two **artifacts** above are Claude-Code-specific — no other harness executes a `.claude/workflows/*.js` file — and the portable core is therefore the skills. That is the portability boundary below, and it is unchanged. Codex's in-harness realization is not this workflow ported; it is the `pair-loop` skill driving the same lane through Codex's own tools, with the lane's deterministic half in a tested module shipped as a KB asset. See [ADR-021](../tech/adr/adr-021-fan-out-three-realizations.md) §7 for the probe rule the correction motivates — availability is established by probing the session, never by naming the product, which is exactly the mistake the struck clause made.
 
 The question: are these part of Pair the framework, or a Claude-Code-specific add-on?
 
