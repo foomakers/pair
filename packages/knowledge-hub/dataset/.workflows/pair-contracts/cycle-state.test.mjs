@@ -171,10 +171,17 @@ test('cycle-state.mjs ships byte-identical inside every phase skill (installed a
     )
 })
 
+// t9d-17: the authorized scope-decision principal is read from ADOPTION (way-of-working.md), never a
+// literal in shipped code — every run directory here sits under a root that declares the maintainer.
+const seedAdoption = (root, text = '## Assignment\n\n- `default-assignee`: `rucka` — the maintainer.\n- No `code-host-assignee`: one identifier for both.\n') => {
+  mkdirSync(join(root, '.pair', 'adoption', 'tech'), { recursive: true })
+  writeFileSync(join(root, '.pair', 'adoption', 'tech', 'way-of-working.md'), text)
+}
 function runDir() {
   const root = mkdtempSync(join(tmpdir(), 'cycle-'))
   const dir = join(root, '.pair', 'working', 'runs', 'run-1', '42')
   mkdirSync(dir, { recursive: true })
+  seedAdoption(root)
   return { root, dir }
 }
 // A handoff as a phase skill publishes it: envelope + phase fields.
@@ -939,6 +946,47 @@ test('T-22 (DT-12/13): a technically converged review with pending scope proposa
   assert.equal(r2.next.step, 'prepare')
   assert.equal(r2.next.mode, 'remediation')
   assert.equal(r2.next.findings.every(f => !f.id.startsWith('sc-')), true, 'no scope proposal id ever enters a fix plan')
+})
+
+test('t9d-17: the authorized principal is READ FROM ADOPTION — `code-host-assignee`, else `default-assignee` (way-of-working.md); `--maintainer` overrides; unresolvable ⇒ typed refusal, nothing written; no login is a literal in shipped code', () => {
+  const src = readFileSync(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url), 'utf8')
+  assert.equal(/maintainer\s*=\s*'[a-z]+'/.test(src), false, 'no hard-coded principal in the script')
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const body = decisionBody([{ id: 'sc-1', action: 'ignore', rationale: 'covered' }], hash)
+  const ref = n => `https://github.com/foomakers/pair/pull/7#issuecomment-${n}`
+  // 1. adoption names alice ⇒ alice decides, the account `rucka` is a stranger here
+  const { root, dir } = runDir()
+  seedAdoption(root, '## Assignment\n\n- `default-assignee`: `alice` — the maintainer.\n- No `code-host-assignee`: one identifier.\n')
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  setComments({ 601: comment('rucka', body), 602: comment('alice', body) })
+  assert.match(applyScopeDecisions({ dir, decisionRef: ref(601), repo: 'foomakers/pair', pr: 7, workflowVersion: V }).reason, /^author-not-authorized:rucka/)
+  const ok = applyScopeDecisions({ dir, decisionRef: ref(602), repo: 'foomakers/pair', pr: 7, workflowVersion: V })
+  assert.equal(ok.applied, true, JSON.stringify(ok))
+  assert.deepEqual(ok.maintainer, { login: 'alice', source: 'default-assignee' })
+  // 2. the code-host identifier wins over the PM-tool one when both are declared
+  const { root: r2, dir: d2 } = runDir()
+  seedAdoption(r2, '- `default-assignee`: `alice`\n- `code-host-assignee`: `bob`\n')
+  review(d2, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  setComments({ 603: comment('bob', body), 604: comment('alice', body) })
+  assert.match(applyScopeDecisions({ dir: d2, decisionRef: ref(604), repo: 'foomakers/pair', pr: 7, workflowVersion: V }).reason, /^author-not-authorized:alice/)
+  const ok2 = applyScopeDecisions({ dir: d2, decisionRef: ref(603), repo: 'foomakers/pair', pr: 7, workflowVersion: V })
+  assert.deepEqual({ applied: ok2.applied, maintainer: ok2.maintainer }, { applied: true, maintainer: { login: 'bob', source: 'code-host-assignee' } })
+  // 3. nothing resolvable ⇒ fail closed BEFORE any read of the PR, nothing written
+  const { root: r3, dir: d3 } = runDir()
+  rmSync(join(r3, '.pair', 'adoption'), { recursive: true, force: true })
+  review(d3, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  setComments({ 605: comment('rucka', body) })
+  const before = readdirSync(d3).sort()
+  assert.deepEqual(applyScopeDecisions({ dir: d3, decisionRef: ref(605), repo: 'foomakers/pair', pr: 7, workflowVersion: V }), { applied: false, reason: 'maintainer-unresolved:way-of-working-not-found' })
+  assert.deepEqual(discoverScopeDecisions({ dir: d3, repo: 'foomakers/pair', pr: 7, workflowVersion: V }), { applied: false, reason: 'maintainer-unresolved:way-of-working-not-found' })
+  seedAdoption(r3, '## Assignment\n\nnothing declared here\n')
+  assert.deepEqual(applyScopeDecisions({ dir: d3, decisionRef: ref(605), repo: 'foomakers/pair', pr: 7, workflowVersion: V }), { applied: false, reason: 'maintainer-unresolved:no-assignee-in-adoption' })
+  assert.deepEqual(readdirSync(d3).sort(), before, 'a refused resolution writes nothing')
+  // 4. `--maintainer` is the explicit override, through the real CLI
+  const cli = spawnSync(process.execPath, [CLI, 'apply-scope-decisions', '--dir', d3, '--decision-ref', ref(605), '--repo', 'foomakers/pair', '--pr', '7', '--workflowVersion', V, '--maintainer', 'rucka'], { encoding: 'utf8' })
+  assert.equal(cli.status, 0, cli.stdout + cli.stderr)
+  const parsed = JSON.parse(cli.stdout.trim().split('\n').pop())
+  assert.deepEqual({ applied: parsed.applied, maintainer: parsed.maintainer }, { applied: true, maintainer: { login: 'rucka', source: 'flag' } })
 })
 
 test('T-22 (DT-14): an authenticated ignore decision preserves quality evidence, records the rationale, never touches source/severity — readiness follows once every proposal is dispositioned', () => {

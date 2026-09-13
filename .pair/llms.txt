@@ -144,6 +144,7 @@
 - [Decision: a scope decision is keyed by the proposal's id and type — never its wording — and the cycle discovers it on the PR before asking again](.pair/adoption/decision-log/2026-09-13-scope-decision-identity-is-the-proposal-id.md)
 - [Decision: when no host runtime is present, the final reviewer runs `finalize` — the synthesis is still the script's, never the reviewer's prose](.pair/adoption/decision-log/2026-09-13-the-final-reviewer-finalizes-when-no-host-runtime-is-present.md)
 - [Decision: the run-directory lock records its owner, breaks a dead writer's lock and refuses a stale live one out loud](.pair/adoption/decision-log/2026-09-13-the-run-directory-lock-has-an-owner-and-a-staleness-rule.md)
+- [Decision: the scope-decision principal is read from adoption — never a login literal in shipped code](.pair/adoption/decision-log/2026-09-13-the-scope-decision-principal-is-read-from-adoption.md)
 
 ## How-To Guides
 

@@ -41,8 +41,10 @@
 //     → reads the PR's comments back and applies every decision-shaped one, oldest first — how a
 //       cycle honours a decision the maintainer already posted before asking again (canary v9, B).
 //     → { applied, reason?, results?, path? }   (US-479 T-22, S5)
-//     Reads the ACTUAL PR comment through `gh`; verifies author type=User and login in the
-//     authorized set; applies ignore | new-card | extend-current-card mechanically and persists a
+//     Reads the ACTUAL PR comment through `gh`; verifies author type=User and login == the adopted
+//     maintainer (`code-host-assignee`, else `default-assignee`, in .pair/adoption/tech/way-of-working.md
+//     found above --dir; `--maintainer` overrides; unresolvable ⇒ `maintainer-unresolved:*`, fail closed —
+//     t9d-17); applies ignore | new-card | extend-current-card mechanically and persists a
 //     `recordType: decision` review-phase handoff. Idempotent on the same decisionRef.
 //
 //   node … test-identity --cwd <worktree> --command <cmd> [--env-keys K1,K2] [--toolchain <s>]
@@ -878,7 +880,45 @@ function extendCard({ ghBin, repo, story, ac }) {
 // a `User` in the authorized maintainer set, applies exact approved payloads mechanically — no
 // planner agent — and persists the result as a `recordType: decision` review-phase handoff via the
 // ordinary `publish`. Idempotent: a decisionRef already applied is a no-op, not a duplicate write.
-export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer = 'rucka', ghBin = process.env.PAIR_GH_BIN || 'gh', workflowVersion, lockWaitMs = 5000 }) {
+// t9d-17: the authorized scope-decision principal is read from ADOPTION, never a login literal in
+// shipped code. `code-host-assignee` (the PR side) wins over `default-assignee` in
+// `.pair/adoption/tech/way-of-working.md` (found by walking up from the run directory); an explicit
+// `--maintainer` overrides; nothing resolvable is a typed refusal — fail closed, no PR read, no write.
+const ASSIGNEE_KEYS = ['code-host-assignee', 'default-assignee']
+export function findAdoptionFile(from, rel = join('.pair', 'adoption', 'tech', 'way-of-working.md')) {
+  let cur
+  try {
+    cur = realpathSync(from)
+  } catch {
+    cur = String(from)
+  }
+  for (;;) {
+    const candidate = join(cur, rel)
+    if (existsSync(candidate)) return candidate
+    const up = dirname(cur)
+    if (up === cur) return null
+    cur = up
+  }
+}
+export function resolveMaintainer({ dir, maintainer }) {
+  if (maintainer && typeof maintainer === 'object' && maintainer.login) return { login: String(maintainer.login), source: maintainer.source ?? 'flag' }
+  if (typeof maintainer === 'string' && maintainer.trim()) return { login: maintainer.trim(), source: 'flag' }
+  const file = findAdoptionFile(dir)
+  if (!file) return { error: 'maintainer-unresolved:way-of-working-not-found' }
+  let text
+  try {
+    text = readFileSync(file, 'utf8')
+  } catch {
+    return { error: 'maintainer-unresolved:way-of-working-unreadable' }
+  }
+  for (const key of ASSIGNEE_KEYS) {
+    const m = new RegExp('^\\s*[-*]\\s*`' + key + '`\\s*:\\s*`([^`\\s]+)`', 'm').exec(text)
+    if (m) return { login: m[1], source: key }
+  }
+  return { error: 'maintainer-unresolved:no-assignee-in-adoption' }
+}
+
+export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer, ghBin = process.env.PAIR_GH_BIN || 'gh', workflowVersion, lockWaitMs = 5000 }) {
   const handoffs = readHandoffs(dir)
   const reviews = handoffs.filter(h => h.data && h.skill === 'review-phase')
   if (!reviews.length) return { applied: false, reason: 'no-review-evidence' }
@@ -887,6 +927,8 @@ export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer = '
   for (const r of reviews) for (const c of r.data.scopeChanges ?? []) if (c?.id) seen.set(c.id, c)
   const pending = [...seen.values()].filter(c => (c.status ?? 'pending') === 'pending')
   if (!pending.length) return { applied: false, reason: 'no-pending-scope-changes' }
+  const who = resolveMaintainer({ dir, maintainer })
+  if (who.error) return { applied: false, reason: who.error }
   const m = COMMENT_URL_RE.exec(String(decisionRef ?? ''))
   if (!m) return { applied: false, reason: 'decisionRef-invalid' }
   const [, owner, repoName, prNum] = m
@@ -901,7 +943,7 @@ export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer = '
     return { applied: false, reason: 'gh-api-invalid-json' }
   }
   if (comment?.user?.type !== 'User') return { applied: false, reason: 'author-not-a-user' }
-  if (comment.user.login !== maintainer) return { applied: false, reason: `author-not-authorized:${comment.user.login}` }
+  if (comment.user.login !== who.login) return { applied: false, reason: `author-not-authorized:${comment.user.login}` }
   if (!new RegExp(`/issues/${prNum}$`).test(String(comment.issue_url ?? ''))) return { applied: false, reason: 'decisionRef-pr-mismatch' }
   const parsed = parseScopeDecisionComment(comment.body)
   if (parsed.error) return { applied: false, reason: parsed.error }
@@ -982,7 +1024,7 @@ export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer = '
   writeFileSync(tmp, JSON.stringify(draft))
   const attempt = handoffs.filter(h => h.phase === lastReview.phase && h.skill === 'review-phase').length + 1
   const out = publish({ dir, file: tmp, phase: lastReview.phase, skill: 'review-phase', workflowVersion: workflowVersion ?? lastReview.data.workflowVersion, attempt, predecessor: lastReview.name, lockWaitMs, ghBin })
-  return { applied: !!out.published, reason: out.published ? undefined : out.reason, results, path: out.path }
+  return { applied: !!out.published, reason: out.published ? undefined : out.reason, results, path: out.path, maintainer: who }
 }
 
 // DISCOVERY (canary v9, B): the maintainer's decision lives on the PR, not in the run directory —
@@ -993,7 +1035,7 @@ export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer = '
 // there, unchanged; this only supplies the `decisionRef`. Never a planner, never an inference:
 // a comment that is not decision-shaped is not a candidate, and one that fails a check is
 // reported with its reason, not retried into acceptance.
-export function discoverScopeDecisions({ dir, repo, pr, maintainer = 'rucka', ghBin = process.env.PAIR_GH_BIN || 'gh', workflowVersion, lockWaitMs = 5000 }) {
+export function discoverScopeDecisions({ dir, repo, pr, maintainer, ghBin = process.env.PAIR_GH_BIN || 'gh', workflowVersion, lockWaitMs = 5000 }) {
   const handoffs = readHandoffs(dir)
   const reviews = handoffs.filter(h => h.data && h.skill === 'review-phase')
   if (!reviews.length) return { applied: false, reason: 'no-review-evidence', discovered: [] }
@@ -1002,6 +1044,8 @@ export function discoverScopeDecisions({ dir, repo, pr, maintainer = 'rucka', gh
   if (![...seen.values()].some(c => (c.status ?? 'pending') === 'pending')) return { applied: false, reason: 'no-pending-scope-changes', discovered: [] }
   if (typeof repo !== 'string' || !/^[^/\s]+\/[^/\s]+$/.test(repo)) return { applied: false, reason: 'repo-invalid', discovered: [] }
   if (!Number.isInteger(Number(pr)) || Number(pr) <= 0) return { applied: false, reason: 'pr-invalid', discovered: [] }
+  const who = resolveMaintainer({ dir, maintainer })
+  if (who.error) return { applied: false, reason: who.error }
   const r = spawnSync(ghBin, ['api', '--paginate', `repos/${repo}/issues/${Number(pr)}/comments`], { encoding: 'utf8', env: cleanGitEnv(process.env) })
   if (r.error || r.status !== 0) return { applied: false, reason: `gh-api-failed:${(r.stderr || r.error?.message || '').trim()}`, discovered: [] }
   // --paginate concatenates pages as consecutive JSON arrays.
@@ -1028,7 +1072,7 @@ export function discoverScopeDecisions({ dir, repo, pr, maintainer = 'rucka', gh
   const discovered = []
   for (const c of candidates) {
     const decisionRef = `https://github.com/${repo}/pull/${Number(pr)}#issuecomment-${c.id}`
-    const out = applyScopeDecisions({ dir, decisionRef, repo, pr: Number(pr), maintainer, ghBin, workflowVersion, lockWaitMs })
+    const out = applyScopeDecisions({ dir, decisionRef, repo, pr: Number(pr), maintainer: who, ghBin, workflowVersion, lockWaitMs })
     discovered.push({ decisionRef, applied: !!out.applied, ...(out.reason ? { reason: out.reason } : {}), ...(out.results ? { results: out.results } : {}) })
     if (out.reason === 'no-pending-scope-changes') break
   }
