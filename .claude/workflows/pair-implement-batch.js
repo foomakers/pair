@@ -479,7 +479,7 @@ const RUN_ID = PARSED.runId
 // The coordinator's own version, returned with every result and handed to every phase skill so
 // each handoff records which coordinator produced it. Bump on any change to the dispatch
 // contract (skill names, argument names, statuses).
-const WORKFLOW_VERSION = '4.0.0'
+const WORKFLOW_VERSION = '4.0.1'
 
 // ── Pipeline configuration: what makes this engine reusable ─────────────────
 // Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved
@@ -1560,18 +1560,23 @@ async function driveStory(story) {
   const findingsArg = list => (list && list.length ? ` $findings=${JSON.stringify(list.map(compactFinding))}` : '')
 
   // Findings carried to the merge gate unfixed — by-design, human-dispositioned or below the floor —
-  // accumulate across rounds and runs; never reassigned.
+  // accumulate across rounds and runs; never reassigned. Keyed by the STABLE id alone (canary v9,
+  // D): a carried finding is re-described on every later review (new wording, a moved line), and
+  // a key that folded location/description in admitted the same `r0-2` twice. The latest review's
+  // row replaces the earlier one in place — one row per id, its most recent description.
   const accepted = []
-  const acceptedKeys = new Set()
+  const acceptedIndex = new Map()
   const accept = findings => {
     for (const f of findings) {
       // The delimiter is spelled as an ESCAPE, never a raw byte: the Workflow harness refuses a script
       // carrying control characters (they would be hidden in its approval dialog), so a raw NUL makes
       // the whole workflow undispatchable — measured on canary run 11.
-      const key = `${f.id ?? ''}\u0000${f.location ?? ''}\u0000${f.description ?? ''}`
-      if (acceptedKeys.has(key)) continue
-      acceptedKeys.add(key)
-      accepted.push(f)
+      const key = f.id ? String(f.id) : `${f.location ?? ''}\u0000${f.description ?? ''}`
+      if (acceptedIndex.has(key)) accepted[acceptedIndex.get(key)] = f
+      else {
+        acceptedIndex.set(key, accepted.length)
+        accepted.push(f)
+      }
     }
   }
   // US-479 T-26: a bare path reference, not a claim of durable evidence (an untracked local path

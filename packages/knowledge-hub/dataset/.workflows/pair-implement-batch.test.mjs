@@ -265,10 +265,10 @@ test('TC-11: a resumed PR with a clean verification is ONE dispatch — the fina
 test('TC-11: every dispatch is a configured skill + typed arguments + the engine version, run directory and policy', async () => {
   const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] })
   const { result, calls } = await runWorkflow({ args: { cards: [STORY], runId: 'run-42' }, dispatch: stdDispatch({ review }) })
-  assert.equal(result.workflowVersion, '4.0.0')
+  assert.equal(result.workflowVersion, '4.0.1')
   for (const c of calls.slice(1)) {
     assert.match(c.prompt, /^Invoke \*\*\/pair-workflow-(red-spec|red-verify|implement-phase|green-fix|review-phase)\*\* for story #292 with \$run=run-42 \$story=292 \$branch=feat\/#292-x \$worktree=\.\.\/pair-worktrees\/292 \$base=origin\/main \$stacked=false/, c.opts.label)
-    assert.ok(c.prompt.includes('$workflowVersion=4.0.0'), `${c.opts.label} was not told the workflow version`)
+    assert.ok(c.prompt.includes('$workflowVersion=4.0.1'), `${c.opts.label} was not told the workflow version`)
     assert.ok(c.prompt.includes('$policy={"maxFixRounds":3,"redRepairs":1,"greenRetries":1,"reviewers":1}'), `${c.opts.label} was not told the policy`)
     assert.match(c.prompt, /\$inputs=[0-9a-f]{16}/, `${c.opts.label} was not told the effective-inputs digest`)
     assert.match(c.prompt, /\$entry=(fresh|pr)/)
@@ -577,6 +577,15 @@ test('TC-13: a human-dispositioned or by-design finding is carried to the merge 
   assert.equal(invented.result.batch[0].status, 'failed-verify')
 })
 
+test('canary v9 (D): a carried finding re-described on a later review is ONE accepted finding keyed by its stable id — the latest description wins, never a duplicate row', async () => {
+  const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding(), finding({ severity: 'Minor', description: 'first wording of the same defect' })] } : { verdict: 'Approved', findings: [finding({ id: 'r0-1', transition: 'resolved' }), finding({ id: 'r0-2', severity: 'Minor', description: 'second wording of the same defect', location: 'src/a.ts:9' })] })
+  const { result } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], severityFloor: 'Major' }, dispatch: stdDispatch({ review }) })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.deepEqual(result.batch[0].acceptedFindings.map(f => f.id), ['r0-2'], 'a stable id is accepted once, whatever its wording per round')
+  assert.equal(result.batch[0].acceptedFindings[0].description, 'second wording of the same defect')
+  assert.equal(result.batch[0].acceptedFindings[0].location, 'src/a.ts:9')
+})
+
 test('TC-12: `done` is accepted only from a verification whose evidence says ready on the head it reviewed — a moved remote head or a blocking finding cannot be declared done', async () => {
   const notReady = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review: { verdict: 'Approved', findings: [], readiness: { ready: false, remoteHead: HEAD2 }, next: { step: 'done', reviewedHead: HEAD, round: 0, verdict: 'Approved' } } }) })
   assert.equal(notReady.result.batch[0].status, 'failed-verify')
@@ -859,10 +868,10 @@ test('t9-5: a next that asks for validate/implement/green without a usable contr
   }
 })
 
-test('TC-14: the result carries workflowVersion 4.0.0 and every status row is one of the documented set; ready rows carry reviewedHead + verdict', async () => {
+test('TC-14: the result carries workflowVersion 4.0.1 and every status row is one of the documented set; ready rows carry reviewedHead + verdict', async () => {
   const STATUSES = new Set(['ready-for-merge', 'escalate', 'failed-preparation', 'failed-contract', 'failed-seal', 'failed-implement', 'failed-fix', 'failed-verify', 'failed-custody', 'failed-resume', 'incompatible', 'awaiting-scope-decision', 'failed-publication', 'interrupted', 'abandoned'])
   const { result } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch() })
-  assert.equal(result.workflowVersion, '4.0.0')
+  assert.equal(result.workflowVersion, '4.0.1')
   for (const row of result.batch) {
     assert.equal(row.id, STORY.id)
     assert.ok(STATUSES.has(row.status), row.status)
@@ -1081,7 +1090,7 @@ test('an EXPLICIT empty list stays a legal no-op — no agent, no contract', asy
   assert.equal(calls.length, 0)
   assert.deepEqual(result.batch, [])
   assert.match(result.note, /Empty batch/)
-  assert.equal(result.workflowVersion, '4.0.0')
+  assert.equal(result.workflowVersion, '4.0.1')
 })
 test('a bare array, a JSON string, `cards` and the `stories` alias all drive the batch; both lists together throw', async () => {
   for (const args of [[STORY], JSON.stringify({ stories: [STORY] }), { cards: [STORY] }, { stories: [STORY] }, { cards: [STORY], stories: undefined }, { stories: [STORY], cards: null }]) {
