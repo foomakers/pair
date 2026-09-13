@@ -429,10 +429,17 @@ export function listSnapshots({ pr, base, cwd }) {
 export function verifyChain({ pr, base, cwd, expectContract = true }) {
   if (!SHA_RE.test(String(base))) return { verified: false, contractBreach: true, breaches: [{ code: 'base-not-a-sha' }], snapshots: [] }
   const snaps = listSnapshots({ pr, base, cwd })
-  if (!snaps.length)
-    return expectContract
-      ? { verified: false, contractBreach: true, breaches: [{ code: 'snapshot-missing' }], snapshots: [] }
-      : { verified: true, contractBreach: false, breaches: [], snapshots: [], contract: 'none' }
+  // US-479 (canary 481-v5): `expectContract: false` is a statement about THIS cycle — it has sealed
+  // nothing. Any snapshot in range therefore belongs to another, concluded cycle, and a concluded
+  // cycle's seals are history: they must not fail the one starting now. Without this, a finished
+  // cycle left every file it sealed untouchable outside the workflow forever — a hand fix, a hotfix
+  // or a merge from main touching one of them failed the NEXT cycle at its first review, and the
+  // escape the design intends (a successor seal ends the previous segment) was unreachable, because
+  // sealing needs `validate` and custody blocks at `r0`. Reported as history, never dropped in
+  // silence. The strict default is untouched: inside a cycle every guarantee holds exactly as before.
+  if (!expectContract)
+    return { verified: true, contractBreach: false, breaches: [], snapshots: [], contract: 'none', historicalSnapshots: snaps.map(s => ({ phase: s.phase, sha: s.sha, manifest: s.manifest })) }
+  if (!snaps.length) return { verified: false, contractBreach: true, breaches: [{ code: 'snapshot-missing' }], snapshots: [] }
   const breaches = []
   const breach = (code, extra = {}) => breaches.push({ code, ...extra })
   const head = git(['rev-parse', 'HEAD'], cwd)

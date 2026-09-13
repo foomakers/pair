@@ -549,6 +549,40 @@ test('verify-chain lists only first-parent history (t9b-3): a foreign PR seal me
   rmSync(cwd, { recursive: true, force: true })
 })
 
+test('verify-chain: a CONCLUDED cycle`s seals are history, not a perpetual claim on the branch (canary 481-v5)', () => {
+  // A finished cycle leaves its snapshot commit in the branch forever. Walk a later cycle`s chain
+  // from the branch base and those seals are still in range — so every file the old cycle sealed
+  // became untouchable outside the workflow, for good: a hand fix, a hotfix, a merge from main
+  // touching one of them fails the NEXT cycle at its first review, before anyone can propose a new
+  // contract. The way out the design intends (a successor seal ends the previous segment) is
+  // unreachable, because sealing needs `validate` and custody blocks at `r0`.
+  // `expectContract: false` states that THIS cycle has sealed nothing. Snapshots found under that
+  // statement therefore belong to other, concluded cycles: reported as history, never as breaches.
+  const { cwd, base } = repo()
+  redContract(cwd, { fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/'] } })
+  const s = seal({ pr: PR, phase: PHASE, base, contractPath: '.pair/working/red-draft.json', cwd })
+  rmSync(join(cwd, '.pair/working/red-draft.json'))
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  // that cycle is over; someone now edits the file it sealed, by hand, outside any workflow
+  writeFileSync(join(cwd, 'test/a.test.js'), 'it("edited after the cycle closed", () => {})\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '-m', 'hand fix after the cycle closed')
+  // the strict default still sees it — that is the in-cycle guarantee and it must not move
+  const strict = verifyChain({ pr: PR, base, cwd })
+  assert.equal(strict.verified, false, 'inside a cycle, a changed sealed blob is still a breach')
+  assert.ok(strict.breaches.some(b => b.code === 'test-blob-changed'))
+  // a NEW cycle that has sealed nothing is not bound by the old one
+  const fresh = verifyChain({ pr: PR, base, cwd, expectContract: false })
+  assert.deepEqual(
+    { verified: fresh.verified, breach: fresh.contractBreach, breaches: fresh.breaches, contract: fresh.contract },
+    { verified: true, breach: false, breaches: [], contract: 'none' },
+    'a concluded cycle`s seals cannot fail a cycle that has none of its own',
+  )
+  assert.ok(fresh.historicalSnapshots?.length >= 1, 'and they are REPORTED as history, never silently dropped')
+  assert.equal(fresh.historicalSnapshots[0].phase, PHASE)
+  rmSync(cwd, { recursive: true, force: true })
+})
+
 test('verify-chain on a branch that never sealed anything: a breach only when a contract was EXPECTED (canary 481-v2)', () => {
   // The first review of a PR that has had no remediation round runs against a branch carrying zero
   // `Pair-RED-Snapshot` trailers. There is no contract, so there is nothing to violate — but the
