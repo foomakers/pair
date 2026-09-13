@@ -142,6 +142,7 @@
 - [Decision: custody never infers a breach from what it cannot see](.pair/adoption/decision-log/2026-09-12-custody-never-infers-a-breach-from-what-it-cannot-see.md)
 - [Decision: rollback takes a head, its notes live in the handoff, and nobody deletes them](.pair/adoption/decision-log/2026-09-12-rollback-notes-are-derived-from-handoffs.md)
 - [Decision: a scope decision is keyed by the proposal's id and type — never its wording — and the cycle discovers it on the PR before asking again](.pair/adoption/decision-log/2026-09-13-scope-decision-identity-is-the-proposal-id.md)
+- [Decision: tech debt — the engine's card transport is Claude Code + GitHub (`gh`) for now, recorded with its exit path](.pair/adoption/decision-log/2026-09-13-tech-debt-card-transport-is-claude-code-plus-github-for-now.md)
 - [Decision: the final reviewer of a cycle concludes the required `pair-review` check and the `pr-state:*` label — merge stays outside the engine](.pair/adoption/decision-log/2026-09-13-the-final-reviewer-concludes-the-pair-review-check-and-the-pr-state-label.md)
 - [Decision: when no host runtime is present, the final reviewer runs `finalize` — the synthesis is still the script's, never the reviewer's prose](.pair/adoption/decision-log/2026-09-13-the-final-reviewer-finalizes-when-no-host-runtime-is-present.md)
 - [Decision: the run-directory lock records its owner, breaks a dead writer's lock and refuses a stale live one out loud](.pair/adoption/decision-log/2026-09-13-the-run-directory-lock-has-an-owner-and-a-staleness-rule.md)

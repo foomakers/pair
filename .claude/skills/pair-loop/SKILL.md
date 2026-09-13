@@ -82,5 +82,6 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 ## Notes
 
+- **Host runtime (US-479 T-25, t9d-1).** This loop runs in the Workflow sandbox: no shell, so it cannot run the engine's host recipe (`cycle-runtime.mjs entry/observe/finalize`). Metrics and the ONE PR synthesis still reach the PR because the final reviewer runs `finalize` when no host runtime is present (ADL 2026-09-13); a shell host (`pair run`) is where the full recipe belongs.
 - This skill and the `pair-loop` workflow share one contract: the workflow is the fan-out realization, this file is the entry point, the degradation guard, and the portable single-card path. Neither re-derives the automation-policy.md schema — both read it through the same extraction rules.
 - Non-Claude-Code note (ADR-017 §5, amended by ADR-021): every other supported harness runs the one-card path — as tier 2 when an external driver (`pair run`) re-invokes it unattended, as tier 3 when a human/CI/cron does. This is not a lesser mode by accident: it is the same safety property (no in-context multi-card iteration) applied without a fan-out primitive to lean on, and under tier 2 the fresh process per iteration makes the isolation stricter, not weaker.

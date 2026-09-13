@@ -64,3 +64,16 @@ a `metrics.json` nobody had written.
 
 - [ADR-024](../tech/adr/adr-024-delivery-phases-are-skills.md), amendments (b) T-25/T-26 and (v)
 - `.claude/skills/pair-workflow-review-phase/SKILL.md` Step 5.3; `cycle-runtime.mjs finalizeMetrics`
+
+## Addendum 2026-09-13 — t9d-1: where the host recipe can and cannot be wired
+
+Verified on `d8646222` and after: on the workflow path (the Workflow sandbox, which is where
+`/pair-loop` and `pair-implement-batch` run) there is **no shell**, so neither `pair-loop.js` nor
+the coordinator can invoke `cycle-runtime.mjs entry/observe/finalize`; the decision above is what
+closes the delivery gap there — the final reviewer runs `finalize`, and the coordinator turns an
+unconfirmed synthesis into `failed-publication`. No cheap hook exists in `pair-loop.js` (it calls
+`workflow('pair-implement-batch', …)` and nothing else can execute a process). The natural host for
+the full recipe is the pair CLI's `pair run` (`apps/pair-cli/src/commands/run/spawn.ts` spawns the
+engine per iteration and owns a shell): wiring `entry` before the spawn and `observe`/`finalize`
+around it is a follow-up in that package, not an engine change. Until then `entry` is
+documentation plus `recipe.test.mjs`, and the reviewer fallback is the path that runs.

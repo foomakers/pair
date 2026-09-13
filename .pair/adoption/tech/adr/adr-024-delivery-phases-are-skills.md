@@ -1227,3 +1227,15 @@ gains fields, none of the existing ones change meaning:
   exactly as the publisher mandates it; the `green` step carries the maintainer's `reconstruct`
   directive and the coordinator dispatches `$reconstruct` to the fixer.
 - **`pr-comment.mjs`** splits `--paginate` pages string-aware.
+- **Card transport is GitHub via `gh`, recorded as tech debt.** See
+  [ADL 2026-09-13](../../decision-log/2026-09-13-tech-debt-card-transport-is-claude-code-plus-github-for-now.md):
+  the constraint (GitHub as code host and PM tool, from Claude Code), the typed refusal an adopter
+  elsewhere gets, and the exit path (one `cardTransport` seam selected by adoption).
+- **The host recipe on the workflow path.** Addendum to the 2026-09-13 finalize ADL: the sandbox
+  has no shell, so the reviewer fallback is the path that runs; `pair run` is the host where the
+  full recipe belongs (follow-up outside the engine).
+- **Open (t9d-2):** the batch-level `pair-contract-generator` dispatch still runs on every batch.
+  Folding the template-contract check into the first review dispatch (`$contractSpec`, loose schema
+  for that one review, post-hoc vocabulary validation, floor/ranks agreement for the first review)
+  is designed but not landed in `4.0.1`; it touches the vocabulary constants, the reviewer's Step 0
+  and four test suites, and is left for its own commit.

@@ -132,6 +132,12 @@ Batch-level, once per run and cache-by-hash: `/pair-workflow-contract-phase` (`p
 haiku) derives the review template's vocabulary contract. It is the **template** contract; the
 **acceptance** contract a story is judged against is the one stage 1 prepares and stage 2 seals.
 
+**Transport constraint (recorded as tech debt, ADL 2026-09-13):** every card and PR write the engine
+performs goes through the GitHub CLI (`gh issue view|edit|create`, `gh api …/comments|statuses|labels`),
+so the workflow supports GitHub as code host **and** PM tool, driven from Claude Code; an adopter
+elsewhere gets a typed `gh … failed` refusal, never a silent skip. The exit path is one `cardTransport`
+seam selected by adoption.
+
 Every stage begins and ends with `cycle-state.mjs` — a script shipped inside each skill — which
 reads the phase handoffs under `.pair/working/runs/<runId>/<story>/` in the main checkout (never
 a worktree), publishes the stage's own handoff atomically (sequenced, predecessor-checked, a
