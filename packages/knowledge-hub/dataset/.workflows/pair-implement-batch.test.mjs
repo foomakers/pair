@@ -58,7 +58,7 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3 } = {}) {
     if (!stories.has(id)) stories.set(id, { plans: {}, greens: {}, repairs: {}, verifies: {}, lastReviewHead: null, prior: new Map(), seq: {} })
     return stories.get(id)
   }
-  const blockingOf = f => !f.nonActionable && f.transition !== 'resolved' && f.transition !== 'human' && f.kind !== 'question' && (!floor || rankOf(f.severity) >= rankOf(floor))
+  const blockingOf = f => f.regressionRisk?.state === 'active' || (!f.nonActionable && f.transition !== 'resolved' && f.transition !== 'human' && f.kind !== 'question' && (!floor || rankOf(f.severity) >= rankOf(floor)))
   return (prompt, opts, res) => {
     if (res === null || res === undefined) return res
     if (typeof res !== 'object') return res
@@ -588,6 +588,28 @@ test('TC-13: a human-dispositioned or by-design finding is carried to the merge 
   // a verifier cannot invent a human disposition on a finding nobody has seen: that is input, not judgment
   const invented = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review: { verdict: 'Approved', findings: [finding({ transition: 'human', disposition: 'accepted' })] } }) })
   assert.equal(invented.result.batch[0].status, 'failed-verify')
+})
+
+// ── t9d-6: the two validators agree on an ACTIVE regression risk under a severity floor ─────────
+// The publisher (cycle-state.mjs) mandates `blocking: true` on any finding whose regressionRisk is
+// active — an active risk is by definition an open blocker. The coordinator re-derives `blocking`
+// from the floor; without the same exemption a Minor regression under `severityFloor: Major` is a
+// result the publisher accepts and the coordinator refuses (`failed-verify`), killing the rewind.
+const activeRegression = (extra = {}) => ({
+  id: 'r0-9', severity: 'Minor', location: 'src/a.ts:9', description: 'AC-7 passed at H0 and fails at H1', recommendation: 'restore the boundary', kind: 'regression', transition: 'open', origin: 'introduced-by-remediation', obligationIds: ['AC-7'],
+  regressionRisk: { state: 'active', lastCleanReviewedHead: HEAD, firstFailingHead: HEAD2, introducedByRemediationBatchId: 'r1', reproducerRef: 'pnpm test -t AC-7', closureAssertions: [{ id: 'ca-1', command: 'pnpm test -t AC-7', expected: 'pass' }], affectedBoundaryRefs: ['src/a.ts'] },
+  ...extra,
+})
+test('t9d-6: a Minor finding carrying an ACTIVE regression risk is blocking under `severityFloor: Major` for the coordinator too — the publisher`s mandate is mirrored, the rewind proceeds', async () => {
+  const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [activeRegression({ blocking: true })] } : { verdict: 'Approved', findings: [activeRegression({ blocking: false, transition: 'resolved', evidence: 'guard green', regressionRisk: undefined, origin: undefined })] })
+  const { result, calls } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], severityFloor: 'Major' }, dispatch: stdDispatch({ review }) })
+  assert.notEqual(result.batch[0].status, 'failed-verify', JSON.stringify(result.batch[0]))
+  assert.ok(calls.some(c => c.opts.label?.startsWith('prepare:#292 r1-g1')), `the rewind was dispatched: ${JSON.stringify(calls.map(c => c.opts.label))}`)
+})
+test('t9d-6: the converse holds — an active regression risk declared NON-blocking is refused by the coordinator exactly as the publisher refuses it', async () => {
+  const { result } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], severityFloor: 'Major' }, dispatch: stdDispatch({ review: { verdict: 'Rework', findings: [activeRegression({ blocking: false })] } }) })
+  assert.equal(result.batch[0].status, 'failed-verify')
+  assert.match(result.batch[0].reason, /blocking=false disagrees/)
 })
 
 test('canary v9 (D): a carried finding re-described on a later review is ONE accepted finding keyed by its stable id — the latest description wins, never a duplicate row', async () => {

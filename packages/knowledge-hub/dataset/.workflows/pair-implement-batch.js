@@ -1654,7 +1654,10 @@ async function driveStory(story) {
 
   // The verifier applied the SAME severity policy this file holds: re-derive `blocking` from the
   // floor and refuse a result that disagrees — a policy applied twice must agree, or fail closed.
-  const expectedBlocking = f => !f.nonActionable && f.transition !== 'resolved' && f.transition !== 'human' && f.kind !== 'question' && (!SEVERITY_FLOOR || rankOf(f.severity) >= SEVERITY_FLOOR.rank)
+  // t9d-6: the publisher (cycle-state.mjs) mandates `blocking: true` on a finding whose regression risk
+  // is ACTIVE — an active risk is an open blocker whatever its severity. The same exemption here, or
+  // a Minor regression under a Major floor is accepted by one validator and refused by the other.
+  const expectedBlocking = f => f.regressionRisk?.state === 'active' || (!f.nonActionable && f.transition !== 'resolved' && f.transition !== 'human' && f.kind !== 'question' && (!SEVERITY_FLOOR || rankOf(f.severity) >= SEVERITY_FLOOR.rank))
   // The FIRST review of a PR-entry cycle reads the PR's earlier reviews (ids are stable across
   // rounds AND cycles): a finding this run has never seen may arrive resolved/superseded as HISTORY,
   // non-blocking and with read-back evidence — never as an invented closure (canary v4, run 14).
