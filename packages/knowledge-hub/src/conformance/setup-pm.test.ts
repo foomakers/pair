@@ -91,6 +91,116 @@ const normalize = (markdown: string): string =>
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+/**
+ * The real cells of ONE markdown table row, normalized — or a throw.
+ *
+ * FAILS CLOSED. A markdown row is written with a leading AND a trailing pipe, so splitting it
+ * yields an empty element on each side of the real cells. A line without that shape (prose that
+ * happens to carry a pipe, a row truncated before its trailing pipe) is NOT a row: it throws
+ * rather than yielding cells, so a row lookup that drifts can never be a way to reach green.
+ */
+const rowCells = (row: string, label: string): string[] => {
+  const parts = row.trim().replace(/^>\s*/, '').split('|')
+  const bounded = parts.length >= 3 && parts[0]?.trim() === '' && parts.at(-1)?.trim() === ''
+  if (!bounded) {
+    throw new Error(
+      `${label}: "${row.trim()}" is not a | Tool | Best For | Implementation Guide | table row — ` +
+        `the enrolment verdict this guard reads cannot be located.`,
+    )
+  }
+  return parts.slice(1, -1).map(cell => normalize(cell).trim())
+}
+
+/**
+ * The columns the Step 2 selection table declares, in the order it declares them. Pinned as a
+ * constant so the synthetic rows below can be read without a corpus, and asserted against the
+ * real header in `the Step 2 table declares the columns this guard reads` — the constant is a
+ * restatement of the artifact, never a second source of truth.
+ */
+const STEP2_COLUMNS = ['tool', 'best for', 'implementation guide']
+
+/** The column whose cell decides whether a tool is selectable at Step 2. */
+const VERDICT_COLUMN = 'implementation guide'
+
+/** The one verdict that enrolls a tool as selectable in Step 2. */
+const AVAILABLE = 'available'
+
+/**
+ * The HALT vocabulary the `Other` row carries. Step 2.4 sends a tool filed under it to a HALT,
+ * so it must appear NOWHERE in the row of an adapter that ships — not only in the verdict cell.
+ */
+const HALT_VERDICT = 'no implementation guide'
+
+/** `rowCells` for the header SEARCH only, where a non-row line is an ordinary miss, not a fault. */
+const rowCellsOrNull = (row: string): string[] | null => {
+  try {
+    return rowCells(row, 'probe')
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The columns the Step 2 table's own header row declares — read from the corpus, so the verdict
+ * below is located by the column the table NAMES rather than by a position counted from the end.
+ * Throws when there is no header, or when the header does not declare the verdict column.
+ */
+const step2Columns = (step2: string, label: string): string[] => {
+  const header = step2
+    .split('\n')
+    .find(line => line.includes('|') && rowCellsOrNull(line)?.[0] === 'tool')
+  if (!header) {
+    throw new Error(
+      `${label}: the Step 2 selection table has no header row starting with a "Tool" column — ` +
+        `the enrolment verdict cannot be bound to a declared column.`,
+    )
+  }
+  const columns = rowCells(header, label)
+  if (!columns.includes(VERDICT_COLUMN)) {
+    throw new Error(
+      `${label}: the Step 2 table header declares [${columns.join(' | ')}] — no ` +
+        `"${VERDICT_COLUMN}" column, so no cell of a row can be read as the enrolment verdict.`,
+    )
+  }
+  return columns
+}
+
+/**
+ * The `Implementation Guide` verdict of ONE Step 2 selection-table row — normalized, trimmed,
+ * located by the DECLARED column and read EXACTLY, never by substring and never by position.
+ *
+ * WHY EXACTLY. `toContain('available')` is satisfied by its own negations: `Not Available` and
+ * `Unavailable` both contain the token, so a shipped adapter marked unselectable in the very
+ * table this guard keeps in sync went 43/43 green. The companion `not.toContain('no
+ * implementation guide')` did not catch it either — neither phrasing contains that string.
+ * Exact equality against the table's one positive verdict rejects both negations, the HALT
+ * vocabulary and any cell outside the vocabulary, through ONE assertion on the verdict cell.
+ *
+ * WHY BY COLUMN, AND WITH EXACT ARITY. Reading the verdict positionally (the cell before the
+ * trailing pipe) is sound only while the table has exactly the columns it has today. Append one
+ * column to a row and the read silently SHIFTS onto the new cell: a row rewritten to
+ * `| **Azure DevOps** | Microsoft ecosystem | Not Available | Available |` stays bounded, throws
+ * nothing, and yields `available` — the very "silently reading a neighbouring column as the
+ * verdict" this guard exists to prevent, reached from the right instead of the left. So the cell
+ * is located at the index the header declares, and a row whose real-cell count is not the
+ * declared column count fails closed and loudly instead of shifting.
+ */
+const guideVerdict = (row: string, label: string, columns: string[] = STEP2_COLUMNS): string => {
+  const cells = rowCells(row, label)
+  if (cells.length !== columns.length) {
+    throw new Error(
+      `${label}: "${row.trim()}" carries ${cells.length} cells but the Step 2 table declares ` +
+        `${columns.length} (${columns.join(' | ')}) — a column added or removed shifts the ` +
+        `enrolment verdict onto a neighbouring cell, so this guard fails closed rather than reading it.`,
+    )
+  }
+  const index = columns.indexOf(VERDICT_COLUMN)
+  if (index < 0) {
+    throw new Error(`${label}: no "${VERDICT_COLUMN}" column among [${columns.join(' | ')}].`)
+  }
+  return cells[index] as string
+}
+
 const adapterCases = CORPORA.flatMap(({ label, adapterDir, skill }) =>
   adapterFiles(adapterDir).map(file => {
     const content = read(join(adapterDir, file))
@@ -109,15 +219,41 @@ describe('setup-pm SKILL.md — every adapter on disk is a selectable tool (#321
     }
   })
 
+  it.each(skillCases)(
+    '$corpus — the Step 2 table declares the columns this guard reads',
+    ({ corpus, skillText }) => {
+      // The verdict is located by the column the table NAMES, so the header is asserted rather
+      // than assumed: renaming or dropping `Implementation Guide` must fail loudly here instead
+      // of leaving every enrolment case below reading whatever cell happened to take its place.
+      const step2 = sectionBetween(skillText, '### Step 2: Select PM Tool', '### Step 3:')
+      expect(step2Columns(step2, `${corpus} — Step 2 table header`)).toEqual(STEP2_COLUMNS)
+    },
+  )
+
   it.each(adapterCases)(
     '$corpus — Step 2 offers $tool as Available (AC-1/AC-8)',
-    ({ tool, skillText }) => {
+    ({ corpus, tool, skillText }) => {
       const step2 = sectionBetween(skillText, '### Step 2: Select PM Tool', '### Step 3:')
+      const columns = step2Columns(step2, `${corpus} — Step 2 table header`)
       const row = step2.split('\n').find(line => line.includes('|') && line.includes(`**${tool}**`))
       expect(row, `Step 2 selection table has no row for ${tool}`).toBeDefined()
-      expect(normalize(row as string)).toContain('available')
-      // AC-8: an adapter that ships must not be filed under the no-guide HALT row.
-      expect(normalize(row as string)).not.toContain('no implementation guide')
+      // AC-1 and AC-8 in ONE exact read of the DECLARED verdict column: the cell must BE the
+      // positive vocabulary, so a shipped adapter can be neither negated (`Not Available`,
+      // `Unavailable`) nor filed under the no-guide HALT row, and a column added to the row
+      // throws instead of shifting the read. See `guideVerdict`.
+      expect(
+        guideVerdict(row as string, `${corpus} — Step 2 row for ${tool}`, columns),
+        `Step 2 marks ${tool} "${row}" — an adapter that ships must read exactly "Available"`,
+      ).toBe(AVAILABLE)
+      // AC-8, ROW-SCOPED AND DELIBERATELY KEPT. The exact read above holds the verdict CELL; it
+      // is strictly stronger than the old `toContain('available')` there and nowhere else. The
+      // HALT vocabulary parked in another cell — `| **Azure DevOps** | Microsoft ecosystem; no
+      // implementation guide yet | Available |` — passes the cell read and is caught only here,
+      // which is why both assertions stand rather than one replacing the other.
+      expect(
+        normalize(row as string),
+        `Step 2 files ${tool} under the no-implementation-guide HALT vocabulary: "${row}"`,
+      ).not.toContain(HALT_VERDICT)
     },
   )
 
@@ -420,6 +556,138 @@ describe('setup-pm SKILL.md — Step 4 back-references resolve to the act-step t
     ])
     expect(() => citedBackReference(outOfRange, 'out of range')).toThrow(
       /cites step 7, which does not exist/,
+    )
+  })
+})
+
+/**
+ * Guard strength for the Step 2 enrolment verdict, on synthetic rows rather than the real corpus
+ * — the states the shipped table must NOT be allowed to reach, exercised without editing it into
+ * a broken shape. Same construction as the back-reference fail-closed block above.
+ *
+ * Two classes live here. (a) Substring containment: every negation of `Available` CONTAINS the
+ * token it negates, so the assertion that read the cell by containment accepted the exact edit it
+ * existed to catch. (b) Column drift: a verdict located by position shifts onto a neighbouring
+ * cell the moment the row gains or loses a column, which is the same failure reached from the
+ * other side. Marking a tool unselectable while its adapter file stays on disk is the natural
+ * deprecation order, and adding a column to a comparison table is ordinary editing — which is
+ * what makes both reachable rather than contrived.
+ */
+describe('setup-pm SKILL.md — the Step 2 enrolment verdict is read exactly (#321 AC-1/AC-8)', () => {
+  const row = (verdict: string): string =>
+    `   > | **Azure DevOps** | Microsoft ecosystem, enterprise boards + repos | ${verdict} |`
+
+  it.each([
+    ['Not Available', 'not available'],
+    ['Unavailable', 'unavailable'],
+    ['NOT AVAILABLE', 'not available'],
+    ['No implementation guide yet', 'no implementation guide yet'],
+    ['TBD', 'tbd'],
+    ['', ''],
+  ])('a "%s" verdict is not the enrolment vocabulary', (verdict, expected) => {
+    const read = guideVerdict(row(verdict), 'synthetic')
+    expect(read).toBe(expected)
+    // The assertion the real case makes — stated here against the value that must fail it.
+    expect(read).not.toBe(AVAILABLE)
+  })
+
+  it.each([
+    ['Available', 'the shipped vocabulary'],
+    ['**Available**', 'emphasised'],
+    ['  Available  ', 'padded'],
+    ['`Available`', 'in a code span'],
+  ])('"%s" (%s) still enrolls the tool', verdict => {
+    // The other half: tightening the read must not reject the formatting the table legitimately
+    // uses, or the guard would redden on a prettier reflow rather than on a real regression.
+    expect(guideVerdict(row(verdict), 'synthetic')).toBe(AVAILABLE)
+  })
+
+  it('a line that is not a table row throws instead of yielding a verdict', () => {
+    expect(() =>
+      guideVerdict('   > Which tool does your team use or want to adopt? | Available', 'prose'),
+    ).toThrow(/is not a \| Tool \| Best For \| Implementation Guide \| table row/)
+  })
+
+  it('a row missing its trailing pipe throws instead of yielding a verdict', () => {
+    // Fail closed on truncation too: `split` on an unterminated row would hand back the LAST
+    // cell as if it were the one before it, silently reading the Best For column as the verdict.
+    expect(() =>
+      guideVerdict('   > | **Azure DevOps** | Microsoft ecosystem | Available', 'truncated'),
+    ).toThrow(/is not a \| Tool \| Best For \| Implementation Guide \| table row/)
+  })
+
+  it('a terminated row carrying one EXTRA column throws instead of shifting the read', () => {
+    // The counterexample that a position-from-the-right read passes: the row is bounded, throws
+    // nothing, and its last-but-one cell is the appended column — so `Not Available` in the real
+    // Implementation Guide column would have been laundered into `available`.
+    const widened = '   > | **Azure DevOps** | Microsoft ecosystem | Not Available | Available |'
+    expect(rowCells(widened, 'widened')).toEqual([
+      'azure devops',
+      'microsoft ecosystem',
+      'not available',
+      'available',
+    ])
+    expect(() => guideVerdict(widened, 'synthetic')).toThrow(
+      /carries 4 cells but the Step 2 table declares 3/,
+    )
+  })
+
+  it('a row MISSING a column throws instead of reading its neighbour', () => {
+    // The same arity check from the other direction: dropping `Best For` would put the tool name
+    // itself one cell from the end, and a positional read would compare a tool name to a verdict.
+    expect(() => guideVerdict('   > | **Azure DevOps** | Available |', 'narrowed')).toThrow(
+      /carries 2 cells but the Step 2 table declares 3/,
+    )
+  })
+
+  it('an embedded pipe in the Best For cell throws instead of being absorbed', () => {
+    // Extra cells to the LEFT are a column drift too. A positional read absorbs them silently;
+    // exact arity rejects them, so an author who writes a pipe into prose is told, not ignored.
+    expect(() =>
+      guideVerdict('   > | **Azure DevOps** | boards | repos | Available |', 'embedded pipe'),
+    ).toThrow(/carries 4 cells but the Step 2 table declares 3/)
+  })
+
+  it('the HALT vocabulary outside the verdict cell is caught by the row-scoped guard', () => {
+    // Why the real case keeps TWO assertions. The cell-exact read is strictly stronger than the
+    // old containment check WITHIN the verdict cell — and blind everywhere else. This row reads
+    // `Available` in the declared column and still files a shipped adapter under the Step 2.4
+    // HALT vocabulary; only the row-scoped AC-8 assertion rejects it.
+    const laundered =
+      '   > | **Azure DevOps** | Microsoft ecosystem; no implementation guide yet | Available |'
+    expect(guideVerdict(laundered, 'synthetic')).toBe(AVAILABLE)
+    expect(normalize(laundered)).toContain(HALT_VERDICT)
+  })
+
+  it('the verdict is located by the declared column, not by a position', () => {
+    // The header decides which cell is read: with the verdict column declared FIRST, the first
+    // cell is the verdict — a read counted from the end would answer `azure devops`.
+    const reordered = ['implementation guide', 'tool', 'best for']
+    expect(
+      guideVerdict(
+        '   > | Available | **Azure DevOps** | Microsoft ecosystem |',
+        'reordered',
+        reordered,
+      ),
+    ).toBe(AVAILABLE)
+  })
+
+  it('a Step 2 table whose header drops the verdict column throws', () => {
+    const headerless = [
+      '### Step 2: Select PM Tool',
+      '',
+      '> | Tool | Best For |',
+      '> |---|---|',
+      '',
+    ].join('\n')
+    expect(() => step2Columns(headerless, 'no verdict column')).toThrow(
+      /no "implementation guide" column/,
+    )
+  })
+
+  it('a Step 2 section with no table header at all throws', () => {
+    expect(() => step2Columns('### Step 2: Select PM Tool\n\n> Pick one.\n', 'no header')).toThrow(
+      /no header row starting with a "Tool" column/,
     )
   })
 })
