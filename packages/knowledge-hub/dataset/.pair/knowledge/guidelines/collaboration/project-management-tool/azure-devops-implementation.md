@@ -61,8 +61,11 @@ Declare the tool in `way-of-working.md`:
 ```markdown
 - Azure DevOps is adopted for project management.
   Organization: <org>. Project: <project>.
+  Team: <team>. Area path: <area-path>.
   See `.pair/knowledge/guidelines/collaboration/project-management-tool/azure-devops-implementation.md` for usage.
 ```
+
+`Team` and `Area path` are not decoration: every work-item create passes `--area` (see [Item Visibility](#item-visibility-membership-and-assignee)), and an item created outside the area paths the team's board is configured for is invisible in the view that team reads. `/setup-pm` writes both, and reports the gap when it cannot resolve them.
 
 ## Work Item Hierarchy Mapping
 
