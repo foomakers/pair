@@ -48,7 +48,8 @@
 //   node … test-identity --cwd <worktree> --command <cmd> [--env-keys K1,K2] [--toolchain <s>]
 //     → { identity, parts, reusable, missing }     a cached test result is valid ONLY for this identity
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { hostname } from 'node:os'
 import { join, basename, dirname } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -460,25 +461,71 @@ export function envelopeErrors(data, { phase, skill }) {
 function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
-function withLock(dir, waitMs, fn) {
+// ── the run-directory mutex (US-479 T-16 / t9d-7) ──────────────────────────────────────────────
+// `mkdir <dir>/.lock` is the atomic acquire. The holder records itself inside (`owner.json`: pid,
+// host, startedAt) so a lock left by a writer the supervisor SIGKILLed (a `finally` never runs then)
+// is recognisable and never wedges the cycle forever:
+//   - owner recorded, same host, pid dead           ⇒ broken, publish proceeds, `brokeStaleLock` reported
+//   - no owner record (legacy bare lock), older than LOCK_STALE_MS ⇒ broken (`orphan-stale`), reported
+//   - owner alive (or unverifiable: another host), younger than the bound ⇒ `locked` after the wait
+//   - owner alive/unverifiable AND older than the bound ⇒ typed `stale-lock` refusal naming the owner —
+//     a human decides; a live writer's lock is never removed by another process.
+export const LOCK_STALE_MS = 10 * 60 * 1000
+const LOCK_OWNER_FILE = 'owner.json'
+function pidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return null
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    return e.code === 'ESRCH' ? false : true
+  }
+}
+export function inspectLock(lock, { now = Date.now(), staleMs = LOCK_STALE_MS } = {}) {
+  if (!existsSync(lock)) return { state: 'free', owner: null, ageMs: 0 }
+  let owner = null
+  try {
+    const o = JSON.parse(readFileSync(join(lock, LOCK_OWNER_FILE), 'utf8'))
+    if (o && typeof o === 'object') owner = { pid: o.pid ?? null, host: o.host ?? null, startedAt: o.startedAt ?? null }
+  } catch {}
+  let ageMs = 0
+  try {
+    ageMs = Math.max(0, Math.round(now - statSync(lock).mtimeMs))
+  } catch {}
+  const sameHost = owner?.host == null || owner.host === hostname()
+  if (owner && sameHost && pidAlive(owner.pid) === false) return { state: 'dead-owner', owner, ageMs }
+  if (ageMs >= staleMs) return { state: owner ? 'stale-lock' : 'orphan-stale', owner, ageMs }
+  return { state: 'held', owner, ageMs }
+}
+export function withLock(dir, waitMs, fn, { staleMs = LOCK_STALE_MS } = {}) {
   const lock = join(dir, '.lock')
   const deadline = Date.now() + waitMs
+  let brokeStaleLock
   for (;;) {
     try {
       mkdirSync(lock)
       break
     } catch (e) {
       if (e.code !== 'EEXIST') throw e
-      if (Date.now() >= deadline) return { published: false, reason: 'locked', lock }
+      const seen = inspectLock(lock, { staleMs })
+      if (seen.state === 'dead-owner' || seen.state === 'orphan-stale') {
+        rmSync(lock, { recursive: true, force: true })
+        brokeStaleLock = { reason: seen.state, owner: seen.owner, ageMs: seen.ageMs }
+        continue
+      }
+      if (seen.state === 'stale-lock') return { published: false, reason: 'stale-lock', lock, owner: seen.owner, ageMs: seen.ageMs }
+      if (Date.now() >= deadline) return { published: false, reason: 'locked', lock, owner: seen.owner, ageMs: seen.ageMs }
       sleep(20)
     }
   }
   try {
-    return fn()
+    writeFileSync(join(lock, LOCK_OWNER_FILE), JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }))
+  } catch {}
+  try {
+    const out = fn()
+    return brokeStaleLock && out && typeof out === 'object' && !Array.isArray(out) ? { ...out, brokeStaleLock } : out
   } finally {
-    try {
-      rmdirSync(lock)
-    } catch {}
+    rmSync(lock, { recursive: true, force: true })
   }
 }
 

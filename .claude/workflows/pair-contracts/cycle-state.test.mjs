@@ -143,13 +143,13 @@ process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(1)
 }
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync, rmdirSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync, rmdirSync, utimesSync } from 'node:fs'
+import { tmpdir, hostname } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, predecessorEvidence, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions, discoverScopeDecisions } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, predecessorEvidence, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions, discoverScopeDecisions, withLock } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
 const V = '3.0.0'
@@ -237,6 +237,65 @@ test('publish: a second writer for the same step is a stale write — the first 
   const again = publish({ dir, file, phase: 'a0', skill: 'red-spec', workflowVersion: V, attempt: 2 })
   assert.equal(again.published, true)
   assert.ok(existsSync(join(dir, 'a0-red-spec.attempt-2.json')))
+})
+
+// ── t9d-7: the mutex has an owner and a staleness rule — a SIGKILLed writer never wedges the cycle ──
+const draftFor = dir => {
+  const file = join(dir, 'draft.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red' }))
+  return file
+}
+test('t9d-7: a lock whose recorded owner pid is DEAD is broken and the publish proceeds, reporting the break', () => {
+  const { dir } = runDir()
+  const dead = spawnSync(process.execPath, ['-e', '0']).pid
+  mkdirSync(join(dir, '.lock'))
+  writeFileSync(join(dir, '.lock', 'owner.json'), JSON.stringify({ pid: dead, host: hostname(), startedAt: new Date().toISOString() }))
+  const out = publish({ dir, file: draftFor(dir), phase: 'a0', skill: 'red-spec', workflowVersion: V, lockWaitMs: 50 })
+  assert.equal(out.published, true, JSON.stringify(out))
+  assert.equal(out.brokeStaleLock?.reason, 'dead-owner')
+  assert.equal(out.brokeStaleLock?.owner?.pid, dead)
+  assert.equal(existsSync(join(dir, '.lock')), false, 'the lock is released after the write')
+})
+test('t9d-7: an ownerless lock (legacy bare mkdir) older than the staleness bound is broken; a young one is still `locked`; the refusal names what it saw', () => {
+  const { dir } = runDir()
+  mkdirSync(join(dir, '.lock'))
+  const old = new Date(Date.now() - 11 * 60 * 1000)
+  utimesSync(join(dir, '.lock'), old, old)
+  const out = publish({ dir, file: draftFor(dir), phase: 'a0', skill: 'red-spec', workflowVersion: V, lockWaitMs: 50 })
+  assert.equal(out.published, true, JSON.stringify(out))
+  assert.equal(out.brokeStaleLock?.reason, 'orphan-stale')
+  assert.ok(out.brokeStaleLock.ageMs >= 10 * 60 * 1000)
+  // young + ownerless: respected, with the age reported so an operator can tell what is holding it
+  mkdirSync(join(dir, '.lock'))
+  const held = publish({ dir, file: draftFor(dir), phase: 'a0', skill: 'red-spec', workflowVersion: V, lockWaitMs: 50 })
+  assert.equal(held.reason, 'locked')
+  assert.equal(held.owner, null)
+  assert.ok(Number.isInteger(held.ageMs))
+})
+test('t9d-7: a lock held by a LIVE owner is never broken — respected while young, a typed `stale-lock` refusal (owner named) once past the bound', () => {
+  const { dir } = runDir()
+  mkdirSync(join(dir, '.lock'))
+  writeFileSync(join(dir, '.lock', 'owner.json'), JSON.stringify({ pid: process.pid, host: hostname(), startedAt: new Date().toISOString() }))
+  const held = publish({ dir, file: draftFor(dir), phase: 'a0', skill: 'red-spec', workflowVersion: V, lockWaitMs: 50 })
+  assert.deepEqual({ published: held.published, reason: held.reason, pid: held.owner?.pid }, { published: false, reason: 'locked', pid: process.pid })
+  const old = new Date(Date.now() - 11 * 60 * 1000)
+  utimesSync(join(dir, '.lock'), old, old)
+  const stale = publish({ dir, file: draftFor(dir), phase: 'a0', skill: 'red-spec', workflowVersion: V, lockWaitMs: 50 })
+  assert.deepEqual({ published: stale.published, reason: stale.reason, pid: stale.owner?.pid }, { published: false, reason: 'stale-lock', pid: process.pid })
+  assert.ok(existsSync(join(dir, '.lock', 'owner.json')), 'a live writer`s lock is never removed by another process')
+})
+test('t9d-7: a writer records itself as the lock owner (pid, host, startedAt) while it holds the lock', () => {
+  const { dir } = runDir()
+  let seen
+  const out = withLock(dir, 50, () => {
+    seen = JSON.parse(readFileSync(join(dir, '.lock', 'owner.json'), 'utf8'))
+    return { published: true }
+  })
+  assert.equal(out.published, true)
+  assert.equal(seen.pid, process.pid)
+  assert.equal(seen.host, hostname())
+  assert.match(seen.startedAt, /^\d{4}-/)
+  assert.equal(existsSync(join(dir, '.lock')), false)
 })
 
 test('publish: a held lock is respected, never broken', () => {
