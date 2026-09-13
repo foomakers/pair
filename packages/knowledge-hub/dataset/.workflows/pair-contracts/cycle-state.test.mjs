@@ -3630,6 +3630,29 @@ test('AC-32: overlapping work does NOT veto a named rollback — the human who n
 const rollbackTo = (dir, head) => resolve({ dir, workflowVersion: V, policy: { ...POLICY, rollbackTo: head }, entry: 'pr', pr: 7 }).next
 const workedNote = (extra = {}) => ({ id: 'w1', claim: 'the installer resolves from SKILL_DIR, not cwd', appliesTo: ['src/a.ts'], evidence: [{ id: 'we-1', command: 'pnpm exec vitest run src/a.test.ts -t resolves', expected: 'pass' }], ...extra })
 
+test('t9d-26: the directive reaches the FIXER — once the rewind is prepared and sealed, the `green` step carries the SAME reconstruct (fromHead, paths, riskIds); no named head, no directive; an unknown head is the same typed refusal', () => {
+  const { dir } = runDir()
+  const riskId = provenRisk(dir)
+  const prepared = rollbackTo(dir, H0)
+  assert.equal(prepared.step, 'prepare')
+  assert.equal(prepared.reconstruct?.fromHead, H0)
+  redSpec(dir, 'r1-g1', { groupId: 'r1-g1', remediationBatchId: 'r1', regressionRepairOf: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  redVerify(dir, 'r1-g1', { remediationBatchId: 'r1', regressionGuards: [riskId] }, { attempt: 2 })
+  const green = rollbackTo(dir, H0)
+  assert.equal(green.step, 'green')
+  assert.deepEqual(
+    { from: green.reconstruct?.fromHead, paths: green.reconstruct?.paths, risks: green.reconstruct?.riskIds },
+    { from: H0, paths: ['src/a.ts'], risks: [riskId] },
+    'the fixer restores content at the head the maintainer named, inside the group`s own scope, measured against its guards',
+  )
+  assert.ok(Array.isArray(green.reconstruct.notes?.regressions), 'the notes travel too')
+  assert.equal(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next.reconstruct, undefined, 'no named head ⇒ the green step carries nothing, as before')
+  const unknown = rollbackTo(dir, SHA('e'))
+  assert.equal(unknown.step, 'green')
+  assert.equal(unknown.reconstruct, undefined)
+  assert.equal(unknown.rollbackRefusal, `rollback-head-unknown:${SHA('e')}`)
+})
+
 test('rollback: a 40-hex head this cycle recorded is taken as given — no round name, nothing to resolve', () => {
   const { dir } = runDir()
   provenRisk(dir)

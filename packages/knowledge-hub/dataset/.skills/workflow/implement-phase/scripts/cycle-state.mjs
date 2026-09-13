@@ -1332,6 +1332,28 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     return [...seen.values()]
   }
   const pendingScopeChanges = () => scopeChangesSeen().filter(c => (c.status ?? 'pending') === 'pending')
+  // US-479 AC-32 / t9d-26: the maintainer's rollback directive is computed ONCE per rewind batch and
+  // delivered to EVERY dispatch of the phase that repairs it — the preparation AND the green fixer,
+  // the actor that actually restores content at `fromHead` (green-fix SKILL, S13). A head is taken
+  // as given (existence-validated, never guessed); a refusal is typed and the cycle still proceeds.
+  const rollbackDirective = (phase, batch, activeRisks) => {
+    if (!policy.rollbackTo) return {}
+    const want = String(policy.rollbackTo)
+    const paths = groupOf(phase)?.allowedPaths ?? []
+    if (!SHA_RE.test(want)) return { rollbackRefusal: `rollback-head-invalid:${want}` }
+    if (!list.some(h => [h.data.outputHead, h.data.reviewedHead].some(x => String(x ?? '') === want))) return { rollbackRefusal: `rollback-head-unknown:${want}` }
+    if (!paths.length) return { rollbackRefusal: `rollback-scope-unknown:${phase}` }
+    const notes = rollbackNotes(list, ctx.ledger)
+    const ofBatch = activeRisks.filter(x => String(x.introducedByRemediationBatchId) === String(batch))
+    return { reconstruct: { fromHead: want, paths, riskIds: ofBatch.map(x => x.riskId), notes: { obligations: notes.obligations.filter(o => o.open), regressions: notes.regressions, worked: notes.worked } } }
+  }
+  // The green step of a regression-rewind phase (its preparation recorded `regressionRepairOf`) carries
+  // the same directive its preparation received; any other green step carries nothing, as before.
+  const greenDirective = phase => {
+    const batch = latestOf('red-spec', phase)?.data.regressionRepairOf
+    if (!batch || !policy.rollbackTo) return {}
+    return rollbackDirective(phase, batch, (ctx.ledger ?? regressionRiskLedger(list)).filter(r => r.state === 'active'))
+  }
   const findingsByIds = ids => {
     const pool = new Map()
     for (const r of reviews) for (const f of r.data.findings ?? []) if (f?.id) pool.set(f.id, f)
@@ -1348,7 +1370,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     for (const groupId of ids) {
       const phase = latestGroupPhase(groupId)
       const greens = list.filter(h => h.skill === 'green-fix' && h.phase === phase).length
-      if (greens <= (policy.greenRetries ?? 1)) return { step: 'green', mode: 'retry', phase, round, attempt: greens + 1, base: latestOf('red-verify', phase, x => x.sealed)?.data.inputHead, contract: contractOf(phase), group: groupOf(phase), findings: atf.filter(f => f.groupId === groupId), detail: 'an approved test still fails on production' }
+      if (greens <= (policy.greenRetries ?? 1)) return { step: 'green', mode: 'retry', phase, round, attempt: greens + 1, base: latestOf('red-verify', phase, x => x.sealed)?.data.inputHead, contract: contractOf(phase), group: groupOf(phase), findings: atf.filter(f => f.groupId === groupId), detail: 'an approved test still fails on production', ...greenDirective(phase) }
     }
     return null
   }
@@ -1435,7 +1457,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     if (parts.kind === 'initial') return { step: 'implement', mode: parts.revision > 1 ? 'revision' : 'initial', phase: last.phase, round: 0, attempt: byPhase('implement-phase', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), pr: list.map(h => h.data.pr).find(x => Number.isInteger(x)) }
     // The GREEN attempt follows what this phase has already seen: a batch prepared again after a
     // regression rewind (US-479 T-29) fixes forward as attempt n+1, never over its own handoff.
-    return { step: 'green', mode: parts.revision > 1 ? 'revision' : 'remediation', phase: last.phase, round: parts.round, attempt: byPhase('green-fix', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupOf(last.phase)?.findings) }
+    return { step: 'green', mode: parts.revision > 1 ? 'revision' : 'remediation', phase: last.phase, round: parts.round, attempt: byPhase('green-fix', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupOf(last.phase)?.findings), ...greenDirective(last.phase) }
   }
   if (last.skill === 'implement-phase') {
     if (d.status === 'ok' && d.gatesPassed === true && Number.isInteger(d.prNumber) && SHA_RE.test(String(d.outputHead ?? ''))) {
@@ -1538,17 +1560,6 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       // it matched a non-revision name against its own revisions and kept the last, so `a0` could
       // resolve to `a0-rev2`'s head — a head nobody named, restored over real work (ADL 2026-09-12).
       // Validation is existence: this cycle recorded that sha, or the directive is refused out loud.
-      const ofBatch = activeRisks.filter(x => String(x.introducedByRemediationBatchId) === batch)
-      const paths = groupOf(phase)?.allowedPaths ?? []
-      const notes = rollbackNotes(list, ctx.ledger)
-      let reconstruct
-      let rollbackRefusal
-      if (policy.rollbackTo) {
-        const want = String(policy.rollbackTo)
-        const known = list.some(h => [h.data.outputHead, h.data.reviewedHead].some(x => String(x ?? '') === want))
-        if (!SHA_RE.test(want)) rollbackRefusal = `rollback-head-invalid:${want}`
-        else if (!known) rollbackRefusal = `rollback-head-unknown:${want}`
-        else if (!paths.length) rollbackRefusal = `rollback-scope-unknown:${phase}`
         // US-479 (u): the workflow does NOT infer whether the decision was carried out. Nothing in
         // the handoffs records that fact, so four rounds in a row picked a proxy for it — the view's
         // emptiness, then "this batch was repaired", then "the echo plus some later fix", then two
@@ -1561,8 +1572,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
         // attributable state instead of a predicate nobody could see misfire. This is AC-32's own
         // lesson — the workflow stopped deciding whether a restore was safe — applied to how MANY
         // times, which it had never stopped deciding.
-        else reconstruct = { fromHead: want, paths, riskIds: ofBatch.map(x => x.riskId), notes: { obligations: notes.obligations.filter(o => o.open), regressions: notes.regressions, worked: notes.worked } }
-      }
+      const directive = rollbackDirective(phase, batch, activeRisks)
       const carried = new Map()
       for (const f of blocking) carried.set(f.id, f)
       for (const r of activeRisks) {
@@ -1580,8 +1590,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
         regressionRisks: activeRisks,
         regressionRepairOf: batch,
         group: groupOf(phase),
-        ...(reconstruct ? { reconstruct } : {}),
-        ...(rollbackRefusal ? { rollbackRefusal } : {}),
+        ...directive,
         detail: `regression-risk rewind of ${batch}: ${activeRisks.length} active guard(s) plus every unresolved finding, fixed forward on the current head`,
       }
     }

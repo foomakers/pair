@@ -1482,6 +1482,27 @@ test('ADR-024 (u): every delivery of a rollback directive is REPORTED in the run
   assert.match(line, /until `rollbackTo` is cleared/, 'and whose job it is to end it')
 })
 
+test('t9d-26: a `green` next that carries the directive is dispatched to the FIXER with `$reconstruct` (fromHead, paths) — and reported in the run log', async () => {
+  const reconstruct = { fromHead: HEAD2, paths: ['src/a.ts', 'src/b.ts'], riskIds: ['risk:aaaaaaaaaaaaaaaa'], notes: { obligations: [], regressions: [], worked: [] } }
+  const greenNext = { step: 'green', mode: 'remediation', phase: 'r1-g1', round: 1, attempt: 2, base: HEAD, contract: { path: '/main/.pair/working/runs/r/292/r1-g1-red-contract.json', hash: SHA256('1'), snapshot: SNAP, revision: 1 }, group: { groupId: 'r1-g1', owner: 'a', mode: 'behavioral', allowedPaths: ['src/'] }, regressionRepairOf: 'r1', reconstruct }
+  let pass = 0
+  const { result, calls, logs } = await runWorkflow({
+    args: { cards: [{ ...STORY, prNumber: 7 }] },
+    dispatch: (p, o) => {
+      if (o.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (o.agentType === 'pair-red-contract-verifier') return /r1-g1/.test(p) ? { next: greenNext } : {}
+      if (o.agentType === 'pair-reviewer') return pass++ === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [finding({ id: 'r0-1', transition: 'resolved', blocking: false, evidence: 'restored and fixed forward' })] }
+      return {}
+    },
+  })
+  const green = calls.find(c => c.opts.label?.startsWith('green:'))
+  assert.ok(green, `no green dispatch (${result.batch[0].status}: ${result.batch[0].reason}): ${JSON.stringify(calls.map(c => c.opts.label))}`)
+  assert.match(green.prompt, /\$reconstruct=/, 'the fixer is told to restore — the skill declares the argument, the coordinator must send it')
+  const sent = JSON.parse(/\$reconstruct=(\{.*?\})(?= \$|$)/.exec(green.prompt)[1])
+  assert.deepEqual({ fromHead: sent.fromHead, paths: sent.paths }, { fromHead: HEAD2, paths: ['src/a.ts', 'src/b.ts'] })
+  assert.ok(logs.some(m => /r1-g1: rollback directive delivered/.test(m) && new RegExp(HEAD2).test(m)))
+})
+
 test('ADR-024 (u): a dispatch that carries the directive and then REDIRECTS still reports it — the report is owed to the dispatch, and a redirect leaves the prepare branch entirely', async () => {
   // The discriminating case. A refusal never lost the report — the log sat above `isPrepareRefusal`
   // even before it was moved — but a redirect `continue`s past the whole prepare branch, so a report
