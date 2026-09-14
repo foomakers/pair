@@ -531,12 +531,12 @@ describe("turbo.json keeps each package's #test / #test:coverage inputs in sync"
   // name.
   const TURBO = join(ROOT, 'turbo.json')
 
-  const readTurboTasks = (): Record<string, { inputs?: unknown }> => {
+  const readTurboTasks = (): Record<string, { inputs?: unknown; outputs?: unknown }> => {
     const stripped = read(TURBO).replace(/^[ \t]*\/\/.*$/gm, '')
     const parsed: unknown = JSON.parse(stripped)
     const tasks = (parsed as { tasks?: unknown }).tasks
     expect(tasks, 'turbo.json has no top-level "tasks" object').toBeTypeOf('object')
-    return tasks as Record<string, { inputs?: unknown }>
+    return tasks as Record<string, { inputs?: unknown; outputs?: unknown }>
   }
 
   // The actual repo-wide reads each package's tests depend on turbo invalidating on — not just
@@ -546,13 +546,14 @@ describe("turbo.json keeps each package's #test / #test:coverage inputs in sync"
   // workspace: a task with inputs = ["$TURBO_ROOT$/x/**"] and no $TURBO_DEFAULT$ hashes only
   // that root path, not the package's own source.
   //
-  // Covers BOTH #test(:coverage) pairs this story's own fix rounds added turbo.json overrides
-  // for — @pair/knowledge-hub's (round 5-7, the CP5/docs-page/CP10 repo-wide reads) and
-  // @pair/dev-tools's (round 8, run-format.test.ts's execFileSync of the real
-  // scripts/format-lib/run-format.sh). Asserting only the first pair left the second an
-  // unguarded hand-maintained duplicate — the exact class this describe block exists to close,
-  // reintroduced by its own follow-up fix one round later.
-  const TASK_PAIRS: Array<{ pkg: string; requiredInputs: string[] }> = [
+  // Covers ALL THREE #test(:coverage) pairs that carry a turbo.json override today —
+  // @pair/knowledge-hub's (round 5-7, the CP5/docs-page/CP10 repo-wide reads), @pair/dev-tools's
+  // (round 8, run-format.test.ts's execFileSync of the real scripts/format-lib/run-format.sh) and
+  // @pair/pair-cli's (#434 G0: the .pair/.claude/scripts/dataset reads listed on its entry below).
+  // Asserting only the first pair left the second an unguarded hand-maintained duplicate — the exact
+  // class this describe block exists to close, reintroduced by its own follow-up fix one round later;
+  // the third was found the same way, by a cache replay hiding a red llms-index-conformance.
+  const TASK_PAIRS: Array<{ pkg: string; requiredInputs: string[]; coverageOutputs: string[] }> = [
     {
       pkg: '@pair/knowledge-hub',
       // The FULL 11-entry list this PR ships, not a subset — a round-9 review found the guard
@@ -574,16 +575,42 @@ describe("turbo.json keeps each package's #test / #test:coverage inputs in sync"
         '$TURBO_ROOT$/scripts/**',
         '$TURBO_ROOT$/turbo.json',
       ],
+      coverageOutputs: ['coverage/**'],
     },
     {
       pkg: '@pair/dev-tools',
       requiredInputs: ['$TURBO_DEFAULT$', '$TURBO_ROOT$/scripts/format-lib/**'],
+      coverageOutputs: ['coverage/**'],
+    },
+    {
+      // @pair/pair-cli's suites read repo-wide artifacts too — five real reads, each grepped for an
+      // actual fs/child_process call, not inferred from file names: llms-index-conformance.test.ts
+      // asserts the committed `.pair/llms.txt` against `generateLlmsTxt`, which walks
+      // `.pair/adoption/**` and `.pair/knowledge/{how-to,guidelines}/**`; tier-parity.test.ts reads
+      // `.pair/adoption/tech/automation.md`; prompt-safety.test.ts and tier-parity.test.ts read
+      // `.claude/workflows/pair-loop.js`; official-kb-name.test.ts READS (not execs)
+      // `scripts/workflows/release/package-kb-dataset.sh`; commands/run/invocation.test.ts lists
+      // `packages/knowledge-hub/dataset/.skills/**`. MEASURED (#434, PR #478): a commit adding an ADL
+      // without regenerating llms.txt passed `pnpm quality-gate` AND the pre-push hook — the task hash
+      // was identical before and after the `.pair` edit (`$TURBO_DEFAULT$` sees none of those
+      // paths) — while `vitest run llms-index-conformance` failed. CI, always cold, would have caught
+      // it; the local gate was a false green.
+      pkg: '@pair/pair-cli',
+      requiredInputs: [
+        '$TURBO_DEFAULT$',
+        '$TURBO_ROOT$/.pair/**',
+        '$TURBO_ROOT$/.claude/**',
+        '$TURBO_ROOT$/scripts/**',
+        '$TURBO_ROOT$/packages/knowledge-hub/dataset/**',
+        '$TURBO_ROOT$/turbo.json',
+      ],
+      coverageOutputs: ['coverage/**'],
     },
   ]
 
   it.each(TASK_PAIRS)(
     '$pkg has identical, non-empty inputs for #test and #test:coverage, covering the real repo-wide reads',
-    ({ pkg, requiredInputs }) => {
+    ({ pkg, requiredInputs, coverageOutputs }) => {
       const tasks = readTurboTasks()
       const testInputs = tasks[`${pkg}#test`]?.inputs
       const coverageInputs = tasks[`${pkg}#test:coverage`]?.inputs
@@ -593,6 +620,15 @@ describe("turbo.json keeps each package's #test / #test:coverage inputs in sync"
         expect(testInputs, `${pkg}#test is missing ${path}`).toContain(path)
       }
       expect(coverageInputs).toEqual(testInputs)
+      // A task-id override REPLACES the base definition, it does not merge — so a `#test:coverage`
+      // override copied from `#test` silently drops the base task's `outputs: ["coverage/**"]`, and
+      // turbo then replays a cached run WITHOUT restoring the coverage report. MEASURED (#434 G0
+      // review): with `outputs: []`, `rm -rf coverage && turbo run test:coverage` twice ends in
+      // `>>> FULL TURBO` and no `coverage/` directory. `inputs` parity alone cannot see this.
+      const coverageOut = (tasks[`${pkg}#test:coverage`] as { outputs?: unknown })?.outputs
+      expect(coverageOut, `${pkg}#test:coverage must keep the base task's outputs`).toEqual(
+        coverageOutputs,
+      )
     },
   )
 })

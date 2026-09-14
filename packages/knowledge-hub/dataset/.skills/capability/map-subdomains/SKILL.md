@@ -1,13 +1,21 @@
 ---
 name: map-subdomains
 description: "Classifies business capabilities into DDD subdomains (core, supporting, generic) with a volatility rating, scoped to items just touched. Composed by /refine-story, /plan-initiatives, /plan-epics, /brainstorm; full-scope re-mapping only via /bootstrap."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
 # /map-subdomains — Subdomain Placement (Capability)
 
 Classify business capabilities into Domain-Driven Design subdomains — core, supporting, or generic — and place them with a Volatility rating. A **capability**, not a standalone lifecycle step: always invoked scoped to the items the caller just touched, never as a full re-mapping outside `/bootstrap`.
+
+## Process Profile
+
+<!-- process-step: id=define-subdomains -->
+
+Executable form of the **`define-subdomains`** step. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; under `$approval: auto` there is nobody to answer, so the run **HALTs**. <!-- approval-round: kind=gate; auto=halt -->
+
+A **composed** invocation never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Arguments
 
@@ -134,6 +142,8 @@ SUBDOMAIN PLACEMENT COMPLETE:
 ├── Location:   adoption/product/subdomain/
 └── Next:       /map-contexts (scoped to the same items)
 ```
+
+The `Next:` line names only steps enabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md): a disabled one is dropped, and when none is left the line names no skill.
 
 ## Edge Cases and Error Handling
 

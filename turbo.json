@@ -87,15 +87,73 @@
     // logic would therefore replay a cached PASS on this test locally — the identical
     // local-false-green class this same PR's knowledge-hub#test entry above exists to close,
     // for the one test file in this PR that most needs to actually run.
+    // Same reasoning, second repo-wide artifact (#413): format-workflow-composition.test.ts reads
+    // .github/workflows/format.yml, so adding `paths-ignore:` to that workflow — the exact
+    // regression the guard exists for — touches no file under packages/dev-tools and would replay
+    // a cached PASS. CI is cold on every run and unaffected either way; this closes the LOCAL
+    // false green, which is also what the pre-push hook (`turbo test`) sees.
+    // Third, and the one BOTH guards in this folder read: the root package.json. checkThisRepoGate
+    // parses it outright, and checkFormatWorkflow defaults rootScripts to readRootScripts(), which
+    // is how `pnpm format` in a workflow step resolves to prettier:fix at all. MEASURED without
+    // this entry: `turbo run test --filter=@pair/dev-tools --dry=json` hashed 7271baf2a672a276, and
+    // rewriting the root `format:check` script to `pnpm prettier:fix` — i.e. CI now WRITES — left
+    // the hash at 7271baf2a672a276, a cached PASS with the guard never running. Same one input away
+    // from the false green each guard exists to close.
     "@pair/dev-tools#test": {
       "dependsOn": ["build"],
       "outputs": [],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/format-lib/**"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/format-lib/**",
+        "$TURBO_ROOT$/.github/workflows/format.yml",
+        "$TURBO_ROOT$/package.json"
+      ]
+    },
+    // @pair/pair-cli's suites read repo-wide artifacts: llms-index-conformance asserts the committed
+    // .pair/llms.txt against generateLlmsTxt over .pair/adoption/** and .pair/knowledge/**;
+    // tier-parity reads .pair/adoption/tech/automation.md; prompt-safety and tier-parity read
+    // .claude/workflows/pair-loop.js; official-kb-name reads scripts/workflows/release/
+    // package-kb-dataset.sh; commands/run/invocation lists packages/knowledge-hub/dataset/.skills.
+    // MEASURED (#434 / PR #478): adding an ADL without regenerating .pair/llms.txt passed
+    // `pnpm quality-gate` and the pre-push hook through a cache replay (task hash identical before
+    // and after the .pair edit) while the same test failed when run directly. Guarded by
+    // web-cloud-environment.test.ts TASK_PAIRS, which also asserts #test:coverage keeps
+    // `outputs: ["coverage/**"]` — an override replaces the base task, it does not merge.
+    "@pair/pair-cli#test": {
+      "dependsOn": ["build"],
+      "outputs": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.pair/**",
+        "$TURBO_ROOT$/.claude/**",
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/packages/knowledge-hub/dataset/**",
+        "$TURBO_ROOT$/turbo.json"
+      ]
+    },
+    // If you change one list, change @pair/pair-cli#test the same way, or this task silently
+    // falls back to a stale local cache — the TASK_PAIRS guard fails the build if they diverge.
+    "@pair/pair-cli#test:coverage": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.pair/**",
+        "$TURBO_ROOT$/.claude/**",
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/packages/knowledge-hub/dataset/**",
+        "$TURBO_ROOT$/turbo.json"
+      ]
     },
     "@pair/dev-tools#test:coverage": {
       "dependsOn": ["build"],
       "outputs": ["coverage/**"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/format-lib/**"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/format-lib/**",
+        "$TURBO_ROOT$/.github/workflows/format.yml",
+        "$TURBO_ROOT$/package.json"
+      ]
     },
     "ts:check": {
       "dependsOn": ["^build"],

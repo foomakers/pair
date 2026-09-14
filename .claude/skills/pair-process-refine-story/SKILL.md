@@ -1,13 +1,19 @@
 ---
 name: pair-process-refine-story
 description: "Refines a user story from Draft to Ready — the single Draft→Ready path (D24): phase 0 grill(sync), Given-When-Then acceptance criteria, map-subdomains/map-contexts scoped analysis, classify matrix, sprint readiness. Composes /pair-capability-grill, /pair-capability-map-subdomains, /pair-capability-map-contexts, /pair-capability-classify, /pair-capability-write-issue. Not for sizing an already-refined story (use /pair-capability-estimate)."
-version: 0.7.0
+version: 0.8.0
 author: Foomakers
 ---
 
 # /pair-process-refine-story — Story Refinement (single Draft→Ready)
 
 Transform a user story from rough breakdown (Draft) into a development-ready specification (Ready). This is **THE single Draft→Ready path** — no separate "make-ready" skill exists and none is ever born (R3.12, D24); refinement IS the transition (canonical-states.md). **Section-level idempotency** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md): each refinement section is checked before acting; partial refinements resume from the first missing section, an already-Ready story is confirmed and exits.
+
+## Process Profile
+
+<!-- process-step: id=refine-story -->
+
+Executable form of the **`refine-story`** step, and a composer of `define-subdomains`, `define-bounded-contexts`. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; a **composed** one never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Composed Skills
 
@@ -100,7 +106,7 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
    - Address **edge cases** and error handling conditions.
    - **Adoption-informed** (Step 1b): a criterion contradicting a live record is reshaped to fit it or dropped with that record named; one that genuinely reopens it is kept and labelled `Revisits <id>: <one-line why>`, never silently contradicted. Every criterion a record shaped **cites** it inline in the convention's form — `(per ADR-013)`, `(per decision-log/<date>-<topic>)`, `(per DDR-004)`, `(per context-map: <term>)`, the convention's complete list — and registered terms are used rather than synonyms.
 2. **Act**: Domain check — the map half of Step 1b's read (loaded once, not twice). If `context-map.md` (in `.pair/adoption/product/`) exists, read it (plus any linked `subdomain/<slug>.context.md` this story touches). When the story introduces or sharpens a domain term, update the map inline per the [Context Map Maintenance](../../../.pair/knowledge/guidelines/architecture/design-patterns/context-map-maintenance.md) guideline. When a proposed criterion conflicts with a registered rule, flag it citing that rule (and the DDR, when one exists) and resolve with the developer before proceeding. Skip this step entirely if the map doesn't exist — its absence is expected, not an error.
-3. **Act**: Domain placement (functional). Is `/pair-capability-map-subdomains` installed? Compose `/pair-capability-map-subdomains` with `$scope: [the business capability this story touches]` — **scoped to the story, never `$scope: all`** (that is `/pair-process-bootstrap`-only). It classifies the touched capability as core/supporting/generic with a Volatility rating; that placement feeds the **Business impact** dimension of the classification matrix (Step 3b) and the volatility input to coupling (Step 3). Not installed, or no domain artifacts and no PRD/initiatives to classify from → degrade: skip domain placement with a note, still produce the functional analysis.
+3. **Act**: Domain placement (functional). Is `/pair-capability-map-subdomains` installed? Compose `/pair-capability-map-subdomains` with `$scope: [the business capability this story touches]` — **scoped to the story, never `$scope: all`** (that is `/pair-process-bootstrap`-only). It classifies the touched capability as core/supporting/generic with a Volatility rating; that placement feeds the **Business impact** dimension of the classification matrix (Step 3b) and the volatility input to coupling (Step 3). Not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md), or no domain artifacts and no PRD/initiatives to classify from → degrade: skip domain placement with a note, still produce the functional analysis.
 4. **Act**: Present the proposed criteria to the developer for validation:
 
    > Proposed acceptance criteria for `#[ID]`:
@@ -124,7 +130,7 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
    - **Design flag** (DoR criterion 6): set the `Design:` line under Implementation Approach to `not required` when the approach is understood, or `required — reference: <link>` when a design doc/spike is needed — per [definition-of-ready-and-done.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md). This is the criterion Step 5 verifies as the sixth DoR criterion.
    - Reference [architecture.md](../../../.pair/adoption/tech/architecture.md) and [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md).
    - **Adoption-informed** (Step 1b): an approach a live record already settled is followed and **cited** rather than re-proposed; an approach a live record rejected is not proposed at all, and the rejection is reported instead. An approach that genuinely reopens a record is presented in item 3 labelled `Revisits <id>: <one-line why>` for the developer to accept or reject.
-2. **Act**: Touched-context mapping (technical). Is `/pair-capability-map-contexts` installed? Compose `/pair-capability-map-contexts` with `$scope: [the contexts/services this story touches]` — **scoped, never `$scope: all`** (that is `/pair-process-bootstrap`-only). It maps the touched subdomains to bounded contexts and assesses each relationship (integration strength, socio-technical distance, volatility) to derive a balanced/unbalanced verdict. **When it reports an unbalanced integration this story introduces — strong coupling toward a distant and/or volatile context — record it as a row in the Technical Risks and Mitigation table** (D38): the coupling risk this story adds, its impact, and the mitigation. This same map-contexts output feeds the **Coupling balance** dimension of the classification matrix (Step 3b) — refine-story runs no coupling assessment of its own; the inputs come from the scoped map-contexts output and the subdomain catalog volatility (D24). Not installed, or no domain artifacts → coupling is "not assessed", excluded from the matrix max, never blocks (D21).
+2. **Act**: Touched-context mapping (technical). Is `/pair-capability-map-contexts` installed? Compose `/pair-capability-map-contexts` with `$scope: [the contexts/services this story touches]` — **scoped, never `$scope: all`** (that is `/pair-process-bootstrap`-only). It maps the touched subdomains to bounded contexts and assesses each relationship (integration strength, socio-technical distance, volatility) to derive a balanced/unbalanced verdict. **When it reports an unbalanced integration this story introduces — strong coupling toward a distant and/or volatile context — record it as a row in the Technical Risks and Mitigation table** (D38): the coupling risk this story adds, its impact, and the mitigation. This same map-contexts output feeds the **Coupling balance** dimension of the classification matrix (Step 3b) — refine-story runs no coupling assessment of its own; the inputs come from the scoped map-contexts output and the subdomain catalog volatility (D24). Not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md), or no domain artifacts → coupling is "not assessed", excluded from the matrix max, never blocks (D21).
 3. **Act**: Present technical analysis (strategy, key components, integration points, and any coupling risk from the mapping) to developer for validation — with each decision cited and each `Revisits <id>` flag shown, so the developer approves the decisions applied, not just the approach.
 4. **Verify**: Human-judgment gate — the developer explicitly approves the presented strategy, key components, and risks (or requests changes, looping back to Step 3's Act). Only an explicit approval finalizes the analysis.
 
@@ -193,6 +199,8 @@ STORY REFINEMENT COMPLETE:
 └── Next:     /plan-tasks to create task breakdown
 ```
 
+The `Next:` line names only steps enabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md): a disabled one is dropped, and when none is left the line names no skill.
+
 ## HALT Conditions
 
 - **No Draft stories in backlog** (Step 0) — nothing to refine.
@@ -206,7 +214,7 @@ STORY REFINEMENT COMPLETE:
 See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (optional skill `/pair-capability-write-issue` not installed / PM tool not accessible → produce the refined story content, ask developer to update manually) for the standard scenarios. Additional cases:
 
 - **`/pair-capability-grill` not installed** (Phase 0): warn and skip the sync; the per-step human-judgment approval gates in Steps 2–4 remain the alignment mechanism — refinement still completes.
-- **`/pair-capability-map-subdomains` / `/pair-capability-map-contexts` not installed, or no domain artifacts** (Steps 2–3): the functional and technical analysis sections are still produced; domain placement and touched-context mapping are skipped with a note, and the coupling dimension is "not assessed" (never a HALT).
+- **`/pair-capability-map-subdomains` / `/pair-capability-map-contexts` not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md), or no domain artifacts** (Steps 2–3): the functional and technical analysis sections are still produced; domain placement and touched-context mapping are skipped with a note, and the coupling dimension is "not assessed" (never a HALT).
 - **`/pair-capability-classify` not installed** (Step 3b): refinement completes without a matrix; the skip is flagged in the summary and the `## Classification` section stays empty.
 - **No state mapping resolves to `Ready`** (Step 5): the completed DoR sections on the body are the readiness signal (definition-of-ready-and-done.md Readiness Fallback) — not an error.
 - If adoption files (architecture, tech-stack) are not found, skip technical analysis alignment checks and warn.
