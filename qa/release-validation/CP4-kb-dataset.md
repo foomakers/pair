@@ -77,7 +77,7 @@
 
 ---
 
-## MT-CP405: pair kb-verify on KB ZIP
+## MT-CP405: pair-cli kb-verify on KB ZIP
 
 **Priority**: P1
 **Preconditions**: MT-CP401 passes, `$CLI` functional
@@ -94,7 +94,7 @@
 
 ---
 
-## MT-CP406: pair kb-verify --json output
+## MT-CP406: pair-cli kb-verify --json output
 
 **Priority**: P2
 **Preconditions**: MT-CP401 passes, `$CLI` functional
@@ -112,7 +112,7 @@
 
 ---
 
-## MT-CP407: pair kb-info on KB ZIP
+## MT-CP407: pair-cli kb-info on KB ZIP
 
 **Priority**: P1
 **Preconditions**: MT-CP401 passes, `$CLI` functional
@@ -130,7 +130,7 @@
 
 ---
 
-## MT-CP408: pair kb-info --json output
+## MT-CP408: pair-cli kb-info --json output
 
 **Priority**: P2
 **Preconditions**: MT-CP401 passes, `$CLI` functional

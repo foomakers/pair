@@ -269,7 +269,7 @@ describe('dispatchCommand() - real handlers integration', () => {
      * `dispatchWithExitCode`, so only a genuinely non-zero outcome exercises the branch. A real
      * child process is spawned — a stub "engine" that prints a non-terminal event and exits 0 —
      * so this also pins the fail-closed rule end to end: exit status 0 from the engine, iteration
-     * failed, `pair run` exits 1.
+     * failed, `pair-cli run` exits 1.
      */
     test('forwards a failed iteration as exit code 1, whatever the engine exited with', async () => {
       const realDir = mkdtempSync(join(tmpdir(), 'pair-dispatch-'))

@@ -9,7 +9,7 @@ This page is an **index, not a re-explanation**: every row deep-links to the own
 
 ## Opt-in quality configuration
 
-Every row carries the same uniform schema — **what it is · default state · adoption flag / mechanism · how to enable · owning page**. Defaults below are the **framework/dataset defaults** (what a fresh `pair install` ships), not any single project's choices — see [Framework defaults vs pair's own opt-ins](#framework-defaults-vs-pairs-own-opt-ins).
+Every row carries the same uniform schema — **what it is · default state · adoption flag / mechanism · how to enable · owning page**. Defaults below are the **framework/dataset defaults** (what a fresh `pair-cli install` ships), not any single project's choices — see [Framework defaults vs pair's own opt-ins](#framework-defaults-vs-pairs-own-opt-ins).
 
 | Knob | What it is | Default | Adoption flag / mechanism | How to enable | Owning page |
 | --- | --- | --- | --- | --- | --- |
@@ -26,7 +26,7 @@ Every row carries the same uniform schema — **what it is · default state · a
 
 The **Default** column above is always the **framework/dataset default** — what the KB template ships with. A project (including pair itself) may opt into any knob; that project-level choice does **not** change the framework default.
 
-Concrete example: pair **dogfoods** the Coverage guardrail — its own `tech/way-of-working.md` sets `Coverage guardrail: enabled` and wires a CI job. The framework default **remains `disabled`**: a fresh `pair install` ships the guardrail off. Read a default here as "what you get out of the box", not "what pair runs on its own repo".
+Concrete example: pair **dogfoods** the Coverage guardrail — its own `tech/way-of-working.md` sets `Coverage guardrail: enabled` and wires a CI job. The framework default **remains `disabled`**: a fresh `pair-cli install` ships the guardrail off. Read a default here as "what you get out of the box", not "what pair runs on its own repo".
 
 ## What is NOT optional (mandatory / always-on)
 

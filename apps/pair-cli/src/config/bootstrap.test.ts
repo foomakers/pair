@@ -73,7 +73,7 @@ describe('config bootstrap', () => {
    * under the CLI's own package directory, and `postbuild.js` bundles no dataset — so
    * `getKnowledgeHubDatasetPath` THROWS rather than returning a missing path. Every fixture
    * above seeds a monorepo layout, which is why reviving the pre-flight could ship with a
-   * green suite while `pair install` aborted for every real user: the download populated the
+   * green suite while `pair-cli install` aborted for every real user: the download populated the
    * cache slot and the final check then probed the bundled path that does not exist.
    */
   it('succeeds in a released layout, where no bundled dataset path can even be resolved', async () => {

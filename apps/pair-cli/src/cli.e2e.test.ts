@@ -57,7 +57,7 @@ describe('pair-cli e2e', () => {
       const fs = new InMemoryFileSystemService(seed, projectRoot, projectRoot)
 
       // 2. Perform installation to disjoint target
-      // pair install /opt/pair/kb --source /mnt/external/kb-dataset
+      // pair-cli install /opt/pair/kb --source /mnt/external/kb-dataset
       await installCommand(fs, ['--source', kbSourceDir], {
         baseTarget: disjointTarget,
         useDefaults: true,
@@ -73,7 +73,7 @@ describe('pair-cli e2e', () => {
       // Add new file to source
       await fs.writeFile(`${kbSourceDir}/knowledge/new.md`, 'New content')
 
-      // pair update /opt/pair/kb --source /mnt/external/kb-dataset
+      // pair-cli update /opt/pair/kb --source /mnt/external/kb-dataset
       await handleUpdateCommand(
         {
           command: 'update',
@@ -89,7 +89,7 @@ describe('pair-cli e2e', () => {
       expect(fs.existsSync(`${disjointTarget}/knowledge/new.md`)).toBe(true)
 
       // 5. Test disjoint update-link
-      // pair update-link /opt/pair/kb
+      // pair-cli update-link /opt/pair/kb
       await handleUpdateLinkCommand(
         {
           command: 'update-link',
@@ -111,7 +111,7 @@ describe('pair-cli e2e', () => {
      * (scaffold output is the package input; the package/scaffold registry declaration
      * is what install consumes), proving the scaffold needs no install special-casing.
      */
-    it('scaffolds an external KB repo, packages it with pair package, and installs it into a separate project', async () => {
+    it('scaffolds an external KB repo, packages it with pair-cli package, and installs it into a separate project', async () => {
       const moduleDir = '/opt/pair-cli'
       const kbRepo = '/work/acme-kb'
       const consumer = '/work/consumer'
@@ -207,7 +207,7 @@ describe('pair-cli e2e', () => {
         projectRoot,
       )
 
-      /** `pair kb-info --json` (version-check mode), returning exit code + parsed report. */
+      /** `pair-cli kb-info --json` (version-check mode), returning exit code + parsed report. */
       async function versionCheck() {
         const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
         try {

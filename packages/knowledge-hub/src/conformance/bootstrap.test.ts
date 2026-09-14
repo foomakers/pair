@@ -40,7 +40,7 @@ const mirrorSkill = (): string => read(join(MIRROR_DIR, 'SKILL.md'))
 const mirrorDefaults = (): string => read(join(MIRROR_DIR, 'quick-mode-defaults.md'))
 
 /**
- * The dataset → root-mirror transform pair (`pair update`): skill-reference
+ * The dataset → root-mirror transform pair (`pair-cli update`): skill-reference
  * rewrite (`/bootstrap` → `/pair-process-bootstrap`) + SKILL.md link-path
  * rewrite. Same helper the implement/skills-guide mirror guards use.
  */
@@ -490,7 +490,7 @@ describe('no regression on the guided path (AC2)', () => {
   })
 })
 
-describe('root mirror is in sync with the dataset (pair update)', () => {
+describe('root mirror is in sync with the dataset (pair-cli update)', () => {
   it('SKILL.md equals the dataset run through the real transform', () => {
     const expected = toMirror(
       syncFrontmatter(datasetSkill(), { from: 'bootstrap', to: 'pair-process-bootstrap' }),

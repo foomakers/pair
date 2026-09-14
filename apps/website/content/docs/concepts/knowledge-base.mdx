@@ -45,7 +45,7 @@ When the AI generates code, it reads both: the guidelines tell it the standards,
 
 ### A Third Area: Working (Operational, Not Knowledge)
 
-`.pair/working/` holds state produced *during* execution — checkpoints and reports — not knowledge or decisions. It is excluded from both registries above by design: `pair install` never creates it and `pair update` never touches it. Skills create `checkpoints/` and `reports/<category>/` on demand the first time they need them. See the [KB Structure Reference](/docs/reference/kb-structure) for details.
+`.pair/working/` holds state produced *during* execution — checkpoints and reports — not knowledge or decisions. It is excluded from both registries above by design: `pair-cli install` never creates it and `pair-cli update` never touches it. Skills create `checkpoints/` and `reports/<category>/` on demand the first time they need them. See the [KB Structure Reference](/docs/reference/kb-structure) for details.
 
 ## How It Provides Context
 

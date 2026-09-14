@@ -358,7 +358,7 @@ describe('formatReport - untrusted content is rendered inert', () => {
   // The report body reproduces strings supplied by the KB under validation: a
   // config key echoed in a run warning, a registry name, a file name. Verbatim,
   // `\u001B[2J` clears the operator's screen and `\u001B]0;…\u0007` rewrites the terminal
-  // title — from `pair kb-validate --path ./downloaded-kb`, the validate-a-KB-you-
+  // title — from `pair-cli kb-validate --path ./downloaded-kb`, the validate-a-KB-you-
   // did-not-author case (US-188).
   const escaped = '\\x1B[2J'
 

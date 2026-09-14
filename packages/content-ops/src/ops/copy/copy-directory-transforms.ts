@@ -316,7 +316,7 @@ export async function copyDirectoryWithTransforms(params: {
  * NOT a live fix — FORWARD-COMPATIBILITY, and deliberately so: this whole
  * function runs only under `behavior: 'mirror'`, and the one registry declaring
  * `flattenDepth` today (`skills`) declares `behavior: 'overwrite'`, so on the real
- * `pair update` path a deleted `references/` still survives — exactly as a deleted
+ * `pair-cli update` path a deleted `references/` still survives — exactly as a deleted
  * whole skill directory always has under `overwrite`. The descent keeps the
  * library's mirror contract correct at the granularity the bounded flatten
  * introduced, for a `skills` flip to `mirror` or any other registry adopting the

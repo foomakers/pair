@@ -9,7 +9,7 @@ import type { RegistryConfig } from './resolver'
 // Story #233 (DoD — CLI recognizes `tech/risk-matrix.md` as an adoption artifact):
 // `.pair/adoption/tech/risk-matrix.md` is the optional quality-model delta a project
 // authors (or `/classify` proposes). It is a project artifact, not KB-shipped content —
-// so on `pair update` it must be RECOGNIZED as adoption (behavior `add`: added if absent,
+// so on `pair-cli update` it must be RECOGNIZED as adoption (behavior `add`: added if absent,
 // never overwritten) and never clobbered. This is already true structurally because it
 // lives under the `adoption` registry (source `.pair/adoption`, behavior `add`); these
 // tests pin that invariant so a future config change can't silently start clobbering it.

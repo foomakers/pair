@@ -9,16 +9,16 @@ Automatically validate, fix, and update links in your installed Knowledge Base c
 
 ```bash
 # Validate and convert all links to relative paths (default)
-pair update-link
+pair-cli update-link
 
 # Preview changes without modifying files
-pair update-link --dry-run
+pair-cli update-link --dry-run
 
 # Convert all links to absolute paths
-pair update-link --absolute
+pair-cli update-link --absolute
 
 # Get detailed logging
-pair update-link --log-level debug
+pair-cli update-link --log-level debug
 ```
 
 ## Use Cases
@@ -29,10 +29,10 @@ When you move or rename directories:
 
 ```bash
 # Update KB links after restructuring project
-pair update-link
+pair-cli update-link
 
 # Check what would change first
-pair update-link --dry-run
+pair-cli update-link --dry-run
 ```
 
 ### 2. Repository Migration
@@ -41,10 +41,10 @@ After moving your project to a different location:
 
 ```bash
 # Convert to absolute paths for new location
-pair update-link --absolute
+pair-cli update-link --absolute
 
 # Or normalize to relative paths
-pair update-link --relative
+pair-cli update-link --relative
 ```
 
 ### 3. Link Validation
@@ -53,7 +53,7 @@ Check for broken links in installed KB:
 
 ```bash
 # Validate and fix broken links
-pair update-link --verbose
+pair-cli update-link --verbose
 ```
 
 ### 4. Path Normalization
@@ -62,10 +62,10 @@ Standardize link formats across KB:
 
 ```bash
 # Convert all to relative paths (default)
-pair update-link
+pair-cli update-link
 
 # Convert all to absolute paths
-pair update-link --absolute
+pair-cli update-link --absolute
 ```
 
 ## Command Reference
@@ -73,7 +73,7 @@ pair update-link --absolute
 ### Basic Syntax
 
 ```bash
-pair update-link [options]
+pair-cli update-link [options]
 ```
 
 ### Options
@@ -90,33 +90,33 @@ pair update-link [options]
 **Default behavior (relative paths):**
 
 ```bash
-pair update-link
+pair-cli update-link
 ```
 
 **Explicit relative conversion:**
 
 ```bash
-pair update-link --relative
+pair-cli update-link --relative
 ```
 
 **Convert to absolute paths:**
 
 ```bash
-pair update-link --absolute
+pair-cli update-link --absolute
 ```
 
 **Preview without changes:**
 
 ```bash
-pair update-link --dry-run
+pair-cli update-link --dry-run
 # or combine with path mode
-pair update-link --absolute --dry-run
+pair-cli update-link --absolute --dry-run
 ```
 
 **Detailed logging:**
 
 ```bash
-pair update-link --verbose
+pair-cli update-link --verbose
 ```
 
 ## How It Works
@@ -182,10 +182,10 @@ Tip: Remove --dry-run to apply changes
 
 ```bash
 # Install KB first
-pair install
+pair-cli install
 
 # Then update links for your project structure
-pair update-link
+pair-cli update-link
 ```
 
 ### Moving Project Directory
@@ -195,29 +195,29 @@ pair update-link
 cd /new/path/to/project
 
 # Update links for new location
-pair update-link
+pair-cli update-link
 ```
 
 ### Checking Link Health
 
 ```bash
 # Run dry-run with debug-level logging
-pair update-link --dry-run --log-level debug
+pair-cli update-link --dry-run --log-level debug
 
 # Review output for broken links
 # Fix issues manually if needed
 # Run actual update
-pair update-link
+pair-cli update-link
 ```
 
 ### Standardizing Link Format
 
 ```bash
 # Convert mixed link formats to relative
-pair update-link --relative
+pair-cli update-link --relative
 
 # Or convert to absolute for portability
-pair update-link --absolute
+pair-cli update-link --absolute
 ```
 
 ## Troubleshooting
@@ -230,10 +230,10 @@ pair update-link --absolute
 
 ```bash
 # Install KB first
-pair install
+pair-cli install
 
 # Then run update-link
-pair update-link
+pair-cli update-link
 ```
 
 ### Permission Errors
@@ -250,7 +250,7 @@ ls -la .pair/
 chmod -R u+w .pair/
 
 # Run command again
-pair update-link
+pair-cli update-link
 ```
 
 ### Broken Links Remain
@@ -261,12 +261,12 @@ pair update-link
 
 ```bash
 # Use verbose mode to see details
-pair update-link --verbose
+pair-cli update-link --verbose
 
 # Check reported errors in output
 # Manually fix links that cannot be auto-resolved
 # Re-run command
-pair update-link
+pair-cli update-link
 ```
 
 ### Root Detection Fails
@@ -287,7 +287,7 @@ ls -la .pair/
 
 # Run from project root
 cd /path/to/project-root
-pair update-link
+pair-cli update-link
 ```
 
 ## Integration with Other Commands
@@ -296,19 +296,19 @@ pair update-link
 
 ```bash
 # 1. Install KB content
-pair install
+pair-cli install
 
 # 2. Validate and update links
-pair update-link --dry-run
+pair-cli update-link --dry-run
 
 # 3. Apply link updates
-pair update-link
+pair-cli update-link
 
 # 4. Update KB content to latest version
-pair update
+pair-cli update
 
 # 5. Re-validate links after update
-pair update-link
+pair-cli update-link
 ```
 
 ### CI/CD Integration
@@ -319,13 +319,13 @@ pair update-link
   run: npm install -g @foomakers/pair-cli
 
 - name: Install KB
-  run: pair install
+  run: pair-cli install
 
 - name: Validate links
-  run: pair update-link --dry-run
+  run: pair-cli update-link --dry-run
 
 - name: Update links
-  run: pair update-link
+  run: pair-cli update-link
 ```
 
 ## Best Practices

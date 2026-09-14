@@ -6,11 +6,11 @@ const ROOT = join(__dirname, '..', '..')
 const DATASET = join(ROOT, 'dataset')
 // Repo root is two levels above this package (packages/knowledge-hub -> repo root).
 const REPO_ROOT = join(ROOT, '..', '..')
-// The GENERATED knowledge-base mirror in the root install tree. `pair update`
+// The GENERATED knowledge-base mirror in the root install tree. `pair-cli update`
 // regenerates it from the dataset (mirror behavior); its links must resolve,
 // notably .pair/knowledge/skills-guide.md -> ../../.claude/skills/pair-*/SKILL.md.
 // Scoped to knowledge/ (not all of .pair/): .pair/adoption/ is user-owned
-// `add`-behavior content pair update never regenerates, with its own,
+// `add`-behavior content `pair-cli update` never regenerates, with its own,
 // pre-existing link state that is out of scope for this generated-tree gate.
 const ROOT_KNOWLEDGE = join(REPO_ROOT, '.pair', 'knowledge')
 const ERRORS_PATH = join(ROOT, 'errors.txt')

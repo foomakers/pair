@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # KB Dataset Packaging Script
-# Creates ZIP from knowledge-hub dataset using 'pair package' command
+# Creates ZIP from knowledge-hub dataset using 'pair-cli package' command
 # Ensures consistent packaging logic with manual KB packaging
 # Includes link normalization and package verification
 
@@ -81,7 +81,7 @@ fi
 
 mkdir -p "$RELEASE_DIR"
 
-# Note: Link normalization via 'pair update-link' is not applicable to dataset source
+# Note: Link normalization via 'pair-cli update-link' is not applicable to dataset source
 # because update-link command works on installed KB content in .pair directory
 # The dataset source links should already be in correct format (relative paths)
 
@@ -99,7 +99,7 @@ if [[ $DATASET_SIZE_MB -gt 50 ]]; then
   echo "   Consider optimization for faster downloads"
 fi
 
-# Create temporary config.json for pair kb package
+# Create temporary config.json for pair-cli package
 echo "📝 Creating packaging config..."
 TEMP_CONFIG=$(mktemp)
 cat > "$TEMP_CONFIG" <<EOF
@@ -115,8 +115,8 @@ cat > "$TEMP_CONFIG" <<EOF
 }
 EOF
 
-# Use pair package command to create the ZIP
-echo "🗜️  Creating ZIP archive with pair package..."
+# Use pair-cli package command to create the ZIP
+echo "🗜️  Creating ZIP archive with pair-cli package..."
 PAIR_CLI="apps/pair-cli/dist/cli.js"
 
 # Check if CLI is built

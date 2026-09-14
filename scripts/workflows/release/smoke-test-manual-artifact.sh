@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Script: smoke-test-manual-artifact.sh
 # Purpose: Smoke-test manual ZIP artifact by verifying checksum, running --version,
-# and exercising `pair install` against the sample project using the extracted binary.
+# and exercising `pair-cli install` against the sample project using the extracted binary.
 # Parameters:
 #   VERSION: The version to test (e.g., v1.0.0)
 
@@ -181,11 +181,14 @@ if [ "$FORCE_CLEANUP" = "1" ]; then
 fi
 
 echo "Running: $RUNNER_SCRIPT ${ARGS[*]}"
-"$RUNNER_SCRIPT" "${ARGS[@]}"
-
-RET=$?
+# Same shape as smoke-test-npm-artifact.sh, same reason: a bare call under `set -e` aborts
+# before the summary line, so the exit-code echo below only ever printed on success. `||
+# RET=$?` keeps the wrapper's diagnostics reachable on the failing path, which is the only
+# path they exist for. (`if ! cmd` would report the negation's status — always 0.)
+RET=0
+"$RUNNER_SCRIPT" "${ARGS[@]}" || RET=$?
 echo "Standardized smoke-test suite exit code: $RET"
 
 # Let EXIT trap run cleanup and exit with the suite return code
-exit $RET
+exit "$RET"
 

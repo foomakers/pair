@@ -103,7 +103,7 @@ describe('copy — a symlink may not carry content in from outside the read root
     // contained, but `readdir` does not follow a link to classify it, so `entry.isDirectory()`
     // is false and the entry used to fall through to the FILE branch: `readFile` on a
     // directory throws EISDIR, `installRegistryOrReportFailure` catches it, the whole
-    // registry is reported `failed` and `pair install --source` exits 1 (US-396 round 5).
+    // registry is reported `failed` and `pair-cli install --source` exits 1 (US-396 round 5).
     mkdirSync(join(kb, 'content', 'v2'))
     writeFileSync(join(kb, 'content', 'v2', 'guide.md'), '# v2\n')
     symlinkSync('./v2', join(kb, 'content', 'latest'))

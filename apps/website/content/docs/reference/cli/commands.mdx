@@ -24,7 +24,7 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 ## Rules that apply to every command
 
 - **Extra positional arguments are an error.** Every command rejects positionals beyond the ones
-  documented for it: `pair install ./a ./b` fails with `error: too many arguments for 'install'`
+  documented for it: `pair-cli install ./a ./b` fails with `error: too many arguments for 'install'`
   (exit 1) instead of silently ignoring `./b`. This is what catches an unquoted option value —
   `--name Acme KB` (which used to mean `--name Acme`) now fails instead of half-working; quote it:
   `--name "Acme KB"`. This is a behavior change — earlier releases ignored the stray argument, so a
@@ -41,8 +41,8 @@ Install documentation and assets from KB source to target folder.
 ### Usage
 
 ```bash
-pair install [target]
-pair install [registry:target ...]
+pair-cli install [target]
+pair-cli install [registry:target ...]
 ```
 
 ### Arguments
@@ -74,30 +74,30 @@ pair install [registry:target ...]
 
 ```bash
 # List available registries
-pair install --list-targets
+pair-cli install --list-targets
 
 # Install with defaults
-pair install
+pair-cli install
 
 # Install to custom directory
-pair install ./my-custom-path
+pair-cli install ./my-custom-path
 
 # Install specific registries
-pair install github:.github knowledge:.pair
+pair-cli install github:.github knowledge:.pair
 
 # Use custom KB source (remote URL)
-pair install --source https://internal-mirror.company.com/kb.zip
+pair-cli install --source https://internal-mirror.company.com/kb.zip
 
 # Use custom KB source (git repository)
-pair install --source https://github.com/acme/kb-artifacts.git
-pair install --source git@github.com:acme/kb-artifacts.git#v1.0.0
+pair-cli install --source https://github.com/acme/kb-artifacts.git
+pair-cli install --source git@github.com:acme/kb-artifacts.git#v1.0.0
 
 # Use custom KB source (local path)
-pair install --source /absolute/path/to/kb-content
-pair install --source ./relative/path/to/kb-content
+pair-cli install --source /absolute/path/to/kb-content
+pair-cli install --source ./relative/path/to/kb-content
 
 # Offline mode (no KB download)
-pair install --offline --source ./local-kb-content
+pair-cli install --offline --source ./local-kb-content
 ```
 
 ---
@@ -109,8 +109,8 @@ Update existing documentation and assets from KB source.
 ### Usage
 
 ```bash
-pair update [target]
-pair update [registry:target ...]
+pair-cli update [target]
+pair-cli update [registry:target ...]
 ```
 
 ### Arguments
@@ -130,19 +130,19 @@ pair update [registry:target ...]
 
 ```bash
 # Update with defaults
-pair update
+pair-cli update
 
 # Update specific registries
-pair update github:.github knowledge:.pair
+pair-cli update github:.github knowledge:.pair
 
 # Update from custom KB source
-pair update --source https://internal-mirror.company.com/kb.zip
+pair-cli update --source https://internal-mirror.company.com/kb.zip
 
 # Update from git repository
-pair update --source https://github.com/acme/kb-artifacts.git#v2.0.0
+pair-cli update --source https://github.com/acme/kb-artifacts.git#v2.0.0
 
 # Offline update
-pair update --offline --source ./local-kb-content
+pair-cli update --offline --source ./local-kb-content
 ```
 
 ---
@@ -154,7 +154,7 @@ Validate and update internal links in installed KB content.
 ### Usage
 
 ```bash
-pair update-link [target]
+pair-cli update-link [target]
 ```
 
 ### Options
@@ -169,17 +169,17 @@ pair update-link [target]
 
 ```bash
 # Update links in current directory
-pair update-link
+pair-cli update-link
 
 # Preview link updates (dry-run)
-pair update-link --dry-run
+pair-cli update-link --dry-run
 
 # Update links with verbose output
-pair update-link --verbose
+pair-cli update-link --verbose
 
 # Update links from custom KB source
-pair update-link --url https://github.com/org/repo/releases/download/v1.0/kb.zip
-pair update-link --url ./relative/path/to/kb
+pair-cli update-link --url https://github.com/org/repo/releases/download/v1.0/kb.zip
+pair-cli update-link --url ./relative/path/to/kb
 ```
 
 For detailed usage, see the [Link Update Guide](/docs/reference/cli/update-link).
@@ -193,7 +193,7 @@ Package KB content into validated ZIP file for distribution.
 ### Usage
 
 ```bash
-pair package [options]
+pair-cli package [options]
 ```
 
 ### Options
@@ -226,27 +226,27 @@ pair package [options]
 
 ```bash
 # Package current directory (target layout — default)
-pair package
+pair-cli package
 
 # Package from source layout
-pair package --layout source
+pair-cli package --layout source
 
 # Package with custom output path
-pair package -o dist/kb-v1.0.0.zip
+pair-cli package -o dist/kb-v1.0.0.zip
 
 # Package with metadata
-pair package --name "My KB" --version 1.0.0
+pair-cli package --name "My KB" --version 1.0.0
 
 # Interactive package creation
-pair package --interactive
+pair-cli package --interactive
 
 # Organizational package
-pair package --org --org-name "Acme Corp" --team "Platform" --compliance "SOC2,ISO27001"
+pair-cli package --org --org-name "Acme Corp" --team "Platform" --compliance "SOC2,ISO27001"
 ```
 
 ### Interactive Mode
 
-Quick mode is the default: omitting `--interactive` resolves smart defaults from `package.json`, `git config`, and saved preferences (`~/.pair/preferences.json`) and applies them in one shot — so `pair package` in a repo whose `package.json` name is `foo` produces a `foo` package, not `kb-package`. Passing `--interactive` (the guided selector, requires a TTY) enters a guided flow that pre-fills prompts from the _same_ resolved defaults and lets you confirm or override each. This guided/quick duality follows the [Guided / Quick Setup Convention](/docs/contributing/writing-skills#setup-skills-guided-vs-quick).
+Quick mode is the default: omitting `--interactive` resolves smart defaults from `package.json`, `git config`, and saved preferences (`~/.pair/preferences.json`) and applies them in one shot — so `pair-cli package` in a repo whose `package.json` name is `foo` produces a `foo` package, not `kb-package`. Passing `--interactive` (the guided selector, requires a TTY) enters a guided flow that pre-fills prompts from the _same_ resolved defaults and lets you confirm or override each. This guided/quick duality follows the [Guided / Quick Setup Convention](/docs/contributing/writing-skills#setup-skills-guided-vs-quick).
 
 ### Org Template
 
@@ -262,7 +262,7 @@ project's installed KB version against the current one.
 ### Usage
 
 ```bash
-pair kb-info [package-path] [options]
+pair-cli kb-info [package-path] [options]
 ```
 
 ### Options
@@ -275,14 +275,14 @@ pair kb-info [package-path] [options]
 
 ### Version Check Mode
 
-Running `pair kb-info` without a package path compares the KB version recorded as installed in
+Running `pair-cli kb-info` without a package path compares the KB version recorded as installed in
 the project (written by `install`/`update` on success) against the current one:
 
 - **Up to date** — installed matches current, exit code 0.
 - **Version drift** — installed differs from current; the output includes a migration-page URL
   for the version jump (one page per jump, per the docs Migrations index).
-- **Unknown installed version** — legacy install with no recorded metadata; run `pair install` or
-  `pair update` to record it.
+- **Unknown installed version** — legacy install with no recorded metadata; run `pair-cli install` or
+  `pair-cli update` to record it.
 - **Current version unavailable** — the source could not be resolved (offline, unreachable
   mirror, etc.); the installed version is still reported. Exit code is 0 in all cases — this is a
   metadata check only, it never performs migration.
@@ -325,22 +325,22 @@ version unavailable** with the reason and still exits **0**, like every other so
 
 ```bash
 # Display package metadata
-pair kb-info my-kb.zip
+pair-cli kb-info my-kb.zip
 
 # Display as JSON
-pair kb-info my-kb.zip --json
+pair-cli kb-info my-kb.zip --json
 
 # Check installed vs current KB version
-pair kb-info
+pair-cli kb-info
 
 # Version check, JSON output (for CI)
-pair kb-info --json
+pair-cli kb-info --json
 
 # Version check against a custom source
-pair kb-info --source /path/to/kb
+pair-cli kb-info --source /path/to/kb
 
 # Version check against a git-hosted KB, pinned to a tag
-pair kb-info --source https://github.com/acme/kb.git#v2.0.0
+pair-cli kb-info --source https://github.com/acme/kb.git#v2.0.0
 ```
 
 ---
@@ -353,7 +353,7 @@ Inspect and reclaim the shared KB cache — the machine-wide directory where `in
 ### Usage
 
 ```bash
-pair kb-cache [list|prune] [options]
+pair-cli kb-cache [list|prune] [options]
 ```
 
 ### Arguments
@@ -397,16 +397,16 @@ This command reads the cache only — it never downloads a KB.
 
 ```bash
 # Show what the cache holds
-pair kb-cache
+pair-cli kb-cache
 
 # See what prune would reclaim, without deleting
-pair kb-cache prune --dry-run
+pair-cli kb-cache prune --dry-run
 
 # Reclaim the stale slots
-pair kb-cache prune
+pair-cli kb-cache prune
 
 # Machine-readable inventory
-pair kb-cache list --json
+pair-cli kb-cache list --json
 ```
 
 ## kb-verify
@@ -416,7 +416,7 @@ Verify KB package integrity before installation or distribution. Validates check
 ### Usage
 
 ```bash
-pair kb-verify <package-path> [options]
+pair-cli kb-verify <package-path> [options]
 ```
 
 ### Options
@@ -436,13 +436,13 @@ pair kb-verify <package-path> [options]
 
 ```bash
 # Verify package
-pair kb-verify kb-package.zip
+pair-cli kb-verify kb-package.zip
 
 # Verify with JSON output (for CI/CD)
-pair kb-verify dist/kb-v1.0.0.zip --json
+pair-cli kb-verify dist/kb-v1.0.0.zip --json
 
 # Verify with debug logging
-pair kb-verify kb-package.zip --log-level debug
+pair-cli kb-verify kb-package.zip --log-level debug
 ```
 
 ---
@@ -454,7 +454,7 @@ Validate KB structure, links, and metadata using layout-aware validation.
 ### Usage
 
 ```bash
-pair kb-validate [options]
+pair-cli kb-validate [options]
 ```
 
 This command takes **no positional argument** — the KB directory is passed as
@@ -477,22 +477,22 @@ This command takes **no positional argument** — the KB directory is passed as
 
 ```bash
 # Validate current directory
-pair kb-validate
+pair-cli kb-validate
 
 # Validate another directory
-pair kb-validate --path ./my-kb
+pair-cli kb-validate --path ./my-kb
 
 # Validate source layout
-pair kb-validate --layout source
+pair-cli kb-validate --layout source
 
 # Validate with zero tolerance (optional link patterns discarded)
-pair kb-validate --strict
+pair-cli kb-validate --strict
 
 # Validate excluding specific registries
-pair kb-validate --skip-registries adoption,github
+pair-cli kb-validate --skip-registries adoption,github
 
 # Tolerate links into a codebase that is not checked out beside the KB
-pair kb-validate --optional-link-patterns "apps/**,packages/**"
+pair-cli kb-validate --optional-link-patterns "apps/**,packages/**"
 ```
 
 ### Optional link patterns
@@ -612,7 +612,7 @@ in the CLI, so any code host works.
 ### Usage
 
 ```bash
-pair scaffold-kb [path] [options]
+pair-cli scaffold-kb [path] [options]
 ```
 
 ### Arguments
@@ -652,7 +652,7 @@ overwrite decision.
 | `.pair/knowledge/`, `.skills/`  | your content (seed files are never overwritten)     |
 | `pair.config.json`              | scaffold-owned — knowledge + skills registries      |
 | `README.md`, `.gitignore`       | scaffold-owned                                      |
-| `scripts/release.sh`            | scaffold-owned — wraps `pair package` (mode `0755`) |
+| `scripts/release.sh`            | scaffold-owned — wraps `pair-cli package` (mode `0755`) |
 | `.github/workflows/release.yml` | scaffold-owned — `--host github` only               |
 
 No `.pair/adoption/` is created: a KB is knowledge, not a configured project.
@@ -668,19 +668,19 @@ kept and reported as skipped.
 
 ```bash
 # Scaffold in the current directory
-pair scaffold-kb
+pair-cli scaffold-kb
 
 # Scaffold into a new directory with an explicit name
-pair scaffold-kb ../acme-kb --name "Acme KB"
+pair-cli scaffold-kb ../acme-kb --name "Acme KB"
 
 # Non-GitHub code host: release script only, no workflow
-pair scaffold-kb ../acme-kb --host generic
+pair-cli scaffold-kb ../acme-kb --host generic
 
-# Release it (wraps pair package, then tags and publishes)
+# Release it (wraps pair-cli package, then tags and publishes)
 cd ../acme-kb && bash scripts/release.sh 1.0.0
 
 # Install it into a project
-pair install --source https://github.com/acme/acme-kb.git
+pair-cli install --source https://github.com/acme/acme-kb.git
 ```
 
 See [Scaffold an External KB](/docs/customization/external-kb) for the full workflow.
@@ -694,7 +694,7 @@ Validate asset registry configuration file.
 ### Usage
 
 ```bash
-pair validate-config [options]
+pair-cli validate-config [options]
 ```
 
 ### Options
@@ -715,10 +715,10 @@ pair validate-config [options]
 
 ```bash
 # Validate default config.json
-pair validate-config
+pair-cli validate-config
 
 # Validate custom config file
-pair validate-config --config ./my-config.json
+pair-cli validate-config --config ./my-config.json
 ```
 
 ---
@@ -728,7 +728,7 @@ pair validate-config --config ./my-config.json
 Run a pair skill **headlessly** on a chosen engine, re-invoking it until it stops — the portable
 unattended loop (`ADR-021` tier 2: the external driver).
 
-`pair run` is an **execution adapter**, not a process engine. It decides *how* to invoke (engine,
+`pair-cli run` is an **execution adapter**, not a process engine. It decides *how* to invoke (engine,
 skill, perimeter, autonomy) and never *what* to work on: eligibility, the stop predicate, the
 parallelism ceiling and the audit location are read from
 [`.pair/adoption/tech/automation.md`](/docs/reference/quality-model) with the names `pair-loop`
@@ -737,7 +737,7 @@ already defines, and that file is never written. **It never merges, in any mode.
 ### Usage
 
 ```bash
-pair run [options]
+pair-cli run [options]
 ```
 
 ### Options
@@ -781,7 +781,7 @@ Both default **off**, and neither can be granted from `pair.config.json`:
   confirmation mechanism at all (`pi` has no permission prompts) **refuses to run** without this
   flag rather than pretending confirmations are active.
 - **`--approve-project-trust`** — run where the engine's trust store has no decision for this
-  project. `pair run` never writes that store: provision trust with the engine's own command or
+  project. `pair-cli run` never writes that store: provision trust with the engine's own command or
   with `/pair-capability-setup-harness`.
 
 #### `--autonomous` also suppresses the skill's own approval rounds
@@ -848,13 +848,13 @@ re-evaluated each time and a card that becomes eligible mid-run is picked up on 
 The loop stops when the skill reports itself finished (it printed no continue-token), an iteration
 fails, or the perimeter's cap is reached. The continue-token is recognised only as a **line of its
 own** naming a concrete re-invocation — the documented template (`CONTINUE-TOKEN: pair-loop [--root
-<id>] …`) echoed by an agent that read the skill file is not a token, and does not extend the run. Within one `pair run` process parallelism is **1**: the
+<id>] …`) echoed by an agent that read the skill file is not a token, and does not extend the run. Within one `pair-cli run` process parallelism is **1**: the
 command states the policy's `## Max Parallelism` ceiling and leaves batching to `pair-loop` —
 concurrency comes from running several driver processes.
 
 ### Merge
 
-`pair run` never merges, on any path. What it reports is the **policy's** posture: with
+`pair-cli run` never merges, on any path. What it reports is the **policy's** posture: with
 `## Auto-Advance` at its `(none)` default nothing is pushed or merged unattended, and with a tier
 declared there the invoked skill may push and merge that tier itself once its PR is review-approved
 and its gates are green. The command prints whichever of the two holds, rather than promising the
@@ -864,22 +864,22 @@ gate is always human.
 
 ```bash
 # Drive the #212 subtree with confirmations active, at most 5 iterations
-pair run --root 212 --max-iterations 5
+pair-cli run --root 212 --max-iterations 5
 
 # Unattended, on pi, scoped to green cards, autonomy explicit
-pair run --engine pi --root 212 --autonomous --max-iterations 3
+pair-cli run --engine pi --root 212 --autonomous --max-iterations 3
 
 # See exactly what would run — resolution only, nothing spawned
-pair run --root 212 --dry-run
+pair-cli run --root 212 --dry-run
 
 # Scope the selector itself: --filter needs a skill that declares one
-pair run --skill pair-next --filter risk:green --max-iterations 1
+pair-cli run --skill pair-next --filter risk:green --max-iterations 1
 
 # A skill with approval rounds, driven unattended: it receives --approval auto
-pair run --skill pair-capability-assess-stack --root 212 --autonomous --max-iterations 1
+pair-cli run --skill pair-capability-assess-stack --root 212 --autonomous --max-iterations 1
 
 # A one-shot prompt on the default engine, bounded by its directory
-pair run --prompt "/pair-next --root 212" --cwd . --max-iterations 1
+pair-cli run --prompt "/pair-next --root 212" --cwd . --max-iterations 1
 ```
 
 ---
@@ -902,7 +902,7 @@ Options available for all commands:
   command proceeds with whatever KB is already on disk. It was a **no-op** in every release up to
   and including 0.4.3: its only consumer was that pre-flight, and a guard in the `preAction` hook
   returned before it on every invocation. Two consequences of reviving it, both user-visible:
-  `pair install --no-kb` no longer downloads a KB, and `--url <source>` together with `--no-kb` is
+  `pair-cli install --no-kb` no longer downloads a KB, and `--url <source>` together with `--no-kb` is
   now **rejected** (`Cannot use --url and --no-kb together`) where it was previously accepted and
   silently ignored — naming a source and refusing to fetch it is a contradiction. Only `install`
   and `update` run the pre-flight at all; every other command reads what is already on disk.

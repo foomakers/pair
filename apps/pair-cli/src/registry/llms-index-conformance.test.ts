@@ -30,7 +30,7 @@ describe('generateLlmsTxt over the real repo tree — the sections the index mus
   // The generator scanned `.pair/product/adopted` / `.pair/tech/adopted` —
   // directories no shipped dataset ever created — so the index every agent reads
   // to find project context carried NO Adoption sections at all: an adopting
-  // project ran `pair install` and got an llms.txt missing its own PRD,
+  // project ran `pair-cli install` and got an llms.txt missing its own PRD,
   // architecture and tech-stack, the highest-value entries in the file, with
   // nothing reporting it. The byte-equality guard in
   // `packages/dev-tools/src/quality-gates/llms-txt-drift-check.ts` pins whatever

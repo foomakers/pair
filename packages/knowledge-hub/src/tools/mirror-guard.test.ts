@@ -76,7 +76,7 @@ const registryConfigFor = (key: string): RegistryConfigJson => {
 
 /**
  * The registry's declared `include` narrowing, as posix path prefixes without
- * the leading '/'. `pair update` copies only these subtrees, so enumerating
+ * the leading '/'. `pair-cli update` copies only these subtrees, so enumerating
  * anything outside them would demand a mirror the pipeline never writes (the
  * `github` registry declares `include: ["/agents"]` and its dataset tree could
  * grow a sibling directory tomorrow).
@@ -133,7 +133,7 @@ interface MirrorFixture {
    * narrowed by the SAME `include` predicate — the other side of the set
    * equality. Narrowing both sides with one predicate is load-bearing: the
    * `github` target really does hold un-included siblings (`.github/workflows`,
-   * `.github/skills`) that `pair update` never writes from this registry.
+   * `.github/skills`) that `pair-cli update` never writes from this registry.
    */
   installedAll: string[]
   source: (rel: string) => string
@@ -148,7 +148,7 @@ const buildFixture = (mirror: GuardedMirror): MirrorFixture => {
   const source = (rel: string): string =>
     readFileSync(join(REPO_ROOT, datasetPathOf(mirror, rel)), 'utf-8')
   // the FULL per-target install: naming transform + marker strip + skill refs,
-  // each applied only where `pair update` applies it (see buildInstallTransform)
+  // each applied only where `pair-cli update` applies it (see buildInstallTransform)
   const install = buildInstallTransform(mirror, transform)
 
   const expected = new Map(
@@ -198,7 +198,7 @@ const CORPUS_TEST_TIMEOUT_MS = 30_000
 /**
  * Data-driven mirror-equality guard for EVERY guarded (dataset → installed)
  * pair (#393 AC1/AC5): for every file the dataset contributes, the installed
- * copy must equal the REAL `pair update` install of its dataset source — not
+ * copy must equal the REAL `pair-cli update` install of its dataset source — not
  * the source itself.
  *
  * Four mirrors share this suite because they share the relationship: an install
@@ -286,13 +286,13 @@ describe.each(FIXTURES)(
      * `05-how-to-define-bounded-contexts.md` were dropped from the dataset in
      * #246 and were still installed at the repo root ~5 months later, indexed
      * into `.pair/llms.txt` where agents read them. A hand-edit, a bad merge or
-     * a `pair update` run from an older dataset reopens it, and every other
+     * a `pair-cli update` run from an older dataset reopens it, and every other
      * assertion in this file stays green while it does.
      *
      * Adding it makes the guard a set EQUALITY over entry paths, and it is
      * DETECTION only — it reads two path lists, deletes nothing, and is
      * therefore independent of the open product decision about wiring
-     * destructive cleanup onto `pair update` (mirror-guard ADL, OPEN RESIDUAL).
+     * destructive cleanup onto `pair-cli update` (mirror-guard ADL, OPEN RESIDUAL).
      * Green on both directory mirrors when introduced: the dataset and installed
      * path sets were already identical for `.pair/knowledge` and
      * `.github/agents`, so this lands as a regression guard, not a red test.
@@ -433,13 +433,13 @@ describe('the guarded mirrors are the ones this comparison is valid for (#393)',
 })
 
 /**
- * `buildInstallTransform` is the COMPLETE `pair update` install for these
+ * `buildInstallTransform` is the COMPLETE `pair-cli update` install for these
  * mirrors only under the config each one is modeled against. Pin that, as the
  * sibling `skill-md-mirror` pins `SKILL_COPY_OPTS`: if a registry later gains
  * `flatten`/`prefix`, the real pipeline both renames paths AND stops rewriting
  * skill references entirely (`applySkillRefsToNonSkillRegistries` skips any
  * registry with flatten/prefix), so the modeled install would no longer equal
- * `pair update`'s output and the guard above would go permanently red with no
+ * `pair-cli update`'s output and the guard above would go permanently red with no
  * satisfiable mirror — the deadlock this story removed, reintroduced one level
  * up. Failing HERE attributes it to the registry change instead of blaming the
  * mirror.
@@ -487,7 +487,7 @@ describe.each(FIXTURES)(
       }
       // every enumerated path sits under a declared include prefix — an
       // un-included sibling directory added to the dataset must NOT be demanded
-      // of the mirror, since `pair update` never copies it. Uses THE membership
+      // of the mirror, since `pair-cli update` never copies it. Uses THE membership
       // predicate the fixture narrowed with, so the two cannot disagree about
       // an edge case and blame it on a sibling directory.
       for (const rel of all) expect(isIncluded(mirror.key, rel)).toBe(true)
@@ -531,7 +531,7 @@ describe('assertMirrorMatches — failure paths and message (#393)', () => {
     const message = captureThrownMessage(() => assertKb(REL, expected, 'drifted\n'))
     expect(message).toContain(join(KB_MIRROR.mirrorRel, REL))
     expect(message).toContain(join(KB_MIRROR.datasetRel, REL))
-    expect(message).toContain("Regenerate with 'pair update'")
+    expect(message).toContain("Regenerate with 'pair-cli update'")
     expect(message).toContain('never hand-edit the mirror')
   })
 
@@ -587,7 +587,7 @@ describe('assertMirrorMatches — failure paths and message (#393)', () => {
 
   it('reports a missing mirror as missing, with the regenerate hint (not as drift)', () => {
     expect(() => assertKb(REL, expected, undefined)).toThrow(
-      /Mirror missing.*does not exist.*pair update/s,
+      /Mirror missing.*does not exist.*pair-cli update/s,
     )
   })
 })
@@ -629,7 +629,7 @@ describe('assertNoOrphanedMirrorEntries — the reverse sweep (#393)', () => {
     )
     expect(message).toContain('DELETE it')
     expect(message).toContain(`ADD it to the dataset under ${KB_MIRROR.datasetRel}`)
-    expect(message).toContain("'pair update'")
+    expect(message).toContain("'pair-cli update'")
     // states what it compared, like its forward sibling, so the reader cannot
     // mistake it for the transform assertion
     expect(message).toContain('COMPARED')

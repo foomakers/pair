@@ -24,7 +24,7 @@ Skills live in the Knowledge Base dataset and get distributed to AI tool directo
 packages/knowledge-hub/dataset/.pair/knowledge/
 ├── skills-guide.md          # Full skill catalog
 
-# After pair install, skills are distributed to:
+# After pair-cli install, skills are distributed to:
 .claude/skills/
 ├── pair-process-implement/
 │   └── SKILL.md
@@ -134,9 +134,9 @@ Skills define explicit HALT conditions — situations where the skill stops and 
 
 ## Setup skills: guided vs quick
 
-A skill or CLI command that collects inputs to produce or configure something (package metadata, an adoption decision, a scaffolded project) exposes the same two-mode duality — **guided** (asks one input at a time, each pre-filled with a sensible default) and **quick** (accepts KB-sensible defaults in one shot, for CI, scripting, and experienced users). Neither mode is universally the default: each adopter declares its own (a human-facing setup skill leans guided, a scripting-first CLI command leans quick), and an explicit signal selects the non-default mode. Guided always needs a TTY — a non-interactive environment can never run it, so the command fails clearly or falls back to quick, never hangs. The two shipped precedents declare opposite defaults: `pair package` defaults to quick with `--interactive` as the guided opt-in, while the `assess-*` family defaults to guided (Path C) with a `$choice` override as the quick opt-in.
+A skill or CLI command that collects inputs to produce or configure something (package metadata, an adoption decision, a scaffolded project) exposes the same two-mode duality — **guided** (asks one input at a time, each pre-filled with a sensible default) and **quick** (accepts KB-sensible defaults in one shot, for CI, scripting, and experienced users). Neither mode is universally the default: each adopter declares its own (a human-facing setup skill leans guided, a scripting-first CLI command leans quick), and an explicit signal selects the non-default mode. Guided always needs a TTY — a non-interactive environment can never run it, so the command fails clearly or falls back to quick, never hangs. The two shipped precedents declare opposite defaults: `pair-cli package` defaults to quick with `--interactive` as the guided opt-in, while the `assess-*` family defaults to guided (Path C) with a `$choice` override as the quick opt-in.
 
-Both modes read the **same resolved defaults** through one precedence cascade — `explicit argument/flag > project state > saved/inferred preferences > hardcoded` — the mode only decides whether each value is confirmed or taken as-is. This is the `pair package` command's `--interactive` flag + `resolveDefaults()` cascade (both the quick and guided paths resolve it), and the `assess-*` family's resolution cascade (Path A override = quick, Path C = guided).
+Both modes read the **same resolved defaults** through one precedence cascade — `explicit argument/flag > project state > saved/inferred preferences > hardcoded` — the mode only decides whether each value is confirmed or taken as-is. This is the `pair-cli package` command's `--interactive` flag + `resolveDefaults()` cascade (both the quick and guided paths resolve it), and the `assess-*` family's resolution cascade (Path A override = quick, Path C = guided).
 
 Adopt the convention directly rather than re-designing the duality — the full mechanics, precedents, and edge cases live in the KB reference `.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/guided-quick-setup.md`.
 
@@ -264,7 +264,7 @@ Add your skill to `packages/knowledge-hub/dataset/.pair/knowledge/skills-guide.m
 
 ### 5. Test the skill
 
-1. Install the KB locally: run `pair install` or copy the SKILL.md to `.claude/skills/<skill-name>/`.
+1. Install the KB locally: run `pair-cli install` or copy the SKILL.md to `.claude/skills/<skill-name>/`.
 2. Run the trigger eval: should-trigger and should-not-trigger prompts in fresh sessions (see [Evaluation](#9-evaluation)).
 3. Invoke the skill via the slash command (e.g., `/pair-capability-example`).
 4. Verify the skill follows its algorithm correctly.

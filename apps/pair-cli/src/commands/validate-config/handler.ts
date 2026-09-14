@@ -53,7 +53,7 @@ export async function handleValidateConfigCommand(
 
   // The optional `engine` block (US-451) is validated in the SAME pass as the registries, and
   // its errors are reported the same way: a malformed block must be a validation failure here
-  // rather than a surprise at `pair run` time. An ABSENT block adds nothing — delta-only.
+  // rather than a surprise at `pair-cli run` time. An ABSENT block adds nothing — delta-only.
   const engineBlock = readEngineDeclaration(workingPathSource, ENGINE_IDS)
   const errors = [...validation.errors, ...engineBlock.errors]
 

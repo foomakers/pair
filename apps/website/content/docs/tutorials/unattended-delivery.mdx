@@ -3,13 +3,13 @@ title: Unattended Delivery
 description: Configure pair to develop and merge low-risk cards on its own — from a single manual run to a daemon on a dedicated VPS that watches your backlog.
 ---
 
-A walkthrough for turning `pair run` from "something I invoke by hand" into "something that watches
+A walkthrough for turning `pair-cli run` from "something I invoke by hand" into "something that watches
 the backlog and ships `risk:green` cards without me." You'll go from a manual dry-run to a
 systemd-managed daemon on a dedicated box in about 30 minutes.
 
 ## Prerequisites
 
-- **pair-cli** installed in the project (`pair install` completed)
+- **pair-cli** installed in the project (`pair-cli install` completed)
 - A **classification model** in place — `classify` already emitting `risk:*` tags on your cards (see
   [Quality Model](/docs/reference/quality-model)). Unattended delivery filters on this; without it,
   there is nothing to filter on.
@@ -24,7 +24,7 @@ systemd-managed daemon on a dedicated box in about 30 minutes.
 - A `tech/automation.md` policy declaring which cards run unattended, whether they can merge on
   their own, and where the trail is written
 - One manual, supervised run to prove the config before anything runs unattended
-- A daemon — systemd timer (or a scheduled task, or a supervisor loop) — that re-invokes `pair run`
+- A daemon — systemd timer (or a scheduled task, or a supervisor loop) — that re-invokes `pair-cli run`
   on a schedule, so new eligible cards get picked up without you starting anything by hand
 - A working understanding of what "eligible" means, who can change it, and what stops the whole
   thing cold if anything looks wrong
@@ -100,7 +100,7 @@ unattended — or stay `(none)` to develop them unattended but still gate the me
 
 ## Step 2: Prepare the engine for headless, unattended runs
 
-`pair run` drives one of three engines — [pi](/docs/integrations/pi),
+`pair-cli run` drives one of three engines — [pi](/docs/integrations/pi),
 [opencode](/docs/integrations/opencode), or Claude Code (`claude -p`) — chosen with `--engine`, a
 project default in `pair.config.json`, or (Claude Code) the schema default. Each has its own
 headless posture:
@@ -111,7 +111,7 @@ headless posture:
 | `opencode` | On by default, opt out with `--auto` | None — no trust gate | Nothing beyond authentication (`opencode auth list`) |
 | `claude` (`claude -p`) | On by default, opt out with `--permission-mode bypassPermissions` | Skipped automatically in `-p` mode | Nothing beyond `claude` being on `PATH` and authenticated |
 
-`--autonomous` on `pair run` is the one switch that maps to whichever of these each engine actually
+`--autonomous` on `pair-cli run` is the one switch that maps to whichever of these each engine actually
 has — pi requires it outright (it has no other posture to run headless with), opencode and Claude
 Code accept it as an explicit opt-out of their default confirmations.
 
@@ -134,7 +134,7 @@ Pin the engine so every invocation (yours, a teammate's, the daemon's) agrees wi
 Resolve everything and print it — nothing spawns:
 
 ```bash
-pair run --root 212 --dry-run
+pair-cli run --root 212 --dry-run
 ```
 
 This prints which engine won and from where (flag > config > schema default), the work perimeter
@@ -144,7 +144,7 @@ stop — an unattended run should never be the first time you see this output.
 Then run it for real, still narrow, still watched:
 
 ```bash
-pair run --root 212 --autonomous --max-iterations 3
+pair-cli run --root 212 --autonomous --max-iterations 3
 ```
 
 `--autonomous` accepts the engine's own confirmations away; it does **not** turn off the
@@ -157,14 +157,14 @@ what the policy says.
   If the loop composes a skill with an internal approval round — one of the `assess-*`/`map-*`
   family — under `--autonomous` it now passes `--approval auto` to any of them that declare it, so
   the round resolves from project state or reports itself unresolved instead of asking a question
-  nobody is there to answer. This is what closed the gap between `pair run` shipping and those
+  nobody is there to answer. This is what closed the gap between `pair-cli run` shipping and those
   skills gaining a non-interactive mode in the first place — if you're on an older `pair-cli`, update
   it before relying on this.
 </Callout>
 
 ## Step 4: Turn it into a daemon
 
-`pair run` and the in-harness `pair-loop` workflow both **stop** when nothing is eligible — they
+`pair-cli run` and the in-harness `pair-loop` workflow both **stop** when nothing is eligible — they
 don't block waiting for new cards to appear. "Watching the backlog" is therefore an external
 scheduler re-invoking the command periodically, not a single long-lived process holding a socket
 open. Three ways to get there, in order of what most teams should actually use:

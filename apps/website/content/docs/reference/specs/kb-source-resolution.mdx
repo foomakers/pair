@@ -22,8 +22,8 @@ explicitly always wins, `--url <remote zip>` included. In a development checkout
 is downloaded and cached under its own slot rather than silently replaced by the local
 dataset — which is also what makes the `--url` path exercisable outside a released binary.
 
-`--url` and `--source` name a source in exactly the same way: `pair install --url X` and
-`pair install --source X` resolve the same identity, download into the same cache slot and
+`--url` and `--source` name a source in exactly the same way: `pair-cli install --url X` and
+`pair-cli install --source X` resolve the same identity, download into the same cache slot and
 install the same bytes. The only difference is scope — `--url` is declared on the program,
 so it applies to whichever subcommand runs (`install`, `update`, `kb-info`), while
 `--source` belongs to one command and therefore wins where both are given. That equivalence
@@ -288,8 +288,8 @@ that older version's directory and is never read again — abandoned, not discar
 **Disk:** one slot per distinct source. Slots are plain directories with no hidden state —
 `rm -rf ~/.pair/kb/external` is always safe, and the next install re-populates what it
 needs. There is no automatic eviction (no LRU, no TTL): growth is proportional to the number
-of KBs you install, not to how often you install them. Use `pair kb-cache list` to see what
-is there and `pair kb-cache prune` (add `--dry-run` first) to reclaim what is dead. Four
+of KBs you install, not to how often you install them. Use `pair-cli kb-cache list` to see what
+is there and `pair-cli kb-cache prune` (add `--dry-run` first) to reclaim what is dead. Four
 leftovers `rm -rf ~/.pair/kb/external` does **not** cover, all safe to delete by hand:
 
 | Leftover                           | Left by                                                                           | `prune`                         |

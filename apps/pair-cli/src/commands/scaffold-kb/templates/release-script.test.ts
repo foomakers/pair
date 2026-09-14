@@ -59,7 +59,7 @@ describe('renderReleaseScript', () => {
     expect(github).toMatch(/usage: .*<version>/)
   })
 
-  it('reuses the existing pair package command instead of a new release mechanism', () => {
+  it('reuses the existing pair-cli package command instead of a new release mechanism', () => {
     expect(github).toContain('PAIR_CLI="${PAIR_CLI:-npx --yes @foomakers/pair-cli@0.4.3}"')
     expect(github).toContain('$PAIR_CLI package')
     expect(github).toContain('--layout source')
