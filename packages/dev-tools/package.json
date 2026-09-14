@@ -19,9 +19,12 @@
     "benchmark-update-link": "ts-node src/quality-gates/benchmark-update-link.ts",
     "determine-version": "ts-node src/release/determine-version.ts",
     "pre-push-gate:check": "ts-node src/quality-gates/pre-push-gate-composition.ts",
-    "format-workflow:check": "ts-node src/quality-gates/format-workflow-composition.ts"
+    "format-workflow:check": "ts-node src/quality-gates/format-workflow-composition.ts",
+    "llms-index:check": "ts-node -T src/quality-gates/llms-txt-drift-check.ts",
+    "llms-index:regen": "ts-node -T src/quality-gates/llms-txt-regenerate.ts"
   },
   "devDependencies": {
+    "@pair/content-ops": "workspace:*",
     "@pair/eslint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
     "@pair/markdownlint-config": "workspace:*",
