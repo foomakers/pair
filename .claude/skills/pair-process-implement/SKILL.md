@@ -15,6 +15,12 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 
 **One PR per story:** the story lands on ONE branch with ONE PR; subsequent work on the story (further tasks/features) updates that same PR, never a new one unless a human explicitly requests it.
 
+## Process Profile
+
+<!-- process-step: id=implement -->
+
+Executable form of the **`implement`** step. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; a **composed** one never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
+
 ## Composed Skills
 
 | Skill              | Type       | Required                                                                                            |
