@@ -75,6 +75,37 @@ Example — split configuration (Linear for the backlog, GitHub for the code):
 - `base-branch`: `main`.
 ```
 
+## Process Profile
+
+Optional. **Which process steps this project runs.** **Omitted by default**: pair assumes the full process, so a team that runs everything configures nothing here and behaves exactly as before this section existed (convention over configuration, D21). The schema, the built-in profiles and the step ids live in the KB — [process-profiles.md](../../knowledge/guidelines/technical-standards/ai-development/process-profiles.md) and the [step catalogue](../../knowledge/guidelines/technical-standards/ai-development/step-catalogue.md) — this section only names the choice.
+
+| Field       | Default     | Meaning                                                                                                       |
+| ----------- | ----------- | --------------------------------------------------------------------------------------------------------------- |
+| `profile`   | `default`   | `default` (every step), `poc` (no DDD mapping, no strategic planning layer) or `custom`.                        |
+| `whitelist` | *(none)*    | The enabled step ids. **Required with `custom`; invalid with `default` or `poc`**, which carry their own sets.  |
+
+- **Omitted ⇒ `default`.** Absence is a declaration, not a gap: the whole process applies.
+- The profile governs the **step**, not one of its representations — so a project with **no skills installed**, following the how-to guides by hand, is governed identically.
+- A **disabled** step is never proposed by `/next`; invoked directly it warns and asks for confirmation; reached as a composition it is skipped exactly like a skill that is not installed. See [process-profile gate](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
+- An unknown profile name, an unknown step id and an **empty** whitelist all **HALT** — a typo must never silently disable a step, and an empty whitelist is a misconfiguration, not "everything disabled".
+- Each key is **one line, however long**: a value wrapped onto a second line **HALTs** rather than being read up to the wrap (the ids after it would vanish from every suggestion with nothing reported). If a line-length lint rule objects, exempt the line — do not wrap it.
+- Naming the same step id **twice** in one whitelist **HALTs** as well: it is never deduped in silence, since a repeat is as likely an unfinished edit as a harmless one.
+- **Declare, don't quote.** A key is a list item in this section, at any indent under four spaces — a **nested** item is read as a key too, so a sub-bullet is not a safe place to park an old value as a note (it duplicates the key and **HALTs**); at four spaces or a tab it HALTs as well. On a **blockquote** line (one opening with `>`, even carrying an otherwise perfect key) it **HALTs**, and so does a key on a numbered marker (`1. profile: poc`) whether or not it is backticked — two author errors on one line compose, they do not cancel — that is a decorated declaration, not a quotation. Inside the **table above** it is neither read nor reported: a table row documents the keys, and documentation is never configuration.
+- **The key is read case-insensitively, the value is not.** `` - `Profile`: `poc` `` and `` - `Whitelist`: … `` declare exactly what their lowercase spellings do (the `Field` column above is Title Case, so mirroring it is a natural edit); a value in another case — `` `POC` `` — **HALTs** as an unknown profile name.
+
+Example — a proof-of-concept team:
+
+```text
+- `profile`: `poc`
+```
+
+Example — a `custom` subset (delivery only, planning done elsewhere):
+
+```text
+- `profile`: `custom`
+- `whitelist`: `brainstorm`, `plan-stories`, `refine-story`, `plan-tasks`, `implement`, `review`
+```
+
 ## State Mapping
 
 Optional. Skills resolve item state to 5 canonical macrostates — `Draft`, `Ready`, `In Progress`, `Review`, `Done` — through this section. **Omitted by default**: pair assumes your board already uses canonical names, so nothing needs to be configured here. Add a `Board State → Macrostate` table only if your board uses different names — mapping is n-m (many board states may map to one macrostate, never the inverse). See [canonical-states.md](../../knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) for the full schema, semantics, and examples (default, GitHub Projects, minimal board, custom n-m).
