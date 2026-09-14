@@ -2,11 +2,11 @@
 
 ## Overview
 
-`.pair/working/` is the **operational area**: where AI capabilities persist state produced *during* execution — checkpoints and reports. It is operational data, not knowledge, so it stays outside every KB asset registry by design (D14). `pair install` and `pair update` never create, modify, or delete anything under it.
+`.pair/working/` is the **operational area**: where AI capabilities persist state produced *during* execution — checkpoints and reports. It is operational data, not knowledge, so it stays outside every KB asset registry by design (D14). `pair-cli install` and `pair-cli update` never create, modify, or delete anything under it.
 
 This is distinct from the other two `.pair/` areas:
 
-| Area | Contents | Owner | Touched by `pair update`? |
+| Area | Contents | Owner | Touched by `pair-cli update`? |
 | --- | --- | --- | --- |
 | `.pair/knowledge/` | Upstream guidelines and how-to | pair KB | Yes (mirror) |
 | `.pair/adoption/` | Project decisions | Project | Add-only (new files) |
@@ -21,7 +21,7 @@ This is distinct from the other two `.pair/` areas:
     └── <category>/        # Generated reports, grouped by category (e.g. quality, monitoring)
 ```
 
-Both subdirectories are created **on demand** by the skill that first needs them — a checkpoint capability creates `checkpoints/` the first time it writes state, a reporting capability creates `reports/<category>/` the first time it writes a report. `pair install` does not scaffold this structure.
+Both subdirectories are created **on demand** by the skill that first needs them — a checkpoint capability creates `checkpoints/` the first time it writes state, a reporting capability creates `reports/<category>/` the first time it writes a report. `pair-cli install` does not scaffold this structure.
 
 ## Report Panels — Period Key and Idempotent Update
 
@@ -43,9 +43,9 @@ Panels are read-only over their sources: a panel writer aggregates data other ca
 
 ## How It Is Protected (D14)
 
-`pair install`/`pair update` only ever touch paths **inside a configured registry's target** — the mirror cleanup deletes only entries within a registry `target` that are absent from that registry's `source`. A directory that is not a registry `source` or `target` is therefore never created, modified, or deleted. The working area is protected by exactly this: **it is never a registry target.**
+`pair-cli install`/`pair-cli update` only ever touch paths **inside a configured registry's target** — the mirror cleanup deletes only entries within a registry `target` that are absent from that registry's `source`. A directory that is not a registry `source` or `target` is therefore never created, modified, or deleted. The working area is protected by exactly this: **it is never a registry target.**
 
-There is no runtime "hard-exclusion" carve-out. The only way the working area could be touched is a *misconfigured* registry whose `target` equals or is an ancestor/descendant of it (e.g. a registry mirroring the whole `.pair/` root). That is prevented at config-validation time — `pair validate-config`, and the same check run inside `pair install`/`pair update`, **reject** any such config before a single file is copied (see [Validation](#validation)). Fail-closed: a bad config errors out; it does not silently proceed with a carve-out.
+There is no runtime "hard-exclusion" carve-out. The only way the working area could be touched is a *misconfigured* registry whose `target` equals or is an ancestor/descendant of it (e.g. a registry mirroring the whole `.pair/` root). That is prevented at config-validation time — `pair-cli validate-config`, and the same check run inside `pair-cli install`/`pair-cli update`, **reject** any such config before a single file is copied (see [Validation](#validation)). Fail-closed: a bad config errors out; it does not silently proceed with a carve-out.
 
 The working area is the first member of a small set of **reserved project-side paths** that no registry target may overlap. The set is extensible — future meta/config files (e.g. the KB version marker) join the same guard.
 
@@ -64,20 +64,20 @@ When overridden:
 
 - The override — not the default — is the reserved path that no registry target may overlap.
 - Skills reading or writing checkpoints/reports must resolve the same override (read `working_path` from `pair.config.json`; fall back to `.pair/working` when absent) so the two sides never disagree on where the working area lives.
-- The override must be **project-relative**. An absolute `working_path` is rejected by `pair validate-config` — it cannot be compared against the project-relative registry targets, so it would defeat the overlap guard.
+- The override must be **project-relative**. An absolute `working_path` is rejected by `pair-cli validate-config` — it cannot be compared against the project-relative registry targets, so it would defeat the overlap guard.
 
 ## Validation
 
-`pair validate-config` (and the identical check inside `pair install`/`pair update`) **rejects** the config in these cases:
+`pair-cli validate-config` (and the identical check inside `pair-cli install`/`pair-cli update`) **rejects** the config in these cases:
 
 - **A registry overlaps a reserved path**: a registry's `target` path equals, contains, or is contained by the (default or overridden) working path. This catches both directions — a registry accidentally covering the working area, and a working-area override that lands inside a registry-managed directory.
 - **A non-project-relative `working_path`**: an absolute path (or one escaping the project root) is rejected.
 
-Because the working area is simply not a registry target, a valid config guarantees `pair install`/`pair update` never touch it — no runtime carve-out is needed.
+Because the working area is simply not a registry target, a valid config guarantees `pair-cli install`/`pair-cli update` never touch it — no runtime carve-out is needed.
 
 ## Convention for External KBs
 
-This guarantee is not specific to the `foomakers/pair` KB — any KB dataset consumed by `pair-cli` inherits it, because the reserved-path validation is enforced by `pair-cli` itself (`validateAllRegistries` → `detectReservedPathOverlap`), not by anything the dataset declares. A custom or organization-specific KB does not need to do anything special: it only needs to avoid declaring a registry whose `target` overlaps the working area, which `pair validate-config` rejects.
+This guarantee is not specific to the `foomakers/pair` KB — any KB dataset consumed by `pair-cli` inherits it, because the reserved-path validation is enforced by `pair-cli` itself (`validateAllRegistries` → `detectReservedPathOverlap`), not by anything the dataset declares. A custom or organization-specific KB does not need to do anything special: it only needs to avoid declaring a registry whose `target` overlaps the working area, which `pair-cli validate-config` rejects.
 
 ## Not Ambient Context
 
@@ -91,6 +91,6 @@ The working area is operational handoff state, not shared knowledge, so it is **
 | Reporting capabilities (e.g. quality, monitoring) | Write `.pair/working/reports/<category>/` |
 | One-shot audit writers (e.g. `pair-capability-assess-security` audit, `pair-capability-assess-coupling` full) | Write `reports/<category>/<YYYY-MM-DD>-<audit-name>.md` (run-date keyed) |
 | Panel writers (e.g. `pair-capability-assess-cost` report mode → `reports/cost/<period-key>-cost-panel.md`; `pair-capability-analyze-delivery-metrics` → `reports/metrics/<period-key>-delivery-metrics.md`) | Apply [Report Panels — Period Key and Idempotent Update](#report-panels--period-key-and-idempotent-update) |
-| `pair install` | Never scaffolds or touches the working area |
-| `pair update` | Never modifies or deletes anything under the working area |
-| `pair validate-config` | Errors on any registry/working-area overlap |
+| `pair-cli install` | Never scaffolds or touches the working area |
+| `pair-cli update` | Never modifies or deletes anything under the working area |
+| `pair-cli validate-config` | Errors on any registry/working-area overlap |

@@ -4,11 +4,11 @@
 export const kbVerifyCommandMetadata = {
   name: 'kb-verify',
   description: 'Verify KB package integrity using checksum, structure, and manifest validation',
-  usage: 'pair kb-verify <package-path> [options]',
+  usage: 'pair-cli kb-verify <package-path> [options]',
   examples: [
-    'pair kb-verify kb-package.zip                  # Verify package with human-readable output',
-    'pair kb-verify kb-package.zip --json            # Verify with JSON output',
-    'pair kb-verify dist/kb-v1.0.0.zip               # Verify package at specific path',
+    'pair-cli kb-verify kb-package.zip                  # Verify package with human-readable output',
+    'pair-cli kb-verify kb-package.zip --json            # Verify with JSON output',
+    'pair-cli kb-verify dist/kb-v1.0.0.zip               # Verify package at specific path',
   ],
   options: [
     { flags: '<package-path>', description: 'Path to the KB package ZIP file' },

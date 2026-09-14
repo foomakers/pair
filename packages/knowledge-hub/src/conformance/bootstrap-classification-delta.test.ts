@@ -923,7 +923,7 @@ describe('Step 4.3 reports the outcome (DoD)', () => {
   })
 })
 
-describe('root mirror carries the new phase (pair update)', () => {
+describe('root mirror carries the new phase (pair-cli update)', () => {
   it('mirrors Phase 3.6 with prefixed skill references', () => {
     const m = mirrorSkill()
     expect(m).toMatch(/^## Phase 3\.6/m)

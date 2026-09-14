@@ -326,7 +326,7 @@ describe('handleMirrorCleanup', () => {
   // ── Recursive cleanup (#426, absorbed into #393) ──────────────────────────
   // The comparison used to stop at the TOP level: a directory present on both sides was
   // kept and never looked inside, so a file removed from the dataset survived every
-  // `pair update` forever. Measured cost: two how-to guides deleted from the dataset in
+  // `pair-cli update` forever. Measured cost: two how-to guides deleted from the dataset in
   // #246 were still installed ~5 months later and were advertised by `.pair/llms.txt`,
   // so agents were pointed at guides the KB no longer ships.
   it('removes a stale file NESTED under a directory that exists on both sides', async () => {

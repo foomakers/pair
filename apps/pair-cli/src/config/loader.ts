@@ -234,7 +234,7 @@ function summarizeDeclaration(
  * absent from the source. That is a WRITE decision, not a content one — a source
  * declaring `{"include":[]}` widened cleanup ownership to the registry's entire target
  * (verified: it deleted a consumer's `.github/ISSUE_TEMPLATE` and `.github/workflows` on
- * `pair update`), and a source declaring a narrower `include` than the base registry
+ * `pair-cli update`), and a source declaring a narrower `include` than the base registry
  * still moves which of the CONSUMER's own files are liable to deletion (US-396 review
  * round 2, escalated from round 3's Critical). `exclude` stays: it only ever NARROWS what
  * a mirror deletes, never widens it, so it cannot reach this failure mode.
@@ -313,7 +313,7 @@ function isStringArray(value: unknown): boolean {
 /**
  * `source` is where the CLI READS from: `resolveRegistryPaths` does
  * `resolve(datasetRoot, config.source)`, so an absolute path replaces the KB root outright
- * and a `..` walks out of it — a source-declared one would turn `pair install --source`
+ * and a `..` walks out of it — a source-declared one would turn `pair-cli install --source`
  * into "copy arbitrary local files into the consumer's repository" (SSH keys land in a
  * tree the user commits). Layer 2 describes its OWN content, so the path must stay inside
  * the KB: relative, and still inside after normalisation (`a/../../b` included).

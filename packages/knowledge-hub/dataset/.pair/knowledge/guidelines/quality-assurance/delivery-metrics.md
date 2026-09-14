@@ -96,4 +96,4 @@ What each metric needs, and where each adapter exposes it. The adapter is author
 
 - This guideline owns the **definitions**, the **aggregation rules** and the **field mapping**; `analyze-delivery-metrics` is the skill that applies them (three-layer principle, quality model §1).
 - Cadence is the caller's concern (D18): the panel is generated on demand, and an automation loop may drive it periodically. Nothing here schedules anything.
-- The panel is an **operational artifact** under `.pair/working/` — never knowledge, never an adoption write, never touched by `pair install`/`pair update` (D14, working-area convention).
+- The panel is an **operational artifact** under `.pair/working/` — never knowledge, never an adoption write, never touched by `pair-cli install`/`pair-cli update` (D14, working-area convention).

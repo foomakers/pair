@@ -23,7 +23,7 @@ export interface LinkValidationOptions {
   fs: FileSystemService
   /**
    * When supplied AND `strict` is set, external (`http`/`https`) links are probed
-   * with an HTTP HEAD. No CLI path supplies one today — `pair kb-validate --strict`
+   * with an HTTP HEAD. No CLI path supplies one today — `pair-cli kb-validate --strict`
    * makes zero network requests — so this is a module-level capability only.
    */
   httpClient?: HttpClientService

@@ -21,8 +21,8 @@ export function parseKbCacheCommand(
   if (!(ACTIONS as readonly string[]).includes(a)) {
     throw new Error(
       `Unknown kb-cache action "${a}". Expected one of: ${ACTIONS.join(', ')}.\n\n` +
-        `  pair kb-cache list    show every cache slot, its kind and size\n` +
-        `  pair kb-cache prune   remove stale slots (external slots are never removed)`,
+        `  pair-cli kb-cache list    show every cache slot, its kind and size\n` +
+        `  pair-cli kb-cache prune   remove stale slots (external slots are never removed)`,
     )
   }
   return {

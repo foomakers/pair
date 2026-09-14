@@ -4,7 +4,7 @@
  */
 export function renderGitignore(): string {
   return [
-    '# Packaging output (pair package)',
+    '# Packaging output (pair-cli package)',
     'dist/',
     '*.zip',
     '',

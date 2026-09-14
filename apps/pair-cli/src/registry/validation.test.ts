@@ -523,7 +523,7 @@ describe('US-219 — the workflow + agent registries are installable and reserve
 
   it('installs unconditionally, with no tool-gating at install time (ADR-017 §5)', () => {
     // Workflows are Claude-Code-specific and inert elsewhere. Gating the install on the
-    // detected tool would make the artifact absent exactly where a later `pair update`
+    // detected tool would make the artifact absent exactly where a later `pair-cli update`
     // could not add it back without re-running detection.
     // The gate is on the registry's STRUCTURE — the keys that could carry a condition — not on
     // its serialized text. Grepping the whole JSON swept in `description`, where "Claude Code

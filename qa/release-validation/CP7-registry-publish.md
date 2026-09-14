@@ -90,7 +90,7 @@
 
 ---
 
-## MT-CP705: Install + pair install from registry
+## MT-CP705: Install + pair-cli install from registry
 
 **Priority**: P0
 **Preconditions**: MT-CP703 passes

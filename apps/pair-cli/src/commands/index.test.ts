@@ -1,5 +1,27 @@
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { describe, it, expect } from 'vitest'
 import { commandRegistry } from './index'
+
+/**
+ * The name the package actually PUBLISHES, read from the manifest rather than copied.
+ *
+ * A literal here would make this gate blind to the one drift it cannot survive: rename the
+ * `bin` key and every `usage`/`examples` string names a binary no install creates, while a
+ * literal-comparing test stays green — the same "the gate cannot see the drift it exists to
+ * catch" shape that let `usage: 'pair run [options]'` ship. Sole `bin` key by construction:
+ * more than one published name would mean the help text has a choice to make, and this
+ * asserts there is none.
+ */
+function publishedBin(): string {
+  const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8')) as {
+    bin: Record<string, string>
+  }
+  const [name, ...rest] = Object.keys(pkg.bin)
+  expect(rest).toEqual([])
+  if (name === undefined) throw new Error('apps/pair-cli/package.json declares no `bin`')
+  return name
+}
 
 describe('commandRegistry', () => {
   it('exports all expected commands with metadata and parsers', () => {
@@ -23,6 +45,37 @@ describe('commandRegistry', () => {
       expect(typeof entry.handle).toBe('function')
       expect(typeof entry.metadata).toBe('object')
     }
+  })
+
+  // US-449: the published bin is `pair-cli`; a bare `pair` is what no npm install ever
+  // creates. The docs tree has `docs:staleness` to catch that drift, but the CLI's OWN
+  // help text had no gate at all — which is how `run/metadata.ts` arrived (#451) carrying
+  // `usage: 'pair run [options]'` and shipped wrong help while ts:check, lint, the full
+  // test suite and docs:staleness all stayed green. This is that gate: every `usage` and
+  // every `examples` entry in the registry names the real binary.
+  it('every command names the published binary in usage and examples', () => {
+    const bin = publishedBin()
+    const offenders: string[] = []
+    for (const key of Object.keys(commandRegistry)) {
+      const { metadata } = commandRegistry[key as keyof typeof commandRegistry]
+      // `usage` is stricter than `examples`: `cli.ts` renders it by STRIPPING the
+      // `<bin> <command> ` prefix Commander prints itself, and falls back to Commander's
+      // generated line when the prefix is absent. Pinning the full prefix here is what
+      // keeps that fallback dead — a `usage` that drifted would otherwise disappear from
+      // `--help` silently instead of failing.
+      const lines: { where: string; text: string; prefix: string }[] = [
+        { where: `${key}.usage`, text: metadata.usage, prefix: `${bin} ${metadata.name} ` },
+        ...metadata.examples.map((text, i) => ({
+          where: `${key}.examples[${i}]`,
+          text,
+          prefix: `${bin} `,
+        })),
+      ]
+      for (const { where, text, prefix } of lines) {
+        if (!text.startsWith(prefix)) offenders.push(`${where}: ${text}`)
+      }
+    }
+    expect(offenders).toEqual([])
   })
 
   // A closed limitation left in `--help` tells users a delivered feature is broken:

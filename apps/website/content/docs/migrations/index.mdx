@@ -17,7 +17,7 @@ Every pair release that changes the `.pair/adoption/` or `.pair/knowledge/` stru
 
 Before picking a starting page:
 
-- If you still have the KB package/ZIP you installed from, run `pair kb-info <package-path>` to read its version metadata.
+- If you still have the KB package/ZIP you installed from, run `pair-cli kb-info <package-path>` to read its version metadata.
 - Otherwise, check for the structural markers a migration would have added — e.g. does `.pair/adoption/product/context-map.md` exist? Does `.pair/working/` exist? Their absence means you're pre-migration for that jump.
 
 A dedicated CLI check (installed KB vs. current, compared directly) is landing in a follow-up story — until then, use the checks above.
@@ -26,7 +26,7 @@ A dedicated CLI check (installed KB vs. current, compared directly) is landing i
 
 | Version jump | What changed |
 | --- | --- |
-| [v0.4 → v0.5](/docs/migrations/v0.4-to-v0.5) | Canonical backlog states (incl. legacy `Refined` boards), map-subdomains/map-contexts rename, **`pair update` now deletes installed files the KB no longer ships** (grows incrementally as more stories for this jump land) |
+| [v0.4 → v0.5](/docs/migrations/v0.4-to-v0.5) | Canonical backlog states (incl. legacy `Refined` boards), map-subdomains/map-contexts rename, **`pair-cli update` now deletes installed files the KB no longer ships** (grows incrementally as more stories for this jump land) |
 
 ## Related
 

@@ -39,7 +39,7 @@ function renderList(entries: CacheEntry[]): void {
   logger.info(`\n  ${entries.length} entries, ${human(total)} total.`)
   if (stale.length > 0)
     logger.info(
-      `  ${stale.length} prunable (${human(stale.reduce((n, e) => n + e.size, 0))}) — run \`pair kb-cache prune\`.`,
+      `  ${stale.length} prunable (${human(stale.reduce((n, e) => n + e.size, 0))}) — run \`pair-cli kb-cache prune\`.`,
     )
 }
 

@@ -176,7 +176,7 @@ describe('cache-slot-key — key → path mapping', () => {
 
   /**
    * The cache root feeds every slot path, and `purgeSlot` deletes a slot recursively.
-   * A relative override would resolve slots against the process cwd, so `pair install`
+   * A relative override would resolve slots against the process cwd, so `pair-cli install`
    * inside a repository would create AND recursively delete directories in it.
    */
   it('refuses a relative PAIR_KB_CACHE_DIR instead of resolving slots against the cwd', () => {

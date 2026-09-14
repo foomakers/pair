@@ -655,25 +655,25 @@ describe('brainstorm — catalog registration (#230)', () => {
       '/pair-process-brainstorm',
     ],
   ] as const) {
-    it(`${label} next catalog lists brainstorm and states 10 process / 50 total`, () => {
+    it(`${label} next catalog lists brainstorm and states 10 process / 44 total`, () => {
       expect(next).toContain(`\`${command}\``)
       expect(next).toContain('10 process')
-      expect(next).toContain('50 skills')
+      expect(next).toContain('44 skills')
     })
 
-    it(`${label} skills-guide lists brainstorm and states 10 process / 50 total`, () => {
+    it(`${label} skills-guide lists brainstorm and states 10 process / 44 total`, () => {
       expect(guide).toContain(`\`${command}\``)
       expect(guide).toContain('10 process')
-      expect(guide).toMatch(/Total: 50/)
+      expect(guide).toMatch(/Total: 44/)
     })
 
-    it(`${label} way-of-working states the 50-skill catalog`, () => {
-      expect(wow).toContain('50 skills')
+    it(`${label} way-of-working states the 44-skill catalog`, () => {
+      expect(wow).toContain('44 skills')
     })
 
-    it(`${label} getting-started states 50 Agent Skills (10 process + 32 capability + 6 workflow + 2 navigator)`, () => {
-      expect(gettingStarted).toContain('50 Agent Skills')
-      expect(gettingStarted).toContain('(10 process + 32 capability + 6 workflow + 2 navigator)')
+    it(`${label} getting-started states 44 Agent Skills (10 process + 32 capability + 2 navigator)`, () => {
+      expect(gettingStarted).toContain('44 Agent Skills')
+      expect(gettingStarted).toContain('(10 process + 32 capability + 2 navigator)')
     })
   }
 })
@@ -819,7 +819,7 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
     // number. Measure what the name says.
     // #280 review finding (Minor): it measured the DATASET copy only. The budget
     // exists to bound the entrypoint an assistant actually LOADS, and that is the
-    // INSTALLED MIRROR — `pair install`'s output, systematically larger than its
+    // INSTALLED MIRROR — `pair-cli install`'s output, systematically larger than its
     // source because the transform expands every `/skill` reference to its namespaced
     // form. A dataset-only guard therefore reported green on a tree whose SHIPPED file
     // was already over budget. The overshoot is this branch's, not `main`'s — on
@@ -828,14 +828,6 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
     // with the dataset copy still green. Both copies are measured now, the MIRROR is the binding one, and
     // the budget was NOT raised to absorb it: brainstorm's Notes restatements were
     // disclosed away (they duplicated the preamble, Parametrization and Phase 3).
-    // #251 review round 10 (Questions): this branch's profile delta left the mirror
-    // at 28,643 B — 29 B of headroom, so the NEXT unrelated PR would have paid for a
-    // disclosure split it did not come for (a one-word clarification, or `pair
-    // update` re-expanding one `/skill` reference, is already over). The split was
-    // taken here instead and the budget again NOT raised: the Parametrization
-    // paragraph restating parametrization.md's own precedence prose, and the Notes
-    // bullet restating the three sibling pointers already carried by their own
-    // sections. Mirror 28,643 → 27,979 B.
     const BUDGET_BYTES = 28 * 1024
     for (const v of VARIANTS) {
       const size = Buffer.byteLength(v.content, 'utf-8')

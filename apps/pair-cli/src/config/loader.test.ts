@@ -594,7 +594,7 @@ describe('config loader - project layer when the module dir is not the project r
  * a declaration that is well-formed field-by-field but incoherent with the layer beneath
  * is backed out whole, with a warning.
  *
- * Before this: `pair install --source ./kb` against a KB shipping
+ * Before this: `pair-cli install --source ./kb` against a KB shipping
  * `{"asset_registries":{"knowledge":{"include":"*.md"}}}` (string, not array) threw
  * `Registry 'knowledge' include must be an array of strings` out of `setupInstallContext`,
  * printed it naming the CONSUMER's registry, exited 1 and installed nothing. `include` is

@@ -150,7 +150,7 @@ export const REMEDY_SCRIPT = 'format'
  * The second step is not optional advice: `packages/knowledge-hub/dataset/.skills/**`
  * IS in format scope (workspace package), while its generated twin
  * `.claude/skills/pair-<prefixed>/**` is NOT (`.claude/` is not a workspace member),
- * and `skill-md-mirror` asserts the two are byte-equal through the real `pair update`
+ * and `skill-md-mirror` asserts the two are byte-equal through the real `pair-cli update`
  * transform. So a format-only edit to the dataset copy turns a green `format:check`
  * into a red `skills:conformance` LATER IN THE SAME GATE. Advertising `pnpm format`
  * alone would hand the developer a loop back to `--no-verify`. Structural fix (one
@@ -160,7 +160,7 @@ export const PRE_PUSH_REMEDY =
   'Formatting is checked, not applied, before a push: run `pnpm format` and commit the result. ' +
   'Applying it here could not fix the commits being pushed anyway. ' +
   'If `pnpm format` touched `packages/knowledge-hub/dataset/.skills/**`, re-sync the generated ' +
-  '`.claude/skills/**` copies (`pair update`) in the same commit, or `skills:conformance` fails ' +
+  '`.claude/skills/**` copies (`pair-cli update`) in the same commit, or `skills:conformance` fails ' +
   'later in this same gate on the mirror-equality guard.'
 
 /** Bounds the transitive expansion, so a cyclic or deep script graph terminates. */

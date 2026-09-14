@@ -7,7 +7,7 @@ This guide explains how to install pair's Knowledge Base from sources other than
 
 ## Default Behavior
 
-By default, `pair install` auto-downloads the KB from the latest GitHub release. You only need this guide if you need to:
+By default, `pair-cli install` auto-downloads the KB from the latest GitHub release. You only need this guide if you need to:
 
 - Use a custom mirror or internal artifact server
 - Install from a local directory or ZIP file
@@ -18,7 +18,7 @@ By default, `pair install` auto-downloads the KB from the latest GitHub release.
 Provide any HTTP/HTTPS URL pointing to a KB ZIP package:
 
 ```bash
-pair install --source https://internal-mirror.company.com/kb-v1.2.0.zip
+pair-cli install --source https://internal-mirror.company.com/kb-v1.2.0.zip
 ```
 
 The CLI downloads the package, validates its integrity (SHA-256 checksum), and installs all registries.
@@ -29,11 +29,11 @@ If your organization hosts KB artifacts on an internal server:
 
 ```bash
 # One-time install
-pair install --source https://artifacts.company.com/pair/kb-latest.zip
+pair-cli install --source https://artifacts.company.com/pair/kb-latest.zip
 
 # Or set a default via environment variable
 export PAIR_KB_DEFAULT_URL=https://artifacts.company.com/pair/kb-latest.zip
-pair install
+pair-cli install
 ```
 
 ## Install from a Git Repository
@@ -42,14 +42,14 @@ Point `--source` to any Git repository URL. pair-cli clones the repo (shallow, d
 
 ```bash
 # HTTPS (public repo)
-pair install --source https://github.com/acme/kb-artifacts.git
+pair-cli install --source https://github.com/acme/kb-artifacts.git
 
 # SSH
-pair install --source git@github.com:acme/kb-artifacts.git
+pair-cli install --source git@github.com:acme/kb-artifacts.git
 
 # Pin to a tag or branch with #ref
-pair install --source https://github.com/acme/kb-artifacts.git#v1.0.0
-pair install --source git@github.com:acme/kb-artifacts.git#main
+pair-cli install --source https://github.com/acme/kb-artifacts.git#v1.0.0
+pair-cli install --source git@github.com:acme/kb-artifacts.git#main
 ```
 
 ### Private Repositories
@@ -60,7 +60,7 @@ For **HTTPS URLs** to private repos, set `PAIR_GIT_TOKEN`:
 
 ```bash
 export PAIR_GIT_TOKEN=ghp_your_personal_access_token
-pair install --source https://github.com/acme/private-kb.git#v2.0.0
+pair-cli install --source https://github.com/acme/private-kb.git#v2.0.0
 ```
 
 In CI/CD, inject the token as a secret:
@@ -68,13 +68,13 @@ In CI/CD, inject the token as a secret:
 ```yaml
 env:
   PAIR_GIT_TOKEN: ${{ secrets.GIT_TOKEN }}
-run: pair install --source https://github.com/acme/kb-artifacts.git#v1.0.0
+run: pair-cli install --source https://github.com/acme/kb-artifacts.git#v1.0.0
 ```
 
 The `update` command works the same way:
 
 ```bash
-pair update --source https://github.com/acme/kb-artifacts.git#v2.0.0
+pair-cli update --source https://github.com/acme/kb-artifacts.git#v2.0.0
 ```
 
 ## Install from a Local Path
@@ -83,13 +83,13 @@ Point `--source` to a local directory or ZIP file:
 
 ```bash
 # From an absolute path
-pair install --source /path/to/kb-content
+pair-cli install --source /path/to/kb-content
 
 # From a relative path
-pair install --source ./local-kb
+pair-cli install --source ./local-kb
 
 # From a ZIP file
-pair install --source ./downloads/kb-v1.0.0.zip
+pair-cli install --source ./downloads/kb-v1.0.0.zip
 ```
 
 ### When to Use Local Paths
@@ -103,7 +103,7 @@ pair install --source ./downloads/kb-v1.0.0.zip
 For air-gapped or network-restricted environments, combine `--offline` with `--source`:
 
 ```bash
-pair install --offline --source ./kb-content
+pair-cli install --offline --source ./kb-content
 ```
 
 The `--offline` flag tells the CLI to skip any network requests. It requires `--source` pointing to a local path.
@@ -126,7 +126,7 @@ wget https://github.com/foomakers/pair/releases/latest/download/kb.zip
 unzip kb.zip -d ./kb-content
 
 # Install in offline mode
-pair install --offline --source ./kb-content
+pair-cli install --offline --source ./kb-content
 ```
 
 ### Constraints
@@ -148,10 +148,10 @@ Always verify a KB package before installing from an untrusted source:
 
 ```bash
 # Verify integrity
-pair kb-verify ./kb-package.zip
+pair-cli kb-verify ./kb-package.zip
 
 # If verification passes, install
-pair install --source ./kb-package.zip
+pair-cli install --source ./kb-package.zip
 ```
 
 The verification checks SHA-256 checksum, package structure, and manifest validity.
@@ -162,10 +162,10 @@ The `update` command accepts the same `--source` and `--offline` flags:
 
 ```bash
 # Update from custom URL
-pair update --source https://mirror.company.com/kb-v2.0.0.zip
+pair-cli update --source https://mirror.company.com/kb-v2.0.0.zip
 
 # Update from local path (offline)
-pair update --offline --source ./updated-kb
+pair-cli update --offline --source ./updated-kb
 ```
 
 ## Related
