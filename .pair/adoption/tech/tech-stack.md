@@ -51,6 +51,8 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 - markdown-it v14.1.0 is adopted for Markdown parsing.
 - mdast v3.0.0 and @types/mdast v3.0.15 are adopted for Markdown AST types.
 - remark-parse v11.0.0 and unified v11.0.5 are adopted for the unified ecosystem.
+- @mdx-js/mdx v3.1.1 and remark-gfm v4.0.1 are adopted as `apps/website` devDependencies — the same pair fumadocs resolves — so the docs gate compiles pages with the site's own MDX pipeline to find the repo citations it renders as links (ADL 2026-09-08-repo-citations-are-gated-through-the-site-compiler).
+- github-slugger v2.0.0 and mdast-util-to-string v4.0.0 are adopted as `apps/website` devDependencies (alongside the already-adopted remark-parse and unified) so the docs gate computes repo-citation heading anchors exactly as github.com does, offline — see ADL 2026-09-08-repo-citation-anchors-are-githubs-own-slugs.
 - @types/markdown-it v14.1.2 is adopted for TypeScript types for markdown-it.
 
 ## Website & documentation
