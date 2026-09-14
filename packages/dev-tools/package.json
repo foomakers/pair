@@ -24,6 +24,7 @@
     "llms-index:regen": "ts-node -T src/quality-gates/llms-txt-regenerate.ts"
   },
   "devDependencies": {
+    "@pair/content-ops": "workspace:*",
     "@pair/eslint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
     "@pair/markdownlint-config": "workspace:*",
@@ -34,8 +35,7 @@
     "@vitest/coverage-v8": "catalog:",
     "typescript": "catalog:",
     "ts-node": "catalog:",
-    "yaml": "catalog:",
-    "@pair/content-ops": "workspace:*"
+    "yaml": "catalog:"
   },
   "prettier": "@pair/prettier-config"
 }
