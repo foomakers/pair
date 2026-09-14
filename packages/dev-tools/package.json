@@ -1,7 +1,7 @@
 {
   "name": "@pair/dev-tools",
   "version": "0.4.3",
-  "description": "Pair's own automation scripts for development and deployment (code-hygiene, sync-version, benchmark-update-link, determine-version) as tested TypeScript modules — the reference pattern for repo quality gates and release tooling.",
+  "description": "Pair's own automation scripts for development and deployment (code-hygiene, sync-version, benchmark-update-link, determine-version) as tested TypeScript modules \u2014 the reference pattern for repo quality gates and release tooling.",
   "private": true,
   "scripts": {
     "prettier:fix": "prettier-fix",
@@ -14,16 +14,16 @@
     "mdlint:check": "markdownlint-check",
     "mdlint:fix": "markdownlint-fix",
     "code-hygiene:check": "ts-node src/quality-gates/code-hygiene-check.ts",
-    "llms-index:check": "ts-node -T src/quality-gates/llms-txt-drift-check.ts",
-    "llms-index:regen": "ts-node -T src/quality-gates/llms-txt-regenerate.ts",
     "smoke-modes:check": "ts-node src/quality-gates/smoke-scenario-modes.ts",
     "sync-version": "ts-node src/quality-gates/sync-version-in-docs.ts",
     "benchmark-update-link": "ts-node src/quality-gates/benchmark-update-link.ts",
     "determine-version": "ts-node src/release/determine-version.ts",
-    "pre-push-gate:check": "ts-node src/quality-gates/pre-push-gate-composition.ts"
+    "pre-push-gate:check": "ts-node src/quality-gates/pre-push-gate-composition.ts",
+    "format-workflow:check": "ts-node src/quality-gates/format-workflow-composition.ts",
+    "llms-index:check": "ts-node -T src/quality-gates/llms-txt-drift-check.ts",
+    "llms-index:regen": "ts-node -T src/quality-gates/llms-txt-regenerate.ts"
   },
   "devDependencies": {
-    "@pair/content-ops": "workspace:*",
     "@pair/eslint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
     "@pair/markdownlint-config": "workspace:*",
@@ -33,7 +33,8 @@
     "vite-tsconfig-paths": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "typescript": "catalog:",
-    "ts-node": "catalog:"
+    "ts-node": "catalog:",
+    "yaml": "catalog:"
   },
   "prettier": "@pair/prettier-config"
 }
