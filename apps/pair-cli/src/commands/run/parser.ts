@@ -204,9 +204,12 @@ function resolveDispatch(options: ParseRunOptions): RunDispatchRequest | undefin
 function resolveCardTags(raw: string | undefined): readonly string[] {
   if (raw === undefined || raw.trim().length === 0) return []
   const trimmed = raw.trim()
-  // Lossless JSON serialization (preferred): ['tag1', 'tag2,with,comma']
-  // Backwards-compatible comma-split for legacy callers.
-  let tags: string[]
+  const tags = parseCardTags(trimmed)
+  validateTags(tags, raw.trim())
+  return tags
+}
+
+function parseCardTags(trimmed: string): string[] {
   const looksLikeJson = trimmed.startsWith('[') || trimmed.startsWith('{')
   if (looksLikeJson) {
     let parsed: unknown
@@ -216,22 +219,22 @@ function resolveCardTags(raw: string | undefined): readonly string[] {
       throw new Error('--card-tags contains invalid JSON')
     }
     if (Array.isArray(parsed) && parsed.every(t => typeof t === 'string')) {
-      tags = parsed
-    } else {
-      throw new Error('--card-tags JSON must be a string array')
+      return parsed
     }
-  } else {
-    tags = trimmed
-      .split(',')
-      .map(tag => tag.trim())
+    throw new Error('--card-tags JSON must be a string array')
   }
+  return trimmed
+    .split(',')
+    .map(tag => tag.trim())
+}
+
+function validateTags(tags: string[], rawTrimmed: string): void {
   for (const tag of tags) {
     if (tag.length === 0) {
-      throw new Error(`--card-tags contains an empty tag: ${raw.trim()}`)
+      throw new Error(`--card-tags contains an empty tag: ${rawTrimmed}`)
     }
     if (!isSafePromptText(tag)) throw new Error(promptSafetyFailure('--card-tags', tag))
   }
-  return tags
 }
 
 function resolveScope(options: ParseRunOptions): RunScopeOptions {
