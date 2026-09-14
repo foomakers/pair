@@ -14,7 +14,7 @@ Convention Adoption
 
 ## Context
 
-`pair run` refuses every flag passed with an empty value — `--root ""`, `--filter ""`, `--skill ""` all fail at parse time, deliberately: a flag named with nothing behind it is a caller bug, and accepting it silently is how an unattended run ends up doing something nobody asked for.
+`pair-cli run` refuses every flag passed with an empty value — `--root ""`, `--filter ""`, `--skill ""` all fail at parse time, deliberately: a flag named with nothing behind it is a caller bug, and accepting it silently is how an unattended run ends up doing something nobody asked for.
 
 Story #217's `--card-tags` inherited that rule, and the end-to-end test on a populated board (T5) showed it was the wrong rule for this one flag. The dispatch entry point is called by a **host trigger**, and the reference GitHub adapter renders the labels it observed as `join(github.event.issue.labels.*.name, ',')`. On an issue with **no labels** that expression renders `""`. So the very state AC2 is about — "an issue with no mapped tag runs nothing" — arrived at the parser as an empty value and was rejected with `--card-tags was passed with an empty value`, exit 1.
 

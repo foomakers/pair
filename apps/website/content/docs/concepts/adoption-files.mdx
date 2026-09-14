@@ -67,6 +67,59 @@ Defines your development process:
 
 It also hosts an optional `## State Mapping` section — only needed if your board's column names differ from pair's [canonical states](/docs/concepts/canonical-states). Omitted by default.
 
+#### `## Process Profile` — running a subset of the process
+
+Optional. Not every team runs every step. A `## Process Profile` section declares which **process steps** this project does, and no disabled step is ever proposed.
+
+```text
+## Process Profile
+
+- `profile`: `poc`
+```
+
+| Profile   | What it enables                                                                                                      |
+| --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `default` | Every step. **This is what an absent section means** — a team running the full process configures nothing.             |
+| `poc`     | No DDD mapping and no strategic planning layer: `specify-prd`, `bootstrap`, `brainstorm`, `plan-stories`, `refine-story`, `plan-tasks`, `implement`, `review`. |
+| `custom`  | Exactly the steps you name in a `whitelist`.                                                                           |
+
+```text
+## Process Profile
+
+- `profile`: `custom`
+- `whitelist`: `brainstorm`, `plan-stories`, `refine-story`, `plan-tasks`, `implement`, `review`
+```
+
+**The unit is the step, not the skill.** A step has up to two representations — a how-to guide (the manual path) and an executable skill — and the profile governs the step, so a project with **no skills installed**, working from the how-to guides by hand, gets exactly the same behaviour. The mapping lives in the [step catalogue](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/step-catalogue.md); the schema and the built-in profiles in [process-profiles.md](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md).
+
+What a disabled step does, in the three places you can meet one:
+
+- `/pair-next` never proposes it.
+- Invoked **directly**, the skill warns that the step is disabled and asks for confirmation — a profile is a project convention, not a permission system.
+- Reached as a **composition** from an enabled step, it is silently skipped, exactly like a skill that is not installed. It never stops to ask about a step you did not name.
+
+A profile is **validated, not trusted**: a misread profile does not surface as an error anyone sees — it removes a step from every suggestion, which looks exactly like that step not being due yet. Every case below **HALTs** instead of quietly resolving to `default`.
+
+| Case                                                                                  | Outcome                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unknown profile name, or an unknown step id in a `whitelist`                          | **HALT**, listing the valid values — in two deliberately different messages: a typo in a step id is not the same mistake as naming a profile that does not exist.            |
+| `custom` with **no** `whitelist`, or with an **empty** one                            | **HALT**, again in two messages — "you wrote none" is not "you wrote an empty one". An empty whitelist is a misconfiguration, never "everything off".                        |
+| A line the schema can't read (`- profile: poc`, value unbackticked)                   | **HALT** restating the shape. The key is detected loosely and its value accepted strictly: reading the line as "no declaration" resolves to `default` and re-enables the whole process. |
+| A **partially** readable whitelist (`` - `whitelist`: `implement`, review ``)         | **HALT** on the whole line, never on the readable half — keeping the backticked ids and dropping the bare one would remove a step with nothing reported.                     |
+| The section declared **twice**, at a level other than `##`, or as a **setext** heading | **HALT**. Only the first section is read, and a heading at another level (`### Process Profile`) is not this section at all.                                                 |
+| The same key on **two lines**, or a key with no bullet or a numbered one (`1.`)        | **HALT**. Only the last line would be read; a bullet-less key would be passed over as prose and resolve to `default`. Backticks are optional behind a marker and required without one, so `1. profile: poc` HALTs too — the two errors compose.                                                        |
+| A value that **spills** past its key's line (wrapped, or ending on a dangling `,`)     | **HALT**. Read up to the wrap the line looks complete, so the ids after it vanish from every suggestion with nothing reported.                                               |
+| A key **indented** by four spaces or a tab                                            | **HALT** — at that indent it is indistinguishable from a sublist item, and the same key indented by two spaces IS read.                                                       |
+| A key inside a **blockquote** (`` > - `profile`: `poc` ``)                            | **HALT**. `>` is not indentation, so the line would be passed over as prose and resolve to `default`. A key inside a documentation **table row** is the deliberate opposite: no declaration, and no HALT either. |
+| A key under **no `## Process Profile` section at all** — `## Process Profiles` (plural), `## ProcessProfile`, an unrelated heading, or none | **HALT** naming the line. Every heading rule above closes only the spellings it names; a key outside every section was read by nothing and reported by nothing, which is the same silent `default`. A key-shaped line in a code block, an HTML comment or a table row is not a key. |
+| The same step id named **twice** in one whitelist                                     | **HALT** naming it — never deduped in silence: a repeat is as likely an unfinished edit as a harmless one, and unread it doubles that step's warning and every "N steps enabled" count. |
+| An **unterminated** fence or HTML comment anywhere in the file                        | **HALT**. Everything after it reads as non-content, so the real section is never found and nothing else would report that the file went unread.                              |
+| A whitelist that disables a step another enabled step depends on                      | **Reported** with the minimal fix — the one case that is not fatal, and never silently repaired.                                                                             |
+
+What the reader accepts without complaint: the **heading** spelled as loosely as the keys (`## Process profile`, `## Process Profile (optional)`, the closed-ATX `## Process Profile ##`, up to three spaces of indent), so decorating it cannot make the declaration evaporate; the **key in any case** (`` - `Profile`: `poc` ``, `` - `Whitelist`: … ``) — case is part of the key's spelling, so it is detected like any other decoration, while the **value** stays strict (`` `POC` `` is an unknown profile name and HALTs); **CRLF** files, normalized before anything is read (read literally, a Windows checkout would match no key and no heading at all); and all three CommonMark **code-block forms** — ```` ``` ````, `~~~` and four-space indent — as examples, never declarations, with a fence closing only on a run of the same character at least as long as the one that opened it and HTML comments masked, so neither an illustrative block nor a commented-out section can become the project's profile.
+
+Guidelines are **not** steps: testing, security, code design and the quality gates apply to whatever process you run, so `poc` shortens the process without loosening the bar on the code.
+
 ### PRD.md
 
 Your Product Requirements Document — the source of truth for what the project does, who it serves, and what features are prioritized (P0/P1/P2).
@@ -90,7 +143,7 @@ If the file doesn't exist, AI assistants skip the domain check entirely — this
 
 ### automation.md
 
-Optional. `tech/automation.md` declares how much of the delivery flow may run **unattended**, in seven independent sections `pair-loop` and `pair run` read. Each has its own fail-closed default — absent file or absent section never widens automation, only a project that writes the section opts in. Six of them are below; the seventh, `## Harness` / `## Model Policy` (supported engines, per-tier model class), lives in the [guideline](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md).
+Optional. `tech/automation.md` declares how much of the delivery flow may run **unattended**, in seven independent sections `pair-loop` and `pair-cli run` read. Each has its own fail-closed default — absent file or absent section never widens automation, only a project that writes the section opts in. Six of them are below; the seventh, `## Harness` / `## Model Policy` (supported engines, per-tier model class), lives in the [guideline](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md).
 
 ```text
 ## Eligibility
@@ -151,7 +204,7 @@ Five properties are worth knowing before you write one:
 - **The card travels as the workflow's own argument.** `pair-loop` takes it as `--root <card>` and `pair-process-plan-tasks` as `--story <card>` — and the latter selects the highest-priority story on the board when it gets no story at all, so a workflow the dispatcher cannot scope to the card is refused rather than run on a card nobody tagged. Those two *are* the mappable set: a skill outside it is refused even when installed, because a dispatch takes the card's lock and posts a record on it, and doing that for a skill that only reports leaves a card claiming work nothing did.
 - **A workflow that needs a human in the room is not mappable.** A dispatch runs unattended, so `auto-refine ⇒ pair-process-refine-story` is refused even though the dispatcher knows how to scope it: refinement's alignment gate ends only on an explicit human approval, and unattended that means either a stall until the timeout — holding the card's lock, on a card publicly commented as started — or an agent approving its own work past the gate. Refine by hand; map the tags for what follows.
 
-Eligibility is applied **before** routing, so a mapped card that does not carry the eligibility label is skipped and logged without ever being routed. A trigger passes the card and its labels to the entry point — [`pair run --card <id> --card-tags <list>`](/docs/reference/cli/commands#run) — which is where the routing happens.
+Eligibility is applied **before** routing, so a mapped card that does not carry the eligibility label is skipped and logged without ever being routed. A trigger passes the card and its labels to the entry point — [`pair-cli run --card <id> --card-tags <list>`](/docs/reference/cli/commands#run) — which is where the routing happens.
 
 ### risk-matrix.md
 

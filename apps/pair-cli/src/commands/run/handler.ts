@@ -197,7 +197,7 @@ function resolveRun(
 }
 
 function report(resolved: ResolvedRun, policyWarnings: readonly string[]): void {
-  console.log(chalk.bold('pair run'))
+  console.log(chalk.bold('pair-cli run'))
   if (resolved.dispatch) console.log(`  ${describeDispatch(resolved.dispatch)}`)
   console.log(`  ${describeEngineResolution(resolved.engine)}`)
   console.log(`  ${describeSkillResolution(resolved.invocation)}`)
@@ -216,7 +216,7 @@ function report(resolved: ResolvedRun, policyWarnings: readonly string[]): void 
 }
 
 /**
- * Handles `pair run` — the execution adapter (US-451).
+ * Handles `pair-cli run` — the execution adapter (US-451).
  *
  * Composes resolution → refusals → the re-invocation loop. The process logic stays in the skill:
  * this handler decides HOW to invoke, never WHAT to work on (BR1), and never merges (AC10).

@@ -1045,7 +1045,7 @@ describe('automation-policy.md — the workflow catalog (story #217 T4)', () => 
    *
    * The excluded case, concretely: a team copies the guideline's own example into
    * `tech/automation.md` and labels Draft card 304 `auto-refine` + `risk:green`. The trigger fires
-   * `pair run --card 304 --card-tags "auto-refine,risk:green" --autonomous`; the driver takes 304's
+   * `pair-cli run --card 304 --card-tags "auto-refine,risk:green" --autonomous`; the driver takes 304's
    * exclusive lock, appends `event=start`, prints the `DISPATCH-RECORD:` line the adapter posts as a
    * public comment on the card, and spawns the workflow under `bypassPermissions`. If that workflow
    * mandates explicit human alignment, the run either stalls on a question no one answers until the
@@ -1219,7 +1219,7 @@ describe('docs site — tag-driven dispatch is documented where an operator look
 
   it('the unattended-delivery tutorial shows the trigger-driven variant', () => {
     expect(tutorial).toMatch(/## Workflows/)
-    expect(tutorial).toMatch(/pair run --card/)
+    expect(tutorial).toMatch(/pair-cli run --card/)
   })
 
   it('every surface counts the policy file the way the guideline does', () => {

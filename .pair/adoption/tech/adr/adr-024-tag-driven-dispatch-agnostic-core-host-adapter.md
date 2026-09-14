@@ -11,7 +11,7 @@ Accepted
 ## Context
 
 - Story #217 (R4.4, epic #212) asks for **tag-driven workflows**: different tags trigger different workflows, exclusively on tagged issues, with the tag→workflow mapping declared in adoption. Automation must start **only** where a team explicitly enabled it, and each tag must route to the right behavior.
-- The pieces around it already exist and must not be re-decided: `## Eligibility` (#216) selects *which cards* an unattended run may pick up; `pair-next` stays the frozen selector atom (ADR-017 §1); `pair run` is the portable execution adapter and the ADR-021 tier-2 entry point (#451); `pair-loop` and the other process skills are the workflows themselves.
+- The pieces around it already exist and must not be re-decided: `## Eligibility` (#216) selects *which cards* an unattended run may pick up; `pair-next` stays the frozen selector atom (ADR-017 §1); `pair-cli run` is the portable execution adapter and the ADR-021 tier-2 entry point (#451); `pair-loop` and the other process skills are the workflows themselves.
 - What was **not** decided anywhere: where the tag→workflow mapping lives, who evaluates it, how the "run start is recorded on the issue" (AC3) happens given that the driver deliberately holds **no tracker credentials**, and how a trigger burst is prevented from starting two runs on one card.
 - **Hard to reverse**: the mapping's grammar becomes adoption content in every adopting project, and the entry point's flags become a public CLI contract that host triggers are written against.
 - **Surprising without context**: that the driver is *told* the card's labels instead of reading them from the tracker; that an unmapped card is skipped by *absence of a route* rather than by a guard; and that the on-issue comment is emitted as a line on stdout for someone else to post.
@@ -27,7 +27,7 @@ Accepted
 
 ### Option 2: the CLI grows a tracker client and reads the card's labels itself
 
-- **Description**: `pair run --card 217` fetches the issue from the code host, reads its labels, then routes.
+- **Description**: `pair-cli run --card 217` fetches the issue from the code host, reads its labels, then routes.
 - **Pros**: one argument instead of two; the operator cannot pass stale labels.
 - **Cons**: puts host credentials and a per-host API client into the driver, which is the one component that is deliberately host-agnostic — and multiplies by every tracker pair supports. It also duplicates what the trigger already knows: a host workflow firing on a label event *has* the labels in hand.
 
@@ -39,9 +39,9 @@ See Decision.
 
 1. **The mapping is adoption data**: a seventh section of the optional `.pair/adoption/tech/automation.md`, `## Workflows`, with entries `<tag> ⇒ <workflow>` and an optional `Precedence:` line. Its schema is owned by the KB guideline `collaboration/automation/automation-policy.md` (D21: adoption is the delta, the KB is the schema). The **tag is an opaque routing key** and the **workflow is a skill name** — so no classification criterion ever lives in code (D18). The *set of nameable workflows* is not open, and item 7 is why: it is the KB catalog, held in the driver as data and asserted equal to the guideline's table by test.
 
-2. **The routing core is a pure function in the entry point** (`pair run`, ADR-021 tier 2): `dispatch.ts` takes the card, the labels a trigger observed, the policy and an installed-skill probe, and returns *route* or *skip*, or HALTs. It performs no I/O, holds no credentials, and knows nothing about the tracker. The order is normative — **mapping → eligibility → routing** — so an ineligible card is skipped before its tags are read at all.
+2. **The routing core is a pure function in the entry point** (`pair-cli run`, ADR-021 tier 2): `dispatch.ts` takes the card, the labels a trigger observed, the policy and an installed-skill probe, and returns *route* or *skip*, or HALTs. It performs no I/O, holds no credentials, and knows nothing about the tracker. The order is normative — **mapping → eligibility → routing** — so an ineligible card is skipped before its tags are read at all.
 
-3. **The card's labels are an input, not a lookup**: `pair run --card <id> --card-tags <list>`. The trigger's own **thin per-host adapter** (a GitHub Actions job, a webhook runner) supplies both, under the credentials it already runs with. Adding a code host is a new adapter, never a change to the core. Both values are untrusted host data and are content-checked at parse time, exactly as `--root`/`--filter` already are.
+3. **The card's labels are an input, not a lookup**: `pair-cli run --card <id> --card-tags <list>`. The trigger's own **thin per-host adapter** (a GitHub Actions job, a webhook runner) supplies both, under the credentials it already runs with. Adding a code host is a new adapter, never a change to the core. Both values are untrusted host data and are content-checked at parse time, exactly as `--root`/`--filter` already are.
 
 4. **The on-issue audit is split, and the split is the point**: every decision (start/skip/end) is appended to the run's `## Audit Location` file, and the `start` record — **and only that one** — is *also* printed as a single `DISPATCH-RECORD:` line for the host adapter to post as a comment on the card. The driver writes files and prints lines; it never posts to a tracker. Skips and ends stay in the file deliberately: a card that gets a comment for every unmapped label edit is unreadable within a day, and the `end` duplicates on the card what the trail already holds. AC3 asks for the run *start* on the issue, and that is exactly what ships.
 
