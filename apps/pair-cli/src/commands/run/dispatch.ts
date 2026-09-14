@@ -179,7 +179,7 @@ function assertWorkflowsInstalled(mapping: WorkflowMapping, isInstalled: SkillPr
     if (isInstalled(route.workflow)) continue
     policyHalt(
       `\`## Workflows\` maps \`${route.tag}\` to \`${route.workflow}\`, which is not installed — ` +
-        `install it with \`pair install\`, or map the tag to a workflow this project has`,
+        `install it with \`pair-cli install\`, or map the tag to a workflow this project has`,
     )
   }
 }
