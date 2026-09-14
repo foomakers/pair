@@ -24,6 +24,7 @@
     "llms-index:regen": "ts-node -T src/quality-gates/llms-txt-regenerate.ts"
   },
   "devDependencies": {
+    "@pair/content-ops": "workspace:*",
     "@pair/eslint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
     "@pair/markdownlint-config": "workspace:*",

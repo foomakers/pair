@@ -497,6 +497,9 @@ importers:
 
   packages/dev-tools:
     devDependencies:
+      '@pair/content-ops':
+        specifier: workspace:*
+        version: link:../content-ops
       '@pair/eslint-config':
         specifier: workspace:*
         version: link:../../tools/eslint-config
