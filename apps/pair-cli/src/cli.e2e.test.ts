@@ -1,5 +1,9 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
+import { fileSystemService } from '@pair/content-ops'
 import {
   installCommand,
   handleInstallCommand,
@@ -8,7 +12,9 @@ import {
   handlePackageCommand,
   handleScaffoldKbCommand,
   handleKbInfoCommand,
+  commandRegistry,
 } from './commands'
+import type { IterationResult } from './commands/run/stream-reader'
 
 /**
  * pair-cli e2e suite.
@@ -257,6 +263,266 @@ describe('pair-cli e2e', () => {
       expect(clean.report.installed.version).toBe('1.2.0')
       expect(clean.report.current.version).toBe('1.2.0')
       expect(clean.report.migrationUrl).toBeUndefined()
+    })
+  })
+
+  /**
+   * US-217 T-5 — tag-driven dispatch against a POPULATED BOARD, end to end.
+   *
+   * Genuinely e2e by this suite's own bar (see the header): the run is driven through the command
+   * registry the CLI dispatches on, against a REAL project directory, and each dispatch hands state
+   * to the next one through artifacts on disk — the per-card lock and the appended audit file. The
+   * module suites prove each decision in isolation with the lock and the audit writer injected;
+   * what only this level can show is that five triggers fired at one project leave exactly the runs,
+   * the trail and the locks they should, with nothing shared between them but the filesystem.
+   *
+   * The board is the fixture: one card per case the story names — routed, untagged, eligible but
+   * unmapped, multi-tagged, mapped but ineligible. The ONLY injected dependency is the engine spawn,
+   * because a test that starts a real agent is not a test.
+   */
+  describe('tag-driven dispatch on a populated board (US-217)', () => {
+    const POLICY = `## Eligibility
+
+risk:green
+
+## Workflows
+
+auto-plan ⇒ pair-process-plan-tasks
+auto-dev ⇒ pair-loop
+Precedence: auto-plan, auto-dev
+`
+
+    /**
+     * The cards a trigger fires on, with the labels it observed at that moment — and everything
+     * each one must produce.
+     *
+     * The fixture IS the assertion set: `routes` is the prompt the engine must be given (absent ⇒
+     * nothing may spawn, nothing may be recorded on the card) and `trail` is what the audit file
+     * must say about that card. Every check below iterates these rows, so a row added here is a
+     * row checked, and a row whose workflow, scoping argument or skip reason changes fails on its
+     * own row instead of shifting a positional index under an assertion about a different card.
+     */
+    const BOARD = [
+      // pair-loop declares `--iteration` too, and plan-tasks does not: each invocation carries
+      // exactly the arguments its own `## Arguments` table declares, and nothing else.
+      {
+        card: '301',
+        tags: ['auto-dev', 'risk:green'],
+        routes: '/pair-loop --root 301 --iteration 1',
+        trail: [
+          /event=start card=301 tag=auto-dev workflow=pair-loop/,
+          /event=end card=301 .*outcome=completed/,
+        ],
+      },
+      // 302 is the UNLABELLED card — the state a host adapter renders as an empty `--card-tags`.
+      // It stops at the ELIGIBILITY gate, before its (absent) tags are ever routed: an untagged
+      // card matches no eligibility label either, so the earliest guard is the one that catches it.
+      {
+        card: '302',
+        tags: [],
+        routes: undefined,
+        trail: [/event=skip card=302 reason=ineligible/],
+      },
+      // 303 IS eligible and still runs nothing: eligibility selects, the mapping routes, and there
+      // is no default workflow for a card the mapping does not name.
+      {
+        card: '303',
+        tags: ['risk:green'],
+        routes: undefined,
+        trail: [/event=skip card=303 reason=unmapped/],
+      },
+      {
+        card: '304',
+        tags: ['auto-plan', 'auto-dev', 'risk:green'],
+        // The DECLARED precedence wins over the first mapped tag the card carries — and the card
+        // reaches plan-tasks as `--story`, the argument that skill declares: `--root 304` is a
+        // scope it never sees, and its Step 0 would then pick the top story on the board.
+        routes: '/pair-process-plan-tasks --story 304',
+        trail: [/event=start card=304 tag=auto-plan/],
+      },
+      {
+        card: '305',
+        tags: ['auto-dev'],
+        routes: undefined,
+        trail: [/event=skip card=305 reason=ineligible/],
+      },
+    ] as const
+
+    type BoardRow = (typeof BOARD)[number]
+    /** The cards the board expects to run, in trigger order — the fixture, read as data. */
+    const routed = BOARD.filter(
+      (row): row is BoardRow & { routes: string } => row.routes !== undefined,
+    )
+    const unrouted = BOARD.filter(row => row.routes === undefined)
+
+    const AUDIT = '.pair/working/automation/loop-audit.md'
+    const LOCKS = '.pair/working/automation/locks'
+
+    let project: string
+    let spawned: string[]
+    let printed: string[]
+    let log: ReturnType<typeof vi.spyOn>
+
+    const write = (relative: string, content: string): void => {
+      const target = join(project, relative)
+      mkdirSync(join(target, '..'), { recursive: true })
+      writeFileSync(target, content)
+    }
+
+    beforeEach(() => {
+      project = mkdtempSync(join(tmpdir(), 'pair-dispatch-e2e-'))
+      spawned = []
+      printed = []
+
+      write(
+        'config.json',
+        JSON.stringify({
+          asset_registries: {
+            skills: {
+              source: '.skills',
+              behavior: 'overwrite',
+              description: 'skills',
+              prefix: 'pair',
+              targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+            },
+          },
+        }),
+      )
+      // The installed skill set the mapping is resolved against — both declared workflows.
+      write('.claude/skills/pair-loop/SKILL.md', '')
+      write('.claude/skills/pair-process-plan-tasks/SKILL.md', '')
+      write('.pair/adoption/tech/automation.md', POLICY)
+      // A `claude` on PATH: engine resolution probes the filesystem, and the default cascade
+      // resolves the schema default when nothing declares one.
+      write('bin/claude', '')
+      vi.stubEnv('PATH', join(project, 'bin'))
+
+      log = vi.spyOn(console, 'log').mockImplementation(line => {
+        printed.push(String(line))
+      })
+    })
+
+    afterEach(() => {
+      log.mockRestore()
+      vi.unstubAllEnvs()
+      rmSync(project, { recursive: true, force: true })
+    })
+
+    /** One trigger event, through the registry the CLI dispatches on. */
+    const trigger = async (
+      card: string,
+      tags: readonly string[],
+      runIteration?: () => Promise<IterationResult>,
+    ): Promise<number> =>
+      commandRegistry.run.handle(
+        commandRegistry.run.parse({
+          card,
+          cardTags: tags.join(','),
+          cwd: project,
+          maxIterations: 1,
+        }),
+        fileSystemService,
+        {
+          runIteration: async input => {
+            spawned.push(input.promptText)
+            return runIteration ? await runIteration() : { outcome: 'success', detail: 'done' }
+          },
+        },
+      )
+
+    const auditTrail = (): string => readFileSync(join(project, AUDIT), 'utf-8')
+
+    it('runs exactly the two cards the mapping routes, and leaves the trail to prove the other three', async () => {
+      for (const { card, tags } of BOARD) expect(await trigger(card, tags)).toBe(0)
+
+      // AC1 — routed cards ran the MAPPED workflow, scoped to their own card, and NOTHING else ran.
+      // Driven off the fixture: every row that declares a route is checked against the prompt the
+      // engine was actually given, in the order the triggers fired.
+      expect(spawned).toEqual(routed.map(row => row.routes))
+
+      // AC2 — every card left the trail its own row declares, and the ones that ran nothing say
+      // WHY. Read off the fixture, so a row added above is a row this checks.
+      const trail = auditTrail()
+      for (const row of BOARD) for (const line of row.trail) expect(trail).toMatch(line)
+      // No card was ever routed to a workflow its tags do not name, and none of them started.
+      for (const { card } of unrouted) {
+        expect(trail).not.toMatch(new RegExp(`card=${card} (tag|workflow)=`))
+        expect(trail).not.toMatch(new RegExp(`event=start card=${card}`))
+      }
+
+      // AC3 — the line the host adapter posts on the card exists for the runs that started, and
+      // ONLY for those: a card that never ran must not get a comment claiming it did.
+      const records = printed.filter(line => line.startsWith('DISPATCH-RECORD:'))
+      expect(records).toEqual(routed.map(row => expect.stringContaining(`card=${row.card}`)))
+
+      // Every lock was released: the board is left dispatchable, not parked.
+      for (const { card } of BOARD) expect(existsSync(join(project, LOCKS, card))).toBe(false)
+    })
+
+    /**
+     * The dispatched card is the ONLY subject a routed run can have — `--root` cannot displace it.
+     *
+     * Before the refusal, `--card 301 --root 300` parsed and drove `/pair-loop --root 300` while the
+     * audit file recorded `card=301` start AND end, the `DISPATCH-RECORD:` line named 301, and the
+     * exclusive lock was taken on 301 — so the agent worked an unguarded subtree (a second trigger
+     * on 300 would have acquired its own free lock and started a second agent on the same branch)
+     * and the trail credited a card nothing ran on. Checked through the registry, because the
+     * refusal has to hold at the entry point a trigger actually calls.
+     */
+    it('refuses --root on a dispatched card, and spawns nothing when it does', async () => {
+      expect(() =>
+        commandRegistry.run.parse({
+          card: '301',
+          cardTags: 'auto-dev,risk:green',
+          root: '300',
+          cwd: project,
+          maxIterations: 1,
+        }),
+      ).toThrow(/--card cannot be combined with --root/)
+
+      expect(spawned).toHaveLength(0)
+      expect(existsSync(join(project, AUDIT))).toBe(false)
+      expect(existsSync(join(project, LOCKS, '301'))).toBe(false)
+    })
+
+    it('never starts a second run on a card a run already holds (trigger burst)', async () => {
+      // The burst, exactly as a host produces it: the second trigger arrives WHILE the first run is
+      // in flight. Re-entering from inside the iteration is what makes the lock the thing under
+      // test rather than a sequence of two finished runs.
+      let reentrant: number | undefined
+      await trigger('301', ['auto-dev', 'risk:green'], async () => {
+        reentrant = await trigger('301', ['auto-dev', 'risk:green'])
+        return { outcome: 'success', detail: 'done' }
+      })
+
+      expect(reentrant).toBe(0)
+      // One spawn, not two: the second dispatch was skipped, never queued behind the first.
+      expect(spawned).toHaveLength(1)
+      expect(auditTrail()).toMatch(/event=skip card=301 reason=run-in-progress/)
+      // ...and the burst did not leave the card locked for the next trigger.
+      expect(existsSync(join(project, LOCKS, '301'))).toBe(false)
+      // The skip names the REAL holder — the directory the run probed, and how long it has held it.
+      // Nothing reaps a lock, so a killed run leaves one behind and every later trigger on the card
+      // skips forever; the age is what tells an operator this skip is not a healthy burst.
+      const skip = printed.find(line => line.includes('run-in-progress'))
+      expect(skip).toContain(join(project, LOCKS, '301'))
+      expect(skip).toContain('held under a minute')
+      expect(skip).toMatch(/stale/)
+    })
+
+    it('routes nothing at all when the project declares no mapping — the shipped default', async () => {
+      write('.pair/adoption/tech/automation.md', '## Eligibility\n\nrisk:green\n')
+
+      for (const { card, tags } of BOARD) expect(await trigger(card, tags)).toBe(0)
+
+      expect(spawned).toHaveLength(0)
+      expect(printed.some(line => line.includes('no mapping declared'))).toBe(true)
+      // EVERY card on the board, not just the one that would otherwise have routed: with no
+      // `## Workflows` section nothing is routable, and each card says so in the trail.
+      const trail = auditTrail()
+      for (const { card } of BOARD) {
+        expect(trail).toMatch(new RegExp(`event=skip card=${card} reason=no-mapping-declared`))
+      }
     })
   })
 })

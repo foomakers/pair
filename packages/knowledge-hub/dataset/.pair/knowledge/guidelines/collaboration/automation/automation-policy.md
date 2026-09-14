@@ -2,7 +2,7 @@
 
 How much of the delivery flow a project lets run **unattended** is a project decision, so it lives in an adoption file: the optional `.pair/adoption/tech/automation.md`. This guideline defines that file's schema.
 
-It specifies six sections, landed across two stories and owned one at a time so two stories never claim the same lines of the same file: `## Eligibility` (#216) selects **which cards** an unattended run may pick up at all; `## Harness`/`## Model Policy` (#450) declare supported agent harnesses and per-tier model class; and `## Auto-Advance`, `## Stop Predicate`, `## Max Parallelism`, `## Audit Location` (#250) are the remaining ADR-017 §6 knobs — which tier may auto-merge, when a run stops, the parallel-batch ceiling, and where the audit trail is written.
+It specifies seven sections, landed across several stories and owned one at a time so two stories never claim the same lines of the same file: `## Eligibility` (#216) selects **which cards** an unattended run may pick up at all; `## Workflows` (#217) maps **a tag to the workflow that runs on a card carrying it**, which is what makes automation opt-in per card; `## Harness`/`## Model Policy` (#450) declare supported agent harnesses and per-tier model class; and `## Auto-Advance`, `## Stop Predicate`, `## Max Parallelism`, `## Audit Location` (#250) are the remaining ADR-017 §6 knobs — which tier may auto-merge, when a run stops, the parallel-batch ceiling, and where the audit trail is written.
 
 **Eligibility selects `which cards`, never which gates.** The per-tier gate/approval policy already exists in [`quality-model.md`](../../quality-assurance/quality-model.md) §4 and is not restated here — auto-advance *enacts* that policy, it does not redefine it. Two sources of truth for the same rule is the failure mode this split exists to prevent.
 
@@ -100,6 +100,7 @@ An **untagged** card — one carrying no `risk:*` label at all — never matches
 | Is the card Ready / in the right state? | The consumer's own selection rules (`pair-next`). Eligibility is a **label** predicate only; state and readiness gating stay where they already live |
 | Auto-advance switch, stop predicate, step defaults, `max_parallelism`, audit location | ADR-017 §6 — the four sections below (`## Auto-Advance`, `## Stop Predicate`, `## Max Parallelism`, `## Audit Location`), landed by the automation loop story (#250) |
 | Which label a card carries | `classify`, via the Tag Projection declaration in `tech/risk-matrix.md` |
+| Which workflow runs on an eligible card | `## Workflows` below — the tag→workflow mapping (#217). Eligibility selects, the mapping routes; neither answers the other's question |
 
 ## Auto-Advance — which tiers may push/merge unattended
 
@@ -197,6 +198,106 @@ automation/loop-audit.md
 ### Unwritable destination ⇒ fail loudly
 
 If the resolved path cannot be created or written, `pair-loop` **MUST HALT the run** rather than proceed unaudited: an unattended run with no audit trail is not an acceptable degraded mode (ADR-017 §6).
+
+## Workflows — which workflow each tag routes to
+
+The **tag→workflow mapping** (#217, R4.4): the declaration that makes automation opt-in **per card** instead of per run. `## Eligibility` above answers *which cards an unattended run may pick up at all*; this section answers *what runs on a card once a trigger fires on it*, keyed by a tag the card carries.
+
+```markdown
+## Workflows
+
+auto-dev ⇒ pair-loop
+auto-plan ⇒ pair-process-plan-tasks
+Precedence: auto-dev, auto-plan
+```
+
+- **One entry per line, `<tag> ⇒ <workflow>`** — the same `⇒` (U+21D2) `## Stop Predicate` uses, and only that one. An ASCII `=>` is a **HALT** naming the documented spelling, so the same file cannot mean different things to two consumers.
+- **The tag is an OPAQUE routing key** (D18). It is matched against the card's labels with the plain **string equality** `## Eligibility` already uses — no tier arithmetic, no family knowledge, and **no classification criteria anywhere in the routing code**: tags are produced by `classify`, and a workflow only ever *reads* them. That property is grep-verifiable, and it is meant to be.
+- **The workflow is a skill name** — the entry point of a composition of existing skills, never a bespoke engine and never a merit rule. Two conditions, both required: it must be **installed**, and it must be one the dispatcher can hand the dispatched card to — the set named in *"The workflows a mapping can name"* below. A skill that is installed but outside that catalog is **refused**, and the refusal stops dispatch for the whole board (see the routing-time HALTs), so this bullet is not the whole rule: read it together with the catalog section.
+- **`Precedence: <tag>, <tag>, …`** — optional, at most one line, first listed wins. It resolves a card carrying **more than one** mapped tag, and nothing else.
+
+### Untagged ⇒ never. That is the whole opt-in boundary.
+
+A card carrying **no mapped tag never runs**. There is no default workflow, no "fall back to the develop workflow", no implicit route for an unmapped card — a consumer **MUST** skip it and log the skip. The absence of a route is the authorization decision, so widening it is not a convenience: it is the difference between automation on the cards a team named and automation on the backlog.
+
+### Absent section ⇒ no workflow is available
+
+`## Workflows` absent (or the whole optional file absent) ⇒ **no mapping is declared**: nothing can be routed. A dispatch **MUST** report `no mapping declared`, naming the file, and **exit cleanly** — automation is opt-in (D21), so a project that never wrote this section has simply not opted in, and that is never an error and never a default workflow.
+
+**Absent section ≠ empty section**, exactly as under `## Eligibility`: a heading with no entry is a **half-written declaration** ⇒ HALT.
+
+### Eligibility is applied BEFORE routing
+
+The order is normative. A card that does not match `## Eligibility` is **skipped before its tags are looked at at all**, and the skip is **logged**. Routing an ineligible card and relying on a later gate to stop it would put the eligibility filter — the one declaration that keeps business-critical work out of an unattended pipeline — after the decision it exists to bound.
+
+### Not a routable mapping ⇒ HALT
+
+At **read** time, a consumer **MUST HALT** with an adoption-fix message naming the file and the offending value when:
+
+1. the section is present with **no entry line** (a half-written declaration);
+2. a line matches **neither** `<tag> ⇒ <workflow>` **nor** `Precedence: <tag>, …`;
+3. an entry uses `=>` instead of `⇒`;
+4. the **same tag** is declared twice — one card would route to two workflows, and picking one silently is what this HALT prevents;
+5. a **tag** is not usable as a label: longer than the host's label-name cap (**50 characters** on GitHub; another tracker applies its own), carrying a comma or a standalone `AND`/`OR`/`NOT`, opening with a markdown block marker, or containing a character that could turn it into a command fragment once inlined in an agent prompt. These are `## Eligibility`'s own triggers 3–5 plus the content MUST, applied to the same kind of value for the same reasons — one rule set, not a second one;
+6. a **workflow name** is not a plain identifier (it is spliced into an agent invocation *and* used as a path segment when probing whether the skill is installed);
+7. there is **more than one `Precedence:` line**, the line is empty, it repeats a tag, or it names a tag no entry declares — a precedence naming an undeclared tag is dead configuration that reads as a working tie-break;
+8. the file carries **more than one `## Workflows` heading** — counted as rendered markdown at level 2, so an occurrence inside a fenced code block is not one.
+
+At **routing** time — the two rules that need a board and an installed skill set, so they cannot be answered from the file alone:
+
+- **a mapped tag whose workflow is not installed ⇒ HALT** with an adoption-fix message naming the tag, the workflow and the file. Never a silent fall back to another workflow: running a *different* workflow than the one declared is the outcome no operator can debug. The check runs **before** eligibility and routing, so this HALT stops dispatch for **every** card — including cards that are ineligible or carry no mapped tag at all — not only the cards carrying the offending tag. One broken line is broken configuration for the whole board, and that is the point: making the failure surface only on whichever card happens to carry that tag would make it depend on which trigger fired first;
+- **a card carrying two or more mapped tags with no `Precedence:` line — or with none of those tags listed in it — ⇒ HALT**. A silent choice between two declared workflows is precisely what the precedence line exists to prevent, so its absence is a question for a maintainer, not a tie for a consumer to break.
+
+### One run per card — the concurrency guard
+
+A trigger fires on card metadata, and metadata changes in **bursts** (a label added, removed, re-added; a re-run of the same host job). A consumer **MUST** take an **exclusive per-card lock** before it dispatches and release it when the run ends; a second dispatch for a card whose lock is held is **skipped and logged**, never queued behind the first. Two agent runs on one card is the failure mode this guard exists for: they would race on the same branch, the same PR and the same board state.
+
+**The lock is scoped to ONE working area** (ADR-024): it stops two dispatches that share `working_path` — a persistent daemon, a long-lived runner — and it cannot see a holder on another machine or in another fresh checkout. A host whose jobs get an ephemeral workspace **MUST** put every path that dispatches a card into one host-side concurrency group, because there the group is the only cross-job guard there is.
+
+**A lock has no timeout and nothing reaps it.** A run killed by a signal, an OOM kill or a job timeout leaves the lock behind, and automation is then silently off for that card: every later trigger skips and exits cleanly. A consumer **MUST** therefore report, in the skip, *where* the lock is and *how long* it has been held — the two facts that separate a healthy burst from a stale lock — and the operator surface **MUST** document clearing it.
+
+### The audit trail — and where host credentials are not
+
+Every dispatch decision — **start**, **skip**, **end** — is appended to the run's `## Audit Location` file. The **start** record, and **only** the start record, is *also* emitted on stdout as a single `DISPATCH-RECORD:` line, so the **trigger's host adapter** — the thin, per-host piece that already holds the credentials the trigger runs under — can post it as a comment on the card. A skip and an end stay in the file: a card that gets a comment for every unmapped label edit is unreadable within a day, and an end comment doubles the noise for a fact the trail already holds. The dispatcher core stays **host-agnostic**: it reads tags it was handed, resolves a workflow and writes a file, and never holds a tracker token. Adding a host is a new adapter, never a change to the routing core.
+
+### The workflows a mapping can name
+
+A workflow is a **skill that already exists** — the entry point of a composition, so there is no bespoke engine to write and mapping a tag costs one line of adoption. **This table is the mappable set**, not an illustrative sample of it: a mapping may name one of these and nothing else, and a skill outside it is refused even when installed. They are the compositions pair ships, and they are the reason the mapping needs no vocabulary of its own.
+
+| Workflow | What a card routed to it gets | A tag teams usually map to it | How the dispatched card reaches it |
+| --- | --- | --- | --- |
+| `pair-loop` | the delivery loop — selects the card, implements it, opens the PR, drives the review/fix rounds, and stops at a review-approved PR (it never merges outside `## Auto-Advance`) | `auto-dev` | `--root <card>` |
+| `pair-process-plan-tasks` | a refined story broken into implementation tasks, with the dependency graph and the AC-coverage table written back onto the card | `auto-plan` | `--story <card>` |
+
+**A mapping may only name a workflow in that table, and the last column is why.** The dispatched card is the whole subject of the run, and it arrives as an **argument** — under the name that workflow's own `## Arguments` table declares, borrowed and never invented (D18). The two above spell it differently, and the difference is not cosmetic: `pair-process-plan-tasks` states that **when its `$story` is absent it selects the highest-priority story on the board itself**. So a card handed to it under a name it does not declare is a card it never sees — the workflow runs, on a *different* card, while the audit trail and the on-issue `DISPATCH-RECORD:` both name the card that was tagged. A consumer therefore **MUST HALT** on a mapped workflow this table does not list, with an adoption-fix message, rather than dispatch a run it cannot scope — the same fail-fast, whole-board check an uninstalled workflow already gets, and for the same reason: a run nobody is watching must never pick its own subject.
+
+**Being scopable is not enough to be mappable.** A consumer may well know how some other skill spells its scope — `pair-next` takes `--root`, and driving it by hand with one is perfectly legitimate — and that is still not a licence to route a card to it. A dispatch takes the card's exclusive lock, writes an `event=start` audit line and emits the `DISPATCH-RECORD:` line the host adapter posts as a comment; a skill that only *reports* changes nothing, so all a team gets is a card claiming work that never happened and a lock nobody needed. Widening the set is a change to this table, made deliberately, with the "what a card routed to it gets" and "how the dispatched card reaches it" columns filled in — never a side effect of a consumer happening to know an argument name.
+
+#### A workflow that needs a human in the room is not mappable
+
+A dispatch runs with **nobody watching**, under an autonomy posture the operator opted into once, for as long as the per-iteration timeout allows. So the table above admits only workflows that can **reach a terminal outcome without an interlocutor**. A workflow whose steps require an explicit human decision — a `Human-judgment gate`, an alignment sync that ends only on an explicit "yes" — has exactly two outcomes when it is dispatched, and both are worse than not running:
+
+- it **stalls** on a question no one answers, until the per-iteration timeout kills it, holding the card's exclusive lock for the whole window while the card carries a public comment saying a run started; or
+- the agent, having no one to ask, **supplies its own approval** and drives the card past the gate — which is the authorization control the gate exists to be, satisfied by the party it exists to constrain.
+
+`pair-process-refine-story` is the concrete exclusion and the reason this rule is written down: it is the single Draft→Ready path, and its own SKILL.md calls phase 0 "the R3.11 AI↔human alignment gate — a prerequisite, not optional", adds three per-step `Human-judgment gate`s, and closes with "what is never skipped is explicit human alignment before the story reaches `Ready`". It is a **hand-driven** workflow (`/pair-process-refine-story --story <card>`, or the refine batch), not a tag-driven one. Refinement is where a human belongs; the mapping is for the work that follows it.
+
+```markdown
+## Workflows
+
+auto-plan ⇒ pair-process-plan-tasks
+auto-dev ⇒ pair-loop
+Precedence: auto-plan, auto-dev
+```
+
+Two properties of that example are worth stating, because both are load-bearing rather than stylistic:
+
+- **The precedence line is what makes the pair safe.** A card that has just been broken into tasks often still carries `auto-plan` when `auto-dev` is added; without the line, that card is a HALT the moment a trigger fires on it. Declaring `auto-plan` first is not a preference — it is the answer to a question the dispatcher refuses to answer for you.
+- **A workflow is never mapped to two tags to mean two intensities of it.** Tags carry no merit (D18), so `auto-dev-fast ⇒ pair-loop` and `auto-dev ⇒ pair-loop` route identically; what varies a run's behaviour is the policy above (`## Eligibility`, `## Stop Predicate`, `## Max Parallelism`), never the tag that routed it.
+
+### What fires the dispatch — the per-host adapter
+
+Nothing in this file starts a run. A **trigger** does: a thin, per-host piece that observes a card's labels changing and calls the entry point with what it already holds, `pair-cli run --card <id> --card-tags <list>`. It is the component that carries the tracker credentials, and the one that posts the `DISPATCH-RECORD:` line back onto the card. The reference implementation — a GitHub Actions job firing on `issues: [labeled]` — is in [github-automation.md](github-automation.md); a host with webhooks and a job runner (Azure DevOps service hooks, a Jira automation rule) is the same shape against a different API, and adding one never touches the routing core.
 
 ## Harness and Model Policy
 

@@ -14,7 +14,7 @@ export const FALLBACK_SKILL = 'pair-next'
 export type SkillProbe = (name: string) => boolean
 
 export type ResolvedInvocation =
-  | { kind: 'skill'; name: string; source: 'cascade' | 'cascade-fallback' | '--skill' }
+  | { kind: 'skill'; name: string; source: 'cascade' | 'cascade-fallback' | '--skill' | 'mapping' }
   | { kind: 'prompt'; text: string }
 
 /**
@@ -63,5 +63,9 @@ export function describeSkillResolution(resolved: ResolvedInvocation): string {
       return `Invocation: skill ${resolved.name} (cascade: ${PREFERRED_SKILL} installed)`
     case 'cascade-fallback':
       return `Invocation: skill ${resolved.name} (cascade: ${PREFERRED_SKILL} not installed, falling back)`
+    case 'mapping':
+      // US-217: the card's tag chose this, not the cascade and not a flag — so the line says which
+      // declaration is answerable for what is about to run unattended.
+      return `Invocation: skill ${resolved.name} (from the \`## Workflows\` mapping)`
   }
 }
