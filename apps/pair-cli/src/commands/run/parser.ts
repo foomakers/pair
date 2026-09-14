@@ -203,14 +203,29 @@ function resolveDispatch(options: ParseRunOptions): RunDispatchRequest | undefin
  */
 function resolveCardTags(raw: string | undefined): readonly string[] {
   if (raw === undefined || raw.trim().length === 0) return []
-  const tags = raw
-    .trim()
-    .split(',')
-    .map(tag => tag.trim())
+  const trimmed = raw.trim()
+  // Lossless JSON serialization (preferred): ['tag1', 'tag2,with,comma']
+  // Backwards-compatible comma-split for legacy callers.
+  let tags: string[]
+  const looksLikeJson = trimmed.startsWith('[') || trimmed.startsWith('{')
+  if (looksLikeJson) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(trimmed)
+    } catch {
+      throw new Error('--card-tags contains invalid JSON')
+    }
+    if (Array.isArray(parsed) && parsed.every(t => typeof t === 'string')) {
+      tags = parsed
+    } else {
+      throw new Error('--card-tags JSON must be a string array')
+    }
+  } else {
+    tags = trimmed
+      .split(',')
+      .map(tag => tag.trim())
+  }
   for (const tag of tags) {
-    // An EMPTY entry is refused rather than filtered away: `auto-dev,,risk:green` is a rendering
-    // mistake in whatever built the list, and silently dropping it hides a trigger that is one
-    // string-interpolation bug away from passing no tags at all.
     if (tag.length === 0) {
       throw new Error(`--card-tags contains an empty tag: ${raw.trim()}`)
     }

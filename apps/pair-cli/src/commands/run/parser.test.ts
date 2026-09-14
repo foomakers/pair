@@ -254,6 +254,24 @@ describe('parseRunCommand — tag-driven dispatch (US-217)', () => {
     expect(parseRunCommand({ card: '217', cardTags }).dispatch).toEqual({ card: '217', tags: [] })
   })
 
+  it('reads a JSON array for lossless tag serialization (tags with commas)', () => {
+    const config = parseRunCommand({ card: '217', cardTags: '["auto-dev", "risk:green,with,commas"]' })
+
+    expect(config.dispatch).toEqual({ card: '217', tags: ['auto-dev', 'risk:green,with,commas'] })
+  })
+
+  it('rejects malformed JSON in --card-tags', () => {
+    expect(() => parseRunCommand({ card: '217', cardTags: '[not valid json' })).toThrow(
+      /--card-tags contains invalid JSON/,
+    )
+  })
+
+  it('rejects JSON that is not a string array', () => {
+    expect(() => parseRunCommand({ card: '217', cardTags: '{"not": "array"}' })).toThrow(
+      /--card-tags JSON must be a string array/,
+    )
+  })
+
   // `--root` belongs in this list for the SAME reason `--skill` does, and it is the more dangerous
   // of the two: `--card 217 --root 300` used to parse, and the run then drove the agent over 300
   // while the audit trail, the `DISPATCH-RECORD:` comment and the exclusive lock all named 217 —
