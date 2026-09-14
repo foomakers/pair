@@ -1,5 +1,11 @@
 # @pair/website
 
+## 0.4.4
+
+### Patch Changes
+
+- @pair/brand@0.4.4
+
 ## 0.4.3
 
 ### Patch Changes
