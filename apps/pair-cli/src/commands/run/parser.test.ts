@@ -255,7 +255,10 @@ describe('parseRunCommand — tag-driven dispatch (US-217)', () => {
   })
 
   it('reads a JSON array for lossless tag serialization (tags with commas)', () => {
-    const config = parseRunCommand({ card: '217', cardTags: '["auto-dev", "risk:green,with,commas"]' })
+    const config = parseRunCommand({
+      card: '217',
+      cardTags: '["auto-dev", "risk:green,with,commas"]',
+    })
 
     expect(config.dispatch).toEqual({ card: '217', tags: ['auto-dev', 'risk:green,with,commas'] })
   })

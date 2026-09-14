@@ -223,9 +223,7 @@ function parseCardTags(trimmed: string): string[] {
     }
     throw new Error('--card-tags JSON must be a string array')
   }
-  return trimmed
-    .split(',')
-    .map(tag => tag.trim())
+  return trimmed.split(',').map(tag => tag.trim())
 }
 
 function validateTags(tags: string[], rawTrimmed: string): void {
