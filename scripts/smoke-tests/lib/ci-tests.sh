@@ -43,12 +43,12 @@ CI_TESTS=(
   "tier-aware-gate.sh"
   "coverage-gate.sh"
   "pr-state-flow.sh"
-  "review-identity.sh"
   "pr-tree-resolve.sh"
   "format-ignore-delegation.sh"
   "batch-engine-install.sh"
   "registry-exclude.sh"
   "no-dataset-in-artifacts.sh"
+  "github-dispatch-adapter.sh"
   "runner-outcomes.sh"
 )
 

@@ -3,13 +3,13 @@ title: Unattended Delivery
 description: Configure pair to develop and merge low-risk cards on its own — from a single manual run to a daemon on a dedicated VPS that watches your backlog.
 ---
 
-A walkthrough for turning `pair-cli run` from "something I invoke by hand" into "something that watches
+A walkthrough for turning `pair run` from "something I invoke by hand" into "something that watches
 the backlog and ships `risk:green` cards without me." You'll go from a manual dry-run to a
 systemd-managed daemon on a dedicated box in about 30 minutes.
 
 ## Prerequisites
 
-- **pair-cli** installed in the project (`pair-cli install` completed)
+- **pair-cli** installed in the project (`pair install` completed)
 - A **classification model** in place — `classify` already emitting `risk:*` tags on your cards (see
   [Quality Model](/docs/reference/quality-model)). Unattended delivery filters on this; without it,
   there is nothing to filter on.
@@ -24,7 +24,7 @@ systemd-managed daemon on a dedicated box in about 30 minutes.
 - A `tech/automation.md` policy declaring which cards run unattended, whether they can merge on
   their own, and where the trail is written
 - One manual, supervised run to prove the config before anything runs unattended
-- A daemon — systemd timer (or a scheduled task, or a supervisor loop) — that re-invokes `pair-cli run`
+- A daemon — systemd timer (or a scheduled task, or a supervisor loop) — that re-invokes `pair run`
   on a schedule, so new eligible cards get picked up without you starting anything by hand
 - A working understanding of what "eligible" means, who can change it, and what stops the whole
   thing cold if anything looks wrong
@@ -32,8 +32,10 @@ systemd-managed daemon on a dedicated box in about 30 minutes.
 ## Step 1: Declare the automation policy
 
 Everything here lives in one adoption file: `.pair/adoption/tech/automation.md`. It's optional —
-absent, it means "automation is off," never "automation runs on everything." Six independent
-sections, each with its own fail-closed default:
+absent, it means "automation is off," never "automation runs on everything." Seven independent
+sections, each with its own fail-closed default. Five of them are below; `## Workflows` is what
+Option D in Step 4 adds, and `## Harness` / `## Model Policy` (supported engines, per-tier model
+class) live in the guideline:
 
 ```markdown
 ## Eligibility
@@ -100,7 +102,7 @@ unattended — or stay `(none)` to develop them unattended but still gate the me
 
 ## Step 2: Prepare the engine for headless, unattended runs
 
-`pair-cli run` drives one of three engines — [pi](/docs/integrations/pi),
+`pair run` drives one of three engines — [pi](/docs/integrations/pi),
 [opencode](/docs/integrations/opencode), or Claude Code (`claude -p`) — chosen with `--engine`, a
 project default in `pair.config.json`, or (Claude Code) the schema default. Each has its own
 headless posture:
@@ -111,7 +113,7 @@ headless posture:
 | `opencode` | On by default, opt out with `--auto` | None — no trust gate | Nothing beyond authentication (`opencode auth list`) |
 | `claude` (`claude -p`) | On by default, opt out with `--permission-mode bypassPermissions` | Skipped automatically in `-p` mode | Nothing beyond `claude` being on `PATH` and authenticated |
 
-`--autonomous` on `pair-cli run` is the one switch that maps to whichever of these each engine actually
+`--autonomous` on `pair run` is the one switch that maps to whichever of these each engine actually
 has — pi requires it outright (it has no other posture to run headless with), opencode and Claude
 Code accept it as an explicit opt-out of their default confirmations.
 
@@ -134,7 +136,7 @@ Pin the engine so every invocation (yours, a teammate's, the daemon's) agrees wi
 Resolve everything and print it — nothing spawns:
 
 ```bash
-pair-cli run --root 212 --dry-run
+pair run --root 212 --dry-run
 ```
 
 This prints which engine won and from where (flag > config > schema default), the work perimeter
@@ -144,7 +146,7 @@ stop — an unattended run should never be the first time you see this output.
 Then run it for real, still narrow, still watched:
 
 ```bash
-pair-cli run --root 212 --autonomous --max-iterations 3
+pair run --root 212 --autonomous --max-iterations 3
 ```
 
 `--autonomous` accepts the engine's own confirmations away; it does **not** turn off the
@@ -157,14 +159,14 @@ what the policy says.
   If the loop composes a skill with an internal approval round — one of the `assess-*`/`map-*`
   family — under `--autonomous` it now passes `--approval auto` to any of them that declare it, so
   the round resolves from project state or reports itself unresolved instead of asking a question
-  nobody is there to answer. This is what closed the gap between `pair-cli run` shipping and those
+  nobody is there to answer. This is what closed the gap between `pair run` shipping and those
   skills gaining a non-interactive mode in the first place — if you're on an older `pair-cli`, update
   it before relying on this.
 </Callout>
 
 ## Step 4: Turn it into a daemon
 
-`pair-cli run` and the in-harness `pair-loop` workflow both **stop** when nothing is eligible — they
+`pair run` and the in-harness `pair-loop` workflow both **stop** when nothing is eligible — they
 don't block waiting for new cards to appear. "Watching the backlog" is therefore an external
 scheduler re-invoking the command periodically, not a single long-lived process holding a socket
 open. Three ways to get there, in order of what most teams should actually use:
@@ -244,6 +246,51 @@ the same crash-recovery guarantee Option A gets for free.
   what it actually needs (a machine user or a fine-grained token, not your personal one), and don't
   run anything else on it you wouldn't want that same credential set exposed to.
 </Callout>
+
+### Option D — no schedule at all: let a tag start the run
+
+The three options above are **pull**: something wakes up on a timer and asks what is eligible. The
+alternative is **push** — a run starts when *you* tag a card, and never otherwise. Add the one
+section Step 1 left out — `## Workflows`, the seventh — to the same policy file:
+
+```text
+## Workflows
+
+auto-plan ⇒ pair-process-plan-tasks
+auto-dev ⇒ pair-loop
+Precedence: auto-plan, auto-dev
+```
+
+…then have your code host call the entry point when a label changes, passing the card and the labels
+it just observed:
+
+```bash
+pair run --card 217 --card-tags "auto-dev,risk:green" --autonomous
+```
+
+The mapping decides which workflow runs; a card carrying **no mapped tag runs nothing**, and with no
+`## Workflows` section at all the command reports `no mapping declared` and exits cleanly. Map a tag
+only to a workflow from the guideline's catalog (`pair-loop`, `pair-process-plan-tasks`): the card
+is handed over as the argument that workflow declares — `--root 217`, or `--story 217` for
+`pair-process-plan-tasks` — and a mapping naming anything else HALTs rather than start a run that
+would pick its own card. **Refinement is deliberately not in that catalog**:
+`pair-process-refine-story` ends only on an explicit human approval, so unattended it would either
+stall until the timeout or approve its own work past the gate — refine by hand, and map tags for
+what follows. Only a run
+*start* is printed as a `DISPATCH-RECORD:` line for your trigger to post back on the card — skips and
+endings stay in the audit file, so a label edit that routes nothing never comments. The ready-made
+GitHub Actions job — fires on `issues: [labeled]`, installs the CLI (a runner does not ship it) and
+dispatches — is in `collaboration/automation/github-automation.md` in the knowledge base; the flags
+are documented in [`pair run`](/docs/reference/cli/commands#run).
+
+The dispatch takes a **per-card lock** so a burst of label edits cannot start two runs on one card —
+but that lock is scoped to one working area. On a daemon box (Options A–C) that is the guard. On
+ephemeral CI runners each job checks out its own workspace, so there the *host's* concurrency group
+is the guard, and every path that can dispatch a card belongs in it — the shipped job declares
+`concurrency: pair-dispatch-<issue>` for exactly that reason.
+
+Pull and push compose: the timer keeps the eligible backlog moving, the tag starts a specific card
+now. Both read the same policy file, and both stop at the same human merge gate.
 
 ## Step 5: Watch it — audit trail and recovery
 

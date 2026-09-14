@@ -14,7 +14,7 @@ export const FALLBACK_SKILL = 'pair-next'
 export type SkillProbe = (name: string) => boolean
 
 export type ResolvedInvocation =
-  | { kind: 'skill'; name: string; source: 'cascade' | 'cascade-fallback' | '--skill' }
+  | { kind: 'skill'; name: string; source: 'cascade' | 'cascade-fallback' | '--skill' | 'mapping' }
   | { kind: 'prompt'; text: string }
 
 /**
@@ -37,7 +37,7 @@ export function resolveInvocation(
     if (!probe(request.name)) {
       throw new Error(
         `Skill '${request.name}' is not installed (--skill never falls back). ` +
-          `Install it with \`pair-cli install\`, or drop --skill to use the ${PREFERRED_SKILL} → ${FALLBACK_SKILL} cascade.`,
+          `Install it with \`pair install\`, or drop --skill to use the ${PREFERRED_SKILL} → ${FALLBACK_SKILL} cascade.`,
       )
     }
     return { kind: 'skill', name: request.name, source: '--skill' }
@@ -49,7 +49,7 @@ export function resolveInvocation(
 
   throw new Error(
     `Neither ${PREFERRED_SKILL} nor ${FALLBACK_SKILL} is installed: there is no skill to run. ` +
-      `Run \`pair-cli install\`, or pass --prompt to run a prompt instead.`,
+      `Run \`pair install\`, or pass --prompt to run a prompt instead.`,
   )
 }
 
@@ -63,5 +63,9 @@ export function describeSkillResolution(resolved: ResolvedInvocation): string {
       return `Invocation: skill ${resolved.name} (cascade: ${PREFERRED_SKILL} installed)`
     case 'cascade-fallback':
       return `Invocation: skill ${resolved.name} (cascade: ${PREFERRED_SKILL} not installed, falling back)`
+    case 'mapping':
+      // US-217: the card's tag chose this, not the cascade and not a flag — so the line says which
+      // declaration is answerable for what is about to run unattended.
+      return `Invocation: skill ${resolved.name} (from the \`## Workflows\` mapping)`
   }
 }

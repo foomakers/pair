@@ -196,3 +196,89 @@ describe('parseRunCommand', () => {
     )
   })
 })
+
+// US-217 — tag-driven dispatch. `--card` + `--card-tags` are the trigger's own two facts: which
+// card fired, and what labels it carried when it did. Both are host DATA, so both are checked by
+// content at parse time, exactly as `--root` and `--filter` are.
+describe('parseRunCommand — tag-driven dispatch (US-217)', () => {
+  it('reads the card and its observed tags', () => {
+    const config = parseRunCommand({ card: '217', cardTags: 'auto-dev, risk:green' })
+
+    expect(config.dispatch).toEqual({ card: '217', tags: ['auto-dev', 'risk:green'] })
+  })
+
+  it('treats a card with no --card-tags as a card carrying no tags (never a default route)', () => {
+    expect(parseRunCommand({ card: '217' }).dispatch).toEqual({ card: '217', tags: [] })
+  })
+
+  it('keeps a tag carrying spaces as one tag', () => {
+    expect(parseRunCommand({ card: '217', cardTags: 'good first issue' }).dispatch?.tags).toEqual([
+      'good first issue',
+    ])
+  })
+
+  it('leaves dispatch absent when no --card is passed', () => {
+    expect(parseRunCommand({ root: '212' }).dispatch).toBeUndefined()
+  })
+
+  it('rejects --card-tags without --card: there is no card to dispatch', () => {
+    expect(() => parseRunCommand({ cardTags: 'auto-dev' })).toThrow(/--card/)
+  })
+
+  it('rejects a --card that is not a plain identifier', () => {
+    expect(() => parseRunCommand({ card: '217; rm -rf /' })).toThrow(/plain identifier/)
+  })
+
+  it('rejects a tag that could turn into a command fragment', () => {
+    expect(() => parseRunCommand({ card: '217', cardTags: 'auto-$(whoami)' })).toThrow(
+      /command fragment/,
+    )
+  })
+
+  it('rejects an empty tag in the list rather than silently dropping it', () => {
+    expect(() => parseRunCommand({ card: '217', cardTags: 'auto-dev,,risk:green' })).toThrow(
+      /--card-tags/,
+    )
+  })
+
+  // An UNLABELLED card is the case AC2 is about, and it is what every host adapter renders as an
+  // EMPTY --card-tags: `join(github.event.issue.labels.*.name, ',')` on an issue with no labels is
+  // `""`. Refusing it would make the opt-in boundary — untagged ⇒ skip, cleanly, exit 0 —
+  // unreachable through the entry point and turn the commonest state on a board into a failed
+  // trigger job. Distinct from a HOLE inside a list (`auto-dev,,risk:green`), which stays an error:
+  // there the caller rendered a list and lost an item.
+  it.each([
+    ['an empty value', ''],
+    ['a whitespace-only value', '   '],
+  ])('reads %s as a card carrying no labels, not as a malformed flag', (_case, cardTags) => {
+    expect(parseRunCommand({ card: '217', cardTags }).dispatch).toEqual({ card: '217', tags: [] })
+  })
+
+  // `--root` belongs in this list for the SAME reason `--skill` does, and it is the more dangerous
+  // of the two: `--card 217 --root 300` used to parse, and the run then drove the agent over 300
+  // while the audit trail, the `DISPATCH-RECORD:` comment and the exclusive lock all named 217 —
+  // card 300 unguarded and card 217 credited with work never done on it.
+  it.each([
+    ['--skill', { card: '217', skill: 'pair-loop' }],
+    ['--prompt', { card: '217', prompt: 'do the thing' }],
+    ['--root', { card: '217', root: '300' }],
+  ])('refuses %s alongside --card: the dispatched card is the whole subject', (_case, options) => {
+    expect(() => parseRunCommand(options)).toThrow(/--card/)
+  })
+
+  it('names every conflicting flag it was given, not just the first', () => {
+    expect(() => parseRunCommand({ card: '217', root: '300', skill: 'pair-loop' })).toThrow(
+      /--skill or --root/,
+    )
+  })
+
+  // `--filter` is NOT in that list: it narrows WHICH cards a card-scoped selector picks up within
+  // the run, it does not answer "what is this run about", and a dispatched workflow that declares
+  // no `--filter` never receives it anyway.
+  it('still accepts --filter alongside --card', () => {
+    const config = parseRunCommand({ card: '217', cardTags: 'auto-dev', filter: 'risk:green' })
+
+    expect(config.scope.filter).toBe('risk:green')
+    expect(config.scope.root).toBeUndefined()
+  })
+})
