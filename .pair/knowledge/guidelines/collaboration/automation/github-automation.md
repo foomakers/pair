@@ -256,7 +256,7 @@ jobs:
           # The labels the trigger ALREADY observed — passed as data, never re-fetched. An
           # adapter that queries the API for them is the tracker client the driver exists
           # without. Through the environment, not string-interpolated into the command line.
-          CARD_TAGS: ${{ join(github.event.issue.labels.*.name, ',') }}
+          CARD_TAGS: ${{ toJson(github.event.issue.labels.*.name) }}
           CARD: ${{ github.event.issue.number }}
         run: |
           pair-cli run --card "$CARD" --card-tags "$CARD_TAGS" --autonomous \
