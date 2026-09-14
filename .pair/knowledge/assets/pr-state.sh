@@ -71,6 +71,117 @@ resolve_pr_state() {
   echo "ready-to-merge"
 }
 
+# light_auto_approve_allowed <pr_labels> <light_declared> <tier> <state>
+#   pr_labels      : the pull request's label NAMES (TAGS ONLY). PREFER one name per LINE
+#                    (on GitHub: `gh pr view <n> --json labels -q '.labels[].name'`) or
+#                    comma-separated: both delimit whole names, so a label whose NAME
+#                    contains a space (`good first issue`) stays one label. The
+#                    space-joined shape (`-q '[.labels[].name]|join(" ")'`) is accepted as
+#                    a LEGACY input and is AMBIGUOUS by construction — see the match below.
+#   light_declared : 1 when the project's adoption declares the `light` family in
+#                    `## Tag Projection` (tech/risk-matrix.md); anything else ⇒ not declared
+#   tier           : green | yellow | red | <anything else ⇒ red (fail-safe)>
+#   state          : the synthesis `resolve_pr_state` already produced
+#
+# Exit 0 = the dedicated review identity may submit a native approving review, so the
+# pull request satisfies the host's required-approvals rule with no human action.
+# Exit 1 = no-op, with the unmet condition on stderr. Never a silent yes.
+#
+# THIS ROW IS THE ONLY AUTHORITY FOR AN `APPROVE` EVENT THE IDENTITY SIGNS. It is the
+# third argument of `identity_verdict_event` (review-identity.sh): in `identity` mode,
+# outside this row an approving verdict is published as a COMMENT-form review, never as a
+# native APPROVE. (In `session` mode no identity acts and the argument is not read: the
+# account whose token is loaded signs its own review, as it did before this row existed.) That is what makes the
+# gate below load-bearing rather than decorative — without it every approving verdict
+# would satisfy a host `required_approving_review_count >= 1` on its own.
+#
+# A SIBLING, NOT A CHANGE: `resolve_pr_state` above is not modified and not consulted
+# for anything but its already-computed output. This row does not decide the PR state;
+# it decides only whether the identity signs the approving review the host asks for.
+#
+# ZERO CRITERIA (D18). "Light" is not computed here and is not computable here: this
+# reads a TAG the classification produced upstream, a DECLARATION the project made in
+# its adoption, the tier, and the synthesis. It never inspects the change.
+#
+# ADOPTION IS THE GATE, NOT THE LABEL. All four conditions must hold, and the
+# declaration is deliberately one of them: a hand-applied `light` label on a repository
+# whose adoption declares no `light` projection triggers nothing at all. That is the
+# containment for the obvious abuse — mis-tagging a pull request to auto-approve it.
+#
+# BELOW RED ONLY. `explicit_approval_required` is the same per-tier row the synthesis
+# reads, so an untagged or malformed tier fails this row exactly as it fails the rest of
+# the flow: most restrictive wins, and light never bypasses the 🔴 human-approval rule
+# (ADR-018, amendment 2026-08-28 — the identity's approval is excluded from
+# `human_approval_jq_filter` mechanically: by the type clause for an App, by the
+# `REVIEW_IDENTITY_LOGIN` clause for a bot user).
+light_auto_approve_allowed() {
+  local labels="${1:-}" declared="${2:-0}" tier="${3:-}" state="${4:-}"
+
+  if [ "$declared" != "1" ]; then
+    echo "pr-state: adoption declares no 'light' family in ## Tag Projection — no auto-approval (the label alone is inert)" >&2
+    return 1
+  fi
+
+  # WHOLE-LABEL match: `lightweight` is not `light`. What "whole" can mean depends on the
+  # SHAPE of the read, and each shape carries ITS OWN delimiter — never another shape's:
+  #   one name per LINE (`-q '.labels[].name'`) — EXACT for every label name whenever the
+  #   string ACTUALLY carries a newline: ≥2 labels, or ONE label whose trailing newline the
+  #   caller preserved. A code-host name cannot contain a newline, so that split never cuts
+  #   a name. Split on newlines ALONE: a name may legally contain a COMMA (`theme, light`),
+  #   and translating commas here would cut one whole name into two fields and match the
+  #   tag against a fragment nobody applied.
+  #   RESIDUAL, single label + a comma in its NAME. `LABELS="$(gh pr view <n> --json labels
+  #   -q '.labels[].name')"` strips the trailing newline, so a PR carrying the ONE label
+  #   `theme, light` reaches this function as `theme, light` with NO newline, takes the
+  #   comma branch below and matches on the fragment `light`. Nothing in that string says
+  #   whether the comma delimits two names or belongs to one — the same irrecoverable
+  #   ambiguity as the joined shape. It is not reachable through this row today (a sub-🔴
+  #   tier needs a `risk:*` label, hence a second field and a newline), but a caller that
+  #   supplies the tier from another source meets it: preserve the trailing newline and the
+  #   LINE branch is taken, which is exact.
+  #   COMMA-separated — a field is a whole label name, spaces included, so `ui: light theme`
+  #   is one label and never the tag. Exact only for names FREE OF COMMAS: once the host
+  #   joined the names with commas, a name containing one is indistinguishable from two
+  #   labels, the same way the space-joined shape below loses names containing spaces.
+  #   NO DELIMITER AT ALL — the shape a ONE-label line read produces (`ui: light theme`),
+  #   and the shape the LEGACY space-joined read (`-q '[.labels[].name] | join(" ")'`)
+  #   produces for every PR. It is matched as ONE whole trimmed field, and therefore FAILS
+  #   CLOSED: `light` alone still matches, `ui: light theme` is a no-op, and the joined
+  #   `risk:green light` is a no-op too. That last one is the deliberate cost: a code-host
+  #   label NAME may itself contain spaces (`good first issue`, `help wanted`), so the
+  #   joined shape is irrecoverably AMBIGUOUS — nothing in it distinguishes the `light` TAG
+  #   from a label merely containing the word — and an ambiguous input must never authorize
+  #   an APPROVE. Pass the line form, which is exact; the joined form is accepted only in
+  #   the degenerate single-label case where it IS the line form.
+  local matched=0 line fields=""
+  case "$labels" in
+  *$'\n'*) fields="$labels" ;;
+  *,*) fields="${labels//,/$'\n'}" ;;
+  *) fields="$labels" ;;
+  esac
+  while IFS= read -r line; do
+    line="${line#"${line%%[![:space:]]*}"}" # trim leading blanks
+    line="${line%"${line##*[![:space:]]}"}" # trim trailing blanks
+    [ "$line" = light ] && matched=1
+  done <<<"$fields"
+  if [ "$matched" != 1 ]; then
+    echo "pr-state: the pull request does not carry the 'light' tag — no auto-approval" >&2
+    return 1
+  fi
+
+  if explicit_approval_required "$tier"; then
+    echo "pr-state: tier '${tier:-unknown}' requires an explicit human approval — light applies below red only, and never bypasses that rule" >&2
+    return 1
+  fi
+
+  if [ "$state" != "ready-to-merge" ]; then
+    echo "pr-state: state is '${state:-unknown}', not merge-enabling — no auto-approval (this row never overrides the synthesis)" >&2
+    return 1
+  fi
+
+  return 0
+}
+
 # explicit_approval_required <tier> — exit 0 (required) for red and for any
 # unknown/absent tier (fail-safe), exit 1 (not required) for green/yellow.
 # The requirement itself is the quality model's §4 row, not a rule invented here.
@@ -109,16 +220,29 @@ merge_allowed() {
 # projection", as for tier-resolve.sh).
 #
 #   Input  : a REST `GET /repos/{owner}/{repo}/pulls/{n}/reviews` payload (an array).
-#   Env    : HEAD_SHA (the only commit branch protection evaluates), PR_AUTHOR (login).
+#   Env    : HEAD_SHA (the only commit branch protection evaluates), PR_AUTHOR (login),
+#            REVIEW_IDENTITY_LOGIN (the dedicated review identity's account login, when
+#            one is configured — see below; unset ⇒ the clause is inert, which is correct
+#            only for a project running no identity or an App one).
 #   Output : one line per qualifying review id — count them; and always read ALL pages
 #            (`--paginate`), since an approval can sit past page 1.
 #
 # Rejects by construction: a non-APPROVED review, an approval on any other commit
 # (i.e. stale after a force-push), a non-human account (`user.type != "User"` — bots
-# and GitHub Apps, so the pair review itself can never satisfy the gate), and the PR
-# author's own approval.
+# and GitHub Apps), the PR author's own approval, and the DEDICATED REVIEW IDENTITY's
+# own account by login.
+#
+# WHY THE LOGIN CLAUSE IS NOT REDUNDANT WITH THE TYPE CLAUSE. A GitHub **App**
+# installation types as `"Bot"`, so the type clause alone excludes it. A **bot user** —
+# an ordinary machine account, the `Review identity: bot-user` form — types as `"User"`
+# on this API: the type clause does NOT exclude it, and without the login clause a
+# machine account could sign the 🔴 explicit HUMAN approval. The clause is the mechanical
+# exclusion for that form; `review_identity_exclusion_ok` (review-identity.sh) makes an
+# unprovisioned `REVIEW_IDENTITY_LOGIN` a not-healthy identity, so the flow HALTs rather
+# than running with the clause inert. See github-implementation.md § "Dedicated review
+# identity" for how the variable reaches the `pair-explicit-approval` job.
 human_approval_jq_filter() {
-  printf '%s' '.[] | select(.state=="APPROVED" and .commit_id==env.HEAD_SHA and .user.type=="User" and .user.login!=env.PR_AUTHOR) | .id'
+  printf '%s' '.[] | select(.state=="APPROVED" and .commit_id==env.HEAD_SHA and .user.type=="User" and .user.login!=env.PR_AUTHOR and .user.login!=env.REVIEW_IDENTITY_LOGIN) | .id'
 }
 
 # review_check_conclusion <verdict> — maps a review verdict onto the conclusion the
