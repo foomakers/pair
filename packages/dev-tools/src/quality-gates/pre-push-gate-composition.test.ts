@@ -9,6 +9,7 @@ import {
   ROOT_PACKAGE_JSON,
   GUARD_SCRIPT,
   REMEDY_SCRIPT,
+  MIRROR_REMEDY_SCRIPT,
   PRE_PUSH_REMEDY,
 } from './pre-push-gate-composition'
 
@@ -138,6 +139,28 @@ describe('the pre-push gate never runs a write-mode step (#394)', () => {
     ])
   })
 
+  // `pnpm mirrors:regenerate` → scripts/regenerate-mirrors.sh rewrites `.claude/**`, root
+  // `.pair/**`, `AGENTS.md`/`CLAUDE.md` and `.github/agents/**` from the local dataset. It is
+  // the writer the gate's OWN remedy names (MIRROR_REMEDY_SCRIPT), has no check mode by design
+  // (#419 AC8 — the mirror guards are the checker), and was introduced without a line here:
+  // PROBED, a gate ending in `&& pnpm mirrors:regenerate` returned ok=true while the control
+  // `&& pnpm sync-version 1.0.0` returned ok=false. Both spellings, like sync-version.
+  it('flags mirrors:regenerate and the script it runs (a writer with no check mode)', () => {
+    expect(findWriteModeFormatters('turbo lint && pnpm mirrors:regenerate')).toEqual([
+      'mirrors:regenerate',
+    ])
+    expect(findWriteModeFormatters('./scripts/regenerate-mirrors.sh')).toEqual([
+      'regenerate-mirrors',
+    ])
+    expect(findWriteModeFormatters('bash scripts/regenerate-mirrors.sh')).toEqual([
+      'regenerate-mirrors',
+    ])
+  })
+
+  it('does not mistake the script test file for the script', () => {
+    expect(findWriteModeFormatters('vitest run regenerate-mirrors.test.ts')).toEqual([])
+  })
+
   it('names the remedy, so a failure is actionable', () => {
     expect(PRE_PUSH_REMEDY).toContain(`pnpm ${REMEDY_SCRIPT}`)
   })
@@ -146,22 +169,26 @@ describe('the pre-push gate never runs a write-mode step (#394)', () => {
   // cannot reach its generated .claude twin (not a workspace member), while skill-md-mirror
   // asserts byte equality — so format:check-green becomes skills:conformance-red later in
   // the SAME gate. Reproduced on the real MD049 drift this branch cleared.
-  it('the remedy warns that a dataset .skills edit needs the .claude mirror re-synced', () => {
-    expect(PRE_PUSH_REMEDY).toContain('packages/knowledge-hub/dataset/.skills/**')
+  it('the remedy warns that a dataset edit needs BOTH generated mirror trees re-synced', () => {
+    expect(PRE_PUSH_REMEDY).toContain('packages/knowledge-hub/dataset/**')
     expect(PRE_PUSH_REMEDY).toContain('.claude/skills/**')
+    // Naming only `.claude/skills/**` (the pre-#419-review shape) sends a contributor who
+    // reformatted a dataset GUIDELINE looking at the skills tree, where nothing changed —
+    // its twin is `.pair/knowledge/**`. Both documents already named both trees; this
+    // constant did not, which is the divergence the docblock above now scopes explicitly.
+    expect(PRE_PUSH_REMEDY).toContain('.pair/knowledge/**')
     expect(PRE_PUSH_REMEDY).toContain('skills:conformance')
   })
 
-  // The third of the three places ADL 2026-07-31-pre-push-gate-is-check-only requires to
-  // agree (DEVELOPMENT.md, development-setup.mdx, this string). It is the PRINTED one, so
-  // it is also the only one a developer copy-pastes: `pair` is a binary no install creates
-  // (ADL 2026-08-25), and the other two were renamed to `pair-cli` while this drifted.
-  it('the remedy names the published binary, so the copy-pasted step exists', () => {
-    expect(PRE_PUSH_REMEDY).toContain('pair-cli update')
-    // Lookbehind, not `[^-]`: a preceding-character class cannot see offset 0, so a future
-    // reorder that OPENS the string with `pair update …` would slip past the pin while
-    // `toContain('pair-cli update')` still passed on a later sentence.
-    expect(PRE_PUSH_REMEDY).not.toMatch(/(?<!-)\bpair update/)
+  // #419. The re-sync step used to name `pair update`, which is an INSTALL command:
+  // it resolves and installs the latest PUBLISHED knowledge base. A contributor whose
+  // working tree drifted needs regeneration from the working tree's own dataset, so
+  // the advertised remedy depended on what had been released rather than on what was
+  // in front of them — the most plausible reason three recorded drifts were hand-ported
+  // instead of regenerated.
+  it('names the LOCAL regeneration command, not the published-KB install (#419)', () => {
+    expect(PRE_PUSH_REMEDY).toContain(`pnpm ${MIRROR_REMEDY_SCRIPT}`)
+    expect(PRE_PUSH_REMEDY).not.toContain('pair update')
   })
 })
 
@@ -265,6 +292,7 @@ describe('checkRootGate reads the repo gate rather than trusting a copy (#394)',
         'mdlint:fix':
           "turbo mdlint:fix && ./tools/markdownlint-config/bin/markdownlint-fix.sh '*.md'",
         [GUARD_SCRIPT]: 'pnpm --filter @pair/dev-tools pre-push-gate:check',
+        [MIRROR_REMEDY_SCRIPT]: './scripts/regenerate-mirrors.sh',
         ...scripts,
       },
     })
@@ -375,6 +403,32 @@ describe('checkRootGate reads the repo gate rather than trusting a copy (#394)',
     expect(r.message).toContain('test:perf')
   })
 
+  // The finding's exact probe: the gate reaching the very writer #419 introduced, through the
+  // root script the adoption's `mirror-realign-command` names. Delegation form (the script body
+  // is the .sh path), so the expansion is exercised too.
+  it('fails when the gate appends `pnpm mirrors:regenerate` (rewrites every mirror tree)', () => {
+    const r = checkRootGate(
+      pkg({
+        'quality-gate': `turbo lint && pnpm format:check && pnpm ${GUARD_SCRIPT} && pnpm mirrors:regenerate`,
+        'mirrors:regenerate': './scripts/regenerate-mirrors.sh',
+      }),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('mirrors:regenerate')
+  })
+
+  it('still passes when `mirrors:regenerate` is only the remedy the gate NAMES, never runs', () => {
+    // The real root package.json defines the script (MIRROR_REMEDY_SCRIPT must exist) and the
+    // gate must not reach it. Both at once — the shape this repo actually has.
+    const r = checkRootGate(
+      pkg({
+        'quality-gate': `turbo lint && pnpm format:check && pnpm ${GUARD_SCRIPT}`,
+        'mirrors:regenerate': './scripts/regenerate-mirrors.sh',
+      }),
+    )
+    expect(r.ok).toBe(true)
+  })
+
   it('fails when a gate script calls the prettier bin wrapper directly', () => {
     const r = checkRootGate(pkg({ 'format:check': './tools/prettier-config/bin/prettier-fix.sh' }))
     expect(r.ok).toBe(false)
@@ -405,6 +459,17 @@ describe('checkRootGate reads the repo gate rather than trusting a copy (#394)',
     expect(r.message).toContain(REMEDY_SCRIPT)
   })
 
+  // Same dead-advice check, for the second command the remedy now names (#419). Both
+  // steps of a two-step remedy have to exist, or the half that does not is a loop back
+  // to `--no-verify` — which is the failure this guard was written to prevent for the first.
+  it('fails when the mirror-regeneration remedy does not exist', () => {
+    const scripts = JSON.parse(pkg({})) as { scripts: Record<string, string> }
+    delete scripts.scripts[MIRROR_REMEDY_SCRIPT]
+    const r = checkRootGate(JSON.stringify(scripts))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain(MIRROR_REMEDY_SCRIPT)
+  })
+
   it('fails loudly when there is no gate at all, rather than passing vacuously', () => {
     expect(checkRootGate(JSON.stringify({ scripts: {} })).ok).toBe(false)
   })
@@ -431,28 +496,5 @@ describe('checkRootGate reads the repo gate rather than trusting a copy (#394)',
     // inside the gate — so the guard cannot be quietly unplugged.
     const result = checkThisRepoGate()
     expect(result.ok, result.message).toBe(true)
-  })
-})
-
-// `-w` is prettier's documented short form of `--write` (`prettier --help`, 3.6.2: "-w,
-// --write  Edit files in-place"); measured, `prettier -w x.ts` rewrites the file. The list
-// had the long spelling only (#413 round 13).
-describe('prettier `-w` is the write flag (#413)', () => {
-  it('flags `prettier -w`', () => {
-    expect(findWriteModeFormatters('prettier -w .')).toEqual(['prettier --write'])
-    expect(findWriteModeFormatters('npx prettier -w src')).toEqual(['prettier --write'])
-    expect(findWriteModeFormatters('pnpm exec prettier --config x -w "**/*.ts"')).toEqual([
-      'prettier --write',
-    ])
-  })
-
-  it('does not pair a `-w` from another command with a check-mode prettier', () => {
-    expect(findWriteModeFormatters('other-tool -w && prettier --check .')).toEqual([])
-    expect(findWriteModeFormatters('prettier --check . ; sleep -w')).toEqual([])
-  })
-
-  it('does not read `--write`-like or `-w`-prefixed words as the flag', () => {
-    expect(findWriteModeFormatters('prettier --log-level warn --check .')).toEqual([])
-    expect(findWriteModeFormatters('prettier -write .')).toEqual([])
   })
 })

@@ -37,6 +37,8 @@ and the package script runs the module through a TS runner (`ts-node`/`tsx`) beh
 
 **Scripts are never unit-tested.** No importing a script's functions into a test, and no black-box `spawnSync`/`exec` of a script inside a vitest unit test. Unit tests target the module's exported logic. When script/CLI-level (end-to-end) verification is wanted, it uses the **smoke-test suite** (`scripts/smoke-tests/`, `pnpm smoke-tests`), not vitest.
 
+> **Bounded exception, added 2026-09-01 (#419)** — a *thin script whose behaviour IS the deliverable* (no logic to extract; `run-format.sh`, `regenerate-mirrors.sh`) may be black-box executed from vitest against a **throwaway fixture**, asserting observable behaviour only. Conditions, rationale and why the smoke suite is not the right home for those cases: [2026-09-01-publish-pr-realigns-mirrors-before-the-gate.md](./2026-09-01-publish-pr-realigns-mirrors-before-the-gate.md), Decision. Everything above stands for every script that does hold logic — the fix there is still "extract to a module + white-box test".
+
 Rationale: a gate is testable logic, not an opaque script; keeping the logic in an importable module removes duplication and orphan tests that reach into root `scripts/`; unit tests then cover module logic while smoke tests cover CLI wiring end-to-end. The module's public functions are the single tested surface; the CLI wrapper is a trivial, unit-test-exempt shell.
 
 ## Alternatives Considered
