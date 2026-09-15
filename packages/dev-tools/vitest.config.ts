@@ -7,11 +7,11 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     // #419: this suite shells out per test (turbo builds + real CLI runs — the
-    // regenerate file alone burns ~60s of subprocesses). Under turbo's
-    // package-parallel CI run the default worker count starves the vitest
-    // parent RPC (`Timeout calling "onTaskUpdate"` with every test green),
-    // so cap workers here instead of flakes-gating the branch.
-    maxWorkers: 2,
+    // regenerate file alone burns ~60s of nested subprocesses). Under turbo's
+    // package-parallel CI run the worker fan-out starves the vitest parent RPC
+    // (`Timeout calling "onTaskUpdate"` with every test green), so run this
+    // package's files serially instead of flakes-gating the branch.
+    maxWorkers: 1,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
