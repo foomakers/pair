@@ -12,6 +12,9 @@ export default defineConfig({
     // (`Timeout calling "onTaskUpdate"` with every test green), so run this
     // package's files serially instead of flakes-gating the branch.
     maxWorkers: 1,
+    // Use forks pool with single fork to keep parent RPC responsive under CPU load.
+    pool: 'forks',
+    poolOptions: { forks: { singleFork: true } },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
