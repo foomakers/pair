@@ -57,7 +57,7 @@ describe('publish-pr realigns mirrors before its gate (#419)', () => {
     // exists for. Anchored to the Phase 1 SPAN, not to the file: `/verify-quality`
     // appears in the frontmatter description and the composed-skills table long before
     // any phase, so a global indexOf comparison would pass on any arrangement.
-    const realignIdx = p1.search(/mirror-realign-command/)
+    const realignIdx = p1.search(/pre-publish/)
     const gateIdx = p1.search(/Compose `\/verify-quality`/)
     expect(realignIdx).toBeGreaterThanOrEqual(0)
     expect(gateIdx).toBeGreaterThan(realignIdx)
@@ -65,7 +65,7 @@ describe('publish-pr realigns mirrors before its gate (#419)', () => {
 
   it('reads the command from the adoption instead of naming one (portability)', () => {
     const c = dataset()
-    expect(c).toContain('`mirror-realign-command`')
+    expect(c).not.toContain('`mirror-realign-command`')
     expect(c).toContain('## Quality Gates')
     // A skill shipped to every adopter must not hardcode this repository's own script.
     expect(c).not.toContain('pnpm mirrors:regenerate')
@@ -73,8 +73,8 @@ describe('publish-pr realigns mirrors before its gate (#419)', () => {
 
   it('skips the step entirely when no command is declared, reporting nothing', () => {
     const c = dataset()
-    expect(c).toMatch(/Absent ⇒ the realignment step is skipped entirely/)
-    expect(c).toMatch(/No `mirror-realign-command` declared[\s\S]{0,200}skip the realignment step/)
+    expect(c).toMatch(/Absent ⇒ the hook steps are skipped entirely/)
+    expect(c).toMatch(/No `## Publish-PR Hooks` declared[\s\S]{0,200}skip the hook steps/)
   })
 
   it('regenerates from the LOCAL dataset, never from a published release', () => {
@@ -390,7 +390,7 @@ describe('publish-pr realigns mirrors before its gate (#419)', () => {
     const n = notes()
     expect(n).not.toMatch(/it does not modify source files/)
     expect(n).toMatch(
-      /modifies files \*\*only\*\* through the adoption-declared `mirror-realign-command`/,
+      /modifies files \*\*only\*\* through the adoption-declared hooks \(Phase 1 `pre-publish`\)/,
     )
     expect(n).toMatch(/never renders a review verdict, and never merges/)
   })
