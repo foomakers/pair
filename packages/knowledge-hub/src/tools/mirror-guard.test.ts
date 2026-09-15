@@ -21,6 +21,7 @@ import {
   CLAUDE_MD_MIRROR,
   type GuardedMirror,
 } from './mirror-guard'
+import { MIRROR_REGENERATE_COMMAND } from './skill-md-mirror'
 
 // packages/knowledge-hub/src/tools -> repo root
 const REPO_ROOT = join(__dirname, '..', '..', '..', '..')
@@ -76,7 +77,7 @@ const registryConfigFor = (key: string): RegistryConfigJson => {
 
 /**
  * The registry's declared `include` narrowing, as posix path prefixes without
- * the leading '/'. `pair-cli update` copies only these subtrees, so enumerating
+ * the leading '/'. `pair update` copies only these subtrees, so enumerating
  * anything outside them would demand a mirror the pipeline never writes (the
  * `github` registry declares `include: ["/agents"]` and its dataset tree could
  * grow a sibling directory tomorrow).
@@ -133,7 +134,7 @@ interface MirrorFixture {
    * narrowed by the SAME `include` predicate — the other side of the set
    * equality. Narrowing both sides with one predicate is load-bearing: the
    * `github` target really does hold un-included siblings (`.github/workflows`,
-   * `.github/skills`) that `pair-cli update` never writes from this registry.
+   * `.github/skills`) that `pair update` never writes from this registry.
    */
   installedAll: string[]
   source: (rel: string) => string
@@ -148,7 +149,7 @@ const buildFixture = (mirror: GuardedMirror): MirrorFixture => {
   const source = (rel: string): string =>
     readFileSync(join(REPO_ROOT, datasetPathOf(mirror, rel)), 'utf-8')
   // the FULL per-target install: naming transform + marker strip + skill refs,
-  // each applied only where `pair-cli update` applies it (see buildInstallTransform)
+  // each applied only where `pair update` applies it (see buildInstallTransform)
   const install = buildInstallTransform(mirror, transform)
 
   const expected = new Map(
@@ -198,7 +199,7 @@ const CORPUS_TEST_TIMEOUT_MS = 30_000
 /**
  * Data-driven mirror-equality guard for EVERY guarded (dataset → installed)
  * pair (#393 AC1/AC5): for every file the dataset contributes, the installed
- * copy must equal the REAL `pair-cli update` install of its dataset source — not
+ * copy must equal the REAL `pair update` install of its dataset source — not
  * the source itself.
  *
  * Four mirrors share this suite because they share the relationship: an install
@@ -286,13 +287,13 @@ describe.each(FIXTURES)(
      * `05-how-to-define-bounded-contexts.md` were dropped from the dataset in
      * #246 and were still installed at the repo root ~5 months later, indexed
      * into `.pair/llms.txt` where agents read them. A hand-edit, a bad merge or
-     * a `pair-cli update` run from an older dataset reopens it, and every other
+     * a `pair update` run from an older dataset reopens it, and every other
      * assertion in this file stays green while it does.
      *
      * Adding it makes the guard a set EQUALITY over entry paths, and it is
      * DETECTION only — it reads two path lists, deletes nothing, and is
      * therefore independent of the open product decision about wiring
-     * destructive cleanup onto `pair-cli update` (mirror-guard ADL, OPEN RESIDUAL).
+     * destructive cleanup onto `pair update` (mirror-guard ADL, OPEN RESIDUAL).
      * Green on both directory mirrors when introduced: the dataset and installed
      * path sets were already identical for `.pair/knowledge` and
      * `.github/agents`, so this lands as a regression guard, not a red test.
@@ -433,13 +434,13 @@ describe('the guarded mirrors are the ones this comparison is valid for (#393)',
 })
 
 /**
- * `buildInstallTransform` is the COMPLETE `pair-cli update` install for these
+ * `buildInstallTransform` is the COMPLETE `pair update` install for these
  * mirrors only under the config each one is modeled against. Pin that, as the
  * sibling `skill-md-mirror` pins `SKILL_COPY_OPTS`: if a registry later gains
  * `flatten`/`prefix`, the real pipeline both renames paths AND stops rewriting
  * skill references entirely (`applySkillRefsToNonSkillRegistries` skips any
  * registry with flatten/prefix), so the modeled install would no longer equal
- * `pair-cli update`'s output and the guard above would go permanently red with no
+ * `pair update`'s output and the guard above would go permanently red with no
  * satisfiable mirror — the deadlock this story removed, reintroduced one level
  * up. Failing HERE attributes it to the registry change instead of blaming the
  * mirror.
@@ -487,7 +488,7 @@ describe.each(FIXTURES)(
       }
       // every enumerated path sits under a declared include prefix — an
       // un-included sibling directory added to the dataset must NOT be demanded
-      // of the mirror, since `pair-cli update` never copies it. Uses THE membership
+      // of the mirror, since `pair update` never copies it. Uses THE membership
       // predicate the fixture narrowed with, so the two cannot disagree about
       // an edge case and blame it on a sibling directory.
       for (const rel of all) expect(isIncluded(mirror.key, rel)).toBe(true)
@@ -531,8 +532,24 @@ describe('assertMirrorMatches — failure paths and message (#393)', () => {
     const message = captureThrownMessage(() => assertKb(REL, expected, 'drifted\n'))
     expect(message).toContain(join(KB_MIRROR.mirrorRel, REL))
     expect(message).toContain(join(KB_MIRROR.datasetRel, REL))
-    expect(message).toContain("Regenerate with 'pair-cli update'")
+    expect(message).toContain(`Regenerate with '${MIRROR_REGENERATE_COMMAND}'`)
     expect(message).toContain('never hand-edit the mirror')
+  })
+
+  // #419. The remedy used to be `pair update`, which INSTALLS the latest published
+  // knowledge base — so the fix for "your working tree drifted" depended on what had
+  // been released. Three of the seven recorded drifts were hand-ported instead, which
+  // is what a disproportionate remedy buys. The command named here regenerates from
+  // the working tree's own dataset and nothing else.
+  it('names the LOCAL regeneration command, never the published-KB install (#419)', () => {
+    const message = captureThrownMessage(() => assertKb(REL, expected, 'drifted\n'))
+    const remedyLine = message.split('\n').find(line => line.startsWith('Regenerate with'))
+    // Asserted, not cast: reword the guard's remedy line and `find` returns undefined, so
+    // a cast would surface the break as `TypeError: Cannot read properties of undefined`
+    // instead of naming the contract that broke — the remedy line must still be there.
+    expect(remedyLine).toBeDefined()
+    expect(remedyLine).toContain(MIRROR_REGENERATE_COMMAND)
+    expect(remedyLine).not.toContain('pair update')
   })
 
   it('names the paths of the registry it was given, not the KB by default', () => {
@@ -585,10 +602,19 @@ describe('assertMirrorMatches — failure paths and message (#393)', () => {
     expect(message).not.toContain('naming transform')
   })
 
-  it('reports a missing mirror as missing, with the regenerate hint (not as drift)', () => {
-    expect(() => assertKb(REL, expected, undefined)).toThrow(
-      /Mirror missing.*does not exist.*pair-cli update/s,
-    )
+  // #419 round 4: the MISSING branch, not just the drifted one. It is the branch a
+  // contributor reaches by adding `packages/knowledge-hub/dataset/.pair/knowledge/new-guide.md`
+  // and committing before regenerating — the most common way here, since a brand-new dataset
+  // file has no mirror yet. Told to run `pair update`, they install the PUBLISHED KB: their
+  // new file is in no release so the guard stays red, AND every other local mirror is
+  // overwritten with released content — manufacturing the drift this guard exists to stop.
+  it('reports a missing mirror as missing (not as drift) and names the LOCAL regeneration command', () => {
+    const message = captureThrownMessage(() => assertKb(REL, expected, undefined))
+    expect(message).toContain('Mirror missing')
+    expect(message).toContain('does not exist')
+    expect(message).not.toContain('has drifted')
+    expect(message).toContain(MIRROR_REGENERATE_COMMAND)
+    expect(message).not.toContain('pair update')
   })
 })
 
@@ -629,7 +655,13 @@ describe('assertNoOrphanedMirrorEntries — the reverse sweep (#393)', () => {
     )
     expect(message).toContain('DELETE it')
     expect(message).toContain(`ADD it to the dataset under ${KB_MIRROR.datasetRel}`)
-    expect(message).toContain("'pair-cli update'")
+    // #419 round 4, same contract as the forward guard's two branches: the SECOND half of
+    // this remedy ("add it to the dataset AND regenerate") is exactly the case `pair update`
+    // cannot serve — a file just added to the local dataset is in no published release, so
+    // the reader who follows the instruction literally comes back to a still-red guard.
+    // The `pair update` sentence one line above is a different claim (what the install
+    // does to an installed-only file) and stays.
+    expect(message).toContain(`regenerate with '${MIRROR_REGENERATE_COMMAND}'`)
     // states what it compared, like its forward sibling, so the reader cannot
     // mistake it for the transform assertion
     expect(message).toContain('COMPARED')

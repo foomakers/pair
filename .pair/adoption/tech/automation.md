@@ -25,3 +25,12 @@ max-iterations: 20
 ## Audit Location
 
 automation/loop-audit.md
+
+## Publish-PR Hooks
+
+Optional commands that `publish-pr` executes at defined points. Each hook is a shell command string.
+
+- `pre-publish` — runs after PR creation, before quality gate. Fails the publish if non-zero.
+- `post-publish` — runs after quality gate passes, before review dispatch. Failure does not block (logs only).
+
+- `pre-publish`: `pnpm mirrors:regenerate`

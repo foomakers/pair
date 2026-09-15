@@ -23,7 +23,7 @@ The ratchet ships as a **generated KB asset**, closing the loop differently:
   - `packages/knowledge-hub/dataset/.pair/knowledge/assets/coverage-ratchet.cjs` — the shipped corpus
   - `.pair/knowledge/assets/coverage-ratchet.cjs` — pair's own installed copy
   The module imports only node builtins, so a single-file transpile is a complete program; CommonJS output keeps its `require.main === module` entrypoint working under plain `node`.
-- `/setup-gates` emits `node .pair/knowledge/assets/coverage-ratchet.cjs …` in the adopter's push-triggered workflow — the file `pair install` put there. No npm registry round-trip, no version pin to maintain, no new command.
+- `/pair-capability-setup-gates` emits `node .pair/knowledge/assets/coverage-ratchet.cjs …` in the adopter's push-triggered workflow — the file `pair install` put there. No npm registry round-trip, no version pin to maintain, no new command.
 - Pair's own CI step invokes the same relative path from its installed copy.
 - A conformance gate (`conformance/coverage-ratchet-asset.test.ts`) compiles the source fresh and asserts both committed copies match byte-for-byte: editing an asset by hand, or editing the source without regenerating, turns red. The smoke scenario executes the shipped `.cjs` end-to-end.
 

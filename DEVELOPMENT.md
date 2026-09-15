@@ -65,6 +65,7 @@ pnpm install              # Install all dependencies
 pnpm quality-gate         # Full quality check (ts:check + test + lint + format check + hygiene)
 pnpm format               # Apply formatting (prettier + markdownlint, write mode)
 pnpm format:check         # Check formatting only — what the gate runs; never writes
+pnpm mirrors:regenerate   # Realign the generated mirrors with the LOCAL dataset (offline)
 pnpm test                 # Run all tests (Turbo)
 pnpm build                # Build all packages (Turbo)
 pnpm lint                 # Lint all packages (Turbo)
@@ -121,7 +122,7 @@ Before committing, always run:
 pnpm quality-gate
 ```
 
-This runs (in order): `ts:check`, `test`, `lint`, `workflows:test`, `format:check` (prettier + markdownlint, **check mode**), `gate:composition`, `hygiene:check`, `smoke-modes:check`, `docs:staleness`, `skills:conformance`, `llms-index:check`, `dup:check`. A red `llms-index:check` means `.pair/llms.txt` no longer matches its generator: run `pnpm llms-index:regen` and commit the result (the gate prints the missing/extra lines and never writes the file; the regen script writes that one file and refuses when the report says regenerating is the wrong move).
+This runs (in order): `ts:check`, `test`, `lint`, `format:check` (prettier + markdownlint, **check mode**), `gate:composition`, `hygiene:check`, `docs:staleness`, `skills:conformance`, `dup:check`.
 
 The gate never formats. It is the pre-push hook, where the commits already exist: a write-mode
 formatter would rewrite the working tree without touching what is being pushed, so it only pollutes
@@ -129,12 +130,14 @@ the next diff. On a `format:check` failure, run `pnpm format` and commit the res
 instead of 1 means a formatter wrapper itself failed (a broken install, not drift) — read its output
 rather than running `pnpm format`. **Two-step remedy:** if `pnpm format` touched
 `packages/knowledge-hub/dataset/**`, re-sync the generated `.claude/skills/**` and
-`.pair/knowledge/**` copies (`pair-cli update`) in the same commit, or a mirror guard fails later in the
-same gate — the dataset copy is inside format scope, its generated twin is not (`.claude/` and root
-`.pair/` are not workspace members), and the mirror guards assert each twin equals the OUTPUT of the
-real `pair-cli update` transform — never the dataset source itself, which the corpus is transformed away
-from. `gate:composition` guards the gate against a write-mode step (formatter or eslint autofix)
-creeping back in. See ADL
+`.pair/knowledge/**` copies (`pnpm mirrors:regenerate`) in the same commit, or a mirror guard fails
+later in the same gate — the dataset copy is inside format scope, its generated twin is not
+(`.claude/` and root `.pair/` are not workspace members), and the mirror guards assert each twin
+equals the OUTPUT of the real `pair update` transform — never the dataset source itself, which the
+corpus is transformed away from. `gate:composition` guards the gate against a write-mode step
+(formatter or eslint autofix) creeping back in. `pnpm mirrors:regenerate` regenerates from the
+working tree's own dataset, offline; `pair update` installs the latest PUBLISHED knowledge base and
+is not the remedy for local drift. See ADL
 [2026-07-31-pre-push-gate-is-check-only.md](.pair/adoption/decision-log/2026-07-31-pre-push-gate-is-check-only.md).
 
 ### Custom Gate Registry
@@ -151,13 +154,13 @@ The pair CLI (`@pair/pair-cli`) provides:
 
 | Command | Description |
 |---------|-------------|
-| `pair-cli install` | Install knowledge base documentation |
-| `pair-cli update` | Update knowledge base to latest version |
-| `pair-cli update-link` | Normalize markdown links (relative/absolute) |
-| `pair-cli kb-validate` | Validate KB structure, links, and metadata |
-| `pair-cli package` | Package .pair/ into distributable ZIP (`--interactive`, `--org`) |
-| `pair-cli kb-info` | Display metadata from a KB package ZIP |
-| `pair-cli kb-verify` | Verify KB package integrity (checksum, structure, manifest) |
+| `pair install` | Install knowledge base documentation |
+| `pair update` | Update knowledge base to latest version |
+| `pair update-link` | Normalize markdown links (relative/absolute) |
+| `pair kb-validate` | Validate KB structure, links, and metadata |
+| `pair package` | Package .pair/ into distributable ZIP (`--interactive`, `--org`) |
+| `pair kb-info` | Display metadata from a KB package ZIP |
+| `pair kb-verify` | Verify KB package integrity (checksum, structure, manifest) |
 
 See [apps/pair-cli/README.md](apps/pair-cli/README.md) for complete reference.
 

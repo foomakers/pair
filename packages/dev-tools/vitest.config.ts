@@ -6,6 +6,16 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    // #419: this suite shells out per test (turbo builds + real CLI runs — the
+    // regenerate file alone burns ~60s of nested subprocesses). Under turbo's
+    // package-parallel CI run the synchronous subprocesses block the event loop,
+    // starving the vitest parent RPC (`Timeout calling "onTaskUpdate"` with
+    // every test green). Use threads pool (no separate process RPC) with
+    // extended timeout to avoid the 60s RPC timeout in forks pool.
+    maxWorkers: 1,
+    pool: 'threads',
+    // Increase test timeout to 3 minutes to give subprocesses time to complete.
+    testTimeout: 180_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
