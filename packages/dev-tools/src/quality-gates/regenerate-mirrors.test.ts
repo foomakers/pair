@@ -1099,7 +1099,9 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       // OVERWRITTEN row: the file is still there, its content is the dataset's — a digest that
       // MOVED, which is the `overwrote uncommitted changes in:` row's territory, not the HALT's.
       expect(existsSync(join(tmp, OVERWRITTEN))).toBe(true)
-      expect(git(tmp, ['hash-object', OVERWRITTEN]).trim()).not.toBe(before.digests.get(OVERWRITTEN))
+      expect(git(tmp, ['hash-object', OVERWRITTEN]).trim()).not.toBe(
+        before.digests.get(OVERWRITTEN),
+      )
       expect(readFileSync(join(tmp, OVERWRITTEN), 'utf-8')).toBe('# AGENTS\n')
       expect(afterEntries).toContainEqual({ xy: '??', path: OVERWRITTEN })
       // UNTOUCHED rows: same bytes, same porcelain entry, not in the index. These are the files
@@ -1298,7 +1300,14 @@ describe('the shipped mirror-realign asset drives the real writer (#419, /publis
       expect(Number(row?.[2])).toBe(committed.length)
       expect(git(tmp, ['log', '-1', '--format=%s']).trim()).toBe(REGEN_MESSAGE)
       expect(git(tmp, ['rev-parse', 'HEAD^']).trim()).toBe(head)
-      expect(committed).toContain('.pair/knowledge/index.md')
+      // The regenerated index.md renders byte-equal to HEAD (the converge commit stored
+      // exactly what the writer reproduces), so after `git add` its index entry equals HEAD
+      // and the pathspec commit lists it NOWHERE: the commit is the staged set MINUS every
+      // path whose staged content equals HEAD — the subset rule the skill documents for this
+      // exact `.M` → gone shape. The destroyed hand-edit is covered instead by the recover
+      // row asserted above (regex) and below (cat-file). Asserting containment here would
+      // demand git commit a path with no diff, which no recipe can do.
+      expect(committed).not.toContain('.pair/knowledge/index.md')
       expect(committed).toContain('.pair/knowledge/new-guide.md')
       expect(committed).not.toContain('src/authored.ts')
       expect(committed).not.toContain('notes.md')
