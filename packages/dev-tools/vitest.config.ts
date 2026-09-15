@@ -8,13 +8,16 @@ export default defineConfig({
     globals: true,
     // #419: this suite shells out per test (turbo builds + real CLI runs — the
     // regenerate file alone burns ~60s of nested subprocesses). Under turbo's
-    // package-parallel CI run the worker fan-out starves the vitest parent RPC
-    // (`Timeout calling "onTaskUpdate"` with every test green), so run this
-    // package's files serially instead of flakes-gating the branch.
+    // package-parallel CI run the synchronous subprocesses block the event loop,
+    // starving the vitest parent RPC (`Timeout calling "onTaskUpdate"` with
+    // every test green). Run serially with longer timeout and fork isolation.
     maxWorkers: 1,
     // Use forks pool with single fork to keep parent RPC responsive under CPU load.
     pool: 'forks',
     poolOptions: { forks: { singleFork: true } },
+    // Increase test timeout to 3 minutes to prevent RPC timeout during long
+    // turbo+CLI subprocesses that block the event loop.
+    testTimeout: 180_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
