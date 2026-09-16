@@ -45,6 +45,7 @@
         "$TURBO_ROOT$/.claude-plugin/marketplace.json",
         "$TURBO_ROOT$/.pair/**",
         "$TURBO_ROOT$/apps/pair-cli/config.json",
+        "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/apps/website/content/docs/**",
         "$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts",
         "$TURBO_ROOT$/qa/**",
@@ -71,6 +72,7 @@
         "$TURBO_ROOT$/.claude-plugin/marketplace.json",
         "$TURBO_ROOT$/.pair/**",
         "$TURBO_ROOT$/apps/pair-cli/config.json",
+        "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/apps/website/content/docs/**",
         "$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts",
         "$TURBO_ROOT$/qa/**",
@@ -87,73 +89,34 @@
     // logic would therefore replay a cached PASS on this test locally — the identical
     // local-false-green class this same PR's knowledge-hub#test entry above exists to close,
     // for the one test file in this PR that most needs to actually run.
-    // Same reasoning, second repo-wide artifact (#413): format-workflow-composition.test.ts reads
-    // .github/workflows/format.yml, so adding `paths-ignore:` to that workflow — the exact
-    // regression the guard exists for — touches no file under packages/dev-tools and would replay
-    // a cached PASS. CI is cold on every run and unaffected either way; this closes the LOCAL
-    // false green, which is also what the pre-push hook (`turbo test`) sees.
-    // Third, and the one BOTH guards in this folder read: the root package.json. checkThisRepoGate
-    // parses it outright, and checkFormatWorkflow defaults rootScripts to readRootScripts(), which
-    // is how `pnpm format` in a workflow step resolves to prettier:fix at all. MEASURED without
-    // this entry: `turbo run test --filter=@pair/dev-tools --dry=json` hashed 7271baf2a672a276, and
-    // rewriting the root `format:check` script to `pnpm prettier:fix` — i.e. CI now WRITES — left
-    // the hash at 7271baf2a672a276, a cached PASS with the guard never running. Same one input away
-    // from the false green each guard exists to close.
+    // WIDENED to scripts/** (#419): regenerate-mirrors.test.ts exercises
+    // scripts/regenerate-mirrors.sh the same way, so a per-script list would have to grow with
+    // every new one and degrades SILENTLY (stale PASS) when it does not — the same reason the
+    // note at the top of this file gives for preferring over-approximation. $TURBO_ROOT$/package.json
+    // is here because pre-push-gate-composition.test.ts runs checkRootGate against the REAL root
+    // package.json: deleting the `mirrors:regenerate` script is exactly the dead-advice regression
+    // that guard exists to catch, and it touches no file under packages/dev-tools.
+    // `@pair/pair-cli#build` in dependsOn (#419, round 2) covers the one tree these tests
+    // EXECUTE that neither list reaches: regenerate-mirrors.test.ts AC1/AC2 run the real
+    // scripts/regenerate-mirrors.sh with TOOLCHAIN_ROOT = this repo, so they build and run
+    // apps/pair-cli and assert the output of the real `pair update --source` transform.
+    // @pair/dev-tools declares no dependency on @pair/pair-cli (only the four config
+    // packages), so nothing in `inputs` or in `^build` covered apps/pair-cli/**,
+    // packages/content-ops/** or packages/knowledge-hub/**. MEASURED at 0a6712e3:
+    // `printf '\n// cache probe\n' >> apps/pair-cli/src/registry/skill-refs.ts` — the
+    // skill-reference rewriter these tests exercise — then
+    // `turbo run test --filter @pair/dev-tools` replayed `1 cached, 125ms >>> FULL TURBO`.
+    // A task dependency enters the hash, so this invalidates on the WHOLE CLI closure and,
+    // unlike a hand-listed set of trees, cannot go stale when that closure grows.
     "@pair/dev-tools#test": {
-      "dependsOn": ["build"],
+      "dependsOn": ["build", "@pair/pair-cli#build"],
       "outputs": [],
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/scripts/format-lib/**",
-        "$TURBO_ROOT$/.github/workflows/format.yml",
-        "$TURBO_ROOT$/package.json"
-      ]
-    },
-    // @pair/pair-cli's suites read repo-wide artifacts: llms-index-conformance asserts the committed
-    // .pair/llms.txt against generateLlmsTxt over .pair/adoption/** and .pair/knowledge/**;
-    // tier-parity reads .pair/adoption/tech/automation.md; prompt-safety and tier-parity read
-    // .claude/workflows/pair-loop.js; official-kb-name reads scripts/workflows/release/
-    // package-kb-dataset.sh; commands/run/invocation lists packages/knowledge-hub/dataset/.skills.
-    // MEASURED (#434 / PR #478): adding an ADL without regenerating .pair/llms.txt passed
-    // `pnpm quality-gate` and the pre-push hook through a cache replay (task hash identical before
-    // and after the .pair edit) while the same test failed when run directly. Guarded by
-    // web-cloud-environment.test.ts TASK_PAIRS, which also asserts #test:coverage keeps
-    // `outputs: ["coverage/**"]` — an override replaces the base task, it does not merge.
-    "@pair/pair-cli#test": {
-      "dependsOn": ["build"],
-      "outputs": [],
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/.pair/**",
-        "$TURBO_ROOT$/.claude/**",
-        "$TURBO_ROOT$/scripts/**",
-        "$TURBO_ROOT$/packages/knowledge-hub/dataset/**",
-        "$TURBO_ROOT$/turbo.json"
-      ]
-    },
-    // If you change one list, change @pair/pair-cli#test the same way, or this task silently
-    // falls back to a stale local cache — the TASK_PAIRS guard fails the build if they diverge.
-    "@pair/pair-cli#test:coverage": {
-      "dependsOn": ["build"],
-      "outputs": ["coverage/**"],
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/.pair/**",
-        "$TURBO_ROOT$/.claude/**",
-        "$TURBO_ROOT$/scripts/**",
-        "$TURBO_ROOT$/packages/knowledge-hub/dataset/**",
-        "$TURBO_ROOT$/turbo.json"
-      ]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/**", "$TURBO_ROOT$/package.json"]
     },
     "@pair/dev-tools#test:coverage": {
-      "dependsOn": ["build"],
+      "dependsOn": ["build", "@pair/pair-cli#build"],
       "outputs": ["coverage/**"],
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/scripts/format-lib/**",
-        "$TURBO_ROOT$/.github/workflows/format.yml",
-        "$TURBO_ROOT$/package.json"
-      ]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/**", "$TURBO_ROOT$/package.json"]
     },
     "ts:check": {
       "dependsOn": ["^build"],
