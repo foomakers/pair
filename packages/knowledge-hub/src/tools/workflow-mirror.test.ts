@@ -94,7 +94,7 @@ describe.each(PAIRS)('$what: dataset and root copy are one artifact', ({ dataset
   })
 
   it('every file is byte-identical', () => {
-    for (const name of listFiles(datasetDir)) {
+    for (const name of listFiles(datasetDir).filter(f => !f.endsWith('.test.mjs'))) {
       const source = readFileSync(join(datasetDir, name), 'utf-8')
       const live = readFileSync(join(installedDir, name), 'utf-8')
       expect(

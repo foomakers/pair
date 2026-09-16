@@ -47,7 +47,7 @@ Two steps of this flow ask a human a question: Step 1.4 ("Proceed with review?")
 
 - **Step 1.4** — do **not** ask. Emit the same READY block as output and continue directly to Step 1.5.
 - **Step 5.5** — do **not** ask, and never self-answer "Merge now". The outcome is always option 2 (**author/human merges**): produce the report and stop after Phase 5.
-- **A dispatched run never reaches Phase 6**: it does not merge, does not cascade, does not delete a branch, even on APPROVED with `merge_allowed` true. The human merge gate is the point of the flow ([pr-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md): "a human still performs the merge; pair never auto-merges"). The dispatch instruction says so explicitly, and this contract holds even if it does not.
+- **A dispatched run never reaches Phase 6**: it does not merge, does not cascade, does not delete a branch, even on APPROVED with `merge_allowed` true. The reviewer never merges its own verdict — a self-answered "Merge now" here would let the reviewing agent merge on its own APPROVED verdict, which is exactly what the human merge gate forbids. Merging stays the orchestrator's act: `/pair-process-implement` Phase 4 (human re-invoked) or `/pair-loop` under `## Auto-Advance` (unattended, on freshly re-verified signals) — both re-synthesize and run the same `merge_allowed` precondition ([pr-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md)). The dispatch instruction says so explicitly, and this contract holds even if it does not.
 
 Everything else (phases 1–5, the verdict, the `pair-review` publication, the state synthesis) is identical to an interactive run.
 

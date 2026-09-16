@@ -12,7 +12,7 @@ to-be-reviewed → ready-to-merge
 | PR state | Meaning | Merge-enabling |
 | --- | --- | --- |
 | **to-be-reviewed** | The PR is open and not yet cleared: gates not green, review not submitted (or crashed), or a 🔴 PR still awaiting explicit human approval | No |
-| **ready-to-merge** | Gates green **and** review approved **and** (at 🔴) explicit human approval recorded | Yes — a human still performs the merge; pair never auto-merges |
+| **ready-to-merge** | Gates green **and** review approved **and** (at 🔴) explicit human approval recorded | Yes — a human performs the merge, unless the project's `## Auto-Advance` names the tier and `pair-loop` executes it unattended on freshly re-verified signals (same synthesis, no looser rule) |
 | **not-approved** | The review verdict is CHANGES-REQUESTED — the findings route back to a human (the author) | No |
 
 This document is the **one place** the PR state flow is defined. It is the pull-request companion to [canonical-states.md](canonical-states.md), which owns the five **work-item** macrostates: a PR in any of the three states above sits under the work item's `Review` macrostate; `Done` is produced by the merge, not by a PR state.
@@ -137,12 +137,13 @@ One row, and it is inert unless a project turns it on. When **all four** hold �
 | --- | --- |
 | `/publish-pr` | Creates the PR, propagates the story's classification tags, registers `pair-review` as **pending**, labels the PR `pr-state:to-be-reviewed`, and triggers the review in a clean-context subagent |
 | `/review` | Produces the judgment verdict in the native review, publishes the `pair-review` check conclusion (`review_check_conclusion`), computes the state (`resolve_pr_state`), swaps the `pr-state:*` label, and refuses to merge unless `merge_allowed` passes |
-| `/review-phase` (delivery workflow, batch engine) | The final non-partial reviewer of a cycle publishes the `pair-review` conclusion on the exact head it verified and swaps the `pr-state:*` label (`scripts/pr-state.mjs conclude`, the same mapping as `pr-state.sh`); a non-decision publishes nothing, so the pending check keeps the merge blocked. Never merges. |
+| `/review-phase` (delivery workflow, batch engine) | The final non-partial reviewer of a cycle publishes the `pair-review` conclusion on the exact head it verified and swaps the `pr-state:*` label (`scripts/pr-state.mjs conclude`, the same mapping as `pr-state.sh`); a non-decision publishes nothing, so the pending check keeps the merge blocked. Never merges — merging is the loop's, not the reviewer's. |
+| `/loop` (unattended, adoption-gated) | The **only** unattended merge path: when the card's tier is in `## Auto-Advance`, executes the merge on freshly re-verified signals (tier, remote head, both conclusions, gate set — the `merge_allowed` conjunction), then the merge-and-cascade close. It executes merges the synthesis authorizes; it judges nothing |
 | `/implement` Phase 4 | The **other** merge path (the author re-invoked after an approving review): runs the *same* precondition as `/review`'s — re-synthesize the current signals, `merge_allowed`, HALT otherwise — before merging. "At least one approval" is **not** the condition; a 🔴 PR with an approving verdict and no explicit human approval must not merge here either |
 | **Dedicated review identity** (optional) | The **actor**, not a decider: executes the code-host writes `/publish-pr` and `/review` perform — the native verdict, the `pair-review` publication, the audit comment — when one is configured. It signs an **approving** review only below 🔴 and only where adoption declares the `light` family; every other approving verdict stays a comment-form review. It never satisfies the 🔴 explicit human approval |
 | `/setup-gates` | Wires `pair-review` + `pair-explicit-approval` as required checks on the protected branch alongside the gate jobs, or reports degraded mode |
 | Code host | Enforces: blocks the merge button while any required check is red, pending, or absent |
-| Human | Fixes findings, gives the explicit approval at 🔴, and presses merge |
+| Human | Fixes findings, gives the explicit approval at 🔴, and presses merge wherever `## Auto-Advance` does not cover the tier |
 
 ## Related
 
