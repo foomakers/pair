@@ -36,9 +36,11 @@ The compiled matrix has one row per dimension below. Each row resolves to `green
 | --- | --- | --- | --- | --- | --- |
 | Service/domain criticality | R5.1 | `tech/risk-matrix.md` criticality table | Low | Medium (default when the file is absent) | High (default for a service/domain **not listed** in an existing table — conservative) |
 | Change/diff risk | R5.2 | story scope → diff footprint | isolated, localized change | touches multiple modules or shared code | schema/migration, contract-breaking change, or infra provisioning change |
-| Business impact | R4.3 | subdomain classification of what the story/diff touches | `generic` subdomain | `supporting` subdomain | `core` subdomain |
+| Business impact | R4.3 | subdomain classification of what the story/diff touches | `generic` subdomain — **or any subdomain**, when the change is trivial and the project opted in (`business-impact.trivial-diff`, §6) | `supporting` subdomain (unless the trivial-diff override applies, §6) | `core` subdomain (unless the trivial-diff override applies, §6) |
 | Security relevance | — | heuristic over touched paths | no security-sensitive surface | security-adjacent (new external dependency, input validation on a non-critical path) | authn/authz, secrets/credentials, cryptography, PII, untrusted-input parsing |
 | Coupling balance | — | story context (touched subdomains' volatility + cross-context integrations) → diff (`assess-coupling` verdict) | balanced | unbalanced + stable | unbalanced + volatile |
+
+**Business impact** reads *where* a change lands, not *what* it does — deliberately, since the subdomain map is the only such signal available before any code exists. A project that finds this too coarse for objectively trivial work may declare the opt-in `business-impact.trivial-diff` override (§6); absent that declaration this dimension resolves from the subdomain class alone, exactly as the row above states. **Precedence, when the key is declared:** the override outranks this row's yellow and red cells — resolve triviality (§6) first, and fall back to the subdomain class only when the override does not apply. It is the one cell alternation in this table that is not decided by the Source column alone.
 
 Coupling sources absent (no subdomain/bounded-context artifacts, no `assess-coupling` available) ⇒ reported **not assessed**, excluded from the max below, never blocks (D21). See `architecture/design-patterns/coupling-balance.md` (nested taxonomy entry, §7, not yet published) — the single home for the coupling model itself; this document never duplicates that content, only the classification rule above.
 
@@ -129,7 +131,7 @@ Optional file holding up to three independent sections — a project may have no
 
 - **`## Tag Projection`** (§5) — which classification tags get emitted. In practice the section most projects end up with first, since `classify` proactively proposes it the first time it runs (§5) — a project doesn't have to know this file exists to get a sensible default.
 - **`## Criticality Table`** — per-service/domain criticality overrides (§3.1). Offered by `/pair-process-bootstrap` Phase 3.6, which proposes the candidate rows from the project's domain model and writes only the ones confirmed; hand-authoring from the example asset stays equally valid.
-- **`## Overrides`** — threshold overrides for other dimensions, plus optional per-tier reviewer-count/SLA overrides (§4). Offered by the same `/pair-process-bootstrap` Phase 3.6.
+- **`## Overrides`** — **threshold overrides** for other dimensions (a path that always classifies at least yellow, say), **dimension-resolution overrides** that change how a dimension *resolves* rather than where its threshold sits (today `business-impact.trivial-diff`, below, is the only one), plus optional per-tier reviewer-count/SLA overrides (§4). The **threshold** and **reviewer/SLA** families are offered by the same `/pair-process-bootstrap` Phase 3.6; the dimension-resolution family is **hand-authored** today — Phase 3.6 does not ask about it, and its offer is one-shot (an existing `## Overrides` is reported `already authored` and never re-proposed), so a project that answered the other two questions reaches this key from the example asset, not from a re-run.
 
 Absent entirely ⇒ KB defaults (§3.1) apply completely to the matrix, and no tags are emitted (§5) — nothing fails (D21). This is the state before `classify` has ever run, or before its Tag Projection proposal has been answered.
 
@@ -148,6 +150,7 @@ Active: risk
 ## Overrides
 
 - change-risk.shared-paths: ["packages/billing/**"]
+- business-impact.trivial-diff: green
 ```
 
 - **Key namespace** (what the read side queries): a story or diff resolves to the **deployable that owns the touched files** — the workspace package, app, or top-level path scope (`apps/website`, `packages/billing`; a single-deployable repository resolves to that one scope). That identifier is the key looked up in the criticality table, so **rows are keyed by it**. Bounded contexts and subdomains name *business* boundaries and often carry different names: they are good sources of candidate rows and of the criticality *value*, but a row keyed by a name no diff ever resolves to is never read, while the deployable it meant to cover stays unlisted and falls to the conservative High below.
@@ -157,6 +160,28 @@ Active: risk
 - **Malformed file** (unparseable table, unknown keys): skills warn and fall back to KB defaults entirely (D21) — including no tag emission, exactly as if the whole file were absent.
 - **Unknown service/domain** (queried but not in the criticality table): treated as unclassified ⇒ conservative High for that dimension.
 - A filled-in example (also usable as adoption starting point) is at [risk-matrix-example.md](../../assets/risk-matrix-example.md).
+
+### `business-impact.trivial-diff` — the opt-in trivial-change override
+
+```markdown
+## Overrides
+
+- business-impact.trivial-diff: green
+```
+
+Declared, this key lets the **Business impact** dimension (§3.1) resolve `green` for an objectively trivial change **regardless of the subdomain** the touched files belong to, so a doc typo fix or a comment tidy inside a `core` subdomain no longer inherits that subdomain's floor. **It is opt-in: absent the declaration — and it is absent in the KB default — Business impact resolves from the subdomain class exactly as §3.1 states, for every project that has not asked for it.**
+
+- **What counts as trivial** — objective and checkable from `git diff`, never a judgment about how important the prose or the file is. A change is trivial when **either**:
+  - **(a) every** changed file is **non-executable** documentation — extension `.md`/`.mdx` (this includes guarded markdown mirrors, so a doc plus its mirrors is still all-documentation), *excluding the markdown an agent acts on* per the next bullet; **or**
+  - **(b) no** changed hunk in **any** changed file **alters an executable or declarative statement** — comment-only, whitespace-only, formatter-output-only and, in executable markdown, prose-only changes all qualify; a hunk that changes an instruction, a rule, a value or anything else the file is acted on for does not. The statement test is the gate, those categories are examples of passing it.
+- **Markdown an agent acts on is out of branch (a)** — two classes, both machine-resolved however `.md` their extension is. **Executable markdown**: markdown that *is* the procedure rather than describing it — an agent skill or workflow file (`**/SKILL.md`, `.claude/skills/**`, `.claude/workflows/**`, `.claude/agents/**`), an always-loaded **agent-instruction** file (a root `AGENTS.md`/`CLAUDE.md`, or whatever equivalent the project's agents read as their standing rule set), the sources any of them are generated from, an asset script embedded in markdown. **Adoption/policy markdown**: the project's own configuration written in markdown, whose declared **values** an agent parses and acts on — the whole `tech/**` adoption directory (`tech/risk-matrix.md`, `tech/automation.md`, `tech/way-of-working.md`, `tech/coverage-baseline.md`, and whatever else a project declares there — a **directory**, not a fixed list, because policy files are added over time and an enumeration that lags one file is a hole) — the same content the next bullet already calls non-trivial when it is serialized as `json`/`yaml`/`toml`/`env`, and no more trivial for being markdown. Neither class ever satisfies branch (a): **branch (b) then decides**, so a hunk altering an instruction (a merge rule, a gate, a step) or a declared value (an eligibility tier, a threshold, a criticality row) is **not** trivial, while a typo fix in that same file's surrounding rationale prose still is. Branch (a) is the first arm of an OR and short-circuits, so this exclusion has to be read on branch (a) itself, not after it. **Why these two classes and not every `.md` a machine reads**: a normative guideline deliberately stays *inside* branch (a), because it is a shared rule surface **many independent consumers** resolve from — §3.1's own *shared code* trigger fires on it, and Change/diff risk reads yellow with no carve-out needed. The two classes above have a **single consumer** (the agent that executes the file, or the skill that reads its values), so no other dimension fires on their behalf and the exclusion has to be mechanical instead.
+- **What is *not* trivial, however cosmetic it looks**: an identifier or file rename, a string-literal change, a dependency or version change, a value change in a config/data file — `json`/`yaml`/`toml`/`env`, and equally the markdown a project declares its policy in (previous bullet), a test expectation change, and a regenerated build artifact. A rename is excluded on purpose — behaviour preservation is a judgment, not a diff-visible fact.
+- **All-or-nothing per item.** Tier is per story/PR, not per file (§3.2), so **one non-trivial file or hunk** disables the override for the whole item and Business impact falls back to the subdomain class. There is no per-file granularity to fall back to.
+- **Raises green, never lowers anything.** The override may only move Business impact from yellow/red to green. It never touches another dimension, and the tier stays `max()` of the assessed dimensions — a red anywhere else still decides the tier. At review it is subject to the ordinary confirm-or-raise rule: it never lowers a value below the refinement floor (§3.2, D17).
+- **At refinement time** (no code yet): applies only when the story's declared scope is unambiguously trivial (docs/comment/cosmetic only). Ambiguous scope, or any named behaviour change ⇒ it does **not** apply (fail-safe toward the subdomain rule); review re-resolves the dimension from the real diff.
+- **Triviality unverifiable** (diff unreadable — binary, truncated, or too large) ⇒ the override does **not** apply, and `classify` reports `Confidence: low`. An empty diff has nothing to classify as trivial: the dimension resolves from the subdomain class.
+- **`green` is the only accepted value** — the key is a boolean in disguise. The **value is the first token after the colon**; an inline rationale may follow it on the same line — the form every key in this section is written in — and that prose is not part of the value. **Backtick formatting is markdown, not part of the token**: ``- `business-impact.trivial-diff`: `green` — …`` declares exactly what `- business-impact.trivial-diff: green — …` declares — strip the backticks around the key and the value before reading either. (The example asset writes the backticked form; this repo's own declaration writes the plain one.) Any other value, or a malformed key form, is treated as absent: skills warn and fall back to the KB default for this dimension (the malformed-file rule above, D21) — never a HALT.
+- **It is a rule for the classifying agent, not a config key parsed by code.** `classify` resolves `## Overrides` qualitatively, like every other key in this section; nothing here implies a parser or a schema, and no threshold from this section is ever copied into a skill (D18).
 
 ### Resolution-cascade walkthrough
 
@@ -168,6 +193,22 @@ Active: risk
 | File present, service listed | `payments: High` | `payments` resolves to red for that dimension, overriding the Medium default |
 | File present, service **not** listed | table has other entries only | Conservative High (red) for that dimension, not the absent-file Medium default |
 | File present but malformed | unparseable | Warn, fall back to KB defaults as if absent (including no tag emission) |
+| Trivial diff, override **not** declared | no `business-impact.trivial-diff` key | Business impact resolves from the subdomain class (§3.1) — the KB default is untouched by this key existing |
+| Trivial diff, override declared | `business-impact.trivial-diff: green` | Business impact resolves **green** even in a `core` subdomain; the body matrix names `Overrides: business-impact.trivial-diff` as the source instead of the subdomain class |
+| Mixed diff (one non-trivial file or hunk), override declared | `business-impact.trivial-diff: green` | Override does not apply at all — Business impact resolves from the subdomain class, as if undeclared |
+| Trivial diff, override declared with a value other than `green` | `business-impact.trivial-diff: sometimes` | Warn, treat the key as absent, resolve from the subdomain class — never a HALT |
+
+### Worked examples — the trivial-diff override
+
+Hand-traced matrices for a project that has declared `business-impact.trivial-diff: green`. All three touch a **`core`** subdomain (Business impact would otherwise be red) inside a deployable listed `Low`. They pin the three behaviours the key must have: it fires on a genuinely trivial diff, it disappears the moment one hunk is not, and it never buys down another dimension's red.
+
+| Ex | Service/domain criticality | Change/diff risk | Business impact | Security relevance | Coupling balance | Tier |
+| --- | --- | --- | --- | --- | --- | --- |
+| A — a typo fix in a `.md` guideline's prose — no rule changed | green | green | green (Overrides: business-impact.trivial-diff) | green | not assessed | risk:green |
+| B — that same `.md` edit plus one changed line in a request handler | green | yellow (two modules) | red (core subdomain — one non-trivial hunk disables the override) | green | not assessed | risk:red |
+| C — a `.md`-only runbook edit that lives **inside** a security-sensitive path the §3.1 heuristic flags (`services/auth/docs/credential-rotation.md`) | green | green | green (Overrides: business-impact.trivial-diff) | red (§3.1 path heuristic: an authn/secrets path) | not assessed | risk:red |
+
+A is the case the key exists for: `.md`-only, so branch (a) holds and the `core` floor is lifted. Its Change/diff risk is green because the row is a **non-normative** prose fix; a `.md` edit that changes a *rule* is equally trivial by this definition but reads **yellow** on Change/diff risk (a shared rule surface every consumer resolves from), and `max()` keeps that off green — the override never buys a normative change a green tier on its own. B is all-or-nothing (§6, *All-or-nothing per item*) — the handler hunk alters a statement, so the whole item falls back to the subdomain class. C is the never-lowers guarantee: Business impact is greened, Security relevance still reads red on its own heuristic, and `max()` keeps the tier at `risk:red`. C's Security red comes from **where the file lives** — §3.1's Security row is a heuristic over *touched paths*, so it fires because the path is inside an authn/secrets surface, **not** because the prose mentions credentials. Vocabulary is not the trigger: the same runbook under `docs/` reads Security green, and C would then resolve `risk:green` — which is why the row names its path.
 
 ## 7. Nested Taxonomy
 

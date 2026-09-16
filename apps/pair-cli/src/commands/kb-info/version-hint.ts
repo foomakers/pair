@@ -44,7 +44,7 @@ export async function emitVersionDriftHint(deps: {
 }
 
 /**
- * Record the just-applied KB version (AC4) so future `pair kb-info` checks
+ * Record the just-applied KB version (AC4) so future `pair-cli kb-info` checks
  * have something to compare against instead of "unknown installed version".
  */
 export async function recordInstalledVersion(deps: {

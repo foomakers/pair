@@ -4,14 +4,14 @@
 export const kbInfoCommandMetadata = {
   name: 'kb-info',
   description: 'Display KB package metadata, or check installed vs current KB version',
-  usage: 'pair kb-info [package-path] [options]',
+  usage: 'pair-cli kb-info [package-path] [options]',
   examples: [
-    'pair kb-info my-kb.zip                          # Display package metadata',
-    'pair kb-info my-kb.zip --json                    # Output as JSON',
-    'pair kb-info dist/kb-v1.0.0.zip                  # Inspect specific package',
-    'pair kb-info                                     # Check installed vs current KB version',
-    'pair kb-info --json                              # Version check, JSON output',
-    'pair kb-info --source /path/to/kb                # Version check against a custom source',
+    'pair-cli kb-info my-kb.zip                          # Display package metadata',
+    'pair-cli kb-info my-kb.zip --json                    # Output as JSON',
+    'pair-cli kb-info dist/kb-v1.0.0.zip                  # Inspect specific package',
+    'pair-cli kb-info                                     # Check installed vs current KB version',
+    'pair-cli kb-info --json                              # Version check, JSON output',
+    'pair-cli kb-info --source /path/to/kb                # Version check against a custom source',
   ],
   options: [
     {

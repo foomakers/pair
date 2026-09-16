@@ -65,6 +65,7 @@ pnpm install              # Install all dependencies
 pnpm quality-gate         # Full quality check (ts:check + test + lint + format check + hygiene)
 pnpm format               # Apply formatting (prettier + markdownlint, write mode)
 pnpm format:check         # Check formatting only — what the gate runs; never writes
+pnpm mirrors:regenerate   # Realign the generated mirrors with the LOCAL dataset (offline)
 pnpm test                 # Run all tests (Turbo)
 pnpm build                # Build all packages (Turbo)
 pnpm lint                 # Lint all packages (Turbo)
@@ -129,12 +130,14 @@ the next diff. On a `format:check` failure, run `pnpm format` and commit the res
 instead of 1 means a formatter wrapper itself failed (a broken install, not drift) — read its output
 rather than running `pnpm format`. **Two-step remedy:** if `pnpm format` touched
 `packages/knowledge-hub/dataset/**`, re-sync the generated `.claude/skills/**` and
-`.pair/knowledge/**` copies (`pair update`) in the same commit, or a mirror guard fails later in the
-same gate — the dataset copy is inside format scope, its generated twin is not (`.claude/` and root
-`.pair/` are not workspace members), and the mirror guards assert each twin equals the OUTPUT of the
-real `pair update` transform — never the dataset source itself, which the corpus is transformed away
-from. `gate:composition` guards the gate against a write-mode step (formatter or eslint autofix)
-creeping back in. See ADL
+`.pair/knowledge/**` copies (`pnpm mirrors:regenerate`) in the same commit, or a mirror guard fails
+later in the same gate — the dataset copy is inside format scope, its generated twin is not
+(`.claude/` and root `.pair/` are not workspace members), and the mirror guards assert each twin
+equals the OUTPUT of the real `pair update` transform — never the dataset source itself, which the
+corpus is transformed away from. `gate:composition` guards the gate against a write-mode step
+(formatter or eslint autofix) creeping back in. `pnpm mirrors:regenerate` regenerates from the
+working tree's own dataset, offline; `pair update` installs the latest PUBLISHED knowledge base and
+is not the remedy for local drift. See ADL
 [2026-07-31-pre-push-gate-is-check-only.md](.pair/adoption/decision-log/2026-07-31-pre-push-gate-is-check-only.md).
 
 ### Custom Gate Registry

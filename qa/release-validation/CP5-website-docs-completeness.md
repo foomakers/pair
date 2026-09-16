@@ -30,7 +30,7 @@
 - `$BASE_URL/docs/getting-started/bootstrap-quick-mode`
 - `$BASE_URL/docs/getting-started/checklist`
 
-**Concepts** (12 pages):
+**Concepts** (13 pages):
 
 - `$BASE_URL/docs/concepts`
 - `$BASE_URL/docs/concepts/ai-assisted-sdlc`
@@ -43,6 +43,7 @@
 - `$BASE_URL/docs/concepts/code-host`
 - `$BASE_URL/docs/concepts/definition-of-ready-and-done`
 - `$BASE_URL/docs/concepts/pr-state-flow`
+- `$BASE_URL/docs/concepts/review-identity`
 - `$BASE_URL/docs/concepts/tag-driven-gates`
 
 **Process Lifecycle** (5 pages):
@@ -138,13 +139,13 @@
 
 ### Expected Result
 
-- All 84 URLs return HTTP 200
+- All 85 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 84 pages
+- Total: 85 pages
 
 ---
 
@@ -191,4 +192,4 @@
 - #225 (web/cloud environments): MT-CP501 page count 61 → 62, Integrations 6 → 7 — added `/docs/integrations/web-cloud-environments`.
 - #225 (review): MT-CP501 page count 62 → 80 — backfilled the 18 live pages the sweep had drifted past (`/docs`, 5 Concepts, `contributing/writing-migration-pages`, `customization/external-kb`, 2 Migrations, `pm-tools/azure-devops`, 5 Reference, 2 Tutorials). The list is now asserted against the filesystem by `packages/knowledge-hub/src/conformance/docs-page-coverage.test.ts`, so a new page that is not listed here fails CI rather than silently escaping the sweep.
 - #451 (pair-cli execution adapter): MT-CP501 page count 80 → 83, Integrations 7 → 10 — added `/docs/integrations/pi`, `/docs/integrations/opencode` and `/docs/integrations/adding-a-harness` (the harness-execution layer the #450 coordination note left for this story).
-- #464 (approval signal threaded into composed skills): MT-CP501 page count 83 → 84, Tutorials 7 → 8 — added `/docs/tutorials/unattended-delivery` (configuring `tech/automation.md` and daemonizing `pair run` on a dedicated box).
+- #464 (approval signal threaded into composed skills): MT-CP501 page count 83 → 84, Tutorials 7 → 8 — added `/docs/tutorials/unattended-delivery` (configuring `tech/automation.md` and daemonizing `pair-cli run` on a dedicated box).

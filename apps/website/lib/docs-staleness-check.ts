@@ -14,6 +14,13 @@
  * apps/website/lib -> apps/website -> apps -> <repo root> (up 3).
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { compileSync } from '@mdx-js/mdx'
+import remarkGfm from 'remark-gfm'
+import remarkParse from 'remark-parse'
+import { unified } from 'unified'
+import { toString as mdastToString } from 'mdast-util-to-string'
+import GitHubSlugger from 'github-slugger'
 import { basename, join, relative, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -179,13 +186,270 @@ export function findDeadLinks(content: string, rel: string, validRoutes: Set<str
   return errors
 }
 
+/**
+ * Check 5b: every repo citation the SITE RENDERS AS A LINK resolves to a tracked file.
+ *
+ * A docs page cites repository files as `https://github.com/foomakers/pair/blob/main/<path>`.
+ * The oracle for "is this a link" is the site's own MDX compiler — `@mdx-js/mdx` + `remark-gfm`,
+ * the pair fumadocs runs — not a regex over the raw bytes: a URL inside a fence, a code span or a
+ * JSX comment block is text on the rendered page and must not be gated; the same URL in prose is a
+ * link a reader can click into a 404. Compiling the page and reading the `href` values the
+ * compiler emits is what makes fence, span, comment, table-cell and escape rules all come out
+ * right for free — they are the compiler's, not ours.
+ *
+ * "Resolves" means the path is git-tracked at that exact spelling — a tracked file, or a tracked
+ * directory prefix — whichever of blob/tree/raw the URL says: github.com 301-redirects the word to
+ * the kind it serves, and `servedKind` below does the same. The filesystem is not the oracle: macOS
+ * is case-insensitive and would pass `readme.md`, which github.com serves as a 404. Only `main`
+ * refs are checked; a pinned tag or SHA is a deliberate citation of a moment in time and is left
+ * alone.
+ */
+const REPO_CITATION_RE =
+  /href: "https:\/\/github\.com\/foomakers\/pair\/(blob|tree|raw)\/([^/"]+)\/([^"#?]+)(\?[^"#]*)?(?:#([^"]*))?/g
+const FRONTMATTER_RE = /^---\r?\n[\s\S]*?\r?\n---\r?\n/
+
+/** Reads a git-tracked path's content, or `undefined` when it cannot be read. */
+export type TargetSource = (path: string) => string | undefined
+
+export function findDeadRepoCitations(
+  content: string,
+  rel: string,
+  tracked: ReadonlySet<string>,
+  targetSource: TargetSource,
+): string[] {
+  const errors: string[] = []
+  let compiled: string
+  try {
+    compiled = String(
+      compileSync(content.replace(FRONTMATTER_RE, ''), { remarkPlugins: [remarkGfm] }),
+    )
+  } catch {
+    // A page the site cannot build is not this check's finding — next build reports it, loudly.
+    return errors
+  }
+  for (const m of compiled.matchAll(REPO_CITATION_RE)) {
+    const { kind, ref, path, query, fragment } = citationOf(m)
+    if (ref !== 'main') continue
+    const clean = safeDecode(path).replace(/\/$/, '')
+    // "git-tracked", not "on main": the oracle is the index of the branch under review, which is
+    // the right question — will this citation resolve once the branch merges.
+    const served = servedKind(kind, clean, tracked)
+    if (served === undefined) {
+      errors.push(`Dead repo citation in ${rel}: ${kind}/main/${clean} is not a git-tracked file`)
+      continue
+    }
+    if (fragment)
+      errors.push(
+        ...deadAnchorErrors({
+          kind: served,
+          cited: kind,
+          path: clean,
+          query,
+          fragment,
+          rel,
+          tracked,
+          targetSource,
+        }),
+      )
+  }
+  return errors
+}
+
+function citationOf(m: RegExpMatchArray) {
+  return {
+    kind: m[1] ?? '',
+    ref: m[2] ?? '',
+    path: m[3] ?? '',
+    query: m[4] ?? '',
+    fragment: m[5] ?? '',
+  }
+}
+
+/**
+ * A malformed escape (`100%coverage.sh`) is still a citation to report — never a URIError out of
+ * the whole run, which would also discard every other check's findings.
+ */
+function safeDecode(s: string): string {
+  try {
+    return decodeURIComponent(s)
+  } catch {
+    return s
+  }
+}
+
+type Kind = 'blob' | 'tree' | 'raw'
+
+/**
+ * The page github.com actually serves for a citation, or `undefined` when it serves a 404.
+ * MEASURED 2026-09-08: `tree/<file>` is 301-redirected to `blob/<file>`, and `blob/<dir>` and
+ * `raw/<dir>` to `tree/<dir>` — so the tracked index decides the kind, not the word in the URL.
+ */
+function servedKind(cited: string, clean: string, tracked: ReadonlySet<string>): Kind | undefined {
+  if (tracked.has(clean)) return cited === 'raw' ? 'raw' : 'blob'
+  if ([...tracked].some(t => t.startsWith(clean + '/'))) return 'tree'
+  return undefined
+}
+
+/**
+ * Check 5c — the `#fragment` of a citation must be an anchor github.com actually renders.
+ *
+ * Rules are github.com's, MEASURED on the rendered pages (`id="user-content-<slug>"`, see ADL
+ * 2026-09-08-repo-citation-anchors-are-githubs-own-slugs) and applied offline. A `blob/` of a
+ * Markdown file (`.md`, `.markdown`, `.mdx` — all three render) has heading anchors: `github-slugger`
+ * over each heading's text, duplicates suffixed `-1`, `-2`…, plus any `id`/`name` written in raw
+ * HTML. A `tree/` page renders the directory's README under the listing, so it serves that
+ * README's heading anchors and nothing else. `#L<n>` / `#L<n>-L<m>` line anchors exist only where
+ * a source panel is shown — a non-Markdown blob, or a Markdown blob under `?plain=1` — and are
+ * bounded by the file's line count. `raw/` has no anchors. The reader for "which headings" is
+ * remark-parse + remark-gfm, so a `#` inside a fence or in frontmatter is not a heading here
+ * either. Fails closed: an anchor this check cannot prove is reported, never assumed.
+ */
+const LINE_ANCHOR_RE = /^L(\d+)(?:C\d+)?(?:-L(\d+)(?:C\d+)?)?$/
+const RENDERED_MARKDOWN_RE = /\.(md|markdown|mdx)$/i
+const README_RE = /^readme\.(md|markdown|mdx)$/i
+// GitHub's sanitizer parses the HTML, so double-quoted, single-quoted and unquoted ids all count.
+const HTML_ID_RE = /\s(?:id|name)=(?:"([^"]+)"|'([^']+)'|([^\s"'>]+))/g
+
+/** What github.com shows for the cited URL: a rendered README under a listing, rendered Markdown, or source. */
+type View = 'tree' | 'rendered' | 'source'
+
+function deadAnchorErrors(c: {
+  kind: Kind
+  cited: string
+  path: string
+  query: string
+  fragment: string
+  rel: string
+  tracked: ReadonlySet<string>
+  targetSource: TargetSource
+}): string[] {
+  const cite = `${c.cited}/main/${c.path}${c.query}#${c.fragment}`
+  const dead = (why: string) => [`Dead repo citation in ${c.rel}: ${cite} — ${why}`]
+  if (c.kind === 'raw') return dead('raw/ has no anchors')
+  const target = c.kind === 'tree' ? readmeOf(c.path, c.tracked) : c.path
+  if (target === undefined) return dead('no README in that directory, so tree/ renders no anchors')
+  const source = c.targetSource(target)
+  if (source === undefined) return dead('the target could not be read')
+  const fragment = safeDecode(c.fragment)
+  const view = viewOf(c.kind, target, c.query)
+  const why = LINE_ANCHOR_RE.test(fragment)
+    ? lineAnchorProblem(fragment, source, view)
+    : headingAnchorProblem(fragment, source, view)
+  return why ? dead(why) : []
+}
+
+/** The README github.com renders under a `tree/` listing, if one is tracked in that directory. */
+function readmeOf(dir: string, tracked: ReadonlySet<string>): string | undefined {
+  for (const t of tracked) {
+    if (t.startsWith(dir + '/') && README_RE.test(t.slice(dir.length + 1))) return t
+  }
+  return undefined
+}
+
+function viewOf(kind: Kind, path: string, query: string): View {
+  if (kind === 'tree') return 'tree'
+  if (/(^|&)plain=1(&|$)/.test(query.slice(1))) return 'source'
+  return RENDERED_MARKDOWN_RE.test(path) ? 'rendered' : 'source'
+}
+
+/** `#L<n>` / `#L<n>-L<m>` need a source panel and must lie inside the file; the reason when not, else null. */
+function lineAnchorProblem(fragment: string, source: string, view: View): string | null {
+  if (view === 'tree') return 'tree/ shows no source panel, so it has no line anchors'
+  if (view === 'rendered')
+    return 'a rendered Markdown file has no line anchors — cite it with ?plain=1'
+  const line = LINE_ANCHOR_RE.exec(fragment)!
+  const lines = source.split(/\r?\n/).length - (source.endsWith('\n') ? 1 : 0)
+  const from = Number(line[1])
+  const to = line[2] === undefined ? from : Number(line[2])
+  if (from < 1 || to < from || to > lines)
+    return `line anchor #${fragment} is outside the file's ${lines} lines`
+  return null
+}
+
+/** A heading anchor exists only on a rendered view; the reason when it does not, else null. */
+function headingAnchorProblem(fragment: string, source: string, view: View): string | null {
+  if (view === 'source') return 'this view shows the source, which has line anchors only'
+  if (!githubHeadingSlugs(source).has(fragment))
+    return 'no heading or anchor in the target renders to that id'
+  return null
+}
+
+/**
+ * The anchor ids github.com gives a rendered Markdown file, in document order: `github-slugger`
+ * over each heading's text (duplicates suffixed `-1`, `-2`…), plus any `id`/`name` written in raw
+ * HTML. Frontmatter is a table on github.com, not headings, so it is stripped first.
+ */
+export function githubHeadingSlugs(markdown: string): Set<string> {
+  const tree = unified().use(remarkParse).use(remarkGfm).parse(markdown.replace(FRONTMATTER_RE, ''))
+  const slugger = new GitHubSlugger()
+  const ids = new Set<string>()
+  type Node = { type: string; children?: unknown[]; value?: string }
+  const htmlIds = (node: Node) => {
+    if (node.type === 'html' && node.value)
+      for (const m of node.value.matchAll(HTML_ID_RE)) ids.add(m[1] ?? m[2] ?? m[3] ?? '')
+    for (const child of node.children ?? []) htmlIds(child as Node)
+  }
+  const headingText = (node: Node): string =>
+    node.type === 'html'
+      ? ''
+      : node.children
+        ? node.children.map(c => headingText(c as Node)).join('')
+        : mdastToString(node, { includeImageAlt: false })
+  const visit = (node: Node) => {
+    if (node.type === 'heading') {
+      // github.com serves the slug AND any anchor written inline in the heading; the slug is over
+      // the rendered text, so inline HTML contributes its ids but not its tags.
+      ids.add(slugger.slug(headingText(node)))
+      htmlIds(node)
+      return
+    }
+    if (node.type === 'html') return htmlIds(node)
+    for (const child of node.children ?? []) visit(child as Node)
+  }
+  visit(tree as unknown as Node)
+  return ids
+}
+
+/** Reads a tracked path under `repoRoot`, once per run; `undefined` (never a throw) when it cannot be read. */
+export function readTracked(repoRoot: string): TargetSource {
+  const cache = new Map<string, string | undefined>()
+  return path => {
+    if (!cache.has(path)) {
+      try {
+        cache.set(path, readFileSync(join(repoRoot, path), 'utf8'))
+      } catch {
+        cache.set(path, undefined)
+      }
+    }
+    return cache.get(path)
+  }
+}
+
+/** The git repository root that owns `root` — asked of git, not derived from directory depth. */
+export function repoRootOf(root: string): string {
+  return execFileSync('git', ['rev-parse', '--show-toplevel'], {
+    cwd: root,
+    encoding: 'utf8',
+  }).trim()
+}
+
+/** The set of git-tracked paths, exact case — the only honest existence oracle on a case-insensitive filesystem. */
+export function trackedFiles(repoRoot: string): Set<string> {
+  const out = execFileSync('git', ['ls-files', '-z'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  })
+  return new Set(out.split('\0').filter(Boolean))
+}
+
 // --- Catalog ROW CONTENT (single-sourced from the dataset SKILL.md frontmatter) ---
 //
 // checkCatalogSync (Check 2) pins the catalog's skill NAME LIST to the dataset;
 // findSkillCountMismatches pins the "N skills" COUNTS. Neither pins the per-row
 // Command / Description CONTENT, which used to be hand-maintained and could drift
 // silently from the dataset. checkCatalogContent (Check 2c) closes that gap: the
-// Command is DERIVED from category+name (the same transform `pair update` applies)
+// Command is DERIVED from category+name (the same transform `pair-cli update` applies)
 // and the Description from the skill's frontmatter — so the dataset is the single
 // source of truth, CI-enforced. (The Composes column is NOT owned by this check.)
 
@@ -200,7 +464,7 @@ export interface ExpectedRow {
 }
 
 /**
- * category+name → the slash-command, the same name transform `pair update` applies
+ * category+name → the slash-command, the same name transform `pair-cli update` applies
  * when mirroring the dataset into `.claude/skills/`: a meta skill (its SKILL.md sits
  * at the category root, so name === category, e.g. `next`) becomes `/pair-<name>`;
  * every other skill becomes `/pair-<category>-<name>`.
@@ -337,6 +601,61 @@ export function checkCatalogContent(expected: Map<string, ExpectedRow>, catalog:
   return errors
 }
 
+/** The dataset skills tree, relative to the repo root — the source the catalog header names. */
+export const SKILLS_SOURCE_REL = 'packages/knowledge-hub/dataset/.skills'
+
+/** The catalog header's own `> **Last updated:** YYYY-MM-DD` claim (null when absent or malformed). */
+export function parseCatalogLastUpdated(catalog: string): string | null {
+  return /^>\s*\*\*Last updated:\*\*\s*(\d{4}-\d{2}-\d{2})\b/m.exec(catalog)?.[1] ?? null
+}
+
+/** The date (YYYY-MM-DD) of the newest commit touching `pathRel`, or null when git cannot say. */
+export function newestChangeDate(root: string, pathRel: string): string | null {
+  try {
+    const out = execFileSync('git', ['log', '-1', '--format=%cs', '--', pathRel], {
+      cwd: root,
+      encoding: 'utf8',
+    }).trim()
+    return /^\d{4}-\d{2}-\d{2}$/.test(out) ? out : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Check 2d: the catalog's `Last updated` header is not OLDER than the dataset skills it describes.
+ *
+ * Every sibling catalog gate compares skills — the row list (2), the row Command/Description (2c),
+ * the "N skills" counts. None read the header's date, so the page kept claiming 2026-09-08 through
+ * every later dataset change with the whole gate green (q-10, independent pass over review
+ * 5190603055). The date is the one claim a reader uses to decide whether to trust the page, so it
+ * is gated the same way its rows are: against the source, not against a human's memory. Both
+ * degenerate cases fail LOUDLY rather than pass vacuously — an unparsable header, and a source
+ * date git cannot produce.
+ */
+export function checkCatalogFreshness(
+  catalog: string,
+  newestSourceChange: string | null,
+  sourceLabel = `${SKILLS_SOURCE_REL}/`,
+): string[] {
+  const lastUpdated = parseCatalogLastUpdated(catalog)
+  if (lastUpdated === null) {
+    return [
+      'skills-catalog.mdx has no `> **Last updated:** YYYY-MM-DD` header — the catalog freshness check cannot run',
+    ]
+  }
+  if (newestSourceChange === null) {
+    return [
+      `cannot resolve the last change date of ${sourceLabel} from git — the catalog freshness check cannot run`,
+    ]
+  }
+  // ISO dates compare lexicographically; a header dated AFTER the source is fine (a doc-only edit).
+  if (lastUpdated >= newestSourceChange) return []
+  return [
+    `skills-catalog.mdx says "Last updated: ${lastUpdated}" but ${sourceLabel} changed on ${newestSourceChange} — the page dates itself before the content it describes (bump the header when the catalog changes)`,
+  ]
+}
+
 /** Check 2: catalog lists every skill dir, and no catalog row lacks a dir (both directions). */
 export function checkCatalogSync(allSkills: string[], catalog: string): string[] {
   const errors: string[] = []
@@ -433,20 +752,172 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
 }
 
 /**
- * A `pair-cli <word>` INVOCATION, as opposed to the words "pair-cli" in a sentence.
+ * A `<bin> <word>` INVOCATION, as opposed to the words "pair-cli"/"pair" in a sentence.
  *
- * Positional, deliberately, and not a list of prose words to keep extending: `pair-cli`
+ * Positional, deliberately, and not a list of prose words to keep extending: the binary
  * counts as an invocation only at the start of an inline code span or of a fenced line,
- * optionally behind `$ ` or `npx [--no] <pkg>`. That is what separates an instruction
+ * optionally behind `$ ` or a package-manager runner (`<runner> [flags] [@scope/]<bin>[@version]`).
+ * That is what separates an instruction
  * from English — "common pair-cli workflows" and "the pair-cli version it invokes" are
  * prose and must not fail the gate, while `` `pair-cli init` `` is a command that does
  * not exist. The previous shape kept a PROSE_WORDS allow-list, which is the maintenance
  * pattern where the next false positive is fixed by adding a word rather than by fixing
  * the rule; under the positional rule that list is dead and is gone.
+ *
+ * The BINARY is captured (group 1) rather than pinned to the literal `pair-cli`, because
+ * both spellings are invocations and only one of them exists: `pair` is what the docs
+ * used to say and what no `npm install` ever creates (ADL 2026-08-25 — `pair-cli` is the
+ * canonical name, no alias). Matching `pair-cli` alone made the gate structurally blind
+ * to the very drift it exists to catch (US-449).
+ *
+ * The separator between binary and command is ONE space, not `\s+`: an aligned column of
+ * whitespace is a diagram, never a command. The PM-tool pages map their hierarchy under a
+ * fenced heading (`pair                    Linear`), which `\s+` would read as "run
+ * `pair Linear`". This is a KNOWING trade, and it covers every non-single-space separator:
+ * neither `pair-cli  <cmd>` written with two spaces nor `pair-cli\t<cmd>` written with a TAB
+ * is flagged (no such form exists in the docs today — verified: `checkDocsCommands` returns
+ * `[]` for both, pinned in the suite). A tab is column alignment by definition, so the
+ * diagram rationale applies to it unchanged. Do not re-widen the separator to `\s+` or `\s`
+ * to recover either — that hands the four PM-tool diagrams back as false positives; if
+ * multi-space or tab invocations ever appear, narrow the DIAGRAM instead (e.g. require the
+ * run of whitespace to align with another line's column).
+ *
+ * The runner is a PREFIX of the binary, never a slot that consumes it. An earlier shape
+ * spelled it `npx\s+(?:--no\s+)?@?[\w/.-]+\s+` — a package token followed by a still-required
+ * literal binary — so the real form `npx --no @foomakers/pair-cli <cmd>` could not match at
+ * all and every npx-prefixed invocation in the docs was invisible to the gate. The scope
+ * (`@foomakers/`) and the version (`@latest`) therefore attach to the captured binary here,
+ * and the flags are what sit between the runner and it.
+ *
+ * The runner list is every form the docs PUBLISH, not `npx` alone. While `npx` was the only
+ * one, `pnpm dlx pair-cli install` (reference/cli/workflows.mdx), `pnpm dlx pair-cli
+ * update-link --dry-run`, `pnpm pair-cli install` (tutorials/team-setup.mdx) and `pnpm
+ * pair-cli --version` (tutorials/first-project.mdx) sat behind a runner the rule could not
+ * see: dropping the `-cli` on any of them returned `[]` and shipped green, and an unknown
+ * command behind the same runner (`pnpm dlx pair-cli kb validate`) was invisible too.
+ *
+ * `pnpm dlx` / `pnpm exec` / `yarn dlx` / `npx` consume a flag run; a BARE package manager
+ * (`pnpm <bin> <cmd>`) does not, and that asymmetry is load-bearing. `pnpm --filter <pkg>`
+ * puts a PACKAGE NAME in flag-argument position, and this repo's package is literally
+ * called `pair-cli` — reading `--filter` as a lone flag would read the filter's argument as
+ * the binary and the script name as its command, so `pnpm --filter @pair/pair-cli build`
+ * would be reported as the nonexistent command `build` on three pages that are correct as
+ * written. Both halves are pinned in the suite.
+ *
+ * A flag whose ARGUMENT is a package name is therefore consumed WITH its argument, and the
+ * runners above have exactly one: `--package`/`-p` (`RUNNER_FLAG`). Reading it as a lone
+ * flag broke both directions of the canonical npx idiom for a package whose bin differs
+ * from its name. `npx --package @foomakers/pair-cli pair-cli install` — correct as written —
+ * had `--package ` eaten as a flag, `@foomakers/` read as the scope, the first `pair-cli`
+ * read as the binary and the REAL binary token read as its command: the gate turned red on
+ * a correct page with no edit that clears it short of deleting a correct instruction. In
+ * the other direction `npx --package=@foomakers/pair-cli pair install` returned `[]`, since
+ * the flag run had no `=value` form — real drift, green, behind a LISTED runner. Both
+ * spellings and both directions are pinned. Add a runner here when the docs start
+ * publishing one, and add any flag of it that takes a package/name argument to
+ * `RUNNER_FLAG`'s first alternative — a runner whose package-argument flag is NOT listed
+ * there must not be given the flag run at all (which is what keeps bare `pnpm` out: its
+ * `--filter` is exactly such a flag and is deliberately unlisted, so the whole flag run is
+ * withheld rather than widened around it).
+ *
+ * The span rule TOKENIZES real code spans (`` `…` `` pairs, `CODE_SPAN`) and anchors the
+ * prefix at the start of the span's CONTENT — it does not scan for the prefix "after a
+ * backtick". Both weaker shapes have already misfired once each, in opposite directions:
+ *   - `` `\s* `` let a CLOSING FENCE (which ends with a backtick) cross the newline into the
+ *     paragraph below — "pair creates Markdown files" read as an invocation of `creates`;
+ *   - `` `[ \t]* `` fixed that newline but still matched after ANY backtick, so a CLOSING
+ *     INLINE span followed by prose on the SAME line did it again: `` `config.json` pair
+ *     skills resolve state `` read as an invocation of `skills`, and the gate would have
+ *     told the writer to "write `pair-cli skills`" inside an English sentence.
+ * Tokenizing removes the class rather than the two cases: the text after a closing delimiter
+ * is outside every span, and a fence (```` ``` ````) yields no span at all since a span needs
+ * a non-backtick character between its delimiters. Both cases are pinned in the suite.
+ *
+ * CommonMark's DOUBLED delimiter (`` ``pair install`` ``) is why `CODE_SPAN` implements the
+ * real closer rule — an opening RUN of N backticks closed by the first run of EXACTLY N,
+ * content free to hold runs of any OTHER length — rather than pairing single backticks. A
+ * naive `` `([^`\n]+)` `` does read a doubled span's OWN content (the attempt at the outer
+ * backtick fails, the scan retries one character on and pairs the inner delimiters), which
+ * is why this was invisible: it consumes only ONE of the two CLOSING backticks, and the
+ * leftover flips span parity for the REST OF THE LINE, so every later inline invocation on
+ * it goes unseen — no error, silent. Balancing the run alone is still not enough, because
+ * the reason an author doubles the delimiter is to quote a BACKTICKED literal, so the
+ * content holds backticks too: the two lines that carry doubled spans today
+ * (`reference/skill-management.mdx:211`, which carries two of them, and `:219`, which carries
+ * one) are all of that shape. Live, not latent — appending an inline `` `pair install` `` to
+ * either of those real lines returned `[]`, while the same text on a plain line was flagged.
+ * Doubling is still not an EXEMPTION: a page that wants to quote a wrong form deliberately
+ * writes it as unbackticked prose, which this positional rule (span content / fenced line)
+ * does not reach by construction. A fence still yields no span, now because content may
+ * neither begin nor end with a backtick.
+ *
+ * The doubled span, its backticked content and its line-mates are pinned. The fence is pinned
+ * through what it can actually change: the fence pass's own cases and the closing fence that
+ * must not reach the paragraph below. "A fence yields no span" is NOT assertable through
+ * `checkDocsCommands` — a fenced line is scanned by the fence pass regardless and errors dedup
+ * by binary+command, so the two passes reading the same line collapse to one error either way.
  */
-const INVOCATION_PREFIX = String.raw`(?:\$\s*)?(?:npx\s+(?:--no\s+)?@?[\w/.-]+\s+)?pair-cli\s+`
-const SPAN_INVOCATION = new RegExp('`\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)', 'g')
-const LINE_INVOCATION = new RegExp('^\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)')
+/**
+ * The canonical binary name — the one place inside this package where it is written, and
+ * the alternation below is BUILT from it, so a `bin` rename is a one-line edit here. Were
+ * the alternation a literal, renaming this constant alone would leave the gate unable to
+ * see the NEW name at all (silent, the exact blindness US-449 removed) while reporting the
+ * old correct lines as wrong. `pair` stays a literal beside it because it is the known-WRONG
+ * binary, not a second name for the published one — on a future rename, add the superseded
+ * name there too for as long as the corpus still carries it.
+ *
+ * Interpolated into a regex as-is, which an npm bin name may be (`[\w.-]`-ish); a future
+ * name carrying a regex metacharacter would need escaping.
+ */
+const PUBLISHED_BIN = 'pair-cli'
+/**
+ * ONE flag of a runner's flag run. `--package`/`-p` is listed FIRST because its argument is
+ * a package NAME and must be consumed with it (see above); every other flag stands alone,
+ * in either the `--flag value` or the `--flag=value` spelling.
+ */
+const RUNNER_FLAG = String.raw`(?:(?:--package|-p)[ \t]+\S+|-{1,2}[\w-]+(?:=\S*)?)[ \t]+`
+/** `npx`/`pnpm dlx`/`pnpm exec`/`yarn dlx` take a flag run; a bare `pnpm` must not (see above). */
+const RUNNER =
+  String.raw`(?:(?:npx|pnpm[ \t]+dlx|pnpm[ \t]+exec|yarn[ \t]+dlx)[ \t]+(?:` +
+  RUNNER_FLAG +
+  String.raw`)*|pnpm[ \t]+)?`
+/**
+ * Group 1: the binary a line names — the published one (from `PUBLISHED_BIN`) or the legacy
+ * `pair` that no install creates. `PUBLISHED_BIN` is first so the longer name wins the
+ * alternation when one is a prefix of the other.
+ */
+const BINARY = `(${PUBLISHED_BIN}|pair)`
+const INVOCATION_PREFIX =
+  String.raw`(?:\$[ \t]*)?` +
+  RUNNER +
+  String.raw`(?:@[\w.-]+/)?` +
+  BINARY +
+  String.raw`(?:@[\w.-]+)? `
+/**
+ * One inline code span's CONTENT (group 2), never crossing a line. CommonMark's own closer
+ * rule: an opening RUN of N backticks (`(?<!`)` keeps the scan from starting mid-run) is
+ * closed by the first run of EXACTLY N (`\1(?!`)`), and the content between them may hold
+ * backtick runs of any other length — which is the whole reason an author doubles the
+ * delimiter. Content may neither begin nor end with a backtick, so a fence yields no span.
+ * See the doubled-delimiter paragraph above.
+ */
+const CODE_SPAN = /(?<!`)(`+)([^`\n](?:[^\n]*?[^`\n])?)\1(?!`)/g
+/**
+ * The token after the binary: a command name, OR a flag. A flag is never a command NAME,
+ * but it IS an invocation — `pair --version` is the single most copy-pasted line in the
+ * docs (9 pages carry it in its correct spelling today), and while the group was
+ * `[A-Za-z][\w.-]*` a leading `-` failed the WHOLE prefix, so `pair --version` was not
+ * seen as an invocation at all and shipped green behind a binary no `npm install`
+ * creates. The token is therefore flag-aware, and `checkDocsCommands` runs only the
+ * binary half on a `-`-leading token — otherwise the correct `pair-cli --version` would
+ * become a false "is not a command". A LETTER is required immediately after the one or
+ * two dashes, which is what a real flag looks like and what an ASCII diagram does not:
+ * `pair -> story` and a bare `pair -- install` (an argument separator, not a flag) match
+ * nothing, same trade as the single-space separator above.
+ */
+const COMMAND_TOKEN = String.raw`(-{1,2}[A-Za-z][\w-]*|[A-Za-z][\w.-]*)`
+const SPAN_INVOCATION = new RegExp('^[ \\t]*' + INVOCATION_PREFIX + COMMAND_TOKEN)
+const LINE_INVOCATION = new RegExp('^\\s*' + INVOCATION_PREFIX + COMMAND_TOKEN)
 
 /**
  * `vX.Y.Z` / `v0.4.3` on a fenced line is printed OUTPUT, never a command — which is why
@@ -456,12 +927,14 @@ const LINE_INVOCATION = new RegExp('^\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.
 const VERSION_STRING = /^v[\dX]/i
 
 /**
- * Check 4: every `pair-cli <command>` the docs tell a reader to run exists.
+ * Check 4: every invocation the docs tell a reader to run is one that WORKS — the right
+ * binary (`pair-cli`, never a bare `pair`), naming a command that exists.
  *
  * Scoped to the whole docs tree, not just tutorials. That widening is the point: with
  * tutorials only, 21 references to three non-existent commands (`init`, `kb validate`,
  * `kb info`) survived across eight pages — each one telling a reader to run something
- * that fails.
+ * that fails. The wrong-binary case is the same defect one level up: `pair install` is
+ * a real command behind a bin that no install creates.
  */
 export function checkDocsCommands(
   docs: { rel: string; content: string }[],
@@ -469,30 +942,62 @@ export function checkDocsCommands(
 ): string[] {
   const errors: string[] = []
   for (const { rel, content } of docs) {
-    for (const cmd of invokedCommands(content)) {
-      if (commandDirs.includes(cmd) || VERSION_STRING.test(cmd)) continue
-      errors.push(`${rel} tells the reader to run "pair-cli ${cmd}", which is not a command`)
+    for (const { bin, cmd } of invokedCommands(content)) {
+      // Ordering is load-bearing and deliberate: the version guard precedes the binary
+      // check, so `pair v0.5.0` — a version BANNER, i.e. output a reader compares against,
+      // not an invocation — is skipped whole and is the one input where a bare `pair`
+      // survives the rule. Flagging it would tell a writer to rewrite printed output.
+      if (VERSION_STRING.test(cmd)) continue
+      // A flag is an invocation but not a command name, so only the binary half applies.
+      const isFlag = cmd.startsWith('-')
+      // Wrong binary reported once and on its own: `pair kb-validate` is not ALSO an
+      // unknown command, and `pair init` should not be counted twice. ONE error, but the
+      // message still has to be honest about both halves — a prescriptive `write
+      // "pair-cli init"` for a command that does not exist sends the writer to publish a
+      // second broken invocation and buys a second red round, so the fix is only offered
+      // when there is one.
+      if (bin !== PUBLISHED_BIN) {
+        const remedy = isFlag
+          ? ''
+          : commandDirs.includes(cmd)
+            ? ` — write "${PUBLISHED_BIN} ${cmd}"`
+            : `, and "${cmd}" is not one of its commands`
+        errors.push(
+          `${rel} tells the reader to run "${bin} ${cmd}", but the published binary is ` +
+            `"${PUBLISHED_BIN}"${remedy}`,
+        )
+        continue
+      }
+      if (isFlag || commandDirs.includes(cmd)) continue
+      errors.push(`${rel} tells the reader to run "${bin} ${cmd}", which is not a command`)
     }
   }
   return errors
 }
 
-/** The commands a document actually invokes — code spans plus fenced command lines. */
-function invokedCommands(content: string): Set<string> {
-  const found = new Set<string>()
-  for (const m of content.matchAll(SPAN_INVOCATION)) {
-    if (m[1] !== undefined) found.add(m[1])
+/** One `<bin> <cmd>` a document tells the reader to run. */
+interface Invocation {
+  bin: string
+  cmd: string
+}
+
+/** The invocations a document actually makes — code spans plus fenced command lines. */
+function invokedCommands(content: string): Invocation[] {
+  const found = new Map<string, Invocation>()
+  const add = (m: RegExpMatchArray | null): void => {
+    const [, bin, cmd] = m ?? []
+    if (bin !== undefined && cmd !== undefined) found.set(`${bin} ${cmd}`, { bin, cmd })
   }
+  for (const [, , span] of content.matchAll(CODE_SPAN)) add(SPAN_INVOCATION.exec(span ?? ''))
   let inFence = false
   for (const line of content.split('\n')) {
     if (/^\s*```/.test(line)) {
       inFence = !inFence
       continue
     }
-    const m = inFence ? LINE_INVOCATION.exec(line) : null
-    if (m?.[1] !== undefined) found.add(m[1])
+    if (inFence) add(LINE_INVOCATION.exec(line))
   }
-  return found
+  return [...found.values()]
 }
 
 /** Build the set of valid /docs routes from the docs .mdx file list. */
@@ -540,8 +1045,19 @@ function perFileErrors(params: {
   declaredPluginSkills: number | null
   howToCount: number | null
   validRoutes: Set<string>
+  repoRoot: string
 }): string[] {
-  const { docsFiles, docsDir, skillCount, declaredPluginSkills, howToCount, validRoutes } = params
+  const {
+    docsFiles,
+    docsDir,
+    skillCount,
+    declaredPluginSkills,
+    howToCount,
+    validRoutes,
+    repoRoot,
+  } = params
+  const tracked = trackedFiles(repoRoot)
+  const targetSource = readTracked(repoRoot)
   const errors: string[] = []
   for (const file of docsFiles) {
     const content = readFileSync(file, 'utf-8')
@@ -552,6 +1068,7 @@ function perFileErrors(params: {
     }
     if (howToCount !== null) errors.push(...findGuideCountMismatches(content, rel, howToCount))
     errors.push(...findDeadLinks(content, rel, validRoutes))
+    errors.push(...findDeadRepoCitations(content, rel, tracked, targetSource))
   }
   return errors
 }
@@ -571,6 +1088,24 @@ function readmeErrors(path: string, skillCount: number, howToCount: number | nul
     errors.push(...findGuideCountMismatches(content, 'README.md', howToCount))
   }
   return errors
+}
+
+/**
+ * Every check the skills catalog owns: the row LIST (Check 2), the row CONTENT (2c) and the
+ * header's own `Last updated` date (2d). Grouped in one function so `runAllChecks` stays inside
+ * the line ceiling, the same reason `checkPaths` is extracted.
+ */
+function catalogErrors(
+  catalog: string,
+  allSkills: string[],
+  skillsDir: string,
+  root: string,
+): string[] {
+  return [
+    ...checkCatalogSync(allSkills, catalog),
+    ...checkCatalogContent(generateCatalogRows(skillsDir), catalog),
+    ...checkCatalogFreshness(catalog, newestChangeDate(repoRootOf(root), SKILLS_SOURCE_REL)),
+  ]
 }
 
 /** Run every check against a repo root and collect all drift errors. */
@@ -680,7 +1215,7 @@ export function checkBatchEngineWorkflows(shipped: string[], doc: string): strin
 }
 
 /**
- * The batch-engine page states WHERE `pair install` puts the engine, WHAT ships, and WHAT
+ * The batch-engine page states WHERE `pair-cli install` puts the engine, WHAT ships, and WHAT
  * authority arrives. Every one of those claims is read back from the dataset and the registries
  * rather than trusted, so renaming a target — or adding a workflow — without touching the page
  * fails here instead of leaving a doc pointing at something nobody gets.
@@ -718,7 +1253,7 @@ export function batchEngineErrors(paths: {
 
 /**
  * The docs pages whose fenced sample block claims to BE the output of
- * `pair install --list-targets`. These are transcripts a reader compares their own
+ * `pair-cli install --list-targets`. These are transcripts a reader compares their own
  * terminal against line for line, so drift here does not read as a stale doc — it reads
  * as a broken install, and the reader has no way to tell the two apart.
  */
@@ -799,7 +1334,7 @@ export function listTargetsSampleErrors(paths: { CLI_CONFIG: string; DOCS_DIR: s
 
 /**
  * Checks 2b + 2d — everything derived from `apps/pair-cli/config.json`: the batch-engine
- * asset paths, and the three docs pages that print `pair install --list-targets` output.
+ * asset paths, and the three docs pages that print `pair-cli install --list-targets` output.
  */
 function cliConfigDerivedErrors(
   paths: Parameters<typeof batchEngineErrors>[0] & Parameters<typeof listTargetsSampleErrors>[0],
@@ -832,16 +1367,14 @@ export function runAllChecks(root: string): RunResult {
       declaredPluginSkills,
       howToCount,
       validRoutes,
+      repoRoot: repoRootOf(root),
     }),
   )
 
-  // Check 2: catalog sync (both directions)
+  // Checks 2 / 2c / 2d: everything the skills catalog claims — rows, row content, header date
   const catalog = readFileSync(paths.CATALOG_FILE, 'utf-8')
   errors.push(...cliConfigDerivedErrors(paths))
-  errors.push(...checkCatalogSync(allSkills, catalog))
-
-  // Check 2c: catalog row CONTENT (Command + Description) single-sourced from the dataset
-  errors.push(...checkCatalogContent(generateCatalogRows(SKILLS_DIR), catalog))
+  errors.push(...catalogErrors(catalog, allSkills, SKILLS_DIR, root))
 
   // Checks 3 & 4: CLI command anchors + tutorial references
   const docs = docsFiles.map(file => ({

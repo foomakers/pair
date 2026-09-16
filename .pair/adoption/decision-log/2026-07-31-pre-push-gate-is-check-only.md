@@ -50,6 +50,8 @@ A second failure mode surfaced while implementing this: generated artifacts. In 
 
 ## Resolved Decision (2026-08-05) — neither A nor B; a dedicated command instead
 
+**Closed 2026-09-01 by story #419** — the Open Decision below is no longer open, and nothing here is pending. All three parts shipped: the command is the root script `pnpm mirrors:regenerate` (`scripts/regenerate-mirrors.sh`, wrapping `pair update --source <local dataset> --offline`, no check mode); `PRE_PUSH_REMEDY`, `DEVELOPMENT.md`, its docs-site twin **and both mirror guards' own failure messages** name it instead of `pair update`; and `/pair-capability-publish-pr` runs it in Phase 1, before its gate, committing the output separately when it drifted — see ADL [2026-09-01-publish-pr-realigns-mirrors-before-the-gate.md](./2026-09-01-publish-pr-realigns-mirrors-before-the-gate.md) for why that phase and why the command is read from the adoption. `pnpm format` and the check-only gate are byte-for-byte unchanged.
+
 **Decided by the maintainer on 2026-08-05. Tracked as story #419.** Both shapes below were declined as written, for reasons that only became visible when the actual remedy command was inspected.
 
 **The remedy was naming the wrong command.** `PRE_PUSH_REMEDY`, `DEVELOPMENT.md` and its docs-site twin all say `pair update` — which `DEVELOPMENT.md` itself documents as *"Update knowledge base to latest version"*. That resolves and installs the **published** KB; what a mirror divergence needs is regeneration **from the local dataset** (`pair update --source <local dataset>`, the form `CP3` and the `source-resolution` smoke scenario already exercise). So the documented fix for a reformatted table was a knowledge-base update — disproportionate and non-deterministic, and the most plausible explanation for why three of the seven incidents were hand-ports: a contributor faced with that command reasonably chose to edit the mirror instead.
@@ -68,7 +70,7 @@ A second failure mode surfaced while implementing this: generated artifacts. In 
 
 This also becomes load-bearing once **#414** lands: with the mirrors inside `format:check` scope, a contributor without this command would be pushed toward hand-formatting a generated file — which the mirror guards forbid.
 
-### Original framing (kept for the record)
+### Original framing (kept for the record — closed, see above)
 
 **Should the gate apply the fix as well as failing, and should `pnpm format` realign the generated mirrors?** Raised by the maintainer 2026-08-04 while reviewing this story; deliberately not implemented at the time, and not to be implemented without their call.
 

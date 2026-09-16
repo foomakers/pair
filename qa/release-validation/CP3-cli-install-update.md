@@ -1,7 +1,7 @@
 # CP3 — CLI Install & Update
 
 **Priority**: P0
-**Scope**: `pair install` (auto-download KB, explicit source), `pair update`, idempotency, isolation
+**Scope**: `pair-cli install` (auto-download KB, explicit source), `pair-cli update`, idempotency, isolation
 **Preconditions**: Working CLI binary (from CP2). `$WORKDIR` created outside the repo. `$CLI` = path to working pair-cli binary.
 
 **CRITICAL**: All install/update tests MUST use `$WORKDIR` subdirectories as working directory, NEVER the repo itself.
@@ -167,7 +167,7 @@
 ### Expected Result
 
 - Non-zero exit code
-- Error message suggests using `pair update` instead
+- Error message suggests using `pair-cli update` instead
 - No files overwritten or modified
 
 ---
@@ -382,7 +382,7 @@
 ### Expected Result
 
 - Non-zero exit code
-- Error message suggests using `pair update`
+- Error message suggests using `pair-cli update`
 - No files overwritten
 
 ### Notes
@@ -405,7 +405,7 @@
 ### Expected Result
 
 - Non-zero exit code
-- Error message suggests using `pair install` first
+- Error message suggests using `pair-cli install` first
 - No files created
 
 ### Notes

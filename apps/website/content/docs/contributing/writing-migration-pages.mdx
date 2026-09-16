@@ -25,7 +25,7 @@ Every migration page has exactly three sections, in this order:
 - **Copy-paste.** A single fenced block, no placeholders the reader has to fill in blind. If a value is project-specific, tell the agent how to discover it — don't ask the human to edit the prompt first.
 - **Agent-agnostic.** No pair-specific slash command or skill invocation — plain instructions any coding agent can follow by reading and writing files.
 - **Idempotent.** Every step checks "is this already done?" before acting, and the prompt says so explicitly. Re-running must be safe.
-- **Scoped.** Touches only adoption/KB files in the consumer project (`.pair/adoption/`, `.pair/working/`). Never edits `.pair/knowledge/` (upstream, overwritten by `pair update` anyway), skill files, or application code.
+- **Scoped.** Touches only adoption/KB files in the consumer project (`.pair/adoption/`, `.pair/working/`). Never edits `.pair/knowledge/` (upstream, overwritten by `pair-cli update` anyway), skill files, or application code.
 - **Resumable, not duplicating.** If a previous run was interrupted or only partially applied, the prompt detects the partial state and finishes it rather than starting over or double-writing.
 
 ## Template

@@ -1,0 +1,114 @@
+# Formatting gate (story #413).
+#
+# Since #394 the pre-push hook CHECKS formatting instead of applying it — right
+# shape for a hook, but it left the LOCAL HOOK AS THE ONLY ENFORCEMENT POINT: a
+# push with `--no-verify`, or a contributor whose hooks are not installed, landed
+# unformatted code with every CI check green. This workflow runs the identical
+# `pnpm format:check` on every PR and on push to `main`.
+#
+# A DEDICATED WORKFLOW, not a job in ci.yml: that workflow carries
+# `paths-ignore: ['.changeset/**']` at WORKFLOW level, which a job inherits — so a
+# PR touching only `.changeset/**` would run no formatting check at all. A check
+# with a hole in its TRIGGER reads as enforcement and is not. Its own workflow also
+# means its own status context (`format`), separately requirable once branch
+# protection is written.
+#
+# THE SHAPE OF THIS FILE IS ASSERTED, so a red `pnpm test` (or `pnpm
+# gate:composition`) on an edit here is expected, not a flake: every trigger, filter,
+# key, action, input, command and condition is an allow-list, read by
+# packages/dev-tools/src/quality-gates/format-workflow-composition.ts. That guard
+# PARSES this file with `yaml@2.8.2`, so the SPELLING is free (flow style, anchors,
+# aliases, JSON steps, CRLF all resolve to the same document GitHub runs) and only
+# the meaning is constrained. That module's header is the rule inventory and the
+# reason for each rule (the exact checking command, the checkout's inputs, the
+# workflow/job/step key allow-lists, the runner label below, the toolchain-only install
+# shell, the say-only remedy, …); the per-block notes below say only what is not obvious
+# from the YAML itself.
+
+name: Format
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  # Manual runs on an arbitrary ref. Re-running the job from the Actions UI only
+  # replays the ref it already ran on; this is the escape hatch ci.yml already has.
+  workflow_dispatch:
+
+# SUPERSESSION, not de-duplication. Keyed on `github.ref` the two triggers never
+# meet: a `pull_request` run is `refs/pull/<n>/merge`, a push to main is
+# `refs/heads/main`, so they sit in different groups (and after a merge the PR is
+# closed, so `pull_request` does not fire at all). What this buys is dropping a run
+# whose ref has already moved on — push three commits to a PR branch, only the last
+# verdict is worth a runner.
+#
+# Hence the CONDITIONAL cancel: two merges to main a minute apart share
+# `format-refs/heads/main`, and an unconditional `true` would cancel the first
+# commit's run, leaving that commit with no formatting verdict of its own. Main is
+# linear, so the surviving run's tree still contains that commit and the drift is
+# caught one commit later — this is the stronger of two acceptable spellings, not the
+# only correct one (the guard allow-lists a bare `true` as the weaker). On main, runs
+# queue.
+concurrency:
+  group: format-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  format:
+    # GitHub-hosted, and asserted as such: `runs-on` picks the machine, which decides
+    # what `pnpm` and `prettier` are and who watches the run — the `container:` question
+    # spelled as a value. On a public repo a `pull_request` run executes the PR's own
+    # copy of this file, so `self-hosted` here would be a machine the PR chose.
+    runs-on: ubuntu-latest
+    # This job runs `pnpm install`, i.e. PR-authored lifecycle scripts. It takes the
+    # least token it can and a timeout that turns a hung install into a red instead
+    # of a six-hour default.
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.15.0'
+      - name: Ensure pnpm is available (fallback)
+        run: |
+          if ! command -v pnpm >/dev/null 2>&1; then
+            echo "pnpm not found in PATH; attempting to enable via corepack"
+            corepack enable || true
+            corepack prepare pnpm@10.15.0 --activate || true
+          fi
+      # Pinned to the same major ci.yml and release.yml pin — see the note on
+      # ci.yml's `Setup Node.js` step. Raising this means raising those together.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+      # The identical script the pre-push hook and a developer run. It names the
+      # offending files and exits non-zero.
+      - name: Check formatting
+        id: format_check
+        run: pnpm format:check
+      # …but it does NOT name the remedy: `--list-different` prints the paths and
+      # suppresses prettier's own "Run Prettier with --write to fix" line. The
+      # contributor this workflow exists for (hooks not installed, or pushed with
+      # `--no-verify`) would otherwise read a bare filename and no instruction. The
+      # annotation surfaces on the PR's Checks tab, not only in the log.
+      #
+      # SCOPED to the check's own outcome, not a bare `if: failure()` — that is
+      # JOB-scoped and fires for ANY earlier failure. A `pnpm install` broken by a
+      # lockfile drift or a registry outage would otherwise be annotated "not
+      # formatted, run 'pnpm format'": the contributor runs it, nothing changes, and
+      # the real cause sits under a confident wrong diagnosis.
+      - name: Explain how to fix a formatting failure
+        if: failure() && steps.format_check.outcome == 'failure'
+        run: |
+          echo "::error title=Formatting check failed::The files listed in the previous step are not formatted. Run 'pnpm format' locally, commit the result, and push again. CI never rewrites your branch."

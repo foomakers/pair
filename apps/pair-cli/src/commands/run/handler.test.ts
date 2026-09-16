@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { handleRunCommand, type IterationRunner } from './handler'
+import type { LockAcquirer } from './card-lock'
 import { parseRunCommand } from './parser'
 import { POLICY_PATH } from './automation-policy'
 import type { IterationResult } from './stream-reader'
@@ -437,5 +438,419 @@ describe('handleRunCommand — driving the loop', () => {
     )
 
     expect(calls[0]?.promptText).toBe('audit the backlog')
+  })
+})
+
+// US-217 — tag-driven dispatch, end to end through the handler: the trigger's two facts in, a
+// routed workflow (or a logged skip) out, and nothing spawned where nothing was declared. The lock
+// and the audit writer are injected: both are real-filesystem primitives by design (atomic create,
+// atomic append), and they have their own tests against a real temporary directory.
+describe('handleRunCommand — tag-driven dispatch (US-217)', () => {
+  const DISPATCH_POLICY = `${POLICY}
+## Workflows
+
+auto-dev ⇒ pair-loop
+auto-plan ⇒ pair-process-plan-tasks
+Precedence: auto-plan, auto-dev
+`
+
+  const dispatchFs = (policy = DISPATCH_POLICY) =>
+    projectFs({
+      [`${cwd}/${POLICY_PATH}`]: policy,
+      [`${cwd}/.claude/skills/pair-process-plan-tasks/SKILL.md`]: '',
+    })
+
+  /** Records what was audited, without touching a real working area. */
+  function fakeAudit() {
+    const entries: Array<{ path: string; line: string }> = []
+    return { entries, append: (path: string, line: string) => entries.push({ path, line }) }
+  }
+
+  /** A lock that is either free or already held, and remembers acquire/release ordering. */
+  function fakeLock(held = false) {
+    const events: string[] = []
+    const acquire: LockAcquirer = ({ card }) => {
+      events.push(`acquire:${card}`)
+      if (held) {
+        return { kind: 'held', path: `/locks/${card}`, since: HELD_SINCE }
+      }
+      return {
+        kind: 'acquired',
+        lock: { path: `/locks/${card}`, release: () => events.push(`release:${card}`) },
+      }
+    }
+    return { events, acquire }
+  }
+
+  /** Old enough that no run is plausibly still in flight — the stale-lock case, in one constant. */
+  const HELD_SINCE = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()
+
+  function deps(results: IterationResult[] = [ok()], held = false) {
+    const { calls, runner } = fakeRunner(results)
+    const audit = fakeAudit()
+    const lock = fakeLock(held)
+    return {
+      calls,
+      audit,
+      lock,
+      handler: { runIteration: runner, acquireLock: lock.acquire, appendAudit: audit.append },
+    }
+  }
+
+  beforeEach(() => vi.stubEnv('PATH', '/bin'))
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  it('routes an eligible, tagged card to its mapped workflow and runs it (AC1, AC3)', async () => {
+    const output = captureLog()
+    const { calls, handler } = deps()
+
+    const code = await handleRunCommand(
+      parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+      dispatchFs(),
+      handler,
+    )
+
+    expect(code).toBe(0)
+    expect(output()).toContain('tag auto-dev ⇒ workflow pair-loop')
+    expect(calls).toHaveLength(1)
+    // The card becomes the run's scope root — `pair-next`'s own parameter, borrowed, not invented.
+    expect(calls[0]?.promptText).toContain('pair-loop')
+    expect(calls[0]?.promptText).toContain('--root 217')
+  })
+
+  it('picks the workflow the declared precedence names on a card carrying two mapped tags', async () => {
+    const output = captureLog()
+    const { calls, handler } = deps()
+
+    await handleRunCommand(
+      parseRunCommand({ card: '217', cardTags: 'auto-dev,auto-plan,risk:green' }),
+      dispatchFs(),
+      handler,
+    )
+
+    expect(output()).toContain('workflow pair-process-plan-tasks')
+    expect(calls[0]?.promptText).toContain('pair-process-plan-tasks')
+  })
+
+  it('runs NOTHING on a card carrying no mapped tag, and says why (AC2)', async () => {
+    const output = captureLog()
+    const { calls, audit, handler } = deps()
+
+    const code = await handleRunCommand(
+      parseRunCommand({ card: '218', cardTags: 'risk:green' }),
+      dispatchFs(),
+      handler,
+    )
+
+    expect(code).toBe(0)
+    expect(calls).toHaveLength(0)
+    expect(output()).toContain('no mapped tag')
+    expect(audit.entries[0]?.line).toContain('event=skip')
+    expect(audit.entries[0]?.line).toContain('reason=unmapped')
+  })
+
+  it('runs nothing on a mapped but ineligible card, and logs the skip (BR3)', async () => {
+    const output = captureLog()
+    const { calls, audit, handler } = deps()
+
+    await handleRunCommand(
+      parseRunCommand({ card: '219', cardTags: 'auto-dev' }),
+      dispatchFs(),
+      handler,
+    )
+
+    expect(calls).toHaveLength(0)
+    expect(output()).toContain('ineligible')
+    expect(audit.entries[0]?.line).toContain('reason=ineligible')
+  })
+
+  it('exits cleanly with "no mapping declared" when the adoption declares no workflows (AC4)', async () => {
+    const output = captureLog()
+    const { calls, handler } = deps()
+
+    const code = await handleRunCommand(
+      parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+      dispatchFs(POLICY),
+      handler,
+    )
+
+    expect(code).toBe(0)
+    expect(calls).toHaveLength(0)
+    expect(output()).toContain('no mapping declared')
+  })
+
+  it('HALTs before spawning when a mapped workflow is not installed', async () => {
+    captureLog()
+    const { calls, handler } = deps()
+    const fs = projectFs({ [`${cwd}/${POLICY_PATH}`]: DISPATCH_POLICY })
+
+    await expect(
+      handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        fs,
+        handler,
+      ),
+    ).rejects.toThrow(/pair-process-plan-tasks.*not installed/s)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('resolves and prints the route under --dry-run, spawning nothing and writing nothing', async () => {
+    const output = captureLog()
+    const { calls, audit, lock, handler } = deps()
+
+    await handleRunCommand(
+      parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green', dryRun: true }),
+      dispatchFs(),
+      handler,
+    )
+
+    expect(output()).toContain('tag auto-dev ⇒ workflow pair-loop')
+    expect(output()).toContain('(from the `## Workflows` mapping)')
+    expect(calls).toHaveLength(0)
+    expect(audit.entries).toHaveLength(0)
+    expect(lock.events).toHaveLength(0)
+  })
+
+  describe('the audit trail (AC3)', () => {
+    it('appends start and end records under the resolved audit location', async () => {
+      captureLog()
+      const { audit, handler } = deps()
+
+      await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        handler,
+      )
+
+      expect(audit.entries.map(entry => entry.path)).toEqual([
+        '/project/.pair/working/automation/loop-audit.md',
+        '/project/.pair/working/automation/loop-audit.md',
+      ])
+      expect(audit.entries[0]?.line).toContain(
+        'event=start card=217 tag=auto-dev workflow=pair-loop',
+      )
+      expect(audit.entries[1]?.line).toContain('event=end')
+      expect(audit.entries[1]?.line).toContain('outcome=completed')
+    })
+
+    it('prints the DISPATCH-RECORD line a host adapter posts on the card', async () => {
+      const output = captureLog()
+      const { handler } = deps()
+
+      await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        handler,
+      )
+
+      expect(output()).toMatch(/^DISPATCH-RECORD: .*event=start card=217/m)
+    })
+
+    it('records a failed run as such, rather than leaving the trail claiming it started', async () => {
+      captureLog()
+      const { audit, handler } = deps([{ outcome: 'failed', detail: 'no terminal event' }])
+
+      await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        handler,
+      )
+
+      expect(audit.entries[1]?.line).toContain('outcome=failed')
+    })
+  })
+
+  describe('the concurrency guard (never two runs on one card)', () => {
+    it('skips a dispatch whose card is already locked, and spawns nothing', async () => {
+      const output = captureLog()
+      const { calls, audit, handler } = deps([ok()], true)
+
+      const code = await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        handler,
+      )
+
+      expect(code).toBe(0)
+      expect(calls).toHaveLength(0)
+      expect(output()).toContain('run-in-progress')
+      expect(audit.entries[0]?.line).toContain('reason=run-in-progress')
+    })
+
+    it('reports the holder the acquirer named, and how long it has held the card', async () => {
+      // The path comes from the ACQUIRER, never re-derived at the call site: an operator chasing a
+      // stale lock must be sent to the directory this run actually probed. The age is what tells
+      // them it IS stale — a killed run leaves the lock behind and nothing ever reaps it.
+      const output = captureLog()
+      const { handler } = deps([ok()], true)
+
+      await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        handler,
+      )
+
+      expect(output()).toContain('/locks/217')
+      expect(output()).toMatch(/held 3h \d+m/)
+      expect(output()).toMatch(/stale/)
+    })
+
+    it('takes the lock before spawning and releases it after the run', async () => {
+      captureLog()
+      const { lock, handler } = deps()
+
+      await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        handler,
+      )
+
+      expect(lock.events).toEqual(['acquire:217', 'release:217'])
+    })
+
+    it('releases the lock even when the run throws — a crash must not park the card', async () => {
+      captureLog()
+      const { lock, audit, handler } = deps()
+      const exploding: IterationRunner = () => Promise.reject(new Error('engine exploded'))
+
+      await expect(
+        handleRunCommand(
+          parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+          dispatchFs(),
+          { ...handler, runIteration: exploding },
+        ),
+      ).rejects.toThrow('engine exploded')
+      expect(lock.events).toEqual(['acquire:217', 'release:217'])
+      // ...and the TRAIL says so. A trail that stops at `event=start` reads identically to a run
+      // still in flight, and the released lock leaves no second signal on the filesystem either —
+      // so the operator reading it after an unattended night cannot tell the two apart.
+      expect(audit.entries.map(entry => entry.line)).toEqual([
+        expect.stringContaining('event=start card=217'),
+        expect.stringContaining('event=end card=217'),
+      ])
+      expect(audit.entries[1]?.line).toContain('outcome=crashed')
+    })
+
+    it('keeps the crash visible when the `end` record itself cannot be written', async () => {
+      // Both failures at once: the engine dies AND the audit file is unwritable (a full disk, a
+      // `## Audit Location` pointing somewhere read-only). An unaudited run stays a hard failure —
+      // but an operator handed only `EACCES: permission denied` would be debugging the wrong
+      // machine, so the engine error is carried in the message and kept as the cause.
+      captureLog()
+      const { lock, handler } = deps()
+      const exploding: IterationRunner = () => Promise.reject(new Error('engine exploded'))
+      const crash = new Error('engine exploded')
+
+      const failing = await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        {
+          ...handler,
+          runIteration: exploding,
+          appendAudit: (_path, line) => {
+            if (line.includes('event=end')) throw new Error('EACCES: audit file is read-only')
+          },
+        },
+      ).catch((error: unknown) => error)
+
+      expect(String(failing)).toContain('engine exploded')
+      expect(String(failing)).toContain('EACCES')
+      expect((failing as Error).cause).toBeInstanceOf(Error)
+      expect(String((failing as Error).cause)).toContain(crash.message)
+      // The lock is still released: a card parked by a double failure is the worst of both.
+      expect(lock.events).toEqual(['acquire:217', 'release:217'])
+    })
+
+    it('reports an unwritable audit destination as a dispatch that never started, not as a crash', async () => {
+      // The `start` record is the FIRST thing written, so a `## Audit Location` the process cannot
+      // write (read-only mount, wrong ownership on a daemon box) makes the start write the thing
+      // that throws. Reported as a crash it produced two false statements at once: that a run
+      // crashed (no engine process was ever spawned) and that "the trail now stops at
+      // `event=start`" (no start line was ever written — the file may not exist at all), sending
+      // the operator to reconcile a run that never happened against a trail with no record of it.
+      captureLog()
+      const { calls, lock, handler } = deps()
+
+      const failing = await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        {
+          ...handler,
+          appendAudit: () => {
+            throw new Error("EACCES: permission denied, open '/ro/loop-audit.md'")
+          },
+        },
+      ).catch((error: unknown) => error)
+
+      expect(String(failing)).toContain('EACCES')
+      expect(String(failing)).toContain('nothing was spawned')
+      // The two false claims, named: neither may appear.
+      expect(String(failing)).not.toContain('crashed')
+      expect(String(failing)).not.toContain('event=start')
+      // Nothing ran, and the card is left dispatchable for the next trigger.
+      expect(calls).toHaveLength(0)
+      expect(lock.events).toEqual(['acquire:217', 'release:217'])
+    })
+  })
+
+  /**
+   * The SKIP is the frequent path, and it had no message of its own.
+   *
+   * `start`/`end` were given worded failures above; the skip — the commonest outcome on a board,
+   * and the one this feature promises "costs nothing" — wrote its record outside any try, so an
+   * unwritable `## Audit Location` surfaced as a bare `EACCES: … open '…/audit.md'`: no card
+   * number, no statement that nothing was spawned, no adoption-fix pointer. Fail-closed is kept
+   * (an unaudited decision is not a mode) — what changes is that the operator is told which card,
+   * that nothing ran, and where to fix it.
+   */
+  describe('an unauditable SKIP names the card, not just the filesystem', () => {
+    const unwritable = (handler: Record<string, unknown>) => ({
+      ...handler,
+      appendAudit: () => {
+        throw new Error("EACCES: permission denied, open '/ro/loop-audit.md'")
+      },
+    })
+
+    it.each([
+      ['unmapped', { card: '302', cardTags: '' }],
+      ['ineligible', { card: '219', cardTags: 'auto-dev' }],
+    ])('the pre-lock skip on an %s card', async (_reason, flags) => {
+      captureLog()
+      const { calls, handler } = deps()
+
+      const failing = await handleRunCommand(
+        parseRunCommand(flags),
+        dispatchFs(),
+        unwritable(handler),
+      ).catch((error: unknown) => error)
+
+      expect(String(failing)).toContain(`card ${flags.card}`)
+      expect(String(failing)).toContain('could not be audited')
+      expect(String(failing)).toContain('EACCES')
+      expect(String(failing)).toContain('nothing was spawned')
+      expect(String(failing)).toContain('audit destination')
+      expect(calls).toHaveLength(0)
+    })
+
+    it('the lock-held skip, where a run IS in flight on the card', async () => {
+      captureLog()
+      const { calls, lock, handler } = deps([ok()], true)
+
+      const failing = await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        unwritable(handler),
+      ).catch((error: unknown) => error)
+
+      expect(String(failing)).toContain('card 217')
+      expect(String(failing)).toContain('could not be audited')
+      expect(String(failing)).toContain('nothing was spawned')
+      expect(calls).toHaveLength(0)
+      // The holder's lock is NOT released by the run that failed to record its own skip.
+      expect(lock.events).toEqual(['acquire:217'])
+    })
   })
 })

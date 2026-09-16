@@ -7,7 +7,7 @@ import type { SkillProbe } from './resolve-skill'
 const SKILLS_REGISTRY = 'skills'
 
 /**
- * Builds the "is this skill installed" probe from the SAME layout knowledge `pair install`
+ * Builds the "is this skill installed" probe from the SAME layout knowledge `pair-cli install`
  * writes with (ADR-005): the `skills` registry's target paths and its `prefix`. Nothing here
  * re-derives an installation path — a project that redirected its skills targets in
  * `pair.config.json` is probed where its skills actually are.

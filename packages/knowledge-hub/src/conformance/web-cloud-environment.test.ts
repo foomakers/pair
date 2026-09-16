@@ -531,12 +531,12 @@ describe("turbo.json keeps each package's #test / #test:coverage inputs in sync"
   // name.
   const TURBO = join(ROOT, 'turbo.json')
 
-  const readTurboTasks = (): Record<string, { inputs?: unknown }> => {
+  const readTurboTasks = (): Record<string, { inputs?: unknown; dependsOn?: unknown }> => {
     const stripped = read(TURBO).replace(/^[ \t]*\/\/.*$/gm, '')
     const parsed: unknown = JSON.parse(stripped)
     const tasks = (parsed as { tasks?: unknown }).tasks
     expect(tasks, 'turbo.json has no top-level "tasks" object').toBeTypeOf('object')
-    return tasks as Record<string, { inputs?: unknown }>
+    return tasks as Record<string, { inputs?: unknown; dependsOn?: unknown }>
   }
 
   // The actual repo-wide reads each package's tests depend on turbo invalidating on — not just
@@ -552,34 +552,60 @@ describe("turbo.json keeps each package's #test / #test:coverage inputs in sync"
   // scripts/format-lib/run-format.sh). Asserting only the first pair left the second an
   // unguarded hand-maintained duplicate — the exact class this describe block exists to close,
   // reintroduced by its own follow-up fix one round later.
-  const TASK_PAIRS: Array<{ pkg: string; requiredInputs: string[] }> = [
-    {
-      pkg: '@pair/knowledge-hub',
-      // The FULL 11-entry list this PR ships, not a subset — a round-9 review found the guard
-      // only checking 6 of them (missing `.claude/**`, `.claude-plugin/marketplace.json`,
-      // `apps/pair-cli/config.json`, `.github/workflows/**`, `scripts/**`), and mutation-proved
-      // that deleting `.claude/**` from BOTH arrays — read by 20+ conformance files in this
-      // package — stayed green. A partial floor is exactly the "we asserted the ONE entry that
-      // matters least" mistake this describe block's own history keeps making one level down.
-      requiredInputs: [
-        '$TURBO_DEFAULT$',
-        '$TURBO_ROOT$/.claude/**',
-        '$TURBO_ROOT$/.claude-plugin/marketplace.json',
-        '$TURBO_ROOT$/.pair/**',
-        '$TURBO_ROOT$/apps/pair-cli/config.json',
-        '$TURBO_ROOT$/apps/website/content/docs/**',
-        '$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts',
-        '$TURBO_ROOT$/qa/**',
-        '$TURBO_ROOT$/.github/workflows/**',
-        '$TURBO_ROOT$/scripts/**',
-        '$TURBO_ROOT$/turbo.json',
-      ],
-    },
-    {
-      pkg: '@pair/dev-tools',
-      requiredInputs: ['$TURBO_DEFAULT$', '$TURBO_ROOT$/scripts/format-lib/**'],
-    },
-  ]
+  //
+  // `requiredDependsOn` covers the reads a path list CANNOT: a test that EXECUTES another
+  // package's built output depends on that package's whole source closure, and a task
+  // dependency is the only entry that follows the closure when it grows.
+  const TASK_PAIRS: Array<{ pkg: string; requiredInputs: string[]; requiredDependsOn: string[] }> =
+    [
+      {
+        pkg: '@pair/knowledge-hub',
+        requiredDependsOn: ['build'],
+        // The FULL 11-entry list this PR ships, not a subset — a round-9 review found the guard
+        // only checking 6 of them (missing `.claude/**`, `.claude-plugin/marketplace.json`,
+        // `apps/pair-cli/config.json`, `.github/workflows/**`, `scripts/**`), and mutation-proved
+        // that deleting `.claude/**` from BOTH arrays — read by 20+ conformance files in this
+        // package — stayed green. A partial floor is exactly the "we asserted the ONE entry that
+        // matters least" mistake this describe block's own history keeps making one level down.
+        requiredInputs: [
+          '$TURBO_DEFAULT$',
+          '$TURBO_ROOT$/.claude/**',
+          '$TURBO_ROOT$/.claude-plugin/marketplace.json',
+          '$TURBO_ROOT$/.pair/**',
+          '$TURBO_ROOT$/apps/pair-cli/config.json',
+          // #419: mirror-realignment.test.ts asserts MIRROR_REGENERATE_COMMAND names a script
+          // the ROOT package.json actually defines. Renaming that script touches no file in
+          // this package, so without this entry the guard replays a cached PASS over dead advice.
+          '$TURBO_ROOT$/package.json',
+          '$TURBO_ROOT$/apps/website/content/docs/**',
+          '$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts',
+          '$TURBO_ROOT$/qa/**',
+          '$TURBO_ROOT$/.github/workflows/**',
+          '$TURBO_ROOT$/scripts/**',
+          '$TURBO_ROOT$/turbo.json',
+        ],
+      },
+      {
+        pkg: '@pair/dev-tools',
+        // #419 widened `scripts/format-lib/**` to `scripts/**`: regenerate-mirrors.test.ts
+        // execFileSyncs scripts/regenerate-mirrors.sh the same way run-format.test.ts does its
+        // script, and a per-script list degrades SILENTLY (a stale PASS) the next time one is
+        // added without it. `package.json` is required because pre-push-gate-composition.test.ts
+        // runs checkRootGate against the REAL root manifest.
+        requiredInputs: ['$TURBO_DEFAULT$', '$TURBO_ROOT$/scripts/**', '$TURBO_ROOT$/package.json'],
+        // #419 round 2: regenerate-mirrors.test.ts AC1/AC2 run the real
+        // scripts/regenerate-mirrors.sh, whose TOOLCHAIN_ROOT is this repo — so they BUILD and
+        // RUN apps/pair-cli and assert the output of the real `pair update --source` transform.
+        // @pair/dev-tools declares no dependency on @pair/pair-cli, so neither `inputs` above
+        // nor `^build` reached apps/pair-cli/**, packages/content-ops/** or
+        // packages/knowledge-hub/**. MEASURED at 0a6712e3, clean worktree: appending a comment
+        // to apps/pair-cli/src/registry/skill-refs.ts (the skill-reference rewriter those tests
+        // exercise) and re-running `turbo run test --filter @pair/dev-tools` replayed
+        // `1 cached, 125ms >>> FULL TURBO`. With this dependency: `2 cached, 12.7s` — and the
+        // same probe on packages/content-ops/src/index.ts gives `0 cached`.
+        requiredDependsOn: ['build', '@pair/pair-cli#build'],
+      },
+    ]
 
   it.each(TASK_PAIRS)(
     '$pkg has identical, non-empty inputs for #test and #test:coverage, covering the real repo-wide reads',
@@ -593,6 +619,24 @@ describe("turbo.json keeps each package's #test / #test:coverage inputs in sync"
         expect(testInputs, `${pkg}#test is missing ${path}`).toContain(path)
       }
       expect(coverageInputs).toEqual(testInputs)
+    },
+  )
+
+  it.each(TASK_PAIRS)(
+    '$pkg declares the same dependsOn for #test and #test:coverage, covering the packages its tests EXECUTE',
+    ({ pkg, requiredDependsOn }) => {
+      const tasks = readTurboTasks()
+      const testDeps = tasks[`${pkg}#test`]?.dependsOn
+      const coverageDeps = tasks[`${pkg}#test:coverage`]?.dependsOn
+      expect(Array.isArray(testDeps), `${pkg}#test has no dependsOn array`).toBe(true)
+      expect(Array.isArray(coverageDeps), `${pkg}#test:coverage has no dependsOn array`).toBe(true)
+      for (const dep of requiredDependsOn) {
+        expect(testDeps, `${pkg}#test is missing dependsOn ${dep}`).toContain(dep)
+      }
+      // The coverage variant is a hand-maintained duplicate with no anchor mechanism in
+      // turbo.json: drifting only one of the two is how a stale cache comes back on the half
+      // nobody re-ran.
+      expect(coverageDeps).toEqual(testDeps)
     },
   )
 })

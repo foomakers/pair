@@ -40,7 +40,7 @@ describe('implement composes checkpoint + publish-pr (#256)', () => {
   it('installed mirror is byte-for-byte reproducible from the dataset via the real transform', () => {
     // Whole-file mirror consistency (the same guarantee skills-guide-mirror.test.ts
     // asserts for skills-guide.md): the installed SKILL.md must equal the dataset
-    // SKILL.md run through the `pair update` copy pipeline —
+    // SKILL.md run through the `pair-cli update` copy pipeline —
     //   1. syncFrontmatter: the `name:` rename `implement` -> `pair-process-implement`
     //      the flatten+prefix directory rename triggers (a SKILL.md carries a renamed
     //      frontmatter `name`, unlike the frontmatter-free skills-guide.md), then
@@ -55,7 +55,7 @@ describe('implement composes checkpoint + publish-pr (#256)', () => {
     // in the mirror). skills-guide.md has no same-dir sibling links, so that helper alone
     // suffices there but not here. We neutralize exactly that systematic `./`-prepend on
     // both sides — every OTHER byte must still match, so any real drift (hand-edited mirror,
-    // a dataset edit not propagated via `pair update`) still fails. `pair update` remains
+    // a dataset edit not propagated via `pair-cli update`) still fails. `pair-cli update` remains
     // the ground truth for regeneration.
     //
     // Restrict the neutralization to SAME-DIR SIBLING links only (`](./name.md)` with no

@@ -6,6 +6,8 @@ import {
   countDeclaredPluginSkills,
   findGuideCountMismatches,
   findDeadLinks,
+  findDeadRepoCitations,
+  githubHeadingSlugs,
   checkCatalogSync,
   checkCommandAnchors,
   checkDocsCommands,
@@ -24,6 +26,9 @@ import {
   checkBatchEngineWorkflows,
   batchEngineErrors,
   checkListTargetsSamples,
+  checkCatalogFreshness,
+  parseCatalogLastUpdated,
+  newestChangeDate,
 } from './docs-staleness-check'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
@@ -182,6 +187,393 @@ describe('findDeadLinks', () => {
   })
 })
 
+describe('findDeadRepoCitations', () => {
+  // The tracked set stands in for `git ls-files`: exact paths, exact case — the case-insensitive
+  // macOS filesystem would otherwise pass a `readme.md` citation that github.com serves as 404.
+  const tracked = new Set([
+    'README.md',
+    'docs/contributing/index.mdx',
+    'packages/content-ops/src/index.ts',
+    'apps/website/app/(landing)/constants.ts',
+  ])
+  const LIVE = 'https://github.com/foomakers/pair/blob/main/README.md'
+  const DEAD = 'https://github.com/foomakers/pair/blob/main/does/not/exist.md'
+
+  // Every `hrefs` below is what the site's own MDX compiler (@mdx-js/mdx + remark-gfm, the same
+  // pair fumadocs runs) emits as a link for that source — the oracle is the renderer, not a regex.
+  const ROWS: ReadonlyArray<{ why: string; content: string; dead: number }> = [
+    {
+      why: 'a markdown link to a missing repo file',
+      content: `See [the file](${DEAD}) here.\n`,
+      dead: 1,
+    },
+    { why: 'a bare GFM autolink to a missing repo file', content: `See ${DEAD} here.\n`, dead: 1 },
+    { why: 'a live citation', content: `See [readme](${LIVE}).\n`, dead: 0 },
+    {
+      why: 'a tree/ citation to a tracked directory',
+      content: `See [src](https://github.com/foomakers/pair/tree/main/packages/content-ops/src).\n`,
+      dead: 0,
+    },
+    {
+      why: 'the dead URL inside a fenced code block (rendered as code, not a link)',
+      content: '```bash\ngh api ' + DEAD + '\n```\n',
+      dead: 0,
+    },
+    {
+      why: 'the dead URL inside an inline code span',
+      content: `Run \`curl ${DEAD}\` first.\n`,
+      dead: 0,
+    },
+    {
+      why: 'the dead URL inside a JSX comment (compiled away)',
+      content: `{/* TODO ${DEAD} */}\n\nText.\n`,
+      dead: 0,
+    },
+    {
+      why: 'a case-mismatched path the filesystem would forgive',
+      content: `See [x](https://github.com/foomakers/pair/blob/main/readme.md).\n`,
+      dead: 1,
+    },
+    {
+      why: 'a github URL to another repository',
+      content: `See [x](https://github.com/vercel/next.js/blob/main/nope.md).\n`,
+      dead: 0,
+    },
+    {
+      why: 'a citation with a fragment and query',
+      content: `See [x](${DEAD}#anchor?plain=1).\n`,
+      dead: 1,
+    },
+    {
+      // Not "frontmatter above the prose" — MDX compiles well-formed frontmatter as a thematic
+      // break plus a paragraph, so that row passes with or without the strip. This one does not:
+      // an unbalanced `{` in the frontmatter is an MDX expression the compiler rejects, and
+      // without the strip the page falls into the compile-failure catch and goes UNCHECKED.
+      why: 'frontmatter MDX cannot parse, stripped before compiling',
+      content: `---\ntitle: 'a { b'\n---\n\nSee [x](${DEAD}).\n`,
+      dead: 1,
+    },
+    {
+      // ADL decision 3: a pinned ref is a citation of a moment in time, left alone.
+      why: 'a citation pinned to a SHA rather than main',
+      content: `See [x](https://github.com/foomakers/pair/blob/1bbccf6f/does/not/exist.md).\n`,
+      dead: 0,
+    },
+    {
+      // ADL decision 2: raw/ is a file URL form exactly like blob/.
+      why: 'a raw/ citation to a missing repo file',
+      content: `See [x](https://github.com/foomakers/pair/raw/main/does/not/exist.md).\n`,
+      dead: 1,
+    },
+    {
+      // ADL decision 4: a page the compiler rejects is next build's finding, not this gate's —
+      // the gate returns nothing rather than a misleading citation error.
+      why: 'a page the compiler rejects — next build reports it, not this gate',
+      content: `See [x](${DEAD}).\n\n<Broken attr={ unclosed\n`,
+      dead: 0,
+    },
+    {
+      // The tree/ arm must still CHECK: a tree/ URL whose prefix matches nothing tracked is dead.
+      // Without this row the arm can be mutated to accept everything with the suite green.
+      why: 'a tree/ citation to a directory that does not exist',
+      content: `See [x](https://github.com/foomakers/pair/tree/main/packages/deleted-package).\n`,
+      dead: 1,
+    },
+    {
+      // github.com serves `tree/<dir>/` and `tree/<dir>` alike; the trailing slash is stripped
+      // before the prefix test, or a live directory citation would be reported dead.
+      why: 'a live tree/ citation with a trailing slash',
+      content: `See [x](https://github.com/foomakers/pair/tree/main/packages/content-ops/src/).\n`,
+      dead: 0,
+    },
+    {
+      // GitHub's copy-link percent-escapes `(` and `)`; 13 tracked paths under
+      // apps/website/app/(landing)/ carry them. The citation must resolve through the decode.
+      why: 'a live citation whose path is percent-escaped the way GitHub copies it',
+      content: `See [x](https://github.com/foomakers/pair/blob/main/apps/website/app/%28landing%29/constants.ts).\n`,
+      dead: 0,
+    },
+    {
+      // A literal `%` is not a valid escape. The gate must REPORT the citation, never throw a
+      // URIError out of the whole run — that would also discard every other check's findings.
+      why: 'a path with a malformed percent-escape, reported instead of crashing the gate',
+      content: `See [x](https://github.com/foomakers/pair/blob/main/scripts/100%coverage.sh).\n`,
+      dead: 1,
+    },
+  ]
+  for (const { why, content, dead } of ROWS) {
+    it(`${dead === 0 ? 'ignores' : 'flags'} ${why}`, () => {
+      expect(
+        findDeadRepoCitations(content, 'a.mdx', tracked, () => undefined),
+        why,
+      ).toHaveLength(dead)
+    })
+  }
+  it('names the file, the cited path and the reason in the error', () => {
+    const [err] = findDeadRepoCitations(
+      `See [x](${DEAD}).\n`,
+      'pm-tools/index.mdx',
+      tracked,
+      () => undefined,
+    )
+    expect(err).toContain('pm-tools/index.mdx')
+    expect(err).toContain('does/not/exist.md')
+    expect(err).toMatch(/not a git-tracked file/)
+  })
+})
+
+describe('findDeadRepoCitations — #fragment anchors (Check 5c)', () => {
+  // github.com's own rules, measured on the rendered pages (ADL
+  // 2026-09-08-repo-citation-anchors-are-githubs-own-slugs): a rendered Markdown heading (.md,
+  // .markdown, .mdx alike) gets `id="user-content-<slug>"`, <slug> being github-slugger over its
+  // text, duplicates `-1`, `-2`…; a tree/ page renders the directory's README under the listing;
+  // `#L<n>` line anchors exist only where a source panel is shown — non-Markdown blobs, or a
+  // Markdown blob under `?plain=1`; raw/ has no anchors at all.
+  const tracked = new Set([
+    'README.md',
+    'docs/guide.md',
+    'docs/page.mdx',
+    'packages/x/src/index.ts',
+    'qa/plan.md',
+    'apps/cli/README.md',
+    'apps/cli/src/main.ts',
+  ])
+  const targets = new Map<string, string>([
+    [
+      'README.md',
+      [
+        '---',
+        'title: Frontmatter Heading',
+        '---',
+        '# Intro',
+        '',
+        '## 6. `tech/risk-matrix.md` — Adoption Delta',
+        '',
+        '## Steps',
+        'one',
+        '## Steps',
+        'two',
+        '## Café',
+        '',
+        '<a name="legacy"></a>',
+        '',
+        "<a id='single-quoted'></a>",
+        '',
+        '## <a id="inline"></a> Inline Anchored',
+        '',
+        '```md',
+        '# not a heading',
+        '```',
+        '',
+        'Setext Title',
+        '============',
+        '',
+      ].join('\n'),
+    ],
+    ['docs/guide.md', '## Execution Log\n'],
+    ['docs/page.mdx', '## Rendered By Fumadocs\n'],
+    ['packages/x/src/index.ts', Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join('\n')],
+    ['qa/plan.md', '## Execution Log\n'],
+    ['apps/cli/README.md', '# cli\n\n## Development\n'],
+    ['apps/cli/src/main.ts', 'export {}\n'],
+  ])
+  const src = (path: string) => targets.get(path)
+  const B = 'https://github.com/foomakers/pair/blob/main/'
+
+  const ROWS: Array<[string, string, number]> = [
+    ['live heading anchor', `[x](${B}docs/guide.md#execution-log)`, 0],
+    ['dead heading anchor', `[x](${B}docs/guide.md#deployment-log)`, 1],
+    [
+      'punctuation, backticks and an em-dash slug exactly as github.com does (the real quality-model citation shape)',
+      `[x](${B}README.md#6-techrisk-matrixmd--adoption-delta)`,
+      0,
+    ],
+    ['second duplicate heading gets -1', `[x](${B}README.md#steps-1)`, 0],
+    ['no third duplicate, so -2 is dead', `[x](${B}README.md#steps-2)`, 1],
+    ['a heading inside a fence is not a heading', `[x](${B}README.md#not-a-heading)`, 1],
+    [
+      'a frontmatter key is not a heading (github renders frontmatter as a table)',
+      `[x](${B}README.md#frontmatter-heading)`,
+      1,
+    ],
+    ['setext heading', `[x](${B}README.md#setext-title)`, 0],
+    [
+      'unicode letters survive the slug; percent-escaped fragment decodes first',
+      `[x](${B}README.md#caf%C3%A9)`,
+      0,
+    ],
+    ['an explicit html <a name> anchor', `[x](${B}README.md#legacy)`, 0],
+    [
+      'a single-quoted html id is an anchor too (GitHub parses HTML, not quotes)',
+      `[x](${B}README.md#single-quoted)`,
+      0,
+    ],
+    ['a heading carrying an inline html anchor serves both ids', `[x](${B}README.md#inline)`, 0],
+    [
+      '…and its own slug — over the text content, untrimmed, exactly as github.com (measured: gitui FAQ.md serves `-table-of-contents`)',
+      `[x](${B}README.md#-inline-anchored)`,
+      0,
+    ],
+    ['the trimmed spelling of that slug is NOT served', `[x](${B}README.md#inline-anchored)`, 1],
+    [
+      'fragment case matters (ids are lowercase, browser matching is exact)',
+      `[x](${B}docs/guide.md#Execution-Log)`,
+      1,
+    ],
+    [
+      'a .mdx blob is rendered as Markdown on github.com (measured: pm-tools/index.mdx serves 6 ids)',
+      `[x](${B}docs/page.mdx#rendered-by-fumadocs)`,
+      0,
+    ],
+    ['a dead heading on a .mdx blob', `[x](${B}docs/page.mdx#nope)`, 1],
+    ['line anchor inside the file', `[x](${B}packages/x/src/index.ts#L12)`, 0],
+    ['line anchor past the end', `[x](${B}packages/x/src/index.ts#L40)`, 1],
+    ['line range whose end is past the end', `[x](${B}packages/x/src/index.ts#L5-L30)`, 1],
+    ['line range with columns', `[x](${B}packages/x/src/index.ts#L5C1-L9C4)`, 0],
+    ['the last line is inside the file', `[x](${B}packages/x/src/index.ts#L20)`, 0],
+    ['one past the last line is not', `[x](${B}packages/x/src/index.ts#L21)`, 1],
+    [
+      'line anchor on a RENDERED markdown file is dead — github.com serves line anchors only under ?plain=1',
+      `[x](${B}docs/guide.md#L1)`,
+      1,
+    ],
+    ['heading anchor on a non-markdown file', `[x](${B}packages/x/src/index.ts#execution-log)`, 1],
+    [
+      '?plain=1 shows source, so a heading anchor is dead there',
+      `[x](${B}docs/guide.md?plain=1#execution-log)`,
+      1,
+    ],
+    ['?plain=1 keeps line anchors', `[x](${B}docs/guide.md?plain=1#L1)`, 0],
+    [
+      'tree/ renders the directory README — its heading anchors are live',
+      `[x](https://github.com/foomakers/pair/tree/main/apps/cli#development)`,
+      0,
+    ],
+    [
+      'tree/ dead README heading',
+      `[x](https://github.com/foomakers/pair/tree/main/apps/cli#nope)`,
+      1,
+    ],
+    [
+      'tree/ of a directory with no README has no anchors',
+      `[x](https://github.com/foomakers/pair/tree/main/docs#execution-log)`,
+      1,
+    ],
+    [
+      'tree/ has no source panel, so no line anchors',
+      `[x](https://github.com/foomakers/pair/tree/main/apps/cli#L2)`,
+      1,
+    ],
+    [
+      'tree/<file> is 301-redirected by github.com to blob/<file> — its heading anchors are live',
+      `[x](https://github.com/foomakers/pair/tree/main/apps/cli/README.md#development)`,
+      0,
+    ],
+    [
+      '…and a dead heading through tree/<file> is still dead',
+      `[x](https://github.com/foomakers/pair/tree/main/apps/cli/README.md#nope)`,
+      1,
+    ],
+    [
+      'blob/<dir> is 301-redirected to tree/<dir> — the README heading anchors are live',
+      `[x](${B}apps/cli#development)`,
+      0,
+    ],
+    ['…and a dead heading through blob/<dir> is still dead', `[x](${B}apps/cli#nope)`, 1],
+    [
+      'raw/<dir> is 301-redirected to tree/<dir> too',
+      `[x](https://github.com/foomakers/pair/raw/main/apps/cli#development)`,
+      0,
+    ],
+    [
+      'raw/ has no anchors',
+      `[x](https://github.com/foomakers/pair/raw/main/docs/guide.md#execution-log)`,
+      1,
+    ],
+    ['empty fragment is not a citation of an anchor', `[x](${B}docs/guide.md#)`, 0],
+    ['no fragment: unchanged behaviour', `[x](${B}docs/guide.md)`, 0],
+    [
+      'dead path with a fragment reports the path once, not the anchor too',
+      `[x](${B}docs/nope.md#execution-log)`,
+      1,
+    ],
+    ['a dead anchor in a code span is invisible', `\`${B}docs/guide.md#deployment-log\``, 0],
+  ]
+
+  it.each(ROWS)('%s', (_label, body, dead) => {
+    expect(findDeadRepoCitations(`See ${body}.\n`, 'a.mdx', tracked, src)).toHaveLength(dead)
+  })
+
+  it('names the fragment and the reason', () => {
+    const [err] = findDeadRepoCitations(
+      `See [x](${B}docs/guide.md#deployment-log).\n`,
+      'a.mdx',
+      tracked,
+      src,
+    )
+    expect(err).toContain('docs/guide.md#deployment-log')
+    expect(err).toMatch(/no heading or anchor/)
+  })
+
+  it('names the line count when a line anchor is past the end', () => {
+    const [err] = findDeadRepoCitations(
+      `See [x](${B}packages/x/src/index.ts#L40).\n`,
+      'a.mdx',
+      tracked,
+      src,
+    )
+    expect(err).toContain('#L40')
+    expect(err).toContain('20 lines')
+  })
+
+  it('names the missing README when a tree/ anchor cannot resolve', () => {
+    const [err] = findDeadRepoCitations(
+      `See [x](https://github.com/foomakers/pair/tree/main/docs#execution-log).\n`,
+      'a.mdx',
+      tracked,
+      src,
+    )
+    expect(err).toMatch(/no README/)
+  })
+
+  it('tells the author to cite ?plain=1 for a line anchor on a rendered Markdown file', () => {
+    const [err] = findDeadRepoCitations(`See [x](${B}docs/guide.md#L1).\n`, 'a.mdx', tracked, src)
+    expect(err).toMatch(/\?plain=1/)
+  })
+
+  it('a tracked target the run cannot read is a finding, not a pass', () => {
+    const [err] = findDeadRepoCitations(
+      `See [x](${B}qa/plan.md#execution-log).\n`,
+      'a.mdx',
+      tracked,
+      () => undefined,
+    )
+    expect(err).toMatch(/could not be read/)
+  })
+})
+
+describe('githubHeadingSlugs', () => {
+  it('slugs headings in document order with github-slugger duplicate suffixes', () => {
+    expect([...githubHeadingSlugs('# A\n## A\n## B & C\n')]).toEqual(['a', 'a-1', 'b--c'])
+  })
+  it('reads single-quoted and unquoted html ids as well as double-quoted ones', () => {
+    expect([...githubHeadingSlugs(`<a id='a'></a>\n\n<a name=b></a>\n\n<a id="c"></a>\n`)]).toEqual(
+      ['a', 'b', 'c'],
+    )
+  })
+  it('ignores frontmatter and fenced code, keeps setext and html anchors', () => {
+    const md = '---\ntitle: T\n---\n```\n# fenced\n```\nS\n=\n<a id="x"></a>\n'
+    expect([...githubHeadingSlugs(md)]).toEqual(['s', 'x'])
+  })
+  it('a heading with an inline html anchor yields its (untrimmed) slug and the anchor id', () => {
+    expect([...githubHeadingSlugs('## <a id="k"></a> Key Term\n')]).toEqual(['-key-term', 'k'])
+  })
+  it('inline html contributes no tag text to the slug; link text inside it does', () => {
+    const md = '## 1. <a name="c"></a> "Bad" Error <small><sup>[Top ▲](#toc)</sup></small>\n'
+    expect([...githubHeadingSlugs(md)]).toEqual(['1--bad-error-top-', 'c'])
+  })
+})
+
 describe('checkCatalogSync', () => {
   it('flags a skill dir missing from the catalog', () => {
     expect(checkCatalogSync(['implement'], 'no rows here')).toHaveLength(1)
@@ -227,6 +619,173 @@ describe('checkDocsCommands', () => {
     )
   })
 
+  // The npx runner is a PREFIX of the binary, not a slot that swallows it: the real form
+  // docs use names the SCOPED PACKAGE (`npx --no @foomakers/pair-cli <cmd>`), and an
+  // earlier shape consumed `@foomakers/pair-cli` as the package token and then still
+  // demanded a literal binary after it — so nothing behind npx could ever match and a
+  // misspelled command shipped silently. The `npx --no pair-cli update` case above passed
+  // only by accident (`--no` swallowed as the package token), which is why it alone was
+  // false confidence.
+  it('flags a misspelled command behind npx with the scoped package', () => {
+    const errs = checkDocsCommands(
+      doc('```bash\nnpx --no @foomakers/pair-cli kb-valdate\n```'),
+      commands,
+    )
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('kb-valdate')
+  })
+
+  it('flags a nonexistent command behind a bare npx', () => {
+    const errs = checkDocsCommands(doc('```bash\nnpx pair-cli bogus-command\n```'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('bogus-command')
+  })
+
+  it('passes a real command behind npx with a versioned scoped package', () => {
+    expect(
+      checkDocsCommands(
+        doc('```bash\nnpx --yes @foomakers/pair-cli@latest install\n```'),
+        commands,
+      ),
+    ).toHaveLength(0)
+  })
+
+  it('flags a bare `pair` behind npx — the runner does not launder the wrong binary', () => {
+    const errs = checkDocsCommands(doc('```bash\nnpx --no @foomakers/pair install\n```'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('pair-cli install')
+  })
+
+  // US-449 round 6: npx was the ONLY runner the prefix knew, and the docs publish three
+  // other forms today — `pnpm dlx pair-cli install` (reference/cli/workflows.mdx:269),
+  // `pnpm pair-cli install` (tutorials/team-setup.mdx:48), `pnpm pair-cli --version`
+  // (tutorials/first-project.mdx:75). Drop the `-cli` on any of them and the gate returned
+  // [] — the drift this rule exists to catch, on the exact lines the site publishes.
+  it('flags a bare `pair` behind `pnpm dlx` — the form workflows.mdx publishes', () => {
+    const errs = checkDocsCommands(doc('```bash\npnpm dlx pair install\n```'), commands)
+    expect(errs).toEqual([
+      'a.mdx tells the reader to run "pair install", but the published binary is ' +
+        '"pair-cli" — write "pair-cli install"',
+    ])
+  })
+
+  it('flags a bare `pair` behind a bare `pnpm` — the form team-setup.mdx publishes', () => {
+    const errs = checkDocsCommands(doc('Use `pnpm pair install` instead.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('"pair install"')
+  })
+
+  it('flags a bare `pair` behind `yarn dlx` and `pnpm exec`', () => {
+    expect(checkDocsCommands(doc('```bash\nyarn dlx pair update\n```'), commands)).toHaveLength(1)
+    expect(checkDocsCommands(doc('```bash\npnpm exec pair install\n```'), commands)).toHaveLength(1)
+  })
+
+  it('sees an unknown command behind a non-npx runner too', () => {
+    const errs = checkDocsCommands(doc('```bash\npnpm dlx pair-cli kb validate\n```'), commands)
+    expect(errs).toEqual(['a.mdx tells the reader to run "pair-cli kb", which is not a command'])
+  })
+
+  it('passes the correct pnpm forms the docs already publish', () => {
+    expect(
+      checkDocsCommands(doc('```bash\npnpm dlx pair-cli install\n```'), commands),
+    ).toHaveLength(0)
+    expect(
+      checkDocsCommands(doc('```bash\npnpm dlx pair-cli update-link --dry-run\n```'), [
+        ...commands,
+        'update-link',
+      ]),
+    ).toHaveLength(0)
+    expect(checkDocsCommands(doc('```bash\npnpm pair-cli --version\n```'), commands)).toHaveLength(
+      0,
+    )
+  })
+
+  // US-449 round 7: `--package`/`-p` is the one runner flag whose ARGUMENT is a package
+  // NAME, and the flag run consumed the flag alone. So the canonical npx idiom for a
+  // package whose bin differs from its package name —
+  // `npx --package @foomakers/pair-cli pair-cli install`, a CORRECT line — had `--package `
+  // eaten as a flag, `@foomakers/` read as the scope, the first `pair-cli` read as the
+  // binary and the REAL binary token read as the command: `"pair-cli pair-cli" … is not a
+  // command`, a CI red on a correct page with no edit that clears it short of deleting a
+  // correct instruction. Same for `-p` and, since the runner list widened, for
+  // `pnpm dlx --package …`.
+  it('consumes `--package`/`-p` together with its package argument', () => {
+    expect(
+      checkDocsCommands(
+        doc('```bash\nnpx --package @foomakers/pair-cli pair-cli install\n```'),
+        commands,
+      ),
+    ).toEqual([])
+    expect(
+      checkDocsCommands(doc('```bash\nnpx -p @foomakers/pair-cli pair-cli install\n```'), commands),
+    ).toEqual([])
+    expect(
+      checkDocsCommands(
+        doc('```bash\npnpm dlx --package @foomakers/pair-cli pair-cli install\n```'),
+        commands,
+      ),
+    ).toEqual([])
+  })
+
+  // The other direction of the same flag: consuming the argument must not launder the
+  // WRONG binary that follows it.
+  it('still flags a bare `pair` after a consumed `--package` argument', () => {
+    expect(
+      checkDocsCommands(doc('```bash\nnpx -p @foomakers/pair-cli pair install\n```'), commands),
+    ).toEqual([
+      'a.mdx tells the reader to run "pair install", but the published binary is ' +
+        '"pair-cli" — write "pair-cli install"',
+    ])
+  })
+
+  // The `--flag=value` spelling had no form at all in the flag run, so real drift shipped
+  // green behind a LISTED runner: `npx --package=@foomakers/pair-cli pair install`
+  // returned [].
+  it('accepts the `--flag=value` spelling of a runner flag', () => {
+    expect(
+      checkDocsCommands(
+        doc('```bash\nnpx --package=@foomakers/pair-cli pair install\n```'),
+        commands,
+      ),
+    ).toEqual([
+      'a.mdx tells the reader to run "pair install", but the published binary is ' +
+        '"pair-cli" — write "pair-cli install"',
+    ])
+    expect(
+      checkDocsCommands(
+        doc('```bash\npnpm dlx --package=@foomakers/pair-cli pair-cli install\n```'),
+        commands,
+      ),
+    ).toEqual([])
+  })
+
+  // Why the BARE package-manager form takes no flag run, while `npx`/`pnpm dlx` do:
+  // `pnpm --filter <pkg>` puts a PACKAGE NAME in flag-argument position, and this
+  // repo's package is literally called `pair-cli`. Consuming `--filter ` as a flag would
+  // read the filter's argument as the binary and the script name as its command —
+  // `pnpm --filter @pair/pair-cli build` would be reported as the nonexistent command
+  // `build`, on three pages that are correct as written.
+  it('does not read `pnpm --filter <pkg> <script>` as an invocation of the CLI', () => {
+    expect(
+      checkDocsCommands(doc('```bash\npnpm --filter @pair/pair-cli build\n```'), commands),
+    ).toHaveLength(0)
+    expect(
+      checkDocsCommands(doc('```bash\npnpm --filter pair-cli dev update .\n```'), commands),
+    ).toHaveLength(0)
+    expect(
+      checkDocsCommands(doc('Use `pnpm --filter` to scope a command.'), commands),
+    ).toHaveLength(0)
+  })
+
+  it('does not read a package INSTALL as an invocation', () => {
+    expect(
+      checkDocsCommands(doc('```bash\npnpm add -D @foomakers/pair-cli\n```'), commands),
+    ).toHaveLength(0)
+    expect(
+      checkDocsCommands(doc('```bash\nnpm install -g @foomakers/pair-cli\n```'), commands),
+    ).toHaveLength(0)
+  })
+
   // The reason the rule is positional rather than a prose-word allow-list: these are
   // English, and an earlier list-based version had to grow a word for each of them.
   it('ignores "pair-cli" used as a noun in prose', () => {
@@ -238,8 +797,210 @@ describe('checkDocsCommands', () => {
     expect(checkDocsCommands(doc('```text\npair-cli vX.Y.Z\n```'), commands)).toHaveLength(0)
   })
 
+  // A flag is never a command NAME, so `pair-cli --version` must stay clean — but the
+  // token is still an invocation, and behind the wrong binary it is the single most
+  // copy-pasted line in the docs. The command token therefore accepts `-`-leading tokens
+  // and the command-existence half is skipped for them; only the binary half applies.
   it('ignores a flag, which is never a command name', () => {
     expect(checkDocsCommands(doc('```bash\npair-cli --version\n```'), commands)).toHaveLength(0)
+    expect(checkDocsCommands(doc('```bash\npair-cli --help\n```'), commands)).toHaveLength(0)
+    expect(checkDocsCommands(doc('Run `pair-cli --version` to check.'), commands)).toHaveLength(0)
+  })
+
+  // US-449 round 5: `pair --version` is the exact form 9 pages already carry in its
+  // CORRECT spelling, so the bare slip is one edit away — and the old command group
+  // (`[A-Za-z][\w.-]*`) could not match a leading `-`, so the whole prefix failed and the
+  // line was not seen as an invocation at all. The page shipped green telling the reader
+  // to run a binary no npm install creates.
+  it('flags a bare `pair --version` in a fence — a flag does not launder the binary', () => {
+    const errs = checkDocsCommands(doc('```bash\npair --version\n```'), commands)
+    expect(errs).toEqual([
+      'a.mdx tells the reader to run "pair --version", but the published binary is "pair-cli"',
+    ])
+  })
+
+  it('flags a bare `pair --help` in an inline span', () => {
+    const errs = checkDocsCommands(doc('Read `pair --help` for the list.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('"pair --help"')
+    // The command-existence half must stay OFF for a flag: no "is not one of its
+    // commands", and no `write "pair-cli --help"` prescription either way round.
+    expect(errs[0]).not.toContain('is not one of its commands')
+  })
+
+  it('flags a bare `pair -v` short flag too', () => {
+    expect(checkDocsCommands(doc('```bash\npair -v\n```'), commands)).toHaveLength(1)
+  })
+
+  // `--` alone, or an arrow, is not a flag token: the capture needs a word character
+  // after the dashes, so fenced ASCII diagrams and prose stay clean.
+  it('does not read `pair -> x` or a bare `pair --` as an invocation', () => {
+    expect(checkDocsCommands(doc('```text\npair -> story\n```'), commands)).toHaveLength(0)
+    expect(checkDocsCommands(doc('```bash\npair -- install\n```'), commands)).toHaveLength(0)
+  })
+
+  // US-449: the published bin is `pair-cli`; `pair` is not installed by any npm install,
+  // so a doc telling the reader to run it is a copy-paste that fails with "command not
+  // found". Before this, the gate matched the literal `pair-cli` prefix only and was
+  // structurally blind to the wrong name — the exact drift it exists to catch.
+  it('flags a bare `pair <cmd>` invocation in a span — the published bin is pair-cli', () => {
+    expect(checkDocsCommands(doc('Run `pair install` first.'), commands)).toEqual([
+      'a.mdx tells the reader to run "pair install", but the published binary is ' +
+        '"pair-cli" — write "pair-cli install"',
+    ])
+  })
+
+  it('flags a bare `pair <cmd>` invocation in a fence, even for a real command', () => {
+    const errs = checkDocsCommands(doc('```bash\npair kb-validate\n```'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('pair-cli kb-validate')
+  })
+
+  it('flags a bare `pair <cmd>` behind a shell prompt', () => {
+    expect(checkDocsCommands(doc('```bash\n$ pair update\n```'), commands)).toHaveLength(1)
+  })
+
+  // The bare-`pair` case reports the binary once — it is not ALSO an unknown-command
+  // error, or every renamed line would be counted twice. The TEXT is asserted too: one
+  // error must not mean half a message. `write "pair-cli init"` for a command that does
+  // not exist is the gate telling a writer to publish a different broken invocation, and
+  // the next run answers `"pair-cli init" … is not a command` — two red rounds, the first
+  // of them wrong. Asserting the count alone is what let that ship.
+  it('reports a bare `pair <unknown>` once, and does not recommend the nonexistent command', () => {
+    const errs = checkDocsCommands(doc('Run `pair init` first.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('"init" is not one of its commands')
+    expect(errs[0]).not.toContain('write "pair-cli init"')
+  })
+
+  // Why the separator is ONE space and not `\s+`: the PM-tool pages align two columns
+  // under a fenced heading (`pair                    Linear`). A run of whitespace is a
+  // diagram, never an invocation — widening to bare `pair` must not start reading them
+  // as "run `pair Linear`".
+  it('ignores an aligned column in a fenced diagram', () => {
+    const diagram =
+      '```text\npair                    Linear\n─────\nEpic                    Project\n```'
+    expect(checkDocsCommands(doc(diagram), commands)).toHaveLength(0)
+  })
+
+  // Same rule, other side: ONE literal space excludes a TAB too, for the same diagram
+  // reason — a tab is column alignment by definition. Pinned so the exclusion reads as
+  // deliberate: a later reader who finds a tab-separated invocation unflagged should
+  // narrow the diagram, not re-widen the separator to `\s`.
+  it('does not read a TAB-separated line as an invocation', () => {
+    expect(checkDocsCommands(doc('```bash\npair-cli\tbogus-tab\n```'), commands)).toHaveLength(0)
+    expect(checkDocsCommands(doc('```bash\npair-cli bogus-one\n```'), commands)).toHaveLength(1)
+  })
+
+  it('ignores "pair" used as the product name in prose', () => {
+    const prose = 'pair installs bridge files, and pair maps its hierarchy to Linear.'
+    expect(checkDocsCommands(doc(prose), commands)).toHaveLength(0)
+  })
+
+  // A CLOSING FENCE ends with a backtick. The span rule's leading `\s*` used to cross the
+  // newline from it into the paragraph below, reading "pair creates Markdown files" as an
+  // invocation of the (nonexistent) command `creates`. Latent while only `pair-cli`
+  // matched — a paragraph rarely opens with it — and immediate once bare `pair` counts.
+  it('does not let a closing fence reach into the next paragraph', () => {
+    const md = '```text\nEpic → Story\n```\n\npair creates Markdown files from the template.'
+    expect(checkDocsCommands(doc(md), commands)).toHaveLength(0)
+  })
+
+  // Same class as the closing fence, one line down and unpinned until now: a CLOSING
+  // INLINE span also ends with a backtick, so "after a backtick" read the prose that
+  // follows it as an invocation. `pair` is the product name on ~10 docs pages, so this
+  // turns a correct edit red with advice that would corrupt the sentence — "write
+  // `pair-cli skills`" inside "pair skills follow the Agent Skills standard".
+  it('does not read prose after a CLOSING inline span as an invocation', () => {
+    expect(
+      checkDocsCommands(doc('Read `config.json` pair skills resolve state.'), commands),
+    ).toHaveLength(0)
+    expect(
+      checkDocsCommands(doc('See `way-of-working.md` pair install markers here.'), commands),
+    ).toHaveLength(0)
+  })
+
+  it('still flags an invocation that OPENS its own span later on the same line', () => {
+    const errs = checkDocsCommands(doc('Read `config.json`, then run `pair install`.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('pair-cli install')
+  })
+
+  // CommonMark's DOUBLED delimiter is covered because `CODE_SPAN` closes an opening run of N
+  // backticks on the first run of exactly N. Pinned in both directions.
+  it('tokenizes a DOUBLED-backtick span, both directions', () => {
+    const errs = checkDocsCommands(doc('Run ``pair install`` now.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('write "pair-cli install"')
+    expect(checkDocsCommands(doc('Run ``pair-cli install`` now.'), commands)).toHaveLength(0)
+  })
+
+  it('flags a wrong form quoted in a doubled span — doubling is not an exemption', () => {
+    const errs = checkDocsCommands(doc('Never write ``pair init``.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('"init" is not one of its commands')
+    // The way to show a wrong form on a docs page is unbackticked prose: the rule is
+    // positional (span content / fenced line), so prose is outside it by construction.
+    expect(checkDocsCommands(doc('Never write pair init.'), commands)).toHaveLength(0)
+  })
+
+  // The reason `CODE_SPAN` implements CommonMark's closer rule instead of stumbling into the
+  // inner pair: a naive `` `([^`\n]+)` `` consumes ONE of the two closing backticks,
+  // and the leftover backtick flips code-span parity for the REST OF THE LINE — every later
+  // inline invocation on it becomes invisible, with no error to say so. The corpus already
+  // carries inline doubled spans (`reference/skill-management.mdx`), so this is live: an
+  // author quoting a backticked literal in a doubled span and adding a real command later on
+  // the same line shipped the wrong binary green. Both spans of the line are read now.
+  it('a doubled span does not blind the REST of its line', () => {
+    const errs = checkDocsCommands(
+      doc('See ``pair-cli install`` then `pair update` next.'),
+      commands,
+    )
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('write "pair-cli update"')
+    // ANY doubled span does it, including one that names no binary at all.
+    expect(
+      checkDocsCommands(doc('Note ``config.json`` and `pair update` next.'), commands),
+    ).toEqual(errs)
+    // The paired success path: correct binary in both spans stays silent.
+    expect(
+      checkDocsCommands(doc('See ``pair-cli install`` then `pair-cli update` next.'), commands),
+    ).toHaveLength(0)
+  })
+
+  // The doubled spans the corpus ACTUALLY carries — two lines, `reference/skill-management.mdx:211`
+  // (two spans) and `:219` (one) — exist to quote a BACKTICKED literal, so their content holds
+  // backticks; the `cell` fixture below is `:211` with both of its spans, plus the invocation an
+  // author would add on the same line, and `prose` is the span-bearing clause of `:219` with that
+  // same invocation appended. Do NOT drop the appended invocation from either fixture: it IS the
+  // line-mate the parity leak used to blind, and without it the line carries no invocation at all
+  // — the loop below fails `toHaveLength(1)` and the suite goes red (measured, both). Dropping it
+  // from `cell` additionally leaves `:211` byte-for-byte, i.e. duplicates the corpus-verbatim
+  // assertion below; `prose` is only the span-bearing EXCERPT of `:219` (the corpus clause runs on
+  // `; only triple-backtick/tilde *blocks* are excluded.`), so no restored-corpus reading of it
+  // exists and it simply turns red. A delimiter run that is balanced but whose
+  // content excludes backticks still cannot pair them, and the same parity leak blinds the rest of
+  // those lines.
+  it('reads a doubled span whose CONTENT contains backticks, and the rest of its line', () => {
+    const cell = '| `` `/next` `` | `` `/pair-next` `` | Run `pair install` to apply.'
+    const prose =
+      'Inline single-backtick code spans (`` `/next` ``) are still rewritten. Run `pair install` to apply.'
+    for (const line of [cell, prose]) {
+      const errs = checkDocsCommands(doc(line), commands)
+      expect(errs).toHaveLength(1)
+      expect(errs[0]).toContain('write "pair-cli install"')
+    }
+    // The quoted literals themselves are never invocations, with or without the line-mate —
+    // this one is `:211` verbatim.
+    expect(checkDocsCommands(doc('| `` `/next` `` | `` `/pair-next` `` |'), commands)).toHaveLength(
+      0,
+    )
+    // "A fence yields no span" is deliberately NOT asserted here — through `checkDocsCommands`
+    // it is unobservable: a fenced LINE is scanned by the fence pass anyway and errors dedup by
+    // `${bin} ${cmd}`, so a fenced line the span pass also read collapses to the same single
+    // error either way. The fence's observable pins are the fence pass's own cases above and
+    // the closing-fence/next-paragraph case, which is what goes red if the span rule stops
+    // tokenizing and returns to matching "after a backtick".
   })
 })
 
@@ -257,11 +1018,15 @@ describe('buildValidRoutes', () => {
 })
 
 describe('runAllChecks (in-process, real docs tree)', () => {
-  it('reports zero drift and 44 skills against the actual repo', () => {
+  // Check 5b compiles every docs page through the real MDX compiler, so this is no longer a
+  // 5000ms test: MEASURED 1.0s locally and 17.1s on the ubuntu CI runner, actions run 34229200841 (five test
+  // files sharing two cores), where vitest's default budget failed it. Same shape as
+  // deploy-build-command.test.ts: an explicit budget with the measurement it came from.
+  it('reports zero drift and 50 skills against the actual repo', () => {
     const { errors, skillCount } = runAllChecks(REPO_ROOT)
     expect(errors, errors.join('\n')).toHaveLength(0)
-    expect(skillCount).toBe(44)
-  })
+    expect(skillCount).toBe(50)
+  }, 60_000)
 })
 
 // Check 2c — catalog ROW CONTENT single-sourced from the dataset SKILL.md frontmatter.
@@ -356,13 +1121,71 @@ describe('generateCatalogRows + committed catalog parity (Check 2c integration)'
   const CATALOG = join(REPO_ROOT, 'apps/website/content/docs/reference/skills-catalog.mdx')
   it('derives a command + non-empty description for every dataset skill', () => {
     const rows = generateCatalogRows(SKILLS_DIR)
-    expect(rows.size).toBe(44)
+    expect(rows.size).toBe(50)
     expect(rows.get('next')?.command).toBe('/pair-next')
     for (const [, row] of rows) expect(row.description.length).toBeGreaterThan(0)
   })
   it('the committed skills-catalog rows match the dataset-derived truth (no drift)', () => {
     const rows = generateCatalogRows(SKILLS_DIR)
     const errors = checkCatalogContent(rows, readFileSync(CATALOG, 'utf-8'))
+    expect(errors, errors.join('\n')).toHaveLength(0)
+  })
+})
+
+// ── The catalog's own "Last updated" claim (q-10, independent pass over review 5190603055) ──
+// Every other catalog gate counts or compares SKILLS: the row list, the row content, the "N skills"
+// prose. None looked at the header's date, so `skills-catalog.mdx` sat on 2026-09-08 through every
+// later dataset change with the whole gate green — the page dated itself before the content it
+// describes, and the date is the one claim a reader uses to decide whether to trust the page.
+describe('checkCatalogFreshness', () => {
+  const header = (d: string) =>
+    `---\ntitle: Skills Catalog\n---\n\n> **Last updated:** ${d}. Source: \`packages/knowledge-hub/dataset/.skills/\`\n`
+
+  it('passes when the header date equals the newest source change', () => {
+    expect(checkCatalogFreshness(header('2026-09-13'), '2026-09-13')).toEqual([])
+  })
+
+  it('passes when the header date is NEWER than the newest source change', () => {
+    expect(checkCatalogFreshness(header('2026-09-20'), '2026-09-13')).toEqual([])
+  })
+
+  it('fails when the header date predates the newest source change (the q-10 defect)', () => {
+    const errors = checkCatalogFreshness(header('2026-09-08'), '2026-09-13')
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('2026-09-08')
+    expect(errors[0]).toContain('2026-09-13')
+  })
+
+  it('fails loudly when the header carries no parsable date — the check must not pass vacuously', () => {
+    expect(checkCatalogFreshness('> **Last updated:** soon.\n', '2026-09-13')).toEqual([
+      'skills-catalog.mdx has no `> **Last updated:** YYYY-MM-DD` header — the catalog freshness check cannot run',
+    ])
+  })
+
+  it('fails loudly when the source change date cannot be resolved', () => {
+    expect(checkCatalogFreshness(header('2026-09-13'), null)).toEqual([
+      'cannot resolve the last change date of packages/knowledge-hub/dataset/.skills/ from git — the catalog freshness check cannot run',
+    ])
+  })
+
+  it('parses the header date, and returns null when it is absent or malformed', () => {
+    expect(parseCatalogLastUpdated(header('2026-09-13'))).toBe('2026-09-13')
+    expect(parseCatalogLastUpdated('> **Last updated:** 13-09-2026.\n')).toBeNull()
+    expect(parseCatalogLastUpdated('no header at all')).toBeNull()
+  })
+})
+
+describe('the committed skills-catalog dates itself no earlier than its source (q-10 integration)', () => {
+  it('passes against the real git history of the dataset skills tree', () => {
+    const newest = newestChangeDate(REPO_ROOT, 'packages/knowledge-hub/dataset/.skills')
+    expect(newest, 'git could not date the dataset skills tree').toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    const errors = checkCatalogFreshness(
+      readFileSync(
+        join(REPO_ROOT, 'apps/website/content/docs/reference/skills-catalog.mdx'),
+        'utf-8',
+      ),
+      newest,
+    )
     expect(errors, errors.join('\n')).toHaveLength(0)
   })
 })

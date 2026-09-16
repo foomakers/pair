@@ -34,6 +34,8 @@ This framework does not cover:
 
 **[definition-of-ready-and-done.md](definition-of-ready-and-done.md)** - Canonical Definition of Ready (R3.8, 6 criteria) and Definition of Done (R3.9, 4 criteria + per-tier hooks) — companion to canonical-states.md, the source `/pair-capability-verify-done` and the user-story template read
 
+**[task-progress-feedback.md](task-progress-feedback.md)** - The breakdown-to-task feedback loop: the task-ID locator, the tick-only body patch, and the single batched progress comment per run iteration (D22) — how an inline task checklist reports progress while `/pair-process-implement` works through it, on the manual and the supervised path alike
+
 **[pr-states.md](pr-states.md)** - The PR state flow (gate ≠ review): the 3 PR states (`to-be-reviewed` → `ready-to-merge` / `not-approved`), the synthesis of gates × review verdict × tier × explicit approval, and the required `pair-review` / `pair-explicit-approval` checks that make merge blocking mechanical — the pull-request companion to canonical-states.md
 
 ### Implementation Guides

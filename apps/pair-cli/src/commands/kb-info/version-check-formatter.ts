@@ -25,7 +25,7 @@ function statusLine(result: VersionCheckResult): string {
 }
 
 /**
- * Format a version-check result as human-readable text for `pair kb-info`.
+ * Format a version-check result as human-readable text for `pair-cli kb-info`.
  */
 export function formatVersionCheckHuman(result: VersionCheckResult): string {
   const lines: string[] = []
@@ -56,7 +56,7 @@ export function formatVersionCheckHuman(result: VersionCheckResult): string {
   if (result.status === 'unknown-installed') {
     lines.push('')
     lines.push('  No installed-version metadata found (legacy install).')
-    lines.push('  Re-install (`pair install`) or update (`pair update`) to record it.')
+    lines.push('  Re-install (`pair-cli install`) or update (`pair-cli update`) to record it.')
   }
 
   if (result.status === 'current-unavailable') {
@@ -69,7 +69,7 @@ export function formatVersionCheckHuman(result: VersionCheckResult): string {
 }
 
 /**
- * Format a version-check result as JSON for `pair kb-info --json`.
+ * Format a version-check result as JSON for `pair-cli kb-info --json`.
  */
 export function formatVersionCheckJSON(result: VersionCheckResult): string {
   return JSON.stringify(result, null, 2)

@@ -72,8 +72,8 @@ describe('parseKbInfoCommand', () => {
 /**
  * US-395 review round 12: kb-info's registry probe resolves the dataset the same way
  * install does, so the version it reports must be the version the named source carries —
- * a program-level `--url` included, or `pair kb-info --url <mirror>` reports the official
- * KB's version while `pair install --url <mirror>` installs the mirror's.
+ * a program-level `--url` included, or `pair-cli kb-info --url <mirror>` reports the official
+ * KB's version while `pair-cli install --url <mirror>` installs the mirror's.
  */
 describe('US-395: the program-level --url names the source when --source does not', () => {
   it('uses --url as the version-check source', () => {

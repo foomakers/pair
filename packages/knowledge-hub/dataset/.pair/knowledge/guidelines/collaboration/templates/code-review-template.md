@@ -37,7 +37,7 @@ history and not an open item. Say so when the count is zero. -->
 | --------------------------- | ------- | -------------------------- | ----------------- |
 | Service/domain criticality  | [color] | [KB default / table]       | [note]            |
 | Change/diff risk            | [color] | [diff footprint]           | [note]            |
-| Business impact             | [color] | [subdomain class]          | [note]            |
+| Business impact             | [color] | [subdomain class \| Overrides: business-impact.trivial-diff] | [note]            |
 | Security relevance          | [color] | `/assess-security`         | [raise-only, D17] |
 | Coupling balance            | [color] | `/assess-coupling`         | [not assessed until #263] |
 

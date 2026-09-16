@@ -28,9 +28,9 @@ This framework does not cover:
 
 ## Directory Contents
 
-**[automation-policy.md](automation-policy.md)** - `tech/automation.md` schema: the `## Eligibility` declaration that selects which cards may run unattended
+**[automation-policy.md](automation-policy.md)** - `tech/automation.md` schema: the `## Eligibility` declaration that selects which cards may run unattended, and the `## Workflows` mapping that routes a tagged card to the workflow that runs on it
 
-**[github-automation.md](github-automation.md)** - GitHub Actions and workflow automation strategies
+**[github-automation.md](github-automation.md)** - GitHub Actions and workflow automation strategies, including the reference tag-driven dispatch trigger adapter
 
 **[azure-devops-automation.md](azure-devops-automation.md)** - Azure DevOps board rules, branch policies, and service hooks
 

@@ -13,7 +13,7 @@ Configure the project management tool for the current project. Guides the develo
 
 | Argument | Required | Description                                                                                 |
 | -------- | -------- | ------------------------------------------------------------------------------------------- |
-| `$tool`  | No       | PM tool to configure (e.g., `github`, `filesystem`). If omitted, presents selection options. |
+| `$tool`  | No       | PM tool to configure. Its accepted values are the **canonical tool tokens** — the alias table in [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#code-host-resolution) is their single source of truth, so `azure-devops` resolves without guessing and no token list is duplicated here. If omitted, presents selection options. |
 
 ## Composed Skills
 
@@ -80,7 +80,7 @@ Configure the project management tool for the current project. Guides the develo
 2. **Act**: Walk the developer through the setup steps from the implementation guide:
    - For **GitHub Projects**: project creation, board configuration, label setup, automation rules, MCP integration
    - For **Filesystem**: directory structure creation, status tracking files, workflow templates — and the `code-host` declaration in `## Git Workflow`, because a filesystem tracker hosts no repositories
-   - For **Azure DevOps**: organization/project defaults, work item type mapping, board columns, `az` authentication
+   - For **Azure DevOps**: run the adapter's **Detection and HALT Behavior** checks — `az` binary → `azure-devops` extension → authenticated session — **before any configuration write**, HALTing with the adapter's pointer on the first miss; the skill never installs or authenticates on its own. Then: organization/project defaults, work item type mapping, and the **team + area path** whose board view the items must land in
    - For **Linear**: team + project creation, type labels, estimate scale, access path (MCP or GraphQL) — and the `code-host` declaration in `## Git Workflow`, because Linear hosts no repositories
 
 3. **Act**: Gather project-specific details needed for configuration:
@@ -97,12 +97,15 @@ Configure the project management tool for the current project. Guides the develo
 2. **Act**: Add or update the PM tool section with:
    - Tool name and version/tier
    - Workflow methodology (Kanban, Scrum, etc.)
-   - Project identifier (e.g., GitHub org/project name, filesystem path)
+   - Project identifier (e.g., GitHub org/project name, Azure organization + project, filesystem path)
    - Access method (e.g., MCP, CLI, direct)
+   - **Every field the selected tool's adapter reads back from this file** — its `### Adoption Configuration` snippet is the schema, so nothing tool-specific is enumerated here. For Azure DevOps that is the **team and its area path**: each work-item create passes `--area`, and an item outside the area paths the team's board is configured for is created, assigned and absent from the view the team actually reads.
    - Reference to implementation guide
-3. **Act — `## Git Workflow` (only when needed)**: if the selected PM tool **hosts no code** — `linear`, `jira`, **`filesystem`** (it tracks item state in files and has no repositories, branches or PRs) — ask which tool hosts the repositories and write `code-host` (+ `base-branch`) in the `## Git Workflow` section. When the PM tool *is* the code host (GitHub Projects, Azure DevOps), **write nothing** — omitted means "same tool", the zero-configuration default. See [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md) for the full hosts-code / hosts-no-code split.
-4. **Act — `## Assignment` (always ask)**: ask **who items and pull requests default to**, and write `## Assignment` → `default-assignee` in way-of-working.md. This is the one adoption key that has no safe inferred value: skills never fall back to the authenticated user (an agent under a bot token would assign everything to the bot), so **nothing declared here means every item and every PR this project files is written unassigned** — and most boards are read filtered by assignee, so those items are invisible on the board while open and green. When step 3 just declared a separate `code-host`, also ask whether that host knows the same person by a **different identifier** and write `code-host-assignee` when it does. Already declared ⇒ confirm it and leave it byte-identical (idempotent). Declined ⇒ write nothing and say what it costs. Schema and cascade: [Assignee resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#assignee-resolution).
-5. **Verify**: Way-of-working reflects current PM configuration, `code-host` is declared iff the PM tool cannot host the code, and `## Assignment` either declares `default-assignee` or the developer was told, in so many words, that items and PRs will be filed unassigned.
+3. **Act — `## State Mapping` (when the board does not already use the canonical names)**: write the section mapping the project's **real work item states** — the ones the tool reports, never an invented one — to the canonical macrostates. A board **column** is not a state: it labels a bucket inside one and cannot be written, so it never appears in this section. Schema and per-tool examples (including the Azure Boards Scrum process and the `Review` gap it has by default): [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md). Omitted means the board already speaks canonical (zero-configuration default, not a degradation).
+4. **Act — report what could not be resolved**: if a field the adapter reads back cannot be determined during setup (unknown team, no access to the area-path list), **report it to the developer as a follow-up** — for Azure DevOps: *"area path not declared: items may be created outside the team's board view"* — and never silently omit it. Same rule as the adapter's unresolvable-assignee case: an unresolvable field is reported, not dropped.
+5. **Act — `## Git Workflow` (only when needed)**: if the selected PM tool **hosts no code** — `linear`, `jira`, **`filesystem`** (it tracks item state in files and has no repositories, branches or PRs) — ask which tool hosts the repositories and write `code-host` (+ `base-branch`) in the `## Git Workflow` section. When the PM tool *is* the code host (GitHub Projects, Azure DevOps), **write nothing** — omitted means "same tool", the zero-configuration default. See [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md) for the full hosts-code / hosts-no-code split.
+6. **Act — `## Assignment` (always ask)**: ask **who items and pull requests default to**, and write `## Assignment` → `default-assignee` in way-of-working.md. This is the one adoption key that has no safe inferred value: skills never fall back to the authenticated user (an agent under a bot token would assign everything to the bot), so **nothing declared here means every item and every PR this project files is written unassigned** — and most boards are read filtered by assignee, so those items are invisible on the board while open and green. When step 5 just declared a separate `code-host`, also ask whether that host knows the same person by a **different identifier** and write `code-host-assignee` when it does. Already declared ⇒ confirm it and leave it byte-identical (idempotent). Declined ⇒ write nothing and say what it costs. Schema and cascade: [Assignee resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#assignee-resolution).
+7. **Verify**: Way-of-working reflects current PM configuration, `code-host` is declared iff the PM tool cannot host the code, and `## Assignment` either declares `default-assignee` or the developer was told, in so many words, that items and PRs will be filed unassigned.
 
 ### Step 5: Record Decision
 
@@ -141,7 +144,9 @@ When invoked **independently**:
 
 ## Edge Cases
 
-- **PM tool already configured + reconfigure**: Old configuration is replaced, not appended. The new ADL entry references the previous decision if one exists.
+- **PM tool already configured + reconfigure**: Old configuration is replaced, not appended — including the tool-specific fields Step 4.2 writes (an Azure reconfiguration gets its team + area path and `## State Mapping` on this path too). The new ADL entry references the previous decision if one exists.
+- **Invalid `$tool` token**: a value outside the canonical token table is never coerced to the nearest tool — it falls through to the Step 2 interactive selection table and the developer picks there.
+- **Inherited or custom process**: a project whose tracker was customized reports state literals that differ from its tool's defaults. Write the states the project reports; never invent one to fill a macrostate (on Azure Boards `Review` in particular has no default state — see canonical-states.md, Example 5).
 - **No MCP connection for GitHub**: Warn that GitHub Projects requires MCP or CLI access. Offer to configure the adoption file manually and validate connectivity later.
 - **Multiple PM tools**: This skill configures exactly one PM tool per project — no dual-tool configuration. If the developer needs to track a second tool informally, suggest they note a primary + secondary convention in way-of-working themselves (an informal record, not something this skill sets up or persists).
 
@@ -155,7 +160,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 ## Notes
 
-- Supported tools with implementation guides: **GitHub Projects**, **Filesystem**.
+- Supported tools with implementation guides: **GitHub Projects**, **Filesystem**, **Azure DevOps**, **Linear** — the same four the Step 2 table offers, and exactly the adapters shipped in [project-management-tool/](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/README.md). Anything else (Jira, GitLab) takes the Step 2.4 HALT.
 - The [selection framework](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) provides decision matrix and cost-benefit analysis for tool selection.
 - This skill modifies: `adoption/tech/way-of-working.md` and creates an ADL entry via `/record-decision`.
 - PM tool configuration is a project-level decision — it applies to all team members and workflows.

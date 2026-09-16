@@ -2,7 +2,7 @@ import { namedSource } from '#config/cli'
 
 /**
  * Configuration for kb-info command in package-display mode
- * (`pair kb-info <package-path>` — reads a KB package ZIP's manifest).
+ * (`pair-cli kb-info <package-path>` — reads a KB package ZIP's manifest).
  */
 export interface KbInfoPackageCommandConfig {
   command: 'kb-info'
@@ -13,7 +13,7 @@ export interface KbInfoPackageCommandConfig {
 
 /**
  * Configuration for kb-info command in version-check mode
- * (`pair kb-info` with no package path — compares installed vs current KB version).
+ * (`pair-cli kb-info` with no package path — compares installed vs current KB version).
  */
 export interface KbInfoVersionCheckCommandConfig {
   command: 'kb-info'
@@ -35,8 +35,8 @@ export interface ParseKbInfoOptions {
  * Parse kb-info command arguments.
  * Options shape matches Commander.js parsed output (same pattern as kb-verify).
  *
- * - `pair kb-info <package-path>` — package-display mode (reads a KB package ZIP)
- * - `pair kb-info [--source <path|url>]` — version-check mode (installed vs current);
+ * - `pair-cli kb-info <package-path>` — package-display mode (reads a KB package ZIP)
+ * - `pair-cli kb-info [--source <path|url>]` — version-check mode (installed vs current);
  *   the program-level `--url` stands in for `--source` when it is absent
  */
 export function parseKbInfoCommand(
@@ -49,7 +49,7 @@ export function parseKbInfoCommand(
   if (!packagePath) {
     // The version reported must be the version of the source the user NAMED — the
     // program-level `--url` included, or kb-info would report the official KB while
-    // `pair install --url <mirror>` installs the mirror's (US-395).
+    // `pair-cli install --url <mirror>` installs the mirror's (US-395).
     const source = namedSource(options)
     return {
       command: 'kb-info',
