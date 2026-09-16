@@ -447,13 +447,15 @@ if command -v jq >/dev/null 2>&1; then
     HEAD_SHA="$head" jq -r "$TOKEN_FILTER" "$COMMENTS_FIXTURE" |
       grep -c "$(printf '%s\\|' "$@" | sed 's/\\|$//')" || true
   }
-  # AC1: human maintainers' tokens on the current head are candidates. Five qualify
+  # AC1: human maintainers' tokens on the current head are candidates. Eight qualify
   # with the author exclusion live — `solo-maintainer` (OWNER), `second-human`
   # (COLLABORATOR) three times: plain, after a CLOSED fence, and after an HTML comment
-  # — plus `org-member-readonly`, whom only the SERVER-SIDE permission read below can
+  # — plus three rendering-visible tokens beside exotic markup (round 6 below: nested
+  # HTML comment, token between two closed fences, mid-line fence opener) — plus
+  # `org-member-readonly`, whom only the SERVER-SIDE permission read below can
   # reject. The Bot, App-attributed, drive-by, stale, withdrawn, quoted, indented,
   # FENCED, HTML-commented and author tokens must all be absent.
-  check "tokens accepted for human non-author maintainers on the current head" 5 \
+  check "tokens accepted for human non-author maintainers on the current head" 8 \
     "$(count_tokens "$TOKEN_HEAD")"
   # AC3: a force-push moves the head; no comment names the new one, so the token is void.
   check "token void after a force-push (head no longer named)" 0 \
@@ -539,6 +541,29 @@ if command -v jq >/dev/null 2>&1; then
   # that merely shares the body with one. 3237609021 does exactly that.
   check "a genuine token beside an HTML comment still counts" 1 \
     "$(matched_ids "$TOKEN_HEAD" 3237609021)"
+  # --- #472 review round 6: re-review battery over the round-4 escalation ---------
+  # The escalation named three shapes GitHub renders as code/invisible against an
+  # absolute strip claim. Probed against the SHIPPED predicate, all three agree with
+  # GitHub's rendering here — and so do their neighbours, which this battery pins so
+  # the strip cannot regress silently:
+  #   3237609022 a NESTED HTML comment (`<!-- <!-- -->` ends at the first `-->`;
+  #              the token line is visible text) — counts, as rendered.
+  #   3237609023 a token BETWEEN two closed fences (visible paragraph) — counts.
+  #   3237609024 a mid-LINE fence opener (`text \`\`\`` opens no fence; the token
+  #              line is a visible paragraph continuation) — counts. A bare
+  #              backtick-parity split swallowed this one; the line-anchored split
+  #              keeps it.
+  check "rendering-visible tokens beside exotic markup still count" 3 \
+    "$(matched_ids "$TOKEN_HEAD" 3237609022 3237609023 3237609024)"
+  #   3237609025 glued to a `~~~` closer (a closing fence takes no trailing content,
+  #              so GitHub leaves the fence open and renders the token as code).
+  #   3237609026 inside a 4-space-indented fence (indented code block; the anchor
+  #              rejects the indented line anyway — the documented residual holds).
+  check "a token glued to a tilde fence or inside an indented fence does not approve" 0 \
+    "$(matched_ids "$TOKEN_HEAD" 3237609025 3237609026)"
+  check "…and neither is ever published as the approver" "" \
+    "$(HEAD_SHA="$TOKEN_HEAD" jq -r "$ACTOR_FILTER" "$COMMENTS_FIXTURE" |
+      grep '^tilde-glued-collab \|^indented-fencer ' || true)"
   # Minor: HEAD_SHA is concatenated INTO a regex, so a 40-char metacharacter string
   # must be refused by the `^[0-9a-f]{40}$` guard, not merely by its length.
   check "a 40-character metacharacter 'head' matches nothing" 0 \

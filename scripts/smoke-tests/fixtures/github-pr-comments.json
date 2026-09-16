@@ -317,5 +317,80 @@
       "site_admin": false,
       "type": "User"
     }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "<!-- <!-- -->\n/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:25:00Z",
+    "id": 3237609022,
+    "node_id": "IC_kwDODKw3uc7A09022",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:25:00Z",
+    "user": {
+      "id": 609022,
+      "login": "nested-html-collab",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "```\na\n```\n/approve cc1fba122f0c912ba01288fe90ab2632e7e41057\n```\nb\n```",
+    "created_at": "2026-08-28T11:26:00Z",
+    "id": 3237609023,
+    "node_id": "IC_kwDODKw3uc7A09023",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:26:00Z",
+    "user": {
+      "id": 609023,
+      "login": "between-fences-collab",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "text ```\n/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:27:00Z",
+    "id": 3237609024,
+    "node_id": "IC_kwDODKw3uc7A09024",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:27:00Z",
+    "user": {
+      "id": 609024,
+      "login": "midline-collab",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "~~~\nexample\n~~~/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:28:00Z",
+    "id": 3237609025,
+    "node_id": "IC_kwDODKw3uc7A09025",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:28:00Z",
+    "user": {
+      "id": 609025,
+      "login": "tilde-glued-collab",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "    ```\n    /approve cc1fba122f0c912ba01288fe90ab2632e7e41057\n    ```",
+    "created_at": "2026-08-28T11:29:00Z",
+    "id": 3237609026,
+    "node_id": "IC_kwDODKw3uc7A09026",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:29:00Z",
+    "user": {
+      "id": 609026,
+      "login": "indented-fencer",
+      "site_admin": false,
+      "type": "User"
+    }
   }
 ]
