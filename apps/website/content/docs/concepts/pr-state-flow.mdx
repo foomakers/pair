@@ -15,7 +15,7 @@ to-be-reviewed → ready-to-merge
 | PR state | Meaning | Mergeable |
 | --- | --- | --- |
 | **to-be-reviewed** | Gates not green, review not submitted (or crashed), or a 🔴 PR still waiting for explicit human approval | No |
-| **ready-to-merge** | Gates green, review approved, and (at 🔴) a human approval on the current head | Yes — a human still presses merge; pair never auto-merges |
+| **ready-to-merge** | Gates green, review approved, and (at 🔴) a human approval on the current head | Yes — a human performs the merge, unless the project's `## Auto-Advance` names the tier and `pair-loop` executes it unattended on freshly re-verified signals (same synthesis, no looser rule) |
 | **not-approved** | The review asked for changes; the findings go back to the author | No |
 
 ## Two enforcers that never blur

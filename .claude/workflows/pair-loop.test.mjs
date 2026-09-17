@@ -519,6 +519,7 @@ test('orchestration: review-approved risk:green with Auto-Advance re-reads the t
     dispatch: (prompt, opts) => {
       if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
       if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
+      if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
       if (opts.phase === 'Advance') {
         advancePrompted = true
         return { merged: true }
@@ -687,6 +688,7 @@ test('orchestration: a gate-red merge refusal is parked, never re-driven through
     dispatch: (prompt, opts) => {
       if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
       if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
+      if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
       if (opts.phase === 'Advance') return { merged: false, reason: 'lint failed' } // gate came back red
       return {}
     },
@@ -910,6 +912,7 @@ test('orchestration: the /pair-capability-verify-quality merge prompt carries no
           ],
         }
       if (prompt.includes('CURRENT `risk:*` label')) return { tier: 'risk:green' }
+      if (prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
       if (prompt.includes('review-approved on PR')) return { merged: true }
       return {}
     },
@@ -918,4 +921,174 @@ test('orchestration: the /pair-capability-verify-quality merge prompt carries no
   const merge = calls.find(c => c.prompt.includes('/pair-capability-verify-quality'))
   assert.ok(merge, 'the auto-advance merge prompt must have run')
   assert.equal(merge.prompt.includes('--approval'), false)
+})
+
+test('orchestration: a moved head since the review parks the card — never merged unreviewed code', async () => {
+  let mergePrompted = false
+  const { result } = await runWorkflow({
+    args: {
+      policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n',
+    },
+    dispatch: (prompt, opts) => {
+      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
+      if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'b'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
+      if (opts.phase === 'Advance') {
+        mergePrompted = true
+        return { merged: true }
+      }
+      return {}
+    },
+    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
+  })
+  assert.equal(mergePrompted, false, 'merged a head the review never saw')
+  const haltEntry = result.log.find(l => l.id === '1' && /head moved|unreviewed/i.test(l.reason ?? ''))
+  assert.ok(haltEntry, 'expected a parked entry naming the moved head')
+})
+
+test('orchestration: pair-review conclusion other than success on the head parks the card', async () => {
+  for (const pairReview of ['failure', 'pending', '']) {
+    let mergePrompted = false
+    const { result } = await runWorkflow({
+      args: {
+        policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n',
+      },
+      dispatch: (prompt, opts) => {
+        if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+        if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
+        if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview, explicitApproval: 'success' }
+        if (opts.phase === 'Advance') {
+          mergePrompted = true
+          return { merged: true }
+        }
+        return {}
+      },
+      workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
+    })
+    assert.equal(mergePrompted, false, `merged with pair-review=${JSON.stringify(pairReview)}`)
+    const haltEntry = result.log.find(l => l.id === '1' && /pair-review/i.test(l.reason ?? ''))
+    assert.ok(haltEntry, `expected a parked entry naming pair-review for ${JSON.stringify(pairReview)}`)
+  }
+})
+
+test('orchestration: explicit-approval conclusion other than success parks the card (D10, red without human approval never merges)', async () => {
+  let mergePrompted = false
+  const { result } = await runWorkflow({
+    args: {
+      policyText: '## Eligibility\n\nrisk:red\n\n## Auto-Advance\n\nrisk:red\n\n## Max Parallelism\n\n1\n',
+    },
+    dispatch: (prompt, opts) => {
+      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:red', mutexResources: [], prerequisites: [] }] }
+      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:red' }
+      if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'failure' }
+      if (opts.phase === 'Advance') {
+        mergePrompted = true
+        return { merged: true }
+      }
+      return {}
+    },
+    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
+  })
+  assert.equal(mergePrompted, false, 'merged a red PR with no human approval')
+  const haltEntry = result.log.find(l => l.id === '1' && /explicit-approval|D10/i.test(l.reason ?? ''))
+  assert.ok(haltEntry, 'expected a parked entry naming explicit-approval/D10')
+})
+
+test('orchestration: malformed PR signals park the card — never merged on unread evidence', async () => {
+  let mergePrompted = false
+  const { result } = await runWorkflow({
+    args: {
+      policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n',
+    },
+    dispatch: (prompt, opts) => {
+      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
+      if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return {}
+      if (opts.phase === 'Advance') {
+        mergePrompted = true
+        return { merged: true }
+      }
+      return {}
+    },
+    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
+  })
+  assert.equal(mergePrompted, false, 'merged on unread signals')
+  const haltEntry = result.log.find(l => l.id === '1' && /signals/i.test(l.reason ?? ''))
+  assert.ok(haltEntry, 'expected a parked entry naming the signals')
+})
+
+test('orchestration: the merge prompt carries the merge contract (head, conclusions, cascade)', async () => {
+  const { calls } = await runWorkflow({
+    args: {
+      policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n',
+    },
+    dispatch: (prompt, opts) => {
+      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
+      if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
+      if (opts.phase === 'Advance' && prompt.includes('review-approved on PR')) return { merged: true }
+      return {}
+    },
+    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
+  })
+  const merge = calls.find(c => c.prompt.includes('review-approved on PR'))
+  assert.ok(merge, 'the auto-advance merge prompt must have run on verified signals')
+  assert.match(merge.prompt, /reviewedHead|remote head/i)
+  assert.match(merge.prompt, /pair-explicit-approval/)
+  assert.match(merge.prompt, /squash/)
+  assert.match(merge.prompt, /close the story|cascade/i)
+})
+
+test('orchestration: a merge that succeeds with a failed cascade is parked naming the cascade, never silently halted', async () => {
+  // Round 4 Minor-2: merge and cascade share one `{ merged, reason }` shape, so a merged PR whose
+  // post-merge cascade (close the story, parents Done, branch, checkpoint) failed came back
+  // `merged: true` — halted, never parked. The merge landed and the story stayed open with nobody
+  // told. `cascaded` is a SEPARATE signal, and its absence reads as a failure like every other
+  // unreadable signal on this path.
+  for (const advance of [
+    { merged: true, cascaded: false, reason: 'could not confirm parent #9 Done' },
+    { merged: true, reason: 'ok' }, // no `cascaded` at all — fail-safe, never assumed done
+  ]) {
+    const { result } = await runWorkflow({
+      args: {
+        policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 3\n',
+      },
+      dispatch: (prompt, opts) => {
+        if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+        if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
+        if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
+        if (opts.phase === 'Advance' && prompt.includes('review-approved on PR')) return advance
+        return {}
+      },
+      workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
+    })
+    const parked = result.log.find(l => l.id === '1' && l.parked === true && /cascade/i.test(l.reason ?? ''))
+    assert.ok(parked, `expected a park naming the failed cascade for ${JSON.stringify(advance)}`)
+    assert.match(parked.reason, /merged/i) // the park must say the merge DID land — not read as a refusal
+  }
+})
+
+test('orchestration: a merge with a confirmed cascade is not parked', async () => {
+  const { result } = await runWorkflow({
+    args: {
+      policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 3\n',
+    },
+    dispatch: (prompt, opts) => {
+      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
+      if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
+      if (opts.phase === 'Advance' && prompt.includes('review-approved on PR')) return { merged: true, cascaded: true, reason: 'merged and cascaded' }
+      return {}
+    },
+    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
+  })
+  assert.equal(result.log.some(l => l.id === '1' && l.parked === true), false)
+  assert.ok(result.log.some(l => l.id === '1' && l.autoAdvance === true))
+})
+
+test('orchestration: the merge prompt asks for the cascade signal separately from the merge', () => {
+  // The park above is only reachable if the prompt actually REQUESTS `cascaded` — a schema field
+  // no prompt mentions comes back undefined forever and parks every merge.
+  assert.match(FULL_SRC, /cascaded/)
+  assert.match(FULL_SRC, /properties: \{ merged: \{ type: 'boolean' \}, cascaded: \{ type: 'boolean' \}/)
 })
