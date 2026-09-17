@@ -33,4 +33,4 @@ Optional commands that `publish-pr` executes at defined points. Each hook is a s
 - `pre-publish` — runs after PR creation, before quality gate. Fails the publish if non-zero.
 - `post-publish` — runs after quality gate passes, before review dispatch. Failure does not block (logs only).
 
-- `pre-publish`: `pair-cli update`
+- `pre-publish`: `pnpm mirrors:regenerate`
