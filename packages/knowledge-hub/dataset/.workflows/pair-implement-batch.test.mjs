@@ -1695,10 +1695,11 @@ test('DT-10: a capsule carrying an unknown key or a missing required field is re
 // source declares, read from the source text (the sandbox module cannot export it).
 test('AC-12: the engine mirrors `cycle-state.mjs` CAPS exactly — one owner, no drifting second copy', async () => {
   const { CAPS } = await import('../skills/pair-workflow-red-spec/scripts/cycle-state.mjs')
-  const declared = /const CYCLE_CAPS = (\{[^}]*\})/.exec(SRC)
+  const declared = /const CYCLE_CAPS = \{([^}]*)\}/.exec(SRC)
   assert.ok(declared, 'the engine declares no CYCLE_CAPS mirror')
-  // eslint-disable-next-line no-new-func
-  assert.deepEqual(new Function(`return ${declared[1]}`)(), CAPS, 'the engine mirror drifted from cycle-state.mjs CAPS')
+  // Parsed, never evaluated: the mirror is an integer map, so quoting its keys makes it JSON.
+  const mirrored = JSON.parse(`{${declared[1].replace(/([A-Za-z_$][\w$]*)\s*:/g, '"$1":')}}`)
+  assert.deepEqual(mirrored, CAPS, 'the engine mirror drifted from cycle-state.mjs CAPS')
 })
 
 test('DT-10: a durable state that keeps redirecting stops as failed-resume instead of looping forever', async () => {
