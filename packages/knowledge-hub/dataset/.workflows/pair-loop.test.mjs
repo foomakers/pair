@@ -1038,3 +1038,57 @@ test('orchestration: the merge prompt carries the merge contract (head, conclusi
   assert.match(merge.prompt, /squash/)
   assert.match(merge.prompt, /close the story|cascade/i)
 })
+
+test('orchestration: a merge that succeeds with a failed cascade is parked naming the cascade, never silently halted', async () => {
+  // Round 4 Minor-2: merge and cascade share one `{ merged, reason }` shape, so a merged PR whose
+  // post-merge cascade (close the story, parents Done, branch, checkpoint) failed came back
+  // `merged: true` — halted, never parked. The merge landed and the story stayed open with nobody
+  // told. `cascaded` is a SEPARATE signal, and its absence reads as a failure like every other
+  // unreadable signal on this path.
+  for (const advance of [
+    { merged: true, cascaded: false, reason: 'could not confirm parent #9 Done' },
+    { merged: true, reason: 'ok' }, // no `cascaded` at all — fail-safe, never assumed done
+  ]) {
+    const { result } = await runWorkflow({
+      args: {
+        policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 3\n',
+      },
+      dispatch: (prompt, opts) => {
+        if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+        if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
+        if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
+        if (opts.phase === 'Advance' && prompt.includes('review-approved on PR')) return advance
+        return {}
+      },
+      workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
+    })
+    const parked = result.log.find(l => l.id === '1' && l.parked === true && /cascade/i.test(l.reason ?? ''))
+    assert.ok(parked, `expected a park naming the failed cascade for ${JSON.stringify(advance)}`)
+    assert.match(parked.reason, /merged/i) // the park must say the merge DID land — not read as a refusal
+  }
+})
+
+test('orchestration: a merge with a confirmed cascade is not parked', async () => {
+  const { result } = await runWorkflow({
+    args: {
+      policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 3\n',
+    },
+    dispatch: (prompt, opts) => {
+      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
+      if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
+      if (opts.phase === 'Advance' && prompt.includes('review-approved on PR')) return { merged: true, cascaded: true, reason: 'merged and cascaded' }
+      return {}
+    },
+    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
+  })
+  assert.equal(result.log.some(l => l.id === '1' && l.parked === true), false)
+  assert.ok(result.log.some(l => l.id === '1' && l.autoAdvance === true))
+})
+
+test('orchestration: the merge prompt asks for the cascade signal separately from the merge', () => {
+  // The park above is only reachable if the prompt actually REQUESTS `cascaded` — a schema field
+  // no prompt mentions comes back undefined forever and parks every merge.
+  assert.match(FULL_SRC, /cascaded/)
+  assert.match(FULL_SRC, /properties: \{ merged: \{ type: 'boolean' \}, cascaded: \{ type: 'boolean' \}/)
+})
