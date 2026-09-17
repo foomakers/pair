@@ -56,6 +56,21 @@ const SAFE_REF = /^[A-Za-z0-9._\-/]+$/
 const UNSAFE = /(^-)|(^\.)|(\.\.)|(\/\/)|(@\{)|([\s~^:?*[\\])/
 const isSegment = v => typeof v === 'string' && SAFE_SEGMENT.test(v) && !v.includes('..')
 const isRef = v => typeof v === 'string' && v.length > 0 && SAFE_REF.test(v) && !UNSAFE.test(v) && !v.endsWith('/') && !v.endsWith('.lock')
+// A RELATIVE directory/file path a stage agent `cd`s into, creates worktrees under and aims
+// `git worktree remove --force` at. Every component is a safe segment (so `;`, `&&`, spaces,
+// backticks and `$(` cannot survive), never absolute, never starting with `-`. EXACTLY ONE leading
+// `..` is legal, because pair's own default IS `../pair-worktrees` — the worktree root is a SIBLING
+// of the repository by design. Anything deeper re-opens the escape one component to the left.
+const isRelPath = v => {
+  const parts = v.split('/')
+  const rest = parts[0] === '..' ? parts.slice(1) : parts
+  return rest.length > 0 && rest.every(p => p !== '.' && p !== '..' && /^[A-Za-z0-9._][A-Za-z0-9._-]*$/.test(p))
+}
+// A skill NAME, as an agent is told to invoke it: an optional leading slash, then a name. A name,
+// never a sentence — `skills.implement: '/x and then gh pr merge 432 --squash'` is rendered
+// verbatim into the implement prompt as the process the agent must follow, so the space is the
+// giveaway: no legitimate skill reference carries one.
+const isSkillRef = v => /^\/?[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(v) && !v.includes('..')
 const must = (ok, halt, detail) => {
   if (!ok) fail(halt, detail)
 }
@@ -96,7 +111,15 @@ const samePath = (a, b) => {
 // that tree may hold a human's uncommitted work.
 function worktreeCommand(opts) {
   const { main, story, branch, base } = opts
-  const worktreeRoot = opts['worktree-root'] ?? PIPELINE_DEFAULTS.worktreeRoot
+  // The worktree root is half of the path `git worktree add` creates and `git worktree remove
+  // --force <root>/<id>` later deletes, so it is judged BEFORE any directory exists — a HALT that
+  // arrives after the `add` has already escaped is a report, not a validation. An ABSOLUTE root is
+  // a caller naming a place and stays legal (spaces included); the RELATIVE form is the traversal
+  // rule, and it is the engine's `isRelPath`, not a second, looser spelling of it.
+  const rawRoot = opts['worktree-root']
+  must(rawRoot === undefined || typeof rawRoot === 'string', 'worktree-root-invalid', '--worktree-root requires a value')
+  const worktreeRoot = rawRoot === undefined ? PIPELINE_DEFAULTS.worktreeRoot : rawRoot.trim()
+  must(worktreeRoot.length > 0 && (isAbsolute(worktreeRoot) || isRelPath(worktreeRoot)), 'worktree-root-invalid', `--worktree-root must be an absolute path, or a relative one built from safe segments with at most one leading \`..\`: ${JSON.stringify(worktreeRoot)} — it is the root a \`git worktree remove --force\` is aimed at, so it is refused, never normalised`)
   must(isSegment(String(story)), 'story-invalid', `--story must be one safe path segment: ${story}`)
   must(isRef(branch), 'branch-invalid', `--branch must be a git ref: ${branch}`)
   must(isRef(base), 'base-invalid', `--base must be a git ref: ${base}`)
@@ -187,12 +210,81 @@ const compactFinding = f => ({
 })
 const isPosInt = v => Number.isInteger(v) && v > 0
 
+// ── `--pipeline`, held to the engine's own grammar (AC-12) ──────────────────────────────────
+// Every value below is interpolated VERBATIM into the `$…=` prompt a stage agent is told to follow
+// or into a path a `git worktree remove --force` deletes — the same command lines the card fields
+// are already validated for. `pair-implement-batch.js`, the sibling realization of this one cycle,
+// refuses this exact set at parse time (`resolvePipeline`/`normalizePipeline`); a coordinator that
+// accepted it would be the looser of the two, and `$profile` (#488) is designed to feed this flag.
+// The engine is a sandboxed workflow script this file cannot import, so the grammar is stated in
+// the same spellings here and held equal to its source by `engine-boundaries.test.mjs`.
+const PIPELINE_KEYS = ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate', 'maxFixRounds', 'reviewers']
+// Retired by engine 3.0.0 (ADR-024 amendment b): named, never mapped silently, never re-added.
+const RETIRED_SKILL_KEYS = {
+  remediationPlan: 'redSpec (grouping is a step of preparation)',
+  redSeal: 'redVerify (the seal runs in the validation execution)',
+  p3Verify: "reviewPhase (custody + evidence are the final verifier's first steps)",
+  cycleComments: 'reviewPhase / greenFix (probe, synthesis and flush are scripts inside those stages)',
+  prPhase: 'implementPhase (the implementer publishes the PR)',
+}
+const rejectUnknownKeys = (obj, allowed, where) => {
+  for (const k of Object.keys(obj ?? {}))
+    // An unrecognised key is an unvalidated value by another name: dropped in silence, it leaves
+    // the caller believing they overrode something while pair's own default runs.
+    if (!allowed.includes(k)) fail('pipeline-invalid', `unknown \`${where}.${k}\`; expected one of ${allowed.join(', ')}. An unrecognised key would be dropped in silence and the cycle would run pair's default while the caller believed otherwise.`)
+}
+function resolvePipeline(raw) {
+  // `undefined`/`null` is ABSENT, not a bad value — one spelling for an unset optional key across
+  // the whole contract, and the engine takes its default here rather than refusing.
+  if (raw === undefined || raw === null) return PIPELINE_DEFAULTS
+  if (typeof raw !== 'object' || Array.isArray(raw)) fail('pipeline-invalid', `--pipeline must be an object; received ${JSON.stringify(raw).slice(0, 60)}. Omit it entirely to run on pair's defaults.`)
+  rejectUnknownKeys(raw, PIPELINE_KEYS, 'pipeline')
+  const str = (v, key, fallback, ok, what) => {
+    if (v === undefined || v === null) return fallback
+    // `String(v)` on an object yields '[object Object]' and on a number a bare digit string, either
+    // of which interpolates into a prompt as a name no agent can follow — and a predicate applied
+    // to a raw value is unsound anyway (`isRelPath(5)` throws, `isSkillRef(5)` passes by coercion).
+    // The TYPE is rejected first, never coerced.
+    if (typeof v !== 'string') fail('pipeline-invalid', `\`pipeline.${key}\` must be a string; received ${typeof v}.`)
+    const t = v.trim()
+    // Trimmed, exactly as the engine's `str()` trims: '  main  ' is a value the engine ACCEPTS and
+    // normalises, so halting on it would refuse what the other realization renders.
+    if (!t) fail('pipeline-invalid', `\`pipeline.${key}\` is empty — omit the key to keep the default (${fallback}).`)
+    if (!ok(t)) fail('pipeline-invalid', `\`pipeline.${key}\` is ${JSON.stringify(t)}, which is not ${what}. Pipeline values are interpolated verbatim into the prompts and command lines the agents run, so a value carrying shell syntax or a path escape would EXECUTE rather than name a ${key}. Rejected, never quoted.`)
+    return t
+  }
+  // The NUMERIC keys, rejected rather than coerced: a cap that cannot be honoured must not silently
+  // become pair's default — the discarded setting is the one deciding how much autonomous work
+  // happens before a human is asked. `'2'` is the shape a hand-written JSON arg produces.
+  const posInt = (v, key, fallback) => {
+    if (v === undefined || v === null) return fallback
+    if (!isPosInt(v)) fail('pipeline-invalid', `\`pipeline.${key}\` must be an integer >= 1; received ${JSON.stringify(v)}. Omit the key to keep pair's default (${fallback}) — it is never inferred from a bad value.`)
+    return v
+  }
+  if (raw.skills !== undefined && raw.skills !== null && (typeof raw.skills !== 'object' || Array.isArray(raw.skills)))
+    fail('pipeline-invalid', `\`pipeline.skills\` must be an object; received ${Array.isArray(raw.skills) ? 'array' : typeof raw.skills}. A non-object would be silently ignored and pair's own skill names would run instead. Omit the key to keep them deliberately.`)
+  for (const k of Object.keys(raw.skills ?? {}))
+    if (RETIRED_SKILL_KEYS[k]) fail('pipeline-invalid', `\`pipeline.skills.${k}\` was retired by engine 3.0.0 (ADR-024 amendment b) — its work now runs inside ${RETIRED_SKILL_KEYS[k]}. Remove the key; a retired dispatch is never mapped silently and never re-added.`)
+  rejectUnknownKeys(raw.skills, Object.keys(PIPELINE_DEFAULTS.skills), 'pipeline.skills')
+  const skills = { ...PIPELINE_DEFAULTS.skills }
+  for (const [k, v] of Object.entries(raw.skills ?? {})) skills[k] = str(v, `skills.${k}`, PIPELINE_DEFAULTS.skills[k], isSkillRef, 'a skill name as an agent invokes one — no spaces, no shell syntax, no `..`')
+  return {
+    skills,
+    worktreeRoot: str(raw.worktreeRoot, 'worktreeRoot', PIPELINE_DEFAULTS.worktreeRoot, isRelPath, 'a relative path built from safe segments (at most one leading `..`; it is the root a `--force` worktree remove is aimed at)'),
+    auditLogDir: str(raw.auditLogDir, 'auditLogDir', PIPELINE_DEFAULTS.auditLogDir, isRelPath, 'a relative path built from safe segments (at most one leading `..`)'),
+    baseBranch: str(raw.baseBranch, 'baseBranch', PIPELINE_DEFAULTS.baseBranch, isRef, "a valid git ref (it is the `<base>` argument of `git worktree add`, exactly like a card's `base`)"),
+    reviewTemplate: str(raw.reviewTemplate, 'reviewTemplate', PIPELINE_DEFAULTS.reviewTemplate, isRelPath, 'a relative path built from safe segments (at most one leading `..`)'),
+    maxFixRounds: posInt(raw.maxFixRounds, 'maxFixRounds', PIPELINE_DEFAULTS.maxFixRounds),
+    reviewers: posInt(raw.reviewers, 'reviewers', PIPELINE_DEFAULTS.reviewers),
+  }
+}
+
 function packetCommand(opts) {
   const next = JSON.parse(opts.next)
   const card = JSON.parse(opts.card)
   const policy = JSON.parse(opts.policy ?? '{}')
   const workflowVersion = opts['workflow-version']
-  const pipeline = { ...PIPELINE_DEFAULTS, ...(opts.pipeline ? JSON.parse(opts.pipeline) : {}), skills: { ...PIPELINE_DEFAULTS.skills, ...(opts.pipeline ? (JSON.parse(opts.pipeline).skills ?? {}) : {}) } }
+  const pipeline = resolvePipeline(opts.pipeline === undefined ? undefined : JSON.parse(opts.pipeline))
   const SK = pipeline.skills
   const runId = opts.run ?? `story-${card.id}`
   must(isSegment(String(card.id)), 'card-invalid', `card.id must be one safe path segment: ${card.id}`)

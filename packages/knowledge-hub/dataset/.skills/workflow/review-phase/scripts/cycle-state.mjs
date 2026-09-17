@@ -200,8 +200,14 @@ export const effectiveInputs = (story, { workflowVersion, pipeline = PIPELINE_DE
       reviewers: pipeline.reviewers,
     }),
   )
+// The workflow version's own grammar: `<major>.<minor>.<patch>` and nothing else. Stated ONCE,
+// because two consumers derive the cycle key from it — `compatible()`, which keys a run by MAJOR,
+// and the `inputs --story` digest both realizations must agree on. A version outside this grammar
+// is a version the command did not really get: `publish` already refuses a handoff carrying one,
+// so accepting it anywhere upstream only mints an identity nothing downstream can use.
+export const isWorkflowVersion = v => typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v)
 export const compatible = (mine, theirs) => {
-  const major = v => (typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v) ? v.split('.')[0] : null)
+  const major = v => (isWorkflowVersion(v) ? v.split('.')[0] : null)
   return major(mine) !== null && major(mine) === major(theirs)
 }
 export function phaseParts(phase) {
@@ -2172,12 +2178,17 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // which runs it continues, and a reader never mistakes it for a clean new PR.
   const predecessorRuns = [...new Set(handoffs.filter(h => h.data?.recordType === 'migration').flatMap(h => (h.data.predecessorRuns ?? []).map(r => r.runId)))].sort()
   // US-486 AC-12: the per-story ceilings are enforced HERE, from the durable evidence alone, so
-  // every realization hits the same wall. Dispatches are counted from the published handoffs
-  // (attempts included — a second attempt is a second dispatch); consecutive redirects publish no
-  // handoff, so the coordinator that observed them hands the count in.
+  // every realization reads the same run directory and reaches the same verdict on it. The two
+  // ceilings count DIFFERENT things and each says which: this one counts the PUBLISHED HANDOFFS in
+  // the run directory — a durable, cumulative quantity (every resume and every attempt is another
+  // file), not the engine's per-invocation `storyMetrics.dispatches`; consecutive redirects publish
+  // no handoff at all, so the coordinator that observed them hands that count in instead. Because
+  // the handoff count only grows, the block is permanent for this run directory, which is why its
+  // detail names the recovery a human actually has (`migrate-acknowledge` binds a fresh run
+  // directory to this one) rather than implying a retry would clear it.
   if (next.step !== 'done' && next.step !== 'blocked') {
     if (handoffs.length >= CAPS.dispatchesPerStory)
-      next = { step: 'blocked', reason: 'failed-resume', cap: 'dispatchesPerStory', detail: `the cycle asked for more than ${CAPS.dispatchesPerStory} dispatches in one run — looping, not converging` }
+      next = { step: 'blocked', reason: 'failed-resume', cap: 'dispatchesPerStory', detail: `${handoffs.length} published handoff files in this run directory, at or above the ceiling of ${CAPS.dispatchesPerStory} — the count is cumulative across every resume (attempts included), never per invocation, and nothing here asked for another dispatch. A human resumes by binding a NEW run directory to this one: \`cycle-state.mjs migrate-acknowledge --dir <new run dir> --legacy <this dir> …\`` }
     else if (Number.isInteger(Number(redirects)) && Number(redirects) >= CAPS.consecutiveRedirects)
       next = { step: 'blocked', reason: 'failed-resume', cap: 'consecutiveRedirects', detail: `${CAPS.consecutiveRedirects} consecutive redirects — the durable state and the dispatched step disagree` }
   }
@@ -2401,6 +2412,16 @@ if (isMain()) {
       // identity). `--story` is the CARD's effective-inputs digest in the FNV-1a form the
       // sandboxed engine can also compute, so both realizations agree on `$inputs` (US-486 AC-10).
       if (opts.story === undefined) need('json')
+      else {
+        // The `--story` digest is KEYED by the workflow MAJOR, so a missing or malformed version
+        // does not degrade the answer — it mints a DIFFERENT digest, silently, and a coordinator
+        // that stamps it into `$inputs` drives `resolve` into its inputs-changed branch and
+        // invalidates every review handoff of the run. Fail closed, on the producer's own grammar,
+        // and print no digest at all: the consumer reads stdout, not a warning (US-486 AC-10, BR6).
+        need('workflowVersion')
+        if (!isWorkflowVersion(opts.workflowVersion))
+          throw new Error(`--workflowVersion must be <major>.<minor>.<patch>; received ${JSON.stringify(opts.workflowVersion)} — the digest is keyed by its MAJOR and is never computed from a version this command did not really get`)
+      }
       out = opts.story !== undefined ? { inputsDigest: effectiveInputs(JSON.parse(opts.story), { workflowVersion: opts.workflowVersion }) } : { inputsDigest: inputsDigest(JSON.parse(opts.json)) }
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)

@@ -78,7 +78,7 @@ node "$SKILL_DIR/scripts/cycle-dispatch.mjs" worktree --main "$PWD" --story $car
 
 **Act.** Nothing by hand. The script creates or reuses.
 
-**Verify.** `halt: worktree-conflict` ⇒ HALT (below). The developer's own checkout is never touched, and no worktree is ever `--force`d or switched.
+**Verify.** `halt: worktree-conflict` or `halt: worktree-root-invalid` ⇒ HALT (below). Every path segment and git ref this script is handed is validated BEFORE anything is created, so a refused root leaves no directory and registers no worktree. The developer's own checkout is never touched, and no worktree is ever `--force`d or switched.
 
 ### Step 3: Render the packet and dispatch exactly one stage
 
@@ -96,7 +96,7 @@ node "$SKILL_DIR/scripts/cycle-dispatch.mjs" packet --next '<next JSON>' --card 
 - `fresh` — spawn a NEW subagent. This is the KB default on every transition, and it is **mandatory** into `validate` and `verify`: an independent verifier that inherits the author's context is not independent.
 - `reuse` — **resume** the previous subagent of that same role instead of spawning one (`SendMessage` on Claude, `resume_agent` / `send_input` on Codex). `cycle-state.mjs` returns `reuse` only for `prepare→prepare`, `implement→green` and `green→green`; it is never this skill's call. `cycle-dispatch.mjs context-table` prints the table.
 
-**Verify.** One stage, one dispatch. Keep only the compact `resolve` output; never read a handoff whole into this session, and never retain a subagent's transcript.
+**Verify.** `halt: pipeline-invalid` ⇒ HALT (below): every `--pipeline` value is held to the same grammar the batch engine holds it to, and no packet is rendered from a refused one. Otherwise one stage, one dispatch. Keep only the compact `resolve` output; never read a handoff whole into this session, and never retain a subagent's transcript.
 
 ### Step 4: Decide from the file, never from the return value
 
@@ -127,6 +127,8 @@ node "$SKILL_DIR/scripts/cycle-dispatch.mjs" packet --next '<next JSON>' --card 
 | ------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `realization-unavailable`| No row's dispatch primitive is present — no subagent primitive, or nesting is forbidden | The probed toolset and the fallback command `pair-cli run --card N [--pr P]` (the `--pr` half only when a PR exists) |
 | `worktree-conflict`      | `<root>/<card>` exists on another branch, or is not a registered worktree               | Both branch names and the path; resolve it by hand — never `--force`, never a checkout switch |
+| `worktree-root-invalid`  | `--worktree-root` is not an absolute path nor a relative one of safe segments with at most one leading `..` | The value, refused verbatim — nothing is created and no worktree is registered |
+| `pipeline-invalid`       | A `--pipeline` key or value is outside the grammar the batch engine enforces on it      | The offending key and why — no argument packet and no prompt are rendered                   |
 | `profile-unresolved`     | `$profile` was given and cannot be read or does not validate                            | What was asked for and why it did not resolve                                              |
 | `usage`                  | `$card` and `$pr` both given, or neither                                                | The two valid entries                                                                      |
 
@@ -138,6 +140,7 @@ An unrecognized `resolve` output is a HALT too, never a silent degradation: this
 - **A Codex dispatch returns nothing structured**: irrelevant by construction — the handoff on disk is the contract, and Step 4 reads it.
 - **The remote head moved between stages**: `resolve` reports `failed-resume`. Stop and report; a rebase is never repaired here.
 - **A legacy (pre-schema-3) run directory**: `resolve` reports `incompatible`. Stop and point at `migrate-acknowledge`; never write into the legacy directory.
+- **A run directory at the per-story ceiling**: `resolve` returns `blocked` / `failed-resume` with `cap: dispatchesPerStory`. It counts the PUBLISHED HANDOFFS in that directory, cumulatively across every resume, so it never clears by retrying — report the detail as it comes, `migrate-acknowledge` included.
 - **A long cycle growing this session's context**: only `resolve` outputs are retained. When it still grows, the cycle is resumable — re-invoke on the same `$runId` and it continues from the first incomplete step, re-running no completed stage and opening no second PR.
 
 ## Output Format
