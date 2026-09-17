@@ -94,6 +94,10 @@ describe.each(PAIRS)('$what: dataset and root copy are one artifact', ({ dataset
   })
 
   it('every file is byte-identical', () => {
+    // NO file type is exempt, `*.test.mjs` included (regression of #495): `workflows:test` runs
+    // `node --test` in `.claude/workflows/` ONLY, so the dataset's dry-run suites are never
+    // executed where they live — this byte check is the only thing that keeps them equal to the
+    // suites that do run. Exempting them turns the dataset copy into unexecuted, unverified text.
     for (const name of listFiles(datasetDir)) {
       const source = readFileSync(join(datasetDir, name), 'utf-8')
       const live = readFileSync(join(installedDir, name), 'utf-8')

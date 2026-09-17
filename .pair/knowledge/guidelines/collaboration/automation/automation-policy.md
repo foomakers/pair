@@ -129,6 +129,10 @@ A consumer **MUST HALT**, naming the file and the offending value, when the sect
 2. it names the same tier more than once, or carries a boolean operator (`AND`/`OR`/`NOT`) — the switch is a set membership, not an expression;
 3. it is not `(none)` and not a comma-separated list of valid tier labels (e.g. free prose).
 
+### Merge execution — what auto-advance verifies at merge time
+
+The switch above authorizes **which tiers** may merge unattended; it does not merge by itself. When a review-approved card's tier is in `## Auto-Advance`, `pair-loop` executes the merge ONLY after re-verifying, on freshly re-read signals, the conjunction that IS `merge_allowed` ([pr-states.md](../../collaboration/project-management-tool/pr-states.md) synthesis): the card's tier re-read (a mid-run raise parks the card), the PR's current remote head identical to the reviewed head (a moved head is never merged), `pair-review` conclusion `success` on that head, `pair-explicit-approval` conclusion `success` on that head (below 🔴 it auto-passes; at 🔴 without a recorded human approval it cannot be success — D10), and the tier's gate set green. Anything unreadable, moved, or not `success` parks the card with the failing item named — never merged. The merge itself follows merge-and-cascade (adopted strategy, commit message per template, story close + parent cascade with read-back, branch deletion, checkpoint removal). The loop therefore executes exactly the merges the synthesis authorizes, on tiers the project named — coherent with the adoption-gated light row, which authorizes the *approving review* under the same below-🔴 synthesis while this switch authorizes the *merge execution*.
+
 ## Stop Predicate — when an unattended run stops
 
 ```markdown

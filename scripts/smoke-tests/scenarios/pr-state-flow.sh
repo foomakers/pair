@@ -54,6 +54,13 @@ audit() { # audit <description> <file> <pattern...>
   done
   log_succ "$desc"
 }
+section_between() { # section_between <file> <start-marker> <end-marker> — body from start to end (exclusive)
+  awk -v s="$2" -v e="$3" '
+    !inside && index($0, s) == 1 { inside = 1 }
+    inside && index($0, e) == 1 && index($0, s) != 1 { exit }
+    inside { print }
+  ' "$1"
+}
 
 for f in "$EVALUATOR" "$TIER_RESOLVER" "$GUIDELINE" "$GITHUB_GUIDE" "$PUBLISH_PR" "$REVIEW" \
   "$MERGE_CASCADE" "$SETUP_GATES" "$IMPLEMENT" "$QUALITY_MODEL" "$ADR"; do
@@ -744,9 +751,20 @@ if grep -q 'no additional API call\|pays no extra API call' "$GITHUB_GUIDE"; the
 else
   log_succ "the guide no longer claims the token branch is free for a multi-human repo"
 fi
-REVIEW_QUERY_LINE="$(grep -n 'pulls/\$PR/reviews' "$GITHUB_GUIDE" | head -1 | cut -d: -f1)"
-TOKEN_QUERY_LINE="$(grep -n 'issues/\$PR/comments' "$GITHUB_GUIDE" | head -1 | cut -d: -f1)"
-if [ -n "$REVIEW_QUERY_LINE" ] && [ -n "$TOKEN_QUERY_LINE" ] &&
+# Ordering is a property OF THE JOB, so it is read inside the job's own body — not
+# across the whole guide. `Dedicated review identity` (#218) documents an identity
+# write probe that also calls `issues/$PR/comments`; document-wide, that unrelated
+# line is the FIRST comments call in the file and the comparison silently becomes
+# "the probe vs. the review query" instead of "the token path vs. the review path".
+# Scoping to the job keeps the asserted property intact (same reason the vitest AC4
+# assertion uses `sectionBetween`) — an undelimitable job section fails, never passes.
+JOB_SECTION="$(section_between "$GITHUB_GUIDE" '### `pair-explicit-approval` job' \
+  '### The solo-maintainer approval token')"
+REVIEW_QUERY_LINE="$(printf '%s\n' "$JOB_SECTION" | grep -n 'pulls/\$PR/reviews' | head -1 | cut -d: -f1)"
+TOKEN_QUERY_LINE="$(printf '%s\n' "$JOB_SECTION" | grep -n 'issues/\$PR/comments' | head -1 | cut -d: -f1)"
+if [ -z "$JOB_SECTION" ]; then
+  log_fail "the \`pair-explicit-approval\` job section is not delimitable — AC4 unverifiable"; FAILED=1
+elif [ -n "$REVIEW_QUERY_LINE" ] && [ -n "$TOKEN_QUERY_LINE" ] &&
   [ "$REVIEW_QUERY_LINE" -lt "$TOKEN_QUERY_LINE" ]; then
   log_succ "the review path is evaluated before the token path (review stays preferred)"
 else
