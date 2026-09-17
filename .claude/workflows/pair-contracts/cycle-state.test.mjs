@@ -324,9 +324,10 @@ test('resolve: an empty run directory is `empty`, and the entry step depends on 
   const { dir } = runDir()
   const fresh = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
   assert.equal(fresh.status, 'empty')
-  assert.deepEqual(fresh.next, { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1 })
+  // US-486 AC-7: `context` travels with every transition — the first stage of a role is `fresh`.
+  assert.deepEqual(fresh.next, { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1, context: 'fresh' })
   const resumed = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr' })
-  assert.deepEqual(resumed.next, { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 })
+  assert.deepEqual(resumed.next, { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1, context: 'fresh' })
 })
 
 test('resolve: initial chain — prepare → validate → implement → verify(first) → done', () => {
