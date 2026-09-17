@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, existsSync } from 'fs'
 import { dirname, join, resolve } from 'path'
+import { sectionBetween } from './test-utils'
 
 // Story #234 — PR state flow (gate ≠ review) + pair review as a required check.
 //
@@ -774,8 +775,17 @@ describe('the host job wires the token as the ALTERNATIVE path (#398)', () => {
   })
 
   it('AC4 — the review path is queried first; the token is only the fallback', () => {
-    const reviewAt = GITHUB_GUIDE.indexOf('pulls/$PR/reviews')
-    const tokenAt = GITHUB_GUIDE.indexOf('issues/$PR/comments')
+    // Scoped to the JOB's own body. A whole-document indexOf compared the job's reviews
+    // query against the FIRST `issues/$PR/comments` in the file, which is the identity
+    // setup section's scratch-comment write probe (#218) — an unrelated snippet whose
+    // position says nothing about query order inside the gate.
+    const job = sectionBetween(
+      GITHUB_GUIDE,
+      '### `pair-explicit-approval` job',
+      '### The solo-maintainer approval token',
+    )
+    const reviewAt = job.indexOf('pulls/$PR/reviews')
+    const tokenAt = job.indexOf('issues/$PR/comments')
     expect(reviewAt).toBeGreaterThan(-1)
     expect(tokenAt).toBeGreaterThan(reviewAt)
     expect(GITHUB_GUIDE).toMatch(/(preferred|primary|only if|fallback)[\s\S]{0,400}token/i)
