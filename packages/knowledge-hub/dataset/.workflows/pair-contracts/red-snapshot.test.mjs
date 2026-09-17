@@ -818,3 +818,79 @@ test('CLI: seal accepts --root and reports the same typed refusals', () => {
   rmSync(cwd, { recursive: true, force: true })
   rmSync(main, { recursive: true, force: true })
 })
+
+// ── r0-1: the transient seal manifest never survives in the repository tree ──────────────────
+// `seal` commits `.pair/red-snapshots/pr-<n>-<phase>.json` so the contract's record lives in
+// HISTORY, and `verify` filters that exact path out of the post-seal delta (`path !== manifest`)
+// precisely because the file is meant to be REMOVED above the snapshot. US-482 did it once in
+// a5f4da50; this repository grew the same file back at `pr-0-a0.json`.
+// Left in the tree it is the ONE path failing this repo's format gate: the gate's file set is
+// `git ls-files --cached --others --exclude-standard` (scripts/format-lib/git-tracked-paths.sh),
+// whose only exclusion arms are third-party skills, `.claude/workflows` and `.claude/agents` —
+// never `.pair/`. So `pnpm prettier:check` exits 1, `pnpm quality-gate` and
+// `.github/workflows/format.yml` cannot go green, and the head is unmergeable.
+// These assertions run against THIS repository rather than a fixture because the defect IS a tree
+// state; the fixture row at the bottom proves the same predicate discriminates.
+const SEAL_TRAILER_RE = /^Pair-RED-Snapshot: pr=(\d+); phase=([^;]+); base=([0-9a-f]{40}); manifest=(\S+)$/m
+const REPO = git(fileURLToPath(new URL('.', import.meta.url)), 'rev-parse', '--show-toplevel')
+const hasBlob = (cwd, rev, path) => spawnSync('git', ['cat-file', '-e', `${rev}:${path}`], { cwd }).status === 0
+const trackedUnder = (cwd, dir) => git(cwd, 'ls-tree', '-r', '--name-only', 'HEAD', '--', dir).split('\n').filter(Boolean)
+
+// Every RED seal on HEAD's first-parent history, with where its manifest can still be read. A
+// shallow checkout simply sees fewer commits; it never invents a manifest that is not there.
+function sealedManifests(cwd) {
+  return git(cwd, 'log', '--first-parent', '--format=%H%x1f%B%x1e', 'HEAD')
+    .split('\x1e')
+    .map(e => e.trim())
+    .filter(e => e.includes('\x1f'))
+    .map(e => ({ sha: e.slice(0, e.indexOf('\x1f')), m: SEAL_TRAILER_RE.exec(e.slice(e.indexOf('\x1f') + 1)) }))
+    .filter(({ m }) => m)
+    .map(({ sha, m }) => ({ sha, phase: m[2], manifest: m[4], inHistory: hasBlob(cwd, sha, m[4]), atHead: hasBlob(cwd, 'HEAD', m[4]) }))
+}
+
+test('r0-1 w1: no RED seal manifest is tracked at HEAD — the transient record belongs to history, not the tree', () => {
+  assert.deepEqual(
+    trackedUnder(REPO, '.pair/red-snapshots/'),
+    [],
+    'the seal manifest is transient: `seal` commits it so the contract is in history, and it must be REMOVED above the snapshot (US-482, a5f4da50). Left tracked it is the one path failing `pnpm prettier:check`, so `pnpm quality-gate` and .github/workflows/format.yml cannot go green.',
+  )
+})
+
+test('r0-1 c1: the record survives the removal — every seal still carries its own manifest blob', () => {
+  // The control the fix must not break: deleting the file from the TREE may never delete it from
+  // the commit that sealed it, which is where `verify` reads the contract (`git show <snap>:<m>`).
+  for (const s of sealedManifests(REPO)) assert.ok(s.inHistory, `${s.sha} (${s.phase}) no longer carries ${s.manifest}`)
+})
+
+test('r0-1 i1: readable at its snapshot commit AND absent from HEAD — for every seal of this branch', () => {
+  // The interaction c1 and w1 do not cover on their own: the invariant is per-seal, so a second
+  // round that seals again and removes only the FIRST manifest is still a defect.
+  const seals = sealedManifests(REPO)
+  assert.deepEqual(seals.filter(s => !s.inHistory).map(s => s.manifest), [], 'a seal commit that lost its manifest')
+  assert.deepEqual(seals.filter(s => s.atHead).map(s => s.manifest), [], 'a manifest still present at HEAD was never removed above its snapshot')
+})
+
+test('r0-1 c3: the invariant may not be discharged by hiding — the format gate still sees `.pair/red-snapshots/`', () => {
+  const ignored = spawnSync('git', ['check-ignore', '-q', '--', '.pair/red-snapshots/pr-0-a0.json'], { cwd: REPO }).status === 0
+  assert.equal(ignored, false, 'gitignoring the directory hides the defect from the gate instead of fixing it')
+  const derivation = readFileSync(join(REPO, 'scripts/format-lib/git-tracked-paths.sh'), 'utf8')
+  assert.equal(/red-snapshots/.test(derivation), false, 'the gate derivation must not learn to skip the manifest')
+  assert.equal(/^\s*\.pair\/[^)\n]*\)\s*continue/m.test(derivation), false, 'no `.pair/` exclusion arm may be added to the gate derivation')
+})
+
+test('r0-1 b1: vacuous where nothing was sealed, exact where a manifest was left behind (fixture)', () => {
+  const { cwd, base } = repo()
+  assert.deepEqual(sealedManifests(cwd), [], 'nothing sealed: nothing to report')
+  assert.deepEqual(trackedUnder(cwd, '.pair/red-snapshots/'), [])
+  redContract(cwd, { fixScope: { owner: 'a()', mode: 'structural', allowedPaths: ['src/'] } })
+  const s = seal({ pr: PR, phase: PHASE, base, contractPath: '.pair/working/red-draft.json', cwd })
+  rmSync(join(cwd, '.pair/working/red-draft.json'))
+  const state = () => sealedManifests(cwd).map(x => [x.manifest, x.inHistory, x.atHead])
+  assert.deepEqual(state(), [[s.manifest, true, true]], 'straight after the seal: in history AND in the tree — the defect state this repo is in')
+  assert.deepEqual(trackedUnder(cwd, '.pair/red-snapshots/'), [s.manifest])
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  assert.deepEqual(state(), [[s.manifest, true, false]], 'removed above the snapshot: the record survives, the tree is clean')
+  assert.deepEqual(trackedUnder(cwd, '.pair/red-snapshots/'), [])
+  assert.equal(verifyChain({ pr: PR, base, cwd }).verified, true, 'custody is unaffected by the removal')
+  rmSync(cwd, { recursive: true, force: true })
+})
