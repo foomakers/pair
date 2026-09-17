@@ -1,0 +1,259 @@
+{
+  "$meta": {
+    "pr": "494",
+    "phase": "r1-g3",
+    "base": "11c134727b56e1049e84fcc163f5af89aebccf0c",
+    "trailer": "Pair-RED-Snapshot: pr=494; phase=r1-g3; base=11c134727b56e1049e84fcc163f5af89aebccf0c; manifest=.pair/red-snapshots/pr-494-r1-g3.json",
+    "artifacts": [
+      "apps/website/lib/skills-catalog-merge-coherence.test.ts"
+    ]
+  },
+  "run": "story-486",
+  "story": "486",
+  "pr": 494,
+  "branch": "feature/US-486-pair-workflow-cycle-coordinator",
+  "phase": "r1-g3",
+  "mode": "repair",
+  "status": "red",
+  "groupId": "r1-g3",
+  "remediationBatchId": "r1",
+  "inputHead": "11c134727b56e1049e84fcc163f5af89aebccf0c",
+  "inputsDigest": "424c8d45c92b3fef",
+  "attempt": 4,
+  "worktree": "/Users/gianlucacarucci5/projects/pair-worktrees/486",
+  "sourceOfTruth": "packages/knowledge-hub/dataset/.skills/ (the skill dataset the catalog is derived from) + git's own three-way merge of HEAD with origin/main (8c24f30a2c9e6dc3ed0cd80a3b589d241d9558e4) + apps/website/lib/docs-staleness-check.ts (the gate that owns every assertion about apps/website/content/docs/reference/skills-catalog.mdx)",
+  "testCommand": "cd apps/website && pnpm exec vitest run lib/skills-catalog-merge-coherence.test.ts",
+  "formatGate": "node node_modules/.pnpm/prettier@3.6.2/node_modules/prettier/bin/prettier.cjs --check apps/website/lib/skills-catalog-merge-coherence.test.ts — All matched files use Prettier code style! (run AFTER --write, before hashing). Note: `pnpm prettier:fix` derives its path set from git-tracked files only, so an untracked new test is NOT reached by it; prettier was invoked directly.",
+  "inventory": [
+    {
+      "id": "r0-6",
+      "producer": "git's three-way merge of this branch with its base — `git merge-tree --write-tree origin/main HEAD` — and, over the tree that merge produces, the catalog assertions owned by apps/website/lib/docs-staleness-check.ts: checkCatalogSync (rows <-> .skills dirs, both directions), checkCatalogContent(generateCatalogRows(skillsDir)) (each row's Command/Description derived from the SKILL.md frontmatter), findSkillCountMismatches (every \"N skills\" phrasing vs the real dir count) and checkCatalogFreshness (the `> **Last updated:** YYYY-MM-DD` header vs the newest commit date of packages/knowledge-hub/dataset/.skills/). No generator script writes the page: the derivation lives in these functions and `regenerating the catalog` means re-deriving the rows/count/date from the merged .skills tree, which is exactly what they check.",
+      "inputs": [
+        "origin/main = 8c24f30a2c9e6dc3ed0cd80a3b589d241d9558e4",
+        "HEAD = 11c134727b56e1049e84fcc163f5af89aebccf0c",
+        "merge base = 47606d8268934ca4afffb1c1a7034c5af6695ac0",
+        "the merged blob of apps/website/content/docs/reference/skills-catalog.mdx",
+        "the merged tree of packages/knowledge-hub/dataset/.skills/ (its SKILL.md frontmatter descriptions)",
+        "git commit dates of packages/knowledge-hub/dataset/.skills/ on BOTH sides"
+      ],
+      "representations": [
+        "authority: packages/knowledge-hub/dataset/.skills/<category>/<skill>/SKILL.md (a meta skill's SKILL.md sits at the category root)",
+        "derived page: apps/website/content/docs/reference/skills-catalog.mdx (frontmatter description count, prose count, `Last updated` header, one table row per skill)",
+        "installed mirror: .claude/skills/<skill>/SKILL.md (mirrors:regenerate; NOT read by the catalog gate)",
+        "remote mirror of the merge verdict: GitHub's PR `mergeable` field (CONFLICTING today on PR #494)"
+      ],
+      "consumers": [
+        "pnpm docs:staleness (root script -> apps/website tsx lib/docs-staleness-check.ts) — a CI step of ci.yml `build` and a member of `pnpm quality-gate`",
+        "the GitHub merge button / the pair-review PR state flow — a CONFLICTING PR cannot merge",
+        "readers of https://<site>/docs/reference/skills-catalog"
+      ],
+      "classes": [
+        "C1 merge cleanliness — HEAD merges into the base with no CONFLICT line (the fixed state)",
+        "C2 merge cleanliness — HEAD conflicts with the base (today: skills-catalog.mdx, content)",
+        "C3 merged blob integrity — the merged catalog carries no conflict markers (<<<<<<< / ======= / >>>>>>> / |||||||)",
+        "C4 merged row set — every merged .skills dir has a catalog row (no missing row)",
+        "C5 merged row set — every catalog row has a merged .skills dir (no orphan row)",
+        "C6 merged row content — each row's Command + Description equal the value derived from the merged SKILL.md frontmatter",
+        "C7 merged count phrasings — every \"N skills\" phrasing in the merged catalog equals the merged skill-dir count (the silent 50-vs-51 desync a hand-resolved hunk produces)",
+        "C8 merged freshness — the merged `Last updated` date is not older than the newest .skills change date across BOTH sides (today the conflicted region's FIRST match is origin/main's 2026-09-16, while .skills changed 2026-09-17)",
+        "C9 already-correct side — HEAD alone satisfies C4..C7 (51 skills, `pnpm docs:staleness` PASS)",
+        "C10 already-correct side — origin/main alone satisfies C4..C7 (50 skills): the defect is the MERGE, not either side"
+      ],
+      "interactions": [
+        "I1 C1 x (C3..C8): a clean merge is NOT sufficient — the tree git produces (or a human hand-resolves) must ALSO raise zero catalog errors; a resolution that takes one side's hunk wholesale can satisfy C1 and break C7/C8 silently, which is precisely what the finding names",
+        "I2 C7 x C4/C5: count phrasing, row set and dir set must agree at the SAME time — a hand resolution that keeps the 51st row but restores main's \"50 skills\" prose passes checkCatalogSync and fails findSkillCountMismatches"
+      ],
+      "evidence": "cd apps/website && pnpm exec vitest run lib/skills-catalog-merge-coherence.test.ts --reporter=verbose"
+    }
+  ],
+  "fixScope": {
+    "owner": "the branch's mergeability with origin/main and the generated skills catalog it conflicts in",
+    "mode": "structural",
+    "allowedPaths": [
+      "apps/website/content/docs/reference/skills-catalog.mdx",
+      "apps/website/content/docs/concepts/pr-state-flow.mdx",
+      ".pair/adoption/tech/adr/adr-018-pr-state-flow-required-checks.md",
+      ".pair/adoption/tech/way-of-working.md",
+      ".pair/knowledge/",
+      ".gitleaks.toml",
+      "packages/knowledge-hub/dataset/.pair/knowledge/",
+      "packages/knowledge-hub/src/conformance/pr-state-flow.test.ts",
+      "scripts/smoke-tests/"
+    ],
+    "oracle": "cd apps/website && pnpm exec vitest run lib/skills-catalog-merge-coherence.test.ts (rows r0-6-*) + git merge-tree --write-tree origin/main HEAD (no CONFLICT line) + pnpm docs:staleness",
+    "note": "Unchanged from the group planned in r1-g1-red-spec.json — not narrowed. Every path here is a path `git merge origin/main` itself writes: the 15 files origin/main changed since the merge base are exactly apps/website/content/docs/{reference/skills-catalog.mdx,concepts/pr-state-flow.mdx}, .pair/adoption/tech/{adr/adr-018-...md,way-of-working.md}, .pair/knowledge/{assets/pr-state.sh,guidelines/collaboration/project-management-tool/{github-implementation.md,pr-states.md}}, .gitleaks.toml, the three packages/knowledge-hub/dataset/.pair/knowledge/ mirrors, packages/knowledge-hub/src/conformance/pr-state-flow.test.ts and scripts/smoke-tests/{fixtures/github-collaborator-permissions.json,fixtures/github-pr-comments.json,scenarios/pr-state-flow.sh}. packages/knowledge-hub/src/conformance/pr-state-flow.test.ts is a TEST path the MERGE brings in from origin/main unchanged — it is listed so the custody check does not read it as an unlisted test edit; the fixer must take origin/main's version verbatim, never author a byte of it. The RED artifact of this contract (apps/website/lib/skills-catalog-merge-coherence.test.ts) is sealed and is NOT in scope."
+  },
+  "matrix": [
+    {
+      "id": "r0-6-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "C2 — the three-way merge of HEAD (11c13472) with origin/main (8c24f30a) at the base",
+      "oracle": "cd apps/website && pnpm exec vitest run lib/skills-catalog-merge-coherence.test.ts -t 'r0-6 w1: HEAD merges into the base with no conflict'",
+      "expected": "`git merge-tree --write-tree origin/main HEAD` exits 0 and prints no `CONFLICT` line",
+      "observed": "FAIL — conflicts = ['CONFLICT (content): Merge conflict in apps/website/content/docs/reference/skills-catalog.mdx'], exit 1",
+      "covers": [
+        "r0-6"
+      ],
+      "rationale": "The finding's own VERIFY, executed rather than read off GitHub's `mergeable` field. It is RED for exactly the defect: both sides edited the header line region of the derived catalog."
+    },
+    {
+      "id": "r0-6-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "C3 — the catalog blob of the tree `merge-tree --write-tree` writes (4c4cf219 at this head)",
+      "oracle": "cd apps/website && pnpm exec vitest run lib/skills-catalog-merge-coherence.test.ts -t 'r0-6 w2: the merged catalog carries no conflict markers'",
+      "expected": "no line of the merged catalog starts with <<<<<<< / ======= / >>>>>>> / |||||||",
+      "observed": "FAIL — ['<<<<<<< 8c24f30a2c9e6dc3ed0cd80a3b589d241d9558e4', '=======', '>>>>>>> HEAD']",
+      "covers": [
+        "r0-6"
+      ],
+      "rationale": "Discriminates the CONTENT of the merge from its verdict: git writes a tree even when it conflicts, and this row names what is actually wrong inside it. It also survives the fix as the guard against a resolution that commits markers — the one failure mode docs:staleness would only catch indirectly."
+    },
+    {
+      "id": "r0-6-w3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "C8 — the merged catalog's `Last updated` header vs the newest commit date of packages/knowledge-hub/dataset/.skills/ across BOTH origin/main and HEAD",
+      "oracle": "cd apps/website && pnpm exec vitest run lib/skills-catalog-merge-coherence.test.ts -t 'r0-6 w3: the merged catalog Last updated is not older than the merged .skills'",
+      "expected": "checkCatalogFreshness(mergedCatalog, max(newest .skills date on origin/main, on HEAD)) === []",
+      "observed": "FAIL — ['skills-catalog.mdx says \"Last updated: 2026-09-16\" but packages/knowledge-hub/dataset/.skills/ changed on 2026-09-17 — the page dates itself before the content it describes (bump the header when the catalog changes)']",
+      "covers": [
+        "r0-6"
+      ],
+      "rationale": "This is the EXACT line that conflicts, and it is the one a hand resolution gets wrong silently: parseCatalogLastUpdated takes the FIRST `> **Last updated:**` match, so the conflicted blob reads as origin/main's 2026-09-16 while the merged .skills changed on 2026-09-17. A resolution that keeps main's side is textually plausible and gate-red; the fix must take the newer date (or a newer one still)."
+    },
+    {
+      "id": "r0-6-b1",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "C7 — every \"N skills\" phrasing of the merged catalog vs the merged .skills dir count",
+      "oracle": "cd apps/website && pnpm exec vitest run lib/skills-catalog-merge-coherence.test.ts -t 'r0-6 b1 \\(boundary\\): the merged catalog \"N skills\" phrasings match the merged skill count'",
+      "expected": "findSkillCountMismatches(mergedCatalog, CATALOG_REL, mergedSkills.length) === []",
+      "observed": "PASS — the declared oracle, run verbatim at 11c13472, reports `Test Files 1 passed (1) / Tests 1 passed | 9 skipped (10)`, exit 0: the escaped pattern selects exactly this row and no other. git auto-merged the two count lines to HEAD’s 51 and the merged tree carries 51 skill dirs; findSkillCountMismatches === [] (0 mismatches).",
+      "covers": [
+        "r0-6"
+      ],
+      "rationale": "Recorded as PASS, never forced red: today git resolved the count lines itself, so the '50 remains 50' desync the finding warns about has not happened — it is what a HAND resolution would cause. The row is the guard that keeps the automatic outcome after the fixer touches the file; a fix that resolves by taking origin/main's hunk turns it red at once. Not collapsible into b2: checkCatalogSync passes on a catalog whose rows are right and whose prose count is stale — that is the silent desync, and only this assertion sees it."
+    },
+    {
+      "id": "r0-6-b2",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "C4 + C5 — the merged catalog's row set vs the merged .skills dir set, both directions",
+      "oracle": "cd apps/website && pnpm exec vitest run lib/skills-catalog-merge-coherence.test.ts -t 'r0-6 b2 \\(boundary\\): the merged catalog lists exactly the merged .skills dirs, both directions'",
+      "expected": "checkCatalogSync(skillsOfTree(mergedTree), mergedCatalog) === []",
+      "observed": "PASS — the declared oracle, run verbatim at 11c13472, reports `Test Files 1 passed (1) / Tests 1 passed | 9 skipped (10)`, exit 0. checkCatalogSync === []: 51 dirs, 51 rows, no missing and no orphan.",
+      "covers": [
+        "r0-6"
+      ],
+      "rationale": "The 51st row (`cycle`) is added by HEAD in a region origin/main did not touch, so git kept it. The row proves the fixer did not 'resolve' the conflict by dropping the branch's own row — the cheapest way to make merge-tree clean and the one that would silently undo the story."
+    },
+    {
+      "id": "r0-6-b3",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "C6 — each merged row's Command + Description vs the value derived from the merged SKILL.md frontmatter (the .skills subtree of the merged tree, materialized with `git archive`)",
+      "oracle": "cd apps/website && pnpm exec vitest run lib/skills-catalog-merge-coherence.test.ts -t 'r0-6 b3 \\(boundary\\): every merged catalog row matches the row derived from the merged .skills'",
+      "expected": "checkCatalogContent(generateCatalogRows(mergedSkillsDir), mergedCatalog) === []",
+      "observed": "PASS — the declared oracle, run verbatim at 11c13472, reports `Test Files 1 passed (1) / Tests 1 passed | 9 skipped (10)`, exit 0. checkCatalogContent === []: 0 command/description drifts across 51 rows.",
+      "covers": [
+        "r0-6"
+      ],
+      "rationale": "This is the executable meaning of 'regenerate the catalog rather than resolving the hunk by hand': the rows must equal what the merged dataset derives. Run against the MERGED dataset, not the working tree, so a SKILL.md description that origin/main changed is compared with the row the merge produces."
+    },
+    {
+      "id": "r0-6-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "C9 — HEAD's own working tree: its catalog vs its own .skills dirs",
+      "oracle": "cd apps/website && pnpm exec vitest run lib/skills-catalog-merge-coherence.test.ts -t 'r0-6 c1 \\(control\\): HEAD alone is catalog-coherent'",
+      "expected": "checkCatalogSync + checkCatalogContent + findSkillCountMismatches all [] at HEAD",
+      "observed": "PASS — the declared oracle, run verbatim at 11c13472, reports `Test Files 1 passed (1) / Tests 1 passed | 9 skipped (10)`, exit 0. HEAD alone: 51 skills, 0 errors across sync + content + counts.",
+      "covers": [
+        "r0-6"
+      ],
+      "rationale": "Positive control: the branch is not the broken side, so a fix that rewrites the branch's catalog to make the merge clean is wrong by construction."
+    },
+    {
+      "id": "r0-6-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "C10 — origin/main's own tree: its catalog blob vs its own .skills dirs",
+      "oracle": "cd apps/website && pnpm exec vitest run lib/skills-catalog-merge-coherence.test.ts -t 'r0-6 c2 \\(control\\): the base alone is catalog-coherent'",
+      "expected": "checkCatalogSync + checkCatalogContent + findSkillCountMismatches all [] at origin/main",
+      "observed": "PASS — the declared oracle, run verbatim at 11c13472, reports `Test Files 1 passed (1) / Tests 1 passed | 9 skipped (10)`, exit 0. origin/main alone: 50 skills, 0 errors.",
+      "covers": [
+        "r0-6"
+      ],
+      "rationale": "The other positive control, and the one that confirms the finding's own reading: origin/main still declares 50 and is internally correct, so 51 is the right post-merge number. The defect is the merge, not a side; neither side may be 'corrected'."
+    },
+    {
+      "id": "r0-6-c3",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "C9 via the REAL gate, not its library — the finding's second oracle at HEAD",
+      "oracle": "cd /Users/gianlucacarucci5/projects/pair-worktrees/486 && pnpm docs:staleness",
+      "expected": "exit 0, `PASS — 51 skills, 11 commands in sync`",
+      "observed": "PASS — 51 skills, 11 commands in sync",
+      "covers": [
+        "r0-6"
+      ],
+      "rationale": "Ties the in-process rows to the command CI actually runs, and pins the post-fix obligation: after the merge HEAD *is* the merged content, so this same command re-checks every row above from then on — which is what makes the shallow-clone degradation of the merge rows harmless."
+    },
+    {
+      "id": "r0-6-i1",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "I1 + I2 — the merged tree judged by the WHOLE catalog check set at once (sync + content + counts + freshness)",
+      "oracle": "cd apps/website && pnpm exec vitest run lib/skills-catalog-merge-coherence.test.ts -t 'r0-6 i1 \\(interaction\\): a clean merge is not enough'",
+      "expected": "the union of checkCatalogSync, checkCatalogContent, findSkillCountMismatches and checkCatalogFreshness over the merged tree === []",
+      "observed": "FAIL — the declared oracle, run verbatim at 11c13472, reports `Test Files 1 failed (1) / Tests 1 failed | 9 skipped (10)`, exit 1: the escaped pattern selects exactly this row and it is RED. AssertionError at lib/skills-catalog-merge-coherence.test.ts:250 — catalogErrorsOf(MERGE.tree, BASE) returned [\"skills-catalog.mdx says \\\"Last updated: 2026-09-16\\\" but packages/knowledge-hub/dataset/.skills/ changed on 2026-09-17 — the page dates itself before the content it describes (bump the header when the catalog changes)\"], expected [].",
+      "covers": [
+        "r0-6"
+      ],
+      "rationale": "Not a duplicate of w3 plus b1..b3: those are the individual rules, this is the conjunction a resolution must satisfy SIMULTANEOUSLY. A fixer can make w1 green (merge cleanly) and each remaining rule green in isolation while a partial hand-resolution leaves the union red — the finding's 'silently desynchronize it from the count assertions' is exactly this row."
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/website/lib/skills-catalog-merge-coherence.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:2a8251d3c379479c5fbabf2bc1d3a995c3e4659007dd02eb56088251e33d1aeb",
+      "command": "cd /Users/gianlucacarucci5/projects/pair-worktrees/486/apps/website && pnpm exec vitest run lib/skills-catalog-merge-coherence.test.ts --reporter=verbose",
+      "observed": "Test Files 1 failed (1) — Tests 4 failed | 6 passed (10): r0-6-w1, r0-6-w2, r0-6-w3 and r0-6-i1 fail at 11c13472; r0-6-b1, r0-6-b2, r0-6-b3, r0-6-c1, r0-6-c2 and the base-ref guard pass"
+    }
+  ],
+  "testExempt": false,
+  "reconciled": [],
+  "preserved": [],
+  "notes": {
+    "fix-shape": "Merge origin/main into the branch (`git merge origin/main`), resolve apps/website/content/docs/reference/skills-catalog.mdx by RE-DERIVING it from the merged packages/knowledge-hub/dataset/.skills/ — keep both sides' rows, keep the count equal to the merged dir count, and set `> **Last updated:**` to a date not older than the newest .skills change (2026-09-17 today) — then let the other 14 merged paths take origin/main's content verbatim. There is no generator script: the derivation is generateCatalogRows/checkCatalog* in apps/website/lib/docs-staleness-check.ts, and matching them IS the regeneration.",
+    "degradation": "The merge rows resolve their base through `origin/main` (overridable with PAIR_MERGE_BASE_REF). ci.yml's `build` job uses actions/checkout@v3 at depth 1, which has no such ref; the suite then reports the stand-down LOUDLY and asserts the clone is shallow, so it can never pass vacuously in a full clone. The verifier and the fixer run in the persistent worktree, where the ref exists and every row runs.",
+    "repair": "r1-g3 attempt 2 (mode: repair), answering rv-r1-g3-1..6 (mechanism row-oracle-t-selector). The six rejected rows declared a -t selector whose UNESCAPED parentheses made vitest's RegExp require the literal text without them, so each command matched NO test and exited 0 (`Tests 10 skipped (10)`): a baseline:red witness read GREEN and four baseline:pass guards asserted nothing. ONLY the -t pattern of those six rows changed (parentheses escaped) plus their `observed`, re-recorded from this attempt's verbatim run at 11c13472. Every row id, kind, baseline, condition, expected, covers and rationale is unchanged; the four rows the rejection did not name (w1, w2, w3, c3) are untouched — their selectors carry no regex grouping. The RED artifact apps/website/lib/skills-catalog-merge-coherence.test.ts is BYTE-IDENTICAL to attempt 3's (sha256:2a8251d3..., re-hashed in the worktree at this head): no test title was renamed, so the verifier's own closure assertions select their row too — all six were re-run verbatim and reported the required shape.",
+    "oracleSelectorRule": "Every -t pattern in this contract is a RegExp, not a substring. A row whose command reports `N skipped (N)` selects nothing and proves nothing. Each declared oracle here was re-run verbatim at 11c13472 and reports `Tests 1 failed | 9 skipped (10)` (baseline: red, exit 1) or `Tests 1 passed | 9 skipped (10)` (baseline: pass, exit 0); the file-level suite still reports `Tests 4 failed | 6 passed (10)`.",
+    "attemptNumbering": "resolve() derived next.attempt=2 for this repair (redRepairs budget: 1 of 1 spent). The handoff slot r1-g3-red-spec.attempt-2.json is already occupied by attempt 2 of this phase, the `stale` refusal published when the head moved from 77cc7633 to 11c13472, and publish() refuses to overwrite an existing handoff (`stale-write`). Nothing of that history is deleted or renamed: this repair is published at the next free slot, attempt 4, and records repairAttempt=2 so the budget the resolver counts stays legible. The repair budget itself is unaffected — `repairs` is counted from unverified red-verify handoffs (cycle-state.mjs:1609), not from red-spec attempt numbers."
+  },
+  "changedRows": [
+    "r0-6-i1",
+    "r0-6-b1",
+    "r0-6-b2",
+    "r0-6-b3",
+    "r0-6-c1",
+    "r0-6-c2"
+  ],
+  "repairOf": {
+    "contractHash": "sha256:9283e5b8ef47b5af073948436ee6659e8ecb3ecaa7b3fd8b402b2f4441247388",
+    "rejection": [
+      "rv-r1-g3-1",
+      "rv-r1-g3-2",
+      "rv-r1-g3-3",
+      "rv-r1-g3-4",
+      "rv-r1-g3-5",
+      "rv-r1-g3-6"
+    ],
+    "mechanismId": "row-oracle-t-selector"
+  },
+  "repairAttempt": 2
+}
