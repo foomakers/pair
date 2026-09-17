@@ -1689,6 +1689,18 @@ test('DT-10: a capsule carrying an unknown key or a missing required field is re
   }
 })
 
+// US-486 AC-12: the engine's ceilings are `cycle-state.mjs`'s `CAPS`. The Workflow sandbox has no
+// imports, so the engine carries a MIRROR of that structure — and a mirror is only one owner while
+// something proves it equal. This is that proof: the owner's export against the literal the engine
+// source declares, read from the source text (the sandbox module cannot export it).
+test('AC-12: the engine mirrors `cycle-state.mjs` CAPS exactly — one owner, no drifting second copy', async () => {
+  const { CAPS } = await import('../skills/pair-workflow-red-spec/scripts/cycle-state.mjs')
+  const declared = /const CYCLE_CAPS = (\{[^}]*\})/.exec(SRC)
+  assert.ok(declared, 'the engine declares no CYCLE_CAPS mirror')
+  // eslint-disable-next-line no-new-func
+  assert.deepEqual(new Function(`return ${declared[1]}`)(), CAPS, 'the engine mirror drifted from cycle-state.mjs CAPS')
+})
+
 test('DT-10: a durable state that keeps redirecting stops as failed-resume instead of looping forever', async () => {
   let n = 0
   const { result, calls } = await runWorkflow({
