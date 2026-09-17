@@ -833,8 +833,18 @@ const MAX_RED_CONTRACT_REPAIRS = 1
 // An approved test failing on production returns to implementation on the SAME seal once; a second
 // failure is `failed-fix` — the contract was right, the fix was not, and a third GREEN is drift.
 const MAX_GREEN_RETRIES = 1
-// A cycle that asks for more dispatches than this in one run is looping, not converging.
-const MAX_DISPATCHES_PER_STORY = 40
+// US-486 AC-12: the per-story ceilings are OWNED by `cycle-state.mjs` (`CAPS`) and enforced there
+// by `resolve` itself, so every realization of the cycle hits the same wall. This sandbox has no
+// filesystem, no shell and no imports, so it cannot read them at run time — and it cannot do
+// without them either: a stage that keeps redirecting to an ever-advancing round produces a new
+// (step, phase, mode, attempt, reviewer) key every time, so `seen` never fires and only a ceiling
+// stops the loop (DT-10).
+// What it holds is therefore a MIRROR, not a second definition: the values are declared once, in
+// one structure, named after the owner's export, and `pair-implement-batch.test.mjs` asserts this
+// object equals `CAPS` imported from `cycle-state.mjs`. Drift fails a test — it does not wait for
+// a canary. This is the same "one owner, N guarded copies" idiom the six byte-identical
+// `cycle-state.mjs` installs already use.
+const CYCLE_CAPS = { dispatchesPerStory: 40, consecutiveRedirects: 3 }
 
 // ── Schemas (orchestration return-value contracts) ─────────────────────────
 // These are the compact values agents RETURN for control-flow — NOT the artifact
@@ -1566,8 +1576,11 @@ const canonical = v => (Array.isArray(v) ? `[${v.map(canonical).join(',')}]` : v
 // the transitions (cycle-state reads it from $policy on every resolve), it does not change what a
 // review judged — a human extending it after an `escalate` (canary run 11, r3) must resume at the
 // revision, not pay a re-review of the same head first and then hit the new ceiling one round early.
-const effectiveInputs = story =>
-  fnv1a(canonical({ workflowMajor: WORKFLOW_VERSION.split('.')[0], story: story.id, branch: story.branch, base: baseOf(story), title: story.title, notes: story.notes ?? null, severityFloor: SEVERITY_FLOOR?.name ?? null, skills: SK, reviewTemplate: PIPELINE.reviewTemplate, reviewers: PIPELINE.reviewers }))
+// US-486 AC-10/AC-12: the composition below is `effectiveInputs` in `cycle-state.mjs`, which is
+// its owner and its only documented spelling (`cycle-state.mjs inputs --story <card>`). It is
+// stated here ONCE, at its single call site, because this sandbox cannot import or shell out to
+// that script — and the two producers are held equal executably (the coordinator contract runs the
+// real engine and the real script and compares the digests), so neither can drift unnoticed.
 // The compact finding a stage receives: identity, severity, location, the failure case and the
 // recommendation — never raw logs, never the whole review history (the run directory holds it).
 const compactFinding = f => ({ id: f.id, severity: f.severity, location: f.location, description: f.description, recommendation: f.recommendation, ...(f.kind ? { kind: f.kind } : {}), ...(f.groupId ? { groupId: f.groupId } : {}), ...(f.rowId ? { rowId: f.rowId } : {}), ...(f.external ? { external: true } : {}), ...(f.missedUpstream ? { missedUpstream: true } : {}) })
@@ -1600,7 +1613,7 @@ async function driveStory(story) {
   // US-479 AC-32: `rollbackTo` is the maintainer's call, taken per card after its budget escalated
   // and they read the dossier — the engine never infers it and has no default for it.
   const policy = { maxFixRounds: MAX_FIX_ROUNDS, redRepairs: MAX_RED_CONTRACT_REPAIRS, greenRetries: MAX_GREEN_RETRIES, reviewers: PIPELINE.reviewers, ...(story.rollbackTo ? { rollbackTo: story.rollbackTo } : {}) }
-  const inputs = effectiveInputs(story)
+  const inputs = fnv1a(canonical({ workflowMajor: WORKFLOW_VERSION.split('.')[0], story: story.id, branch: story.branch, base: baseOf(story), title: story.title, notes: story.notes ?? null, severityFloor: SEVERITY_FLOOR?.name ?? null, skills: SK, reviewTemplate: PIPELINE.reviewTemplate, reviewers: PIPELINE.reviewers }))
   const storyMetrics = { dispatches: 0, retries: 0, redirects: 0 }
   const common = () =>
     `$run=${runId} $story=${story.id} $branch=${story.branch} $worktree=${worktreePath} $base=${storyBase} $stacked=${stacked}${pr ? ` $pr=${pr}` : ''} $entry=${pr ? 'pr' : 'fresh'} $policy=${JSON.stringify(policy)} $inputs=${inputs}`
@@ -1737,7 +1750,7 @@ async function driveStory(story) {
   while (true) {
     if (next.step === 'done') return result('ready-for-merge', { reviewedHead: next.reviewedHead, verdict: next.verdict, round: next.round })
     if (next.step === 'blocked') return blockedResult(next)
-    if (storyMetrics.dispatches >= MAX_DISPATCHES_PER_STORY) return result('failed-resume', { reason: `the cycle asked for more than ${MAX_DISPATCHES_PER_STORY} dispatches in one run — looping, not converging` })
+    if (storyMetrics.dispatches >= CYCLE_CAPS.dispatchesPerStory) return result('failed-resume', { reason: `the cycle asked for more than ${CYCLE_CAPS.dispatchesPerStory} dispatches in one run — looping, not converging` })
     const key = `${next.step}:${next.phase}:${next.mode ?? ''}:${next.attempt ?? 1}:${next.reviewer ?? 1}`
     if (seen.has(key)) return result('failed-resume', { reason: `the cycle state asked for ${key} twice in one run` })
     seen.add(key)
@@ -1792,7 +1805,7 @@ async function driveStory(story) {
       if (res.next.step === next.step && res.next.phase === next.phase) return result('failed-resume', { reason: `${stage} redirected to itself (${next.step}/${next.phase}) instead of running`, phase: next.phase })
       storyMetrics.redirects++
       METRICS.redirects++
-      if (++redirectsInARow > 2) return result('failed-resume', { reason: 'three consecutive redirects — the durable state and the dispatched step disagree' })
+      if (++redirectsInARow >= CYCLE_CAPS.consecutiveRedirects) return result('failed-resume', { reason: 'three consecutive redirects — the durable state and the dispatched step disagree' })
       next = res.next
       continue
     }

@@ -16,9 +16,9 @@ Run `/pair-next` at the start of every session. It reads project adoption files 
 |------|-------|---------|
 | **Process** | 10 | Lifecycle phases — orchestrate capability skills |
 | **Capability** | 32 | Atomic units — perform a single focused operation |
-| **Workflow** | 6 | Delivery stages — dispatched by the batch engine, one mutation boundary each |
+| **Workflow** | 7 | Delivery stages — dispatched by the batch engine, one mutation boundary each |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 50 (10 process + 32 capability + 6 workflow + 2 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 51 (10 process + 32 capability + 7 workflow + 2 navigator).
 
 ## Full Catalog
 
@@ -131,9 +131,9 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 |-------|-------|
 | `/pair-capability-grill` | Reusable interview engine (interview / sync modes), write-free |
 
-### Workflow Skills (6)
+### Workflow Skills (7)
 
-Delivery-stage skills the batch engine (`pair-implement-batch`) dispatches to — the four judgment stages of a delivery cycle (US-479, ADR-024 amendment b) plus the batch-level template contract. Each resolves the durable cycle state first (`cycle-state.mjs`), owns one mutation boundary and publishes one handoff under `.pair/working/runs/<run>/<story>/`; probe, seal, hash, state and comment publication run as scripts inside them, never as their own dispatch.
+Delivery-stage skills the batch engine (`pair-implement-batch`) or the in-session coordinator (`/pair-workflow-cycle`) dispatches to — the four judgment stages of a delivery cycle (US-479, ADR-024 amendment b), the batch-level template contract and the coordinator that drives them. Each resolves the durable cycle state first (`cycle-state.mjs`), owns one mutation boundary and publishes one handoff under `.pair/working/runs/<run>/<story>/`; probe, seal, hash, state and comment publication run as scripts inside them, never as their own dispatch.
 
 | Skill | Stage | Description |
 |-------|-------|-------------|
@@ -143,6 +143,7 @@ Delivery-stage skills the batch engine (`pair-implement-batch`) dispatches to �
 | `/pair-workflow-green-fix` | 3 implementation (remediation) | Make the sealed contract pass inside fixScope; GREEN above the seal; PR updated; one retry on the same seal |
 | `/pair-workflow-review-phase` | 4 final verification | `red-snapshot.mjs verify-chain`, evidence re-run, tier passes, stable finding ids and transitions, readiness bound to the remote head, marker-keyed idempotent publication |
 | `/pair-workflow-contract-phase` | 0 | Ensure the template-derived machine contract (cache-by-hash via ensure-contract.mjs) |
+| `/pair-workflow-cycle` | coordinator | Turns the crank from inside a session: `resolve` → dispatch one stage to a subagent → `resolve`, on any harness with a subagent primitive (probed, never inferred). Owns no cycle rule and never merges |
 
 ## Directory Structure
 

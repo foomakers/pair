@@ -164,6 +164,7 @@
 - [Decision: the run-directory lock records its owner, breaks a dead writer's lock and refuses a stale live one out loud](.pair/adoption/decision-log/2026-09-13-the-run-directory-lock-has-an-owner-and-a-staleness-rule.md)
 - [Decision: the scope-baseline hash is published to the reviewer — a consumer-only hash is a question nobody can answer](.pair/adoption/decision-log/2026-09-13-the-scope-baseline-hash-has-a-producer-the-reviewer-can-run.md)
 - [Decision: the scope-decision principal is read from adoption — never a login literal in shipped code](.pair/adoption/decision-log/2026-09-13-the-scope-decision-principal-is-read-from-adoption.md)
+- [Decision: subagent freshness is a transition policy the cycle state owns, and the harness realization is a probed table of data](.pair/adoption/decision-log/2026-09-17-freshness-is-a-transition-policy-and-the-realization-table-is-data.md)
 
 ## How-To Guides
 
