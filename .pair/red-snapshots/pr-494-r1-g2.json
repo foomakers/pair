@@ -1,0 +1,540 @@
+{
+  "$meta": {
+    "pr": "494",
+    "phase": "r1-g2",
+    "base": "82a29f0358d81d7fed7e41a68df8653e49a73d73",
+    "trailer": "Pair-RED-Snapshot: pr=494; phase=r1-g2; base=82a29f0358d81d7fed7e41a68df8653e49a73d73; manifest=.pair/red-snapshots/pr-494-r1-g2.json",
+    "artifacts": [
+      ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs"
+    ]
+  },
+  "run": "story-486",
+  "story": "486",
+  "pr": 494,
+  "branch": "feature/US-486-pair-workflow-cycle-coordinator",
+  "phase": "r1-g2",
+  "mode": "repair",
+  "status": "red",
+  "groupId": "r1-g2",
+  "remediationBatchId": "r1",
+  "inputHead": "82a29f0358d81d7fed7e41a68df8653e49a73d73",
+  "inputsDigest": "424c8d45c92b3fef",
+  "sourceOfTruth": "The three round-0 review findings r0-2, r0-2's two arms, r0-3 and r0-4, each re-run against this head before a row was written. The GRAMMAR every r0-2 row asserts is not invented here: `.claude/workflows/pair-implement-batch.js` — the sibling realization of this same cycle — already states it predicate by predicate (isRelPath L201-205, isSkillRef L210, isRef L184, isProse L188, posInt L207+, rejectUnknownKeys, applied in normalizePipeline L575-597), and its own comments say the two spellings must not diverge. The engine file is NOT in fixScope: it is the authority, not the thing under repair.",
+  "worktree": "../pair-worktrees/486",
+  "testCommand": "cd .claude/workflows && node --test pair-contracts/cycle-coordinator.test.mjs",
+  "formatGate": "SKIPPED by derivation, not by omission: the repo's format gate is `pnpm prettier:check` -> scripts/format-lib/run-format.sh check prettier ts tsx js jsx json html, and scripts/format-lib/git-tracked-paths.sh with that extension list emits no `.mjs` path at all (verified at this head: 0 hits for cycle-coordinator). The one artifact of this contract is a `.mjs` file no formatter in this repository rewrites, so no sealed byte can become unfixable. Its style follows the file's own conventions (no semicolons, single quotes, trailing commas).",
+  "inventory": [
+    {
+      "id": "r0-2",
+      "producer": "The argument boundary of `.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs`: `worktreeCommand()` (L91-118), which validates `--story` (isSegment), `--branch`/`--base` (isRef) and `--main` (existsSync) but takes `opts['worktree-root']` straight into `resolvePath(main, worktreeRoot)` + `join(root, story)` + `git worktree add`; and `packetCommand()` (L189-196), which merges `JSON.parse(opts.pipeline)` over PIPELINE_DEFAULTS with no predicate on any value and then renders those values into `$worktree=`, `$base=`, `$implementSkill=`, `$reviewers=`, `$reviewLog=`, `$template=`. The file header (L20-21) claims 'every path segment / git ref is validated before it is used'. The GRAMMAR each value must satisfy is owned by pair-implement-batch.js's normalizePipeline, the other realization of the same pipeline object.",
+      "inputs": [
+        "cycle-dispatch.mjs worktree --main --story --branch --base --worktree-root",
+        "cycle-dispatch.mjs packet --next --card --policy --run --workflow-version --pipeline --contract-resolved --required --severity-floor --severities --verdicts --ranks",
+        "the JSON object of --pipeline: skills.{contractPhase,redSpec,redVerify,implementPhase,greenFix,reviewPhase,implement,review,verifyQuality,recordDecision,checkpoint,publishPr,writeIssue}, worktreeRoot, auditLogDir, baseBranch, reviewTemplate, maxFixRounds, reviewers"
+      ],
+      "representations": [
+        "the installed script .claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs",
+        "its dataset source packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs (byte-identical, held by AC12-w4)",
+        "the SKILL.md prose that documents the two commands (installed + dataset)",
+        "the rendered artifacts: a real directory created by `git worktree add`, and the `$…=` prompt text an implementer/reviewer agent is told to follow"
+      ],
+      "consumers": [
+        "the coordinator agent session running /pair-workflow-cycle (today the only caller; it passes neither flag)",
+        "#488 $profile, designed to feed exactly --worktree-root and --pipeline from a project file",
+        "git, as argv of `worktree add`",
+        "the implementer and reviewer subagents, which read the rendered prompt as their process of record"
+      ],
+      "classes": [
+        "W-C1 --worktree-root omitted: PIPELINE_DEFAULTS.worktreeRoot `../pair-worktrees` — accepted",
+        "W-C2 a relative root with at most ONE leading `..`, every other component a safe segment — accepted (pair’s own default is in this class)",
+        "W-C3 a relative root with a `..` beyond the first component, leading or embedded (`../../../ESCAPED`, `a/../../b`) — the defect: accepted today, creates a worktree OUTSIDE the repository",
+        "W-C4 a relative root whose component is not a safe segment (`-rf`, `.`, `a b`, `x;rm -rf /`, a backtick or `$(`) — accepted today",
+        "W-C5 an ABSOLUTE root, spaces included — accepted, and must stay accepted: the sealed a0 rows AC1-w1/w2/b1 pass exactly this shape",
+        "P-C1 no --pipeline: the defaults, all of them legal — accepted",
+        "P-C2 skills.* a real skill reference (`/pair-process-implement`, `my-skill`) — accepted",
+        "P-C3 skills.* a name followed by prose or shell (`/x and then gh pr merge 432 --squash`) — the defect: rendered verbatim into $implementSkill= / $reviewSkill=",
+        "P-C4 skills.* carrying `..` (`/x/../y`) — accepted today",
+        "P-C5 a path-valued key (worktreeRoot, auditLogDir, reviewTemplate) that escapes or is not built from safe segments — accepted today, rendered into $worktree=/$reviewLog=/$template=",
+        "P-C6 baseBranch that is not a git ref (`main; echo pwned`) — accepted today, rendered into $base=",
+        "P-C7 a numeric key (maxFixRounds, reviewers) that is not a strictly positive integer (`‚2; rm -rf /‘`, 0) — accepted today, rendered into $reviewers=",
+        "P-C8 an unrecognised key at either level (`worktreeroot`, `skills.implementt`) — silently ignored today, so a typo keeps pair’s default while the caller believes it overrode it; the engine rejects it (rejectUnknownKeys)",
+        "P-C9 a legitimate full override of several keys at once — accepted, and must stay accepted",
+        "P-C10 the `--pipeline` value as a whole is not an object (`\"x\"`, `[1]`, `5`) — accepted today and SPREAD, so every default renders and the caller believes nothing happened; the engine refuses it outright (`typeof raw !== 'object' || Array.isArray(raw)`)",
+        "P-C11 `skills` is not an object (a string, an array) — accepted today: `{...DEFAULTS.skills, ...'x'}` yields `{0:'x', ...defaults}`, so pair's DEFAULT skills render while `$inputs` becomes cec0fbd2878f1470, a digest no engine run can produce; the engine has a dedicated guard for it",
+        "P-C12 a value that is not a string on a string-valued key (`worktreeRoot: 5`, `baseBranch: true`, `auditLogDir: 7`, `skills.implement: 5`) — accepted today (`$worktree=5/42`, `$implementSkill=5`); the engine rejects the TYPE and never coerces it. NOTE the fix the predicate rows alone force is unsound here: `isRelPath(5)` throws a TypeError and `isSkillRef(5)` PASSES by regex coercion",
+        "P-C13 an empty or whitespace-only string value (`worktreeRoot: ''` -> `$worktree=/42`, the absolute root a `--force` worktree remove is aimed at; `baseBranch: '   '`; `skills.implement: ''` -> `$implementSkill=`) — accepted today; the engine rejects empty-after-trim rather than falling back silently",
+        "P-C14 a string value with surrounding whitespace whose TRIMMED form is legal (`baseBranch: '  main  '`) — the engine accepts it and uses `main`; the skill renders `$base=  main  ` verbatim, a ref no git command resolves and a different digest for the same intent",
+        "P-C15 an optional key spelled `null` (and the whole `--pipeline` spelled `null`) — ABSENT by the authority's own rule (`str()`/`posInt()`/`resolvePipeline`), the DEFAULT is taken. Today `{\"reviewers\":null}` shifts the digest to ceccaee23c8d6c74, `{\"worktreeRoot\":null}` renders `$worktree=null/42`, `--pipeline null` crashes untyped (exit 2). Must stay ACCEPTED: the value-by-value predicate fix would HALT on it and diverge from the engine",
+        "P-C16 a `skills` key engine 3.0.0 RETIRED (`redSeal`, `prPhase`, …) — accepted today and silently ignored; the engine refuses it by name with a migration message"
+      ],
+      "interactions": [
+        "I1 validation x AC-3 packet equality: the prompt cycle-dispatch composes is asserted byte-identical to the real engine’s under the dry-run harness (AC3-w1, AC3-w1b). A HALT that fires on the DEFAULT pipeline would break that equality — the validation must refuse only what the engine refuses.",
+        "I2 validation x the engine as authority: pair-implement-batch.js is outside fixScope and its predicates are extracted from its SOURCE TEXT by engine-boundaries.test.mjs (string slice between `const isRelPath =` and `// A skill NAME`). The fix may not move, rename or reword those engine lines; a second spelling belongs on the skill side (cycle-state.mjs, which cycle-dispatch already imports from).",
+        "I3 validation x AC-12 one-owner: a predicate added to cycle-state.mjs must land in all twelve copies (six skills x dataset+mirror) or AC12-w3 fails; cycle-dispatch.mjs must stay identical between dataset and mirror or AC12-w4 fails.",
+        "I4 --worktree-root x the side effect: the HALT must precede `mkdirSync(dirname(path))` and `git worktree add`, otherwise the escaped directory exists even though the command reported failure.",
+        "I5 shape x predicate ORDER: the four shape checks run BEFORE any predicate, so a refusal must be the typed `pipeline-invalid` HALT (`fail()`: exit 1 + machine-readable `halt`) and never an uncaught TypeError (the CLI catch: exit 2 + `{ error }`). A crash is not a HALT, and a coerced pass is not a refusal."
+      ]
+    },
+    {
+      "id": "r0-3",
+      "producer": "The `inputs` branch of the cycle-state.mjs CLI (L2398-2405): `if (opts.story === undefined) need('json')` — the `--story` arm requires nothing — feeding `effectiveInputs(card, { workflowVersion: opts.workflowVersion })` (L188-200), whose first canonical field is `workflowMajor: String(workflowVersion ?? '').split('.')[0]`. An absent or empty flag is not an error there, it is the empty string: a different, silently-computed digest.",
+      "inputs": [
+        "cycle-state.mjs inputs --story '<card JSON>' [--workflowVersion <v>]",
+        "cycle-state.mjs inputs --json '<object>'",
+        "the card object: id, title, branch, base?, notes?"
+      ],
+      "representations": [
+        "the 16-hex FNV-1a digest on stdout (the `--story` arm) — the value a coordinator stamps into `$inputs`",
+        "the `sha256:<64 hex>` digest on stdout (the `--json` arm) — a different, already-published surface",
+        "the same composition inside pair-implement-batch.js, which renders it into every dispatched prompt",
+        "the persisted `inputsDigest` field of every published handoff",
+        "the documented spelling in the cycle SKILL.md L60 (installed + dataset), which passes --workflowVersion"
+      ],
+      "consumers": [
+        "the coordinator agent, which passes the printed value as `$inputs` to every stage",
+        "resolve() L2157: `last.data.inputsDigest !== inputs` discards an APPROVED review, forces verify/re-review at r<n+1> and lists every prior review-phase handoff in `invalidated`",
+        "every stage skill, which records `inputsDigest: $inputs` in its handoff"
+      ],
+      "classes": [
+        "C1 --story + a well-formed --workflowVersion: f4d545d8fe3bb756 for the reference card — accepted",
+        "C2 --story + NO --workflowVersion: exit 0 and 6018e32a192ed7e6 — the defect (fails OPEN)",
+        "C3 --story + --workflowVersion '': the SAME 6018e32a192ed7e6 — the defect again, past any `need()` that only tests undefined",
+        "C4 --story + a bare `--workflowVersion` with no value: already exit 2 (`bad argument`), the parser refuses it — must stay refused",
+        "C5 --story + a differing patch/minor (4.9.9 vs 4.0.1): the SAME digest — required, the digest is keyed by MAJOR (a patch successor must not invalidate review evidence)",
+        "C6 --json without --workflowVersion: accepted, `sha256:<64 hex>` — a different surface, not this obligation’s to re-key",
+        "C7 neither --story nor --json: already exit 2 `--json is required` — must stay",
+        "C8 --story + a PRESENT but malformed --workflowVersion (`garbage`, `true`, `' '`, `v4.0.1`, `0`, `NaN`, `4.0.1.2`, `4.0.1-rc.1`) — the defect again, wider than C2/C3: each spelling exits 0 with its OWN silently different digest (d4a809ab2b26ed6b, df25b07e271730b4, 72cfe7b4d9752052, …), and each survives a fix written as 'defined and non-empty'",
+        "C9 --story + a TRUNCATED version (`4`, `4.0`) — exit 0 with the CORRECT f4d545d8fe3bb756 today, because only the major is used. Outside the producer's own grammar (`compatible()` accepts /^\\d+\\.\\d+\\.\\d+$/ and nothing else) and refused by the same rule, so the line is stated on both sides and a shape hardening cannot silently move a persisted identity"
+      ],
+      "interactions": [
+        "I1 requirement x AC-10 digest parity: the value the `--story` arm prints must still equal the `$inputs` the real engine renders (AC10-w1); requiring the flag may not change the composition, only refuse the call that omits it.",
+        "I2 requirement x the `--json` arm: the two surfaces are two digests, both published and both consumed; the fix touches the `--story` arm only (AC10-c2, AC10-b1).",
+        "I3 requirement x the documented callers: SKILL.md L60 and AC10-w1 both already pass --workflowVersion, so no live caller is broken by making it mandatory.",
+        "I4 the grammar x `parseCli`: the refusal of a VALUELESS `--workflowVersion` is produced by `parseCli` (rest[i+1] === undefined throws `bad argument`), a function inside this group’s fixScope. Nothing pinned it, and a parser made tolerant of a valueless flag turns the bare spelling into the value `true` — defined, non-empty, and straight into class C8."
+      ]
+    },
+    {
+      "id": "r0-4",
+      "producer": "The per-story ceiling block of resolve() in cycle-state.mjs (L2176-2183): `if (handoffs.length >= CAPS.dispatchesPerStory) next = { step: 'blocked', reason: 'failed-resume', cap: 'dispatchesPerStory', detail: 'the cycle asked for more than 40 dispatches in one run — looping, not converging' }`. `handoffs` is readHandoffs(dir) (L330-347): every file in the run directory matching NAME_RE, attempts included, cumulative across every resume. The quantity in the message (`dispatches asked for in one run`) is not the quantity counted (published handoff files that survive in the directory), and nothing in the message names a way out.",
+      "inputs": [
+        "cycle-state.mjs resolve --dir <run dir> --workflowVersion --entry [--pr --story --inputs --acHash --redirects]",
+        "the run directory’s NAME_RE-matching handoff files (a0[-rev<m>] | r<n>[-g<k>[-rev<m>]] | m<n>) x (red-spec | red-verify | implement-phase | green-fix | review-phase) [.attempt-<n>]",
+        "CAPS.dispatchesPerStory = 40, CAPS.consecutiveRedirects = 3 (exported data, AC12-w1)"
+      ],
+      "representations": [
+        "the `next` object on stdout: { step: blocked, reason: failed-resume, cap: dispatchesPerStory, detail: <text> }",
+        "the identical wall in the sibling realization, pair-implement-batch.js, via the mirrored CYCLE_CAPS",
+        "the code comment at L2176-2178 that claims every realization hits the same wall"
+      ],
+      "consumers": [
+        "the coordinator agent session, which reports the block and stops",
+        "the batch engine, which ends the story",
+        "a human resuming the cycle by hand: they get the same block on every subsequent resolve and the message tells them nothing to do about it"
+      ],
+      "classes": [
+        "C1 fewer than 40 handoff files: the cycle advances normally (this very run directory, 7 files)",
+        "C2 exactly 39: still advances — the boundary below the cap",
+        "C3 exactly 40: blocked — the boundary AT the cap (the comparison is `>=`, so the message’s ‚more than 40‘ is wrong here by one as well)",
+        "C4 more than 40 (44 handoffs, reproduced by padding a copied run directory): blocked, with the same fixed text whatever the real number is",
+        "C5 next.step already `done` (a converged cycle) above the cap: the ceiling never applies — required, guarded by `next.step !== done && next.step !== blocked`",
+        "C6 the sibling ceiling `--redirects >= 3`: a DIFFERENT cap whose message already names what it counts — must stay untouched"
+      ],
+      "interactions": [
+        "I1 the block x a human resume: the count is cumulative over a directory nobody may delete (sealed evidence), so without a named recovery the cycle is permanently dead. `migrate-acknowledge` is the mechanism that already exists for it: a NEW run directory bound read-only to this one, which continues the succession line and starts its own count.",
+        "I2 the block x the OTHER realization: the engine’s storyMetrics.dispatches is per-invocation while this count is cumulative, so the two do not hit the same wall at the same moment; the detail must describe what THIS producer counted rather than assert a symmetry it does not have.",
+        "I3 the machine fields x AC-12: `cap: dispatchesPerStory` is the spelling of exported CAPS data that AC12-w1/w2 pin in both realizations — the message changes, the key does not."
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "the pair-workflow-cycle CLI argument boundary — cycle-dispatch.mjs and cycle-state.mjs parse/validate, and their six installed + six dataset copies are one artifact",
+    "mode": "behavioral",
+    "allowedPaths": [
+      ".claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs",
+      ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-cycle/SKILL.md",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md"
+    ],
+    "oracle": "node <script> <command> … — process exit code + the JSON on stdout"
+  },
+  "matrix": [
+    {
+      "id": "r0-2-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "W-C3 — `cycle-dispatch.mjs worktree --worktree-root ../../../ESCAPED` against a repository three levels below a temp root",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-2 w1: a multi-level `--worktree-root` is a typed HALT and creates nothing'",
+      "expected": "non-zero exit, stdout `{ halt: 'worktree-root-invalid', … }`, `<root>/ESCAPED` does not exist, and `git worktree list` in the main checkout still shows exactly one worktree",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "The finding’s own VERIFY. The no-directory and no-registration assertions are what makes it a validation rather than a late error: today the halt would arrive after `git worktree add` already succeeded."
+    },
+    {
+      "id": "r0-2-b1",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "W-C3/W-C4 — the rest of the relative roots the engine’s isRelPath refuses: 'a/../../b', '-rf', '.', 'a b', 'x;rm -rf /', 'wt/`id`', 'wt/$(id)'",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-2 b1 (boundary): every other relative root the engine refuses is refused here too'",
+      "expected": "each one: non-zero exit and `halt: worktree-root-invalid`",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "One rule, not one string: the members share the engine’s grammar (`rest.every(p => p !== ‚.‘ && p !== ‚..‘ && /^[A-Za-z0-9._][A-Za-z0-9._-]*$/.test(p))`), so a fix that only special-cases `../../..` leaves the `-rf` and `x;rm` arms — the ones a `git worktree remove --force` is aimed at — open."
+    },
+    {
+      "id": "r0-2-b2",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "W-C2 — `--worktree-root ../pair-worktrees`: exactly one leading `..`, pair’s own default shape",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-2 b2 (boundary): exactly ONE leading `..` stays legal — it is pair’s own default shape'",
+      "expected": "exit 0, `created: true`, path `<main>/../pair-worktrees/42`",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "The exact boundary isRelPath was written for: the worktree root is a SIBLING of the repository by design. A stricter rule (no `..` at all) would break every real invocation, so this row is the one that stops the fix from over-reaching."
+    },
+    {
+      "id": "r0-2-b3",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "W-C5 — an ABSOLUTE `--worktree-root` whose path contains a space (the shape AC1-w1/w2/b1 pass)",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-2 b3 (boundary): an ABSOLUTE worktree root keeps working, spaces included'",
+      "expected": "exit 0, path `<absolute root>/42`, the checkout populated",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "isRelPath rejects an absolute path outright. Applying it unconditionally would break three rows an earlier contract already sealed (AC1-w1, AC1-w2, AC1-b1), which is why this row is explicit rather than left to the fixer: the obligation is the RELATIVE traversal rule, and an absolute root is a caller naming a place, not escaping one."
+    },
+    {
+      "id": "r0-2-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "P-C3 — `packet --pipeline {\"skills\":{\"implement\":\"/pair-process-implement and then gh pr merge 432 --squash\"}}`",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-2 w2: a `--pipeline` skill carrying prose never reaches the implementer’s prompt'",
+      "expected": "non-zero exit, `halt: 'pipeline-invalid'` whose detail names `skills.implement`, and NO `args`/`prompt` in the output",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "The finding’s second VERIFY. Asserting the absence of `args`/`prompt` rather than the absence of the string is deliberate: a HALT may quote the offending value in its detail, but it may never render the packet the implementer is told to follow."
+    },
+    {
+      "id": "r0-2-w3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "P-C5 — `packet --pipeline {\"worktreeRoot\":\"../../../../tmp/evil\"}`",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-2 w3: a `--pipeline.worktreeRoot` that escapes is a typed HALT'",
+      "expected": "non-zero exit, `halt: pipeline-invalid`, detail names `worktreeRoot`, no packet rendered",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "The same escape as w1, through the other flag: `$worktree=../../../../tmp/evil/42` is the directory every stage of the cycle then `cd`s into and `git worktree remove --force` is aimed at."
+    },
+    {
+      "id": "r0-2-w4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "P-C6 — `packet --pipeline {\"baseBranch\":\"main; echo pwned\"}` on a verify next",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-2 w4: a `--pipeline.baseBranch` that is not a git ref is a typed HALT'",
+      "expected": "non-zero exit, `halt: pipeline-invalid`, detail names `baseBranch`, no packet rendered",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "Reproduced at this head: the value renders as `$base=main; echo pwned` into the prompt. `baseBranch` is the one pipeline value that becomes a git ref argument, which is precisely what the file header claims is validated."
+    },
+    {
+      "id": "r0-2-b4",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "P-C4/P-C5/P-C7/P-C8 — the remaining pipeline grammar in one table: skills.implement `/x/../y`; skills.review `a review skill`; auditLogDir `../../etc`; reviewTemplate `../../../etc/passwd`; reviewers `2; rm -rf /`; maxFixRounds 0; the unknown keys `worktreeroot` and `skills.implementt`",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-2 b4 (boundary): every remaining `--pipeline` value is held to the engine’s own grammar'",
+      "expected": "each: non-zero exit, `halt: pipeline-invalid`, detail naming that key, no packet rendered",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "‚Every `--pipeline` value‘ is the obligation, and each member has its own predicate in the engine (isSkillRef, isRelPath, posInt, rejectUnknownKeys). The unknown-key arm is included because an ignored key is an unvalidated value by another name: `worktreeroot` silently keeps pair’s default while #488’s $profile believes it overrode it."
+    },
+    {
+      "id": "r0-2-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "P-C1 — `packet` with no `--pipeline` at all",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-2 c1 (control): with no `--pipeline` the packet is unchanged — the defaults are legal'",
+      "expected": "exit 0, `$worktree=../pair-worktrees/42`, `$implementSkill=/pair-process-implement`",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "PIPELINE_DEFAULTS.worktreeRoot is itself a one-`..` relative path: a validation that refuses its own defaults would block every real dispatch."
+    },
+    {
+      "id": "r0-2-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "P-C9 — a legitimate override of six keys at once (skills.implement `/my-implement`, worktreeRoot `../wt`, auditLogDir, baseBranch `origin/develop`, reviewers 2, maxFixRounds 1)",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-2 c2 (control): a LEGITIMATE pipeline override is honoured, not refused'",
+      "expected": "exit 0 and the overrides rendered: `$implementSkill=/my-implement`, `$worktree=../wt/42`, `$base=origin/develop`",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "The flag exists to be used — #488 is built on it. A fix that halts on anything non-default satisfies every witness and destroys the feature."
+    },
+    {
+      "id": "r0-3-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "C2 — `cycle-state.mjs inputs --story '{\"id\":\"42\",\"title\":\"T\",\"branch\":\"feature/US-42-x\"}'` with no --workflowVersion",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-3 w1: `inputs --story` without `--workflowVersion` exits non-zero and prints no digest'",
+      "expected": "non-zero exit, stdout `{ error: … }` naming workflowVersion, no `inputsDigest` key and no 16-hex token anywhere on stdout",
+      "covers": [
+        "r0-3"
+      ],
+      "rationale": "The finding’s VERIFY verbatim. The ‚no 16-hex token‘ assertion is the fail-closed half: printing the wrong digest alongside a warning is exactly the failure mode, since the coordinator reads stdout, not prose."
+    },
+    {
+      "id": "r0-3-b1",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "C3 — the same call with `--workflowVersion ''`",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-3 b1 (boundary): an EMPTY `--workflowVersion` is the same fail-open and is refused too'",
+      "expected": "non-zero exit, error naming workflowVersion, no digest printed",
+      "covers": [
+        "r0-3"
+      ],
+      "rationale": "Verified at this head: `--workflowVersion ''` yields 6018e32a192ed7e6, byte-identical to omitting the flag, because `String('' ?? '').split('.')[0]` is the same empty major. A fix written as `need('workflowVersion')` — which only tests `undefined` — closes C2 and leaves this one open."
+    },
+    {
+      "id": "r0-3-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "C1/C5 — the well-formed call at 4.0.1, and the same card at 4.9.9",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-3 c1 (control): the well-formed call keeps its digest, and it is keyed by MAJOR only'",
+      "expected": "exit 0 and `f4d545d8fe3bb756` for both",
+      "covers": [
+        "r0-3"
+      ],
+      "rationale": "The digest is a persisted identity: changing it would make every stored `inputsDigest` compare unequal and force a re-review of every in-flight cycle. The 4.9.9 arm pins that the fix does not start hashing the full version while adding the requirement."
+    },
+    {
+      "id": "r0-3-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "C6/C7 — `inputs --json` with no version flag, and `inputs` with neither --story nor --json",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-3 c2 (control): the `--json` surface is untouched by the new requirement'",
+      "expected": "`--json`: exit 0 and a `sha256:<64 hex>`; neither flag: non-zero exit and `--json is required`",
+      "covers": [
+        "r0-3"
+      ],
+      "rationale": "Two surfaces, two digests. The requirement belongs to the `--story` arm; hanging it on the command would break the published `--json` surface AC10-c2 seals."
+    },
+    {
+      "id": "r0-4-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "C3 — a run directory holding exactly 40 published handoffs (one real review-phase handoff plus padded copies), resolved with --entry pr",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-4 w1: at the cap, the block says what it COUNTED and how a human gets out'",
+      "expected": "exit 0 and `next` = { step: blocked, reason: failed-resume, cap: 'dispatchesPerStory', detail: … } where the detail matches /published handoff/i, matches /migrate-acknowledge/ and states 40",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "The finding’s ASSERT: the detail must describe the quantity actually counted and name a recovery path. The transition itself is NOT changed by this contract — an active cycle at or above the ceiling still becomes blocked/failed-resume/dispatchesPerStory, and the `cap` key stays the exported CAPS spelling AC12-w1/w2 pin in both realizations. What changes is the description and the way out, which is why the machine fields are asserted unchanged in the same row."
+    },
+    {
+      "id": "r0-4-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "C4 — the same directory padded to 44 handoffs",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-4 w2: the count is CUMULATIVE across resumes and the detail states the real number'",
+      "expected": "blocked, and the detail states 44 as well as the cap 40, matches /published handoff/i and /migrate-acknowledge/, and does NOT match /asked for more than/",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "Discriminates a wording change from a correction: a detail that still says ‚the cycle asked for more than 40 dispatches‘ misstates both the quantity (published handoff files, cumulative across every resume, attempts included) and, at exactly 40, the comparison. The negative assertion is what makes the row fail for the defect rather than for its phrasing."
+    },
+    {
+      "id": "r0-4-b1",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "C2 — the same directory with 39 handoffs",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-4 b1 (boundary): one handoff below the cap the cycle still advances'",
+      "expected": "exit 0 and `next.step` is not `blocked` (prepare, at this construction)",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "The ceiling is `>=`: one file below it the cycle must still move. Pins that a fix to the message does not move the threshold."
+    },
+    {
+      "id": "r0-4-b2",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "C5 — 44 handoffs whose last published one is an APPROVED, ready review",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-4 b2 (boundary): a CONVERGED cycle above the cap is `done`, never blocked'",
+      "expected": "`next.step` is `done`",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "A long but converged cycle must not be retro-actively blocked by its own history; the guard `next.step !== done && next.step !== blocked` is the reason, and this row keeps it."
+    },
+    {
+      "id": "r0-4-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "C6 — the sibling ceiling: a small run directory resolved with `--redirects 3`",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-4 c1 (control): the sibling redirect cap is untouched and keeps its own wording'",
+      "expected": "blocked with `cap: consecutiveRedirects` and a detail naming redirects",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "The two ceilings share a code block. This one already names what it counts (a handed-in count, exactly the shape the finding suggests for the other) and must come through untouched."
+    },
+    {
+      "id": "r1-g2-i1",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": "r0-2 x r0-3 x r0-4 x AC-12 — all three fixes land in files that ship as twelve copies of cycle-state.mjs (six skills x dataset+mirror) and two of cycle-dispatch.mjs",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'AC12-w3: `cycle-state.mjs` ships byte-identical inside SIX skills, dataset and mirror' and :: 'AC12-w4: the coordinator ships as a dataset skill mirrored to `pair-workflow-cycle`'",
+      "expected": "both pass: every copy byte-identical to the dataset source",
+      "covers": [
+        "r0-2",
+        "r0-3",
+        "r0-4"
+      ],
+      "rationale": "The single most likely way this group half-lands: edit the installed script, run the witnesses (which import the installed one), and leave eleven copies behind. Listed as an interaction because it belongs to all three findings at once, and every copy is inside fixScope."
+    },
+    {
+      "id": "r1-g2-i2",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": "r0-2 x AC-3 — after validation is added, the prepare and verify packets are still byte-identical to the prompts the REAL pair-implement-batch.js composes under the dry-run harness",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'AC3-w1: the `prepare` packet is byte-identical to the prompt `pair-implement-batch.js` composes' and :: 'AC3-w1b: the `verify` packet is byte-identical to the prompt `pair-implement-batch.js` composes'",
+      "expected": "both pass: the packet prompt equals the engine prompt byte for byte",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "The rollback notes name this differential as the thing that must survive any rebuild (w-1). A validation that fires on the default pipeline, or that normalizes a value instead of refusing it, breaks the equality rather than the witnesses — which is why it is a row and not a hope."
+    },
+    {
+      "id": "r1-g2-i3",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": "r0-3 x AC-10 — requiring the flag may not change the digest the two realizations agree on, nor the review-invalidation behaviour keyed by it",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'AC10-w1: `cycle-state.mjs inputs --story` reproduces the digest the engine puts in `$inputs`', :: 'AC10-c2 (control): `inputs --json` keeps its published `sha256:<64 hex>` form, and the export is that same function', :: 'AC10-b1 (boundary): a CHANGED effective-inputs digest invalidates the review evidence; the same digest does not'",
+      "expected": "all three pass",
+      "covers": [
+        "r0-3"
+      ],
+      "rationale": "AC-10 and BR6 are what r0-3 defeats; these are the rows that say the repair restored them instead of moving the goalposts."
+    },
+    {
+      "id": "r1-g2-i4",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": "r0-2 x the authority — pair-implement-batch.js stays outside fixScope and its predicate SOURCE TEXT is read by a string-slicing guard (`const isRelPath =` … `// A skill NAME`)",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/engine-boundaries.test.mjs",
+      "expected": "6 tests, 0 failures",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "The grammar is copied FROM the engine, so the temptation is to refactor the engine to share it. The engine is a sandboxed workflow script the skills cannot import, it is not in fixScope, and engine-boundaries.test.mjs reconstructs its predicates by slicing those exact comment markers out of its source — moving them breaks a suite this group never touched."
+    },
+    {
+      "id": "r0-2-b5",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "P-C10/P-C11/P-C12/P-C13/P-C16 — the SHAPE dimension in one table: `--pipeline` as a whole not an object (`\"x\"`, `[1]`, `5`); `skills` a string or an array; a non-string value on each key kind (worktreeRoot 5, baseBranch true, auditLogDir 7, skills.implement 5); an empty or whitespace-only value (worktreeRoot ''/'   ', baseBranch ''/'   ', reviewTemplate '', skills.implement ''/'   '); the numeric keys not integers (reviewers '2', maxFixRounds true, maxFixRounds '  '); a RETIRED skills key (skills.redSeal)",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-2 b5 (boundary): the SHAPE of a `--pipeline` value is refused before any predicate runs'",
+      "expected": "each member: exit 1 (not 0, and not the CLI catch's 2), `halt: 'pipeline-invalid'`, a detail naming that key, NO `args` and NO `prompt`, no `$inputs=` token anywhere on stdout, and no TypeError/ReferenceError on stderr. A `--pipeline` that is not JSON at all stays refused with no packet.",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "Every other P-row hands a NON-EMPTY STRING to a predicate; the authority runs four checks before any predicate reaches a value. The two dimensions fail differently and a fix for one leaves the other open: `{\"skills\":\"x\"}` renders the DEFAULT skills and stamps cec0fbd2878f1470 — the AC-10/BR6 damage r0-3 is about, reached through r0-2's flag — while `{\"worktreeRoot\":\"\"}` renders `$worktree=/42`. The `exit === 1` and no-stack assertions are load-bearing: applying the engine predicates to a raw value is unsound on non-strings (`isRelPath(5)` throws, `isSkillRef(5)` passes by coercion and renders `$implementSkill=5`), so a crash would satisfy `notEqual(status, 0)` while being the opposite of the typed HALT the obligation requires."
+    },
+    {
+      "id": "r0-2-b6",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "P-C14 — a value whose TRIMMED form is legal, on each key kind: baseBranch '  main  ', worktreeRoot ' ../wt ', skills.implement ' /my-implement ', auditLogDir ' .pair/x ', skills.review ' /my-review '",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-2 b6 (boundary): a value with surrounding whitespace is TRIMMED, exactly as the engine trims it'",
+      "expected": "each pair: exit 0 for BOTH, and the padded call's `args` and `prompt` byte-identical to its trimmed twin's. Today `{\"baseBranch\":\"  main  \"}` renders `$base=  main  ` and `$inputs=e0541df78b5cf125` against the twin's `$base=main` / `$inputs=b083ed5f9fb650dd`.",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "The other half of the same authority line, and the half a refusal would get WRONG: `str()` returns `String(v).trim()`, so '  main  ' is a value the engine ACCEPTS and normalises — halting on it would refuse what the engine accepts and break interaction I1. Asserted differentially against the trimmed twin so the row states the engine's rule and hard-codes no digest."
+    },
+    {
+      "id": "r0-2-c3",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "P-C15 — the ABSENT spelling on every optional key: `--pipeline null`, `{}`, and `null` on skills, worktreeRoot, auditLogDir, baseBranch, reviewTemplate, maxFixRounds, reviewers, skills.implement, skills.review, plus all of them at once — rendered for BOTH the implement and the verify packet",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-2 c3 (boundary): `null` is the ABSENT spelling — the defaults, never a HALT, never a shifted digest'",
+      "expected": "each spelling, each packet: exit 0, no `halt`, and `args`/`prompt` byte-identical to the call with NO `--pipeline` at all — the DEFAULTS (`$worktree=../pair-worktrees/42`, `$reviewers=1`, `$base=origin/main`, `$inputs=f4d545d8fe3bb756`). Today `{\"reviewers\":null}` shifts the digest to ceccaee23c8d6c74, `{\"worktreeRoot\":null}` renders `$worktree=null/42`, and `--pipeline null` exits 2 on an untyped TypeError.",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "The must-stay-ACCEPTED guard the rejection asked for, carried by the row id it named. Recorded as `boundary`/`red` rather than `control`/`pass` because it does NOT pass at this head — the literal `null` is rendered — and a control is never forced red. It does the control's job in both directions: the fix every predicate row forces makes `isPosInt(null)` false and `isRelPath(null)` throw, so `null` would become a HALT on the skill side while the engine takes the default, and this row fails then too. The authority states the rule verbatim: '`null` is ABSENT here too, not a bad value — one spelling for an unset optional key across the whole contract'."
+    },
+    {
+      "id": "r0-3-b2",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "C8/C9 — a PRESENT `--workflowVersion` outside the producer's own grammar: `garbage`, `true`, `' '`, `v4.0.1`, `0`, `NaN`, `4.0.1.2`, `4.0.1-rc.1`, and the truncated `4`, `4.0`",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-3 b2 (boundary): a PRESENT but malformed `--workflowVersion` is the same fail-open and is refused too'",
+      "expected": "each: non-zero exit, an error naming workflowVersion, and no /\\b[0-9a-f]{16}\\b/ token anywhere on stdout. In the SAME row, the accepted side pinned explicitly: `--workflowVersion 4.0.1` still exits 0 with f4d545d8fe3bb756.",
+      "covers": [
+        "r0-3"
+      ],
+      "rationale": "w1 and b1 close exactly two spellings of r0-3's fail-open (`undefined`, `''`); the class is wider and the rest survives a fix written as 'defined and non-empty' — `garbage` -> d4a809ab2b26ed6b, `true` -> df25b07e271730b4, `' '` -> 72cfe7b4d9752052, three silently different digests no engine run produces. The grammar is not invented: `compatible()` in the same file keys the cycle by MAJOR and accepts /^\\d+\\.\\d+\\.\\d+$/ and nothing else, and `publish` already refuses a handoff whose workflowVersion fails it — so accepting `4` at `inputs` would stamp a digest no handoff can be published with. `4`/`4.0` are therefore pinned REFUSED, on the record, and the f4d545d8fe3bb756 assertion in the same row stops the hardening from moving a persisted identity while closing the class."
+    },
+    {
+      "id": "r0-3-c3",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "C4 — `inputs --story '<card>' --workflowVersion` with no value, and the same valueless flag placed ahead of another",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs :: 'r0-3 c3 (control): a bare `--workflowVersion` with no value stays a parser refusal'",
+      "expected": "trailing: exit 2 and `{ error: 'bad argument: --workflowVersion' }`, no `inputsDigest`, no 16-hex token. Mid-list: non-zero and no 16-hex token.",
+      "covers": [
+        "r0-3"
+      ],
+      "rationale": "C4 was enumerated and covered by nothing — no assertion in the suite exercised a valueless flag — while `parseCli`, the function that produces the refusal, sits inside this group's fixScope and is edited by the repair. The route is concrete: a parser made tolerant of a valueless flag turns the bare spelling into the VALUE `true`, which is defined and non-empty, passes both w1 and b1, and lands in class C8 (`--workflowVersion true` -> df25b07e271730b4, exit 0). Already correct at this head, so `baseline: pass`."
+    }
+  ],
+  "redTests": [
+    {
+      "file": ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:07518ab853207d79e3276cf17115258d9c54456e9fa5ef51e8ad62c16e71d674",
+      "command": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs",
+      "observed": "# tests 58 / # pass 44 / # fail 14 — not ok 35, 36 (r0-2 w1, b1); not ok 39, 40, 41, 42 (r0-2 w2, w3, w4, b4); not ok 45 (r0-2 b5): `--pipeline '\"x\"'` exits 0 instead of a typed HALT; not ok 46 (r0-2 b6): `$base=  main  ` with $inputs=e0541df78b5cf125 against the trimmed twin's `$base=main` with $inputs=b083ed5f9fb650dd; not ok 47 (r0-2 c3): `--pipeline null` exits 2 instead of 0; not ok 48, 49 (r0-3 w1, b1); not ok 50 (r0-3 b2): `--workflowVersion garbage` exits 0; not ok 54, 55 (r0-4 w1, w2). Rows 37, 38, 43, 44, 51, 52, 53 (the controls and pass-boundaries, r0-3 c3 included) and all 34 pre-existing rows pass."
+    }
+  ],
+  "testExempt": false,
+  "reconciled": [
+    {
+      "path": ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      "sha256": "sha256:bd4fd854ca8b91d23e93313b3dbdc2055438ad28bb54e4bf9c05c765210827ea",
+      "note": "attempt 1 of this same phase left this artifact dirty and owned by no commit; restored to the base and re-authored"
+    }
+  ],
+  "preserved": [],
+  "attempt": 2,
+  "revision": 1,
+  "changedRows": [
+    "r0-2-b5",
+    "r0-2-b6",
+    "r0-2-c3",
+    "r0-3-b2",
+    "r0-3-c3"
+  ]
+}
