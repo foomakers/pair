@@ -17,7 +17,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { contractErrors, hashFile, isTestPath, manifestPathFor, seal, trailerFor, verify, verifyChain, predecessorPhase, scopeNarrowing, isModulePath } from '../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs'
+import { contractErrors, hashFile, isTestPath, manifestPathFor, seal, trailerFor, verify, verifyChain, predecessorPhase, scopeNarrowing, isModulePath, OVERRIDABLE_BREACH_CODES } from '../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url))
 
@@ -893,4 +893,168 @@ test('r0-1 b1: vacuous where nothing was sealed, exact where a manifest was left
   assert.deepEqual(trackedUnder(cwd, '.pair/red-snapshots/'), [])
   assert.equal(verifyChain({ pr: PR, base, cwd }).verified, true, 'custody is unaffected by the removal')
   rmSync(cwd, { recursive: true, force: true })
+})
+
+// ── custody overrides (<runDir>/custody-overrides.json) ─────────────────────────────────────
+test('verify-chain: an out-of-scope breach on an already-sealed segment is overridden by a human-authorized, attributed entry in <runDir>/custody-overrides.json — verified against its claimed source, never on trust; malformed or mismatched entries leave the breach blocking', () => {
+  const { cwd, base } = chainRepo()
+  // A change to src/other.js outside r1-g1's allowedPaths (['src/a.js']) — stands in for content
+  // a merge from origin/main carries into an already-sealed segment.
+  write(cwd, 'src/other.js', 'export const o = 1\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'merge-carried change to src/other.js')
+
+  const bare = verifyChain({ pr: PR, base, cwd })
+  assert.equal(bare.verified, false)
+  assert.ok(bare.breaches.some(b => b.code === 'out-of-scope' && b.path === 'src/other.js' && b.segment === 'r1-g1'))
+  assert.equal(bare.overriddenBreaches, undefined)
+
+  const runDir = mkdtempSync(join(tmpdir(), 'run-dir-'))
+  const overridesPath = join(runDir, 'custody-overrides.json')
+  // A sealed handoff must exist in runDir or `expectContract` derives to false and verifyChainCore
+  // short-circuits to `verified: true` before ever reaching the segment loop — unrelated to overrides.
+  writeFileSync(join(runDir, 'r1-g1-red-verify.json'), JSON.stringify({ skill: 'red-verify', sealed: true }))
+
+  // Malformed (missing authorizedBy): dropped, never partially trusted — the breach still blocks.
+  writeFileSync(overridesPath, JSON.stringify({ overrides: [{ code: 'out-of-scope', path: 'src/other.js', segment: 'r1-g1', reason: 'x', at: new Date().toISOString() }] }))
+  const malformed = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.equal(malformed.verified, false)
+  assert.ok(malformed.breaches.some(b => b.code === 'out-of-scope' && b.path === 'src/other.js'))
+
+  // Well-formed, but its claimed source (`verifyAgainst`) disagrees with HEAD: refused, not honored on trust.
+  git(cwd, 'branch', 'origin-main-stand-in', base) // at base, src/other.js still reads 'export const o = 0\n'
+  writeFileSync(
+    overridesPath,
+    JSON.stringify({ overrides: [{ code: 'out-of-scope', path: 'src/other.js', segment: 'r1-g1', reason: 'merge-carried from main', authorizedBy: 'maintainer', at: new Date().toISOString(), verifyAgainst: 'origin-main-stand-in' }] }),
+  )
+  const mismatched = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.equal(mismatched.verified, false)
+  assert.ok(mismatched.breaches.some(b => b.code === 'out-of-scope' && b.path === 'src/other.js'))
+  assert.equal(mismatched.overriddenBreaches, undefined)
+
+  // The claimed source now agrees byte-for-byte: honored, moved to overriddenBreaches, attributed.
+  // It carries the same blob at a commit OF ITS OWN — a ref resolving to HEAD would compare the
+  // path with itself and prove nothing (r0-3), so the stand-in gets its own history here.
+  git(cwd, 'checkout', '-q', '-b', 'source-branch')
+  write(cwd, 'docs/side.md', 'unrelated content on the source branch\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'source-branch commit carrying the same src/other.js')
+  git(cwd, 'branch', '-f', 'origin-main-stand-in', 'source-branch')
+  git(cwd, 'checkout', '-q', 'main')
+  const honored = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.equal(honored.verified, true, JSON.stringify(honored))
+  assert.equal(honored.breaches.length, 0)
+  assert.equal(honored.overriddenBreaches?.length, 1)
+  assert.equal(honored.overriddenBreaches[0].code, 'out-of-scope')
+  assert.equal(honored.overriddenBreaches[0].path, 'src/other.js')
+  assert.equal(honored.overriddenBreaches[0].override.authorizedBy, 'maintainer')
+  assert.equal(honored.overriddenBreaches[0].override.verifyAgainst, 'origin-main-stand-in')
+
+  // A different segment / different code never matches this entry — no accidental over-reach.
+  writeFileSync(
+    overridesPath,
+    JSON.stringify({ overrides: [{ code: 'out-of-scope', path: 'src/other.js', segment: 'r1-g2-not-this-one', reason: 'wrong segment', authorizedBy: 'maintainer', at: new Date().toISOString() }] }),
+  )
+  const wrongSegment = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.equal(wrongSegment.verified, false)
+  assert.ok(wrongSegment.breaches.some(b => b.code === 'out-of-scope' && b.path === 'src/other.js'))
+
+  rmSync(cwd, { recursive: true, force: true })
+  rmSync(runDir, { recursive: true, force: true })
+})
+
+test('verify-chain: a `verifyAgainst` that proves nothing — declared but empty, or resolving to HEAD itself — never honors an override (r0-3)', () => {
+  const { cwd, base } = chainRepo()
+  write(cwd, 'src/other.js', 'export const o = 1\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'merge-carried change to src/other.js')
+  const runDir = mkdtempSync(join(tmpdir(), 'run-dir-'))
+  writeFileSync(join(runDir, 'r1-g1-red-verify.json'), JSON.stringify({ skill: 'red-verify', sealed: true }))
+  const overridesPath = join(runDir, 'custody-overrides.json')
+  const put = extra =>
+    writeFileSync(
+      overridesPath,
+      JSON.stringify({
+        overrides: [{ code: 'out-of-scope', path: 'src/other.js', segment: 'r1-g1', reason: 'merge-carried from main', authorizedBy: 'maintainer', at: new Date().toISOString(), ...extra }],
+      }),
+    )
+  const blocked = why => {
+    const r = verifyChain({ pr: PR, base, cwd, runDir })
+    assert.equal(r.verified, false, why)
+    assert.ok(
+      r.breaches.some(b => b.code === 'out-of-scope' && b.path === 'src/other.js'),
+      why,
+    )
+    assert.equal(r.overriddenBreaches, undefined, why)
+  }
+  // (a) the field is DECLARED, so it must prove something. Empty, blank or not a string is not a
+  // claim that passed its check — it is a claim that cannot be checked, and fail-safe means the
+  // breach stays blocking. (`''` short-circuited to "honored" before r0-3; `[]` stringified to
+  // `:<path>`, the INDEX version of the file, which matches HEAD after any commit.)
+  for (const v of ['', '   ', null, 42, [], {}]) {
+    put({ verifyAgainst: v })
+    blocked(`verifyAgainst: ${JSON.stringify(v)}`)
+  }
+  // (b) a ref resolving to HEAD compares the path with ITSELF — always true, self-attested.
+  // A ref that NAMES a non-commit object at HEAD (an annotated tag, a tree) is included here
+  // deliberately: `rev-parse --verify` alone returns what the ref NAMES, not what it peels to, so
+  // without `^{commit}` on both sides these two slipped through the OTHER-COMMIT check (their
+  // rev-parse output differs from HEAD's raw commit sha) while `${ref}:${path}` still resolved
+  // through HEAD's own tree — the same self-attestation as the bare `HEAD` case, one layer deeper.
+  git(cwd, 'branch', '-f', 'self-ref', 'HEAD')
+  git(cwd, 'tag', '-a', 'self-ref-annotated', '-m', 'an annotated tag naming HEAD, not a commit id', 'HEAD')
+  for (const v of ['HEAD', 'self-ref', git(cwd, 'rev-parse', 'HEAD'), 'self-ref-annotated', 'HEAD^{tree}']) {
+    put({ verifyAgainst: v })
+    blocked(`verifyAgainst: ${v} (resolves to HEAD)`)
+  }
+  put({ verifyAgainst: 'no-such-ref' })
+  blocked('an unresolvable ref')
+  // A DIFFERENT commit carrying the same blob is the proof the override needs: honored.
+  git(cwd, 'checkout', '-q', '-b', 'source-branch')
+  write(cwd, 'docs/side.md', 'unrelated content on the source branch\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'source-branch commit carrying the same src/other.js')
+  git(cwd, 'checkout', '-q', 'main')
+  put({ verifyAgainst: 'source-branch' })
+  const honored = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.equal(honored.verified, true, JSON.stringify(honored))
+  assert.equal(honored.overriddenBreaches?.[0].override.verifyAgainst, 'source-branch')
+  // No `verifyAgainst` at all is a different statement — nothing is claimed, so nothing is
+  // checked: the override stands on its attribution alone, as documented.
+  put({})
+  const noClaim = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.equal(noClaim.verified, true, JSON.stringify(noClaim))
+  assert.equal(noClaim.overriddenBreaches?.[0].override.verifyAgainst, undefined)
+  rmSync(cwd, { recursive: true, force: true })
+  rmSync(runDir, { recursive: true, force: true })
+})
+
+test('verify-chain: only an allow-listed breach code accepts a human override — the set is named, never inferred from the shape of the breach (r0-4)', () => {
+  assert.deepEqual([...OVERRIDABLE_BREACH_CODES].sort(), ['behavioral-adds-or-moves-module', 'out-of-scope', 'test-blob-changed', 'test-mode-production-change', 'unlisted-test-changed'])
+  assert.ok(!OVERRIDABLE_BREACH_CODES.includes('parent-not-base'), 'ancestry is not a human-overridable property')
+  const { cwd, base } = chainRepo()
+  // A crafted snapshot whose trailer names a base that is NOT its parent → `parent-not-base`.
+  const head = git(cwd, 'rev-parse', 'HEAD')
+  const trailer = trailerFor({ pr: PR, phase: 'r1-g2', base: 'a'.repeat(40), manifest: manifestPathFor(PR, 'r1-g2') })
+  const crafted = git(cwd, 'commit-tree', git(cwd, 'rev-parse', 'HEAD^{tree}'), '-p', head, '-m', `red: crafted snapshot\n\n${trailer}`)
+  git(cwd, 'reset', '-q', '--hard', crafted)
+  const runDir = mkdtempSync(join(tmpdir(), 'run-dir-'))
+  writeFileSync(join(runDir, 'r1-g1-red-verify.json'), JSON.stringify({ skill: 'red-verify', sealed: true }))
+  // A malicious (or merely mistaken) entry naming a non-overridable code, dressed in the
+  // path+segment shape the old duck-typed check keyed on: never honored.
+  writeFileSync(
+    join(runDir, 'custody-overrides.json'),
+    JSON.stringify({
+      overrides: [{ code: 'parent-not-base', path: 'src/a.js', segment: 'r1-g1', reason: 'ancestry is not mine to waive', authorizedBy: 'maintainer', at: new Date().toISOString() }],
+    }),
+  )
+  const r = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.equal(r.verified, false)
+  assert.ok(
+    r.breaches.some(b => b.code === 'parent-not-base'),
+    JSON.stringify(r.breaches),
+  )
+  assert.equal(r.overriddenBreaches, undefined)
+  rmSync(cwd, { recursive: true, force: true })
+  rmSync(runDir, { recursive: true, force: true })
 })
