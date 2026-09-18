@@ -1,0 +1,180 @@
+{
+  "$meta": {
+    "pr": "494",
+    "phase": "r2-g5",
+    "base": "7425a13c4ea1aa0f60ce3618895ba96bb94733ce",
+    "trailer": "Pair-RED-Snapshot: pr=494; phase=r2-g5; base=7425a13c4ea1aa0f60ce3618895ba96bb94733ce; manifest=.pair/red-snapshots/pr-494-r2-g5.json",
+    "artifacts": [
+      ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      ".claude/workflows/pair-implement-batch.test.mjs"
+    ]
+  },
+  "schema": "red-contract/1",
+  "run": "story-486",
+  "story": "486",
+  "pr": 494,
+  "branch": "feature/US-486-pair-workflow-cycle-coordinator",
+  "phase": "r2-g5",
+  "mode": "remediation",
+  "attempt": 1,
+  "remediationBatchId": "r2",
+  "groupId": "r2-g5",
+  "workflowVersion": "4.0.1",
+  "inputHead": "7425a13c4ea1aa0f60ce3618895ba96bb94733ce",
+  "base": "origin/main",
+  "phaseRoutingNote": "Never in round 2's plan — a feature added on maintainer instruction ('estendi anche il cycle per poter gestire dinamicamente l'effort') for the two-harness canary itself (US-486's own r0-5 DoD item), discovered and authored after r2-g4 sealed. Filed under the next sequential groupId in round 2's batch, directly authored and sealed by the orchestrator: this run directory's dispatchesPerStory cap (already at/above ceiling) blocks any further agent-dispatched resolve() redirect here, exactly as r1-g1-rev2, r2-g3 and r2-g4 were.",
+  "sourceOfTruth": ".claude/workflows/pair-implement-batch.js (BATCH_EFFORT/ROLE_EFFORTS/withModel, the accepted-args validation block) and .claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs (KNOWN_EFFORTS, packetCommand's $profile.effort handling) — both read and modified directly, plus their dataset mirrors and SKILL.md's own documentation of the same behavior.",
+  "status": "red",
+  "testExempt": false,
+  "scope": {
+    "inheritedFrom": null,
+    "groupId": "r2-g5",
+    "findings": [
+      "r2-g5-1"
+    ],
+    "dependsOn": [],
+    "dependsOnSatisfied": "no dependency: adds a new, independent override dial to both engines"
+  },
+  "inventory": [
+    {
+      "id": "r2-g5-1",
+      "producer": "pair-implement-batch.js's withModel() (effort resolution: ROLE_EFFORTS[role] ?? BATCH_EFFORT ?? opts.effort) and cycle-dispatch.mjs's packetCommand() ($profile.effort validation + echo + prompt rendering)",
+      "aliasRationale": null,
+      "inputs": [
+        "args.effort / args.efforts (pair-implement-batch.js) — previously did not exist; every stage's opts.effort was the literal 'high', unconditionally",
+        "$profile (pair-workflow-cycle) — previously reserved, unimplemented, no consumer anywhere in cycle-dispatch.mjs"
+      ],
+      "representations": [
+        "pair-implement-batch.js's accepted top-level args (rejectUnknownKeys) and its whenToUse doc string",
+        "cycle-dispatch.mjs's packet FLAGS list and SKILL.md's $profile argument row + Step 3's dispatch bullet",
+        "cycle-coordinator.test.mjs AC-profile-w1/w2/c1; pair-implement-batch.test.mjs's new efforts tests"
+      ],
+      "consumers": [
+        "the maintainer launching a comparative canary (batch vs cycle+Claude vs cycle+Codex) who needs effort held equal, or deliberately lowered, across all three without editing engine source per run",
+        "every future caller of either engine wanting a role- or stage-scoped reasoning-effort override"
+      ],
+      "classes": [
+        "C1 (pair-implement-batch, before) — opts.effort hardcoded 'high' at all 5 dispatch sites, no override possible",
+        "C2 (pair-implement-batch, after) — args.effort (batch-wide) / args.efforts.<role> (per-role) override the stage default, retired roles rejected with the same migration message as models, unknown values throw before any agent runs",
+        "C3 (pair-workflow-cycle, before) — $profile documented as reserved, zero consuming code; a caller passing --profile got silently ignored (undocumented no-op)",
+        "C4 (pair-workflow-cycle, after) — $profile.effort validates against the same known-effort list, HALTs profile-unresolved on an unknown value (never a silent default), and is rendered as a REQUEST in every stage's prompt regardless of realization",
+        "C5 (asymmetry, both after) — Codex has a REAL enforced lever (`-c model_reasoning_effort`) the coordinator applies to its own dispatch call; Claude's `Agent` tool has none, so for Claude the SAME instruction is honestly rendered as non-enforced prose, never claimed as a guarantee"
+      ],
+      "interactions": [
+        "I1 — a batch-wide `effort` and a per-role `efforts.<role>` both given: per-role wins, exactly mirroring `models`' own precedence, proven by the new pair-implement-batch.test.mjs case (green:low, red:medium from `efforts`, `verify` keeps the stage's own 'high' default because it has no override)",
+        "I2 — `$profile.effort` absent leaves the packet byte-identical to before (no `effort` key at all, not even null), proven by AC-profile-c1"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "pair-implement-batch.js's args/model/effort resolution block and cycle-dispatch.mjs's packetCommand/$profile handling, plus SKILL.md's documentation of both",
+    "mode": "behavioral",
+    "allowedPaths": [
+      ".claude/workflows/pair-implement-batch.js",
+      "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js",
+      ".claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs",
+      ".claude/skills/pair-workflow-cycle/SKILL.md",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r2-g5-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "cycle-dispatch.mjs packet echoes $profile.effort on the emitted packet and renders a request in the prompt",
+      "oracle": "node --test .claude/workflows/pair-contracts/cycle-coordinator.test.mjs -- (test name: \"AC-profile-w1: a valid $profile.effort is echoed on the packet and requested in the prompt\")",
+      "expected": "packet(...).effort === 'low' and packet(...).prompt matches /Requested reasoning effort for this dispatch: \\*\\*low\\*\\*/ and /request, not an enforced setting/",
+      "covers": [
+        "r2-g5-1"
+      ],
+      "rationale": "Before this fix, --profile was accepted syntactically (unknown-flag rejection would not fire) but silently ignored: no `effort` field on the packet, no prompt text. Reproduced live before the fix (this exact test written against the unmodified script, run before touching packetCommand): fails because packetCommand never reads opts.profile at all."
+    },
+    {
+      "id": "r2-g5-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "an unknown $profile.effort is a typed HALT before any packet is built",
+      "oracle": "node --test .claude/workflows/pair-contracts/cycle-coordinator.test.mjs -- (test name: \"AC-profile-w2: an unknown $profile.effort is a typed HALT before any packet is built, never a silent default\")",
+      "expected": "packet(...) exits 1 with {halt:'profile-unresolved'}",
+      "covers": [
+        "r2-g5-1"
+      ],
+      "rationale": "Before this fix, any --profile value (including a garbage effort) was silently ignored — no HALT existed. Confirmed the HALT is new, typed, and fires before the packet's other fields are computed."
+    },
+    {
+      "id": "r2-g5-w3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "pair-implement-batch.js's args.efforts routes the five live roles independently; args.effort is the batch-wide fallback; unknown values throw; a role with no override keeps the stage's own hardcoded default",
+      "oracle": "node --test .claude/workflows/pair-implement-batch.test.mjs -- (test name: \"US-486 canary follow-up: \\`efforts\\` routes the five live roles independently; \\`effort\\` stays the batch-wide default; unknown efforts throw; the stage default survives when neither is given\")",
+      "expected": "green dispatch opts.effort==='low', prepare(red) opts.effort==='medium', verify(reviewer, no override) opts.effort==='high'; args.effort:'medium-ish' throws 'unknown effort'; args.efforts.redd throws 'efforts.redd'; a batch-wide args.effort:'low' with no per-role override makes every dispatched stage's opts.effort 'low'",
+      "covers": [
+        "r2-g5-1"
+      ],
+      "rationale": "Before this fix `args.effort`/`args.efforts` were unknown keys silently rejected by rejectUnknownKeys (`args.effort is not a recognised key`), and every stage's effort was unconditionally the literal 'high' with no override path at all."
+    },
+    {
+      "id": "r2-g5-w4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "an `args.efforts` role retired by engine 3.0.0 is rejected with the same migration message `args.models` already gives, never mapped, never dropped",
+      "oracle": "node --test .claude/workflows/pair-implement-batch.test.mjs -- (test name: \"US-486 canary follow-up: retired \\`efforts\\` roles are REJECTED with the same migration message as \\`models\\` — never mapped, never dropped\")",
+      "expected": "args.efforts.{planner|seal|preflight|pr} throws 'efforts.<role> ... retired by engine 3.0.' naming what absorbed it",
+      "covers": [
+        "r2-g5-1"
+      ],
+      "rationale": "Before this fix `efforts` did not exist, so there was no retired-role check to reproduce red against — the row is red because the whole feature, including this guard, is new."
+    },
+    {
+      "id": "r2-g5-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "an absent $profile leaves cycle-dispatch.mjs's packet output byte-identical to today (no `effort` key, no prompt note) — this fix must never change behavior for a caller that has not adopted a profile",
+      "oracle": "node --test .claude/workflows/pair-contracts/cycle-coordinator.test.mjs -- (test name: \"AC-profile-c1 (control): an absent $profile leaves the packet byte-identical to today — no \\`effort\\` field, no prompt note\")",
+      "expected": "'effort' in packet(...) === false and packet(...).prompt does not match /reasoning effort/",
+      "covers": [
+        "r2-g5-1"
+      ],
+      "rationale": "Positive/no-regression control: passed before this fix trivially (there was no `effort` field or note to begin with) and must keep passing after — the new machinery is additive only, on an explicit opt-in."
+    }
+  ],
+  "redTests": [
+    {
+      "file": ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:86c658316d4dab8e22d1ce0fa60744976f71c2a184cfa4d9568669aa93b2258a",
+      "command": "node --test .claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      "observed": "Before the fix (AC-profile-w1/w2/c1 written against the then-unmodified cycle-dispatch.mjs): w1 and w2 failed (no `effort` field, no HALT — silently ignored $profile), c1 passed trivially. After the fix (commit 7425a13c): 76/76 pass."
+    },
+    {
+      "file": ".claude/workflows/pair-implement-batch.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:097333be40237a243138cd626a0ad3ded286eab2179aaa949395573b7dd81a5e",
+      "command": "node --test .claude/workflows/pair-implement-batch.test.mjs",
+      "observed": "Before the fix: both new tests failed -- `args.efforts`/`args.effort` were unrecognised keys (rejectUnknownKeys threw 'args.effort is not a recognised key' / 'args.efforts is not a recognised key'), so the retired-role and routing assertions never got to run their real assertions. After the fix (commit 7425a13c): 113/113 pass."
+    }
+  ],
+  "supportingEvidence": [],
+  "reattest": {
+    "reason": "Both test files were committed directly as part of an orchestrator-authored feature (commit 7425a13c4ea1aa0f60ce3618895ba96bb94733ce, 'feat: dynamic per-stage reasoning effort'), test-first: each new test was written against the UNMODIFIED engine code first, confirmed to fail for the exact reason the feature's absence predicts (unrecognised args key / silently-ignored $profile / no HALT), then the engine code was written and confirmed green (76/76 cycle-coordinator.test.mjs, 113/113 pair-implement-batch.test.mjs, 797/797 pnpm workflows:test, quality-gate clean) — all before this contract was written, exactly as r1-g1-rev2's and r2-g4's reattest were. The working tree is not dirty at either path (already committed at inputHead), so reattest lets the sealer verify these witnesses by content hash against the real HEAD blob instead of requiring an uncommitted change."
+  },
+  "reconciled": [
+    {
+      "path": ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      "sha256": "sha256:86c658316d4dab8e22d1ce0fa60744976f71c2a184cfa4d9568669aa93b2258a"
+    },
+    {
+      "path": ".claude/workflows/pair-implement-batch.test.mjs",
+      "sha256": "sha256:097333be40237a243138cd626a0ad3ded286eab2179aaa949395573b7dd81a5e"
+    },
+    {
+      "path": "packages/knowledge-hub/dataset/.workflows/pair-implement-batch.test.mjs",
+      "sha256": "sha256:097333be40237a243138cd626a0ad3ded286eab2179aaa949395573b7dd81a5e"
+    }
+  ],
+  "preserved": []
+}
