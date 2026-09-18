@@ -609,9 +609,33 @@ export function parseCatalogLastUpdated(catalog: string): string | null {
   return /^>\s*\*\*Last updated:\*\*\s*(\d{4}-\d{2}-\d{2})\b/m.exec(catalog)?.[1] ?? null
 }
 
-/** The date (YYYY-MM-DD) of the newest commit touching `pathRel`, or null when git cannot say. */
+/**
+ * The date (YYYY-MM-DD) of the newest commit touching `pathRel`, or null when git cannot say.
+ *
+ * A SHALLOW clone is one of the ways git cannot say — and the one way it does not admit it.
+ * The grafted tip has no parents, so git reads it as ADDING every file and
+ * `git log -1 -- <path>` answers with the TIP's own date whatever that commit touched. On a
+ * `pull_request` event the tip is the synthetic merge commit GitHub creates the moment the run
+ * starts, i.e. TODAY, so check 2d accused every correct header dated before the run day and
+ * could only pass on the header's own date (CI 35305574304 on ce10aea9, green the day before
+ * on byte-identical content). Refusing is the honest answer: null reaches
+ * `checkCatalogFreshness`'s loud "cannot resolve ..." branch, which names the real cause,
+ * instead of an accusation about a commit that never touched the path (r1-1).
+ *
+ * Two independent corrections, both needed: `.github/workflows/ci.yml` now gives the gate the
+ * history it reads (`fetch-depth: 0`, as `secret-scan` already did), and this guard keeps the
+ * function from inventing a date wherever else it is ever run.
+ */
 export function newestChangeDate(root: string, pathRel: string): string | null {
   try {
+    // Fail-closed: anything but a literal `false` (older git prints the shallow file's path)
+    // is treated as shallow. Outside a repository this exits non-zero and the catch answers,
+    // exactly as the `git log` call did before.
+    const shallow = execFileSync('git', ['rev-parse', '--is-shallow-repository'], {
+      cwd: root,
+      encoding: 'utf8',
+    }).trim()
+    if (shallow !== 'false') return null
     const out = execFileSync('git', ['log', '-1', '--format=%cs', '--', pathRel], {
       cwd: root,
       encoding: 'utf8',
