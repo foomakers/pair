@@ -233,7 +233,12 @@ export function usageArguments(usage: string, bin: string, command: string): str
 function buildDispatchExtras(
   initCwd: string | undefined,
   configPath: string | undefined,
-): { baseTarget?: string; config?: string; progressWriter: { write(s: string): void }; isTTY: boolean } {
+): {
+  baseTarget?: string
+  config?: string
+  progressWriter: { write(s: string): void }
+  isTTY: boolean
+} {
   return {
     ...(initCwd && { baseTarget: initCwd }),
     ...(configPath && { config: configPath }),
