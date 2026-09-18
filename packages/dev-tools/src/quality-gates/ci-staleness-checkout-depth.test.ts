@@ -158,6 +158,36 @@ describe('every workflow job that runs the docs-staleness gate checks out histor
     expect(offenders, shallowMessage(offenders)).toEqual([])
   })
 
+  // r2-g3-w1 — WITNESS (discriminates finding r1-3 / obligation r2-g1-rem1, the SECOND live
+  // C6 member r2-g1 named but could not fix inside its own `fixScope`). The GLOBAL derived
+  // offender set — no OWNED_WORKFLOWS filter — must be empty: every gate-running job in the
+  // repository, not only the ones a prior group owned, must check out full history. At this
+  // base `.github/workflows/release.yml` job `release` still declares no `fetch-depth` on its
+  // `actions/checkout@v4` step (line 29-30) while running `pnpm quality-gate`, which chains
+  // into `pnpm docs:staleness` (root package.json). RED here until `release.yml`'s checkout
+  // adds `fetch-depth: 0`, the exact fix `r2-g1-red-contract.json`'s plan named for group
+  // `r2-g3` (`allowedPaths: ['.github/workflows/release.yml']`).
+  it('checks out full history in every gate-running job in the repository, not only the ones a prior group owned', () => {
+    const offenders = gateRunnersWithoutHistory(readWorkflows(), scriptsReachingTheGate())
+    expect(offenders, shallowMessage(offenders)).toEqual([])
+  })
+
+  // r2-g3-c1 — CONTROL (mechanism pin): the release job is a gate runner (through the
+  // `quality-gate` chain) and its only checkout step is the one this fix must touch. Fails if
+  // the step is removed, renamed to a non-checkout action, or the chain to the gate is broken
+  // — any of which would silently empty w1 above instead of turning it green.
+  it('confirms the release job runs the gate through the quality-gate chain and has exactly one checkout step to fix', () => {
+    const release = readWorkflows()['.github/workflows/release.yml'] as Doc
+    const job = release.jobs?.['release'] as Job
+    expect(gateRunners(readWorkflows(), scriptsReachingTheGate())).toContain(
+      '.github/workflows/release.yml:release',
+    )
+    const checkoutSteps = stepsOf(job).filter(
+      s => typeof s.uses === 'string' && s.uses.startsWith('actions/checkout'),
+    )
+    expect(checkoutSteps).toHaveLength(1)
+  })
+
   // r1-1-c4 — CONTROL: the sibling job that already does it right must keep doing it.
   it('keeps the full-history checkout secret-scan already declares', () => {
     const ci = readWorkflows()['.github/workflows/ci.yml'] as Doc
