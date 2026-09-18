@@ -818,3 +818,64 @@ test('CLI: seal accepts --root and reports the same typed refusals', () => {
   rmSync(cwd, { recursive: true, force: true })
   rmSync(main, { recursive: true, force: true })
 })
+
+// ── custody overrides (<runDir>/custody-overrides.json) ─────────────────────────────────────
+test('verify-chain: an out-of-scope breach on an already-sealed segment is overridden by a human-authorized, attributed entry in <runDir>/custody-overrides.json — verified against its claimed source, never on trust; malformed or mismatched entries leave the breach blocking', () => {
+  const { cwd, base } = chainRepo()
+  // A change to src/other.js outside r1-g1's allowedPaths (['src/a.js']) — stands in for content
+  // a merge from origin/main carries into an already-sealed segment.
+  write(cwd, 'src/other.js', 'export const o = 1\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'merge-carried change to src/other.js')
+
+  const bare = verifyChain({ pr: PR, base, cwd })
+  assert.equal(bare.verified, false)
+  assert.ok(bare.breaches.some(b => b.code === 'out-of-scope' && b.path === 'src/other.js' && b.segment === 'r1-g1'))
+  assert.equal(bare.overriddenBreaches, undefined)
+
+  const runDir = mkdtempSync(join(tmpdir(), 'run-dir-'))
+  const overridesPath = join(runDir, 'custody-overrides.json')
+  // A sealed handoff must exist in runDir or `expectContract` derives to false and verifyChainCore
+  // short-circuits to `verified: true` before ever reaching the segment loop — unrelated to overrides.
+  writeFileSync(join(runDir, 'r1-g1-red-verify.json'), JSON.stringify({ skill: 'red-verify', sealed: true }))
+
+  // Malformed (missing authorizedBy): dropped, never partially trusted — the breach still blocks.
+  writeFileSync(overridesPath, JSON.stringify({ overrides: [{ code: 'out-of-scope', path: 'src/other.js', segment: 'r1-g1', reason: 'x', at: new Date().toISOString() }] }))
+  const malformed = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.equal(malformed.verified, false)
+  assert.ok(malformed.breaches.some(b => b.code === 'out-of-scope' && b.path === 'src/other.js'))
+
+  // Well-formed, but its claimed source (`verifyAgainst`) disagrees with HEAD: refused, not honored on trust.
+  git(cwd, 'branch', 'origin-main-stand-in', base) // at base, src/other.js still reads 'export const o = 0\n'
+  writeFileSync(
+    overridesPath,
+    JSON.stringify({ overrides: [{ code: 'out-of-scope', path: 'src/other.js', segment: 'r1-g1', reason: 'merge-carried from main', authorizedBy: 'maintainer', at: new Date().toISOString(), verifyAgainst: 'origin-main-stand-in' }] }),
+  )
+  const mismatched = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.equal(mismatched.verified, false)
+  assert.ok(mismatched.breaches.some(b => b.code === 'out-of-scope' && b.path === 'src/other.js'))
+  assert.equal(mismatched.overriddenBreaches, undefined)
+
+  // The claimed source now agrees byte-for-byte: honored, moved to overriddenBreaches, attributed.
+  git(cwd, 'branch', '-f', 'origin-main-stand-in', 'HEAD')
+  const honored = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.equal(honored.verified, true, JSON.stringify(honored))
+  assert.equal(honored.breaches.length, 0)
+  assert.equal(honored.overriddenBreaches?.length, 1)
+  assert.equal(honored.overriddenBreaches[0].code, 'out-of-scope')
+  assert.equal(honored.overriddenBreaches[0].path, 'src/other.js')
+  assert.equal(honored.overriddenBreaches[0].override.authorizedBy, 'maintainer')
+  assert.equal(honored.overriddenBreaches[0].override.verifyAgainst, 'origin-main-stand-in')
+
+  // A different segment / different code never matches this entry — no accidental over-reach.
+  writeFileSync(
+    overridesPath,
+    JSON.stringify({ overrides: [{ code: 'out-of-scope', path: 'src/other.js', segment: 'r1-g2-not-this-one', reason: 'wrong segment', authorizedBy: 'maintainer', at: new Date().toISOString() }] }),
+  )
+  const wrongSegment = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.equal(wrongSegment.verified, false)
+  assert.ok(wrongSegment.breaches.some(b => b.code === 'out-of-scope' && b.path === 'src/other.js'))
+
+  rmSync(cwd, { recursive: true, force: true })
+  rmSync(runDir, { recursive: true, force: true })
+})

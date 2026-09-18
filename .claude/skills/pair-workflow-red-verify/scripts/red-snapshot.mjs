@@ -446,11 +446,46 @@ export function sealedHandoffsIn(runDir) {
   }
   return out.sort()
 }
+// A human-authorized custody exception for a SEGMENT breach (`out-of-scope`, `unlisted-test-changed`,
+// `test-mode-production-change`, `behavioral-adds-or-moves-module`, a segment-scoped `test-blob-changed`)
+// on an ALREADY-SEALED segment — never inferred, never self-granted by an agent, and never a field on
+// the sealed contract itself (that would mutate a sigillo already committed). Lives beside the story's
+// own working files as `<runDir>/custody-overrides.json`: `{ overrides: [{ code, path, segment, reason,
+// authorizedBy, at, verifyAgainst? }] }`. A malformed entry (missing any required field, an
+// unparseable `at`) is DROPPED, never partially trusted — the breach it would have covered stays
+// blocking, fail-safe. `verifyAgainst`, when present, is not taken on faith: `verifyChainCore` proves
+// the path's blob at HEAD is byte-identical to that ref before honoring the override — an override
+// whose claimed source has since diverged is refused, not silently accepted. An honored override never
+// vanishes a breach: it moves from `breaches` to `overriddenBreaches`, still visible, still attributed.
+function readCustodyOverrides(runDir) {
+  const p = join(runDir, 'custody-overrides.json')
+  if (!existsSync(p)) return []
+  let data
+  try {
+    data = JSON.parse(readFileSync(p, 'utf8'))
+  } catch {
+    return []
+  }
+  if (!data || !Array.isArray(data.overrides)) return []
+  return data.overrides.filter(
+    o =>
+      o &&
+      typeof o === 'object' &&
+      String(o.code ?? '').trim() &&
+      String(o.path ?? '').trim() &&
+      String(o.segment ?? '').trim() &&
+      String(o.authorizedBy ?? '').trim() &&
+      String(o.reason ?? '').trim() &&
+      String(o.at ?? '').trim() &&
+      !Number.isNaN(Date.parse(o.at)),
+  )
+}
 export function verifyChain({ pr, base, cwd, expectContract, runDir }) {
-  if (runDir === undefined) return verifyChainCore({ pr, base, cwd, expectContract: expectContract ?? true })
+  const overrides = runDir !== undefined ? readCustodyOverrides(runDir) : []
+  if (runDir === undefined) return verifyChainCore({ pr, base, cwd, expectContract: expectContract ?? true, overrides })
   const sealed = sealedHandoffsIn(runDir)
   const derived = sealed.length > 0
-  const out = verifyChainCore({ pr, base, cwd, expectContract: derived })
+  const out = verifyChainCore({ pr, base, cwd, expectContract: derived, overrides })
   out.contractExpectation = { source: 'run-dir', runDir, sealedHandoffs: sealed, expectContract: derived }
   if (expectContract === false && derived) {
     out.breaches = [{ code: 'contract-expected-refused', sealedHandoffs: sealed }, ...(out.breaches ?? [])]
@@ -459,7 +494,7 @@ export function verifyChain({ pr, base, cwd, expectContract, runDir }) {
   }
   return out
 }
-function verifyChainCore({ pr, base, cwd, expectContract = true }) {
+function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [] }) {
   if (!SHA_RE.test(String(base))) return { verified: false, contractBreach: true, breaches: [{ code: 'base-not-a-sha' }], snapshots: [] }
   const snaps = listSnapshots({ pr, base, cwd })
   // US-479 (canary 481-v5): `expectContract: false` is a statement about THIS cycle — it has sealed
@@ -474,7 +509,24 @@ function verifyChainCore({ pr, base, cwd, expectContract = true }) {
     return { verified: true, contractBreach: false, breaches: [], snapshots: [], contract: 'none', historicalSnapshots: snaps.map(s => ({ phase: s.phase, sha: s.sha, manifest: s.manifest })) }
   if (!snaps.length) return { verified: false, contractBreach: true, breaches: [{ code: 'snapshot-missing' }], snapshots: [] }
   const breaches = []
-  const breach = (code, extra = {}) => breaches.push({ code, ...extra })
+  const overriddenBreaches = []
+  const findOverride = (code, path, segment) => overrides.find(o => o.code === code && o.path === path && o.segment === segment)
+  const overrideHolds = o => {
+    if (!o.verifyAgainst) return true
+    const atRef = git(['rev-parse', '--verify', '-q', `${o.verifyAgainst}:${o.path}`], cwd, { allowFail: true })
+    const atHead = git(['rev-parse', '--verify', '-q', `HEAD:${o.path}`], cwd, { allowFail: true })
+    return atRef !== null && atRef === atHead
+  }
+  const breach = (code, extra = {}) => {
+    if (extra.path && extra.segment) {
+      const o = findOverride(code, extra.path, extra.segment)
+      if (o && overrideHolds(o)) {
+        overriddenBreaches.push({ code, ...extra, override: { authorizedBy: o.authorizedBy, reason: o.reason, at: o.at, ...(o.verifyAgainst ? { verifyAgainst: o.verifyAgainst } : {}) } })
+        return
+      }
+    }
+    breaches.push({ code, ...extra })
+  }
   const head = git(['rev-parse', 'HEAD'], cwd)
   // Each snapshot: parent == its declared base, and that base descends from the previous snapshot.
   const contracts = []
@@ -560,7 +612,14 @@ function verifyChainCore({ pr, base, cwd, expectContract = true }) {
     seen.add(k)
     return true
   })
-  return { verified: unique.length === 0, contractBreach: unique.length > 0, head, snapshots: snaps.map(s => ({ pr: s.pr, phase: s.phase, snapshot: s.sha, base: s.base, manifest: s.manifest })), breaches: unique }
+  return {
+    verified: unique.length === 0,
+    contractBreach: unique.length > 0,
+    head,
+    snapshots: snaps.map(s => ({ pr: s.pr, phase: s.phase, snapshot: s.sha, base: s.base, manifest: s.manifest })),
+    breaches: unique,
+    ...(overriddenBreaches.length ? { overriddenBreaches } : {}),
+  }
 }
 
 // ── CLI ────────────────────────────────────────────────────────────────────────────────────
