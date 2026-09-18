@@ -163,6 +163,23 @@ the smoke's entire point is a real, unattended write, so treat
 `AGENT_HARNESS_SMOKE_REPO` as fully disposable and never point it at a repository whose
 history matters.
 
+### 9. Remote Source Resolution (`scenarios/remote-source-resolution.sh`) — story #136
+
+Manual only — never in CI (see `lib/ci-tests.sh` `CI_EXCLUDED`, network dependency). Covers
+`pair install|update --source <https-url>` end to end: `source-resolution.sh` (offline-safe)
+exercises only local directories, and `auto-download-*.sh` cover only the no-`--source`
+release-asset path, so nothing else exercises the remote-URL path.
+
+- **Happy path**: install and update against a pinned real HTTPS release asset of this repo,
+  verifying installed content on disk and the non-TTY download-progress evidence
+  (`formatProgress`'s `<label>... N% complete` lines).
+- **Invalid source**: `file://` and `ftp://` are rejected as unsupported protocols; a malformed
+  non-URL string falls through to local-path resolution and fails as a non-existent path.
+- **HTTP 404**: fails fast with no retry delay (non-retryable), against a local self-signed-cert
+  HTTPS fixture (`fixtures/https-404-server.js`) — deterministic, no third-party endpoint.
+- **Connection refused**: retries the full budget (1s+2s+4s, 3 retries) before failing, against a
+  closed local port (`fixtures/closed-port.js`) — deterministic, no third-party endpoint.
+
 ## How to Run
 
 The `run-all.sh` script requires at least the path to the executable to be tested.

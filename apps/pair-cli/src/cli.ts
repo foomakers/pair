@@ -224,6 +224,29 @@ export function usageArguments(usage: string, bin: string, command: string): str
   return usage.startsWith(prefix) ? usage.slice(prefix.length) : undefined
 }
 
+/**
+ * The download-progress sink threaded down to `resolveDatasetRoot` for a non-TTY
+ * `<label>... N% complete` line (`formatProgress`) — real stdout, real TTY-ness, built once
+ * per dispatched command rather than inline in the action closure (keeps that closure's
+ * line count under the function-size gate).
+ */
+function buildDispatchExtras(
+  initCwd: string | undefined,
+  configPath: string | undefined,
+): {
+  baseTarget?: string
+  config?: string
+  progressWriter: { write(s: string): void }
+  isTTY: boolean
+} {
+  return {
+    ...(initCwd && { baseTarget: initCwd }),
+    ...(configPath && { config: configPath }),
+    progressWriter: { write: (s: string) => process.stdout.write(s) },
+    isTTY: process.stdout.isTTY === true,
+  }
+}
+
 function registerCommandFromMetadata(
   prog: Command,
   commandName: keyof typeof commandRegistry,
@@ -268,8 +291,7 @@ function registerCommandFromMetadata(
     await dispatchCommand(config, fsService, {
       httpClient,
       cliVersion: version,
-      ...(initCwd && { baseTarget: initCwd }),
-      ...(configPath && { config: configPath }),
+      ...buildDispatchExtras(initCwd, configPath),
     })
   })
 }
