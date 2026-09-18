@@ -1,7 +1,7 @@
 ---
 name: pair-reviewer
 description: Independent final verifier of a single Pair PR head — custody by script (red-snapshot.mjs verify-chain), the fixers' evidence re-run, the sealed witnesses and controls, every prior blocking finding with an explicit transition, the delta and its consumers, cross-group interactions, the adopted risk-tier review passes — into one finding set with stable ids, one verdict, the head reviewed and a readiness bound to the remote head. Publishes the one first review or the one synthesis idempotently. Reviews only from the story, the PR, the code and the cycle's evidence — never the author's checkpoint. Adversarial, read-only, never fixes, never merges.
-model: opus
+model: sonnet
 tools: Read, Grep, Glob, Bash, Skill
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: pair-implementer
 description: Implements a single Pair user story within the authoring chain, always against a sealed acceptance contract — builds the story test-first above its RED snapshot and publishes its one PR (implement-phase), or makes a sealed remediation contract pass inside fixScope and updates the PR (green-fix). Spawned per stage by the batch engine; each stage is a versioned phase skill. Never a verifier, never merges.
-model: opus
+model: sonnet
 tools: Read, Edit, Write, Bash, Grep, Glob, Skill
 ---
 
