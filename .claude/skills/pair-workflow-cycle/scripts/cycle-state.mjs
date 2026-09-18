@@ -1735,7 +1735,12 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     const plan = planFor(parts.round)
     const groups = orderGroups(plan?.groups ?? []) ?? []
     const idx = groups.findIndex(g => g.groupId === parts.groupId)
-    const nextGroup = groups[idx + 1]
+    // idx is -1 when the current phase was dispatched OUTSIDE the plan this round's red-spec wrote
+    // (a group added later, after a review discovered a new finding not in the original plan) —
+    // groups[-1 + 1] would silently resolve to groups[0], re-dispatching the FIRST planned group as
+    // if it were still due, even when it is already sealed/green/resolved. undefined here correctly
+    // falls through to the round re-review below instead.
+    const nextGroup = idx === -1 ? undefined : groups[idx + 1]
     const roundReview = reviews.filter(h => (phaseParts(h.phase)?.round ?? -1) === parts.round).pop()
     if (roundReview) {
       // This GREEN was a retry after the round's review: the other groups whose approved test
