@@ -7,6 +7,8 @@ interface DispatchContext {
   cliVersion?: string
   baseTarget?: string
   config?: string
+  progressWriter?: { write(s: string): void }
+  isTTY?: boolean
 }
 
 async function dispatchWithExitCode(handler: () => Promise<number>): Promise<void> {
@@ -105,5 +107,7 @@ function resolveOptions(ctx: DispatchContext) {
     ...(ctx.cliVersion && { cliVersion: ctx.cliVersion }),
     ...(ctx.baseTarget && { baseTarget: ctx.baseTarget }),
     ...(ctx.config && { config: ctx.config }),
+    ...(ctx.progressWriter && { progressWriter: ctx.progressWriter }),
+    ...(typeof ctx.isTTY !== 'undefined' && { isTTY: ctx.isTTY }),
   }
 }

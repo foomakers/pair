@@ -55,6 +55,8 @@ interface InstallHandlerOptions {
   httpClient?: HttpClientService
   cliVersion?: string
   presenter?: CliPresenter
+  progressWriter?: { write(s: string): void }
+  isTTY?: boolean
 }
 
 /**
@@ -193,6 +195,27 @@ function resolveConfigOptions(
   }
 }
 
+/**
+ * `resolveDatasetRoot`'s options, isolated so `setupInstallContext` stays one branch under
+ * the complexity gate — the `--no-kb` cast and the progress/TTY passthrough are plain
+ * field reads, not decisions, but ESLint's `complexity` rule still weighs each in the
+ * caller that builds them inline.
+ */
+function resolveInstallDatasetOptions(
+  config: InstallableConfig,
+  options?: InstallHandlerOptions,
+): Parameters<typeof resolveDatasetRoot>[2] {
+  return {
+    cliVersion: options?.cliVersion,
+    httpClient: options?.httpClient,
+    // `--no-kb` has to reach THIS reader too: the pre-flight honouring it only skips the warm
+    // fetch, and the command would otherwise download the KB the user just refused.
+    kb: (config as { kb?: boolean }).kb,
+    progressWriter: options?.progressWriter,
+    isTTY: options?.isTTY,
+  }
+}
+
 async function setupInstallContext(
   fs: FileSystemService,
   config: InstallableConfig,
@@ -204,13 +227,11 @@ async function setupInstallContext(
   sourceDeclaration?: SourceDeclarationOutcome | undefined
   resolution: string
 }> {
-  const datasetRoot = await resolveDatasetRoot(fs, config, {
-    cliVersion: options?.cliVersion,
-    httpClient: options?.httpClient,
-    // `--no-kb` has to reach THIS reader too: the pre-flight honouring it only skips the warm
-    // fetch, and the command would otherwise download the KB the user just refused.
-    kb: (config as { kb?: boolean }).kb,
-  })
+  const datasetRoot = await resolveDatasetRoot(
+    fs,
+    config,
+    resolveInstallDatasetOptions(config, options),
+  )
   const baseTarget = options?.baseTarget || config.target || fs.currentWorkingDirectory()
   const configContent = loadConfigWithOverrides(
     fs,

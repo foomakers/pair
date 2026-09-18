@@ -56,6 +56,8 @@ interface UpdateHandlerOptions {
   httpClient?: HttpClientService
   cliVersion?: string
   presenter?: CliPresenter
+  progressWriter?: { write(s: string): void }
+  isTTY?: boolean
 }
 
 type UpdateContext = {
@@ -139,6 +141,27 @@ function resolveConfigOptions(
   }
 }
 
+/**
+ * `resolveDatasetRoot`'s options, isolated so `setupUpdateContext` stays one branch under
+ * the complexity gate — the `--no-kb` cast and the progress/TTY passthrough are plain
+ * field reads, not decisions, but ESLint's `complexity` rule still weighs each in the
+ * caller that builds them inline.
+ */
+function resolveUpdateDatasetOptions(
+  config: UpdateCommandConfig,
+  options?: UpdateHandlerOptions,
+): Parameters<typeof resolveDatasetRoot>[2] {
+  return {
+    cliVersion: options?.cliVersion,
+    httpClient: options?.httpClient,
+    // `--no-kb` has to reach THIS reader too: the pre-flight honouring it only skips the warm
+    // fetch, and the command would otherwise download the KB the user just refused.
+    kb: (config as { kb?: boolean }).kb,
+    progressWriter: options?.progressWriter,
+    isTTY: options?.isTTY,
+  }
+}
+
 async function setupUpdateContext(
   fs: FileSystemService,
   config: UpdateCommandConfig,
@@ -150,13 +173,11 @@ async function setupUpdateContext(
   sourceDeclaration?: SourceDeclarationOutcome | undefined
   resolution: string
 }> {
-  const datasetRoot = await resolveDatasetRoot(fs, config, {
-    cliVersion: options?.cliVersion,
-    httpClient: options?.httpClient,
-    // `--no-kb` has to reach THIS reader too: the pre-flight honouring it only skips the warm
-    // fetch, and the command would otherwise download the KB the user just refused.
-    kb: (config as { kb?: boolean }).kb,
-  })
+  const datasetRoot = await resolveDatasetRoot(
+    fs,
+    config,
+    resolveUpdateDatasetOptions(config, options),
+  )
   // The project being updated is where its own pair.config.json lives — not the CLI's
   // module directory, which is what the loader defaults to (US-396).
   const baseTarget = options?.baseTarget || config.target || fs.currentWorkingDirectory()

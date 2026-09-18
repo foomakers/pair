@@ -54,6 +54,8 @@ async function downloadKBIfNeeded(options: {
   fsService: FileSystemService
   httpClient: HttpClientService
   customUrl?: string | undefined
+  progressWriter?: { write(s: string): void } | undefined
+  isTTY?: boolean | undefined
   isKBCachedFn?: typeof isKBCached
   ensureKBAvailableFn?: typeof ensureKBAvailable
   DIAG: boolean
@@ -63,6 +65,8 @@ async function downloadKBIfNeeded(options: {
     fsService,
     httpClient,
     customUrl,
+    progressWriter,
+    isTTY,
     DIAG,
     isKBCachedFn = isKBCached,
     ensureKBAvailableFn = ensureKBAvailable,
@@ -83,6 +87,8 @@ async function downloadKBIfNeeded(options: {
     httpClient,
     fs: fsService,
     ...(customUrl && { customUrl }),
+    ...(progressWriter && { progressWriter }),
+    ...(typeof isTTY !== 'undefined' && { isTTY }),
   })
   return kbPath
 }
@@ -95,6 +101,8 @@ export async function getKnowledgeHubDatasetPathWithFallback(options: {
   httpClient: HttpClientService
   version: string
   customUrl?: string
+  progressWriter?: { write(s: string): void } | undefined
+  isTTY?: boolean | undefined
   isKBCachedFn?: typeof isKBCached
   ensureKBAvailableFn?: typeof ensureKBAvailable
 }): Promise<string> {
@@ -103,6 +111,8 @@ export async function getKnowledgeHubDatasetPathWithFallback(options: {
     httpClient,
     version,
     customUrl,
+    progressWriter,
+    isTTY,
     isKBCachedFn = isKBCached,
     ensureKBAvailableFn = ensureKBAvailable,
   } = options
@@ -124,6 +134,8 @@ export async function getKnowledgeHubDatasetPathWithFallback(options: {
     fsService,
     httpClient,
     customUrl,
+    progressWriter,
+    isTTY,
     isKBCachedFn,
     ensureKBAvailableFn,
     DIAG,
@@ -177,12 +189,24 @@ async function resolveLocalDataset(
   return resolved
 }
 
+/** Download-progress passthrough shared by every network-fetching branch below. */
+interface DownloadPassthrough {
+  progressWriter?: { write(s: string): void } | undefined
+  isTTY?: boolean | undefined
+}
+
+interface DefaultDatasetOptions extends DownloadPassthrough {
+  httpClient?: HttpClientService | undefined
+  kb?: boolean | undefined
+}
+
 async function resolveDefaultDataset(
   fs: FileSystemService,
   version: string,
-  httpClient?: HttpClientService,
-  kb?: boolean,
+  options: DefaultDatasetOptions,
 ): Promise<string> {
+  const { httpClient, kb, progressWriter, isTTY } = options
+
   // `--no-kb` means "use what is already here", not "download quietly". Resolve from the
   // bundled dataset or an already-populated cache slot, and if neither exists say so with the
   // two ways out — rather than fetching the KB the user just refused.
@@ -203,6 +227,8 @@ async function resolveDefaultDataset(
       fsService: fs,
       httpClient,
       version,
+      progressWriter,
+      isTTY,
     })
   }
   const localPath = await tryMonorepoDatasetPath(fs, isDiagEnabled())
@@ -211,6 +237,46 @@ async function resolveDefaultDataset(
     'Knowledge base dataset not found locally and no network client available. ' +
       'Use --source <path> to provide a local KB directory or .zip file.',
   )
+}
+
+interface RemoteDatasetRequest extends DownloadPassthrough {
+  url: string
+  version: string
+  httpClient: HttpClientService | undefined
+}
+
+async function resolveRemoteDataset(
+  fs: FileSystemService,
+  request: RemoteDatasetRequest,
+): Promise<string> {
+  const { url, version, httpClient, ...passthrough } = request
+  if (!httpClient) {
+    throw new Error('Remote resolution requires httpClient')
+  }
+  return getKnowledgeHubDatasetPathWithFallback({
+    fsService: fs,
+    httpClient,
+    version,
+    customUrl: url,
+    ...passthrough,
+  })
+}
+
+/** Unpacks `DatasetResolveOptions`'s optional fields, isolated from `resolveDatasetRoot`'s
+ * own switch so ESLint's `complexity` rule (which weighs each `?.` read) counts them once,
+ * here, rather than inflating the dispatcher it feeds. */
+function unpackDatasetResolveOptions(options: DatasetResolveOptions | undefined): {
+  version: string
+  httpClient: HttpClientService | undefined
+  kb: boolean | undefined
+  passthrough: DownloadPassthrough
+} {
+  return {
+    version: options?.cliVersion || '0.0.0',
+    httpClient: options?.httpClient,
+    kb: options?.kb,
+    passthrough: { progressWriter: options?.progressWriter, isTTY: options?.isTTY },
+  }
 }
 
 /**
@@ -222,25 +288,14 @@ export async function resolveDatasetRoot(
   config: DatasetResolvableConfig,
   options?: DatasetResolveOptions,
 ): Promise<string> {
-  const version = options?.cliVersion || '0.0.0'
-  const httpClient = options?.httpClient
-  const kb = options?.kb
+  const { version, httpClient, kb, passthrough } = unpackDatasetResolveOptions(options)
 
   switch (config.resolution) {
     case 'default':
-      return resolveDefaultDataset(fs, version, httpClient, kb)
+      return resolveDefaultDataset(fs, version, { httpClient, kb, ...passthrough })
 
-    case 'remote': {
-      if (!httpClient) {
-        throw new Error('Remote resolution requires httpClient')
-      }
-      return getKnowledgeHubDatasetPathWithFallback({
-        fsService: fs,
-        httpClient,
-        version,
-        customUrl: config.url,
-      })
-    }
+    case 'remote':
+      return resolveRemoteDataset(fs, { url: config.url, version, httpClient, ...passthrough })
 
     case 'git':
       // Pure dispatch: the git slot's lifecycle lives in kb-manager, with every other
