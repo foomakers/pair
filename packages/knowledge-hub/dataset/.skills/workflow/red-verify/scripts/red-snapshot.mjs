@@ -529,10 +529,16 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [] 
     if (!('verifyAgainst' in o) || o.verifyAgainst === undefined) return true
     const ref = o.verifyAgainst
     if (typeof ref !== 'string' || !ref.trim()) return false
-    // The ref must be a commit OTHER than HEAD: `HEAD` (or any ref resolving to it) compares the
-    // path with itself, which is true by construction and proves nothing (r0-3b).
-    const refCommit = git(['rev-parse', '--verify', '-q', ref], cwd, { allowFail: true })
-    const headCommit = git(['rev-parse', '--verify', '-q', 'HEAD'], cwd, { allowFail: true })
+    // The ref must PEEL TO a commit other than HEAD's: `HEAD` (or any ref resolving to it) compares
+    // the path with itself, which is true by construction and proves nothing (r0-3b). `^{commit}`
+    // is required, not optional — `rev-parse --verify` alone returns the object the ref NAMES, not
+    // what it peels to, so an annotated tag AT HEAD (a tag object, not a commit) or `HEAD^{tree}` (a
+    // tree, not a commit) both differ from HEAD's raw commit sha while resolving `${ref}:${path}`
+    // through HEAD's own tree regardless — the blob comparison below becomes HEAD:path === HEAD:path
+    // again, silently. Peeling both sides to `^{commit}` closes that: a tag or tree that names HEAD
+    // collapses onto the same commit id as HEAD itself and is refused, exactly like the bare `HEAD` case.
+    const refCommit = git(['rev-parse', '--verify', '-q', `${ref}^{commit}`], cwd, { allowFail: true })
+    const headCommit = git(['rev-parse', '--verify', '-q', 'HEAD^{commit}'], cwd, { allowFail: true })
     if (refCommit === null || headCommit === null || refCommit === headCommit) return false
     const atRef = git(['rev-parse', '--verify', '-q', `${ref}:${o.path}`], cwd, { allowFail: true })
     const atHead = git(['rev-parse', '--verify', '-q', `HEAD:${o.path}`], cwd, { allowFail: true })

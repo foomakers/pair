@@ -60,10 +60,13 @@ The mechanism, and the properties that make it a decision rather than an escape 
    waivable at all**. A future breach code does not become overridable by growing the fields an
    override matches on; it becomes overridable by being added to that list, deliberately.
 4. **Verified where verification is possible.** `verifyAgainst`, when declared, is proven: the path's
-   blob at HEAD must be byte-identical to that ref. ABSENT claims nothing and is honored on the
-   attribution alone; DECLARED must prove something — an empty or non-string value, an unresolvable
-   ref, or a ref resolving to HEAD's own commit (a self-comparison, true by construction) all refuse
-   the override rather than skip the proof.
+   blob at HEAD must be byte-identical to that ref, and the ref must PEEL (`^{commit}`) to a commit
+   other than HEAD's own — `rev-parse --verify` alone returns the object a ref NAMES, not what it
+   peels to, so an annotated tag at HEAD or `HEAD^{tree}` both differ from HEAD's raw commit id while
+   still resolving the path through HEAD's own tree; peeling both sides closes that. ABSENT claims
+   nothing and is honored on the attribution alone; DECLARED must prove something — an empty or
+   non-string value, an unresolvable ref, or a ref peeling to HEAD's own commit (a self-comparison,
+   true by construction) all refuse the override rather than skip the proof.
 5. **Never invisible.** An honored override does not delete a breach: it moves it from `breaches` to
    `overriddenBreaches`, carrying `override: { authorizedBy, reason, at, verifyAgainst? }`. The
    reviewer copies that array into its `custody` handoff verbatim, so the durable record says who

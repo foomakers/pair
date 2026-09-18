@@ -920,8 +920,14 @@ test('verify-chain: a `verifyAgainst` that proves nothing — declared but empty
     blocked(`verifyAgainst: ${JSON.stringify(v)}`)
   }
   // (b) a ref resolving to HEAD compares the path with ITSELF — always true, self-attested.
+  // A ref that NAMES a non-commit object at HEAD (an annotated tag, a tree) is included here
+  // deliberately: `rev-parse --verify` alone returns what the ref NAMES, not what it peels to, so
+  // without `^{commit}` on both sides these two slipped through the OTHER-COMMIT check (their
+  // rev-parse output differs from HEAD's raw commit sha) while `${ref}:${path}` still resolved
+  // through HEAD's own tree — the same self-attestation as the bare `HEAD` case, one layer deeper.
   git(cwd, 'branch', '-f', 'self-ref', 'HEAD')
-  for (const v of ['HEAD', 'self-ref', git(cwd, 'rev-parse', 'HEAD')]) {
+  git(cwd, 'tag', '-a', 'self-ref-annotated', '-m', 'an annotated tag naming HEAD, not a commit id', 'HEAD')
+  for (const v of ['HEAD', 'self-ref', git(cwd, 'rev-parse', 'HEAD'), 'self-ref-annotated', 'HEAD^{tree}']) {
     put({ verifyAgainst: v })
     blocked(`verifyAgainst: ${v} (resolves to HEAD)`)
   }
