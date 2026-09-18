@@ -11,7 +11,7 @@ export const meta = {
   // reports why. Keep every value here a single literal, however long the line gets
   // (.claude/workflows/ is outside the prettier gate, so no formatter will re-wrap it).
   whenToUse:
-    'REQUIRED args shape: {"cards":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} (`stories` is the accepted alias; never pass both) — a bare space-separated list of issue refs is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. Optional per card: base (the branch it stacks on), notes (scope directive), prNumber (re-enter the review loop on an existing PR). Optional per run: maxParallelism, severityFloor, model, models (roles implementation | reviewer | red | redVerifier | green), runId (resume a cycle by naming its run directory), entryCapsules (map of admitted story id -> a cache hint for the host entry wiring; US-479 T-23, remediated by Finding 1 — accepted and validated, never trusted as approval, never changes dispatch behavior), pipeline (skill names, worktree root, audit-log dir, base branch, review-template path, maxFixRounds, reviewers). Engine 3.0.0 retired the planner, sealer, P3, cycle-comments and pr-phase dispatches: the keys `pipeline.skills.remediationPlan|redSeal|p3Verify|cycleComments|prPhase` and `models.planner|seal|preflight|pr` are REJECTED with a migration message, never silently mapped. Every value is validated by TYPE at parse time and a wrong one throws before any agent runs; card fields AND pipeline values are also validated by CONTENT (git refs, safe path segments, skill names) because they reach the shell commands the agents run — a value carrying shell syntax or `..` is rejected, never quoted. An unset optional key may be omitted or spelled `undefined`/`null` — all three mean absent; an EMPTY string is not one of them and throws. Pre-filter for mutex safety — no two cards may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a cold full-repo quality gate qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
+    'REQUIRED args shape: {"cards":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} (`stories` is the accepted alias; never pass both) — a bare space-separated list of issue refs is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. Optional per card: base (the branch it stacks on), notes (scope directive), prNumber (re-enter the review loop on an existing PR). Optional per run: maxParallelism, severityFloor, model, models (roles implementation | reviewer | red | redVerifier | green), effort, efforts (same roles as models; one of low | medium | high | xhigh | max, mirroring the Workflow sandbox own per-dispatch effort dial — the stage hardcoded default otherwise), runId (resume a cycle by naming its run directory), entryCapsules (map of admitted story id -> a cache hint for the host entry wiring; US-479 T-23, remediated by Finding 1 — accepted and validated, never trusted as approval, never changes dispatch behavior), pipeline (skill names, worktree root, audit-log dir, base branch, review-template path, maxFixRounds, reviewers). Engine 3.0.0 retired the planner, sealer, P3, cycle-comments and pr-phase dispatches: the keys `pipeline.skills.remediationPlan|redSeal|p3Verify|cycleComments|prPhase` and `models.planner|seal|preflight|pr`/`efforts.planner|seal|preflight|pr` are REJECTED with a migration message, never silently mapped. Every value is validated by TYPE at parse time and a wrong one throws before any agent runs; card fields AND pipeline values are also validated by CONTENT (git refs, safe path segments, skill names) because they reach the shell commands the agents run — a value carrying shell syntax or `..` is rejected, never quoted. An unset optional key may be omitted or spelled `undefined`/`null` — all three mean absent; an EMPTY string is not one of them and throws. Pre-filter for mutex safety — no two cards may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a cold full-repo quality gate qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
   phases: [
     { title: 'Contracts', model: 'haiku' },
     { title: 'Prepare', model: 'opus' },
@@ -405,12 +405,12 @@ function parseBatchArgs(raw) {
   })
   // Return the NORMALIZED container, not just the list. Every option must be read from the
   // parsed object, once.
-  rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'models', 'pipeline', 'maxParallelism', 'runId', 'entryCapsules'], 'args')
+  rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'models', 'effort', 'efforts', 'pipeline', 'maxParallelism', 'runId', 'entryCapsules'], 'args')
   // Reject the TYPE before anything coerces it, the same rule `constrain` applies to card
   // fields. Checked HERE, at parse time, not where each is consumed: `severityFloor` is only
   // rankable after the contract dispatch, and a wrong TYPE should not wait on an agent to be
   // reported.
-  for (const key of ['severityFloor', 'model', 'runId']) {
+  for (const key of ['severityFloor', 'model', 'effort', 'runId']) {
     if (a[key] !== undefined && a[key] !== null && typeof a[key] !== 'string')
       throw new Error(
         `implement-batch: \`args.${key}\` has ${key} of type ${Array.isArray(a[key]) ? 'array' : typeof a[key]}, which is not a string. ` +
@@ -446,6 +446,25 @@ function parseBatchArgs(raw) {
       models[role] = value.trim()
     }
   }
+  // `efforts` mirrors `models` exactly — same roles, same retired-key rejection, same shape —
+  // because a reasoning-effort A/B test has the identical hazard: lowering GREEN alone while
+  // silently also lowering the adversarial REVIEWER would make a result unable to say which
+  // change explains the outcome.
+  let efforts
+  if (a.efforts !== undefined && a.efforts !== null) {
+    if (typeof a.efforts !== 'object' || Array.isArray(a.efforts))
+      throw new Error('implement-batch: `args.efforts` must be an object keyed by workflow role, or be omitted.')
+    for (const role of Object.keys(a.efforts))
+      if (RETIRED_MODEL_ROLES[role])
+        throw new Error(`implement-batch: \`args.efforts.${role}\` was retired by engine 3.0.0 (ADR-024 amendment b) — its work now runs inside ${RETIRED_MODEL_ROLES[role]}. Remove the key; it is never mapped silently.`)
+    rejectUnknownKeys(a.efforts, modelRoles, 'args.efforts')
+    efforts = {}
+    for (const [role, value] of Object.entries(a.efforts)) {
+      if (typeof value !== 'string' || !value.trim())
+        throw new Error(`implement-batch: \`args.efforts.${role}\` must be a non-empty effort name.`)
+      efforts[role] = value.trim()
+    }
+  }
   const runId = a.runId === undefined || a.runId === null ? undefined : String(a.runId).trim()
   if (runId !== undefined && !isSegment(runId))
     throw new Error(
@@ -472,7 +491,7 @@ function parseBatchArgs(raw) {
       entryCapsules[id] = capsule
     }
   }
-  return { stories, severityFloor: a.severityFloor, model: a.model, models, pipeline: a.pipeline, maxParallelism: a.maxParallelism, runId, entryCapsules }
+  return { stories, severityFloor: a.severityFloor, model: a.model, models, effort: a.effort, efforts, pipeline: a.pipeline, maxParallelism: a.maxParallelism, runId, entryCapsules }
 }
 const PARSED = parseBatchArgs(args)
 const RUN_ID = PARSED.runId
@@ -816,11 +835,31 @@ const BATCH_MODEL = validateModel(PARSED.model, 'args.model')
 const ROLE_MODELS = Object.fromEntries(
   Object.entries(PARSED.models ?? {}).map(([role, value]) => [role, validateModel(value, `args.models.${role}`)]),
 )
+// Reasoning effort, same override shape as model (batch-wide `effort`, per-role `efforts`).
+// `opts.effort` on the `agent()` call is a REAL, enforced parameter of the Workflow sandbox
+// (unlike the top-level Agent tool, which exposes no effort dial at all — US-486 canary
+// discovery). KNOWN_EFFORTS mirrors the sandbox's own accepted values; an unranked/unknown one
+// is a caller typo and throws before any agent runs, exactly like an unknown model.
+const KNOWN_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
+const validateEffort = (value, where) => {
+  const v = String(value ?? '').trim()
+  if (!v) return undefined
+  if (!KNOWN_EFFORTS.includes(v))
+    throw new Error(`implement-batch: unknown effort ${JSON.stringify(v)} at ${where}; expected one of ${KNOWN_EFFORTS.join(' | ')}.`)
+  return v
+}
+const BATCH_EFFORT = validateEffort(PARSED.effort, 'args.effort')
+const ROLE_EFFORTS = Object.fromEntries(
+  Object.entries(PARSED.efforts ?? {}).map(([role, value]) => [role, validateEffort(value, `args.efforts.${role}`)]),
+)
 // Deliberate fixed-model utility steps do not call this helper: they are not part of a model
-// comparison and remain deterministic.
+// comparison and remain deterministic. The stage's own hardcoded `effort` (in its call-site
+// `opts`) is the DEFAULT only — a caller-supplied `efforts.<role>` or batch-wide `effort`
+// always wins, never silently ignored.
 const withModel = (role, opts) => {
   const model = ROLE_MODELS[role] ?? BATCH_MODEL
-  return model ? { ...opts, model } : opts
+  const effort = ROLE_EFFORTS[role] ?? BATCH_EFFORT ?? opts.effort
+  return { ...opts, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
 }
 // Rounds of autonomous fix<->re-review before escalating to a human. Beyond 3 the loop is
 // usually not converging for a reason a fourth round won't fix either (a design disagreement),

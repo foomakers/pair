@@ -58,6 +58,18 @@ export const REALIZATIONS = [
 // actually resume any work.
 const RESUME_ALIASES = { codex: ['collaboration.followup_task'] }
 
+// ── reasoning effort profile ($profile, reserved by SKILL.md, US-486 canary follow-up) ─────────
+// Mirrors `pair-implement-batch.js`'s own `agent()` effort dial exactly (same accepted values):
+// KNOWN_EFFORTS lives here, not in cycle-state.mjs, because it is a coordinator-only concern — the
+// batch engine's sandbox cannot import this file (or cycle-state.mjs) at all, so it keeps its own
+// independent copy of the same list (already true of its KNOWN_MODELS). Enforcement differs by
+// realization: Codex accepts `-c model_reasoning_effort=<value>` as a REAL, enforced parameter
+// (verified against a live session); the top-level `Agent` tool a Claude-bound coordinator uses to
+// dispatch stage subagents exposes NO effort parameter at all, so for `claude` this can only ever
+// be a best-effort PROMPT instruction, never an enforced one — `packetCommand` says so honestly in
+// the rendered prompt rather than silently pretending both realizations honour it identically.
+const KNOWN_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
+
 // ── validation (values reaching git) ────────────────────────────────────────────────────────
 const SAFE_SEGMENT = /^[A-Za-z0-9._-]+$/
 const SAFE_REF = /^[A-Za-z0-9._\-/]+$/
@@ -297,6 +309,13 @@ function packetCommand(opts) {
   const workflowVersion = opts['workflow-version'] ?? WORKFLOW_VERSION
   const pipeline = resolvePipeline(opts.pipeline === undefined ? undefined : JSON.parse(opts.pipeline))
   const SK = pipeline.skills
+  // `$profile` (SKILL.md's reserved argument): absent ⇒ no override, exactly today's behavior.
+  // Present but its `effort` unknown ⇒ HALT `profile-unresolved`, never a silent default — the
+  // HALT this argument was reserved under before any consumer existed.
+  const profile = opts.profile === undefined ? {} : JSON.parse(opts.profile)
+  if (profile.effort !== undefined && !KNOWN_EFFORTS.includes(profile.effort))
+    fail('profile-unresolved', `$profile.effort ${JSON.stringify(profile.effort)} is not one of ${KNOWN_EFFORTS.join(' | ')}`, { profile })
+  const effort = profile.effort
   const runId = opts.run ?? `story-${card.id}`
   must(isSegment(String(card.id)), 'card-invalid', `card.id must be one safe path segment: ${card.id}`)
   must(isSegment(runId), 'run-invalid', `--run must be one safe path segment: ${runId}`)
@@ -323,8 +342,16 @@ function packetCommand(opts) {
   const blindPaths = [...new Set(['.pair/working/', pipeline.auditLogDir])].map(p => `\`${p}\``).join(' or ')
 
   const common = `$run=${runId} $story=${card.id} $branch=${card.branch} $worktree=${worktreePath} $base=${storyBase} $stacked=${stacked}${pr ? ` $pr=${pr}` : ''} $entry=${pr ? 'pr' : 'fresh'} $policy=${JSON.stringify(policy)} $inputs=${inputs}`
+  // Best-effort only: an enforced dial exists for Codex (`-c model_reasoning_effort=<value>` on
+  // the realization's own dispatch call, never rendered into the prompt text itself) but NOT for
+  // Claude (the `Agent` tool the coordinator dispatches through has no effort parameter at all) —
+  // so the SAME instruction line is honest about being a request, never a guarantee, whichever
+  // realization is bound.
+  const effortNote = effort
+    ? ` Requested reasoning effort for this dispatch: **${effort}** (a process/mechanics run, not a quality bar — spend only the deliberation this step's Check/Act/Verify beats actually need). This is a request, not an enforced setting: honour it as best you can within your own harness's controls.`
+    : ''
   const invoke = (skill, args) =>
-    `Invoke **${skill}** for story ${tag} with ${args} $workflowVersion=${workflowVersion}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines — its Step 0 resolves the durable cycle state and returns \`{ status: "redirect", next }\` when another step is due, spending no judgment. Do NOT read ${blindPaths} except the checkpoint and the run directory \`${runDir}/\` the skill names; that directory lives in the MAIN checkout — the working directory you were started in, before any cd — never inside a story or review worktree. Do NOT merge.`
+    `Invoke **${skill}** for story ${tag} with ${args} $workflowVersion=${workflowVersion}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines — its Step 0 resolves the durable cycle state and returns \`{ status: "redirect", next }\` when another step is due, spending no judgment. Do NOT read ${blindPaths} except the checkpoint and the run directory \`${runDir}/\` the skill names; that directory lives in the MAIN checkout — the working directory you were started in, before any cd — never inside a story or review worktree. Do NOT merge.${effortNote}`
   const notesArg = card.notes ? ` $notes=${JSON.stringify(card.notes)}` : ''
   const findingsArg = list => (list && list.length ? ` $findings=${JSON.stringify(list.map(compactFinding))}` : '')
   const n = next
@@ -397,6 +424,9 @@ function packetCommand(opts) {
     worktree,
     runDir,
     pr,
+    // Present only when `$profile.effort` was given — absent (never `null`) preserves today's
+    // behavior exactly for every caller that has not adopted a profile yet.
+    ...(effort ? { effort } : {}),
     args,
     prompt: invoke(skill, args),
   })
@@ -427,7 +457,7 @@ function realizationsCommand(opts) {
 // ── CLI ─────────────────────────────────────────────────────────────────────────────────────
 const FLAGS = {
   worktree: ['main', 'story', 'branch', 'base', 'worktree-root'],
-  packet: ['next', 'card', 'policy', 'run', 'workflow-version', 'pipeline', 'contract-resolved', 'required', 'severity-floor', 'severities', 'verdicts', 'ranks'],
+  packet: ['next', 'card', 'policy', 'run', 'workflow-version', 'pipeline', 'profile', 'contract-resolved', 'required', 'severity-floor', 'severities', 'verdicts', 'ranks'],
   realizations: ['tools', 'product', 'story', 'pr'],
   'context-table': [],
 }

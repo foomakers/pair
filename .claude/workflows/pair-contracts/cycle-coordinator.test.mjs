@@ -835,6 +835,72 @@ test('AC7-b1 (boundary): `reuse` is admissible only within a role, and `context-
   )
 })
 
+// ══ AC-profile — `$profile.effort` is a per-dispatch request, enforced for Codex, prose-only for Claude ══
+
+test('AC-profile-w1: a valid $profile.effort is echoed on the packet and requested in the prompt', () => {
+  const next = { step: 'prepare', mode: 'initial', phase: 'a0', context: 'fresh' }
+  const r = dispatch([
+    'packet',
+    '--next',
+    JSON.stringify(next),
+    '--card',
+    JSON.stringify(CARD),
+    '--policy',
+    JSON.stringify(POLICY),
+    '--run',
+    'story-42',
+    '--workflow-version',
+    WORKFLOW_VERSION,
+    '--profile',
+    JSON.stringify({ effort: 'low' }),
+  ])
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.equal(r.json.effort, 'low')
+  assert.match(r.json.prompt, /Requested reasoning effort for this dispatch: \*\*low\*\*/)
+  assert.match(r.json.prompt, /request, not an enforced setting/, 'never claims to be enforced for every realization')
+})
+
+test('AC-profile-w2: an unknown $profile.effort is a typed HALT before any packet is built, never a silent default', () => {
+  const next = { step: 'prepare', mode: 'initial', phase: 'a0', context: 'fresh' }
+  const r = dispatch([
+    'packet',
+    '--next',
+    JSON.stringify(next),
+    '--card',
+    JSON.stringify(CARD),
+    '--policy',
+    JSON.stringify(POLICY),
+    '--run',
+    'story-42',
+    '--workflow-version',
+    WORKFLOW_VERSION,
+    '--profile',
+    JSON.stringify({ effort: 'bogus' }),
+  ])
+  assert.equal(r.status, 1, r.stdout + r.stderr)
+  assert.equal(r.json.halt, 'profile-unresolved')
+})
+
+test('AC-profile-c1 (control): an absent $profile leaves the packet byte-identical to today — no `effort` field, no prompt note', () => {
+  const next = { step: 'prepare', mode: 'initial', phase: 'a0', context: 'fresh' }
+  const r = dispatch([
+    'packet',
+    '--next',
+    JSON.stringify(next),
+    '--card',
+    JSON.stringify(CARD),
+    '--policy',
+    JSON.stringify(POLICY),
+    '--run',
+    'story-42',
+    '--workflow-version',
+    WORKFLOW_VERSION,
+  ])
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.ok(!('effort' in r.json), 'no `effort` key at all when no profile was given, not even null/undefined')
+  assert.doesNotMatch(r.json.prompt, /reasoning effort/)
+})
+
 // ══ AC8 — `$rounds` bounds this invocation's remediation and never widens maxFixRounds ══════════
 
 test('AC8-c1 (control): `maxFixRounds` is the authority `$rounds` may only narrow', async () => {

@@ -918,6 +918,27 @@ test('TC-14: `models` routes the five live roles independently; `model` stays th
   assert.match(await expectThrow({ args: { cards: [STORY], models: { greeen: 'opus' } } }), /models\.greeen/)
 })
 
+test('US-486 canary follow-up: retired `efforts` roles are REJECTED with the same migration message as `models` — never mapped, never dropped', async () => {
+  for (const [role, absorbed] of [['planner', /red/], ['seal', /redVerifier/], ['preflight', /reviewer/], ['pr', /implementation/]]) {
+    const msg = await expectThrow({ args: { cards: [STORY], efforts: { [role]: 'low' } } })
+    assert.match(msg, new RegExp(`efforts\\.${role}.*retired by engine 3\\.0\\.`), role)
+    assert.match(msg, absorbed)
+  }
+})
+
+test('US-486 canary follow-up: `efforts` routes the five live roles independently; `effort` stays the batch-wide default; unknown efforts throw; the stage default survives when neither is given', async () => {
+  const { calls } = await runWorkflow({ args: { cards: [STORY], efforts: { green: 'low', red: 'medium' } }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] }) }) })
+  const effort = l => calls.find(c => c.opts.label === l).opts.effort
+  assert.equal(effort('green:#292 r1-g1'), 'low')
+  assert.equal(effort('prepare:#292 r1-g1'), 'medium')
+  assert.equal(effort('verify:#292 r1'), 'high', 'no override for this role: the stage keeps its own hardcoded default')
+  assert.match(await expectThrow({ args: { cards: [STORY], effort: 'medium-ish' } }), /unknown effort "medium-ish"/)
+  assert.match(await expectThrow({ args: { cards: [STORY], efforts: { redd: 'low' } } }), /efforts\.redd/)
+  // batch-wide `effort` overrides every stage's own default when no per-role `efforts` entry wins
+  const { calls: batchWide } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], effort: 'low' }, dispatch: stdDispatch() })
+  assert.ok(batchWide.every(c => c.opts.effort === 'low'), 'every dispatched stage honours the batch-wide effort override')
+})
+
 test('TC-14: pipeline.reviewers is a positive integer threaded to the verifier and the policy', async () => {
   const { calls } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], pipeline: { reviewers: 2 } }, dispatch: stdDispatch() })
   assert.match(calls[0].prompt, /"reviewers":2\}/)
