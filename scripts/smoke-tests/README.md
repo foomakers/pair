@@ -163,6 +163,16 @@ the smoke's entire point is a real, unattended write, so treat
 `AGENT_HARNESS_SMOKE_REPO` as fully disposable and never point it at a repository whose
 history matters.
 
+### 9. Remote Source Resolution (`scenarios/remote-source-resolution.sh`) — story #136
+
+Manual/full-suite only — never in CI (see `lib/ci-tests.sh` `CI_EXCLUDED`, network dependency).
+Covers `pair install|update --source <https-url>` end to end: happy-path install and update
+against a pinned real GitHub release asset, non-TTY download evidence, and the error paths
+(unsupported protocol, missing local path, non-retryable 404, retryable connection-refused
+exhausting the retry budget) via a local self-signed HTTPS fixture and a closed local port —
+never a third-party endpoint for the error cases. Registered in `CI_EXCLUDED` with a reason
+naming the network dependency, consistent with the CI-list entry above.
+
 ## How to Run
 
 The `run-all.sh` script requires at least the path to the executable to be tested.
