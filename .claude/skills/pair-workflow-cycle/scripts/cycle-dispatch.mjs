@@ -40,15 +40,23 @@ export const REALIZATIONS = [
   {
     id: 'codex',
     host: 'Codex',
-    dispatch: 'spawn_agent',
-    resume: 'resume_agent',
+    // Verified against a real Codex CLI session (0.154.0), not assumed: asked to introspect its
+    // own declared toolset, it reported `collaboration.spawn_agent` / `collaboration.followup_task`
+    // — namespaced under `collaboration.`, never the bare `spawn_agent` / `resume_agent` this row
+    // held before (US-486 canary discovery: the probe never matched, every codex-bound dispatch
+    // fell straight to `realization-unavailable`). A rename is still just an edit to this array.
+    dispatch: 'collaboration.spawn_agent',
+    resume: 'collaboration.followup_task',
     // Codex has no `agentType`: the role travels as the agent `.md` body plus the skill reference.
     rolePacket: 'inline-role-body',
   },
 ]
 // Alternate resume primitives a host may expose instead of the row's canonical one. Probed the
-// same way; the row is still bound by its dispatch primitive.
-const RESUME_ALIASES = { codex: ['resume_agent', 'send_input'] }
+// same way; the row is still bound by its dispatch primitive. `collaboration.send_message` is
+// deliberately NOT an alias here: introspection confirmed it delivers a message WITHOUT triggering
+// the sub-agent to act on it — silently binding it as "resume" would look successful and never
+// actually resume any work.
+const RESUME_ALIASES = { codex: ['collaboration.followup_task'] }
 
 // ── validation (values reaching git) ────────────────────────────────────────────────────────
 const SAFE_SEGMENT = /^[A-Za-z0-9._-]+$/

@@ -41,7 +41,7 @@ node "$SKILL_DIR/scripts/cycle-dispatch.mjs" realizations --tools '<JSON array o
 | Row      | Dispatch primitive | Resume primitive              | How the role travels                       |
 | -------- | ------------------ | ----------------------------- | ------------------------------------------ |
 | `claude` | `Agent`            | `SendMessage`                 | `agentType` — the stage's agent definition  |
-| `codex`  | `spawn_agent`      | `resume_agent` / `send_input` | the agent `.md` body + the skill reference  |
+| `codex`  | `collaboration.spawn_agent` | `collaboration.followup_task` | the agent `.md` body + the skill reference  |
 
 Report which realization won and which primitives it bound to, in one line.
 
@@ -101,7 +101,7 @@ node "$SKILL_DIR/scripts/cycle-dispatch.mjs" packet --next '<next JSON>' --card 
 **Act.** Dispatch `prompt` under `agentType` (Claude) or as the row's role packet (Codex), honouring `next.context`:
 
 - `fresh` — spawn a NEW subagent. This is the KB default on every transition, and it is **mandatory** into `validate` and `verify`: an independent verifier that inherits the author's context is not independent.
-- `reuse` — **resume** the previous subagent of that same role instead of spawning one (`SendMessage` on Claude, `resume_agent` / `send_input` on Codex). `cycle-state.mjs` returns `reuse` only for `prepare→prepare`, `implement→green` and `green→green`; it is never this skill's call. `cycle-dispatch.mjs context-table` prints the table.
+- `reuse` — **resume** the previous subagent of that same role instead of spawning one (`SendMessage` on Claude, `collaboration.followup_task` on Codex). `cycle-state.mjs` returns `reuse` only for `prepare→prepare`, `implement→green` and `green→green`; it is never this skill's call. `cycle-dispatch.mjs context-table` prints the table.
 
 **Verify.** `halt: pipeline-invalid` ⇒ HALT (below): every `--pipeline` value is held to the same grammar the batch engine holds it to, and no packet is rendered from a refused one. Otherwise one stage, one dispatch. Keep only the compact `resolve` output; never read a handoff whole into this session, and never retain a subagent's transcript.
 

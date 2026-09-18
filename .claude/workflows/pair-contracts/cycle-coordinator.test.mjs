@@ -543,15 +543,15 @@ test('AC6-w1: the realization table is data — one structure, tool names as its
   assert.deepEqual(Object.keys(byId).sort(), ['claude', 'codex'])
   assert.equal(byId.claude.dispatch, 'Agent')
   assert.equal(byId.claude.resume, 'SendMessage')
-  assert.equal(byId.codex.dispatch, 'spawn_agent')
-  assert.match(byId.codex.resume, /^(resume_agent|send_input)$/)
+  assert.equal(byId.codex.dispatch, 'collaboration.spawn_agent')
+  assert.equal(byId.codex.resume, 'collaboration.followup_task')
 })
 
 test('AC6-w2: the row is bound by the PROBED tool, never by a product name or version', () => {
   const codex = dispatch([
     'realizations',
     '--tools',
-    JSON.stringify(['spawn_agent', 'resume_agent']),
+    JSON.stringify(['collaboration.spawn_agent', 'collaboration.followup_task']),
   ])
   assert.equal(codex.status, 0, codex.stdout + codex.stderr)
   assert.equal(codex.json.bound, 'codex')
@@ -813,7 +813,7 @@ test('AC7-w4: the coordinator skill documents the `reuse` branch and names each 
   assert.match(md, /`?reuse`?/, 'the reuse branch must be documented at all')
   assert.match(md, /resum/i, 'what `reuse` MEANS — the previous subagent of the role is resumed')
   assert.match(md, /SendMessage/, 'the Claude resume primitive the realization table binds')
-  assert.match(md, /resume_agent|send_input/, 'the Codex resume primitive')
+  assert.match(md, /collaboration\.followup_task/, 'the Codex resume primitive')
 })
 
 test('AC7-b1 (boundary): `reuse` is admissible only within a role, and `context-table` is cycle-state’s own table', async () => {
