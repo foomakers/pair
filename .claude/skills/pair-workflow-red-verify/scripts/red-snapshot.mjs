@@ -164,6 +164,18 @@ export function contractErrors(c) {
       }
     }
   }
+  // `reattest` (2026-09-18): a revision whose witness artifact's content is ALREADY at HEAD — it
+  // arrived through a commit outside this contract's own history (a merge this story's own gate
+  // forced, never an agent's own edit) — has nothing left to make `dirty` for seal() to commit: the
+  // content it would write is byte-identical to what is already there. Never inferred: the contract
+  // must say so, with a reason, or seal() refuses exactly as it always has (`artifact-not-changed`).
+  // The hash check above `dirty` still runs unconditionally — reattest waives ONLY the dirty
+  // requirement, never the proof that the declared sha256 matches the artifact's real content.
+  if (c.reattest !== undefined) {
+    const r = c.reattest
+    if (!r || typeof r !== 'object' || Array.isArray(r)) errs.push('reattest must be an object when present')
+    else if (!String(r.reason ?? '').trim()) errs.push('reattest.reason missing')
+  }
   return errs
 }
 
@@ -311,8 +323,14 @@ export function seal({ pr, phase, base, contractPath, cwd, root }) {
   const outside = dirty.filter(p => !files.includes(p))
   if (outside.length) return { sealed: false, reason: 'dirty-outside-contract', paths: outside }
   const notDirty = witnessPaths(contract).filter(f => !dirty.includes(f))
-  if (notDirty.length && contract.testExempt !== true)
-    return { sealed: false, reason: 'artifact-not-changed', paths: notDirty }
+  if (notDirty.length && contract.testExempt !== true) {
+    // A well-formed `reattest` (contractErrors already refused a malformed one) waives ONLY this
+    // dirty requirement — every notDirty path's sha256 was already proven against the real artifact
+    // above, before `dirty` was even computed. Nothing here trusts the content; it only stops
+    // demanding a working-tree change that a merge already made moot.
+    const reattestOk = contract.reattest && typeof contract.reattest === 'object' && String(contract.reattest.reason ?? '').trim()
+    if (!reattestOk) return { sealed: false, reason: 'artifact-not-changed', paths: notDirty }
+  }
 
   const manifestAbs = join(cwd, manifest)
   mkdirSync(dirname(manifestAbs), { recursive: true })
@@ -362,7 +380,11 @@ export function verify({ pr, phase, base, cwd }) {
   for (const p of tree) if (!expected.has(p)) breach('snapshot-carries-unlisted-file', { path: p })
   // Witnesses changed at the base, so they appear in the snapshot's diff; a `pass` control may be
   // an unchanged file — it must exist in the snapshot's TREE, not in its diff.
-  const mustDiff = new Set([manifest, ...(contract && !contractErrors(contract).length ? witnessPaths(contract) : [])])
+  // A well-formed `reattest` means the seal never required these witnesses to be dirty (see seal()),
+  // so a valid seal never put them in this commit's OWN diff either — they must exist in the
+  // snapshot's tree (checked below via `listed`), never in `mustDiff`.
+  const reattested = contract && !contractErrors(contract).length && contract.reattest && typeof contract.reattest === 'object' && String(contract.reattest.reason ?? '').trim()
+  const mustDiff = new Set([manifest, ...(contract && !contractErrors(contract).length && !reattested ? witnessPaths(contract) : [])])
   for (const p of mustDiff) if (!tree.includes(p)) breach('snapshot-lacks-listed-file', { path: p })
   for (const p of listed) if (!mustDiff.has(p) && git(['rev-parse', '--verify', '-q', `${snapshot}:${p}`], cwd, { allowFail: true }) === null) breach('snapshot-lacks-listed-file', { path: p })
 

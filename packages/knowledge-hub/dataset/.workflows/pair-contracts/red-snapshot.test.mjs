@@ -982,3 +982,80 @@ test('verify-chain: only an allow-listed breach code accepts a human override �
   rmSync(cwd, { recursive: true, force: true })
   rmSync(runDir, { recursive: true, force: true })
 })
+
+// ── reattest (a sealed witness whose content already changed via a commit outside this contract) ──
+test('seal: a `reattest` revision re-seals a witness whose content is ALREADY at HEAD (a merge committed it, nothing left to make dirty) — without it, seal refuses artifact-not-changed exactly as before; a malformed reattest is refused by contractErrors, never partially trusted; the seal alone does not clear the per-segment custody breach, which stays a separate, ordinary human-authorized override', () => {
+  const { cwd, base, s1, head1 } = chainRepo()
+  // Simulate a merge from elsewhere: the sealed test file gets NEW content in an ORDINARY commit,
+  // not through this contract's own GREEN — exactly like PR #497 landing inside r2-g2's fixScope.
+  write(cwd, 'test/a.test.js', 'import { a } from "../src/a.js"\nif (a() !== 2) throw new Error("FAIL")\n// merge-carried addition\nif (typeof a !== "function") throw new Error("FAIL not-a-fn")\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'merge-carried: extend the sealed witness')
+  const mergedHead = git(cwd, 'rev-parse', 'HEAD')
+  const newHash = hashFile('test/a.test.js', cwd)
+
+  const revisionContract = {
+    sourceOfTruth: 'a()',
+    fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/a.js'] },
+    revision: 2,
+    supersedes: 'r1-g1',
+    matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'default', oracle: 'node test/a.test.js', expected: '2', covers: ['r0-1'] }],
+    redTests: [{ file: 'test/a.test.js', kind: 'test', baseline: 'red', sha256: newHash, command: 'node test/a.test.js', observed: 'Original failure at base (unchanged): FAIL. Re-sealed at merged head with no new dirty change — content already matches via the merge commit above.' }],
+    testExempt: false,
+  }
+
+  // Without `reattest`: refused exactly as it always was — nothing silently widened.
+  write(cwd, '.pair/working/no-reattest.json', JSON.stringify(revisionContract))
+  const bare = seal({ pr: PR, phase: 'r1-g1-rev2', base: mergedHead, contractPath: '.pair/working/no-reattest.json', cwd })
+  assert.equal(bare.sealed, false)
+  assert.equal(bare.reason, 'artifact-not-changed')
+  assert.deepEqual(bare.paths, ['test/a.test.js'])
+  rmSync(join(cwd, '.pair/working/no-reattest.json'))
+
+  // A malformed reattest (no reason): contractErrors refuses it before seal ever runs its own checks.
+  assert.match(contractErrors({ ...revisionContract, reattest: {} }).join(), /reattest\.reason missing/)
+  assert.match(contractErrors({ ...revisionContract, reattest: 'yes' }).join(), /reattest must be an object/)
+  assert.deepEqual(contractErrors({ ...revisionContract, reattest: { reason: 'merge-carried' } }), [])
+
+  // With a well-formed `reattest`: seal proceeds, writing the manifest alone (the witness file is
+  // already at its declared content — nothing to commit for it).
+  write(cwd, '.pair/working/rev-draft.json', JSON.stringify({ ...revisionContract, reattest: { reason: "Content already at HEAD via a merge this branch's own gate forced; nothing left to make dirty." } }))
+  const s2 = seal({ pr: PR, phase: 'r1-g1-rev2', base: mergedHead, contractPath: '.pair/working/rev-draft.json', cwd })
+  assert.equal(s2.sealed, true, JSON.stringify(s2))
+  assert.equal(git(cwd, 'rev-parse', `${s2.snapshot}^`), mergedHead, 'the seal commit sits directly above the merge commit — nothing else was committed in between')
+  rmSync(join(cwd, '.pair/working/rev-draft.json'))
+
+  // verify-chain WITHOUT an override still reports the segment-level breach: `reattest` only
+  // waives seal()'s own dirty requirement, never the per-segment custody rule that a sealed blob
+  // changed inside r1-g1's own segment (before r1-g1-rev2 existed) was unauthorized AT THAT TIME —
+  // custody is never retroactive. This breach carries `path` + `segment`, so — unlike the global
+  // blob-identity form — it IS reachable by the ordinary human-authorized override mechanism.
+  const bareChain = verifyChain({ pr: PR, base, cwd })
+  assert.equal(bareChain.verified, false)
+  assert.ok(bareChain.breaches.some(b => b.code === 'test-blob-changed' && b.path === 'test/a.test.js' && b.segment === 'r1-g1'))
+
+  const runDir = mkdtempSync(join(tmpdir(), 'run-dir-'))
+  writeFileSync(join(runDir, 'r1-g1-red-verify.json'), JSON.stringify({ skill: 'red-verify', sealed: true }))
+  writeFileSync(
+    join(runDir, 'custody-overrides.json'),
+    JSON.stringify({
+      overrides: [
+        {
+          code: 'test-blob-changed',
+          path: 'test/a.test.js',
+          segment: 'r1-g1',
+          reason: 'The r1-g1-rev2 seal (validated independently) re-attests this exact content — this is the segment-level record of the same authorized reattest, not a new unreviewed change.',
+          authorizedBy: 'maintainer',
+          at: new Date().toISOString(),
+        },
+      ],
+    }),
+  )
+  const chain = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.equal(chain.verified, true, JSON.stringify(chain))
+  assert.deepEqual(chain.snapshots.map(s => s.phase), ['r1-g1', 'r1-g1-rev2'])
+  assert.equal(chain.overriddenBreaches?.length, 1)
+  rmSync(runDir, { recursive: true, force: true })
+
+  rmSync(cwd, { recursive: true, force: true })
+})
