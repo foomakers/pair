@@ -14,10 +14,10 @@ export const meta = {
     'REQUIRED args shape: {"cards":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} (`stories` is the accepted alias; never pass both) — a bare space-separated list of issue refs is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. Optional per card: base (the branch it stacks on), notes (scope directive), prNumber (re-enter the review loop on an existing PR). Optional per run: maxParallelism, severityFloor, model, models (roles implementation | reviewer | red | redVerifier | green), runId (resume a cycle by naming its run directory), entryCapsules (map of admitted story id -> a cache hint for the host entry wiring; US-479 T-23, remediated by Finding 1 — accepted and validated, never trusted as approval, never changes dispatch behavior), pipeline (skill names, worktree root, audit-log dir, base branch, review-template path, maxFixRounds, reviewers). Engine 3.0.0 retired the planner, sealer, P3, cycle-comments and pr-phase dispatches: the keys `pipeline.skills.remediationPlan|redSeal|p3Verify|cycleComments|prPhase` and `models.planner|seal|preflight|pr` are REJECTED with a migration message, never silently mapped. Every value is validated by TYPE at parse time and a wrong one throws before any agent runs; card fields AND pipeline values are also validated by CONTENT (git refs, safe path segments, skill names) because they reach the shell commands the agents run — a value carrying shell syntax or `..` is rejected, never quoted. An unset optional key may be omitted or spelled `undefined`/`null` — all three mean absent; an EMPTY string is not one of them and throws. Pre-filter for mutex safety — no two cards may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a cold full-repo quality gate qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
   phases: [
     { title: 'Contracts', model: 'haiku' },
-    { title: 'Prepare', model: 'opus' },
-    { title: 'Validate', model: 'opus' },
-    { title: 'Implement', model: 'opus' },
-    { title: 'Verify', model: 'opus' },
+    { title: 'Prepare', model: 'sonnet' },
+    { title: 'Validate', model: 'sonnet' },
+    { title: 'Implement', model: 'sonnet' },
+    { title: 'Verify', model: 'sonnet' },
   ],
 }
 
@@ -130,13 +130,13 @@ export const meta = {
 
 // ── Model / effort policy ──────────────────────────────────────────────────
 // MODEL is set per ROLE in each agent's frontmatter (.claude/agents/*.md): the
-// stable default — implementer & reviewer -> opus, contract-generator -> haiku.
+// stable default — implementer & reviewer -> sonnet, contract-generator -> haiku.
 // EFFORT is set per STEP below in the agent() opts (the guaranteed lever for a
 // running workflow), scaled to the step's difficulty. The one MODEL exception is
 // the PR-open step: an implementer doing light checkpoint->PR authoring, dialed
 // down to sonnet/medium via opts (opts win over frontmatter). Spend concentrates
-// where quality pays: coding (implement/fix, opus/high) and the adversarial
-// review gate (opus/xhigh). NOTE: .claude/workflows/ is outside the packages/apps
+// where quality pays: coding (implement/fix, sonnet/high) and the adversarial
+// review gate (sonnet/xhigh). NOTE: .claude/workflows/ is outside the packages/apps
 // prettier gate — keep the one-line opts style already used in this file.
 
 // ── Input ────────────────────────────────────────────────────────────────
