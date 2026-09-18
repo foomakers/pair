@@ -206,6 +206,13 @@ export const effectiveInputs = (story, { workflowVersion, pipeline = PIPELINE_DE
 // is a version the command did not really get: `publish` already refuses a handoff carrying one,
 // so accepting it anywhere upstream only mints an identity nothing downstream can use.
 export const isWorkflowVersion = v => typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v)
+// The ONE version this realization of the cycle speaks, pinned exactly the way the sibling
+// realization pins it (`const WORKFLOW_VERSION = '…'` in `.claude/workflows/pair-implement-batch.js`):
+// as DATA, in one place. The engine cannot be handed a bad version because it never types one; the
+// in-session coordinator could, for as long as the value lived nowhere it could read. It does now —
+// `cycle-state.mjs version` prints it for a shell to capture, `cycle-dispatch.mjs` imports it rather
+// than re-spelling it (AC-12), and an omitted `--workflow-version` renders it instead of a guess.
+export const WORKFLOW_VERSION = '4.0.1'
 export const compatible = (mine, theirs) => {
   const major = v => (isWorkflowVersion(v) ? v.split('.')[0] : null)
   return major(mine) !== null && major(mine) === major(theirs)
@@ -2367,6 +2374,7 @@ if (isMain()) {
       'migrate-inspect': ['dir'],
       'migrate-acknowledge': ['branch', 'dir', 'head', 'legacy', 'pr', 'run', 'story', 'workflowVersion'],
       'test-identity': ['command', 'cwd', 'env-keys', 'toolchain'],
+      version: [],
     }
     if (FLAGS[cmd]) {
       const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
@@ -2380,6 +2388,17 @@ if (isMain()) {
     for (const k of ['file', 'legacy', 'runsRoot', 'cwd'])
       if (opts[k] !== undefined)
         for (const one of String(opts[k]).split(',')) if (hasParentHop(one)) throw new Error(`path-escape: --${k} ${one}`)
+    // US-486 (finding r1-2): the workflow version is judged at the CLI BOUNDARY — once, for every
+    // subcommand the table above DECLARES it for, before the command does any work. `publish` and
+    // `inputs` judge it themselves and already refuse before any effect, in their own typed shape
+    // (`reason: 'workflowVersion-invalid'` is the handoff answer publish's consumers read), so the
+    // boundary defers to them; every other declaring subcommand used to pass the value straight
+    // through and only learn of it from `publish` — one full agent stage, a written draft and a `gh`
+    // round-trip later. An ABSENT flag stays `need()`'s refusal: "required" and "malformed" are
+    // different answers and a consumer reading the message deserves the right one.
+    const VERSION_SELF_JUDGED = new Set(['publish', 'inputs'])
+    if (FLAGS[cmd]?.includes('workflowVersion') && !VERSION_SELF_JUDGED.has(cmd) && opts.workflowVersion !== undefined && !isWorkflowVersion(opts.workflowVersion))
+      throw new Error(`--workflowVersion must be <major>.<minor>.<patch>; received ${JSON.stringify(opts.workflowVersion)} — a version outside that grammar is one this command did not really get, and it is refused here, before any effect`)
     const need = (...ks) => {
       for (const k of ks) if (opts[k] === undefined) throw new Error(`--${k} is required`)
     }
@@ -2454,6 +2473,12 @@ if (isMain()) {
       out = migrateAcknowledge({ dir: opts.dir, legacyDirs, workflowVersion: opts.workflowVersion, story: opts.story, pr: opts.pr ? Number(opts.pr) : undefined, run: opts.run, branch: opts.branch, inputHead: opts.head })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.applied || out.reason === 'already-acknowledged' ? 0 : 1)
+    } else if (cmd === 'version') {
+      // The pin, printed bare so a shell can capture it: `WV="$(… cycle-state.mjs version)"`. It is
+      // the one value this realization passes to every `--workflowVersion`, and having a producer
+      // for it is what keeps a transcribed literal out of the coordinator's prose (US-486, r1-2).
+      process.stdout.write(WORKFLOW_VERSION + '\n')
+      process.exit(0)
     } else if (cmd === 'test-identity') {
       need('cwd', 'command')
       const keys = (opts['env-keys'] ?? 'CI,NODE_ENV,TZ').split(',').filter(Boolean)
@@ -2461,7 +2486,7 @@ if (isMain()) {
       out = testIdentity({ cwd: opts.cwd, command: opts.command, env, toolchain: opts.toolchain ?? `node ${process.version}` })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
-    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | migrate-inspect | apply-scope-decisions | scope-baseline | test-identity)`)
+    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | migrate-inspect | apply-scope-decisions | scope-baseline | test-identity | version)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)

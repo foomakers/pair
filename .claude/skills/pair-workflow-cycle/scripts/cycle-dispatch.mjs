@@ -22,7 +22,7 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, realpathSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve as resolvePath } from 'node:path'
-import { CAPS, CONTEXT_TABLE, PIPELINE_DEFAULTS, DEFAULT_SEVERITY_FLOOR, effectiveInputs } from './cycle-state.mjs'
+import { CAPS, CONTEXT_TABLE, PIPELINE_DEFAULTS, DEFAULT_SEVERITY_FLOOR, WORKFLOW_VERSION, effectiveInputs, isWorkflowVersion } from './cycle-state.mjs'
 
 // ── the realization table, as DATA (AC-6) ───────────────────────────────────────────────────
 // A row is bound by the PRIMITIVE the host actually exposes, never by a product name or a version
@@ -283,7 +283,10 @@ function packetCommand(opts) {
   const next = JSON.parse(opts.next)
   const card = JSON.parse(opts.card)
   const policy = JSON.parse(opts.policy ?? '{}')
-  const workflowVersion = opts['workflow-version']
+  // Omitted ⇒ the ONE pin, imported from cycle-state (never a literal here: a second spelling of
+  // the state machine's identity is a fork of it — AC-12). The coordinator is an agent session, and
+  // a value it has no producer for is a value it invents.
+  const workflowVersion = opts['workflow-version'] ?? WORKFLOW_VERSION
   const pipeline = resolvePipeline(opts.pipeline === undefined ? undefined : JSON.parse(opts.pipeline))
   const SK = pipeline.skills
   const runId = opts.run ?? `story-${card.id}`
@@ -291,6 +294,11 @@ function packetCommand(opts) {
   must(isSegment(runId), 'run-invalid', `--run must be one safe path segment: ${runId}`)
   must(isRef(card.branch), 'card-invalid', `card.branch must be a git ref: ${card.branch}`)
   must(typeof workflowVersion === 'string' && workflowVersion.length > 0, 'workflow-version-missing', '--workflow-version is required')
+  // Held to the grammar its own state machine owns, HERE — where the value enters. It is rendered
+  // verbatim into the stage prompt an agent reads as its process of record AND keys the `$inputs`
+  // digest both realizations must agree on, so `publish` would refuse it at the END of that whole
+  // stage, with a contract written and no handoff recorded. Refused before a packet exists instead.
+  must(isWorkflowVersion(workflowVersion), 'workflow-version-invalid', `--workflow-version must be <major>.<minor>.<patch>; received ${JSON.stringify(workflowVersion)}. Rejected, never rendered: no argument packet and no prompt are built from a version \`publish\` will refuse one agent dispatch from now.`)
 
   const tag = `#${card.id}`
   const worktreePath = `${pipeline.worktreeRoot}/${card.id}`
@@ -444,7 +452,7 @@ try {
     need('main', 'story', 'branch', 'base')
     OUT = worktreeCommand(opts)
   } else if (cmd === 'packet') {
-    need('next', 'card', 'workflow-version')
+    need('next', 'card')
     OUT = packetCommand(opts)
   } else if (cmd === 'realizations') {
     OUT = realizationsCommand(opts)

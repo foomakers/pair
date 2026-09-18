@@ -52,12 +52,19 @@ Report which realization won and which primitives it bound to, in one line.
 **Check.** Ask the one authority, from the MAIN checkout:
 
 ```bash
+WV="$(node "$SKILL_DIR/scripts/cycle-state.mjs" version)"
 node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir ".pair/working/runs/$runId/$card" \
-  --workflowVersion <version> --policy '<policy JSON>' --entry <fresh|pr> [--pr $pr] \
+  --workflowVersion "$WV" --policy '<policy JSON>' --entry <fresh|pr> [--pr $pr] \
   --story $card --inputs <digest> --runsRoot .pair/working/runs [--redirects <n>]
 ```
 
-The digest is the script's own: `cycle-state.mjs inputs --story '<card JSON>' --workflowVersion <version>`. Never compute it by hand — both realizations must get the same value.
+The workflow version is never typed: `cycle-state.mjs version` prints the one value this cycle speaks, and every command below is handed that capture. A version outside `<major>.<minor>.<patch>` is refused by whichever command receives it, before it does any work — so a literal remembered from a previous session fails the run rather than mints an identity nothing downstream accepts.
+
+The digest is the script's own — never computed by hand, because both realizations must agree on it:
+
+```bash
+node "$SKILL_DIR/scripts/cycle-state.mjs" inputs --story '<card JSON>' --workflowVersion "$WV"
+```
 
 **Skip.** Nothing here is skippable, on any turn, including the first.
 
@@ -86,7 +93,7 @@ node "$SKILL_DIR/scripts/cycle-dispatch.mjs" worktree --main "$PWD" --story $car
 
 ```bash
 node "$SKILL_DIR/scripts/cycle-dispatch.mjs" packet --next '<next JSON>' --card '<card JSON>' \
-  --policy '<policy JSON>' --run "$runId" --workflow-version <version>
+  --policy '<policy JSON>' --run "$runId" --workflow-version "$WV"
 ```
 
 **Skip.** Never compose a stage prompt yourself, not even "the obvious one": the packet is byte-identical to what the batch engine composes, and a hand-written variant is a second process wearing the same name.
@@ -129,6 +136,7 @@ node "$SKILL_DIR/scripts/cycle-dispatch.mjs" packet --next '<next JSON>' --card 
 | `worktree-conflict`      | `<root>/<card>` exists on another branch, or is not a registered worktree               | Both branch names and the path; resolve it by hand — never `--force`, never a checkout switch |
 | `worktree-root-invalid`  | `--worktree-root` is not an absolute path nor a relative one of safe segments with at most one leading `..` | The value, refused verbatim — nothing is created and no worktree is registered |
 | `pipeline-invalid`       | A `--pipeline` key or value is outside the grammar the batch engine enforces on it      | The offending key and why — no argument packet and no prompt are rendered                   |
+| `workflow-version-invalid` | `--workflow-version` is not `<major>.<minor>.<patch>` — the grammar `publish` already enforces | The value, refused verbatim — no argument packet and no prompt are rendered from it. Pass the `version` command's output, never a remembered literal |
 | `profile-unresolved`     | `$profile` was given and cannot be read or does not validate                            | What was asked for and why it did not resolve                                              |
 | `usage`                  | `$card` and `$pr` both given, or neither                                                | The two valid entries                                                                      |
 
