@@ -493,6 +493,32 @@ test('resolve: a genuine contract gap revises ONLY the affected group as a new r
   assert.deepEqual(r.next.findings.map(f => f.id), ['r1-1'])
 })
 
+test('resolve: a group dispatched OUTSIDE the round plan (its own red-spec never a plan-writer — added after the plan was already sealed) is never mistaken, once green, for a re-dispatch of the plan\'s FIRST group; the cycle proceeds to the round re-review instead (US-486 r2-g3 discovery)', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r0-1')] })
+  redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r1-g1' })
+  redVerify(dir, 'r1-g1', {})
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('d'), evidenceLedger: [] })
+  review(dir, 'r1', { mode: 're-review', readiness: { ready: false }, reviewedHead: SHA('d'), findings: [finding('r0-1', { transition: 'resolved', blocking: false }), finding('r1-1', { kind: 'defect', missedUpstream: true })] })
+  // Round 2 opens on r1-1, planned as a SINGLE group r2-g1 — this plan is the ONLY one `planFor(2)`
+  // will ever find (it is the first red-spec of round 2 carrying a `plan` field).
+  redSpec(dir, 'r2-g1', { plan: { groups: [{ groupId: 'r2-g1', findings: ['r1-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, groupId: 'r2-g1' })
+  redVerify(dir, 'r2-g1', { snapshot: SHA('e') })
+  handoff(dir, 'r2-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('f'), evidenceLedger: [] })
+  // A group discovered later and dispatched directly as r2-g2 — same batch id, but its own
+  // red-spec carries no `plan` (exactly like a group added after the round's plan was already
+  // sealed): r2-g1's plan never lists it.
+  redSpec(dir, 'r2-g2', { groupId: 'r2-g2' })
+  redVerify(dir, 'r2-g2', { snapshot: SHA('g') })
+  handoff(dir, 'r2-g2', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('h'), evidenceLedger: [] })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  // Before the fix: groups.findIndex(g => g.groupId === 'r2-g2') is -1 against r2-g1's own plan
+  // (which lists only r2-g1), and `groups[-1 + 1]` silently resolved to `groups[0]` — r2-g1 itself,
+  // already sealed and green — re-dispatching it as if it were still due. Fixed: idx === -1 falls
+  // through to the round re-review instead of indexing the plan array with a bogus position.
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase }, { step: 'verify', mode: 're-review', phase: 'r2' })
+})
+
 test('resolve: a genuine gap in the INITIAL acceptance contract revises a0 as a0-rev2 — validate + successor seal, implement again on the same branch, then a re-review of the prior findings + delta (canary run 11)', () => {
   const { dir } = runDir()
   redSpec(dir, 'a0')
