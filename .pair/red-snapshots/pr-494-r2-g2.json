@@ -1,0 +1,306 @@
+{
+  "$meta": {
+    "pr": "494",
+    "phase": "r2-g2",
+    "base": "097d829a2f0c70c42694f1175503d1fad36d1f26",
+    "trailer": "Pair-RED-Snapshot: pr=494; phase=r2-g2; base=097d829a2f0c70c42694f1175503d1fad36d1f26; manifest=.pair/red-snapshots/pr-494-r2-g2.json",
+    "artifacts": [
+      ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs"
+    ]
+  },
+  "run": "story-486",
+  "story": "486",
+  "pr": 494,
+  "branch": "feature/US-486-pair-workflow-cycle-coordinator",
+  "phase": "r2-g2",
+  "mode": "repair",
+  "status": "red",
+  "groupId": "r2-g2",
+  "remediationBatchId": "r2",
+  "inputHead": "097d829a2f0c70c42694f1175503d1fad36d1f26",
+  "inputsDigest": "424c8d45c92b3fef",
+  "worktree": "../pair-worktrees/486",
+  "sourceOfTruth": "Finding r1-2, re-run against this head before a row was written. The GRAMMAR is not invented here: `cycle-state.mjs` L203-208 already owns it — `export const isWorkflowVersion = v => typeof v === 'string' && /^\\d+\\.\\d+\\.\\d+$/.test(v)`, with the comment 'a version outside this grammar is a version the command did not really get: publish already refuses a handoff carrying one, so accepting it anywhere upstream only mints an identity nothing downstream can use'. `publish` (L1250) enforces it and `inputs --story` (L2422) was closed by r1-g2. The VALUE is owned by `.claude/workflows/pair-implement-batch.js:482` — `const WORKFLOW_VERSION = '4.0.1'`, the sibling realization of this same cycle. Neither file is in fixScope: both are the authority, not the thing under repair. REPAIR (attempt 2): the set of entry points is no longer a hand-written list. It is re-derived from the CLI's OWN declared argument table — `const FLAGS = {…}` in cycle-state.mjs L2358-2369, the object its CLI refuses unknown flags against — which declares `workflowVersion` for FIVE subcommands: resolve, publish, inputs, apply-scope-decisions (L2365) and migrate-acknowledge (L2368). The rows read that table at run time, so a sixth declaring subcommand is covered the day it is added (and a declaring subcommand with no invocation fails the row loudly, rather than being skipped).",
+  "testCommand": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs",
+  "formatGate": "SKIPPED by derivation, not by omission: the repo's format gate is `pnpm prettier:check` -> scripts/format-lib/run-format.sh check prettier ts tsx js jsx json html, and `scripts/format-lib/git-tracked-paths.sh ts tsx js jsx json html` emits 0 paths matching cycle-coordinator at THIS head (re-verified). `pnpm mdlint` covers .md only and no .md is an artifact of this contract. The one artifact is a .mjs file no formatter in this repository rewrites, so no sealed byte can become unfixable. Its style follows the file's own conventions (no semicolons, single quotes, trailing commas). Re-verified at attempt 2: `scripts/format-lib/git-tracked-paths.sh ts tsx js jsx json html` emits 0 paths under .claude/workflows.",
+  "inventory": [
+    {
+      "id": "r1-2",
+      "producer": "`packetCommand()` in `.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs` (the `packet` CLI command, L282-293): it takes `opts['workflow-version']` under `must(typeof workflowVersion === 'string' && workflowVersion.length > 0, 'workflow-version-missing', ...)` — a non-empty-string check, not the grammar — and renders the value verbatim into `$workflowVersion=` inside `invoke()`, and into `effectiveInputs(card, { workflowVersion, ... })` which KEYS the `$inputs` digest by it. The second half of the obligation has no producer at all today: the coordinator skill pins the version it is supposed to pass NOWHERE (`<version>` is a prose placeholder in SKILL.md L56/L60/L89; no constant in either coordinator script; 0 hits for a `\\d+\\.\\d+\\.\\d+` string literal in cycle-dispatch.mjs). The GRAMMAR's owner is `isWorkflowVersion` exported from `cycle-state.mjs` L208; the VALUE's owner is `const WORKFLOW_VERSION = '4.0.1'` in `.claude/workflows/pair-implement-batch.js:482`.",
+      "inputs": [
+        "DERIVED, not listed: every subcommand that declares `workflowVersion` in cycle-state.mjs's own `const FLAGS = {…}` argument table (L2358-2369) — at this head `resolve`, `publish`, `inputs`, `apply-scope-decisions`, `migrate-acknowledge`. The rows parse that table; the enumeration below is the value it has at 097d829a, not the authority.",
+        "cycle-dispatch.mjs packet --workflow-version <string> (also: absent; present with the value swallowed by the next flag, which the parser turns into boolean `true`)",
+        "cycle-state.mjs resolve --workflowVersion <string> — accepts anything today",
+        "cycle-state.mjs publish --workflowVersion <string> — the ONE authority: refuses before the write (L1250)",
+        "cycle-state.mjs inputs --story --workflowVersion <string> (closed by r1-g2, row r0-3-b2)",
+        "cycle-state.mjs apply-scope-decisions --workflowVersion <string> — never judged here; the value is handed to `publish` as the LAST statement of applyScopeDecisions (L1185), after the gh comment read, verifyExistingIssue / createTargetIssue / extendCard and a `.scope-decision-*.json` draft",
+        "cycle-state.mjs migrate-acknowledge --workflowVersion <string> — REQUIRED (need(...), L2452) and never judged; the value is handed to `publish` (L2300) after every predecessor handoff is hashed, the migrationKey computed, the run directory mkdir'd and the `.migration-*.json` draft written"
+      ],
+      "representations": [
+        "the installed script .claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs",
+        "its dataset source packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs (byte-identical, held by AC12-w4)",
+        "cycle-state.mjs in SIX installed skills + SIX dataset copies (byte-identical, held by AC12-w3)",
+        "the coordinator SKILL.md (installed + dataset), whose Step 1/Step 3 command lines spell `<version>`",
+        "the rendered artifact: the `$workflowVersion=` token of the stage prompt an agent reads as its process of record"
+      ],
+      "consumers": [
+        "the stage subagent, which is dispatched with `$workflowVersion=<value>` and passes it back to `resolve` and `publish`",
+        "cycle-state.mjs `compatible()` — keys the run by MAJOR; a malformed version has a null major",
+        "cycle-state.mjs `effectiveInputs()` — the `$inputs` digest both realizations must agree on",
+        "cycle-state.mjs `publish` — the ONLY place a bad version is refused today, one full agent stage later",
+        "cycle-state.mjs `applyScopeDecisions` / `migrateAcknowledge` — they PASS the value through to publish after their effects, so publish's refusal arrives with a stray draft file (and, for scope decisions, an applied decision and a gh round-trip) already on disk"
+      ],
+      "classes": [
+        "V-C1 well-formed and equal to the engine's pin (`4.0.1`) — accepted everywhere",
+        "V-C2 well-formed, another major (`1.2.3`, `3.0.0`) — accepted by the grammar; the value is not the gate (resolve must keep answering for legacy/migration majors)",
+        "V-C3 malformed, near-miss of the grammar (`4.x`, `4.0`, `v4.0.1`, `4.0.1-rc.1`, `4.0.1.2`, `'4.0.1 '`, `'4.0.1\\n'`) — refused by publish, ACCEPTED by packet and resolve today",
+        "V-C4 malformed, prose/shell garbage (`nonsense; rm -rf /`) — refused by publish, rendered VERBATIM into the stage prompt by packet today",
+        "V-C5 empty string — already refused by packet (`workflow-version-missing`, exit 1)",
+        "V-C6 flag absent entirely — already refused by the arg parser (`{\"error\":\"--workflow-version is required\"}`, exit 2)",
+        "V-C7 flag present, value swallowed by the next `--flag` (parser yields boolean `true`) — already refused (`workflow-version-missing`, exit 1)",
+        "V-C8a the pin's own existence and uniqueness: exactly one version, reachable as DATA, equal to the engine's — absent today (zero pins)",
+        "V-C8b the pin's REACHABILITY for the coordinator: the agent can obtain that value without a literal existing anywhere outside the pin. Split out of V-C8 by the repair: SKILL.md L56/L60/L89 spell a bare `<version>` placeholder and name no source, so a fix that exports a pin and validates packet/resolve turns every other row green while the agent still invents the literal it types.",
+        "V-C9 malformed value handed to a declaring subcommand that never JUDGES it — at this head `apply-scope-decisions` and `migrate-acknowledge`. Membership is derived from the FLAGS table, not enumerated: the refusal exists (publish) but arrives AFTER the effects. Reproduced: migrate-acknowledge leaves a `.migration-*.json` and a computed migrationKey; apply-scope-decisions reads the maintainer's comment through `gh`, applies the decision and leaves a `.scope-decision-*.json`, both exiting 1 with `workflowVersion-invalid`."
+      ],
+      "interactions": [
+        "V-I1 pin -> packet -> resolve -> publish: the value the coordinator pins must be one every downstream authority accepts (today there is no pin to feed the chain)",
+        "V-I2 refusal symmetry, QUANTIFIED over the argument table: every subcommand declaring `workflowVersion` must refuse, with a typed version reason, exactly the set `publish` refuses — read from `const FLAGS` at run time, never from a list written here",
+        "V-I3 refusal ORDER, quantified the same way: for every declaring subcommand the refusal precedes every effect — the run directory is byte-identical afterwards and `gh` is never invoked. V-I2 and V-I3 are different failures: apply-scope-decisions and migrate-acknowledge satisfy V-I2 (they do refuse) and violate V-I3 (they refuse last)."
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "the pair-workflow-cycle CLI argument boundary — packetCommand in cycle-dispatch.mjs and the single place the coordinator pins the workflow version it passes; the installed and dataset copies of those scripts are one artifact",
+    "mode": "behavioral",
+    "allowedPaths": [
+      ".claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs",
+      ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-cycle/SKILL.md",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md"
+    ],
+    "oracle": "node .claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs packet --workflow-version <value> … — process exit code + the JSON/prompt on stdout"
+  },
+  "matrix": [
+    {
+      "id": "r1-2-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "V-C3. `packet --next <a real resolve next> --card <card> --policy <policy> --run story-42 --workflow-version 4.x`",
+      "oracle": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs -- row `r1-2 w1`; process exit code + the emitted JSON",
+      "expected": "exit 1; `{halt:'workflow-version-invalid', detail:<names `4.x`>}`; NO `prompt` key and NO `args` key in the emitted object.",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "The finding's own VERIFY/ASSERT, verbatim: a typed HALT with exit 1, and no prompt rendered from a refused value."
+    },
+    {
+      "id": "r1-2-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "V-C4. The same packet call with `--workflow-version 'nonsense; rm -rf /'`.",
+      "oracle": "same suite, row `r1-2 w2`; exit code + the FULL stdout",
+      "expected": "exit 1, `halt:'workflow-version-invalid'`, and stdout contains no `$workflowVersion=` token at all — the refused value never reaches prompt text, not even inside the HALT.",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "Separates 'the command exits non-zero' from 'the value was never rendered'. Today the whole stage prompt is emitted with the garbage inlined."
+    },
+    {
+      "id": "r1-2-w3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "V-C8a (uniqueness half; reachability is w5). `await import('.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs')`, collecting every exported string matching /^\\d+\\.\\d+\\.\\d+$/; and the source of `cycle-dispatch.mjs`.",
+      "oracle": "same suite, row `r1-2 w3`; the exported values + a source scan for a quoted version literal",
+      "expected": "EXACTLY ONE such export; its value equals the `const WORKFLOW_VERSION = '<v>'` literal of `.claude/workflows/pair-implement-batch.js`; and `cycle-dispatch.mjs` contains no quoted `x.y.z` literal of its own (it imports the pin).",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "The 'pin it in one place the way the engine does' half. The home is DERIVED, not preferred: `cycle-dispatch.mjs` has no main guard, so importing it runs its CLI and exits — the only place a pin is reachable as data is the module the dispatcher already imports CAPS/CONTEXT_TABLE/PIPELINE_DEFAULTS/isWorkflowVersion from (AC-12, and the approved property w-5: the dispatcher imports, never re-spells). The symbol NAME is not asserted; only that exactly one such exported value exists. REPAIRED (r2-g2-v2): this row is now explicitly only the UNIQUENESS half of the old V-C8. It asserts the pin EXISTS, is unique, equals the engine's and is not duplicated in cycle-dispatch.mjs — nothing about the coordinator being able to obtain it. That second half is row w5, without which a fix that exports the pin and validates packet/resolve turns all twelve original rows green while SKILL.md still tells the agent to type `<version>` by hand."
+    },
+    {
+      "id": "r1-2-w4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "V-C3 at the EARLIER entry point. `resolve --dir <empty run dir> --workflowVersion 4.x --policy <policy> --entry fresh --story 42 --inputs x`.",
+      "oracle": "same suite, row `r1-2 w4`; exit code + the emitted JSON",
+      "expected": "non-zero exit; NO `next` in the emitted object; the message names the received value (the shape `inputs --workflowVersion` already uses).",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "`resolve` is Step 1 of the coordinator's algorithm and `packet` is Step 3 — resolve is where a bad version FIRST enters. Closing packet alone leaves the finding's own cited failure (`resolve --workflowVersion 4.x` answering `{step:'prepare'}` happily) open one call earlier. cycle-state.mjs is in fixScope. No sealed row anywhere asserts that resolve accepts a malformed version (checked: the only empty-version assertion in the suite, L1490, is on `inputs`)."
+    },
+    {
+      "id": "r1-2-b1",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "V-C3 across the near-miss set: `4.0`, `v4.0.1`, `'4.0.1 '`, `'4.0.1\\n'`, `4.0.1-rc.1`, `4.0.1.2` — each fed to BOTH `packet` and `resolve`.",
+      "oracle": "same suite, row `r1-2 b1`; exit code + emitted JSON per value",
+      "expected": "every value: packet exit 1 with `halt:'workflow-version-invalid'`; resolve non-zero with no `next`.",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "A predicate that only catches `4.x` is not the grammar. Trailing whitespace is included because the current check is `length > 0`, which a trimmed-looking value passes."
+    },
+    {
+      "id": "r1-2-b2",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "V-C5/V-C6/V-C7. `packet` with the flag omitted; with `--workflow-version ''`; and with the value swallowed by the next flag.",
+      "oracle": "same suite, row `r1-2 b2`; exit code + emitted JSON",
+      "expected": "for each: EITHER a refusal (non-zero, no `prompt`) OR exit 0 whose rendered `$workflowVersion=` satisfies the grammar. Never a prompt carrying a value the grammar rejects. The swallowed-value case must always refuse.",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "Deliberately design-tolerant: the fix MAY default an omitted flag to the pin, and this row neither forces nor forbids it — it forbids only the one outcome the finding is about. Passes at base (exit 2 / exit 1, no prompt)."
+    },
+    {
+      "id": "r1-2-b3",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "V-C8's uniqueness, on the prose surface: the coordinator SKILL.md body (installed + dataset), frontmatter stripped — the skill's own `version: 0.1.0` is not a workflow version.",
+      "oracle": "same suite, row `r1-2 b3`; a scan of the body for `\\b\\d+\\.\\d+\\.\\d+\\b`",
+      "expected": "no match, in either copy.",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "'One place' is the obligation; a literal typed into the prose is a second copy that drifts silently. Passes at base (0 hits) — this row exists so the FIX cannot create the duplicate while closing the defect."
+    },
+    {
+      "id": "r1-2-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "V-C1. `packet … --workflow-version 4.0.1` for the `prepare` stage.",
+      "oracle": "same suite, row `r1-2 c1`; exit code + the rendered prompt compared to the prompt `pair-implement-batch.js` composes for the same stage under its dry-run harness",
+      "expected": "exit 0, no `halt`, prompt carries `$workflowVersion=4.0.1.`, and the prompt is byte-identical to the engine's.",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "'An unchanged packet on the second' — proved against the other realization of the same cycle, not against a transcription."
+    },
+    {
+      "id": "r1-2-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "The r1-g2 refusals at this same boundary, with a valid version: `--pipeline '\"x\"'`; `--pipeline null`; a `card.branch` of `feature/..x`.",
+      "oracle": "same suite, row `r1-2 c2`; exit code + `halt`",
+      "expected": "`pipeline-invalid` exit 1; exit 0 for `null`; `card-invalid` exit 1 — unchanged.",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "The new `must` is inserted into a validation sequence r1-g2 already sealed; this row is what makes a precedence-shuffling fix visible."
+    },
+    {
+      "id": "r1-2-c3",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "V-C2. `resolve` on an empty run dir with `4.0.1`, and with `3.0.0`.",
+      "oracle": "same suite, row `r1-2 c3`; exit code + `next`",
+      "expected": "both exit 0 and answer `prepare/initial/a0` — the GRAMMAR is the gate, not the value.",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "Forbids the over-broad fix that hardcodes 'only the pin resolves', which would break every legacy-major and migrate-acknowledge path."
+    },
+    {
+      "id": "r1-2-i1",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "V-I1. Read the single pinned version as data, then feed that exact value to `packet`, `resolve` and `publish` (a valid a0 red-spec draft).",
+      "oracle": "same suite, row `r1-2 i1`; the three exit codes + `next.step` + `published`",
+      "expected": "packet exit 0 rendering `$workflowVersion=<pin>.`; resolve exit 0 answering `prepare`; publish exit 0 with `published:true`.",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "The closure of the asymmetry in the direction that matters: the version the coordinator is told to pass is one every downstream authority accepts. RED today at step one — there is no pin."
+    },
+    {
+      "id": "r1-2-i2",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "V-I2. For each of `4.0.1`, `1.2.3`, `4.x`, `4.0`, `v4.0.1`, `nonsense; rm -rf /`: run `publish` (the authority) and then EVERY subcommand the CLI's own `const FLAGS` table declares `workflowVersion` for, plus `packet`.",
+      "oracle": "same suite, row `r1-2 i2`; per (value, subcommand): the exit code and the typed reason (`json.reason` / `json.error` / `json.halt` matching /workflow-?[vV]ersion/), collected — never short-circuited",
+      "expected": "publish refuses iff the value is malformed; and for EVERY declaring subcommand of the table (and packet), `refusedForVersion` equals publish's verdict. The collected disagreement list is empty.",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "States the invariant as a bi-conditional against the existing authority rather than as a list of blessed strings, so it keeps holding if the grammar ever widens. Today: publish refuses 4 of 6, packet and resolve refuse 0 of 6. REPAIRED (r2-g2-v1): the bi-conditional is now quantified over the CLI's own argument table read at run time, not over a two-name prose list, so it keeps holding when a sixth subcommand declares the flag — and a declaring subcommand with no invocation here fails the row instead of being skipped. Failures are collected, so the observed output names every entry point that disagrees, not just the first. At 097d829a the disagreement list is 8 entries (resolve and packet, on each of the 4 malformed probes); apply-scope-decisions and migrate-acknowledge AGREE here — they do refuse — which is exactly why V-I3/row i3 exists."
+    },
+    {
+      "id": "r1-2-i3",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "V-I3/V-C9. For EVERY subcommand the `const FLAGS` table declares `workflowVersion` for, one minimally-valid invocation in every other dimension, handed `4.x`: resolve (fresh run dir), publish (valid a0 red-spec draft), inputs (--story <card>), apply-scope-decisions (a run dir holding a REAL review handoff published by `publish` with one pending scopeChange, the maintainer's decision comment served by a logging fake `gh` via PAIR_GH_BIN, --maintainer rucka), migrate-acknowledge (a REAL predecessor run dir built by `publish`, --legacy it).",
+      "oracle": "same suite, row `r1-2 i3`; per subcommand: exit code, the typed reason, the recursive content-hash snapshot of the run directory taken immediately before and after the call, and the fake `gh`'s invocation log",
+      "expected": "for every declaring subcommand: refused with a typed version reason (exit non-zero), the run-directory snapshot byte-identical before and after, and zero `gh` invocations. The collected violation list is empty.",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "The gap r2-g2-v1 names: the refusal exists but arrives after the work. Re-run at 097d829a the list is exactly ['resolve','apply-scope-decisions','migrate-acknowledge'] — resolve does not refuse at all; apply-scope-decisions refuses AFTER reading the maintainer's comment through gh, applying the decision and leaving `.scope-decision-<ts>.json`; migrate-acknowledge refuses AFTER hashing every predecessor handoff, computing the migrationKey and leaving `.migration-<ts>.json`. Design-tolerant about HOW (a shared `must(isWorkflowVersion(...))` at the CLI boundary, or a check at the head of each function): it constrains only order and effect. The subcommand set is read from the table, so a sixth one is covered without editing this row, and a declaring subcommand with no invocation fails loudly."
+    },
+    {
+      "id": "r1-2-c4",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "V-C1 over the same derived set. The identical five invocations of row i3, handed the well-formed `4.0.1`.",
+      "oracle": "same suite, row `r1-2 c4`; per subcommand: exit code plus its own success marker — resolve `next.step==='prepare'`, publish `published===true`, inputs a string `inputsDigest`, apply-scope-decisions `applied===true`, migrate-acknowledge `applied===true`",
+      "expected": "no subcommand refuses for the version, and every one still succeeds exactly as it does today.",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "The other half of r2-g2-v1's VERIFY ('one malformed and one well-formed'). It is what stops the fix from closing i3 by refusing earlier AND more: the whole apply-scope-decisions and migrate-acknowledge happy paths (real review evidence, a real gh round-trip, a real predecessor run) must still run to completion. Passes at base (5/5)."
+    },
+    {
+      "id": "r1-2-w5",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "V-C8b. (a) `packet` with `--workflow-version` OMITTED (every other argument valid, `--next` from a real resolve); and (b) the coordinator SKILL.md bodies, installed and dataset: every argument passed to `--workflow-version`/`--workflowVersion` in the file, and every shell capture in the file of the form `VAR=$( … cycle-state.mjs|cycle-dispatch.mjs … )`.",
+      "oracle": "same suite, row `r1-2 w5`; (a) the packet exit code and the `$workflowVersion=` token of the rendered prompt compared to the engine's pin; (b) the two SKILL.md bodies",
+      "expected": "(a) OR (b). (a): exit 0 and the rendered version equals the engine's pin — read as data, never transcribed. (b): in EACH file, at least one such capture exists and EVERY `--workflow-version` argument in that file is that captured variable (`$V`, `\"$V\"`, `${V}`), never a `<…>` placeholder.",
+      "covers": [
+        "r1-2"
+      ],
+      "rationale": "The gap r2-g2-v2 names, made executable and left design-tolerant the way b2 is: it forbids only the third state — a pin that exists and that nothing but the agent's memory can reach. RED at 097d829a on both paths: (a) exits 2 with {\"error\":\"--workflow-version is required\"}; (b) both SKILL.md copies pass `<version>` at L56/L60/L89 and contain zero captures. A fix that exports the pin, validates packet and resolve and leaves SKILL.md untouched leaves this row red — which is precisely the surviving half of r1-2 the verifier caught."
+    }
+  ],
+  "redTests": [
+    {
+      "file": ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:0e181dacc2f0819246d2b7debcb1a26123b71be4cc8a44b1013f8e5d5ed086a0",
+      "command": "cd .claude/workflows && node --test --test-reporter=tap pair-contracts/cycle-coordinator.test.mjs",
+      "observed": "# tests 73 / # pass 64 / # fail 9 — not ok 59 (r1-2 w1) packet 4.x exit 0, full prepare packet emitted; not ok 60 (r1-2 w2) prompt carries `$workflowVersion=nonsense; rm -rf /`; not ok 61 (r1-2 w3) `exactly one pinned version must be exported …; found []`; not ok 62 (r1-2 w4) resolve --workflowVersion 4.x exits 0 with {\"status\":\"empty\",\"next\":{\"step\":\"prepare\"…},\"workflowVersion\":\"4.x\"}; not ok 63 (r1-2 b1) packet \"4.0\" exit 0; not ok 69 (r1-2 i1) `no single pinned version to feed the chain: []`; not ok 70 (r1-2 i2) disagreement list = ['resolve @ \"4.x\"','packet (cycle-dispatch.mjs) @ \"4.x\"','resolve @ \"4.0\"','packet @ \"4.0\"','resolve @ \"v4.0.1\"','packet @ \"v4.0.1\"','resolve @ \"nonsense; rm -rf /\"','packet @ \"nonsense; rm -rf /\"'] !== []; not ok 71 (r1-2 i3) violation list = ['resolve','apply-scope-decisions','migrate-acknowledge'] !== [], with runDirAfter ['.scope-decision-1789713207948-ened99rrhul.json','r0-review-phase.json'] + ghCalls [[\"api\",\"repos/foomakers/pair/issues/comments/701\"]] for apply-scope-decisions and ['.migration-1789713208777-7j9ta3yf853.json'] for migrate-acknowledge; not ok 73 (r1-2 w5) `(a) packet with --workflow-version omitted: exit 2, rendered undefined (the pin is \"4.0.1\")` and `(b) version arguments [\"<version>\",\"<version>`.\",\"<version>\"], obtained from []` in both SKILL.md copies. Rows 64-68 and 72 (b2, b3, c1, c2, c3, c4) and all 58 pre-existing rows pass."
+    }
+  ],
+  "testExempt": false,
+  "reconciled": [],
+  "preserved": [],
+  "attempt": 2,
+  "revision": 1,
+  "repairOf": {
+    "contractHash": "sha256:ee63b59fcdec30eb03e535cad722c57918e6ca269057fce341246c1c6f030597",
+    "rejection": [
+      "r2-g2-v1",
+      "r2-g2-v2"
+    ]
+  },
+  "changedRows": [
+    "r1-2-i2",
+    "r1-2-w3",
+    "r1-2-i3",
+    "r1-2-c4",
+    "r1-2-w5"
+  ]
+}

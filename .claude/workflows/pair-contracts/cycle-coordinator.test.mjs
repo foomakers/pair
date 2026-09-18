@@ -1703,3 +1703,692 @@ test('r0-4 c1 (control): the sibling redirect cap is untouched and keeps its own
   assert.equal(r.json.next.cap, 'consecutiveRedirects')
   assert.match(String(r.json.next.detail), /redirect/i)
 })
+
+// ══ r2-g2 — the workflow version at the coordinator's CLI boundary (finding r1-2) ═══════════════
+//
+// r1-g2 closed `--worktree-root` and every `--pipeline` value against the engine's grammar and
+// exported `isWorkflowVersion` from `cycle-state.mjs` — but `--workflow-version` itself is still
+// checked as "a non-empty string", and the version the coordinator is supposed to PASS is pinned
+// nowhere in `pair-workflow-cycle` (the engine pins `const WORKFLOW_VERSION = '4.0.1'` in
+// `pair-implement-batch.js` and cannot be handed a bad one; the in-session coordinator can).
+//
+// The grammar is NOT invented here. `cycle-state.mjs` already owns it — `isWorkflowVersion`,
+// `/^\d+\.\d+\.\d+$/`, stated once with the comment "accepting it anywhere upstream only mints an
+// identity nothing downstream can use" — and `publish` already refuses anything outside it with
+// `workflowVersion-invalid`. Every row below asserts the SAME grammar one dispatch EARLIER, where
+// the value enters, instead of one full agent stage later where the refusal costs a written
+// contract and an unrecorded handoff.
+
+const VERSION_GRAMMAR = /^\d+\.\d+\.\d+$/
+const ENGINE_PIN = /const WORKFLOW_VERSION = '(\d+\.\d+\.\d+)'/.exec(readFileSync(BATCH_JS, 'utf8'))?.[1]
+const COORD_STATE = join(SKILLS, 'pair-workflow-cycle/scripts/cycle-state.mjs')
+const COORD_DISPATCH = join(SKILLS, 'pair-workflow-cycle/scripts/cycle-dispatch.mjs')
+const DATASET_CYCLE_SKILL = join(DATASET, '.skills/workflow/cycle/SKILL.md')
+
+// A real `next`, produced by the real authority — never a hand-built stand-in for one.
+function freshNext(version = WORKFLOW_VERSION) {
+  const { dir } = runDir()
+  return state([
+    'resolve',
+    '--dir',
+    dir,
+    '--workflowVersion',
+    version,
+    '--policy',
+    JSON.stringify(POLICY),
+    '--entry',
+    'fresh',
+    '--story',
+    '42',
+    '--inputs',
+    'x',
+  ]).json.next
+}
+const packetWith = version => {
+  const args = [
+    'packet',
+    '--next',
+    JSON.stringify(freshNext()),
+    '--card',
+    JSON.stringify(CARD),
+    '--policy',
+    JSON.stringify(POLICY),
+    '--run',
+    'story-42',
+  ]
+  if (version !== undefined) args.push('--workflow-version', version)
+  return dispatch(args)
+}
+const resolveWith = version => {
+  const { dir } = runDir()
+  return state([
+    'resolve',
+    '--dir',
+    dir,
+    '--workflowVersion',
+    version,
+    '--policy',
+    JSON.stringify(POLICY),
+    '--entry',
+    'fresh',
+    '--story',
+    '42',
+    '--inputs',
+    'x',
+  ])
+}
+function publishWith(version) {
+  const { root, dir } = runDir()
+  const draft = join(root, 'draft-r2g2.json')
+  writeFileSync(
+    draft,
+    JSON.stringify({
+      run: 'story-42',
+      story: '42',
+      branch: 'feature/US-42-x',
+      phase: 'a0',
+      skill: 'red-spec',
+      inputHead: 'a'.repeat(40),
+      inputsDigest: 'x',
+      acHash: `sha256:${'0'.repeat(64)}`,
+      attempt: 1,
+      mode: 'initial',
+      status: 'red',
+      contractPath: '/x.json',
+      contractHash: `sha256:${'1'.repeat(64)}`,
+      reconciled: [],
+      preserved: [],
+      findings: { received: [], covered: [] },
+      elapsedMs: 1,
+    }),
+  )
+  return state([
+    'publish',
+    '--dir',
+    dir,
+    '--file',
+    draft,
+    '--phase',
+    'a0',
+    '--skill',
+    'red-spec',
+    '--workflowVersion',
+    version,
+    '--attempt',
+    '1',
+  ])
+}
+// The one pin, read as DATA from the coordinator's own authority. `cycle-dispatch.mjs` has no
+// `import.meta`/main guard — importing it RUNS its CLI and exits — so the only place a pin is
+// reachable as data is the module the dispatcher already imports CAPS, CONTEXT_TABLE,
+// PIPELINE_DEFAULTS and isWorkflowVersion from (AC-12: the dispatcher imports, never re-spells).
+async function pinnedVersions() {
+  const mod = await import(COORD_STATE)
+  return Object.entries(mod)
+    .filter(([, v]) => typeof v === 'string' && VERSION_GRAMMAR.test(v))
+    .map(([k, v]) => [k, v])
+}
+
+test('r1-2 w1 (witness): `packet --workflow-version 4.x` is a typed HALT with exit 1, not a rendered packet', () => {
+  const r = packetWith('4.x')
+  assert.equal(r.status, 1, `exit 1, got ${r.status}: ${r.stdout}${r.stderr}`)
+  assert.equal(
+    r.json?.halt,
+    'workflow-version-invalid',
+    `a typed halt, got ${JSON.stringify(r.json)}`,
+  )
+  assert.match(String(r.json?.detail ?? ''), /4\.x/, 'the detail names the value it was handed')
+  assert.equal(r.json.prompt, undefined, 'no prompt is rendered from a refused value')
+  assert.equal(r.json.args, undefined, 'and no argument packet either')
+})
+
+test('r1-2 w2 (witness): a version that is prose/shell garbage never reaches a stage prompt', () => {
+  const r = packetWith('nonsense; rm -rf /')
+  assert.equal(r.status, 1, `exit 1, got ${r.status}: ${r.stdout}${r.stderr}`)
+  assert.equal(r.json?.halt, 'workflow-version-invalid', JSON.stringify(r.json))
+  assert.doesNotMatch(
+    r.stdout,
+    /\$workflowVersion=/,
+    'the refused value must not be rendered into any prompt text, not even inside a HALT',
+  )
+})
+
+// V-C8a — the UNIQUENESS half of the pin: exactly one, as data, equal to the engine’s. The other
+// half (the coordinator can actually OBTAIN it without transcribing a literal) is w5: a pin nothing
+// reads is a pin the agent still has to invent, and every row below this one would stay green.
+test('r1-2 w3 (witness, V-C8a): the coordinator pins the workflow version ONCE, as data, equal to the engine’s', async () => {
+  assert.ok(ENGINE_PIN, `pair-implement-batch.js no longer pins WORKFLOW_VERSION as a literal`)
+  const pins = await pinnedVersions()
+  assert.equal(
+    pins.length,
+    1,
+    `exactly one pinned version must be exported from the coordinator’s cycle-state.mjs; found ${JSON.stringify(pins)}`,
+  )
+  assert.equal(
+    pins[0][1],
+    ENGINE_PIN,
+    `the coordinator’s pin (${pins[0][0]}=${pins[0][1]}) must equal the engine’s WORKFLOW_VERSION (${ENGINE_PIN}) — two realizations of one cycle, one version`,
+  )
+  assert.doesNotMatch(
+    readFileSync(COORD_DISPATCH, 'utf8'),
+    /(['"`])\d+\.\d+\.\d+\1/,
+    '`cycle-dispatch.mjs` imports the pin; a version literal here is a second copy of the state machine’s identity (AC-12)',
+  )
+})
+
+test('r1-2 w4 (witness): `resolve --workflowVersion 4.x` refuses instead of answering `prepare`', () => {
+  const r = resolveWith('4.x')
+  assert.notEqual(r.status, 0, `a malformed version must not resolve: ${r.stdout}`)
+  assert.equal(
+    r.json?.next,
+    undefined,
+    `no stage is due from a version the command did not really get: ${JSON.stringify(r.json)}`,
+  )
+  assert.match(
+    `${r.stdout}${r.stderr}`,
+    /4\.x/,
+    'the refusal names the value, the way `inputs` already does',
+  )
+})
+
+test('r1-2 b1 (boundary): every near-miss of the grammar is refused at BOTH entry points', () => {
+  for (const v of ['4.0', 'v4.0.1', '4.0.1 ', '4.0.1\n', '4.0.1-rc.1', '4.0.1.2']) {
+    assert.ok(!VERSION_GRAMMAR.test(v), `${JSON.stringify(v)} is outside the grammar by construction`)
+    const p = packetWith(v)
+    assert.equal(p.status, 1, `packet ${JSON.stringify(v)}: exit 1, got ${p.status} ${p.stdout}`)
+    assert.equal(p.json?.halt, 'workflow-version-invalid', `packet ${JSON.stringify(v)}: ${p.stdout}`)
+    const s = resolveWith(v)
+    assert.notEqual(s.status, 0, `resolve ${JSON.stringify(v)}: ${s.stdout}`)
+    assert.equal(s.json?.next, undefined, `resolve ${JSON.stringify(v)}: ${s.stdout}`)
+  }
+})
+
+test('r1-2 b2 (boundary, pass at base): an absent or swallowed `--workflow-version` never renders an invalid one', () => {
+  // Either the command still refuses, or it renders the ONE pinned version. What it may never do
+  // is render a `$workflowVersion=` the grammar rejects.
+  const check = r => {
+    if (r.status !== 0) {
+      assert.equal(r.json?.prompt, undefined, `a refusal renders no prompt: ${r.stdout}`)
+      return
+    }
+    const rendered = /\$workflowVersion=(\S+)\./.exec(r.json.prompt)?.[1]
+    assert.ok(rendered, `an accepted packet must carry $workflowVersion: ${r.json.prompt}`)
+    assert.match(rendered, VERSION_GRAMMAR, 'a rendered version is always well-formed')
+  }
+  check(packetWith(undefined)) // flag omitted entirely
+  check(packetWith('')) // flag present, empty value
+  const swallowed = dispatch([
+    'packet',
+    '--next',
+    JSON.stringify(freshNext()),
+    '--card',
+    JSON.stringify(CARD),
+    '--policy',
+    JSON.stringify(POLICY),
+    '--workflow-version',
+    '--run', // the value is swallowed by the next flag: `opts['workflow-version'] === true`
+    'story-42',
+  ])
+  assert.notEqual(swallowed.status, 0, `a swallowed value is never a version: ${swallowed.stdout}`)
+  assert.equal(swallowed.json?.prompt, undefined)
+})
+
+test('r1-2 b3 (boundary, pass at base): the coordinator’s SKILL.md spells no workflow version of its own', () => {
+  for (const md of [CYCLE_SKILL, DATASET_CYCLE_SKILL]) {
+    const body = readFileSync(md, 'utf8').replace(/^---\n[\s\S]*?\n---\n/, '') // the skill’s OWN `version:` is frontmatter
+    const hits = body.match(/\b\d+\.\d+\.\d+\b/g) ?? []
+    assert.deepEqual(
+      hits,
+      [],
+      `${md} carries a version literal (${hits.join(', ')}) — the pin lives in exactly one place, and prose is not it`,
+    )
+  }
+})
+
+test('r1-2 c1 (control): a well-formed version still renders the packet, byte-identical to the engine’s', async () => {
+  const calls = await batchPrompts({ cards: [CARD] })
+  const fromBatch = calls.find(c => c.opts.label?.startsWith('prepare:'))
+  assert.ok(fromBatch, 'the engine dispatched no prepare')
+  const r = packetWith(WORKFLOW_VERSION)
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.equal(r.json.halt, undefined)
+  assert.match(r.json.prompt, new RegExp(`\\$workflowVersion=${WORKFLOW_VERSION.replace(/\./g, '\\.')}\\.`))
+  assert.equal(r.json.prompt, fromBatch.prompt, 'the accepted packet is unchanged')
+})
+
+test('r1-2 c2 (control): the r1-g2 HALTs at this same boundary are untouched and keep their precedence', () => {
+  const withPipeline = pipeline =>
+    dispatch([
+      'packet',
+      '--next',
+      JSON.stringify(freshNext()),
+      '--card',
+      JSON.stringify(CARD),
+      '--policy',
+      JSON.stringify(POLICY),
+      '--run',
+      'story-42',
+      '--workflow-version',
+      WORKFLOW_VERSION,
+      '--pipeline',
+      pipeline,
+    ])
+  const bad = withPipeline('"x"')
+  assert.equal(bad.status, 1, bad.stdout)
+  assert.equal(bad.json?.halt, 'pipeline-invalid', bad.stdout)
+  const ok = withPipeline('null')
+  assert.equal(ok.status, 0, ok.stdout + ok.stderr)
+
+  const badCard = dispatch([
+    'packet',
+    '--next',
+    JSON.stringify(freshNext()),
+    '--card',
+    JSON.stringify({ ...CARD, branch: 'feature/..x' }),
+    '--policy',
+    JSON.stringify(POLICY),
+    '--run',
+    'story-42',
+    '--workflow-version',
+    WORKFLOW_VERSION,
+  ])
+  assert.equal(badCard.status, 1, badCard.stdout)
+  assert.equal(badCard.json?.halt, 'card-invalid', badCard.stdout)
+})
+
+test('r1-2 c3 (control): a well-formed version of ANOTHER major still resolves — the grammar is the gate, not the value', () => {
+  const pinned = resolveWith(WORKFLOW_VERSION)
+  assert.equal(pinned.status, 0, pinned.stderr)
+  assert.equal(pinned.json.next.step, 'prepare')
+  assert.equal(pinned.json.next.mode, 'initial')
+  assert.equal(pinned.json.next.phase, 'a0')
+
+  const older = resolveWith('3.0.0')
+  assert.equal(older.status, 0, `a legacy/migration major is well-formed and still answers: ${older.stdout}`)
+  assert.equal(older.json.next.step, 'prepare')
+})
+
+test('r1-2 i1 (interaction): the pinned version is accepted by packet, resolve AND publish', async () => {
+  const pins = await pinnedVersions()
+  assert.equal(pins.length, 1, `no single pinned version to feed the chain: ${JSON.stringify(pins)}`)
+  const pin = pins[0][1]
+
+  const p = packetWith(pin)
+  assert.equal(p.status, 0, `packet refused the coordinator’s own pin: ${p.stdout}`)
+  assert.match(p.json.prompt, new RegExp(`\\$workflowVersion=${pin.replace(/\./g, '\\.')}\\.`))
+
+  const s = resolveWith(pin)
+  assert.equal(s.status, 0, `resolve refused the pin: ${s.stdout}`)
+  assert.equal(s.json.next.step, 'prepare')
+
+  const pub = publishWith(pin)
+  assert.equal(pub.status, 0, `publish refused the pin: ${pub.stdout}`)
+  assert.equal(pub.json.published, true, pub.stdout)
+})
+
+// ── the CLI's own argument table is the authority on WHO gets handed a version ─────────────────
+//
+// The rows below are not quantified over a hand-written list of entry points: a list in prose is a
+// snapshot that goes stale the moment a sixth subcommand declares the flag. `cycle-state.mjs`
+// already publishes the set as data — the per-command `FLAGS` table its CLI refuses unknown flags
+// with (`const FLAGS = { … }`) — and every subcommand that DECLARES `workflowVersion` there is a
+// place a version enters the state machine. That table is read here, and a declaring subcommand
+// with no invocation below fails loudly rather than being skipped.
+
+import { chmodSync, readdirSync, statSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+
+function declaringSubcommands() {
+  const src = readFileSync(COORD_STATE, 'utf8')
+  const table = /const FLAGS = \{\n([\s\S]*?)\n\s*\}\n/.exec(src)
+  assert.ok(
+    table,
+    '`cycle-state.mjs` no longer declares its per-command flag table as `const FLAGS = {…}` — the row must be re-pointed at whatever now decides which subcommand may be handed which flag, never at a list typed here',
+  )
+  const found = []
+  for (const line of table[1].split('\n')) {
+    const entry = /^\s*'?([A-Za-z][\w-]*)'?:\s*\[([^\]]*)\]/.exec(line)
+    if (!entry) continue
+    const flags = entry[2].split(',').map(f => f.trim().replace(/^['"]|['"]$/g, ''))
+    if (flags.includes('workflowVersion')) found.push(entry[1])
+  }
+  assert.ok(found.length >= 3, `the flag table parsed to an implausible set: ${JSON.stringify(found)}`)
+  return found
+}
+
+// A `gh` that does the minimum `apply-scope-decisions` needs AND logs every invocation, so "no gh
+// call" is an observation, not an inference.
+function ghStub() {
+  const home = mkdtempSync(join(tmpdir(), 'us486-gh-'))
+  const bin = join(home, 'gh')
+  const log = join(home, 'calls.log')
+  writeFileSync(log, '')
+  writeFileSync(
+    bin,
+    `#!/usr/bin/env node
+const fs = require('fs')
+const a = process.argv.slice(2)
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(a) + '\\n')
+if (a[0] === 'api') {
+  const m = /issues\\/comments\\/(\\d+)$/.exec(a[1] || '')
+  const comments = JSON.parse(process.env.FAKE_GH_COMMENTS_JSON || '{}')
+  const c = m && comments[m[1]]
+  if (c) { process.stdout.write(JSON.stringify(c)); process.exit(0) }
+}
+if (a[0] === 'issue' && a[1] === 'view') { process.stdout.write('card body of #' + a[2]); process.exit(0) }
+process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(1)
+`,
+  )
+  chmodSync(bin, 0o755)
+  return { bin, calls: () => readFileSync(log, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)) }
+}
+
+// Every regular file under the run directory, content-hashed: the oracle for "nothing was written".
+function dirSnapshot(dir) {
+  if (!existsSync(dir)) return []
+  const out = []
+  const walk = (at, rel) => {
+    for (const name of readdirSync(at).sort()) {
+      const full = join(at, name)
+      if (statSync(full).isDirectory()) walk(full, `${rel}${name}/`)
+      else out.push(`${rel}${name}:${createHash('sha256').update(readFileSync(full)).digest('hex')}`)
+    }
+  }
+  walk(dir, '')
+  return out
+}
+
+const SHA40 = c => c.repeat(40)
+const redSpecDraft = (root, story = '42', runId = 'story-42') => {
+  const f = join(root, `draft-${Math.random().toString(36).slice(2)}.json`)
+  writeFileSync(
+    f,
+    JSON.stringify({
+      run: runId,
+      story,
+      branch: `feature/US-${story}-x`,
+      phase: 'a0',
+      skill: 'red-spec',
+      inputHead: SHA40('a'),
+      inputsDigest: 'x',
+      acHash: `sha256:${'0'.repeat(64)}`,
+      attempt: 1,
+      mode: 'initial',
+      status: 'red',
+      contractPath: '/x.json',
+      contractHash: `sha256:${'1'.repeat(64)}`,
+      reconciled: [],
+      preserved: [],
+      findings: { received: [], covered: [] },
+      elapsedMs: 1,
+    }),
+  )
+  return f
+}
+// A real predecessor run directory, built by the real `publish` — never a hand-written handoff.
+function legacyRunDir() {
+  const { root, dir } = runDir('story-41', '41')
+  const p = state([
+    'publish',
+    '--dir',
+    dir,
+    '--file',
+    redSpecDraft(root, '41', 'story-41'),
+    '--phase',
+    'a0',
+    '--skill',
+    'red-spec',
+    '--workflowVersion',
+    WORKFLOW_VERSION,
+    '--attempt',
+    '1',
+  ])
+  assert.equal(p.status, 0, `the predecessor fixture must be real evidence: ${p.stdout}`)
+  return dir
+}
+// A run directory holding REAL review evidence with a pending scope proposal, plus the maintainer's
+// decision comment the fake `gh` will serve.
+function scopeDecisionFixture() {
+  const { root, dir } = runDir()
+  const draft = join(root, 'review.json')
+  writeFileSync(
+    draft,
+    JSON.stringify({
+      run: 'story-42',
+      story: '42',
+      pr: 7,
+      branch: 'feature/US-42-x',
+      phase: 'r0',
+      skill: 'review-phase',
+      inputHead: SHA40('c'),
+      reviewedHead: SHA40('c'),
+      verdict: 'CHANGES-REQUESTED',
+      findings: [],
+      custody: { verified: true, contractBreach: false },
+      readiness: { ready: false, remoteHead: SHA40('c') },
+      mode: 'first',
+      scopeChanges: [
+        {
+          id: 'sc-1',
+          type: 'new-requirement',
+          proposal: 'a proposal the maintainer decided on',
+          status: 'pending',
+          discoveredAtReviewId: 'r0',
+          baselineEvidenceRefs: [],
+        },
+      ],
+    }),
+  )
+  const p = state([
+    'publish',
+    '--dir',
+    dir,
+    '--file',
+    draft,
+    '--phase',
+    'r0',
+    '--skill',
+    'review-phase',
+    '--workflowVersion',
+    WORKFLOW_VERSION,
+  ])
+  assert.equal(p.status, 0, `the review fixture must be real evidence: ${p.stdout}`)
+  const baseline = state(['scope-baseline', '--dir', dir]).json.scopeBaselineHash
+  const body =
+    '```json\n' +
+    JSON.stringify({
+      schemaVersion: 1,
+      scopeBaselineHash: baseline,
+      decisions: [{ id: 'sc-1', action: 'ignore', rationale: 'already covered by AC-3' }],
+    }) +
+    '\n```'
+  return {
+    dir,
+    decisionRef: 'https://github.com/foomakers/pair/pull/7#issuecomment-701',
+    comments: {
+      701: {
+        user: { login: 'rucka', type: 'User' },
+        issue_url: 'https://api.github.com/repos/foomakers/pair/issues/7',
+        body,
+      },
+    },
+  }
+}
+
+// One invocation per declaring subcommand: minimally valid in EVERY dimension but the version, so
+// the only thing a refusal can be about is the version — and so an acceptance runs the real thing.
+const INVOCATIONS = {
+  resolve: version => {
+    const { dir } = runDir()
+    return {
+      dir,
+      args: ['resolve', '--dir', dir, '--workflowVersion', version, '--policy', JSON.stringify(POLICY), '--entry', 'fresh', '--story', '42', '--inputs', 'x'],
+      accepted: r => r.status === 0 && r.json?.next?.step === 'prepare',
+    }
+  },
+  publish: version => {
+    const { root, dir } = runDir()
+    return {
+      dir,
+      args: ['publish', '--dir', dir, '--file', redSpecDraft(root), '--phase', 'a0', '--skill', 'red-spec', '--workflowVersion', version, '--attempt', '1'],
+      accepted: r => r.status === 0 && r.json?.published === true,
+    }
+  },
+  inputs: version => {
+    const { dir } = runDir() // this command touches no run directory at all — the snapshot proves it
+    return {
+      dir,
+      args: ['inputs', '--story', JSON.stringify(CARD), '--workflowVersion', version],
+      accepted: r => r.status === 0 && typeof r.json?.inputsDigest === 'string',
+    }
+  },
+  'apply-scope-decisions': version => {
+    const fx = scopeDecisionFixture()
+    const gh = ghStub()
+    return {
+      dir: fx.dir,
+      gh,
+      env: { ...process.env, PAIR_GH_BIN: gh.bin, FAKE_GH_COMMENTS_JSON: JSON.stringify(fx.comments) },
+      args: ['apply-scope-decisions', '--dir', fx.dir, '--repo', 'foomakers/pair', '--pr', '7', '--decision-ref', fx.decisionRef, '--maintainer', 'rucka', '--workflowVersion', version],
+      accepted: r => r.status === 0 && r.json?.applied === true,
+    }
+  },
+  'migrate-acknowledge': version => {
+    const { dir } = runDir()
+    return {
+      dir,
+      args: ['migrate-acknowledge', '--dir', dir, '--legacy', legacyRunDir(), '--workflowVersion', version, '--story', '42', '--run', 'story-42', '--branch', 'feature/US-42-x', '--head', SHA40('c')],
+      accepted: r => r.status === 0 && r.json?.applied === true,
+    }
+  },
+}
+
+// One probe of one subcommand: the run directory before and after, every `gh` invocation, the exit
+// code and whatever the command printed.
+function probe(cmd, version) {
+  const build = INVOCATIONS[cmd]
+  assert.ok(
+    build,
+    `\`${cmd}\` declares --workflowVersion in cycle-state.mjs's own FLAGS table but no invocation is exercised here — a new entry point for the version is not covered by silence`,
+  )
+  const inv = build(version)
+  const before = dirSnapshot(inv.dir)
+  const r = state(inv.args, inv.env ? { env: inv.env } : undefined)
+  const printed = `${r.stdout}${r.stderr}`
+  return {
+    cmd,
+    version,
+    status: r.status,
+    json: r.json,
+    printed,
+    accepted: inv.accepted(r),
+    // a refusal that is ABOUT the version, typed — never a generic non-zero exit
+    refusedForVersion: r.status !== 0 && /workflow-?[vV]ersion/.test(String(r.json?.reason ?? r.json?.error ?? r.json?.halt ?? '')),
+    dirChanged: JSON.stringify(before) !== JSON.stringify(dirSnapshot(inv.dir)),
+    dirAfter: dirSnapshot(inv.dir).map(x => x.split(':')[0]),
+    ghCalls: inv.gh ? inv.gh.calls() : [],
+  }
+}
+
+test('r1-2 i2 (interaction): every subcommand DECLARING a workflow version refuses exactly the set publish refuses', () => {
+  const probes = ['4.0.1', '1.2.3', '4.x', '4.0', 'v4.0.1', 'nonsense; rm -rf /']
+  const cmds = declaringSubcommands()
+  // Collected, never short-circuited: a boundary with five entry points is only described by the
+  // WHOLE list of the ones that disagree — the first mismatch would hide the other four.
+  const disagree = []
+  for (const v of probes) {
+    const malformed = VERSION_GRAMMAR.test(v) === false
+    // `publish` is the authority: the one place the grammar is already enforced.
+    const pub = publishWith(v)
+    assert.equal(
+      pub.json?.reason === 'workflowVersion-invalid',
+      malformed,
+      `publish must refuse ${JSON.stringify(v)} iff it is malformed: ${pub.stdout}`,
+    )
+    for (const cmd of cmds) {
+      const p = probe(cmd, v)
+      if (p.refusedForVersion !== malformed)
+        disagree.push({ cmd, version: v, publishRefused: malformed, refusedForVersion: p.refusedForVersion, exit: p.status, printed: p.printed.slice(0, 160) })
+    }
+    // the same boundary one script over: the coordinator's own `packet`
+    const packetRefused = packetWith(v).status !== 0
+    if (packetRefused !== malformed) disagree.push({ cmd: 'packet (cycle-dispatch.mjs)', version: v, publishRefused: malformed, refusedForVersion: packetRefused })
+  }
+  assert.deepEqual(
+    disagree.map(d => `${d.cmd} @ ${JSON.stringify(d.version)}`),
+    [],
+    `every entry point declaring a workflow version must refuse exactly what publish refuses:\n${JSON.stringify(disagree, null, 2)}`,
+  )
+})
+
+test('r1-2 i3 (interaction): a malformed version is refused BEFORE any effect — no file written, no gh call', () => {
+  const late = []
+  for (const cmd of declaringSubcommands()) {
+    const p = probe(cmd, '4.x')
+    if (!p.refusedForVersion || p.dirChanged || p.ghCalls.length)
+      late.push({
+        cmd,
+        exit: p.status,
+        refusedForVersion: p.refusedForVersion,
+        runDirAfter: p.dirAfter,
+        ghCalls: p.ghCalls,
+        printed: p.printed.slice(0, 200),
+      })
+  }
+  assert.deepEqual(
+    late.map(x => x.cmd),
+    [],
+    `a version outside the grammar must be refused before the work, not next to its leftovers:\n${JSON.stringify(late, null, 2)}`,
+  )
+})
+
+test('r1-2 c4 (control): the same subcommands, handed the well-formed pin, still do exactly what they do today', () => {
+  for (const cmd of declaringSubcommands()) {
+    const p = probe(cmd, WORKFLOW_VERSION)
+    assert.equal(p.refusedForVersion, false, `\`${cmd}\` refused a well-formed version: ${p.printed.slice(0, 200)}`)
+    assert.equal(
+      p.accepted,
+      true,
+      `\`${cmd}\` must still succeed on ${WORKFLOW_VERSION}: ${JSON.stringify({ status: p.status, printed: p.printed.slice(0, 200) })}`,
+    )
+  }
+})
+
+test('r1-2 w5 (witness, V-C8b): the coordinator can OBTAIN the pinned version without transcribing a literal', () => {
+  // Design-tolerant, the way b2 is: EITHER the CLI reads the pin itself when the flag is omitted,
+  // OR the coordinator's process of record names the command that reads it. What the contract
+  // refuses is the third state — a pin that exists and that nothing but a human's memory can reach,
+  // which is what leaves `<version>` in three command lines the agent must type by hand.
+  const omitted = dispatch([
+    'packet',
+    '--next',
+    JSON.stringify(freshNext()),
+    '--card',
+    JSON.stringify(CARD),
+    '--policy',
+    JSON.stringify(POLICY),
+    '--run',
+    'story-42',
+  ])
+  const rendered = omitted.status === 0 ? /\$workflowVersion=(\S+)\./.exec(omitted.json?.prompt ?? '')?.[1] : undefined
+  const a = rendered !== undefined && rendered === ENGINE_PIN
+
+  const bPerFile = [CYCLE_SKILL, DATASET_CYCLE_SKILL].map(md => {
+    const body = readFileSync(md, 'utf8')
+    const captured = [...body.matchAll(/(?:^|[\s(])(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=["']?\$\(([^)]*cycle-(?:state|dispatch)\.mjs[^)]*)\)/g)].map(m => m[1])
+    const uses = [...body.matchAll(/--workflow-?[vV]ersion[ =]+(\S+)/g)].map(m => m[1])
+    const reads = uses.every(u => captured.some(v => [`$${v}`, `"$${v}"`, `\${${v}}`, `"\${${v}}"`].includes(u)))
+    return { md, captured, uses, ok: uses.length > 0 && captured.length > 0 && reads }
+  })
+  const b = bPerFile.every(x => x.ok)
+
+  assert.ok(
+    a || b,
+    `the pinned version is unreachable for the coordinator:\n` +
+      `  (a) \`packet\` with --workflow-version omitted: exit ${omitted.status}, rendered ${JSON.stringify(rendered)} (the pin is ${JSON.stringify(ENGINE_PIN)}) — ${JSON.stringify(omitted.json)}\n` +
+      bPerFile
+        .map(x => `  (b) ${x.md}: version arguments ${JSON.stringify(x.uses)}, obtained from ${JSON.stringify(x.captured)}`)
+        .join('\n') +
+      `\nEither the CLI defaults an omitted --workflow-version to the pin, or SKILL.md names the command that reads it. A literal typed from memory is neither.`,
+  )
+})
