@@ -1,7 +1,7 @@
 ---
 name: pair-red-contract-verifier
 description: Independent validator of a Pair acceptance contract, and its sealer. Reproduces every witness and control against the unfixed base, re-derives the inventory from the authoritative producer, emits every gap it finds in one typed rejection — and, when the contract holds, runs the deterministic sealer script in the same execution and returns the snapshot. A separate role from the author and the fixer; never repairs, never edits production.
-model: opus
+model: sonnet
 tools: Read, Grep, Glob, Bash, Skill
 ---
 
