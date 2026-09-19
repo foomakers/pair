@@ -366,9 +366,12 @@ function packetCommand(opts) {
   // Claude (the `Agent` tool the coordinator dispatches through has no effort parameter at all) —
   // so the SAME instruction line is honest about being a request, never a guarantee, whichever
   // realization is bound.
-  const effortNote = effort
-    ? ` Requested reasoning effort for this dispatch: **${effort}** (a process/mechanics run, not a quality bar — spend only the deliberation this step's Check/Act/Verify beats actually need). This is a request, not an enforced setting: honour it as best you can within your own harness's controls.`
-    : ''
+  // Deliberately states ONLY the requested level, never a permission to lower rigor: an earlier
+  // wording ("not a quality bar — spend only the deliberation actually needed") read as license to
+  // cut corners and correlated with a Claude-bound run producing a contract with real schema
+  // defects a Codex-free comparable run did not have (US-486 canary, 2026-09-19) — every other
+  // requirement in this prompt (Check/Act/Verify, never improvise) still applies at every level.
+  const effortNote = effort ? ` Requested reasoning effort for this dispatch: **${effort}**. This is a request, not an enforced setting: honour it as best you can within your own harness's controls — it changes how much you think, never what you are required to produce or verify.` : ''
   const invoke = (skill, args) =>
     `Invoke **${skill}** for story ${tag} with ${args} $workflowVersion=${workflowVersion}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines — its Step 0 resolves the durable cycle state and returns \`{ status: "redirect", next }\` when another step is due, spending no judgment. Do NOT read ${blindPaths} except the checkpoint and the run directory \`${runDir}/\` the skill names; that directory lives in the MAIN checkout — the working directory you were started in, before any cd — never inside a story or review worktree. Do NOT merge.${effortNote}`
   const notesArg = card.notes ? ` $notes=${JSON.stringify(card.notes)}` : ''
