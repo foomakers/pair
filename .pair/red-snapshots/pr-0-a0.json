@@ -1,0 +1,378 @@
+{
+  "$meta": {
+    "pr": "0",
+    "phase": "a0",
+    "base": "71aff3c25947f9d684b2fc83da99992e2aa187b9",
+    "trailer": "Pair-RED-Snapshot: pr=0; phase=a0; base=71aff3c25947f9d684b2fc83da99992e2aa187b9; manifest=.pair/red-snapshots/pr-0-a0.json",
+    "artifacts": [
+      "scripts/smoke-tests/scenarios/remote-source-resolution.sh"
+    ]
+  },
+  "status": "red",
+  "mode": "initial",
+  "inputHead": "71aff3c25947f9d684b2fc83da99992e2aa187b9",
+  "sourceOfTruth": "Story #136 GitHub issue body (AC1-10, Assumptions, Technical Analysis, Technical Risks) cross-verified against direct reads of packages/content-ops/src/{path-resolution/source-detector.ts, http/{http-client-service,download-manager,retryable-download}.ts} and apps/pair-cli/src/{kb-manager/{kb-availability,kb-installer,download-ui,checksum-manager}.ts, config/kb-resolver.ts, commands/install/parser.ts, cli.ts} and scripts/smoke-tests/{run-all.sh, lib/{utils.sh,ci-tests.sh}, scenarios/{source-resolution.sh,auto-download-install.sh,runner-outcomes.sh}} — plus real command execution against a built CLI (pnpm install --frozen-lockfile; pnpm turbo build --filter=@pair/pair-cli...) at this inputHead, network-connected, against the pinned release v0.4.3 asset knowledge-base-0.4.3.zip.",
+  "fixScope": {
+    "owner": "Integration & Process Standardization — KB source-resolution smoke coverage",
+    "mode": "test",
+    "allowedPaths": []
+  },
+  "inventory": [
+    {
+      "id": "AC-1",
+      "producer": "scripts/smoke-tests/lib/utils.sh (scenario_state, file_mode) + run-all.sh (is_offline_safe) + runner-outcomes.sh (CI list integrity)",
+      "inputs": [
+        "the new scenario file's own header: shebang, OFFLINE_SAFE=false line, lib/utils.sh sourcing, git-tracked mode"
+      ],
+      "representations": [
+        "scripts/smoke-tests/scenarios/remote-source-resolution.sh on disk",
+        "its committed git mode (100755)"
+      ],
+      "consumers": [
+        "run-all.sh (auto-discovery + --ci + --offline-only)",
+        "runner-outcomes.sh (coverage-integrity loop)",
+        "pnpm smoke-tests"
+      ],
+      "classes": [
+        "present + executable + OFFLINE_SAFE=false declared (valid, this scenario)",
+        "missing / NOT_EXECUTABLE (invalid — not applicable, ruled out by direct inspection)"
+      ],
+      "interactions": [
+        "file mode x OFFLINE_SAFE declaration, both read by independent consumers (run-all.sh vs runner-outcomes.sh) and must agree"
+      ]
+    },
+    {
+      "id": "AC-2",
+      "producer": "apps/pair-cli/src/kb-manager/kb-availability.ts:installFromSource('remote') -> kb-installer.ts:installKB, reached via config/kb-resolver.ts:resolveDatasetRoot('remote')",
+      "inputs": [
+        "--source <https-url> CLI flag"
+      ],
+      "representations": [
+        "commands/install/parser.ts InstallCommandConfigRemote { resolution: 'remote', url }"
+      ],
+      "consumers": [
+        "commands/install/handler.ts:setupInstallContext -> executeInstall (registry copy into target workspace)"
+      ],
+      "classes": [
+        "fresh install, clean workspace, valid reachable HTTPS URL"
+      ],
+      "interactions": [
+        "install (AC-2) precedes update (AC-3) on the SAME cache slot/workspace"
+      ]
+    },
+    {
+      "id": "AC-3",
+      "producer": "same as AC-2 (update command shares resolveDatasetRoot/installFromSource)",
+      "inputs": [
+        "--source <https-url>, workspace already installed from that URL"
+      ],
+      "representations": [
+        "commands/update/parser.ts (mirrors install's remote resolution)"
+      ],
+      "consumers": [
+        "commands/update/handler.ts"
+      ],
+      "classes": [
+        "update after a successful prior install from the same source"
+      ],
+      "interactions": [
+        "shares the install (AC-2) x update (AC-3) sequential interaction above"
+      ]
+    },
+    {
+      "id": "AC-4",
+      "producer": "apps/pair-cli/src/kb-manager/download-ui.ts:announceDownload/announceSuccess, called from kb-installer.ts:installKB",
+      "inputs": [
+        "version, downloadUrl"
+      ],
+      "representations": [
+        "stdout log lines emitted via @pair/content-ops logger"
+      ],
+      "consumers": [
+        "non-TTY capture of the install command's output ($TMP_DIR/last_cmd_output.log)"
+      ],
+      "classes": [
+        "downloadUrl containing 'github.com' -> 'KB not found, downloading vX from GitHub' (no ellipsis, no raw URL)",
+        "other URL -> '... from <url>...' (with ellipsis) — NOT exercised by the pinned happy-path URL, noted as an uncovered class"
+      ],
+      "interactions": [
+        "announceDownload emitted BEFORE the download; announceSuccess AFTER — both are asserted present in the same captured log"
+      ]
+    },
+    {
+      "id": "AC-5",
+      "producer": "packages/content-ops/src/path-resolution/source-detector.ts:isUnsupportedProtocol/detectSourceType, consumed at PARSE time by commands/install/parser.ts:resolveInstallSourceConfig and at RUNTIME by config/kb-resolver.ts:resolveLocalDataset",
+      "inputs": [
+        "--source <value>: file://, ftp://, or a non-URL string"
+      ],
+      "representations": [
+        "CLI argument string"
+      ],
+      "consumers": [
+        "install command's synchronous parse-time throw ('Unsupported source protocol: ...') for file/ftp; the async resolveLocalDataset throw ('KB source path not found: ...') for a non-existent local-looking string"
+      ],
+      "classes": [
+        "file:// (INVALID protocol, parse-time)",
+        "ftp:// (INVALID protocol, parse-time)",
+        "non-URL non-existent path (falls through to LOCAL resolution, runtime throw)"
+      ],
+      "interactions": [
+        "protocol-check ordering: isUnsupportedProtocol is checked BEFORE isGitUrl/isRemoteUrl in detectSourceType"
+      ]
+    },
+    {
+      "id": "AC-6",
+      "producer": "packages/content-ops/src/http/download-manager.ts:defaultErrorHandler.handleHttpError(404) + retryable-download.ts:isRetryableError",
+      "inputs": [
+        "HTTP response status 404 from the download URL"
+      ],
+      "representations": [
+        "Error('Resource not found (404): <url>')  reformatted by apps/pair-cli/src/kb-manager/error-formatter.ts into 'KB v<version> not found (404). Download manually from: <origin>'"
+      ],
+      "consumers": [
+        "kb-installer.ts:installKB catch block -> CLI top-level error handler (cli.ts:main) -> process.exit(1)"
+      ],
+      "classes": [
+        "404 (non-retryable — 'resource not found' does not match RETRYABLE_PATTERNS)"
+      ],
+      "interactions": [
+        "404-detection x retry-eligibility: MUST fail on the FIRST attempt, no delay"
+      ]
+    },
+    {
+      "id": "AC-7",
+      "producer": "packages/content-ops/src/http/retryable-download.ts:downloadWithRetry/isRetryableError/DEFAULT_MAX_RETRIES(3)/DEFAULT_DELAYS([1000,2000,4000])",
+      "inputs": [
+        "ECONNREFUSED network error (nothing listening on the target host:port)"
+      ],
+      "representations": [
+        "Node https client socket error, wrapped by download-manager.ts:defaultErrorHandler.handleNetworkError -> 'Network error downloading KB: connect ECONNREFUSED ... . Check connectivity.'"
+      ],
+      "consumers": [
+        "kb-installer.ts:installKB catch block -> CLI top-level error handler -> process.exit(1)"
+      ],
+      "classes": [
+        "connection-refused (retryable — matches 'econnrefused'), retry budget exhausted"
+      ],
+      "interactions": [
+        "retry-count x cumulative delay: 3 retries at [1s,2s,4s] = 7s LOWER BOUND before the final, permanent failure"
+      ]
+    },
+    {
+      "id": "AC-8",
+      "producer": "scripts/smoke-tests/run-all.sh:is_offline_safe (greps '^OFFLINE_SAFE=' on the scenario file)",
+      "inputs": [
+        "the new scenario's OFFLINE_SAFE=false line"
+      ],
+      "representations": [
+        "run-all.sh --offline-only discovery loop (full local-suite mode, independent of CI_TESTS/CI_EXCLUDED)"
+      ],
+      "consumers": [
+        "pnpm smoke-tests -- --offline-only / any --offline-only invocation"
+      ],
+      "classes": [
+        "OFFLINE_SAFE=false -> skipped under --offline-only (this scenario)"
+      ],
+      "interactions": [
+        "none beyond the single declaration read; NOT gated on the AC-9 CI_EXCLUDED registration"
+      ]
+    },
+    {
+      "id": "AC-9",
+      "producer": "scripts/smoke-tests/lib/ci-tests.sh (CI_TESTS / CI_EXCLUDED arrays), validated by scripts/smoke-tests/scenarios/runner-outcomes.sh's coverage-integrity loop",
+      "inputs": [
+        "scenario filename membership in exactly one of the two arrays, with a reason string for CI_EXCLUDED"
+      ],
+      "representations": [
+        "bash arrays, '<file>: <reason>' entries"
+      ],
+      "consumers": [
+        "run-all.sh --ci (reads CI_TESTS only)",
+        "runner-outcomes.sh (asserts every scenarios/*.sh file is covered by one array)"
+      ],
+      "classes": [
+        "registered in CI_EXCLUDED with a network-dependency reason (target end state — the implementer's fixScope, not red-spec's)",
+        "unregistered (the CURRENT, real state at this head — proven red below)"
+      ],
+      "interactions": [
+        "registration x OFFLINE_SAFE declaration: runner-outcomes.sh additionally requires that a CI_EXCLUDED entry's target either declares OFFLINE_SAFE=false or names a tracking issue"
+      ]
+    },
+    {
+      "id": "AC-10",
+      "producer": "scripts/smoke-tests/README.md 'Covered Test Scenarios' section (prose, docs-only)",
+      "inputs": [
+        "none — documentation, not executable"
+      ],
+      "representations": [
+        "markdown section, modeled on the existing '### 8. Agent Harness Functional Smoke' entry"
+      ],
+      "consumers": [
+        "human readers"
+      ],
+      "classes": [
+        "documented consistently with the AC-9 ci-tests.sh reason (target end state — the implementer's fixScope)"
+      ],
+      "interactions": [
+        "none"
+      ]
+    }
+  ],
+  "matrix": [
+    {
+      "id": "AC1-w1",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "scripts/smoke-tests/scenarios/remote-source-resolution.sh exists, is committed-executable (chmod 100755), declares OFFLINE_SAFE=false on its own line, and sources lib/utils.sh",
+      "oracle": "scenario_state()+file_mode() (lib/utils.sh) on the file, plus `grep -m1 '^OFFLINE_SAFE=' <file>`",
+      "expected": "RUNNABLE / 755 / OFFLINE_SAFE=false matched",
+      "covers": [
+        "AC-1"
+      ],
+      "rationale": "Verified directly on the written file: `ls -la` shows mode -rwxr-xr-x (755); line 9 is exactly `OFFLINE_SAFE=false`; line 11 sources `$(dirname \"$0\")/../lib/utils.sh`, matching source-resolution.sh's convention."
+    },
+    {
+      "id": "AC2-w1",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "pair install --source <pinned GitHub release .zip URL> in a clean workspace",
+      "oracle": "run_pair install --source \"$RELEASE_URL\"; assert_success; assert_dir .pair; assert_dir .pair/knowledge; assert_dir .pair/adoption; assert_file AGENTS.md",
+      "expected": "exit 0; all four post-conditions hold",
+      "covers": [
+        "AC-2"
+      ],
+      "rationale": "Executed for real against https://github.com/foomakers/pair/releases/download/v0.4.3/knowledge-base-0.4.3.zip in an isolated scratch workspace (built CLI: pnpm turbo build --filter=@pair/pair-cli...): exit 0; `.pair`, `.pair/knowledge`, `.pair/adoption` present; `AGENTS.md` present. Command and full captured output kept in the run's evidence log. RE-VERIFIED under the corrected redTests[0].command (absolute TEST_BINARY): standalone re-run of the scenario at inputHead reproduced Test 1's PASS output exactly (Command succeeded; all four post-conditions present) — the row's claimed evidence is now the same run that produces the contract's redTests[0].observed."
+    },
+    {
+      "id": "AC3-w1",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "pair update --source <same URL>, in the SAME workspace AC2-w1 just installed",
+      "oracle": "run_pair update --source \"$RELEASE_URL\"; assert_success; assert_dir .pair",
+      "expected": "exit 0",
+      "covers": [
+        "AC-3"
+      ],
+      "rationale": "Executed for real immediately after AC2-w1 in the same workspace: exit 0, 5 registries updated ok, 2 reported 'skipped — not shipped by this source' (workflows, agent-definitions — a correct partial-source outcome for this KB archive, not a failure). RE-VERIFIED under the corrected redTests[0].command: standalone re-run reproduced Test 3's PASS output exactly (Command succeeded; .pair present)."
+    },
+    {
+      "id": "AC4-w1",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "the captured stdout of the AC2-w1 install command, read BEFORE AC3-w1's update overwrites it",
+      "oracle": "assert_output_contains 'downloading'; assert_output_contains 'installed at' against $TMP_DIR/last_cmd_output.log",
+      "expected": "both substrings present",
+      "covers": [
+        "AC-4"
+      ],
+      "rationale": "Real captured output: 'KB not found, downloading v0.4.3 from GitHub' and '✅ KB v0.4.3 installed at <cachePath>' (download-ui.ts's announceDownload github.com-branch / announceSuccess). VERIFIED by direct read: config/kb-resolver.ts's DatasetResolveOptions declares progressWriter/isTTY but resolveDatasetRoot (same file, ~224-243) never reads them, and they are never threaded through InstallHandlerOptions/DispatchContext — formatProgress's non-TTY percentage line is genuinely unreachable from this call chain, matching the card's 2026-09-18 descope note exactly. RE-VERIFIED under the corrected redTests[0].command: standalone re-run reproduced Test 2's PASS output exactly (Output contains 'downloading'; Output contains 'installed at')."
+    },
+    {
+      "id": "AC5-w1",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "pair install --source file:///etc",
+      "oracle": "assert_failure; assert_output_contains 'Unsupported source protocol'",
+      "expected": "exit 1, message present",
+      "covers": [
+        "AC-5"
+      ],
+      "rationale": "Real run: exit 1, 'Error: Unsupported source protocol: file:///etc'. INJECTED-REGRESSION discriminance proof: patched the COMPILED packages/content-ops/dist/path-resolution/source-detector.js's isUnsupportedProtocol to `return false` (isolated to dist/, never a source file) and re-ran the identical command: exit 1 via a DIFFERENT path ('KB source path not found: .../file:/etc'), so assert_output_contains('Unsupported source protocol') would now FAIL — the row is discriminant. The compiled file was reverted immediately after (post-revert diff against the pre-patch backup was byte-identical). RE-VERIFIED under the corrected redTests[0].command: standalone re-run reproduced Test 4's file:// PASS output exactly (Command failed as expected; Output contains 'Unsupported source protocol')."
+    },
+    {
+      "id": "AC5-w2",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "pair install --source ftp://example.com/x",
+      "oracle": "assert_failure; assert_output_contains 'Unsupported source protocol'",
+      "expected": "exit 1, message present",
+      "covers": [
+        "AC-5"
+      ],
+      "rationale": "Real run: exit 1, 'Error: Unsupported source protocol: ftp://example.com/x'. Covered by the same isUnsupportedProtocol regression proof as AC5-w1 (one producer, two classes). RE-VERIFIED under the corrected redTests[0].command: standalone re-run reproduced Test 4's ftp:// PASS output exactly (Command failed as expected; Output contains 'Unsupported source protocol')."
+    },
+    {
+      "id": "AC5-b1",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "pair install --source not-a-real-source::whatever (non-URL string, falls through to local-path resolution, path does not exist)",
+      "oracle": "assert_failure; assert_output_contains 'not found'",
+      "expected": "exit 1, 'KB source path not found' message",
+      "covers": [
+        "AC-5"
+      ],
+      "rationale": "Real run: exit 1, 'Error: KB source path not found: <workspace>/not-a-real-source::whatever' — confirms the fallthrough boundary (neither unsupported-protocol, git, nor remote-URL; resolved as a local path) documented in source-detector.ts / kb-resolver.ts:resolveLocalDataset. RE-VERIFIED under the corrected redTests[0].command: standalone re-run reproduced Test 4's non-URL PASS output exactly (Command failed as expected; Output contains 'not found')."
+    },
+    {
+      "id": "AC6-w1",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "pair install --source https://127.0.0.1:<port>/missing.zip against a local self-signed HTTPS server (SAN=IP:127.0.0.1) returning 404, trusted via NODE_EXTRA_CA_CERTS scoped to this one command",
+      "oracle": "assert_failure; ELAPSED_404 -le 3 (seconds)",
+      "expected": "exit 1, fast failure (no retry delay)",
+      "covers": [
+        "AC-6"
+      ],
+      "rationale": "Real run: exit 1 in 0s, 'Error: KB vunknown not found (404). Download manually from: https://127.0.0.1:<port>'. VERIFIED FINDING (contract-relevant, not a defect): the production HttpClientService (packages/content-ops/src/http/http-client-service.ts) calls Node's `https` module DIRECTLY and rejects a plain http:// URL SYNCHRONOUSLY ('Protocol \"http:\" not supported. Expected \"https:\"') before any network attempt — confirmed by direct execution. The card's Technical Analysis sketch of a plain `python3 -m http.server` (http://) fixture would therefore NEVER reach the 404/retry code paths; it would only ever hit this protocol guard. A local HTTPS server is required and is what this witness (and AC7-w1) actually uses. INJECTED-REGRESSION discriminance proof: added 'not found' to RETRYABLE_PATTERNS in the COMPILED packages/content-ops/dist/http/retryable-download.js (isolated to dist/) and re-ran the identical command: it then took 8s (retried the full budget) instead of failing fast, so the -le 3 assertion would now FAIL — discriminant. Reverted immediately (post-revert diff byte-identical). RE-VERIFIED under the corrected redTests[0].command: standalone re-run reproduced Test 5's PASS output exactly (Command failed as expected; 404 failed fast with no retry delay, 0s)."
+    },
+    {
+      "id": "AC7-w1",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "pair install --source https://127.0.0.1:<closed-port>/kb.zip (nothing listening; OS-level ECONNREFUSED, no TLS handshake reached)",
+      "oracle": "assert_failure; ELAPSED_REFUSED -ge 7 (seconds)",
+      "expected": "exit 1, duration >= 7s (3 retries x [1s,2s,4s])",
+      "covers": [
+        "AC-7"
+      ],
+      "rationale": "Real run: exit 1 in 7-8s across repeated executions, 'Error: Network error downloading KB: connect ECONNREFUSED 127.0.0.1:<port>. Check connectivity.'. INJECTED-REGRESSION discriminance proof: set DEFAULT_MAX_RETRIES=0 in the COMPILED packages/content-ops/dist/http/retryable-download.js (isolated to dist/) and re-ran the identical command: it then failed in 0s, so the -ge 7 assertion would now FAIL — discriminant. Reverted immediately (post-revert diff byte-identical). Per-attempt retry logging is deliberately NOT asserted, per the card's Assumption 4 (downloadWithRetry retries silently by design). RE-VERIFIED under the corrected redTests[0].command: standalone re-run reproduced Test 6's PASS output exactly (Command failed as expected; connection-refused exhausted the retry budget, 7s >= 7s)."
+    },
+    {
+      "id": "AC8-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "scripts/smoke-tests/run-all.sh --offline-only (full local-suite mode), with the new scenario present but STILL UNREGISTERED in lib/ci-tests.sh",
+      "oracle": "grep run-all.sh's own stdout for 'Skipping (not offline-safe): remote-source-resolution.sh'",
+      "expected": "scenario reported skipped, never executed",
+      "covers": [
+        "AC-8"
+      ],
+      "rationale": "Real run: `bash scripts/smoke-tests/run-all.sh --binary \"node apps/pair-cli/dist/cli.js\" --offline-only --cleanup` printed 'Skipping (not offline-safe): remote-source-resolution.sh'. This control ALREADY passes today, independent of the AC-9 CI_EXCLUDED registration: run-all.sh's is_offline_safe() reads the scenario's OWN OFFLINE_SAFE=false line directly, never the ci-tests.sh arrays."
+    },
+    {
+      "id": "AC9-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "scripts/smoke-tests/scenarios/runner-outcomes.sh, with the new scenario file present but NOT YET registered in lib/ci-tests.sh (that one-line registration is the implementer's fixScope, not red-spec's — a behavior-repair and a test never share a contract)",
+      "oracle": "bash scripts/smoke-tests/scenarios/runner-outcomes.sh",
+      "expected": "currently FAILS (exit 1), naming the unregistered scenario; the implementer's single CI_EXCLUDED line turns this green with no other change",
+      "covers": [
+        "AC-9"
+      ],
+      "rationale": "Real run AT THIS HEAD (inputHead, with the new scenario added and nothing else changed): exit 1, '[FAIL] scenario(s) neither in CI_TESTS nor documented in CI_EXCLUDED: remote-source-resolution.sh'. GENUINE RED baseline evidence (not required under fixScope.mode=test, since production needs no fix here, but recorded because it was directly available): runner-outcomes.sh is a PRE-EXISTING, UNMODIFIED test — this red-spec attempt did not touch it — its own coverage-integrity check goes red purely because the new scenario file exists and is unregistered."
+    },
+    {
+      "id": "AC10-na",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "condition": "scripts/smoke-tests/README.md documents the new scenario (name, purpose, exclusion reason) under 'Covered Test Scenarios'",
+      "oracle": "none",
+      "expected": "n/a",
+      "covers": [
+        "AC-10"
+      ],
+      "rationale": "No executable oracle exists in this repo for README-prose consistency (verified: no lint/test target reads scripts/smoke-tests/README.md). The story's own Validation and Testing Strategy for this task (T-5) names only a 'manual read-through cross-checked against lib/ci-tests.sh's entry text' — a human-verified criterion, not an automatable one. Also out of scope for red-spec's own edits (test source and fixtures only) and out of fixScope.mode=test's zero-production-change premise; the path itself (scripts/smoke-tests/README.md) is left in fixScope.allowedPaths for the implementer, alongside AC-9's registration."
+    }
+  ],
+  "redTests": [
+    {
+      "file": "scripts/smoke-tests/scenarios/remote-source-resolution.sh",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:4275605dfb0bb7c46218b46cd0fb0bda6d1b2ad0426a86baf59cdf9dccc40471",
+      "command": "TEST_BINARY=\"node $(pwd)/apps/pair-cli/dist/cli.js\" REPO_ROOT=\"$(pwd)\" bash scripts/smoke-tests/scenarios/remote-source-resolution.sh",
+      "observed": "exit 0; 23/23 assertions succeeded (network-dependent happy path against the pinned v0.4.3 release asset, plus deterministic local self-signed-HTTPS fixtures for the three error paths). Reproduced twice standalone in the worktree at inputHead with the absolute TEST_BINARY path; the previously-recorded relative TEST_BINARY form did not resolve run_pair()'s [ -f \"$BIN_PATH\" ] check from the scenario's own workspace cwd and Test 1 exited non-zero with \"Cannot find module\" — corrected here per the red-verify rejection on redTests[0].command."
+    }
+  ],
+  "testExempt": false
+}
