@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'fs'
+import { tmpdir } from 'os'
 import { join } from 'path'
 
 // packages/knowledge-hub/src/tools -> repo root
@@ -19,18 +29,78 @@ const REPO_ROOT = join(__dirname, '..', '..', '..', '..')
  * transform. So the guard is byte equality, and it is allowed to be that strict — which
  * also makes it the cheapest possible statement of the invariant.
  */
-const PAIRS = [
+/**
+ * A file the ROOT copy holds and the dataset does not. The mirror is one-directional (every
+ * shipped file must exist at the root; the reverse is not required), so this is the only place
+ * that says which root-only files are deliberate — and it is ENUMERATED rather than described,
+ * because a contributor who finds a root-only file absent from the list has no way to tell
+ * "deliberate exclusion" from "drift someone forgot to mirror", and the obvious repair (copy it
+ * into `dataset/.workflows/`) is silent: the byte guard below goes green on two equal copies
+ * while the dataset copy stops being runnable where it lands.
+ */
+type RootOnlyExclusion = {
+  /** Why the file exists at the root and must NOT be copied into the dataset. */
+  why: string
+  /**
+   * Specifiers the file resolves RELATIVE TO ITSELF which exist where it actually runs and do
+   * NOT exist at the path it would occupy in the dataset. This turns "it cannot be mirrored"
+   * from a claim into something the suite resolves on the real trees: the day one of them starts
+   * resolving from the dataset too, the stated reason is gone and the check says so.
+   */
+  unresolvableIfMirrored?: string[]
+}
+
+type MirrorPair = {
+  what: string
+  dataset: string
+  installed: string
+  rootOnly: Record<string, RootOnlyExclusion>
+}
+
+const PAIRS: MirrorPair[] = [
   {
     what: 'workflows',
     dataset: 'packages/knowledge-hub/dataset/.workflows',
     installed: '.claude/workflows',
+    rootOnly: {
+      'pair-analyze-pr-batch.js': {
+        why:
+          'It dispatches its agents to `/analyze-pr`, a PERSONAL, user-level skill that exists in ' +
+          "neither this repo's `.claude/skills/` nor the shipped dataset. Shipping it would install " +
+          'a workflow whose agents are sent to a skill an adopter does not have; its ' +
+          '`meta.whenToUse` states that prerequisite for the contributor who runs it here.',
+      },
+      'pair-analyze-pr-batch.test.mjs': {
+        why:
+          'Root-only for the same reason as its engine — a test file has nothing to drive without ' +
+          "it. The two travel together, and the dataset's `pair-refine-batch.test.mjs` reads the " +
+          'unshipped engine only when it is present, so the DATASET copy stays runnable (`node ' +
+          '--test` in `dataset/.workflows/`, asserted there).',
+      },
+      'pair-contracts/cycle-coordinator.test.mjs': {
+        why:
+          'It runs from `.claude/workflows` ONLY — its `../../skills/pair-workflow-*` imports name ' +
+          'the INSTALLED skill directories, which the dataset lays out under ' +
+          '`.skills/workflow/<skill>/` instead, so a mirrored copy would resolve none of them and ' +
+          'would not be runnable where it landed (its own header states this).',
+        unresolvableIfMirrored: [
+          '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs',
+          '../../skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs',
+          '../../skills/pair-workflow-cycle/SKILL.md',
+          '../../../packages/knowledge-hub/dataset/',
+        ],
+      },
+    },
   },
   {
     what: 'agent definitions',
     dataset: 'packages/knowledge-hub/dataset/.agents',
     installed: '.claude/agents',
+    // No exemption exists here, and an empty record is the assertion: a root-only agent
+    // definition is drift, not policy.
+    rootOnly: {},
   },
-] as const
+]
 
 /**
  * Every shipped file, RECURSIVELY — `pair-contracts/` still carries the dry-run tests and the contract cache's `.gitignore`; the scripts themselves ship inside the skills that run them since US-479 (`.skills/workflow/<skill>/scripts/*.mjs`). A dependency
@@ -59,52 +129,171 @@ const listFiles = (dir: string, prefix = ''): string[] =>
         .sort()
     : []
 
-describe.each(PAIRS)('$what: dataset and root copy are one artifact', ({ dataset, installed }) => {
-  const datasetDir = join(REPO_ROOT, dataset)
-  const installedDir = join(REPO_ROOT, installed)
+/**
+ * The files the root copy holds alone — the set the enumerated policy above must equal exactly.
+ * Taken as a function of two directories so the same derivation runs against the real trees and
+ * against an injected-regression copy of them.
+ */
+const rootOnlyFiles = (datasetDir: string, installedDir: string): string[] => {
+  const shipped = new Set(listFiles(datasetDir))
+  return listFiles(installedDir).filter(f => !shipped.has(f))
+}
 
-  it('ships at least one file — an empty source would make every check below vacuous', () => {
-    // Without this, deleting the dataset directory turns the whole suite green.
-    expect(listFiles(datasetDir).length).toBeGreaterThan(0)
-  })
+describe.each(PAIRS)(
+  '$what: dataset and root copy are one artifact',
+  ({ dataset, installed, rootOnly }) => {
+    const datasetDir = join(REPO_ROOT, dataset)
+    const installedDir = join(REPO_ROOT, installed)
 
-  it('the root copy carries every dataset file — the dataset is the shipped subset', () => {
-    // Direction matters. Every shipped file must exist at the root, or this repo is not
-    // running what it ships. The reverse is NOT required, and the current root-only files
-    // are a deliberate exclusion rather than drift:
-    //
-    //   `.claude/workflows/pair-analyze-pr-batch.js` dispatches its agents to `/analyze-pr`,
-    //   a PERSONAL, user-level skill that exists in neither this repo's `.claude/skills/` nor
-    //   the shipped dataset. Shipping it would install a workflow whose agents are sent to a
-    //   skill an adopter does not have. Its `meta.whenToUse` states that prerequisite for the
-    //   contributor who runs it here. `pair-analyze-pr-batch.test.mjs` is root-only for the
-    //   same reason — a test file has nothing to drive without its engine. The two travel
-    //   together, and the dataset's `pair-refine-batch.test.mjs` reads the unshipped engine only
-    //   when it is present, so the DATASET copy stays runnable (`node --test` in
-    //   `dataset/.workflows/`, asserted there). Not an adopter's install: the `workflows`
-    //   registry excludes every `*.test.mjs` (see the exclude list read below), so no adopter
-    //   ever receives these suites — the runnable-copy problem is the mirror's own.
-    //
-    // (The policy is recorded HERE, next to the guard that depends on it, rather than in a
-    // dataset README: a README under `dataset/.workflows/` would itself install into every
-    // adopter's `.claude/workflows/`.)
-    const shipped = listFiles(datasetDir)
-    const live = new Set(listFiles(installedDir))
-    expect(shipped.filter(f => !live.has(f))).toEqual([])
-  })
+    it('ships at least one file — an empty source would make every check below vacuous', () => {
+      // Without this, deleting the dataset directory turns the whole suite green.
+      expect(listFiles(datasetDir).length).toBeGreaterThan(0)
+    })
 
-  it('every file is byte-identical', () => {
-    // NO file type is exempt, `*.test.mjs` included (regression of #495): `workflows:test` runs
-    // `node --test` in `.claude/workflows/` ONLY, so the dataset's dry-run suites are never
-    // executed where they live — this byte check is the only thing that keeps them equal to the
-    // suites that do run. Exempting them turns the dataset copy into unexecuted, unverified text.
-    for (const name of listFiles(datasetDir)) {
-      const source = readFileSync(join(datasetDir, name), 'utf-8')
-      const live = readFileSync(join(installedDir, name), 'utf-8')
+    it('the root copy carries every dataset file — the dataset is the shipped subset', () => {
+      // Direction matters. Every shipped file must exist at the root, or this repo is not
+      // running what it ships. The reverse is NOT required — the deliberate root-only files are
+      // enumerated in this pair's `rootOnly`, one rationale each, and the next check holds that
+      // enumeration equal to reality.
+      //
+      // (The policy is recorded HERE, next to the guard that depends on it, rather than in a
+      // dataset README: a README under `dataset/.workflows/` would itself install into every
+      // adopter's `.claude/workflows/`.)
+      const shipped = listFiles(datasetDir)
+      const live = new Set(listFiles(installedDir))
+      expect(shipped.filter(f => !live.has(f))).toEqual([])
+    })
+
+    it('the enumerated root-only exclusions are exactly the files the root copy holds alone', () => {
+      // The check the prose version of this policy could not make. It fails in BOTH directions:
+      //
+      //   a root-only file nobody wrote a rationale for — the reader who finds it has to guess
+      //   whether it is policy or drift, and the plausible guess ("mirror it") breaks the file:
+      //   `pair-contracts/cycle-coordinator.test.mjs` copied into `dataset/.workflows/` resolves
+      //   none of its `../../skills/pair-workflow-*` imports, and the byte guard above stays green
+      //   the whole time because both copies are then equal;
+      //
+      //   a rationale for a file that is no longer root-only — it protects nothing and still reads
+      //   as an authority.
+      //
+      // Not the same list as the `workflows` registry `exclude` (checked further below): that one
+      // keeps DATASET test files out of an adopter's install and, by its own guard, may name only
+      // files the dataset ships. A root-only file can never appear in it.
+      expect(rootOnlyFiles(datasetDir, installedDir)).toEqual(Object.keys(rootOnly).sort())
+    })
+
+    it('every enumerated exclusion says why', () => {
+      const silent = Object.entries(rootOnly)
+        .filter(([, e]) => e.why.trim().length < 40)
+        .map(([f]) => f)
       expect(
-        live,
-        `${installed}/${name} has drifted from the dataset — copy the dataset version`,
-      ).toBe(source)
+        silent,
+        `root-only exclusions recorded without a usable reason: ${silent.join(', ')}`,
+      ).toEqual([])
+    })
+
+    it('every file is byte-identical', () => {
+      // NO file type is exempt, `*.test.mjs` included (regression of #495): `workflows:test` runs
+      // `node --test` in `.claude/workflows/` ONLY, so the dataset's dry-run suites are never
+      // executed where they live — this byte check is the only thing that keeps them equal to the
+      // suites that do run. Exempting them turns the dataset copy into unexecuted, unverified text.
+      for (const name of listFiles(datasetDir)) {
+        const source = readFileSync(join(datasetDir, name), 'utf-8')
+        const live = readFileSync(join(installedDir, name), 'utf-8')
+        expect(
+          live,
+          `${installed}/${name} has drifted from the dataset — copy the dataset version`,
+        ).toBe(source)
+      }
+    })
+  },
+)
+
+describe('US-219 — the root-only exclusion policy is executable, not folklore', () => {
+  it('an exclusion that claims unresolvable imports is checked against both locations', () => {
+    const claims = PAIRS.flatMap(p =>
+      Object.entries(p.rootOnly).flatMap(([file, e]) =>
+        (e.unresolvableIfMirrored ?? []).map(
+          spec => [p, file, spec] as [MirrorPair, string, string],
+        ),
+      ),
+    )
+    expect(
+      claims.length,
+      'no exclusion backs its rationale with a resolvable/unresolvable specifier — the reason is prose again',
+    ).toBeGreaterThan(0)
+
+    const wrong: string[] = []
+    for (const [pair, file, spec] of claims) {
+      const here = join(REPO_ROOT, pair.installed, file, '..', spec)
+      const mirrored = join(REPO_ROOT, pair.dataset, file, '..', spec)
+      if (!existsSync(here)) wrong.push(`${file}: ${spec} does not resolve where the file runs`)
+      if (existsSync(mirrored))
+        wrong.push(`${file}: ${spec} WOULD resolve from the dataset — the stated reason is stale`)
+    }
+    expect(wrong, wrong.join('\n  ')).toEqual([])
+  })
+
+  it('mirroring an excluded file into the dataset is caught — no other guard objects', () => {
+    // The exact repair a contributor reaches for when the enumeration does not mention a
+    // root-only file: copy it into `dataset/.workflows/`. Both pre-existing guards go GREEN on
+    // it (the dataset is still a subset of the root; the two copies are byte-identical), while
+    // the dataset copy resolves none of its imports. Run on COPIES, so proving it costs nothing.
+    const pair = PAIRS.find(p => p.what === 'workflows')!
+    const file = 'pair-contracts/cycle-coordinator.test.mjs'
+    const tmp = mkdtempSync(join(tmpdir(), 'workflow-mirror-mirrored-'))
+    try {
+      const datasetCopy = join(tmp, 'dataset')
+      const installedCopy = join(tmp, 'installed')
+      cpSync(join(REPO_ROOT, pair.dataset), datasetCopy, { recursive: true })
+      cpSync(join(REPO_ROOT, pair.installed), installedCopy, { recursive: true })
+      cpSync(join(installedCopy, file), join(datasetCopy, file))
+
+      const shipped = listFiles(datasetCopy)
+      const live = new Set(listFiles(installedCopy))
+      expect(shipped.filter(f => !live.has(f))).toEqual([])
+      expect(readFileSync(join(datasetCopy, file), 'utf-8')).toBe(
+        readFileSync(join(installedCopy, file), 'utf-8'),
+      )
+
+      expect(rootOnlyFiles(datasetCopy, installedCopy)).not.toContain(file)
+      expect(() =>
+        expect(rootOnlyFiles(datasetCopy, installedCopy)).toEqual(
+          Object.keys(pair.rootOnly).sort(),
+        ),
+      ).toThrow()
+    } finally {
+      rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it('a fourth root-only file makes the enumeration check fail', () => {
+    // The injected regression this policy exists to catch, run against a COPY of the real trees:
+    // without it, "the enumeration equals reality" is satisfied by any list that happens to match
+    // today, and nothing proves it would object tomorrow.
+    const pair = PAIRS.find(p => p.what === 'workflows')!
+    const tmp = mkdtempSync(join(tmpdir(), 'workflow-mirror-root-only-'))
+    try {
+      const datasetCopy = join(tmp, 'dataset')
+      const installedCopy = join(tmp, 'installed')
+      cpSync(join(REPO_ROOT, pair.dataset), datasetCopy, { recursive: true })
+      cpSync(join(REPO_ROOT, pair.installed), installedCopy, { recursive: true })
+
+      // The copy reproduces the real verdict — otherwise the injection below proves nothing.
+      expect(rootOnlyFiles(datasetCopy, installedCopy)).toEqual(Object.keys(pair.rootOnly).sort())
+
+      writeFileSync(join(installedCopy, 'pair-contracts', 'injected-regression.test.mjs'), '// x\n')
+
+      expect(rootOnlyFiles(datasetCopy, installedCopy).filter(f => !(f in pair.rootOnly))).toEqual([
+        'pair-contracts/injected-regression.test.mjs',
+      ])
+      expect(() =>
+        expect(rootOnlyFiles(datasetCopy, installedCopy)).toEqual(
+          Object.keys(pair.rootOnly).sort(),
+        ),
+      ).toThrow()
+    } finally {
+      rmSync(tmp, { recursive: true, force: true })
     }
   })
 })

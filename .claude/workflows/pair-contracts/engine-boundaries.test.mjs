@@ -61,15 +61,16 @@ function provision() {
 }
 const installed = rel => join(provision(), '.claude/skills', rel)
 
-test('TC-14 / TC-07: `pair install` lands the six phase skills with every script they run, and none of the retired ones', () => {
+test('TC-14 / TC-07: `pair install` lands the seven workflow skills with every script they run, and none of the retired ones', () => {
   const project = provision()
   const skills = readdirSync(join(project, '.claude/skills')).filter(d => d.startsWith('pair-workflow-')).sort()
-  assert.deepEqual(skills, ['pair-workflow-contract-phase', 'pair-workflow-green-fix', 'pair-workflow-implement-phase', 'pair-workflow-red-spec', 'pair-workflow-red-verify', 'pair-workflow-review-phase'])
-  for (const f of ['pair-workflow-contract-phase/scripts/ensure-contract.mjs', 'pair-workflow-red-spec/scripts/cycle-state.mjs', 'pair-workflow-red-verify/scripts/cycle-state.mjs', 'pair-workflow-red-verify/scripts/red-snapshot.mjs', 'pair-workflow-implement-phase/scripts/cycle-state.mjs', 'pair-workflow-green-fix/scripts/cycle-state.mjs', 'pair-workflow-green-fix/scripts/pr-comment.mjs', 'pair-workflow-review-phase/scripts/cycle-state.mjs', 'pair-workflow-review-phase/scripts/red-snapshot.mjs', 'pair-workflow-review-phase/scripts/pr-comment.mjs'])
+  // US-486: the in-session coordinator ships beside the five stages and the template contract.
+  assert.deepEqual(skills, ['pair-workflow-contract-phase', 'pair-workflow-cycle', 'pair-workflow-green-fix', 'pair-workflow-implement-phase', 'pair-workflow-red-spec', 'pair-workflow-red-verify', 'pair-workflow-review-phase'])
+  for (const f of ['pair-workflow-contract-phase/scripts/ensure-contract.mjs', 'pair-workflow-red-spec/scripts/cycle-state.mjs', 'pair-workflow-red-verify/scripts/cycle-state.mjs', 'pair-workflow-red-verify/scripts/red-snapshot.mjs', 'pair-workflow-implement-phase/scripts/cycle-state.mjs', 'pair-workflow-green-fix/scripts/cycle-state.mjs', 'pair-workflow-green-fix/scripts/pr-comment.mjs', 'pair-workflow-review-phase/scripts/cycle-state.mjs', 'pair-workflow-review-phase/scripts/red-snapshot.mjs', 'pair-workflow-review-phase/scripts/pr-comment.mjs', 'pair-workflow-cycle/scripts/cycle-state.mjs', 'pair-workflow-cycle/scripts/cycle-dispatch.mjs'])
     assert.ok(existsSync(installed(f)), `${f} did not install`)
   // the installed copies are the dataset's bytes, and every skill names its own script directory
   assert.equal(readFileSync(installed('pair-workflow-red-verify/scripts/red-snapshot.mjs'), 'utf8'), readFileSync(join(DATASET, '.skills/workflow/red-verify/scripts/red-snapshot.mjs'), 'utf8'))
-  for (const s of ['red-spec', 'red-verify', 'implement-phase', 'green-fix', 'review-phase']) assert.match(readFileSync(installed(`pair-workflow-${s}/SKILL.md`), 'utf8'), /\$SKILL_DIR\/scripts\/cycle-state\.mjs/)
+  for (const s of ['red-spec', 'red-verify', 'implement-phase', 'green-fix', 'review-phase', 'cycle']) assert.match(readFileSync(installed(`pair-workflow-${s}/SKILL.md`), 'utf8'), /\$SKILL_DIR\/scripts\/cycle-state\.mjs/)
   for (const gone of ['pair-workflow-remediation-plan', 'pair-workflow-red-seal', 'pair-workflow-p3-verify', 'pair-workflow-cycle-comments', 'pair-workflow-pr-phase']) assert.equal(existsSync(join(project, '.claude/skills', gone)), false, gone)
   assert.deepEqual(readdirSync(join(project, '.claude/agents')).sort(), ['pair-contract-generator.md', 'pair-fix-test-author.md', 'pair-implementer.md', 'pair-red-contract-verifier.md', 'pair-reviewer.md'])
   assert.equal(existsSync(join(project, '.claude/workflows/pair-implement-batch.test.mjs')), false, 'dry-run suites never install')

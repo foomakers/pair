@@ -62,6 +62,32 @@ export const SCHEMA_VERSION = 3
 export const METRICS_SCHEMA_VERSION = 1
 export const SKILLS = ['red-spec', 'red-verify', 'implement-phase', 'green-fix', 'review-phase']
 export const STEPS = ['prepare', 'validate', 'implement', 'green', 'verify', 'done', 'blocked']
+// ── the cycle's rules, held HERE as data (US-486 AC-12) ─────────────────────────────────────
+// Every realization of the cycle — the `pair-implement-batch` Workflow script, the
+// `pair-workflow-cycle` in-session coordinator, `pair-cli` — reads these from this file. A second
+// copy in a consumer is a fork of the state machine, so the consumers are grep-guarded against
+// redefining them.
+//   dispatchesPerStory   one run that asks for more than this is looping, not converging.
+//   consecutiveRedirects the durable state and the dispatched step disagree this many times in a
+//                        row only when one of the two is wrong.
+export const CAPS = { dispatchesPerStory: 40, consecutiveRedirects: 3 }
+// A dead dispatch (the agent died, or returned a shape no stage can use) is retried with the SAME
+// prompt: every stage is re-entrant by construction, so the retry RESUMES. Policy data, so a
+// caller may narrow or widen it without a second rule living in the caller.
+export const POLICY_DEFAULTS = { deadDispatchRetries: 1 }
+// ── transition context policy (US-486 AC-7) ────────────────────────────────────────────────
+// `next.context` says whether the stage about to run gets a FRESH subagent or RESUMES the previous
+// subagent of the same role. The KB default is `fresh` on every transition (ADR-024: freeze the
+// baseline before optimizing). `reuse` is admissible only WITHIN one role — never into `validate`
+// or `verify`, whose whole value is an independent, blind verifier (ADR-017 §3, ADL 2026-07-11).
+export const CONTEXT_TABLE = { default: 'fresh', reuseAllowed: ['prepare->prepare', 'implement->green', 'green->green'] }
+// Which cycle STEP a published handoff's skill played, so a transition can be named `from->to`.
+export const STEP_OF_SKILL = { 'red-spec': 'prepare', 'red-verify': 'validate', 'implement-phase': 'implement', 'green-fix': 'green', 'review-phase': 'verify' }
+// The agent ROLE each step runs as (ADR-024 §7: no new agent type, ever). `reuse` resumes the
+// previous subagent OF THE SAME ROLE, so a transition's `from` is the last step that role played —
+// not the last step anybody played. `implement->green` is one role (`pair-implementer`) picking its
+// own work back up across the verification that sits between them.
+export const AGENT_OF_STEP = { prepare: 'pair-fix-test-author', validate: 'pair-red-contract-verifier', implement: 'pair-implementer', green: 'pair-implementer', verify: 'pair-reviewer' }
 export const PREPARE_REFUSALS = ['stale', 'split-required', 'unprovable', 'dirty']
 // US-479 B1 (S3, AC-08, DT-04): a preparation that discovers its obligation cannot be contracted
 // WITHOUT contradicting rows of an already-sealed contract answers `contradiction` — a typed
@@ -113,8 +139,82 @@ const VOLATILE = new Set(['contractPath', 'createdAt', '$meta', 'contractHash', 
 export const contractHash = contract =>
   sha256(canonical(Object.fromEntries(Object.entries(contract ?? {}).filter(([k]) => !VOLATILE.has(k)))))
 export const inputsDigest = inputs => sha256(canonical(inputs ?? {}))
+// ── effective inputs of a card (US-486 AC-10/AC-12) ────────────────────────────────────────
+// The digest every realization stamps into `$inputs`: the cycle state compares it with the one
+// persisted in the last review handoff, and a change re-validates the review evidence instead of
+// trusting it. FNV-1a, not a hash from `crypto`: the Workflow sandbox has no crypto, and this is a
+// CHANGE-DETECTION identity, never a security primitive. Two realizations must compute the same
+// value for the same card, so the composition is stated ONCE, here.
+export function fnv1a(str) {
+  let h1 = 0x811c9dc5
+  let h2 = 0x01000193
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i)
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0
+    h2 = Math.imul(h2 ^ c, 0x811c9dc5) >>> 0
+  }
+  return h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')
+}
+// pair's own pipeline values — the defaults an adopter overrides per key. They are part of the
+// effective inputs (renaming a stage skill or the review template DOES change what a review
+// judged), so they live beside the composition that consumes them.
+export const PIPELINE_DEFAULTS = {
+  skills: {
+    implement: '/pair-process-implement',
+    publishPr: '/pair-capability-publish-pr',
+    review: '/pair-process-review',
+    verifyQuality: '/pair-capability-verify-quality',
+    checkpoint: '/pair-capability-checkpoint',
+    recordDecision: '/pair-capability-record-decision',
+    writeIssue: '/pair-capability-write-issue',
+    contractPhase: '/pair-workflow-contract-phase',
+    redSpec: '/pair-workflow-red-spec',
+    redVerify: '/pair-workflow-red-verify',
+    implementPhase: '/pair-workflow-implement-phase',
+    greenFix: '/pair-workflow-green-fix',
+    reviewPhase: '/pair-workflow-review-phase',
+  },
+  worktreeRoot: '../pair-worktrees',
+  auditLogDir: '.pair/working/reviews',
+  baseBranch: 'origin/main',
+  reviewTemplate: '.pair/knowledge/guidelines/collaboration/templates/code-review-template.md',
+  maxFixRounds: 3,
+  reviewers: 1,
+}
+export const DEFAULT_SEVERITY_FLOOR = 'Minor'
+// The engine is keyed by MAJOR: a patch/minor successor must not invalidate review evidence. The
+// fix-round budget is deliberately NOT an input either — it bounds the transitions, it does not
+// change what a review judged.
+export const effectiveInputs = (story, { workflowVersion, pipeline = PIPELINE_DEFAULTS, severityFloor = DEFAULT_SEVERITY_FLOOR } = {}) =>
+  fnv1a(
+    canonical({
+      workflowMajor: String(workflowVersion ?? '').split('.')[0],
+      story: story.id,
+      branch: story.branch,
+      base: String(story.base ?? '').trim() || pipeline.baseBranch,
+      title: story.title,
+      notes: story.notes ?? null,
+      severityFloor: severityFloor ?? null,
+      skills: pipeline.skills,
+      reviewTemplate: pipeline.reviewTemplate,
+      reviewers: pipeline.reviewers,
+    }),
+  )
+// The workflow version's own grammar: `<major>.<minor>.<patch>` and nothing else. Stated ONCE,
+// because two consumers derive the cycle key from it — `compatible()`, which keys a run by MAJOR,
+// and the `inputs --story` digest both realizations must agree on. A version outside this grammar
+// is a version the command did not really get: `publish` already refuses a handoff carrying one,
+// so accepting it anywhere upstream only mints an identity nothing downstream can use.
+export const isWorkflowVersion = v => typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v)
+// The ONE version this realization of the cycle speaks, pinned exactly the way the sibling
+// realization pins it (`const WORKFLOW_VERSION = '…'` in `.claude/workflows/pair-implement-batch.js`):
+// as DATA, in one place. The engine cannot be handed a bad version because it never types one; the
+// in-session coordinator could, for as long as the value lived nowhere it could read. It does now —
+// `cycle-state.mjs version` prints it for a shell to capture, `cycle-dispatch.mjs` imports it rather
+// than re-spelling it (AC-12), and an omitted `--workflow-version` renders it instead of a guess.
+export const WORKFLOW_VERSION = '4.0.1'
 export const compatible = (mine, theirs) => {
-  const major = v => (typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v) ? v.split('.')[0] : null)
+  const major = v => (isWorkflowVersion(v) ? v.split('.')[0] : null)
   return major(mine) !== null && major(mine) === major(theirs)
 }
 export function phaseParts(phase) {
@@ -1635,7 +1735,12 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     const plan = planFor(parts.round)
     const groups = orderGroups(plan?.groups ?? []) ?? []
     const idx = groups.findIndex(g => g.groupId === parts.groupId)
-    const nextGroup = groups[idx + 1]
+    // idx is -1 when the current phase was dispatched OUTSIDE the plan this round's red-spec wrote
+    // (a group added later, after a review discovered a new finding not in the original plan) —
+    // groups[-1 + 1] would silently resolve to groups[0], re-dispatching the FIRST planned group as
+    // if it were still due, even when it is already sealed/green/resolved. undefined here correctly
+    // falls through to the round re-review below instead.
+    const nextGroup = idx === -1 ? undefined : groups[idx + 1]
     const roundReview = reviews.filter(h => (phaseParts(h.phase)?.round ?? -1) === parts.round).pop()
     if (roundReview) {
       // This GREEN was a retry after the round's review: the other groups whose approved test
@@ -1962,7 +2067,48 @@ export function cycleCounters(allHandoffs, precomputedLedger) {
   }
 }
 
-export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story }) {
+// ── transition context (US-486 AC-7) ───────────────────────────────────────────────────────
+// A `--contextPolicy` is validated against CONTEXT_TABLE as a WHOLE before anything resolves: a
+// caller asking `reuse` where the table forbids it is refused fail-closed, never silently
+// downgraded to `fresh` — the refusal is the signal that a profile is wrong.
+export function contextPolicyError(contextPolicy) {
+  if (contextPolicy === undefined || contextPolicy === null) return null
+  if (typeof contextPolicy !== 'object' || Array.isArray(contextPolicy)) return 'context-policy-invalid'
+  for (const [transition, value] of Object.entries(contextPolicy)) {
+    if (value !== 'fresh' && value !== 'reuse') return 'context-policy-invalid'
+    if (value === 'reuse' && !CONTEXT_TABLE.reuseAllowed.includes(transition)) return 'context-policy-invalid'
+  }
+  return null
+}
+const contextOf = (fromStep, toStep, contextPolicy) => {
+  if (!fromStep || !toStep) return CONTEXT_TABLE.default
+  const transition = `${fromStep}->${toStep}`
+  if (!CONTEXT_TABLE.reuseAllowed.includes(transition)) return CONTEXT_TABLE.default
+  return contextPolicy?.[transition] === 'reuse' ? 'reuse' : CONTEXT_TABLE.default
+}
+// The step the role about to run played LAST — the subagent `reuse` would resume.
+const priorStepOfRole = (handoffs, toStep) => {
+  const role = AGENT_OF_STEP[toStep]
+  if (!role) return null
+  for (let i = handoffs.length - 1; i >= 0; i--) {
+    const step = STEP_OF_SKILL[handoffs[i].skill]
+    if (step && AGENT_OF_STEP[step] === role) return step
+  }
+  return null
+}
+const withContext = (next, handoffs, contextPolicy) =>
+  next && typeof next === 'object' && next.context === undefined ? { ...next, context: contextOf(priorStepOfRole(handoffs, next.step), next.step, contextPolicy) } : next
+
+export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects }) {
+  // Fail closed before ANY state is read: an unusable freshness policy is never resolved around.
+  const policyError = contextPolicyError(contextPolicy)
+  if (policyError) throw new Error(policyError)
+  const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects })
+  // The budgets a coordinator spends are the cycle's data, never the coordinator's own constants.
+  return { ...out, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
+}
+
+function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects }) {
   const where = safeRunDir(dir)
   if (where.error) return { status: 'invalid', reason: where.error, path: where.path, workflowVersion }
   const handoffs = readHandoffs(dir)
@@ -1989,7 +2135,7 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
       if (candidates.length === 1) return { status: 'other-run', runId: candidates[0], legacyRuns, workflowVersion }
       if (candidates.length > 1) return { status: 'incompatible', reason: 'ambiguous-runs', candidates, legacyRuns, workflowVersion }
     }
-    return { status: 'empty', next: deriveNext([], policy, { entry }), handoffs: [], legacyRuns, workflowVersion }
+    return { status: 'empty', next: withContext(deriveNext([], policy, { entry }), [], contextPolicy), handoffs: [], legacyRuns, workflowVersion }
   }
   for (const h of handoffs) {
     if (h.data.schemaVersion !== SCHEMA_VERSION) return { status: 'incompatible', reason: `schemaVersion ${JSON.stringify(h.data.schemaVersion)} != ${SCHEMA_VERSION} in ${h.name}`, workflowVersion }
@@ -2043,6 +2189,22 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   // US-479 B2: the provenance binding travels with EVERY resolve — a resumed cycle never forgets
   // which runs it continues, and a reader never mistakes it for a clean new PR.
   const predecessorRuns = [...new Set(handoffs.filter(h => h.data?.recordType === 'migration').flatMap(h => (h.data.predecessorRuns ?? []).map(r => r.runId)))].sort()
+  // US-486 AC-12: the per-story ceilings are enforced HERE, from the durable evidence alone, so
+  // every realization reads the same run directory and reaches the same verdict on it. The two
+  // ceilings count DIFFERENT things and each says which: this one counts the PUBLISHED HANDOFFS in
+  // the run directory — a durable, cumulative quantity (every resume and every attempt is another
+  // file), not the engine's per-invocation `storyMetrics.dispatches`; consecutive redirects publish
+  // no handoff at all, so the coordinator that observed them hands that count in instead. Because
+  // the handoff count only grows, the block is permanent for this run directory, which is why its
+  // detail names the recovery a human actually has (`migrate-acknowledge` binds a fresh run
+  // directory to this one) rather than implying a retry would clear it.
+  if (next.step !== 'done' && next.step !== 'blocked') {
+    if (handoffs.length >= CAPS.dispatchesPerStory)
+      next = { step: 'blocked', reason: 'failed-resume', cap: 'dispatchesPerStory', detail: `${handoffs.length} published handoff files in this run directory, at or above the ceiling of ${CAPS.dispatchesPerStory} — the count is cumulative across every resume (attempts included), never per invocation, and nothing here asked for another dispatch. A human resumes by binding a NEW run directory to this one: \`cycle-state.mjs migrate-acknowledge --dir <new run dir> --legacy <this dir> …\`` }
+    else if (Number.isInteger(Number(redirects)) && Number(redirects) >= CAPS.consecutiveRedirects)
+      next = { step: 'blocked', reason: 'failed-resume', cap: 'consecutiveRedirects', detail: `${CAPS.consecutiveRedirects} consecutive redirects — the durable state and the dispatched step disagree` }
+  }
+  next = withContext(next, handoffs, contextPolicy)
   const status = next.step === 'done' ? 'completed' : next.step === 'blocked' ? 'blocked' : 'in-progress'
   const nextFindingSeq = handoffs.filter(h => h.skill === 'review-phase').reduce((m, h) => Math.max(m, ...(h.data.findings ?? []).map(f => Number(/-(\d+)$/.exec(String(f.id ?? ''))?.[1] ?? 0))), 0) + 1
   return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs, ledger), predecessorRuns, activeRegressionRisks: ledger.filter(r => r.state === 'active'), rollbackNotes: rollbackNotes(handoffs, ledger) }
@@ -2207,16 +2369,17 @@ if (isMain()) {
     const { cmd, opts } = parseCli(process.argv.slice(2))
     // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
     const FLAGS = {
-      resolve: ['acHash', 'dir', 'entry', 'head', 'inputs', 'policy', 'pr', 'runsRoot', 'story', 'workflowVersion'],
+      resolve: ['acHash', 'contextPolicy', 'dir', 'entry', 'head', 'inputs', 'policy', 'pr', 'redirects', 'runsRoot', 'story', 'workflowVersion'],
       publish: ['attempt', 'dir', 'file', 'phase', 'pr', 'predecessor', 'skill', 'workflowVersion'],
       hash: ['file'],
       'ac-hash': ['story'],
-      inputs: ['json'],
+      inputs: ['json', 'story', 'workflowVersion'],
       'apply-scope-decisions': ['decision-ref', 'dir', 'maintainer', 'pr', 'repo', 'workflowVersion'],
       'scope-baseline': ['dir'],
       'migrate-inspect': ['dir'],
       'migrate-acknowledge': ['branch', 'dir', 'head', 'legacy', 'pr', 'run', 'story', 'workflowVersion'],
       'test-identity': ['command', 'cwd', 'env-keys', 'toolchain'],
+      version: [],
     }
     if (FLAGS[cmd]) {
       const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
@@ -2230,13 +2393,24 @@ if (isMain()) {
     for (const k of ['file', 'legacy', 'runsRoot', 'cwd'])
       if (opts[k] !== undefined)
         for (const one of String(opts[k]).split(',')) if (hasParentHop(one)) throw new Error(`path-escape: --${k} ${one}`)
+    // US-486 (finding r1-2): the workflow version is judged at the CLI BOUNDARY — once, for every
+    // subcommand the table above DECLARES it for, before the command does any work. `publish` and
+    // `inputs` judge it themselves and already refuse before any effect, in their own typed shape
+    // (`reason: 'workflowVersion-invalid'` is the handoff answer publish's consumers read), so the
+    // boundary defers to them; every other declaring subcommand used to pass the value straight
+    // through and only learn of it from `publish` — one full agent stage, a written draft and a `gh`
+    // round-trip later. An ABSENT flag stays `need()`'s refusal: "required" and "malformed" are
+    // different answers and a consumer reading the message deserves the right one.
+    const VERSION_SELF_JUDGED = new Set(['publish', 'inputs'])
+    if (FLAGS[cmd]?.includes('workflowVersion') && !VERSION_SELF_JUDGED.has(cmd) && opts.workflowVersion !== undefined && !isWorkflowVersion(opts.workflowVersion))
+      throw new Error(`--workflowVersion must be <major>.<minor>.<patch>; received ${JSON.stringify(opts.workflowVersion)} — a version outside that grammar is one this command did not really get, and it is refused here, before any effect`)
     const need = (...ks) => {
       for (const k of ks) if (opts[k] === undefined) throw new Error(`--${k} is required`)
     }
     let out
     if (cmd === 'resolve') {
       need('dir', 'workflowVersion', 'entry')
-      out = resolve({ dir: opts.dir, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr, head: opts.head, inputs: opts.inputs, acHash: opts.acHash, runsRoot: opts.runsRoot, story: opts.story })
+      out = resolve({ dir: opts.dir, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr, head: opts.head, inputs: opts.inputs, acHash: opts.acHash, runsRoot: opts.runsRoot, story: opts.story, contextPolicy: opts.contextPolicy ? JSON.parse(opts.contextPolicy) : undefined, redirects: opts.redirects })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
     } else if (cmd === 'publish') {
@@ -2257,8 +2431,23 @@ if (isMain()) {
       process.stdout.write(JSON.stringify({ acHash: h.acHash }) + '\n')
       process.exit(0)
     } else if (cmd === 'inputs') {
-      need('json')
-      process.stdout.write(JSON.stringify({ inputsDigest: inputsDigest(JSON.parse(opts.json)) }) + '\n')
+      // Two surfaces, two digests, both published and both consumed — never one re-keyed into the
+      // other. `--json` is the canonical `sha256:<64 hex>` of an arbitrary object (the handoff
+      // identity). `--story` is the CARD's effective-inputs digest in the FNV-1a form the
+      // sandboxed engine can also compute, so both realizations agree on `$inputs` (US-486 AC-10).
+      if (opts.story === undefined) need('json')
+      else {
+        // The `--story` digest is KEYED by the workflow MAJOR, so a missing or malformed version
+        // does not degrade the answer — it mints a DIFFERENT digest, silently, and a coordinator
+        // that stamps it into `$inputs` drives `resolve` into its inputs-changed branch and
+        // invalidates every review handoff of the run. Fail closed, on the producer's own grammar,
+        // and print no digest at all: the consumer reads stdout, not a warning (US-486 AC-10, BR6).
+        need('workflowVersion')
+        if (!isWorkflowVersion(opts.workflowVersion))
+          throw new Error(`--workflowVersion must be <major>.<minor>.<patch>; received ${JSON.stringify(opts.workflowVersion)} — the digest is keyed by its MAJOR and is never computed from a version this command did not really get`)
+      }
+      out = opts.story !== undefined ? { inputsDigest: effectiveInputs(JSON.parse(opts.story), { workflowVersion: opts.workflowVersion }) } : { inputsDigest: inputsDigest(JSON.parse(opts.json)) }
+      process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
     } else if (cmd === 'apply-scope-decisions') {
       need('dir', 'repo', 'pr')
@@ -2289,6 +2478,12 @@ if (isMain()) {
       out = migrateAcknowledge({ dir: opts.dir, legacyDirs, workflowVersion: opts.workflowVersion, story: opts.story, pr: opts.pr ? Number(opts.pr) : undefined, run: opts.run, branch: opts.branch, inputHead: opts.head })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.applied || out.reason === 'already-acknowledged' ? 0 : 1)
+    } else if (cmd === 'version') {
+      // The pin, printed bare so a shell can capture it: `WV="$(… cycle-state.mjs version)"`. It is
+      // the one value this realization passes to every `--workflowVersion`, and having a producer
+      // for it is what keeps a transcribed literal out of the coordinator's prose (US-486, r1-2).
+      process.stdout.write(WORKFLOW_VERSION + '\n')
+      process.exit(0)
     } else if (cmd === 'test-identity') {
       need('cwd', 'command')
       const keys = (opts['env-keys'] ?? 'CI,NODE_ENV,TZ').split(',').filter(Boolean)
@@ -2296,7 +2491,7 @@ if (isMain()) {
       out = testIdentity({ cwd: opts.cwd, command: opts.command, env, toolchain: opts.toolchain ?? `node ${process.version}` })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
-    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | migrate-inspect | apply-scope-decisions | scope-baseline | test-identity)`)
+    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | migrate-inspect | apply-scope-decisions | scope-baseline | test-identity | version)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)
