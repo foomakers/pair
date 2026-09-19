@@ -74,6 +74,7 @@ CI_TESTS=(
 # offline-unsafe — the same kind of unchecked claim as the 644 mode. It still runs
 # in the full local suite (pnpm smoke-tests).
 CI_EXCLUDED=(
+  "remote-source-resolution.sh: OFFLINE_SAFE=false — 'pair install|update --source <https-url>' happy path downloads a real pinned GitHub release asset; unreleased on a PR branch (story #136)"
   "auto-download-install.sh: OFFLINE_SAFE=false — 'pair install' with no --source auto-downloads the release asset matching the CLI version; unreleased on a PR branch"
   "auto-download-update.sh: OFFLINE_SAFE=false — same download path on 'pair update'; exercised post-release by release.yml (smoke-test-npm-artifact.sh) against the real artifact"
   "default-resolution.sh: OFFLINE_SAFE=false — clears the KB cache to force a fresh download from GitHub releases (same dependency, install + update); the fallback it asserts stays a manual guarantee, see the note above"

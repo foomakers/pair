@@ -163,6 +163,22 @@ the smoke's entire point is a real, unattended write, so treat
 `AGENT_HARNESS_SMOKE_REPO` as fully disposable and never point it at a repository whose
 history matters.
 
+### 9. Remote Source Resolution (`scenarios/remote-source-resolution.sh`) — story #136
+
+Manual only — never in CI (see `lib/ci-tests.sh` `CI_EXCLUDED`). Exercises
+`pair install|update --source <https-url>` end to end: the happy path (Tests 1-3)
+downloads a real pinned GitHub release asset of this repo and asserts install,
+progress output, and a follow-up update all succeed. Error paths (Tests 4-6) are
+fully deterministic offline, against local fixtures: unsupported protocols
+(`file://`, `ftp://`), a non-existent local-looking source, a 404 from a local
+self-signed HTTPS server (fails fast, no retry delay), and a connection-refused
+target (exhausts the full retry budget before failing).
+
+Excluded from CI for the same reason as `auto-download-install.sh` and
+`auto-download-update.sh`: the happy path depends on a published GitHub release
+matching the CLI version, which is frequently unreleased on a PR branch — a red
+here would report the release calendar, not the diff.
+
 ## How to Run
 
 The `run-all.sh` script requires at least the path to the executable to be tested.
