@@ -40,23 +40,42 @@ export const REALIZATIONS = [
   {
     id: 'codex',
     host: 'Codex',
-    // Verified against a real Codex CLI session (0.154.0), not assumed: asked to introspect its
-    // own declared toolset, it reported `collaboration.spawn_agent` / `collaboration.followup_task`
-    // — namespaced under `collaboration.`, never the bare `spawn_agent` / `resume_agent` this row
-    // held before (US-486 canary discovery: the probe never matched, every codex-bound dispatch
-    // fell straight to `realization-unavailable`). A rename is still just an edit to this array.
+    // `dispatch`/`resume` here are the FIRST-listed (canonical) entries of DISPATCH_ALIASES /
+    // RESUME_ALIASES below — kept for documentation and as the ultimate fallback when a probed
+    // toolset has neither namespace's tool but this row is still bound by some other candidate.
+    // Codex's own tool surface has been observed under TWO DIFFERENT namespaces within the SAME
+    // day (US-486 canary, 2026-09-18 -> 2026-09-19): a live session first reported
+    // `collaboration.spawn_agent` / `collaboration.followup_task`, then — with no config change on
+    // this end — a second live session reported `multi_agent_v1__spawn_agent` /
+    // `multi_agent_v1__resume_agent` / `multi_agent_v1__send_input` instead, and a third
+    // introspection-only probe reported NEITHER namespace at all (the tools were plainly absent).
+    // A single hardcoded name breaks every time this surface shifts (it already has, twice); the
+    // fix is DISPATCH_ALIASES below, checked the same way RESUME_ALIASES always has been — never
+    // another hardcoded string here.
     dispatch: 'collaboration.spawn_agent',
     resume: 'collaboration.followup_task',
     // Codex has no `agentType`: the role travels as the agent `.md` body plus the skill reference.
     rolePacket: 'inline-role-body',
   },
 ]
+// Alternate dispatch primitives a host may expose instead of the row's canonical one — checked
+// the SAME way as RESUME_ALIASES, because the dispatch name has proven just as volatile as the
+// resume one (US-486 canary: `collaboration.spawn_agent` one day, `multi_agent_v1__spawn_agent`
+// the next, on the identical CLI version 0.154.0 with no local config change). Never inferred —
+// only a name a live introspection actually reported is added here.
+const DISPATCH_ALIASES = { codex: ['collaboration.spawn_agent', 'multi_agent_v1__spawn_agent'] }
 // Alternate resume primitives a host may expose instead of the row's canonical one. Probed the
 // same way; the row is still bound by its dispatch primitive. `collaboration.send_message` is
 // deliberately NOT an alias here: introspection confirmed it delivers a message WITHOUT triggering
 // the sub-agent to act on it — silently binding it as "resume" would look successful and never
-// actually resume any work.
-const RESUME_ALIASES = { codex: ['collaboration.followup_task'] }
+// actually resume any work. `multi_agent_v1__resume_agent` is added on the same v1-namespace
+// discovery as DISPATCH_ALIASES above; unlike `collaboration.followup_task` its own trigger-vs-
+// message-only behavior was NOT independently re-confirmed live (repeated introspection attempts
+// could not reproduce the v1 namespace on demand to ask it directly) — accepted on the strength of
+// its own name (symmetric with `spawn_agent`/`send_input`, the same shape the confirmed
+// collaboration.* trio already has) rather than a second live verification. Named here, not
+// silently assumed, so this gap is visible rather than hidden.
+const RESUME_ALIASES = { codex: ['collaboration.followup_task', 'multi_agent_v1__resume_agent'] }
 
 // ── reasoning effort profile ($profile, reserved by SKILL.md, US-486 canary follow-up) ─────────
 // Mirrors `pair-implement-batch.js`'s own `agent()` effort dial exactly (same accepted values):
@@ -439,8 +458,10 @@ function realizationsCommand(opts) {
   const tools = new Set(JSON.parse(opts.tools).map(String))
   // The row is bound by the PRIMITIVE, never by `--product`: a product name is an assertion about
   // the host, a present tool is evidence of it. `--product` is accepted and reported so the HALT
-  // can say what claimed to be there, and it can never bind a row on its own.
-  const bound = rows.find(r => tools.has(r.dispatch))
+  // can say what claimed to be there, and it can never bind a row on its own. Checked against
+  // EVERY known dispatch alias for the row, not just its canonical `dispatch` field — a namespace
+  // this row's host has renamed to (US-486 canary: Codex, twice in one day) is still a match.
+  const bound = rows.find(r => (DISPATCH_ALIASES[r.id] ?? [r.dispatch]).some(t => tools.has(t)))
   if (!bound) {
     // AC-6's fallback command. The `--pr` half of `pair-cli run --card N [--pr P]` is OPTIONAL and
     // omitted when there is no PR: a line reading `--pr undefined` hands the operator a command
@@ -449,9 +470,11 @@ function realizationsCommand(opts) {
     const fallback = `pair-cli run --card ${story}${opts.pr === undefined ? '' : ` --pr ${opts.pr}`}`
     fail('realization-unavailable', `no subagent primitive is present in this session (probed: ${[...tools].join(', ') || 'none'}${opts.product ? `; the host names itself "${opts.product}", which is not evidence` : ''}). Run the cycle from the command line instead: ${fallback}`, { fallback })
   }
+  const dispatchCandidates = DISPATCH_ALIASES[bound.id] ?? [bound.dispatch]
+  const dispatch = dispatchCandidates.find(t => tools.has(t)) ?? bound.dispatch
   const resumeCandidates = RESUME_ALIASES[bound.id] ?? [bound.resume]
   const resume = resumeCandidates.find(t => tools.has(t)) ?? bound.resume
-  return emit({ bound: bound.id, realization: { ...bound, resume }, realizations: rows })
+  return emit({ bound: bound.id, realization: { ...bound, dispatch, resume }, realizations: rows })
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────────────────────────────

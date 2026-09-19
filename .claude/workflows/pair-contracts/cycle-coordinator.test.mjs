@@ -573,6 +573,33 @@ test('AC6-w2: the row is bound by the PROBED tool, never by a product name or ve
   assert.equal(named.json.halt, 'realization-unavailable')
 })
 
+test('AC6-w3 (US-486 canary follow-up): a Codex namespace rename binds via DISPATCH_ALIASES, never a single hardcoded name — observed live, twice in one day, on the identical CLI version', () => {
+  // The `multi_agent_v1__*` namespace, observed replacing `collaboration.*` with no local config
+  // change (2026-09-19). Binds exactly like the collaboration.* trio, and the emitted `dispatch`/
+  // `resume` report WHICHEVER alias actually matched — never the row's fixed canonical string.
+  const v1 = dispatch([
+    'realizations',
+    '--tools',
+    JSON.stringify(['multi_agent_v1__spawn_agent', 'multi_agent_v1__resume_agent']),
+  ])
+  assert.equal(v1.status, 0, v1.stdout + v1.stderr)
+  assert.equal(v1.json.bound, 'codex')
+  assert.equal(v1.json.realization.dispatch, 'multi_agent_v1__spawn_agent')
+  assert.equal(v1.json.realization.resume, 'multi_agent_v1__resume_agent')
+  // The OLD namespace must keep binding too — an alias list only ADDS candidates, never retires one.
+  const collab = dispatch([
+    'realizations',
+    '--tools',
+    JSON.stringify(['collaboration.spawn_agent', 'collaboration.followup_task']),
+  ])
+  assert.equal(collab.json.realization.dispatch, 'collaboration.spawn_agent')
+  assert.equal(collab.json.realization.resume, 'collaboration.followup_task')
+  // Neither namespace present ⇒ still realization-unavailable, never a false positive.
+  const none = dispatch(['realizations', '--tools', JSON.stringify(['Bash', 'Read'])])
+  assert.notEqual(none.status, 0)
+  assert.equal(none.json.halt, 'realization-unavailable')
+})
+
 // The bracketed form. Its complement — a fresh card with no PR — is AC6-b2.
 test('AC6-b1 (boundary): no row applies ⇒ `realization-unavailable` printing the `pair-cli` fallback', () => {
   const r = dispatch(['realizations', '--tools', '[]', '--story', '486', '--pr', '9'])
