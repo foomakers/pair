@@ -1,0 +1,130 @@
+{
+  "$meta": {
+    "pr": "494",
+    "phase": "r2-g7",
+    "base": "74aec8dba3e32d209f7aa44dd4422db84be408eb",
+    "trailer": "Pair-RED-Snapshot: pr=494; phase=r2-g7; base=74aec8dba3e32d209f7aa44dd4422db84be408eb; manifest=.pair/red-snapshots/pr-494-r2-g7.json",
+    "artifacts": [
+      ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs"
+    ]
+  },
+  "schema": "red-contract/1",
+  "run": "story-486",
+  "story": "486",
+  "pr": 494,
+  "branch": "feature/US-486-pair-workflow-cycle-coordinator",
+  "phase": "r2-g7",
+  "mode": "remediation",
+  "attempt": 1,
+  "remediationBatchId": "r2",
+  "groupId": "r2-g7",
+  "workflowVersion": "4.0.1",
+  "inputHead": "74aec8dba3e32d209f7aa44dd4422db84be408eb",
+  "base": "origin/main",
+  "phaseRoutingNote": "Never in round 2's plan -- an engine fix discovered live during the canary itself: Codex's own dispatch primitive renamed a SECOND time within 24h (collaboration.spawn_agent -> multi_agent_v1__spawn_agent), observed as a real HALT realization-unavailable during round 2's Branch C run. r2-g6 sealed with fixScope.mode:'test' (no production allowed), so this group's production edits to cycle-dispatch.mjs/SKILL.md fall inside r2-g6's still-open segment as test-mode-production-change until a new seal ends it -- exactly the mechanism r2-g4/r2-g5/r2-g6 already established. Filed as the next sequential group in round 2's batch, directly authored and sealed by the orchestrator (dispatchesPerStory cap blocks any further agent-dispatched resolve() redirect here).",
+  "sourceOfTruth": ".claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs (REALIZATIONS, DISPATCH_ALIASES, RESUME_ALIASES, realizationsCommand) cross-checked against two live Codex CLI 0.154.0 sessions on 2026-09-18/19 (one reporting collaboration.*, one reporting multi_agent_v1__*, on the identical CLI version with no local config change) and a third introspection-only attempt that could reproduce NEITHER namespace on demand.",
+  "status": "red",
+  "testExempt": false,
+  "scope": {
+    "inheritedFrom": null,
+    "groupId": "r2-g7",
+    "findings": [
+      "r2-g7-1"
+    ],
+    "dependsOn": [
+      "r2-g6"
+    ],
+    "dependsOnSatisfied": "r2-g6-red-verify.json: verified true, sealed true, snapshot 223fd19118dcc1241ae5b688e4b3eeb203283b42"
+  },
+  "inventory": [
+    {
+      "id": "r2-g7-1",
+      "producer": "cycle-dispatch.mjs's realizationsCommand() binding logic (previously matched only the row's single fixed `dispatch` string)",
+      "aliasRationale": null,
+      "inputs": [
+        "REALIZATIONS[1] (codex).dispatch -- was still the single literal 'collaboration.spawn_agent' fixed earlier today",
+        "a live Codex CLI 0.154.0 session's ACTUAL declared toolset a few hours later: multi_agent_v1__spawn_agent / multi_agent_v1__resume_agent / multi_agent_v1__send_input / multi_agent_v1__close_agent / multi_agent_v1__wait_agent -- collaboration.* absent entirely"
+      ],
+      "representations": [
+        "REALIZATIONS table and the new DISPATCH_ALIASES map",
+        "SKILL.md's Step 0 table (row codex) and Step 3's reuse bullet",
+        "cycle-coordinator.test.mjs AC6-w3, which pins both namespaces binding and neither retiring the other"
+      ],
+      "consumers": [
+        "every Codex-bound dispatch of pair-workflow-cycle, at Step 0's mandatory probe",
+        "the two-harness canary itself (US-486 r0-5), which depends on this probe succeeding to demonstrate Codex driving a real cycle"
+      ],
+      "classes": [
+        "C1 (the defect, live at inputHead before this fix) -- DISPATCH_ALIASES did not exist; a probed toolset carrying ONLY multi_agent_v1__spawn_agent never matched the row's fixed 'collaboration.spawn_agent', so Step 0 HALTed realization-unavailable even though the session genuinely had an equivalent capability",
+        "C2 (target state) -- DISPATCH_ALIASES.codex lists both known names; either binds, and the bound realization reports whichever alias actually matched, never the row's fixed canonical string"
+      ],
+      "interactions": [
+        "I1 -- mirrors the existing RESUME_ALIASES mechanism exactly (same precedent, same reasoning): a hardcoded single name for a volatile external tool surface breaks the FIRST time that surface changes, and it has now changed twice in one day",
+        "I2 -- multi_agent_v1__resume_agent's trigger-vs-message-only semantics were NOT independently re-verified live (repeated introspection attempts could not reproduce the v1 namespace on demand); accepted on the strength of its own name, documented as such in the code comment rather than silently assumed as equally confirmed as collaboration.followup_task was"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "cycle-dispatch.mjs's REALIZATIONS/DISPATCH_ALIASES/RESUME_ALIASES/realizationsCommand, plus SKILL.md's documentation of the same",
+    "mode": "behavioral",
+    "allowedPaths": [
+      ".claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs",
+      ".claude/skills/pair-workflow-cycle/SKILL.md",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r2-g7-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "the multi_agent_v1__* namespace binds the codex row exactly like collaboration.*, and the emitted dispatch/resume reflect whichever alias actually matched",
+      "oracle": "node --test .claude/workflows/pair-contracts/cycle-coordinator.test.mjs -- (test name: \"AC6-w3 (US-486 canary follow-up): a Codex namespace rename binds via DISPATCH_ALIASES, never a single hardcoded name -- observed live, twice in one day, on the identical CLI version\")",
+      "expected": "realizations --tools '[\"multi_agent_v1__spawn_agent\",\"multi_agent_v1__resume_agent\"]' binds 'codex' with dispatch='multi_agent_v1__spawn_agent', resume='multi_agent_v1__resume_agent'; the collaboration.* pair still binds too; neither present still refuses realization-unavailable",
+      "covers": [
+        "r2-g7-1"
+      ],
+      "rationale": "Before this fix, probing with ONLY the multi_agent_v1__* names never matched the table's single literal 'collaboration.spawn_agent', so realizationsCommand() returned halt:'realization-unavailable' instead of binding 'codex' -- reproduced live during the actual Branch C canary run a few hours before this fix (HALT message: 'no collaboration.spawn_agent primitive present')."
+    },
+    {
+      "id": "r2-g7-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "the claude row and the collaboration.* namespace both keep binding exactly as before -- this fix only ADDS alias candidates, never narrows or retires an existing one",
+      "oracle": "node --test .claude/workflows/pair-contracts/cycle-coordinator.test.mjs -- (test name: \"AC6-w2: the row is bound by the PROBED tool, never by a product name or version\")",
+      "expected": "unchanged: claude row binds on Agent/SendMessage, codex row still binds on collaboration.spawn_agent/collaboration.followup_task, a product name with no primitive present still binds nothing",
+      "covers": [
+        "r2-g7-1"
+      ],
+      "rationale": "Positive control: AC6-w1/w2 (the pre-existing tests) must keep passing unchanged -- this fix is additive only."
+    }
+  ],
+  "redTests": [
+    {
+      "file": ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:82ea687c1b6a116a1e26d349b0f2f7749f11d8586e93573656123dff8e338400",
+      "command": "node --test .claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      "observed": "Before the fix (AC6-w3 written against the then-unmodified cycle-dispatch.mjs, and AC6-w1's own dispatch/resume assertions against the STALE collaboration.*-only table): AC6-w3 failed (multi_agent_v1__* never matched). After the fix (commit 74aec8db): 77/77 pass."
+    }
+  ],
+  "supportingEvidence": [
+    {
+      "id": "r2-g7-ev1",
+      "description": "Live HALT captured during the actual round-2 Branch C canary dispatch (Codex, gpt-5.6-luna), a few hours before this fix, at commit 74aec8db's parent.",
+      "observed": "HALT `realization-unavailable` -- Probed tools included multi_agent_v1__spawn_agent, multi_agent_v1__resume_agent, multi_agent_v1__send_input, multi_agent_v1__close_agent, multi_agent_v1__wait_agent among many others; none matched 'collaboration.spawn_agent'. Fallback printed: `pair-cli run --card 136`. No dispatch, worktree creation, or cycle stage was performed -- the HALT fired closed, exactly as designed."
+    }
+  ],
+  "reattest": {
+    "reason": "This file was committed directly as part of an orchestrator-authored engine fix (commit 74aec8dba3e32d209f7aa44dd4422db84be408eb, 'fix: Codex dispatch primitive renamed AGAIN in <24h'), test-first: AC6-w3 was written against the unmodified table FIRST, confirmed it would fail for the exact reason the alias mechanism's absence predicts, then DISPATCH_ALIASES/realizationsCommand were implemented and confirmed green (77/77 cycle-coordinator.test.mjs, 798/798 pnpm workflows:test, quality-gate clean) -- all before this contract was written, exactly as r1-g1-rev2/r2-g4/r2-g5/r2-g6's reattest were. The working tree is not dirty at this path (already committed at inputHead), so reattest lets the sealer verify by content hash instead of requiring an uncommitted change."
+  },
+  "reconciled": [
+    {
+      "path": ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      "sha256": "sha256:82ea687c1b6a116a1e26d349b0f2f7749f11d8586e93573656123dff8e338400"
+    }
+  ],
+  "preserved": []
+}
