@@ -47,8 +47,19 @@ jobs:
     runs-on: ubuntu-latest
     if: "!(startsWith(github.event.head_commit.message, 'chore: release v'))"
     steps:
+      # FULL history, not the default depth 1: the `docs-staleness check` step below dates
+      # `packages/knowledge-hub/dataset/.skills/` with `git log -1 -- <path>`, and in a shallow
+      # clone the grafted tip has no parents — git reads it as ADDING every file and answers
+      # with the TIP's date whatever it touched. On a `pull_request` that tip is the synthetic
+      # merge commit made when the run starts, so the gate dated the source TODAY and accused
+      # every correct header (run 35305574304 on ce10aea9, green the day before on identical
+      # content). `secret-scan` above already checks out history for the same class of reason.
+      # Raising this depth back re-breaks check 2d; the guard in
+      # apps/website/lib/docs-staleness-check.ts then makes it refuse loudly instead of lying.
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:

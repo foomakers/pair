@@ -819,6 +819,82 @@ test('CLI: seal accepts --root and reports the same typed refusals', () => {
   rmSync(main, { recursive: true, force: true })
 })
 
+// ── r0-1: the transient seal manifest never survives in the repository tree ──────────────────
+// `seal` commits `.pair/red-snapshots/pr-<n>-<phase>.json` so the contract's record lives in
+// HISTORY, and `verify` filters that exact path out of the post-seal delta (`path !== manifest`)
+// precisely because the file is meant to be REMOVED above the snapshot. US-482 did it once in
+// a5f4da50; this repository grew the same file back at `pr-0-a0.json`.
+// Left in the tree it is the ONE path failing this repo's format gate: the gate's file set is
+// `git ls-files --cached --others --exclude-standard` (scripts/format-lib/git-tracked-paths.sh),
+// whose only exclusion arms are third-party skills, `.claude/workflows` and `.claude/agents` —
+// never `.pair/`. So `pnpm prettier:check` exits 1, `pnpm quality-gate` and
+// `.github/workflows/format.yml` cannot go green, and the head is unmergeable.
+// These assertions run against THIS repository rather than a fixture because the defect IS a tree
+// state; the fixture row at the bottom proves the same predicate discriminates.
+const SEAL_TRAILER_RE = /^Pair-RED-Snapshot: pr=(\d+); phase=([^;]+); base=([0-9a-f]{40}); manifest=(\S+)$/m
+const REPO = git(fileURLToPath(new URL('.', import.meta.url)), 'rev-parse', '--show-toplevel')
+const hasBlob = (cwd, rev, path) => spawnSync('git', ['cat-file', '-e', `${rev}:${path}`], { cwd }).status === 0
+const trackedUnder = (cwd, dir) => git(cwd, 'ls-tree', '-r', '--name-only', 'HEAD', '--', dir).split('\n').filter(Boolean)
+
+// Every RED seal on HEAD's first-parent history, with where its manifest can still be read. A
+// shallow checkout simply sees fewer commits; it never invents a manifest that is not there.
+function sealedManifests(cwd) {
+  return git(cwd, 'log', '--first-parent', '--format=%H%x1f%B%x1e', 'HEAD')
+    .split('\x1e')
+    .map(e => e.trim())
+    .filter(e => e.includes('\x1f'))
+    .map(e => ({ sha: e.slice(0, e.indexOf('\x1f')), m: SEAL_TRAILER_RE.exec(e.slice(e.indexOf('\x1f') + 1)) }))
+    .filter(({ m }) => m)
+    .map(({ sha, m }) => ({ sha, phase: m[2], manifest: m[4], inHistory: hasBlob(cwd, sha, m[4]), atHead: hasBlob(cwd, 'HEAD', m[4]) }))
+}
+
+test('r0-1 w1: no RED seal manifest is tracked at HEAD — the transient record belongs to history, not the tree', () => {
+  assert.deepEqual(
+    trackedUnder(REPO, '.pair/red-snapshots/'),
+    [],
+    'the seal manifest is transient: `seal` commits it so the contract is in history, and it must be REMOVED above the snapshot (US-482, a5f4da50). Left tracked it is the one path failing `pnpm prettier:check`, so `pnpm quality-gate` and .github/workflows/format.yml cannot go green.',
+  )
+})
+
+test('r0-1 c1: the record survives the removal — every seal still carries its own manifest blob', () => {
+  // The control the fix must not break: deleting the file from the TREE may never delete it from
+  // the commit that sealed it, which is where `verify` reads the contract (`git show <snap>:<m>`).
+  for (const s of sealedManifests(REPO)) assert.ok(s.inHistory, `${s.sha} (${s.phase}) no longer carries ${s.manifest}`)
+})
+
+test('r0-1 i1: readable at its snapshot commit AND absent from HEAD — for every seal of this branch', () => {
+  // The interaction c1 and w1 do not cover on their own: the invariant is per-seal, so a second
+  // round that seals again and removes only the FIRST manifest is still a defect.
+  const seals = sealedManifests(REPO)
+  assert.deepEqual(seals.filter(s => !s.inHistory).map(s => s.manifest), [], 'a seal commit that lost its manifest')
+  assert.deepEqual(seals.filter(s => s.atHead).map(s => s.manifest), [], 'a manifest still present at HEAD was never removed above its snapshot')
+})
+
+test('r0-1 c3: the invariant may not be discharged by hiding — the format gate still sees `.pair/red-snapshots/`', () => {
+  const ignored = spawnSync('git', ['check-ignore', '-q', '--', '.pair/red-snapshots/pr-0-a0.json'], { cwd: REPO }).status === 0
+  assert.equal(ignored, false, 'gitignoring the directory hides the defect from the gate instead of fixing it')
+  const derivation = readFileSync(join(REPO, 'scripts/format-lib/git-tracked-paths.sh'), 'utf8')
+  assert.equal(/red-snapshots/.test(derivation), false, 'the gate derivation must not learn to skip the manifest')
+  assert.equal(/^\s*\.pair\/[^)\n]*\)\s*continue/m.test(derivation), false, 'no `.pair/` exclusion arm may be added to the gate derivation')
+})
+
+test('r0-1 b1: vacuous where nothing was sealed, exact where a manifest was left behind (fixture)', () => {
+  const { cwd, base } = repo()
+  assert.deepEqual(sealedManifests(cwd), [], 'nothing sealed: nothing to report')
+  assert.deepEqual(trackedUnder(cwd, '.pair/red-snapshots/'), [])
+  redContract(cwd, { fixScope: { owner: 'a()', mode: 'structural', allowedPaths: ['src/'] } })
+  const s = seal({ pr: PR, phase: PHASE, base, contractPath: '.pair/working/red-draft.json', cwd })
+  rmSync(join(cwd, '.pair/working/red-draft.json'))
+  const state = () => sealedManifests(cwd).map(x => [x.manifest, x.inHistory, x.atHead])
+  assert.deepEqual(state(), [[s.manifest, true, true]], 'straight after the seal: in history AND in the tree — the defect state this repo is in')
+  assert.deepEqual(trackedUnder(cwd, '.pair/red-snapshots/'), [s.manifest])
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  assert.deepEqual(state(), [[s.manifest, true, false]], 'removed above the snapshot: the record survives, the tree is clean')
+  assert.deepEqual(trackedUnder(cwd, '.pair/red-snapshots/'), [])
+  assert.equal(verifyChain({ pr: PR, base, cwd }).verified, true, 'custody is unaffected by the removal')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
 // ── custody overrides (<runDir>/custody-overrides.json) ─────────────────────────────────────
 test('verify-chain: an out-of-scope breach on an already-sealed segment is overridden by a human-authorized, attributed entry in <runDir>/custody-overrides.json — verified against its claimed source, never on trust; malformed or mismatched entries leave the breach blocking', () => {
   const { cwd, base } = chainRepo()
@@ -981,4 +1057,81 @@ test('verify-chain: only an allow-listed breach code accepts a human override �
   assert.equal(r.overriddenBreaches, undefined)
   rmSync(cwd, { recursive: true, force: true })
   rmSync(runDir, { recursive: true, force: true })
+})
+
+// ── reattest (a sealed witness whose content already changed via a commit outside this contract) ──
+test('seal: a `reattest` revision re-seals a witness whose content is ALREADY at HEAD (a merge committed it, nothing left to make dirty) — without it, seal refuses artifact-not-changed exactly as before; a malformed reattest is refused by contractErrors, never partially trusted; the seal alone does not clear the per-segment custody breach, which stays a separate, ordinary human-authorized override', () => {
+  const { cwd, base, s1, head1 } = chainRepo()
+  // Simulate a merge from elsewhere: the sealed test file gets NEW content in an ORDINARY commit,
+  // not through this contract's own GREEN — exactly like PR #497 landing inside r2-g2's fixScope.
+  write(cwd, 'test/a.test.js', 'import { a } from "../src/a.js"\nif (a() !== 2) throw new Error("FAIL")\n// merge-carried addition\nif (typeof a !== "function") throw new Error("FAIL not-a-fn")\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'merge-carried: extend the sealed witness')
+  const mergedHead = git(cwd, 'rev-parse', 'HEAD')
+  const newHash = hashFile('test/a.test.js', cwd)
+
+  const revisionContract = {
+    sourceOfTruth: 'a()',
+    fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/a.js'] },
+    revision: 2,
+    supersedes: 'r1-g1',
+    matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'default', oracle: 'node test/a.test.js', expected: '2', covers: ['r0-1'] }],
+    redTests: [{ file: 'test/a.test.js', kind: 'test', baseline: 'red', sha256: newHash, command: 'node test/a.test.js', observed: 'Original failure at base (unchanged): FAIL. Re-sealed at merged head with no new dirty change — content already matches via the merge commit above.' }],
+    testExempt: false,
+  }
+
+  // Without `reattest`: refused exactly as it always was — nothing silently widened.
+  write(cwd, '.pair/working/no-reattest.json', JSON.stringify(revisionContract))
+  const bare = seal({ pr: PR, phase: 'r1-g1-rev2', base: mergedHead, contractPath: '.pair/working/no-reattest.json', cwd })
+  assert.equal(bare.sealed, false)
+  assert.equal(bare.reason, 'artifact-not-changed')
+  assert.deepEqual(bare.paths, ['test/a.test.js'])
+  rmSync(join(cwd, '.pair/working/no-reattest.json'))
+
+  // A malformed reattest (no reason): contractErrors refuses it before seal ever runs its own checks.
+  assert.match(contractErrors({ ...revisionContract, reattest: {} }).join(), /reattest\.reason missing/)
+  assert.match(contractErrors({ ...revisionContract, reattest: 'yes' }).join(), /reattest must be an object/)
+  assert.deepEqual(contractErrors({ ...revisionContract, reattest: { reason: 'merge-carried' } }), [])
+
+  // With a well-formed `reattest`: seal proceeds, writing the manifest alone (the witness file is
+  // already at its declared content — nothing to commit for it).
+  write(cwd, '.pair/working/rev-draft.json', JSON.stringify({ ...revisionContract, reattest: { reason: "Content already at HEAD via a merge this branch's own gate forced; nothing left to make dirty." } }))
+  const s2 = seal({ pr: PR, phase: 'r1-g1-rev2', base: mergedHead, contractPath: '.pair/working/rev-draft.json', cwd })
+  assert.equal(s2.sealed, true, JSON.stringify(s2))
+  assert.equal(git(cwd, 'rev-parse', `${s2.snapshot}^`), mergedHead, 'the seal commit sits directly above the merge commit — nothing else was committed in between')
+  rmSync(join(cwd, '.pair/working/rev-draft.json'))
+
+  // verify-chain WITHOUT an override still reports the segment-level breach: `reattest` only
+  // waives seal()'s own dirty requirement, never the per-segment custody rule that a sealed blob
+  // changed inside r1-g1's own segment (before r1-g1-rev2 existed) was unauthorized AT THAT TIME —
+  // custody is never retroactive. This breach carries `path` + `segment`, so — unlike the global
+  // blob-identity form — it IS reachable by the ordinary human-authorized override mechanism.
+  const bareChain = verifyChain({ pr: PR, base, cwd })
+  assert.equal(bareChain.verified, false)
+  assert.ok(bareChain.breaches.some(b => b.code === 'test-blob-changed' && b.path === 'test/a.test.js' && b.segment === 'r1-g1'))
+
+  const runDir = mkdtempSync(join(tmpdir(), 'run-dir-'))
+  writeFileSync(join(runDir, 'r1-g1-red-verify.json'), JSON.stringify({ skill: 'red-verify', sealed: true }))
+  writeFileSync(
+    join(runDir, 'custody-overrides.json'),
+    JSON.stringify({
+      overrides: [
+        {
+          code: 'test-blob-changed',
+          path: 'test/a.test.js',
+          segment: 'r1-g1',
+          reason: 'The r1-g1-rev2 seal (validated independently) re-attests this exact content — this is the segment-level record of the same authorized reattest, not a new unreviewed change.',
+          authorizedBy: 'maintainer',
+          at: new Date().toISOString(),
+        },
+      ],
+    }),
+  )
+  const chain = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.equal(chain.verified, true, JSON.stringify(chain))
+  assert.deepEqual(chain.snapshots.map(s => s.phase), ['r1-g1', 'r1-g1-rev2'])
+  assert.equal(chain.overriddenBreaches?.length, 1)
+  rmSync(runDir, { recursive: true, force: true })
+
+  rmSync(cwd, { recursive: true, force: true })
 })

@@ -26,8 +26,15 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       version_no_v: ${{ steps.normalize_version.outputs.version_no_v }}
     steps:
+      # FULL history, not the default depth 1: this job runs `pnpm quality-gate`, which
+      # reaches the docs-staleness check that dates `packages/knowledge-hub/dataset/.skills/`
+      # with `git log -1 -- <path>` — on a shallow clone the grafted tip has no parents, so
+      # git answers with the TIP's date whatever it touched, making the gate fail here on
+      # every release. `build` in ci.yml already checks out history for the same reason.
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
