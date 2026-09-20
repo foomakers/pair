@@ -2124,6 +2124,10 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
     // still find the cycle that already exists beside it, or two siblings make every resume ambiguous.
     if (runsRoot && story && existsSync(runsRoot)) {
       const candidates = readdirSync(runsRoot).filter(r => {
+        // A `_`-prefixed entry (e.g. `_archived-<name>`) is a reserved, never-canonical directory —
+        // a maintainer archiving a finished run this way must actually free the story (US-486 r0-5
+        // kill/resume canary: 136-cycle-codex-v6 renamed `_archived-136-…` still redirected here).
+        if (r.startsWith('_')) return false
         const other = join(runsRoot, r, String(story))
         if (other === dir || !existsSync(other)) return false
         const hs = readHandoffs(other).filter(h => h.data && (pr === undefined || h.data.pr === undefined || String(h.data.pr) === String(pr)))
@@ -2150,6 +2154,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   const siblingContradictionKeys = []
   if (runsRoot && story && existsSync(runsRoot)) {
     for (const r of readdirSync(runsRoot)) {
+      if (r.startsWith('_')) continue // reserved, never-canonical (see the candidates scan above)
       const other = join(runsRoot, r, String(story))
       if (other === dir || !existsSync(other)) continue
       for (const h of readHandoffs(other))
