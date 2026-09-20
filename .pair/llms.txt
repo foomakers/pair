@@ -166,6 +166,7 @@
 - [Decision: the scope-decision principal is read from adoption — never a login literal in shipped code](.pair/adoption/decision-log/2026-09-13-the-scope-decision-principal-is-read-from-adoption.md)
 - [Decision: publish-pr hooks are configurable via adoption, not hardcoded](.pair/adoption/decision-log/2026-09-15-publish-pr-hooks-are-configurable-via-adoption-not-hardcoded.md)
 - [Decision: auto-advance executes the merge on re-verified signals (loop closes the loop)](.pair/adoption/decision-log/2026-09-16-auto-advance-executes-merge-on-reverified-signals.md)
+- [Decision: subagent freshness is a transition policy the cycle state owns, and the harness realization is a probed table of data](.pair/adoption/decision-log/2026-09-17-freshness-is-a-transition-policy-and-the-realization-table-is-data.md)
 - [Decision: a custody breach is waived only by an explicit, attributed, verified override](.pair/adoption/decision-log/2026-09-18-a-custody-breach-is-waived-only-by-an-explicit-attributed-override.md)
 
 ## How-To Guides
