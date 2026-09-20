@@ -188,7 +188,7 @@ It is kept as the stable citation key — the normative statement is this sectio
 
 - `adoption/tech/way-of-working.md` — the Quality Gates entry for `llms-index:check`
   states the index's order rule and now also the LF pin, both citing this ADL.
-- **`@pair/pair-cli` is published (`0.4.3`, not private) and this changes its output**:
+- **`@pair/pair-cli` is published (`0.4.4`, not private) and this changes its output**:
   `generateLlmsTxt` is what `pair install` / `pair update` writes into every adopter's
   `.pair/llms.txt`, so their next run reorders it. Per ADL
   [2026-08-20-a-user-facing-cli-fix-carries-its-changeset.md](2026-08-20-a-user-facing-cli-fix-carries-its-changeset.md)
