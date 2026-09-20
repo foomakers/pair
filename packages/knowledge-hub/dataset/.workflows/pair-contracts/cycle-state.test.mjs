@@ -704,6 +704,27 @@ test('resolve: with an empty run directory and a PR, other run directories of th
   assert.equal(fresh.next.step, 'verify')
 })
 
+test('resolve: a runsRoot entry with the reserved `_archived-` prefix is never adopted as other-run, nor counted toward ambiguity — a maintainer moving a finished run aside with that prefix must actually free the story for a new cycle (US-486 r0-5 kill/resume canary, discovered live: 136-cycle-codex-v6 renamed `_archived-136-…` still redirected a fresh run to it)', () => {
+  const { root, dir } = runDir()
+  const runs = join(root, '.pair', 'working', 'runs')
+  const archived = join(runs, '_archived-run-0', '42')
+  mkdirSync(archived, { recursive: true })
+  redSpec(archived, 'a0')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh', runsRoot: runs, story: '42' })
+  assert.equal(r.status, 'empty', 'an `_archived-`-prefixed run is never adopted as other-run')
+  // a genuine candidate alongside an archived one is still adopted singly, never flagged ambiguous
+  const other = join(runs, 'run-2', '42')
+  mkdirSync(other, { recursive: true })
+  redSpec(other, 'a0')
+  const r2 = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh', runsRoot: runs, story: '42' })
+  assert.deepEqual({ status: r2.status, runId: r2.runId }, { status: 'other-run', runId: 'run-2' })
+  // the sibling-contradiction-key scan (the second readdirSync(runsRoot) site) must exclude it too
+  const { dir: d2 } = runDir()
+  redSpec(d2, 'a0', { inputsDigest: 'd1' })
+  const r3 = resolve({ dir: d2, workflowVersion: V, policy: POLICY, entry: 'fresh', runsRoot: runs, story: '42' })
+  assert.equal(r3.status, 'in-progress', 'an archived sibling never throws or blocks resolution of an unrelated in-progress cycle')
+})
+
 // ── identities ────────────────────────────────────────────────────────────────────────────
 test('contractHash is canonical: key order and the volatile fields do not change it, a row does', () => {
   const a = { fixScope: { owner: 'x', mode: 'behavioral', allowedPaths: ['s'] }, matrix: [{ id: 'row-1', condition: 'c', oracle: 'o', expected: 'e' }], redTests: [], contractPath: '/a', createdAt: 't1' }

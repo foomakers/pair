@@ -1,0 +1,163 @@
+{
+  "$meta": {
+    "pr": "494",
+    "phase": "r2-g8",
+    "base": "abb3f069fd55a8044901bc878bb0d0f0d482001a",
+    "trailer": "Pair-RED-Snapshot: pr=494; phase=r2-g8; base=abb3f069fd55a8044901bc878bb0d0f0d482001a; manifest=.pair/red-snapshots/pr-494-r2-g8.json",
+    "artifacts": [
+      ".claude/workflows/pair-contracts/cycle-state.test.mjs",
+      "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-state.test.mjs"
+    ]
+  },
+  "schema": "red-contract/1",
+  "run": "story-486",
+  "story": "486",
+  "pr": 494,
+  "branch": "feature/US-486-pair-workflow-cycle-coordinator",
+  "phase": "r2-g8",
+  "mode": "remediation",
+  "attempt": 1,
+  "remediationBatchId": "r2",
+  "groupId": "r2-g8",
+  "workflowVersion": "4.0.1",
+  "inputHead": "abb3f069fd55a8044901bc878bb0d0f0d482001a",
+  "base": "origin/main",
+  "phaseRoutingNote": "Never in round 2's plan -- discovered live while executing the r0-5 kill/resume canary test itself (the last missing DoD item of US-486's T-7 Canary): archiving a finished run directory for story 136 by renaming it with the session's own `_archived-<name>` prefix, then launching a fresh run for the same story, produced status:'other-run' redirecting straight back into the archived directory -- resolve()'s two readdirSync(runsRoot) scans (the other-run/ambiguous-runs candidate scan, and the sibling-contradiction-key scan) never excluded a reserved/non-canonical prefix. Filed as the next sequential group in round 2's batch, directly authored and sealed by the orchestrator (dispatchesPerStory cap blocks any further agent-dispatched resolve() redirect here), same as r2-g4 through r2-g7.",
+  "sourceOfTruth": "cycle-state.mjs's resolveState() (both readdirSync(runsRoot) scans) cross-checked live: `.pair/working/runs/136-cycle-codex-v6` renamed to `_archived-136-attempt3-cycle-codex-terra` and left inside `.pair/working/runs/`, then `pair-implement-batch` relaunched for story 136 with a fresh runId -- resolve() returned `{status:'other-run', runId:'_archived-136-attempt3-cycle-codex-terra'}` instead of `status:'empty'`. Fix verified by unblocking the archived directory (moved outside `.pair/working/runs/` as a workaround) before this contract existed; this contract makes the workaround unnecessary going forward.",
+  "status": "red",
+  "testExempt": false,
+  "scope": {
+    "inheritedFrom": null,
+    "groupId": "r2-g8",
+    "findings": [
+      "r2-g8-1"
+    ],
+    "dependsOn": [
+      "r2-g7"
+    ],
+    "dependsOnSatisfied": "r2-g7-red-verify.json: verified true, sealed true, snapshot 888876d0f7b1e778e93228683ea2260a2cf41cc6"
+  },
+  "inventory": [
+    {
+      "id": "r2-g8-1",
+      "producer": "cycle-state.mjs's resolveState() -- the two readdirSync(runsRoot) scans that look for a sibling run directory of the same story (the other-run/ambiguous-runs candidate scan when the current dir is empty, and the sibling-contradiction-key scan that runs on every resolve)",
+      "aliasRationale": null,
+      "inputs": [
+        "A runsRoot containing a directory renamed with the `_archived-` prefix (the ONLY archiving convention ever used in this repo's history -- introduced ad hoc this session, never previously exercised against a live resolve() call) that still holds a compatible, non-empty handoff set for the same story",
+        "A fresh, genuinely empty run directory for that same story"
+      ],
+      "representations": [
+        "resolveState()'s candidates filter (readdirSync(runsRoot).filter(...)) and its sibling-contradiction-key loop (for (const r of readdirSync(runsRoot)))",
+        "cycle-coordinator.test.mjs's AC12-w3 mirror-identity check, which now covers a sixth location (pair-workflow-cycle) alongside the five phase skills and their dataset mirrors",
+        "cycle-state.test.mjs's new resolve() test"
+      ],
+      "consumers": [
+        "every fresh-entry dispatch of any phase skill for a story whose prior run was moved aside with the `_archived-` convention",
+        "the US-486 r0-5 kill/resume canary itself, which depends on archiving being a real exclusion to free a story for a repeatable test"
+      ],
+      "classes": [
+        "C1 (the defect, live at inputHead before this fix) -- a `_archived-<name>` directory with a compatible handoff set for the target story is treated as a live candidate: alone it is wrongly adopted as `other-run`, alongside a real candidate it wrongly contributes to `ambiguous-runs`, and its `contradiction` handoffs (if any) wrongly contribute to the sibling-contradiction-key budget",
+        "C2 (target state) -- any runsRoot entry whose name starts with `_` is excluded from BOTH scans unconditionally, so it is exactly as if the directory did not exist for resolve() purposes; a genuine sibling run alongside it is still adopted normally"
+      ],
+      "interactions": [
+        "I1 -- the reserved-prefix exclusion is a NEW convention, not a rename of an existing one: nothing in the shipped skills, docs or tests previously assigned meaning to a leading underscore in a runsRoot entry name, so this fix introduces the rule rather than repairing a broken one",
+        "I2 -- both scan sites must exclude the prefix identically, or a `_archived-` directory would be invisible to the candidate scan but still poison the sibling-contradiction-key budget (or vice versa) -- the contract requires both, not either"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "cycle-state.mjs's resolveState() (both readdirSync(runsRoot) scans), shipped identically inside all six skills, their five dataset mirrors and pair-workflow-cycle's mirror",
+    "mode": "behavioral",
+    "allowedPaths": [
+      ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r2-g8-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "a `_archived-<name>` directory carrying a compatible handoff set for the target story is excluded from the other-run/ambiguous-runs candidate scan",
+      "oracle": "node --test .claude/workflows/pair-contracts/cycle-state.test.mjs -- (test name: \"resolve: a runsRoot entry with the reserved `_archived-` prefix is never adopted as other-run, nor counted toward ambiguity\")",
+      "expected": "resolve() on an empty dir with only a `_archived-run-0/<story>` sibling returns status:'empty' (never 'other-run'); with a second, genuine `run-2/<story>` sibling alongside it, resolve() returns status:'other-run' runId:'run-2' (never 'ambiguous-runs', never adopting the archived one)",
+      "covers": [
+        "r2-g8-1"
+      ],
+      "rationale": "Before this fix, the archived directory alone was wrongly adopted as other-run (reproduced live: 136 redirected into `_archived-136-attempt3-cycle-codex-terra`); this row proves the exclusion for the candidate scan specifically."
+    },
+    {
+      "id": "r2-g8-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "a `_archived-<name>` sibling never poisons the sibling-contradiction-key scan (the second readdirSync(runsRoot) site) -- an unrelated in-progress cycle in the target dir still resolves normally",
+      "oracle": "node --test .claude/workflows/pair-contracts/cycle-state.test.mjs -- (same test, third assertion)",
+      "expected": "resolve() on a dir with its own published a0-red-spec handoff, and an unrelated `_archived-*` sibling for the same story present in runsRoot, still returns status:'in-progress' -- the archived sibling is never read for contradiction keys",
+      "covers": [
+        "r2-g8-1"
+      ],
+      "rationale": "The two readdirSync(runsRoot) sites are independent code paths; excluding the prefix at only one of them would leave the other scan still walking into archived directories."
+    },
+    {
+      "id": "r2-g8-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "a genuine (non-`_`-prefixed) sibling run is still adopted or flagged ambiguous exactly as before -- this fix only ADDS an exclusion, never narrows adoption of a real candidate",
+      "oracle": "node --test .claude/workflows/pair-contracts/cycle-state.test.mjs -- (test name: \"resolve: with an empty run directory and a PR, other run directories of the same story are searched -- one match is adopted, several are ambiguous\")",
+      "expected": "unchanged: a single genuine sibling is adopted as other-run, two are ambiguous-runs, a legacy-schema sibling is reported but never adopted",
+      "covers": [
+        "r2-g8-1"
+      ],
+      "rationale": "Positive control: the pre-existing other-run/ambiguous-runs/legacy tests must keep passing unchanged -- this fix is additive only (an early `return false` / `continue` guard, nothing else touched)."
+    }
+  ],
+  "redTests": [
+    {
+      "file": ".claude/workflows/pair-contracts/cycle-state.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:750fca60ee2dcd3def33b55b024bb0737450bcd5349d0ebcbefe8b3c65844cea",
+      "command": "node --test .claude/workflows/pair-contracts/cycle-state.test.mjs",
+      "observed": "Before the fix: the new test's first assertion failed -- resolve() returned {status:'other-run', runId:'_archived-run-0'} instead of {status:'empty'} (AssertionError, actual 'other-run' expected 'empty'). After the fix (both readdirSync(runsRoot) sites gated on `_`-prefix exclusion, applied identically to all 6 skill copies + 6 dataset mirrors): 191/191 pass."
+    },
+    {
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-state.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:750fca60ee2dcd3def33b55b024bb0737450bcd5349d0ebcbefe8b3c65844cea",
+      "command": "pnpm --filter @pair/knowledge-hub test -- workflow-mirror.test.ts",
+      "observed": "Before the sync: FAILED — workflow-mirror.test.ts > 'workflows': dataset and root copy are one artifact > every file is byte-identical — AssertionError: .claude/workflows/pair-contracts/cycle-state.test.mjs has drifted from the dataset (the new test existed only in the source copy). After syncing this mirror to byte-identity with the source: pass."
+    }
+  ],
+  "supportingEvidence": [
+    {
+      "id": "r2-g8-ev1",
+      "description": "Live redirect captured during the US-486 r0-5 kill/resume canary test itself, 2026-09-19/20.",
+      "observed": "`.pair/working/runs/136-cycle-codex-v6` (story 136's prior canonical cycle, a terminal `unprovable` Branch-C attempt) was renamed to `.pair/working/runs/_archived-136-attempt3-cycle-codex-terra` to free the story for a fresh test run. Launching `pair-implement-batch` for story 136 with a genuinely empty new runId still returned `{status:'redirect', next:{step:'blocked', reason:'other-run', runId:'_archived-136-attempt3-cycle-codex-terra'}}` -- confirmed by calling `resolve` directly with the same arguments. Worked around by moving the archived directory outside `.pair/working/runs/` entirely (a new `.pair/working/archived-runs/` sibling) before this contract existed."
+    }
+  ],
+  "reattest": {
+    "reason": "Test-first, exactly as r2-g4 through r2-g7: cycle-state.test.mjs's new resolve() test was written and confirmed RED against the unmodified resolveState() first (both readdirSync(runsRoot) scans reproduced the defect), then the `_`-prefix exclusion guard was added to both scan sites in all 12 production paths (6 skill copies + 6 dataset mirrors, verified byte-identical to each other both before and after), then confirmed green: 191/191 cycle-state.test.mjs, 77/77 cycle-coordinator.test.mjs (AC12-w3 mirror-identity check included, now covering all 6 locations), 799/799 pnpm workflows:test, pnpm format:check and pnpm skills:conformance clean -- all before this contract was written. The working tree is not dirty at these paths at seal time only if committed first; reattest lets the sealer verify by content hash instead of requiring an uncommitted change, matching the r2-g4..g7 precedent."
+  },
+  "reconciled": [
+    {
+      "path": ".claude/workflows/pair-contracts/cycle-state.test.mjs",
+      "sha256": "sha256:750fca60ee2dcd3def33b55b024bb0737450bcd5349d0ebcbefe8b3c65844cea"
+    },
+    {
+      "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-state.test.mjs",
+      "sha256": "sha256:750fca60ee2dcd3def33b55b024bb0737450bcd5349d0ebcbefe8b3c65844cea"
+    }
+  ],
+  "preserved": []
+}
