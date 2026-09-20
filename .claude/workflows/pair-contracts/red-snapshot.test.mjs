@@ -835,6 +835,17 @@ const SEAL_TRAILER_RE = /^Pair-RED-Snapshot: pr=(\d+); phase=([^;]+); base=([0-9
 const REPO = git(fileURLToPath(new URL('.', import.meta.url)), 'rev-parse', '--show-toplevel')
 const hasBlob = (cwd, rev, path) => spawnSync('git', ['cat-file', '-e', `${rev}:${path}`], { cwd }).status === 0
 const trackedUnder = (cwd, dir) => git(cwd, 'ls-tree', '-r', '--name-only', 'HEAD', '--', dir).split('\n').filter(Boolean)
+// A GitHub squash-merge commit's body concatenates every original subcommit's subject+body — a
+// seal commit's own subject and trailer can reappear verbatim in the MIDDLE of that text (US-486
+// r0-5: main's squash-merge of #494 did exactly this for phase a0's seal). Scanning the whole body
+// for a matching LINE therefore mistakes the squash commit itself for a seal it never made. A real
+// git trailer only lives in the trailer BLOCK at the very end of a message (`git interpret-trailers`
+// is git's own authority on that shape) — restricting the match to that block's output is exactly
+// what distinguishes "this commit's own trailer" from "a trailer-shaped line quoted from history".
+const trailerBlockOf = (cwd, body) => {
+  const r = spawnSync('git', ['interpret-trailers', '--parse'], { cwd, input: body, encoding: 'utf8' })
+  return r.status === 0 ? r.stdout : ''
+}
 
 // Every RED seal on HEAD's first-parent history, with where its manifest can still be read. A
 // shallow checkout simply sees fewer commits; it never invents a manifest that is not there.
@@ -843,7 +854,11 @@ function sealedManifests(cwd) {
     .split('\x1e')
     .map(e => e.trim())
     .filter(e => e.includes('\x1f'))
-    .map(e => ({ sha: e.slice(0, e.indexOf('\x1f')), m: SEAL_TRAILER_RE.exec(e.slice(e.indexOf('\x1f') + 1)) }))
+    .map(e => {
+      const sha = e.slice(0, e.indexOf('\x1f'))
+      const body = e.slice(e.indexOf('\x1f') + 1)
+      return { sha, m: SEAL_TRAILER_RE.exec(trailerBlockOf(cwd, body)) }
+    })
     .filter(({ m }) => m)
     .map(({ sha, m }) => ({ sha, phase: m[2], manifest: m[4], inHistory: hasBlob(cwd, sha, m[4]), atHead: hasBlob(cwd, 'HEAD', m[4]) }))
 }
@@ -892,6 +907,49 @@ test('r0-1 b1: vacuous where nothing was sealed, exact where a manifest was left
   assert.deepEqual(state(), [[s.manifest, true, false]], 'removed above the snapshot: the record survives, the tree is clean')
   assert.deepEqual(trackedUnder(cwd, '.pair/red-snapshots/'), [])
   assert.equal(verifyChain({ pr: PR, base, cwd }).verified, true, 'custody is unaffected by the removal')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('r0-1 b2: a trailer-shaped line embedded inside a LATER, unrelated commit body (a squash merge concatenates every original subcommit message into one) is never mistaken for that commit sealing anything — only a REAL trailer block (git interpret-trailers) counts (US-486 r0-5: main`s own squash-merge of #494 embedded phase a0`s seal trailer inside the merge commit`s body, and the naive line-scan mistook that merge commit for the seal itself, `inHistory:false` because a squash commit`s tree never matches the real seal`s)', () => {
+  const { cwd, base } = repo()
+  redContract(cwd, { fixScope: { owner: 'a()', mode: 'structural', allowedPaths: ['src/'] } })
+  const s = seal({ pr: PR, phase: PHASE, base, contractPath: '.pair/working/red-draft.json', cwd })
+  rmSync(join(cwd, '.pair/working/red-draft.json'))
+  const sealSha = git(cwd, 'rev-parse', 'HEAD')
+  const sealSubject = git(cwd, 'log', '-1', '--format=%s', sealSha)
+  const sealTrailer = trailerFor({ pr: PR, phase: PHASE, base, manifest: s.manifest })
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  assert.deepEqual(
+    sealedManifests(cwd).map(x => [x.manifest, x.inHistory, x.atHead]),
+    [[s.manifest, true, false]],
+    'exactly one real seal, correctly recorded, before the squash-shaped commit lands',
+  )
+  // A later commit whose body is a GitHub-squash-style concatenation: the seal's own subject +
+  // trailer line reappear verbatim in the MIDDLE of the message, followed by more unrelated
+  // history and a real trailer block at the very end. This never carries the manifest in ITS
+  // OWN tree (it is a different commit entirely) and must never be reported as a seal.
+  // No file change here (--allow-empty): the point under test is the message-scanning, not
+  // custody's out-of-scope check — a real content change is not needed to reproduce the defect.
+  const squashBody = [
+    'chore: squash-merge everything (simulates a GitHub squash-merge PR)',
+    '',
+    `* ${sealSubject}`,
+    '',
+    sealTrailer,
+    '',
+    '* docs: unrelated follow-up',
+    '',
+    'Some unrelated body text.',
+    '',
+    'Co-authored-by: Someone Else <someone@example.com>',
+  ].join('\n')
+  git(cwd, 'commit', '-q', '--no-verify', '--allow-empty', '-m', squashBody)
+  assert.deepEqual(
+    sealedManifests(cwd).map(x => [x.manifest, x.inHistory, x.atHead]),
+    [[s.manifest, true, false]],
+    'the squash-shaped commit must not surface as a second (broken) seal — the embedded line is not a real trailer of that commit',
+  )
+  assert.equal(verifyChain({ pr: PR, base, cwd }).verified, true, 'custody stays intact through the squash-shaped commit')
   rmSync(cwd, { recursive: true, force: true })
 })
 

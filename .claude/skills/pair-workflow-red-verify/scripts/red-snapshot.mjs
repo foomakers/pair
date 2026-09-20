@@ -98,6 +98,17 @@ export function git(args, cwd, { allowFail = false } = {}) {
   return r.status === 0 ? r.stdout.replace(/\n$/, '') : null
 }
 
+// A GitHub squash-merge commit's body concatenates every original subcommit's subject+body — a
+// seal commit's own subject and trailer can reappear verbatim in the MIDDLE of that text (US-486
+// r0-5: main's own squash-merge of a PR carrying red-snapshot commits did exactly this). A real
+// git trailer only lives in the trailer BLOCK at the very end of a message; restricting the match
+// to `git interpret-trailers`'s own output is what tells "this commit's own trailer" apart from
+// "a trailer-shaped line quoted from an earlier, now-squashed commit's history".
+function trailerBlockOf(body, cwd) {
+  const r = spawnSync('git', ['interpret-trailers', '--parse'], { cwd, input: body, encoding: 'utf8', env: cleanGitEnv() })
+  return r.status === 0 ? r.stdout : ''
+}
+
 // ── Contract shape (the RED author's return value, persisted as the manifest) ──────────────
 export function contractErrors(c) {
   const errs = []
@@ -210,7 +221,7 @@ export function findSnapshotByPhase({ pr, phase, cwd }) {
   const out = git(['log', '--format=%H%x00%B%x1e'], cwd) ?? ''
   for (const rec of out.split('\x1e').map(r => r.replace(/^\n/, '')).filter(Boolean)) {
     const [sha, body] = rec.split('\x00')
-    for (const line of (body ?? '').split('\n')) {
+    for (const line of trailerBlockOf(body ?? '', cwd).split('\n')) {
       const m = re.exec(line.trim())
       if (m) {
         const raw = git(['show', `${sha}:${m[2]}`], cwd, { allowFail: true })
@@ -240,7 +251,7 @@ export function findSnapshot({ pr, phase, base, cwd }) {
       const [sha, body] = rec.split('\x00')
       return { sha, body: body ?? '' }
     })
-    .filter(({ body }) => body.split('\n').some(line => line.trim() === trailer))
+    .filter(({ body }) => trailerBlockOf(body, cwd).split('\n').some(line => line.trim() === trailer))
     .map(({ sha }) => sha)
   return { manifest, trailer, matches }
 }
@@ -435,7 +446,7 @@ export function listSnapshots({ pr, base, cwd }) {
   const snaps = []
   for (const rec of out.split('\x1e').map(r => r.replace(/^\n/, '')).filter(Boolean)) {
     const [sha, body] = rec.split('\x00')
-    for (const line of (body ?? '').split('\n')) {
+    for (const line of trailerBlockOf(body ?? '', cwd).split('\n')) {
       const m = re.exec(line.trim())
       if (m) snaps.push({ sha, pr: m[1], phase: m[2], base: m[3], manifest: m[4] })
     }
