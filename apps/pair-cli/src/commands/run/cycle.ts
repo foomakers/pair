@@ -129,9 +129,15 @@ function settlePreviousDispatch(
 }
 
 /** Whether `next` is beyond the `--rounds` bound — the run stops WITHOUT dispatching it. */
-function roundsBoundReached(rounds: RunCycleInput['rounds'], next: CycleResolveResult['next']): boolean {
+function roundsBoundReached(
+  rounds: RunCycleInput['rounds'],
+  next: CycleResolveResult['next'],
+): boolean {
   return (
-    rounds !== undefined && rounds !== 'max' && typeof next.round === 'number' && next.round > rounds
+    rounds !== undefined &&
+    rounds !== 'max' &&
+    typeof next.round === 'number' &&
+    next.round > rounds
   )
 }
 

@@ -434,7 +434,10 @@ interface DorFallbackInput {
  * happens NEXT, decided by the card's OWN Definition-of-Ready macrostate — never presence/absence
  * of a mapping alone, and never consulted at all when a route already matched (Assumption 2).
  */
-async function handleDorFallback(input: DorFallbackInput, deps: RunHandlerDependencies): Promise<number> {
+async function handleDorFallback(
+  input: DorFallbackInput,
+  deps: RunHandlerDependencies,
+): Promise<number> {
   const { config, context, fs, cwd, decision } = input
 
   reportSkippedDispatch(context)
@@ -445,7 +448,15 @@ async function handleDorFallback(input: DorFallbackInput, deps: RunHandlerDepend
 
   if (readiness === 'draft') {
     return runPrepSkill(
-      { config, context, fs, cwd, card: decision.card, skill: 'pair-process-refine-story', label: 'Draft' },
+      {
+        config,
+        context,
+        fs,
+        cwd,
+        card: decision.card,
+        skill: 'pair-process-refine-story',
+        label: 'Draft',
+      },
       deps,
     )
   }
@@ -533,7 +544,12 @@ interface CycleCoordinatorInput {
  * refused only once the entry resolves to the cycle coordinator (never at parse time, so US-217's
  * own accepted --filter-alongside---card stays a zero-regression control for a ROUTE decision).
  */
-function assertNoLoopModeConcerns(config: RunCommandConfig, context: RunContext, fs: FileSystemService, cwd: string): void {
+function assertNoLoopModeConcerns(
+  config: RunCommandConfig,
+  context: RunContext,
+  fs: FileSystemService,
+  cwd: string,
+): void {
   if (config.scope.filter !== undefined) {
     throw new Error(
       `--filter cannot be combined with a --card entry that resolves to the delivery-cycle ` +
@@ -598,7 +614,8 @@ async function enterCycleCoordinator(
   // scoping here to the branch AC11's OWN fixture actually exercises keeps that shared fixture's
   // other rows untouched. Flagged as a contract note: a real, unconfigured-vs-partially-configured
   // project could still reach `driveCycle` unchecked via the `unmapped` branch.
-  const location = dorReason === 'no-mapping-declared' ? locateCycleScripts(fs, context.config, cwd) : undefined
+  const location =
+    dorReason === 'no-mapping-declared' ? locateCycleScripts(fs, context.config, cwd) : undefined
 
   const dispatch = config.dispatch!
   reportCycleEntry({

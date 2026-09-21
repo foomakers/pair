@@ -260,7 +260,8 @@ function resolveDispatch(options: ParseRunOptions): RunDispatchRequest | undefin
   }
 
   const pr = options.pr === undefined ? undefined : parsePositiveInteger('--pr', options.pr)
-  const runId = options.runId === undefined ? `story-${card}` : identifierText(options.runId, '--run-id')!
+  const runId =
+    options.runId === undefined ? `story-${card}` : identifierText(options.runId, '--run-id')!
   const rounds = resolveRounds(options.rounds)
 
   const dispatch = {

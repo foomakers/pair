@@ -160,7 +160,11 @@ function rejectIfFailed(parsed: unknown): void {
 }
 
 /** Runs `node <script> <cmd> --flag value …` and parses the ONE line of JSON it writes to stdout. */
-function runScript(script: string, cmd: string, args: readonly (readonly [string, string])[]): unknown {
+function runScript(
+  script: string,
+  cmd: string,
+  args: readonly (readonly [string, string])[],
+): unknown {
   const argv = [script, cmd]
   for (const [flag, value] of args) argv.push(`--${flag}`, value)
   const result = spawnSync('node', argv, { encoding: 'utf8' })
@@ -205,7 +209,8 @@ export function createCycleScriptsBridge(location: CycleScriptsLocation): CycleS
       ]
       if (options.policy !== undefined) args.push(['policy', JSON.stringify(options.policy)])
       if (options.run !== undefined) args.push(['run', options.run])
-      if (options.workflowVersion !== undefined) args.push(['workflow-version', options.workflowVersion])
+      if (options.workflowVersion !== undefined)
+        args.push(['workflow-version', options.workflowVersion])
       if (options.pipeline !== undefined) args.push(['pipeline', JSON.stringify(options.pipeline)])
       if (options.style !== undefined) args.push(['style', options.style])
       return runScript(cycleDispatchPath, 'packet', args) as CyclePacketResult
