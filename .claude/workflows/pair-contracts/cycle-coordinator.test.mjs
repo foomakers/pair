@@ -884,7 +884,11 @@ test('AC-profile-w1: a valid $profile.effort is echoed on the packet and request
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.equal(r.json.effort, 'low')
   assert.match(r.json.prompt, /Requested reasoning effort for this dispatch: \*\*low\*\*/)
-  assert.match(r.json.prompt, /request, not an enforced setting/, 'never claims to be enforced for every realization')
+  assert.match(
+    r.json.prompt,
+    /request, not an enforced setting/,
+    'never claims to be enforced for every realization',
+  )
 })
 
 test('AC-profile-w2: an unknown $profile.effort is a typed HALT before any packet is built, never a silent default', () => {
@@ -924,7 +928,10 @@ test('AC-profile-c1 (control): an absent $profile leaves the packet byte-identic
     WORKFLOW_VERSION,
   ])
   assert.equal(r.status, 0, r.stdout + r.stderr)
-  assert.ok(!('effort' in r.json), 'no `effort` key at all when no profile was given, not even null/undefined')
+  assert.ok(
+    !('effort' in r.json),
+    'no `effort` key at all when no profile was given, not even null/undefined',
+  )
   assert.doesNotMatch(r.json.prompt, /reasoning effort/)
 })
 
@@ -1813,7 +1820,9 @@ test('r0-4 c1 (control): the sibling redirect cap is untouched and keeps its own
 // contract and an unrecorded handoff.
 
 const VERSION_GRAMMAR = /^\d+\.\d+\.\d+$/
-const ENGINE_PIN = /const WORKFLOW_VERSION = '(\d+\.\d+\.\d+)'/.exec(readFileSync(BATCH_JS, 'utf8'))?.[1]
+const ENGINE_PIN = /const WORKFLOW_VERSION = '(\d+\.\d+\.\d+)'/.exec(
+  readFileSync(BATCH_JS, 'utf8'),
+)?.[1]
 const COORD_STATE = join(SKILLS, 'pair-workflow-cycle/scripts/cycle-state.mjs')
 const COORD_DISPATCH = join(SKILLS, 'pair-workflow-cycle/scripts/cycle-dispatch.mjs')
 const DATASET_CYCLE_SKILL = join(DATASET, '.skills/workflow/cycle/SKILL.md')
@@ -1986,10 +1995,17 @@ test('r1-2 w4 (witness): `resolve --workflowVersion 4.x` refuses instead of answ
 
 test('r1-2 b1 (boundary): every near-miss of the grammar is refused at BOTH entry points', () => {
   for (const v of ['4.0', 'v4.0.1', '4.0.1 ', '4.0.1\n', '4.0.1-rc.1', '4.0.1.2']) {
-    assert.ok(!VERSION_GRAMMAR.test(v), `${JSON.stringify(v)} is outside the grammar by construction`)
+    assert.ok(
+      !VERSION_GRAMMAR.test(v),
+      `${JSON.stringify(v)} is outside the grammar by construction`,
+    )
     const p = packetWith(v)
     assert.equal(p.status, 1, `packet ${JSON.stringify(v)}: exit 1, got ${p.status} ${p.stdout}`)
-    assert.equal(p.json?.halt, 'workflow-version-invalid', `packet ${JSON.stringify(v)}: ${p.stdout}`)
+    assert.equal(
+      p.json?.halt,
+      'workflow-version-invalid',
+      `packet ${JSON.stringify(v)}: ${p.stdout}`,
+    )
     const s = resolveWith(v)
     assert.notEqual(s.status, 0, `resolve ${JSON.stringify(v)}: ${s.stdout}`)
     assert.equal(s.json?.next, undefined, `resolve ${JSON.stringify(v)}: ${s.stdout}`)
@@ -2045,7 +2061,10 @@ test('r1-2 c1 (control): a well-formed version still renders the packet, byte-id
   const r = packetWith(WORKFLOW_VERSION)
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.equal(r.json.halt, undefined)
-  assert.match(r.json.prompt, new RegExp(`\\$workflowVersion=${WORKFLOW_VERSION.replace(/\./g, '\\.')}\\.`))
+  assert.match(
+    r.json.prompt,
+    new RegExp(`\\$workflowVersion=${WORKFLOW_VERSION.replace(/\./g, '\\.')}\\.`),
+  )
   assert.equal(r.json.prompt, fromBatch.prompt, 'the accepted packet is unchanged')
 })
 
@@ -2097,13 +2116,21 @@ test('r1-2 c3 (control): a well-formed version of ANOTHER major still resolves �
   assert.equal(pinned.json.next.phase, 'a0')
 
   const older = resolveWith('3.0.0')
-  assert.equal(older.status, 0, `a legacy/migration major is well-formed and still answers: ${older.stdout}`)
+  assert.equal(
+    older.status,
+    0,
+    `a legacy/migration major is well-formed and still answers: ${older.stdout}`,
+  )
   assert.equal(older.json.next.step, 'prepare')
 })
 
 test('r1-2 i1 (interaction): the pinned version is accepted by packet, resolve AND publish', async () => {
   const pins = await pinnedVersions()
-  assert.equal(pins.length, 1, `no single pinned version to feed the chain: ${JSON.stringify(pins)}`)
+  assert.equal(
+    pins.length,
+    1,
+    `no single pinned version to feed the chain: ${JSON.stringify(pins)}`,
+  )
   const pin = pins[0][1]
 
   const p = packetWith(pin)
@@ -2145,7 +2172,10 @@ function declaringSubcommands() {
     const flags = entry[2].split(',').map(f => f.trim().replace(/^['"]|['"]$/g, ''))
     if (flags.includes('workflowVersion')) found.push(entry[1])
   }
-  assert.ok(found.length >= 3, `the flag table parsed to an implausible set: ${JSON.stringify(found)}`)
+  assert.ok(
+    found.length >= 3,
+    `the flag table parsed to an implausible set: ${JSON.stringify(found)}`,
+  )
   return found
 }
 
@@ -2173,7 +2203,14 @@ process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(1)
 `,
   )
   chmodSync(bin, 0o755)
-  return { bin, calls: () => readFileSync(log, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)) }
+  return {
+    bin,
+    calls: () =>
+      readFileSync(log, 'utf8')
+        .split('\n')
+        .filter(Boolean)
+        .map(l => JSON.parse(l)),
+  }
 }
 
 // Every regular file under the run directory, content-hashed: the oracle for "nothing was written".
@@ -2184,7 +2221,8 @@ function dirSnapshot(dir) {
     for (const name of readdirSync(at).sort()) {
       const full = join(at, name)
       if (statSync(full).isDirectory()) walk(full, `${rel}${name}/`)
-      else out.push(`${rel}${name}:${createHash('sha256').update(readFileSync(full)).digest('hex')}`)
+      else
+        out.push(`${rel}${name}:${createHash('sha256').update(readFileSync(full)).digest('hex')}`)
     }
   }
   walk(dir, '')
@@ -2315,7 +2353,21 @@ const INVOCATIONS = {
     const { dir } = runDir()
     return {
       dir,
-      args: ['resolve', '--dir', dir, '--workflowVersion', version, '--policy', JSON.stringify(POLICY), '--entry', 'fresh', '--story', '42', '--inputs', 'x'],
+      args: [
+        'resolve',
+        '--dir',
+        dir,
+        '--workflowVersion',
+        version,
+        '--policy',
+        JSON.stringify(POLICY),
+        '--entry',
+        'fresh',
+        '--story',
+        '42',
+        '--inputs',
+        'x',
+      ],
       accepted: r => r.status === 0 && r.json?.next?.step === 'prepare',
     }
   },
@@ -2323,7 +2375,21 @@ const INVOCATIONS = {
     const { root, dir } = runDir()
     return {
       dir,
-      args: ['publish', '--dir', dir, '--file', redSpecDraft(root), '--phase', 'a0', '--skill', 'red-spec', '--workflowVersion', version, '--attempt', '1'],
+      args: [
+        'publish',
+        '--dir',
+        dir,
+        '--file',
+        redSpecDraft(root),
+        '--phase',
+        'a0',
+        '--skill',
+        'red-spec',
+        '--workflowVersion',
+        version,
+        '--attempt',
+        '1',
+      ],
       accepted: r => r.status === 0 && r.json?.published === true,
     }
   },
@@ -2341,8 +2407,26 @@ const INVOCATIONS = {
     return {
       dir: fx.dir,
       gh,
-      env: { ...process.env, PAIR_GH_BIN: gh.bin, FAKE_GH_COMMENTS_JSON: JSON.stringify(fx.comments) },
-      args: ['apply-scope-decisions', '--dir', fx.dir, '--repo', 'foomakers/pair', '--pr', '7', '--decision-ref', fx.decisionRef, '--maintainer', 'rucka', '--workflowVersion', version],
+      env: {
+        ...process.env,
+        PAIR_GH_BIN: gh.bin,
+        FAKE_GH_COMMENTS_JSON: JSON.stringify(fx.comments),
+      },
+      args: [
+        'apply-scope-decisions',
+        '--dir',
+        fx.dir,
+        '--repo',
+        'foomakers/pair',
+        '--pr',
+        '7',
+        '--decision-ref',
+        fx.decisionRef,
+        '--maintainer',
+        'rucka',
+        '--workflowVersion',
+        version,
+      ],
       accepted: r => r.status === 0 && r.json?.applied === true,
     }
   },
@@ -2350,7 +2434,23 @@ const INVOCATIONS = {
     const { dir } = runDir()
     return {
       dir,
-      args: ['migrate-acknowledge', '--dir', dir, '--legacy', legacyRunDir(), '--workflowVersion', version, '--story', '42', '--run', 'story-42', '--branch', 'feature/US-42-x', '--head', SHA40('c')],
+      args: [
+        'migrate-acknowledge',
+        '--dir',
+        dir,
+        '--legacy',
+        legacyRunDir(),
+        '--workflowVersion',
+        version,
+        '--story',
+        '42',
+        '--run',
+        'story-42',
+        '--branch',
+        'feature/US-42-x',
+        '--head',
+        SHA40('c'),
+      ],
       accepted: r => r.status === 0 && r.json?.applied === true,
     }
   },
@@ -2376,7 +2476,9 @@ function probe(cmd, version) {
     printed,
     accepted: inv.accepted(r),
     // a refusal that is ABOUT the version, typed — never a generic non-zero exit
-    refusedForVersion: r.status !== 0 && /workflow-?[vV]ersion/.test(String(r.json?.reason ?? r.json?.error ?? r.json?.halt ?? '')),
+    refusedForVersion:
+      r.status !== 0 &&
+      /workflow-?[vV]ersion/.test(String(r.json?.reason ?? r.json?.error ?? r.json?.halt ?? '')),
     dirChanged: JSON.stringify(before) !== JSON.stringify(dirSnapshot(inv.dir)),
     dirAfter: dirSnapshot(inv.dir).map(x => x.split(':')[0]),
     ghCalls: inv.gh ? inv.gh.calls() : [],
@@ -2401,11 +2503,24 @@ test('r1-2 i2 (interaction): every subcommand DECLARING a workflow version refus
     for (const cmd of cmds) {
       const p = probe(cmd, v)
       if (p.refusedForVersion !== malformed)
-        disagree.push({ cmd, version: v, publishRefused: malformed, refusedForVersion: p.refusedForVersion, exit: p.status, printed: p.printed.slice(0, 160) })
+        disagree.push({
+          cmd,
+          version: v,
+          publishRefused: malformed,
+          refusedForVersion: p.refusedForVersion,
+          exit: p.status,
+          printed: p.printed.slice(0, 160),
+        })
     }
     // the same boundary one script over: the coordinator's own `packet`
     const packetRefused = packetWith(v).status !== 0
-    if (packetRefused !== malformed) disagree.push({ cmd: 'packet (cycle-dispatch.mjs)', version: v, publishRefused: malformed, refusedForVersion: packetRefused })
+    if (packetRefused !== malformed)
+      disagree.push({
+        cmd: 'packet (cycle-dispatch.mjs)',
+        version: v,
+        publishRefused: malformed,
+        refusedForVersion: packetRefused,
+      })
   }
   assert.deepEqual(
     disagree.map(d => `${d.cmd} @ ${JSON.stringify(d.version)}`),
@@ -2438,7 +2553,11 @@ test('r1-2 i3 (interaction): a malformed version is refused BEFORE any effect �
 test('r1-2 c4 (control): the same subcommands, handed the well-formed pin, still do exactly what they do today', () => {
   for (const cmd of declaringSubcommands()) {
     const p = probe(cmd, WORKFLOW_VERSION)
-    assert.equal(p.refusedForVersion, false, `\`${cmd}\` refused a well-formed version: ${p.printed.slice(0, 200)}`)
+    assert.equal(
+      p.refusedForVersion,
+      false,
+      `\`${cmd}\` refused a well-formed version: ${p.printed.slice(0, 200)}`,
+    )
     assert.equal(
       p.accepted,
       true,
@@ -2463,14 +2582,23 @@ test('r1-2 w5 (witness, V-C8b): the coordinator can OBTAIN the pinned version wi
     '--run',
     'story-42',
   ])
-  const rendered = omitted.status === 0 ? /\$workflowVersion=(\S+)\./.exec(omitted.json?.prompt ?? '')?.[1] : undefined
+  const rendered =
+    omitted.status === 0
+      ? /\$workflowVersion=(\S+)\./.exec(omitted.json?.prompt ?? '')?.[1]
+      : undefined
   const a = rendered !== undefined && rendered === ENGINE_PIN
 
   const bPerFile = [CYCLE_SKILL, DATASET_CYCLE_SKILL].map(md => {
     const body = readFileSync(md, 'utf8')
-    const captured = [...body.matchAll(/(?:^|[\s(])(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=["']?\$\(([^)]*cycle-(?:state|dispatch)\.mjs[^)]*)\)/g)].map(m => m[1])
+    const captured = [
+      ...body.matchAll(
+        /(?:^|[\s(])(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=["']?\$\(([^)]*cycle-(?:state|dispatch)\.mjs[^)]*)\)/g,
+      ),
+    ].map(m => m[1])
     const uses = [...body.matchAll(/--workflow-?[vV]ersion[ =]+(\S+)/g)].map(m => m[1])
-    const reads = uses.every(u => captured.some(v => [`$${v}`, `"$${v}"`, `\${${v}}`, `"\${${v}}"`].includes(u)))
+    const reads = uses.every(u =>
+      captured.some(v => [`$${v}`, `"$${v}"`, `\${${v}}`, `"\${${v}}"`].includes(u)),
+    )
     return { md, captured, uses, ok: uses.length > 0 && captured.length > 0 && reads }
   })
   const b = bPerFile.every(x => x.ok)
@@ -2480,8 +2608,107 @@ test('r1-2 w5 (witness, V-C8b): the coordinator can OBTAIN the pinned version wi
     `the pinned version is unreachable for the coordinator:\n` +
       `  (a) \`packet\` with --workflow-version omitted: exit ${omitted.status}, rendered ${JSON.stringify(rendered)} (the pin is ${JSON.stringify(ENGINE_PIN)}) — ${JSON.stringify(omitted.json)}\n` +
       bPerFile
-        .map(x => `  (b) ${x.md}: version arguments ${JSON.stringify(x.uses)}, obtained from ${JSON.stringify(x.captured)}`)
+        .map(
+          x =>
+            `  (b) ${x.md}: version arguments ${JSON.stringify(x.uses)}, obtained from ${JSON.stringify(x.captured)}`,
+        )
         .join('\n') +
       `\nEither the CLI defaults an omitted --workflow-version to the pin, or SKILL.md names the command that reads it. A literal typed from memory is neither.`,
   )
+})
+
+// ══ US-487 T-3 — the role-packet rendering STYLE (`cycle-dispatch.mjs packet --style <style>`) ═══
+//
+// US-487's own Team Coordination note: "a `--style` rendering flag on `cycle-dispatch packet` if
+// #486 did not ship it" — it did not (baseline: `--style` is an UNKNOWN flag today, exit 2). A
+// headless process realization (`pair-cli run --card`, no subagent primitive) needs the SAME
+// distinction `apps/pair-cli/src/commands/run/engines.ts` already draws for `run --skill`
+// (`skillInvocationStyle: 'slash' | 'instruction'`, `claude` vs `pi`/`opencode`): a `claude -p`
+// process reads its ENTIRE prompt as literal input, so the slash-command line has to be genuinely
+// present for the CLI to invoke it that way, while `pi`/`opencode` discover skills through
+// natural-language instruction text with no slash syntax on a one-shot prompt (`buildPromptText`,
+// `apps/pair-cli/src/commands/run/invocation.ts`).
+//
+// The EXACT wording is the implementer's (T-3): what this contract holds constant is (a) omitting
+// `--style` must not move a single byte of what #486 already ships (regression control — the exact
+// baseline string is pinned below), (b) `slash` and `instruction` must render VISIBLY differently,
+// (c) `slash` starts the prompt with the literal `/<skill>` form `buildPromptText`'s own slash
+// branch already uses elsewhere in this codebase, (d) an unrecognised style value is a typed
+// refusal, never a silent default.
+
+const STYLE_BASELINE_PROMPT =
+  'Invoke **/pair-workflow-red-spec** for story #42 with $run=story-42 $story=42 ' +
+  '$branch=feature/US-42-x $worktree=../pair-worktrees/42 $base=origin/main $stacked=false ' +
+  '$entry=fresh $policy='
+
+function packetFor(styleArgs = []) {
+  return dispatch([
+    'packet',
+    '--next',
+    JSON.stringify(freshNext()),
+    '--card',
+    JSON.stringify(CARD),
+    '--policy',
+    JSON.stringify(POLICY),
+    '--run',
+    'story-42',
+    ...styleArgs,
+  ])
+}
+
+// NOTE (baseline, recorded here rather than asserted): at THIS head, `--style` is an unknown flag
+// for `packet` — `packetFor(['--style', 'instruction'])` returns `{"error":"unknown flag(s) for
+// packet: --style"}`, exit 2. That observation is the RED evidence for w2/w3/i1 below; it is not
+// itself a standing assertion, because it would have to start FAILING the moment the fix ships
+// (the flag becoming known is the whole point) — a test that must break on success is not a
+// regression guard, so it is not one.
+
+test('T-3 c1 (control): omitting --style renders EXACTLY what #486 already ships — zero regression', () => {
+  const result = packetFor()
+
+  assert.equal(result.status, 0)
+  assert.ok(
+    result.json?.prompt?.startsWith(STYLE_BASELINE_PROMPT),
+    `omitted --style must not move #486's existing rendering; got: ${JSON.stringify(result.json?.prompt)}`,
+  )
+})
+
+test('T-3 w2 (witness, once shipped): --style slash starts the prompt with the literal /<skill> form', () => {
+  const result = packetFor(['--style', 'slash'])
+
+  assert.equal(result.status, 0, JSON.stringify(result.json))
+  assert.match(
+    result.json?.prompt ?? '',
+    /^\/pair-workflow-red-spec /,
+    `--style slash must render the literal slash-command line, exactly as buildPromptText's own ` +
+      `'slash' branch does for claude in apps/pair-cli/src/commands/run/invocation.ts; got: ${JSON.stringify(result.json?.prompt)}`,
+  )
+})
+
+test('T-3 w3 (witness, once shipped): --style instruction never starts the prompt with a bare slash-command', () => {
+  const result = packetFor(['--style', 'instruction'])
+
+  assert.equal(result.status, 0, JSON.stringify(result.json))
+  assert.ok(
+    !/^\//.test(result.json?.prompt ?? ''),
+    `--style instruction must render the portable, no-slash-syntax form pi/opencode discover skills ` +
+      `through (engines.ts: skillInvocationStyle 'instruction'); got: ${JSON.stringify(result.json?.prompt)}`,
+  )
+  assert.match(result.json?.prompt ?? '', /pair-workflow-red-spec/)
+})
+
+test('T-3 i1 (interaction, once shipped): slash and instruction render VISIBLY different prompts for the SAME next/card', () => {
+  const slash = packetFor(['--style', 'slash'])
+  const instruction = packetFor(['--style', 'instruction'])
+
+  assert.equal(slash.status, 0, JSON.stringify(slash.json))
+  assert.equal(instruction.status, 0, JSON.stringify(instruction.json))
+  assert.notEqual(slash.json?.prompt, instruction.json?.prompt)
+})
+
+test('T-3 b1 (boundary, once shipped): an unrecognised --style value is a typed refusal, never a silent default', () => {
+  const result = packetFor(['--style', 'xml'])
+
+  assert.notEqual(result.status, 0)
+  assert.match(JSON.stringify(result.json ?? {}) + result.stdout, /style/i)
 })
