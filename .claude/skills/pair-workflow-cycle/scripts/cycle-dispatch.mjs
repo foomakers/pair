@@ -374,6 +374,23 @@ function packetCommand(opts) {
   const effortNote = effort ? ` Requested reasoning effort for this dispatch: **${effort}**. This is a request, not an enforced setting: honour it as best you can within your own harness's controls — it changes how much you think, never what you are required to produce or verify.` : ''
   const invoke = (skill, args) =>
     `Invoke **${skill}** for story ${tag} with ${args} $workflowVersion=${workflowVersion}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines — its Step 0 resolves the durable cycle state and returns \`{ status: "redirect", next }\` when another step is due, spending no judgment. Do NOT read ${blindPaths} except the checkpoint and the run directory \`${runDir}/\` the skill names; that directory lives in the MAIN checkout — the working directory you were started in, before any cd — never inside a story or review worktree. Do NOT merge.${effortNote}`
+  // ── US-487 T-3 — the role-packet rendering STYLE ────────────────────────────────────────────
+  // A headless process realization (`pair-cli run --card`, no subagent primitive) needs the SAME
+  // distinction `apps/pair-cli/src/commands/run/engines.ts` already draws for `run --skill`
+  // (`skillInvocationStyle: 'slash' | 'instruction'`): a `claude -p` process reads its ENTIRE
+  // prompt as literal input, so the slash-command line has to be genuinely present for the CLI to
+  // invoke it that way, while `pi`/`opencode` discover skills through natural-language instruction
+  // text with no slash syntax on a one-shot prompt. `--style` omitted renders EXACTLY what #486
+  // already ships (`invoke`, above) — zero regression for the in-session subagent realization,
+  // which never passes it.
+  const KNOWN_STYLES = ['slash', 'instruction']
+  const renderPrompt = (skill, args, style) => {
+    if (style === undefined) return invoke(skill, args)
+    if (!KNOWN_STYLES.includes(style)) fail('style-invalid', `--style must be one of ${KNOWN_STYLES.join(' | ')}; received ${JSON.stringify(style)}`)
+    const bare = skill.replace(/^\//, '')
+    const body = `${args} $workflowVersion=${workflowVersion}`
+    return style === 'slash' ? `/${bare} ${body}` : `Run the ${bare} skill with these arguments: ${body}`
+  }
   const notesArg = card.notes ? ` $notes=${JSON.stringify(card.notes)}` : ''
   const findingsArg = list => (list && list.length ? ` $findings=${JSON.stringify(list.map(compactFinding))}` : '')
   const n = next
@@ -450,7 +467,7 @@ function packetCommand(opts) {
     // behavior exactly for every caller that has not adopted a profile yet.
     ...(effort ? { effort } : {}),
     args,
-    prompt: invoke(skill, args),
+    prompt: renderPrompt(skill, args, opts.style),
   })
 }
 
@@ -483,7 +500,7 @@ function realizationsCommand(opts) {
 // ── CLI ─────────────────────────────────────────────────────────────────────────────────────
 const FLAGS = {
   worktree: ['main', 'story', 'branch', 'base', 'worktree-root'],
-  packet: ['next', 'card', 'policy', 'run', 'workflow-version', 'pipeline', 'profile', 'contract-resolved', 'required', 'severity-floor', 'severities', 'verdicts', 'ranks'],
+  packet: ['next', 'card', 'policy', 'run', 'workflow-version', 'pipeline', 'profile', 'contract-resolved', 'required', 'severity-floor', 'severities', 'verdicts', 'ranks', 'style'],
   realizations: ['tools', 'product', 'story', 'pr'],
   'context-table': [],
 }

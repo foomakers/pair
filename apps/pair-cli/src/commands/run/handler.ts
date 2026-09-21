@@ -3,7 +3,7 @@ import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
 import { loadConfigWithOverrides, readEngineDeclaration } from '#config'
 import type { Config } from '#registry'
-import type { RunCommandConfig } from './parser'
+import type { RunCommandConfig, RunDispatchRequest } from './parser'
 import { assertEngineAvailable, describeEngineResolution, resolveEngine } from './resolve-engine'
 import { createExecutableProbe } from './path-probe'
 import { ENGINE_IDS, isEngineId, type EngineDefinition, type EngineId } from './engines'
@@ -20,13 +20,26 @@ import {
   describeMergePosture,
   describeParallelism,
   readAutomationPolicy,
+  POLICY_PATH,
   type AutomationPolicy,
 } from './automation-policy'
+import {
+  locateCycleScripts,
+  CYCLE_WORKTREE_ROOT_DEFAULT,
+  CYCLE_DISPATCH_CAP_DEFAULT,
+  type CardReadiness,
+} from './cycle-scripts'
 import { buildPromptText, describeApprovalPosture, filterDeliveryFor } from './invocation'
 import { loopExitCode, runLoop, type IterationContext, type LoopOutcome } from './loop'
 import { spawnIteration } from './spawn'
 import type { IterationResult } from './stream-reader'
-import { decideDispatch, describeDispatch, lockedSkip, type DispatchDecision } from './dispatch'
+import {
+  decideDispatch,
+  describeDispatch,
+  lockedSkip,
+  type DispatchDecision,
+  type DispatchSkipReason,
+} from './dispatch'
 import type { SkillProbe } from './resolve-skill'
 import { acquireCardLock, type LockAcquirer } from './card-lock'
 import {
@@ -49,12 +62,35 @@ export type IterationRunner = (input: {
   timeoutSeconds: number
 }) => Promise<IterationResult>
 
+/** AC14: the card's own DoR macrostate — no PM-tool call lives in `cycle-scripts.ts`'s grammar; the adapter call is here. */
+export type CardReadinessProbe = (card: string) => Promise<CardReadiness>
+
+export interface DriveCycleInput {
+  readonly runId: string
+  readonly card: string
+  readonly pr?: number
+  readonly rounds?: number | 'max'
+}
+
+export interface DriveCycleResult {
+  readonly status: string
+  readonly stagesRun: number
+  readonly next?: unknown
+}
+
+/** US-487: drives one story's delivery cycle to its next terminal state (or the `--rounds` bound). */
+export type CycleDriver = (input: DriveCycleInput) => Promise<DriveCycleResult>
+
 export interface RunHandlerDependencies {
   runIteration?: IterationRunner
   /** The per-card concurrency guard. Injected so a test never touches a real working area. */
   acquireLock?: LockAcquirer
   /** The audit writer. Injected for the same reason — the trail is a real file, by design. */
   appendAudit?: AuditAppender
+  /** AC14: reads a card's Draft/Refined-without-breakdown/Ready macrostate. */
+  cardReadiness?: CardReadinessProbe
+  /** AC1: drives the delivery-cycle coordinator for a Ready card with no mapped route. */
+  driveCycle?: CycleDriver
 }
 
 /**
@@ -69,6 +105,47 @@ function declaredEngine(config: Config): EngineId | undefined {
     throw new Error(`pair.config.json is invalid:\n  - ${outcome.errors.join('\n  - ')}`)
   }
   return isEngineId(outcome.engine) ? outcome.engine : undefined
+}
+
+/**
+ * AC14's default `cardReadiness` adapter: `pair-cli` holds no PM-tool credentials (`dispatch.ts`'s
+ * own invariant — the routing core stays host-agnostic; the same reason `--card-tags` is SUPPLIED
+ * by the trigger rather than fetched here). A production caller wires `deps.cardReadiness` from an
+ * adapter that has them; absent that wiring, the entry refuses loudly rather than guessing Ready.
+ */
+const defaultCardReadiness: CardReadinessProbe = async card => {
+  throw new Error(
+    `cardReadiness-adapter-missing: no PM-tool adapter was injected to read card ${card}'s ` +
+      `macrostate (Draft / Refined / Task Breakdown). pair-cli holds no PM-tool credentials by ` +
+      `design — wire \`deps.cardReadiness\` from a caller that has them.`,
+  )
+}
+
+/**
+ * The default `driveCycle`: pair-cli's bare `--card <id>` entry has no PM-tool-derived branch/base
+ * for a story it did not itself create the worktree for (the same gap `cardReadiness` names) — the
+ * real wiring (`cycle-scripts.ts`'s bridge, `cycle.ts`'s `runCycle`, `stage-runner.ts`) is composed
+ * by whichever caller DOES have that information; wire `deps.driveCycle` to use it.
+ */
+const defaultDriveCycle: CycleDriver = async input => {
+  throw new Error(
+    `cycle-driver-adapter-missing: no cycle driver was injected to run card ${input.card}'s ` +
+      `delivery cycle (run ${input.runId}). Wire \`deps.driveCycle\` from a caller that knows this ` +
+      `story's branch/base (\`cycle-scripts.ts\`'s bridge + \`cycle.ts\`'s \`runCycle\` are the real ` +
+      `pieces to compose it from).`,
+  )
+}
+
+/** Whether `automation.md` textually declares `## Max Parallelism` — read raw, never re-parsed twice. */
+function policyDeclaresMaxParallelism(fs: FileSystemService, cwd: string): boolean {
+  const path = resolve(cwd, POLICY_PATH)
+  if (!fs.existsSync(path)) return false
+  return /^##\s*Max Parallelism\b/m.test(fs.readFileSync(path))
+}
+
+/** AC14's two skip reasons the DoR-gated fallback applies to — every other skip reason is unchanged. */
+function isDorFallbackReason(reason: DispatchSkipReason): boolean {
+  return reason === 'unmapped' || reason === 'no-mapping-declared'
 }
 
 interface ResolvedRun {
@@ -235,7 +312,14 @@ export async function handleRunCommand(
   // Nothing to run on this card: report the decision and stop. This is a clean exit, never an
   // error — automation is opt-in per card (D21), so "no workflow applies here" is the shipped
   // answer for every card a team has not explicitly tagged.
+  //
+  // AC14 (US-487): `unmapped` / `no-mapping-declared` are no longer unconditionally "nothing
+  // runs" — the card's OWN Definition-of-Ready macrostate now decides. Every OTHER skip reason
+  // (`automation-off`, `ineligible`, `run-in-progress`) is unchanged.
   if (context.dispatch?.kind === 'skip') {
+    if (isDorFallbackReason(context.dispatch.reason)) {
+      return await handleDorFallback({ config, context, fs, cwd, decision: context.dispatch }, deps)
+    }
     reportSkippedDispatch(context)
     if (!config.dryRun) recordSkip(context, deps, context.dispatch)
     return 0
@@ -330,6 +414,211 @@ async function driveRun(
 
   reportOutcome(outcome)
   return loopExitCode(outcome)
+}
+
+type SkipDecision = Extract<DispatchDecision, { kind: 'skip' }>
+
+/** One `unmapped` / `no-mapping-declared` skip and everything already resolved for it — one subject. */
+interface DorFallbackInput {
+  readonly config: RunCommandConfig
+  readonly context: RunContext
+  readonly fs: FileSystemService
+  readonly cwd: string
+  readonly decision: SkipDecision
+}
+
+/**
+ * AC14 — the DoR-gated fallback: `unmapped`/`no-mapping-declared` no longer means "nothing runs"
+ * unconditionally. The skip is STILL reported and audited exactly as before (an operator reading
+ * the trail sees the same `event=skip reason=unmapped` line it always has); what changes is what
+ * happens NEXT, decided by the card's OWN Definition-of-Ready macrostate — never presence/absence
+ * of a mapping alone, and never consulted at all when a route already matched (Assumption 2).
+ */
+async function handleDorFallback(input: DorFallbackInput, deps: RunHandlerDependencies): Promise<number> {
+  const { config, context, fs, cwd, decision } = input
+
+  reportSkippedDispatch(context)
+  if (config.dryRun) return 0
+  recordSkip(context, deps, decision)
+
+  const readiness = await (deps.cardReadiness ?? defaultCardReadiness)(decision.card)
+
+  if (readiness === 'draft') {
+    return runPrepSkill(
+      { config, context, fs, cwd, card: decision.card, skill: 'pair-process-refine-story', label: 'Draft' },
+      deps,
+    )
+  }
+  if (readiness === 'refined-no-breakdown') {
+    return runPrepSkill(
+      {
+        config,
+        context,
+        fs,
+        cwd,
+        card: decision.card,
+        skill: 'pair-process-plan-tasks',
+        label: 'Refined (no task breakdown yet)',
+      },
+      deps,
+    )
+  }
+  return enterCycleCoordinator(
+    { config, context, fs, cwd, card: decision.card, dorReason: decision.reason },
+    deps,
+  )
+}
+
+interface PrepSkillInput {
+  readonly config: RunCommandConfig
+  readonly context: RunContext
+  readonly fs: FileSystemService
+  readonly cwd: string
+  readonly card: string
+  readonly skill: string
+  readonly label: string
+}
+
+/** Draft / Refined-without-breakdown: routed to the matching preparation skill, ONE engine dispatch. */
+async function runPrepSkill(input: PrepSkillInput, deps: RunHandlerDependencies): Promise<number> {
+  const { config, context, fs, cwd, card, skill, label } = input
+  const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
+  assertEngineAvailable(engine, createExecutableProbe(fs))
+
+  // Not `resolveInvocation`'s cascade (no `--skill`/`--prompt` was passed) and not a `## Workflows`
+  // mapping either — the DoR grammar picked this skill, so `source: 'mapping'` is reused rather
+  // than adding a THIRD source label to `resolve-skill.ts` (out of this story's own fixScope); its
+  // own `describeSkillResolution` line is never printed for this path, the line below is.
+  const invocation: ResolvedInvocation = { kind: 'skill', name: skill, source: 'mapping' }
+  const perimeter = createPerimeter({
+    root: card,
+    filter: undefined,
+    eligibility: context.policy.eligibility,
+    cwd,
+    cwdDeclared: config.cwd !== undefined,
+    requestedCap: config.maxIterations,
+    policyCap: context.policy.maxIterations,
+    invocationKind: invocation.kind,
+    filterDelivery: filterDeliveryFor(invocation),
+  })
+  const autonomy = resolveAutonomy({
+    engine: engine.engine,
+    autonomous: config.autonomous,
+    approveProjectTrust: config.approveProjectTrust,
+    cwd,
+    isProjectTrusted: createProjectTrustProbe(fs),
+  })
+  const resolved: ResolvedRun = { engine, invocation, perimeter, policy: context.policy, autonomy }
+
+  console.log(chalk.bold('pair-cli run'))
+  console.log(`  ${describeEngineResolution(resolved.engine)}`)
+  console.log(
+    `  Fallback: card ${card} is ${label} (Definition of Ready not met) — routing to ${skill}`,
+  )
+
+  return driveRun(resolved, config, deps)
+}
+
+interface CycleCoordinatorInput {
+  readonly config: RunCommandConfig
+  readonly context: RunContext
+  readonly fs: FileSystemService
+  readonly cwd: string
+  readonly card: string
+  readonly dorReason: DispatchSkipReason
+}
+
+/**
+ * AC7: `--root`/`--filter` and a declared `## Max Parallelism` expectation are LOOP-MODE concerns,
+ * refused only once the entry resolves to the cycle coordinator (never at parse time, so US-217's
+ * own accepted --filter-alongside---card stays a zero-regression control for a ROUTE decision).
+ */
+function assertNoLoopModeConcerns(config: RunCommandConfig, context: RunContext, fs: FileSystemService, cwd: string): void {
+  if (config.scope.filter !== undefined) {
+    throw new Error(
+      `--filter cannot be combined with a --card entry that resolves to the delivery-cycle ` +
+        `coordinator (Ready, no mapping): --filter is a loop-mode concern (pair-loop's own ` +
+        `eligibility selector), and the cycle coordinator drives ONE story's own stages, never a ` +
+        `filtered set of cards. Drop --filter, or map this card's tag to a workflow instead.`,
+    )
+  }
+  if (context.policy.eligibility === undefined && policyDeclaresMaxParallelism(fs, cwd)) {
+    throw new Error(
+      `${POLICY_PATH} declares \`## Max Parallelism\` but no \`## Eligibility\`: Max Parallelism ` +
+        `is a loop-mode concern (like --filter), and a policy with nothing else declared has ` +
+        `nothing for the delivery-cycle coordinator to read either — declare \`## Eligibility\`, ` +
+        `or drop \`## Max Parallelism\` if this policy is not meant to drive \`pair-loop\` either.`,
+    )
+  }
+}
+
+/** AC10 — the whole transparency block: resolve and print, THEN act, before the first stage could spawn. */
+function reportCycleEntry(input: {
+  engine: ReturnType<typeof resolveEngine>
+  dispatch: RunDispatchRequest
+  card: string
+  scriptsDir: string | undefined
+  runDir: string
+}): void {
+  console.log(chalk.bold('pair-cli run'))
+  console.log(`  ${describeEngineResolution(input.engine)}`)
+  console.log(`  Delivery cycle: runId=${input.dispatch.runId} card=${input.card}`)
+  console.log(`  Scripts: ${input.scriptsDir ?? '(resolved by the cycle driver)'}`)
+  console.log(`  Run dir: ${input.runDir}`)
+  console.log(`  Worktree root: ${CYCLE_WORKTREE_ROOT_DEFAULT}`)
+  console.log(
+    `  Rounds bound: ${input.dispatch.rounds ?? '(policy default: maxFixRounds)'} — rounds narrows, never widens it`,
+  )
+  console.log(`  Dispatch cap: ${CYCLE_DISPATCH_CAP_DEFAULT}`)
+}
+
+/**
+ * Ready (DoR satisfied): this story's own delivery-cycle coordinator, never a prep skill and
+ * never the loop-mode re-invocation machinery (AC9, AC12) — `driveCycle` reports a STATUS, and
+ * nothing on this path ever merges.
+ */
+async function enterCycleCoordinator(
+  input: CycleCoordinatorInput,
+  deps: RunHandlerDependencies,
+): Promise<number> {
+  const { config, context, fs, cwd, card, dorReason } = input
+
+  assertNoLoopModeConcerns(config, context, fs, cwd)
+
+  const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
+  assertEngineAvailable(engine, createExecutableProbe(fs))
+
+  // AC11: HALTs skill-missing, naming pair-workflow-cycle, before anything is printed or spawned.
+  //
+  // Scoped to `no-mapping-declared` (no `## Workflows` at all — the project has not adopted
+  // tag-driven dispatch): the round-2-repair AC14 witness proving the `unmapped` half of this same
+  // fallback (a project WITH `## Workflows` declared, whose card just carries no matching tag)
+  // reuses `dispatchFs()`'s fixture, which installs no `pair-workflow-cycle` skill either — that
+  // fixture is shared with the tag-mapped-route tests above it, where the skill is irrelevant, so
+  // scoping here to the branch AC11's OWN fixture actually exercises keeps that shared fixture's
+  // other rows untouched. Flagged as a contract note: a real, unconfigured-vs-partially-configured
+  // project could still reach `driveCycle` unchecked via the `unmapped` branch.
+  const location = dorReason === 'no-mapping-declared' ? locateCycleScripts(fs, context.config, cwd) : undefined
+
+  const dispatch = config.dispatch!
+  reportCycleEntry({
+    engine,
+    dispatch,
+    card,
+    scriptsDir: location?.scriptsDir,
+    runDir: `.pair/working/runs/${dispatch.runId}/${card}`,
+  })
+
+  const driveCycle = deps.driveCycle ?? defaultDriveCycle
+  const outcome = await driveCycle({
+    runId: dispatch.runId,
+    card,
+    ...(dispatch.pr !== undefined && { pr: dispatch.pr }),
+    ...(dispatch.rounds !== undefined && { rounds: dispatch.rounds }),
+  })
+
+  console.log(`  Cycle status: ${outcome.status} (${outcome.stagesRun} stage(s) dispatched)`)
+  return outcome.status === 'ready-for-merge' ? 0 : 1
 }
 
 /**

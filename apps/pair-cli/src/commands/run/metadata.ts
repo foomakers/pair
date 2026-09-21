@@ -9,6 +9,9 @@ export const runCommandMetadata = {
     'pair-cli run --skill pair-next --root 212 --dry-run   # resolve and print, spawn nothing',
     'pair-cli run --prompt "/pair-next --root 212" --max-iterations 1',
     'pair-cli run --card 217 --card-tags "auto-dev,risk:green"   # tag-driven: the mapping picks the workflow',
+    'pair-cli run --card 487                                # Ready, no mapping: drives this story\'s own delivery cycle',
+    'pair-cli run --card 487 --pr 42                        # enters the cycle at {verify, first, r0} — never prepare',
+    'pair-cli run --card 487 --rounds 1                     # bounds remediation to one round, never widened',
   ],
   options: [
     { flags: '--engine <id>', description: 'Engine to run: pi | opencode | claude' },
@@ -31,7 +34,21 @@ export const runCommandMetadata = {
     {
       flags: '--card-tags <list>',
       description:
-        'Comma-separated labels the trigger observed on --card. Absent, empty (an unlabelled card) or unmapped ⇒ nothing runs',
+        'Comma-separated labels the trigger observed on --card. Absent, empty (an unlabelled card) or unmapped ⇒ the DoR-gated fallback decides (US-487 AC14): Draft/Refined-without-breakdown routes to the matching prep skill, Ready starts the delivery-cycle coordinator',
+    },
+    {
+      flags: '--pr <n>',
+      description:
+        'US-487: enters the delivery-cycle coordinator at its review stage ({verify, first, r0}), never prepare (requires --card)',
+    },
+    {
+      flags: '--rounds <n|max>',
+      description:
+        "US-487: bounds the delivery cycle's remediation rounds — never widened past the policy's maxFixRounds (requires --card)",
+    },
+    {
+      flags: '--run-id <id>',
+      description: 'US-487: the delivery cycle\'s run identity; defaults to story-<card> (requires --card)',
     },
     { flags: '--cwd <dir>', description: 'Working directory every iteration runs in' },
     {

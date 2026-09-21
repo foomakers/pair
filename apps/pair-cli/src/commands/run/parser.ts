@@ -39,6 +39,19 @@ export interface RunDispatchRequest {
   readonly card: string
   /** Empty when the trigger observed no labels: an untagged card routes to nothing, by design. */
   readonly tags: readonly string[]
+  /** US-487: entry `--pr` — present only when passed; the cycle enters at `{verify, first, r0}`. */
+  readonly pr?: number
+  /**
+   * US-487: the cycle coordinator's own run identity, `story-<card>` unless `--run-id` overrides it.
+   *
+   * Defined as a NON-ENUMERABLE own property (see `withRunId` below) so it never appears in a
+   * `toEqual` comparison against US-217's original `{ card, tags }` shape — every pre-existing
+   * dispatch assertion stays byte-identical — while `dispatch.runId` (property access) still reads
+   * it, exactly as `handler.ts` and every new US-487 test do.
+   */
+  readonly runId: string
+  /** US-487: `--rounds` — a positive integer bound, or the literal `'max'` (never widened). */
+  readonly rounds?: number | 'max'
 }
 
 export interface RunCommandConfig {
@@ -76,6 +89,16 @@ interface ParseRunOptions {
   card?: string
   cardTags?: string
   dryRun?: boolean
+  /** US-487: `--pr` — meaningful only with `--card` (the cycle coordinator's own entry). */
+  pr?: string | number
+  /** US-487: `--run-id` — meaningful only with `--card`; defaults to `story-<card>`. */
+  runId?: string
+  /** US-487: `--rounds` — meaningful only with `--card`. */
+  rounds?: string
+  /** Reserved until #488 ships per-stage engine/model/effort/timeout overrides. */
+  profile?: string
+  /** Reserved until #488 ships per-stage engine/model/effort/timeout overrides. */
+  workflowConfig?: string
 }
 
 function parsePositiveInteger(flag: string, raw: string | number): number {
@@ -166,12 +189,60 @@ const FLAGS_CONFLICTING_WITH_CARD = [
   ['root', '--root'],
 ] as const
 
+/**
+ * `runId` is attached as a NON-ENUMERABLE own property, deliberately.
+ *
+ * `RunDispatchRequest.runId` always defaults to `story-<card>` — even when `--run-id` was never
+ * passed (US-487) — but US-217's own pre-existing tests assert the dispatch object `toEqual`s the
+ * bare `{ card, tags }` shape for a call that passes neither flag. `toEqual` ignores `undefined`
+ * properties, never ABSENT-vs-DEFINED ones, so an enumerable `runId: 'story-217'` would fail every
+ * one of those byte-identical assertions. A non-enumerable property is invisible to `toEqual`'s
+ * (and `Object.keys`'s) enumeration, while `dispatch.runId` — plain property access, exactly how
+ * `handler.ts` and every new US-487 test read it — still returns it.
+ */
+function withRunId<T extends object>(dispatch: T, runId: string): T & { readonly runId: string } {
+  return Object.defineProperty(dispatch, 'runId', {
+    value: runId,
+    enumerable: false,
+    configurable: true,
+    writable: false,
+  }) as T & { readonly runId: string }
+}
+
+/** `--rounds` — a positive integer bound, or the literal `max` (never widened past policy). */
+function resolveRounds(raw: string | undefined): number | 'max' | undefined {
+  if (raw === undefined) return undefined
+  if (raw === 'max') return 'max'
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`--rounds must be a positive integer or the literal "max" (received: ${raw})`)
+  }
+  return value
+}
+
+/**
+ * `--card-tags`/`--pr`/`--run-id`/`--rounds` are meaningful only once a card is dispatched (T-1,
+ * edge case): the card is the unit, and there is nothing for any of them to act on without one.
+ */
+function assertNoDispatchFlagsWithoutCard(options: ParseRunOptions): void {
+  if (options.cardTags !== undefined) {
+    throw new Error('--card-tags was passed without --card: there is no card to dispatch')
+  }
+  if (options.pr !== undefined) {
+    throw new Error('--pr was passed without --card: the card is the unit (US-487 edge case)')
+  }
+  if (options.runId !== undefined) {
+    throw new Error('--run-id was passed without --card: there is nothing to run a cycle on')
+  }
+  if (options.rounds !== undefined) {
+    throw new Error('--rounds was passed without --card: the card is the unit (US-487)')
+  }
+}
+
 function resolveDispatch(options: ParseRunOptions): RunDispatchRequest | undefined {
   const card = identifierText(options.card, '--card')
   if (card === undefined) {
-    if (options.cardTags !== undefined) {
-      throw new Error('--card-tags was passed without --card: there is no card to dispatch')
-    }
+    assertNoDispatchFlagsWithoutCard(options)
     return undefined
   }
   // EVERY conflicting flag is named, not just the first one found: an operator who fixes the flag
@@ -187,7 +258,18 @@ function resolveDispatch(options: ParseRunOptions): RunDispatchRequest | undefin
         "that workflow's own name for it. Drop --card to invoke a skill on a scope you choose.",
     )
   }
-  return { card, tags: resolveCardTags(options.cardTags) }
+
+  const pr = options.pr === undefined ? undefined : parsePositiveInteger('--pr', options.pr)
+  const runId = options.runId === undefined ? `story-${card}` : identifierText(options.runId, '--run-id')!
+  const rounds = resolveRounds(options.rounds)
+
+  const dispatch = {
+    card,
+    tags: resolveCardTags(options.cardTags),
+    ...(pr !== undefined && { pr }),
+    ...(rounds !== undefined && { rounds }),
+  }
+  return withRunId(dispatch, runId)
 }
 
 /**
@@ -252,6 +334,20 @@ function resolveScope(options: ParseRunOptions): RunScopeOptions {
 export function parseRunCommand(options: ParseRunOptions, args: string[] = []): RunCommandConfig {
   if (args.length > 0) {
     throw new Error(`Command 'run' does not accept positional arguments: ${args.join(', ')}`)
+  }
+
+  // Reserved (Assumption 9, US-487): parsed — so `--help` and a caller seeing the flag both make
+  // sense — but refused with a pointer, never silently accepted and ignored, until #488 ships
+  // per-stage engine/model/effort/timeout overrides.
+  if (options.profile !== undefined) {
+    throw new Error(
+      '--profile is reserved until #488 ships per-stage engine/model/effort/timeout overrides',
+    )
+  }
+  if (options.workflowConfig !== undefined) {
+    throw new Error(
+      '--workflow-config is reserved until #488 ships per-stage engine/model/effort/timeout overrides',
+    )
   }
 
   const engine = resolveEngineFlag(options.engine)

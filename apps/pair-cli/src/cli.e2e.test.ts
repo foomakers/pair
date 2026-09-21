@@ -391,6 +391,13 @@ Precedence: auto-plan, auto-dev
       // The installed skill set the mapping is resolved against — both declared workflows.
       write('.claude/skills/pair-loop/SKILL.md', '')
       write('.claude/skills/pair-process-plan-tasks/SKILL.md', '')
+      // US-487 AC14: an `unmapped`/`no-mapping-declared` skip now falls back to the card's own
+      // readiness — every board row below is 'ready' by fixture design (BR2), which resolves
+      // through THIS story's own delivery-cycle coordinator, so its own installed skill is here
+      // too (never actually driven for real: `driveCycle` is faked in `trigger()` below).
+      write('.claude/skills/pair-workflow-cycle/SKILL.md', '')
+      write('.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs', '')
+      write('.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs', '')
       write('.pair/adoption/tech/automation.md', POLICY)
       // A `claude` on PATH: engine resolution probes the filesystem, and the default cascade
       // resolves the schema default when nothing declares one.
@@ -427,6 +434,13 @@ Precedence: auto-plan, auto-dev
             spawned.push(input.promptText)
             return runIteration ? await runIteration() : { outcome: 'success', detail: 'done' }
           },
+          // US-487 AC14: every board card is 'ready' (fixture-wide), so an unmapped/no-mapping
+          // card resolves to THIS story's own cycle coordinator, never a prep skill — `driveCycle`
+          // is faked (never actually driving a real cycle) so this suite stays about ROUTING, the
+          // property it has always asserted; `spawned` (via `runIteration`) stays exactly the
+          // MAPPED cards' own dispatches, byte-identical to the pre-US-487 assertions below.
+          cardReadiness: async () => 'ready',
+          driveCycle: async () => ({ status: 'ready-for-merge', stagesRun: 0 }),
         },
       )
 
