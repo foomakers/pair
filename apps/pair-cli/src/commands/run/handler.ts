@@ -227,6 +227,22 @@ function scopeRoot(config: RunCommandConfig, dispatch?: DispatchDecision): strin
  * A refusal — no perimeter, an untrusted project, an engine with no confirmations and no
  * `--autonomous`, a malformed policy — happens here, so no iteration ever starts outside them.
  */
+/** The autonomy/trust posture for one resolved engine — shared by every entry that spawns one. */
+function resolveAutonomyFor(
+  engine: EngineDefinition,
+  config: RunCommandConfig,
+  cwd: string,
+  fs: FileSystemService,
+): AutonomyDecision {
+  return resolveAutonomy({
+    engine,
+    autonomous: config.autonomous,
+    approveProjectTrust: config.approveProjectTrust,
+    cwd,
+    isProjectTrusted: createProjectTrustProbe(fs),
+  })
+}
+
 function resolveRun(
   config: RunCommandConfig,
   context: RunContext,
@@ -255,13 +271,7 @@ function resolveRun(
     // so the check has to happen after skill resolution and before any spawn (round 1, finding 1).
     filterDelivery: filterDeliveryFor(invocation),
   })
-  const autonomy = resolveAutonomy({
-    engine: engine.engine,
-    autonomous: config.autonomous,
-    approveProjectTrust: config.approveProjectTrust,
-    cwd,
-    isProjectTrusted: createProjectTrustProbe(fs),
-  })
+  const autonomy = resolveAutonomyFor(engine.engine, config, cwd, fs)
 
   return {
     engine,
@@ -512,13 +522,7 @@ async function runPrepSkill(input: PrepSkillInput, deps: RunHandlerDependencies)
     invocationKind: invocation.kind,
     filterDelivery: filterDeliveryFor(invocation),
   })
-  const autonomy = resolveAutonomy({
-    engine: engine.engine,
-    autonomous: config.autonomous,
-    approveProjectTrust: config.approveProjectTrust,
-    cwd,
-    isProjectTrusted: createProjectTrustProbe(fs),
-  })
+  const autonomy = resolveAutonomyFor(engine.engine, config, cwd, fs)
   const resolved: ResolvedRun = { engine, invocation, perimeter, policy: context.policy, autonomy }
 
   console.log(chalk.bold('pair-cli run'))
