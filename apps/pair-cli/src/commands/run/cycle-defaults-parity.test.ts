@@ -2,7 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
-import { CYCLE_WORKTREE_ROOT_DEFAULT, CYCLE_DISPATCH_CAP_DEFAULT } from './cycle-scripts'
+import {
+  CYCLE_WORKTREE_ROOT_DEFAULT,
+  CYCLE_DISPATCH_CAP_DEFAULT,
+  CYCLE_WORKFLOW_VERSION,
+  CYCLE_BASE_BRANCH_DEFAULT,
+} from './cycle-scripts'
 
 /**
  * CROSS-IMPLEMENTATION PARITY — review finding r0-4 (US-487).
@@ -28,7 +33,8 @@ const CYCLE_STATE = join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts/
 
 interface CycleStateModule {
   readonly CAPS: { readonly dispatchesPerStory: number }
-  readonly PIPELINE_DEFAULTS: { readonly worktreeRoot: string }
+  readonly PIPELINE_DEFAULTS: { readonly worktreeRoot: string; readonly baseBranch: string }
+  readonly WORKFLOW_VERSION: string
 }
 
 describe('cycle defaults parity with pair-workflow-cycle (r0-4)', () => {
@@ -41,5 +47,9 @@ describe('cycle defaults parity with pair-workflow-cycle (r0-4)', () => {
 
     expect(CYCLE_WORKTREE_ROOT_DEFAULT).toBe(cycleState.PIPELINE_DEFAULTS.worktreeRoot)
     expect(CYCLE_DISPATCH_CAP_DEFAULT).toBe(cycleState.CAPS.dispatchesPerStory)
+    // The driver sends both of these to the scripts on every dispatch, so a drift is not cosmetic:
+    // a stale version is refused by `publish`, and a stale base cuts the worktree from the wrong ref.
+    expect(CYCLE_WORKFLOW_VERSION).toBe(cycleState.WORKFLOW_VERSION)
+    expect(CYCLE_BASE_BRANCH_DEFAULT).toBe(cycleState.PIPELINE_DEFAULTS.baseBranch)
   })
 })

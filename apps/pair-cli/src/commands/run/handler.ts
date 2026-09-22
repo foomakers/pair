@@ -27,8 +27,11 @@ import {
   locateCycleScripts,
   CYCLE_WORKTREE_ROOT_DEFAULT,
   CYCLE_DISPATCH_CAP_DEFAULT,
+  CYCLE_WORKFLOW_VERSION,
+  CYCLE_BASE_BRANCH_DEFAULT,
   type CardReadiness,
 } from './cycle-scripts'
+import { createDefaultCycleDriver, ghCardReadiness } from './cycle-wiring'
 import { buildPromptText, describeApprovalPosture, filterDeliveryFor } from './invocation'
 import { loopExitCode, runLoop, type IterationContext, type LoopOutcome } from './loop'
 import { spawnIteration } from './spawn'
@@ -107,35 +110,6 @@ function declaredEngine(config: Config): EngineId | undefined {
   return isEngineId(outcome.engine) ? outcome.engine : undefined
 }
 
-/**
- * AC14's default `cardReadiness` adapter: `pair-cli` holds no PM-tool credentials (`dispatch.ts`'s
- * own invariant — the routing core stays host-agnostic; the same reason `--card-tags` is SUPPLIED
- * by the trigger rather than fetched here). A production caller wires `deps.cardReadiness` from an
- * adapter that has them; absent that wiring, the entry refuses loudly rather than guessing Ready.
- */
-const defaultCardReadiness: CardReadinessProbe = async card => {
-  throw new Error(
-    `cardReadiness-adapter-missing: no PM-tool adapter was injected to read card ${card}'s ` +
-      `macrostate (Draft / Refined / Task Breakdown). pair-cli holds no PM-tool credentials by ` +
-      `design — wire \`deps.cardReadiness\` from a caller that has them.`,
-  )
-}
-
-/**
- * The default `driveCycle`: pair-cli's bare `--card <id>` entry has no PM-tool-derived branch/base
- * for a story it did not itself create the worktree for (the same gap `cardReadiness` names) — the
- * real wiring (`cycle-scripts.ts`'s bridge, `cycle.ts`'s `runCycle`, `stage-runner.ts`) is composed
- * by whichever caller DOES have that information; wire `deps.driveCycle` to use it.
- */
-const defaultDriveCycle: CycleDriver = async input => {
-  throw new Error(
-    `cycle-driver-adapter-missing: no cycle driver was injected to run card ${input.card}'s ` +
-      `delivery cycle (run ${input.runId}). Wire \`deps.driveCycle\` from a caller that knows this ` +
-      `story's branch/base (\`cycle-scripts.ts\`'s bridge + \`cycle.ts\`'s \`runCycle\` are the real ` +
-      `pieces to compose it from).`,
-  )
-}
-
 /** Whether `automation.md` textually declares `## Max Parallelism` — read raw, never re-parsed twice. */
 function policyDeclaresMaxParallelism(fs: FileSystemService, cwd: string): boolean {
   const path = resolve(cwd, POLICY_PATH)
@@ -154,14 +128,18 @@ function policyDeclaresMaxParallelism(fs: FileSystemService, cwd: string): boole
  * business-critical work out of an unattended pipeline is never evaluated after the decision it
  * exists to bound" — would hold for tag dispatch and quietly not hold here.
  *
- * So the label is consulted before falling back, in the one case the dispatcher never got to:
+ * So the label is consulted before falling back, in the one case the dispatcher never got to — and
+ * it is consulted where it MEANS something: `## Eligibility` bounds the UNATTENDED pipeline, and
+ * `--autonomous` is this command's own explicit opt-in to being one. A run without it confirms (or
+ * fails loudly) at every write, so it is supervised by construction and the label does not apply;
+ * demanding it there would force a maintainer to assert labels the card does not carry.
  *
  * - `unmapped` — eligibility was already checked and PASSED upstream (it is evaluated before
  *   routing), so nothing is re-checked here.
- * - `no-mapping-declared` with no `## Eligibility` — the project never opted into automation at
- *   all, so the command is being typed by a human. Fall back.
- * - `no-mapping-declared` with `## Eligibility` declared — the card must carry the label, exactly
- *   as it would have had to for any mapped workflow. An ineligible card stays an ordinary skip.
+ * - `no-mapping-declared`, not `--autonomous` — a supervised invocation. Fall back.
+ * - `no-mapping-declared` with `--autonomous` — unattended: no `## Eligibility` declared means the
+ *   project never opted into automation at all and the run proceeds; declared means the card must
+ *   carry the label, exactly as it would have for any mapped workflow.
  *
  * `automation-off`, `ineligible` and `run-in-progress` never reach this function.
  */
@@ -169,9 +147,11 @@ export function isDorFallbackReason(
   reason: DispatchSkipReason,
   policy: AutomationPolicy,
   tags: readonly string[] | undefined,
+  autonomous: boolean,
 ): boolean {
   if (reason === 'unmapped') return true
   if (reason !== 'no-mapping-declared') return false
+  if (!autonomous) return true
   // Absent tags are the same evidence as empty ones — "the trigger saw no labels" — never a reason
   // to skip the check. The defaulting lives here so the caller carries no extra branch.
   return policy.eligibility === undefined || (tags ?? []).includes(policy.eligibility)
@@ -356,7 +336,14 @@ export async function handleRunCommand(
   // runs" — the card's OWN Definition-of-Ready macrostate now decides. Every OTHER skip reason
   // (`automation-off`, `ineligible`, `run-in-progress`) is unchanged.
   if (context.dispatch?.kind === 'skip') {
-    if (isDorFallbackReason(context.dispatch.reason, context.policy, config.dispatch?.tags)) {
+    if (
+      isDorFallbackReason(
+        context.dispatch.reason,
+        context.policy,
+        config.dispatch?.tags,
+        config.autonomous === true,
+      )
+    ) {
       return await handleDorFallback({ config, context, fs, cwd, decision: context.dispatch }, deps)
     }
     reportSkippedDispatch(context)
@@ -483,7 +470,7 @@ async function handleDorFallback(
   if (config.dryRun) return 0
   recordSkip(context, deps, decision)
 
-  const readiness = await (deps.cardReadiness ?? defaultCardReadiness)(decision.card)
+  const readiness = await (deps.cardReadiness ?? ghCardReadiness)(decision.card)
 
   if (readiness === 'draft') {
     return runPrepSkill(
@@ -621,6 +608,26 @@ function reportCycleEntry(input: {
   console.log(`  Dispatch cap: ${CYCLE_DISPATCH_CAP_DEFAULT}`)
 }
 
+/** The shipped driver: the pieces T-2/T-3/T-4 built, composed with this run's own resolved context. */
+function productionCycleDriver(input: {
+  engine: ReturnType<typeof resolveEngine>
+  config: RunCommandConfig
+  cwd: string
+  fs: FileSystemService
+  location: ReturnType<typeof locateCycleScripts> | undefined
+}): CycleDriver {
+  return createDefaultCycleDriver({
+    engine: input.engine.engine,
+    cwd: input.cwd,
+    fs: input.fs,
+    location: input.location,
+    autonomyArgs: resolveAutonomyFor(input.engine.engine, input.config, input.cwd, input.fs).args,
+    timeoutSeconds: input.config.iterationTimeoutSeconds,
+    workflowVersion: CYCLE_WORKFLOW_VERSION,
+    baseBranch: CYCLE_BASE_BRANCH_DEFAULT,
+  })
+}
+
 /**
  * Ready (DoR satisfied): this story's own delivery-cycle coordinator, never a prep skill and
  * never the loop-mode re-invocation machinery (AC9, AC12) — `driveCycle` reports a STATUS, and
@@ -659,7 +666,7 @@ async function enterCycleCoordinator(
     runDir: `.pair/working/runs/${dispatch.runId}/${card}`,
   })
 
-  const driveCycle = deps.driveCycle ?? defaultDriveCycle
+  const driveCycle = deps.driveCycle ?? productionCycleDriver({ engine, config, cwd, fs, location })
   const outcome = await driveCycle({
     runId: dispatch.runId,
     card,

@@ -253,3 +253,7 @@ export function classifyCardReadiness(card: CardMacrostate): CardReadiness {
 // bridge, once a stage actually spawns; this pre-flight line is presentation only, never a decision.
 export const CYCLE_WORKTREE_ROOT_DEFAULT = '../pair-worktrees'
 export const CYCLE_DISPATCH_CAP_DEFAULT = 40
+/** `cycle-state.mjs`'s own `WORKFLOW_VERSION` — the version every handoff records and `resolve` checks. */
+export const CYCLE_WORKFLOW_VERSION = '4.0.1'
+/** `cycle-state.mjs`'s own `PIPELINE_DEFAULTS.baseBranch` — what a fresh story's worktree is cut from. */
+export const CYCLE_BASE_BRANCH_DEFAULT = 'origin/main'
