@@ -169,6 +169,7 @@
 - [Decision: subagent freshness is a transition policy the cycle state owns, and the harness realization is a probed table of data](.pair/adoption/decision-log/2026-09-17-freshness-is-a-transition-policy-and-the-realization-table-is-data.md)
 - [Decision: a custody breach is waived only by an explicit, attributed, verified override](.pair/adoption/decision-log/2026-09-18-a-custody-breach-is-waived-only-by-an-explicit-attributed-override.md)
 - [Analysis Log: US-487 implementation compromises forced by sealed-test inconsistencies](.pair/adoption/decision-log/2026-09-21-us-487-cycle-coordinator-contract-compromises.md)
+- [Decision Log: Tier 2 is realized at the STAGE level, and `next.context: reuse` degrades to `fresh` under a process realization](.pair/adoption/decision-log/2026-09-22-tier-2-is-realized-at-the-stage-level-and-reuse-degrades-to-fresh.md)
 
 ## How-To Guides
 

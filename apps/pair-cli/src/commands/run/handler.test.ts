@@ -928,7 +928,18 @@ Precedence: auto-plan, auto-dev
  * own state machine (that is `cycle.test.ts`'s job) or the script bridge (`cycle-scripts.test.ts`'s).
  */
 describe('handleRunCommand — the delivery-cycle coordinator entry (US-487)', () => {
-  const NO_MAPPING_POLICY = POLICY // carries no `## Workflows` section
+  // Carries neither `## Workflows` nor `## Eligibility`: a project that never opted into automation
+  // at all, which is the case AC14's DoR fallback is FOR (the command is being typed by a human).
+  // Keeping `## Eligibility` here while passing `cardTags: ''` would make every case below assert
+  // that an INELIGIBLE card reaches the delivery cycle — the hole `dor-fallback-eligibility.test.ts`
+  // exists to close, and not a property any test in this block is about.
+  // `## Max Parallelism` is deliberately absent too: `assertNoLoopModeConcerns` refuses a policy
+  // that declares it without `## Eligibility`, and the refusal has its own test below (`maxParallelismFs`).
+  const NO_MAPPING_POLICY = `## Stop Predicate
+
+tag:risk:red ⇒ Done
+max-iterations: 20
+`
 
   const cycleFs = () =>
     projectFs({

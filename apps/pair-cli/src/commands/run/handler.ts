@@ -143,9 +143,38 @@ function policyDeclaresMaxParallelism(fs: FileSystemService, cwd: string): boole
   return /^##\s*Max Parallelism\b/m.test(fs.readFileSync(path))
 }
 
-/** AC14's two skip reasons the DoR-gated fallback applies to — every other skip reason is unchanged. */
-function isDorFallbackReason(reason: DispatchSkipReason): boolean {
-  return reason === 'unmapped' || reason === 'no-mapping-declared'
+/**
+ * AC14's fallback engages only where the ELIGIBILITY gate does not stand in its way.
+ *
+ * `decideDispatch` answers `no-mapping-declared` FIRST — before `## Eligibility` is read at all
+ * (`dispatch.ts`: the `mapping === undefined` branch returns above the eligibility branch). So a
+ * project that declares `## Eligibility` but no `## Workflows` would otherwise reach this fallback
+ * for EVERY card, including one the eligibility label exists to keep out: BR3's invariant — "an
+ * ineligible card is skipped BEFORE its tags are looked at, so the one declaration that keeps
+ * business-critical work out of an unattended pipeline is never evaluated after the decision it
+ * exists to bound" — would hold for tag dispatch and quietly not hold here.
+ *
+ * So the label is consulted before falling back, in the one case the dispatcher never got to:
+ *
+ * - `unmapped` — eligibility was already checked and PASSED upstream (it is evaluated before
+ *   routing), so nothing is re-checked here.
+ * - `no-mapping-declared` with no `## Eligibility` — the project never opted into automation at
+ *   all, so the command is being typed by a human. Fall back.
+ * - `no-mapping-declared` with `## Eligibility` declared — the card must carry the label, exactly
+ *   as it would have had to for any mapped workflow. An ineligible card stays an ordinary skip.
+ *
+ * `automation-off`, `ineligible` and `run-in-progress` never reach this function.
+ */
+export function isDorFallbackReason(
+  reason: DispatchSkipReason,
+  policy: AutomationPolicy,
+  tags: readonly string[] | undefined,
+): boolean {
+  if (reason === 'unmapped') return true
+  if (reason !== 'no-mapping-declared') return false
+  // Absent tags are the same evidence as empty ones — "the trigger saw no labels" — never a reason
+  // to skip the check. The defaulting lives here so the caller carries no extra branch.
+  return policy.eligibility === undefined || (tags ?? []).includes(policy.eligibility)
 }
 
 interface ResolvedRun {
@@ -327,7 +356,7 @@ export async function handleRunCommand(
   // runs" — the card's OWN Definition-of-Ready macrostate now decides. Every OTHER skip reason
   // (`automation-off`, `ineligible`, `run-in-progress`) is unchanged.
   if (context.dispatch?.kind === 'skip') {
-    if (isDorFallbackReason(context.dispatch.reason)) {
+    if (isDorFallbackReason(context.dispatch.reason, context.policy, config.dispatch?.tags)) {
       return await handleDorFallback({ config, context, fs, cwd, decision: context.dispatch }, deps)
     }
     reportSkippedDispatch(context)

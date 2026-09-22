@@ -43,6 +43,7 @@ Two gateways, **neither is an engine** — engine selection is a separate axis (
 
 - Nothing structurally analogous to pi's "no MCP" limitation — MCP is native here.
 - No equivalent absence to call out for Claude Code's two-execution-layer split; opencode's headless surface is `run` + `serve`, not a second orchestration layer.
+- **No sub-agent primitive the delivery cycle can dispatch through — and it needs none.** `pair-cli run --card <id>` drives the whole cycle (`prepare → validate → implement → green → verify`) by spawning one fresh opencode process per stage, the stage's agent role travelling in the prompt as data, rendered in opencode's `instruction` invocation style (ADR-021 tier 2, realized at the stage level). A `reuse` transition degrades to `fresh`, stated once per run: a process that has exited leaves no session to resume, which makes the isolation stricter than an in-session coordinator's, never weaker.
 
 ## 9. Verified-Against Version
 

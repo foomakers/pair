@@ -34,13 +34,13 @@ A personal `~/.pi/agent/AGENTS.md` brings global instructions into every session
 - **API key**: environment variable per provider (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENCODE_API_KEY` for opencode's gateways, and roughly two dozen more) or `~/.pi/agent/auth.json`. Headless-capable — no interactive step required once the variable or file is set.
 - **OAuth subscription** (Claude Pro/Max, ChatGPT Plus/Pro, GitHub Copilot, xAI, OpenRouter, Radius): interactive `/login`, token cached in `auth.json` with auto-refresh. **This is a local-interactive path, not a CI path** — there is no non-interactive way to complete the initial OAuth handshake.
 - **Headless + project trust (load-bearing, not obvious from "skills are already visible")**: non-interactive modes (`-p`, `--mode json`, `--mode rpc`) never show the trust prompt. With pi's default `defaultProjectTrust: "ask"` (or `"never"`), a headless run **ignores** project-local resources gated by trust, which includes project `.agents/skills` reached via the ancestor-directory walk. Two ways to fix it, and they are not equivalent in blast radius:
-  - **Preferred: a per-directory decision in `~/.pi/agent/trust.json`**, scoped to this project's canonical path — written once interactively via pi's own `/trust` command, or provisioned directly by `/setup-harness` for this project only.
+  - **Preferred: a per-directory decision in `~/.pi/agent/trust.json`**, scoped to this project's canonical path — written once interactively via pi's own `/trust` command, or provisioned directly by `/pair-capability-setup-harness` for this project only.
   - **`defaultProjectTrust: "always"` in `~/.pi/agent/settings.json`** trusts **every** project pi ever opens headlessly on this machine, not just this one — a global change with a much larger blast radius than provisioning a single project needs. Offer this only when the developer explicitly wants that (e.g. a dedicated CI/automation machine that only ever runs trusted repos), never as the default remedy.
-  Either is a **trust configuration**, not a credential — setting one is within `/setup-harness`'s provisioning scope, not a violation of "never touch credentials."
+  Either is a **trust configuration**, not a credential — setting one is within `/pair-capability-setup-harness`'s provisioning scope, not a violation of "never touch credentials."
 
 ## 5. Access Paths
 
-**No MCP.** Stated in the installed version's own README: *"No MCP. Build CLI tools with READMEs (see Skills), or build an extension that adds MCP support."* This is a deliberate design choice pi documents itself, not an omission. A project whose `tech/automation.md` requires `mcp` access is **not fit** for pi — `/setup-harness`'s fitness check must stop before any configuration write and name this incompatibility precisely.
+**No MCP.** Stated in the installed version's own README: *"No MCP. Build CLI tools with READMEs (see Skills), or build an extension that adds MCP support."* This is a deliberate design choice pi documents itself, not an omission. A project whose `tech/automation.md` requires `mcp` access is **not fit** for pi — `/pair-capability-setup-harness`'s fitness check must stop before any configuration write and name this incompatibility precisely.
 
 ## 6. Model Provider Configuration
 
@@ -56,7 +56,8 @@ Standard per-provider API-key/OAuth resolution (see [Authentication](#4-authenti
 
 - **MCP** (by design — see [Access Paths](#5-access-paths)).
 - Sub-agents, permission popups, plan mode, to-dos, and background bash are intentionally absent from the base agent; they are addressable as extensions, not gaps to work around here.
-- A built-in sandbox — pi runs with the permissions of the invoking user; isolation for untrusted/unattended work is the operator's responsibility (container, VM, or micro-VM), not something this guide or `/setup-harness` provisions.
+  **The missing sub-agent primitive does not cost pi the delivery cycle.** `pair-cli run --card <id>` drives the whole cycle — `prepare → validate → implement → green → verify` — by spawning one fresh pi process per stage, with the stage's agent role travelling in the prompt as data (ADR-021 tier 2, realized at the stage level). The one thing a process realization cannot honour is a `reuse` transition — there is no session to resume once the process exits — so it degrades to `fresh` and the run says so once. That makes pi's isolation **stricter** than an in-session coordinator's, never weaker.
+- A built-in sandbox — pi runs with the permissions of the invoking user; isolation for untrusted/unattended work is the operator's responsibility (container, VM, or micro-VM), not something this guide or `/pair-capability-setup-harness` provisions.
 
 ## 9. Verified-Against Version
 
