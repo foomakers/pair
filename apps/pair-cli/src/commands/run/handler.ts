@@ -635,6 +635,25 @@ function assertNoLoopModeConcerns(
   }
 }
 
+/**
+ * Why the cycle stopped, not just that it did.
+ *
+ * `resolve` already carries the answer — the refusal a phase returned, the budget it exhausted, the
+ * detail it wrote — and dropping it left an operator with `failed-preparation` and nowhere to go
+ * but reading handoff JSON by hand. That is the whole diagnostic surface of an unattended run.
+ */
+function reportCycleReason(next: DriveCycleResult['next']): void {
+  if (!next || typeof next !== 'object') return
+  const n = next as { reason?: unknown; refusal?: unknown; detail?: unknown; budget?: unknown }
+  const parts = [
+    n.reason !== undefined ? `reason ${String(n.reason)}` : undefined,
+    n.refusal !== undefined ? `refusal ${String(n.refusal)}` : undefined,
+    n.budget !== undefined ? `budget ${String(n.budget)}` : undefined,
+  ].filter(Boolean)
+  if (parts.length > 0) console.log(`  ${parts.join(' · ')}`)
+  if (typeof n.detail === 'string' && n.detail.trim()) console.log(`  ${n.detail}`)
+}
+
 /** AC10 — the whole transparency block: resolve and print, THEN act, before the first stage could spawn. */
 function reportCycleEntry(input: {
   engine: ReturnType<typeof resolveEngine>
@@ -722,6 +741,7 @@ async function enterCycleCoordinator(
   })
 
   console.log(`  Cycle status: ${outcome.status} (${outcome.stagesRun} stage(s) dispatched)`)
+  reportCycleReason(outcome.next)
   return outcome.status === 'ready-for-merge' ? 0 : 1
 }
 

@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process'
-import { dirname, isAbsolute, resolve as resolvePath } from 'path'
+import { dirname } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import type { EngineDefinition } from './engines'
 import { runCycle, type CycleOutcome, type CycleStageResult } from './cycle'
@@ -195,29 +195,24 @@ const packetFor =
       workflowVersion: ctx.workflowVersion,
     }) as never
 
-const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packet: unknown) => {
-  // `$worktree` comes out of the packet RELATIVE, and by grammar it can be nothing else: the packet
-  // path validates `pipeline.worktreeRoot` with `isRelPath`, so an absolute root is refused there
-  // (unlike the `worktree` command, which accepts one). Relative to WHAT is the caller's to know —
-  // it is the main checkout, the same anchor `worktree` resolves against. Spawning with it verbatim
-  // resolves it against the driver's own cwd instead, which is a different directory whenever the
-  // command is run from a worktree: the spawn then fails ENOENT on a path nobody created.
-  const raw = packet as { worktree: string }
-  const worktree = isAbsolute(raw.worktree) ? raw.worktree : resolvePath(co.main, raw.worktree)
-  return (await runStage({
+const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packet: unknown) =>
+  (await runStage({
     engine: ctx.engine,
-    packet: { ...raw, worktree } as never,
+    // The stage starts in the MAIN CHECKOUT, never in the story's worktree. Every phase skill's
+    // Step 0 reads `MAIN="$(pwd)"` — "the main checkout, you have not cd'd yet" — and resolves the
+    // run directory from it; the packet's own `$worktree` is what tells the agent where to cd, and
+    // it is relative to that same anchor. Spawned in the worktree instead, the stage does all its
+    // work and writes its handoffs INSIDE the worktree, which the skills forbid in as many words
+    // ("never inside a story or review worktree"). The driver then finds no handoff where the
+    // contract says one must be, reads the stage as not advanced, retries, and reports
+    // `failed-<step>` — for a stage that actually succeeded. Silent, and invisible to any test
+    // whose bridge is a fake.
+    packet: { ...(packet as object), worktree: co.main } as never,
     autonomyArgs: ctx.autonomyArgs,
     timeoutSeconds: ctx.timeoutSeconds,
     runIteration: spawnIteration,
   })) as CycleStageResult
-}
 
-/**
- * Composes the three pieces T-2/T-3/T-4 built into the driver `handleRunCommand` calls: the script
- * bridge (the ONLY rule authority), the stage runner (one fresh process per stage) and the pure
- * loop. It adds no rule of its own — every transition still comes from `resolve`.
- */
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {
   return async (input: CycleDriverRequest): Promise<CycleOutcome> => {
     const co = coordinatesFor(ctx, input)
@@ -229,6 +224,16 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       policy: {},
       ...(input.rounds !== undefined && { rounds: input.rounds }),
       onNotice: note => console.log(`  ${note}`),
+      // One line per stage, the moment the NEXT resolve reveals whether it advanced. Without it a
+      // forty-dispatch unattended run prints a single terminal status and nothing else: the stage
+      // that mattered is indistinguishable from the thirty-nine that did not, and a stage that
+      // silently wrote its handoff in the wrong place reads exactly like one that failed.
+      onStage: record =>
+        console.log(
+          `  Stage ${record.step}${record.phase ? `:${record.phase}` : ''} — process ` +
+            `${record.processOutcome}, handoff ${record.handoffAdvanced ? 'advanced' : 'NOT advanced'}` +
+            `${record.detail ? ` (${record.detail})` : ''}`,
+        ),
     })
   }
 }
