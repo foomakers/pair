@@ -89,12 +89,37 @@ assert_dir "my-docs/.pair"
 log_succ "Install to custom target from local dir succeeded"
 
 # -------------------------------------------------------------------
-# Test 7: US-395 — the program-level --url names the source
+# Test 7: Install from local directory (relative path)
+# -------------------------------------------------------------------
+log_info "Test 7: Install from local directory (relative path)"
+TEST_DIR=$(setup_workspace "source-res-dir-rel")
+cd "$TEST_DIR"
+cp -R "$MOCK_KB" ./relative-kb
+run_pair install --source "./relative-kb"
+assert_success || exit 1
+assert_dir ".pair"
+log_succ "Install from relative directory succeeded"
+
+# -------------------------------------------------------------------
+# Test 8: Error on structurally invalid source directory
+# -------------------------------------------------------------------
+log_info "Test 8: Error on structurally invalid source directory"
+TEST_DIR=$(setup_workspace "source-res-invalid-structure")
+cd "$TEST_DIR"
+mkdir -p ./not-a-kb
+echo "not a valid KB" > ./not-a-kb/random.txt
+run_pair install --source "./not-a-kb"
+assert_failure || exit 1
+assert_output_contains "Invalid KB structure at:" || exit 1
+log_succ "Structurally invalid source correctly rejected"
+
+# -------------------------------------------------------------------
+# Test 9: US-395 — the program-level --url names the source
 # `--url` is declared on the program, so it only reaches resolution through the
 # global/command option merge. It used to be read by the (never-reached) bootstrap
 # pre-flight alone, which made `pair install --url X` install the DEFAULT KB.
 # -------------------------------------------------------------------
-log_info "Test 7: Install with the program-level --url naming a local source"
+log_info "Test 9: Install with the program-level --url naming a local source"
 TEST_DIR=$(setup_workspace "source-res-global-url")
 cd "$TEST_DIR"
 run_pair install --url "$MOCK_KB"
@@ -104,9 +129,9 @@ assert_contains ".pair/knowledge/index.md" "Mock Knowledge" || exit 1
 log_succ "Install from the program-level --url succeeded"
 
 # -------------------------------------------------------------------
-# Test 8: US-395 — an explicit --source outranks the program-level --url
+# Test 10: US-395 — an explicit --source outranks the program-level --url
 # -------------------------------------------------------------------
-log_info "Test 8: --source outranks --url"
+log_info "Test 10: --source outranks --url"
 TEST_DIR=$(setup_workspace "source-res-url-vs-source")
 cd "$TEST_DIR"
 run_pair install --source "$MOCK_KB" --url "/nonexistent/path/to/kb"

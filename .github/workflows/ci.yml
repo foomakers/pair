@@ -241,12 +241,14 @@ jobs:
   # PARALLEL to `build`, as its own status check: a red here says "a real-CLI
   # scenario broke", which is a different diagnosis from a red unit/lint gate.
   #
-  # MEASURED COST (AC6) — observed IN CI, on this job, not extrapolated from a
-  # local run: 1m53s end-to-end for the 18-scenario CI-safe list. Run 31538360697,
-  # job 93934813269 (2026-08-11, ubuntu-latest): checkout+pnpm 4s, install 10s,
-  # CLI+deps build 6s, the suite itself 1m28s, all 18 scenarios PASS.
-  # In the SAME run `build` took 3m59s, so smoke is ~47% of the critical path job:
-  # it adds runner time and ZERO wall-clock.
+  # MEASURED COST (AC7) — observed IN CI, on this job, not extrapolated from a
+  # local run: ubuntu-latest took 1m53s end-to-end for the 18-scenario CI-safe
+  # list. Run 31538360697, job 93934813269 (2026-08-11): checkout+pnpm 4s,
+  # install 10s, CLI+deps build 6s, the suite itself 1m28s, all 18 scenarios PASS.
+  # macos-latest is measured by the sibling matrix leg on each PR head. Because
+  # matrix legs run in parallel, wall-clock is the slower leg, not the sum.
+  # In the SAME ubuntu-latest run `build` took 3m59s, so smoke was ~47% of the
+  # critical path job: it added runner time and ZERO wall-clock before the matrix.
   # REVISIT THRESHOLD: revisit when smoke exceeds ~75% of `build` in the same run
   # — ~3m00s against today's 3m59s, i.e. roughly +1m05s of new scenarios from here.
   # Past it, the list gets scoped (reasons recorded in lib/ci-tests.sh) or moved to
@@ -265,8 +267,12 @@ jobs:
   #
   # No secrets are used, so a fork PR is a full-strength run.
   smoke:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     if: "!(startsWith(github.event.head_commit.message, 'chore: release v'))"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     # This job executes PR-authored code (pnpm lifecycle scripts + shell scenarios
     # that package and run a CLI), so it takes the least token it can and a timeout
     # that turns a scenario blocking on stdin into a 15-minute red instead of a
