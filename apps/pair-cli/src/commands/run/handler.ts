@@ -20,7 +20,6 @@ import {
   describeMergePosture,
   describeParallelism,
   readAutomationPolicy,
-  POLICY_PATH,
   type AutomationPolicy,
 } from './automation-policy'
 import {
@@ -118,13 +117,6 @@ function declaredEngine(config: Config): EngineId | undefined {
     throw new Error(`pair.config.json is invalid:\n  - ${outcome.errors.join('\n  - ')}`)
   }
   return isEngineId(outcome.engine) ? outcome.engine : undefined
-}
-
-/** Whether `automation.md` textually declares `## Max Parallelism` — read raw, never re-parsed twice. */
-function policyDeclaresMaxParallelism(fs: FileSystemService, cwd: string): boolean {
-  const path = resolve(cwd, POLICY_PATH)
-  if (!fs.existsSync(path)) return false
-  return /^##\s*Max Parallelism\b/m.test(fs.readFileSync(path))
 }
 
 /**
@@ -631,11 +623,7 @@ interface CycleCoordinatorInput {
  * refused only once the entry resolves to the cycle coordinator (never at parse time, so US-217's
  * own accepted --filter-alongside---card stays a zero-regression control for a ROUTE decision).
  */
-function assertNoLoopModeConcerns(
-  config: RunCommandConfig,
-  fs: FileSystemService,
-  cwd: string,
-): void {
+function assertNoLoopModeConcerns(config: RunCommandConfig): void {
   if (config.scope.filter !== undefined) {
     throw new Error(
       `--filter cannot be combined with a --card entry that resolves to the delivery-cycle ` +
@@ -644,19 +632,18 @@ function assertNoLoopModeConcerns(
         `filtered set of cards. Drop --filter, or map this card's tag to a workflow instead.`,
     )
   }
-  // r0-3: UNCONDITIONAL, as AC7 and Assumption 6 both state it — "`--root`/`--filter` and
-  // `## Max Parallelism` are loop-mode concerns and are refused in card mode". Gating it on
-  // `eligibility === undefined` made the refusal depend on an unrelated declaration: a project
-  // that declared both `## Eligibility` and `## Max Parallelism` reached the cycle coordinator
-  // carrying a parallelism expectation nothing on this path can honour, silently.
-  if (policyDeclaresMaxParallelism(fs, cwd)) {
-    throw new Error(
-      `${POLICY_PATH} declares \`## Max Parallelism\`, which is a loop-mode concern (like ` +
-        `--filter): the delivery-cycle coordinator drives ONE story's own stages in sequence and ` +
-        `can honour no parallelism ceiling. Drop \`## Max Parallelism\`, or map this card's tag ` +
-        `to a workflow so it runs in loop mode instead.`,
-    )
-  }
+  // r0-3, then AC7's rewrite (2026-09-22). The review was right that the old `eligibility ===
+  // undefined` guard matched nothing the AC said. Making the refusal unconditional — the literal
+  // reading — then refused the coordinator on THIS repository, whose `automation.md` declares
+  // `## Max Parallelism` for `pair-loop`. The letter of the AC made the feature unreachable for
+  // every project that also runs a parallel loop.
+  //
+  // The distinction the AC was missing, and now states: `--root`/`--filter` above are arguments of
+  // THIS invocation — someone is asking this run for something the cycle does not do. A declared
+  // `## Max Parallelism` is a key in a shared policy file addressed to ANOTHER consumer. Refusing
+  // on it conflates "a request made of me" with "a setting that exists for someone else", so it is
+  // not refused. Loop mode reads the ceiling through `automation-policy`'s own parser, which is
+  // where it belongs; the local textual probe this function used has no remaining caller and is gone.
 }
 
 /**
@@ -755,7 +742,7 @@ async function enterCycleCoordinator(
 ): Promise<number> {
   const { config, context, fs, cwd, card } = input
 
-  assertNoLoopModeConcerns(config, fs, cwd)
+  assertNoLoopModeConcerns(config)
 
   const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
   const engineDef = resolveEngineFor(engine, context, cwd, fs)

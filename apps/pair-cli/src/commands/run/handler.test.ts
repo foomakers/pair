@@ -1059,12 +1059,16 @@ max-iterations: 20
     expect(driveCycle).toHaveBeenCalledWith(expect.objectContaining({ pr: 42 }))
   })
 
-  it('AC7: a declared `## Max Parallelism` expectation is REFUSED once the card resolves to cycle-coordinator mode (Ready, no mapping) — a loop-mode concern', async () => {
-    // Round 2 repair: AC7's own inputs list "--card + `## Max Parallelism` expectation"
-    // (Assumption 6: "`--root`/`--filter` and `## Max Parallelism` expectation are loop-mode
-    // concerns and are refused in card mode"), but only the `--filter` half was witnessed. A
-    // fixture of its OWN — never `cycleFs()`'s shared `POLICY` — so it proves this class without
-    // moving any other row's fixture.
+  it('AC7: a DECLARED `## Max Parallelism` does NOT block the coordinator — it addresses pair-loop, not this run', async () => {
+    // Rewritten 2026-09-22 with AC7 itself. Review finding r0-3 was right that the old guard
+    // (`eligibility === undefined`) matched nothing the AC said; making the refusal unconditional —
+    // the literal reading — then refused the coordinator on THIS repository, whose automation.md
+    // declares `## Max Parallelism` for pair-loop. The letter of the AC made the feature
+    // unreachable for every project that also runs a parallel loop.
+    //
+    // The distinction AC7 now draws: `--root`/`--filter` are arguments of THIS invocation, so
+    // whoever passes one is asking this run for something the cycle does not do. A declared
+    // `## Max Parallelism` is a key in a shared policy file addressed to ANOTHER consumer.
     captureLog()
     const { handler, driveCycle } = readyDeps()
     const maxParallelismFs = projectFs({
@@ -1074,10 +1078,13 @@ max-iterations: 20
       [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs`]: '',
     })
 
-    await expect(
-      handleRunCommand(parseRunCommand({ card: '218', cardTags: '' }), maxParallelismFs, handler),
-    ).rejects.toThrow(/Max Parallelism/)
-    expect(driveCycle).not.toHaveBeenCalled()
+    await handleRunCommand(
+      parseRunCommand({ card: '218', cardTags: '' }),
+      maxParallelismFs,
+      handler,
+    )
+
+    expect(driveCycle).toHaveBeenCalledTimes(1)
   })
 
   it('AC7: --filter alongside --card is REFUSED once the card resolves to cycle-coordinator mode (Ready, no mapping) — a loop-mode concern', async () => {
