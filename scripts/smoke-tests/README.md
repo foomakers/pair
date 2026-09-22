@@ -23,9 +23,11 @@ Each scenario ends in exactly one of four states, and the last three all fail th
 
 ### Which scenarios run in CI
 
-`run-all.sh --ci` runs the list in **`lib/ci-tests.sh`**, and that list is the one the `smoke` job of `.github/workflows/ci.yml` executes on every pull request.
+`run-all.sh --ci` runs the CI-safe list in **`lib/ci-tests.sh`**, and that list is the one the `smoke` job of `.github/workflows/ci.yml` executes on every pull request on both `ubuntu-latest` and `macos-latest`.
 
 The rule, stated as enforced: **a scenario runs in CI unless it declares `OFFLINE_SAFE=false` on its own line.** The declaration is opt-**out** — `is_offline_safe` (in `run-all.sh`) and `runner-outcomes.sh` both match `^OFFLINE_SAFE=`, so a scenario that declares nothing, or declares it inside a comment, counts as offline-safe and is in scope. The exception in the other direction — pulling an offline-safe scenario out — needs a tracking issue in its reason, recorded in `CI_EXCLUDED` next to the list. `scenarios/runner-outcomes.sh` fails if a scenario is in neither array, so a new scenario cannot join the suite and quietly never run in CI.
+
+`pnpm smoke-tests` runs the full local suite on the invoking machine as a single-platform run. Use it for manual coverage beyond the CI-safe list; cross-platform pre-merge coverage comes from the CI matrix.
 
 > **Note:** The runner sanitizes some `npm_config_*` environment variables (e.g. `npm_config_cleanup_unused_catalogs`, `npm_config_catalog`) before executing scenarios. These keys can surface from pnpm workspace config entries and may trigger noisy "Unknown env config" warnings from `npm`. Clearing them ensures consistent and quiet smoke-test runs across CI and local environments.
 
