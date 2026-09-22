@@ -1,3 +1,4 @@
+import { resolveEngineBinary } from './path-probe'
 import { DEFAULT_ENGINE_ID, ENGINES, type EngineDefinition, type EngineId } from './engines'
 
 /**
@@ -48,11 +49,47 @@ export function describeEngineResolution(resolved: ResolvedEngine): string {
  * names the resolved command AND the level that produced it, because "engine not found" with
  * neither is unactionable when the engine came from a config file the operator did not write.
  */
-export function assertEngineAvailable(resolved: ResolvedEngine, probe: ExecutableProbe): void {
-  if (probe(resolved.engine.command)) return
-  throw new Error(
-    `Engine '${resolved.engine.id}' is not installed or not on PATH: ` +
-      `\`${resolved.engine.command}\` could not be found (resolved from ${resolved.source}). ` +
-      `Install it, or pass --engine with one of the others.`,
-  )
+export interface EngineBinaryLookup {
+  readonly fs: { existsSync(path: string): boolean }
+  readonly repoRoot: string
+  readonly declaredBin?: Readonly<Record<string, string>> | undefined
+}
+
+/**
+ * Resolves the executable to spawn, or throws naming the one thing the operator can do about it.
+ *
+ * Returns the ENGINE with its `command` replaced by what was actually found, so everything
+ * downstream (arg building, spawn) uses the resolved path without knowing how it was resolved.
+ */
+export function assertEngineAvailable(
+  resolved: ResolvedEngine,
+  probe: ExecutableProbe,
+  lookup?: EngineBinaryLookup,
+): EngineDefinition {
+  if (lookup === undefined) {
+    if (probe(resolved.engine.command)) return resolved.engine
+    throw new Error(
+      `Engine '${resolved.engine.id}' is not installed or not on PATH: ` +
+        `\`${resolved.engine.command}\` could not be found (resolved from ${resolved.source}). ` +
+        `Install it, or pass --engine with one of the others.`,
+    )
+  }
+  const found = resolveEngineBinary({
+    id: resolved.engine.id,
+    command: resolved.engine.command,
+    fs: lookup.fs as never,
+    repoRoot: lookup.repoRoot,
+    declaredBin: lookup.declaredBin,
+    probe,
+  })
+  if (found === undefined) {
+    throw new Error(
+      `Engine '${resolved.engine.id}' could not be located: \`${resolved.engine.command}\` is not ` +
+        `on PATH, and is not in this repository's \`node_modules/.bin\` either (engine resolved ` +
+        `from ${resolved.source}). Install it, pass --engine with one of the others, or declare ` +
+        `where it lives: {"engine": {"id": "${resolved.engine.id}", "bin": {"${resolved.engine.id}": "/path/to/${resolved.engine.command}"}}} ` +
+        `in pair.config.json.`,
+    )
+  }
+  return { ...resolved.engine, command: found.command }
 }

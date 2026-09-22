@@ -26,11 +26,19 @@ export interface EngineDeclaration {
   id: string
 }
 
-const DECLARABLE_FIELDS = ['id'] as const
+const DECLARABLE_FIELDS = ['id', 'bin'] as const
 
 export interface EngineBlockOutcome {
   /** The declared engine id, present only when the block is valid. */
   engine?: string
+  /**
+   * `engine.bin`: where THIS machine keeps the executable, when it is not resolvable on its own.
+   *
+   * A map keyed by engine id, so one config can pin several. It is the LAST word on resolution and
+   * the FIRST thing consulted — a machine that had to declare a path is a machine where guessing
+   * has already failed once.
+   */
+  bin?: Readonly<Record<string, string>>
   /** Validation errors, in the same style as the registry ones (empty ⇒ valid or absent). */
   errors: string[]
 }
@@ -75,5 +83,36 @@ export function readEngineDeclaration(
     }
   }
 
-  return { engine: id, errors: [] }
+  const bin = readBinBlock(block['bin'], knownEngineIds)
+  if ('errors' in bin) return bin
+
+  return { engine: id, bin: bin.value, errors: [] }
+}
+
+/** `engine.bin`: a map of engine id to the executable's path ON THIS MACHINE. Absent is legal. */
+function readBinBlock(
+  raw: unknown,
+  knownEngineIds: readonly string[],
+): { value: Record<string, string> } | EngineBlockOutcome {
+  if (raw === undefined) return { value: {} }
+  if (!isPlainObject(raw)) {
+    return {
+      errors: [
+        'engine.bin: must be an object keyed by engine id, e.g. {"bin": {"pi": "/usr/local/bin/pi"}}',
+      ],
+    }
+  }
+  const value: Record<string, string> = {}
+  for (const [key, path] of Object.entries(raw)) {
+    if (!knownEngineIds.includes(key)) {
+      return {
+        errors: [`engine.bin: unknown engine '${key}' (supported: ${knownEngineIds.join(', ')})`],
+      }
+    }
+    if (typeof path !== 'string' || path.trim().length === 0) {
+      return { errors: [`engine.bin.${key}: must be a non-empty path`] }
+    }
+    value[key] = path.trim()
+  }
+  return { value }
 }

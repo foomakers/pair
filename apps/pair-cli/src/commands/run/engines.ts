@@ -19,7 +19,7 @@
  */
 
 /** Engine ids this CLI knows. Adding one is a data edit in `ENGINES` below. */
-export const ENGINE_IDS = ['pi', 'opencode', 'claude'] as const
+export const ENGINE_IDS = ['pi', 'opencode', 'claude', 'codex'] as const
 
 export type EngineId = (typeof ENGINE_IDS)[number]
 
@@ -173,10 +173,52 @@ const CLAUDE: EngineDefinition = {
   verifiedAgainst: 'claude --help + live `claude -p --output-format stream-json` (2026-08-24)',
 }
 
+/**
+ * Codex as a tier-2 DRIVER, which ADR-021 already named one: "`claude -p` and Codex are legitimate
+ * driver ENGINES, not competitors to tier 1". The engine map simply never carried the row.
+ *
+ * Distinct from #441, which asks a different question — whether Codex's own subagent primitive can
+ * host the IN-SESSION coordinator (tier 1). Having subagents never excluded an engine from tier 2:
+ * `claude` has them and is here. What qualifies an engine is being drivable headlessly, one process
+ * per unit of work, over a stream carrying a terminal event.
+ */
+const CODEX: EngineDefinition = {
+  id: 'codex',
+  command: 'codex',
+  headlessArgs: ['exec', '--json'],
+  skillInvocationStyle: 'instruction',
+  autonomy: {
+    kind: 'flag',
+    autonomyArgs: ['--dangerously-bypass-approvals-and-sandbox'],
+  },
+  projectTrust: {
+    kind: 'none',
+    note: 'codex exec gates on its sandbox/approval policy, not on a per-project trust store',
+  },
+  // Two events, not one: the stream ends on `turn.completed` OR `turn.failed`, and they differ only
+  // by type. The second rule's `successWhen` names the type that WOULD have been a success, so a
+  // line that already matched `turn.failed` can never satisfy it — deliberately unsatisfiable, and
+  // it reads as what it means: "terminal, and a success only when the turn completed".
+  terminalEvents: [
+    { match: { type: 'turn.completed' } },
+    {
+      match: { type: 'turn.failed' },
+      successWhen: { type: 'turn.completed' },
+      detailField: 'error.message',
+    },
+  ],
+  verifiedAgainst:
+    'codex 0.155.1 — `codex exec --help` and a live `codex exec --json` run (2026-09-22): ' +
+    'thread.started / turn.started / item.completed / turn.completed observed on the wire; ' +
+    "turn.failed and its `error.message` read from the binary's own TurnFailedEvent symbols, " +
+    'not yet observed live',
+}
+
 export const ENGINES: Readonly<Record<EngineId, EngineDefinition>> = Object.freeze({
   pi: PI,
   opencode: OPENCODE,
   claude: CLAUDE,
+  codex: CODEX,
 })
 
 /**

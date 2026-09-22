@@ -102,6 +102,11 @@ export interface RunHandlerDependencies {
  * A malformed block THROWS rather than degrading to the default: an operator whose typo was
  * silently ignored would have no way to tell a working configuration from a broken one.
  */
+/** `engine.bin` from `pair.config.json`: where THIS machine keeps each executable, when it must say. */
+function declaredEngineBin(config: Config): Readonly<Record<string, string>> | undefined {
+  return readEngineDeclaration(config, ENGINE_IDS).bin
+}
+
 function declaredEngine(config: Config): EngineId | undefined {
   const outcome = readEngineDeclaration(config, ENGINE_IDS)
   if (outcome.errors.length > 0) {
@@ -567,7 +572,11 @@ interface PrepSkillInput {
 async function runPrepSkill(input: PrepSkillInput, deps: RunHandlerDependencies): Promise<number> {
   const { config, context, fs, cwd, card, skill, label } = input
   const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
-  assertEngineAvailable(engine, createExecutableProbe(fs))
+  const engineDef = assertEngineAvailable(engine, createExecutableProbe(fs), {
+    fs,
+    repoRoot: cwd,
+    declaredBin: declaredEngineBin(context.config),
+  })
 
   // Not `resolveInvocation`'s cascade (no `--skill`/`--prompt` was passed) and not a `## Workflows`
   // mapping either — the DoR grammar picked this skill, so `source: 'mapping'` is reused rather
@@ -586,7 +595,13 @@ async function runPrepSkill(input: PrepSkillInput, deps: RunHandlerDependencies)
     filterDelivery: filterDeliveryFor(invocation),
   })
   const autonomy = resolveAutonomyFor(engine.engine, config, cwd, fs)
-  const resolved: ResolvedRun = { engine, invocation, perimeter, policy: context.policy, autonomy }
+  const resolved: ResolvedRun = {
+    engine: { ...engine, engine: engineDef },
+    invocation,
+    perimeter,
+    policy: context.policy,
+    autonomy,
+  }
 
   console.log(chalk.bold('pair-cli run'))
   console.log(`  ${describeEngineResolution(resolved.engine)}`)
@@ -677,13 +692,14 @@ function reportCycleEntry(input: {
 /** The shipped driver: the pieces T-2/T-3/T-4 built, composed with this run's own resolved context. */
 function productionCycleDriver(input: {
   engine: ReturnType<typeof resolveEngine>
+  engineDef: EngineDefinition
   config: RunCommandConfig
   cwd: string
   fs: FileSystemService
   location: ReturnType<typeof locateCycleScripts> | undefined
 }): CycleDriver {
   return createDefaultCycleDriver({
-    engine: input.engine.engine,
+    engine: input.engineDef,
     cwd: input.cwd,
     fs: input.fs,
     location: input.location,
@@ -708,7 +724,11 @@ async function enterCycleCoordinator(
   assertNoLoopModeConcerns(config, context, fs, cwd)
 
   const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
-  assertEngineAvailable(engine, createExecutableProbe(fs))
+  const engineDef = assertEngineAvailable(engine, createExecutableProbe(fs), {
+    fs,
+    repoRoot: cwd,
+    declaredBin: declaredEngineBin(context.config),
+  })
 
   // AC11: HALTs skill-missing, naming pair-workflow-cycle, before anything is printed or spawned.
   //
@@ -732,7 +752,8 @@ async function enterCycleCoordinator(
     runDir: `.pair/working/runs/${dispatch.runId}/${card}`,
   })
 
-  const driveCycle = deps.driveCycle ?? productionCycleDriver({ engine, config, cwd, fs, location })
+  const driveCycle =
+    deps.driveCycle ?? productionCycleDriver({ engine, engineDef, config, cwd, fs, location })
   const outcome = await driveCycle({
     runId: dispatch.runId,
     card,
