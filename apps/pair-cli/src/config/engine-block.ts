@@ -26,7 +26,7 @@ export interface EngineDeclaration {
   id: string
 }
 
-const DECLARABLE_FIELDS = ['id', 'bin'] as const
+const DECLARABLE_FIELDS = ['id', 'bin', 'model'] as const
 
 export interface EngineBlockOutcome {
   /** The declared engine id, present only when the block is valid. */
@@ -39,6 +39,13 @@ export interface EngineBlockOutcome {
    * has already failed once.
    */
   bin?: Readonly<Record<string, string>>
+  /**
+   * `engine.model`: the model each engine drives, keyed by engine id.
+   *
+   * Run-wide, the analogue of `engine.id` — one engine, one model, every stage. PER-STAGE
+   * selection is #488's and is deliberately not this.
+   */
+  model?: Readonly<Record<string, string>>
   /** Validation errors, in the same style as the registry ones (empty ⇒ valid or absent). */
   errors: string[]
 }
@@ -83,22 +90,25 @@ export function readEngineDeclaration(
     }
   }
 
-  const bin = readBinBlock(block['bin'], knownEngineIds)
+  const bin = readIdKeyedPaths(block['bin'], knownEngineIds, 'bin')
   if ('errors' in bin) return bin
+  const model = readIdKeyedPaths(block['model'], knownEngineIds, 'model')
+  if ('errors' in model) return model
 
-  return { engine: id, bin: bin.value, errors: [] }
+  return { engine: id, bin: bin.value, model: model.value, errors: [] }
 }
 
-/** `engine.bin`: a map of engine id to the executable's path ON THIS MACHINE. Absent is legal. */
-function readBinBlock(
+/** `engine.bin` / `engine.model`: a map keyed by engine id. Absent is legal; a bad entry is not. */
+function readIdKeyedPaths(
   raw: unknown,
   knownEngineIds: readonly string[],
+  field: 'bin' | 'model',
 ): { value: Record<string, string> } | EngineBlockOutcome {
   if (raw === undefined) return { value: {} }
   if (!isPlainObject(raw)) {
     return {
       errors: [
-        'engine.bin: must be an object keyed by engine id, e.g. {"bin": {"pi": "/usr/local/bin/pi"}}',
+        `engine.${field}: must be an object keyed by engine id, e.g. {"${field}": {"pi": "…"}}`,
       ],
     }
   }
@@ -106,11 +116,13 @@ function readBinBlock(
   for (const [key, path] of Object.entries(raw)) {
     if (!knownEngineIds.includes(key)) {
       return {
-        errors: [`engine.bin: unknown engine '${key}' (supported: ${knownEngineIds.join(', ')})`],
+        errors: [
+          `engine.${field}: unknown engine '${key}' (supported: ${knownEngineIds.join(', ')})`,
+        ],
       }
     }
     if (typeof path !== 'string' || path.trim().length === 0) {
-      return { errors: [`engine.bin.${key}: must be a non-empty path`] }
+      return { errors: [`engine.${field}.${key}: must be a non-empty path`] }
     }
     value[key] = path.trim()
   }

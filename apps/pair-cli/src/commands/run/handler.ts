@@ -31,7 +31,7 @@ import {
   CYCLE_BASE_BRANCH_DEFAULT,
   type CardReadiness,
 } from './cycle-scripts'
-import { createDefaultCycleDriver, ghCardReadiness } from './cycle-wiring'
+import { createDefaultCycleDriver, ghCardReadiness, mainCheckout } from './cycle-wiring'
 import { buildPromptText, describeApprovalPosture, filterDeliveryFor } from './invocation'
 import { loopExitCode, runLoop, type IterationContext, type LoopOutcome } from './loop'
 import { spawnIteration } from './spawn'
@@ -96,17 +96,22 @@ export interface RunHandlerDependencies {
   driveCycle?: CycleDriver
 }
 
+/** `engine.bin` from `pair.config.json`: where THIS machine keeps each executable, when it must say. */
+function declaredEngineBin(config: Config): Readonly<Record<string, string>> | undefined {
+  return readEngineDeclaration(config, ENGINE_IDS).bin
+}
+
+/** `engine.model`: the model this project pins for each engine, run-wide (per-stage is #488's). */
+function declaredEngineModel(config: Config, id: string): string | undefined {
+  return readEngineDeclaration(config, ENGINE_IDS).model?.[id]
+}
+
 /**
  * The engine the project's own `pair.config.json` declares, if any.
  *
  * A malformed block THROWS rather than degrading to the default: an operator whose typo was
  * silently ignored would have no way to tell a working configuration from a broken one.
  */
-/** `engine.bin` from `pair.config.json`: where THIS machine keeps each executable, when it must say. */
-function declaredEngineBin(config: Config): Readonly<Record<string, string>> | undefined {
-  return readEngineDeclaration(config, ENGINE_IDS).bin
-}
-
 function declaredEngine(config: Config): EngineId | undefined {
   const outcome = readEngineDeclaration(config, ENGINE_IDS)
   if (outcome.errors.length > 0) {
@@ -689,11 +694,26 @@ function reportCycleEntry(input: {
   console.log(`  Dispatch cap: ${CYCLE_DISPATCH_CAP_DEFAULT}`)
 }
 
+/** The executable this run will actually spawn: config, then PATH, then the repo's own bin. */
+function resolveEngineFor(
+  engine: ReturnType<typeof resolveEngine>,
+  context: RunContext,
+  cwd: string,
+  fs: FileSystemService,
+): EngineDefinition {
+  return assertEngineAvailable(engine, createExecutableProbe(fs), {
+    fs,
+    repoRoot: cwd,
+    declaredBin: declaredEngineBin(context.config),
+  })
+}
+
 /** The shipped driver: the pieces T-2/T-3/T-4 built, composed with this run's own resolved context. */
 function productionCycleDriver(input: {
   engine: ReturnType<typeof resolveEngine>
   engineDef: EngineDefinition
   config: RunCommandConfig
+  context: RunContext
   cwd: string
   fs: FileSystemService
   location: ReturnType<typeof locateCycleScripts> | undefined
@@ -703,10 +723,20 @@ function productionCycleDriver(input: {
     cwd: input.cwd,
     fs: input.fs,
     location: input.location,
-    autonomyArgs: resolveAutonomyFor(input.engine.engine, input.config, input.cwd, input.fs).args,
+    // Trust and autonomy are decided about the directory the STAGE will actually run in — the main
+    // checkout — not about the driver's own cwd. They differ whenever the command is invoked from a
+    // worktree, and the check then answers a question nobody asked: pi refuses a story worktree it
+    // has never seen, while the process it would have spawned was going to run somewhere trusted.
+    autonomyArgs: resolveAutonomyFor(
+      input.engineDef,
+      input.config,
+      mainCheckout(input.cwd),
+      input.fs,
+    ).args,
     timeoutSeconds: input.config.iterationTimeoutSeconds,
     workflowVersion: CYCLE_WORKFLOW_VERSION,
     baseBranch: CYCLE_BASE_BRANCH_DEFAULT,
+    model: declaredEngineModel(input.context.config, input.engineDef.id),
   })
 }
 
@@ -724,11 +754,7 @@ async function enterCycleCoordinator(
   assertNoLoopModeConcerns(config, context, fs, cwd)
 
   const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
-  const engineDef = assertEngineAvailable(engine, createExecutableProbe(fs), {
-    fs,
-    repoRoot: cwd,
-    declaredBin: declaredEngineBin(context.config),
-  })
+  const engineDef = resolveEngineFor(engine, context, cwd, fs)
 
   // AC11: HALTs skill-missing, naming pair-workflow-cycle, before anything is printed or spawned.
   //
@@ -753,7 +779,8 @@ async function enterCycleCoordinator(
   })
 
   const driveCycle =
-    deps.driveCycle ?? productionCycleDriver({ engine, engineDef, config, cwd, fs, location })
+    deps.driveCycle ??
+    productionCycleDriver({ engine, engineDef, config, context, cwd, fs, location })
   const outcome = await driveCycle({
     runId: dispatch.runId,
     card,

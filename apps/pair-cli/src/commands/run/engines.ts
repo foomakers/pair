@@ -85,6 +85,12 @@ export interface EngineDefinition {
   readonly command: string
   /** Args that put the engine in one-shot headless mode and make it emit JSONL. */
   readonly headlessArgs: readonly string[]
+  /**
+   * The flag this engine takes a model under, when a project pins one (`engine.model` in
+   * pair.config.json). PER-STAGE model selection is #488's; this is the run-wide analogue of
+   * `--engine` — one engine, one model, for every stage of the run.
+   */
+  readonly modelFlag?: string
   /** Flag carrying the working directory, when the engine has one (`undefined` ⇒ spawn cwd). */
   readonly cwdFlag?: string
   readonly skillInvocationStyle: SkillInvocationStyle
@@ -108,6 +114,7 @@ export interface EngineDefinition {
  */
 const PI: EngineDefinition = {
   id: 'pi',
+  modelFlag: '--model',
   command: 'pi',
   headlessArgs: ['--mode', 'json'],
   skillInvocationStyle: 'instruction',
@@ -134,6 +141,7 @@ const PI: EngineDefinition = {
  */
 const OPENCODE: EngineDefinition = {
   id: 'opencode',
+  modelFlag: '--model',
   command: 'opencode',
   headlessArgs: ['run', '--format', 'json'],
   cwdFlag: '--dir',
@@ -159,6 +167,7 @@ const OPENCODE: EngineDefinition = {
  */
 const CLAUDE: EngineDefinition = {
   id: 'claude',
+  modelFlag: '--model',
   command: 'claude',
   headlessArgs: ['-p', '--output-format', 'stream-json', '--verbose'],
   skillInvocationStyle: 'slash',
@@ -184,6 +193,7 @@ const CLAUDE: EngineDefinition = {
  */
 const CODEX: EngineDefinition = {
   id: 'codex',
+  modelFlag: '--model',
   command: 'codex',
   headlessArgs: ['exec', '--json'],
   skillInvocationStyle: 'instruction',

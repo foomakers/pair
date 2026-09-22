@@ -119,6 +119,8 @@ export interface CycleDriverContext {
   readonly timeoutSeconds: number
   readonly workflowVersion: string
   readonly baseBranch: string
+  /** The model pinned for this engine, if the project declared one. */
+  readonly model?: string | undefined
 }
 
 export interface CycleDriverRequest {
@@ -209,6 +211,7 @@ const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packe
     // whose bridge is a fake.
     packet: { ...(packet as object), worktree: co.main } as never,
     autonomyArgs: ctx.autonomyArgs,
+    ...(ctx.model !== undefined && { model: ctx.model }),
     timeoutSeconds: ctx.timeoutSeconds,
     runIteration: spawnIteration,
   })) as CycleStageResult
@@ -216,12 +219,18 @@ const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packe
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {
   return async (input: CycleDriverRequest): Promise<CycleOutcome> => {
     const co = coordinatesFor(ctx, input)
+    // The budgets are `cycle-state`'s, never this driver's: AC5 says the dead-dispatch retry is
+    // "read from cycle-state, never defined in pair-cli". Its own `resolve` output carries them,
+    // so they are read once here and handed to the loop — passing `{}` silently set every budget
+    // to zero, which the opencode leg showed as a stage that was never retried.
+    const first = await resolveFor(ctx, input, co)()
+    const policy = (first as { policy?: Record<string, unknown> }).policy ?? {}
     return await runCycle({
       resolve: resolveFor(ctx, input, co),
       worktree: worktreeFor(ctx, input, co),
       packet: packetFor(ctx, input, co) as never,
       spawnStage: spawnStageFor(ctx, co),
-      policy: {},
+      policy,
       ...(input.rounds !== undefined && { rounds: input.rounds }),
       onNotice: note => console.log(`  ${note}`),
       // One line per stage, the moment the NEXT resolve reveals whether it advanced. Without it a

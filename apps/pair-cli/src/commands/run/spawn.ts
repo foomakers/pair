@@ -19,12 +19,15 @@ export interface EngineArgsInput {
   readonly cwd: string
   /** Autonomy args, already translated through the engine map (empty ⇒ confirmations active). */
   readonly autonomyArgs: readonly string[]
+  /** The model this project pinned for this engine, if any (`engine.model` in pair.config.json). */
+  readonly model?: string | undefined
 }
 
 /** The engine's argv: headless/stream flags, an optional cwd flag, autonomy, then the prompt. */
 export function buildEngineArgs(input: EngineArgsInput): string[] {
   return [
     ...input.engine.headlessArgs,
+    ...(input.engine.modelFlag && input.model ? [input.engine.modelFlag, input.model] : []),
     ...(input.engine.cwdFlag ? [input.engine.cwdFlag, input.cwd] : []),
     ...input.autonomyArgs,
     input.promptText,

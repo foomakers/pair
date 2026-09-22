@@ -47,6 +47,8 @@ export interface RunStageInput {
   readonly engine: EngineDefinition
   readonly packet: StagePacket
   readonly autonomyArgs: readonly string[]
+  /** The model pinned for this engine, threaded to the spawn (run-wide; per-stage is #488's). */
+  readonly model?: string | undefined
   readonly timeoutSeconds: number
   readonly runIteration: (input: SpawnIterationInput) => Promise<IterationResult>
 }
@@ -58,6 +60,7 @@ export async function runStage(input: RunStageInput): Promise<CycleStageResult> 
     promptText: input.packet.prompt,
     cwd: input.packet.worktree,
     autonomyArgs: input.autonomyArgs,
+    ...(input.model !== undefined && { model: input.model }),
     timeoutSeconds: input.timeoutSeconds,
   })
   return {
