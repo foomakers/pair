@@ -242,15 +242,15 @@ jobs:
   # scenario broke", which is a different diagnosis from a red unit/lint gate.
   #
   # MEASURED COST (AC7) — observed IN CI, on this job, not extrapolated from a
-  # local run: ubuntu-latest took 1m53s end-to-end for the 18-scenario CI-safe
-  # list. Run 31538360697, job 93934813269 (2026-08-11): checkout+pnpm 4s,
-  # install 10s, CLI+deps build 6s, the suite itself 1m28s, all 18 scenarios PASS.
-  # macos-latest is measured by the sibling matrix leg on each PR head. Because
-  # matrix legs run in parallel, wall-clock is the slower leg, not the sum.
-  # In the SAME ubuntu-latest run `build` took 3m59s, so smoke was ~47% of the
-  # critical path job: it added runner time and ZERO wall-clock before the matrix.
+  # local run: ubuntu-latest took 2m18s end-to-end for the 18-scenario CI-safe
+  # list. Run 35722661742, job 106728912182 (2026-09-22).
+  # macos-latest took 2m21s end-to-end for the same list.
+  # Run 35722661742, job 106728912218 (2026-09-22). Because matrix legs run in parallel,
+  # wall-clock is the slower leg, not the sum.
+  # In the SAME PR run `build` took 5m30s, so smoke was ~43% of the critical
+  # path job: it added runner time and ZERO wall-clock before the matrix.
   # REVISIT THRESHOLD: revisit when smoke exceeds ~75% of `build` in the same run
-  # — ~3m00s against today's 3m59s, i.e. roughly +1m05s of new scenarios from here.
+  # — ~4m08s against today's 5m30s, i.e. roughly +1m47s of new scenarios from here.
   # Past it, the list gets scoped (reasons recorded in lib/ci-tests.sh) or moved to
   # a schedule — deliberately, not tolerated silently. A nightly was rejected on
   # data: it would report a pinned-bug flip up to 24h late, on main, instead of on
