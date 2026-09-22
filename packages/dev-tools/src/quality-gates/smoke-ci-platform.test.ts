@@ -121,9 +121,16 @@ describe('smoke CI platform coverage (#135)', () => {
 
   it('AC7 records macOS cost beside the smoke job and states parallel wall-clock semantics', () => {
     const ci = workflowText()
-    expect(ci).toMatch(/MEASURED COST[\s\S]*ubuntu-latest[\s\S]*macos-latest/)
-    expect(ci).toMatch(/wall-clock is the slower leg, not the sum/i)
-    expect(ci).toMatch(/REVISIT THRESHOLD/)
+    const measuredCost = ci.match(/MEASURED COST \(AC7\)[\s\S]*?REVISIT THRESHOLD/)?.[0] ?? ''
+
+    expect(measuredCost).toMatch(
+      /ubuntu-latest took \d+m\d+s[\s\S]*Run \d+, job \d+ \(\d{4}-\d{2}-\d{2}\)/,
+    )
+    expect(measuredCost).toMatch(
+      /macos-latest took \d+m\d+s[\s\S]*Run \d+, job \d+ \(\d{4}-\d{2}-\d{2}\)/,
+    )
+    expect(measuredCost).not.toMatch(/macos-latest is measured by the sibling matrix leg/i)
+    expect(measuredCost).toMatch(/matrix legs run in parallel[\s\S]*wall-clock is the slower leg/i)
   })
 
   it('AC8 documents the CI-safe platforms and the full local suite posture', () => {
