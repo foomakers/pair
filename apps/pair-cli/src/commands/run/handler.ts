@@ -633,7 +633,6 @@ interface CycleCoordinatorInput {
  */
 function assertNoLoopModeConcerns(
   config: RunCommandConfig,
-  context: RunContext,
   fs: FileSystemService,
   cwd: string,
 ): void {
@@ -645,12 +644,17 @@ function assertNoLoopModeConcerns(
         `filtered set of cards. Drop --filter, or map this card's tag to a workflow instead.`,
     )
   }
-  if (context.policy.eligibility === undefined && policyDeclaresMaxParallelism(fs, cwd)) {
+  // r0-3: UNCONDITIONAL, as AC7 and Assumption 6 both state it — "`--root`/`--filter` and
+  // `## Max Parallelism` are loop-mode concerns and are refused in card mode". Gating it on
+  // `eligibility === undefined` made the refusal depend on an unrelated declaration: a project
+  // that declared both `## Eligibility` and `## Max Parallelism` reached the cycle coordinator
+  // carrying a parallelism expectation nothing on this path can honour, silently.
+  if (policyDeclaresMaxParallelism(fs, cwd)) {
     throw new Error(
-      `${POLICY_PATH} declares \`## Max Parallelism\` but no \`## Eligibility\`: Max Parallelism ` +
-        `is a loop-mode concern (like --filter), and a policy with nothing else declared has ` +
-        `nothing for the delivery-cycle coordinator to read either — declare \`## Eligibility\`, ` +
-        `or drop \`## Max Parallelism\` if this policy is not meant to drive \`pair-loop\` either.`,
+      `${POLICY_PATH} declares \`## Max Parallelism\`, which is a loop-mode concern (like ` +
+        `--filter): the delivery-cycle coordinator drives ONE story's own stages in sequence and ` +
+        `can honour no parallelism ceiling. Drop \`## Max Parallelism\`, or map this card's tag ` +
+        `to a workflow so it runs in loop mode instead.`,
     )
   }
 }
@@ -749,9 +753,9 @@ async function enterCycleCoordinator(
   input: CycleCoordinatorInput,
   deps: RunHandlerDependencies,
 ): Promise<number> {
-  const { config, context, fs, cwd, card, dorReason } = input
+  const { config, context, fs, cwd, card } = input
 
-  assertNoLoopModeConcerns(config, context, fs, cwd)
+  assertNoLoopModeConcerns(config, fs, cwd)
 
   const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
   const engineDef = resolveEngineFor(engine, context, cwd, fs)
@@ -766,8 +770,11 @@ async function enterCycleCoordinator(
   // scoping here to the branch AC11's OWN fixture actually exercises keeps that shared fixture's
   // other rows untouched. Flagged as a contract note: a real, unconfigured-vs-partially-configured
   // project could still reach `driveCycle` unchecked via the `unmapped` branch.
-  const location =
-    dorReason === 'no-mapping-declared' ? locateCycleScripts(fs, context.config, cwd) : undefined
+  // r0-4: located for BOTH fallback reasons, not just `no-mapping-declared`. `handleDorFallback`
+  // reaches here for `unmapped` too (a project WITH `## Workflows` whose card carries no mapped
+  // tag), and scoping the probe to one of them let that project reach `driveCycle` with the skill
+  // absent — the very HALT AC11 exists to raise, skipped for half its own surface.
+  const location = locateCycleScripts(fs, context.config, cwd)
 
   const dispatch = config.dispatch!
   reportCycleEntry({

@@ -454,10 +454,22 @@ auto-plan ⇒ pair-process-plan-tasks
 Precedence: auto-plan, auto-dev
 `
 
+  // r0-3 made the `## Max Parallelism` refusal unconditional in cycle mode, as AC7 states it. A
+  // fixture that declares it can therefore no longer reach the coordinator — which is the point,
+  // and is asserted on its own fixture below. The AC14 routing cases use this one instead: same
+  // mapping, no loop-mode expectation to refuse.
+  const DISPATCH_POLICY_NO_PARALLELISM = DISPATCH_POLICY.replace(/## Max Parallelism\n\n3\n/, '')
+
   const dispatchFs = (policy = DISPATCH_POLICY) =>
     projectFs({
       [`${cwd}/${POLICY_PATH}`]: policy,
       [`${cwd}/.claude/skills/pair-process-plan-tasks/SKILL.md`]: '',
+      // r0-4 widened AC11's skill-missing HALT to BOTH fallback reasons, so the `unmapped` half of
+      // AC14 now needs the cycle skill present like the `no-mapping-declared` half always did.
+      // The HALT itself keeps its own fixture, which deliberately omits these.
+      [`${cwd}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
+      [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs`]: '',
+      [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs`]: '',
     })
 
   /** Records what was audited, without touching a real working area. */
@@ -584,7 +596,7 @@ Precedence: auto-plan, auto-dev
 
     const code = await handleRunCommand(
       parseRunCommand({ card: '218', cardTags: 'risk:green' }),
-      dispatchFs(),
+      dispatchFs(DISPATCH_POLICY_NO_PARALLELISM),
       { ...handler, cardReadiness, driveCycle },
     )
 
