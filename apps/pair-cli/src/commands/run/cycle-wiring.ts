@@ -80,6 +80,69 @@ export function deriveBranch(card: string, title: string): string {
   return `feature/US-${card}${slug ? `-${slug}` : ''}`
 }
 
+/**
+ * The story's branch, asked of the authority that knows it before it is ever derived.
+ *
+ * Deriving from the card title is a fallback, not a source of truth: a title that changes after the
+ * branch was cut produces a name nobody uses. US-487's own title did exactly that — the derived
+ * `feature/US-487-pair-cli-run-card-pr-rounds` collided with the real
+ * `feature/US-487-pair-cli-run-card-coordinator`, and the worktree guard refused, correctly.
+ *
+ * 1. `--pr <n>` — `gh pr view --json headRefName` is authoritative and ends the guessing.
+ * 2. An existing branch for this card, local or on origin — it is the one already in use.
+ * 3. Derivation from the title, for a story that has none of the above yet.
+ */
+export function resolveBranch(
+  card: string,
+  title: string,
+  pr: number | undefined,
+  cwd: string,
+): string {
+  if (pr !== undefined) {
+    try {
+      const head = execFileSync(
+        'gh',
+        ['pr', 'view', String(pr), '--json', 'headRefName', '-q', '.headRefName'],
+        {
+          cwd,
+          encoding: 'utf-8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      ).trim()
+      if (head) return head
+    } catch {
+      // Fall through: a PR that cannot be read is not a reason to refuse outright — the existing
+      // branch below, or the derivation, may still be right. The worktree guard is the backstop.
+    }
+  }
+  const existing = existingBranchFor(card, cwd)
+  return existing ?? deriveBranch(card, title)
+}
+
+/** A branch already cut for this card, preferring the local ref and falling back to origin's. */
+function existingBranchFor(card: string, cwd: string): string | undefined {
+  const pattern = `feature/US-${card}-*`
+  for (const args of [
+    ['branch', '--list', pattern, '--format=%(refname:short)'],
+    ['branch', '--list', '--remotes', `origin/${pattern}`, '--format=%(refname:lstrip=3)'],
+  ]) {
+    try {
+      const found = execFileSync('git', args, {
+        cwd,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+      if (found.length === 1) return found[0]
+    } catch {
+      // A git that cannot answer is not an answer: fall through to the next source.
+    }
+  }
+  return undefined
+}
+
 export const ghCardReadiness = async (card: string): Promise<CardReadiness> =>
   classifyCardReadiness(readCardViaGh(card, process.cwd()))
 
@@ -147,7 +210,7 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
   return {
     bridge: createCycleScriptsBridge(ctx.location),
     main,
-    branch: deriveBranch(input.card, record.title),
+    branch: resolveBranch(input.card, record.title, input.pr, ctx.cwd),
     title: record.title,
     runDir: `${runsRoot}/${input.runId}/${input.card}`,
     runsRoot,

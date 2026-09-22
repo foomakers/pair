@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseCardRecord, deriveBranch } from './cycle-wiring'
+import { parseCardRecord, deriveBranch, resolveBranch } from './cycle-wiring'
 
 /**
  * The pure halves of the production wiring — the tracker call itself is the operator's own `gh`
@@ -57,5 +57,33 @@ describe('deriveBranch', () => {
 
   it('still yields a usable branch when the title slugs to nothing', () => {
     expect(deriveBranch('42', '!!! ???')).toBe('feature/US-42')
+  })
+})
+
+describe('resolveBranch — ask the authority before deriving', () => {
+  // The 8th defect the canary found: US-487's title changed after its branch was cut, so
+  // `deriveBranch` produced `feature/US-487-pair-cli-run-card-pr-rounds` while the real branch was
+  // `…-coordinator`. The worktree guard refused to switch a checkout, correctly — but the driver
+  // should never have asked. Derivation is the fallback of last resort, not the first answer.
+  it('falls back to derivation only for a card with no branch anywhere', () => {
+    // A card id nothing in this repository has ever cut a branch for: no PR, no local ref, no
+    // remote ref — the one case where the title is genuinely the only thing to go on.
+    expect(resolveBranch('999999', 'A story never started', undefined, process.cwd())).toBe(
+      deriveBranch('999999', 'A story never started'),
+    )
+  })
+
+  it('prefers an existing branch for the card over anything the title would derive', () => {
+    // This worktree's own story: the title no longer matches the branch, which is exactly the
+    // condition that made derivation wrong.
+    const derived = deriveBranch('487', 'pair-cli run --card [--pr] [--rounds] — coordinator')
+    const resolved = resolveBranch(
+      '487',
+      'pair-cli run --card [--pr] [--rounds] — coordinator',
+      undefined,
+      process.cwd(),
+    )
+    expect(resolved).toBe('feature/US-487-pair-cli-run-card-coordinator')
+    expect(resolved).not.toBe(derived)
   })
 })
