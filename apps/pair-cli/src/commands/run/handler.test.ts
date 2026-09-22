@@ -1103,6 +1103,8 @@ describe('handleRunCommand — the delivery-cycle coordinator entry (US-487)', (
     // Structural: `deps` accepted by `handleRunCommand` carries no merge seam at all (see
     // `RunHandlerDependencies` — `driveCycle` returns a STATUS, never an action), so a converged
     // cycle cannot have called one.
-    expect(driveCycle).toHaveReturnedWith(expect.objectContaining({ status: 'ready-for-merge' }))
+    // `driveCycle` is an ASYNC mock: `toHaveReturnedWith` would compare against the Promise it
+    // returns and pass for any resolved value. `toHaveResolvedWith` is what discriminates here.
+    expect(driveCycle).toHaveResolvedWith(expect.objectContaining({ status: 'ready-for-merge' }))
   })
 })

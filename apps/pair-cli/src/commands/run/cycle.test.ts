@@ -38,19 +38,22 @@ const BLOCKED_ESCALATE = { step: 'blocked', reason: 'escalate', detail: 'a human
 
 describe('runCycle (US-487 T-4)', () => {
   it('AC1: drives resolve → worktree → packet → spawnStage → resolve until a terminal step, one fresh dispatch per stage', async () => {
+    // Three stages, not two: a two-stage chain cannot discriminate a loop that is general in the
+    // number of stages from one that happens to dispatch twice. prepare → validate → implement.
     const resolve = scriptedResolve([
       { status: 'empty', next: PREPARE_A0 },
       { status: 'in-progress', next: VALIDATE_A0 },
+      { status: 'in-progress', next: IMPLEMENT_A0 },
       { status: 'completed', next: DONE },
     ])
     const spawnStage = vi.fn(async (): Promise<CycleStageResult> => ({ processOutcome: 'success' }))
 
     const outcome = await runCycle({ resolve, worktree, packet, spawnStage, policy: {} })
 
-    expect(resolve).toHaveBeenCalledTimes(3)
-    expect(spawnStage).toHaveBeenCalledTimes(2)
+    expect(resolve).toHaveBeenCalledTimes(4)
+    expect(spawnStage).toHaveBeenCalledTimes(3)
     expect(outcome.status).toBe('ready-for-merge')
-    expect(outcome.stagesRun).toBe(2)
+    expect(outcome.stagesRun).toBe(3)
   })
 
   it('AC9: a converged run directory (already terminal on the FIRST resolve) spawns nothing', async () => {
