@@ -1,4 +1,5 @@
 import { execFileSync } from 'child_process'
+import { dirname, isAbsolute, resolve as resolvePath } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import type { EngineDefinition } from './engines'
 import { runCycle, type CycleOutcome, type CycleStageResult } from './cycle'
@@ -82,6 +83,33 @@ export function deriveBranch(card: string, title: string): string {
 export const ghCardReadiness = async (card: string): Promise<CardReadiness> =>
   classifyCardReadiness(readCardViaGh(card, process.cwd()))
 
+/**
+ * The repository's MAIN checkout — never the directory the command happened to run in.
+ *
+ * `cycle-dispatch.mjs worktree` resolves a relative `--worktree-root` against `--main`
+ * (`resolvePath(main, worktreeRoot)`), and the shipped default is `../pair-worktrees`. Run from the
+ * main checkout the two coincide, which is why passing the cwd looks right; run from a worktree —
+ * which is exactly what driving a canary does — `..` is already the worktree root, so the story's
+ * worktree lands in `pair-worktrees/pair-worktrees/<id>`. Found by running it, not by reading it.
+ *
+ * `--git-common-dir` is the one answer that is the same from every worktree of a repository.
+ */
+export function mainCheckout(cwd: string): string {
+  try {
+    const commonDir = execFileSync(
+      'git',
+      ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+      { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] },
+    ).trim()
+    return dirname(commonDir)
+  } catch (error) {
+    throw new Error(
+      `main-checkout-unresolved: could not resolve this repository's main checkout from ${cwd} — ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+}
+
 export interface CycleDriverContext {
   readonly engine: EngineDefinition
   readonly cwd: string
@@ -108,10 +136,17 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
         `dispatched. Install the skill, or run where it is installed.`,
     )
   }
-  const runsRoot = `${ctx.cwd}/.pair/working/runs`
+  // Handoffs live under the MAIN checkout, by the same contract the phase skills state: "handoffs
+  // live under `.pair/working/runs/$run/$story/` in the MAIN checkout the coordinator was started
+  // in — never inside a story or review worktree".
+  const main = mainCheckout(ctx.cwd)
+  const runsRoot = `${main}/.pair/working/runs`
+  const record = readCardViaGh(input.card, ctx.cwd)
   return {
     bridge: createCycleScriptsBridge(ctx.location),
-    branch: deriveBranch(input.card, readCardViaGh(input.card, ctx.cwd).title),
+    main,
+    branch: deriveBranch(input.card, record.title),
+    title: record.title,
     runDir: `${runsRoot}/${input.runId}/${input.card}`,
     runsRoot,
   }
@@ -134,7 +169,7 @@ const resolveFor =
 const worktreeFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => async () =>
     co.bridge.worktree({
-      main: ctx.cwd,
+      main: co.main,
       story: input.card,
       branch: co.branch,
       base: ctx.baseBranch,
@@ -145,19 +180,38 @@ const packetFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => async (next: unknown) =>
     co.bridge.packet({
       next: next as never,
-      card: input.card,
+      // `--card` is the card OBJECT the dispatch script validates field by field (`card.id`,
+      // `card.branch`, `card.base`, `card.title`, `card.prNumber`), never the bare id — the
+      // bridge types it `unknown`, so only a real dispatch catches the difference.
+      card: {
+        id: input.card,
+        branch: co.branch,
+        base: ctx.baseBranch,
+        title: co.title,
+        ...(input.pr !== undefined && { prNumber: input.pr }),
+      },
+      run: input.runId,
       style: styleFor(ctx.engine),
       workflowVersion: ctx.workflowVersion,
     }) as never
 
-const spawnStageFor = (ctx: CycleDriverContext) => async (packet: unknown) =>
-  (await runStage({
+const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packet: unknown) => {
+  // `$worktree` comes out of the packet RELATIVE, and by grammar it can be nothing else: the packet
+  // path validates `pipeline.worktreeRoot` with `isRelPath`, so an absolute root is refused there
+  // (unlike the `worktree` command, which accepts one). Relative to WHAT is the caller's to know —
+  // it is the main checkout, the same anchor `worktree` resolves against. Spawning with it verbatim
+  // resolves it against the driver's own cwd instead, which is a different directory whenever the
+  // command is run from a worktree: the spawn then fails ENOENT on a path nobody created.
+  const raw = packet as { worktree: string }
+  const worktree = isAbsolute(raw.worktree) ? raw.worktree : resolvePath(co.main, raw.worktree)
+  return (await runStage({
     engine: ctx.engine,
-    packet: packet as never,
+    packet: { ...raw, worktree } as never,
     autonomyArgs: ctx.autonomyArgs,
     timeoutSeconds: ctx.timeoutSeconds,
     runIteration: spawnIteration,
   })) as CycleStageResult
+}
 
 /**
  * Composes the three pieces T-2/T-3/T-4 built into the driver `handleRunCommand` calls: the script
@@ -171,7 +225,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       resolve: resolveFor(ctx, input, co),
       worktree: worktreeFor(ctx, input, co),
       packet: packetFor(ctx, input, co) as never,
-      spawnStage: spawnStageFor(ctx),
+      spawnStage: spawnStageFor(ctx, co),
       policy: {},
       ...(input.rounds !== undefined && { rounds: input.rounds }),
       onNotice: note => console.log(`  ${note}`),

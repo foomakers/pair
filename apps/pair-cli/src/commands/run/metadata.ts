@@ -66,6 +66,11 @@ export const runCommandMetadata = {
         'Explicit operator authorization to run where the engine does not trust the project',
     },
     {
+      flags: '--approve-ineligible',
+      description:
+        'Explicit operator authorization for THIS run on a card `## Eligibility` would exclude (never persisted)',
+    },
+    {
       flags: '--iteration-timeout <seconds>',
       description: 'Per-iteration wall-clock bound (hang guard, default 1800)',
     },

@@ -140,21 +140,39 @@ function policyDeclaresMaxParallelism(fs: FileSystemService, cwd: string): boole
  * - `no-mapping-declared` with `--autonomous` — unattended: no `## Eligibility` declared means the
  *   project never opted into automation at all and the run proceeds; declared means the card must
  *   carry the label, exactly as it would have for any mapped workflow.
+ * - `--approve-ineligible` — the operator overrides that last case for THIS run. A policy binds a
+ *   pipeline, never the person who wrote it: someone who knows why this card is the exception must
+ *   be able to say so, and carry the responsibility. It is per-invocation by construction — nothing
+ *   is written, so the next run on the same card is bounded again — and it is announced, never
+ *   silent, so the override appears in the output an unattended run is audited by.
  *
  * `automation-off`, `ineligible` and `run-in-progress` never reach this function.
  */
-export function isDorFallbackReason(
-  reason: DispatchSkipReason,
-  policy: AutomationPolicy,
-  tags: readonly string[] | undefined,
-  autonomous: boolean,
-): boolean {
-  if (reason === 'unmapped') return true
-  if (reason !== 'no-mapping-declared') return false
-  if (!autonomous) return true
-  // Absent tags are the same evidence as empty ones — "the trigger saw no labels" — never a reason
-  // to skip the check. The defaulting lives here so the caller carries no extra branch.
-  return policy.eligibility === undefined || (tags ?? []).includes(policy.eligibility)
+export interface DorFallbackGate {
+  readonly reason: DispatchSkipReason
+  readonly policy: AutomationPolicy
+  /** The labels the trigger observed. Absent and empty are the same evidence: "it saw none". */
+  readonly tags?: readonly string[] | undefined
+  readonly autonomous: boolean
+  readonly approveIneligible?: boolean
+}
+
+export function isDorFallbackReason(gate: DorFallbackGate): boolean {
+  if (gate.reason === 'unmapped') return true
+  if (gate.reason !== 'no-mapping-declared') return false
+  if (!gate.autonomous || gate.approveIneligible === true) return true
+  return (
+    gate.policy.eligibility === undefined || (gate.tags ?? []).includes(gate.policy.eligibility)
+  )
+}
+
+/** True only when `--approve-ineligible` is what decided the outcome — see the announcement below. */
+export function ineligibleOverrideApplied(gate: DorFallbackGate): boolean {
+  if (gate.reason !== 'no-mapping-declared') return false
+  if (!gate.autonomous || gate.approveIneligible !== true) return false
+  return (
+    gate.policy.eligibility !== undefined && !(gate.tags ?? []).includes(gate.policy.eligibility)
+  )
 }
 
 interface ResolvedRun {
@@ -336,14 +354,7 @@ export async function handleRunCommand(
   // runs" — the card's OWN Definition-of-Ready macrostate now decides. Every OTHER skip reason
   // (`automation-off`, `ineligible`, `run-in-progress`) is unchanged.
   if (context.dispatch?.kind === 'skip') {
-    if (
-      isDorFallbackReason(
-        context.dispatch.reason,
-        context.policy,
-        config.dispatch?.tags,
-        config.autonomous === true,
-      )
-    ) {
+    if (isDorFallbackReason(gateFor(context.dispatch.reason, context, config))) {
       return await handleDorFallback({ config, context, fs, cwd, decision: context.dispatch }, deps)
     }
     reportSkippedDispatch(context)
@@ -460,6 +471,41 @@ interface DorFallbackInput {
  * happens NEXT, decided by the card's OWN Definition-of-Ready macrostate — never presence/absence
  * of a mapping alone, and never consulted at all when a route already matched (Assumption 2).
  */
+/** One gate value, built from the run's own state — never five positional arguments at a call site. */
+function gateFor(
+  reason: DispatchSkipReason,
+  context: RunContext,
+  config: RunCommandConfig,
+): DorFallbackGate {
+  return {
+    reason,
+    policy: context.policy,
+    tags: config.dispatch?.tags,
+    autonomous: config.autonomous === true,
+    approveIneligible: config.approveIneligible === true,
+  }
+}
+
+/**
+ * An override nobody can see in the output is not an override, it is a silent exception: whoever
+ * reads an unattended run's trail afterwards could not tell one from an ordinary run. Printed only
+ * when the flag actually decided the outcome, so it never becomes noise on runs it changed nothing.
+ */
+function announceIneligibleOverride(
+  card: string,
+  context: RunContext,
+  config: RunCommandConfig,
+): void {
+  if (!ineligibleOverrideApplied(gateFor('no-mapping-declared', context, config))) return
+  console.log(
+    chalk.yellow(
+      `  Eligibility OVERRIDDEN for this run: card ${card} does not carry ` +
+        `\`${context.policy.eligibility}\` (\`## Eligibility\`), and --approve-ineligible was passed. ` +
+        `This authorization is not persisted — the next run on this card is bounded again.`,
+    ),
+  )
+}
+
 async function handleDorFallback(
   input: DorFallbackInput,
   deps: RunHandlerDependencies,
@@ -467,6 +513,7 @@ async function handleDorFallback(
   const { config, context, fs, cwd, decision } = input
 
   reportSkippedDispatch(context)
+  announceIneligibleOverride(decision.card, context, config)
   if (config.dryRun) return 0
   recordSkip(context, deps, decision)
 

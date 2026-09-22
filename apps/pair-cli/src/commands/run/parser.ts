@@ -68,6 +68,8 @@ export interface RunCommandConfig {
   autonomous: boolean
   /** Explicit operator authorization to run in a project the engine does not trust (AC6). */
   approveProjectTrust: boolean
+  /** `--approve-ineligible`: this ONE run may proceed on a card `## Eligibility` would exclude. */
+  approveIneligible: boolean
   iterationTimeoutSeconds: number
   /** Present only when `--card` was passed: the run is a tag-driven dispatch (US-217). */
   dispatch?: RunDispatchRequest
@@ -85,6 +87,7 @@ interface ParseRunOptions {
   maxIterations?: string | number
   autonomous?: boolean
   approveProjectTrust?: boolean
+  approveIneligible?: boolean
   iterationTimeout?: string | number
   card?: string
   cardTags?: string
@@ -367,6 +370,7 @@ export function parseRunCommand(options: ParseRunOptions, args: string[] = []): 
     }),
     autonomous: options.autonomous === true,
     approveProjectTrust: options.approveProjectTrust === true,
+    approveIneligible: options.approveIneligible === true,
     iterationTimeoutSeconds:
       options.iterationTimeout === undefined
         ? DEFAULT_ITERATION_TIMEOUT_SECONDS

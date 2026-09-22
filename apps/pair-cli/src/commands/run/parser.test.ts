@@ -11,6 +11,7 @@ describe('parseRunCommand', () => {
       scope: {},
       autonomous: false,
       approveProjectTrust: false,
+      approveIneligible: false,
       iterationTimeoutSeconds: DEFAULT_ITERATION_TIMEOUT_SECONDS,
       dryRun: false,
     })
@@ -46,6 +47,7 @@ describe('parseRunCommand', () => {
       maxIterations: 4,
       autonomous: true,
       approveProjectTrust: true,
+      approveIneligible: false,
       iterationTimeoutSeconds: 90,
       dryRun: true,
     })
