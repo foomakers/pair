@@ -398,6 +398,63 @@ test('r0-1: a second call with no record after a resume (the host rejected it, S
   assert.equal(c4.json.arguments.args.runId, s3.result.runId, 'the next reuse resumes the fresh retry, not the rejected id')
 })
 
+// ── r1-4: a host-rejected run id stays rejected, whatever overwrites `pending` afterwards ──────
+// implement records run-A; a green reuse resumes it; the host rejects it (no record). From then on
+// no reuse of that role may resume run-A again — not after a fresh retry that also dies unrecorded,
+// nor after any number of them, nor after a fresh retry that ADVANCES unrecorded (Step 4 accepts a
+// missing return) followed by other roles' calls through the same ledger.
+async function rejectedResume(w, ledger, env) {
+  const impl = packetFor(w, { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1, context: 'fresh' })
+  const c1 = bridge(['call', '--packet', impl.file, '--ledger', ledger, '--tool', toolJson()], env)
+  assert.equal(c1.status, 0, c1.out)
+  const s1 = await stubSubagent(c1.json.arguments, w)
+  assert.equal(bridge(['record', '--ledger', ledger, '--result', JSON.stringify(s1.result)], env).json.recorded, true)
+  const green = packetFor(w, GREEN_REUSE)
+  const c2 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], env)
+  assert.equal(c2.json.op, 'resume', c2.out)
+  assert.equal(c2.json.arguments.args.runId, s1.result.runId)
+  return { green, runA: s1.result.runId }
+}
+
+test('r1-4: rejected resume, then a fresh retry that also dies unrecorded — the next reuse still never resumes the rejected id', async () => {
+  const w = world()
+  const ledger = join(w.main, 'ledger.json')
+  const inA = { PI_SESSION_ID: w.session }
+  const { green, runA } = await rejectedResume(w, ledger, inA)
+  const c3 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assertFreshNotForeign(c3, runA) // the fresh retry — it dies too, nothing recorded
+  const c4 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assertFreshNotForeign(c4, runA)
+})
+
+test('r1-4: any number of unrecorded retries after a rejected resume never re-resume the rejected id', async () => {
+  const w = world()
+  const ledger = join(w.main, 'ledger.json')
+  const inA = { PI_SESSION_ID: w.session }
+  const { green, runA } = await rejectedResume(w, ledger, inA)
+  for (let i = 0; i < 5; i++) {
+    const c = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], inA)
+    assertFreshNotForeign(c, runA)
+  }
+})
+
+test('r1-4: rejected resume, fresh retry advances unrecorded, another role runs, then a later green reuse — never the rejected id', async () => {
+  const w = world()
+  const ledger = join(w.main, 'ledger.json')
+  const inA = { PI_SESSION_ID: w.session }
+  const { green, runA } = await rejectedResume(w, ledger, inA)
+  const c3 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assertFreshNotForeign(c3, runA)
+  await stubSubagent(c3.json.arguments, w) // the retry's handoff advances; its return is lost, nothing recorded
+  const review = packetFor(w, { step: 'verify', mode: 'remediation', phase: 'r1', round: 1, attempt: 1, context: 'fresh', pr: 7, head: 'c'.repeat(40), snapshot: 'a'.repeat(40), contract: '/c.json', base: 'b'.repeat(40) })
+  assert.notEqual(review.packet.agentType, green.packet.agentType, 'another role')
+  const cr = bridge(['call', '--packet', review.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assert.equal(cr.status, 0, cr.out)
+  const green2 = packetFor(w, { ...GREEN_REUSE, phase: 'r2', round: 2 })
+  const c5 = bridge(['call', '--packet', green2.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assertFreshNotForeign(c5, runA)
+})
+
 test('r0-1: Step 3 states the same-role fresh fallback for a rejected resume, so a retry never re-resumes the same id', () => {
   const step3 = section(readFileSync(CYCLE_SKILL, 'utf8'), '### Step 3:')
   assert.match(step3, /reject[^\n]*resume[^\n]*\bfresh\b|resume[^\n]*reject[^\n]*\bfresh\b/i, 'a rejected resume has a stated fresh fallback')

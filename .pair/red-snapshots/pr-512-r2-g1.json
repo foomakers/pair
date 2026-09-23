@@ -1,0 +1,193 @@
+{
+  "$meta": {
+    "pr": "512",
+    "phase": "r2-g1",
+    "base": "9bbfb29ce8ad71543168b41a79381cc9723d5586",
+    "trailer": "Pair-RED-Snapshot: pr=512; phase=r2-g1; base=9bbfb29ce8ad71543168b41a79381cc9723d5586; manifest=.pair/red-snapshots/pr-512-r2-g1.json",
+    "artifacts": [
+      ".claude/workflows/pair-contracts/pi-bridge.test.mjs"
+    ]
+  },
+  "run": "story-503",
+  "story": "503",
+  "pr": 512,
+  "phase": "r2-g1",
+  "mode": "repair",
+  "remediationBatchId": "r2",
+  "groupId": "r2-g1",
+  "inputHead": "9bbfb29ce8ad71543168b41a79381cc9723d5586",
+  "sourceOfTruth": [
+    "SKILL.md Step 3 (at 9bbfb29c): 'a retry never re-resumes the same id'; pi.md/ADL: host-rejected resume ⇒ same-role fresh stage",
+    "pi-subagents@0.71.0: a rejected resume errors the subagent call with no JSON to record (tool-reference.md:184,201)",
+    "cycle-state.mjs: a dead dispatch is re-dispatched with the SAME prompt (same role), so the next call after a rejected resume is always the same role"
+  ],
+  "inventory": [
+    {
+      "id": "r1-4",
+      "producer": "pi-bridge.mjs callCommand: the rejected-resume guard (ledger.pending op resume, same role) and ledger.roles[role] it leaves in place",
+      "inputs": [
+        "ledger.pending (single slot, overwritten by every call)",
+        "ledger.roles[role].runId",
+        "PI_SESSION_ID"
+      ],
+      "representations": [
+        ".claude/skills/pair-workflow-cycle/scripts/pi-bridge.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/pi-bridge.mjs (mirror)"
+      ],
+      "consumers": [
+        "pi subagent runs.run({resume}) — rejects the id again",
+        "pair-workflow-cycle Step 3/Step 4 dead-dispatch retry"
+      ],
+      "classes": [
+        "rejected resume ⇒ next call fresh (sealed r1-g1 control)",
+        "rejected resume ⇒ fresh retry dies unrecorded ⇒ next reuse fresh, never the rejected id (witness)",
+        "any number N of unrecorded retries ⇒ all fresh, never the rejected id (witness)",
+        "fresh retry recorded ⇒ next reuse resumes the retry run (sealed control)",
+        "rejected resume ⇒ fresh retry ADVANCES its handoff unrecorded (Step 4 accepts a missing return) ⇒ other roles' calls (verify/prepare/validate) overwrite ledger.pending ⇒ a later green→green reuse is fresh, never the rejected id (interaction witness)"
+      ],
+      "interactions": [
+        "rejection guard × pending overwrite by the next call × roles[role] retention",
+        "rejection × unrecorded advanced retry × another role's call through the same ledger × later same-role reuse"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "pair-workflow-cycle pi realization (pi-bridge.mjs call ledger)",
+    "mode": "behavioral",
+    "allowedPaths": [
+      ".claude/skills/pair-workflow-cycle/scripts/pi-bridge.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/pi-bridge.mjs",
+      ".claude/skills/pair-workflow-cycle/SKILL.md",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md",
+      ".pair/adoption/decision-log/",
+      ".pair/llms.txt"
+    ]
+  },
+  "plan": {
+    "remediationBatchId": "r2",
+    "groups": [
+      {
+        "groupId": "r2-g1",
+        "owner": "pair-workflow-cycle pi realization (pi-bridge.mjs call ledger)",
+        "oracle": "SKILL.md Step 3 'a retry never re-resumes the same id' + pi-subagents@0.71.0 rejected-resume behaviour",
+        "mode": "behavioral",
+        "findings": [
+          "r1-4"
+        ],
+        "allowedPaths": [
+          ".claude/skills/pair-workflow-cycle/scripts/pi-bridge.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/pi-bridge.mjs",
+          ".claude/skills/pair-workflow-cycle/SKILL.md",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md",
+          ".pair/adoption/decision-log/",
+          ".pair/llms.txt"
+        ],
+        "dependsOn": []
+      }
+    ],
+    "carried": []
+  },
+  "matrix": [
+    {
+      "id": "r14-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "file": ".claude/workflows/pair-contracts/pi-bridge.test.mjs",
+      "condition": "same PI_SESSION_ID: implement recorded run-A; green reuse ⇒ resume run-A (rejected, unrecorded); green reuse ⇒ fresh (dies unrecorded); green reuse",
+      "oracle": "node --test --test-name-pattern=also.dies.unrecorded pair-contracts/pi-bridge.test.mjs (cwd .claude/workflows)",
+      "expected": "the last call is op fresh, degraded reuse→fresh, args.runId never run-A",
+      "covers": [
+        "r1-4"
+      ]
+    },
+    {
+      "id": "r14-W2",
+      "kind": "boundary",
+      "baseline": "red",
+      "file": ".claude/workflows/pair-contracts/pi-bridge.test.mjs",
+      "condition": "after the rejected resume, 5 successive unrecorded green reuse calls",
+      "oracle": "node --test --test-name-pattern=any.number.of.unrecorded pair-contracts/pi-bridge.test.mjs (cwd .claude/workflows)",
+      "expected": "every call op fresh, degraded reuse→fresh, never args.runId run-A",
+      "covers": [
+        "r1-4"
+      ]
+    },
+    {
+      "id": "r14-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "file": ".claude/workflows/pair-contracts/pi-bridge.test.mjs",
+      "condition": "rejected resume, fresh retry that IS recorded, next reuse (sealed r1-g1 r01-W8)",
+      "oracle": "node --test --test-name-pattern=second.call.with.no.record pair-contracts/pi-bridge.test.mjs (cwd .claude/workflows)",
+      "expected": "retry fresh; after its record the next reuse resumes the retry's runId",
+      "covers": [
+        "r1-4"
+      ]
+    },
+    {
+      "id": "r14-C2",
+      "kind": "control",
+      "baseline": "pass",
+      "file": ".claude/workflows/pair-contracts/pi-bridge.test.mjs",
+      "condition": "every sealed r0-* row (session binding, not-resumable, docs, Step 0b) at 9bbfb29c",
+      "oracle": "node --test --test-name-pattern=r0- pair-contracts/pi-bridge.test.mjs (cwd .claude/workflows)",
+      "expected": "14/14 pass — the fix keeps them green",
+      "covers": [
+        "r1-4"
+      ]
+    },
+    {
+      "id": "r14-C3",
+      "kind": "control",
+      "baseline": "pass",
+      "file": ".claude/workflows/pair-contracts/pi-bridge.test.mjs",
+      "condition": "same-session resumable resume (sealed r01-C1)",
+      "oracle": "node --test --test-name-pattern=same-agent pair-contracts/pi-bridge.test.mjs (cwd .claude/workflows)",
+      "expected": "resume of the latest runId",
+      "covers": [
+        "r1-4"
+      ]
+    },
+    {
+      "id": "r14-NA1",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": ".claude/workflows/pair-contracts/pi-bridge.test.mjs",
+      "condition": "same PI_SESSION_ID: record run-A; green reuse ⇒ resume run-A (rejected, unrecorded); green reuse ⇒ fresh, stub advances its handoff, nothing recorded; verify (pair-reviewer) call through the same ledger; green reuse (r2)",
+      "oracle": "node --test --test-name-pattern=advances.unrecorded pair-contracts/pi-bridge.test.mjs (cwd .claude/workflows)",
+      "expected": "the last green call is op fresh, degraded reuse→fresh, args.runId never run-A",
+      "covers": [
+        "r1-4"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": ".claude/workflows/pair-contracts/pi-bridge.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:df84a7fafb5a144e57afe524a6869fb2a0c5841f44f6bb2352fc4f8be8510f82",
+      "command": "node --test pair-contracts/pi-bridge.test.mjs (cwd .claude/workflows)",
+      "observed": "tests 34, pass 31, fail 3 — failing: r1-4 fresh retry also dies unrecorded, r1-4 any number of unrecorded retries, r1-4 advances unrecorded + another role (each got resume run-1)"
+    }
+  ],
+  "testExempt": false,
+  "notes": {
+    "hermetic": "stubs only; no pi, no gh, no network",
+    "format": ".mjs is outside the adopted format gate",
+    "chain": "the r1-g1-sealed file is extended; the r2-g1 seal re-lists it (verify-chain: a successor snapshot is the only commit allowed to change a sealed test); no sealed test is edited, the two new tests are appended",
+    "discriminance": "scratch copy: unfixed 9bbfb29c ⇒ 31/34 (the three r1-4 rows red); the validator's pending-only candidate (scratchpad/na1 pi-bridge.mjs, rejectedRunId carried in ledger.pending) ⇒ 33/34, only r14-NA1 fails (got resume run-1); deleting ledger.roles[role] when a call degrades on an unrecorded resume ⇒ 34/34"
+  },
+  "attempt": 2,
+  "repairOf": {
+    "contractPath": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-503/503/r2-g1-red-contract.json",
+    "contractHash": "sha256:dc9c5f1e75605775f44c66c9de661e1ab614d8ead42a15593aea39937e1aa1b7",
+    "rejection": [
+      "r14-NA1/r1-4-rejection-lost-across-other-role"
+    ]
+  },
+  "changedRows": [
+    "r14-NA1",
+    "r1-4-rejection-lost-across-other-role"
+  ]
+}
