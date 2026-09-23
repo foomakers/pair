@@ -33,7 +33,7 @@ import { dirname, isAbsolute, join, resolve as resolvePath } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 // ── the pin, as DATA ────────────────────────────────────────────────────────────────────────
-// The version the AC1 probe verified (2026-09-23). Changing it is a data edit here plus the
+// The version #503's live probe verified (2026-09-23). Changing it is a data edit here plus the
 // `verifiedAgainst` line in agent-harness/pi.md — never an inference from what is installed.
 export const PIN = {
   package: 'pi-subagents',
@@ -164,7 +164,7 @@ function skillFileFor(skill, skillsDir) {
 }
 
 // Deterministic rehydration. A pi-subagents resume is a NEW child that is told where the previous
-// session file is and then left to decide whether to read it (observed in the AC1 probe: the model
+// session file is and then left to decide whether to read it (observed in #503's live probe: the model
 // chose to; a weaker one might not). The bridge removes that choice: the first instruction is
 // always to read the file, by its path when the ledger holds it.
 function rehydration(prev) {

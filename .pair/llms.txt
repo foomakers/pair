@@ -170,6 +170,7 @@
 - [Decision: a custody breach is waived only by an explicit, attributed, verified override](.pair/adoption/decision-log/2026-09-18-a-custody-breach-is-waived-only-by-an-explicit-attributed-override.md)
 - [Analysis Log: US-487 implementation compromises forced by sealed-test inconsistencies](.pair/adoption/decision-log/2026-09-21-us-487-cycle-coordinator-contract-compromises.md)
 - [Decision Log: Tier 2 is realized at the STAGE level, and `next.context: reuse` degrades to `fresh` under a process realization](.pair/adoption/decision-log/2026-09-22-tier-2-is-realized-at-the-stage-level-and-reuse-degrades-to-fresh.md)
+- [Decision: pi's in-session cycle runs through the pinned `pi-subagents` package, bridged by a skill-local script, installed only on an explicit yes](.pair/adoption/decision-log/2026-09-23-pi-in-session-cycle-through-pinned-pi-subagents.md)
 - [Decision: US-487 — outcome classes of `pair-cli run --card`'s no-mapping fallback](.pair/adoption/decision-log/2026-09-23-us-487-card-fallback-outcome-classes.md)
 - [Decision: US-506 — the validator proves it executed; one pre-seal guard](.pair/adoption/decision-log/2026-09-23-us-506-validator-execution-evidence-and-pre-seal-guard.md)
 

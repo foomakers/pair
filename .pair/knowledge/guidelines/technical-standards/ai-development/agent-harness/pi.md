@@ -50,15 +50,31 @@ Standard per-provider API-key/OAuth resolution (see [Authentication](#4-authenti
 
 ## 7. Headless Execution
 
-`pi --print` / `-p` for one-shot non-interactive execution; `--mode json` or `--mode rpc` for structured output; `--session-id` / `--session-dir` for scripted session control. Sessions persist as JSONL by default and are shareable via `/share` — a token that ever entered a session's context is a token that can leave the machine through that channel, which is the concrete rationale behind Business Rule 2 (this skill never handles secrets).
+`pi --print` / `-p` for one-shot non-interactive execution — **always with stdin closed**: `pi -p` with an open stdin waits on it and hangs with no output (observed for 10 minutes in #503's probe, 2026-09-23), so every spawn of pi (pair-cli, `/pair-capability-setup-harness`, any script) closes it; `--mode json` or `--mode rpc` for structured output; `--session-id` / `--session-dir` for scripted session control. Sessions persist as JSONL by default and are shareable via `/share` — a token that ever entered a session's context is a token that can leave the machine through that channel, which is the concrete rationale behind Business Rule 2 (this skill never handles secrets).
 
 ## 8. What pi Does NOT Support
 
 - **MCP** (by design — see [Access Paths](#5-access-paths)).
 - Sub-agents, permission popups, plan mode, to-dos, and background bash are intentionally absent from the base agent; they are addressable as extensions, not gaps to work around here.
-  **The missing sub-agent primitive does not cost pi the delivery cycle.** `pair-cli run --card <id>` drives the whole cycle — `implement → verify` on a fresh card, then `prepare → validate → green → verify` for each round of review findings — by spawning one fresh pi process per stage, with the stage's agent role travelling in the prompt as data (ADR-021 tier 2, realized at the stage level). The one thing a process realization cannot honour is a `reuse` transition — there is no session to resume once the process exits — so it degrades to `fresh` and the run says so once. That makes pi's isolation **stricter** than an in-session coordinator's, never weaker.
+  **In-session, `pi-subagents` supplies it.** The third-party [`pi-subagents`](https://github.com/nicobailon/pi-subagents) package adds a `subagent` tool (loaded through `subagents_enable` in a fresh session), and `pair-workflow-cycle` binds a `pi` realization row to it: every stage is dispatched as a `subagent` child, and a `reuse` transition revives the same stage agent (`runs.run({ resume })`). The exact tool arguments come from the skill's `scripts/pi-bridge.mjs`, which checks the tool's name and parameters against the pinned version before each dispatch and refuses a mismatch naming that version. **Rehydration caveat**: a `pi-subagents` resume is not an in-memory continuation — it starts a NEW child that is told where the previous session file is, and the model decides whether to read it (in #503's probe it did, and recovered a secret it was never told again). The bridge makes that step deterministic: the resumed task always opens by telling the agent to read that file first, by path. The package is installed only on an explicit yes, through `/pair-capability-setup-harness` with `$harness: pi` — never by the cycle itself.
+  **Without it, the missing sub-agent primitive still does not cost pi the delivery cycle.** `pair-cli run --card <id>` drives the whole cycle — `implement → verify` on a fresh card, then `prepare → validate → green → verify` for each round of review findings — by spawning one fresh pi process per stage, with the stage's agent role travelling in the prompt as data (ADR-021 tier 2, realized at the stage level). The one thing a process realization cannot honour is a `reuse` transition — there is no session to resume once the process exits — so it degrades to `fresh` and the run says so once. That makes pi's isolation **stricter** than an in-session coordinator's, never weaker.
 - A built-in sandbox — pi runs with the permissions of the invoking user; isolation for untrusted/unattended work is the operator's responsibility (container, VM, or micro-VM), not something this guide or `/pair-capability-setup-harness` provisions.
 
 ## 9. Verified-Against Version
 
 `@earendil-works/pi-coding-agent@0.84.2`, observed 2026-08-23 on macOS (darwin 25.6.0) via the installed package's `--help` output and its own `dist/core/resource-loader.js` source.
+
+`pi-subagents@0.71.0` — the pinned version, verified by #503's live probe (2026-09-23, pi 0.84.3, a project-local install in a trusted throwaway repo: a resumed stage recalled what only the previous stage had been told, and both stages published their handoff) and by reading the package's own `src/extension/schemas.js` (the `subagent` parameters the bridge checks). It is the `PIN` of `pair-workflow-cycle/scripts/pi-bridge.mjs`; a test keeps the two equal. **Minimum pi for it: `0.86.1`** — the package declares `@earendil-works/pi-ai >=0.86.1` and warns `Dynamic tool activation requires Pi 0.86.1 or newer` on older ones (it still ran on 0.84.3 in the probe, without dynamic activation).
+
+### Setup
+
+What `/pair-capability-setup-harness` with `$harness: pi` proposes — each command runs only on the developer's explicit yes, and a re-run on a machine already at these versions confirms instead of rewriting:
+
+| Need | Command | Source |
+| --- | --- | --- |
+| Install pi | `npm install -g --ignore-scripts @earendil-works/pi-coding-agent` | pi's own `docs/quickstart.md` |
+| Update pi below `0.86.1` | `pi update --self` | pi's own `docs/packages.md` |
+| `pi-subagents`, user scope (`~/.pi/agent/npm/`) | `pi install npm:pi-subagents@0.71.0` | pi's `docs/packages.md` (versioned npm specs are pinned and skipped by `pi update`) |
+| `pi-subagents`, project scope (`.pi/npm/`, `.pi/settings.json`) | `pi install npm:pi-subagents@0.71.0 -l` | same — loaded only once the project is trusted ([Authentication](#4-authentication)) |
+
+The installed version is read from `<scope>/npm/node_modules/pi-subagents/package.json` (pi's `dist/core/package-manager.js`), never assumed.
