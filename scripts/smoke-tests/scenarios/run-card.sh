@@ -102,25 +102,28 @@ log_info "Test 3: --profile is refused with a pointer to #488"
 if run_pair run --card 12 --profile x; then fail "--profile was accepted"; fi
 assert_output_contains "#488" || FAILED=1
 
-# ── 4. AC1/AC10: a Ready card enters the real cycle; a dead dispatch ends failed-prepare ───────
-log_info "Test 4: Ready card, --autonomous ⇒ transparency block, real scripts, failed-prepare"
+# ── 4. AC1/AC10: a Ready card enters the real cycle at implement (US-506: no up-front contract);
+#    a dead dispatch ends failed-implement ─────────────────────────────────────────────────────
+log_info "Test 4: Ready card, --autonomous ⇒ transparency block, real scripts, failed-implement"
 : >"$ENGINE_LOG"
 if run_pair run --card 12 --autonomous; then fail "a dead dispatch reported success"; fi
 assert_output_contains "Worktree root: ../pair-worktrees" || FAILED=1
 assert_output_contains "Dispatch cap: 40" || FAILED=1
-assert_output_contains "Cycle status: failed-prepare" || FAILED=1
-grep -q "/pair-workflow-red-spec" "$ENGINE_LOG" || fail "the prepare stage was never dispatched"
+assert_output_contains "Cycle status: failed-implement" || FAILED=1
+grep -q "/pair-workflow-implement-phase" "$ENGINE_LOG" || fail "the implement stage was never dispatched"
+if grep -q "/pair-workflow-red-spec" "$ENGINE_LOG"; then fail "a fresh card dispatched a preparation before any code"; fi
 [ -d "$WORK/pair-worktrees/12" ] || fail "the story worktree was not created under the script's root"
 
-# ── 5. AC11: agent-definition-missing HALTs before any spawn ──────────────────────────────────
-log_info "Test 5: a missing stage agent definition HALTs agent-definition-missing"
-mv "$MAIN/.claude/agents/pair-fix-test-author.md" "$WORK/role.md"
+# ── 5. AC11: the FIRST stage's missing agent definition HALTs agent-definition-missing before any
+#    spawn (the role is checked per packet: a later stage's role is checked when that stage is due) ─
+log_info "Test 5: a missing first-stage agent definition HALTs agent-definition-missing"
+mv "$MAIN/.claude/agents/pair-implementer.md" "$WORK/role.md"
 rm -rf "$MAIN/.pair/working/runs"
 : >"$ENGINE_LOG"
 if run_pair run --card 12 --autonomous; then fail "missing role was accepted"; fi
 assert_output_contains "agent-definition-missing" || FAILED=1
 [ "$(spawns)" = "0" ] || fail "a stage was spawned without its role"
-mv "$WORK/role.md" "$MAIN/.claude/agents/pair-fix-test-author.md"
+mv "$WORK/role.md" "$MAIN/.claude/agents/pair-implementer.md"
 
 # ── 6. Edge case: the story worktree exists on another branch ⇒ worktree-conflict ──────────────
 log_info "Test 6: story worktree on another branch HALTs worktree-conflict before any spawn"

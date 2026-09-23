@@ -847,9 +847,11 @@ and the order is fixed — **the tag mapping is asked first, always**:
    The cycle's own values — the workflow version, the base branch, the worktree root and the dispatch
    cap — are read from the installed `pair-workflow-cycle` scripts and printed before the first
    stage, with the scripts path, the run directory, the `runId` and the `--rounds` bound. Missing
-   pieces HALT before any spawn: `skill-missing` (the skill is not installed),
-   `agent-definition-missing` (a stage's role, located through the `agent-definitions` registry),
-   `worktree-conflict` (the story worktree is checked out on another branch).
+   pieces HALT: `skill-missing` (the skill is not installed) and `worktree-conflict` (the story
+   worktree is checked out on another branch) before any spawn; `agent-definition-missing` (a stage's
+   role, located through the `agent-definitions` registry) when the stage that needs that role is
+   due — before any spawn for the first stage's role, later for a role only a later stage uses (e.g.
+   the preparation role, first needed by a finding round).
 
 ### Tag-driven dispatch
 
