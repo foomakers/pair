@@ -1455,7 +1455,7 @@ test('US-506 F-3 w2 (AC11): a fixer\'s own edit that restores an out-of-scope fi
   rmSync(cwd, { recursive: true, force: true })
 })
 
-test('US-506 F-6 (AC11): a revert of the PR\'s own out-of-scope edit made INSIDE the merge commit — a path the base never changed since the fork — is still a breach; a base-side change resolved to base stays exempt', () => {
+test('US-506 F-6 (AC11): a revert of the PR\'s own out-of-scope edit made INSIDE the merge commit — a path the base never changed since the fork — is still a breach; only what the base changed (docs/x.md) is exempt', () => {
   const { cwd, base } = repo()
   git(cwd, 'checkout', '-q', '-b', 'story')
   write(cwd, 'src/other.js', 'export const o = 99 // changed by the implement stage\n')
@@ -1482,3 +1482,34 @@ test('US-506 F-6 (AC11): a revert of the PR\'s own out-of-scope edit made INSIDE
   assert.deepEqual(chain.mergedBase?.paths, ['docs/x.md'])
   rmSync(cwd, { recursive: true, force: true })
 })
+
+// ── US-506 Q-2 (AC11): the base-deletion branch — a pre-fork file the BASE deleted, deletion kept by
+// the merge, is the base's change: exempt (also when the PR had edited it: modify/delete ⇒ delete).
+for (const [name, prEdits] of [['E3 the PR never touched it', false], ['E4 the PR had edited it (modify/delete resolved to delete)', true]])
+  test(`US-506 Q-2 (AC11): the base deletes a pre-fork file and the merge keeps the deletion ⇒ exempt — ${name}`, () => {
+    const { cwd } = repo()
+    git(cwd, 'checkout', '-q', '-b', 'story')
+    if (prEdits) write(cwd, 'src/other.js', 'export const o = 5 // edited by the implement stage\n')
+    else write(cwd, 'src/pr.js', 'export const p = 1\n')
+    git(cwd, 'add', '-A')
+    git(cwd, 'commit', '-q', '--no-verify', '-m', 'implement')
+    const head1 = git(cwd, 'rev-parse', 'HEAD')
+    const { contractPath } = redContract(cwd)
+    const s = seal({ pr: PR, phase: 'r1-g1', base: head1, contractPath, cwd })
+    assert.equal(s.sealed, true, JSON.stringify(s))
+    rmSync(join(cwd, contractPath))
+    green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+    git(cwd, 'checkout', '-q', 'main')
+    git(cwd, 'rm', '-q', 'src/other.js')
+    git(cwd, 'commit', '-q', '--no-verify', '-m', 'main deletes src/other.js')
+    git(cwd, 'checkout', '-q', 'story')
+    spawnSync('git', ['merge', '-q', '--no-ff', '--no-commit', 'main'], { cwd, encoding: 'utf8' }) // E4 conflicts: modify/delete
+    spawnSync('git', ['rm', '-q', '--ignore-unmatch', 'src/other.js'], { cwd, encoding: 'utf8' })
+    git(cwd, 'commit', '-q', '--no-verify', '-m', 'merge main')
+    assert.equal(existsSync(join(cwd, 'src/other.js')), false, 'the merge kept the deletion')
+    const runDir = runDirWith({ 'r1-g1-red-verify': { skill: 'red-verify', phase: 'r1-g1', verified: true, sealed: true, inputHead: head1 } })
+    const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
+    assert.deepEqual({ verified: chain.verified, breaches: chain.breaches }, { verified: true, breaches: [] }, JSON.stringify(chain))
+    assert.deepEqual(chain.mergedBase?.paths, ['src/other.js'])
+    rmSync(cwd, { recursive: true, force: true })
+  })
