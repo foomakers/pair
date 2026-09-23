@@ -2361,7 +2361,33 @@ function scopeDecisionFixture() {
 
 // One invocation per declaring subcommand: minimally valid in EVERY dimension but the version, so
 // the only thing a refusal can be about is the version — and so an acceptance runs the real thing.
+// US-506 T-5: a run directory holding one unvalidated preparation (for `supersede`) and one holding an
+// escalated review (for `decide`), each seeded through the REAL `publish` at the pinned version.
+const seededRunDir = draft => {
+  const { root, dir } = runDir()
+  const f = join(root, `seed-${Math.random().toString(36).slice(2)}.json`)
+  writeFileSync(f, JSON.stringify(draft))
+  const pub = state(['publish', '--dir', dir, '--file', f, '--phase', draft.phase, '--skill', draft.skill, '--workflowVersion', WORKFLOW_VERSION, '--attempt', '1'])
+  assert.equal(pub.status, 0, pub.stdout + pub.stderr)
+  return dir
+}
 const INVOCATIONS = {
+  supersede: version => {
+    const dir = seededRunDir({ run: 'story-42', story: '42', branch: 'feature/US-42-x', phase: 'a0', skill: 'red-spec', inputHead: SHA40('a'), mode: 'initial', status: 'red', contractPath: '/x.json', contractHash: `sha256:${'1'.repeat(64)}` })
+    return {
+      dir,
+      args: ['supersede', '--dir', dir, '--phase', 'a0', '--reason', 'probe', '--by', 'rucka', '--workflowVersion', version, '--entry', 'fresh'],
+      accepted: r => r.status === 0 && r.json?.superseded === true,
+    }
+  },
+  decide: version => {
+    const dir = seededRunDir({ run: 'story-42', story: '42', pr: 7, branch: 'feature/US-42-x', phase: 'r0', skill: 'review-phase', inputHead: SHA40('a'), reviewedHead: SHA40('c'), verdict: 'CHANGES-REQUESTED', mode: 'first', needsHumanDecision: true, findings: [{ id: 'r0-1', severity: 'Major', location: 'x.js:1', description: 'd', recommendation: 'r', blocking: true, transition: 'open', kind: 'defect', reproducer: { command: 'node --test x.test.mjs' } }], custody: { verified: true, contractBreach: false }, readiness: { ready: false, remoteHead: SHA40('c') } })
+    return {
+      dir,
+      args: ['decide', '--dir', dir, '--phase', 'r0', '--finding', 'r0-1', '--decision', 'probe', '--by', 'rucka', '--workflowVersion', version, '--entry', 'pr', '--pr', '7'],
+      accepted: r => r.status === 0 && r.json?.decided === true,
+    }
+  },
   resolve: version => {
     const { dir } = runDir()
     return {
@@ -2727,4 +2753,15 @@ test('T-3 b1 (boundary, once shipped): an unrecognised --style value is a typed 
 
   assert.notEqual(result.status, 0)
   assert.match(JSON.stringify(result.json ?? {}) + result.stdout, /style/i)
+})
+
+// ══ US-506 T-5 — the coordinator documents the maintainer's two recovery commands ══════════════
+test('US-506 T-5: the coordinator skill names `supersede` and `decide` as the recovery commands, with their refusals', () => {
+  for (const md of [CYCLE_SKILL, join(DATASET, '.skills/workflow/cycle/SKILL.md')]) {
+    const body = readFileSync(md, 'utf8')
+    assert.match(body, /cycle-state\.mjs" supersede --dir <run dir> --phase <p> --reason/)
+    assert.match(body, /cycle-state\.mjs" decide --dir <run dir> --phase <r<n>> --finding <id> --decision/)
+    for (const code of ['supersede-sealed', 'supersede-validated', 'supersede-not-found']) assert.ok(body.includes(code), `${md}: ${code}`)
+    assert.match(body, /`resolve` yields `implement \/ initial \/ a0`/)
+  }
 })

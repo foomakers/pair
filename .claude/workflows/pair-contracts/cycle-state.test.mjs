@@ -152,7 +152,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, predecessorEvidence, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions, discoverScopeDecisions, withLock } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, predecessorEvidence, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions, discoverScopeDecisions, withLock, supersede, decide } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
 const V = '3.0.0'
@@ -4252,4 +4252,124 @@ test('US-506 T-4 w4 (AC7): each rejection points at its OWN contract file, and `
   const other = publish({ dir: d3, file: verdictNaming(c1.path), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V, predecessor: 'r1-g1-red-spec' })
   assert.deepEqual([other.published, other.reason], [false, 'contract-path-mismatch'])
   assert.equal(publish({ dir: d3, file: verdictNaming(k1.path), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V, predecessor: 'r1-g1-red-spec' }).published, true)
+})
+
+// ══ US-506 T-5 — `supersede` sets an unvalidated attempt aside; `decide` records a human decision on an escalate ══
+// US-487: three handoffs were renamed by hand (a `_` prefix made them invisible to a directory listing) and
+// a review was re-run only to carry a maintainer's answer to `needsHumanDecision`.
+const listing = dir => readdirSync(dir).sort()
+const cliState = args => {
+  const r = spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8' })
+  return { status: r.status, json: JSON.parse(r.stdout.trim().split('\n').pop()) }
+}
+function unvalidatedRepair() {
+  const { dir } = runDir()
+  const c1 = writeContract(dir, 'a0-red-contract.json', { attempt: 1 })
+  redSpec(dir, 'a0', { contractPath: c1.path, contractHash: c1.hash })
+  redVerify(dir, 'a0', { verified: false, sealed: false, snapshot: undefined, findings: rejectionOf(['row-1']) }, { predecessor: 'a0-red-spec' })
+  const c2 = writeContract(dir, 'a0-red-contract.attempt-2.json', { attempt: 2 })
+  redSpec(dir, 'a0', { contractPath: c2.path, contractHash: c2.hash, changedRows: ['row-1'], mode: 'repair' }, { predecessor: 'a0-red-verify', attempt: 2 })
+  return { dir, c1, c2 }
+}
+const ON = new Date('2026-09-23T10:00:00Z')
+
+test('US-506 T-5 w1 (AC8): `supersede` sets an UNVALIDATED attempt aside — a prefix a listing shows and NAME_RE ignores — indexes it and reports the step now due', () => {
+  const { dir } = unvalidatedRepair()
+  assert.equal(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' }).next.step, 'validate')
+  const out = supersede({ dir, phase: 'a0', reason: 'built on a wrong maintainer note', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'fresh', now: ON })
+  assert.equal(out.superseded, true, JSON.stringify(out))
+  assert.deepEqual([out.from, out.to], ['a0-red-spec.attempt-2.json', 'superseded-2026-09-23-a0-red-spec.attempt-2.json'])
+  assert.equal(out.contract?.to, 'superseded-2026-09-23-a0-red-contract.attempt-2.json')
+  const files = listing(dir)
+  for (const f of ['superseded-2026-09-23-a0-red-spec.attempt-2.json', 'superseded-2026-09-23-a0-red-contract.attempt-2.json', 'maintainer-interventions.md', 'a0-red-spec.json', 'a0-red-verify.json', 'a0-red-contract.json']) assert.ok(files.includes(f), f)
+  assert.ok(!files.includes('a0-red-spec.attempt-2.json'))
+  assert.deepEqual(readHandoffs(dir).map(h => h.name), ['a0-red-spec', 'a0-red-verify'], 'invisible to NAME_RE, visible to a listing')
+  // the step the set-aside attempt had answered is due again, and the output says so
+  assert.deepEqual(pick(out.next, 'step', 'mode', 'phase', 'attempt'), { step: 'prepare', mode: 'repair', phase: 'a0', attempt: 2 })
+  const index = readFileSync(join(dir, 'maintainer-interventions.md'), 'utf8')
+  assert.match(index, /\| file \| what it is \| why it was set aside \| set aside by \| what supersedes it \|/)
+  assert.match(index, /\| `superseded-2026-09-23-a0-red-spec\.attempt-2\.json` \| a0 red-spec attempt 2 \(contract `sha256:[0-9a-f]{8}…`\), never validated \| built on a wrong maintainer note \| rucka, 2026-09-23 \| the step now due: prepare repair a0 attempt 2 \|/)
+  // a second set-aside appends a row to the same table
+  const again = unvalidatedRepair()
+  writeFileSync(join(again.dir, 'maintainer-interventions.md'), readFileSync(join(dir, 'maintainer-interventions.md')))
+  supersede({ dir: again.dir, phase: 'a0', reason: 'second', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'fresh', now: ON })
+  const rows = readFileSync(join(again.dir, 'maintainer-interventions.md'), 'utf8').split('\n').filter(l => l.startsWith('| `superseded-'))
+  assert.equal(rows.length, 2)
+  assert.equal(readFileSync(join(again.dir, 'maintainer-interventions.md'), 'utf8').match(/\| file \| what it is/g).length, 1, 'one table, not one per row')
+})
+
+test('US-506 T-5 w2 (AC8): a sealed attempt, a validated (rejected) attempt, an unknown phase or attempt get a typed refusal — nothing renamed', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0')
+  redVerify(dir, 'a0', {}, { predecessor: 'a0-red-spec' })
+  const before = listing(dir)
+  assert.equal(supersede({ dir, phase: 'a0', reason: 'r', by: 'rucka', workflowVersion: V }).reason, 'supersede-sealed')
+  assert.deepEqual(listing(dir), before)
+  const { dir: rejected } = runDir()
+  redSpec(rejected, 'a0')
+  redVerify(rejected, 'a0', { verified: false, sealed: false, snapshot: undefined, findings: [] }, { predecessor: 'a0-red-spec' })
+  const b2 = listing(rejected)
+  assert.equal(supersede({ dir: rejected, phase: 'a0', reason: 'r', by: 'rucka', workflowVersion: V }).reason, 'supersede-validated')
+  const { dir: d3 } = unvalidatedRepair()
+  const b3 = listing(d3)
+  assert.equal(supersede({ dir: d3, phase: 'r7-g1', reason: 'r', by: 'rucka', workflowVersion: V }).reason, 'supersede-not-found')
+  assert.equal(supersede({ dir: d3, phase: 'a0', attempt: 5, reason: 'r', by: 'rucka', workflowVersion: V }).reason, 'supersede-not-found')
+  assert.equal(supersede({ dir: d3, phase: 'a0', reason: '  ', by: 'rucka', workflowVersion: V }).reason, 'supersede-reason-missing')
+  assert.equal(supersede({ dir: d3, phase: 'a0', reason: 'r', by: '', workflowVersion: V }).reason, 'supersede-by-missing')
+  assert.deepEqual([listing(rejected), listing(d3)], [b2, b3])
+})
+
+test('US-506 T-5 w3 (AC8): the CLI `supersede` prints JSON — exit 0 when set aside, 1 on a typed refusal', () => {
+  const { dir } = unvalidatedRepair()
+  const ok = cliState(['supersede', '--dir', dir, '--phase', 'a0', '--reason', 'wrong note', '--by', 'rucka', '--workflowVersion', V, '--policy', JSON.stringify(POLICY), '--entry', 'fresh'])
+  assert.deepEqual([ok.status, ok.json.superseded, ok.json.next.step], [0, true, 'prepare'])
+  const refused = cliState(['supersede', '--dir', dir, '--phase', 'a0', '--reason', 'again', '--by', 'rucka', '--workflowVersion', V])
+  assert.deepEqual([refused.status, refused.json.reason], [1, 'supersede-validated'])
+})
+
+function escalatedReview() {
+  const { dir } = runDir()
+  review(dir, 'r0', { verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('c') }, needsHumanDecision: true, findings: [finding('r0-5'), finding('r0-15', { external: true })] })
+  return dir
+}
+test('US-506 T-5 w4 (AC8): `decide` records the maintainer\'s answer to `needsHumanDecision` as its OWN handoff — no rename, no review re-run — and `resolve` routes the remediation', () => {
+  const dir = escalatedReview()
+  const r0 = readFileSync(join(dir, 'r0-review-phase.json'), 'utf8')
+  assert.deepEqual(pick(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next, 'step', 'reason'), { step: 'blocked', reason: 'escalate' })
+  const out = decide({ dir, phase: 'r0', finding: 'r0-5', decision: 'option (a): AC14 amended on the card', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, now: ON })
+  assert.equal(out.decided, true, JSON.stringify(out))
+  assert.deepEqual(pick(out.next, 'step', 'mode', 'phase'), { step: 'prepare', mode: 'remediation', phase: 'r1-g1' })
+  assert.equal(readFileSync(join(dir, 'r0-review-phase.json'), 'utf8'), r0, 'the review is untouched')
+  assert.deepEqual(readHandoffs(dir).map(h => [h.name, h.attempt]), [['r0-review-phase', 1], ['r0-review-phase', 2]])
+  const rec = JSON.parse(readFileSync(join(dir, 'r0-review-phase.attempt-2.json'), 'utf8'))
+  assert.equal(rec.recordType, 'decision')
+  assert.equal(rec.needsHumanDecision, false)
+  assert.deepEqual(rec.humanDecisions, [{ findingId: 'r0-5', decision: 'option (a): AC14 amended on the card', by: 'rucka', at: ON.toISOString() }])
+  assert.equal(rec.reviewedHead, SHA('c'))
+  assert.equal(cycleCounters(readHandoffs(dir)).reviewExecutions, 1, 'a decision is not a review execution')
+  // a second decision on the same escalation accumulates, and the finding carries its answer
+  const two = decide({ dir, phase: 'r0', finding: 'r0-15', decision: 'the maintainer session runs the demos and attaches the evidence', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, now: ON })
+  assert.equal(two.decided, true, JSON.stringify(two))
+  const rec3 = JSON.parse(readFileSync(join(dir, 'r0-review-phase.attempt-3.json'), 'utf8'))
+  assert.deepEqual(rec3.humanDecisions.map(d => d.findingId), ['r0-5', 'r0-15'])
+  assert.equal(rec3.findings.find(f => f.id === 'r0-15').humanDecision.by, 'rucka')
+})
+
+test('US-506 T-5 w5 (AC8): `decide` is refused when the cycle is not escalated on a human decision, for an unknown finding, twice for one finding — nothing written', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('c') }, findings: [finding('r0-1')] })
+  const before = listing(dir)
+  assert.equal(decide({ dir, phase: 'r0', finding: 'r0-1', decision: 'd', by: 'rucka', workflowVersion: V }).reason, 'decide-not-escalated')
+  const esc = escalatedReview()
+  assert.equal(decide({ dir: esc, phase: 'r0', finding: 'r0-99', decision: 'd', by: 'rucka', workflowVersion: V }).reason, 'decide-finding-unknown:r0-99')
+  assert.equal(decide({ dir: esc, phase: 'r1', finding: 'r0-5', decision: 'd', by: 'rucka', workflowVersion: V }).reason, 'decide-not-escalated')
+  assert.equal(decide({ dir: esc, phase: 'r0', finding: 'r0-5', decision: ' ', by: 'rucka', workflowVersion: V }).reason, 'decide-decision-missing')
+  assert.equal(decide({ dir: esc, phase: 'r0', finding: 'r0-5', decision: 'd', by: 'rucka', workflowVersion: V }).decided, true)
+  assert.equal(decide({ dir: esc, phase: 'r0', finding: 'r0-5', decision: 'd2', by: 'rucka', workflowVersion: V }).reason, 'decide-already-decided:r0-5')
+  assert.deepEqual(listing(dir), before)
+  // the CLI
+  const e2 = escalatedReview()
+  const cli = cliState(['decide', '--dir', e2, '--phase', 'r0', '--finding', 'r0-5', '--decision', 'option (a)', '--by', 'rucka', '--workflowVersion', V, '--entry', 'pr', '--pr', '7', '--policy', JSON.stringify(POLICY)])
+  assert.deepEqual([cli.status, cli.json.decided, cli.json.next.step], [0, true, 'prepare'])
+  assert.equal(cliState(['decide', '--dir', e2, '--phase', 'r0', '--finding', 'nope', '--decision', 'x', '--by', 'rucka', '--workflowVersion', V]).status, 1)
 })

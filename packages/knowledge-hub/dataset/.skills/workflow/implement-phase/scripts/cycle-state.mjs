@@ -47,6 +47,15 @@
 //     t9d-17); applies ignore | new-card | extend-current-card mechanically and persists a
 //     `recordType: decision` review-phase handoff. Idempotent on the same decisionRef.
 //
+//   node … supersede --dir <dir> --phase <p> --reason <text> --by <who> --workflowVersion <v> [--attempt <n>] [--entry fresh|pr] [--policy <json>] [--pr <n>]
+//     → { superseded, from, to, contract?, index, next }   (US-506 T-5) sets an UNVALIDATED red-spec attempt
+//     aside as `superseded-<date>-<file>` (a listing shows it, NAME_RE does not), indexes it in
+//     maintainer-interventions.md; refused on a sealed (`supersede-sealed`) or answered (`supersede-validated`) attempt.
+//
+//   node … decide --dir <dir> --phase <p> --finding <id> --decision <text> --by <who> --workflowVersion <v> [--entry] [--policy] [--pr]
+//     → { decided, path, next }   (US-506 T-5) records a maintainer's answer to a review's needsHumanDecision
+//     as its own `recordType: decision` handoff; `resolve` then leaves `escalate` — nothing renamed, no review re-run.
+//
 //   node … test-identity --cwd <worktree> --command <cmd> [--env-keys K1,K2] [--toolchain <s>]
 //     → { identity, parts, reusable, missing }     a cached test result is valid ONLY for this identity
 import { createHash } from 'node:crypto'
@@ -2409,6 +2418,115 @@ export function migrateAcknowledge({ dir, legacyDirs = [], workflowVersion, stor
   return { applied: !!out.published, reason: out.published ? undefined : out.reason, path: out.path, migrationKey, predecessorRuns: predecessorRuns.map(r => r.runId) }
 }
 
+// ── maintainer recovery (US-506 T-5, AC8) ─────────────────────────────────────────────────
+// Two commands for what US-487's maintainer did by hand. `supersede` sets an UNVALIDATED
+// preparation attempt aside under a prefix a directory listing shows and NAME_RE ignores, and
+// indexes it in `maintainer-interventions.md`; `decide` records a maintainer's answer to a review's
+// `needsHumanDecision` as its own handoff, so the cycle leaves `escalate` with no handoff renamed
+// and no review re-run. Both print what `resolve` then says is due.
+export const INTERVENTIONS_FILE = 'maintainer-interventions.md'
+const INTERVENTIONS_HEADER = '| file | what it is | why it was set aside | set aside by | what supersedes it |'
+const dayOf = d => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10)
+const cell = v => String(v ?? '').replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ').trim()
+const describeNext = n => (n?.step === 'blocked' ? `blocked (${n.reason})` : n?.step === 'done' ? 'done' : `${n?.step} ${n?.mode ?? ''} ${n?.phase ?? ''} attempt ${n?.attempt ?? 1}`.replace(/\s+/g, ' ').trim())
+function appendIntervention(dir, row) {
+  const file = join(dir, INTERVENTIONS_FILE)
+  const line = `| ${row.map(cell).join(' | ')} |`
+  const prior = existsSync(file) ? readFileSync(file, 'utf8') : ''
+  // One table: a row lands under the existing header when the file already has one, and a header
+  // (plus the title on a new file) is written only once — never one table per intervention.
+  const head = prior ? (prior.includes(INTERVENTIONS_HEADER) ? '' : `${prior.endsWith('\n') ? '' : '\n'}\n${INTERVENTIONS_HEADER}\n| --- | --- | --- | --- | --- |\n`) : `# Maintainer interventions\n\n${INTERVENTIONS_HEADER}\n| --- | --- | --- | --- | --- |\n`
+  writeFileSync(file, `${prior}${prior && !head && !prior.endsWith('\n') ? '\n' : ''}${head}${line}\n`)
+  return file
+}
+const resolveAfter = ({ dir, workflowVersion, policy, entry, pr }) => resolve({ dir, workflowVersion, policy: policy ?? {}, entry: entry ?? (pr !== undefined ? 'pr' : 'fresh'), ...(pr !== undefined ? { pr } : {}) })
+
+export function supersede({ dir, phase, skill = 'red-spec', attempt, reason, by, now = new Date(), workflowVersion, policy, entry, pr, lockWaitMs = 5000 }) {
+  const where = safeRunDir(dir)
+  if (where.error) return { superseded: false, reason: where.error, path: where.path }
+  if (!String(reason ?? '').trim()) return { superseded: false, reason: 'supersede-reason-missing' }
+  if (!String(by ?? '').trim()) return { superseded: false, reason: 'supersede-by-missing' }
+  if (skill !== 'red-spec') return { superseded: false, reason: `supersede-skill-unsupported:${skill}` }
+  return withLock(dir, lockWaitMs, () => {
+    const handoffs = readHandoffs(dir)
+    const ofPhase = handoffs.filter(h => h.skill === skill && h.phase === phase && h.data)
+    const target = attempt !== undefined ? ofPhase.find(h => h.attempt === Number(attempt)) : ofPhase[ofPhase.length - 1]
+    if (!target) return { superseded: false, reason: 'supersede-not-found', phase, attempt: attempt ?? null }
+    const verdicts = handoffs.filter(h => h.skill === 'red-verify' && h.phase === phase && h.data)
+    if (verdicts.some(v => v.data.sealed === true && (!target.data.contractHash || v.data.contractHash === target.data.contractHash))) return { superseded: false, reason: 'supersede-sealed', file: basename(target.file) }
+    // A verdict published AFTER this attempt answered it: a rejection is evidence the next repair
+    // is checked against, never something to set aside.
+    if (verdicts.some(v => handoffs.indexOf(v) > handoffs.indexOf(target))) return { superseded: false, reason: 'supersede-validated', file: basename(target.file) }
+    const prefix = `superseded-${dayOf(now)}-`
+    const from = basename(target.file)
+    const to = `${prefix}${from}`
+    if (existsSync(join(dir, to))) return { superseded: false, reason: 'supersede-target-exists', file: to }
+    renameSync(target.file, join(dir, to))
+    // The attempt's own contract file goes with it when it lives in this run directory and no other
+    // handoff names it — a listing then shows the attempt and its contract side by side.
+    let contract
+    const cp = String(target.data.contractPath ?? '').trim()
+    if (cp && existsSync(cp) && dirname(resolvePath(cp)) === resolvePath(dir) && !handoffs.some(h => h !== target && h.data?.contractPath === cp)) {
+      const cto = `${prefix}${basename(cp)}`
+      if (!existsSync(join(dir, cto))) {
+        renameSync(cp, join(dir, cto))
+        contract = { from: basename(cp), to: cto }
+      }
+    }
+    const out = resolveAfter({ dir, workflowVersion, policy, entry, pr })
+    const hash = String(target.data.contractHash ?? '')
+    const what = `${phase} ${skill} attempt ${target.attempt}${hash ? ` (contract \`${hash.slice(0, 15)}…\`)` : ''}, never validated`
+    const index = appendIntervention(dir, [`\`${to}\``, what, reason, `${by}, ${dayOf(now)}`, `the step now due: ${describeNext(out.next)}`])
+    return { superseded: true, from, to, ...(contract ? { contract } : {}), index, status: out.status, next: out.next }
+  })
+}
+
+export function decide({ dir, phase, finding, decision, by, now = new Date(), workflowVersion, policy, entry, pr, lockWaitMs = 5000 }) {
+  const where = safeRunDir(dir)
+  if (where.error) return { decided: false, reason: where.error, path: where.path }
+  if (!String(decision ?? '').trim()) return { decided: false, reason: 'decide-decision-missing' }
+  if (!String(by ?? '').trim()) return { decided: false, reason: 'decide-by-missing' }
+  if (!compatible(workflowVersion, workflowVersion)) return { decided: false, reason: 'workflowVersion-invalid' }
+  const list = readHandoffs(dir).filter(h => h.data && h.data.recordType !== 'migration')
+  const last = list[list.length - 1]
+  // The escalation a decision answers: the last handoff is the review that asked, or a decision
+  // already recorded on top of it (several findings, several answers — each its own record).
+  const asked = [...list].reverse().find(h => h.skill === 'review-phase' && (h.data.recordType ?? 'judgment') === 'judgment')
+  const onTop = last && last.skill === 'review-phase' && (last === asked || (last.data.recordType === 'decision' && Array.isArray(last.data.humanDecisions)))
+  if (!asked || !onTop || asked.phase !== phase || asked.data.needsHumanDecision !== true) return { decided: false, reason: 'decide-not-escalated', phase }
+  const base = last.data
+  const findings = Array.isArray(base.findings) ? base.findings : []
+  if (!findings.some(f => f?.id === finding)) return { decided: false, reason: `decide-finding-unknown:${finding}` }
+  const prior = Array.isArray(base.humanDecisions) ? base.humanDecisions : []
+  if (prior.some(d => d.findingId === finding)) return { decided: false, reason: `decide-already-decided:${finding}` }
+  const at = (now instanceof Date ? now : new Date(now)).toISOString()
+  const entryOf = { findingId: finding, decision: String(decision), by: String(by), at }
+  const keep = ['run', 'story', 'pr', 'branch', 'inputHead', 'reviewedHead', 'verdict', 'custody', 'readiness', 'mode', 'tier', 'passes', 'reviewer', 'scopeChanges', 'inputsDigest', 'remediationBatchId', 'scopeEpoch', 'scopeBaselineHash', 'firstReviewHead']
+  const draft = {
+    ...Object.fromEntries(keep.filter(k => base[k] !== undefined).map(k => [k, base[k]])),
+    phase,
+    skill: 'review-phase',
+    recordType: 'decision',
+    partial: false,
+    needsHumanDecision: false,
+    findings: findings.map(f => (f?.id === finding ? { ...f, humanDecision: { decision: entryOf.decision, by: entryOf.by, at } } : f)),
+    humanDecisions: [...prior, entryOf],
+    decidedOn: last.name,
+  }
+  const attemptN = list.filter(h => h.skill === 'review-phase' && h.phase === phase).length + 1
+  const tmp = join(dir, `.decision-${process.pid}-${Date.now()}.json`)
+  writeFileSync(tmp, JSON.stringify(draft))
+  const out = publish({ dir, file: tmp, phase, skill: 'review-phase', workflowVersion, attempt: attemptN, lockWaitMs })
+  if (!out.published) {
+    try {
+      unlinkSync(tmp)
+    } catch {}
+    return { decided: false, reason: out.reason, errors: out.errors }
+  }
+  const after = resolveAfter({ dir, workflowVersion, policy, entry, pr })
+  return { decided: true, path: out.path, attempt: attemptN, status: after.status, next: after.next }
+}
+
 // ── test identity ──────────────────────────────────────────────────────────────────────────
 // A git process must act on the repository named by `cwd`, never on one named by an INHERITED
 // environment: a pre-push hook exports GIT_DIR (and friends) to everything it runs, and a script
@@ -2475,6 +2593,8 @@ if (isMain()) {
       'migrate-inspect': ['dir'],
       'migrate-acknowledge': ['branch', 'dir', 'head', 'legacy', 'pr', 'run', 'story', 'workflowVersion'],
       'test-identity': ['command', 'cwd', 'env-keys', 'toolchain'],
+      supersede: ['attempt', 'by', 'dir', 'entry', 'phase', 'policy', 'pr', 'reason', 'skill', 'workflowVersion'],
+      decide: ['by', 'decision', 'dir', 'entry', 'finding', 'phase', 'policy', 'pr', 'workflowVersion'],
       version: [],
     }
     if (FLAGS[cmd]) {
@@ -2574,6 +2694,19 @@ if (isMain()) {
       out = migrateAcknowledge({ dir: opts.dir, legacyDirs, workflowVersion: opts.workflowVersion, story: opts.story, pr: opts.pr ? Number(opts.pr) : undefined, run: opts.run, branch: opts.branch, inputHead: opts.head })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.applied || out.reason === 'already-acknowledged' ? 0 : 1)
+    } else if (cmd === 'supersede') {
+      // US-506 AC8: set an unvalidated attempt aside (visible to a listing, invisible to NAME_RE),
+      // index it in maintainer-interventions.md and print the step `resolve` now names.
+      need('dir', 'phase', 'reason', 'by', 'workflowVersion')
+      out = supersede({ dir: opts.dir, phase: opts.phase, skill: opts.skill, attempt: opts.attempt !== undefined ? Number(opts.attempt) : undefined, reason: opts.reason, by: opts.by, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr !== undefined ? Number(opts.pr) : undefined })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.superseded ? 0 : 1)
+    } else if (cmd === 'decide') {
+      // US-506 AC8: record a maintainer's answer to a review's needsHumanDecision as its own handoff.
+      need('dir', 'phase', 'finding', 'decision', 'by', 'workflowVersion')
+      out = decide({ dir: opts.dir, phase: opts.phase, finding: opts.finding, decision: opts.decision, by: opts.by, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr !== undefined ? Number(opts.pr) : undefined })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.decided ? 0 : 1)
     } else if (cmd === 'version') {
       // The pin, printed bare so a shell can capture it: `WV="$(… cycle-state.mjs version)"`. It is
       // the one value this realization passes to every `--workflowVersion`, and having a producer
@@ -2587,7 +2720,7 @@ if (isMain()) {
       out = testIdentity({ cwd: opts.cwd, command: opts.command, env, toolchain: opts.toolchain ?? `node ${process.version}` })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
-    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | migrate-inspect | apply-scope-decisions | scope-baseline | test-identity | version)`)
+    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | migrate-inspect | apply-scope-decisions | scope-baseline | supersede | decide | test-identity | version)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)

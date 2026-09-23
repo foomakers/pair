@@ -1,6 +1,6 @@
 ---
 name: pair-workflow-cycle
-description: "In-session coordinator for pair's delivery cycle: drives ONE card through prepare → validate → implement → green → verify, one stage per subagent, from an interactive Claude Code or Codex session — no dependency on Claude Code's Workflow tool. Enters on a fresh card ($card) or straight into fix & review on an existing PR ($pr). Holds zero cycle rules: every transition, budget and freshness decision comes from cycle-state.mjs resolve, every argument packet and worktree from cycle-dispatch.mjs. Binds its harness by PROBING for a subagent primitive, never by product name, and HALTs realization-unavailable with the pair-cli fallback when none is present. Never decides merge."
+description: "In-session coordinator for pair's delivery cycle: drives ONE card through implement → verify (a fresh card has no up-front contract) and, for each round of review findings, prepare → validate → green → verify, one stage per subagent, from an interactive Claude Code or Codex session — no dependency on Claude Code's Workflow tool. Enters on a fresh card ($card) or straight into fix & review on an existing PR ($pr). Holds zero cycle rules: every transition, budget and freshness decision comes from cycle-state.mjs resolve, every argument packet and worktree from cycle-dispatch.mjs. Binds its harness by PROBING for a subagent primitive, never by product name, and HALTs realization-unavailable with the pair-cli fallback when none is present. Never decides merge."
 version: 0.1.0
 author: Foomakers
 ---
@@ -15,7 +15,7 @@ Two entries, one cycle: a refined card with no PR runs the whole thing; a PR tha
 
 | Argument    | Required | Description                                                                                                                                                                                 |
 | ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `$card`     | One of   | Card (issue) number. The fresh-card entry: `resolve` yields `prepare / initial / a0`. Give `$card` or `$pr`, never both and never neither.                                                    |
+| `$card`     | One of   | Card (issue) number. The fresh-card entry: `resolve` yields `implement / initial / a0` — no up-front contract (ADR-024 amendment 2026-09-23); a run directory already on the sealed `a0` path continues it. Give `$card` or `$pr`, never both and never neither. |
 | `$pr`       | One of   | PR number — the fix & review entry: `resolve` yields `verify / first / r0` and NO preparation runs before it. The card is read from the PR's linked issue.                                     |
 | `$rounds`   | No       | How many remediation rounds THIS invocation may spend. Default: the policy's `maxFixRounds`. It only ever narrows: a `$rounds` above `maxFixRounds` is **clamped** to the policy value and the clamp is reported — it can never widen the ceiling, because the ceiling is the cycle's, not the invocation's. |
 | `$runId`    | No       | Run directory to drive: `.pair/working/runs/$runId/<card>/`. Default `story-<card>` — the batch engine's own convention, so a cycle started by `pair-implement-batch` resumes here and back.    |
@@ -128,6 +128,13 @@ node "$SKILL_DIR/scripts/cycle-dispatch.mjs" packet --next '<next JSON>' --card 
 **Act.** Report exactly what `resolve` said: `ready-for-merge` when the cycle converged, `escalate` when a human decision is owed, `failed-<stage>` otherwise — with the run directory, the PR and the reviewed head.
 
 **Verify.** You have not merged, not closed the card, not deleted a branch and not posted a review. A converged cycle is a card ready for a human; the `merge` stage is another story's, and `resolve` returns it only when the project's auto-advance policy admits the card's tier.
+
+## Maintainer Recovery
+
+Two commands replace the hand edits US-487's run needed. They are the maintainer's, never this skill's to invoke on its own judgment; both print the `next` that `resolve` then names, and this skill simply continues from it.
+
+- **An unvalidated preparation attempt must be set aside** (built on a wrong premise, before any validator ran): `node "$SKILL_DIR/scripts/cycle-state.mjs" supersede --dir <run dir> --phase <p> --reason '<why>' --by <who> --workflowVersion "$WV" [--attempt <n>]`. The attempt (and its own contract file) become `superseded-<date>-<file>` — visible to a directory listing, invisible to the cycle — and a row lands in `maintainer-interventions.md`. A sealed attempt is refused (`supersede-sealed`), an attempt a rejection already answered too (`supersede-validated`), and an unknown phase or attempt is `supersede-not-found`: nothing is renamed.
+- **A review escalated on `needsHumanDecision`**: `node "$SKILL_DIR/scripts/cycle-state.mjs" decide --dir <run dir> --phase <r<n>> --finding <id> --decision '<the answer>' --by <who> --workflowVersion "$WV"`. The answer is recorded as its own `recordType: decision` handoff — no handoff renamed, no review re-run — and `resolve` leaves `escalate` for the remediation. One call per finding the review asked about.
 
 ## HALT Conditions
 
