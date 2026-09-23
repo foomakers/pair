@@ -1338,8 +1338,13 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       const expected = `${phase}-red-contract.attempt-${n}.json`
       if (basename(cp) !== expected) return { published: false, reason: `contract-attempt-name:${expected}` }
     }
-    for (const h of existingHandoffs.filter(x => x.skill === 'red-spec' && x.phase === phase && x.data)) {
+    const specs = existingHandoffs.filter(x => x.skill === 'red-spec' && x.phase === phase && x.data)
+    for (const [i, h] of specs.entries()) {
       const prev = String(h.data.contractPath ?? '').trim()
+      // A path a LATER attempt of the phase also names is the pre-#506 shape (US-506 F-4): the old
+      // red-spec skill wrote every attempt over `<phase>-red-contract.json`, so only its last writer's
+      // hash can still hold. That attempt is the one checked; the earlier ones are history.
+      if (prev && specs.slice(i + 1).some(x => String(x.data.contractPath ?? '').trim() === prev)) continue
       if (!prev || !/^sha256:[0-9a-f]{64}$/.test(String(h.data.contractHash ?? '')) || !existsSync(prev)) continue
       let intact = false
       try {

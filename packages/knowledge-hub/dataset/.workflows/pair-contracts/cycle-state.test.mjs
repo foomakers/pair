@@ -4416,3 +4416,27 @@ test('US-506 T-6 c2 (control, AC10): an executed, discriminating witness and a p
   redSpec(dir, 'r1-g1')
   assert.equal(publish({ dir, file: verdictDraft(dir, { verified: false, sealed: false, snapshot: undefined, findings: [{ rowId: 'row-1', location: 'a', severity: 'Major', description: 'd', recommendation: 'r' }] }), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V, predecessor: 'r1-g1-red-spec' }).published, true)
 })
+
+// ── US-506 F-4 (AC5 × AC7): a run started before the attempt-file rule wrote EVERY attempt over
+// `<phase>-red-contract.json`, as the old red-spec skill said to. Its next repair must still publish.
+test('US-506 F-4 (AC5 × AC7): an in-flight run whose pre-#506 repair overwrote the shared contract file publishes its next repair; a new-rule overwrite is still refused', () => {
+  const { dir } = runDir()
+  const shared = join(dir, 'a0-red-contract.json')
+  writeFileSync(shared, JSON.stringify({ attempt: 1 }))
+  redSpec(dir, 'a0', { contractPath: shared, contractHash: contractHash({ attempt: 1 }) })
+  redVerify(dir, 'a0', { verified: false, sealed: false, snapshot: undefined, reproduced: undefined, findings: rejectionOf(['row-1']) }, { predecessor: 'a0-red-spec' })
+  // attempt 2 as the pre-#506 engine published it: the SAME file, rewritten (no attempt-file rule then)
+  writeFileSync(shared, JSON.stringify({ attempt: 2 }))
+  writeFileSync(join(dir, 'a0-red-spec.attempt-2.json'), JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: shared, contractHash: contractHash({ attempt: 2 }), changedRows: ['row-1'], schemaVersion: SCHEMA_VERSION, workflowVersion: V, seq: 3, attempt: 2, predecessor: 'a0-red-verify' }))
+  redVerify(dir, 'a0', { verified: false, sealed: false, snapshot: undefined, reproduced: undefined, findings: rejectionOf(['row-2']) }, { predecessor: 'a0-red-spec', attempt: 2 })
+  assert.deepEqual(pick(resolve({ dir, workflowVersion: V, policy: { ...POLICY, redRepairs: 2 }, entry: 'fresh' }).next, 'step', 'mode', 'attempt'), { step: 'prepare', mode: 'repair', attempt: 3 })
+  const c3 = writeContract(dir, 'a0-red-contract.attempt-3.json', { attempt: 3 })
+  const out = publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: c3.path, contractHash: c3.hash, changedRows: ['row-2'] }), phase: 'a0', skill: 'red-spec', workflowVersion: V, predecessor: 'a0-red-verify', attempt: 3 })
+  assert.equal(out.published, true, JSON.stringify(out))
+  // control: a file only ONE attempt ever named is still checked — overwriting it is refused
+  writeFileSync(c3.path, JSON.stringify({ attempt: 'rewritten' }))
+  redVerify(dir, 'a0', { verified: false, sealed: false, snapshot: undefined, reproduced: undefined, findings: rejectionOf(['row-3']) }, { predecessor: 'a0-red-spec', attempt: 3 })
+  const c4 = writeContract(dir, 'a0-red-contract.attempt-4.json', { attempt: 4 })
+  const refused = publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: c4.path, contractHash: c4.hash, changedRows: ['row-3'] }), phase: 'a0', skill: 'red-spec', workflowVersion: V, predecessor: 'a0-red-verify', attempt: 4 })
+  assert.equal(refused.reason, 'contract-attempt-overwritten:a0-red-contract.attempt-3.json')
+})
