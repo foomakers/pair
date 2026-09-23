@@ -131,7 +131,10 @@ function fail(halt, detail, extra = {}) {
 // subagent realization's own mechanism): the role travels in the prompt, as data. The definitions
 // live at `.claude/agents/<agentType>.md`, three levels above this script as it is installed
 // (`.claude/skills/pair-workflow-cycle/scripts/`), so they are located relative to it rather than to
-// whatever directory a caller happened to run from.
+// whatever directory a caller happened to run from. That guess is the DEFAULT only: a caller that
+// knows the project's `agent-definitions` target (pair-cli reads it from the registry) passes
+// `packet --agents-dir <dir>`, because a skill installed under a redirected skills target
+// (`.agents/skills/`) sits three levels below `.agents/`, not below the agents' own target (r0-9).
 const AGENTS_DIR = resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'agents')
 
 /**
@@ -356,6 +359,9 @@ function packetCommand(opts) {
   // Present but its `effort` unknown ⇒ HALT `profile-unresolved`, never a silent default — the
   // HALT this argument was reserved under before any consumer existed.
   const profile = opts.profile === undefined ? {} : JSON.parse(opts.profile)
+  const agentsDir = opts['agents-dir'] ?? AGENTS_DIR
+  if (typeof agentsDir !== 'string' || !isAbsolute(agentsDir))
+    fail('agents-dir-invalid', `--agents-dir must be an absolute directory; received ${JSON.stringify(opts['agents-dir'])}`)
   if (profile.effort !== undefined && !KNOWN_EFFORTS.includes(profile.effort))
     fail('profile-unresolved', `$profile.effort ${JSON.stringify(profile.effort)} is not one of ${KNOWN_EFFORTS.join(' | ')}`, { profile })
   const effort = profile.effort
@@ -432,7 +438,7 @@ function packetCommand(opts) {
     if (!KNOWN_STYLES.includes(style)) fail('style-invalid', `--style must be one of ${KNOWN_STYLES.join(' | ')}; received ${JSON.stringify(style)}`)
     const bare = skill.replace(/^\//, '')
     const body = `${args} $workflowVersion=${workflowVersion}`
-    const role = roleBodyFor(agentType)
+    const role = roleBodyFor(agentType, agentsDir)
     return style === 'slash'
       ? `/${bare} ${body}\n\n${role}\n\n${guardrails}`
       : `${role}\n\nRun the ${bare} skill with these arguments: ${body}\n\n${guardrails}`
@@ -546,7 +552,7 @@ function realizationsCommand(opts) {
 // ── CLI ─────────────────────────────────────────────────────────────────────────────────────
 const FLAGS = {
   worktree: ['main', 'story', 'branch', 'base', 'worktree-root'],
-  packet: ['next', 'card', 'policy', 'run', 'workflow-version', 'pipeline', 'profile', 'contract-resolved', 'required', 'severity-floor', 'severities', 'verdicts', 'ranks', 'style'],
+  packet: ['next', 'card', 'policy', 'run', 'workflow-version', 'pipeline', 'profile', 'contract-resolved', 'required', 'severity-floor', 'severities', 'verdicts', 'ranks', 'style', 'agents-dir'],
   realizations: ['tools', 'product', 'story', 'pr'],
   'context-table': [],
 }

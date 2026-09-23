@@ -6,6 +6,7 @@ import { createExecutableProbe } from './path-probe'
 import type { EngineDefinition } from './engines'
 import type { DispatchSkipReason } from './dispatch'
 import {
+  locateAgentDefinitions,
   locateCycleScripts,
   CYCLE_WORKTREE_ROOT_DEFAULT,
   CYCLE_DISPATCH_CAP_DEFAULT,
@@ -201,7 +202,10 @@ export async function enterCycleCoordinator(
   // reaches here for `unmapped` too (a project WITH `## Workflows` whose card carries no mapped
   // tag), and scoping the probe to one of them let that project reach `driveCycle` with the skill
   // absent — the very HALT AC11 exists to raise, skipped for half its own surface.
-  const location = locateCycleScripts(fs, context.config, cwd)
+  const location = {
+    ...locateCycleScripts(fs, context.config, cwd),
+    agentsDir: locateAgentDefinitions(context.config, cwd),
+  }
 
   const dispatch = config.dispatch!
   reportCycleEntry({

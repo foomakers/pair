@@ -18,6 +18,24 @@ const CYCLE_SKILL_NAME = 'pair-workflow-cycle'
 
 export interface CycleScriptsLocation {
   readonly scriptsDir: string
+  /**
+   * Where the stage agent definitions are installed (the `agent-definitions` registry target),
+   * handed to `packet --agents-dir`. Absent ⇒ the script's own relative default (r0-9).
+   */
+  readonly agentsDir?: string
+}
+
+const AGENT_DEFINITIONS_REGISTRY = 'agent-definitions'
+const AGENT_DEFINITIONS_DEFAULT = '.claude/agents'
+
+/**
+ * The project's installed agent definitions: the `agent-definitions` registry's first target —
+ * the same registry `pair-cli install` writes them through — resolved against the project root.
+ * Never inferred from where the SKILL landed: a redirected skills target does not move the agents.
+ */
+export function locateAgentDefinitions(config: Config, projectRoot: string): string {
+  const target = extractRegistries(config)[AGENT_DEFINITIONS_REGISTRY]?.targets?.[0]?.path
+  return resolve(projectRoot, target ?? AGENT_DEFINITIONS_DEFAULT)
 }
 
 /**
@@ -213,6 +231,7 @@ export function createCycleScriptsBridge(location: CycleScriptsLocation): CycleS
         args.push(['workflow-version', options.workflowVersion])
       if (options.pipeline !== undefined) args.push(['pipeline', JSON.stringify(options.pipeline)])
       if (options.style !== undefined) args.push(['style', options.style])
+      if (location.agentsDir !== undefined) args.push(['agents-dir', location.agentsDir])
       return runScript(cycleDispatchPath, 'packet', args) as CyclePacketResult
     },
   }
