@@ -718,8 +718,11 @@ const identicalToMergedBase = (path, end, merged, cwd) =>
     if (!changed.has(path)) return false
     const atEnd = blobAt(end, path, cwd)
     const atBase = blobAt(parent, path, cwd)
+    // US-506 F-6: the BASE must itself have changed the path since the fork — otherwise a revert of the
+    // PR's own edit hidden inside the merge commit would pass as "brought in by the merge".
+    if (!mergeBase || blobAt(mergeBase, path, cwd) === atBase) return false
     if (atBase !== null) return atEnd === atBase
-    return atEnd === null && !!mergeBase && blobAt(mergeBase, path, cwd) !== null
+    return atEnd === null
   })
 
 export function verifyChain({ pr, base, cwd, expectContract, runDir, baseRef }) {
