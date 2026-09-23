@@ -220,13 +220,26 @@ Precedence: auto-dev, auto-plan
 - **The workflow is a skill name** — the entry point of a composition of existing skills, never a bespoke engine and never a merit rule. Two conditions, both required: it must be **installed**, and it must be one the dispatcher can hand the dispatched card to — the set named in *"The workflows a mapping can name"* below. A skill that is installed but outside that catalog is **refused**, and the refusal stops dispatch for the whole board (see the routing-time HALTs), so this bullet is not the whole rule: read it together with the catalog section.
 - **`Precedence: <tag>, <tag>, …`** — optional, at most one line, first listed wins. It resolves a card carrying **more than one** mapped tag, and nothing else.
 
-### Untagged ⇒ never. That is the whole opt-in boundary.
+### Untagged ⇒ never routed by tag. That is the whole opt-in boundary of tag dispatch.
 
-A card carrying **no mapped tag never runs**. There is no default workflow, no "fall back to the develop workflow", no implicit route for an unmapped card — a consumer **MUST** skip it and log the skip. The absence of a route is the authorization decision, so widening it is not a convenience: it is the difference between automation on the cards a team named and automation on the backlog.
+A card carrying **no mapped tag is never routed to a mapped workflow**. There is no default workflow, no "fall back to the develop workflow", no implicit route for an unmapped card — a tag consumer **MUST** skip it and log the skip. The absence of a route is the authorization decision for tag dispatch, so widening it is not a convenience: it is the difference between automation on the cards a team named and automation on the backlog.
 
 ### Absent section ⇒ no workflow is available
 
-`## Workflows` absent (or the whole optional file absent) ⇒ **no mapping is declared**: nothing can be routed. A dispatch **MUST** report `no mapping declared`, naming the file, and **exit cleanly** — automation is opt-in (D21), so a project that never wrote this section has simply not opted in, and that is never an error and never a default workflow.
+`## Workflows` absent (or the whole optional file absent) ⇒ **no mapping is declared**: nothing can be routed by tag. A dispatch **MUST** report `no mapping declared`, naming the file — automation is opt-in (D21), so a project that never wrote this section has simply not opted in to tag dispatch, and that is never an error and never a default workflow. A tag consumer (`pair-loop`'s selection, a trigger adapter's routing) then exits cleanly; `pair-cli run --card` continues into the card-readiness fallback below.
+
+### `pair-cli run --card` on an unmapped card: the card's own readiness decides
+
+When no mapping matches (`unmapped`, or `no mapping declared`), `pair-cli run --card` (US-487) does not pick a workflow — the card's own macrostate does, bounded in this order:
+
+1. **Eligibility gates unattended runs.** Under `--autonomous`, a card that does not carry the `## Eligibility` label is skipped `ineligible` — also when no `## Workflows` is declared, so the gate is never evaluated after the decision it bounds. `--approve-ineligible` lets that ONE run through; it is announced and never persisted. A supervised run (no `--autonomous`, the engine's confirmations active) is not held back by `## Eligibility`.
+2. **The macrostate, read through `## State Mapping`** ([canonical-states.md](../project-management-tool/canonical-states.md)): `Ready` or `In Progress` with a `## Task Breakdown` ⇒ the delivery-cycle coordinator (`pair-workflow-cycle`'s scripts, one fresh engine process per stage); `Review` ⇒ the cycle, whose handoffs decide the step; `Draft` ⇒ `pair-process-refine-story`; `Ready` without a breakdown ⇒ `pair-process-plan-tasks`. On a board with no state mapped to `Ready`, the Definition of Ready decides the Draft/Ready boundary. An unmapped board state or `Done` ⇒ a clean skip (exit 0). A malformed mapping HALTs.
+3. **Unattended runs never start a preparation skill.** With `--autonomous`, a card routed to `pair-process-refine-story` or `pair-process-plan-tasks` is skipped cleanly (exit 0, "needs a human", nothing spawned) — both open with a human interview.
+4. **`--pr <n>`** enters the cycle at its review stage; the card's preparation state is not consulted.
+5. **Every route that spawns takes the per-card lock** (below), exactly as a mapped route does.
+6. **Card unreadable** (`gh` absent or unauthenticated) with no `## Workflows` declared ⇒ a clean skip that says `card-unreadable`; with a mapping declared the project opted into dispatch, so it fails closed.
+
+The consequence for a trigger: an adapter that calls `pair-cli run --card … --autonomous` on every label event can start the delivery cycle on an unmapped card that is eligible and Ready. A project that wants only tagged cards to run declares `## Eligibility` and keeps its label off every card it has not chosen.
 
 **Absent section ≠ empty section**, exactly as under `## Eligibility`: a heading with no entry is a **half-written declaration** ⇒ HALT.
 
