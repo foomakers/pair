@@ -52,11 +52,15 @@ const rankOf = s => RANKS[String(s ?? '').trim().toLowerCase()] ?? Infinity
 
 // ── The cycle simulator: completes a fixture into the typed result + `next` a real phase skill
 // returns after `cycle-state.mjs resolve`. A fixture that already carries `next` is passed through.
-// `entry` (US-506): `legacy` emulates a run directory that already holds the `a0` contract path
-// (ADR-024 before the 2026-09-23 amendment, AC5) — the engine's first, contract-less `implement`
-// dispatch is REDIRECTED by the stage's own Step 0 to `prepare a0`, exactly as `resolve` answers on
-// such a directory, and the old transitions follow. `fresh` is a card with no evidence at all: the
-// first `implement` does the work (no up-front contract).
+// `entry` (US-506) names the DURABLE STATE the run directory holds when the batch starts — the
+// simulator's Step 0 answers from it, never regardless of it:
+//   `fresh`         no evidence at all: the first `implement` does the work (no up-front contract);
+//   `legacy`        an old-path directory whose `a0` preparation is due (ADR-024 before the
+//                   2026-09-23 amendment, AC5): `resolve` answers `prepare a0`, so the engine's first,
+//                   contract-less `implement` is redirected there and the old transitions follow;
+//   `legacy-sealed` an old-path directory whose `a0` is SEALED and not yet implemented: `resolve`
+//                   answers `implement a0` WITH its contract, so the contract-less first guess is
+//                   redirected to the same step carrying the seal.
 function makeSimulator({ floor = 'Minor', maxFixRounds = 3, entry = 'legacy' } = {}) {
   const stories = new Map()
   const state = id => {
@@ -123,8 +127,9 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3, entry = 'legacy' } =
       return full
     }
     if (opts.agentType === 'pair-implementer' && opts.label?.startsWith('implement:')) {
-      if (entry === 'legacy' && phase === 'a0' && !prompt.includes('$contract=') && !s.legacyRedirected) {
+      if (entry !== 'fresh' && phase === 'a0' && !prompt.includes('$contract=') && !s.legacyRedirected) {
         s.legacyRedirected = true
+        if (entry === 'legacy-sealed') return { status: 'redirect', next: { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1, base: HEAD, contract: { path: contractPath, hash: SHA256('1'), snapshot: SNAP, revision: 1 } } }
         return { status: 'redirect', next: { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1 } }
       }
       const full = { status: 'ok', gatesPassed: true, branch: 'b', prNumber: 7, url: 'https://x/pr/7', outputHead: HEAD, checkpointPath: '.pair/working/checkpoints/x.md', ...res }
@@ -1869,4 +1874,18 @@ test('US-506 T-3: review-phase states the per-AC qualitative test assessment, th
   assert.match(md, /A difference of taste \("I would have done it differently"\) is not a finding and is not recorded/)
   assert.match(md, /The handoff records ONLY the activities of this independent review/)
   assert.match(md, /No evidence of test-first is asked for or checked/)
+})
+
+test('US-506 F-2 (AC5): an old-path run SEALED but not yet implemented — the contract-less first guess is redirected to the same step WITH its seal, and the run completes (never failed-implement)', async () => {
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch(), entry: 'legacy-sealed' })
+  assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+  assert.deepEqual(stageLabels(calls), ['implement:#292', 'implement:#292', 'verify:#292 r0'])
+  assert.doesNotMatch(calls[0].prompt, /\$snapshot=/)
+  assert.match(calls[1].prompt, /\$snapshot=c{40} \$contract=/)
+  assert.equal(result.metrics.redirects, 1)
+})
+
+test('US-506 F-2: implement-phase redirects a dispatch that lacks the contract its `next` carries — never takes the fresh branch on a sealed run', () => {
+  const md = SKILL('implement-phase')
+  assert.match(md, /`next` names this dispatch but carries a `contract` while the dispatch has no `\$snapshot`/)
 })

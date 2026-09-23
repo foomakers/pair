@@ -45,7 +45,7 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVer
 ```
 
 - `status: other-run` ⇒ return `{ status: "other-run", runId }`. `incompatible | invalid` ⇒ return `{ status: "redirect", next: { step: "blocked", reason: "failed-resume", detail: <reason> } }`.
-- `next.step` is not `implement` ⇒ return `{ status: "redirect", next }` verbatim. Spend no judgment. When `next` names THIS dispatch (`implement`, `$phase`) you ARE the step: continue, never return a redirect to yourself.
+- `next.step` is not `implement` ⇒ return `{ status: "redirect", next }` verbatim. Spend no judgment. When `next` names THIS dispatch (`implement`, `$phase`) you ARE the step: continue, never return a redirect to yourself — with one exception: `next` names this dispatch but carries a `contract` while the dispatch has no `$snapshot` (the coordinator's contract-less first guess on a run whose `a0` is already sealed, US-506) ⇒ return `{ status: "redirect", next }` verbatim, so the coordinator re-dispatches this step WITH the seal. Never take the fresh-card branch on a sealed run.
 - Otherwise continue; `next.attempt` is your attempt number.
 - A prior attempt may already have published a PR: `next` then says `verify`, and you return that — never a second PR.
 

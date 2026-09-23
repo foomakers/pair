@@ -808,3 +808,50 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
   assert.deepEqual(view.regressions.active, [])
   assert.equal(view.regressions.historical.length, 1)
 })
+
+// ── US-506 F-2 (AC5): a run SEALED at `a0` and not yet implemented, through the REAL engine and the
+// REAL durable state. The stage stubs apply the phase skills' own Step 0 — redirect when another step
+// is due, and (implement-phase) when `next` carries a contract the dispatch lacks.
+test('US-506 F-2 (AC5): the batch engine resumes an old-path run sealed at a0 — implement is re-dispatched WITH the seal, then verify, ready-for-merge', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'f2-chain-'))
+  const dir = join(root, '.pair', 'working', 'runs', 'f2', '482')
+  mkdirSync(dir, { recursive: true })
+  const SRC = readFileSync(new URL('../pair-implement-batch.js', import.meta.url), 'utf8').replace(/^export /gm, '')
+  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
+  const H = c => c.repeat(40)
+  const D = c => `sha256:${c.repeat(64)}`
+  const arg = (p, n) => new RegExp(`\\$${n}=(\\S+)`).exec(p)?.[1]
+  const V = '4.0.0'
+  const POLICY = { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 }
+  let seq = 0
+  const through = (phase, skill, fields, { predecessor } = {}) => {
+    const file = join(dir, `draft-${++seq}.json`)
+    writeFileSync(file, JSON.stringify({ run: 'f2', story: '482', branch: 'feature/US-482', phase, skill, inputHead: H('a'), ...fields }))
+    const out = publish({ dir, file, phase, skill, workflowVersion: V, predecessor })
+    assert.equal(out.published, true, `${phase}-${skill}: ${JSON.stringify(out)}`)
+    return { inputHead: H('a'), ...fields, next: resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh', story: '482' }).next }
+  }
+  // the run as the pre-#506 engine left it: a0 prepared and SEALED, no implementation, no PR
+  through('a0', 'red-spec', { status: 'red', mode: 'initial', contractPath: join(dir, 'a0-red-contract.json'), contractHash: D('1') })
+  through('a0', 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: H('b'), contractHash: D('1') }, { predecessor: 'a0-red-spec' })
+  const STEP_OF = { 'pair-fix-test-author': 'prepare', 'pair-red-contract-verifier': 'validate', 'pair-reviewer': 'verify' }
+  const dispatched = []
+  const agent = async (prompt, opts) => {
+    dispatched.push({ label: opts.label, prompt })
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit' }
+    const phase = arg(prompt, 'phase')
+    const due = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh', story: '482' }).next
+    const step = STEP_OF[opts.agentType] ?? String(opts.label).split(':')[0]
+    if (due.step !== step || due.phase !== phase) return { status: 'redirect', next: due }
+    if (step === 'implement' && due.contract && !prompt.includes('$snapshot=')) return { status: 'redirect', next: due }
+    if (step === 'implement') return through('a0', 'implement-phase', { status: 'ok', gatesPassed: true, branch: 'feature/US-482', prNumber: 483, url: 'https://x/pr/483', outputHead: H('d'), checkpointPath: 'x.md' }, { predecessor: 'a0-red-verify' })
+    if (step === 'verify') return through('r0', 'review-phase', { pr: 483, reviewedHead: H('d'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: H('d') }, mode: 'first', partial: false, tier: 'risk:green', passes: ['general'], published: { firstReview: true } })
+    return null
+  }
+  const result = await new AsyncFunction('args', 'agent', 'parallel', 'log', SRC)({ cards: [{ id: '482', title: 'Conformance', branch: 'feature/US-482' }], runId: 'f2' }, agent, fns => Promise.all(fns.map(f => f())), () => {})
+  assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+  const stages = dispatched.filter(d => !/^contract:/.test(d.label))
+  assert.deepEqual(stages.map(d => d.label), ['implement:#482', 'implement:#482', 'verify:#482 r0'])
+  assert.match(stages[1].prompt, /\$snapshot=b{40} \$contract=/)
+  assert.deepEqual(readHandoffs(dir).map(h => h.name), ['a0-red-spec', 'a0-red-verify', 'a0-implement-phase', 'r0-review-phase'])
+})

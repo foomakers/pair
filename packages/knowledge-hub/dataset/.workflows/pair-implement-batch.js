@@ -1856,7 +1856,11 @@ async function driveStory(story) {
       if (isPosInt(res.next?.pr)) pr = res.next.pr
       // A stage that redirects to the very step it was dispatched for did not do its work: refuse
       // to loop on it, and say so.
-      if (res.next.step === next.step && res.next.phase === next.phase) return result('failed-resume', { reason: `${stage} redirected to itself (${next.step}/${next.phase}) instead of running`, phase: next.phase })
+      // US-506 (AC5): the one legitimate same-step redirect — the engine's contract-less first guess
+      // `implement a0` on a run whose `a0` is already SEALED: the stage hands back the durable `next`
+      // carrying the contract, and the re-dispatch is a different packet (`$snapshot`, `$contract`).
+      const bindsContract = !!res.next.contract && !next.contract
+      if (res.next.step === next.step && res.next.phase === next.phase && !bindsContract) return result('failed-resume', { reason: `${stage} redirected to itself (${next.step}/${next.phase}) instead of running`, phase: next.phase })
       // A redirect did no work and spent no judgment: the step it was dispatched for may still be
       // due LATER in the same run (US-506: the engine's first guess is `implement a0`, and a run
       // directory on the old `a0` path redirects it to `prepare a0` and reaches that same

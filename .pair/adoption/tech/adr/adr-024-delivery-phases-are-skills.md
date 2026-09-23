@@ -1344,5 +1344,9 @@ still applies to **review findings**.
 **Supersession notes.** Decision §1's statement that preparation precedes every implementation
 now holds for review findings only. The implement-phase description "implementation against the
 sealed acceptance contract" holds for the sealed-`a0` path only. The batch engine's documented
-cold path is 2 dispatches (implement, verify), not 4. A run directory on the old path pays one
-redirect at entry.
+cold path is 2 dispatches (implement, verify), not 4. A batch run on a directory already on the old
+path pays one redirect at entry: to `prepare`/`validate a0` when its preparation is due, or to the
+same `implement a0` carrying the seal when `a0` is sealed and not yet implemented (the implement-phase
+skill redirects a dispatch that lacks the contract `next` carries; the engine accepts that one
+same-step redirect because it binds the contract). The in-session and console coordinators dispatch
+`resolve`'s own `next`, so they pay nothing.
