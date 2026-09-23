@@ -120,7 +120,7 @@ test('T-27: one composed lifecycle — initial build, a real defect + a scope pr
 
   // ── initial contract + implementation (a0) ──────────────────────────────────────────────
   step(dir, 'a0', 'red-spec', { status: 'red', mode: 'initial', contractPath: '/abs/a0-red-contract.json', contractHash: `sha256:${'1'.repeat(64)}` })
-  step(dir, 'a0', 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}` }, { predecessor: 'a0-red-spec' })
+  step(dir, 'a0', 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}` }, { predecessor: 'a0-red-spec' })
   step(dir, 'a0', 'implement-phase', { status: 'ok', prNumber: 480, outputHead: SHA('c'), gatesPassed: true }, { predecessor: 'a0-red-verify' })
   let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
   assert.equal(r.next.step, 'verify')
@@ -147,7 +147,7 @@ test('T-27: one composed lifecycle — initial build, a real defect + a scope pr
 
   // ── remediation round 1: real-authority contract, mechanism named and closed in one answer ─
   step(dir, 'r1-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: '/abs/r1-g1-red-contract.json', contractHash: `sha256:${'2'.repeat(64)}`, plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] } }, { predecessor: 'r0-review-phase' })
-  step(dir, 'r1-g1', 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('d'), contractHash: `sha256:${'2'.repeat(64)}` }, { predecessor: 'r1-g1-red-spec' })
+  step(dir, 'r1-g1', 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: SHA('d'), contractHash: `sha256:${'2'.repeat(64)}` }, { predecessor: 'r1-g1-red-spec' })
   step(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('e'), evidenceLedger: [], remediationBatchId: 'r1' }, { predecessor: 'r1-g1-red-verify' })
   r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 480 })
   assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase }, { step: 'verify', mode: 're-review', phase: 'r1' })
@@ -210,7 +210,7 @@ test('T-27: one composed lifecycle — initial build, a real defect + a scope pr
 
   // ── remediation round 2, for the APPROVED delta only — same pipeline, no parallel path ──────
   step(dir, 'r2-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: '/abs/r2-g1-red-contract.json', contractHash: `sha256:${'3'.repeat(64)}`, plan: { groups: [{ groupId: 'r2-g1', findings: ['AC-99'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/b.ts'] }], carried: [] } }, { predecessor: 'r1-review-phase.attempt-2' })
-  step(dir, 'r2-g1', 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('f'), contractHash: `sha256:${'3'.repeat(64)}` }, { predecessor: 'r2-g1-red-spec' })
+  step(dir, 'r2-g1', 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: SHA('f'), contractHash: `sha256:${'3'.repeat(64)}` }, { predecessor: 'r2-g1-red-spec' })
   step(dir, 'r2-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('9'), evidenceLedger: [], remediationBatchId: 'r2' }, { predecessor: 'r2-g1-red-verify' })
 
   // ── final review: everything resolved, scope extended (not pending) — ready at last ─────────
@@ -405,7 +405,7 @@ test('B1 (DT-04): a contradiction with sealed rows routes a successor revision t
     }
     if (opts.agentType === 'pair-red-contract-verifier')
       // independent validation, simulated only at this boundary: the verdict and the successor seal
-      return through(phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: phase === 'a0' ? H('b') : H('c'), contractHash: arg(prompt, 'contractHash') }, { predecessor: `${phase}-red-spec` })
+      return through(phase, 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: phase === 'a0' ? H('b') : H('c'), contractHash: arg(prompt, 'contractHash') }, { predecessor: `${phase}-red-spec` })
     if (opts.agentType === 'pair-implementer')
       return through(phase, 'implement-phase', { status: 'ok', gatesPassed: true, branch: 'feature/US-482', prNumber: 483, url: 'https://x/pr/483', outputHead: phase === 'a0' ? H('d') : H('e'), checkpointPath: 'x.md' })
     if (opts.agentType === 'pair-reviewer') {
@@ -552,7 +552,7 @@ test('F1 (DT-04 x DT-33): a contradiction naming a contract sealed in a PREDECES
         ...(isRevision ? { revision: Number(arg(prompt, 'revision')), changedRows: jsonArg(prompt, 'changedRows') } : {}),
       })
     }
-    if (opts.agentType === 'pair-red-contract-verifier') return through(phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: H('f'), contractHash: arg(prompt, 'contractHash') }, { predecessor: `${phase}-red-spec` })
+    if (opts.agentType === 'pair-red-contract-verifier') return through(phase, 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: H('f'), contractHash: arg(prompt, 'contractHash') }, { predecessor: `${phase}-red-spec` })
     if (opts.agentType === 'pair-implementer') return through(phase, 'implement-phase', { status: 'ok', gatesPassed: true, branch: 'feature/US-482', prNumber: 483, url: 'https://x/pr/483', outputHead: H('d'), checkpointPath: 'x.md' })
     if (opts.agentType === 'pair-reviewer') {
       const round = Number(/^r(\d+)/.exec(phase)[1])
@@ -701,7 +701,7 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
       // exactly what it validated; the coordinator refuses any other set before the seal is trusted.
       const guards = jsonArg(prompt, 'regressionGuards')
       if (guards) guardPrompts.push({ phase: `validate:${phase}`, guards: guards.map(g => g.riskId) })
-      return through(phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: H('e'), contractHash: arg(prompt, 'contractHash'), remediationBatchId: `r${/^r(\d+)/.exec(phase)?.[1] ?? 0}`, ...(guards ? { regressionGuards: guards.map(g => g.riskId) } : {}) }, { predecessor: `${phase}-red-spec`, attempt: Number(arg(prompt, 'attempt') ?? 1) })
+      return through(phase, 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: H('e'), contractHash: arg(prompt, 'contractHash'), remediationBatchId: `r${/^r(\d+)/.exec(phase)?.[1] ?? 0}`, ...(guards ? { regressionGuards: guards.map(g => g.riskId) } : {}) }, { predecessor: `${phase}-red-spec`, attempt: Number(arg(prompt, 'attempt') ?? 1) })
     }
     if (opts.agentType === 'pair-implementer' && opts.label?.startsWith('implement:')) return through(phase, 'implement-phase', { status: 'ok', gatesPassed: true, branch: 'feature/US-482', prNumber: 483, url: 'https://x/pr/483', outputHead: H0, checkpointPath: 'x.md' })
     if (opts.agentType === 'pair-implementer') {

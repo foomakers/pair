@@ -53,7 +53,7 @@ function handoff(dir, phase, skill, fields, { pr = 7, predecessor, attempt } = {
 const redSpec = (dir, phase, extra = {}, opts) =>
   handoff(dir, phase, 'red-spec', { status: 'red', mode: phase === 'a0' ? 'initial' : 'remediation', contractPath: `/abs/${phase}-red-contract${(opts?.attempt ?? 1) > 1 ? `.attempt-${opts.attempt}` : ''}.json`, contractHash: `sha256:${'1'.repeat(64)}`, ...extra }, opts)
 const redVerify = (dir, phase, extra = {}, opts) =>
-  handoff(dir, phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, ...extra }, opts)
+  handoff(dir, phase, 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, ...extra }, opts)
 const review = (dir, phase, extra = {}, opts) =>
   handoff(dir, phase, 'review-phase', { reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') }, mode: 'first', ...extra }, opts)
 const finding = (id, extra = {}) => ({ id, severity: 'Major', location: 'src/a.ts:1', description: 'wrong', recommendation: 'fix', blocking: true, transition: 'open', reproducer: { command: 'node --test x.test.mjs' }, kind: 'defect', ...extra })

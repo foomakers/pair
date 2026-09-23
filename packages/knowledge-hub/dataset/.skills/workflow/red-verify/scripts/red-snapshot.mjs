@@ -5,10 +5,13 @@
 // INSIDE the story or review worktree by the phase skill that owns it, never by the workflow sandbox
 // (which has no filesystem) and never re-implemented by an LLM agent:
 //
-//   node <skill dir>/scripts/red-snapshot.mjs seal   --pr <n> --phase <p> --base <sha> --contract <contract.json> [--root <main checkout>]
+//   node <skill dir>/scripts/red-snapshot.mjs seal   --pr <n> --phase <p> --base <sha> --contract <contract.json> --static-gates '<json>' [--root <main checkout>]
 //     Verifies HEAD is exactly <base>, every listed artifact hashes to its stated sha256, and the
-//     working tree is dirty ONLY at those artifacts; writes the manifest, creates ONE local
-//     `--no-verify` commit carrying the `Pair-RED-Snapshot` trailer, prints {sealed, snapshot}.
+//     working tree is dirty ONLY at those artifacts; runs the PRE-SEAL GUARD (US-506 AC9: the repo's
+//     static gates over every listed test, a hermetic probe of every witness command — no real `gh`,
+//     no network — the `predecessorContractHash` against the sealed predecessors, a revision's
+//     `changedRows` against its own diff); writes the manifest, creates ONE local `--no-verify` commit
+//     carrying the `Pair-RED-Snapshot` trailer, prints {sealed, snapshot, preSeal}.
 //     Idempotent: an existing snapshot with the same trailer, parent and blobs is returned as-is.
 //
 //   node <skill dir>/scripts/red-snapshot.mjs verify --pr <n> --phase <p> --base <sha>
@@ -34,10 +37,14 @@
 // A rebase is never repaired (US-479 c1): a snapshot that is no longer an ancestor is simply
 // `snapshot-missing`, and the attempt fails closed.
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs'
-import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+// The ONE canonical contract identity (US-506 AC9: `predecessorContractHash` is checked against it).
+// `cycle-state.mjs` ships beside this script in every skill that ships this one.
+import { canonical, contractHash } from './cycle-state.mjs'
 
 export const TRAILER_KEY = 'Pair-RED-Snapshot'
 export const SHA_RE = /^[0-9a-f]{40}$/
@@ -280,7 +287,135 @@ export function resolveContractPath(contractPath, { cwd, root }) {
   return { path: real }
 }
 
-export function seal({ pr, phase, base, contractPath, cwd, root }) {
+// ── the pre-seal guard (US-506 T-6, AC9) ─────────────────────────────────────────────────────
+// Carried from US-487 T-8: its `a0` contract sealed a test with an unused local (the quality gate was
+// red for ANY implementation) and a witness that passes for anything — both byte-identical to the
+// seal, so nobody could fix them afterwards. Four refusals, each naming the file:
+//   static-gate-failed          a listed test fails one of the repo's static gates (lint, tsc, …)
+//   test-spawns-gh / test-reaches-network   a witness command reaches the real tracker or the network
+//   predecessor-hash-unmatched  `predecessorContractHash` is no sealed predecessor's contract hash
+//   changed-rows-omit-witness / changed-rows-omit-row   a revision edits a witness or a row it does not name
+const SNAP_TRAILER_RE = new RegExp(`^${TRAILER_KEY}: pr=(\\d+); phase=([^;]+); base=([0-9a-f]{40}); manifest=(\\S+)$`)
+// Every sealed contract in HEAD's history, with the canonical hash of the contract it sealed.
+export function sealedContracts(cwd) {
+  const out = []
+  const log = git(['log', '--format=%H%x00%B%x1e'], cwd) ?? ''
+  for (const rec of log.split('\x1e').map(r => r.replace(/^\n/, '')).filter(Boolean)) {
+    const [sha, body] = rec.split('\x00')
+    for (const line of trailerBlockOf(body ?? '', cwd).split('\n')) {
+      const m = SNAP_TRAILER_RE.exec(line.trim())
+      if (!m) continue
+      const raw = git(['show', `${sha}:${m[4]}`], cwd, { allowFail: true })
+      try {
+        const manifest = JSON.parse(raw)
+        out.push({ sha, pr: m[1], phase: m[2], manifest: m[4], contractHash: contractHash(manifest) })
+      } catch {}
+    }
+  }
+  return out
+}
+const testArtifacts = c => (c.testExempt === true ? [] : c.redTests.filter(a => (a?.kind ?? 'test') === 'test'))
+const rowMentions = (row, file) => {
+  const base = basename(file)
+  return Object.values(row ?? {}).some(v => (Array.isArray(v) ? v : [v]).some(x => typeof x === 'string' && (x.includes(file) || x.includes(base))))
+}
+// A revision names every row it adds or edits, and every sealed witness file its diff modifies is
+// covered by one of those rows — `changedRows` is checked against what the diff actually touched.
+export function changedRowsErrors({ prev, contract, cwd }) {
+  const changed = new Set(Array.isArray(contract.changedRows) ? contract.changedRows : [])
+  const prevListed = new Map((prev.contract?.redTests ?? []).map(a => [a.file, a]))
+  const changedRows = (contract.matrix ?? []).filter(r => changed.has(r?.id))
+  for (const a of contract.testExempt === true ? [] : contract.redTests) {
+    if (!prevListed.has(a.file)) continue
+    const atPrev = git(['rev-parse', '--verify', '-q', `${prev.sha}:${a.file}`], cwd, { allowFail: true })
+    const now = existsSync(join(cwd, a.file)) ? git(['hash-object', a.file], cwd) : null
+    if (atPrev === now) continue
+    if (!changedRows.some(r => rowMentions(r, a.file))) return { reason: 'changed-rows-omit-witness', path: a.file, changedRows: [...changed] }
+  }
+  const before = new Map((prev.contract?.matrix ?? []).map(r => [r?.id, canonical(r)]))
+  const rows = (contract.matrix ?? []).filter(r => r?.id && before.get(r.id) !== canonical(r) && !changed.has(r.id)).map(r => r.id)
+  if (rows.length) return { reason: 'changed-rows-omit-row', rows, changedRows: [...changed] }
+  return null
+}
+const tail = s => String(s ?? '').trim().split('\n').slice(-20).join('\n')
+// The repo's static gates over every listed TEST artifact. A gate is `{ name, command: [argv] }`; `{file}`
+// runs it once per file (so the refusal names the file), `{files}` once over all of them.
+export function runStaticGates({ gates, contract, cwd, timeoutMs = 300000 }) {
+  if (!Array.isArray(gates) || gates.some(g => !g || typeof g !== 'object' || !String(g.name ?? '').trim() || !Array.isArray(g.command) || !g.command.length || g.command.some(a => typeof a !== 'string')))
+    return { refusal: { reason: 'static-gates-invalid', detail: 'each gate is { name, command: [argv…] } with an optional {file} or {files} placeholder' } }
+  const files = testArtifacts(contract).map(a => a.file)
+  const results = []
+  const run = argv => spawnSync(argv[0], argv.slice(1), { cwd, encoding: 'utf8', timeout: timeoutMs, env: cleanGitEnv() })
+  for (const g of gates) {
+    const perFile = g.command.includes('{file}')
+    const groups = perFile ? files.map(f => [f]) : [files]
+    for (const group of groups) {
+      if (!group.length) continue
+      const argv = g.command.flatMap(a => (a === '{file}' ? group : a === '{files}' ? group : [a]))
+      const r = run(argv)
+      const output = tail(`${r.stdout ?? ''}\n${r.stderr ?? ''}`)
+      const exitCode = r.status ?? (r.error ? -1 : 0)
+      if (exitCode !== 0) {
+        const named = group.find(f => output.includes(f)) ?? group[0]
+        return { refusal: { reason: 'static-gate-failed', gate: g.name, path: named, exitCode, output } }
+      }
+      results.push({ gate: g.name, path: perFile ? group[0] : group.join(','), exitCode })
+    }
+  }
+  return { results }
+}
+const NET_TRAP = `'use strict'
+const fs = require('fs')
+const net = require('net')
+const log = process.env.PAIR_SEAL_TRAP_LOG
+const loopback = h => h === undefined || h === null || h === '' || h === 'localhost' || h === '::1' || /^127\\./.test(String(h)) || h === '0.0.0.0'
+const orig = net.Socket.prototype.connect
+net.Socket.prototype.connect = function (...args) {
+  const a0 = Array.isArray(args[0]) ? args[0][0] : args[0]
+  let host
+  if (a0 && typeof a0 === 'object') {
+    if (a0.path) return orig.apply(this, args)
+    host = a0.host
+  } else if (typeof a0 === 'number' || /^\\d+$/.test(String(a0))) host = typeof args[1] === 'string' ? args[1] : undefined
+  else return orig.apply(this, args)
+  if (loopback(host)) return orig.apply(this, args)
+  try { fs.appendFileSync(log, 'net ' + host + '\\n') } catch {}
+  const err = Object.assign(new Error('pair seal probe: network access to ' + host + ' refused'), { code: 'EPAIRSEAL' })
+  process.nextTick(() => this.destroy(err))
+  return this
+}
+`
+// Every witness command, run once with a `gh` trap FIRST on PATH and a Node preload that refuses any
+// non-loopback socket. A test that stubs `gh` itself (its own PATH entry, PAIR_GH_BIN) never reaches
+// the trap; one that shells out to the operator's `gh` or opens a socket to a real host does. Its exit
+// code is not judged here — only what it reached. The probe never reaches the network or a real `gh`.
+export function hermeticProbe({ contract, cwd, timeoutMs = 120000 }) {
+  const trap = mkdtempSync(join(tmpdir(), 'pair-seal-trap-'))
+  try {
+    writeFileSync(join(trap, 'gh'), '#!/bin/sh\nprintf \'gh %s\\n\' "$*" >> "$PAIR_SEAL_TRAP_LOG"\nexit 97\n', { mode: 0o755 })
+    const preload = join(trap, 'net-trap.cjs')
+    writeFileSync(preload, NET_TRAP)
+    let probed = 0
+    for (const [i, a] of testArtifacts(contract).entries()) {
+      if (!String(a.command ?? '').trim()) continue
+      const log = join(trap, `t${i}.log`)
+      const env = { ...cleanGitEnv(), PATH: `${trap}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}`, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require ${JSON.stringify(preload)}`.trim(), PAIR_SEAL_TRAP_LOG: log }
+      const r = spawnSync('/bin/sh', ['-c', a.command], { cwd, encoding: 'utf8', timeout: timeoutMs, env })
+      probed++
+      if (r.error?.code === 'ETIMEDOUT') return { refusal: { reason: 'hermetic-probe-timeout', path: a.file, command: a.command, timeoutMs } }
+      const hits = existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter(Boolean) : []
+      const gh = hits.find(l => l.startsWith('gh'))
+      if (gh) return { refusal: { reason: 'test-spawns-gh', path: a.file, command: a.command, detail: gh } }
+      const netHit = hits.find(l => l.startsWith('net '))
+      if (netHit) return { refusal: { reason: 'test-reaches-network', path: a.file, command: a.command, host: netHit.slice(4) } }
+    }
+    return { probed }
+  } finally {
+    rmSync(trap, { recursive: true, force: true })
+  }
+}
+
+export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, hermetic = false }) {
   if (!SHA_RE.test(String(base))) return { sealed: false, reason: 'base-not-a-sha' }
   const resolved = resolveContractPath(contractPath, { cwd, root })
   if (resolved.error) return { sealed: false, reason: resolved.error, path: resolved.path, root: resolved.root }
@@ -294,8 +429,9 @@ export function seal({ pr, phase, base, contractPath, cwd, root }) {
   const errs = contractErrors(contract)
   if (errs.length) return { sealed: false, reason: 'contract-invalid', errors: errs }
   const predecessor = predecessorPhase(phase)
+  let prev = null
   if (predecessor) {
-    const prev = findSnapshotByPhase({ pr, phase: predecessor, cwd })
+    prev = findSnapshotByPhase({ pr, phase: predecessor, cwd })
     if (!prev) return { sealed: false, reason: 'predecessor-snapshot-missing', predecessor }
     if (!prev.contract) return { sealed: false, reason: 'predecessor-manifest-unreadable', predecessor, snapshot: prev.sha }
     const narrowed = scopeNarrowing(prev.contract, contract)
@@ -343,6 +479,28 @@ export function seal({ pr, phase, base, contractPath, cwd, root }) {
     if (!reattestOk) return { sealed: false, reason: 'artifact-not-changed', paths: notDirty }
   }
 
+  // ── the pre-seal guard (US-506 AC9): refused with a typed reason naming the file, nothing committed
+  const preSeal = { provenance: 'none' }
+  if (contract.predecessorContractHash !== undefined) {
+    const sealedHashes = sealedContracts(cwd).map(x => x.contractHash)
+    if (!sealedHashes.includes(contract.predecessorContractHash)) return { sealed: false, reason: 'predecessor-hash-unmatched', path: contractPath, stated: contract.predecessorContractHash, sealedPredecessors: [...new Set(sealedHashes)] }
+    preSeal.provenance = 'matched'
+  }
+  if (prev) {
+    const omitted = changedRowsErrors({ prev, contract, cwd })
+    if (omitted) return { sealed: false, predecessor, ...omitted }
+  }
+  if (staticGates !== undefined) {
+    const gates = runStaticGates({ gates: staticGates, contract, cwd })
+    if (gates.refusal) return { sealed: false, ...gates.refusal }
+    preSeal.staticGates = gates.results
+  }
+  if (hermetic) {
+    const probe = hermeticProbe({ contract, cwd })
+    if (probe.refusal) return { sealed: false, ...probe.refusal }
+    preSeal.hermetic = { probed: probe.probed }
+  }
+
   const manifestAbs = join(cwd, manifest)
   mkdirSync(dirname(manifestAbs), { recursive: true })
   writeFileSync(
@@ -352,7 +510,7 @@ export function seal({ pr, phase, base, contractPath, cwd, root }) {
   git(['add', '--', manifest, ...files], cwd)
   git(['commit', '--no-verify', '-q', '-m', `RED snapshot pr=${pr} phase=${phase}\n\n${trailer}`], cwd)
   const snapshot = git(['rev-parse', 'HEAD'], cwd)
-  return { sealed: true, snapshot, manifest }
+  return { sealed: true, snapshot, manifest, preSeal }
 }
 
 // ── verify ─────────────────────────────────────────────────────────────────────────────────
@@ -710,7 +868,7 @@ if (isMain()) {
   try {
     const { cmd, opts } = parseCli(process.argv.slice(2))
     // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
-    const FLAGS = { 'verify-chain': ['pr', 'base', 'cwd', 'contract-expected', 'run-dir'], seal: ['pr', 'phase', 'base', 'cwd', 'contract', 'root'], verify: ['pr', 'phase', 'base', 'cwd'] }
+    const FLAGS = { 'verify-chain': ['pr', 'base', 'cwd', 'contract-expected', 'run-dir'], seal: ['pr', 'phase', 'base', 'cwd', 'contract', 'root', 'static-gates'], verify: ['pr', 'phase', 'base', 'cwd'] }
     if (FLAGS[cmd]) {
       const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
       if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
@@ -730,7 +888,16 @@ if (isMain()) {
       process.exit(out.verified ? 0 : 1)
     } else if (cmd === 'seal') {
       if (!opts.contract) throw new Error('--contract <draft.json> is required')
-      out = seal({ ...common, contractPath: opts.contract, root: opts.root })
+      // US-506 AC9: the repo's static gates are a REQUIRED input — the sealer never seals blind. `[]`
+      // is an explicit, recorded "this repository has none"; the hermetic probe always runs.
+      if (opts['static-gates'] === undefined) throw new Error("--static-gates '<json array of { name, command: [argv] }>' is required ('[]' when the repository has none)")
+      let staticGates
+      try {
+        staticGates = JSON.parse(opts['static-gates'])
+      } catch {
+        throw new Error('--static-gates must be a JSON array')
+      }
+      out = seal({ ...common, contractPath: opts.contract, root: opts.root, staticGates, hermetic: true })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.sealed ? 0 : 1)
     } else if (cmd === 'verify') {

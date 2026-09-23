@@ -535,6 +535,36 @@ export function envelopeErrors(data, { phase, skill }) {
       }
     }
   }
+  // US-506 AC10: the validator PROVES it executed. Every row it validated carries the command it ran,
+  // the exit code and the observed output; a witness (`baseline: red`) needs a run that FAILED — at
+  // the unfixed base, or on the injected regression a `mode: test` guard is proven against — and a
+  // control (`baseline: pass`) a run that PASSED. A test that cannot fail, or cannot pass, is refused.
+  // A rejection may carry its audited rows too; when it does they are held to the same shape.
+  if (skill === 'red-verify') {
+    const rows = data.reproduced
+    if (data.verified === true && (!Array.isArray(rows) || !rows.length)) errs.push('reproduced-missing')
+    else if (rows !== undefined && !Array.isArray(rows)) errs.push('reproduced-not-an-array')
+    else if (Array.isArray(rows)) {
+      const byRow = new Map()
+      for (const r of rows) {
+        const tag = r && typeof r === 'object' && nonBlank(r.rowId) ? r.rowId : '?'
+        if (!r || typeof r !== 'object' || !nonBlank(r.rowId) || !['red', 'pass'].includes(r.baseline) || !nonBlank(r.command) || !Number.isInteger(r.exitCode) || !nonBlank(r.observed)) {
+          errs.push(`reproduced-invalid:${tag}`)
+          continue
+        }
+        if (SHELL_METACHAR_RE.test(r.command)) {
+          errs.push(`reproduced-command-unsafe:${tag}`)
+          continue
+        }
+        byRow.set(r.rowId, [...(byRow.get(r.rowId) ?? []), r])
+      }
+      for (const [rowId, runs] of byRow) {
+        const baseline = runs[0].baseline
+        if (baseline === 'red' && !runs.some(x => x.exitCode !== 0)) errs.push(`witness-cannot-fail:${rowId}`)
+        if (baseline === 'pass' && !runs.some(x => x.exitCode === 0)) errs.push(`control-cannot-pass:${rowId}`)
+      }
+    }
+  }
   // US-479 T-29 (S11): the active regression-risk matrix is a VIEW over the ledger. A handoff that
   // carries its own aggregate would be a second, mutable source of truth.
   if (data.activeRegressionRisks !== undefined) errs.push('activeRegressionRisks-not-storable')
