@@ -4,7 +4,11 @@ import chalk from 'chalk'
 import type { RunCommandConfig } from './parser'
 import { assertEngineAvailable, describeEngineResolution, resolveEngine } from './resolve-engine'
 import { createExecutableProbe } from './path-probe'
-import { describeSkillResolution, resolveInvocation, type ResolvedInvocation } from './resolve-skill'
+import {
+  describeSkillResolution,
+  resolveInvocation,
+  type ResolvedInvocation,
+} from './resolve-skill'
 import { createPerimeter, describePerimeter } from './perimeter'
 import { describeMergePosture, describeParallelism } from './automation-policy'
 import { describeApprovalPosture, filterDeliveryFor } from './invocation'

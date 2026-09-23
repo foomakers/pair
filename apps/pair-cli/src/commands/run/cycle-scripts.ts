@@ -228,10 +228,9 @@ export interface CardMacrostate {
 }
 
 /**
- * Reads the card's own macrostate (Draft / Refined-without-breakdown / Ready) from the SAME
- * markdown shape the card template produces, never a second source of truth. A pure classification:
- * no PM-tool call lives here (that adapter call is `handler.ts`'s) — this is the DECISION grammar
- * over the body it is handed.
+ * The card TEMPLATE's own two literals (`Draft`, `Refined`) classified without a board mapping.
+ * Not the production routing: `run --card` resolves the board state through the adopted
+ * `## State Mapping` (`card-readiness.ts`, review r0-1), where `Refined` is just one board's name.
  */
 export function classifyCardReadiness(card: CardMacrostate): CardReadiness {
   if (card.status === 'Draft') return 'draft'

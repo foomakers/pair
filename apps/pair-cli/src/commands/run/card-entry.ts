@@ -6,7 +6,8 @@ import type { ResolvedInvocation } from './resolve-skill'
 import { createPerimeter } from './perimeter'
 import type { AutomationPolicy } from './automation-policy'
 import type { CardReadiness } from './cycle-scripts'
-import { CardUnreadableError, ghCardReadiness } from './cycle-wiring'
+import { CardUnreadableError, createCardReadinessProbe } from './cycle-wiring'
+import { CardOutOfScopeError } from './card-readiness'
 import { filterDeliveryFor } from './invocation'
 import type { DispatchSkipReason } from './dispatch'
 import { driveRun } from './loop-driver'
@@ -185,7 +186,7 @@ async function handleDorFallback(
   reportFallbackEntry(context, decision)
   announceIneligibleOverride(decision.card, context, config)
 
-  const readiness = await readReadiness(decision, deps)
+  const readiness = await readReadiness(input, deps)
   if (readiness === undefined) {
     recordSkip(context, deps, decision)
     return 0
@@ -205,26 +206,35 @@ async function handleDorFallback(
 }
 
 /**
- * The card's macrostate — or `undefined` for the ONE clean-skip class (AC14-G1): no mapping is
- * declared AND the tracker cannot be asked (`gh` absent or unauthenticated). That is the shipped
- * default meeting a runner with no tracker access (the github-dispatch-adapter smoke), where the
- * answer was always "nothing runs"; it is said, typed, never swallowed. Where a mapping IS
- * declared (`unmapped`) the project opted into dispatch, so an unreadable card still fails closed.
+ * The card's readiness — or `undefined` for a clean skip, said and typed, never swallowed:
+ *
+ * - AC14-G1: no mapping is declared AND the tracker cannot be asked (`gh` absent or
+ *   unauthenticated). That is the shipped default meeting a runner with no tracker access (the
+ *   github-dispatch-adapter smoke), where the answer was always "nothing runs". Where a mapping IS
+ *   declared (`unmapped`) the project opted into dispatch, so an unreadable card still fails closed.
+ * - r0-1: the card's board state is out of scope — unmapped (canonical-states.md Reading rule 4:
+ *   ignored, "the skill proceeds without error"), undeclared, or `Done`.
+ *
+ * A malformed `## State Mapping` is neither: it HALTs, as the schema requires.
  */
 async function readReadiness(
-  decision: SkipDecision,
+  input: DorFallbackInput,
   deps: RunHandlerDependencies,
 ): Promise<CardReadiness | undefined> {
+  const { decision, fs, cwd } = input
   try {
-    return await (deps.cardReadiness ?? ghCardReadiness)(decision.card)
+    return await (deps.cardReadiness ?? createCardReadinessProbe(fs, cwd))(decision.card)
   } catch (error) {
-    if (decision.reason !== 'no-mapping-declared' || !(error instanceof CardUnreadableError)) {
-      throw error
-    }
-    console.log(`  Skipped: ${error.message}`)
+    if (!isCleanSkip(error, decision)) throw error
+    console.log(`  Skipped: ${(error as Error).message}`)
     console.log(chalk.dim('  Nothing was spawned.'))
     return undefined
   }
+}
+
+function isCleanSkip(error: unknown, decision: SkipDecision): boolean {
+  if (error instanceof CardOutOfScopeError) return true
+  return decision.reason === 'no-mapping-declared' && error instanceof CardUnreadableError
 }
 
 /**

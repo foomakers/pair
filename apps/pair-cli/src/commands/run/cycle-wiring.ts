@@ -5,13 +5,13 @@ import type { EngineDefinition } from './engines'
 import { runCycle, type CycleOutcome, type CycleStageResult } from './cycle'
 import {
   createCycleScriptsBridge,
-  classifyCardReadiness,
   CYCLE_WORKTREE_ROOT_DEFAULT,
   type CardReadiness,
   type CycleScriptsLocation,
 } from './cycle-scripts'
 import { runStage, styleFor } from './stage-runner'
 import { spawnIteration } from './spawn'
+import { readStateMapping, resolveCardReadiness, type CardDocument } from './card-readiness'
 
 /**
  * The PRODUCTION wiring for `run --card`'s two injected collaborators.
@@ -58,11 +58,9 @@ export class CardUnreadableError extends Error {
   override readonly name = 'CardUnreadableError'
 }
 
-/** Reads one card through the operator's own `gh`. Never parses prose it did not ask for. */
-export function readCardViaGh(card: string, cwd: string): CardRecord {
-  let raw: string
+function ghIssueView(card: string, cwd: string, fields: string): string {
   try {
-    raw = execFileSync('gh', ['issue', 'view', card, '--json', 'title,body'], {
+    return execFileSync('gh', ['issue', 'view', card, '--json', fields], {
       cwd,
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -73,8 +71,56 @@ export function readCardViaGh(card: string, cwd: string): CardRecord {
         `pair-cli reads the tracker through your own authenticated \`gh\`; check \`gh auth status\`.`,
     )
   }
-  const parsed = JSON.parse(raw) as { title?: string; body?: string }
+}
+
+/** Reads one card through the operator's own `gh`. Never parses prose it did not ask for. */
+export function readCardViaGh(card: string, cwd: string): CardRecord {
+  const parsed = JSON.parse(ghIssueView(card, cwd, 'title,body')) as {
+    title?: string
+    body?: string
+  }
   return parseCardRecord(parsed.title ?? '', parsed.body ?? '')
+}
+
+interface GhCard {
+  title?: string
+  body?: string
+  projectItems?: ReadonlyArray<{ status?: { name?: string } | null }>
+}
+
+/**
+ * The card's BOARD STATE: the project item's own status when the card sits on a board, else the
+ * `**Status**:` line the card template writes — the literal `## State Mapping` is keyed by.
+ * `projectItems` needs the `read:project` scope, so a token without it falls back to the body.
+ */
+function boardStateOf(card: GhCard): string | undefined {
+  const onBoard = card.projectItems?.map(item => item.status?.name?.trim()).find(Boolean)
+  return onBoard ?? STATUS_RE.exec(card.body ?? '')?.[1]
+}
+
+export function readCardDocumentViaGh(card: string, cwd: string): CardDocument {
+  let raw: string
+  try {
+    raw = ghIssueView(card, cwd, 'title,body,projectItems')
+  } catch {
+    raw = ghIssueView(card, cwd, 'title,body')
+  }
+  const parsed = JSON.parse(raw) as GhCard
+  return { title: parsed.title ?? '', body: parsed.body ?? '', boardState: boardStateOf(parsed) }
+}
+
+/**
+ * The shipped readiness probe (AC14): the project's own `## State Mapping`, READ from its
+ * adoption file (a malformed one HALTs before the tracker is asked), then the card through `gh`.
+ * The verdict line is printed so the routing can be checked against the board.
+ */
+export function createCardReadinessProbe(fs: FileSystemService, projectRoot: string) {
+  return async (card: string): Promise<CardReadiness> => {
+    const mapping = readStateMapping(fs, projectRoot)
+    const verdict = resolveCardReadiness(readCardDocumentViaGh(card, process.cwd()), mapping)
+    console.log(`  Readiness: card ${card} — ${verdict.explanation}`)
+    return verdict.readiness
+  }
 }
 
 /** `<type>/<story-id>-<brief-description>`, the documented branch standard — derived, never invented per run. */
@@ -151,9 +197,6 @@ function existingBranchFor(card: string, cwd: string): string | undefined {
   }
   return undefined
 }
-
-export const ghCardReadiness = async (card: string): Promise<CardReadiness> =>
-  classifyCardReadiness(readCardViaGh(card, process.cwd()))
 
 /**
  * The repository's MAIN checkout — never the directory the command happened to run in.
