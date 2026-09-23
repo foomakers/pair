@@ -744,7 +744,7 @@ pair-cli run [options]
 
 | Option                          | Description                                                                                          |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `--engine <id>`                 | Engine to drive: `pi`, `opencode` or `claude`. Precedence: flag > `pair.config.json` > schema default |
+| `--engine <id>`                 | Engine to drive: `pi`, `opencode`, `claude` or `codex`. Precedence: flag > `pair.config.json` > schema default |
 | `--skill <name>`                | Skill to invoke. Explicit, and **never** falls back — a missing skill is an error                     |
 | `--prompt <text>`               | Run this text instead of a skill invocation (mutually exclusive with `--skill`)                       |
 | `--root <id>`                   | Scope root, passed on under the resolved skill's own name for it (`--root` for `pair-next`/`pair-loop`, `--story` for the `pair-process-*` workflows). Not combinable with `--card` — a dispatched card **is** the scope |
@@ -758,6 +758,9 @@ pair-cli run [options]
 | `--max-iterations <n>`          | Iteration cap. **Narrows** the policy's `max-iterations`; it can never widen it                       |
 | `--autonomous`                  | Explicit opt-in: run without confirmations, **and** without the skill's approval rounds — see below   |
 | `--approve-project-trust`       | Explicit authorization to run where the engine does not trust the project                            |
+| `--approve-ineligible`          | Let THIS `--autonomous` run through `## Eligibility` on a card that does not carry the label. Announced, never persisted |
+| `--profile <name>`              | Reserved until #488 (per-stage engine/model/effort/timeout): refused with a pointer                   |
+| `--workflow-config <path>`      | Reserved until #488: refused with a pointer                                                          |
 | `--iteration-timeout <seconds>` | Per-iteration wall-clock bound (hang guard, default `1800`)                                           |
 | `--dry-run`                     | Resolve engine, skill, perimeter and policy, print them, spawn nothing                               |
 
@@ -788,17 +791,46 @@ and the order is fixed — **the tag mapping is asked first, always**:
    maps, that single workflow runs, exactly as it always has. Tag-driven dispatch is unchanged, and
    nothing below can displace it.
 2. **No mapping matches ⇒ the card's own readiness decides.** With no `## Workflows` section, or a
-   card carrying no mapped tag, the command looks at where the card actually is:
-   - **Ready** (refined, with a task breakdown — its Definition of Ready satisfied) ⇒ it drives the
-     **whole delivery cycle** to a terminal status, one fresh engine process per stage.
-   - **Not ready yet** (draft, or refined without a breakdown) ⇒ it routes to the preparation skill
-     that gap calls for — `pair-process-refine-story` for a draft, `pair-process-plan-tasks` for a
-     refined card with no breakdown — and says which one it chose and why. It does **not** start a
-     cycle on a card that cannot yet produce an acceptance contract.
+   card carrying no mapped tag, the command looks at where the card actually is — its board state
+   (the card's project status, else its `**Status**:` line) resolved through the
+   [`## State Mapping`](/docs/concepts/canonical-states) of `way-of-working.md`, then the canonical
+   names:
+   - **Ready** or **In Progress**, with a task breakdown ⇒ it drives the **whole delivery cycle** to a
+     terminal status, one fresh engine process per stage. **Review** re-enters the cycle, whose
+     handoffs decide the step.
+   - **Not ready yet** ⇒ it routes to the preparation skill that gap calls for —
+     `pair-process-refine-story` for a Draft, `pair-process-plan-tasks` for a Ready card with no
+     breakdown — and says which one it chose and why. It does **not** start a cycle on a card that
+     cannot yet produce an acceptance contract. On a board with no state mapped to Ready, the
+     Definition of Ready (the six criteria, the task breakdown covering three of them) decides the
+     Draft/Ready boundary.
+   - A board state that is neither mapped nor canonical, or **Done**, is out of scope: a clean skip
+     (exit `0`). A malformed mapping (one board state under two macrostates) **HALTs**.
+
+   Bounds on that fallback, all towards *not running*:
+   - **Unattended runs never start a preparation skill.** With `--autonomous`, a card routed to
+     refinement or planning is skipped (exit `0`, "needs a human", nothing spawned).
+   - **`## Eligibility` bounds `--autonomous` runs** here too, even with no `## Workflows` declared: a
+     card without the label is skipped `ineligible` before it is read. `--approve-ineligible` lets
+     that one run through, says so, and writes nothing. A supervised run is not held back by it.
+   - **`--pr <n>`** goes straight to fix-and-review in the cycle; the card's preparation state is
+     not consulted.
+   - **Every route that spawns takes the per-card lock**, like a mapped route.
+   - **The card cannot be read** (no `gh`, or unauthenticated) and no `## Workflows` is declared ⇒ a
+     clean skip that says `card-unreadable`; with a mapping declared it fails closed.
 
    Before this, that combination did nothing at all: a card with no mapping was reported as skipped
-   and the command exited. The cycle occupies exactly the space that skip left empty, which is why
-   no project that had already configured tag dispatch sees any change.
+   and the command exited. **That is no longer true for an unmapped card**: a trigger that calls
+   `pair-cli run --card … --autonomous` on every label event can now start the delivery cycle on an
+   eligible Ready card that carries no mapped tag. Mapped routes are unchanged. A project that wants
+   only tagged cards to run declares `## Eligibility`.
+
+   The cycle's own values — the workflow version, the base branch, the worktree root and the dispatch
+   cap — are read from the installed `pair-workflow-cycle` scripts and printed before the first
+   stage, with the scripts path, the run directory, the `runId` and the `--rounds` bound. Missing
+   pieces HALT before any spawn: `skill-missing` (the skill is not installed),
+   `agent-definition-missing` (a stage's role, located through the `agent-definitions` registry),
+   `worktree-conflict` (the story worktree is checked out on another branch).
 
 ### Tag-driven dispatch
 
@@ -824,13 +856,15 @@ still accepted — it narrows what a selector picks up *within* the run, it does
 
 Four properties decide what actually happens, and all four fail towards *not running*:
 
-- **Untagged ⇒ never.** A card carrying no mapped tag is skipped and the skip is reported. There is
-  no default workflow and no fallback: the absence of a route *is* the opt-in boundary. An
+- **Untagged ⇒ never routed by tag.** A card carrying no mapped tag is never dispatched to a mapped
+  workflow, and the skip is reported. There is no default workflow: the absence of a route *is* the
+  opt-in boundary of tag dispatch — what the command does next is the readiness fallback above. An
   **unlabelled** card is the same case reached one step earlier: `--card-tags` is the one flag on
   this command where an empty value is *data* ("the trigger saw no labels"), not a malformed flag,
   so a trigger firing on a bare card skips cleanly instead of failing its job.
-- **No `## Workflows` section ⇒ `no mapping declared`**, printed, exit `0`. A project that never
-  wrote the section has not opted in, which is the shipped default rather than an error.
+- **No `## Workflows` section ⇒ `no mapping declared`**, printed. A project that never wrote the
+  section has not opted in to tag dispatch, which is the shipped default rather than an error; the
+  readiness fallback above then applies.
 - **Eligibility is applied before routing.** A card that does not carry the `## Eligibility` label is
   skipped before its tags are looked at at all.
 - **One run per card.** The dispatch takes an exclusive **per-card lock** (a directory under
@@ -989,6 +1023,15 @@ pair-cli run --card 217 --card-tags "auto-dev,risk:green" --autonomous
 
 # What a trigger would do, without doing it — route, perimeter and policy, nothing spawned
 pair-cli run --card 217 --card-tags "auto-dev,risk:green" --dry-run
+
+# No mapping, Ready card: drive this story's own delivery cycle
+pair-cli run --card 487 --autonomous
+
+# Fix and review on an existing PR, at most one remediation round
+pair-cli run --card 487 --pr 504 --rounds 1 --autonomous
+
+# An unattended run on a card `## Eligibility` would exclude — this run only, announced
+pair-cli run --card 487 --autonomous --approve-ineligible
 ```
 
 ---

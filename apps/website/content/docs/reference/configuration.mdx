@@ -310,10 +310,21 @@ A top-level `engine` field, a sibling of `asset_registries`, names the agent pro
 }
 ```
 
-`id` is the only field the block accepts — `pi`, `opencode` or `claude`. Anything else (an
-unknown id, a non-object block, an extra field) is a **validation error**, never a silent
-fall-back to the default: a typo that quietly ran a different engine would be indistinguishable
-from a working configuration.
+`id` names the engine — `pi`, `opencode`, `claude` or `codex`. Two optional maps, keyed by engine
+id, sit beside it:
+
+- **`bin`** — where THIS machine keeps an engine's executable, when PATH cannot find it
+  (`{"bin": {"pi": "/opt/pi/bin/pi"}}`). Consulted first when the engine is resolved.
+- **`model`** — the model an engine drives, run-wide (`{"model": {"codex": "gpt-5.5"}}`). Per-stage
+  selection is not this block's (#488).
+
+```json
+{ "engine": { "id": "codex", "bin": { "codex": "/usr/local/bin/codex" }, "model": { "codex": "gpt-5.5" } } }
+```
+
+Anything else (an unknown id, a non-object block, an unknown field, a `bin`/`model` key that is not
+an engine id, an empty value) is a **validation error**, never a silent fall-back to the default: a
+typo that quietly ran a different engine would be indistinguishable from a working configuration.
 
 The block is **optional and delta-only**. Precedence, strongest first:
 

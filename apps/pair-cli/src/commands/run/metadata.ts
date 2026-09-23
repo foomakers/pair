@@ -14,7 +14,7 @@ export const runCommandMetadata = {
     'pair-cli run --card 487 --rounds 1                     # bounds remediation to one round, never widened',
   ],
   options: [
-    { flags: '--engine <id>', description: 'Engine to run: pi | opencode | claude' },
+    { flags: '--engine <id>', description: 'Engine to run: pi | opencode | claude | codex' },
     {
       flags: '--skill <name>',
       description: 'Skill to invoke (no fallback); default cascades pair-loop → pair-next',
@@ -34,7 +34,7 @@ export const runCommandMetadata = {
     {
       flags: '--card-tags <list>',
       description:
-        'Comma-separated labels the trigger observed on --card. Absent, empty (an unlabelled card) or unmapped ⇒ the DoR-gated fallback decides (US-487 AC14): Draft/Refined-without-breakdown routes to the matching prep skill, Ready starts the delivery-cycle coordinator',
+        'Comma-separated labels the trigger observed on --card. Absent, empty (an unlabelled card) or unmapped ⇒ the readiness fallback decides (US-487 AC14): the board state through `## State Mapping`; Draft/Ready-without-breakdown routes to the matching prep skill (skipped under --autonomous), Ready starts the delivery-cycle coordinator',
     },
     {
       flags: '--pr <n>',
@@ -68,7 +68,7 @@ export const runCommandMetadata = {
     {
       flags: '--approve-ineligible',
       description:
-        'Explicit operator authorization for THIS run on a card `## Eligibility` would exclude (never persisted)',
+        'Explicit operator authorization for THIS --autonomous run on a card `## Eligibility` would exclude (announced, never persisted)',
     },
     {
       flags: '--iteration-timeout <seconds>',
@@ -96,7 +96,10 @@ export const runCommandMetadata = {
     'An iteration outcome comes from the engine event stream, never from its exit code — no terminal event means failed',
     'Policy (eligibility, stop predicate, parallelism, audit) is read from .pair/adoption/tech/automation.md and never written',
     'The driver NEVER merges, in any mode',
-    'Tag-driven dispatch is opt-in per card: no `## Workflows` mapping, no mapped tag, or an ineligible card ⇒ nothing runs and the skip is reported',
-    'A dispatch takes an exclusive per-card lock: a trigger burst never starts a second run on the same card',
+    'Tag-driven dispatch is opt-in per card: a card with no mapped tag is never routed to a mapped workflow; an ineligible card is skipped',
+    'No mapped tag ⇒ the card readiness decides: Ready ⇒ the delivery cycle; Draft/no breakdown ⇒ prep skill (never under --autonomous); unmapped/Done or an unreadable card with no mapping ⇒ clean skip',
+    'Under --autonomous, `## Eligibility` bounds the fallback too (--approve-ineligible overrides one run); --pr enters the cycle at review',
+    'Every route that spawns on a card takes an exclusive per-card lock: a trigger burst never starts a second run on the same card',
+    'engine.bin / engine.model in pair.config.json: per-machine executable path and run-wide model, keyed by engine id',
   ],
 } as const
