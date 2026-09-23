@@ -38,15 +38,23 @@ function tier1(): Tier1 {
   )() as Tier1
 }
 
-const card = (id: string, extra: Partial<RootCandidate> = {}): RootCandidate => ({
-  id,
-  title: `Card ${id}`,
-  branch: `feature/US-${id}-x`,
-  tier: 'risk:green',
-  mutexResources: [],
-  prerequisites: [],
-  ...extra,
-})
+/**
+ * A candidate as `pair-next` reports it: its `tier` IS its `risk:*` label, so `labels` carries it
+ * (none for an untagged card) — the child `run --card` gates `## Eligibility` on the labels (r0-2).
+ */
+const card = (id: string, extra: Partial<RootCandidate> = {}): RootCandidate => {
+  const tier = extra.tier ?? 'risk:green'
+  return {
+    id,
+    title: `Card ${id}`,
+    branch: `feature/US-${id}-x`,
+    tier,
+    labels: tier.startsWith('risk:') ? [tier] : [],
+    mutexResources: [],
+    prerequisites: [],
+    ...extra,
+  }
+}
 
 const CORPUS: Array<[string, RootCandidate[]]> = [
   ['no cards', []],

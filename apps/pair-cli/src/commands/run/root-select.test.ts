@@ -64,15 +64,15 @@ describe('candidatesInEvent / parseCandidates', () => {
     expect(candidatesInEvent({ text })).toEqual([candidate])
   })
 
-  it('defaults absent labels/resources/prerequisites to empty', () => {
+  it('defaults absent tier/labels/resources/prerequisites to empty', () => {
     const [parsed] = parseCandidates(
-      JSON.stringify({ candidates: [{ id: '7', title: 't', branch: 'b', tier: 'risk:green' }] }),
+      JSON.stringify({ candidates: [{ id: '7', title: 't', branch: 'b' }] }),
     )
     expect(parsed).toEqual({
       id: '7',
       title: 't',
       branch: 'b',
-      tier: 'risk:green',
+      tier: '',
       labels: [],
       mutexResources: [],
       prerequisites: [],

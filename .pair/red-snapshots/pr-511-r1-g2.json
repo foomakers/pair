@@ -1,0 +1,301 @@
+{
+  "$meta": {
+    "pr": "511",
+    "phase": "r1-g2",
+    "base": "f79f041188c5347507262c6ba657786ec527352e",
+    "trailer": "Pair-RED-Snapshot: pr=511; phase=r1-g2; base=f79f041188c5347507262c6ba657786ec527352e; manifest=.pair/red-snapshots/pr-511-r1-g2.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/root-eligibility.test.ts",
+      "apps/pair-cli/src/commands/run/root-plan.test.ts",
+      "apps/pair-cli/src/commands/run/root-select.test.ts"
+    ]
+  },
+  "run": "story-491",
+  "story": "491",
+  "pr": 511,
+  "phase": "r1-g2",
+  "groupId": "r1-g2",
+  "mode": "repair",
+  "remediationBatchId": "r1",
+  "inputHead": "f79f041188c5347507262c6ba657786ec527352e",
+  "base": "origin/main",
+  "sourceOfTruth": "finding r0-2 (cycle-state r1-g2 group); producers root-select.ts parseCandidates, root-plan.ts computeRootPlan; consumer parallel.ts buildCardProcessArgs -> child parser.ts --card-tags -> card-entry.ts isDorFallbackReason / dispatch.ts decideDispatch (eligibility label must be among the tags) at f79f0411",
+  "inventory": [
+    {
+      "id": "r0-2",
+      "producer": "computeRootPlan ## Eligibility filter (root-plan.ts:181-198, applied to tier with the untagged->risk:red fail-safe) over candidates from parseCandidates (root-select.ts:93-126, tier and labels parsed separately, never compared)",
+      "inputs": [
+        "PAIR-ROOT-CANDIDATES payload: tier (risk:* | untagged | empty), labels (absent | [] | non-risk | conflicting risk | matching)",
+        "## Eligibility (declared | absent)",
+        "operator flags --autonomous, --approve-ineligible"
+      ],
+      "representations": [
+        "RootCandidate.tier / .labels",
+        "printed plan (describeRootPlan)",
+        "child argv --card-tags (buildCardProcessArgs)",
+        "batch outcome line + batch audit line"
+      ],
+      "consumers": [
+        "child run --card: parseRunCommand dispatch.tags -> isDorFallbackReason (no mapping) / decideDispatch (mapping); both require the eligibility label among the tags",
+        "runBatch outcome reporting (exit 0 => completed)"
+      ],
+      "classes": [
+        "tier meets eligibility, labels absent",
+        "labels []",
+        "labels without a risk label",
+        "labels with a different risk label",
+        "labels include the tier (agree)",
+        "no ## Eligibility",
+        "tier outside eligibility (already excluded)",
+        "untagged/empty tier with no risk label, no eligibility (consistent)",
+        "--approve-ineligible override"
+      ],
+      "interactions": [
+        "untagged fail-safe tier x ## Eligibility risk:red",
+        "plan x spawn x batch report through handleRunCommand"
+      ]
+    }
+  ],
+  "fixScope": {
+    "groupId": "r1-g2",
+    "owner": "apps/pair-cli/src/commands/run/root-select.ts parseCandidates (candidate tier vs labels) / root-plan.ts computeRootPlan (## Eligibility guard)",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/root-select.ts",
+      "apps/pair-cli/src/commands/run/root-plan.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r1-g2-W-nolabels",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/root-eligibility.test.ts",
+      "condition": "marker payload tier risk:green, no labels field; ## Eligibility risk:green; --autonomous",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-eligibility.test.ts -t \"r1-g2-W-nolabels\"",
+      "expected": "refused by parseCandidates with a message naming 7, or absent from plan.run with a non-empty plan.excluded reason; never planned with an argv the child gate (isDorFallbackReason over parseRunCommand(argv).dispatch.tags) refuses",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r1-g2-W-emptylabels",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/root-eligibility.test.ts",
+      "condition": "tier risk:green, labels []",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-eligibility.test.ts -t \"r1-g2-W-emptylabels\"",
+      "expected": "refused by parseCandidates with a message naming 7, or absent from plan.run with a non-empty plan.excluded reason; never planned with an argv the child gate (isDorFallbackReason over parseRunCommand(argv).dispatch.tags) refuses",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r1-g2-W-otherlabels",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/root-eligibility.test.ts",
+      "condition": "tier risk:green, labels [bug, auto-dev] (forwarded as --card-tags, still no risk:green)",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-eligibility.test.ts -t \"r1-g2-W-otherlabels\"",
+      "expected": "refused by parseCandidates with a message naming 7, or absent from plan.run with a non-empty plan.excluded reason; never planned with an argv the child gate (isDorFallbackReason over parseRunCommand(argv).dispatch.tags) refuses",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "separates \"eligibility label among labels\" from a narrow \"labels non-empty\" fix (that fix fails here and in W-conflict, checked in a scratch copy)"
+    },
+    {
+      "id": "r1-g2-W-conflict",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/root-eligibility.test.ts",
+      "condition": "tier risk:green, labels [risk:yellow] (tier and risk label disagree)",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-eligibility.test.ts -t \"r1-g2-W-conflict\"",
+      "expected": "refused by parseCandidates with a message naming 7, or absent from plan.run with a non-empty plan.excluded reason; never planned with an argv the child gate (isDorFallbackReason over parseRunCommand(argv).dispatch.tags) refuses",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r1-g2-I-failsafe",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/root-eligibility.test.ts",
+      "condition": "tier untagged, labels [], ## Eligibility risk:red: the fail-safe tier (root-plan.ts:185) meets the eligibility the labels do not carry",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-eligibility.test.ts -t \"r1-g2-I-failsafe\"",
+      "expected": "refused by parseCandidates with a message naming 7, or absent from plan.run with a non-empty plan.excluded reason; never planned with an argv the child gate (isDorFallbackReason over parseRunCommand(argv).dispatch.tags) refuses",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "fail-safe rule x eligibility rule; a parse-only fix that refuses risk:* tiers missing from labels still fails here (checked in a scratch copy)"
+    },
+    {
+      "id": "r1-g2-I-report",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/root-eligibility.test.ts",
+      "condition": "through the real handleRunCommand: selectCandidates = the real parseCandidates over the W-nolabels payload; runCardProcess stub exits 0 (a child skipping cleanly exits 0)",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-eligibility.test.ts -t \"r1-g2-I-report\"",
+      "expected": "no spawned argv the child gate refuses; no \"#7: completed\" line in the batch output",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r1-g2-C-agree",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/root-eligibility.test.ts",
+      "condition": "tier risk:green, labels [risk:green, bug], ## Eligibility risk:green",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-eligibility.test.ts -t \"r1-g2-C-agree\"",
+      "expected": "planned; argv carries --card-tags; the child gate admits it",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r1-g2-C-noeligibility",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/root-eligibility.test.ts",
+      "condition": "no ## Eligibility, tier risk:green, labels []",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-eligibility.test.ts -t \"r1-g2-C-noeligibility\"",
+      "expected": "planned with the child gate admitting it, or refused naming 7 (the finding permits refusing a tier missing from its labels); never a Run the child refuses",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "Shared rule and its limit: every witnessed class is decided in the child by the same tags.includes(eligibility) in isDorFallbackReason (card-entry.ts:73-80, no mapping) and decideDispatch (dispatch.ts:85, mapping declared). computeRootPlan/parseCandidates receive neither --approve-ineligible nor the mapping, so no in-scope fix (root-select.ts/root-plan.ts) can make the two child paths diverge. The mapping-declared + no-## Eligibility disagreement (decideDispatch dispatches nothing, dispatch.ts:76) is outside r0-2; this row is scoped to the no-mapping child that the fan-out spawns under the default policy."
+    },
+    {
+      "id": "r1-g2-C-ineligible",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/root-eligibility.test.ts",
+      "condition": "tier risk:yellow, labels [risk:yellow], ## Eligibility risk:green",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-eligibility.test.ts -t \"r1-g2-C-ineligible\"",
+      "expected": "excluded, reason exactly 'not eligible (tier risk:yellow !== risk:green)'",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r1-g2-C-untagged",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/root-eligibility.test.ts",
+      "condition": "no ## Eligibility, tier 'untagged' and '' with labels [bug] (no risk label: tier and labels agree)",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-eligibility.test.ts -t \"r1-g2-C-untagged\"",
+      "expected": "accepted at parse and planned; the child gate admits it. Forbids a fix that refuses every tier not literally present among the labels",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r1-g2-C-approve",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/root-eligibility.test.ts",
+      "condition": "--approve-ineligible, tier risk:green, labels [], ## Eligibility risk:green",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-eligibility.test.ts -t \"r1-g2-C-approve\"",
+      "expected": "if planned, the child gate admits it (argv forwards --approve-ineligible); otherwise refused naming 7 or excluded with a reason",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "Shared rule and its limit: every witnessed class is decided in the child by the same tags.includes(eligibility) in isDorFallbackReason (card-entry.ts:73-80, no mapping) and decideDispatch (dispatch.ts:85, mapping declared). computeRootPlan/parseCandidates receive neither --approve-ineligible nor the mapping, so no in-scope fix (root-select.ts/root-plan.ts) can make the two child paths diverge. The mapping-declared + no-## Eligibility disagreement (decideDispatch dispatches nothing, dispatch.ts:76) is outside r0-2; this row is scoped to the no-mapping child that the fan-out spawns under the default policy."
+    },
+    {
+      "id": "r1-g2-C-planfixtures",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/root-plan.test.ts",
+      "condition": "root-plan.test.ts card() helper now carries labels = [tier] for a risk:* tier ([] when untagged/empty), the way pair-next reports a candidate; existing computeRootPlan/describeRootPlan/parity assertions unchanged",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-plan.test.ts",
+      "expected": "root-plan.test.ts 25/25 pass at base and under a plan-side fix (3 of its tests failed under that fix with the old label-less fixtures)",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r1-g2-C-selectdefaults",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts",
+      "condition": "root-select.test.ts 'defaults absent ...' fixture no longer carries tier risk:green with no labels (that is the W-nolabels defect input): tier absent too ⇒ tier ''",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-select.test.ts",
+      "expected": "root-select.test.ts 19/19 pass at base and under parse-side and plan-side fixes",
+      "covers": [
+        "r0-2"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/root-eligibility.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:a3899133c0e8e87bf77508fa15335acda3b8f8bc3ca01c9e0861ecb6f99c0436",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-eligibility.test.ts",
+      "observed": "at f79f0411: Tests 6 failed | 5 passed (11). FAIL W-nolabels, W-emptylabels, I-failsafe: #7 planned as Run with argv [\"run\",\"--card\",\"7\",\"--cwd\",\"/p\",\"--autonomous\",\"--iteration-timeout\",\"1800\"] (child gate admits: false); FAIL W-otherlabels: argv with --card-tags bug,auto-dev (child gate admits: false); FAIL W-conflict: argv with --card-tags risk:yellow (child gate admits: false); FAIL I-report: spawned a child whose own gate refuses the card: expected [ [ run, --card, 7, …(5) ] ] to deeply equal []"
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/root-plan.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:a4a935f562338976522c8541ceedf9ca0d5ac70308ab062b47d326632f3c37d2",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-plan.test.ts",
+      "observed": "Tests 25 passed (25)"
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/root-select.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:bb31019f2f93905986f752112a34657957404b5dcdf21780ec396ed00dd28360",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/root-select.test.ts",
+      "observed": "Tests 19 passed (19)"
+    }
+  ],
+  "testExempt": false,
+  "discriminance": {
+    "where": "scratch copy of apps/pair-cli outside the worktree, deleted after",
+    "planSideFix": "computeRootPlan requires eligibility among labels: all r1-g2 rows + root-plan/root-select/parallel suites pass",
+    "narrowFix": "labels non-empty only: W-otherlabels, W-conflict fail",
+    "parseOnlyFix": "refuse risk:* tier missing from labels: I-failsafe fails"
+  },
+  "hermetic": "pure functions + handleRunCommand with injected selection, lock, audit writer and card runner; no gh, no engine, no network, no spawn",
+  "findings": {
+    "received": [
+      "r0-2"
+    ],
+    "covered": [
+      "r0-2"
+    ]
+  },
+  "childModel": "the child is modelled as the no-mapping path: parseRunCommand(argv).dispatch.tags -> isDorFallbackReason({reason:no-mapping-declared}). Shared rule and its limit: every witnessed class is decided in the child by the same tags.includes(eligibility) in isDorFallbackReason (card-entry.ts:73-80, no mapping) and decideDispatch (dispatch.ts:85, mapping declared). computeRootPlan/parseCandidates receive neither --approve-ineligible nor the mapping, so no in-scope fix (root-select.ts/root-plan.ts) can make the two child paths diverge. The mapping-declared + no-## Eligibility disagreement (decideDispatch dispatches nothing, dispatch.ts:76) is outside r0-2; this row is scoped to the no-mapping child that the fan-out spawns under the default policy.",
+  "attempt": 2,
+  "changedRows": [
+    "r1-g2-C-planfixtures",
+    "r1-g2-C-selectdefaults",
+    "r1-g2-C-approve",
+    "r1-g2-C-noeligibility"
+  ],
+  "predecessorAttemptContract": {
+    "path": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-491/491/r1-g2-red-contract.json",
+    "hash": "sha256:00e535b27462c6d136223db704d2952d72bc98bf30c378dff80d90eef9c0d2c9"
+  },
+  "reconciled": [
+    {
+      "path": "apps/pair-cli/src/commands/run/root-eligibility.test.ts",
+      "sha256": "sha256:a3899133c0e8e87bf77508fa15335acda3b8f8bc3ca01c9e0861ecb6f99c0436",
+      "action": "kept byte-identical (attempt-1 artifact, no test change in attempt 2)"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/root-plan.test.ts",
+      "sha256": "sha256:a4a935f562338976522c8541ceedf9ca0d5ac70308ab062b47d326632f3c37d2",
+      "action": "kept byte-identical (attempt-1 artifact, no test change in attempt 2)"
+    },
+    {
+      "path": "apps/pair-cli/src/commands/run/root-select.test.ts",
+      "sha256": "sha256:bb31019f2f93905986f752112a34657957404b5dcdf21780ec396ed00dd28360",
+      "action": "kept byte-identical (attempt-1 artifact, no test change in attempt 2)"
+    }
+  ]
+}
