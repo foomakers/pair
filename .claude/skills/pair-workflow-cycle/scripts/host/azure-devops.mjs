@@ -15,6 +15,12 @@
 // `az repos pr update`); `createCard` creates a `User Story` (the Agile process type — a Scrum
 // project's `Product Backlog Item` is not selected automatically); `closeAndCascade` writes the
 // caller's Done-mapped state literal (default `Done`), per canonical-states.md.
+// Scope-decision marker: System.Description is an HTML long-text field — WIQL allows only Contains
+// Words / Not Contains Words / Is Empty / Is Not Empty on it, and the hidden `<!-- pair:scope-decision:<hex> -->`
+// comment is not guaranteed to survive the service's HTML save. So `createCard` also writes the
+// ordinary tag `pair-scope-decision-<hex>` (System.Tags, present in every process), `findCards` looks
+// the marker up by `[System.Tags] CONTAINS` on that tag, and a card read back carries the marker
+// re-derived from the tag when the stored description lost it. Any other search uses Contains Words.
 // REST shapes and api-versions follow the Azure DevOps REST 7.1 reference; this adapter is proven
 // against a recorder stub, not a live organization (US-492 tests).
 //
@@ -35,6 +41,10 @@ export const CARD_TYPE = 'User Story'
 const SHA_RE = /^[0-9a-f]{40}$/
 const CARD_URL_RE = /^https:\/\/dev\.azure\.com\/([^/]+)\/([^/]+)\/_workitems\/edit\/(\d+)$/
 const COMMENT_URL_RE = /^https:\/\/dev\.azure\.com\/([^/]+)\/([^/]+)\/_git\/([^/?#]+)\/pullrequest\/(\d+)\?discussionId=(\d+)#(\d+)$/
+const MARKER_RE = /<!-- pair:scope-decision:([0-9a-f]{32}) -->/
+const MARKER_ONLY_RE = /^<!-- pair:scope-decision:([0-9a-f]{32}) -->$/
+const TAG_RE = /^pair-scope-decision-([0-9a-f]{32})$/i
+const markerTag = hex => `pair-scope-decision-${hex}`
 const STATE_TO_AZ = { success: 'succeeded', failure: 'failed', pending: 'pending' }
 const STATE_FROM_AZ = { succeeded: 'success', failed: 'failure', pending: 'pending', error: 'failure' }
 // REST api-versions per resource (Azure DevOps REST 7.1 reference).
@@ -82,7 +92,14 @@ export default defineAdapter({
     const showCard = (id, expand) => azJson(['boards', 'work-item', 'show', '--id', cardId(id), ...(expand ? ['--expand', expand] : [])], 'boards work-item show')
     const orgOf = wi => /^https:\/\/dev\.azure\.com\/([^/]+)\//.exec(String(wi?.url ?? ''))?.[1]
     const cardUrl = wi => `https://dev.azure.com/${orgOf(wi)}/${wi?.fields?.['System.TeamProject']}/_workitems/edit/${wi?.id}`
-    const asCard = wi => ({ number: wi?.id, url: cardUrl(wi), title: wi?.fields?.['System.Title'], body: wi?.fields?.['System.Description'] ?? '' })
+    // The description, with the scope-decision marker restored from its tag when the save dropped it.
+    const bodyOf = wi => {
+      const body = String(wi?.fields?.['System.Description'] ?? '')
+      if (MARKER_RE.test(body)) return body
+      const hex = String(wi?.fields?.['System.Tags'] ?? '').split(';').map(t => TAG_RE.exec(t.trim())?.[1]).find(Boolean)
+      return hex ? `<!-- pair:scope-decision:${hex.toLowerCase()} -->${body}` : body
+    }
+    const asCard = wi => ({ number: wi?.id, url: cardUrl(wi), title: wi?.fields?.['System.Title'], body: bodyOf(wi) })
     const relatedIds = (wi, rel) => (wi?.relations ?? []).filter(r => r.rel === rel).map(r => Number(/\/workItems\/(\d+)$/i.exec(String(r.url))?.[1])).filter(Number.isInteger)
 
     const prShow = pr => azJson(['repos', 'pr', 'show', '--id', String(pr)], 'repos pr show')
@@ -126,20 +143,23 @@ export default defineAdapter({
       // ── card side (Azure Boards) ──
       readCard(id, { fields } = {}) {
         const wi = showCard(id)
-        if (!fields) return { body: wi?.fields?.['System.Description'] ?? '' }
+        if (!fields) return { body: bodyOf(wi) }
         const card = asCard(wi)
         return Object.fromEntries(fields.map(f => [f, card[f]]))
       },
       findCards({ repo, search }) {
         const { project } = splitRepo(repo)
         const q = s => String(s).replace(/'/g, "''")
-        const wiql = `SELECT [System.Id], [System.Title], [System.Description], [System.TeamProject] FROM WorkItems WHERE [System.TeamProject] = '${q(project)}' AND [System.Description] CONTAINS '${q(search)}'`
+        const hex = MARKER_ONLY_RE.exec(String(search ?? '').trim())?.[1]
+        const match = hex ? `[System.Tags] CONTAINS '${markerTag(hex)}'` : `[System.Description] CONTAINS WORDS '${q(search)}'`
+        const wiql = `SELECT [System.Id], [System.Title], [System.Description], [System.Tags], [System.TeamProject] FROM WorkItems WHERE [System.TeamProject] = '${q(project)}' AND ${match}`
         const rows = azJson(['boards', 'query', '--wiql', wiql], 'boards query')
         return (Array.isArray(rows) ? rows : []).map(asCard)
       },
       createCard({ repo, title, body }) {
         const { project } = splitRepo(repo)
-        const wi = azJson(['boards', 'work-item', 'create', '--type', CARD_TYPE, '--title', title, '--description', body, ...(project ? ['--project', project] : [])], 'boards work-item create')
+        const hex = MARKER_RE.exec(String(body ?? ''))?.[1]
+        const wi = azJson(['boards', 'work-item', 'create', '--type', CARD_TYPE, '--title', title, '--description', body, ...(project ? ['--project', project] : []), ...(hex ? ['--fields', `System.Tags=${markerTag(hex)}`] : [])], 'boards work-item create')
         return { url: cardUrl(wi) }
       },
       updateCard({ id, body }) {
