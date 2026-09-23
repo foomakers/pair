@@ -77,4 +77,16 @@ describe('pair-cli run — the cycle-coordinator flags through the registered co
       dispatch: { card: '7', rounds: 'max' },
     })
   })
+
+  it('US-491: run --root 66 --parallel 3 reaches the parser as the fan-out mode', async () => {
+    await runArgv(['--root', '66', '--parallel', '3', '--autonomous'])
+
+    expect(dispatched).toHaveLength(1)
+    expect(dispatched[0]).toMatchObject({
+      command: 'run',
+      parallel: 3,
+      scope: { root: '66' },
+      autonomous: true,
+    })
+  })
 })

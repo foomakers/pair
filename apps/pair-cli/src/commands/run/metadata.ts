@@ -12,6 +12,7 @@ export const runCommandMetadata = {
     "pair-cli run --card 487                                # Ready, no mapping: drives this story's own delivery cycle",
     'pair-cli run --card 487 --pr 42                        # enters the cycle at {verify, first, r0} — never prepare',
     'pair-cli run --card 487 --rounds 1                     # bounds remediation to one round, never widened',
+    'pair-cli run --root 66 --parallel 3 --autonomous       # fan-out: up to 3 `run --card` processes at once',
   ],
   options: [
     { flags: '--engine <id>', description: 'Engine to run: pi | opencode | claude | codex' },
@@ -50,6 +51,11 @@ export const runCommandMetadata = {
       flags: '--run-id <id>',
       description:
         "US-487: the delivery cycle's run identity; defaults to story-<card> (requires --card)",
+    },
+    {
+      flags: '--parallel <n>',
+      description:
+        "US-491: fan-out over --root — pair-next selects, pair-loop's dependency + mutex analysis plans, and up to min(dependency-allowed, ## Max Parallelism, n) `pair-cli run --card` processes run at once (requires --root; not with --card/--skill/--prompt/--filter/--max-iterations)",
     },
     { flags: '--cwd <dir>', description: 'Working directory every iteration runs in' },
     {
@@ -100,6 +106,7 @@ export const runCommandMetadata = {
     'No mapped tag ⇒ the card readiness decides: Ready ⇒ the delivery cycle; Draft/no breakdown ⇒ prep skill (never under --autonomous); unmapped/Done or an unreadable card with no mapping ⇒ clean skip',
     'Under --autonomous, `## Eligibility` bounds the fallback too (--approve-ineligible overrides one run); --pr enters the cycle at review',
     'Every route that spawns on a card takes an exclusive per-card lock: a trigger burst never starts a second run on the same card',
+    '--root --parallel prints the plan (run / excluded and why / effective limit and what bound it) before any process starts; one card failing never aborts the others, and one batch summary line is appended to the audit file',
     'engine.bin / engine.model in pair.config.json: per-machine executable path and run-wide model, keyed by engine id',
   ],
 } as const

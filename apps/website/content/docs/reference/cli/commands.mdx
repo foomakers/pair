@@ -754,6 +754,7 @@ pair-cli run [options]
 | `--pr <n>`                      | Enter the cycle straight at fix-and-review on an existing PR: the first stage is `verify`, no `prepare` before it. Requires `--card` |
 | `--rounds <n\|max>`             | Bound the remediation rounds of a cycle run. Omitted ⇒ the policy's `maxFixRounds`; it can never widen it |
 | `--run-id <segment>`            | Run directory to continue. Defaults to `story-<card>` — the same convention the batch engine uses       |
+| `--parallel <n>`                | Fan-out over `--root`: up to `min(dependency-allowed, ## Max Parallelism, n)` cards at once, each its own `pair-cli run --card` process — see below. Requires `--root`; not combinable with `--card`/`--skill`/`--prompt`/`--filter`/`--max-iterations` |
 | `--cwd <dir>`                   | Working directory every iteration runs in                                                            |
 | `--max-iterations <n>`          | Iteration cap. **Narrows** the policy's `max-iterations`; it can never widen it                       |
 | `--autonomous`                  | Explicit opt-in: run without confirmations, **and** without the skill's approval rounds — see below   |
