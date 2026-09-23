@@ -44,10 +44,7 @@ answers `incompatible` / `invalid` / `other-run` with no `next`.
    production driver adopts an `other-run` run id once and resolves again (the in-session
    coordinator's rule), never restarting the cycle under the requested id.
 5. A `--rounds`-bounded stop prints the `next` step, phase and round it stopped before (AC8).
-
-Amendment, review round r0 (2026-09-23):
-
-6. **Readiness through the adopted `## State Mapping`** (r0-1). The board state is the card's
+6. *(Amended after review round r0, 2026-09-23 — items 6–10.)* **Readiness through the adopted `## State Mapping`** (r0-1). The board state is the card's
    project-item status, else its `**Status**:` line; it is resolved through `way-of-working.md`'s
    `## State Mapping` (case-insensitive), then the canonical names (`canonical-states.md` Reading
    rules). `Ready`/`In Progress` + task breakdown ⇒ cycle; `Ready`/`In Progress` without ⇒
