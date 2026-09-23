@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { resolveEngine, describeEngineResolution, assertEngineAvailable } from './resolve-engine'
-import { DEFAULT_ENGINE_ID } from './engines'
+import { DEFAULT_ENGINE_ID, ENGINE_IDS, ENGINES } from './engines'
+import { InMemoryFileSystemService } from '@pair/content-ops'
+import { createExecutableProbe } from './path-probe'
 
 describe('resolveEngine', () => {
   it('falls back to the schema default when nothing names an engine (AC12)', () => {
@@ -67,5 +69,47 @@ describe('assertEngineAvailable', () => {
     })
 
     expect(probed).toEqual(['claude'])
+  })
+})
+
+/**
+ * US-503 AC4 — `pair-cli run --engine pi` with no `pi` anywhere names the setup skill.
+ *
+ * Hermetic: the PATH holds no engine directory at all (an empty list of directories), the
+ * filesystem is in memory, and the repository has no `node_modules/.bin` — so every level of
+ * the lookup cascade answers "not here" for real, through the real probe.
+ */
+describe('assertEngineAvailable — engine missing everywhere (US-503 AC4)', () => {
+  const repoRoot = '/project'
+  const emptyFs = () => new InMemoryFileSystemService({}, repoRoot, repoRoot)
+  const noEnginePath = (fs: InMemoryFileSystemService) =>
+    createExecutableProbe(fs, { PATH: '' }, 'darwin')
+  const SETUP = /\/pair-capability-setup-harness` with `\$harness: pi`/
+
+  it('points the pi refusal at the setup skill, on the lookup path `run --card` uses', () => {
+    const fs = emptyFs()
+    expect(() =>
+      assertEngineAvailable(resolveEngine({ flag: 'pi' }), noEnginePath(fs), { fs, repoRoot }),
+    ).toThrow(SETUP)
+  })
+
+  it('points the pi refusal at the setup skill, on the PATH-only path `run --root` uses', () => {
+    expect(() =>
+      assertEngineAvailable(resolveEngine({ flag: 'pi' }), noEnginePath(emptyFs())),
+    ).toThrow(SETUP)
+  })
+
+  it("keeps every other engine's refusal free of a pi setup hint", () => {
+    for (const id of ENGINE_IDS.filter(e => e !== 'pi')) {
+      const fs = emptyFs()
+      let message = ''
+      try {
+        assertEngineAvailable(resolveEngine({ flag: id }), noEnginePath(fs), { fs, repoRoot })
+      } catch (error) {
+        message = (error as Error).message
+      }
+      expect(message).toContain(`\`${ENGINES[id].command}\``)
+      expect(message).not.toMatch(/setup-harness/)
+    }
   })
 })

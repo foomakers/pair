@@ -99,6 +99,12 @@ export interface EngineDefinition {
   readonly terminalEvents: readonly TerminalEventRule[]
   /** Where this entry's values were verified. Printed nowhere; read by the next maintainer. */
   readonly verifiedAgainst: string
+  /**
+   * The pair skill that installs or verifies this engine, when one covers it (US-503 AC4). An
+   * engine-missing refusal names it, so the remedy is one command away; `undefined` ⇒ the
+   * refusal is left exactly as it was.
+   */
+  readonly setup?: string
 }
 
 /**
@@ -130,6 +136,7 @@ const PI: EngineDefinition = {
   terminalEvents: [{ match: { type: 'agent_settled' } }],
   verifiedAgainst:
     '@earendil-works/pi-coding-agent@0.84.3 (dist/modes/print-mode.js, dist/core/agent-session.js)',
+  setup: '`/pair-capability-setup-harness` with `$harness: pi`',
 }
 
 /**

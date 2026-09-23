@@ -66,12 +66,16 @@ export function assertEngineAvailable(
   probe: ExecutableProbe,
   lookup?: EngineBinaryLookup,
 ): EngineDefinition {
+  const setupHint =
+    resolved.engine.setup === undefined
+      ? ''
+      : ` To install or verify it, run ${resolved.engine.setup}.`
   if (lookup === undefined) {
     if (probe(resolved.engine.command)) return resolved.engine
     throw new Error(
       `Engine '${resolved.engine.id}' is not installed or not on PATH: ` +
         `\`${resolved.engine.command}\` could not be found (resolved from ${resolved.source}). ` +
-        `Install it, or pass --engine with one of the others.`,
+        `Install it, or pass --engine with one of the others.${setupHint}`,
     )
   }
   const found = resolveEngineBinary({
@@ -88,7 +92,7 @@ export function assertEngineAvailable(
         `on PATH, and is not in this repository's \`node_modules/.bin\` either (engine resolved ` +
         `from ${resolved.source}). Install it, pass --engine with one of the others, or declare ` +
         `where it lives: {"engine": {"id": "${resolved.engine.id}", "bin": {"${resolved.engine.id}": "/path/to/${resolved.engine.command}"}}} ` +
-        `in pair.config.json.`,
+        `in pair.config.json.${setupHint}`,
     )
   }
   return { ...resolved.engine, command: found.command }
