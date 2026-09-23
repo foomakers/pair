@@ -1346,3 +1346,70 @@ test('US-506 T-6 c1 (control): a clean contract seals unchanged through the CLI 
   assert.equal(blind.status, 2)
   assert.match(blind.json.error, /--static-gates/)
 })
+
+// ══ US-506 T-7 — a merge from the base is not a PR change ═══════════════════════════════════════
+// US-487: the maintainer-decided merge of origin/main (`f9d71a2d`) brought 7 files byte-identical to
+// main into the r0 custody walk, which counted them as the PR's own changes — 7 attributed overrides.
+function mergedFromMain() {
+  const { cwd, base } = repo()
+  // the story: a fresh implement, then a remediation seal and its GREEN
+  git(cwd, 'checkout', '-q', '-b', 'story')
+  write(cwd, 'src/a.js', 'export const a = () => 1 // implemented\n')
+  git(cwd, 'commit', '-q', '--no-verify', '-am', 'implement')
+  const head1 = git(cwd, 'rev-parse', 'HEAD')
+  const { contractPath } = redContract(cwd)
+  const s = seal({ pr: PR, phase: 'r1-g1', base: head1, contractPath, cwd })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  rmSync(join(cwd, contractPath))
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  // meanwhile main moves: 7 files — production outside the fix scope, tests, a new module
+  git(cwd, 'checkout', '-q', 'main')
+  const mainFiles = { 'src/other.js': 'export const o = 7\n', 'src/new-module.js': 'export const n = 1\n', 'docs/guide.md': '# guide\n', 'apps/cli/run.ts': 'export {}\n', 'test/other.test.js': 'if (1 !== 1) throw new Error("FAIL")\n', 'apps/cli/run.test.ts': 'export {}\n', '.github/workflows/ci.yml': 'on: push\n' }
+  for (const [rel, content] of Object.entries(mainFiles)) write(cwd, rel, content)
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'main moves on')
+  const mainHead = git(cwd, 'rev-parse', 'HEAD')
+  git(cwd, 'checkout', '-q', 'story')
+  git(cwd, 'merge', '-q', '--no-ff', '--no-edit', 'main')
+  return { cwd, head1, mainHead, mainFiles }
+}
+const runDirWith = handoffs => {
+  const dir = join(mkdtempSync(join(tmpdir(), 'merge-run-')), '.pair', 'working', 'runs', 'story-7', '7')
+  mkdirSync(dir, { recursive: true })
+  for (const [name, data] of Object.entries(handoffs)) writeFileSync(join(dir, `${name}.json`), JSON.stringify(data))
+  return dir
+}
+
+test('US-506 T-7 w1 (AC11): the files a merge of the base brought in, byte-identical to it, are not PR changes — verified with no override', () => {
+  const { cwd, head1, mainFiles } = mergedFromMain()
+  const runDir = runDirWith({ 'r1-g1-red-verify': { skill: 'red-verify', phase: 'r1-g1', verified: true, sealed: true, inputHead: head1 } })
+  // the US-487 shape: without knowing the base, every merged file is a breach of the r1-g1 segment
+  const strict = verifyChain({ pr: PR, base: head1, cwd, runDir })
+  assert.deepEqual(strict.breaches.map(b => b.path).sort(), Object.keys(mainFiles).sort(), JSON.stringify(strict.breaches))
+  // told the base the story merged, the walk excludes what is byte-identical to it
+  const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
+  assert.deepEqual({ verified: chain.verified, breaches: chain.breaches, overridden: chain.overriddenBreaches }, { verified: true, breaches: [], overridden: undefined })
+  assert.deepEqual(chain.mergedBase?.paths?.sort(), Object.keys(mainFiles).sort())
+  // and through the CLI the review-phase runs
+  const r = spawnSync(process.execPath, [CLI, 'verify-chain', '--pr', PR, '--base', head1, '--run-dir', runDir, '--base-ref', 'main', '--cwd', cwd], { encoding: 'utf8' })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('US-506 T-7 w2 (AC11): a merged file edited AFTER the merge differs from the base and is still a breach; a branch that is not the base earns no exemption', () => {
+  const { cwd, head1 } = mergedFromMain()
+  const runDir = runDirWith({ 'r1-g1-red-verify': { skill: 'red-verify', phase: 'r1-g1', verified: true, sealed: true, inputHead: head1 } })
+  write(cwd, 'src/other.js', 'export const o = 8 // edited by the PR after the merge\n')
+  git(cwd, 'commit', '-q', '--no-verify', '-am', 'post-merge edit')
+  assert.deepEqual(verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' }).breaches.map(b => [b.code, b.path]), [['out-of-scope', 'src/other.js']])
+  // a side branch merged in is not the declared base: its files stay the PR's changes
+  git(cwd, 'checkout', '-q', '-b', 'side', 'main')
+  write(cwd, 'src/side.js', 'export const s = 1\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'side')
+  git(cwd, 'checkout', '-q', 'story')
+  git(cwd, 'merge', '-q', '--no-ff', '--no-edit', 'side')
+  const codes = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' }).breaches.map(b => b.path)
+  assert.ok(codes.includes('src/side.js'), JSON.stringify(codes))
+  rmSync(cwd, { recursive: true, force: true })
+})

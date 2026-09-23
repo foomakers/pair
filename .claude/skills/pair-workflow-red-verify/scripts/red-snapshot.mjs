@@ -22,7 +22,7 @@
 //     path at all). Prints {verified, contractBreach,
 //     breaches[]}. Any breach is terminal for the attempt; the script repairs nothing.
 //
-//   node <skill dir>/scripts/red-snapshot.mjs verify-chain --pr <n> --base <sha>
+//   node <skill dir>/scripts/red-snapshot.mjs verify-chain --pr <n> --base <sha> [--run-dir <dir>] [--base-ref <story base ref>]
 //     The whole attempt since <base>: every snapshot of this PR in order, each well-formed on its
 //     declared base; every sealed blob at HEAD identical to the LATEST snapshot that lists it (a
 //     successor snapshot — a contract REVISION — is the only commit allowed to change a sealed
@@ -682,12 +682,33 @@ function readCustodyOverrides(runDir) {
       !Number.isNaN(Date.parse(o.at)),
   )
 }
-export function verifyChain({ pr, base, cwd, expectContract, runDir }) {
+// ── merges from the base (US-506 T-7, AC11) ──────────────────────────────────────────────────
+// A story branch that merged its base (`origin/main`) carries, in every later segment's diff, the
+// files that merge brought in — byte-identical to the base, not written by the PR. US-487's r0 walk
+// counted 7 such files as `out-of-scope` / `unlisted-test-changed` and needed 7 custody overrides.
+// With the declared base ref, a path whose blob at the segment end equals its blob at a merged
+// parent that IS the base (an ancestor of the ref) is not a PR change. A file edited after the merge
+// differs from the base and stays a breach; a merged branch that is not the base earns nothing.
+export function mergedBaseParents({ from, to, baseRef, cwd }) {
+  if (!baseRef) return []
+  const baseCommit = git(['rev-parse', '--verify', '-q', `${baseRef}^{commit}`], cwd, { allowFail: true })
+  if (!baseCommit) return []
+  const merges = (git(['rev-list', '--first-parent', '--merges', `${from}..${to}`], cwd, { allowFail: true }) ?? '').split('\n').filter(Boolean)
+  const parents = []
+  for (const m of merges)
+    for (const p of (git(['rev-list', '--parents', '-n', '1', m], cwd) ?? '').split(' ').slice(2))
+      if (git(['merge-base', '--is-ancestor', p, baseCommit], cwd, { allowFail: true }) !== null) parents.push(p)
+  return parents
+}
+const blobAt = (rev, path, cwd) => git(['rev-parse', '--verify', '-q', `${rev}:${path}`], cwd, { allowFail: true })
+const identicalToMergedBase = (path, end, parents, cwd) => parents.some(p => blobAt(p, path, cwd) === blobAt(end, path, cwd))
+
+export function verifyChain({ pr, base, cwd, expectContract, runDir, baseRef }) {
   const overrides = runDir !== undefined ? readCustodyOverrides(runDir) : []
-  if (runDir === undefined) return verifyChainCore({ pr, base, cwd, expectContract: expectContract ?? true, overrides })
+  if (runDir === undefined) return verifyChainCore({ pr, base, cwd, expectContract: expectContract ?? true, overrides, baseRef })
   const sealed = sealedHandoffsIn(runDir)
   const derived = sealed.length > 0
-  const out = verifyChainCore({ pr, base, cwd, expectContract: derived, overrides })
+  const out = verifyChainCore({ pr, base, cwd, expectContract: derived, overrides, baseRef })
   out.contractExpectation = { source: 'run-dir', runDir, sealedHandoffs: sealed, expectContract: derived }
   if (expectContract === false && derived) {
     out.breaches = [{ code: 'contract-expected-refused', sealedHandoffs: sealed }, ...(out.breaches ?? [])]
@@ -696,7 +717,7 @@ export function verifyChain({ pr, base, cwd, expectContract, runDir }) {
   }
   return out
 }
-function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [] }) {
+function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [], baseRef }) {
   if (!SHA_RE.test(String(base))) return { verified: false, contractBreach: true, breaches: [{ code: 'base-not-a-sha' }], snapshots: [] }
   const snaps = listSnapshots({ pr, base, cwd })
   // US-479 (canary 481-v5): `expectContract: false` is a statement about THIS cycle — it has sealed
@@ -791,9 +812,11 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [] 
     else if (atSnap !== atHead) breach('test-blob-changed', { path: f, sealedBy: c.phase })
   }
   // Segments: the commits between one snapshot and the next (or HEAD) live under that snapshot's scope.
+  const fromBase = new Set()
   for (const [i, c] of contracts.entries()) {
     const end = i + 1 < contracts.length ? `${contracts[i + 1].sha}^` : head
     const manifests = new Set(contracts.map(x => x.manifest))
+    const mergedParents = mergedBaseParents({ from: c.sha, to: end, baseRef, cwd })
     const changes = (git(['-c', 'core.quotePath=false', 'diff', '--name-status', `${c.sha}..${end}`], cwd) ?? '')
       .split('\n')
       .filter(Boolean)
@@ -803,6 +826,12 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [] 
       })
       .filter(({ path }) => !manifests.has(path))
     for (const { status, path } of changes) {
+      // US-506 AC11: byte-identical to the base this segment merged ⇒ the base's change, not the PR's.
+      // A sealed blob is never exempted this way: its identity is checked below regardless.
+      if (mergedParents.length && !contracts.slice(0, i + 1).some(x => x.listed.includes(path)) && identicalToMergedBase(path, end, mergedParents, cwd)) {
+        fromBase.add(path)
+        continue
+      }
       // A blob sealed by THIS or an EARLIER snapshot stays sealed through every later segment: its
       // change here is a sealed-blob change (reported once, by blob identity, unless a successor
       // re-seals it), never an "unlisted test" of the segment's own contract.
@@ -839,6 +868,7 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [] 
     snapshots: snaps.map(s => ({ pr: s.pr, phase: s.phase, snapshot: s.sha, base: s.base, manifest: s.manifest })),
     breaches: unique,
     ...(overriddenBreaches.length ? { overriddenBreaches } : {}),
+    ...(fromBase.size ? { mergedBase: { baseRef, paths: [...fromBase].sort() } } : {}),
   }
 }
 
@@ -868,7 +898,7 @@ if (isMain()) {
   try {
     const { cmd, opts } = parseCli(process.argv.slice(2))
     // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
-    const FLAGS = { 'verify-chain': ['pr', 'base', 'cwd', 'contract-expected', 'run-dir'], seal: ['pr', 'phase', 'base', 'cwd', 'contract', 'root', 'static-gates'], verify: ['pr', 'phase', 'base', 'cwd'] }
+    const FLAGS = { 'verify-chain': ['pr', 'base', 'cwd', 'contract-expected', 'run-dir', 'base-ref'], seal: ['pr', 'phase', 'base', 'cwd', 'contract', 'root', 'static-gates'], verify: ['pr', 'phase', 'base', 'cwd'] }
     if (FLAGS[cmd]) {
       const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
       if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
@@ -883,7 +913,9 @@ if (isMain()) {
       // Only that exact spelling relaxes the check; anything else keeps the strict default.
       // t9d-9: `--run-dir <run/story dir>` derives the expectation from the sealed handoffs there; the flag
       // is then a claim the script checks, never a bypass.
-      out = verifyChain({ pr: opts.pr, base: opts.base, cwd, expectContract: String(opts['contract-expected'] ?? 'true') !== 'false', runDir: opts['run-dir'] })
+      // US-506 AC11: `--base-ref <ref>` (the story's base, e.g. origin/main) lets a merge of that base
+      // bring in files byte-identical to it without counting them as PR changes.
+      out = verifyChain({ pr: opts.pr, base: opts.base, cwd, expectContract: String(opts['contract-expected'] ?? 'true') !== 'false', runDir: opts['run-dir'], baseRef: opts['base-ref'] })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.verified ? 0 : 1)
     } else if (cmd === 'seal') {
