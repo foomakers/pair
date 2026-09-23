@@ -226,7 +226,7 @@ A card carrying **no mapped tag is never routed to a mapped workflow**. There is
 
 ### Absent section ⇒ no workflow is available
 
-`## Workflows` absent (or the whole optional file absent) ⇒ **no mapping is declared**: nothing can be routed by tag. A dispatch **MUST** report `no mapping declared`, naming the file — automation is opt-in (D21), so a project that never wrote this section has simply not opted in to tag dispatch, and that is never an error and never a default workflow. A tag consumer (`pair-loop`'s selection, a trigger adapter's routing) then exits cleanly; `pair-cli run --card` continues into the card-readiness fallback below.
+`## Workflows` absent (or the whole optional file absent) ⇒ **no mapping is declared**: nothing can be routed by tag. A dispatch **MUST** report `no mapping declared`, naming the file — automation is opt-in (D21), so a project that never wrote this section has simply not opted in to tag dispatch, and that is never an error and never a default workflow. A tag consumer (`pair-loop`'s selection, a trigger adapter's routing) MUST then exit cleanly; `pair-cli run --card` continues into the card-readiness fallback below.
 
 ### `pair-cli run --card` on an unmapped card: the card's own readiness decides
 
