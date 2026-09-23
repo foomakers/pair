@@ -37,10 +37,27 @@ export interface CycleStageRecord {
   readonly handoffAdvanced: boolean
 }
 
+/** A `next` resolve actually answered — every dispatch and every stage record is keyed by one. */
+export type CycleNext = CycleResolveResult['next']
+
+/**
+ * The statuses `resolve` answers WITHOUT a `next` (`cycle-state.mjs` `resolveState`: `incompatible`,
+ * `invalid`, `other-run`) — its own `reason`, and for `other-run` the run id the cycle lives under.
+ */
+export interface CycleResolveStop {
+  readonly status: string
+  readonly reason?: string
+  readonly runId?: string
+  readonly next?: undefined
+}
+
+/** Everything `resolve` can answer: a `next` to act on, or a typed stop without one. */
+export type CycleResolveAnswer = CycleResolveResult | CycleResolveStop
+
 export interface CycleOutcome {
   readonly status: string
   readonly stagesRun: number
-  readonly next?: CycleResolveResult['next']
+  readonly next?: CycleNext
 }
 
 export interface CyclePolicy {
@@ -49,9 +66,9 @@ export interface CyclePolicy {
 }
 
 export interface RunCycleInput {
-  readonly resolve: () => Promise<CycleResolveResult>
+  readonly resolve: () => Promise<CycleResolveAnswer>
   readonly worktree: () => Promise<unknown>
-  readonly packet: (next: CycleResolveResult['next']) => Promise<{
+  readonly packet: (next: CycleNext) => Promise<{
     readonly step: string
     readonly phase?: string | undefined
     readonly prompt: string
@@ -75,14 +92,14 @@ const sameNext = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON
 /** Mutable loop bookkeeping — the ONE dispatch just spawned, and its dead-dispatch retry budget. */
 interface LoopState {
   stagesRun: number
-  dispatchedNext: CycleResolveResult['next'] | null
+  dispatchedNext: CycleNext | null
   dispatchedResult: CycleStageResult | null
   retryCount: number
   reuseNoticeGiven: boolean
 }
 
 function buildStageRecord(
-  dispatchedNext: NonNullable<CycleResolveResult['next']>,
+  dispatchedNext: CycleNext,
   dispatchedResult: CycleStageResult,
   handoffAdvanced: boolean,
 ): CycleStageRecord {
@@ -106,7 +123,7 @@ interface StageObservers {
  */
 function settlePreviousDispatch(
   state: LoopState,
-  next: CycleResolveResult['next'],
+  next: CycleNext,
   deadDispatchRetries: number,
   observers: StageObservers,
 ): CycleOutcome | null {
@@ -129,10 +146,7 @@ function settlePreviousDispatch(
 }
 
 /** Whether `next` is beyond the `--rounds` bound — the run stops WITHOUT dispatching it. */
-function roundsBoundReached(
-  rounds: RunCycleInput['rounds'],
-  next: CycleResolveResult['next'],
-): boolean {
+function roundsBoundReached(rounds: RunCycleInput['rounds'], next: CycleNext): boolean {
   return (
     rounds !== undefined &&
     rounds !== 'max' &&
@@ -142,7 +156,7 @@ function roundsBoundReached(
 }
 
 /** A terminal `next` (not one of the dispatchable steps), as the outcome it reports. */
-function terminalOutcome(next: CycleResolveResult['next'], stagesRun: number): CycleOutcome {
+function terminalOutcome(next: CycleNext, stagesRun: number): CycleOutcome {
   return {
     status: next.step === 'done' ? 'ready-for-merge' : String(next.reason ?? next.step),
     stagesRun,
@@ -153,7 +167,7 @@ function terminalOutcome(next: CycleResolveResult['next'], stagesRun: number): C
 /** AC6: `next.context === 'reuse'` is treated as fresh, reported ONCE per run via `onNotice`. */
 function noticeReuseOnce(
   state: LoopState,
-  next: CycleResolveResult['next'],
+  next: CycleNext,
   onNotice: RunCycleInput['onNotice'],
 ): void {
   if (next.context !== 'reuse' || state.reuseNoticeGiven) return
@@ -162,6 +176,38 @@ function noticeReuseOnce(
       '(ADR-021 §2: a process realization degrades reuse to fresh).',
   )
   state.reuseNoticeGiven = true
+}
+
+/** The recovery a human actually has, per status that answers without a `next`. */
+function recoveryFor(answer: CycleResolveStop): string | undefined {
+  if (answer.status === 'incompatible') {
+    return (
+      'this run directory was written under an incompatible handoff schema — bind a NEW run ' +
+      'directory to it with `cycle-state.mjs migrate-acknowledge --dir <new run dir> --legacy ' +
+      '<this dir>`, then re-run with that --run-id'
+    )
+  }
+  if (answer.status === 'other-run' && answer.runId !== undefined) {
+    return `this story's cycle lives under run ${answer.runId} — re-run with --run-id ${answer.runId}`
+  }
+  return undefined
+}
+
+/**
+ * `resolve` answered a status with NO `next` (`incompatible`, `invalid`, `other-run`): a typed
+ * stop carrying resolve's own reason verbatim — never a dereference of the `next` it did not send.
+ */
+function stoppedWithoutNext(answer: CycleResolveStop, stagesRun: number): CycleOutcome {
+  const detail = recoveryFor(answer)
+  return {
+    status: answer.status,
+    stagesRun,
+    next: {
+      step: 'blocked',
+      reason: answer.reason ?? `resolve answered ${answer.status} without a next step`,
+      ...(detail !== undefined && { detail }),
+    },
+  }
 }
 
 /**
@@ -182,7 +228,16 @@ export async function runCycle(input: RunCycleInput): Promise<CycleOutcome> {
   }
 
   for (;;) {
-    const { next } = await resolve()
+    const answer = await resolve()
+    const next = answer.next
+    if (next === undefined) {
+      if (state.dispatchedNext !== null) {
+        const record = buildStageRecord(state.dispatchedNext, state.dispatchedResult!, false)
+        observers.onStage?.(record)
+        observers.appendAudit?.(record)
+      }
+      return stoppedWithoutNext(answer as CycleResolveStop, state.stagesRun)
+    }
 
     const settled = settlePreviousDispatch(state, next, deadDispatchRetries, observers)
     if (settled !== null) return settled

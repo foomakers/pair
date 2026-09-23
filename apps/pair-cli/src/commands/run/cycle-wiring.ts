@@ -49,6 +49,15 @@ export function parseCardRecord(title: string, body: string): CardRecord {
   return { status, hasTaskBreakdown: BREAKDOWN_RE.test(body), title }
 }
 
+/**
+ * The tracker could not be asked at all (`gh` absent, unauthenticated, offline) — a fact about the
+ * transport, never about the card. Typed so the one caller that treats it as a clean skip (AC14-G1:
+ * no mapping declared + card unreadable) can tell it from a card that WAS read and is malformed.
+ */
+export class CardUnreadableError extends Error {
+  override readonly name = 'CardUnreadableError'
+}
+
 /** Reads one card through the operator's own `gh`. Never parses prose it did not ask for. */
 export function readCardViaGh(card: string, cwd: string): CardRecord {
   let raw: string
@@ -59,7 +68,7 @@ export function readCardViaGh(card: string, cwd: string): CardRecord {
       stdio: ['ignore', 'pipe', 'pipe'],
     })
   } catch (error) {
-    throw new Error(
+    throw new CardUnreadableError(
       `card-unreadable: \`gh issue view ${card}\` failed — ${error instanceof Error ? error.message : String(error)}. ` +
         `pair-cli reads the tracker through your own authenticated \`gh\`; check \`gh auth status\`.`,
     )
@@ -279,14 +288,43 @@ const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packe
     runIteration: spawnIteration,
   })) as CycleStageResult
 
+/**
+ * `resolve` answered `other-run`: this story's cycle was started under ANOTHER run id (by
+ * `pair-workflow-cycle` or `pair-implement-batch`). The in-session coordinator's rule, shared here
+ * (AC9): adopt that run id and resolve again — never crash on the missing `next`, never restart the
+ * cycle beside it under the requested id. Adopted at most once: a second `other-run` is the loop's
+ * own typed stop.
+ */
+function adoptOtherRun(
+  input: CycleDriverRequest,
+  co: Coordinates,
+  answer: unknown,
+): { input: CycleDriverRequest; co: Coordinates } | undefined {
+  const { status, runId } = (answer ?? {}) as { status?: unknown; runId?: unknown }
+  if (status !== 'other-run' || typeof runId !== 'string' || runId === input.runId) return undefined
+  console.log(
+    `  Run id: story ${input.card}'s cycle lives under run ${runId}, not ${input.runId} — continuing it there`,
+  )
+  return {
+    input: { ...input, runId },
+    co: { ...co, runDir: `${co.runsRoot}/${runId}/${input.card}` },
+  }
+}
+
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {
-  return async (input: CycleDriverRequest): Promise<CycleOutcome> => {
-    const co = coordinatesFor(ctx, input)
+  return async (requested: CycleDriverRequest): Promise<CycleOutcome> => {
+    let input = requested
+    let co = coordinatesFor(ctx, input)
     // The budgets are `cycle-state`'s, never this driver's: AC5 says the dead-dispatch retry is
     // "read from cycle-state, never defined in pair-cli". Its own `resolve` output carries them,
     // so they are read once here and handed to the loop — passing `{}` silently set every budget
     // to zero, which the opencode leg showed as a stage that was never retried.
-    const first = await resolveFor(ctx, input, co)()
+    let first: unknown = await resolveFor(ctx, input, co)()
+    const adopted = adoptOtherRun(input, co, first)
+    if (adopted !== undefined) {
+      ;({ input, co } = adopted)
+      first = await resolveFor(ctx, input, co)()
+    }
     const policy = (first as { policy?: Record<string, unknown> }).policy ?? {}
     return await runCycle({
       resolve: resolveFor(ctx, input, co),

@@ -30,7 +30,12 @@ import {
   CYCLE_BASE_BRANCH_DEFAULT,
   type CardReadiness,
 } from './cycle-scripts'
-import { createDefaultCycleDriver, ghCardReadiness, mainCheckout } from './cycle-wiring'
+import {
+  CardUnreadableError,
+  createDefaultCycleDriver,
+  ghCardReadiness,
+  mainCheckout,
+} from './cycle-wiring'
 import { buildPromptText, describeApprovalPosture, filterDeliveryFor } from './invocation'
 import { loopExitCode, runLoop, type IterationContext, type LoopOutcome } from './loop'
 import { spawnIteration } from './spawn'
@@ -166,6 +171,24 @@ export function isDorFallbackReason(gate: DorFallbackGate): boolean {
   return (
     gate.policy.eligibility === undefined || (gate.tags ?? []).includes(gate.policy.eligibility)
   )
+}
+
+/**
+ * The decision an UNATTENDED run on a label-less card gets when no `## Workflows` is declared:
+ * `ineligible`, exactly as `decideDispatch` answers it once a mapping exists (AC15 "skips it as
+ * ineligible") — so the trail reads `reason=ineligible`, and the override is named in the detail.
+ */
+function ineligibleSkip(gate: DorFallbackGate, context: RunContext): SkipDecision {
+  const card = context.dispatch!.card
+  return {
+    kind: 'skip',
+    card,
+    reason: 'ineligible',
+    detail:
+      `card carries no \`${gate.policy.eligibility}\` label (\`## Eligibility\`), so this ` +
+      `unattended (--autonomous) run skips it before reading it — pass --approve-ineligible to ` +
+      `override for this run only`,
+  }
 }
 
 /** True only when `--approve-ineligible` is what decided the outcome — see the announcement below. */
@@ -356,12 +379,7 @@ export async function handleRunCommand(
   // runs" — the card's OWN Definition-of-Ready macrostate now decides. Every OTHER skip reason
   // (`automation-off`, `ineligible`, `run-in-progress`) is unchanged.
   if (context.dispatch?.kind === 'skip') {
-    if (isDorFallbackReason(gateFor(context.dispatch.reason, context, config))) {
-      return await handleDorFallback({ config, context, fs, cwd, decision: context.dispatch }, deps)
-    }
-    reportSkippedDispatch(context)
-    if (!config.dryRun) recordSkip(context, deps, context.dispatch)
-    return 0
+    return await handleSkipDecision({ config, context, fs, cwd, decision: context.dispatch }, deps)
   }
 
   const resolved = resolveRun(config, context, cwd, fs)
@@ -466,6 +484,22 @@ interface DorFallbackInput {
   readonly decision: SkipDecision
 }
 
+/** A `skip` from the dispatcher: the DoR fallback where the gate allows it, else the skip itself. */
+async function handleSkipDecision(
+  input: DorFallbackInput,
+  deps: RunHandlerDependencies,
+): Promise<number> {
+  const { config, context, decision } = input
+  const gate = gateFor(decision.reason, context, config)
+  if (isDorFallbackReason(gate)) return await handleDorFallback(input, deps)
+  // AC15: `no-mapping-declared` refused by the eligibility gate IS an ineligible skip — said and
+  // audited as one, never as the dispatcher's "no mapping declared" alone.
+  const skipped = gate.reason === 'no-mapping-declared' ? ineligibleSkip(gate, context) : undefined
+  reportSkippedDispatch(context, skipped)
+  if (!config.dryRun) recordSkip(context, deps, skipped ?? decision)
+  return 0
+}
+
 /**
  * AC14 — the DoR-gated fallback: `unmapped`/`no-mapping-declared` no longer means "nothing runs"
  * unconditionally. The skip is STILL reported and audited exactly as before (an operator reading
@@ -514,45 +548,80 @@ async function handleDorFallback(
 ): Promise<number> {
   const { config, context, fs, cwd, decision } = input
 
-  reportSkippedDispatch(context)
+  if (config.dryRun) {
+    reportSkippedDispatch(context)
+    announceIneligibleOverride(decision.card, context, config)
+    return 0
+  }
+
+  reportFallbackEntry(context, decision)
   announceIneligibleOverride(decision.card, context, config)
-  if (config.dryRun) return 0
-  recordSkip(context, deps, decision)
 
-  const readiness = await (deps.cardReadiness ?? ghCardReadiness)(decision.card)
+  const readiness = await readReadiness(decision, deps)
+  if (readiness === undefined) {
+    recordSkip(context, deps, decision)
+    return 0
+  }
 
-  if (readiness === 'draft') {
-    return runPrepSkill(
-      {
-        config,
-        context,
-        fs,
-        cwd,
-        card: decision.card,
-        skill: 'pair-process-refine-story',
-        label: 'Draft',
-      },
-      deps,
-    )
+  const prep = PREP_ROUTES[readiness]
+  if (prep !== undefined) {
+    return runPrepSkill({ config, context, fs, cwd, card: decision.card, ...prep }, deps)
   }
-  if (readiness === 'refined-no-breakdown') {
-    return runPrepSkill(
-      {
-        config,
-        context,
-        fs,
-        cwd,
-        card: decision.card,
-        skill: 'pair-process-plan-tasks',
-        label: 'Refined (no task breakdown yet)',
-      },
-      deps,
-    )
-  }
+  console.log(
+    `  Fallback: card ${decision.card} is Ready (Definition of Ready met) — entering the delivery cycle`,
+  )
   return enterCycleCoordinator(
     { config, context, fs, cwd, card: decision.card, dorReason: decision.reason },
     deps,
   )
+}
+
+/**
+ * The card's macrostate — or `undefined` for the ONE clean-skip class (AC14-G1): no mapping is
+ * declared AND the tracker cannot be asked (`gh` absent or unauthenticated). That is the shipped
+ * default meeting a runner with no tracker access (the github-dispatch-adapter smoke), where the
+ * answer was always "nothing runs"; it is said, typed, never swallowed. Where a mapping IS
+ * declared (`unmapped`) the project opted into dispatch, so an unreadable card still fails closed.
+ */
+async function readReadiness(
+  decision: SkipDecision,
+  deps: RunHandlerDependencies,
+): Promise<CardReadiness | undefined> {
+  try {
+    return await (deps.cardReadiness ?? ghCardReadiness)(decision.card)
+  } catch (error) {
+    if (decision.reason !== 'no-mapping-declared' || !(error instanceof CardUnreadableError)) {
+      throw error
+    }
+    console.log(`  Skipped: ${error.message}`)
+    console.log(chalk.dim('  Nothing was spawned.'))
+    return undefined
+  }
+}
+
+/**
+ * AC14: a no-mapping outcome that falls back is a ROUTE decision, not a skip — so it is reported
+ * as the dispatch reason plus the fallback it takes, never "Nothing was spawned.", and it is never
+ * audited `event=skip` (the one exception is the unreadable clean skip above, which IS one).
+ */
+function reportFallbackEntry(context: RunContext, decision: SkipDecision): void {
+  console.log(chalk.bold('pair run'))
+  const headline = decision.reason === 'no-mapping-declared' ? 'no mapping declared' : 'unmapped'
+  console.log(
+    `  Dispatch: card ${decision.card} · ${headline} — ${decision.detail} ⇒ falling back to the ` +
+      `card's own Definition of Ready (AC14)`,
+  )
+  console.log(`  Policy: ${context.policy.source} · audit ${context.policy.auditLocation}`)
+  for (const warning of context.policy.warnings) console.log(chalk.yellow(`  ! ${warning}`))
+}
+
+/** Draft / Refined-without-breakdown ⇒ the preparation skill that moves the card toward Ready. */
+const PREP_ROUTES: Partial<Record<CardReadiness, { skill: string; label: string }>> = {
+  draft: { skill: 'pair-process-refine-story', label: 'Draft' },
+  'refined-no-breakdown': {
+    skill: 'pair-process-plan-tasks',
+    label: 'Refined (no task breakdown yet)',
+  },
 }
 
 interface PrepSkillInput {
@@ -663,6 +732,25 @@ function reportCycleReason(next: DriveCycleResult['next']): void {
   ].filter(Boolean)
   if (parts.length > 0) console.log(`  ${parts.join(' · ')}`)
   if (typeof n.detail === 'string' && n.detail.trim()) console.log(`  ${n.detail}`)
+  const step = describeNextStep(next)
+  if (step !== undefined) console.log(`  Next step: ${step}`)
+}
+
+/**
+ * AC8: a bounded run "exits printing the `next` step" — the step, phase and round the bound
+ * stopped before, so the operator can resume it. Only for a `next` that is a dispatchable step:
+ * `done`/`blocked` are outcomes, already said by the status and reason above.
+ */
+function describeNextStep(next: object): string | undefined {
+  const n = next as { step?: unknown; phase?: unknown; round?: unknown }
+  if (typeof n.step !== 'string' || n.step === 'done' || n.step === 'blocked') return undefined
+  return [
+    n.step,
+    n.phase !== undefined ? `phase ${String(n.phase)}` : undefined,
+    n.round !== undefined ? `round ${String(n.round)}` : undefined,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 /** AC10 — the whole transparency block: resolve and print, THEN act, before the first stage could spawn. */
@@ -921,10 +1009,14 @@ function driveIteration(
   })
 }
 
-/** The whole output of a run that routes nothing: the decision, the policy it came from, warnings. */
-function reportSkippedDispatch(context: RunContext): void {
+/**
+ * The whole output of a run that routes nothing: the decision, the policy it came from, warnings.
+ * `refined` is the decision the handler reached on top of the dispatcher's (AC15's ineligible skip).
+ */
+function reportSkippedDispatch(context: RunContext, refined?: DispatchDecision): void {
   console.log(chalk.bold('pair run'))
   console.log(`  ${describeDispatch(context.dispatch!)}`)
+  if (refined !== undefined) console.log(`  ${describeDispatch(refined)}`)
   console.log(`  Policy: ${context.policy.source} · audit ${context.policy.auditLocation}`)
   for (const warning of context.policy.warnings) console.log(chalk.yellow(`  ! ${warning}`))
   console.log(chalk.dim('  Nothing was spawned.'))
