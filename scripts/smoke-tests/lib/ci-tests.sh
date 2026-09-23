@@ -50,6 +50,7 @@ CI_TESTS=(
   "registry-exclude.sh"
   "no-dataset-in-artifacts.sh"
   "github-dispatch-adapter.sh"
+  "run-card.sh"
   "runner-outcomes.sh"
 )
 
