@@ -99,6 +99,18 @@ describe('assertEngineAvailable — engine missing everywhere (US-503 AC4)', () 
     ).toThrow(SETUP)
   })
 
+  const platforms = ['darwin', 'linux', 'win32']
+  it.each(platforms)(
+    'names the setup skill whatever the injected platform (%s), PATH with no engine directory',
+    platform => {
+      const fs = emptyFs()
+      const probe = createExecutableProbe(fs, { PATH: '', PATHEXT: '.CMD' }, platform)
+      expect(() =>
+        assertEngineAvailable(resolveEngine({ flag: 'pi' }), probe, { fs, repoRoot }),
+      ).toThrow(SETUP)
+    },
+  )
+
   it("keeps every other engine's refusal free of a pi setup hint", () => {
     for (const id of ENGINE_IDS.filter(e => e !== 'pi')) {
       const fs = emptyFs()
