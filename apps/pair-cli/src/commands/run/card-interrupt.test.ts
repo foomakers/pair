@@ -7,10 +7,8 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   realpathSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from 'fs'
 import { tmpdir } from 'os'
@@ -35,17 +33,12 @@ const CLI = join(PKG_ROOT, 'dist', 'cli.js')
 const CARD = '12'
 const EXIT_CODE = { SIGTERM: 143, SIGINT: 130 } as const
 
-/** A build older than the source it tests is a false result either way — refused, never trusted. */
-function assertFreshBuild(): void {
+/**
+ * The built CLI must exist. Freshness is turbo's (`test` dependsOn `build`, content-hashed): an
+ * mtime check here misfires on a cache-restored `dist`. Run directly with vitest, rebuild first.
+ */
+function assertBuilt(): void {
   if (!existsSync(CLI)) throw new Error(`${CLI} is missing: build @pair/pair-cli first`)
-  const srcDir = join(PKG_ROOT, 'src', 'commands', 'run')
-  for (const file of readdirSync(srcDir)) {
-    if (!file.endsWith('.ts') || file.endsWith('.test.ts')) continue
-    const built = join(PKG_ROOT, 'dist', 'commands', 'run', file.replace(/\.ts$/, '.js'))
-    if (!existsSync(built) || statSync(built).mtimeMs < statSync(join(srcDir, file)).mtimeMs) {
-      throw new Error(`stale build: ${built} predates src/commands/run/${file} — rebuild first`)
-    }
-  }
 }
 
 const alive = (pid: number): boolean => {
@@ -85,7 +78,7 @@ describe('r1-2: a signalled driver releases the card lock, stops its engine, and
           .map(line => JSON.parse(line) as { pid: number; prompt: string })
       : []
 
-  beforeAll(assertFreshBuild)
+  beforeAll(assertBuilt)
 
   beforeEach(() => {
     root = realpathSync(mkdtempSync(join(tmpdir(), 'pair-r12-signal-')))
