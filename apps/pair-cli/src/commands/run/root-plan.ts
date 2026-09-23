@@ -189,7 +189,8 @@ export function computeRootPlan(input: RootPlanInput): RootPlan {
   // child could admit it on, so it is excluded here rather than planned, spawned and refused (r0-2).
   const notEligible = (c: (typeof tiered)[number]): string | undefined => {
     if (input.eligibility === undefined) return undefined
-    if (c.tier !== input.eligibility) return `not eligible (tier ${c.tier} !== ${input.eligibility})`
+    if (c.tier !== input.eligibility)
+      return `not eligible (tier ${c.tier} !== ${input.eligibility})`
     if (!(c.labels ?? []).includes(input.eligibility))
       return `not eligible (label ${input.eligibility} absent: its run --card gate reads the labels, tier ${c.tier} is the untagged fail-safe)`
     return undefined
