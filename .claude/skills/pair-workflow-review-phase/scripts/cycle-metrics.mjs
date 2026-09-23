@@ -689,8 +689,11 @@ export const HUMAN_BOUNDARY = '<!-- pair:metrics:end -->'
 
 // `listComments`/`findByMarker`/`upsert` are INJECTED (from pr-comment.mjs) so this module stays
 // dependency-light and testable without a `gh` transport; cycle-runtime.mjs wires the real ones.
-export function publishSummary({ view, marker, pr, repo, listComments, findByMarker, upsert }) {
-  const before = listComments({ pr, repo })
+// `dir` (the run/story directory) reaches every host call, so all three — the prior read, the
+// upsert and the read-back — use that directory's `.host-binding.json` (US-492 AC2), never a
+// re-resolution from the process cwd.
+export function publishSummary({ view, marker, pr, repo, dir, listComments, findByMarker, upsert }) {
+  const before = listComments({ pr, repo, dir })
   const priorHit = findByMarker(before, marker).hits[0]
   let humanSuffix = ''
   if (priorHit) {
@@ -698,10 +701,10 @@ export function publishSummary({ view, marker, pr, repo, listComments, findByMar
     if (idx !== -1) humanSuffix = priorHit.body.slice(idx + HUMAN_BOUNDARY.length)
   }
   const generated = renderPrSummary(view) + HUMAN_BOUNDARY + humanSuffix
-  const result = upsert({ pr, marker, body: generated, repo })
+  const result = upsert({ pr, marker, body: generated, repo, dir })
   const base = { marker, metricsRevision: view.snapshot.revision, sourceDigest: view.snapshot.sourceDigest }
   if (result.error) return { published: false, publication: { ...base, commentId: null, url: null, state: 'failed', lastError: result.error } }
-  const after = listComments({ pr, repo })
+  const after = listComments({ pr, repo, dir })
   const readback = findByMarker(after, marker).hits.find(h => h.id === result.id)
   if (!readback || !readback.body.startsWith(marker)) return { published: false, publication: { ...base, commentId: result.id ?? null, url: result.url ?? null, state: 'failed', lastError: 'readback-mismatch' } }
   return { published: true, publication: { ...base, commentId: result.id, url: result.url, state: 'confirmed', lastError: null } }

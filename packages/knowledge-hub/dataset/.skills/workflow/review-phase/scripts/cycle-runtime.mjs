@@ -741,7 +741,7 @@ export function finalizeMetrics({ dir, repository, story, branch, pr, runId, pub
     // that leaves the run directory without metrics.json.
     let outcome
     try {
-      outcome = publishSummary({ view, marker, pr, repo: repository, ...publish })
+      outcome = publishSummary({ view, marker, pr, repo: repository, dir, ...publish })
     } catch (e) {
       outcome = { published: false, publication: { marker, metricsRevision: view.snapshot.revision, sourceDigest: view.snapshot.sourceDigest, commentId: null, url: null, state: 'failed', lastError: `transport: ${e?.message ?? String(e)}` } }
     }
