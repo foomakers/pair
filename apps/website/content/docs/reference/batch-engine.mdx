@@ -128,6 +128,15 @@ its own and dispatches nothing mechanical:
 | 3 implementation | `/pair-workflow-implement-phase` · `/pair-workflow-green-fix` | `pair-implementer` | GREEN above the seal, inside `fixScope`, never touching a sealed test byte; the initial stage publishes the story's one PR through the configured publish-pr skill, the remediation stage updates it; an approved test that still fails returns here once on the same seal |
 | 4 final verification | `/pair-workflow-review-phase` | `pair-reviewer` | `red-snapshot.mjs verify-chain` first (a breach is terminal), then the fixers' evidence re-run, the witnesses and controls, every prior finding with an explicit transition, the delta and its consumers, cross-group interactions, the adopted risk-tier passes (general via `/pair-process-review`; security and boundary on `risk:yellow`; architecture and an adversarial second pass on `risk:red`); one verdict, the head reviewed, readiness only when the remote head equals it; as the last non-partial reviewer it concludes the required `pair-review` commit status and the ONE `pr-state:*` label (`pr-state.mjs conclude`, the KB mapping) — merge stays a human's |
 
+**A fresh card has no up-front contract** (US-506, ADR-024 amendment 2026-09-23). Its first stage is
+implementation (stage 3): tests and code are written together, test-first, above the base, and an
+informal self-review is fixed but never recorded. Its first final verification (stage 4) names, per
+acceptance criterion, the test that proves it. A weak or missing test is an ordinary finding, and
+every finding carries a reproducer or a concrete failure scenario. Stages 1 and 2 run for **review
+findings**, where the failing test is still written by someone other than the fixer. A run directory
+that already holds `a0` contract handoffs finishes on the old path. Cold path: 2 dispatches (implement,
+verify); one fix round adds 4.
+
 Once per run and cache-by-hash, the review template's vocabulary contract is resolved by the **first
 review dispatch** (`$contractSpec` → the reviewer invokes `/pair-workflow-contract-phase`, whose
 `ensure-contract.mjs check` reads a fresh cache without generating anything, and returns

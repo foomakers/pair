@@ -261,6 +261,12 @@ const CONTRACT_MIRRORS =
   'verdict ← the `## Verdict`-line options; findings[].severity ← the `Findings by severity` severity levels. ' +
   'The RELATIVE severity of those levels is a contract TERM, carried by the top-level `severityRanks` map (one explicit integer per severity, higher = more severe) — the consumer ranks a merge-blocking floor with it and IGNORES the order of the `severities` array entirely'
 
+// US-506 T-8 (AC-12): the bounded-commands guardrail every stage carries, whichever realization
+// renders it. US-487's stage agents stalled on background waits (resumed by hand), and two
+// reviewers removed an engine stub to probe "engine missing" — the CLI fell through to the real
+// `claude` on PATH. Spelled identically in `pair-implement-batch.js`; the packet-parity tests hold
+// the two renderings byte-equal.
+export const BOUNDED_COMMANDS = 'Run only foreground, time-bounded commands: never start a background process and never wait on one. In your own probes never spawn a real engine or a real `gh` — stub them, and test "engine missing" with a PATH that contains no engine directory at all.'
 const templateLabel = p => String(p).split('/').filter(Boolean).pop() || String(p)
 const compactFinding = f => ({
   id: f.id,
@@ -407,7 +413,7 @@ function packetCommand(opts) {
   // bare invocation line and NONE of it — no reviewer blindness, no "the run directory lives in the
   // MAIN checkout", no "Do NOT merge". The first of those absences is the one the US-487 canary hit:
   // stages wrote their handoffs inside the story worktree.
-  const guardrails = `The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines — its Step 0 resolves the durable cycle state and returns \`{ status: "redirect", next }\` when another step is due, spending no judgment. Do NOT read ${blindPaths} except the checkpoint and the run directory \`${runDir}/\` the skill names; that directory lives in the MAIN checkout — the working directory you were started in, before any cd — never inside a story or review worktree. Do NOT merge.${effortNote}`
+  const guardrails = `The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines — its Step 0 resolves the durable cycle state and returns \`{ status: "redirect", next }\` when another step is due, spending no judgment. Do NOT read ${blindPaths} except the checkpoint and the run directory \`${runDir}/\` the skill names; that directory lives in the MAIN checkout — the working directory you were started in, before any cd — never inside a story or review worktree. Do NOT merge. ${BOUNDED_COMMANDS}${effortNote}`
   const invoke = (skill, args) =>
     `Invoke **${skill}** for story ${tag} with ${args} $workflowVersion=${workflowVersion}. ${guardrails}`
   // ── US-487 T-3 — the role-packet rendering STYLE ────────────────────────────────────────────
@@ -466,7 +472,9 @@ function packetCommand(opts) {
     skill = SK.implementPhase
     agentType = 'pair-implementer'
     phaseLabel = 'Implement'
-    args = `${common} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt ?? 1} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)} $title=${JSON.stringify(card.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg}`
+    // US-506: a fresh card's `implement` carries no contract and no base yet — the arguments are
+    // omitted, never rendered `undefined`, exactly as the engine composes them.
+    args = `${common} $phase=${n.phase}${n.base ? ` $head=${n.base}` : ''} $attempt=${n.attempt ?? 1}${n.contract ? ` $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}` : ''} $title=${JSON.stringify(card.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg}`
   } else if (n.step === 'green') {
     skill = SK.greenFix
     agentType = 'pair-implementer'

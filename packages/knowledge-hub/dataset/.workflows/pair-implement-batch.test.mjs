@@ -52,7 +52,16 @@ const rankOf = s => RANKS[String(s ?? '').trim().toLowerCase()] ?? Infinity
 
 // ── The cycle simulator: completes a fixture into the typed result + `next` a real phase skill
 // returns after `cycle-state.mjs resolve`. A fixture that already carries `next` is passed through.
-function makeSimulator({ floor = 'Minor', maxFixRounds = 3 } = {}) {
+// `entry` (US-506) names the DURABLE STATE the run directory holds when the batch starts — the
+// simulator's Step 0 answers from it, never regardless of it:
+//   `fresh`         no evidence at all: the first `implement` does the work (no up-front contract);
+//   `legacy`        an old-path directory whose `a0` preparation is due (ADR-024 before the
+//                   2026-09-23 amendment, AC5): `resolve` answers `prepare a0`, so the engine's first,
+//                   contract-less `implement` is redirected there and the old transitions follow;
+//   `legacy-sealed` an old-path directory whose `a0` is SEALED and not yet implemented: `resolve`
+//                   answers `implement a0` WITH its contract, so the contract-less first guess is
+//                   redirected to the same step carrying the seal.
+function makeSimulator({ floor = 'Minor', maxFixRounds = 3, entry = 'legacy' } = {}) {
   const stories = new Map()
   const state = id => {
     if (!stories.has(id)) stories.set(id, { plans: {}, greens: {}, repairs: {}, verifies: {}, lastReviewHead: null, prior: new Map(), seq: {} })
@@ -118,6 +127,11 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3 } = {}) {
       return full
     }
     if (opts.agentType === 'pair-implementer' && opts.label?.startsWith('implement:')) {
+      if (entry !== 'fresh' && phase === 'a0' && !prompt.includes('$contract=') && !s.legacyRedirected) {
+        s.legacyRedirected = true
+        if (entry === 'legacy-sealed') return { status: 'redirect', next: { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1, base: HEAD, contract: { path: contractPath, hash: SHA256('1'), snapshot: SNAP, revision: 1 } } }
+        return { status: 'redirect', next: { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1 } }
+      }
       const full = { status: 'ok', gatesPassed: true, branch: 'b', prNumber: 7, url: 'https://x/pr/7', outputHead: HEAD, checkpointPath: '.pair/working/checkpoints/x.md', ...res }
       s.implements = (s.implements ?? 0) + 1
       full.next = res.next ?? (full.status === 'ok' && full.gatesPassed === true ? (s.lastReviewRound !== undefined ? { step: 'verify', mode: 're-review', phase: `r${s.lastReviewRound + 1}`, round: s.lastReviewRound + 1, attempt: 1, base: s.lastReviewHead, prior: `r${s.lastReviewRound}-review-phase`, openIds: [...s.prior.values()].filter(f => f.blocking).map(f => f.id), pr: full.prNumber } : { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1, base: full.outputHead, pr: full.prNumber }) : s.implements <= 1 ? { step: 'implement', mode: 'retry', phase: 'a0', round: 0, attempt: 2, base: HEAD, contract: { path: contractPath.replace(phase, 'a0'), hash: SHA256('1'), snapshot: SNAP }, pr: full.prNumber } : { step: 'blocked', reason: 'failed-implement', budget: 'greenRetries' })
@@ -178,9 +192,9 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3 } = {}) {
   }
 }
 
-async function runWorkflow({ args, dispatch, floor, maxFixRounds }) {
+async function runWorkflow({ args, dispatch, floor, maxFixRounds, entry }) {
   const calls = []
-  const simulate = makeSimulator({ floor: floor ?? (args && typeof args === 'object' && !Array.isArray(args) ? args.severityFloor ?? 'Minor' : 'Minor'), maxFixRounds: maxFixRounds ?? (args && typeof args === 'object' && !Array.isArray(args) ? args.pipeline?.maxFixRounds ?? 3 : 3) })
+  const simulate = makeSimulator({ entry, floor: floor ?? (args && typeof args === 'object' && !Array.isArray(args) ? args.severityFloor ?? 'Minor' : 'Minor'), maxFixRounds: maxFixRounds ?? (args && typeof args === 'object' && !Array.isArray(args) ? args.pipeline?.maxFixRounds ?? 3 : 3) })
   const agent = async (prompt, opts) => {
     calls.push({ prompt, opts })
     const raw = await dispatch(prompt, opts)
@@ -239,25 +253,45 @@ async function expectThrow({ args }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // TC-11 — dispatch shape: four logical judgment stages, nothing mechanical dispatched
 // ═══════════════════════════════════════════════════════════════════════════
-test('TC-11 golden trace: a fresh story with a clean first verification is FOUR judgment dispatches — and nothing else (the template contract rides on the first review, t9d-2)', async () => {
+test('US-506 TC-11 golden trace: a FRESH story with a clean first verification is TWO judgment dispatches — implement, then verify — with zero pre-code contract dispatches', async () => {
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch(), entry: 'fresh' })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.deepEqual(labels(calls), ['implement:#292', 'verify:#292 r0'])
+  assert.deepEqual(calls.map(c => c.opts.phase), ['Implement', 'Verify'])
+  // no contract exists yet: the implementer works above the base, so no seal is named to it
+  assert.doesNotMatch(calls[0].prompt, /\$snapshot=|\$contract=|\$head=/)
+  assert.match(calls[0].prompt, /\$phase=a0 \$attempt=1 \$title="T" \$implementSkill=/)
+  assert.match(calls[1].prompt, /\$contractSpec=\{/, 'the first review dispatch carries the contract spec')
+  assert.equal(result.metrics.dispatches, 2)
+})
+
+test('US-506 TC-11 golden trace: a FRESH story with one fix round keeps the test-first remediation path — prepare, validate(+seal), green, verify', async () => {
+  const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] })
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review }), entry: 'fresh' })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.deepEqual(stageLabels(calls), ['implement:#292', 'verify:#292 r0', 'prepare:#292 r1-g1', 'validate:#292 r1-g1', 'green:#292 r1-g1', 'verify:#292 r1'])
+})
+
+test('TC-11 golden trace (AC5, a run already on the `a0` path): the first implement is redirected to prepare a0 and the old FOUR judgment stages follow (the template contract rides on the first review, t9d-2)', async () => {
   const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch() })
   assert.equal(result.batch[0].status, 'ready-for-merge')
   // t9d-2 / AC-06 (S7): NO generator-only dispatch — the first review dispatch resolves the template contract
-  assert.deepEqual(labels(calls), ['prepare:#292 a0', 'validate:#292 a0', 'implement:#292', 'verify:#292 r0'])
+  assert.deepEqual(labels(calls), ['implement:#292', 'prepare:#292 a0', 'validate:#292 a0', 'implement:#292', 'verify:#292 r0'])
   assert.deepEqual([...new Set(calls.map(c => c.opts.agentType))].sort(), ['pair-fix-test-author', 'pair-implementer', 'pair-red-contract-verifier', 'pair-reviewer'])
-  assert.deepEqual(calls.map(c => c.opts.phase), ['Prepare', 'Validate', 'Implement', 'Verify'])
-  assert.match(calls[3].prompt, /\$contractSpec=\{/, 'the first review dispatch carries the contract spec')
+  assert.deepEqual(calls.map(c => c.opts.phase), ['Implement', 'Prepare', 'Validate', 'Implement', 'Verify'])
+  assert.match(calls[4].prompt, /\$contractSpec=\{/, 'the first review dispatch carries the contract spec')
+  assert.equal(result.metrics.redirects, 1)
 })
 
 test('TC-11 golden trace: one fix round on one group adds exactly four dispatches — prepare, validate(+seal), green, final verification', async () => {
   const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] })
   const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review }) })
   assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.deepEqual(stageLabels(calls), ['prepare:#292 a0', 'validate:#292 a0', 'implement:#292', 'verify:#292 r0', 'prepare:#292 r1-g1', 'validate:#292 r1-g1', 'green:#292 r1-g1', 'verify:#292 r1'])
+  assert.deepEqual(stageLabels(calls), ['implement:#292', 'prepare:#292 a0', 'validate:#292 a0', 'implement:#292', 'verify:#292 r0', 'prepare:#292 r1-g1', 'validate:#292 r1-g1', 'green:#292 r1-g1', 'verify:#292 r1'])
   const all = labels(calls).join(' ')
   for (const gone of ['plan:', 'probe:', 'red-seal:', 'preflight:', 'synth:', 'flush:', 'pr:', 'red-spec:', 'red-verify:', 'fix:', 'rev:'])
     assert.ok(!all.includes(gone), `a retired dispatch label survives: ${gone}`)
-  assert.equal(result.metrics.dispatches, 8)
+  assert.equal(result.metrics.dispatches, 9, 'the legacy entry redirect is one dispatch that spends no judgment')
   assert.equal(result.metrics.tokens, 'unknown', 'token counters are not exposed to the script — reported unknown, never zero')
 })
 
@@ -284,7 +318,7 @@ test('TC-11: every dispatch is a configured skill + typed arguments + the engine
     assert.doesNotMatch(c.prompt, /\bgh (pr|issue|api)\b/, `${c.opts.label}: a gh command reached the prompt`)
     assert.doesNotMatch(c.prompt, /\bnode \.claude\//, `${c.opts.label}: a script invocation reached the prompt`)
   }
-  const byLabel = l => calls.find(c => c.opts.label === l).prompt
+  const byLabel = l => calls.filter(c => c.opts.label === l).pop().prompt
   assert.match(byLabel('prepare:#292 a0'), /\$mode=initial \$phase=a0 \$title="T" \$workflowVersion/)
   assert.match(byLabel('validate:#292 a0'), /\$phase=a0 \$head=a{40} \$contract=\"\/main\/\.pair\/working\/runs\/run-42\/292\/a0-red-contract\.json\" \$contractHash=sha256:1{64}/)
   assert.match(byLabel('implement:#292'), /\$snapshot=c{40} \$contract=\"\/main\/.*\$implementSkill=\/pair-process-implement \$verifyQuality=\/pair-capability-verify-quality \$recordDecision=\/pair-capability-record-decision \$checkpoint=\/pair-capability-checkpoint \$publishPr=\/pair-capability-publish-pr/)
@@ -350,9 +384,16 @@ test('TC-11: the author cannot approve its own work — the final verifier and t
 // ═══════════════════════════════════════════════════════════════════════════
 // TC-01 — the acceptance contract is prepared and independently validated BEFORE production edits
 // ═══════════════════════════════════════════════════════════════════════════
-test('TC-01: no implementation or fix is dispatched before an independently validated contract — on a fresh story AND on an existing PR without a baseline; a template-contract cache hit never stands in for it', async () => {
-  const fresh = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() }, review: pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] }) }) })
-  const order = stageLabels(fresh.calls)
+test('TC-01 (US-506): no FIX is dispatched before an independently validated contract — on a fresh story, on an existing PR without a baseline and on a run already on the `a0` path (where the implementation waits for it too); a template-contract cache hit never stands in for it', async () => {
+  const rework = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] })
+  // US-506 AC1/AC4: a fresh story implements first (no up-front contract); its FIX still waits for a validated contract
+  const newPath = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review: rework }), entry: 'fresh' })
+  const newOrder = stageLabels(newPath.calls)
+  assert.equal(newOrder[0], 'implement:#292')
+  for (const [i, l] of newOrder.entries()) if (l.startsWith('green:')) assert.ok(newOrder[i - 1].startsWith('validate:'), `${l} was not preceded by its validation`)
+  const fresh = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() }, review: rework }) })
+  // the legacy entry: the first, contract-less implement is redirected by the stage's own Step 0 and does no work
+  const order = stageLabels(fresh.calls).slice(1)
   const firstWrite = order.findIndex(l => l.startsWith('implement:') || l.startsWith('green:'))
   assert.ok(order.slice(0, firstWrite).some(l => l.startsWith('validate:')), 'a validate ran before the first production edit')
   for (const [i, l] of order.entries()) if (l.startsWith('implement:') || l.startsWith('green:')) assert.ok(order[i - 1].startsWith('validate:'), `${l} was not preceded by its validation`)
@@ -364,14 +405,14 @@ test('TC-01: no implementation or fix is dispatched before an independently vali
   const gap = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-fix-test-author' ? { status: 'unprovable', reason: 'AC-3 names no producer: "the docs are clear" has no grammar, format or command to probe' } : {}) })
   assert.equal(gap.result.batch[0].status, 'failed-preparation')
   assert.match(gap.result.batch[0].reason, /AC-3 names no producer/)
-  assert.equal(gap.calls.filter(c => c.opts.agentType === 'pair-implementer').length, 0)
+  assert.equal(gap.calls.filter(c => c.opts.agentType === 'pair-implementer').length, 1, 'only the redirected legacy entry — no implementation ran')
 })
 
 test('TC-09 / TC-12: an implementation published with a RED gate never reaches the verifier — it returns to implement on the same seal once (canary run 11: the sealed manifest failed the prettier gate), then failed-implement', async () => {
   let n = 0
-  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.label?.startsWith('implement:') ? { gatesPassed: n++ === 0 ? false : true } : o.agentType === 'pair-reviewer' ? { verdict: 'Approved', findings: [] } : {}) })
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.label?.startsWith('implement:') ? { gatesPassed: p.includes('$contract=') && n++ === 0 ? false : true } : o.agentType === 'pair-reviewer' ? { verdict: 'Approved', findings: [] } : {}) })
   assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.deepEqual(stageLabels(calls), ['prepare:#292 a0', 'validate:#292 a0', 'implement:#292', 'implement:#292 attempt 2', 'verify:#292 r0'])
+  assert.deepEqual(stageLabels(calls), ['implement:#292', 'prepare:#292 a0', 'validate:#292 a0', 'implement:#292', 'implement:#292 attempt 2', 'verify:#292 r0'])
   assert.match(calls.find(c => c.opts.label === 'implement:#292 attempt 2').prompt, /\$pr=7 .*\$attempt=2 \$snapshot=c{40}/)
   const twice = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.label?.startsWith('implement:') ? { gatesPassed: false } : {}) })
   assert.equal(twice.result.batch[0].status, 'failed-implement')
@@ -700,7 +741,7 @@ test('TC-09: an approved test failing on production returns to GREEN on the SAME
   const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : pass === 1 ? { verdict: 'Rework', findings: [finding({ id: 'r0-1', transition: 'open', kind: 'approved-test-failing', groupId: 'r1-g1', rowId: 'row-1' })] } : { verdict: 'Approved', findings: [] })
   const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review }) })
   assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.deepEqual(stageLabels(calls).slice(4), ['prepare:#292 r1-g1', 'validate:#292 r1-g1', 'green:#292 r1-g1', 'verify:#292 r1', 'green:#292 r1-g1 attempt 2', 'verify:#292 r1'])
+  assert.deepEqual(stageLabels(calls).slice(5), ['prepare:#292 r1-g1', 'validate:#292 r1-g1', 'green:#292 r1-g1', 'verify:#292 r1', 'green:#292 r1-g1 attempt 2', 'verify:#292 r1'])
   const retry = calls.find(c => c.opts.label === 'green:#292 r1-g1 attempt 2').prompt
   assert.match(retry, /\$attempt=2 \$snapshot=c{40}/)
   const twice = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Rework', findings: [finding({ id: 'r0-1', transition: 'open', kind: 'approved-test-failing', groupId: 'r1-g1' })] }) }) })
@@ -712,7 +753,7 @@ test('TC-09: a genuine contract gap revises ONLY the affected group — prepare(
   const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : pass === 1 ? { verdict: 'Rework', findings: [finding({ id: 'r0-1', transition: 'resolved' }), finding({ location: 'src/a.ts:9', kind: 'contract-gap', groupId: 'r1-g1', description: 'the empty form is unspecified' })] } : { verdict: 'Approved', findings: [] })
   const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review }) })
   assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.deepEqual(stageLabels(calls).slice(8), ['prepare:#292 r1-g1-rev2 revision', 'validate:#292 r1-g1-rev2', 'green:#292 r1-g1-rev2', 'verify:#292 r1'])
+  assert.deepEqual(stageLabels(calls).slice(9), ['prepare:#292 r1-g1-rev2 revision', 'validate:#292 r1-g1-rev2', 'green:#292 r1-g1-rev2', 'verify:#292 r1'])
   const rev = calls.find(c => c.opts.label === 'prepare:#292 r1-g1-rev2 revision').prompt
   assert.match(rev, /\$mode=revision \$phase=r1-g1-rev2 .*\$findings=\[\{"id":"r1-1".*"kind":"contract-gap","groupId":"r1-g1"\}\] \$contract=\"\/main\/\.pair\/working\/runs\/story-292\/292\/r1-g1-red-contract\.json\" \$contractHash=sha256:1{64} \$revision=2/)
 })
@@ -721,7 +762,7 @@ test('TC-09: a contract gap in the INITIAL acceptance contract revises a0 (a0-re
   const review = pass => (pass === 0 ? { verdict: 'CHANGES-REQUESTED', findings: [finding({ severity: 'Minor', kind: 'contract-gap', groupId: 'a0', description: 'a symlinked script is silently dropped' })] } : { verdict: 'APPROVED', findings: [] })
   const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ contractResult: { status: 'failed' }, review }) })
   assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
-  assert.deepEqual(stageLabels(calls), ['prepare:#292 a0', 'validate:#292 a0', 'implement:#292', 'verify:#292 r0', 'prepare:#292 a0-rev2 revision', 'validate:#292 a0-rev2', 'implement:#292', 'verify:#292 r1'])
+  assert.deepEqual(stageLabels(calls), ['implement:#292', 'prepare:#292 a0', 'validate:#292 a0', 'implement:#292', 'verify:#292 r0', 'prepare:#292 a0-rev2 revision', 'validate:#292 a0-rev2', 'implement:#292', 'verify:#292 r1'])
   assert.match(calls.find(c => c.opts.label === 'prepare:#292 a0-rev2 revision').prompt, /\$mode=revision \$phase=a0-rev2 .*\$revision=2/)
   assert.match(calls[calls.length - 1].prompt, /\$mode=re-review .*\$openIds=\["r0-1"\]/)
   assert.equal(calls.filter(c => c.opts.label.startsWith('green:')).length, 0)
@@ -742,12 +783,12 @@ test('TC-10: a rejected contract goes back to preparation ONCE carrying the reje
     })(),
   })
   assert.equal(once.result.batch[0].status, 'ready-for-merge')
-  assert.deepEqual(stageLabels(once.calls), ['prepare:#292 a0', 'validate:#292 a0', 'prepare:#292 a0 repair', 'validate:#292 a0', 'implement:#292', 'verify:#292 r0'])
-  assert.match(once.calls[2].prompt, /\$mode=repair \$phase=a0 .*\$rejection=\[\{"location":"fixture\.test\.ts:3"/)
+  assert.deepEqual(stageLabels(once.calls), ['implement:#292', 'prepare:#292 a0', 'validate:#292 a0', 'prepare:#292 a0 repair', 'validate:#292 a0', 'implement:#292', 'verify:#292 r0'])
+  assert.match(once.calls[3].prompt, /\$mode=repair \$phase=a0 .*\$rejection=\[\{"location":"fixture\.test\.ts:3"/)
   const twice = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-red-contract-verifier' ? { verified: false, findings: [rejection] } : {}) })
   assert.equal(twice.result.batch[0].status, 'failed-contract')
   assert.equal(twice.result.batch[0].budget, 'redRepairs')
-  assert.equal(twice.calls.filter(c => c.opts.agentType === 'pair-implementer').length, 0, 'no GREEN without an approved contract')
+  assert.equal(twice.calls.filter(c => c.opts.agentType === 'pair-implementer').length, 1, 'no GREEN without an approved contract — only the redirected legacy entry')
   assert.equal(twice.calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 2, 'exactly one repair, never a third author')
 })
 
@@ -765,7 +806,7 @@ test('TC-10: a dead step (null or an unusable shape) is retried ONCE with the sa
   let n = 0
   const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-fix-test-author' ? (n++ === 0 ? null : {}) : o.agentType === 'pair-reviewer' ? { verdict: 'Approved', findings: [] } : {}) })
   assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.deepEqual(stageLabels(calls).slice(0, 3), ['prepare:#292 a0', 'prepare:#292 a0 retry', 'validate:#292 a0'])
+  assert.deepEqual(stageLabels(calls).slice(1, 4), ['prepare:#292 a0', 'prepare:#292 a0 retry', 'validate:#292 a0'])
   assert.equal(result.batch[0].metrics.retries, 1)
   for (const [type, status] of [['pair-fix-test-author', 'failed-preparation'], ['pair-red-contract-verifier', 'failed-contract'], ['pair-reviewer', 'failed-verify']]) {
     const dead = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === type ? null : o.agentType === 'pair-reviewer' ? { verdict: 'Approved', findings: [] } : {}) })
@@ -804,7 +845,7 @@ test('TC-12 / TC-16: two groups run sequentially — the second is prepared on t
   const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding(), finding({ location: 'src/b.ts:4' })] } : { verdict: 'Approved', findings: [] })
   const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-reviewer' ? review(o.label === 'verify:#292 r0' ? 0 : 1) : o.agentType === 'pair-fix-test-author' && arg(p, 'phase') === 'r1-g1' ? { plan, fixScope: { owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] } } : {}) })
   assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.deepEqual(stageLabels(calls).slice(4), ['prepare:#292 r1-g1', 'validate:#292 r1-g1', 'green:#292 r1-g1', 'prepare:#292 r1-g2', 'validate:#292 r1-g2', 'green:#292 r1-g2', 'verify:#292 r1'])
+  assert.deepEqual(stageLabels(calls).slice(5), ['prepare:#292 r1-g1', 'validate:#292 r1-g1', 'green:#292 r1-g1', 'prepare:#292 r1-g2', 'validate:#292 r1-g2', 'green:#292 r1-g2', 'verify:#292 r1'])
   assert.match(calls.find(c => c.opts.label === 'prepare:#292 r1-g2').prompt, /\$head=b{40} .*\$scope=\{"groupId":"r1-g2","owner":"b","mode":"behavioral","allowedPaths":\["src\/b\.ts"\],"oracle":"o"\}/)
   assert.match(calls.find(c => c.opts.label === 'verify:#292 r1').prompt, /\$openIds=\["r0-1","r0-2"\]/)
   assert.equal(calls.filter(c => c.opts.agentType === 'pair-reviewer').length, 2, 'one verification per round, not per group')
@@ -843,7 +884,7 @@ test('a revision or repair result is a DELTA: its rows may cover obligations of 
   const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch })
   assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
   assert.equal(result.metrics.retries, 0, 'the delta result must be accepted first time')
-  assert.deepEqual(stageLabels(calls), ['prepare:#292 a0', 'validate:#292 a0', 'implement:#292', 'verify:#292 r0', 'prepare:#292 a0-rev2 revision', 'validate:#292 a0-rev2', 'implement:#292', 'verify:#292 r1'])
+  assert.deepEqual(stageLabels(calls), ['implement:#292', 'prepare:#292 a0', 'validate:#292 a0', 'implement:#292', 'verify:#292 r0', 'prepare:#292 a0-rev2 revision', 'validate:#292 a0-rev2', 'implement:#292', 'verify:#292 r1'])
   // an INITIAL contract still has to cover exactly its own inventory
   const initial = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-fix-test-author' ? { matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'c', oracle: 'o', expected: 'e', covers: ['AC-9'] }] } : std(p, o)) })
   assert.equal(initial.result.batch[0].status, 'failed-preparation')
@@ -970,7 +1011,9 @@ test('t9-2: a verification that declares itself partial (a non-final reviewer) c
 })
 
 test('t9-5: a next that asks for validate/implement/green without a usable contract is a typed failed-resume naming the field — never a coordinator crash reported as a dead agent', async () => {
-  for (const next of [{ step: 'implement', mode: 'initial', phase: 'a0', base: HEAD }, { step: 'green', mode: 'remediation', phase: 'r1-g1', base: HEAD, contract: { path: '/x/r1-g1-red-contract.json' } }, { step: 'validate', mode: 'initial', phase: 'a0', base: HEAD, contract: { hash: 'sha256:' + '1'.repeat(64) } }]) {
+  // US-506: `implement a0` with NO contract is the fresh path and legal; a revision without one, or an
+  // attached contract that is incomplete, is still refused
+  for (const next of [{ step: 'implement', mode: 'revision', phase: 'a0-rev2', base: HEAD }, { step: 'implement', mode: 'initial', phase: 'a0', base: HEAD, contract: { path: '/x/a0-red-contract.json' } }, { step: 'green', mode: 'remediation', phase: 'r1-g1', base: HEAD, contract: { path: '/x/r1-g1-red-contract.json' } }, { step: 'validate', mode: 'initial', phase: 'a0', base: HEAD, contract: { hash: 'sha256:' + '1'.repeat(64) } }]) {
     const { result } = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : { status: 'redirect', next }) })
     assert.equal(result.batch[0].status, 'failed-resume', JSON.stringify(result.batch[0]))
     assert.match(result.batch[0].reason, /contract/)
@@ -1001,10 +1044,16 @@ test('TC-14: the result carries workflowVersion 4.0.1 and every status row is on
 // TC-16 — fixed-trace cost accounting
 // ═══════════════════════════════════════════════════════════════════════════
 test('TC-16: fixed traces — cold path 4 dispatches (was 5 with the generator), one-fix path 8 (was 9), unchanged resume 1 identity dispatch with zero fresh review', async () => {
+  // US-506: a FRESH cold path is 2 dispatches (implement, verify) and one fix round adds the 4 of the
+  // test-first remediation; a run already on the `a0` path pays one extra redirect at entry.
+  const freshCold = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch(), entry: 'fresh' })
+  assert.equal(freshCold.result.metrics.dispatches, 2)
+  const freshFix = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] }) }), entry: 'fresh' })
+  assert.equal(freshFix.result.metrics.dispatches, 6)
   const cold = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch() })
-  assert.equal(cold.result.metrics.dispatches, 4)
+  assert.equal(cold.result.metrics.dispatches, 5)
   const oneFix = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] }) }) })
-  assert.equal(oneFix.result.metrics.dispatches, 8)
+  assert.equal(oneFix.result.metrics.dispatches, 9)
   const resume = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : { status: 'redirect', next: { step: 'done', reviewedHead: HEAD, round: 1, verdict: 'Approved' } }) })
   assert.equal(resume.result.metrics.dispatches, 1)
   assert.equal(resume.result.metrics.redirects, 1)
@@ -1320,7 +1369,7 @@ test('US-219 AC7: present-but-non-string values are rejected, never coerced; num
 test('US-219 AC7: an explicitly-undefined/null optional key means ABSENT; a present-but-blank one throws and says how to mean unset', async () => {
   const { result, calls } = await runWorkflow({ args: { severityFloor: undefined, model: undefined, maxParallelism: undefined, pipeline: undefined, runId: null, cards: [{ id: '219', title: 'T', branch: 'feat/x', base: undefined, notes: undefined, prNumber: undefined }] }, dispatch: stdDispatch() })
   assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.equal(calls.filter(c => c.opts.phase === 'Implement').length, 1, 'prNumber: undefined means "no PR yet"')
+  assert.equal(calls.filter(c => c.opts.phase === 'Implement' && c.prompt.includes('$contract=')).length, 1, 'prNumber: undefined means "no PR yet"')
   for (const [args, re] of [
     [{ cards: [STORY], severityFloor: '' }, /severityFloor.*is empty/s],
     [{ cards: [STORY], model: '   ' }, /model.*is empty/s],
@@ -1425,7 +1474,7 @@ test('US-219 AC6: under a cap, results keep INPUT order and a dead card is repor
 test('US-219: the note is derived from the STATUSES — an all-failed batch says NOTHING COMPLETED, a mixed one counts what advanced', async () => {
   const cards = [{ id: '1', title: 'a', branch: 'b1' }, { id: '2', title: 'b', branch: 'b2' }]
   const allFailed = await runWorkflow({ args: { cards }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : null) })
-  assert.match(allFailed.result.note, /NOTHING COMPLETED: 0\/2 cards advanced.*2 returned a failure status \(2 failed-preparation\)/s)
+  assert.match(allFailed.result.note, /NOTHING COMPLETED: 0\/2 cards advanced.*2 returned a failure status \(2 failed-implement\)/s)
   assert.deepEqual(allFailed.result.died, [])
   const mixed = await runWorkflow({ args: { cards }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-fix-test-author' && /#2\b/.test(p) ? null : o.agentType === 'pair-reviewer' ? { verdict: 'Approved', findings: [] } : {}) })
   assert.match(mixed.result.note, /1\/2 cards advanced to a PR \(1 ready-for-merge\); 1 returned a failure status \(1 failed-preparation\)/)
@@ -1433,7 +1482,7 @@ test('US-219: the note is derived from the STATUSES — an all-failed batch says
 test('US-219 AC4: each stage is its own subagent call, and no call carries two stories', async () => {
   const { calls } = await runWorkflow({ args: { cards: manyStories(2) }, dispatch: stdDispatch() })
   const stage = calls.filter(c => c.opts.agentType !== 'pair-contract-generator')
-  assert.equal(stage.length, 8)
+  assert.equal(stage.length, 10)
   for (const c of stage) assert.equal((c.prompt.match(/for story #\d+/g) ?? []).length, 1)
 })
 test('a required (carried-in P3) finding measured on another head fails before any judgment is trusted; on the same head it is handed to the verifier', async () => {
@@ -1798,4 +1847,45 @@ test('DR-04: the preparation that PLANS a round — dispatched with no scope —
   const src = SRC.slice(SRC.indexOf('const prepare = n =>'), SRC.indexOf('const validate = n =>'))
   assert.doesNotMatch(src, /-g1\$/, 'the plan requirement must not key on the group number')
   assert.match(src, /needPlan:[^,]*!n\.group/, 'it keys on the absence of a dispatched scope, as red-spec`s own contract states')
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-506 — the phase skills state the fresh-card process (T-2, T-3)
+// ═══════════════════════════════════════════════════════════════════════════
+test('US-506 T-2: implement-phase states the fresh entry — TDD as practice above the base, an informal self-review that is fixed and NEVER recorded, no predecessor', () => {
+  const md = SKILL('implement-phase')
+  assert.match(md, /\*\*Fresh card\*\*/)
+  assert.match(md, /tests and code \*\*together, test-first, as practice\*\*/)
+  assert.match(md, /Informal self-review — fix, never record/)
+  assert.match(md, /Nothing of this self-review is recorded anywhere/)
+  assert.match(md, /self-review-not-recordable/)
+  assert.match(md, /a fresh card has no predecessor/)
+  // the sealed path is still documented (AC5): the snapshot, the untouchable sealed bytes
+  assert.match(md, /\*\*Sealed `a0`\*\*/)
+  assert.match(md, /--predecessor a0-red-verify` on the sealed path only/)
+})
+
+test('US-506 T-3: review-phase states the per-AC qualitative test assessment, the evidence rule and that taste is not a finding; mutation is optional', () => {
+  const md = SKILL('review-phase')
+  assert.match(md, /For EVERY acceptance criterion of the card name the test\(s\) that prove it/)
+  assert.match(md, /acAssessment: \[\{ ac, tests, assessment, findingId\? \}\]/)
+  assert.match(md, /A \*\*mutation probe\*\*[^.]*is a tool you MAY use to confirm a suspicion — never a required step/)
+  assert.match(md, /finding-unevidenced:<id>/)
+  assert.match(md, /A difference of taste \("I would have done it differently"\) is not a finding and is not recorded/)
+  assert.match(md, /The handoff records ONLY the activities of this independent review/)
+  assert.match(md, /No evidence of test-first is asked for or checked/)
+})
+
+test('US-506 F-2 (AC5): an old-path run SEALED but not yet implemented — the contract-less first guess is redirected to the same step WITH its seal, and the run completes (never failed-implement)', async () => {
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch(), entry: 'legacy-sealed' })
+  assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+  assert.deepEqual(stageLabels(calls), ['implement:#292', 'implement:#292', 'verify:#292 r0'])
+  assert.doesNotMatch(calls[0].prompt, /\$snapshot=/)
+  assert.match(calls[1].prompt, /\$snapshot=c{40} \$contract=/)
+  assert.equal(result.metrics.redirects, 1)
+})
+
+test('US-506 F-2: implement-phase redirects a dispatch that lacks the contract its `next` carries — never takes the fresh branch on a sealed run', () => {
+  const md = SKILL('implement-phase')
+  assert.match(md, /`next` names this dispatch but carries a `contract` while the dispatch has no `\$snapshot`/)
 })

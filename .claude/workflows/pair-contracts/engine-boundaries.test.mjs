@@ -133,15 +133,15 @@ test("TC-07: the author's ABSOLUTE contract path passes the coordinator's predic
   // publish the preparation handoff in the main checkout, then seal from INSIDE the worktree
   writeFileSync(join(runDir, 'draft.json'), JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'feature/US-42', phase: 'r1-g1', skill: 'red-spec', inputHead: base, status: 'red', mode: 'remediation', contractPath, contractHash: h.json.contractHash, plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a()', mode: 'behavioral', allowedPaths: ['src/a.js'] }], carried: [] } }))
   assert.equal(node(main, cycle, 'publish', '--dir', runDir, '--file', join(runDir, 'draft.json'), '--phase', 'r1-g1', '--skill', 'red-spec', '--workflowVersion', '3.0.0').json.published, true)
-  const seal = node(worktree, snapshot, 'seal', '--pr', '7', '--phase', 'r1-g1', '--base', base, '--contract', contractPath, '--root', main)
+  const seal = node(worktree, snapshot, 'seal', '--pr', '7', '--phase', 'r1-g1', '--base', base, '--contract', contractPath, '--root', main, '--static-gates', '[]')
   assert.equal(seal.status, 0, seal.stdout + seal.stderr)
   assert.equal(seal.json.sealed, true)
   assert.equal(git(worktree, 'rev-parse', `${seal.json.snapshot}^`), base)
   // the same call again (lost response) returns the same snapshot, no second commit
-  assert.deepEqual(node(worktree, snapshot, 'seal', '--pr', '7', '--phase', 'r1-g1', '--base', base, '--contract', contractPath, '--root', main).json.snapshot, seal.json.snapshot)
+  assert.deepEqual(node(worktree, snapshot, 'seal', '--pr', '7', '--phase', 'r1-g1', '--base', base, '--contract', contractPath, '--root', main, '--static-gates', '[]').json.snapshot, seal.json.snapshot)
   assert.equal(git(worktree, 'rev-list', '--count', `${base}..HEAD`), '1')
   // validation handoff → resolve says GREEN next, with the snapshot
-  writeFileSync(join(runDir, 'v.json'), JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'feature/US-42', phase: 'r1-g1', skill: 'red-verify', inputHead: base, verified: true, findings: [], sealed: true, snapshot: seal.json.snapshot, contractHash: h.json.contractHash }))
+  writeFileSync(join(runDir, 'v.json'), JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'feature/US-42', phase: 'r1-g1', skill: 'red-verify', inputHead: base, verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node test/a.test.js', exitCode: 1, observed: 'Error: FAIL' }], findings: [], sealed: true, snapshot: seal.json.snapshot, contractHash: h.json.contractHash }))
   assert.equal(node(main, cycle, 'publish', '--dir', runDir, '--file', join(runDir, 'v.json'), '--phase', 'r1-g1', '--skill', 'red-verify', '--workflowVersion', '3.0.0', '--predecessor', 'r1-g1-red-spec').json.published, true)
   const r = node(main, cycle, 'resolve', '--dir', runDir, '--workflowVersion', '3.0.0', '--policy', '{"maxFixRounds":3,"redRepairs":1,"greenRetries":1,"reviewers":1}', '--entry', 'pr', '--pr', '7').json
   assert.equal(r.next.step, 'green')
@@ -184,7 +184,7 @@ test('TC-07: the coordinator predicate and the installed sealer refuse the same 
     [join(runDir, 'partial.json'), true, 'contract-not-json'],
   ]) {
     assert.equal(isContractPath(p), coordinatorAccepts, `coordinator on ${p}`)
-    const r = node(worktree, snapshot, 'seal', '--pr', '7', '--phase', 'r1-g1', '--base', base, '--contract', p, '--root', main)
+    const r = node(worktree, snapshot, 'seal', '--pr', '7', '--phase', 'r1-g1', '--base', base, '--contract', p, '--root', main, '--static-gates', '[]')
     assert.equal(r.status, 1, p)
     assert.equal(r.json.reason, reason, `${p}: ${r.stdout}`)
   }
@@ -244,7 +244,7 @@ test('TC-08 / TC-14: the installed scripts run outside the monorepo cwd — no r
   write(worktree, 'notes.txt', 'unknown work\n')
   const contractPath = join(runDir, 'c.json')
   writeFileSync(contractPath, JSON.stringify({ sourceOfTruth: 's', fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/a.js'] }, redTests: [{ file: 'test/a.test.js', sha256: `sha256:${sh(worktree, 'shasum', '-a', '256', 'test/a.test.js').split(' ')[0]}`, command: 'x', observed: 'FAIL' }], testExempt: false }))
-  const r = node(worktree, snapshot, 'seal', '--pr', '7', '--phase', 'r1-g1', '--base', base, '--contract', contractPath, '--root', main).json
+  const r = node(worktree, snapshot, 'seal', '--pr', '7', '--phase', 'r1-g1', '--base', base, '--contract', contractPath, '--root', main, '--static-gates', '[]').json
   assert.equal(r.reason, 'dirty-outside-contract')
   assert.deepEqual(r.paths.sort(), ['notes.txt', 'src/a.js'])
   assert.ok(existsSync(join(worktree, 'notes.txt')) && readFileSync(join(worktree, 'src/a.js'), 'utf8') === 'dirty production\n', 'the refusal deleted or reset nothing')
@@ -270,7 +270,7 @@ test('TC-08: with GIT_DIR / GIT_WORK_TREE inherited from a hook and pointing at 
   write(worktree, 'test/a.test.js', 'changed\n')
   const contractPath = join(runDir, 'c.json')
   writeFileSync(contractPath, JSON.stringify({ sourceOfTruth: 's', fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/a.js'] }, redTests: [{ file: 'test/a.test.js', sha256: `sha256:${sh(worktree, 'shasum', '-a', '256', 'test/a.test.js').split(' ')[0]}`, command: 'x', observed: 'FAIL' }], testExempt: false }))
-  const r = spawnSync(process.execPath, [installed('pair-workflow-red-verify/scripts/red-snapshot.mjs'), 'seal', '--pr', '7', '--phase', 'r1-g1', '--base', base, '--contract', contractPath, '--root', main], { cwd: worktree, encoding: 'utf8', env: hostile })
+  const r = spawnSync(process.execPath, [installed('pair-workflow-red-verify/scripts/red-snapshot.mjs'), 'seal', '--pr', '7', '--phase', 'r1-g1', '--base', base, '--contract', contractPath, '--root', main, '--static-gates', '[]'], { cwd: worktree, encoding: 'utf8', env: hostile })
   assert.equal(JSON.parse(r.stdout).sealed, true, r.stdout + r.stderr)
   assert.equal(git(worktree, 'rev-list', '--count', `${base}..HEAD`), '1', 'the seal landed in the fixture worktree')
   // the custody dry-run suite itself, as the pre-push hook runs it

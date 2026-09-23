@@ -392,7 +392,7 @@ test('aggregateCohort: N=0 returns null rates, never 0% success; a mix of known/
 test('t9d-4: reduceCycleMetrics maps the host`s terminal status onto delivery/cohortState — escalate/failed-* blocked, interrupted/abandoned their own states; a ready terminal never overrides handoff evidence', () => {
   const { dir } = runDir()
   const file = join(dir, 'd.json')
-  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [{ id: 'r0-1', severity: 'Major', blocking: true, transition: 'open', location: 'x.js:1', description: 'd', head: SHA('c') }], custody: { verified: true, contractBreach: false }, readiness: { ready: false, blockers: ['r0-1'] }, attempt: 1, reviewer: 'x', partial: false, mode: 'full', tier: 'green', passes: ['general'], scopeChanges: [] }))
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [{ id: 'r0-1', severity: 'Major', blocking: true, transition: 'open', reproducer: { command: 'node --test x.test.mjs' }, location: 'x.js:1', description: 'd', head: SHA('c') }], custody: { verified: true, contractBreach: false }, readiness: { ready: false, blockers: ['r0-1'] }, attempt: 1, reviewer: 'x', partial: false, mode: 'full', tier: 'green', passes: ['general'], scopeChanges: [] }))
   publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.1' })
   const base = { dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'run-1' }
   const outcome = terminal => { const o = reduceCycleMetrics({ ...base, terminal }).outcome; return { delivery: o.delivery, cohortState: o.cohortState, reason: o.reason } }
@@ -642,7 +642,7 @@ test('F5: a migration record is not a review in the REDUCER either — migration
   assert.notEqual(only.outcome.cohortState, 'completed')
   assert.equal(only.execution.reviewExecutions, 0)
   // a real review with a blocking finding, THEN a migration record: the verdict still stands
-  reviewRecord(dir, 'r0', { findings: [{ id: 'r0-1', severity: 'Major', location: 'x', description: 'd', recommendation: 'r', blocking: true, transition: 'open', kind: 'defect' }] }, 2)
+  reviewRecord(dir, 'r0', { findings: [{ id: 'r0-1', severity: 'Major', location: 'x', description: 'd', recommendation: 'r', blocking: true, transition: 'open', reproducer: { command: 'node --test x.test.mjs' }, kind: 'defect' }] }, 2)
   migrationRecord(dir, 'm1', [{ runId: 'v3', dir: pred.dir, metricsPath: pred.metricsPath, handoffs: [{ name: 'r0-review-phase.json', sha256: `sha256:${'2'.repeat(64)}` }] }])
   const after = reduceCycleMetrics({ dir, repository: 'foomakers/pair', story: '42', branch: 'b', pr: 7, runId: 'v9', observations: [] })
   assert.equal(after.outcome.quality, 'not-converged')

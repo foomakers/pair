@@ -505,6 +505,10 @@ const RUN_ID = PARSED.runId
 // each handoff records which coordinator produced it. Bump on any change to the dispatch
 // contract (skill names, argument names, statuses).
 const WORKFLOW_VERSION = '4.0.1'
+// US-506 T-8 (AC-12): the bounded-commands guardrail every dispatch carries — spelled exactly as
+// `cycle-dispatch.mjs` exports it (the sandbox cannot import it); the packet-parity tests hold the
+// two byte-equal.
+const BOUNDED_COMMANDS = 'Run only foreground, time-bounded commands: never start a background process and never wait on one. In your own probes never spawn a real engine or a real `gh` — stub them, and test "engine missing" with a PATH that contains no engine directory at all.'
 
 // ── Pipeline configuration: what makes this engine reusable ─────────────────
 // Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved
@@ -989,6 +993,9 @@ const nextDefect = n => {
   // a revision with no base, which is a typed refusal here too, not a dispatch.
   if (n.step === 'prepare' && (n.mode === 'repair' || n.mode === 'revision') && (!n.contract || typeof n.contract !== 'object' || !String(n.contract.path ?? '').trim() || !SHA256_RE.test(String(n.contract.hash ?? ''))))
     return `${n.mode} without a complete contract descriptor`
+  // US-506: an `implement` of `a0` WITHOUT a contract is the fresh path (no up-front contract, the
+  // implementer works above the base). A contract that IS attached must still be complete.
+  if (n.step === 'implement' && n.contract === undefined && n.phase === 'a0') return null
   if (['validate', 'implement', 'green'].includes(n.step)) {
     if (!n.contract || typeof n.contract !== 'object' || !String(n.contract.path ?? '').trim()) return `${n.step} without contract.path`
     if (n.step !== 'validate' && !SHA40.test(String(n.contract.snapshot ?? ''))) return `${n.step} without a 40-hex contract.snapshot`
@@ -1663,7 +1670,7 @@ async function driveStory(story) {
   const common = () =>
     `$run=${runId} $story=${story.id} $branch=${story.branch} $worktree=${worktreePath} $base=${storyBase} $stacked=${stacked}${pr ? ` $pr=${pr}` : ''} $entry=${pr ? 'pr' : 'fresh'} $policy=${JSON.stringify(policy)} $inputs=${inputs}`
   const invoke = (skill, args) =>
-    `Invoke **${skill}** for story ${tag} with ${args} $workflowVersion=${WORKFLOW_VERSION}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines — its Step 0 resolves the durable cycle state and returns \`{ status: "redirect", next }\` when another step is due, spending no judgment. Do NOT read ${BLIND_PATHS} except the checkpoint and the run directory \`${runDir()}/\` the skill names; that directory lives in the MAIN checkout — the working directory you were started in, before any cd — never inside a story or review worktree. Do NOT merge.`
+    `Invoke **${skill}** for story ${tag} with ${args} $workflowVersion=${WORKFLOW_VERSION}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines — its Step 0 resolves the durable cycle state and returns \`{ status: "redirect", next }\` when another step is due, spending no judgment. Do NOT read ${BLIND_PATHS} except the checkpoint and the run directory \`${runDir()}/\` the skill names; that directory lives in the MAIN checkout — the working directory you were started in, before any cd — never inside a story or review worktree. Do NOT merge. ${BOUNDED_COMMANDS}`
   const notesArg = () => (story.notes ? ` $notes=${JSON.stringify(story.notes)}` : '')
   const findingsArg = list => (list && list.length ? ` $findings=${JSON.stringify(list.map(compactFinding))}` : '')
 
@@ -1723,7 +1730,7 @@ async function driveStory(story) {
     )
   const implement = n =>
     agentRetry(
-      invoke(SK.implementPhase, `${common()} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt ?? 1} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)} $title=${JSON.stringify(story.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg()}`),
+      invoke(SK.implementPhase, `${common()} $phase=${n.phase}${n.base ? ` $head=${n.base}` : ''} $attempt=${n.attempt ?? 1}${n.contract ? ` $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}` : ''} $title=${JSON.stringify(story.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg()}`),
       withModel('implementation', { agentType: 'pair-implementer', phase: 'Implement', label: `implement:${tag}${(n.attempt ?? 1) > 1 ? ` attempt ${n.attempt}` : ''}`, effort: 'high', schema: IMPLEMENT_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || (!!r && (r.status === 'ok' || r.status === 'failed') && typeof r.gatesPassed === 'boolean'),
     )
@@ -1789,7 +1796,9 @@ async function driveStory(story) {
     return errs
   }
 
-  let next = resuming ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
+  // US-506 AC-1: a fresh card has no up-front contract — its first stage is `implement / initial`,
+  // exactly what `cycle-state.mjs`'s `deriveNext([], …, { entry: 'fresh' })` answers.
+  let next = resuming ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
   const seen = new Set()
   let redirectsInARow = 0
   while (true) {
@@ -1847,7 +1856,16 @@ async function driveStory(story) {
       if (isPosInt(res.next?.pr)) pr = res.next.pr
       // A stage that redirects to the very step it was dispatched for did not do its work: refuse
       // to loop on it, and say so.
-      if (res.next.step === next.step && res.next.phase === next.phase) return result('failed-resume', { reason: `${stage} redirected to itself (${next.step}/${next.phase}) instead of running`, phase: next.phase })
+      // US-506 (AC-5): the one legitimate same-step redirect — the engine's contract-less first guess
+      // `implement a0` on a run whose `a0` is already SEALED: the stage hands back the durable `next`
+      // carrying the contract, and the re-dispatch is a different packet (`$snapshot`, `$contract`).
+      const bindsContract = !!res.next.contract && !next.contract
+      if (res.next.step === next.step && res.next.phase === next.phase && !bindsContract) return result('failed-resume', { reason: `${stage} redirected to itself (${next.step}/${next.phase}) instead of running`, phase: next.phase })
+      // A redirect did no work and spent no judgment: the step it was dispatched for may still be
+      // due LATER in the same run (US-506: the engine's first guess is `implement a0`, and a run
+      // directory on the old `a0` path redirects it to `prepare a0` and reaches that same
+      // `implement a0` after the seal). The consecutive-redirect cap still bounds a real loop.
+      seen.delete(key)
       storyMetrics.redirects++
       METRICS.redirects++
       if (++redirectsInARow >= CYCLE_CAPS.consecutiveRedirects) return result('failed-resume', { reason: 'three consecutive redirects — the durable state and the dispatched step disagree' })

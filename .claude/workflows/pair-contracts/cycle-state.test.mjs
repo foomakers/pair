@@ -152,7 +152,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, predecessorEvidence, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions, discoverScopeDecisions, withLock } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, predecessorEvidence, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions, discoverScopeDecisions, withLock, supersede, decide } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
 const V = '3.0.0'
@@ -195,13 +195,18 @@ function handoff(dir, phase, skill, fields, { pr = 7, predecessor, attempt } = {
   assert.equal(out.published, true, JSON.stringify(out))
   return out
 }
+// US-506 AC7: a contract attempt beyond the first is its own file, `<phase>-red-contract.attempt-N.json`.
+const contractFileOf = (phase, attempt = 1) => `/abs/${phase}-red-contract${attempt > 1 ? `.attempt-${attempt}` : ''}.json`
 const redSpec = (dir, phase, extra = {}, opts) =>
-  handoff(dir, phase, 'red-spec', { status: 'red', mode: phase === 'a0' ? 'initial' : 'remediation', contractPath: `/abs/${phase}-red-contract.json`, contractHash: `sha256:${'1'.repeat(64)}`, ...extra }, opts)
+  handoff(dir, phase, 'red-spec', { status: 'red', mode: phase === 'a0' ? 'initial' : 'remediation', contractPath: contractFileOf(phase, opts?.attempt ?? extra.attempt), contractHash: `sha256:${'1'.repeat(64)}`, ...extra }, opts)
+// US-506 AC10: a validated contract carries the execution evidence of its rows.
+const EXECUTED = [{ rowId: 'row-1', baseline: 'red', command: 'node --test test/a.test.mjs', exitCode: 1, observed: 'FAIL 1 of 1' }]
 const redVerify = (dir, phase, extra = {}, opts) =>
-  handoff(dir, phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, ...extra }, opts)
+  handoff(dir, phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, reproduced: EXECUTED, ...extra }, opts)
 const review = (dir, phase, extra = {}, opts) =>
   handoff(dir, phase, 'review-phase', { reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') }, mode: 'first', ...extra }, opts)
-const finding = (id, extra = {}) => ({ id, severity: 'Major', location: 'src/a.ts:1', description: 'wrong', recommendation: 'fix', blocking: true, transition: 'open', kind: 'defect', ...extra })
+// US-506 AC3: an OPEN finding is evidenced — the default carries a reproducer (a plain command).
+const finding = (id, extra = {}) => ({ id, severity: 'Major', location: 'src/a.ts:1', description: 'wrong', recommendation: 'fix', blocking: true, transition: 'open', kind: 'defect', reproducer: { command: 'node --test test/a.test.mjs' }, ...extra })
 
 // ── publish: atomic, sequenced, predecessor-checked, never overwrites a newer handoff ────────
 test('publish: writes <phase>-<skill>.json atomically with a monotonic seq and the envelope stamped', () => {
@@ -325,7 +330,8 @@ test('resolve: an empty run directory is `empty`, and the entry step depends on 
   const fresh = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
   assert.equal(fresh.status, 'empty')
   // US-486 AC-7: `context` travels with every transition — the first stage of a role is `fresh`.
-  assert.deepEqual(fresh.next, { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1, context: 'fresh' })
+  // US-506 AC1: a fresh card has no up-front contract — the cycle starts at `implement / initial`.
+  assert.deepEqual(fresh.next, { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1, context: 'fresh' })
   const resumed = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr' })
   assert.deepEqual(resumed.next, { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1, context: 'fresh' })
 })
@@ -413,7 +419,7 @@ test('resolve: a rejected contract goes back to preparation as a REPAIR carrying
   assert.equal(r.next.attempt, 2)
   assert.deepEqual(r.next.rejection, rejection)
   // repair published as attempt 2, rejected again
-  handoff(dir, 'r1-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: '/abs/r1-g1-red-contract.json', contractHash: `sha256:${'3'.repeat(64)}`, attempt: 2 }, { predecessor: 'r1-g1-red-verify' })
+  handoff(dir, 'r1-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: '/abs/r1-g1-red-contract.attempt-2.json', contractHash: `sha256:${'3'.repeat(64)}`, attempt: 2 }, { predecessor: 'r1-g1-red-verify' })
   publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-verify', inputHead: SHA('a'), verified: false, findings: rejection, sealed: false }), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V, attempt: 2 })
   r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.equal(r.status, 'blocked')
@@ -813,10 +819,10 @@ test('publish --pr: the PR the cycle is bound to is stamped into the envelope; a
   assert.equal(JSON.parse(readFileSync(join(dir, 'a0-red-spec.json'), 'utf8')).pr, 483)
   // a contradicting draft is refused
   file = join(dir, 'd2.json')
-  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 484, branch: 'feature/US-42', phase: 'a0', skill: 'red-verify', inputHead: SHA('a'), verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}` }))
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 484, branch: 'feature/US-42', phase: 'a0', skill: 'red-verify', inputHead: SHA('a'), verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}` }))
   assert.deepEqual(publish({ dir, file, phase: 'a0', skill: 'red-verify', workflowVersion: V, pr: 483 }), { published: false, reason: 'pr-mismatch', stated: 484, pr: 483 })
   // a flag contradicting the run's earlier handoff is refused too
-  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', branch: 'feature/US-42', phase: 'a0', skill: 'red-verify', inputHead: SHA('a'), verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}` }))
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', branch: 'feature/US-42', phase: 'a0', skill: 'red-verify', inputHead: SHA('a'), verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}` }))
   out = publish({ dir, file, phase: 'a0', skill: 'red-verify', workflowVersion: V, pr: 484 })
   assert.deepEqual(out, { published: false, reason: 'pr-mismatch', stated: 483, pr: 484, source: 'earlier-handoff' })
   assert.equal(publish({ dir, file, phase: 'a0', skill: 'red-verify', workflowVersion: V, pr: 0 }).reason, 'pr-invalid')
@@ -899,7 +905,7 @@ test('publish stamps the canonical card hash itself (cardHash via gh): the agent
   // gh down: the value is not comparable evidence
   process.env.FAKE_GH_FAIL = '1'
   try {
-    writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-verify', inputHead: SHA('a'), verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, acHash: `sha256:${'a'.repeat(64)}` }))
+    writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-verify', inputHead: SHA('a'), verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, acHash: `sha256:${'a'.repeat(64)}` }))
     assert.equal(publish({ dir, file, phase: 'a0', skill: 'red-verify', workflowVersion: V, predecessor: 'a0-red-spec' }).published, true)
     const v = JSON.parse(readFileSync(join(dir, 'a0-red-verify.json'), 'utf8'))
     assert.deepEqual({ acHash: v.acHash, source: v.acHashSource, unverified: v.acHashUnverified }, { acHash: undefined, source: undefined, unverified: `sha256:${'a'.repeat(64)}` })
@@ -922,7 +928,7 @@ test('readHandoffs ignores contracts, drafts, locks and the attempt suffix is pa
   assert.equal(list[0].name, 'a0-red-spec')
   assert.equal(list[0].attempt, 1)
   rmSync(join(dir, '.lock'), { recursive: true })
-  publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath: '/x', contractHash: 'sha256:' + '1'.repeat(64) }), phase: 'a0', skill: 'red-spec', workflowVersion: V, attempt: 2 })
+  publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath: '/x/a0-red-contract.attempt-2.json', contractHash: 'sha256:' + '1'.repeat(64) }), phase: 'a0', skill: 'red-spec', workflowVersion: V, attempt: 2 })
   const two = readHandoffs(dir)
   assert.deepEqual(two.map(h => h.attempt), [1, 2])
 })
@@ -2123,13 +2129,13 @@ test('T-20 (DT-03): a repair must verify every PRIOR closure assertion first —
   ]
   redVerify(dir, 'r1-g1', { verified: false, findings: rejection, sealed: false, snapshot: undefined }, { predecessor: 'r1-g1-red-spec' })
   // repair naming only row-1 in changedRows: refused before the write
-  let f = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: '/abs/r1-g1-red-contract.json', contractHash: `sha256:${'3'.repeat(64)}`, changedRows: ['row-1'] })
+  let f = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: '/abs/r1-g1-red-contract.attempt-2.json', contractHash: `sha256:${'3'.repeat(64)}`, changedRows: ['row-1'] })
   let out = publish({ dir, file: f, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, attempt: 2, predecessor: 'r1-g1-red-verify' })
   assert.equal(out.published, false)
   assert.equal(out.reason, 'repair-incomplete:row-2')
   assert.equal(existsSync(join(dir, 'r1-g1-red-spec.attempt-2.json')), false)
   // both rows named: publishes
-  f = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: '/abs/r1-g1-red-contract.json', contractHash: `sha256:${'3'.repeat(64)}`, changedRows: ['row-1', 'row-2'] })
+  f = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: '/abs/r1-g1-red-contract.attempt-2.json', contractHash: `sha256:${'3'.repeat(64)}`, changedRows: ['row-1', 'row-2'] })
   out = publish({ dir, file: f, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, attempt: 2, predecessor: 'r1-g1-red-verify' })
   assert.equal(out.published, true, JSON.stringify(out))
   assert.deepEqual(JSON.parse(readFileSync(join(dir, 'r1-g1-red-spec.attempt-2.json'), 'utf8')).changedRows, ['row-1', 'row-2'])
@@ -2137,7 +2143,7 @@ test('T-20 (DT-03): a repair must verify every PRIOR closure assertion first —
   const { dir: d2 } = runDir()
   redSpec(d2, 'a0')
   redVerify(d2, 'a0', { verified: false, findings: [{ location: 'x', severity: 'Minor', description: 'd', recommendation: 'r' }], sealed: false, snapshot: undefined }, { predecessor: 'a0-red-spec' })
-  const f2 = writeDraft(d2, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: '/abs/a0-red-contract.json', contractHash: `sha256:${'4'.repeat(64)}` })
+  const f2 = writeDraft(d2, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: '/abs/a0-red-contract.attempt-2.json', contractHash: `sha256:${'4'.repeat(64)}` })
   assert.equal(publish({ dir: d2, file: f2, phase: 'a0', skill: 'red-spec', workflowVersion: V, attempt: 2, predecessor: 'a0-red-verify' }).published, true)
 })
 
@@ -2513,7 +2519,7 @@ function legacySealedChain(root, runId = 'v4', { hash = `sha256:${'1'.repeat(64)
   mkdirSync(d, { recursive: true })
   const base = { schemaVersion: 2, workflowVersion: '3.0.13', run: runId, story: '42', pr: 7, branch: 'b', phase, inputHead: SHA('a') }
   writeFileSync(join(d, `${phase}-red-spec.json`), JSON.stringify({ ...base, skill: 'red-spec', status: 'red', mode: 'revision', contractPath: join(d, `${phase}-red-contract.json`), contractHash: hash, seq: 1 }, null, 2) + '\n')
-  writeFileSync(join(d, `${phase}-red-verify.json`), JSON.stringify({ ...base, skill: 'red-verify', verified: true, sealed: true, snapshot: SHA('e'), contractHash: hash, seq: 2 }, null, 2) + '\n')
+  writeFileSync(join(d, `${phase}-red-verify.json`), JSON.stringify({ ...base, skill: 'red-verify', verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], sealed: true, snapshot: SHA('e'), contractHash: hash, seq: 2 }, null, 2) + '\n')
   return d
 }
 function boundCycle(root, legacyDir, runId = 'v5') {
@@ -2617,7 +2623,7 @@ test('F1 residual: the same rule applies to the CURRENT run — a sealed verify 
   redSpec(dir, 'a0', { mode: 'initial', contractHash: `sha256:${'9'.repeat(64)}` })
   redVerify(dir, 'a0', { contractHash: `sha256:${'9'.repeat(64)}` })
   // a seal for a phase that has no red-spec of its own: the descriptor does not exist
-  handoff(dir, 'a0-rev2', 'red-verify', { verified: true, sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}` })
+  handoff(dir, 'a0-rev2', 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}` })
   review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r0-1')] })
   contradiction(dir, 'r1-g1')
   const n = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next
@@ -2887,7 +2893,7 @@ test('T-29 (DT-38): a reintroduction after discharge REOPENS the same risk id an
   assert.deepEqual(resolve({ dir, workflowVersion: V, policy: REOPEN_POLICY, entry: 'pr', pr: 7 }).activeRegressionRisks, [])
   // a later round reintroduces it: the SAME id comes back active
   handoff(dir, 'r3-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: '/abs/c.json', contractHash: `sha256:${'1'.repeat(64)}`, groupId: 'r3-g1', remediationBatchId: 'r3' })
-  handoff(dir, 'r3-g1', 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, remediationBatchId: 'r3' })
+  handoff(dir, 'r3-g1', 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, remediationBatchId: 'r3' })
   handoff(dir, 'r3-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('3'), evidenceLedger: [], remediationBatchId: 'r3' })
   review(dir, 'r4', { mode: 're-review', reviewedHead: SHA('3'), verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [regressionFinding('r1-9', { regressionRisk: risk({ introducedByRemediationBatchId: 'r3', lastCleanReviewedHead: H2, firstFailingHead: SHA('3') }) })], invalidatedBatchId: 'r3' })
   const back = resolve({ dir, workflowVersion: V, policy: REOPEN_POLICY, entry: 'pr', pr: 7 })
@@ -3166,7 +3172,7 @@ test('F-RR-06: completion is scoped to the batch lineage — a later unrelated d
   assert.equal(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).counters.completedCycles, 1)
   // a later, unrelated round finds a NEW defect: r1 stays completed
   handoff(dir, 'r2-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: '/abs/c.json', contractHash: `sha256:${'1'.repeat(64)}`, groupId: 'r2-g1', remediationBatchId: 'r2', plan: { groups: [{ groupId: 'r2-g1', findings: ['r1-1'], owner: 'o', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] } })
-  handoff(dir, 'r2-g1', 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, remediationBatchId: 'r2' })
+  handoff(dir, 'r2-g1', 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, remediationBatchId: 'r2' })
   handoff(dir, 'r2-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: H2, evidenceLedger: [], remediationBatchId: 'r2' })
   review(dir, 'r2', { mode: 're-review', reviewedHead: H2, verdict: 'CHANGES-REQUESTED', readiness: { ready: false }, findings: [finding('r2-1')] })
   const after = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
@@ -3284,7 +3290,7 @@ test('V4 (F-RR-06): handoffs written without `seq` still yield a completed cycle
   // exactly the shape a migrated run has: no `seq` on any handoff
   write('r0-review-phase.json', { phase: 'r0', skill: 'review-phase', reviewedHead: H0, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1')], custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 'first' })
   write('r1-g1-red-spec.json', { phase: 'r1-g1', skill: 'red-spec', status: 'red', mode: 'remediation', contractPath: '/abs/c.json', contractHash: `sha256:${'1'.repeat(64)}`, groupId: 'r1-g1', remediationBatchId: 'r1', plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'o', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] } })
-  write('r1-g1-red-verify.json', { phase: 'r1-g1', skill: 'red-verify', verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, remediationBatchId: 'r1' })
+  write('r1-g1-red-verify.json', { phase: 'r1-g1', skill: 'red-verify', verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, remediationBatchId: 'r1' })
   write('r1-g1-green-fix.json', { phase: 'r1-g1', skill: 'green-fix', fixed: true, needsHumanDecision: false, outputHead: H1, evidenceLedger: [], remediationBatchId: 'r1' })
   write('r1-review-phase.json', { phase: 'r1', skill: 'review-phase', reviewedHead: H1, verdict: 'APPROVED', findings: [finding('r0-1', { transition: 'resolved', blocking: false, evidence: 'closed' })], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: H1 }, mode: 're-review' })
   const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
@@ -4023,4 +4029,435 @@ test('worked: an entry with no evidence and no declared reason is refused before
   // a design decision no command can demonstrate is legal WITH its reason
   const ok = publish({ dir, file: draft({ worked: [workedNote({ evidence: undefined, notVerifiable: true, rationale: 'a naming convention; no command proves it' })] }), phase: 'r1', skill: 'review-phase', workflowVersion: V })
   assert.equal(ok.published, true, JSON.stringify(ok))
+})
+
+// ══ US-506 T-1 — a fresh card starts at `implement / initial`; runs holding `a0` handoffs keep the old path ══
+// AC1: no `prepare`/`validate a0` for a fresh card. AC4: review findings keep prepare → validate → green.
+// AC5: a run directory that already holds `a0` contract handoffs finishes under the old transitions.
+const implementOk = (dir, extra = {}, opts = {}) => handoff(dir, 'a0', 'implement-phase', { status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true, ...extra }, opts)
+const pick = (n, ...ks) => Object.fromEntries(ks.map(k => [k, n[k]]))
+
+test('US-506 T-1 w1: empty + fresh ⇒ implement/initial a0 with no contract; empty + pr ⇒ verify r0 (unchanged)', () => {
+  const { dir } = runDir()
+  const fresh = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(fresh.next, 'step', 'mode', 'phase', 'round', 'attempt'), { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 })
+  assert.equal(fresh.next.contract, undefined, 'a fresh card is implemented above the base, never against a contract')
+  assert.equal(deriveNext([], POLICY, { entry: 'fresh' }).step, 'implement')
+  const pr = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(pick(pr.next, 'step', 'mode', 'phase'), { step: 'verify', mode: 'first', phase: 'r0' })
+})
+
+test('US-506 T-1 w2: the fresh path — implement (no predecessor) → verify r0 → a blocking finding keeps the test-first remediation path', () => {
+  const { dir } = runDir()
+  implementOk(dir)
+  let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'phase', 'base', 'pr'), { step: 'verify', mode: 'first', phase: 'r0', base: SHA('c'), pr: 7 })
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1')], acAssessment: [acRow('AC1', { assessment: 'weak', findingId: 'r0-1' })] }, { predecessor: 'a0-implement-phase' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'phase'), { step: 'prepare', mode: 'remediation', phase: 'r1-g1' })
+  redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'x', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] } })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'phase'), { step: 'validate', phase: 'r1-g1' })
+  redVerify(dir, 'r1-g1', {}, { predecessor: 'r1-g1-red-spec' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'phase'), { step: 'green', phase: 'r1-g1' })
+  assert.equal(r.next.contract.snapshot, SHA('b'))
+})
+
+test('US-506 T-1 w3: a fresh implement with a red gate retries on the same phase WITHOUT a contract, then is failed-implement', () => {
+  const { dir } = runDir()
+  implementOk(dir, { gatesPassed: false })
+  let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'phase', 'attempt', 'pr'), { step: 'implement', mode: 'retry', phase: 'a0', attempt: 2, pr: 7 })
+  assert.equal(r.next.contract, undefined)
+  implementOk(dir, { gatesPassed: false, outputHead: SHA('d') }, { attempt: 2 })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual([r.next.step, r.next.reason, r.next.budget], ['blocked', 'failed-implement', 'greenRetries'])
+})
+
+test('US-506 T-1 w4: on a fresh run a `contract-gap` or `approved-test-failing` naming `a0` has no seal to revise — it routes the ordinary remediation', () => {
+  for (const kind of ['contract-gap', 'approved-test-failing']) {
+    const { dir } = runDir()
+    implementOk(dir)
+    review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1', { kind, groupId: 'a0' })], acAssessment: [acRow('AC1', { assessment: 'weak', findingId: 'r0-1' })] }, { predecessor: 'a0-implement-phase' })
+    const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+    assert.deepEqual(pick(r.next, 'step', 'mode', 'phase'), { step: 'prepare', mode: 'remediation', phase: 'r1-g1' }, kind)
+  }
+})
+
+test('US-506 T-1 c1 (control, AC5): a run holding sealed `a0` handoffs keeps the old transitions to verify, a contract-gap still revises a0', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0')
+  let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'phase'), { step: 'validate', phase: 'a0' })
+  redVerify(dir, 'a0', {}, { predecessor: 'a0-red-spec' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'phase'), { step: 'implement', mode: 'initial', phase: 'a0' })
+  assert.equal(r.next.contract.snapshot, SHA('b'))
+  implementOk(dir, {}, { predecessor: 'a0-red-verify' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'phase'), { step: 'verify', mode: 'first', phase: 'r0' })
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1', { kind: 'contract-gap', groupId: 'a0' })] }, { predecessor: 'a0-implement-phase' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'phase'), { step: 'prepare', mode: 'revision', phase: 'a0-rev2' })
+})
+
+// ══ US-506 T-2 — the implement handoff of a fresh run: no snapshot, no predecessor, NO self-review ══
+test('US-506 T-2 w3: a fresh-run implement handoff publishes with no snapshot and no predecessor', () => {
+  const { dir } = runDir()
+  const out = implementOk(dir)
+  assert.equal(out.published, true)
+  const written = JSON.parse(readFileSync(join(dir, 'a0-implement-phase.json'), 'utf8'))
+  assert.equal(written.snapshot, undefined)
+  assert.equal(written.predecessor, undefined)
+})
+
+test('US-506 T-2 w4 (AC2): the self-review is informal and UNRECORDED — an implement handoff carrying any self-review field is refused before the write', () => {
+  const { dir } = runDir()
+  for (const key of ['selfReview', 'self_review', 'selfReviewFindings', 'SelfReview']) {
+    const file = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'implement-phase', inputHead: SHA('a'), status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true, [key]: { findings: ['fixed a typo'] } })
+    const out = publish({ dir, file, phase: 'a0', skill: 'implement-phase', workflowVersion: V })
+    assert.equal(out.published, false, key)
+    assert.equal(out.reason, `self-review-not-recordable:${key}`)
+  }
+  assert.equal(existsSync(join(dir, 'a0-implement-phase.json')), false)
+})
+
+// ══ US-506 T-3 — the verify judges the tests per AC; every finding is real and evidenced ══
+const evidenced = (id, extra = {}) => finding(id, { reproducer: { command: 'pnpm exec vitest run src/a.test.ts -t empty' }, ...extra })
+const acRow = (ac, extra = {}) => ({ ac, tests: [`src/a.test.ts > ${ac}`], assessment: 'proven', ...extra })
+
+test('US-506 T-3 w1 (AC3): an OPEN finding with neither a reproducer nor a concrete failure scenario is refused — finding-unevidenced', () => {
+  const { dir } = runDir()
+  const bare = { id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'I would have structured this differently', recommendation: 'refactor', blocking: true, transition: 'open', kind: 'defect' }
+  const file = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [bare], custody: { verified: true, contractBreach: false }, readiness: { ready: false, remoteHead: SHA('c') }, mode: 'first' })
+  const out = publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: V })
+  assert.deepEqual([out.published, out.reason], [false, 'finding-unevidenced:r0-1'])
+  // an empty scenario is no scenario
+  const hollow = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [{ ...bare, failureScenario: { input: ' ', actual: '', expected: 'x' } }], custody: { verified: true, contractBreach: false }, readiness: { ready: false, remoteHead: SHA('c') }, mode: 'first' })
+  assert.equal(publish({ dir, file: hollow, phase: 'r0', skill: 'review-phase', workflowVersion: V }).reason, 'finding-unevidenced:r0-1')
+  assert.equal(existsSync(join(dir, 'r0-review-phase.json')), false)
+})
+
+test('US-506 T-3 c1 (control): a reproducer (command or test) or a concrete failure scenario evidences a finding; closures and questions need none', () => {
+  for (const f of [
+    evidenced('r0-1'),
+    finding('r0-1', { reproducer: { testRef: 'src/a.test.ts#empty-form' } }),
+    finding('r0-1', { failureScenario: { input: 'parse("")', actual: 'throws TypeError', expected: 'returns []' } }),
+  ]) {
+    const { dir } = runDir()
+    const out = review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [f] })
+    assert.equal(out.published, true)
+  }
+  const { dir } = runDir()
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [evidenced('r0-1')] })
+  // a closure is a transition on a finding already evidenced; a question claims no defect
+  const out = review(dir, 'r1', { findings: [{ ...finding('r0-1'), transition: 'resolved', blocking: false }, { id: 'r1-1', severity: 'Questions', location: 'src/a.ts:2', description: 'why a Map here?', recommendation: 'explain', blocking: false, transition: 'open', kind: 'question' }], mode: 're-review' }, { predecessor: 'r0-review-phase' })
+  assert.equal(out.published, true)
+})
+
+test('US-506 T-3 w2 (AC3): the FIRST verify of a fresh-card PR names, per AC, the test that proves it — refused without it; a weak or missing test is an ordinary finding', () => {
+  const draftFor = (dir, extra) => writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false, contract: 'none' }, readiness: { ready: true, remoteHead: SHA('c') }, mode: 'first', ...extra })
+  const pub = (dir, extra) => publish({ dir, file: draftFor(dir, extra), phase: 'r0', skill: 'review-phase', workflowVersion: V, predecessor: 'a0-implement-phase' })
+  const fresh = () => {
+    const { dir } = runDir()
+    implementOk(dir)
+    return dir
+  }
+  assert.equal(pub(fresh(), {}).reason, 'acAssessment-missing')
+  assert.equal(pub(fresh(), { acAssessment: [] }).reason, 'acAssessment-missing')
+  assert.equal(pub(fresh(), { acAssessment: [{ ac: 'AC1', assessment: 'proven' }] }).reason, 'acAssessment-invalid:AC1')
+  assert.equal(pub(fresh(), { acAssessment: [acRow('AC1', { assessment: 'great' })] }).reason, 'acAssessment-invalid:AC1')
+  // `weak`/`missing` is a FINDING, never a note: it must name an open finding of this review
+  assert.equal(pub(fresh(), { acAssessment: [acRow('AC1', { assessment: 'weak' })] }).reason, 'acAssessment-finding-missing:AC1')
+  assert.equal(pub(fresh(), { acAssessment: [acRow('AC1', { assessment: 'missing', tests: [], findingId: 'r0-9' })] }).reason, 'acAssessment-finding-missing:AC1')
+  const ok = pub(fresh(), { verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('c') }, findings: [evidenced('r0-1', { description: 'AC2 is asserted with toHaveReturnedWith on an async mock — passes for any value' })], acAssessment: [acRow('AC1'), acRow('AC2', { assessment: 'weak', findingId: 'r0-1' })] })
+  assert.equal(ok.published, true, JSON.stringify(ok))
+  assert.equal(pub(fresh(), { acAssessment: [acRow('AC1')] }).published, true)
+})
+
+test('US-506 T-3 c2 (control, AC4/AC5): a PR-entry cycle and a run on the sealed `a0` path keep today\'s first review — no per-AC table is demanded', () => {
+  const { dir } = runDir()
+  assert.equal(review(dir, 'r0', {}).published, true)
+  const { dir: legacy } = runDir()
+  redSpec(legacy, 'a0')
+  redVerify(legacy, 'a0', {}, { predecessor: 'a0-red-spec' })
+  implementOk(legacy, {}, { predecessor: 'a0-red-verify' })
+  assert.equal(review(legacy, 'r0', {}, { predecessor: 'a0-implement-phase' }).published, true)
+})
+
+// ══ US-506 T-4 — a repair is checked against the LATEST rejection; every contract attempt is its own file ══
+// US-487's run: attempt 2's repair was checked against attempt 1's rejection (a cumulative `changedRows`
+// was forced), and a repair wrote over the contract the rejection named.
+const writeContract = (dir, name, body) => {
+  const path = join(dir, name)
+  writeFileSync(path, JSON.stringify(body))
+  return { path, hash: contractHash(body) }
+}
+const rejectionOf = rows => rows.map(rowId => ({ rowId, location: 'test/a.test.ts:3', severity: 'Major', description: `row ${rowId} cannot fail`, recommendation: 'fix the row' }))
+function rejectedTwice() {
+  const { dir } = runDir()
+  const c1 = writeContract(dir, 'r1-g1-red-contract.json', { attempt: 1, rows: ['row-1', 'row-2'] })
+  redSpec(dir, 'r1-g1', { contractPath: c1.path, contractHash: c1.hash, plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'x', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] } })
+  redVerify(dir, 'r1-g1', { verified: false, sealed: false, snapshot: undefined, findings: rejectionOf(['row-1']) }, { predecessor: 'r1-g1-red-spec' })
+  const c2 = writeContract(dir, 'r1-g1-red-contract.attempt-2.json', { attempt: 2, rows: ['row-1', 'row-2'] })
+  redSpec(dir, 'r1-g1', { contractPath: c2.path, contractHash: c2.hash, changedRows: ['row-1'], mode: 'repair' }, { predecessor: 'r1-g1-red-verify', attempt: 2 })
+  redVerify(dir, 'r1-g1', { verified: false, sealed: false, snapshot: undefined, findings: rejectionOf(['row-2']) }, { predecessor: 'r1-g1-red-spec', attempt: 2 })
+  return { dir, c1, c2 }
+}
+const repairDraft = (dir, extra) => writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', ...extra })
+
+test('US-506 T-4 w1 (AC6): a repair is checked against the MOST RECENT rejection — never the first one', () => {
+  const { dir } = rejectedTwice()
+  const c3 = writeContract(dir, 'r1-g1-red-contract.attempt-3.json', { attempt: 3 })
+  // answering attempt 2's rejection (row-2) is complete — attempt 1's row-1 was already repaired
+  const ok = publish({ dir, file: repairDraft(dir, { contractPath: c3.path, contractHash: c3.hash, changedRows: ['row-2'] }), phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r1-g1-red-verify', attempt: 3 })
+  assert.equal(ok.published, true, JSON.stringify(ok))
+  // …and answering only the FIRST rejection is incomplete against the latest one
+  const { dir: d2 } = rejectedTwice()
+  const c3b = writeContract(d2, 'r1-g1-red-contract.attempt-3.json', { attempt: 3 })
+  const stale = publish({ dir: d2, file: repairDraft(d2, { contractPath: c3b.path, contractHash: c3b.hash, changedRows: ['row-1'] }), phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r1-g1-red-verify', attempt: 3 })
+  assert.deepEqual([stale.published, stale.reason], [false, 'repair-incomplete:row-2'])
+})
+
+test('US-506 T-4 w2 (AC7): a contract attempt beyond the first is written as `<phase>-red-contract.attempt-N.json` — reusing an earlier attempt\'s file is refused', () => {
+  const { dir, c1 } = rejectedTwice()
+  const reuse = publish({ dir, file: repairDraft(dir, { contractPath: c1.path, contractHash: c1.hash, changedRows: ['row-2'] }), phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r1-g1-red-verify', attempt: 3 })
+  assert.deepEqual([reuse.published, reuse.reason], [false, 'contract-attempt-name:r1-g1-red-contract.attempt-3.json'])
+  const odd = writeContract(dir, 'repair.json', { attempt: 3 })
+  assert.equal(publish({ dir, file: repairDraft(dir, { contractPath: odd.path, contractHash: odd.hash, changedRows: ['row-2'] }), phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r1-g1-red-verify', attempt: 3 }).reason, 'contract-attempt-name:r1-g1-red-contract.attempt-3.json')
+})
+
+test('US-506 T-4 w3 (AC7): a repair that OVERWROTE the contract a rejection names is refused, naming the file', () => {
+  const { dir, c1 } = rejectedTwice()
+  writeFileSync(c1.path, JSON.stringify({ attempt: 1, rows: ['rewritten'] }))
+  const c3 = writeContract(dir, 'r1-g1-red-contract.attempt-3.json', { attempt: 3 })
+  const out = publish({ dir, file: repairDraft(dir, { contractPath: c3.path, contractHash: c3.hash, changedRows: ['row-2'] }), phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r1-g1-red-verify', attempt: 3 })
+  assert.deepEqual([out.published, out.reason], [false, 'contract-attempt-overwritten:r1-g1-red-contract.json'])
+})
+
+test('US-506 T-4 w4 (AC7): each rejection points at its OWN contract file, and `resolve` hands the repair the rejected attempt\'s own path and hash; attempt 1 survives', () => {
+  const { dir, c1, c2 } = rejectedTwice()
+  const v1 = JSON.parse(readFileSync(join(dir, 'r1-g1-red-verify.json'), 'utf8'))
+  const v2 = JSON.parse(readFileSync(join(dir, 'r1-g1-red-verify.attempt-2.json'), 'utf8'))
+  assert.equal(v1.contractPath, c1.path)
+  assert.equal(v2.contractPath, c2.path)
+  const r = resolve({ dir, workflowVersion: V, policy: { ...POLICY, redRepairs: 2 }, entry: 'pr', pr: 7 })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'attempt'), { step: 'prepare', mode: 'repair', attempt: 3 })
+  assert.deepEqual({ path: r.next.contract.path, hash: r.next.contract.hash }, { path: c2.path, hash: c2.hash })
+  assert.equal(contractHash(JSON.parse(readFileSync(c1.path, 'utf8'))), c1.hash, 'attempt 1 is intact')
+  // a rejection that names a contract other than the one it validated is refused; its own is accepted
+  const { dir: d3 } = runDir()
+  const k1 = writeContract(d3, 'r1-g1-red-contract.json', { attempt: 1 })
+  redSpec(d3, 'r1-g1', { contractPath: k1.path, contractHash: k1.hash })
+  const verdictNaming = contractPath => writeDraft(d3, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-verify', inputHead: SHA('a'), verified: false, sealed: false, findings: [], contractPath })
+  const other = publish({ dir: d3, file: verdictNaming(c1.path), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V, predecessor: 'r1-g1-red-spec' })
+  assert.deepEqual([other.published, other.reason], [false, 'contract-path-mismatch'])
+  assert.equal(publish({ dir: d3, file: verdictNaming(k1.path), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V, predecessor: 'r1-g1-red-spec' }).published, true)
+})
+
+// ══ US-506 T-5 — `supersede` sets an unvalidated attempt aside; `decide` records a human decision on an escalate ══
+// US-487: three handoffs were renamed by hand (a `_` prefix made them invisible to a directory listing) and
+// a review was re-run only to carry a maintainer's answer to `needsHumanDecision`.
+const listing = dir => readdirSync(dir).sort()
+const cliState = args => {
+  const r = spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8' })
+  return { status: r.status, json: JSON.parse(r.stdout.trim().split('\n').pop()) }
+}
+function unvalidatedRepair() {
+  const { dir } = runDir()
+  const c1 = writeContract(dir, 'a0-red-contract.json', { attempt: 1 })
+  redSpec(dir, 'a0', { contractPath: c1.path, contractHash: c1.hash })
+  redVerify(dir, 'a0', { verified: false, sealed: false, snapshot: undefined, findings: rejectionOf(['row-1']) }, { predecessor: 'a0-red-spec' })
+  const c2 = writeContract(dir, 'a0-red-contract.attempt-2.json', { attempt: 2 })
+  redSpec(dir, 'a0', { contractPath: c2.path, contractHash: c2.hash, changedRows: ['row-1'], mode: 'repair' }, { predecessor: 'a0-red-verify', attempt: 2 })
+  return { dir, c1, c2 }
+}
+const ON = new Date('2026-09-23T10:00:00Z')
+
+test('US-506 T-5 w1 (AC8): `supersede` sets an UNVALIDATED attempt aside — a prefix a listing shows and NAME_RE ignores — indexes it and reports the step now due', () => {
+  const { dir } = unvalidatedRepair()
+  assert.equal(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' }).next.step, 'validate')
+  const out = supersede({ dir, phase: 'a0', reason: 'built on a wrong maintainer note', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'fresh', now: ON })
+  assert.equal(out.superseded, true, JSON.stringify(out))
+  assert.deepEqual([out.from, out.to], ['a0-red-spec.attempt-2.json', 'superseded-2026-09-23-a0-red-spec.attempt-2.json'])
+  assert.equal(out.contract?.to, 'superseded-2026-09-23-a0-red-contract.attempt-2.json')
+  const files = listing(dir)
+  for (const f of ['superseded-2026-09-23-a0-red-spec.attempt-2.json', 'superseded-2026-09-23-a0-red-contract.attempt-2.json', 'maintainer-interventions.md', 'a0-red-spec.json', 'a0-red-verify.json', 'a0-red-contract.json']) assert.ok(files.includes(f), f)
+  assert.ok(!files.includes('a0-red-spec.attempt-2.json'))
+  assert.deepEqual(readHandoffs(dir).map(h => h.name), ['a0-red-spec', 'a0-red-verify'], 'invisible to NAME_RE, visible to a listing')
+  // the step the set-aside attempt had answered is due again, and the output says so
+  assert.deepEqual(pick(out.next, 'step', 'mode', 'phase', 'attempt'), { step: 'prepare', mode: 'repair', phase: 'a0', attempt: 2 })
+  const index = readFileSync(join(dir, 'maintainer-interventions.md'), 'utf8')
+  assert.match(index, /\| file \| what it is \| why it was set aside \| set aside by \| what supersedes it \|/)
+  assert.match(index, /\| `superseded-2026-09-23-a0-red-spec\.attempt-2\.json` \| a0 red-spec attempt 2 \(contract `sha256:[0-9a-f]{8}…`\), never validated \| built on a wrong maintainer note \| rucka, 2026-09-23 \| the step now due: prepare repair a0 attempt 2 \|/)
+  // a second set-aside appends a row to the same table
+  const again = unvalidatedRepair()
+  writeFileSync(join(again.dir, 'maintainer-interventions.md'), readFileSync(join(dir, 'maintainer-interventions.md')))
+  supersede({ dir: again.dir, phase: 'a0', reason: 'second', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'fresh', now: ON })
+  const rows = readFileSync(join(again.dir, 'maintainer-interventions.md'), 'utf8').split('\n').filter(l => l.startsWith('| `superseded-'))
+  assert.equal(rows.length, 2)
+  assert.equal(readFileSync(join(again.dir, 'maintainer-interventions.md'), 'utf8').match(/\| file \| what it is/g).length, 1, 'one table, not one per row')
+})
+
+test('US-506 T-5 w2 (AC8): a sealed attempt, a validated (rejected) attempt, an unknown phase or attempt get a typed refusal — nothing renamed', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0')
+  redVerify(dir, 'a0', {}, { predecessor: 'a0-red-spec' })
+  const before = listing(dir)
+  assert.equal(supersede({ dir, phase: 'a0', reason: 'r', by: 'rucka', workflowVersion: V }).reason, 'supersede-sealed')
+  assert.deepEqual(listing(dir), before)
+  const { dir: rejected } = runDir()
+  redSpec(rejected, 'a0')
+  redVerify(rejected, 'a0', { verified: false, sealed: false, snapshot: undefined, findings: [] }, { predecessor: 'a0-red-spec' })
+  const b2 = listing(rejected)
+  assert.equal(supersede({ dir: rejected, phase: 'a0', reason: 'r', by: 'rucka', workflowVersion: V }).reason, 'supersede-validated')
+  const { dir: d3 } = unvalidatedRepair()
+  const b3 = listing(d3)
+  assert.equal(supersede({ dir: d3, phase: 'r7-g1', reason: 'r', by: 'rucka', workflowVersion: V }).reason, 'supersede-not-found')
+  assert.equal(supersede({ dir: d3, phase: 'a0', attempt: 5, reason: 'r', by: 'rucka', workflowVersion: V }).reason, 'supersede-not-found')
+  assert.equal(supersede({ dir: d3, phase: 'a0', reason: '  ', by: 'rucka', workflowVersion: V }).reason, 'supersede-reason-missing')
+  assert.equal(supersede({ dir: d3, phase: 'a0', reason: 'r', by: '', workflowVersion: V }).reason, 'supersede-by-missing')
+  assert.deepEqual([listing(rejected), listing(d3)], [b2, b3])
+})
+
+test('US-506 T-5 w3 (AC8): the CLI `supersede` prints JSON — exit 0 when set aside, 1 on a typed refusal', () => {
+  const { dir } = unvalidatedRepair()
+  const ok = cliState(['supersede', '--dir', dir, '--phase', 'a0', '--reason', 'wrong note', '--by', 'rucka', '--workflowVersion', V, '--policy', JSON.stringify(POLICY), '--entry', 'fresh'])
+  assert.deepEqual([ok.status, ok.json.superseded, ok.json.next.step], [0, true, 'prepare'])
+  const refused = cliState(['supersede', '--dir', dir, '--phase', 'a0', '--reason', 'again', '--by', 'rucka', '--workflowVersion', V])
+  assert.deepEqual([refused.status, refused.json.reason], [1, 'supersede-validated'])
+})
+
+// US-506 F-5: the review names the decisions it owes (`humanDecisionIds`); the escalate stands until
+// every one is recorded.
+function escalatedReview(extra = {}) {
+  const { dir } = runDir()
+  review(dir, 'r0', { verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('c') }, needsHumanDecision: true, humanDecisionIds: ['r0-5', 'r0-15'], findings: [finding('r0-5'), finding('r0-15', { external: true })], ...extra })
+  return dir
+}
+test('US-506 T-5 w4 (AC8): `decide` records the maintainer\'s answer to `needsHumanDecision` as its OWN handoff — no rename, no review re-run — and `resolve` routes the remediation', () => {
+  const dir = escalatedReview()
+  const r0 = readFileSync(join(dir, 'r0-review-phase.json'), 'utf8')
+  assert.deepEqual(pick(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next, 'step', 'reason'), { step: 'blocked', reason: 'escalate' })
+  const out = decide({ dir, phase: 'r0', finding: 'r0-5', decision: 'option (a): AC14 amended on the card', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, now: ON })
+  assert.equal(out.decided, true, JSON.stringify(out))
+  // F-5: one of the TWO owed decisions is recorded — the escalate stands until the other one is
+  assert.deepEqual(pick(out.next, 'step', 'reason'), { step: 'blocked', reason: 'escalate' })
+  assert.deepEqual(out.pendingDecisions, ['r0-15'])
+  assert.equal(readFileSync(join(dir, 'r0-review-phase.json'), 'utf8'), r0, 'the review is untouched')
+  assert.deepEqual(readHandoffs(dir).map(h => [h.name, h.attempt]), [['r0-review-phase', 1], ['r0-review-phase', 2]])
+  const rec = JSON.parse(readFileSync(join(dir, 'r0-review-phase.attempt-2.json'), 'utf8'))
+  assert.equal(rec.recordType, 'decision')
+  assert.equal(rec.needsHumanDecision, true, 'r0-15 is still owed')
+  assert.deepEqual(rec.humanDecisions, [{ findingId: 'r0-5', decision: 'option (a): AC14 amended on the card', by: 'rucka', at: ON.toISOString() }])
+  assert.equal(rec.reviewedHead, SHA('c'))
+  assert.equal(cycleCounters(readHandoffs(dir)).reviewExecutions, 1, 'a decision is not a review execution')
+  // a second decision on the same escalation accumulates, and the finding carries its answer
+  const two = decide({ dir, phase: 'r0', finding: 'r0-15', decision: 'the maintainer session runs the demos and attaches the evidence', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, now: ON })
+  assert.equal(two.decided, true, JSON.stringify(two))
+  assert.deepEqual(pick(two.next, 'step', 'mode', 'phase'), { step: 'prepare', mode: 'remediation', phase: 'r1-g1' }, 'every owed decision recorded ⇒ the remediation')
+  const rec3 = JSON.parse(readFileSync(join(dir, 'r0-review-phase.attempt-3.json'), 'utf8'))
+  assert.equal(rec3.needsHumanDecision, false)
+  assert.deepEqual(rec3.humanDecisions.map(d => d.findingId), ['r0-5', 'r0-15'])
+  assert.equal(rec3.findings.find(f => f.id === 'r0-15').humanDecision.by, 'rucka')
+})
+
+test('US-506 T-5 w5 (AC8): `decide` is refused when the cycle is not escalated on a human decision, for an unknown finding, twice for one finding — nothing written', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('c') }, findings: [finding('r0-1')] })
+  const before = listing(dir)
+  assert.equal(decide({ dir, phase: 'r0', finding: 'r0-1', decision: 'd', by: 'rucka', workflowVersion: V }).reason, 'decide-not-escalated')
+  const esc = escalatedReview()
+  assert.equal(decide({ dir: esc, phase: 'r0', finding: 'r0-99', decision: 'd', by: 'rucka', workflowVersion: V }).reason, 'decide-finding-unknown:r0-99')
+  assert.equal(decide({ dir: esc, phase: 'r1', finding: 'r0-5', decision: 'd', by: 'rucka', workflowVersion: V }).reason, 'decide-not-escalated')
+  assert.equal(decide({ dir: esc, phase: 'r0', finding: 'r0-5', decision: ' ', by: 'rucka', workflowVersion: V }).reason, 'decide-decision-missing')
+  assert.equal(decide({ dir: esc, phase: 'r0', finding: 'r0-5', decision: 'd', by: 'rucka', workflowVersion: V }).decided, true)
+  assert.equal(decide({ dir: esc, phase: 'r0', finding: 'r0-5', decision: 'd2', by: 'rucka', workflowVersion: V }).reason, 'decide-already-decided:r0-5')
+  assert.deepEqual(listing(dir), before)
+  // the CLI
+  const e2 = escalatedReview()
+  const cli = cliState(['decide', '--dir', e2, '--phase', 'r0', '--finding', 'r0-5', '--decision', 'option (a)', '--by', 'rucka', '--workflowVersion', V, '--entry', 'pr', '--pr', '7', '--policy', JSON.stringify(POLICY)])
+  assert.deepEqual([cli.status, cli.json.decided, cli.json.next.step, cli.json.pendingDecisions], [0, true, 'blocked', ['r0-15']])
+  assert.equal(cliState(['decide', '--dir', e2, '--phase', 'r0', '--finding', 'nope', '--decision', 'x', '--by', 'rucka', '--workflowVersion', V]).status, 1)
+})
+
+// ══ US-506 T-6 — the validator PROVES it executed: per row, the command, its exit code, its output ══
+// Carried from US-487 T-9: GAP-487-2 (`toHaveReturnedWith` on an async mock — it passes for anything)
+// is exactly what the validator exists to catch, and it sealed anyway. The reproducible evidence of
+// what the engine checked: a verdict whose witness exited 0 at the base is now refused.
+const ran = (rowId, extra = {}) => ({ rowId, baseline: 'red', command: 'pnpm exec vitest run src/a.test.ts -t AC12', exitCode: 1, observed: 'FAIL src/a.test.ts > AC12: expected merge never called', ...extra })
+const verdictDraft = (dir, extra) => writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-verify', inputHead: SHA('a'), verified: true, sealed: true, snapshot: SHA('b'), findings: [], contractHash: `sha256:${'1'.repeat(64)}`, ...extra })
+const publishVerdict = (extra, spec = {}) => {
+  const { dir } = runDir()
+  redSpec(dir, 'r1-g1', spec)
+  return publish({ dir, file: verdictDraft(dir, extra), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V, predecessor: 'r1-g1-red-spec' })
+}
+
+test('US-506 T-6 w5 (AC10): a validated contract carries, per row, the command run, its exit code and its observed output — refused without', () => {
+  assert.equal(publishVerdict({}).reason, 'reproduced-missing')
+  assert.equal(publishVerdict({ reproduced: [] }).reason, 'reproduced-missing')
+  for (const [bad, code] of [
+    [{ command: '' }, 'reproduced-invalid:row-1'],
+    [{ exitCode: undefined }, 'reproduced-invalid:row-1'],
+    [{ exitCode: '1' }, 'reproduced-invalid:row-1'],
+    [{ observed: ' ' }, 'reproduced-invalid:row-1'],
+    [{ baseline: 'maybe' }, 'reproduced-invalid:row-1'],
+    [{ command: 'pnpm test; curl evil' }, 'reproduced-command-unsafe:row-1'],
+  ])
+    assert.equal(publishVerdict({ reproduced: [ran('row-1', bad)] }).reason, code, JSON.stringify(bad))
+})
+
+test('US-506 T-6 w6 (AC10): a witness that CANNOT FAIL (it exited 0 against the unfixed base) or a control that cannot pass is refused — the deliberately non-discriminating witness never seals', () => {
+  const nonDiscriminating = publishVerdict({ reproduced: [ran('row-1', { exitCode: 0, observed: '1 passed (toHaveReturnedWith on an async mock)' })] })
+  assert.deepEqual([nonDiscriminating.published, nonDiscriminating.reason], [false, 'witness-cannot-fail:row-1'])
+  const control = publishVerdict({ reproduced: [ran('row-2', { baseline: 'pass', exitCode: 1, observed: 'FAIL' })] })
+  assert.deepEqual([control.published, control.reason], [false, 'control-cannot-pass:row-2'])
+})
+
+test('US-506 T-6 c2 (control, AC10): an executed, discriminating witness and a passing control publish; a rejection may carry no execution rows', () => {
+  const ok = publishVerdict({ reproduced: [ran('row-1'), ran('row-2', { baseline: 'pass', exitCode: 0, observed: '3 passed' })] })
+  assert.equal(ok.published, true, JSON.stringify(ok))
+  const { dir } = runDir()
+  redSpec(dir, 'r1-g1')
+  assert.equal(publish({ dir, file: verdictDraft(dir, { verified: false, sealed: false, snapshot: undefined, findings: [{ rowId: 'row-1', location: 'a', severity: 'Major', description: 'd', recommendation: 'r' }] }), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V, predecessor: 'r1-g1-red-spec' }).published, true)
+})
+
+// ── US-506 F-4 (AC5 × AC7): a run started before the attempt-file rule wrote EVERY attempt over
+// `<phase>-red-contract.json`, as the old red-spec skill said to. Its next repair must still publish.
+test('US-506 F-4 (AC5 × AC7): an in-flight run whose pre-#506 repair overwrote the shared contract file publishes its next repair; a new-rule overwrite is still refused', () => {
+  const { dir } = runDir()
+  const shared = join(dir, 'a0-red-contract.json')
+  writeFileSync(shared, JSON.stringify({ attempt: 1 }))
+  redSpec(dir, 'a0', { contractPath: shared, contractHash: contractHash({ attempt: 1 }) })
+  redVerify(dir, 'a0', { verified: false, sealed: false, snapshot: undefined, reproduced: undefined, findings: rejectionOf(['row-1']) }, { predecessor: 'a0-red-spec' })
+  // attempt 2 as the pre-#506 engine published it: the SAME file, rewritten (no attempt-file rule then)
+  writeFileSync(shared, JSON.stringify({ attempt: 2 }))
+  writeFileSync(join(dir, 'a0-red-spec.attempt-2.json'), JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: shared, contractHash: contractHash({ attempt: 2 }), changedRows: ['row-1'], schemaVersion: SCHEMA_VERSION, workflowVersion: V, seq: 3, attempt: 2, predecessor: 'a0-red-verify' }))
+  redVerify(dir, 'a0', { verified: false, sealed: false, snapshot: undefined, reproduced: undefined, findings: rejectionOf(['row-2']) }, { predecessor: 'a0-red-spec', attempt: 2 })
+  assert.deepEqual(pick(resolve({ dir, workflowVersion: V, policy: { ...POLICY, redRepairs: 2 }, entry: 'fresh' }).next, 'step', 'mode', 'attempt'), { step: 'prepare', mode: 'repair', attempt: 3 })
+  const c3 = writeContract(dir, 'a0-red-contract.attempt-3.json', { attempt: 3 })
+  const out = publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: c3.path, contractHash: c3.hash, changedRows: ['row-2'] }), phase: 'a0', skill: 'red-spec', workflowVersion: V, predecessor: 'a0-red-verify', attempt: 3 })
+  assert.equal(out.published, true, JSON.stringify(out))
+  // control: a file only ONE attempt ever named is still checked — overwriting it is refused
+  writeFileSync(c3.path, JSON.stringify({ attempt: 'rewritten' }))
+  redVerify(dir, 'a0', { verified: false, sealed: false, snapshot: undefined, reproduced: undefined, findings: rejectionOf(['row-3']) }, { predecessor: 'a0-red-spec', attempt: 3 })
+  const c4 = writeContract(dir, 'a0-red-contract.attempt-4.json', { attempt: 4 })
+  const refused = publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: c4.path, contractHash: c4.hash, changedRows: ['row-3'] }), phase: 'a0', skill: 'red-spec', workflowVersion: V, predecessor: 'a0-red-verify', attempt: 4 })
+  assert.equal(refused.reason, 'contract-attempt-overwritten:a0-red-contract.attempt-3.json')
+})
+
+test('US-506 F-5 (AC8): `decide` refuses a finding the review did not escalate; a review naming an unknown id is refused; a legacy review with no owed list is unblocked by its one decision', () => {
+  const dir = escalatedReview()
+  const extra = decide({ dir, phase: 'r0', finding: 'r0-7', decision: 'd', by: 'rucka', workflowVersion: V })
+  assert.equal(extra.reason, 'decide-finding-unknown:r0-7')
+  const d2 = escalatedReview({ findings: [finding('r0-5'), finding('r0-15', { external: true }), finding('r0-16')] })
+  assert.equal(decide({ dir: d2, phase: 'r0', finding: 'r0-16', decision: 'd', by: 'rucka', workflowVersion: V }).reason, 'decide-not-owed:r0-16')
+  const { dir: bad } = runDir()
+  const f = writeDraft(bad, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1')], custody: { verified: true, contractBreach: false }, readiness: { ready: false, remoteHead: SHA('c') }, mode: 'first', needsHumanDecision: true, humanDecisionIds: ['r0-9'] })
+  assert.equal(publish({ dir: bad, file: f, phase: 'r0', skill: 'review-phase', workflowVersion: V }).reason, 'humanDecisionIds-unknown:r0-9')
+  const { dir: legacy } = runDir()
+  review(legacy, 'r0', { verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('c') }, needsHumanDecision: true, findings: [finding('r0-5')] })
+  const one = decide({ dir: legacy, phase: 'r0', finding: 'r0-5', decision: 'd', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(one.next.step, 'prepare', 'no owed list: the one decision answers the escalate')
 })

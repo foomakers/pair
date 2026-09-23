@@ -120,7 +120,7 @@ test('T-27: one composed lifecycle — initial build, a real defect + a scope pr
 
   // ── initial contract + implementation (a0) ──────────────────────────────────────────────
   step(dir, 'a0', 'red-spec', { status: 'red', mode: 'initial', contractPath: '/abs/a0-red-contract.json', contractHash: `sha256:${'1'.repeat(64)}` })
-  step(dir, 'a0', 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}` }, { predecessor: 'a0-red-spec' })
+  step(dir, 'a0', 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}` }, { predecessor: 'a0-red-spec' })
   step(dir, 'a0', 'implement-phase', { status: 'ok', prNumber: 480, outputHead: SHA('c'), gatesPassed: true }, { predecessor: 'a0-red-verify' })
   let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
   assert.equal(r.next.step, 'verify')
@@ -134,7 +134,7 @@ test('T-27: one composed lifecycle — initial build, a real defect + a scope pr
     {
       reviewedHead: SHA('c'),
       verdict: 'CHANGES-REQUESTED',
-      findings: [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'wrong', recommendation: 'fix', blocking: true, transition: 'open', kind: 'defect' }],
+      findings: [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'wrong', recommendation: 'fix', blocking: true, transition: 'open', reproducer: { command: 'node --test x.test.mjs' }, kind: 'defect' }],
       scopeChanges: [{ id: 'sc-1', type: 'new-requirement', proposal: 'add a related capability', status: 'pending', discoveredAtReviewId: 'r0' }],
       custody: { verified: true, contractBreach: false },
       readiness: { ready: false },
@@ -147,7 +147,7 @@ test('T-27: one composed lifecycle — initial build, a real defect + a scope pr
 
   // ── remediation round 1: real-authority contract, mechanism named and closed in one answer ─
   step(dir, 'r1-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: '/abs/r1-g1-red-contract.json', contractHash: `sha256:${'2'.repeat(64)}`, plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] } }, { predecessor: 'r0-review-phase' })
-  step(dir, 'r1-g1', 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('d'), contractHash: `sha256:${'2'.repeat(64)}` }, { predecessor: 'r1-g1-red-spec' })
+  step(dir, 'r1-g1', 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: SHA('d'), contractHash: `sha256:${'2'.repeat(64)}` }, { predecessor: 'r1-g1-red-spec' })
   step(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('e'), evidenceLedger: [], remediationBatchId: 'r1' }, { predecessor: 'r1-g1-red-verify' })
   r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 480 })
   assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase }, { step: 'verify', mode: 're-review', phase: 'r1' })
@@ -210,7 +210,7 @@ test('T-27: one composed lifecycle — initial build, a real defect + a scope pr
 
   // ── remediation round 2, for the APPROVED delta only — same pipeline, no parallel path ──────
   step(dir, 'r2-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: '/abs/r2-g1-red-contract.json', contractHash: `sha256:${'3'.repeat(64)}`, plan: { groups: [{ groupId: 'r2-g1', findings: ['AC-99'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/b.ts'] }], carried: [] } }, { predecessor: 'r1-review-phase.attempt-2' })
-  step(dir, 'r2-g1', 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('f'), contractHash: `sha256:${'3'.repeat(64)}` }, { predecessor: 'r2-g1-red-spec' })
+  step(dir, 'r2-g1', 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: SHA('f'), contractHash: `sha256:${'3'.repeat(64)}` }, { predecessor: 'r2-g1-red-spec' })
   step(dir, 'r2-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('9'), evidenceLedger: [], remediationBatchId: 'r2' }, { predecessor: 'r2-g1-red-verify' })
 
   // ── final review: everything resolved, scope extended (not pending) — ready at last ─────────
@@ -346,11 +346,31 @@ test('B1 (DT-04): a contradiction with sealed rows routes a successor revision t
   }
   const dispatched = []
   const logs = []
+  // US-506 AC5: the contradiction route needs a SEALED `a0`, which only a run already on the old path
+  // carries — this run started before the fresh-entry change: its `a0` preparation is on disk.
+  const a0Prepared = {
+    status: 'red',
+    mode: 'initial',
+    sourceOfTruth: 'the installer pipeline',
+    inventory: [{ id: 'AC-1', producer: 'installer', inputs: ['x'], representations: ['y'], consumers: ['z'], classes: ['supported', 'invalid'] }],
+    fixScope: { owner: 'installer', mode: 'behavioral', allowedPaths: ['src/a.ts'] },
+    matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'c', oracle: 'pnpm test', expected: 'e', covers: ['AC-1'] }],
+    redTests: [{ file: 'a.test.ts', kind: 'test', baseline: 'red', sha256: D('3'), command: 'pnpm exec vitest run a.test.ts', observed: 'FAIL 1 test' }],
+    testExempt: false,
+    contractPath: join(dir, 'a0-red-contract.json'),
+    contractHash: D('1'),
+  }
+  through('a0', 'red-spec', a0Prepared)
+  const STEP_OF = { 'pair-fix-test-author': 'prepare', 'pair-red-contract-verifier': 'validate', 'pair-reviewer': 'verify' }
   const agent = async (prompt, opts) => {
     dispatched.push(opts.label)
     if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: { $meta: { source: 't.md', sourceHash: D('0'), generatedAt: 'x' }, vocabulary: { verdictOptions: ['APPROVED', 'CHANGES-REQUESTED'], severities: ['Critical', 'Major', 'Minor', 'Questions'] }, severityRanks: { Critical: 4, Major: 3, Minor: 2, Questions: 1 }, schema: { type: 'object', properties: { verdict: { type: 'string', enum: ['APPROVED', 'CHANGES-REQUESTED'] }, findings: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, severity: { type: 'string', enum: ['Critical', 'Major', 'Minor', 'Questions'] }, location: { type: 'string' }, description: { type: 'string' }, recommendation: { type: 'string' } }, required: ['id', 'severity', 'location', 'description', 'recommendation'] } } }, required: ['verdict', 'findings'] } } }
     const phase = arg(prompt, 'phase')
     const mode = arg(prompt, 'mode')
+    // every phase skill's Step 0: the REAL durable state, and a redirect when another step is due
+    const due = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh', pr: 483, story: '482' }).next
+    const step = STEP_OF[opts.agentType] ?? String(opts.label).split(':')[0]
+    if (due.step !== step || due.phase !== phase) return { status: 'redirect', next: due }
     if (opts.agentType === 'pair-fix-test-author') {
       // The ONE contradiction: the remediation of r0-1 cannot be contracted without rewriting two
       // rows the sealed a0 contract already approved.
@@ -385,13 +405,13 @@ test('B1 (DT-04): a contradiction with sealed rows routes a successor revision t
     }
     if (opts.agentType === 'pair-red-contract-verifier')
       // independent validation, simulated only at this boundary: the verdict and the successor seal
-      return through(phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: phase === 'a0' ? H('b') : H('c'), contractHash: arg(prompt, 'contractHash') }, { predecessor: `${phase}-red-spec` })
+      return through(phase, 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: phase === 'a0' ? H('b') : H('c'), contractHash: arg(prompt, 'contractHash') }, { predecessor: `${phase}-red-spec` })
     if (opts.agentType === 'pair-implementer')
       return through(phase, 'implement-phase', { status: 'ok', gatesPassed: true, branch: 'feature/US-482', prNumber: 483, url: 'https://x/pr/483', outputHead: phase === 'a0' ? H('d') : H('e'), checkpointPath: 'x.md' })
     if (opts.agentType === 'pair-reviewer') {
       const round = Number(/^r(\d+)/.exec(phase)[1])
       const head = round === 0 ? H('d') : H('e')
-      const findings = round === 0 ? [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: true, transition: 'open' }] : [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: false, transition: 'resolved', evidence: 'the successor rows pass at this head' }]
+      const findings = round === 0 ? [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: true, transition: 'open', reproducer: { command: 'node --test x.test.mjs' } }] : [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: false, transition: 'resolved', evidence: 'the successor rows pass at this head' }]
       return through(phase, 'review-phase', { reviewedHead: head, verdict: round === 0 ? 'CHANGES-REQUESTED' : 'APPROVED', findings, custody: { verified: true, contractBreach: false }, readiness: { ready: round > 0, remoteHead: head }, mode: round === 0 ? 'first' : 're-review', partial: false, tier: 'risk:green', passes: ['general'], published: { firstReview: round === 0, synthesis: round > 0 } })
     }
     return {}
@@ -407,7 +427,7 @@ test('B1 (DT-04): a contradiction with sealed rows routes a successor revision t
   // the route: the contradiction did NOT end the card, and the successor revision was prepared,
   // independently validated, sealed and implemented before the re-review
   assert.deepEqual(dispatched.filter(l => !/^contract:/.test(l)), [
-    'prepare:#482 a0',
+    'implement:#482',
     'validate:#482 a0',
     'implement:#482',
     'verify:#482 r0',
@@ -532,12 +552,12 @@ test('F1 (DT-04 x DT-33): a contradiction naming a contract sealed in a PREDECES
         ...(isRevision ? { revision: Number(arg(prompt, 'revision')), changedRows: jsonArg(prompt, 'changedRows') } : {}),
       })
     }
-    if (opts.agentType === 'pair-red-contract-verifier') return through(phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: H('f'), contractHash: arg(prompt, 'contractHash') }, { predecessor: `${phase}-red-spec` })
+    if (opts.agentType === 'pair-red-contract-verifier') return through(phase, 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: H('f'), contractHash: arg(prompt, 'contractHash') }, { predecessor: `${phase}-red-spec` })
     if (opts.agentType === 'pair-implementer') return through(phase, 'implement-phase', { status: 'ok', gatesPassed: true, branch: 'feature/US-482', prNumber: 483, url: 'https://x/pr/483', outputHead: H('d'), checkpointPath: 'x.md' })
     if (opts.agentType === 'pair-reviewer') {
       const round = Number(/^r(\d+)/.exec(phase)[1])
       const head = round === 0 ? H('c') : H('d')
-      const findings = round === 0 ? [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: true, transition: 'open' }] : [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: false, transition: 'resolved', evidence: 'the successor rows pass at this head' }]
+      const findings = round === 0 ? [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: true, transition: 'open', reproducer: { command: 'node --test x.test.mjs' } }] : [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: false, transition: 'resolved', evidence: 'the successor rows pass at this head' }]
       return through(phase, 'review-phase', { reviewedHead: head, verdict: round === 0 ? 'CHANGES-REQUESTED' : 'APPROVED', findings, custody: { verified: true, contractBreach: false }, readiness: { ready: round > 0, remoteHead: head }, mode: round === 0 ? 'first' : 're-review', partial: false, tier: 'risk:green', passes: ['general'], published: { firstReview: round === 0, synthesis: round > 0 } })
     }
     return {}
@@ -647,8 +667,9 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
     nexts.push({ ...r.next, activeRisks: r.activeRegressionRisks, counters: r.counters })
     return { inputHead: H0, ...fields, next: r.next }
   }
-  const contract = phase => ({ path: join(dir, `${phase}-red-contract.json`), hash: D('1') })
-  const prepared = (phase, mode, extra = {}) => ({
+  // US-506 AC7: a contract attempt beyond the first is its own file
+  const contract = (phase, attempt = 1) => ({ path: join(dir, `${phase}-red-contract${attempt > 1 ? `.attempt-${attempt}` : ''}.json`), hash: D('1') })
+  const prepared = (phase, mode, extra = {}, attempt = 1) => ({
     status: 'red',
     mode,
     sourceOfTruth: 'the installer pipeline',
@@ -657,7 +678,7 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
     matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'c', oracle: 'pnpm test', expected: 'e', covers: ['AC-1'] }],
     redTests: [{ file: 'a.test.ts', kind: 'test', baseline: 'red', sha256: D('3'), command: 'pnpm exec vitest run a.test.ts', observed: 'FAIL 1 test' }],
     testExempt: false,
-    contractPath: contract(phase).path,
+    contractPath: contract(phase, attempt).path,
     contractHash: D('1'),
     ...extra,
   })
@@ -673,14 +694,14 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
       const guards = jsonArg(prompt, 'regressionGuards')
       if (guards) guardPrompts.push({ phase, guards: guards.map(g => g.riskId) })
       const attempt = Number(arg(prompt, 'attempt') ?? 1)
-      return through(phase, 'red-spec', prepared(phase, mode, { groupId: phase, remediationBatchId: `r${/^r(\d+)/.exec(phase)?.[1] ?? 0}`, ...(arg(prompt, 'regressionRepairOf') ? { regressionRepairOf: arg(prompt, 'regressionRepairOf'), regressionGuards: guards.map(g => g.riskId) } : {}), plan: { groups: [{ groupId: phase, findings: (jsonArg(prompt, 'findings') ?? []).map(f => f.id), owner: 'installer', mode: 'behavioral', allowedPaths: ['src/a.ts'], oracle: 'installer', dependsOn: [] }], carried: [] } }), { attempt })
+      return through(phase, 'red-spec', prepared(phase, mode, { groupId: phase, remediationBatchId: `r${/^r(\d+)/.exec(phase)?.[1] ?? 0}`, ...(arg(prompt, 'regressionRepairOf') ? { regressionRepairOf: arg(prompt, 'regressionRepairOf'), regressionGuards: guards.map(g => g.riskId) } : {}), plan: { groups: [{ groupId: phase, findings: (jsonArg(prompt, 'findings') ?? []).map(f => f.id), owner: 'installer', mode: 'behavioral', allowedPaths: ['src/a.ts'], oracle: 'installer', dependsOn: [] }], carried: [] } }, attempt), { attempt })
     }
     if (opts.agentType === 'pair-red-contract-verifier') {
       // US-479 F-RR-03: the independent verifier receives the authoritative guard set and echoes
       // exactly what it validated; the coordinator refuses any other set before the seal is trusted.
       const guards = jsonArg(prompt, 'regressionGuards')
       if (guards) guardPrompts.push({ phase: `validate:${phase}`, guards: guards.map(g => g.riskId) })
-      return through(phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: H('e'), contractHash: arg(prompt, 'contractHash'), remediationBatchId: `r${/^r(\d+)/.exec(phase)?.[1] ?? 0}`, ...(guards ? { regressionGuards: guards.map(g => g.riskId) } : {}) }, { predecessor: `${phase}-red-spec`, attempt: Number(arg(prompt, 'attempt') ?? 1) })
+      return through(phase, 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: H('e'), contractHash: arg(prompt, 'contractHash'), remediationBatchId: `r${/^r(\d+)/.exec(phase)?.[1] ?? 0}`, ...(guards ? { regressionGuards: guards.map(g => g.riskId) } : {}) }, { predecessor: `${phase}-red-spec`, attempt: Number(arg(prompt, 'attempt') ?? 1) })
     }
     if (opts.agentType === 'pair-implementer' && opts.label?.startsWith('implement:')) return through(phase, 'implement-phase', { status: 'ok', gatesPassed: true, branch: 'feature/US-482', prNumber: 483, url: 'https://x/pr/483', outputHead: H0, checkpointPath: 'x.md' })
     if (opts.agentType === 'pair-implementer') {
@@ -694,9 +715,10 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
       // US-479 V2 (F-RR-03): the review receives the active guard set and echoes what it executed
       const reviewGuards = jsonArg(prompt, 'regressionGuards')
       if (reviewGuards) guardPrompts.push({ phase: `review:${phase}`, guards: reviewGuards.map(g => g.riskId) })
-      const open = { id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate reads a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: true, transition: 'open' }
+      const open = { id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate reads a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: true, transition: 'open', reproducer: { command: 'node --test x.test.mjs' } }
       const closed = { ...open, blocking: false, transition: 'resolved', evidence: 'closed by the remediation' }
-      if (pass === 0) return through('r0', 'review-phase', { reviewedHead: H0, verdict: 'CHANGES-REQUESTED', findings: [open], custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 'first', partial: false, tier: 'risk:green', passes: ['general'], published: { firstReview: true } })
+      // US-506 AC3: the first verify of a fresh card names, per AC, the test that proves it
+      if (pass === 0) return through('r0', 'review-phase', { reviewedHead: H0, verdict: 'CHANGES-REQUESTED', findings: [open], acAssessment: [{ ac: 'AC-1', tests: ['src/a.test.ts#AC-1'], assessment: 'weak', findingId: 'r0-1' }], custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 'first', partial: false, tier: 'risk:green', passes: ['general'], published: { firstReview: true } })
       if (pass === 1)
         // the regression: an approved obligation that passes on H0 and fails on H1, from batch r1
         return through('r1', 'review-phase', {
@@ -709,7 +731,7 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
           readiness: { ready: false },
           tier: 'risk:green',
           passes: ['general'],
-          findings: [closed, { id: 'r1-9', severity: 'Major', location: 'src/a.ts:9', description: 'AC-7 passed at H0 and fails at H1', recommendation: 'restore the boundary', kind: 'regression', blocking: true, transition: 'open', origin: 'introduced-by-remediation', obligationIds: ['AC-7'], originEvidence: { baselineHead: H0, failingHead: H1, reproducer: GUARD.reproducerRef }, regressionRisk: { introducedByRemediationBatchId: 'r1', lastCleanReviewedHead: H0, firstFailingHead: H1, ...GUARD, state: 'active' } }],
+          findings: [closed, { id: 'r1-9', severity: 'Major', location: 'src/a.ts:9', description: 'AC-7 passed at H0 and fails at H1', recommendation: 'restore the boundary', kind: 'regression', blocking: true, transition: 'open', reproducer: { command: 'node --test x.test.mjs' }, origin: 'introduced-by-remediation', obligationIds: ['AC-7'], originEvidence: { baselineHead: H0, failingHead: H1, reproducer: GUARD.reproducerRef }, regressionRisk: { introducedByRemediationBatchId: 'r1', lastCleanReviewedHead: H0, firstFailingHead: H1, ...GUARD, state: 'active' } }],
         })
       const riskId = readHandoffs(dir).flatMap(h => h.data.findings ?? []).find(f => f.regressionRisk)?.regressionRisk?.riskId
       return through('r2', 'review-phase', {
@@ -753,9 +775,9 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
   assert.equal(guardPrompts[0].guards.length, 1)
   for (let i = 1; i < guardPrompts.length; i++) assert.deepEqual(guardPrompts[i].guards, guardPrompts[0].guards, guardPrompts[i].phase)
   // the ordinary path, no new stage and no new agent
+  // US-506: a fresh card starts at implement — no up-front `a0` contract; the remediation below is
+  // the unchanged test-first path
   assert.deepEqual(dispatched.filter(l => !/^contract:/.test(l)), [
-    'prepare:#482 a0',
-    'validate:#482 a0',
     'implement:#482',
     'verify:#482 r0',
     'prepare:#482 r1-g1',
@@ -769,7 +791,7 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
   ])
   // the ledger: append-only, both heads preserved, seal untouched, history complete
   const names = readHandoffs(dir).map(h => h.name)
-  assert.deepEqual(names, ['a0-red-spec', 'a0-red-verify', 'a0-implement-phase', 'r0-review-phase', 'r1-g1-red-spec', 'r1-g1-red-verify', 'r1-g1-green-fix', 'r1-review-phase', 'r1-g1-red-spec', 'r1-g1-red-verify', 'r1-g1-green-fix', 'r2-review-phase'])
+  assert.deepEqual(names, ['a0-implement-phase', 'r0-review-phase', 'r1-g1-red-spec', 'r1-g1-red-verify', 'r1-g1-green-fix', 'r1-review-phase', 'r1-g1-red-spec', 'r1-g1-red-verify', 'r1-g1-green-fix', 'r2-review-phase'])
   const final = resolve({ dir, workflowVersion: '4.0.0', policy: POLICY, entry: 'fresh', pr: 483, story: '482' })
   assert.deepEqual(final.activeRegressionRisks, [], 'the active matrix is empty at convergence')
   assert.equal(final.next.step, 'done')
@@ -785,4 +807,51 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
   assert.equal(view.execution.dischargedRegressionRisks, 1)
   assert.deepEqual(view.regressions.active, [])
   assert.equal(view.regressions.historical.length, 1)
+})
+
+// ── US-506 F-2 (AC5): a run SEALED at `a0` and not yet implemented, through the REAL engine and the
+// REAL durable state. The stage stubs apply the phase skills' own Step 0 — redirect when another step
+// is due, and (implement-phase) when `next` carries a contract the dispatch lacks.
+test('US-506 F-2 (AC5): the batch engine resumes an old-path run sealed at a0 — implement is re-dispatched WITH the seal, then verify, ready-for-merge', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'f2-chain-'))
+  const dir = join(root, '.pair', 'working', 'runs', 'f2', '482')
+  mkdirSync(dir, { recursive: true })
+  const SRC = readFileSync(new URL('../pair-implement-batch.js', import.meta.url), 'utf8').replace(/^export /gm, '')
+  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
+  const H = c => c.repeat(40)
+  const D = c => `sha256:${c.repeat(64)}`
+  const arg = (p, n) => new RegExp(`\\$${n}=(\\S+)`).exec(p)?.[1]
+  const V = '4.0.0'
+  const POLICY = { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 }
+  let seq = 0
+  const through = (phase, skill, fields, { predecessor } = {}) => {
+    const file = join(dir, `draft-${++seq}.json`)
+    writeFileSync(file, JSON.stringify({ run: 'f2', story: '482', branch: 'feature/US-482', phase, skill, inputHead: H('a'), ...fields }))
+    const out = publish({ dir, file, phase, skill, workflowVersion: V, predecessor })
+    assert.equal(out.published, true, `${phase}-${skill}: ${JSON.stringify(out)}`)
+    return { inputHead: H('a'), ...fields, next: resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh', story: '482' }).next }
+  }
+  // the run as the pre-#506 engine left it: a0 prepared and SEALED, no implementation, no PR
+  through('a0', 'red-spec', { status: 'red', mode: 'initial', contractPath: join(dir, 'a0-red-contract.json'), contractHash: D('1') })
+  through('a0', 'red-verify', { verified: true, reproduced: [{ rowId: 'row-1', baseline: 'red', command: 'node --test x.test.mjs', exitCode: 1, observed: 'FAIL' }], findings: [], sealed: true, snapshot: H('b'), contractHash: D('1') }, { predecessor: 'a0-red-spec' })
+  const STEP_OF = { 'pair-fix-test-author': 'prepare', 'pair-red-contract-verifier': 'validate', 'pair-reviewer': 'verify' }
+  const dispatched = []
+  const agent = async (prompt, opts) => {
+    dispatched.push({ label: opts.label, prompt })
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit' }
+    const phase = arg(prompt, 'phase')
+    const due = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh', story: '482' }).next
+    const step = STEP_OF[opts.agentType] ?? String(opts.label).split(':')[0]
+    if (due.step !== step || due.phase !== phase) return { status: 'redirect', next: due }
+    if (step === 'implement' && due.contract && !prompt.includes('$snapshot=')) return { status: 'redirect', next: due }
+    if (step === 'implement') return through('a0', 'implement-phase', { status: 'ok', gatesPassed: true, branch: 'feature/US-482', prNumber: 483, url: 'https://x/pr/483', outputHead: H('d'), checkpointPath: 'x.md' }, { predecessor: 'a0-red-verify' })
+    if (step === 'verify') return through('r0', 'review-phase', { pr: 483, reviewedHead: H('d'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: H('d') }, mode: 'first', partial: false, tier: 'risk:green', passes: ['general'], published: { firstReview: true } })
+    return null
+  }
+  const result = await new AsyncFunction('args', 'agent', 'parallel', 'log', SRC)({ cards: [{ id: '482', title: 'Conformance', branch: 'feature/US-482' }], runId: 'f2' }, agent, fns => Promise.all(fns.map(f => f())), () => {})
+  assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+  const stages = dispatched.filter(d => !/^contract:/.test(d.label))
+  assert.deepEqual(stages.map(d => d.label), ['implement:#482', 'implement:#482', 'verify:#482 r0'])
+  assert.match(stages[1].prompt, /\$snapshot=b{40} \$contract=/)
+  assert.deepEqual(readHandoffs(dir).map(h => h.name), ['a0-red-spec', 'a0-red-verify', 'a0-implement-phase', 'r0-review-phase'])
 })

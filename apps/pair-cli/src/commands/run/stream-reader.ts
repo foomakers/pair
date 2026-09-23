@@ -26,6 +26,12 @@ export interface IterationResult {
    * its absence means the skill reported itself finished, which is a STOP, not a failure.
    */
   readonly continueToken?: string
+  /**
+   * US-506 T-8 (AC12): the iteration made no terminal progress within its time bound and was
+   * stopped — a STALL, not a stream that ended on its own. The loop resumes it within the same
+   * dead-dispatch budget; a process realization resumes fresh.
+   */
+  readonly stalled?: true
 }
 
 const NO_TERMINAL_EVENT: IterationResult = {

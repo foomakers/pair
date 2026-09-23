@@ -17,6 +17,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
+import { contractHash } from '../../skills/pair-workflow-red-verify/scripts/cycle-state.mjs'
 import { contractErrors, hashFile, isTestPath, manifestPathFor, seal, trailerFor, verify, verifyChain, predecessorPhase, scopeNarrowing, isModulePath, OVERRIDABLE_BREACH_CODES } from '../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url))
@@ -336,7 +337,7 @@ test('CLI: seal then verify print JSON and exit 0; a breach exits 1; a usage err
   const { cwd, base } = repo()
   const { contractPath } = redContract(cwd)
   const run = (...args) => spawnSync(process.execPath, [CLI, ...args, '--cwd', cwd], { encoding: 'utf8' })
-  let r = run('seal', '--pr', PR, '--phase', PHASE, '--base', base, '--contract', contractPath)
+  let r = run('seal', '--pr', PR, '--phase', PHASE, '--base', base, '--contract', contractPath, '--static-gates', '[]')
   assert.equal(r.status, 0, r.stdout + r.stderr)
   const out = JSON.parse(r.stdout)
   assert.equal(out.sealed, true)
@@ -432,6 +433,8 @@ function revision(cwd, head1, extra = {}) {
     matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'default', oracle: 'node test/a.test.js', expected: '2', covers: ['r0-1'] }, { id: 'row-2', kind: 'witness', baseline: 'red', condition: 'empty', oracle: 'node test/a.test.js', expected: '0', covers: ['r1-1'] }],
     redTests: [{ file: 'test/a.test.js', kind: 'test', sha256: hashFile('test/a.test.js', cwd), command: 'node test/a.test.js', observed: 'Error: FAIL empty' }],
     testExempt: false,
+    // US-506 AC9: a revision names every row it changes — row-2 is new and edits the sealed witness file
+    changedRows: ['row-2'],
     ...extra,
   }
   write(cwd, '.pair/working/rev-draft.json', JSON.stringify(contract))
@@ -683,7 +686,7 @@ test('t9d-18: `--pr` is a number — a traversal in it never reaches a manifest 
   assert.equal(manifestPathFor('7', 'a0'), '.pair/red-snapshots/pr-7-a0.json')
   const { cwd, base } = repo()
   redContract(cwd, { fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/'] } })
-  const r = spawnSync(process.execPath, [CLI, 'seal', '--pr', '../../ESCAPED', '--phase', PHASE, '--base', base, '--contract', '.pair/working/red-draft.json', '--cwd', cwd], { encoding: 'utf8' })
+  const r = spawnSync(process.execPath, [CLI, 'seal', '--pr', '../../ESCAPED', '--phase', PHASE, '--base', base, '--contract', '.pair/working/red-draft.json', '--static-gates', '[]', '--cwd', cwd], { encoding: 'utf8' })
   assert.equal(r.status, 2, r.stdout + r.stderr)
   assert.match(JSON.parse(r.stdout).error, /--pr/)
   assert.equal(existsSync(join(cwd, '.pair', 'red-snapshots')), false, 'nothing was written')
@@ -809,10 +812,10 @@ test('CLI: seal accepts --root and reports the same typed refusals', () => {
   const abs = join(main, '.pair/working/runs/run-1/42/r1-g1-red-contract.json')
   writeFileSync(abs, JSON.stringify(contract))
   const run = (...args) => spawnSync(process.execPath, [CLI, ...args, '--cwd', cwd, '--root', main], { encoding: 'utf8' })
-  let r = run('seal', '--pr', PR, '--phase', PHASE, '--base', base, '--contract', '/etc/passwd')
+  let r = run('seal', '--pr', PR, '--phase', PHASE, '--base', base, '--contract', '/etc/passwd', '--static-gates', '[]')
   assert.equal(r.status, 1)
   assert.equal(JSON.parse(r.stdout).reason, 'path-outside-root')
-  r = run('seal', '--pr', PR, '--phase', PHASE, '--base', base, '--contract', abs)
+  r = run('seal', '--pr', PR, '--phase', PHASE, '--base', base, '--contract', abs, '--static-gates', '[]')
   assert.equal(r.status, 0, r.stdout)
   assert.equal(JSON.parse(r.stdout).sealed, true)
   rmSync(cwd, { recursive: true, force: true })
@@ -1136,6 +1139,8 @@ test('seal: a `reattest` revision re-seals a witness whose content is ALREADY at
     matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'default', oracle: 'node test/a.test.js', expected: '2', covers: ['r0-1'] }],
     redTests: [{ file: 'test/a.test.js', kind: 'test', baseline: 'red', sha256: newHash, command: 'node test/a.test.js', observed: 'Original failure at base (unchanged): FAIL. Re-sealed at merged head with no new dirty change — content already matches via the merge commit above.' }],
     testExempt: false,
+    // US-506 AC9: the re-sealed witness file differs from the predecessor's — the revision names its row
+    changedRows: ['row-1'],
   }
 
   // Without `reattest`: refused exactly as it always was — nothing silently widened.
@@ -1193,3 +1198,318 @@ test('seal: a `reattest` revision re-seals a witness whose content is ALREADY at
 
   rmSync(cwd, { recursive: true, force: true })
 })
+
+// ══ US-506 T-2 — a fresh run has no `a0` seal: custody starts at the base, with no `a0` segment ══
+const freshRunDir = handoffs => {
+  const dir = join(mkdtempSync(join(tmpdir(), 'fresh-run-')), '.pair', 'working', 'runs', 'story-7', '7')
+  mkdirSync(dir, { recursive: true })
+  for (const [name, data] of Object.entries(handoffs)) writeFileSync(join(dir, `${name}.json`), JSON.stringify(data))
+  return dir
+}
+test('US-506 T-2 w1: a fresh run implemented above the base with no seal — its tests and code change freely — verify-chain over the run directory is verified, contract none', () => {
+  const { cwd, base } = repo()
+  // the implement stage: tests and code together, test-first, no RED snapshot anywhere
+  write(cwd, 'test/new.test.js', 'import { a } from "../src/a.js"\nif (a() !== 2) throw new Error("FAIL")\n')
+  write(cwd, 'src/a.js', 'export const a = () => 2\n')
+  write(cwd, 'src/added.js', 'export const b = 1\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'implement')
+  const runDir = freshRunDir({ 'a0-implement-phase': { skill: 'implement-phase', phase: 'a0', status: 'ok', gatesPassed: true } })
+  const chain = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.deepEqual({ verified: chain.verified, contract: chain.contract, breaches: chain.breaches }, { verified: true, contract: 'none', breaches: [] })
+  assert.equal(chain.contractExpectation.expectContract, false)
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('US-506 T-2 w2: a fresh run that reached a remediation round — the implement commits precede the first seal and are never a segment; the r1 segment keeps every guarantee', () => {
+  const { cwd, base } = repo()
+  write(cwd, 'test/new.test.js', 'if (1 !== 1) throw new Error("FAIL")\n')
+  write(cwd, 'src/other.js', 'export const o = 5\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'implement')
+  const head1 = git(cwd, 'rev-parse', 'HEAD')
+  const { contractPath } = redContract(cwd)
+  const s = seal({ pr: PR, phase: 'r1-g1', base: head1, contractPath, cwd })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  rmSync(join(cwd, contractPath))
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  const runDir = freshRunDir({ 'a0-implement-phase': { skill: 'implement-phase', phase: 'a0', status: 'ok' }, 'r1-g1-red-verify': { skill: 'red-verify', phase: 'r1-g1', verified: true, sealed: true, inputHead: head1 } })
+  // walked from the base (no `a0` segment) and from the round base: both verified
+  for (const from of [base, head1]) {
+    const chain = verifyChain({ pr: PR, base: from, cwd, runDir })
+    assert.equal(chain.verified, true, JSON.stringify(chain.breaches))
+    assert.deepEqual(chain.snapshots.map(x => x.phase), ['r1-g1'])
+  }
+  // control: a production change outside the r1 scope, after the seal, is still a breach
+  write(cwd, 'src/other.js', 'export const o = 6\n')
+  git(cwd, 'commit', '-q', '--no-verify', '-am', 'out of scope')
+  assert.deepEqual(verifyChain({ pr: PR, base, cwd, runDir }).breaches.map(b => [b.code, b.path]), [['out-of-scope', 'src/other.js']])
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+// ══ US-506 T-6 — ONE pre-seal guard: static gates, hermeticity, provenance, changedRows ══════════
+// Carried from US-487 T-8: the `a0` contract sealed an unused local (quality-gate red for ANY
+// implementation) and a witness that passes for anything. Each refusal below names the file.
+const sealCli = (cwd, args, env = {}) => {
+  const r = spawnSync(process.execPath, [CLI, 'seal', ...args, '--cwd', cwd], { encoding: 'utf8', env: { ...process.env, ...env } })
+  return { status: r.status, json: JSON.parse(r.stdout.trim().split('\n').pop() || '{}'), stderr: r.stderr }
+}
+// A "real" `gh` standing FIRST on PATH, so a witness that shells out to `gh` is observable and the
+// suite never reaches the operator's real tracker, before or after the guard exists.
+function realGhOnPath() {
+  const dir = mkdtempSync(join(tmpdir(), 'real-gh-'))
+  const log = join(dir, 'reached.log')
+  writeFileSync(join(dir, 'gh'), `#!/bin/sh\necho "$@" >> "${log}"\nexit 0\n`)
+  spawnSync('chmod', ['+x', join(dir, 'gh')])
+  return { PATH: `${dir}:${process.env.PATH}`, log }
+}
+function witnessRepo(testBody) {
+  const { cwd, base } = repo()
+  write(cwd, 'test/w.test.js', testBody)
+  const contract = {
+    sourceOfTruth: 'a()',
+    fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/a.js'] },
+    matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'default', oracle: 'node test/w.test.js', expected: '2', covers: ['r0-1'] }],
+    redTests: [{ file: 'test/w.test.js', kind: 'test', sha256: hashFile('test/w.test.js', cwd), command: 'node test/w.test.js', observed: 'Error: FAIL' }],
+    testExempt: false,
+  }
+  write(cwd, '.pair/working/w-draft.json', JSON.stringify(contract))
+  return { cwd, base, contractPath: '.pair/working/w-draft.json' }
+}
+const LINT_UNUSED = JSON.stringify([{ name: 'lint', command: [process.execPath, '-e', 'const s=require("fs").readFileSync(process.argv[1],"utf8"); if (/const unusedLocal/.test(s)) { console.error(process.argv[1] + ": unusedLocal is assigned a value but never used"); process.exit(1) }', '{file}'] }])
+
+test('US-506 T-6 w1 (AC9): a listed test that fails the repo static gates is refused before the seal, naming the file; a clean one seals', () => {
+  const bad = witnessRepo('const unusedLocal = 1\nimport("../src/a.js").then(m => { if (m.a() !== 2) throw new Error("FAIL") })\n')
+  const refused = sealCli(bad.cwd, ['--pr', PR, '--phase', PHASE, '--base', bad.base, '--contract', bad.contractPath, '--static-gates', LINT_UNUSED])
+  assert.equal(refused.status, 1, JSON.stringify(refused.json))
+  assert.deepEqual([refused.json.sealed, refused.json.reason, refused.json.path, refused.json.gate], [false, 'static-gate-failed', 'test/w.test.js', 'lint'])
+  assert.match(refused.json.output, /unusedLocal is assigned a value but never used/)
+  assert.equal(git(bad.cwd, 'rev-parse', 'HEAD'), bad.base, 'nothing committed')
+  const good = witnessRepo('import("../src/a.js").then(m => { if (m.a() !== 2) throw new Error("FAIL") })\n')
+  const ok = sealCli(good.cwd, ['--pr', PR, '--phase', PHASE, '--base', good.base, '--contract', good.contractPath, '--static-gates', LINT_UNUSED])
+  assert.equal(ok.json.sealed, true, JSON.stringify(ok.json))
+  assert.deepEqual(ok.json.preSeal.staticGates.map(g => [g.gate, g.path, g.exitCode]), [['lint', 'test/w.test.js', 0]])
+})
+
+test('US-506 T-6 w2 (AC9): a listed test that spawns a REAL `gh` or reaches the network is refused, naming the file; a stubbed `gh` and a loopback socket seal', () => {
+  const real = realGhOnPath()
+  const gh = witnessRepo('require("child_process").spawnSync("gh", ["issue", "view", "7"])\nthrow new Error("FAIL")\n')
+  const r1 = sealCli(gh.cwd, ['--pr', PR, '--phase', PHASE, '--base', gh.base, '--contract', gh.contractPath, '--static-gates', '[]'], { PATH: real.PATH })
+  assert.deepEqual([r1.json.sealed, r1.json.reason, r1.json.path], [false, 'test-spawns-gh', 'test/w.test.js'], JSON.stringify(r1.json))
+  assert.equal(existsSync(real.log), false, 'the probe intercepted gh before any real one ran')
+  const net = witnessRepo('const s = require("net").connect({ host: "pair-seal-probe.invalid", port: 443 }); s.on("error", () => {}); setTimeout(() => { throw new Error("FAIL") }, 50)\n')
+  const r2 = sealCli(net.cwd, ['--pr', PR, '--phase', PHASE, '--base', net.base, '--contract', net.contractPath, '--static-gates', '[]'], { PATH: real.PATH })
+  assert.deepEqual([r2.json.sealed, r2.json.reason, r2.json.path, r2.json.host], [false, 'test-reaches-network', 'test/w.test.js', 'pair-seal-probe.invalid'], JSON.stringify(r2.json))
+  // hermetic tests seal: gh is the test's own stub, the socket is loopback
+  const stubbed = witnessRepo('const { mkdtempSync, writeFileSync, chmodSync } = require("fs"); const { join } = require("path"); const d = mkdtempSync(join(require("os").tmpdir(), "stub-")); writeFileSync(join(d, "gh"), "#!/bin/sh\\nexit 0\\n"); chmodSync(join(d, "gh"), 0o755)\nrequire("child_process").spawnSync("gh", ["x"], { env: { ...process.env, PATH: d + ":" + process.env.PATH } })\nconst s = require("net").connect({ host: "127.0.0.1", port: 9 }); s.on("error", () => {}); setTimeout(() => { throw new Error("FAIL") }, 50)\n')
+  const r3 = sealCli(stubbed.cwd, ['--pr', PR, '--phase', PHASE, '--base', stubbed.base, '--contract', stubbed.contractPath, '--static-gates', '[]'], { PATH: real.PATH })
+  assert.equal(r3.json.sealed, true, JSON.stringify(r3.json))
+  assert.equal(r3.json.preSeal.hermetic.probed, 1)
+  assert.equal(existsSync(real.log), false)
+})
+
+test('US-506 T-6 w3 (AC9): a `predecessorContractHash` that matches no sealed predecessor is refused; the real one seals', () => {
+  const { cwd, head1 } = chainRepo()
+  const sealedManifest = JSON.parse(git(cwd, 'show', `HEAD~1:${manifestPathFor(PR, 'r1-g1')}`))
+  const { $meta, ...sealedContract } = sealedManifest
+  void $meta
+  const wrong = revision(cwd, head1, { predecessorContractHash: `sha256:${'f'.repeat(64)}` })
+  assert.deepEqual([wrong.sealed, wrong.reason, wrong.stated], [false, 'predecessor-hash-unmatched', `sha256:${'f'.repeat(64)}`])
+  assert.match(String(wrong.path), /rev-draft\.json$/, 'names the contract file')
+  const right = revision(cwd, head1, { predecessorContractHash: contractHash(sealedContract) })
+  assert.equal(right.sealed, true, JSON.stringify(right))
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('US-506 T-6 w4 (AC9): a revision whose `changedRows` omits a witness its own diff modifies — or a row it edits — is refused, naming the file or the row', () => {
+  let { cwd, head1 } = chainRepo()
+  const omitsFile = revision(cwd, head1, { changedRows: [] })
+  assert.deepEqual([omitsFile.sealed, omitsFile.reason, omitsFile.path], [false, 'changed-rows-omit-witness', 'test/a.test.js'], JSON.stringify(omitsFile))
+  const editsRow = revision(cwd, head1, { matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'default', oracle: 'node test/a.test.js', expected: '3', covers: ['r0-1'] }, { id: 'row-2', kind: 'witness', baseline: 'red', condition: 'empty', oracle: 'node test/a.test.js', expected: '0', covers: ['r1-1'] }] })
+  assert.deepEqual([editsRow.sealed, editsRow.reason, editsRow.rows], [false, 'changed-rows-omit-row', ['row-1']], JSON.stringify(editsRow))
+  const complete = revision(cwd, head1)
+  assert.equal(complete.sealed, true, JSON.stringify(complete))
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('US-506 T-6 c1 (control): a clean contract seals unchanged through the CLI — the same commit shape, the same manifest — and the guard reports what it ran', () => {
+  const { cwd, base } = repo()
+  const { contractPath } = redContract(cwd)
+  const out = sealCli(cwd, ['--pr', PR, '--phase', PHASE, '--base', base, '--contract', contractPath, '--static-gates', '[]'])
+  assert.equal(out.json.sealed, true, JSON.stringify(out.json))
+  assert.deepEqual(git(cwd, 'diff-tree', '--no-commit-id', '--name-only', '-r', out.json.snapshot).split('\n').sort(), [manifestPathFor(PR, PHASE), 'test/a.test.js'].sort())
+  assert.deepEqual(out.json.preSeal.staticGates, [])
+  // without --static-gates the CLI refuses to seal blind: the repo's gates are a required input
+  const { cwd: c2, base: b2 } = repo()
+  const { contractPath: p2 } = redContract(c2)
+  const blind = sealCli(c2, ['--pr', PR, '--phase', PHASE, '--base', b2, '--contract', p2])
+  assert.equal(blind.status, 2)
+  assert.match(blind.json.error, /--static-gates/)
+})
+
+// ══ US-506 T-7 — a merge from the base is not a PR change ═══════════════════════════════════════
+// US-487: the maintainer-decided merge of origin/main (`f9d71a2d`) brought 7 files byte-identical to
+// main into the r0 custody walk, which counted them as the PR's own changes — 7 attributed overrides.
+function mergedFromMain() {
+  const { cwd, base } = repo()
+  // the story: a fresh implement, then a remediation seal and its GREEN
+  git(cwd, 'checkout', '-q', '-b', 'story')
+  write(cwd, 'src/a.js', 'export const a = () => 1 // implemented\n')
+  git(cwd, 'commit', '-q', '--no-verify', '-am', 'implement')
+  const head1 = git(cwd, 'rev-parse', 'HEAD')
+  const { contractPath } = redContract(cwd)
+  const s = seal({ pr: PR, phase: 'r1-g1', base: head1, contractPath, cwd })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  rmSync(join(cwd, contractPath))
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  // meanwhile main moves: 7 files — production outside the fix scope, tests, a new module
+  git(cwd, 'checkout', '-q', 'main')
+  const mainFiles = { 'src/other.js': 'export const o = 7\n', 'src/new-module.js': 'export const n = 1\n', 'docs/guide.md': '# guide\n', 'apps/cli/run.ts': 'export {}\n', 'test/other.test.js': 'if (1 !== 1) throw new Error("FAIL")\n', 'apps/cli/run.test.ts': 'export {}\n', '.github/workflows/ci.yml': 'on: push\n' }
+  for (const [rel, content] of Object.entries(mainFiles)) write(cwd, rel, content)
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'main moves on')
+  const mainHead = git(cwd, 'rev-parse', 'HEAD')
+  git(cwd, 'checkout', '-q', 'story')
+  git(cwd, 'merge', '-q', '--no-ff', '--no-edit', 'main')
+  return { cwd, head1, mainHead, mainFiles }
+}
+const runDirWith = handoffs => {
+  const dir = join(mkdtempSync(join(tmpdir(), 'merge-run-')), '.pair', 'working', 'runs', 'story-7', '7')
+  mkdirSync(dir, { recursive: true })
+  for (const [name, data] of Object.entries(handoffs)) writeFileSync(join(dir, `${name}.json`), JSON.stringify(data))
+  return dir
+}
+
+test('US-506 T-7 w1 (AC11): the files a merge of the base brought in, byte-identical to it, are not PR changes — verified with no override', () => {
+  const { cwd, head1, mainFiles } = mergedFromMain()
+  const runDir = runDirWith({ 'r1-g1-red-verify': { skill: 'red-verify', phase: 'r1-g1', verified: true, sealed: true, inputHead: head1 } })
+  // the US-487 shape: without knowing the base, every merged file is a breach of the r1-g1 segment
+  const strict = verifyChain({ pr: PR, base: head1, cwd, runDir })
+  assert.deepEqual(strict.breaches.map(b => b.path).sort(), Object.keys(mainFiles).sort(), JSON.stringify(strict.breaches))
+  // told the base the story merged, the walk excludes what is byte-identical to it
+  const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
+  assert.deepEqual({ verified: chain.verified, breaches: chain.breaches, overridden: chain.overriddenBreaches }, { verified: true, breaches: [], overridden: undefined })
+  assert.deepEqual(chain.mergedBase?.paths?.sort(), Object.keys(mainFiles).sort())
+  // and through the CLI the review-phase runs
+  const r = spawnSync(process.execPath, [CLI, 'verify-chain', '--pr', PR, '--base', head1, '--run-dir', runDir, '--base-ref', 'main', '--cwd', cwd], { encoding: 'utf8' })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('US-506 T-7 w2 (AC11): a merged file edited AFTER the merge differs from the base and is still a breach; a branch that is not the base earns no exemption', () => {
+  const { cwd, head1 } = mergedFromMain()
+  const runDir = runDirWith({ 'r1-g1-red-verify': { skill: 'red-verify', phase: 'r1-g1', verified: true, sealed: true, inputHead: head1 } })
+  write(cwd, 'src/other.js', 'export const o = 8 // edited by the PR after the merge\n')
+  git(cwd, 'commit', '-q', '--no-verify', '-am', 'post-merge edit')
+  assert.deepEqual(verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' }).breaches.map(b => [b.code, b.path]), [['out-of-scope', 'src/other.js']])
+  // a side branch merged in is not the declared base: its files stay the PR's changes
+  git(cwd, 'checkout', '-q', '-b', 'side', 'main')
+  write(cwd, 'src/side.js', 'export const s = 1\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'side')
+  git(cwd, 'checkout', '-q', 'story')
+  git(cwd, 'merge', '-q', '--no-ff', '--no-edit', 'side')
+  const codes = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' }).breaches.map(b => b.path)
+  assert.ok(codes.includes('src/side.js'), JSON.stringify(codes))
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+// ── US-506 F-3 (AC11): only what the MERGE brought in is exempt — never a PR-owned deletion, never a
+// fixer's own revert to base content ──────────────────────────────────────────────────────────────
+function sealedStoryWith(prOwned) {
+  const { cwd } = repo()
+  git(cwd, 'checkout', '-q', '-b', 'story')
+  for (const [rel, content] of Object.entries(prOwned)) write(cwd, rel, content)
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'implement')
+  const head1 = git(cwd, 'rev-parse', 'HEAD')
+  const { contractPath } = redContract(cwd)
+  const s = seal({ pr: PR, phase: 'r1-g1', base: head1, contractPath, cwd })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  rmSync(join(cwd, contractPath))
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  git(cwd, 'checkout', '-q', 'main')
+  write(cwd, 'docs/x.md', '# x\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'main moves on')
+  git(cwd, 'checkout', '-q', 'story')
+  git(cwd, 'merge', '-q', '--no-ff', '--no-edit', 'main')
+  const runDir = runDirWith({ 'r1-g1-red-verify': { skill: 'red-verify', phase: 'r1-g1', verified: true, sealed: true, inputHead: head1 } })
+  return { cwd, head1, runDir }
+}
+test('US-506 F-3 w1 (AC11): a PR-owned file deleted after a base merge, outside fixScope, is still a breach', () => {
+  const { cwd, head1, runDir } = sealedStoryWith({ 'src/pr-only.js': 'export const p = 1\n' })
+  git(cwd, 'rm', '-q', 'src/pr-only.js')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'delete a PR-owned file out of scope')
+  const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
+  assert.deepEqual(chain.breaches.map(b => [b.code, b.path]), [['out-of-scope', 'src/pr-only.js']], JSON.stringify(chain))
+  assert.deepEqual(chain.mergedBase?.paths, ['docs/x.md'], 'only what the merge brought in is exempt')
+  rmSync(cwd, { recursive: true, force: true })
+})
+test('US-506 F-3 w2 (AC11): a fixer\'s own edit that restores an out-of-scope file to the base content — a path the merge never changed — is still a breach', () => {
+  const { cwd, head1, runDir } = sealedStoryWith({ 'src/other.js': 'export const o = 99 // changed by the implement stage\n' })
+  write(cwd, 'src/other.js', 'export const o = 0\n') // byte-identical to main, but the merge did not bring it
+  git(cwd, 'commit', '-q', '--no-verify', '-am', 'revert an out-of-scope file to base')
+  const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
+  assert.deepEqual(chain.breaches.map(b => [b.code, b.path]), [['out-of-scope', 'src/other.js']], JSON.stringify(chain))
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('US-506 F-6 (AC11): a revert of the PR\'s own out-of-scope edit made INSIDE the merge commit — a path the base never changed since the fork — is still a breach; only what the base changed (docs/x.md) is exempt', () => {
+  const { cwd, base } = repo()
+  git(cwd, 'checkout', '-q', '-b', 'story')
+  write(cwd, 'src/other.js', 'export const o = 99 // changed by the implement stage\n')
+  git(cwd, 'commit', '-q', '--no-verify', '-am', 'implement')
+  const head1 = git(cwd, 'rev-parse', 'HEAD')
+  const { contractPath } = redContract(cwd)
+  const s = seal({ pr: PR, phase: 'r1-g1', base: head1, contractPath, cwd })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  rmSync(join(cwd, contractPath))
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  git(cwd, 'checkout', '-q', 'main')
+  write(cwd, 'docs/x.md', '# x\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'main moves on')
+  git(cwd, 'checkout', '-q', 'story')
+  // the fixer hides an out-of-scope revert inside the merge commit itself
+  git(cwd, 'merge', '-q', '--no-ff', '--no-commit', 'main')
+  git(cwd, 'checkout', 'main', '--', 'src/other.js')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'merge main')
+  void base
+  const runDir = runDirWith({ 'r1-g1-red-verify': { skill: 'red-verify', phase: 'r1-g1', verified: true, sealed: true, inputHead: head1 } })
+  const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
+  assert.deepEqual(chain.breaches.map(b => [b.code, b.path]), [['out-of-scope', 'src/other.js']], JSON.stringify(chain))
+  assert.deepEqual(chain.mergedBase?.paths, ['docs/x.md'])
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+// ── US-506 Q-2 (AC11): the base-deletion branch — a pre-fork file the BASE deleted, deletion kept by
+// the merge, is the base's change: exempt (also when the PR had edited it: modify/delete ⇒ delete).
+for (const [name, prEdits] of [['E3 the PR never touched it', false], ['E4 the PR had edited it (modify/delete resolved to delete)', true]])
+  test(`US-506 Q-2 (AC11): the base deletes a pre-fork file and the merge keeps the deletion ⇒ exempt — ${name}`, () => {
+    const { cwd } = repo()
+    git(cwd, 'checkout', '-q', '-b', 'story')
+    if (prEdits) write(cwd, 'src/other.js', 'export const o = 5 // edited by the implement stage\n')
+    else write(cwd, 'src/pr.js', 'export const p = 1\n')
+    git(cwd, 'add', '-A')
+    git(cwd, 'commit', '-q', '--no-verify', '-m', 'implement')
+    const head1 = git(cwd, 'rev-parse', 'HEAD')
+    const { contractPath } = redContract(cwd)
+    const s = seal({ pr: PR, phase: 'r1-g1', base: head1, contractPath, cwd })
+    assert.equal(s.sealed, true, JSON.stringify(s))
+    rmSync(join(cwd, contractPath))
+    green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+    git(cwd, 'checkout', '-q', 'main')
+    git(cwd, 'rm', '-q', 'src/other.js')
+    git(cwd, 'commit', '-q', '--no-verify', '-m', 'main deletes src/other.js')
+    git(cwd, 'checkout', '-q', 'story')
+    spawnSync('git', ['merge', '-q', '--no-ff', '--no-commit', 'main'], { cwd, encoding: 'utf8' }) // E4 conflicts: modify/delete
+    spawnSync('git', ['rm', '-q', '--ignore-unmatch', 'src/other.js'], { cwd, encoding: 'utf8' })
+    git(cwd, 'commit', '-q', '--no-verify', '-m', 'merge main')
+    assert.equal(existsSync(join(cwd, 'src/other.js')), false, 'the merge kept the deletion')
+    const runDir = runDirWith({ 'r1-g1-red-verify': { skill: 'red-verify', phase: 'r1-g1', verified: true, sealed: true, inputHead: head1 } })
+    const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
+    assert.deepEqual({ verified: chain.verified, breaches: chain.breaches }, { verified: true, breaches: [] }, JSON.stringify(chain))
+    assert.deepEqual(chain.mergedBase?.paths, ['src/other.js'])
+    rmSync(cwd, { recursive: true, force: true })
+  })

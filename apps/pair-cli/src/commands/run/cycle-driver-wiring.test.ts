@@ -36,14 +36,15 @@ import { ENGINES, type EngineDefinition } from './engines'
  * - AC1: resolve → worktree → packet → spawn → resolve, through the real scripts.
  * - AC4: the engine's SUCCESS terminal event is not evidence — the handoff did not advance.
  * - AC5: the dead-dispatch retry budget is the one `cycle-state` reports (`POLICY_DEFAULTS`), not a
- *   `pair-cli` literal and not the `{}` the driver sends: exactly one retry, then `failed-prepare`.
+ *   `pair-cli` literal and not the `{}` the driver sends: exactly one retry, then `failed-implement` (US-506: a fresh card's first stage is implement).
  * - AC3/AC13: the prompt is the packet's own rendering in the engine's style — `slash` for claude,
  *   the role body first for pi's `instruction`.
  * - the stage starts in the MAIN checkout (where every phase skill anchors the run directory),
  *   never in the story worktree the packet names.
  */
 
-const ROLE_LINE = 'You own the preparation stage of a delivery cycle'
+// US-506 AC1: a fresh card's first stage is `implement` — the implementer's role leads the packet.
+const ROLE_LINE = 'You are the **implementer** for a single Pair user story'
 const REPO_ROOT = join(__dirname, '..', '..', '..', '..', '..')
 
 interface EngineCall {
@@ -141,7 +142,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     const outcome = await drive(ENGINES.claude)
 
     expect(calls()).toHaveLength(2) // the stage, plus the one retry — never a third
-    expect(outcome.status).toBe('failed-prepare')
+    expect(outcome.status).toBe('failed-implement')
     expect(outcome.stagesRun).toBe(2)
   }, 60_000)
 
@@ -157,7 +158,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
 
     const [first] = calls()
     const prompt = first!.argv[first!.argv.length - 1]!
-    expect(prompt.startsWith('/pair-workflow-red-spec ')).toBe(true)
+    expect(prompt.startsWith('/pair-workflow-implement-phase ')).toBe(true)
     expect(prompt).toContain(ROLE_LINE)
     expect(first!.argv).not.toContain('bypassPermissions')
   }, 60_000)
@@ -179,7 +180,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     const outcome = await drive(ENGINES.opencode)
 
     expect(calls()).toHaveLength(2)
-    expect(outcome.status).toBe('failed-prepare')
+    expect(outcome.status).toBe('failed-implement')
     expect(outcome.status).not.toBe('ready-for-merge')
   }, 60_000)
 
@@ -189,7 +190,7 @@ process.stdout.write(JSON.stringify({ type: 'step_finish', part: { reason: 'stop
     const [first] = calls()
     const prompt = first!.argv[first!.argv.length - 1]!
     expect(prompt.startsWith(ROLE_LINE)).toBe(true)
-    expect(prompt).toMatch(/Run the pair-workflow-red-spec skill with these arguments:/)
+    expect(prompt).toMatch(/Run the pair-workflow-implement-phase skill with these arguments:/)
     expect(prompt).not.toMatch(/^\//)
   }, 60_000)
   // ── a0 repair (2026-09-22): the classes the validator found no row for ──────────────────────

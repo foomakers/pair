@@ -66,5 +66,6 @@ export async function runStage(input: RunStageInput): Promise<CycleStageResult> 
   return {
     processOutcome: result.outcome,
     ...(result.detail !== undefined && { detail: result.detail }),
+    ...(result.stalled === true && { stalled: true as const }),
   }
 }

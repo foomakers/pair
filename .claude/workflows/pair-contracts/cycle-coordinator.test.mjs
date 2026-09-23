@@ -120,9 +120,9 @@ async function batchPrompts(args) {
   return calls
 }
 
-// ══ AC1 — fresh-card entry: resolve yields prepare/initial/a0, the worktree is idempotent ══════
+// ══ AC1 — fresh-card entry: resolve yields implement/initial/a0 (US-506), the worktree is idempotent ══
 
-test('AC1-c1 (control): `resolve` on an empty run directory with `--entry fresh` yields prepare/initial/a0', () => {
+test('AC1-c1 (control, US-506 AC1): `resolve` on an empty run directory with `--entry fresh` yields implement/initial/a0 — no up-front contract', () => {
   const { dir } = runDir()
   const r = state([
     'resolve',
@@ -140,9 +140,10 @@ test('AC1-c1 (control): `resolve` on an empty run directory with `--entry fresh`
     'abc',
   ])
   assert.equal(r.status, 0, r.stderr)
-  assert.equal(r.json.next.step, 'prepare')
+  assert.equal(r.json.next.step, 'implement')
   assert.equal(r.json.next.mode, 'initial')
   assert.equal(r.json.next.phase, 'a0')
+  assert.equal(r.json.next.contract, undefined)
 })
 
 test('AC1-w1: `cycle-dispatch.mjs worktree` creates the persistent story worktree on the card branch', () => {
@@ -308,13 +309,14 @@ test('AC2-w1: the packet built for a PR entry invokes the review-phase skill, ne
 
 // ══ AC3 — one stage, one dispatch, arguments byte-identical in shape to the batch's ════════════
 
-test('AC3-w1: the `prepare` packet is byte-identical to the prompt `pair-implement-batch.js` composes', async () => {
+test('AC3-w1 (US-506): the fresh card\'s first packet — `implement`, no contract — is byte-identical to the prompt `pair-implement-batch.js` composes', async () => {
   const calls = await batchPrompts({ cards: [CARD] })
-  const fromBatch = calls.find(c => c.opts.label?.startsWith('prepare:'))
+  const fromBatch = calls.find(c => c.opts.label?.startsWith('implement:'))
   assert.ok(
     fromBatch,
-    `the engine dispatched no prepare: ${calls.map(c => c.opts.label).join(', ')}`,
+    `the engine dispatched no implement: ${calls.map(c => c.opts.label).join(', ')}`,
   )
+  assert.doesNotMatch(fromBatch.prompt, /\$snapshot=|\$contract=|\$head=/, 'no contract, no seal, no base yet')
 
   const { dir } = runDir()
   const next = state([
@@ -500,7 +502,7 @@ test('AC4-c1 (control): `resolve` is unmoved by a dead dispatch and advances onl
 test('AC5-c1 (control): the engine retries a dead dispatch exactly once, then ends the story failed', async () => {
   const calls = await batchPrompts({ cards: [CARD] })
   assert.equal(
-    calls.filter(c => c.opts.label?.startsWith('prepare:')).length,
+    calls.filter(c => c.opts.label?.startsWith('implement:')).length,
     2,
     'one dispatch plus exactly one retry',
   )
@@ -1722,6 +1724,7 @@ function capRunDir(count, { converged = false } = {}) {
         recommendation: 'r',
         transition: 'open',
         blocking: true,
+        reproducer: { command: 'node --test x.test.mjs' },
       },
     ],
     readiness: { ready: false, remoteHead: 'c'.repeat(40) },
@@ -2066,8 +2069,8 @@ test('r1-2 b3 (boundary, pass at base): the coordinator’s SKILL.md spells no w
 
 test('r1-2 c1 (control): a well-formed version still renders the packet, byte-identical to the engine’s', async () => {
   const calls = await batchPrompts({ cards: [CARD] })
-  const fromBatch = calls.find(c => c.opts.label?.startsWith('prepare:'))
-  assert.ok(fromBatch, 'the engine dispatched no prepare')
+  const fromBatch = calls.find(c => c.opts.label?.startsWith('implement:'))
+  assert.ok(fromBatch, 'the engine dispatched no implement')
   const r = packetWith(WORKFLOW_VERSION)
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.equal(r.json.halt, undefined)
@@ -2121,7 +2124,7 @@ test('r1-2 c2 (control): the r1-g2 HALTs at this same boundary are untouched and
 test('r1-2 c3 (control): a well-formed version of ANOTHER major still resolves — the grammar is the gate, not the value', () => {
   const pinned = resolveWith(WORKFLOW_VERSION)
   assert.equal(pinned.status, 0, pinned.stderr)
-  assert.equal(pinned.json.next.step, 'prepare')
+  assert.equal(pinned.json.next.step, 'implement')
   assert.equal(pinned.json.next.mode, 'initial')
   assert.equal(pinned.json.next.phase, 'a0')
 
@@ -2131,7 +2134,7 @@ test('r1-2 c3 (control): a well-formed version of ANOTHER major still resolves �
     0,
     `a legacy/migration major is well-formed and still answers: ${older.stdout}`,
   )
-  assert.equal(older.json.next.step, 'prepare')
+  assert.equal(older.json.next.step, 'implement')
 })
 
 test('r1-2 i1 (interaction): the pinned version is accepted by packet, resolve AND publish', async () => {
@@ -2149,7 +2152,7 @@ test('r1-2 i1 (interaction): the pinned version is accepted by packet, resolve A
 
   const s = resolveWith(pin)
   assert.equal(s.status, 0, `resolve refused the pin: ${s.stdout}`)
-  assert.equal(s.json.next.step, 'prepare')
+  assert.equal(s.json.next.step, 'implement')
 
   const pub = publishWith(pin)
   assert.equal(pub.status, 0, `publish refused the pin: ${pub.stdout}`)
@@ -2358,7 +2361,33 @@ function scopeDecisionFixture() {
 
 // One invocation per declaring subcommand: minimally valid in EVERY dimension but the version, so
 // the only thing a refusal can be about is the version — and so an acceptance runs the real thing.
+// US-506 T-5: a run directory holding one unvalidated preparation (for `supersede`) and one holding an
+// escalated review (for `decide`), each seeded through the REAL `publish` at the pinned version.
+const seededRunDir = draft => {
+  const { root, dir } = runDir()
+  const f = join(root, `seed-${Math.random().toString(36).slice(2)}.json`)
+  writeFileSync(f, JSON.stringify(draft))
+  const pub = state(['publish', '--dir', dir, '--file', f, '--phase', draft.phase, '--skill', draft.skill, '--workflowVersion', WORKFLOW_VERSION, '--attempt', '1'])
+  assert.equal(pub.status, 0, pub.stdout + pub.stderr)
+  return dir
+}
 const INVOCATIONS = {
+  supersede: version => {
+    const dir = seededRunDir({ run: 'story-42', story: '42', branch: 'feature/US-42-x', phase: 'a0', skill: 'red-spec', inputHead: SHA40('a'), mode: 'initial', status: 'red', contractPath: '/x.json', contractHash: `sha256:${'1'.repeat(64)}` })
+    return {
+      dir,
+      args: ['supersede', '--dir', dir, '--phase', 'a0', '--reason', 'probe', '--by', 'rucka', '--workflowVersion', version, '--entry', 'fresh'],
+      accepted: r => r.status === 0 && r.json?.superseded === true,
+    }
+  },
+  decide: version => {
+    const dir = seededRunDir({ run: 'story-42', story: '42', pr: 7, branch: 'feature/US-42-x', phase: 'r0', skill: 'review-phase', inputHead: SHA40('a'), reviewedHead: SHA40('c'), verdict: 'CHANGES-REQUESTED', mode: 'first', needsHumanDecision: true, findings: [{ id: 'r0-1', severity: 'Major', location: 'x.js:1', description: 'd', recommendation: 'r', blocking: true, transition: 'open', kind: 'defect', reproducer: { command: 'node --test x.test.mjs' } }], custody: { verified: true, contractBreach: false }, readiness: { ready: false, remoteHead: SHA40('c') } })
+    return {
+      dir,
+      args: ['decide', '--dir', dir, '--phase', 'r0', '--finding', 'r0-1', '--decision', 'probe', '--by', 'rucka', '--workflowVersion', version, '--entry', 'pr', '--pr', '7'],
+      accepted: r => r.status === 0 && r.json?.decided === true,
+    }
+  },
   resolve: version => {
     const { dir } = runDir()
     return {
@@ -2378,7 +2407,7 @@ const INVOCATIONS = {
         '--inputs',
         'x',
       ],
-      accepted: r => r.status === 0 && r.json?.next?.step === 'prepare',
+      accepted: r => r.status === 0 && r.json?.next?.step === 'implement',
     }
   },
   publish: version => {
@@ -2651,11 +2680,14 @@ const STYLE_BASELINE_PROMPT =
   '$branch=feature/US-42-x $worktree=../pair-worktrees/42 $base=origin/main $stacked=false ' +
   '$entry=fresh $policy='
 
+// The style contract is rendered on a `prepare a0` next (a run already on the old path, US-506 AC5):
+// its baseline string is the one #486 shipped, and the red-spec skill is the one it names.
+const LEGACY_PREPARE_NEXT = { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1, context: 'fresh' }
 function packetFor(styleArgs = []) {
   return dispatch([
     'packet',
     '--next',
-    JSON.stringify(freshNext()),
+    JSON.stringify(LEGACY_PREPARE_NEXT),
     '--card',
     JSON.stringify(CARD),
     '--policy',
@@ -2721,4 +2753,27 @@ test('T-3 b1 (boundary, once shipped): an unrecognised --style value is a typed 
 
   assert.notEqual(result.status, 0)
   assert.match(JSON.stringify(result.json ?? {}) + result.stdout, /style/i)
+})
+
+// ══ US-506 T-5 — the coordinator documents the maintainer's two recovery commands ══════════════
+test('US-506 T-5: the coordinator skill names `supersede` and `decide` as the recovery commands, with their refusals', () => {
+  for (const md of [CYCLE_SKILL, join(DATASET, '.skills/workflow/cycle/SKILL.md')]) {
+    const body = readFileSync(md, 'utf8')
+    assert.match(body, /cycle-state\.mjs" supersede --dir <run dir> --phase <p> --reason/)
+    assert.match(body, /cycle-state\.mjs" decide --dir <run dir> --phase <r<n>> --finding <id> --decision/)
+    for (const code of ['supersede-sealed', 'supersede-validated', 'supersede-not-found']) assert.ok(body.includes(code), `${md}: ${code}`)
+    assert.match(body, /`resolve` yields `implement \/ initial \/ a0`/)
+  }
+})
+
+// ══ US-506 T-8 (AC12) — the in-session coordinator resumes a stalled stage once, within the budget ══
+test('US-506 T-8: the coordinator skill resumes a STALLED stage once on the same subagent (fresh where it cannot), within deadDispatchRetries — a second failure is failed-<step>', () => {
+  for (const md of [CYCLE_SKILL, join(DATASET, '.skills/workflow/cycle/SKILL.md')]) {
+    const body = readFileSync(md, 'utf8')
+    assert.match(body, /the stage \*\*STALLED\*\*/)
+    assert.match(body, /\*\*resume it once on the same subagent\*\* with the bound realization's resume primitive \(`SendMessage` on Claude/)
+    assert.match(body, /re-dispatch the SAME prompt fresh instead/)
+    assert.match(body, /A stall resume and a dead-dispatch retry spend the SAME `policy\.deadDispatchRetries` budget/)
+    assert.match(body, /a second failure of the step, of either kind, ends the cycle `failed-<step>`/)
+  }
 })

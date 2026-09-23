@@ -199,6 +199,16 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
       'red-verify',
       {
         verified: true,
+        // US-506 AC10: a validated contract carries its execution evidence
+        reproduced: [
+          {
+            rowId: 'row-1',
+            baseline: 'red',
+            command: 'node --test x.test.mjs',
+            exitCode: 1,
+            observed: 'FAIL',
+          },
+        ],
         findings: [],
         sealed: true,
         snapshot: SHA('b'),

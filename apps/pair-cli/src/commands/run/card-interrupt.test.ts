@@ -199,7 +199,7 @@ else done()
       expect(rerun.output()).not.toMatch(/run-in-progress/)
       const resumed = engineRuns().slice(spawnsBefore)
       expect(resumed.length, rerun.output()).toBeGreaterThan(0)
-      expect(resumed[0]!.prompt).toMatch(/^\/pair-workflow-red-spec /)
+      expect(resumed[0]!.prompt).toMatch(/^\/pair-workflow-implement-phase /)
     }, 120_000)
   }
 })

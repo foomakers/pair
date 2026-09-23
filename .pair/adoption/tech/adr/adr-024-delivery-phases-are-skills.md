@@ -1286,3 +1286,67 @@ gains fields, none of the existing ones change meaning:
   brought back (verdict ∈ options; an unknown severity keeps blocking, as before); a caller floor the
   template cannot express fails the batch at adoption with the same message it failed with before.
   Dispatch counts: cold 4 (was 5), one fix round 8 (was 9), resumed PR 1 (was 2).
+
+## Amendment 2026-09-23 (x) — Revisits ADR-024: a fresh card has no up-front contract (US-506)
+
+Append-only; the earlier amendments stand except where this one says otherwise. The engine stays
+at `4.0.1`: the major is unchanged, no argument is renamed, and in-flight runs stay compatible.
+
+**What changes.** The rule "the contract comes first" no longer applies to a **fresh card**. It
+still applies to **review findings**.
+
+- **Fresh card ⇒ `implement / initial` first.** `deriveNext` on an empty run directory with
+  `entry: fresh` answers `implement` (was `prepare a0`), identically for `pair-workflow-cycle`,
+  `pair-cli run --card` and the batch engine's first guess.
+  - The implementer writes the story's tests and code together, test-first, as a practice. It
+    runs an informal self-review against the AC and the review rules, fixes what it finds, and
+    publishes only with the gates green.
+  - **Nothing of the self-review is recorded.** `publish` refuses a `selfReview*` field
+    (`self-review-not-recordable`).
+  - No proof of test-first is required. A fresh run's custody starts at the base: there is no
+    `a0` segment, and the implement commits precede every seal.
+- **Independence moves to a qualitative verify.** The first `verify` of a fresh card names, per
+  AC, the test that proves it (`acAssessment`; `publish` refuses the first review without it).
+  - A weak or missing test is an ordinary finding. There is no new finding class; a
+    `contract-gap` / `approved-test-failing` naming a group that sealed nothing routes the
+    ordinary remediation.
+  - Every OPEN finding is real and evidenced: a reproducer (command or test) or a concrete
+    failure scenario (`finding-unevidenced` otherwise). A difference of taste is not a finding.
+  - A mutation probe is an optional tool, never a required step.
+- **Review findings keep the sealed test-first path, unchanged.** `prepare r<n>` (a non-fixer
+  writes the failing tests) → `validate` (independent validation + seal) → `green`. There is one
+  path for every card, `risk:red` included: more protection comes from more reviewers
+  (`pipeline.reviewers`), not an extra stage.
+- **Runs already started finish under their rules.** A directory holding `a0` handoffs is not
+  empty, so it continues the old transitions to completion. Nothing is migrated and no evidence
+  is discarded.
+
+**Contract engine hardening (the findings path that remains).** Evidence: US-487's run.
+
+- `publish` checks a repair against the **most recent** rejection. Every contract attempt is its
+  own file (`<phase>-red-contract.attempt-N.json`), an earlier attempt's file must still hash as
+  its handoff recorded, and a verdict carries the `contractPath` it validated.
+- `cycle-state.mjs supersede` (an unvalidated attempt set aside, visible and indexed) and
+  `decide` (a maintainer's answer to `needsHumanDecision` recorded as a `recordType: decision`
+  handoff) replace the hand renames and the re-run review.
+- `red-snapshot.mjs seal` runs one pre-seal guard: the repo's static gates (a required
+  `--static-gates`), a hermetic probe of every witness (no real `gh`, no network), the
+  `predecessorContractHash` provenance check and a `changedRows` completeness check. A verified
+  `red-verify` handoff carries per-row execution evidence, and a witness that cannot fail is
+  refused. See
+  [ADL 2026-09-23](../../decision-log/2026-09-23-us-506-validator-execution-evidence-and-pre-seal-guard.md).
+- `verify-chain --base-ref <base>` does not count files byte-identical to a merged base as PR
+  changes (US-487 needed 7 overrides for exactly that).
+- Every stage packet carries the bounded-commands guardrail: foreground, time-bounded commands
+  only, and no real engine or `gh` in a probe. A stalled stage is resumed once — on the same
+  subagent where the realization can, fresh otherwise — within `deadDispatchRetries`.
+
+**Supersession notes.** Decision §1's statement that preparation precedes every implementation
+now holds for review findings only. The implement-phase description "implementation against the
+sealed acceptance contract" holds for the sealed-`a0` path only. The batch engine's documented
+cold path is 2 dispatches (implement, verify), not 4. A batch run on a directory already on the old
+path pays one redirect at entry: to `prepare`/`validate a0` when its preparation is due, or to the
+same `implement a0` carrying the seal when `a0` is sealed and not yet implemented (the implement-phase
+skill redirects a dispatch that lacks the contract `next` carries; the engine accepts that one
+same-step redirect because it binds the contract). The in-session and console coordinators dispatch
+`resolve`'s own `next`, so they pay nothing.

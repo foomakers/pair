@@ -47,6 +47,15 @@
 //     t9d-17); applies ignore | new-card | extend-current-card mechanically and persists a
 //     `recordType: decision` review-phase handoff. Idempotent on the same decisionRef.
 //
+//   node … supersede --dir <dir> --phase <p> --reason <text> --by <who> --workflowVersion <v> [--attempt <n>] [--entry fresh|pr] [--policy <json>] [--pr <n>]
+//     → { superseded, from, to, contract?, index, next }   (US-506 T-5) sets an UNVALIDATED red-spec attempt
+//     aside as `superseded-<date>-<file>` (a listing shows it, NAME_RE does not), indexes it in
+//     maintainer-interventions.md; refused on a sealed (`supersede-sealed`) or answered (`supersede-validated`) attempt.
+//
+//   node … decide --dir <dir> --phase <p> --finding <id> --decision <text> --by <who> --workflowVersion <v> [--entry] [--policy] [--pr]
+//     → { decided, path, next }   (US-506 T-5) records a maintainer's answer to a review's needsHumanDecision
+//     as its own `recordType: decision` handoff; `resolve` then leaves `escalate` — nothing renamed, no review re-run.
+//
 //   node … test-identity --cwd <worktree> --command <cmd> [--env-keys K1,K2] [--toolchain <s>]
 //     → { identity, parts, reusable, missing }     a cached test result is valid ONLY for this identity
 import { createHash } from 'node:crypto'
@@ -383,6 +392,17 @@ export function envelopeErrors(data, { phase, skill }) {
   if (data.firstReviewHead !== undefined && !SHA_RE.test(String(data.firstReviewHead))) errs.push('firstReviewHead-invalid')
   if (data.remediationBatchId !== undefined && (typeof data.remediationBatchId !== 'string' || data.remediationBatchId === '')) errs.push('remediationBatchId-invalid')
   if (data.recordType !== undefined && !RECORD_TYPES.includes(data.recordType)) errs.push(`recordType-invalid:${data.recordType}`)
+  // US-506 F-5 (AC-8): a review that escalates names the decisions it owes — each one a finding of the
+  // same review — so `decide` can hold the escalate until every one is recorded.
+  if (skill === 'review-phase' && data.humanDecisionIds !== undefined) {
+    const ids = data.humanDecisionIds
+    const known = new Set((Array.isArray(data.findings) ? data.findings : []).map(f => f?.id))
+    if (!Array.isArray(ids) || !ids.length || ids.some(x => typeof x !== 'string' || !x.trim())) errs.push('humanDecisionIds-invalid')
+    else for (const id of ids) if (!known.has(id)) errs.push(`humanDecisionIds-unknown:${id}`)
+  }
+  // US-506 AC-2: the implementer's self-review is informal and UNRECORDED — it happens, it fixes what
+  // it finds, and nothing of it reaches a handoff, so the independent reviewer verifies without bias.
+  if (skill === 'implement-phase') for (const k of Object.keys(data)) if (/^self[-_ ]?review/i.test(k)) errs.push(`self-review-not-recordable:${k}`)
   // red-spec's envelope carries `findings: { received, covered }` — the obligation ids it was
   // handed and the ids its contract covers — NOT review findings (its SKILL.md step 2). Validating
   // it against the review shape refused every preparation that reported what it received
@@ -449,9 +469,20 @@ export function envelopeErrors(data, { phase, skill }) {
           }
         }
         if (f.reproducer !== undefined) {
-          if (!f.reproducer || typeof f.reproducer !== 'object' || typeof f.reproducer.command !== 'string' || !f.reproducer.command.trim()) errs.push(`reproducer-invalid:${f.mechanismId ?? f.rowId ?? '?'}`)
-          else if (SHELL_METACHAR_RE.test(f.reproducer.command)) errs.push(`reproducer-command-unsafe:${f.mechanismId ?? f.rowId ?? '?'}`)
+          // A reproducer is a COMMAND or a TEST reference (US-506 AC-3: "a reproducer (command or test)").
+          const rp = f.reproducer
+          const cmd = rp && typeof rp === 'object' && typeof rp.command === 'string' && rp.command.trim() ? rp.command : undefined
+          const ref = rp && typeof rp === 'object' && typeof rp.testRef === 'string' && rp.testRef.trim() ? rp.testRef : undefined
+          if (!cmd && !ref) errs.push(`reproducer-invalid:${f.mechanismId ?? f.rowId ?? f.id ?? '?'}`)
+          else if (cmd && SHELL_METACHAR_RE.test(cmd)) errs.push(`reproducer-command-unsafe:${f.mechanismId ?? f.rowId ?? f.id ?? '?'}`)
+          else if (ref && SHELL_METACHAR_RE.test(ref)) errs.push(`reproducer-testRef-unsafe:${f.mechanismId ?? f.rowId ?? f.id ?? '?'}`)
         }
+        // US-506 AC-3: every finding a review OPENS is real and evidenced — a reproducer (command or
+        // test), or a concrete failure scenario (this input ⇒ this wrong result). A difference of taste
+        // carries neither and is not a finding. Closures (`resolved`/`superseded`/`human`) transition a
+        // finding that was evidenced when it was opened; a `question` claims no defect. Mechanical
+        // records (`decision`, `migration`) carry the findings they copy, never a new judgment.
+        if (skill === 'review-phase' && (data.recordType ?? 'judgment') === 'judgment' && (f.transition ?? 'open') === 'open' && f.kind !== 'question' && !findingEvidenced(f)) errs.push(`finding-unevidenced:${f.id ?? '?'}`)
       }
       // The verifier's OWN declared set of mechanisms it identified this pass must be closed
       // together — never one gap this round and the sibling mechanism in a later rejection
@@ -509,6 +540,36 @@ export function envelopeErrors(data, { phase, skill }) {
         if (typeof cx.command !== 'string' || !cx.command.trim()) errs.push('counterexample-command-missing')
         else if (SHELL_METACHAR_RE.test(cx.command)) errs.push('counterexample-command-unsafe')
         for (const k of ['expected', 'actual']) if (typeof cx[k] !== 'string' || !cx[k].trim()) errs.push(`counterexample-${k}-missing`)
+      }
+    }
+  }
+  // US-506 AC-10: the validator PROVES it executed. Every row it validated carries the command it ran,
+  // the exit code and the observed output; a witness (`baseline: red`) needs a run that FAILED — at
+  // the unfixed base, or on the injected regression a `mode: test` guard is proven against — and a
+  // control (`baseline: pass`) a run that PASSED. A test that cannot fail, or cannot pass, is refused.
+  // A rejection may carry its audited rows too; when it does they are held to the same shape.
+  if (skill === 'red-verify') {
+    const rows = data.reproduced
+    if (data.verified === true && (!Array.isArray(rows) || !rows.length)) errs.push('reproduced-missing')
+    else if (rows !== undefined && !Array.isArray(rows)) errs.push('reproduced-not-an-array')
+    else if (Array.isArray(rows)) {
+      const byRow = new Map()
+      for (const r of rows) {
+        const tag = r && typeof r === 'object' && nonBlank(r.rowId) ? r.rowId : '?'
+        if (!r || typeof r !== 'object' || !nonBlank(r.rowId) || !['red', 'pass'].includes(r.baseline) || !nonBlank(r.command) || !Number.isInteger(r.exitCode) || !nonBlank(r.observed)) {
+          errs.push(`reproduced-invalid:${tag}`)
+          continue
+        }
+        if (SHELL_METACHAR_RE.test(r.command)) {
+          errs.push(`reproduced-command-unsafe:${tag}`)
+          continue
+        }
+        byRow.set(r.rowId, [...(byRow.get(r.rowId) ?? []), r])
+      }
+      for (const [rowId, runs] of byRow) {
+        const baseline = runs[0].baseline
+        if (baseline === 'red' && !runs.some(x => x.exitCode !== 0)) errs.push(`witness-cannot-fail:${rowId}`)
+        if (baseline === 'pass' && !runs.some(x => x.exitCode === 0)) errs.push(`control-cannot-pass:${rowId}`)
       }
     }
   }
@@ -1259,21 +1320,54 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   // follows a red-verify rejection naming rowId/mechanismId gaps must list every one of them under
   // `changedRows`, or it is refused BEFORE the write (never accepted and reconciled later, canary
   // run 3: two named rewriters, one repaired, the other silently dropped to the next rejection).
+  // US-506 AC-6: the rejection a repair answers is the MOST RECENT `red-verify` of that phase — the
+  // `--predecessor` name `<phase>-red-verify` names the STEP, and its latest attempt is the one the
+  // repair was dispatched with. Reading `<predecessor>.json` read attempt 1 forever, so on US-487 the
+  // second repair had to carry a cumulative `changedRows`.
+  const existingHandoffs = existsSync(dir) ? readHandoffs(dir) : []
   if (skill === 'red-spec' && predecessor && /-red-verify$/.test(predecessor)) {
-    const predFile = join(dir, `${predecessor}.json`)
-    if (existsSync(predFile)) {
-      let predData
+    const predPhase = predecessor.replace(/-red-verify$/, '')
+    const predData = existingHandoffs.filter(h => h.skill === 'red-verify' && h.phase === predPhase && h.data).pop()?.data
+    if (predData && predData.verified === false) {
+      const priorIds = (predData.findings ?? []).map(f => f?.rowId ?? f?.mechanismId).filter(Boolean)
+      const covered = new Set(data.changedRows ?? [])
+      const missing = priorIds.filter(id => !covered.has(id))
+      if (missing.length) return { published: false, reason: `repair-incomplete:${missing.join(',')}` }
+    }
+  }
+  const n = Number.isInteger(attempt) ? attempt : Number.isInteger(data.attempt) ? data.attempt : 1
+  // US-506 AC-7: every contract attempt is its own file — `<phase>-red-contract.attempt-N.json` beyond
+  // the first — and a new attempt never lands on top of an earlier one. The earlier attempts' files
+  // are checked intact against the hash their own handoff recorded: a rejection names its contract,
+  // and a repair that overwrote it would leave the rejection pointing at bytes nobody validated.
+  if (skill === 'red-spec') {
+    const cp = String(data.contractPath ?? '').trim()
+    if (cp && n > 1) {
+      const expected = `${phase}-red-contract.attempt-${n}.json`
+      if (basename(cp) !== expected) return { published: false, reason: `contract-attempt-name:${expected}` }
+    }
+    const specs = existingHandoffs.filter(x => x.skill === 'red-spec' && x.phase === phase && x.data)
+    for (const [i, h] of specs.entries()) {
+      const prev = String(h.data.contractPath ?? '').trim()
+      // A path a LATER attempt of the phase also names is the pre-#506 shape (US-506 F-4): the old
+      // red-spec skill wrote every attempt over `<phase>-red-contract.json`, so only its last writer's
+      // hash can still hold. That attempt is the one checked; the earlier ones are history.
+      if (prev && specs.slice(i + 1).some(x => String(x.data.contractPath ?? '').trim() === prev)) continue
+      if (!prev || !/^sha256:[0-9a-f]{64}$/.test(String(h.data.contractHash ?? '')) || !existsSync(prev)) continue
+      let intact = false
       try {
-        predData = JSON.parse(readFileSync(predFile, 'utf8'))
-      } catch {
-        predData = null
-      }
-      if (predData && predData.verified === false) {
-        const priorIds = (predData.findings ?? []).map(f => f?.rowId ?? f?.mechanismId).filter(Boolean)
-        const covered = new Set(data.changedRows ?? [])
-        const missing = priorIds.filter(id => !covered.has(id))
-        if (missing.length) return { published: false, reason: `repair-incomplete:${missing.join(',')}` }
-      }
+        intact = contractHash(JSON.parse(readFileSync(prev, 'utf8'))) === h.data.contractHash
+      } catch {}
+      if (!intact) return { published: false, reason: `contract-attempt-overwritten:${basename(prev)}`, path: prev }
+    }
+  }
+  // US-506 AC-7: a verdict points at the contract it validated — the one the latest preparation of the
+  // same phase wrote. Stamped when absent; a different one is refused.
+  if (skill === 'red-verify') {
+    const spec = existingHandoffs.filter(h => h.skill === 'red-spec' && h.phase === phase && h.data && String(h.data.contractPath ?? '').trim()).pop()
+    if (spec) {
+      if (data.contractPath !== undefined && data.contractPath !== spec.data.contractPath) return { published: false, reason: 'contract-path-mismatch', stated: data.contractPath, prepared: spec.data.contractPath }
+      data = { ...data, contractPath: spec.data.contractPath }
     }
   }
   // US-479 B1 (S3): the contradiction's budget key is derived HERE from the verified sealed
@@ -1282,6 +1376,17 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
     const target = resolveSealedContract({ handoffs: readHandoffs(dir), predecessors: predecessorEvidence(dir), contractHash: data.predecessorContractHash })
     const line = successionLineOf(target?.phase)
     data = { ...data, contradictionLine: line ?? null, contradictionKey: contradictionKeyOf({ line, conflictingRowIds: data.conflictingRowIds }) }
+  }
+  // US-506 AC-3: the FIRST verify of a fresh card's PR (the run began with `a0-implement-phase` and
+  // never sealed an `a0` contract) names, per AC, the test that proves it. A PR-entry cycle and a run
+  // on the sealed `a0` path keep today's first review.
+  if (skill === 'review-phase' && (data.recordType ?? 'judgment') === 'judgment' && String(phase) === 'r0' && data.mode === 'first') {
+    const prior = readHandoffs(dir)
+    const freshRun = prior.some(h => h.skill === 'implement-phase' && h.phase === 'a0') && !prior.some(h => h.skill === 'red-verify' && h.phase === 'a0')
+    if (freshRun) {
+      const acErrs = acAssessmentErrors(data)
+      if (acErrs.length) return { published: false, reason: acErrs[0], errors: acErrs }
+    }
   }
   // US-479 T-29 (S11): the risk identity is derived HERE, and the claim is checked against what
   // this run actually did — the named batch must exist and the failing head must be one it produced.
@@ -1316,7 +1421,6 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   }
   mkdirSync(dir, { recursive: true })
   if (predecessor && !existsSync(join(dir, `${predecessor}.json`))) return { published: false, reason: 'predecessor-missing', predecessor }
-  const n = Number.isInteger(attempt) ? attempt : Number.isInteger(data.attempt) ? data.attempt : 1
   const name = `${phase}-${skill}`
   const target = join(dir, n > 1 ? `${name}.attempt-${n}.json` : `${name}.json`)
   return withLock(dir, lockWaitMs, () => {
@@ -1534,6 +1638,37 @@ const orderGroups = groups => {
   for (const g of groups) if (!visit(g)) return null
   return out
 }
+// US-506 AC-3 — what makes a finding EVIDENCED: a reproducer (command or test reference), a concrete
+// failure scenario (input ⇒ actual wrong result, against the expected one), or the executable
+// reproducer a regression risk already carries.
+const nonBlank = v => typeof v === 'string' && v.trim() !== ''
+export function findingEvidenced(f) {
+  if (!f || typeof f !== 'object') return false
+  const rp = f.reproducer
+  if (rp && typeof rp === 'object' && (nonBlank(rp.command) || nonBlank(rp.testRef))) return true
+  const fs = f.failureScenario
+  if (fs && typeof fs === 'object' && nonBlank(fs.input) && nonBlank(fs.actual) && nonBlank(fs.expected)) return true
+  return nonBlank(f.regressionRisk?.reproducerRef)
+}
+// US-506 AC-3 — the per-AC qualitative assessment of a fresh card's tests, owed by its FIRST verify:
+// every AC named with the test(s) that prove it. A weak or missing test is an ordinary finding, so
+// such a row names an OPEN finding of the same review (`findingId`), never a free-floating note.
+export const AC_ASSESSMENTS = ['proven', 'weak', 'missing']
+export function acAssessmentErrors(data) {
+  const rows = data.acAssessment
+  if (!Array.isArray(rows) || !rows.length) return ['acAssessment-missing']
+  const errs = []
+  const open = new Set((Array.isArray(data.findings) ? data.findings : []).filter(f => f && (f.transition ?? 'open') === 'open').map(f => f.id))
+  for (const r of rows) {
+    const tag = r && typeof r === 'object' && nonBlank(r.ac) ? r.ac : '?'
+    if (!r || typeof r !== 'object' || !nonBlank(r.ac) || !AC_ASSESSMENTS.includes(r.assessment) || !Array.isArray(r.tests) || r.tests.some(t => !nonBlank(t)) || (r.assessment !== 'missing' && !r.tests.length)) {
+      errs.push(`acAssessment-invalid:${tag}`)
+      continue
+    }
+    if (r.assessment !== 'proven' && !open.has(r.findingId)) errs.push(`acAssessment-finding-missing:${tag}`)
+  }
+  return errs
+}
 const isBlocking = f => f && f.blocking === true && f.transition !== 'resolved' && f.nonActionable !== true
 // Preparation refusals whose cause lies outside the cycle: a later dispatch can succeed unchanged.
 const EXTERNAL_REFUSALS = new Set(['dirty', 'stale'])
@@ -1541,7 +1676,11 @@ const EXTERNAL_REFUSALS = new Set(['dirty', 'stale'])
 function deriveNextStep(handoffs, policy, ctx = {}) {
   // US-479 B2: a migration acknowledgment is evidence about provenance, never a cycle position.
   const list = handoffs.filter(h => h.data && h.data.recordType !== 'migration')
-  if (!list.length) return ctx.entry === 'pr' ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
+  // US-506 AC-1 (ADR-024 amendment 2026-09-23): a FRESH card has no up-front acceptance contract. Its
+  // first step is `implement / initial` above the base — tests and code written together, test-first
+  // — and independence moves to the verify that follows. A directory that already holds `a0` contract
+  // handoffs is not empty, so it never reaches this line: it finishes under the old transitions (AC-5).
+  if (!list.length) return ctx.entry === 'pr' ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
   const last = list[list.length - 1]
   const d = last.data
   const parts = phaseParts(last.phase) ?? {}
@@ -1888,8 +2027,12 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     // counter — a metadata-only re-review (inputsChanged, a moved head) bumps `round` without any
     // actual fix and must not spend the budget a real remediation earns.
     if (cycleCounters(list).spentCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', findings: blocking })
-    const atf = blocking.filter(f => f.kind === 'approved-test-failing')
-    const gaps = blocking.filter(f => f.kind === 'contract-gap')
+    // US-506: `approved-test-failing` and `contract-gap` presuppose a SEALED contract of their group.
+    // On a fresh run `a0` never sealed one, so such a finding has nothing to retry or revise: it is an
+    // ordinary finding and routes the test-first remediation below (AC-3 — no new finding class).
+    const sealedGroup = f => !!f.groupId && groupPhases(f.groupId).length > 0
+    const atf = blocking.filter(f => f.kind === 'approved-test-failing' && sealedGroup(f))
+    const gaps = blocking.filter(f => f.kind === 'contract-gap' && sealedGroup(f))
     // Every blocking finding is an approved test still failing ⇒ GREEN again on the SAME seals,
     // group by group in dependency order (T-9 review, t9-4: two groups used to fall through to a
     // fresh remediation contract). A group out of retries exhausts the budget.
@@ -2318,6 +2461,123 @@ export function migrateAcknowledge({ dir, legacyDirs = [], workflowVersion, stor
   return { applied: !!out.published, reason: out.published ? undefined : out.reason, path: out.path, migrationKey, predecessorRuns: predecessorRuns.map(r => r.runId) }
 }
 
+// ── maintainer recovery (US-506 T-5, AC-8) ─────────────────────────────────────────────────
+// Two commands for what US-487's maintainer did by hand. `supersede` sets an UNVALIDATED
+// preparation attempt aside under a prefix a directory listing shows and NAME_RE ignores, and
+// indexes it in `maintainer-interventions.md`; `decide` records a maintainer's answer to a review's
+// `needsHumanDecision` as its own handoff, so the cycle leaves `escalate` with no handoff renamed
+// and no review re-run. Both print what `resolve` then says is due.
+export const INTERVENTIONS_FILE = 'maintainer-interventions.md'
+const INTERVENTIONS_HEADER = '| file | what it is | why it was set aside | set aside by | what supersedes it |'
+const dayOf = d => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10)
+const cell = v => String(v ?? '').replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ').trim()
+const describeNext = n => (n?.step === 'blocked' ? `blocked (${n.reason})` : n?.step === 'done' ? 'done' : `${n?.step} ${n?.mode ?? ''} ${n?.phase ?? ''} attempt ${n?.attempt ?? 1}`.replace(/\s+/g, ' ').trim())
+function appendIntervention(dir, row) {
+  const file = join(dir, INTERVENTIONS_FILE)
+  const line = `| ${row.map(cell).join(' | ')} |`
+  const prior = existsSync(file) ? readFileSync(file, 'utf8') : ''
+  // One table: a row lands under the existing header when the file already has one, and a header
+  // (plus the title on a new file) is written only once — never one table per intervention.
+  const head = prior ? (prior.includes(INTERVENTIONS_HEADER) ? '' : `${prior.endsWith('\n') ? '' : '\n'}\n${INTERVENTIONS_HEADER}\n| --- | --- | --- | --- | --- |\n`) : `# Maintainer interventions\n\n${INTERVENTIONS_HEADER}\n| --- | --- | --- | --- | --- |\n`
+  writeFileSync(file, `${prior}${prior && !head && !prior.endsWith('\n') ? '\n' : ''}${head}${line}\n`)
+  return file
+}
+const resolveAfter = ({ dir, workflowVersion, policy, entry, pr }) => resolve({ dir, workflowVersion, policy: policy ?? {}, entry: entry ?? (pr !== undefined ? 'pr' : 'fresh'), ...(pr !== undefined ? { pr } : {}) })
+
+export function supersede({ dir, phase, skill = 'red-spec', attempt, reason, by, now = new Date(), workflowVersion, policy, entry, pr, lockWaitMs = 5000 }) {
+  const where = safeRunDir(dir)
+  if (where.error) return { superseded: false, reason: where.error, path: where.path }
+  if (!String(reason ?? '').trim()) return { superseded: false, reason: 'supersede-reason-missing' }
+  if (!String(by ?? '').trim()) return { superseded: false, reason: 'supersede-by-missing' }
+  if (skill !== 'red-spec') return { superseded: false, reason: `supersede-skill-unsupported:${skill}` }
+  return withLock(dir, lockWaitMs, () => {
+    const handoffs = readHandoffs(dir)
+    const ofPhase = handoffs.filter(h => h.skill === skill && h.phase === phase && h.data)
+    const target = attempt !== undefined ? ofPhase.find(h => h.attempt === Number(attempt)) : ofPhase[ofPhase.length - 1]
+    if (!target) return { superseded: false, reason: 'supersede-not-found', phase, attempt: attempt ?? null }
+    const verdicts = handoffs.filter(h => h.skill === 'red-verify' && h.phase === phase && h.data)
+    if (verdicts.some(v => v.data.sealed === true && (!target.data.contractHash || v.data.contractHash === target.data.contractHash))) return { superseded: false, reason: 'supersede-sealed', file: basename(target.file) }
+    // A verdict published AFTER this attempt answered it: a rejection is evidence the next repair
+    // is checked against, never something to set aside.
+    if (verdicts.some(v => handoffs.indexOf(v) > handoffs.indexOf(target))) return { superseded: false, reason: 'supersede-validated', file: basename(target.file) }
+    const prefix = `superseded-${dayOf(now)}-`
+    const from = basename(target.file)
+    const to = `${prefix}${from}`
+    if (existsSync(join(dir, to))) return { superseded: false, reason: 'supersede-target-exists', file: to }
+    renameSync(target.file, join(dir, to))
+    // The attempt's own contract file goes with it when it lives in this run directory and no other
+    // handoff names it — a listing then shows the attempt and its contract side by side.
+    let contract
+    const cp = String(target.data.contractPath ?? '').trim()
+    if (cp && existsSync(cp) && dirname(resolvePath(cp)) === resolvePath(dir) && !handoffs.some(h => h !== target && h.data?.contractPath === cp)) {
+      const cto = `${prefix}${basename(cp)}`
+      if (!existsSync(join(dir, cto))) {
+        renameSync(cp, join(dir, cto))
+        contract = { from: basename(cp), to: cto }
+      }
+    }
+    const out = resolveAfter({ dir, workflowVersion, policy, entry, pr })
+    const hash = String(target.data.contractHash ?? '')
+    const what = `${phase} ${skill} attempt ${target.attempt}${hash ? ` (contract \`${hash.slice(0, 15)}…\`)` : ''}, never validated`
+    const index = appendIntervention(dir, [`\`${to}\``, what, reason, `${by}, ${dayOf(now)}`, `the step now due: ${describeNext(out.next)}`])
+    return { superseded: true, from, to, ...(contract ? { contract } : {}), index, status: out.status, next: out.next }
+  })
+}
+
+export function decide({ dir, phase, finding, decision, by, now = new Date(), workflowVersion, policy, entry, pr, lockWaitMs = 5000 }) {
+  const where = safeRunDir(dir)
+  if (where.error) return { decided: false, reason: where.error, path: where.path }
+  if (!String(decision ?? '').trim()) return { decided: false, reason: 'decide-decision-missing' }
+  if (!String(by ?? '').trim()) return { decided: false, reason: 'decide-by-missing' }
+  if (!compatible(workflowVersion, workflowVersion)) return { decided: false, reason: 'workflowVersion-invalid' }
+  const list = readHandoffs(dir).filter(h => h.data && h.data.recordType !== 'migration')
+  const last = list[list.length - 1]
+  // The escalation a decision answers: the last handoff is the review that asked, or a decision
+  // already recorded on top of it (several findings, several answers — each its own record).
+  const asked = [...list].reverse().find(h => h.skill === 'review-phase' && (h.data.recordType ?? 'judgment') === 'judgment')
+  const onTop = last && last.skill === 'review-phase' && (last === asked || (last.data.recordType === 'decision' && Array.isArray(last.data.humanDecisions)))
+  if (!asked || !onTop || asked.phase !== phase || asked.data.needsHumanDecision !== true) return { decided: false, reason: 'decide-not-escalated', phase }
+  const base = last.data
+  const findings = Array.isArray(base.findings) ? base.findings : []
+  if (!findings.some(f => f?.id === finding)) return { decided: false, reason: `decide-finding-unknown:${finding}` }
+  const prior = Array.isArray(base.humanDecisions) ? base.humanDecisions : []
+  if (prior.some(d => d.findingId === finding)) return { decided: false, reason: `decide-already-decided:${finding}` }
+  // US-506 F-5: the decisions OWED are the ones the review named; the escalate stands until every one
+  // is recorded. A review that named none (pre-#506) owes the one answer it asked for.
+  const owed = Array.isArray(asked.data.humanDecisionIds) && asked.data.humanDecisionIds.length ? asked.data.humanDecisionIds : null
+  if (owed && !owed.includes(finding)) return { decided: false, reason: `decide-not-owed:${finding}`, owed }
+  const decidedIds = new Set([...prior.map(d => d.findingId), finding])
+  const pendingDecisions = owed ? owed.filter(id => !decidedIds.has(id)) : []
+  const at = (now instanceof Date ? now : new Date(now)).toISOString()
+  const entryOf = { findingId: finding, decision: String(decision), by: String(by), at }
+  const keep = ['run', 'story', 'pr', 'branch', 'inputHead', 'reviewedHead', 'verdict', 'custody', 'readiness', 'mode', 'tier', 'passes', 'reviewer', 'scopeChanges', 'inputsDigest', 'remediationBatchId', 'scopeEpoch', 'scopeBaselineHash', 'firstReviewHead']
+  const draft = {
+    ...Object.fromEntries(keep.filter(k => base[k] !== undefined).map(k => [k, base[k]])),
+    phase,
+    skill: 'review-phase',
+    recordType: 'decision',
+    partial: false,
+    needsHumanDecision: pendingDecisions.length > 0,
+    ...(owed ? { humanDecisionIds: owed } : {}),
+    ...(base.humanDecisionKind !== undefined ? { humanDecisionKind: base.humanDecisionKind } : {}),
+    findings: findings.map(f => (f?.id === finding ? { ...f, humanDecision: { decision: entryOf.decision, by: entryOf.by, at } } : f)),
+    humanDecisions: [...prior, entryOf],
+    decidedOn: last.name,
+  }
+  const attemptN = list.filter(h => h.skill === 'review-phase' && h.phase === phase).length + 1
+  const tmp = join(dir, `.decision-${process.pid}-${Date.now()}.json`)
+  writeFileSync(tmp, JSON.stringify(draft))
+  const out = publish({ dir, file: tmp, phase, skill: 'review-phase', workflowVersion, attempt: attemptN, lockWaitMs })
+  if (!out.published) {
+    try {
+      unlinkSync(tmp)
+    } catch {}
+    return { decided: false, reason: out.reason, errors: out.errors }
+  }
+  const after = resolveAfter({ dir, workflowVersion, policy, entry, pr })
+  return { decided: true, path: out.path, attempt: attemptN, pendingDecisions, status: after.status, next: after.next }
+}
+
 // ── test identity ──────────────────────────────────────────────────────────────────────────
 // A git process must act on the repository named by `cwd`, never on one named by an INHERITED
 // environment: a pre-push hook exports GIT_DIR (and friends) to everything it runs, and a script
@@ -2384,6 +2644,8 @@ if (isMain()) {
       'migrate-inspect': ['dir'],
       'migrate-acknowledge': ['branch', 'dir', 'head', 'legacy', 'pr', 'run', 'story', 'workflowVersion'],
       'test-identity': ['command', 'cwd', 'env-keys', 'toolchain'],
+      supersede: ['attempt', 'by', 'dir', 'entry', 'phase', 'policy', 'pr', 'reason', 'skill', 'workflowVersion'],
+      decide: ['by', 'decision', 'dir', 'entry', 'finding', 'phase', 'policy', 'pr', 'workflowVersion'],
       version: [],
     }
     if (FLAGS[cmd]) {
@@ -2483,6 +2745,19 @@ if (isMain()) {
       out = migrateAcknowledge({ dir: opts.dir, legacyDirs, workflowVersion: opts.workflowVersion, story: opts.story, pr: opts.pr ? Number(opts.pr) : undefined, run: opts.run, branch: opts.branch, inputHead: opts.head })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.applied || out.reason === 'already-acknowledged' ? 0 : 1)
+    } else if (cmd === 'supersede') {
+      // US-506 AC-8: set an unvalidated attempt aside (visible to a listing, invisible to NAME_RE),
+      // index it in maintainer-interventions.md and print the step `resolve` now names.
+      need('dir', 'phase', 'reason', 'by', 'workflowVersion')
+      out = supersede({ dir: opts.dir, phase: opts.phase, skill: opts.skill, attempt: opts.attempt !== undefined ? Number(opts.attempt) : undefined, reason: opts.reason, by: opts.by, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr !== undefined ? Number(opts.pr) : undefined })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.superseded ? 0 : 1)
+    } else if (cmd === 'decide') {
+      // US-506 AC-8: record a maintainer's answer to a review's needsHumanDecision as its own handoff.
+      need('dir', 'phase', 'finding', 'decision', 'by', 'workflowVersion')
+      out = decide({ dir: opts.dir, phase: opts.phase, finding: opts.finding, decision: opts.decision, by: opts.by, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr !== undefined ? Number(opts.pr) : undefined })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.decided ? 0 : 1)
     } else if (cmd === 'version') {
       // The pin, printed bare so a shell can capture it: `WV="$(… cycle-state.mjs version)"`. It is
       // the one value this realization passes to every `--workflowVersion`, and having a producer
@@ -2496,7 +2771,7 @@ if (isMain()) {
       out = testIdentity({ cwd: opts.cwd, command: opts.command, env, toolchain: opts.toolchain ?? `node ${process.version}` })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
-    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | migrate-inspect | apply-scope-decisions | scope-baseline | test-identity | version)`)
+    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | migrate-inspect | apply-scope-decisions | scope-baseline | supersede | decide | test-identity | version)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)

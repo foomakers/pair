@@ -59,10 +59,22 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   // Tracked so a SIGTERM/SIGINT on the driver stops it instead of orphaning it (r1-2).
   trackEngine(child)
 
-  const timer = setTimeout(() => child.kill('SIGTERM'), input.timeoutSeconds * 1000)
+  let stalled = false
+  const timer = setTimeout(() => {
+    stalled = true
+    child.kill('SIGTERM')
+  }, input.timeoutSeconds * 1000)
   try {
     child.stdout.setEncoding('utf-8')
-    return await readIterationOutcome(toLines(child.stdout), input.engine)
+    const result = await readIterationOutcome(toLines(child.stdout), input.engine)
+    // US-506 T-8 (AC12): stopped by the bound before any terminal event ⇒ a STALL, named as one.
+    if (stalled && result.outcome !== 'success')
+      return {
+        outcome: 'failed',
+        detail: `stalled: no terminal event within ${input.timeoutSeconds}s — the engine was stopped`,
+        stalled: true,
+      }
+    return result
   } finally {
     clearTimeout(timer)
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')

@@ -133,7 +133,7 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 
 ### Workflow Skills (7)
 
-Delivery-stage skills the batch engine (`pair-implement-batch`) or the in-session coordinator (`/pair-workflow-cycle`) dispatches to — the four judgment stages of a delivery cycle (US-479, ADR-024 amendment b), the batch-level template contract and the coordinator that drives them. Each resolves the durable cycle state first (`cycle-state.mjs`), owns one mutation boundary and publishes one handoff under `.pair/working/runs/<run>/<story>/`; probe, seal, hash, state and comment publication run as scripts inside them, never as their own dispatch.
+Delivery-stage skills the batch engine (`pair-implement-batch`) or the in-session coordinator (`/pair-workflow-cycle`) dispatches to — the four judgment stages of a delivery cycle (US-479, ADR-024 amendment b), the batch-level template contract and the coordinator that drives them. A fresh card starts at implementation — test-first, no up-front contract — and preparation + validation run for each round of review findings (US-506, ADR-024 amendment 2026-09-23). Each resolves the durable cycle state first (`cycle-state.mjs`), owns one mutation boundary and publishes one handoff under `.pair/working/runs/<run>/<story>/`; probe, seal, hash, state and comment publication run as scripts inside them, never as their own dispatch.
 
 | Skill | Stage | Description |
 |-------|-------|-------------|
