@@ -103,6 +103,8 @@ agent instead of starting a new one.
 - **Resume is rehydrated from the transcript**: `pi-subagents` revives a stage as a new child that
   reads its previous session file. pair's bridge always tells it to read that file first, so the
   step does not depend on the model choosing to.
+- **Resume stays in its session**: a stage is resumed only inside the pi session that ran it. In a
+  new pi session (or when pi cannot resume the child) the stage runs fresh, and the cycle says so.
 
 ## What pi Does Not Support
 

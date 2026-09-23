@@ -64,7 +64,8 @@ node "$SKILL_DIR/scripts/pi-bridge.mjs" probe --project "$PWD"
   - On **yes**: run the install line the probe printed (stdin closed, foreground), then STOP and ask the user to re-run this skill — the tool appears only in a new session.
   - On **no**: HALT `pi-subagents-missing` — the in-pi cycle cannot run without it; the fallback is `pair-cli run --card N` from a shell.
 - `status: drift` (installed, a version other than the pinned one) ⇒ warn, naming both versions, and propose aligning it via `/pair-capability-setup-harness` with `$harness: pi` (the probe prints the pinned install line). If the user declines, proceed, and state once in your report that the pi-subagents version is unverified.
-- `status: pinned` ⇒ nothing to propose.
+- `status: pinned` and Step 0 bound the `pi` row ⇒ nothing to propose.
+- `status: pinned` or `status: drift` but Step 0 bound no `pi` row (installed, yet this session did not load the tool) ⇒ HALT `realization-unavailable`, naming the remedy: with `scope: project`, trust the project so pi loads its local packages (see `/pair-capability-setup-harness` with `$harness: pi`); otherwise — or when it was installed earlier in this session — start a new pi session and re-run this skill. Propose nothing else.
 - `activationRequired: subagents_enable` from Step 0 ⇒ call `subagents_enable({})` once; `subagent` is available on your next request.
 
 **Verify.** Before the first dispatch, check the tool's shape as THIS session lists it (its name and its parameter schema, copied from your own tool list, never retyped from memory):
@@ -134,7 +135,11 @@ node "$SKILL_DIR/scripts/pi-bridge.mjs" call --packet <packet file> --tool '<the
 node "$SKILL_DIR/scripts/pi-bridge.mjs" record --ledger <the `ledger` path call printed> --result '<returned JSON>'
 ```
 
-The bridge makes the resume's context deterministic (the task opens by telling the revived agent to read its previous session file, by path), and says `degraded: reuse→fresh` once when no retained run of that role exists:
+The bridge makes the resume's context deterministic: the task opens by telling the revived agent to read its previous session file first, the one named on the `Original session file` line of the host's revive header (the pinned result returns no session file of its own). It resumes a role's run only when it was retained in THIS pi session and the host reported it resumable, and says `degraded: reuse→fresh` once otherwise:
+
+- Each retained run is bound to the parent session that dispatched it, read off `PI_SESSION_ID` (pi exports it to every command its shell runs): a run retained by another pi session (pi exited, the cycle is resumed in a new one), an entry with no binding, or a call with no `PI_SESSION_ID` ⇒ `reuse→fresh` — pi-subagents resolves a retained run only inside its own parent session.
+- A child whose result carries `resumability: not-resumable` (stopped run, missing session file, …) is never retained: `record` drops the role, and the next `reuse` runs fresh.
+- If the host rejects a resume anyway, the fallback is a same-role fresh stage: `record` the failed pass with a null runId (`--result '{"runId":null,"ok":false}'`), then `call` again — it renders `fresh`. When the rejection left no JSON at all and you call again without a record (Step 4's retry), the bridge sees the unrecorded resume and renders `fresh` itself: a retry never re-resumes the same id.
 
 - `fresh` — spawn a NEW subagent. This is the KB default on every transition, and it is **mandatory** into `validate` and `verify`: an independent verifier that inherits the author's context is not independent.
 - `reuse` — **resume** the previous subagent of that same role instead of spawning one (`SendMessage` on Claude, whichever of `collaboration.followup_task` / `multi_agent_v1__resume_agent` the probe actually bound on Codex — its own tool namespace has renamed twice in one day, so never hardcode either name yourself; read it from the bound realization). `cycle-state.mjs` returns `reuse` only for `prepare→prepare`, `implement→green` and `green→green`; it is never this skill's call. `cycle-dispatch.mjs context-table` prints the table.

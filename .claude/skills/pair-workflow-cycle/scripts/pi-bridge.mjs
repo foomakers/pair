@@ -22,7 +22,10 @@
 // `src/extension/index.js` registers the tool `subagent` with `createSubagentParamsSchema()`;
 // `src/extension/tool-activation.js` names the loader `subagents_enable`; `docs/tool-reference.md`
 // documents `runs.run(key, { agent, task })`, `runs.run(key, { resume: runId, task })` and that a
-// revived child is a NEW process that is only told where the old session file is) and off pi's own
+// revived child is a NEW process that is only told where the old session file is;
+// `src/workflows/scripted-workflow.d.ts` declares the `WorkflowScriptChildResult` it resolves to —
+// `runId` and `resumability`, NO session file; a retained run is resolvable only from the parent
+// session that created it, `src/runs/background/async-resume.js`) and off pi's own
 // package manager (`@earendil-works/pi-coding-agent@0.84.3`, `dist/core/package-manager.js`:
 // npm packages install under `<agentDir>/npm/node_modules/<name>` for the user scope and
 // `<cwd>/.pi/npm/node_modules/<name>` for the project scope).
@@ -131,7 +134,15 @@ function assertShape(toolJson) {
   return { ok: true, tool: PIN.tool, version: PIN.version }
 }
 
-// ── the ledger: the latest retained run id per role ────────────────────────────────────────
+// ── the ledger: the latest retained run id per role, bound to its parent pi session ─────────
+// pi exports the current session id to every command its shell tools run (`PI_SESSION_ID`,
+// pi 0.84.3 `docs/environment-variables.md`); pi-subagents resumes a retained run only inside the
+// parent session that created it. An entry is therefore resumable only when the session that
+// records it and the session that calls are provably the same.
+const currentSession = () => {
+  const id = process.env.PI_SESSION_ID
+  return typeof id === 'string' && id.trim() ? id.trim() : null
+}
 const readLedger = path => (existsSync(path) ? readJson(path, 'ledger') : { dispatches: 0, roles: {} })
 const writeLedger = (path, ledger) => {
   mkdirSync(dirname(path), { recursive: true })
@@ -146,14 +157,10 @@ const ledgerPath = (opts, packet) => {
 // ── call: one packet ⇒ one `subagent` invocation ────────────────────────────────────────────
 // The workflow scripts are constant text; every variable travels in `args` (plain JSON), so no
 // prompt byte is ever spliced into JavaScript.
-const FRESH_SCRIPT = [
-  'const r = await runs.run(args.key, { agent: args.agent, context: "fresh", task: args.task });',
-  'return { runId: r.runId ?? null, sessionFile: r.sessionFile ?? null, ok: r.ok !== false };',
-].join('\n')
-const RESUME_SCRIPT = [
-  'const r = await runs.run(args.key, { resume: args.runId, task: args.task });',
-  'return { runId: r.runId ?? null, sessionFile: r.sessionFile ?? null, ok: r.ok !== false };',
-].join('\n')
+// They return only fields `WorkflowScriptChildResult` declares (pi-subagents@0.71.0).
+const RETURN_LINE = 'return { runId: r.runId ?? null, ok: r.ok !== false, resumability: r.resumability ?? null };'
+const FRESH_SCRIPT = ['const r = await runs.run(args.key, { agent: args.agent, context: "fresh", task: args.task });', RETURN_LINE].join('\n')
+const RESUME_SCRIPT = ['const r = await runs.run(args.key, { resume: args.runId, task: args.task });', RETURN_LINE].join('\n')
 
 function skillFileFor(skill, skillsDir) {
   const bare = String(skill ?? '').replace(/^\//, '')
@@ -166,11 +173,12 @@ function skillFileFor(skill, skillsDir) {
 // Deterministic rehydration. A pi-subagents resume is a NEW child that is told where the previous
 // session file is and then left to decide whether to read it (observed in #503's live probe: the model
 // chose to; a weaker one might not). The bridge removes that choice: the first instruction is
-// always to read the file, by its path when the ledger holds it.
+// always to read the file. The pinned result returns no session file, so the instruction points at
+// the "Original session file: <path>" line the host's revive header prints above the follow-up
+// (async-resume.js buildRevivedAsyncTask).
 function rehydration(prev) {
-  const where = prev.sessionFile ? `\`${prev.sessionFile}\`` : 'named on the "Original session file" line above'
   return [
-    `You are the SAME ${prev.role} agent that ran \`${prev.label}\` (run ${prev.runId}). Your memory of that work is in your previous session file, ${where}.`,
+    `You are the SAME ${prev.role} agent that ran \`${prev.label}\` (run ${prev.runId}). Your memory of that work is in your previous session file, named on the "Original session file" line above.`,
     'FIRST ACTION, before any other tool call: read that session file in full with the read tool. Then state in one line the last step you completed there. Only then continue with the task below.',
   ].join('\n')
 }
@@ -188,22 +196,41 @@ function callCommand(opts) {
   // A new stable workflow key per pass: pi-subagents reuses a key only for identical launches.
   const key = `${packet.step}-${packet.phase}-${n}`.replace(/[^A-Za-z0-9._-]/g, '-')
   const prev = ledger.roles?.[packet.agentType]
+  const session = currentSession()
   const cwd = isAbsolute(packet.worktree) ? packet.worktree : resolvePath(packet.worktree)
   const task = `Read the stage skill first: ${skillFile}\n\n${packet.prompt}`
   let op = packet.context === 'reuse' ? 'resume' : 'fresh'
+  // `reuse` degrades to a fresh stage whenever the retained run cannot be resumed here. The cycle is
+  // re-entrant, so fresh is correct — and said once, never silent.
+  const why =
+    op !== 'resume'
+      ? null
+      : ledger.pending?.op === 'resume' && ledger.pending.role === packet.agentType
+        ? // the previous resume of this role was never recorded: the host rejected it (the call
+          // errored, no JSON) — a retry never re-resumes the same id
+          `the previous resume of run ${ledger.pending.runId ?? '?'} was never recorded (rejected by the host)`
+        : !prev?.runId
+          ? `no retained ${packet.agentType} run in ${path}`
+          : !prev.parentSession
+            ? `retained run ${prev.runId} has no parent-session binding`
+            : !session
+              ? `no PI_SESSION_ID in this shell: run ${prev.runId} cannot be proven to belong to this pi session`
+              : prev.parentSession !== session
+                ? `run ${prev.runId} was retained by another pi session (${prev.parentSession}), not this one (${session})`
+                : prev.resumability?.state === 'not-resumable'
+                  ? `run ${prev.runId} is not-resumable: ${prev.resumability.reason ?? 'no reason given'}`
+                  : null
   let degraded
-  if (op === 'resume' && !prev?.runId) {
-    // `reuse` with no retained run of that role (a new session, a cleared ledger): the cycle is
-    // re-entrant, so a fresh stage is correct — and said once, never silent.
+  if (why) {
     op = 'fresh'
-    degraded = `reuse→fresh: no retained ${packet.agentType} run in ${path}`
+    degraded = `reuse→fresh: ${why}`
   }
   const args =
     op === 'resume'
       ? { key, runId: prev.runId, task: `${rehydration({ ...prev, role: packet.agentType })}\n\n${task}` }
       : { key, agent: PIN.agent, task }
   ledger.dispatches = n
-  ledger.pending = { key, role: packet.agentType, label: packet.label ?? `${packet.step} ${packet.phase}`, op }
+  ledger.pending = { key, role: packet.agentType, label: packet.label ?? `${packet.step} ${packet.phase}`, op, parentSession: session, ...(op === 'resume' ? { runId: prev.runId } : {}) }
   writeLedger(path, ledger)
   return emit({
     tool: shape.tool,
@@ -225,15 +252,23 @@ function recordCommand(opts) {
   if (!pending) fail('nothing-pending', `no dispatch is pending in ${path}: record follows a call`)
   const result = parseJson(opts.result, '--result')
   const runId = typeof result?.runId === 'string' && result.runId.trim() ? result.runId.trim() : null
+  const notResumable = result?.resumability?.state === 'not-resumable'
+  // The run belongs to the session that dispatched it; a record from a different shell session binds nothing.
+  const session = currentSession()
+  const parentSession = pending.parentSession ?? session
   delete ledger.pending
   ledger.roles = ledger.roles ?? {}
-  if (!runId) {
+  if (!runId || notResumable) {
     // Nothing to resume later: drop any stale id of that role, so a `reuse` cannot revive the wrong run.
     delete ledger.roles[pending.role]
     writeLedger(path, ledger)
-    return emit({ recorded: false, role: pending.role, reason: 'the stage returned no runId — the next reuse of this role runs fresh' })
+    const reason = !runId
+      ? 'the stage returned no runId'
+      : `the host reported run ${runId} not-resumable (${result.resumability.reason ?? 'no reason given'})`
+    return emit({ recorded: false, role: pending.role, reason: `${reason} — the next reuse of this role runs fresh` })
   }
-  ledger.roles[pending.role] = { runId, sessionFile: typeof result.sessionFile === 'string' ? result.sessionFile : null, label: pending.label }
+  const bound = parentSession && (!session || session === parentSession) ? parentSession : null
+  ledger.roles[pending.role] = { runId, parentSession: bound, label: pending.label }
   writeLedger(path, ledger)
   return emit({ recorded: true, role: pending.role, runId })
 }
