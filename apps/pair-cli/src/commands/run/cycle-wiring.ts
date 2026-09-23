@@ -259,29 +259,60 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
   const main = mainCheckout(ctx.cwd)
   const runsRoot = `${main}/.pair/working/runs`
   const record = readCardViaGh(input.card, ctx.cwd)
+  const bridge = createCycleScriptsBridge(ctx.location)
+  const branch = resolveBranch(input.card, record.title, input.pr, ctx.cwd)
+  const card = { id: input.card, branch, base: ctx.baseBranch, title: record.title }
   return {
-    bridge: createCycleScriptsBridge(ctx.location),
+    bridge,
     main,
-    branch: resolveBranch(input.card, record.title, input.pr, ctx.cwd),
+    branch,
     title: record.title,
     runDir: `${runsRoot}/${input.runId}/${input.card}`,
     runsRoot,
+    // r0-3: the freshness evidence the in-session coordinator's Step 1 hands `resolve` — both
+    // produced by the scripts themselves, never computed here, so the two realizations agree.
+    inputs: bridge.inputs(card, ctx.workflowVersion),
+    acHash: bridge.acHash(input.card),
   }
 }
 
 type Coordinates = ReturnType<typeof coordinatesFor>
 
+/**
+ * The branch's head on the remote, as `git ls-remote` reports it now — or `undefined` when there is
+ * no remote branch yet (a fresh story) or no remote to ask. Read on EVERY resolve: a fix stage
+ * pushes, and a head that moved after the review is what `resolve` re-verifies on.
+ */
+function remoteHead(main: string, branch: string): string | undefined {
+  try {
+    const out = execFileSync('git', ['ls-remote', 'origin', `refs/heads/${branch}`], {
+      cwd: main,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 30_000,
+    })
+    return /^([0-9a-f]{40})\s/m.exec(out)?.[1]
+  } catch {
+    return undefined
+  }
+}
+
 const resolveFor =
-  (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => async () =>
-    co.bridge.resolve({
+  (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => async () => {
+    const head = remoteHead(co.main, co.branch)
+    return co.bridge.resolve({
       dir: co.runDir,
       workflowVersion: ctx.workflowVersion,
       policy: {},
       entry: input.pr === undefined ? 'fresh' : 'pr',
       story: input.card,
       runsRoot: co.runsRoot,
+      inputs: co.inputs,
+      acHash: co.acHash,
+      ...(head !== undefined && { head }),
       ...(input.pr !== undefined && { pr: input.pr }),
     })
+  }
 
 const worktreeFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => async () =>

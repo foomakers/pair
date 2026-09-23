@@ -107,6 +107,7 @@ export interface CycleResolveOptions {
   readonly runsRoot?: string
   readonly head?: string
   readonly inputs?: string
+  readonly acHash?: string
 }
 
 export interface CycleWorktreeOptions {
@@ -147,6 +148,10 @@ export interface CycleScriptsBridge {
   resolve(options: CycleResolveOptions): CycleResolveResult
   worktree(options: CycleWorktreeOptions): CycleWorktreeResult
   packet(options: CyclePacketOptions): CyclePacketResult
+  /** `inputs --story <card JSON>`: the effective-inputs digest both realizations must agree on. */
+  inputs(story: Record<string, unknown>, workflowVersion: string): string
+  /** `ac-hash --story <id>`: the card body's canonical hash, the one every handoff records. */
+  acHash(story: string): string
 }
 
 /** Parses `stdout` as the ONE line of JSON a script writes, or throws `cycle-state-unreadable`. */
@@ -208,6 +213,7 @@ export function createCycleScriptsBridge(location: CycleScriptsLocation): CycleS
       if (options.runsRoot !== undefined) args.push(['runsRoot', options.runsRoot])
       if (options.head !== undefined) args.push(['head', options.head])
       if (options.inputs !== undefined) args.push(['inputs', options.inputs])
+      if (options.acHash !== undefined) args.push(['acHash', options.acHash])
       return runScript(cycleStatePath, 'resolve', args) as CycleResolveResult
     },
     worktree(options) {
@@ -233,6 +239,17 @@ export function createCycleScriptsBridge(location: CycleScriptsLocation): CycleS
       if (options.style !== undefined) args.push(['style', options.style])
       if (location.agentsDir !== undefined) args.push(['agents-dir', location.agentsDir])
       return runScript(cycleDispatchPath, 'packet', args) as CyclePacketResult
+    },
+    inputs(story, workflowVersion) {
+      const out = runScript(cycleStatePath, 'inputs', [
+        ['story', JSON.stringify(story)],
+        ['workflowVersion', workflowVersion],
+      ]) as { inputsDigest?: unknown }
+      return String(out.inputsDigest)
+    },
+    acHash(story) {
+      const out = runScript(cycleStatePath, 'ac-hash', [['story', story]]) as { acHash?: unknown }
+      return String(out.acHash)
     },
   }
 }

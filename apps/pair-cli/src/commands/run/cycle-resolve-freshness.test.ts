@@ -52,10 +52,7 @@ describe('r0-3: resolve carries inputs, acHash and the remote head (production d
     execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
 
   const writeGh = () =>
-    writeFileSync(
-      join(root, 'card.json'),
-      JSON.stringify({ title: TITLE, body: cardBody }),
-    )
+    writeFileSync(join(root, 'card.json'), JSON.stringify({ title: TITLE, body: cardBody }))
 
   beforeEach(() => {
     root = realpathSync(mkdtempSync(join(tmpdir(), 'pair-resolve-fresh-')))
@@ -65,7 +62,18 @@ describe('r0-3: resolve carries inputs, acHash and the remote head (production d
     mkdirSync(main, { recursive: true })
     mkdirSync(bin, { recursive: true })
     git(main, 'init', '-q', '-b', 'main')
-    git(main, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'init')
+    git(
+      main,
+      '-c',
+      'user.name=t',
+      '-c',
+      'user.email=t@t',
+      'commit',
+      '-q',
+      '--allow-empty',
+      '-m',
+      'init',
+    )
     git(main, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
     mkdirSync(scripts(), { recursive: true })
     for (const f of ['cycle-state.mjs', 'cycle-dispatch.mjs'])
@@ -133,7 +141,12 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
             join(scripts(), 'cycle-state.mjs'),
             'inputs',
             '--story',
-            JSON.stringify({ id: '7', branch: BRANCH, base: CYCLE_BASE_BRANCH_DEFAULT, title: TITLE }),
+            JSON.stringify({
+              id: '7',
+              branch: BRANCH,
+              base: CYCLE_BASE_BRANCH_DEFAULT,
+              title: TITLE,
+            }),
             '--workflowVersion',
             CYCLE_WORKFLOW_VERSION,
           ],
@@ -152,17 +165,59 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
       const file = join(runDir(), `tmp-${phase}-${skill}.json`)
       writeFileSync(
         file,
-        JSON.stringify({ run: 'story-7', story: '7', pr: 7, branch: BRANCH, phase, skill, inputHead: SHA('a'), ...fields }),
+        JSON.stringify({
+          run: 'story-7',
+          story: '7',
+          pr: 7,
+          branch: BRANCH,
+          phase,
+          skill,
+          inputHead: SHA('a'),
+          ...fields,
+        }),
       )
-      const out = state.publish({ dir: runDir(), file, phase, skill, workflowVersion: CYCLE_WORKFLOW_VERSION, predecessor })
+      const out = state.publish({
+        dir: runDir(),
+        file,
+        phase,
+        skill,
+        workflowVersion: CYCLE_WORKFLOW_VERSION,
+        predecessor,
+      })
       expect(out.published, JSON.stringify(out)).toBe(true)
     }
     const hash = `sha256:${'1'.repeat(64)}`
-    publish('a0', 'red-spec', { status: 'red', mode: 'initial', contractPath: '/abs/a0.json', contractHash: hash, inputsDigest: reviewInputs })
-    publish('a0', 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: hash, inputsDigest: reviewInputs }, 'a0-red-spec')
-    publish('a0', 'implement-phase', { status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true, inputsDigest: reviewInputs })
+    publish('a0', 'red-spec', {
+      status: 'red',
+      mode: 'initial',
+      contractPath: '/abs/a0.json',
+      contractHash: hash,
+      inputsDigest: reviewInputs,
+    })
+    publish(
+      'a0',
+      'red-verify',
+      {
+        verified: true,
+        findings: [],
+        sealed: true,
+        snapshot: SHA('b'),
+        contractHash: hash,
+        inputsDigest: reviewInputs,
+      },
+      'a0-red-spec',
+    )
+    publish('a0', 'implement-phase', {
+      status: 'ok',
+      prNumber: 7,
+      outputHead: SHA('c'),
+      gatesPassed: true,
+      inputsDigest: reviewInputs,
+    })
     publish('r0', 'review-phase', {
       reviewedHead: SHA('c'),
+      // The reviewer records the card it judged; publish re-stamps it with the script's own hash.
+      acHash: 'the card the review judged',
       verdict: 'APPROVED',
       findings: [],
       custody: { verified: true, contractBreach: false },
