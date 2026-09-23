@@ -60,22 +60,91 @@ const S = JSON.parse(fs.readFileSync(${JSON.stringify(state)}, 'utf8'))
 const save = () => fs.writeFileSync(${JSON.stringify(state)}, JSON.stringify(S))
 const opt = k => { const i = a.indexOf(k); return i === -1 ? undefined : a[i + 1] }
 const out = v => { process.stdout.write(JSON.stringify(v)); process.exit(0) }
+// r1-g3: \`sanitizeHtml\` models the service's HTML sanitization of long-text fields on save — an
+// HTML comment is NOT persisted (the conservative assumption: no boundary evidence says it is).
+const desc = v => (S.sanitizeHtml && v !== undefined ? String(v).replace(/<!--[\\s\\S]*?-->/g, '') : v)
+// r1-g3 attempt 3 (rejection r1-g3-c2, unproven-field-existence-on-create): the stub is conservative
+// on field EXISTENCE too — only the core System.* fields every stock process template defines exist.
+// A \`--fields\` name outside them (an invented Custom.* field) is refused on create/update, and a WIQL
+// SELECT or clause naming one is refused, like a stock-process project refuses it. Writable values are
+// validated where the service validates them (State, AssignedTo identity, Area/Iteration path).
+const CORE = ['System.Id', 'System.Title', 'System.Description', 'System.Tags', 'System.TeamProject', 'System.WorkItemType', 'System.State', 'System.Reason', 'System.AssignedTo', 'System.AreaPath', 'System.IterationPath', 'System.History', 'System.CreatedDate', 'System.ChangedDate', 'System.CreatedBy', 'System.ChangedBy', 'System.Rev']
+const WRITABLE = ['System.Title', 'System.Description', 'System.Tags', 'System.State', 'System.AssignedTo', 'System.AreaPath', 'System.IterationPath', 'System.History']
+const STATES = ['New', 'Active', 'Resolved', 'Closed', 'Removed', 'To Do', 'Doing', 'Done', 'Proposed', 'Committed', 'Approved']
+const refuse = msg => { process.stderr.write(msg); process.exit(1) }
+const fieldsArg = project => { const extra = {}; const fi = a.indexOf('--fields'); if (fi !== -1) for (let j = fi + 1; j < a.length && !a[j].startsWith('--'); j++) { const [k, ...v] = a[j].split('='); extra[k] = v.join('=') }
+  for (const [k, v] of Object.entries(extra)) {
+    if (!CORE.includes(k)) refuse("TF51535: Cannot find field " + k + ".")
+    if (!WRITABLE.includes(k)) refuse("TF401326: Invalid field status 'ReadOnly' for field '" + k + "'.")
+    // r1-g3 attempt 4 (rejection r1-g3-c2, unproven-tag-value-acceptance): no boundary evidence shows the
+    // service accepts, stores verbatim and whole-tag-matches a tag carrying markup or spaces — the stub
+    // admits only an ordinary tag charset per ';'-separated entry and refuses anything else on create/update.
+    if (k === 'System.Tags') for (const t of String(v).split(';').map(s => s.trim()).filter(Boolean)) if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,399}$/.test(t)) refuse("TF401320: Rule Error for field Tags. Error code: InvalidCharacters. Tag: " + t)
+    if (k === 'System.State' && !STATES.includes(v)) refuse("TF401320: Rule Error for field State. Error code: Required, InvalidListValue.")
+    if (k === 'System.AssignedTo' && v && !/^[^\\s<>@]+@[^\\s<>@]+$/.test(v)) refuse("TF401320: Rule Error for field Assigned To. Error code: InvalidIdentity.")
+    if ((k === 'System.AreaPath' || k === 'System.IterationPath') && project !== undefined && v !== project && !v.startsWith(project + '\\\\')) refuse("TF401347: Invalid tree name given for work item, field '" + k + "'.")
+  }
+  return extra }
 const wiOut = id => { const w = S.workItems[id]; if (!w) { process.stderr.write('TF401232: work item ' + id + ' does not exist'); process.exit(1) } return { id: Number(id), url: 'https://dev.azure.com/acme/_apis/wit/workItems/' + id, fields: w.fields, relations: w.relations || [] } }
 if (a[0] === 'boards' && a[1] === 'work-item' && a[2] === 'show') out(wiOut(opt('--id')))
 if (a[0] === 'boards' && a[1] === 'work-item' && a[2] === 'update') {
   const w = S.workItems[opt('--id')]; if (!w) { process.stderr.write('TF401232'); process.exit(1) }
   if (opt('--state') !== undefined) w.fields['System.State'] = opt('--state')
-  if (opt('--description') !== undefined) w.fields['System.Description'] = opt('--description')
+  if (opt('--description') !== undefined) w.fields['System.Description'] = desc(opt('--description'))
+  Object.assign(w.fields, fieldsArg(w.fields['System.TeamProject']))
   save(); out(wiOut(opt('--id')))
 }
 if (a[0] === 'boards' && a[1] === 'work-item' && a[2] === 'create') {
+  // r1-g3: the create never lands remotely
+  if (S.failCreate) { process.stderr.write('TF400813: the service refused the create'); process.exit(1) }
   const id = String(S.next++)
-  S.workItems[id] = { fields: { 'System.Title': opt('--title'), 'System.Description': opt('--description'), 'System.TeamProject': opt('--project'), 'System.WorkItemType': opt('--type'), 'System.State': 'New' } }
-  save(); out(wiOut(id))
+  const extra = fieldsArg(opt('--project'))
+  S.workItems[id] = { fields: { 'System.Title': opt('--title'), 'System.Description': desc(opt('--description')), 'System.TeamProject': opt('--project'), 'System.WorkItemType': opt('--type'), 'System.State': 'New', ...extra } }
+  save()
+  // r1-g3: the create LANDS remotely but the response is lost — the local call fails
+  if (S.loseCreateResponse) { process.stderr.write('connection reset while reading the response'); process.exit(1) }
+  out(wiOut(id))
 }
 if (a[0] === 'boards' && a[1] === 'query') {
-  const w = opt('--wiql'); const needle = /CONTAINS '((?:[^']|'')*)'$/.exec(w)[1].replace(/''/g, "'")
-  out(Object.entries(S.workItems).filter(([, x]) => String(x.fields['System.Description'] || '').includes(needle)).map(([id]) => wiOut(id)))
+  // r1-g3: operator-strict WIQL (Azure Boards query operator table). HTML / PlainText long-text
+  // fields accept ONLY Contains Words / Not Contains Words / Is Empty / Is Not Empty — a plain
+  // CONTAINS on them is refused like the service refuses it. The rows carry only the SELECTed fields.
+  const w = opt('--wiql')
+  const LONG_TEXT = ['System.Description', 'System.History', 'Microsoft.VSTS.TCM.ReproSteps', 'Microsoft.VSTS.Common.AcceptanceCriteria']
+  const m = /^\\s*SELECT\\s+(.+?)\\s+FROM\\s+WorkItems\\s+WHERE\\s+(.+)$/is.exec(w || '')
+  if (!m) { process.stderr.write('TF51004: malformed WIQL: ' + w); process.exit(1) }
+  const select = [...m[1].matchAll(/\\[([^\\]]+)\\]/g)].map(x => x[1])
+  for (const f of select) if (!CORE.includes(f)) refuse('TF51005: The query references a field that does not exist. Unknown field: ' + f)
+  const clauses = []
+  const CL = /^\\s*\\[([^\\]]+)\\]\\s+(=|NOT\\s+CONTAINS\\s+WORDS|CONTAINS\\s+WORDS|CONTAINS|IS\\s+NOT\\s+EMPTY|IS\\s+EMPTY)\\s*(?:'((?:[^']|'')*)')?\\s*(?:AND\\s+|$)/i
+  let rest = m[2]
+  while (rest.trim()) {
+    const c = CL.exec(rest)
+    if (!c) { process.stderr.write('TF51004: unsupported WIQL clause: ' + rest); process.exit(1) }
+    const op = c[2].toUpperCase().replace(/\\s+/g, ' ')
+    if (!CORE.includes(c[1])) refuse('TF51005: The query references a field that does not exist. Unknown field: ' + c[1])
+    if (LONG_TEXT.includes(c[1]) && !['CONTAINS WORDS', 'NOT CONTAINS WORDS', 'IS EMPTY', 'IS NOT EMPTY'].includes(op)) {
+      process.stderr.write("TF51011: The specified operator '" + c[2] + "' cannot be used with long-text field '" + c[1] + "'. Supported: Contains Words, Not Contains Words, Is Empty, Is Not Empty"); process.exit(1)
+    }
+    if (!LONG_TEXT.includes(c[1]) && /WORDS/.test(op)) { process.stderr.write("TF51011: Contains Words is only valid on long-text fields, not '" + c[1] + "'"); process.exit(1) }
+    clauses.push({ field: c[1], op, value: c[3] === undefined ? undefined : c[3].replace(/''/g, "'") })
+    rest = rest.slice(c[0].length)
+  }
+  // r1-g3 attempt 2: Contains Words is a full-text search whose tokenization, HTML-comment indexing
+  // and post-create freshness no boundary evidence demonstrates — the stub accepts it (valid per the
+  // operator table) but it MATCHES NOTHING, so no row can rest on its semantics. System.Tags CONTAINS
+  // is modelled as whole-tag equality (a subset of either real reading: substring or whole tag).
+  const tags = v => String(v ?? '').split(';').map(t => t.trim().toLowerCase()).filter(Boolean)
+  const holds = (x, c) => {
+    const v = x.fields[c.field]
+    if (c.op === '=') return String(v ?? '') === c.value
+    if (c.op === 'CONTAINS' && c.field === 'System.Tags') return tags(v).includes(String(c.value).trim().toLowerCase())
+    if (c.op === 'CONTAINS') return String(v ?? '').toLowerCase().includes(String(c.value).toLowerCase())
+    if (c.op === 'CONTAINS WORDS' || c.op === 'NOT CONTAINS WORDS') return false
+    if (c.op === 'IS EMPTY') return !v
+    return !!v
+  }
+  out(Object.entries(S.workItems).filter(([, x]) => clauses.every(c => holds(x, c))).map(([id]) => { const full = wiOut(id); const all = { 'System.Id': full.id, ...full.fields }; return { id: full.id, url: full.url, fields: Object.fromEntries(select.filter(k => k in all).map(k => [k, all[k]])) } }))
 }
 const pr = n => { const p = S.prs[n]; if (!p) { process.stderr.write('TF401180: pull request ' + n + ' not found'); process.exit(1) } return p }
 if (a[0] === 'repos' && a[1] === 'pr' && a[2] === 'show') { const p = pr(opt('--id')); out({ pullRequestId: Number(opt('--id')), lastMergeSourceCommit: { commitId: p.head }, repository: { webUrl: 'https://dev.azure.com/acme/Proj/_git/app' }, status: p.status || 'active' }) }
@@ -107,6 +176,7 @@ process.stderr.write('unexpected az call: ' + a.join(' ')); process.exit(3)
     dir,
     azBin: join(dir, 'az'),
     state: read,
+    patch: obj => writeFileSync(state, JSON.stringify({ ...read(), ...obj })),
     calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)),
   }
 }
@@ -692,4 +762,217 @@ test('r1-g1-c7: a `code-host` key inside a one-line HTML comment is not read —
 
 test('r1-g1-c5: an unfenced Azure DevOps single-tool project still resolves azure-devops on both sides', () => {
   assert.deepEqual(fenceHosts(`# Way of Working\n\n${AZURE_DECL}`), { pmTool: 'azure-devops', codeHost: 'azure-devops' })
+})
+
+// ── r1-g3 (finding r0-3): findCards WIQL on Azure Boards ───────────────────────────────────────
+// Oracle: the Azure Boards WIQL operator table — System.Description is an HTML long-text field,
+// so it accepts only Contains Words / Not Contains Words / Is Empty / Is Not Empty. fakeAz's
+// `boards query` enforces that table and returns only the SELECTed fields, like the service.
+// Attempt 2 (rejection r1-g3-c2 / r1-g3-c1): no boundary evidence shows that Contains Words matches
+// the marker inside an HTML comment, nor that the comment survives the service's save of an HTML
+// field. So the r1-g3 stub is CONSERVATIVE on both: `sanitizeHtml` drops HTML comments from
+// System.Description on write, and Contains Words matches nothing. Only a route whose semantics the
+// operator table does state — CONTAINS on a System.Tags value that createCard also writes — can make
+// these rows pass. Cards "carrying the marker" are therefore always produced by the adapter's OWN
+// createCard (the producer), never hand-seeded with a field name the fix picks. Attempt 3 (rejection
+// r1-g3-c2, unproven-field-existence-on-create): the stub knows only the core System.* fields every
+// stock process defines, so an invented Custom.* field is refused on create/update and in WIQL — the
+// one field present in every process whose CONTAINS the operator table states is System.Tags.
+// Attempt 4 (rejection r1-g3-c2, unproven-tag-value-acceptance): the stub refuses a tag outside an
+// ordinary charset, and r1-g3-w4 pins the ONE admitted tag — `pair-scope-decision-<the marker's 32 hex>`
+// — in the create argv and in every findCards WIQL.
+const G3_HEX = '0123456789abcdef0123456789abcdef'
+const G3_MARKER = `<!-- pair:scope-decision:${G3_HEX} -->`
+const G3_TAG = `pair-scope-decision-${G3_HEX}`
+const fieldsOf = args => { const i = args.indexOf('--fields'); const r = []; if (i !== -1) for (let j = i + 1; j < args.length && !args[j].startsWith('--'); j++) r.push(args[j]); return r }
+const PLAIN_CONTAINS_ON_LONG_TEXT = /\[(System\.Description|System\.History)\]\s+CONTAINS(?!\s+WORDS)/i
+const wiqlOf = az => az.calls().filter(c => c.args[0] === 'boards' && c.args[1] === 'query').map(c => c.args[c.args.indexOf('--wiql') + 1])
+const g3Card = (id, body, extra = {}) => ({ [id]: { fields: { 'System.Title': `T${id}`, 'System.Description': body, 'System.TeamProject': 'Proj', ...extra } } })
+// a sanitizing fakeAz whose work items are created through the adapter's own createCard, in order
+const g3Az = (cards = [], seed = {}) => {
+  const az = fakeAz({ sanitizeHtml: true, ...seed })
+  const adapter = azure.instantiate({ azBin: az.azBin })
+  for (const c of cards) adapter.createCard({ repo: c.repo ?? 'Proj/app', title: c.title, body: c.body })
+  return az
+}
+const g3Find = (az, search = G3_MARKER, repo = 'Proj/app') => {
+  try {
+    return { rows: azure.instantiate({ azBin: az.azBin }).findCards({ repo, search }) }
+  } catch (e) {
+    return { error: e }
+  }
+}
+
+test('r1-g3-w1: findCards never issues a plain CONTAINS on [System.Description] (HTML long-text field) — the WIQL it sends is one the service accepts', () => {
+  const az = g3Az([{ title: 'T500', body: `${G3_MARKER}\n- [ ] **AC-1**: x` }])
+  const r = g3Find(az)
+  const sent = wiqlOf(az)
+  assert.ok(sent.length >= 1, 'findCards queries Azure Boards through az boards query')
+  for (const w of sent) assert.doesNotMatch(w, PLAIN_CONTAINS_ON_LONG_TEXT, `WIQL uses an operator the long-text field refuses: ${w}`)
+  assert.equal(r.error, undefined, `az boards query refused the WIQL: ${r.error?.message}`)
+})
+
+test('r1-g3-w2: findCards by marker returns exactly the work item createCard made with it — number, url, title and a body carrying the marker — even though the service does not persist the HTML comment', () => {
+  const az = g3Az([
+    { title: 'T500', body: `${G3_MARKER}\n- [ ] **AC-1**: x` },
+    { title: 'T501', body: 'unrelated card' },
+  ])
+  assert.ok(!az.state().workItems[500].fields['System.Description'].includes(G3_MARKER), 'the stub dropped the HTML comment on save')
+  const r = g3Find(az)
+  assert.equal(r.error, undefined, `findCards failed: ${r.error?.message}`)
+  const hits = r.rows.filter(x => typeof x.body === 'string' && x.body.includes(G3_MARKER))
+  assert.equal(hits.length, 1, JSON.stringify(r.rows))
+  assert.deepEqual([hits[0].number, hits[0].url, hits[0].title], [500, 'https://dev.azure.com/acme/Proj/_workitems/edit/500', 'T500'])
+})
+
+test('r1-g3-w3: a work item createCard made with the marker reads back through readCard with the marker in its body — the round trip the post-create verification relies on', () => {
+  const az = g3Az()
+  const adapter = azure.instantiate({ azBin: az.azBin })
+  const { url } = adapter.createCard({ repo: 'Proj/app', title: 'T', body: `${G3_MARKER}\n- [ ] **AC-1**: x` })
+  const card = adapter.readCard(url, { fields: ['number', 'url', 'title', 'body'] })
+  assert.equal(card.number, 500)
+  assert.ok(String(card.body).includes(G3_MARKER), `readCard body lost the marker: ${JSON.stringify(card.body)}`)
+  assert.ok(String(card.body).includes('- [ ] **AC-1**: x'), 'the visible body still reads back')
+})
+
+test('r1-g3-w4: the one admitted route is pinned — createCard sends --fields System.Tags=pair-scope-decision-<the marker hex> and every findCards WIQL uses [System.Tags] CONTAINS on exactly that tag', () => {
+  const az = g3Az([{ title: 'T500', body: `${G3_MARKER}\n- [ ] **AC-1**: x` }])
+  const createArgs = az.calls().find(c => c.args[0] === 'boards' && c.args[2] === 'create').args
+  assert.ok(fieldsOf(createArgs).includes(`System.Tags=${G3_TAG}`), `create argv lacks --fields System.Tags=${G3_TAG}: ${JSON.stringify(createArgs)}`)
+  const r = g3Find(az)
+  assert.equal(r.error, undefined, `findCards failed: ${r.error?.message}`)
+  const sent = wiqlOf(az)
+  assert.ok(sent.length >= 1, 'findCards queries Azure Boards')
+  for (const w of sent) assert.ok(w.includes(`[System.Tags] CONTAINS '${G3_TAG}'`), `WIQL does not match on the pinned tag: ${w}`)
+})
+
+test('r1-g3-b1: the WIQL stays scoped to the repo project, with single quotes doubled — a marked card in another project is never returned', () => {
+  const az = g3Az([
+    { repo: "O'Brien/app", title: 'T500', body: G3_MARKER },
+    { repo: 'Other/app', title: 'T501', body: G3_MARKER },
+  ])
+  const r = g3Find(az, G3_MARKER, "O'Brien/app")
+  assert.ok(wiqlOf(az).length >= 1 && wiqlOf(az).every(w => w.includes("[System.TeamProject] = 'O''Brien'")), wiqlOf(az).join('\n'))
+  assert.equal(r.error, undefined, `findCards failed: ${r.error?.message}`)
+  assert.deepEqual(r.rows.filter(x => x.body.includes(G3_MARKER)).map(x => x.number), [500])
+})
+
+test('r1-g3-w5: findCards with an ordinary non-marker search never issues a plain CONTAINS on [System.Description] either — the WIQL it sends is one the service accepts (validity only: Contains Words matches nothing in the stub, so no match is asserted)', () => {
+  const az = g3Az([{ title: 'T500', body: 'release notes for the login page' }])
+  const r = g3Find(az, 'login page')
+  assert.equal(r.error, undefined, `az boards query refused the WIQL: ${r.error?.message}`)
+  const sent = wiqlOf(az)
+  assert.ok(sent.length >= 1, 'findCards queries Azure Boards through az boards query')
+  for (const w of sent) assert.doesNotMatch(w, PLAIN_CONTAINS_ON_LONG_TEXT, `WIQL uses an operator the long-text field refuses: ${w}`)
+})
+
+// The new-card reconciliation end to end: a scope decision `new-card` on Azure whose create lands
+// remotely but loses its response — reconcileCreatedIssue -> host.pm.findCards(marker).
+const G3_DECISION_REF = 'https://dev.azure.com/acme/Proj/_git/app/pullrequest/3?discussionId=77#1'
+// the marker cycle-state embeds for (decisionRef, scope id) — newCardKey/newCardMarker, recomputed
+const G3_DECISION_HEX = createHashHex(`${G3_DECISION_REF} sc-1`).slice(0, 32)
+const G3_DECISION_MARKER = `<!-- pair:scope-decision:${G3_DECISION_HEX} -->`
+const G3_DECISION_TAG = `pair-scope-decision-${G3_DECISION_HEX}`
+function g3NewCard(seedWorkItems = {}, { loseCreateResponse = true, failCreate = false, createdFirst = [] } = {}) {
+  const { runDir } = wowDir(AZURE_WOW + '\n## Assignment\n\n- `default-assignee`: `rucka@acme.test`\n')
+  const scopeChanges = [{ id: 'sc-1', type: 'new-requirement', proposal: 'p', status: 'pending', discoveredAtReviewId: 'r0', baselineEvidenceRefs: [] }]
+  const draft = join(runDir, 'tmp-r0.json')
+  writeFileSync(draft, JSON.stringify({ run: 'story-9', story: '9', pr: 3, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA, reviewedHead: SHA, verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA }, mode: 'first', scopeChanges }))
+  assert.equal(publish({ dir: runDir, file: draft, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.1' }).published, true)
+  const approvedDelta = { title: 'Follow-up: sc-1', ac: [{ id: 'AC-1', description: 'the deferred requirement' }] }
+  const decision = '```json\n' + JSON.stringify({ schemaVersion: 1, scopeBaselineHash: scopeBaselineHashOf(scopeChanges), decisions: [{ id: 'sc-1', action: 'new-card', approvedDelta }] }) + '\n```'
+  const az = g3Az(createdFirst, {
+    workItems: seedWorkItems,
+    prs: { 3: { head: SHA, threads: [{ id: 77, comments: [{ id: 1, content: decision, author: { uniqueName: 'rucka@acme.test', descriptor: 'aad.rucka' } }] }] } },
+  })
+  az.patch({ loseCreateResponse, failCreate })
+  const out = applyScopeDecisions({ dir: runDir, decisionRef: G3_DECISION_REF, repo: 'Proj/app', pr: 3, workflowVersion: '4.0.1', azBin: az.azBin })
+  return { out, az, approvedDelta }
+}
+
+test('r1-g3-i1: a new-card create that lands on Azure Boards but loses its response is reconciled onto THAT work item by its marker — deferred, no second create — with the HTML comment not persisted by the service', () => {
+  const { out, az, approvedDelta } = g3NewCard()
+  const created = Object.entries(az.state().workItems)
+  assert.equal(created.length, 1, 'the one remote create landed')
+  const [id, wi] = created[0]
+  assert.equal(wi.fields['System.Title'], approvedDelta.title)
+  const createArgs = az.calls().find(c => c.args[0] === 'boards' && c.args[2] === 'create').args
+  assert.ok(createArgs[createArgs.indexOf('--description') + 1].includes(G3_DECISION_MARKER), 'the marker this test recomputes is the one cycle-state embedded')
+  assert.ok(!String(wi.fields['System.Description']).includes(G3_DECISION_MARKER), 'the stub dropped the HTML comment on save')
+  assert.ok(fieldsOf(createArgs).includes(`System.Tags=${G3_DECISION_TAG}`), `create argv lacks --fields System.Tags=${G3_DECISION_TAG}`)
+  assert.equal(wi.fields['System.Tags'], G3_DECISION_TAG, 'the pinned tag is what the service stored')
+  assert.equal(out.applied, true, JSON.stringify(out))
+  assert.equal(out.results[0].status, 'deferred', JSON.stringify(out))
+  assert.equal(out.results[0].targetIssueUrl, `https://dev.azure.com/acme/Proj/_workitems/edit/${id}`)
+  assert.equal(az.calls().filter(c => c.args[0] === 'boards' && c.args[2] === 'create').length, 1, 'reconciliation never creates a second card')
+  for (const w of wiqlOf(az)) {
+    assert.doesNotMatch(w, PLAIN_CONTAINS_ON_LONG_TEXT, w)
+    assert.ok(w.includes(`[System.Tags] CONTAINS '${G3_DECISION_TAG}'`), `WIQL does not match on the pinned tag: ${w}`)
+  }
+})
+
+test('r1-g3-i2: a create that never landed, with a foreign work item sharing the approved title but not the marker — reconciliation answers remote-outcome-uncertain, never a list failure and never the foreign card', () => {
+  const { out, az } = g3NewCard(g3Card(400, '- [ ] **AC-1**: the deferred requirement', { 'System.Title': 'Follow-up: sc-1' }), { loseCreateResponse: false, failCreate: true })
+  assert.equal(out.applied, false, JSON.stringify(out))
+  assert.equal(out.results[0].reason, 'az-issue-create-uncertain:new-card-remote-outcome-uncertain', JSON.stringify(out))
+  assert.equal(Object.keys(az.state().workItems).length, 1, 'nothing was created')
+})
+
+test('r1-g3-i3: two work items createCard made with this decision\'s marker make reconciliation ambiguous — refused, never guessed', () => {
+  const both = [
+    { title: 'A', body: `${G3_DECISION_MARKER}\nA` },
+    { title: 'B', body: `${G3_DECISION_MARKER}\nB` },
+  ]
+  const { out } = g3NewCard({}, { loseCreateResponse: false, failCreate: true, createdFirst: both })
+  assert.equal(out.applied, false, JSON.stringify(out))
+  assert.equal(out.results[0].reason, 'az-issue-create-uncertain:new-card-reconciliation-ambiguous', JSON.stringify(out))
+})
+
+// ── controls: already correct at the base ─────────────────────────────────────────────────────
+test('r1-g3-c1: the Azure createCard still hands the whole body, marker included, to the service in --description (argv only — persistence is w2/w3/i1)', () => {
+  const az = fakeAz({})
+  azure.instantiate({ azBin: az.azBin }).createCard({ repo: 'Proj/app', title: 't', body: `${G3_MARKER}\nbody` })
+  const c = az.calls().find(x => x.args[0] === 'boards' && x.args[2] === 'create')
+  assert.ok(c.args[c.args.indexOf('--description') + 1].includes(G3_MARKER))
+  assert.equal(c.args[c.args.indexOf('--project') + 1], 'Proj')
+})
+
+test('r1-g3-c2: the conservative stub encodes the oracle — plain CONTAINS on System.Description refused, Contains Words accepted but proving no match, HTML comments not persisted, System.Tags CONTAINS a whole-tag match, only SELECTed fields returned, an invented Custom.* field refused on create/update/WIQL, a tag outside the ordinary charset refused on create/update', () => {
+  const az = fakeAz({ sanitizeHtml: true })
+  const adapter = azure.instantiate({ azBin: az.azBin })
+  adapter.createCard({ repo: 'Proj/app', title: 't', body: `${G3_MARKER}\nscope decision text` })
+  assert.equal(az.state().workItems[500].fields['System.Description'], '\nscope decision text', 'the HTML comment is not persisted')
+  az.patch({ workItems: { ...az.state().workItems, ...g3Card(501, 'x', { 'System.Tags': 'pair-scope; other' }) } })
+  const q = wiql => spawnSync(az.azBin, ['boards', 'query', '--wiql', wiql], { encoding: 'utf8' })
+  const bad = q("SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = 'Proj' AND [System.Description] CONTAINS 'x'")
+  assert.equal(bad.status, 1)
+  assert.match(bad.stderr, /long-text field 'System\.Description'/)
+  const words = q("SELECT [System.Id], [System.Description] FROM WorkItems WHERE [System.TeamProject] = 'Proj' AND [System.Description] CONTAINS WORDS 'scope decision'")
+  assert.equal(words.status, 0, words.stderr)
+  assert.deepEqual(JSON.parse(words.stdout), [], 'Contains Words semantics are undemonstrated: no row rests on them')
+  const tag = q("SELECT [System.Id] FROM WorkItems WHERE [System.Tags] CONTAINS 'pair-scope'")
+  assert.equal(tag.status, 0, tag.stderr)
+  assert.deepEqual(JSON.parse(tag.stdout).map(x => x.fields), [{ 'System.Id': 501 }], 'only the SELECTed fields come back')
+  const partial = q("SELECT [System.Id] FROM WorkItems WHERE [System.Tags] CONTAINS 'pair'")
+  assert.deepEqual(JSON.parse(partial.stdout), [], 'a tag CONTAINS is modelled as a whole-tag match')
+  // attempt 3: field existence is conservative — only the core System.* fields of every stock process
+  const create = f => spawnSync(az.azBin, ['boards', 'work-item', 'create', '--project', 'Proj', '--type', 'Issue', '--title', 't', '--description', 'd', '--fields', f], { encoding: 'utf8' })
+  const custom = create(`Custom.PairMarker=${G3_MARKER}`)
+  assert.notEqual(custom.status, 0, 'an invented Custom.* field does not exist on a stock-process project: create fails')
+  assert.match(custom.stderr, /Cannot find field Custom\.PairMarker/)
+  const upd = spawnSync(az.azBin, ['boards', 'work-item', 'update', '--id', '500', '--fields', `Custom.PairMarker=${G3_MARKER}`], { encoding: 'utf8' })
+  assert.notEqual(upd.status, 0, 'update refuses the invented field too')
+  assert.notEqual(q(`SELECT [System.Id] FROM WorkItems WHERE [Custom.PairMarker] CONTAINS '${G3_MARKER}'`).status, 0, 'a WIQL clause on an unknown field is refused')
+  assert.notEqual(q("SELECT [System.Id], [Custom.PairMarker] FROM WorkItems WHERE [System.TeamProject] = 'Proj'").status, 0, 'a WIQL SELECT of an unknown field is refused')
+  const tagged = create('System.Tags=pair-scope-decision-0123')
+  assert.equal(tagged.status, 0, tagged.stderr)
+  assert.equal(JSON.parse(tagged.stdout).fields['System.Tags'], 'pair-scope-decision-0123', 'System.Tags, present in every process, is writable on create')
+  // attempt 4: tag VALUES are conservative too — only an ordinary tag charset is admitted
+  const raw = create(`System.Tags=${G3_MARKER}`)
+  assert.notEqual(raw.status, 0, 'a tag carrying the raw HTML-comment marker is refused on create')
+  assert.match(raw.stderr, /Rule Error for field Tags/)
+  assert.notEqual(create(`System.Tags=ok; ${G3_MARKER}`).status, 0, 'every ;-separated tag is checked')
+  const rawUpd = spawnSync(az.azBin, ['boards', 'work-item', 'update', '--id', '500', '--fields', `System.Tags=${G3_MARKER}`], { encoding: 'utf8' })
+  assert.notEqual(rawUpd.status, 0, 'update refuses the raw-marker tag too')
+  assert.equal(create(`System.Tags=${G3_TAG}`).status, 0, 'the hex-derived tag is an ordinary tag')
 })
