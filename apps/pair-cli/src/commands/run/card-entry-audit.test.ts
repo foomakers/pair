@@ -17,32 +17,34 @@ import type { CardReadiness } from './cycle-scripts'
 
 const cwd = '/project'
 
-const files = (extra: Record<string, string> = {}): InMemoryFileSystemService =>
-  new InMemoryFileSystemService(
-    {
-      [`${cwd}/config.json`]: JSON.stringify({
-        asset_registries: {
-          skills: {
-            source: '.skills',
-            behavior: 'overwrite',
-            description: 'skills',
-            prefix: 'pair',
-            targets: [{ path: '.claude/skills/', mode: 'canonical' }],
-          },
+const files = (
+  extra: Record<string, string> = {},
+  omit: readonly string[] = [],
+): InMemoryFileSystemService => {
+  const seed: Record<string, string> = {
+    [`${cwd}/config.json`]: JSON.stringify({
+      asset_registries: {
+        skills: {
+          source: '.skills',
+          behavior: 'overwrite',
+          description: 'skills',
+          prefix: 'pair',
+          targets: [{ path: '.claude/skills/', mode: 'canonical' }],
         },
-      }),
-      [`${cwd}/.claude/skills/pair-loop/SKILL.md`]: '',
-      [`${cwd}/.claude/skills/pair-process-refine-story/SKILL.md`]: '',
-      [`${cwd}/.claude/skills/pair-process-plan-tasks/SKILL.md`]: '',
-      [`${cwd}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
-      [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs`]: '',
-      [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs`]: '',
-      '/bin/claude': '',
-      ...extra,
-    },
-    cwd,
-    cwd,
-  )
+      },
+    }),
+    [`${cwd}/.claude/skills/pair-loop/SKILL.md`]: '',
+    [`${cwd}/.claude/skills/pair-process-refine-story/SKILL.md`]: '',
+    [`${cwd}/.claude/skills/pair-process-plan-tasks/SKILL.md`]: '',
+    [`${cwd}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
+    [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs`]: '',
+    [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs`]: '',
+    '/bin/claude': '',
+    ...extra,
+  }
+  for (const path of omit) delete seed[path]
+  return new InMemoryFileSystemService(seed, cwd, cwd)
+}
 
 const MAPPED_POLICY = '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-loop\n'
 
@@ -201,5 +203,32 @@ describe('r1-1: every spawning fallback route writes start + end and prints one 
     expect(audit[0]).toMatch(/event=start card=31 tag=auto-dev workflow=pair-loop/)
     expect(audit[1]).toMatch(/event=end card=31\b.*outcome=completed/)
     expect(records()).toHaveLength(1)
+  })
+
+  it('A1-C3: a cycle entry refused before anything spawns (skill-missing) writes no start and prints no DISPATCH-RECORD', async () => {
+    const { audit, records, deps } = harness('ready')
+    const fs = files(
+      {},
+      ['SKILL.md', 'scripts/cycle-state.mjs', 'scripts/cycle-dispatch.mjs'].map(
+        f => `${cwd}/.claude/skills/pair-workflow-cycle/${f}`,
+      ),
+    )
+
+    const outcome = await run({ card: '32', cardTags: '' }, fs, deps)
+
+    expect(outcome.error?.message).toMatch(/skill-missing/)
+    expect(audit.filter(line => /event=start/.test(line))).toHaveLength(0)
+    expect(records()).toHaveLength(0)
+  })
+
+  it('A1-C4: a prep route refused before anything spawns (engine not available) writes no start and prints no DISPATCH-RECORD', async () => {
+    const { audit, records, deps } = harness('draft')
+    const fs = files({}, ['/bin/claude'])
+
+    const outcome = await run({ card: '21', cardTags: '' }, fs, deps)
+
+    expect(outcome.error).toBeDefined()
+    expect(audit.filter(line => /event=start/.test(line))).toHaveLength(0)
+    expect(records()).toHaveLength(0)
   })
 })
