@@ -504,3 +504,192 @@ test('AC8: the extension guide names the eight methods, the registration wiring 
 test('AC8: the guide ships byte-identical in the dataset (the mirror)', () => {
   assert.equal(readFileSync(GUIDE, 'utf8'), readFileSync(join(REPO, 'packages', 'knowledge-hub', 'dataset', '.pair', 'knowledge', 'guidelines', 'collaboration', 'project-management-tool', 'host-adapter-extension-guide.md'), 'utf8'))
 })
+
+// ── r1-g1 (finding r0-2): resolution reads DECLARATIONS, never examples ─────────────────────────
+// A fenced code block (``` or ~~~, indented up to three spaces) or an HTML comment in
+// way-of-working.md documents a declaration; it never is one. The shipped dataset template carries
+// a fenced split-configuration example (Linear + `code-host`: `github`), so a fresh install must
+// still resolve the D21 default, and a real declaration outside the example must win over it.
+const TEMPLATE_WOW = join(REPO, 'packages', 'knowledge-hub', 'dataset', '.pair', 'adoption', 'tech', 'way-of-working.md')
+const INDEX_COPIES = [
+  ...SKILLS.map(s => join(REPO, '.claude', 'skills', `pair-workflow-${s}`, 'scripts', 'host', 'index.mjs')),
+  ...SKILLS.map(s => join(REPO, 'packages', 'knowledge-hub', 'dataset', '.skills', 'workflow', s, 'scripts', 'host', 'index.mjs')),
+]
+const FENCE_DEFAULT = { pmTool: 'github', codeHost: 'github' }
+const AZURE_DECL = '- Azure DevOps is adopted for project management. Organization: acme. Project: Proj.\n'
+
+const shippedTemplate = () => readFileSync(TEMPLATE_WOW, 'utf8')
+const fenceHosts = text => {
+  const r = resolveHosts({ text })
+  return { pmTool: r.pmTool, codeHost: r.codeHost }
+}
+// A recorder for one CLI: logs argv, answers `[]` to a paginated read, refuses anything else.
+function cliRecorder(name) {
+  const dir = mkdtempSync(join(tmpdir(), `${name}-rec-`))
+  const log = join(dir, 'calls.log')
+  writeFileSync(log, '')
+  writeFileSync(
+    join(dir, name),
+    `#!/usr/bin/env node
+const fs = require('fs')
+const a = process.argv.slice(2)
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(a) + '\\n')
+if (a.includes('--paginate')) { process.stdout.write('[]'); process.exit(0) }
+if (a.includes('--http-method') && a.includes('GET')) { process.stdout.write(JSON.stringify({ value: [], count: 0 })); process.exit(0) }
+process.stderr.write('unexpected ${name} call: ' + a.join(' ')); process.exit(3)
+`,
+  )
+  chmodSync(join(dir, name), 0o755)
+  return { dir, bin: join(dir, name), calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) }
+}
+
+// ── witnesses: the shipped template and its fenced example ─────────────────────────────────────
+test('r1-g1-w1: the shipped dataset way-of-working template resolves the D21 default — nothing is declared outside its fenced example', () => {
+  const r = resolveHosts({ text: shippedTemplate() })
+  assert.deepEqual(r, { ...FENCE_DEFAULT, declared: { pmTool: null, codeHost: null } })
+})
+
+test('r1-g1-w2: an Azure DevOps declaration above the template resolves azure-devops on BOTH sides — the fenced `code-host`: `github` example is not a declaration', () => {
+  assert.deepEqual(fenceHosts(`# Way of Working\n\n${AZURE_DECL}\n${shippedTemplate()}`), { pmTool: 'azure-devops', codeHost: 'azure-devops' })
+})
+
+// ── witnesses: every fence / comment form, one rule at a time ──────────────────────────────────
+test('r1-g1-w3: a `pm-tool` key inside a backtick fence is not read — default github', () => {
+  assert.deepEqual(fenceHosts('# W\n\nExample:\n\n```text\n- `pm-tool`: `jira`\n```\n'), FENCE_DEFAULT)
+})
+
+test('r1-g1-w4: a prose declaration inside a tilde fence is not read — default github', () => {
+  assert.deepEqual(fenceHosts('# W\n\n~~~\n- Linear is adopted for project management.\n~~~\n'), FENCE_DEFAULT)
+})
+
+// r1-g1-w5 (list-item-nested fence) is OUT of scope by maintainer decision (run story-492,
+// maintainer-interventions.md, 2026-09-23): the resolver applies CommonMark TOP-LEVEL block rules only,
+// and the limit is documented in way-of-working-pm-resolution.md (r1-g1-d1).
+
+test('r1-g1-w6: a `pm-tool` key inside a multi-line HTML comment is not read — default github', () => {
+  assert.deepEqual(fenceHosts('# W\n\n<!--\n- `pm-tool`: `jira`\n-->\n'), FENCE_DEFAULT)
+})
+
+test('r1-g1-w7: a prose declaration inside a one-line HTML comment is not read — default github', () => {
+  assert.deepEqual(fenceHosts('# W\n\n<!-- Linear is adopted for project management. -->\n'), FENCE_DEFAULT)
+})
+
+// ── interactions: a real declaration after an example, and the consumers of the resolution ─────
+test('r1-g1-i1: a real declaration AFTER a fenced example is the one read — prose and key form alike', () => {
+  const fence = '```text\n- Linear is adopted for project management.\n- `pm-tool`: `jira`\n- `code-host`: `github`\n```\n'
+  assert.deepEqual(fenceHosts(`# W\n\n${fence}\n${AZURE_DECL}`), { pmTool: 'azure-devops', codeHost: 'azure-devops' })
+  assert.deepEqual(fenceHosts(`# W\n\n${fence}\n- \`pm-tool\`: \`azure-devops\`\n`), { pmTool: 'azure-devops', codeHost: 'azure-devops' })
+})
+
+test('r1-g1-i2: `host/index.mjs resolve --from` on the shipped template prints github/github in all 12 shipped copies (installed + dataset)', () => {
+  const { root } = wowDir(shippedTemplate())
+  for (const copy of INDEX_COPIES) {
+    assert.ok(existsSync(copy), copy)
+    const r = spawnSync(process.execPath, [copy, 'resolve', '--from', root], { encoding: 'utf8' })
+    assert.equal(r.status, 0, `${copy}: ${r.stdout}${r.stderr}`)
+    const out = JSON.parse(r.stdout)
+    assert.deepEqual([out.pmTool, out.codeHost], ['github', 'github'], copy)
+  }
+})
+
+test('r1-g1-i3: `cycle-state.mjs bind-hosts` on a project carrying the shipped template binds github/github (the pair-cli run --card entry)', () => {
+  const { runDir } = wowDir(shippedTemplate())
+  const r = spawnSync(process.execPath, [CYCLE_STATE, 'bind-hosts', '--dir', runDir], { encoding: 'utf8' })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const out = JSON.parse(r.stdout)
+  assert.deepEqual([out.action, out.binding.pmTool, out.binding.codeHost], ['bound', 'github', 'github'])
+  assert.ok(existsSync(join(runDir, BINDING_FILE)))
+})
+
+test('r1-g1-i4: `pr-comment.mjs find` run from a project carrying the shipped template reads comments through gh, as before US-492 — never az', () => {
+  const { root } = wowDir(shippedTemplate())
+  const gh = cliRecorder('gh')
+  const az = cliRecorder('az')
+  const env = { ...process.env, PAIR_GH_BIN: gh.bin, PAIR_AZ_BIN: az.bin, PATH: `${gh.dir}:${az.dir}:${process.env.PATH}` }
+  const r = spawnSync(process.execPath, [PR_COMMENT, 'find', '--pr', '9', '--marker', '<!-- pair:first-review #9 PR#9 -->', '--repo', 'o/r'], { encoding: 'utf8', cwd: root, env })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.deepEqual(JSON.parse(r.stdout), { found: false, count: 0 })
+  assert.deepEqual([gh.calls().length, az.calls().length], [1, 0])
+  assert.deepEqual(gh.calls()[0].slice(0, 2), ['api', '--paginate'])
+})
+
+test('r1-g1-i5: an unsupported host declared AFTER a fenced supported example still HALTs host-unsupported — the example never masks the real declaration', () => {
+  assert.throws(
+    () => resolveHosts({ text: '# W\n\n```text\n- `pm-tool`: `github`\n```\n\n- Jira is adopted for project management.\n' }),
+    e => e.kind === 'host-unsupported' && JSON.parse(e.detail).side === 'pm-tool' && JSON.parse(e.detail).declared === 'Jira',
+  )
+})
+
+// ── repair (attempt 2): the maintainer's top-level grammar (maintainer-interventions.md, 2026-09-23) ──
+test('r1-g1-x1: a fence closes only on the SAME character, at least as long — a nested ``` inside ```` and a ~~~ pair inside ``` stay example text', () => {
+  assert.deepEqual(fenceHosts('# W\n\n````markdown\n```text\n- `pm-tool`: `jira`\n```\n````\n'), FENCE_DEFAULT)
+  assert.deepEqual(fenceHosts('# W\n\n```text\n~~~\n- `pm-tool`: `jira`\n~~~\n```\n'), FENCE_DEFAULT)
+})
+
+test('r1-g1-x2: `<!--` inside a fence opens nothing (and a fence marker inside a comment opens nothing) — the real unsupported declaration after it still HALTs host-unsupported Jira', () => {
+  for (const text of [
+    '# W\n\n```html\n<!-- example comment\n```\n\n- Jira is adopted for project management.\n\n<!-- a note -->\n',
+    '# W\n\n<!-- example:\n```text\n-->\n\n- Jira is adopted for project management.\n',
+  ]) {
+    assert.throws(
+      () => resolveHosts({ text }),
+      e => e.kind === 'host-unsupported' && JSON.parse(e.detail).side === 'pm-tool' && JSON.parse(e.detail).declared === 'Jira',
+      text,
+    )
+  }
+})
+
+test('r1-g1-x3: an unterminated fence makes way-of-working malformed — a typed HALT naming the opening line, never a silent github default; a top-level line indented 4+ spaces is indented code, not a declaration', () => {
+  assert.throws(
+    () => resolveHosts({ text: `# W\n\n\`\`\`text\n- example\n\n${AZURE_DECL}` }),
+    e => /way-of-working-malformed/.test(`${e.kind} ${e.message}`) && /\bline 3\b/.test(e.message),
+  )
+  assert.deepEqual(resolveHosts({ text: '# W\n\n    - `pm-tool`: `jira`\n' }), { ...FENCE_DEFAULT, declared: { pmTool: null, codeHost: null } })
+  assert.deepEqual(fenceHosts(`# W\n\n${AZURE_DECL}\n    - \`code-host\`: \`github\`\n`), { pmTool: 'azure-devops', codeHost: 'azure-devops' })
+})
+
+test('r1-g1-d1: way-of-working-pm-resolution.md (root + dataset mirror) documents the grammar limit — fenced blocks and HTML comments are examples, declare the host on a top-level line, an unterminated fence HALTs way-of-working-malformed', () => {
+  const rel = join('.pair', 'knowledge', 'guidelines', 'technical-standards', 'ai-development', 'skill-conventions', 'way-of-working-pm-resolution.md')
+  for (const f of [join(REPO, rel), join(REPO, 'packages', 'knowledge-hub', 'dataset', rel)]) {
+    const doc = readFileSync(f, 'utf8')
+    assert.match(doc, /fenc/i, f)
+    assert.match(doc, /HTML comment/i, f)
+    assert.match(doc, /top-level line/i, f)
+    assert.match(doc, /unterminated/i, f)
+    assert.match(doc, /way-of-working-malformed/, f)
+  }
+})
+
+// ── controls: what already resolves correctly must keep doing so ───────────────────────────────
+test('r1-g1-c1: this repository\'s own way-of-working (GitHub Projects, prose) still resolves github/github', () => {
+  const r = resolveHosts({ text: readFileSync(join(REPO, '.pair', 'adoption', 'tech', 'way-of-working.md'), 'utf8') })
+  assert.deepEqual(r, { ...FENCE_DEFAULT, declared: { pmTool: 'Github Projects', codeHost: null } })
+})
+
+test('r1-g1-c2: an unfenced split configuration (Azure Boards + `code-host`: `github`) still resolves azure-devops/github', () => {
+  assert.deepEqual(fenceHosts(`# W\n\n${AZURE_DECL}\n## Git Workflow\n\n- \`code-host\`: \`github\` — repository \`acme/app\`.\n`), { pmTool: 'azure-devops', codeHost: 'github' })
+})
+
+test('r1-g1-c3: a real declaration BEFORE a fenced example still wins', () => {
+  assert.deepEqual(fenceHosts(`# W\n\n${AZURE_DECL}\n\`\`\`text\n- Linear is adopted for project management.\n\`\`\`\n`), { pmTool: 'azure-devops', codeHost: 'azure-devops' })
+})
+
+test('r1-g1-c4: an unsupported host declared OUTSIDE any fence or comment still HALTs host-unsupported — stripping examples never silences a real declaration', () => {
+  for (const [text, side, declared] of [
+    ['# W\n\n- Jira is adopted for project management.\n', 'pm-tool', 'Jira'],
+    [`# W\n\n<!-- a note -->\n${AZURE_DECL}\n## Git Workflow\n\n- \`code-host\`: \`gitlab\`\n`, 'code-host', 'gitlab'],
+  ]) {
+    assert.throws(
+      () => resolveHosts({ text }),
+      e => e.kind === 'host-unsupported' && JSON.parse(e.detail).side === side && JSON.parse(e.detail).declared === declared,
+    )
+  }
+})
+
+test('r1-g1-c7: a `code-host` key inside a one-line HTML comment is not read — Azure stays its own code host', () => {
+  assert.deepEqual(fenceHosts(`# W\n\n${AZURE_DECL}\n<!-- - \`code-host\`: \`github\` -->\n`), { pmTool: 'azure-devops', codeHost: 'azure-devops' })
+})
+
+test('r1-g1-c5: an unfenced Azure DevOps single-tool project still resolves azure-devops on both sides', () => {
+  assert.deepEqual(fenceHosts(`# Way of Working\n\n${AZURE_DECL}`), { pmTool: 'azure-devops', codeHost: 'azure-devops' })
+})
