@@ -426,6 +426,16 @@ describe('readAutomationPolicy — numeric and condition forms match tier 1 exac
     expect(policy.maxParallelism).toBe(3)
   })
 
+  it('US-491: exposes the per-tier overrides for run --root --parallel, absent when none is declared', () => {
+    expect(
+      policyFrom('## Max Parallelism\n\n3\nrisk:green: 5\nrisk:yellow: 2\n').read()
+        .maxParallelismOverrides,
+    ).toEqual({ 'risk:green': 5, 'risk:yellow': 2 })
+    expect(policyFrom('## Max Parallelism\n\n3\n').read()).not.toHaveProperty(
+      'maxParallelismOverrides',
+    )
+  })
+
   /**
    * Round 4, minor 2 — resolved the other way round, deliberately.
    *

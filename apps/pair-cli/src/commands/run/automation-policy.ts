@@ -45,6 +45,12 @@ export interface AutomationPolicy {
   readonly stopPredicate?: string
   readonly maxIterations: number
   readonly maxParallelism: number
+  /**
+   * `## Max Parallelism`'s per-tier override lines (`<tier>: <n>`), present only when declared.
+   * Applied by `run --root --parallel` exactly as tier 1's `resolveMaxParallelism` applies them
+   * (US-491); the single-process loop still caps itself at 1 (AC9).
+   */
+  readonly maxParallelismOverrides?: Readonly<Record<string, number>>
   readonly auditLocation: string
   /**
    * `## Workflows`'s tag→workflow mapping (US-217), absent when the project declares none.
@@ -108,13 +114,17 @@ export function readAutomationPolicy(fs: FileSystemService, projectRoot: string)
   const eligibility = readEligibility(markdown, warnings)
   const stop = readStopPredicate(markdown)
   const workflows = readWorkflowMapping(markdown)
+  const parallelism = readMaxParallelism(markdown)
 
   return {
     ...(eligibility !== undefined && { eligibility }),
     autoAdvance: readAutoAdvance(markdown, eligibility),
     ...(stop.predicate !== undefined && { stopPredicate: stop.predicate }),
     maxIterations: stop.maxIterations,
-    maxParallelism: readMaxParallelism(markdown),
+    maxParallelism: parallelism.global,
+    ...(Object.keys(parallelism.perTier).length > 0 && {
+      maxParallelismOverrides: parallelism.perTier,
+    }),
     auditLocation: readAuditLocation(markdown),
     ...(workflows !== undefined && { workflows }),
     source: POLICY_PATH,
@@ -351,29 +361,38 @@ function assertCondition(condition: string, line: string): void {
  * than its schema owner — round 3's divergence mirrored (round 5, minor 2). `max-iterations` keeps
  * the strict form because tier 1 IS strict there; the two fields differ deliberately.
  *
- * Per-tier overrides are VALIDATED even though the driver never applies one (it caps itself at 1
- * per process, AC9): tier 1 HALTs on a malformed override, so silently ignoring it here would make
- * the same file mean two different things again.
+ * Per-tier overrides are VALIDATED and returned: the single-process loop never applies one (it caps
+ * itself at 1 per process, AC9), while `run --root --parallel` (US-491) applies them exactly as
+ * tier 1's `resolveMaxParallelism` does — only when the whole batch shares one tier.
  *
  * **Scope of that validation, stated deliberately** (round 6, minor 3): SHAPE only — line form,
  * `family:tier` label, positive integer. Tier 1 additionally rejects an override key the project's
  * Tag Projection does not emit, using the family the calling skill resolves from
  * `tech/risk-matrix.md`. The driver does not read that file: it BORROWS policy rather than deriving
- * it (D18), and it never applies an override anyway. So `risk:blue: 5` is refused by tier 1 and
- * accepted here — the looser direction, acceptable only because the value is unused on tier 2, and
- * registered as an expected divergence in `tier-parity.test.ts` with that reasoning. Resolving the
- * family in the driver is the recorded follow-up if it ever starts applying overrides.
+ * it (D18). So `risk:blue: 5` is refused by tier 1 and accepted here — registered as an expected
+ * divergence in `tier-parity.test.ts`. Under `--parallel` an override only takes effect when every
+ * batched card carries that tier, and with `## Eligibility` declared the batch tier IS the
+ * eligibility label (an emitted tier), so the looser key is never the one applied.
  */
-function readMaxParallelism(markdown: string): number {
+function readMaxParallelism(markdown: string): {
+  global: number
+  perTier: Record<string, number>
+} {
   const lines = sectionLines(markdown, 'Max Parallelism')
-  if (lines === undefined || lines.length === 0) return FAIL_SAFE_MAX_PARALLELISM
+  if (lines === undefined || lines.length === 0) {
+    return { global: FAIL_SAFE_MAX_PARALLELISM, perTier: {} }
+  }
   const global = numericPositiveInteger(lines[0]!, '`## Max Parallelism` first line')
-  for (const line of lines.slice(1)) assertParallelismOverride(line)
-  return global
+  const perTier: Record<string, number> = {}
+  for (const line of lines.slice(1)) {
+    const [tier, value] = readParallelismOverride(line)
+    perTier[tier] = value
+  }
+  return { global, perTier }
 }
 
 /** `<tier>: <positive integer>` — tier 1's own three checks, in its own order. */
-function assertParallelismOverride(line: string): void {
+function readParallelismOverride(line: string): [string, number] {
   const match = /^(.+?):\s*(-?\d+)\s*$/.exec(line)
   if (!match) {
     policyHalt(
@@ -386,7 +405,10 @@ function assertParallelismOverride(line: string): void {
       `\`## Max Parallelism\` override key \`${tier}\` is not a well-formed \`family:tier\` label`,
     )
   }
-  numericPositiveInteger(match[2]!, `\`## Max Parallelism\` override for \`${tier}\``)
+  return [
+    tier,
+    numericPositiveInteger(match[2]!, `\`## Max Parallelism\` override for \`${tier}\``),
+  ]
 }
 
 function readAuditLocation(markdown: string): string {
