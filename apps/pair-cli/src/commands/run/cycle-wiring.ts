@@ -111,7 +111,8 @@ export function readCardDocumentViaGh(card: string, cwd: string): CardDocument {
 export function createCardReadinessProbe(fs: FileSystemService, projectRoot: string) {
   return async (card: string): Promise<CardReadiness> => {
     const mapping = readStateMapping(fs, projectRoot)
-    const verdict = resolveCardReadiness(readCardDocumentViaGh(card, process.cwd()), mapping)
+    // r1-3: `gh` resolves the repository from ITS cwd — the project's, never this process's.
+    const verdict = resolveCardReadiness(readCardDocumentViaGh(card, projectRoot), mapping)
     console.log(`  Readiness: card ${card} — ${verdict.explanation}`)
     return verdict.readiness
   }
@@ -254,7 +255,8 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
   const runsRoot = `${main}/.pair/working/runs`
   // Title only: the board state is readiness's question, answered upstream (r0-1).
   const record = readCardDocumentViaGh(input.card, ctx.cwd)
-  const bridge = createCycleScriptsBridge(ctx.location)
+  // r1-3: the scripts run in the project too — `ac-hash` asks `gh` from its own cwd.
+  const bridge = createCycleScriptsBridge(ctx.location, ctx.cwd)
   const branch = resolveBranch(input.card, record.title, input.pr, ctx.cwd)
   const card = { id: input.card, branch, base: ctx.baseBranch, title: record.title }
   return {

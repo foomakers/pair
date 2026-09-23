@@ -184,14 +184,15 @@ function rejectIfFailed(parsed: unknown): void {
 }
 
 /** Runs `node <script> <cmd> --flag value …` and parses the ONE line of JSON it writes to stdout. */
-function runScript(
+function runScriptIn(
   script: string,
   cmd: string,
   args: readonly (readonly [string, string])[],
+  cwd?: string,
 ): unknown {
   const argv = [script, cmd]
   for (const [flag, value] of args) argv.push(`--${flag}`, value)
-  const result = spawnSync('node', argv, { encoding: 'utf8' })
+  const result = spawnSync('node', argv, { encoding: 'utf8', ...(cwd !== undefined && { cwd }) })
   const parsed = parseScriptOutput(script, cmd, (result.stdout ?? '').trim(), result.stderr)
   rejectIfFailed(parsed)
   return parsed
@@ -237,9 +238,22 @@ function packetArgs(options: CyclePacketOptions, location: CycleScriptsLocation)
   ]
 }
 
-export function createCycleScriptsBridge(location: CycleScriptsLocation): CycleScriptsBridge {
+/**
+ * `cwd` is the PROJECT directory the scripts run in (r1-3): `ac-hash` shells out to `gh`, which
+ * resolves the repository from its cwd, so a script run from anywhere else hashes another
+ * repository's issue. Absent ⇒ this process's cwd (the bridge's own unit tests).
+ */
+export function createCycleScriptsBridge(
+  location: CycleScriptsLocation,
+  cwd?: string,
+): CycleScriptsBridge {
   const cycleStatePath = join(location.scriptsDir, 'cycle-state.mjs')
   const cycleDispatchPath = join(location.scriptsDir, 'cycle-dispatch.mjs')
+  const runScript = (
+    script: string,
+    cmd: string,
+    args: readonly (readonly [string, string])[],
+  ): unknown => runScriptIn(script, cmd, args, cwd)
 
   return {
     resolve: options =>

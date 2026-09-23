@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
@@ -30,7 +38,9 @@ import type { CardReadiness } from './cycle-scripts'
  * Hermetic: in-memory project, injected engine runner / cycle driver / audit writer, stub `gh`.
  */
 
-const cwd = '/project'
+// A directory that EXISTS (r1-3): the production probe runs `gh` in the project, so the in-memory
+// project's root must be somewhere a process can start. Only `gh` runs there; nothing is written.
+const cwd = realpathSync(tmpdir())
 const WOW_PATH = '.pair/adoption/tech/way-of-working.md'
 
 const baseFiles = (root: string): Record<string, string> => ({
