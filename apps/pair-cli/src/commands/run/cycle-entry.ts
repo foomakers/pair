@@ -209,11 +209,16 @@ function driverFor(
  * Ready (DoR satisfied): this story's own delivery-cycle coordinator, never a prep skill and
  * never the loop-mode re-invocation machinery (AC9, AC12) — `driveCycle` reports a STATUS, and
  * nothing on this path ever merges.
+ *
+ * Two halves, so every refusal (`--filter`, engine unavailable, `skill-missing`, the autonomy
+ * posture) and the transparency block happen BEFORE the caller takes the lock and audits `start`:
+ * a run that was never going to spawn posts no `DISPATCH-RECORD:` claiming it started (r1-1).
+ * The returned function is the drive itself.
  */
-export async function enterCycleCoordinator(
+export function prepareCycleCoordinator(
   input: CycleCoordinatorInput,
   deps: RunHandlerDependencies,
-): Promise<number> {
+): () => Promise<number> {
   const { config, context, fs, cwd, card } = input
 
   assertNoLoopModeConcerns(config)
@@ -239,14 +244,16 @@ export async function enterCycleCoordinator(
     shown,
   })
 
-  const outcome = await driveCycle({
-    runId: dispatch.runId,
-    card,
-    ...(dispatch.pr !== undefined && { pr: dispatch.pr }),
-    ...(dispatch.rounds !== undefined && { rounds: dispatch.rounds }),
-  })
+  return async () => {
+    const outcome = await driveCycle({
+      runId: dispatch.runId,
+      card,
+      ...(dispatch.pr !== undefined && { pr: dispatch.pr }),
+      ...(dispatch.rounds !== undefined && { rounds: dispatch.rounds }),
+    })
 
-  console.log(`  Cycle status: ${outcome.status} (${outcome.stagesRun} stage(s) dispatched)`)
-  reportCycleReason(outcome.next)
-  return outcome.status === 'ready-for-merge' ? 0 : 1
+    console.log(`  Cycle status: ${outcome.status} (${outcome.stagesRun} stage(s) dispatched)`)
+    reportCycleReason(outcome.next)
+    return outcome.status === 'ready-for-merge' ? 0 : 1
+  }
 }

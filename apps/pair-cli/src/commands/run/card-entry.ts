@@ -11,7 +11,7 @@ import { CardOutOfScopeError } from './card-readiness'
 import { filterDeliveryFor } from './invocation'
 import type { DispatchSkipReason } from './dispatch'
 import { driveRun } from './loop-driver'
-import { enterCycleCoordinator, resolveEngineFor } from './cycle-entry'
+import { prepareCycleCoordinator, resolveEngineFor } from './cycle-entry'
 import {
   declaredEngine,
   driveLockedCard,
@@ -203,15 +203,14 @@ async function handleDorFallback(
     console.log(
       `  Fallback: card ${decision.card} is Ready (Definition of Ready met) — entering the delivery cycle`,
     )
-    return await underCardLock(entry, deps, CYCLE_WORKFLOW, () => enterCycle(entry, deps))
+    return await enterCycle(entry, deps)
   }
   if (config.autonomous === true) return skipUnattendedPreparation(input, deps, prep)
-  return await underCardLock(entry, deps, prep.skill, () =>
-    runPrepSkill(
-      { config, context, fs: input.fs, cwd: input.cwd, card: decision.card, ...prep },
-      deps,
-    ),
+  const drive = preparePrepSkill(
+    { config, context, fs: input.fs, cwd: input.cwd, card: decision.card, ...prep },
+    deps,
   )
+  return await underCardLock(entry, deps, prep.skill, drive)
 }
 
 /** The card a `--card` entry spawns on, with everything resolved for it — one subject. */
@@ -228,8 +227,10 @@ function entryOf(input: DorFallbackInput): CardEntryInput {
   return { config, context, fs, cwd, card: decision.card }
 }
 
-function enterCycle(entry: CardEntryInput, deps: RunHandlerDependencies): Promise<number> {
-  return enterCycleCoordinator(entry, deps)
+/** Refusals and the transparency block first, then the lock + audit around the drive alone. */
+async function enterCycle(entry: CardEntryInput, deps: RunHandlerDependencies): Promise<number> {
+  const drive = prepareCycleCoordinator(entry, deps)
+  return await underCardLock(entry, deps, CYCLE_WORKFLOW, drive)
 }
 
 /**
@@ -251,7 +252,7 @@ export async function enterCycleAtReview(
     console.log(chalk.dim('  Dry run: nothing was spawned.'))
     return 0
   }
-  return await underCardLock(entry, deps, CYCLE_WORKFLOW, () => enterCycle(entry, deps))
+  return await enterCycle(entry, deps)
 }
 
 /** The workflow a cycle entry runs, as the audit trail and the `DISPATCH-RECORD:` name it. */
@@ -378,8 +379,15 @@ interface PrepSkillInput {
   readonly label: string
 }
 
-/** Draft / Ready-without-breakdown (supervised): routed to the matching preparation skill. */
-async function runPrepSkill(input: PrepSkillInput, deps: RunHandlerDependencies): Promise<number> {
+/**
+ * Draft / Ready-without-breakdown (supervised): routed to the matching preparation skill. Resolved
+ * and printed here — the engine refusal included — so nothing is audited for a run that cannot
+ * start; the returned function is the drive the caller runs under the lock (r1-1).
+ */
+function preparePrepSkill(
+  input: PrepSkillInput,
+  deps: RunHandlerDependencies,
+): () => Promise<number> {
   const { config, context, fs, cwd, card, skill, label } = input
   const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
   const engineDef = resolveEngineFor(engine, context, cwd, fs)
@@ -413,5 +421,5 @@ async function runPrepSkill(input: PrepSkillInput, deps: RunHandlerDependencies)
   console.log(`  ${describeEngineResolution(resolved.engine)}`)
   console.log(`  Fallback: card ${card} is ${label} — routing to ${skill}`)
 
-  return driveRun(resolved, config, deps)
+  return () => driveRun(resolved, config, deps)
 }
