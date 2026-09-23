@@ -75,6 +75,16 @@ export const runCommandMetadata = {
       description: 'Per-iteration wall-clock bound (hang guard, default 1800)',
     },
     {
+      flags: '--profile <name>',
+      description:
+        'Reserved until #488 (per-stage engine/model/effort/timeout): refused with a pointer',
+    },
+    {
+      flags: '--workflow-config <path>',
+      description:
+        'Reserved until #488 (per-stage engine/model/effort/timeout): refused with a pointer',
+    },
+    {
       flags: '--dry-run',
       description: 'Resolve engine, skill, perimeter and policy, print them, spawn nothing',
     },
