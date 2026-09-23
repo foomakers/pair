@@ -466,7 +466,9 @@ function packetCommand(opts) {
     skill = SK.implementPhase
     agentType = 'pair-implementer'
     phaseLabel = 'Implement'
-    args = `${common} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt ?? 1} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)} $title=${JSON.stringify(card.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg}`
+    // US-506: a fresh card's `implement` carries no contract and no base yet — the arguments are
+    // omitted, never rendered `undefined`, exactly as the engine composes them.
+    args = `${common} $phase=${n.phase}${n.base ? ` $head=${n.base}` : ''} $attempt=${n.attempt ?? 1}${n.contract ? ` $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}` : ''} $title=${JSON.stringify(card.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg}`
   } else if (n.step === 'green') {
     skill = SK.greenFix
     agentType = 'pair-implementer'

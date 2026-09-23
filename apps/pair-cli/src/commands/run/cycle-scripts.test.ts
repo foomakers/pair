@@ -153,7 +153,7 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
       scriptsDir: join(projectRoot, '.claude/skills/pair-workflow-cycle/scripts'),
     })
 
-  it('resolve() on an empty run directory returns the real prepare/initial/a0 next (AC1)', () => {
+  it('resolve() on an empty run directory returns the real implement/initial/a0 next — no up-front contract (AC1, US-506)', () => {
     const dir = join(runsRoot, 'story-487/487')
     const result = bridge().resolve({
       dir,
@@ -164,7 +164,12 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
     })
 
     expect(result.status).toBe('empty')
-    expect(result.next).toMatchObject({ step: 'prepare', mode: 'initial', phase: 'a0', attempt: 1 })
+    expect(result.next).toMatchObject({
+      step: 'implement',
+      mode: 'initial',
+      phase: 'a0',
+      attempt: 1,
+    })
   })
 
   it('resolve() on a PR entry starts at {verify, first, r0} — no prepare precedes it (AC2, ADR-024 b)', () => {

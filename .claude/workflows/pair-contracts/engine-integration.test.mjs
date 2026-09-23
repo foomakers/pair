@@ -346,11 +346,31 @@ test('B1 (DT-04): a contradiction with sealed rows routes a successor revision t
   }
   const dispatched = []
   const logs = []
+  // US-506 AC5: the contradiction route needs a SEALED `a0`, which only a run already on the old path
+  // carries — this run started before the fresh-entry change: its `a0` preparation is on disk.
+  const a0Prepared = {
+    status: 'red',
+    mode: 'initial',
+    sourceOfTruth: 'the installer pipeline',
+    inventory: [{ id: 'AC-1', producer: 'installer', inputs: ['x'], representations: ['y'], consumers: ['z'], classes: ['supported', 'invalid'] }],
+    fixScope: { owner: 'installer', mode: 'behavioral', allowedPaths: ['src/a.ts'] },
+    matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'c', oracle: 'pnpm test', expected: 'e', covers: ['AC-1'] }],
+    redTests: [{ file: 'a.test.ts', kind: 'test', baseline: 'red', sha256: D('3'), command: 'pnpm exec vitest run a.test.ts', observed: 'FAIL 1 test' }],
+    testExempt: false,
+    contractPath: join(dir, 'a0-red-contract.json'),
+    contractHash: D('1'),
+  }
+  through('a0', 'red-spec', a0Prepared)
+  const STEP_OF = { 'pair-fix-test-author': 'prepare', 'pair-red-contract-verifier': 'validate', 'pair-reviewer': 'verify' }
   const agent = async (prompt, opts) => {
     dispatched.push(opts.label)
     if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: { $meta: { source: 't.md', sourceHash: D('0'), generatedAt: 'x' }, vocabulary: { verdictOptions: ['APPROVED', 'CHANGES-REQUESTED'], severities: ['Critical', 'Major', 'Minor', 'Questions'] }, severityRanks: { Critical: 4, Major: 3, Minor: 2, Questions: 1 }, schema: { type: 'object', properties: { verdict: { type: 'string', enum: ['APPROVED', 'CHANGES-REQUESTED'] }, findings: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, severity: { type: 'string', enum: ['Critical', 'Major', 'Minor', 'Questions'] }, location: { type: 'string' }, description: { type: 'string' }, recommendation: { type: 'string' } }, required: ['id', 'severity', 'location', 'description', 'recommendation'] } } }, required: ['verdict', 'findings'] } } }
     const phase = arg(prompt, 'phase')
     const mode = arg(prompt, 'mode')
+    // every phase skill's Step 0: the REAL durable state, and a redirect when another step is due
+    const due = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh', pr: 483, story: '482' }).next
+    const step = STEP_OF[opts.agentType] ?? String(opts.label).split(':')[0]
+    if (due.step !== step || due.phase !== phase) return { status: 'redirect', next: due }
     if (opts.agentType === 'pair-fix-test-author') {
       // The ONE contradiction: the remediation of r0-1 cannot be contracted without rewriting two
       // rows the sealed a0 contract already approved.
@@ -407,7 +427,7 @@ test('B1 (DT-04): a contradiction with sealed rows routes a successor revision t
   // the route: the contradiction did NOT end the card, and the successor revision was prepared,
   // independently validated, sealed and implemented before the re-review
   assert.deepEqual(dispatched.filter(l => !/^contract:/.test(l)), [
-    'prepare:#482 a0',
+    'implement:#482',
     'validate:#482 a0',
     'implement:#482',
     'verify:#482 r0',
@@ -753,9 +773,9 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
   assert.equal(guardPrompts[0].guards.length, 1)
   for (let i = 1; i < guardPrompts.length; i++) assert.deepEqual(guardPrompts[i].guards, guardPrompts[0].guards, guardPrompts[i].phase)
   // the ordinary path, no new stage and no new agent
+  // US-506: a fresh card starts at implement — no up-front `a0` contract; the remediation below is
+  // the unchanged test-first path
   assert.deepEqual(dispatched.filter(l => !/^contract:/.test(l)), [
-    'prepare:#482 a0',
-    'validate:#482 a0',
     'implement:#482',
     'verify:#482 r0',
     'prepare:#482 r1-g1',
@@ -769,7 +789,7 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
   ])
   // the ledger: append-only, both heads preserved, seal untouched, history complete
   const names = readHandoffs(dir).map(h => h.name)
-  assert.deepEqual(names, ['a0-red-spec', 'a0-red-verify', 'a0-implement-phase', 'r0-review-phase', 'r1-g1-red-spec', 'r1-g1-red-verify', 'r1-g1-green-fix', 'r1-review-phase', 'r1-g1-red-spec', 'r1-g1-red-verify', 'r1-g1-green-fix', 'r2-review-phase'])
+  assert.deepEqual(names, ['a0-implement-phase', 'r0-review-phase', 'r1-g1-red-spec', 'r1-g1-red-verify', 'r1-g1-green-fix', 'r1-review-phase', 'r1-g1-red-spec', 'r1-g1-red-verify', 'r1-g1-green-fix', 'r2-review-phase'])
   const final = resolve({ dir, workflowVersion: '4.0.0', policy: POLICY, entry: 'fresh', pr: 483, story: '482' })
   assert.deepEqual(final.activeRegressionRisks, [], 'the active matrix is empty at convergence')
   assert.equal(final.next.step, 'done')

@@ -1541,7 +1541,11 @@ const EXTERNAL_REFUSALS = new Set(['dirty', 'stale'])
 function deriveNextStep(handoffs, policy, ctx = {}) {
   // US-479 B2: a migration acknowledgment is evidence about provenance, never a cycle position.
   const list = handoffs.filter(h => h.data && h.data.recordType !== 'migration')
-  if (!list.length) return ctx.entry === 'pr' ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
+  // US-506 AC1 (ADR-024 amendment 2026-09-23): a FRESH card has no up-front acceptance contract. Its
+  // first step is `implement / initial` above the base — tests and code written together, test-first
+  // — and independence moves to the verify that follows. A directory that already holds `a0` contract
+  // handoffs is not empty, so it never reaches this line: it finishes under the old transitions (AC5).
+  if (!list.length) return ctx.entry === 'pr' ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
   const last = list[list.length - 1]
   const d = last.data
   const parts = phaseParts(last.phase) ?? {}
@@ -1888,8 +1892,12 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     // counter — a metadata-only re-review (inputsChanged, a moved head) bumps `round` without any
     // actual fix and must not spend the budget a real remediation earns.
     if (cycleCounters(list).spentCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', findings: blocking })
-    const atf = blocking.filter(f => f.kind === 'approved-test-failing')
-    const gaps = blocking.filter(f => f.kind === 'contract-gap')
+    // US-506: `approved-test-failing` and `contract-gap` presuppose a SEALED contract of their group.
+    // On a fresh run `a0` never sealed one, so such a finding has nothing to retry or revise: it is an
+    // ordinary finding and routes the test-first remediation below (AC3 — no new finding class).
+    const sealedGroup = f => !!f.groupId && groupPhases(f.groupId).length > 0
+    const atf = blocking.filter(f => f.kind === 'approved-test-failing' && sealedGroup(f))
+    const gaps = blocking.filter(f => f.kind === 'contract-gap' && sealedGroup(f))
     // Every blocking finding is an approved test still failing ⇒ GREEN again on the SAME seals,
     // group by group in dependency order (T-9 review, t9-4: two groups used to fall through to a
     // fresh remediation contract). A group out of retries exhausts the budget.

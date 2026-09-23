@@ -325,7 +325,8 @@ test('resolve: an empty run directory is `empty`, and the entry step depends on 
   const fresh = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
   assert.equal(fresh.status, 'empty')
   // US-486 AC-7: `context` travels with every transition — the first stage of a role is `fresh`.
-  assert.deepEqual(fresh.next, { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1, context: 'fresh' })
+  // US-506 AC1: a fresh card has no up-front contract — the cycle starts at `implement / initial`.
+  assert.deepEqual(fresh.next, { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1, context: 'fresh' })
   const resumed = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr' })
   assert.deepEqual(resumed.next, { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1, context: 'fresh' })
 })
@@ -4023,4 +4024,75 @@ test('worked: an entry with no evidence and no declared reason is refused before
   // a design decision no command can demonstrate is legal WITH its reason
   const ok = publish({ dir, file: draft({ worked: [workedNote({ evidence: undefined, notVerifiable: true, rationale: 'a naming convention; no command proves it' })] }), phase: 'r1', skill: 'review-phase', workflowVersion: V })
   assert.equal(ok.published, true, JSON.stringify(ok))
+})
+
+// ══ US-506 T-1 — a fresh card starts at `implement / initial`; runs holding `a0` handoffs keep the old path ══
+// AC1: no `prepare`/`validate a0` for a fresh card. AC4: review findings keep prepare → validate → green.
+// AC5: a run directory that already holds `a0` contract handoffs finishes under the old transitions.
+const implementOk = (dir, extra = {}, opts = {}) => handoff(dir, 'a0', 'implement-phase', { status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true, ...extra }, opts)
+const pick = (n, ...ks) => Object.fromEntries(ks.map(k => [k, n[k]]))
+
+test('US-506 T-1 w1: empty + fresh ⇒ implement/initial a0 with no contract; empty + pr ⇒ verify r0 (unchanged)', () => {
+  const { dir } = runDir()
+  const fresh = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(fresh.next, 'step', 'mode', 'phase', 'round', 'attempt'), { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 })
+  assert.equal(fresh.next.contract, undefined, 'a fresh card is implemented above the base, never against a contract')
+  assert.equal(deriveNext([], POLICY, { entry: 'fresh' }).step, 'implement')
+  const pr = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(pick(pr.next, 'step', 'mode', 'phase'), { step: 'verify', mode: 'first', phase: 'r0' })
+})
+
+test('US-506 T-1 w2: the fresh path — implement (no predecessor) → verify r0 → a blocking finding keeps the test-first remediation path', () => {
+  const { dir } = runDir()
+  implementOk(dir)
+  let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'phase', 'base', 'pr'), { step: 'verify', mode: 'first', phase: 'r0', base: SHA('c'), pr: 7 })
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1')] }, { predecessor: 'a0-implement-phase' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'phase'), { step: 'prepare', mode: 'remediation', phase: 'r1-g1' })
+  redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'x', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] } })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'phase'), { step: 'validate', phase: 'r1-g1' })
+  redVerify(dir, 'r1-g1', {}, { predecessor: 'r1-g1-red-spec' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'phase'), { step: 'green', phase: 'r1-g1' })
+  assert.equal(r.next.contract.snapshot, SHA('b'))
+})
+
+test('US-506 T-1 w3: a fresh implement with a red gate retries on the same phase WITHOUT a contract, then is failed-implement', () => {
+  const { dir } = runDir()
+  implementOk(dir, { gatesPassed: false })
+  let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'phase', 'attempt', 'pr'), { step: 'implement', mode: 'retry', phase: 'a0', attempt: 2, pr: 7 })
+  assert.equal(r.next.contract, undefined)
+  implementOk(dir, { gatesPassed: false, outputHead: SHA('d') }, { attempt: 2 })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual([r.next.step, r.next.reason, r.next.budget], ['blocked', 'failed-implement', 'greenRetries'])
+})
+
+test('US-506 T-1 w4: on a fresh run a `contract-gap` or `approved-test-failing` naming `a0` has no seal to revise — it routes the ordinary remediation', () => {
+  for (const kind of ['contract-gap', 'approved-test-failing']) {
+    const { dir } = runDir()
+    implementOk(dir)
+    review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1', { kind, groupId: 'a0' })] }, { predecessor: 'a0-implement-phase' })
+    const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+    assert.deepEqual(pick(r.next, 'step', 'mode', 'phase'), { step: 'prepare', mode: 'remediation', phase: 'r1-g1' }, kind)
+  }
+})
+
+test('US-506 T-1 c1 (control, AC5): a run holding sealed `a0` handoffs keeps the old transitions to verify, a contract-gap still revises a0', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0')
+  let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'phase'), { step: 'validate', phase: 'a0' })
+  redVerify(dir, 'a0', {}, { predecessor: 'a0-red-spec' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'phase'), { step: 'implement', mode: 'initial', phase: 'a0' })
+  assert.equal(r.next.contract.snapshot, SHA('b'))
+  implementOk(dir, {}, { predecessor: 'a0-red-verify' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'phase'), { step: 'verify', mode: 'first', phase: 'r0' })
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1', { kind: 'contract-gap', groupId: 'a0' })] }, { predecessor: 'a0-implement-phase' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'phase'), { step: 'prepare', mode: 'revision', phase: 'a0-rev2' })
 })

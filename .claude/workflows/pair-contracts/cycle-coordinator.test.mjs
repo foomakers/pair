@@ -120,9 +120,9 @@ async function batchPrompts(args) {
   return calls
 }
 
-// ══ AC1 — fresh-card entry: resolve yields prepare/initial/a0, the worktree is idempotent ══════
+// ══ AC1 — fresh-card entry: resolve yields implement/initial/a0 (US-506), the worktree is idempotent ══
 
-test('AC1-c1 (control): `resolve` on an empty run directory with `--entry fresh` yields prepare/initial/a0', () => {
+test('AC1-c1 (control, US-506 AC1): `resolve` on an empty run directory with `--entry fresh` yields implement/initial/a0 — no up-front contract', () => {
   const { dir } = runDir()
   const r = state([
     'resolve',
@@ -140,9 +140,10 @@ test('AC1-c1 (control): `resolve` on an empty run directory with `--entry fresh`
     'abc',
   ])
   assert.equal(r.status, 0, r.stderr)
-  assert.equal(r.json.next.step, 'prepare')
+  assert.equal(r.json.next.step, 'implement')
   assert.equal(r.json.next.mode, 'initial')
   assert.equal(r.json.next.phase, 'a0')
+  assert.equal(r.json.next.contract, undefined)
 })
 
 test('AC1-w1: `cycle-dispatch.mjs worktree` creates the persistent story worktree on the card branch', () => {
@@ -308,13 +309,14 @@ test('AC2-w1: the packet built for a PR entry invokes the review-phase skill, ne
 
 // ══ AC3 — one stage, one dispatch, arguments byte-identical in shape to the batch's ════════════
 
-test('AC3-w1: the `prepare` packet is byte-identical to the prompt `pair-implement-batch.js` composes', async () => {
+test('AC3-w1 (US-506): the fresh card\'s first packet — `implement`, no contract — is byte-identical to the prompt `pair-implement-batch.js` composes', async () => {
   const calls = await batchPrompts({ cards: [CARD] })
-  const fromBatch = calls.find(c => c.opts.label?.startsWith('prepare:'))
+  const fromBatch = calls.find(c => c.opts.label?.startsWith('implement:'))
   assert.ok(
     fromBatch,
-    `the engine dispatched no prepare: ${calls.map(c => c.opts.label).join(', ')}`,
+    `the engine dispatched no implement: ${calls.map(c => c.opts.label).join(', ')}`,
   )
+  assert.doesNotMatch(fromBatch.prompt, /\$snapshot=|\$contract=|\$head=/, 'no contract, no seal, no base yet')
 
   const { dir } = runDir()
   const next = state([
@@ -500,7 +502,7 @@ test('AC4-c1 (control): `resolve` is unmoved by a dead dispatch and advances onl
 test('AC5-c1 (control): the engine retries a dead dispatch exactly once, then ends the story failed', async () => {
   const calls = await batchPrompts({ cards: [CARD] })
   assert.equal(
-    calls.filter(c => c.opts.label?.startsWith('prepare:')).length,
+    calls.filter(c => c.opts.label?.startsWith('implement:')).length,
     2,
     'one dispatch plus exactly one retry',
   )
@@ -2066,8 +2068,8 @@ test('r1-2 b3 (boundary, pass at base): the coordinator’s SKILL.md spells no w
 
 test('r1-2 c1 (control): a well-formed version still renders the packet, byte-identical to the engine’s', async () => {
   const calls = await batchPrompts({ cards: [CARD] })
-  const fromBatch = calls.find(c => c.opts.label?.startsWith('prepare:'))
-  assert.ok(fromBatch, 'the engine dispatched no prepare')
+  const fromBatch = calls.find(c => c.opts.label?.startsWith('implement:'))
+  assert.ok(fromBatch, 'the engine dispatched no implement')
   const r = packetWith(WORKFLOW_VERSION)
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.equal(r.json.halt, undefined)
@@ -2121,7 +2123,7 @@ test('r1-2 c2 (control): the r1-g2 HALTs at this same boundary are untouched and
 test('r1-2 c3 (control): a well-formed version of ANOTHER major still resolves — the grammar is the gate, not the value', () => {
   const pinned = resolveWith(WORKFLOW_VERSION)
   assert.equal(pinned.status, 0, pinned.stderr)
-  assert.equal(pinned.json.next.step, 'prepare')
+  assert.equal(pinned.json.next.step, 'implement')
   assert.equal(pinned.json.next.mode, 'initial')
   assert.equal(pinned.json.next.phase, 'a0')
 
@@ -2131,7 +2133,7 @@ test('r1-2 c3 (control): a well-formed version of ANOTHER major still resolves �
     0,
     `a legacy/migration major is well-formed and still answers: ${older.stdout}`,
   )
-  assert.equal(older.json.next.step, 'prepare')
+  assert.equal(older.json.next.step, 'implement')
 })
 
 test('r1-2 i1 (interaction): the pinned version is accepted by packet, resolve AND publish', async () => {
@@ -2149,7 +2151,7 @@ test('r1-2 i1 (interaction): the pinned version is accepted by packet, resolve A
 
   const s = resolveWith(pin)
   assert.equal(s.status, 0, `resolve refused the pin: ${s.stdout}`)
-  assert.equal(s.json.next.step, 'prepare')
+  assert.equal(s.json.next.step, 'implement')
 
   const pub = publishWith(pin)
   assert.equal(pub.status, 0, `publish refused the pin: ${pub.stdout}`)
@@ -2378,7 +2380,7 @@ const INVOCATIONS = {
         '--inputs',
         'x',
       ],
-      accepted: r => r.status === 0 && r.json?.next?.step === 'prepare',
+      accepted: r => r.status === 0 && r.json?.next?.step === 'implement',
     }
   },
   publish: version => {
@@ -2651,11 +2653,14 @@ const STYLE_BASELINE_PROMPT =
   '$branch=feature/US-42-x $worktree=../pair-worktrees/42 $base=origin/main $stacked=false ' +
   '$entry=fresh $policy='
 
+// The style contract is rendered on a `prepare a0` next (a run already on the old path, US-506 AC5):
+// its baseline string is the one #486 shipped, and the red-spec skill is the one it names.
+const LEGACY_PREPARE_NEXT = { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1, context: 'fresh' }
 function packetFor(styleArgs = []) {
   return dispatch([
     'packet',
     '--next',
-    JSON.stringify(freshNext()),
+    JSON.stringify(LEGACY_PREPARE_NEXT),
     '--card',
     JSON.stringify(CARD),
     '--policy',
