@@ -1856,7 +1856,7 @@ async function driveStory(story) {
       if (isPosInt(res.next?.pr)) pr = res.next.pr
       // A stage that redirects to the very step it was dispatched for did not do its work: refuse
       // to loop on it, and say so.
-      // US-506 (AC5): the one legitimate same-step redirect — the engine's contract-less first guess
+      // US-506 (AC-5): the one legitimate same-step redirect — the engine's contract-less first guess
       // `implement a0` on a run whose `a0` is already SEALED: the stage hands back the durable `next`
       // carrying the contract, and the re-dispatch is a different packet (`$snapshot`, `$contract`).
       const bindsContract = !!res.next.contract && !next.contract

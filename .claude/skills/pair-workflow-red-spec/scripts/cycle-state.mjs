@@ -392,7 +392,7 @@ export function envelopeErrors(data, { phase, skill }) {
   if (data.firstReviewHead !== undefined && !SHA_RE.test(String(data.firstReviewHead))) errs.push('firstReviewHead-invalid')
   if (data.remediationBatchId !== undefined && (typeof data.remediationBatchId !== 'string' || data.remediationBatchId === '')) errs.push('remediationBatchId-invalid')
   if (data.recordType !== undefined && !RECORD_TYPES.includes(data.recordType)) errs.push(`recordType-invalid:${data.recordType}`)
-  // US-506 F-5 (AC8): a review that escalates names the decisions it owes — each one a finding of the
+  // US-506 F-5 (AC-8): a review that escalates names the decisions it owes — each one a finding of the
   // same review — so `decide` can hold the escalate until every one is recorded.
   if (skill === 'review-phase' && data.humanDecisionIds !== undefined) {
     const ids = data.humanDecisionIds
