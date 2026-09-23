@@ -343,8 +343,8 @@ const FLAGS_CONFLICTING_WITH_PARALLEL = [
 ] as const
 
 /** US-491 T-3: `--parallel N` — a positive integer, with `--root` and nothing that competes with it. */
-function resolveParallel(options: ParseRunOptions): number | undefined {
-  if (options.parallel === undefined) return undefined
+function resolveParallel(options: ParseRunOptions): { parallel?: number } {
+  if (options.parallel === undefined) return {}
   const parallel = parsePositiveInteger('--parallel', options.parallel)
   const conflicting = FLAGS_CONFLICTING_WITH_PARALLEL.filter(
     ([key]) => options[key] !== undefined,
@@ -359,7 +359,7 @@ function resolveParallel(options: ParseRunOptions): number | undefined {
   if (options.root === undefined) {
     throw new Error('--parallel requires --root: the root is the scope pair-next selects from')
   }
-  return parallel
+  return { parallel }
 }
 
 function resolveScope(options: ParseRunOptions): RunScopeOptions {
@@ -418,6 +418,6 @@ export function parseRunCommand(options: ParseRunOptions, args: string[] = []): 
         ? DEFAULT_ITERATION_TIMEOUT_SECONDS
         : parsePositiveInteger('--iteration-timeout', options.iterationTimeout),
     dryRun: options.dryRun === true,
-    ...(parallel !== undefined && { parallel }),
+    ...parallel,
   }
 }

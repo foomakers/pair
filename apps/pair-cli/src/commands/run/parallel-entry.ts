@@ -144,6 +144,30 @@ export async function handleParallelRun(
   return await runBatch({ input, deps, plan })
 }
 
+async function runCardInBatch({
+  input,
+  deps,
+  card,
+  finished,
+}: {
+  input: ParallelRunInput
+  deps: RunHandlerDependencies
+  card: RootCandidate
+  finished: Map<string, CardOutcome>
+}): Promise<CardOutcome> {
+  const outcome = await runPlannedCard({
+    card,
+    config: input.config,
+    cwd: input.cwd,
+    workingArea: input.context.workingArea,
+    acquireLock: deps.acquireLock ?? acquireCardLock,
+    runCardProcess: deps.runCardProcess ?? spawnCardProcess,
+  })
+  finished.set(card.id, outcome)
+  console.log(`  Ended #${card.id}: ${outcome.outcome} — ${outcome.detail}`)
+  return outcome
+}
+
 async function runBatch({
   input,
   deps,
@@ -173,19 +197,7 @@ async function runBatch({
       items: plan.run,
       limit: plan.limit.effective,
       mayStart: () => !isInterrupted(),
-      worker: async card => {
-        const outcome = await runPlannedCard({
-          card,
-          config: input.config,
-          cwd: input.cwd,
-          workingArea: input.context.workingArea,
-          acquireLock: deps.acquireLock ?? acquireCardLock,
-          runCardProcess: deps.runCardProcess ?? spawnCardProcess,
-        })
-        finished.set(card.id, outcome)
-        console.log(`  Ended #${card.id}: ${outcome.outcome} — ${outcome.detail}`)
-        return outcome
-      },
+      worker: card => runCardInBatch({ input, deps, card, finished }),
       notStarted: card => ({ id: card.id, outcome: 'interrupted', detail: 'never started' }),
       onWorkerError: (card, error) => ({
         id: card.id,
