@@ -1724,6 +1724,7 @@ function capRunDir(count, { converged = false } = {}) {
         recommendation: 'r',
         transition: 'open',
         blocking: true,
+        reproducer: { command: 'node --test x.test.mjs' },
       },
     ],
     readiness: { ready: false, remoteHead: 'c'.repeat(40) },

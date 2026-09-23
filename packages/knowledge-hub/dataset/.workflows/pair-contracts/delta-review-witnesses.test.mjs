@@ -56,7 +56,7 @@ const redVerify = (dir, phase, extra = {}, opts) =>
   handoff(dir, phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, ...extra }, opts)
 const review = (dir, phase, extra = {}, opts) =>
   handoff(dir, phase, 'review-phase', { reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') }, mode: 'first', ...extra }, opts)
-const finding = (id, extra = {}) => ({ id, severity: 'Major', location: 'src/a.ts:1', description: 'wrong', recommendation: 'fix', blocking: true, transition: 'open', kind: 'defect', ...extra })
+const finding = (id, extra = {}) => ({ id, severity: 'Major', location: 'src/a.ts:1', description: 'wrong', recommendation: 'fix', blocking: true, transition: 'open', reproducer: { command: 'node --test x.test.mjs' }, kind: 'defect', ...extra })
 const closed = (id, evidence = 'closed') => finding(id, { transition: 'resolved', blocking: false, evidence })
 
 const GUARD = {

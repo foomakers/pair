@@ -452,9 +452,20 @@ export function envelopeErrors(data, { phase, skill }) {
           }
         }
         if (f.reproducer !== undefined) {
-          if (!f.reproducer || typeof f.reproducer !== 'object' || typeof f.reproducer.command !== 'string' || !f.reproducer.command.trim()) errs.push(`reproducer-invalid:${f.mechanismId ?? f.rowId ?? '?'}`)
-          else if (SHELL_METACHAR_RE.test(f.reproducer.command)) errs.push(`reproducer-command-unsafe:${f.mechanismId ?? f.rowId ?? '?'}`)
+          // A reproducer is a COMMAND or a TEST reference (US-506 AC3: "a reproducer (command or test)").
+          const rp = f.reproducer
+          const cmd = rp && typeof rp === 'object' && typeof rp.command === 'string' && rp.command.trim() ? rp.command : undefined
+          const ref = rp && typeof rp === 'object' && typeof rp.testRef === 'string' && rp.testRef.trim() ? rp.testRef : undefined
+          if (!cmd && !ref) errs.push(`reproducer-invalid:${f.mechanismId ?? f.rowId ?? f.id ?? '?'}`)
+          else if (cmd && SHELL_METACHAR_RE.test(cmd)) errs.push(`reproducer-command-unsafe:${f.mechanismId ?? f.rowId ?? f.id ?? '?'}`)
+          else if (ref && SHELL_METACHAR_RE.test(ref)) errs.push(`reproducer-testRef-unsafe:${f.mechanismId ?? f.rowId ?? f.id ?? '?'}`)
         }
+        // US-506 AC3: every finding a review OPENS is real and evidenced — a reproducer (command or
+        // test), or a concrete failure scenario (this input ⇒ this wrong result). A difference of taste
+        // carries neither and is not a finding. Closures (`resolved`/`superseded`/`human`) transition a
+        // finding that was evidenced when it was opened; a `question` claims no defect. Mechanical
+        // records (`decision`, `migration`) carry the findings they copy, never a new judgment.
+        if (skill === 'review-phase' && (data.recordType ?? 'judgment') === 'judgment' && (f.transition ?? 'open') === 'open' && f.kind !== 'question' && !findingEvidenced(f)) errs.push(`finding-unevidenced:${f.id ?? '?'}`)
       }
       // The verifier's OWN declared set of mechanisms it identified this pass must be closed
       // together — never one gap this round and the sibling mechanism in a later rejection
@@ -1286,6 +1297,17 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
     const line = successionLineOf(target?.phase)
     data = { ...data, contradictionLine: line ?? null, contradictionKey: contradictionKeyOf({ line, conflictingRowIds: data.conflictingRowIds }) }
   }
+  // US-506 AC3: the FIRST verify of a fresh card's PR (the run began with `a0-implement-phase` and
+  // never sealed an `a0` contract) names, per AC, the test that proves it. A PR-entry cycle and a run
+  // on the sealed `a0` path keep today's first review.
+  if (skill === 'review-phase' && (data.recordType ?? 'judgment') === 'judgment' && String(phase) === 'r0' && data.mode === 'first') {
+    const prior = readHandoffs(dir)
+    const freshRun = prior.some(h => h.skill === 'implement-phase' && h.phase === 'a0') && !prior.some(h => h.skill === 'red-verify' && h.phase === 'a0')
+    if (freshRun) {
+      const acErrs = acAssessmentErrors(data)
+      if (acErrs.length) return { published: false, reason: acErrs[0], errors: acErrs }
+    }
+  }
   // US-479 T-29 (S11): the risk identity is derived HERE, and the claim is checked against what
   // this run actually did — the named batch must exist and the failing head must be one it produced.
   // US-479 S12/AC-30: ONE authority decides every regression-risk transition, reading the persisted
@@ -1536,6 +1558,37 @@ const orderGroups = groups => {
   }
   for (const g of groups) if (!visit(g)) return null
   return out
+}
+// US-506 AC3 — what makes a finding EVIDENCED: a reproducer (command or test reference), a concrete
+// failure scenario (input ⇒ actual wrong result, against the expected one), or the executable
+// reproducer a regression risk already carries.
+const nonBlank = v => typeof v === 'string' && v.trim() !== ''
+export function findingEvidenced(f) {
+  if (!f || typeof f !== 'object') return false
+  const rp = f.reproducer
+  if (rp && typeof rp === 'object' && (nonBlank(rp.command) || nonBlank(rp.testRef))) return true
+  const fs = f.failureScenario
+  if (fs && typeof fs === 'object' && nonBlank(fs.input) && nonBlank(fs.actual) && nonBlank(fs.expected)) return true
+  return nonBlank(f.regressionRisk?.reproducerRef)
+}
+// US-506 AC3 — the per-AC qualitative assessment of a fresh card's tests, owed by its FIRST verify:
+// every AC named with the test(s) that prove it. A weak or missing test is an ordinary finding, so
+// such a row names an OPEN finding of the same review (`findingId`), never a free-floating note.
+export const AC_ASSESSMENTS = ['proven', 'weak', 'missing']
+export function acAssessmentErrors(data) {
+  const rows = data.acAssessment
+  if (!Array.isArray(rows) || !rows.length) return ['acAssessment-missing']
+  const errs = []
+  const open = new Set((Array.isArray(data.findings) ? data.findings : []).filter(f => f && (f.transition ?? 'open') === 'open').map(f => f.id))
+  for (const r of rows) {
+    const tag = r && typeof r === 'object' && nonBlank(r.ac) ? r.ac : '?'
+    if (!r || typeof r !== 'object' || !nonBlank(r.ac) || !AC_ASSESSMENTS.includes(r.assessment) || !Array.isArray(r.tests) || r.tests.some(t => !nonBlank(t)) || (r.assessment !== 'missing' && !r.tests.length)) {
+      errs.push(`acAssessment-invalid:${tag}`)
+      continue
+    }
+    if (r.assessment !== 'proven' && !open.has(r.findingId)) errs.push(`acAssessment-finding-missing:${tag}`)
+  }
+  return errs
 }
 const isBlocking = f => f && f.blocking === true && f.transition !== 'resolved' && f.nonActionable !== true
 // Preparation refusals whose cause lies outside the cycle: a later dispatch can succeed unchanged.

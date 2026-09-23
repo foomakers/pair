@@ -134,7 +134,7 @@ test('T-27: one composed lifecycle — initial build, a real defect + a scope pr
     {
       reviewedHead: SHA('c'),
       verdict: 'CHANGES-REQUESTED',
-      findings: [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'wrong', recommendation: 'fix', blocking: true, transition: 'open', kind: 'defect' }],
+      findings: [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'wrong', recommendation: 'fix', blocking: true, transition: 'open', reproducer: { command: 'node --test x.test.mjs' }, kind: 'defect' }],
       scopeChanges: [{ id: 'sc-1', type: 'new-requirement', proposal: 'add a related capability', status: 'pending', discoveredAtReviewId: 'r0' }],
       custody: { verified: true, contractBreach: false },
       readiness: { ready: false },
@@ -411,7 +411,7 @@ test('B1 (DT-04): a contradiction with sealed rows routes a successor revision t
     if (opts.agentType === 'pair-reviewer') {
       const round = Number(/^r(\d+)/.exec(phase)[1])
       const head = round === 0 ? H('d') : H('e')
-      const findings = round === 0 ? [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: true, transition: 'open' }] : [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: false, transition: 'resolved', evidence: 'the successor rows pass at this head' }]
+      const findings = round === 0 ? [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: true, transition: 'open', reproducer: { command: 'node --test x.test.mjs' } }] : [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: false, transition: 'resolved', evidence: 'the successor rows pass at this head' }]
       return through(phase, 'review-phase', { reviewedHead: head, verdict: round === 0 ? 'CHANGES-REQUESTED' : 'APPROVED', findings, custody: { verified: true, contractBreach: false }, readiness: { ready: round > 0, remoteHead: head }, mode: round === 0 ? 'first' : 're-review', partial: false, tier: 'risk:green', passes: ['general'], published: { firstReview: round === 0, synthesis: round > 0 } })
     }
     return {}
@@ -557,7 +557,7 @@ test('F1 (DT-04 x DT-33): a contradiction naming a contract sealed in a PREDECES
     if (opts.agentType === 'pair-reviewer') {
       const round = Number(/^r(\d+)/.exec(phase)[1])
       const head = round === 0 ? H('c') : H('d')
-      const findings = round === 0 ? [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: true, transition: 'open' }] : [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: false, transition: 'resolved', evidence: 'the successor rows pass at this head' }]
+      const findings = round === 0 ? [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: true, transition: 'open', reproducer: { command: 'node --test x.test.mjs' } }] : [{ id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate derives what ships from a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: false, transition: 'resolved', evidence: 'the successor rows pass at this head' }]
       return through(phase, 'review-phase', { reviewedHead: head, verdict: round === 0 ? 'CHANGES-REQUESTED' : 'APPROVED', findings, custody: { verified: true, contractBreach: false }, readiness: { ready: round > 0, remoteHead: head }, mode: round === 0 ? 'first' : 're-review', partial: false, tier: 'risk:green', passes: ['general'], published: { firstReview: round === 0, synthesis: round > 0 } })
     }
     return {}
@@ -714,9 +714,10 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
       // US-479 V2 (F-RR-03): the review receives the active guard set and echoes what it executed
       const reviewGuards = jsonArg(prompt, 'regressionGuards')
       if (reviewGuards) guardPrompts.push({ phase: `review:${phase}`, guards: reviewGuards.map(g => g.riskId) })
-      const open = { id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate reads a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: true, transition: 'open' }
+      const open = { id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'the gate reads a dataset walk', recommendation: 'read the installer', kind: 'defect', blocking: true, transition: 'open', reproducer: { command: 'node --test x.test.mjs' } }
       const closed = { ...open, blocking: false, transition: 'resolved', evidence: 'closed by the remediation' }
-      if (pass === 0) return through('r0', 'review-phase', { reviewedHead: H0, verdict: 'CHANGES-REQUESTED', findings: [open], custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 'first', partial: false, tier: 'risk:green', passes: ['general'], published: { firstReview: true } })
+      // US-506 AC3: the first verify of a fresh card names, per AC, the test that proves it
+      if (pass === 0) return through('r0', 'review-phase', { reviewedHead: H0, verdict: 'CHANGES-REQUESTED', findings: [open], acAssessment: [{ ac: 'AC-1', tests: ['src/a.test.ts#AC-1'], assessment: 'weak', findingId: 'r0-1' }], custody: { verified: true, contractBreach: false }, readiness: { ready: false }, mode: 'first', partial: false, tier: 'risk:green', passes: ['general'], published: { firstReview: true } })
       if (pass === 1)
         // the regression: an approved obligation that passes on H0 and fails on H1, from batch r1
         return through('r1', 'review-phase', {
@@ -729,7 +730,7 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
           readiness: { ready: false },
           tier: 'risk:green',
           passes: ['general'],
-          findings: [closed, { id: 'r1-9', severity: 'Major', location: 'src/a.ts:9', description: 'AC-7 passed at H0 and fails at H1', recommendation: 'restore the boundary', kind: 'regression', blocking: true, transition: 'open', origin: 'introduced-by-remediation', obligationIds: ['AC-7'], originEvidence: { baselineHead: H0, failingHead: H1, reproducer: GUARD.reproducerRef }, regressionRisk: { introducedByRemediationBatchId: 'r1', lastCleanReviewedHead: H0, firstFailingHead: H1, ...GUARD, state: 'active' } }],
+          findings: [closed, { id: 'r1-9', severity: 'Major', location: 'src/a.ts:9', description: 'AC-7 passed at H0 and fails at H1', recommendation: 'restore the boundary', kind: 'regression', blocking: true, transition: 'open', reproducer: { command: 'node --test x.test.mjs' }, origin: 'introduced-by-remediation', obligationIds: ['AC-7'], originEvidence: { baselineHead: H0, failingHead: H1, reproducer: GUARD.reproducerRef }, regressionRisk: { introducedByRemediationBatchId: 'r1', lastCleanReviewedHead: H0, firstFailingHead: H1, ...GUARD, state: 'active' } }],
         })
       const riskId = readHandoffs(dir).flatMap(h => h.data.findings ?? []).find(f => f.regressionRisk)?.regressionRisk?.riskId
       return through('r2', 'review-phase', {

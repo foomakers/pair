@@ -373,7 +373,7 @@ test('canary v9 (A): `finalize` CLI on a run directory holding only handoffs (no
 // ── t9d-4 / t9d-5 (T-9 fourth round): the finalizer tells the truth about a failed run and a dead transport ──
 const reviewWithOpenMajor = dir => {
   const file = join(dir, 'd.json')
-  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [{ id: 'r0-1', severity: 'Major', blocking: true, transition: 'open', location: 'x.js:1', description: 'd', head: SHA('c') }], custody: { verified: true, contractBreach: false }, readiness: { ready: false, blockers: ['r0-1'] }, attempt: 1, reviewer: 'x', partial: false, mode: 'full', tier: 'green', passes: ['general'], scopeChanges: [] }))
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [{ id: 'r0-1', severity: 'Major', blocking: true, transition: 'open', reproducer: { command: 'node --test x.test.mjs' }, location: 'x.js:1', description: 'd', head: SHA('c') }], custody: { verified: true, contractBreach: false }, readiness: { ready: false, blockers: ['r0-1'] }, attempt: 1, reviewer: 'x', partial: false, mode: 'full', tier: 'green', passes: ['general'], scopeChanges: [] }))
   publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.1' })
 }
 test('t9d-4: the host`s terminal marker (`escalate`, `failed-*`, `interrupted`, `abandoned`) is the delivery outcome finalize reports — never `in-progress` for a run that ended', () => {

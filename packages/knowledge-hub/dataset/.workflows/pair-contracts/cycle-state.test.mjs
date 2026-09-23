@@ -201,7 +201,8 @@ const redVerify = (dir, phase, extra = {}, opts) =>
   handoff(dir, phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, ...extra }, opts)
 const review = (dir, phase, extra = {}, opts) =>
   handoff(dir, phase, 'review-phase', { reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') }, mode: 'first', ...extra }, opts)
-const finding = (id, extra = {}) => ({ id, severity: 'Major', location: 'src/a.ts:1', description: 'wrong', recommendation: 'fix', blocking: true, transition: 'open', kind: 'defect', ...extra })
+// US-506 AC3: an OPEN finding is evidenced — the default carries a reproducer (a plain command).
+const finding = (id, extra = {}) => ({ id, severity: 'Major', location: 'src/a.ts:1', description: 'wrong', recommendation: 'fix', blocking: true, transition: 'open', kind: 'defect', reproducer: { command: 'node --test test/a.test.mjs' }, ...extra })
 
 // ── publish: atomic, sequenced, predecessor-checked, never overwrites a newer handoff ────────
 test('publish: writes <phase>-<skill>.json atomically with a monotonic seq and the envelope stamped', () => {
@@ -4047,7 +4048,7 @@ test('US-506 T-1 w2: the fresh path — implement (no predecessor) → verify r0
   implementOk(dir)
   let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
   assert.deepEqual(pick(r.next, 'step', 'mode', 'phase', 'base', 'pr'), { step: 'verify', mode: 'first', phase: 'r0', base: SHA('c'), pr: 7 })
-  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1')] }, { predecessor: 'a0-implement-phase' })
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1')], acAssessment: [acRow('AC1', { assessment: 'weak', findingId: 'r0-1' })] }, { predecessor: 'a0-implement-phase' })
   r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
   assert.deepEqual(pick(r.next, 'step', 'mode', 'phase'), { step: 'prepare', mode: 'remediation', phase: 'r1-g1' })
   redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'x', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] } })
@@ -4074,7 +4075,7 @@ test('US-506 T-1 w4: on a fresh run a `contract-gap` or `approved-test-failing` 
   for (const kind of ['contract-gap', 'approved-test-failing']) {
     const { dir } = runDir()
     implementOk(dir)
-    review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1', { kind, groupId: 'a0' })] }, { predecessor: 'a0-implement-phase' })
+    review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1', { kind, groupId: 'a0' })], acAssessment: [acRow('AC1', { assessment: 'weak', findingId: 'r0-1' })] }, { predecessor: 'a0-implement-phase' })
     const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
     assert.deepEqual(pick(r.next, 'step', 'mode', 'phase'), { step: 'prepare', mode: 'remediation', phase: 'r1-g1' }, kind)
   }
@@ -4116,4 +4117,67 @@ test('US-506 T-2 w4 (AC2): the self-review is informal and UNRECORDED — an imp
     assert.equal(out.reason, `self-review-not-recordable:${key}`)
   }
   assert.equal(existsSync(join(dir, 'a0-implement-phase.json')), false)
+})
+
+// ══ US-506 T-3 — the verify judges the tests per AC; every finding is real and evidenced ══
+const evidenced = (id, extra = {}) => finding(id, { reproducer: { command: 'pnpm exec vitest run src/a.test.ts -t empty' }, ...extra })
+const acRow = (ac, extra = {}) => ({ ac, tests: [`src/a.test.ts > ${ac}`], assessment: 'proven', ...extra })
+
+test('US-506 T-3 w1 (AC3): an OPEN finding with neither a reproducer nor a concrete failure scenario is refused — finding-unevidenced', () => {
+  const { dir } = runDir()
+  const bare = { id: 'r0-1', severity: 'Major', location: 'src/a.ts:1', description: 'I would have structured this differently', recommendation: 'refactor', blocking: true, transition: 'open', kind: 'defect' }
+  const file = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [bare], custody: { verified: true, contractBreach: false }, readiness: { ready: false, remoteHead: SHA('c') }, mode: 'first' })
+  const out = publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: V })
+  assert.deepEqual([out.published, out.reason], [false, 'finding-unevidenced:r0-1'])
+  // an empty scenario is no scenario
+  const hollow = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [{ ...bare, failureScenario: { input: ' ', actual: '', expected: 'x' } }], custody: { verified: true, contractBreach: false }, readiness: { ready: false, remoteHead: SHA('c') }, mode: 'first' })
+  assert.equal(publish({ dir, file: hollow, phase: 'r0', skill: 'review-phase', workflowVersion: V }).reason, 'finding-unevidenced:r0-1')
+  assert.equal(existsSync(join(dir, 'r0-review-phase.json')), false)
+})
+
+test('US-506 T-3 c1 (control): a reproducer (command or test) or a concrete failure scenario evidences a finding; closures and questions need none', () => {
+  for (const f of [
+    evidenced('r0-1'),
+    finding('r0-1', { reproducer: { testRef: 'src/a.test.ts#empty-form' } }),
+    finding('r0-1', { failureScenario: { input: 'parse("")', actual: 'throws TypeError', expected: 'returns []' } }),
+  ]) {
+    const { dir } = runDir()
+    const out = review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [f] })
+    assert.equal(out.published, true)
+  }
+  const { dir } = runDir()
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [evidenced('r0-1')] })
+  // a closure is a transition on a finding already evidenced; a question claims no defect
+  const out = review(dir, 'r1', { findings: [{ ...finding('r0-1'), transition: 'resolved', blocking: false }, { id: 'r1-1', severity: 'Questions', location: 'src/a.ts:2', description: 'why a Map here?', recommendation: 'explain', blocking: false, transition: 'open', kind: 'question' }], mode: 're-review' }, { predecessor: 'r0-review-phase' })
+  assert.equal(out.published, true)
+})
+
+test('US-506 T-3 w2 (AC3): the FIRST verify of a fresh-card PR names, per AC, the test that proves it — refused without it; a weak or missing test is an ordinary finding', () => {
+  const draftFor = (dir, extra) => writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false, contract: 'none' }, readiness: { ready: true, remoteHead: SHA('c') }, mode: 'first', ...extra })
+  const pub = (dir, extra) => publish({ dir, file: draftFor(dir, extra), phase: 'r0', skill: 'review-phase', workflowVersion: V, predecessor: 'a0-implement-phase' })
+  const fresh = () => {
+    const { dir } = runDir()
+    implementOk(dir)
+    return dir
+  }
+  assert.equal(pub(fresh(), {}).reason, 'acAssessment-missing')
+  assert.equal(pub(fresh(), { acAssessment: [] }).reason, 'acAssessment-missing')
+  assert.equal(pub(fresh(), { acAssessment: [{ ac: 'AC1', assessment: 'proven' }] }).reason, 'acAssessment-invalid:AC1')
+  assert.equal(pub(fresh(), { acAssessment: [acRow('AC1', { assessment: 'great' })] }).reason, 'acAssessment-invalid:AC1')
+  // `weak`/`missing` is a FINDING, never a note: it must name an open finding of this review
+  assert.equal(pub(fresh(), { acAssessment: [acRow('AC1', { assessment: 'weak' })] }).reason, 'acAssessment-finding-missing:AC1')
+  assert.equal(pub(fresh(), { acAssessment: [acRow('AC1', { assessment: 'missing', tests: [], findingId: 'r0-9' })] }).reason, 'acAssessment-finding-missing:AC1')
+  const ok = pub(fresh(), { verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('c') }, findings: [evidenced('r0-1', { description: 'AC2 is asserted with toHaveReturnedWith on an async mock — passes for any value' })], acAssessment: [acRow('AC1'), acRow('AC2', { assessment: 'weak', findingId: 'r0-1' })] })
+  assert.equal(ok.published, true, JSON.stringify(ok))
+  assert.equal(pub(fresh(), { acAssessment: [acRow('AC1')] }).published, true)
+})
+
+test('US-506 T-3 c2 (control, AC4/AC5): a PR-entry cycle and a run on the sealed `a0` path keep today\'s first review — no per-AC table is demanded', () => {
+  const { dir } = runDir()
+  assert.equal(review(dir, 'r0', {}).published, true)
+  const { dir: legacy } = runDir()
+  redSpec(legacy, 'a0')
+  redVerify(legacy, 'a0', {}, { predecessor: 'a0-red-spec' })
+  implementOk(legacy, {}, { predecessor: 'a0-red-verify' })
+  assert.equal(review(legacy, 'r0', {}, { predecessor: 'a0-implement-phase' }).published, true)
 })

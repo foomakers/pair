@@ -1859,3 +1859,14 @@ test('US-506 T-2: implement-phase states the fresh entry — TDD as practice abo
   assert.match(md, /\*\*Sealed `a0`\*\*/)
   assert.match(md, /--predecessor a0-red-verify` on the sealed path only/)
 })
+
+test('US-506 T-3: review-phase states the per-AC qualitative test assessment, the evidence rule and that taste is not a finding; mutation is optional', () => {
+  const md = SKILL('review-phase')
+  assert.match(md, /For EVERY acceptance criterion of the card name the test\(s\) that prove it/)
+  assert.match(md, /acAssessment: \[\{ ac, tests, assessment, findingId\? \}\]/)
+  assert.match(md, /A \*\*mutation probe\*\*[^.]*is a tool you MAY use to confirm a suspicion — never a required step/)
+  assert.match(md, /finding-unevidenced:<id>/)
+  assert.match(md, /A difference of taste \("I would have done it differently"\) is not a finding and is not recorded/)
+  assert.match(md, /The handoff records ONLY the activities of this independent review/)
+  assert.match(md, /No evidence of test-first is asked for or checked/)
+})
