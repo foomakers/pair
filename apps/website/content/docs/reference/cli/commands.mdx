@@ -754,6 +754,7 @@ pair-cli run [options]
 | `--pr <n>`                      | Enter the cycle straight at fix-and-review on an existing PR: the first stage is `verify`, no `prepare` before it. Requires `--card` |
 | `--rounds <n\|max>`             | Bound the remediation rounds of a cycle run. Omitted ⇒ the policy's `maxFixRounds`; it can never widen it |
 | `--run-id <segment>`            | Run directory to continue. Defaults to `story-<card>` — the same convention the batch engine uses       |
+| `--parallel <n>`                | Fan-out over `--root`: up to `min(dependency-allowed, ## Max Parallelism, n)` cards at once, each its own `pair-cli run --card` process — see below. Requires `--root`; not combinable with `--card`/`--skill`/`--prompt`/`--filter`/`--max-iterations` |
 | `--cwd <dir>`                   | Working directory every iteration runs in                                                            |
 | `--max-iterations <n>`          | Iteration cap. **Narrows** the policy's `max-iterations`; it can never widen it                       |
 | `--autonomous`                  | Explicit opt-in: run without confirmations, **and** without the skill's approval rounds — see below   |
@@ -852,6 +853,45 @@ and the order is fixed — **the tag mapping is asked first, always**:
    role, located through the `agent-definitions` registry) when the stage that needs that role is
    due — before any spawn for the first stage's role, later for a role only a later stage uses (e.g.
    the preparation role, first needed by a finding round).
+
+### Fan-out: `--root <id> --parallel <n>`
+
+Parallel delivery on a harness with no subagent primitive (`pi`, `opencode`, `claude -p`): one
+command drives a dependency- and mutex-safe batch of cards, each through its **own**
+`pair-cli run --card <id>` process — a separate OS process, never a worker thread.
+
+```bash
+pair-cli run --root 66 --parallel 3 --autonomous
+```
+
+1. **Select** — one fresh engine process runs `pair-next --root <id>` (with `--filter` set to
+   `## Eligibility` when the policy declares one, exactly as `pair-loop` does) and reports the
+   candidate set on a `PAIR-ROOT-CANDIDATES:` line: prerequisites with their merged status, the
+   touched surface as mutex resources, labels, tier, title, branch. Nothing is invented here: the
+   scope is `pair-next --root`'s, so `--filter` is refused with `--parallel`.
+2. **Plan** — `pair-loop`'s own dependency + mutex analysis (a card whose prerequisite is not merged
+   is excluded; of two cards sharing a resource, the first wins). The plan is printed **before any
+   process starts**: the cards that run, every excluded card with its reason, and the effective
+   parallelism `min(dependency-allowed, ## Max Parallelism, n)` naming which limit bound it.
+3. **Run** — at most that many `run --card` processes at once; the next card starts when a slot
+   frees (`--parallel 1` is sequential, not a special case). Each child gets the card's labels as
+   `--card-tags` and your own `--engine`/`--autonomous`/`--approve-*`/`--iteration-timeout`,
+   unchanged. Output is prefixed `[#<id>]`; `DISPATCH-RECORD:` lines pass through verbatim.
+4. **Report** — every card's outcome (`completed`, `failed`, `crashed`, `skipped`), and one
+   `event=batch` line in `## Audit Location` (start time, cards attempted, per-card outcome), next
+   to each card's own `start`/`end` lines.
+
+- **One card failing never aborts the others.** A failed, crashed or timed-out card (its own
+  per-process timeout) is that card's outcome; the batch exits `1` when any card failed or crashed.
+- **Mutex resources are locked** through the same card lock `run --card` uses, for the life of the
+  card's process: a second `--parallel` run cannot start a conflicting card meanwhile — the card is
+  reported `skipped`, never silently dropped.
+- **No batch-level merge.** Each card merges or parks inside its own process, exactly as
+  `run --card` alone would.
+- **Nothing to do is not an error**: a root selecting zero cards, or a plan where every card is
+  excluded, exits `0`. `--dry-run` resolves and prints, but runs no selection and spawns nothing.
+- `--parallel` requires `--root`, and is refused with `--card`, `--skill`, `--prompt`, `--filter` or
+  `--max-iterations`. `run --root` without `--parallel` (loop mode) is unchanged.
 
 ### Tag-driven dispatch
 

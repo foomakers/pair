@@ -397,3 +397,44 @@ describe('parseRunCommand — cycle-coordinator flags on --card (US-487)', () =>
     },
   )
 })
+
+describe('parseRunCommand — --root --parallel N (US-491 T-3)', () => {
+  it('carries --parallel as a positive integer next to its --root', () => {
+    const config = parseRunCommand({ root: '66', parallel: '3' })
+
+    expect(config.parallel).toBe(3)
+    expect(config.scope).toEqual({ root: '66' })
+    expect(config.dispatch).toBeUndefined()
+  })
+
+  it('leaves parallel absent without the flag (loop mode unchanged)', () => {
+    expect(parseRunCommand({ root: '66' })).not.toHaveProperty('parallel')
+  })
+
+  it.each(['0', '-1', '1.5', 'many'])('refuses --parallel %s', value => {
+    expect(() => parseRunCommand({ root: '66', parallel: value })).toThrow(
+      /--parallel must be a positive integer/,
+    )
+  })
+
+  it('refuses --parallel without --root: the root is the scope pair-next selects from', () => {
+    expect(() => parseRunCommand({ parallel: '2' })).toThrow(/--parallel requires --root/)
+  })
+
+  it('refuses --parallel with --card: a dispatched card is one card, not a batch', () => {
+    expect(() => parseRunCommand({ card: '7', parallel: '2' })).toThrow(/--parallel/)
+  })
+
+  it('names EVERY flag that conflicts with --parallel', () => {
+    expect(() =>
+      parseRunCommand({
+        root: '66',
+        parallel: '2',
+        skill: 'pair-next',
+        prompt: 'x',
+        filter: 'risk:green',
+        maxIterations: '3',
+      }),
+    ).toThrow(/--skill or --prompt or --filter or --max-iterations/)
+  })
+})

@@ -292,3 +292,32 @@ describe('round-trip: what the driver renders is what the driver can read back',
     expect(result.continueToken).toBeUndefined()
   })
 })
+
+describe('readIterationOutcome — onEvent (US-491)', () => {
+  it('hands every decoded event to the observer, terminal event included, skipping malformed lines', async () => {
+    const content = readFileSync(join(__dirname, '__fixtures__', 'claude-success.jsonl'), 'utf-8')
+    const expected = content
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => {
+        if (line.length === 0) return false
+        try {
+          JSON.parse(line)
+          return true
+        } catch {
+          return false
+        }
+      })
+    const seen: unknown[] = []
+    const lines = (async function* () {
+      yield 'not json'
+      yield* content.split('\n')
+    })()
+
+    const result = await readIterationOutcome(lines, ENGINES.claude, payload => seen.push(payload))
+
+    expect(result.outcome).toBe('success')
+    expect(seen.length).toBe(expected.length)
+    expect(seen.at(-1)).toEqual(JSON.parse(expected.at(-1)!))
+  })
+})

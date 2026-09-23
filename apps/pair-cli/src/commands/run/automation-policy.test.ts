@@ -177,6 +177,7 @@ describe('describeParallelism (AC9)', () => {
     expect(describeParallelism(policy)).toContain('policy declares max 3')
     expect(describeParallelism(policy)).toContain('drives 1 card at a time')
     expect(describeParallelism(policy)).toContain("remains pair-loop's")
+    expect(describeParallelism(policy)).toContain('--root <id> --parallel <n>')
   })
 
   it('says nothing surprising when the policy is already sequential', () => {
@@ -424,6 +425,16 @@ describe('readAutomationPolicy — numeric and condition forms match tier 1 exac
     // The driver caps itself at 1 per process either way (AC9) — it reads the global, and the
     // override only has to be VALIDATED, exactly as tier 1 validates it.
     expect(policy.maxParallelism).toBe(3)
+  })
+
+  it('US-491: exposes the per-tier overrides for run --root --parallel, absent when none is declared', () => {
+    expect(
+      policyFrom('## Max Parallelism\n\n3\nrisk:green: 5\nrisk:yellow: 2\n').read()
+        .maxParallelismOverrides,
+    ).toEqual({ 'risk:green': 5, 'risk:yellow': 2 })
+    expect(policyFrom('## Max Parallelism\n\n3\n').read()).not.toHaveProperty(
+      'maxParallelismOverrides',
+    )
   })
 
   /**

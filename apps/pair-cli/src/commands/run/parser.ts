@@ -75,6 +75,11 @@ export interface RunCommandConfig {
   dispatch?: RunDispatchRequest
   /** Resolve, print and exit without spawning anything. */
   dryRun: boolean
+  /**
+   * US-491: `--parallel N` alongside `--root` — the fan-out mode: `pair-next --root` selects, the
+   * borrowed dependency + mutex analysis plans, and up to N `run --card` processes run at once.
+   */
+  parallel?: number
 }
 
 interface ParseRunOptions {
@@ -98,6 +103,8 @@ interface ParseRunOptions {
   runId?: string
   /** US-487: `--rounds` — meaningful only with `--card`. */
   rounds?: string
+  /** US-491: `--parallel N` — meaningful only with `--root`. */
+  parallel?: string | number
   /** Reserved until #488 ships per-stage engine/model/effort/timeout overrides. */
   profile?: string
   /** Reserved until #488 ships per-stage engine/model/effort/timeout overrides. */
@@ -321,6 +328,40 @@ function validateTags(tags: string[], rawTrimmed: string): void {
   }
 }
 
+/**
+ * `--parallel` flags that would give the fan-out a second answer to a question it already has:
+ * `--card` names ONE card (the batch is `pair-next --root`'s), `--skill`/`--prompt` name what runs
+ * (each card runs its own `run --card`), `--filter` would narrow a selection this mode borrows
+ * verbatim (AC7), `--max-iterations` bounds a loop this mode does not run.
+ */
+const FLAGS_CONFLICTING_WITH_PARALLEL = [
+  ['card', '--card'],
+  ['skill', '--skill'],
+  ['prompt', '--prompt'],
+  ['filter', '--filter'],
+  ['maxIterations', '--max-iterations'],
+] as const
+
+/** US-491 T-3: `--parallel N` — a positive integer, with `--root` and nothing that competes with it. */
+function resolveParallel(options: ParseRunOptions): { parallel?: number } {
+  if (options.parallel === undefined) return {}
+  const parallel = parsePositiveInteger('--parallel', options.parallel)
+  const conflicting = FLAGS_CONFLICTING_WITH_PARALLEL.filter(
+    ([key]) => options[key] !== undefined,
+  ).map(([, flag]) => flag)
+  if (conflicting.length > 0) {
+    throw new Error(
+      `--parallel cannot be combined with ${conflicting.join(' or ')}: the fan-out runs every card ` +
+        '`pair-next --root` selects as its own `pair-cli run --card` process, planned by the ' +
+        'borrowed dependency + mutex analysis — there is no second skill, scope or cap to take',
+    )
+  }
+  if (options.root === undefined) {
+    throw new Error('--parallel requires --root: the root is the scope pair-next selects from')
+  }
+  return { parallel }
+}
+
 function resolveScope(options: ParseRunOptions): RunScopeOptions {
   const root = identifierText(options.root, '--root')
   const filter = promptSafeText(options.filter, '--filter')
@@ -356,6 +397,7 @@ export function parseRunCommand(options: ParseRunOptions, args: string[] = []): 
 
   const engine = resolveEngineFlag(options.engine)
   const cwd = optionalText(options.cwd, '--cwd')
+  const parallel = resolveParallel(options)
   const dispatch = resolveDispatch(options)
 
   return {
@@ -376,5 +418,6 @@ export function parseRunCommand(options: ParseRunOptions, args: string[] = []): 
         ? DEFAULT_ITERATION_TIMEOUT_SECONDS
         : parsePositiveInteger('--iteration-timeout', options.iterationTimeout),
     dryRun: options.dryRun === true,
+    ...parallel,
   }
 }
