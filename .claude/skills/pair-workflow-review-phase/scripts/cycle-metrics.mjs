@@ -690,7 +690,7 @@ export const HUMAN_BOUNDARY = '<!-- pair:metrics:end -->'
 // `listComments`/`findByMarker`/`upsert` are INJECTED (from pr-comment.mjs) so this module stays
 // dependency-light and testable without a `gh` transport; cycle-runtime.mjs wires the real ones.
 // `dir` (the run/story directory) reaches every host call, so all three — the prior read, the
-// upsert and the read-back — use that directory's `.host-binding.json` (US-492 AC2), never a
+// upsert and the read-back — use that directory's `.host-binding.json` (resolved once per run), never a
 // re-resolution from the process cwd.
 export function publishSummary({ view, marker, pr, repo, dir, listComments, findByMarker, upsert }) {
   const before = listComments({ pr, repo, dir })
