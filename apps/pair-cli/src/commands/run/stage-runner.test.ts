@@ -113,3 +113,25 @@ describe("runStage — wiring only: spawns the packet's own prompt, returns the 
     })
   })
 })
+
+describe('runStage — a stall is carried through (US-506 T-8, AC12)', () => {
+  it('relays the iteration’s `stalled` flag so the loop can resume it within the dead-dispatch budget', async () => {
+    const runIteration = vi.fn(async () => ({
+      outcome: 'failed' as const,
+      detail: 'stalled: no terminal event within 1800s — the engine was stopped',
+      stalled: true as const,
+    }))
+    const result = await runStage({
+      engine: ENGINES.claude,
+      packet: { step: 'implement', phase: 'a0', worktree: '/w', prompt: 'go' },
+      autonomyArgs: [],
+      timeoutSeconds: 1800,
+      runIteration,
+    })
+    expect(result).toEqual({
+      processOutcome: 'failed',
+      detail: 'stalled: no terminal event within 1800s — the engine was stopped',
+      stalled: true,
+    })
+  })
+})

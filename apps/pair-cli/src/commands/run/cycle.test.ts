@@ -330,3 +330,55 @@ describe('runCycle (US-487 T-4)', () => {
     )
   })
 })
+
+describe('runCycle — stall resume (US-506 T-8, AC12)', () => {
+  const STALL: CycleStageResult = {
+    processOutcome: 'failed',
+    detail: 'stalled: no terminal event within 1800s — the engine was stopped',
+    stalled: true,
+  }
+
+  it('a stalled stage whose handoff did not advance is resumed ONCE — fresh, since a process realization cannot resume a session — and says so', async () => {
+    const resolve = scriptedResolve([
+      { status: 'empty', next: IMPLEMENT_A0 },
+      { status: 'empty', next: IMPLEMENT_A0 },
+      { status: 'completed', next: DONE },
+    ])
+    const spawnStage = vi
+      .fn(async (): Promise<CycleStageResult> => ({ processOutcome: 'success' }))
+      .mockImplementationOnce(async () => STALL)
+    const notices: string[] = []
+    const stages: unknown[] = []
+    const outcome = await runCycle({
+      resolve,
+      worktree,
+      packet,
+      spawnStage,
+      policy: { deadDispatchRetries: 1 },
+      onNotice: n => notices.push(n),
+      onStage: r => stages.push(r),
+    })
+    expect(spawnStage).toHaveBeenCalledTimes(2)
+    expect(outcome.status).toBe('ready-for-merge')
+    expect(notices.some(n => /stalled/.test(n) && /resumed fresh/.test(n))).toBe(true)
+    expect(stages[0]).toMatchObject({ step: 'implement', stalled: true, handoffAdvanced: false })
+  })
+
+  it('a second failure ends `failed-<step>` — a stall resume and a dead-dispatch retry spend the SAME deadDispatchRetries budget', async () => {
+    for (const second of [STALL, { processOutcome: 'success' } as CycleStageResult]) {
+      const resolve = scriptedResolve([{ status: 'empty', next: IMPLEMENT_A0 }])
+      const spawnStage = vi
+        .fn(async (): Promise<CycleStageResult> => second)
+        .mockImplementationOnce(async () => STALL)
+      const outcome = await runCycle({
+        resolve,
+        worktree,
+        packet,
+        spawnStage,
+        policy: { deadDispatchRetries: 1 },
+      })
+      expect(spawnStage).toHaveBeenCalledTimes(2)
+      expect(outcome.status).toBe('failed-implement')
+    }
+  })
+})

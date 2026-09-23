@@ -2765,3 +2765,15 @@ test('US-506 T-5: the coordinator skill names `supersede` and `decide` as the re
     assert.match(body, /`resolve` yields `implement \/ initial \/ a0`/)
   }
 })
+
+// ══ US-506 T-8 (AC12) — the in-session coordinator resumes a stalled stage once, within the budget ══
+test('US-506 T-8: the coordinator skill resumes a STALLED stage once on the same subagent (fresh where it cannot), within deadDispatchRetries — a second failure is failed-<step>', () => {
+  for (const md of [CYCLE_SKILL, join(DATASET, '.skills/workflow/cycle/SKILL.md')]) {
+    const body = readFileSync(md, 'utf8')
+    assert.match(body, /the stage \*\*STALLED\*\*/)
+    assert.match(body, /\*\*resume it once on the same subagent\*\* with the bound realization's resume primitive \(`SendMessage` on Claude/)
+    assert.match(body, /re-dispatch the SAME prompt fresh instead/)
+    assert.match(body, /A stall resume and a dead-dispatch retry spend the SAME `policy\.deadDispatchRetries` budget/)
+    assert.match(body, /a second failure of the step, of either kind, ends the cycle `failed-<step>`/)
+  }
+})

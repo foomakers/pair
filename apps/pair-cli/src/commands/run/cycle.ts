@@ -26,6 +26,8 @@ export interface CycleResolveResult {
 export interface CycleStageResult {
   readonly processOutcome: 'success' | 'failed'
   readonly detail?: string
+  /** US-506 T-8 (AC12): the stage made no progress within its time bound and was stopped. */
+  readonly stalled?: true
 }
 
 /** One dispatched stage, as logged to `onStage`/`appendAudit` once the NEXT resolve reveals whether it advanced. */
@@ -35,6 +37,7 @@ export interface CycleStageRecord {
   readonly processOutcome: 'success' | 'failed'
   readonly detail?: string
   readonly handoffAdvanced: boolean
+  readonly stalled?: true
 }
 
 /** A `next` resolve actually answered — every dispatch and every stage record is keyed by one. */
@@ -109,12 +112,14 @@ function buildStageRecord(
     processOutcome: dispatchedResult.processOutcome,
     ...(dispatchedResult.detail !== undefined && { detail: dispatchedResult.detail }),
     handoffAdvanced,
+    ...(dispatchedResult.stalled === true && { stalled: true as const }),
   }
 }
 
 interface StageObservers {
   readonly onStage: RunCycleInput['onStage']
   readonly appendAudit: RunCycleInput['appendAudit']
+  readonly onNotice: RunCycleInput['onNotice']
 }
 
 /**
@@ -142,6 +147,14 @@ function settlePreviousDispatch(
     return { status: `failed-${state.dispatchedNext.step}`, stagesRun: state.stagesRun, next }
   }
   state.retryCount += 1
+  // US-506 T-8 (AC12): a stall is resumed within the SAME budget as a dead dispatch. A process
+  // realization has no session to resume, so the resume is a fresh dispatch of the same step.
+  if (record.stalled === true)
+    observers.onNotice?.(
+      `Stage ${record.step}${record.phase ? `:${record.phase}` : ''} stalled (${record.detail ?? 'no progress'}) — ` +
+        'resumed fresh: a process realization cannot resume a session (ADR-021 §2); ' +
+        `retry ${state.retryCount} of ${deadDispatchRetries}.`,
+    )
   return null
 }
 
@@ -217,7 +230,11 @@ function stoppedWithoutNext(answer: CycleResolveStop, stagesRun: number): CycleO
  */
 export async function runCycle(input: RunCycleInput): Promise<CycleOutcome> {
   const { resolve, worktree, packet, spawnStage, policy, rounds, onNotice } = input
-  const observers: StageObservers = { onStage: input.onStage, appendAudit: input.appendAudit }
+  const observers: StageObservers = {
+    onStage: input.onStage,
+    appendAudit: input.appendAudit,
+    onNotice: input.onNotice,
+  }
   const deadDispatchRetries = policy.deadDispatchRetries ?? 0
   const state: LoopState = {
     stagesRun: 0,

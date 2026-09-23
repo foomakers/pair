@@ -135,3 +135,31 @@ describe('spawnIteration — a real child process emitting fixture JSONL', () =>
     expect(result.outcome).toBe('failed')
   }, 20000)
 })
+
+describe('spawnIteration — a stalled stage is named as one (US-506 T-8, AC12)', () => {
+  it('an iteration stopped by its time bound reports `stalled`, distinguishable from a stream that simply ended without a terminal event', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pair-run-'))
+    const hang = join(dir, 'engine.js')
+    writeFileSync(hang, `setTimeout(() => {}, 60000)`)
+    const stalled = await spawnIteration({
+      engine: { ...ENGINES.claude, command: process.execPath, headlessArgs: [hang] },
+      promptText: 'go',
+      cwd: dir,
+      autonomyArgs: [],
+      timeoutSeconds: 1,
+    })
+    expect(stalled).toMatchObject({ outcome: 'failed', stalled: true })
+    expect(stalled.detail).toMatch(/^stalled: no terminal event within 1s/)
+
+    const ended = join(dir, 'ended.js')
+    writeFileSync(ended, `process.stdout.write('{"type":"system"}\\n'); process.exit(0)`)
+    const noEvent = await spawnIteration({
+      engine: { ...ENGINES.claude, command: process.execPath, headlessArgs: [ended] },
+      promptText: 'go',
+      cwd: dir,
+      autonomyArgs: [],
+      timeoutSeconds: 30,
+    })
+    expect(noEvent.stalled).toBeUndefined()
+  }, 20000)
+})
