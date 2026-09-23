@@ -45,6 +45,7 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 - @inquirer/prompts v7.5.0 is adopted for interactive CLI prompts in package creation workflows (TypeScript-native, tree-shakeable individual imports).
 - ts-node v10.9.2 is adopted for TypeScript execution in scripts.
 - dotenv v17.2.1 is adopted for loading environment variables from `.env` files in CLI workflows and release scripts (`apps/pair-cli/`, `scripts/workflows/release/`).
+- pi-subagents v0.71.0 (third-party pi package, user-installed — not a repo dependency) is the pinned sub-agent primitive of the in-`pi` delivery cycle: installed only on explicit yes via `/pair-capability-setup-harness` (`$harness: pi`), bridged by `pair-workflow-cycle/scripts/pi-bridge.mjs` (see [2026-09-23 ADL](../decision-log/2026-09-23-pi-in-session-cycle-through-pinned-pi-subagents.md)).
 
 ## Markdown & docs processing
 

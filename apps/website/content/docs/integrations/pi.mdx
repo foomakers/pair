@@ -17,7 +17,9 @@ which is what makes unattended delivery portable beyond Claude Code.
 
 ## Prerequisites
 
-- pi installed and authenticated (`pi --help` works)
+- pi installed and authenticated (`pi --help` works) — `/pair-capability-setup-harness` with
+  `$harness: pi` proposes the install (or an update below `0.86.1`) and runs it only on your yes,
+  also on a machine where pair was installed long before pi
 - A pair-enabled project (`pair-cli install` completed, `.pair/` exists)
 
 ## Skill Discovery — Nothing to Wire
@@ -82,14 +84,36 @@ To make pi the project's default engine, declare it in `pair.config.json`:
 { "engine": { "id": "pi" } }
 ```
 
+## In-Session Cycle with `pi-subagents`
+
+pi's base agent has no sub-agents. The third-party [`pi-subagents`](https://github.com/nicobailon/pi-subagents)
+package adds them, and `/pair-workflow-cycle` uses it to drive a card from inside an interactive pi
+session: every stage runs as a `subagent` child, and a `reuse` transition revives the same stage
+agent instead of starting a new one.
+
+- **Install on request only**: ask `/pair-capability-setup-harness` (`$harness: pi`) for
+  `pi-subagents` — it installs the pinned version (`0.71.0`), globally or project-local as you
+  choose. A project-local package loads only once the project is trusted.
+- **Started without it**, the cycle proposes the install: on yes it installs and asks you to re-run;
+  on no it stops (use `pair-cli run --card N` from a shell instead). It never installs on its own.
+- **A different version** is reported with an offer to align it; decline and the cycle proceeds,
+  stating the version is unverified.
+- **Tool shape** is checked before every dispatch; a mismatch stops with an error naming the
+  expected version.
+- **Resume is rehydrated from the transcript**: `pi-subagents` revives a stage as a new child that
+  reads its previous session file. pair's bridge always tells it to read that file first, so the
+  step does not depend on the model choosing to.
+- **Resume stays in its session**: a stage is resumed only inside the pi session that ran it. In a
+  new pi session (or when pi cannot resume the child) the stage runs fresh, and the cycle says so.
+
 ## What pi Does Not Support
 
 - **MCP** — by design (pi's own docs). A project whose `tech/automation.md` declares
   `Requires: mcp` is **not fit** for pi, and `/pair-capability-setup-harness` stops before writing
   any configuration rather than half-configuring it.
 - Sub-agents, permission popups, plan mode, background bash — intentionally absent from the base
-  agent. This is why pi is driven per-iteration by an external process (ADR-021 tier 2) rather than
-  by an in-harness fan-out primitive.
+  agent. Without `pi-subagents` (above), pi is driven per stage by an external process
+  (`pair-cli run`, ADR-021 tier 2) rather than by an in-harness fan-out primitive.
 - A built-in sandbox: pi runs with your permissions. Isolation for unattended work (container, VM)
   is the operator's responsibility.
 

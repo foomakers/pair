@@ -1,7 +1,7 @@
 ---
 name: setup-harness
 description: "Configures an agent harness (pi, opencode, Claude Code) to execute pair's process: resolves the harness explicitly (never inferred), verifies its fitness against the project's declared harness/access-path requirements before writing anything, provisions access path / skill paths / context / model provider per the harness's guide, and confirms rather than rewrites on re-run. Invoke directly to configure a harness ('configure pi for this project', 'set up opencode'). Optionally composed by /bootstrap in its finalization phase."
-version: 0.1.0
+version: 0.2.0
 author: Foomakers
 ---
 
@@ -62,12 +62,35 @@ Configure an agent harness so it becomes a valid environment for pair's process.
 
 ### Step 3: Verify the Harness Is Actually There
 
-1. **Act**: Check whether the resolved harness's binary/CLI is present and runnable (e.g. `pi --version`, `opencode --version`, `claude --version`).
-2. **Act** (not installed) → **HALT**, stated as an environment fact, not a project error:
+1. **Act**: Check whether the resolved harness's binary/CLI is present and runnable (e.g. `pi --version`, `opencode --version`, `claude --version`) — every spawn with stdin closed (`pi -p` with an open stdin hangs, observed in #503's probe).
+2. **Act** (not installed, `opencode` / `claude-code`) → **HALT**, stated as an environment fact, not a project error:
 
    > `[harness]` is not installed on this machine. This is an environment gap, not a configuration issue — install it first (see the harness's own install instructions; this KB describes what pair needs from it, not how to install it), then re-run.
 
-3. **Verify**: The harness binary responds. Proceed to Step 4 only once confirmed present.
+3. **Act** (`pi` — install or verify; this branch runs standalone, for `pi` only, long after pair was installed, and is the only harness this skill ever installs):
+   - `pi` absent ⇒ propose the install command from [pi.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/pi.md) § 9 Setup and run it only on an explicit **yes**; on no, stop with the Step 3.2 message. Nothing is installed without that yes.
+   - `pi` present ⇒ read `pi --version` and compare it with the minimum pi.md § 9 states (`0.86.1`, required by `pi-subagents`' dynamic tool activation):
+     - older than `0.86.1` ⇒ propose the update command from pi.md § 9 Setup (again, run only on yes); declined ⇒ continue, reporting the version as below the minimum for the in-pi cycle;
+     - at or above it ⇒ **confirmed**, nothing written.
+   - An install or update that fails (no network, registry refused) ⇒ report the command's own error and stop — npm installs a global package atomically, so there is no half-installed state to clean; never retry silently, never fall back to another install path.
+4. **Verify**: The harness binary responds (and, for `pi`, its version was reported against the minimum). Proceed to Step 4 only once confirmed present.
+
+### Step 3b: `pi-subagents` — Only on Request (pi only)
+
+1. **Check**: Did the developer ask for `pi-subagents` (the package the in-pi delivery cycle dispatches its stages through)? It is set up only when the developer asks for it — never as part of a plain `pi` setup, never inferred.
+2. **Skip**: Not asked ⇒ go to Step 4.
+3. **Act**: Read the pin and the current install from the bridge the cycle uses, so both speak one version:
+
+   ```bash
+   node "$SKILL_DIR/../pair-workflow-cycle/scripts/pi-bridge.mjs" pin
+   node "$SKILL_DIR/../pair-workflow-cycle/scripts/pi-bridge.mjs" probe --project "$PWD"
+   ```
+
+   - `missing` ⇒ ask **global or project-local** (never chosen silently), then propose the matching install line the probe printed (`install.user` / `install.project`) and run it only on yes. For project-local, explain the project-trust step first: pi does not load packages of an untrusted project, so the package stays inert until this project is trusted (Step 5.5).
+   - `pinned` ⇒ **confirmed**, nothing written.
+   - `drift` ⇒ report both versions and propose aligning to the pin with the same install line; declined ⇒ leave it, reporting the version as unverified.
+   - A failed install ⇒ the command's own error, reported; nothing retried.
+4. **Verify**: Re-run `probe`: `pinned` after a yes. Report the pinned version as the `verifiedAgainst` pi.md § 9 records for `pi-subagents` — the bridge's pin and that line are kept equal by a test, so this skill reads them and never edits the KB.
 
 ### Step 4: Verify Authentication — Report, Never Touch
 
@@ -104,7 +127,8 @@ For the resolved, fitness-checked, present harness:
 HARNESS CONFIGURED:
 ├── Harness:     [pi | opencode | claude-code]
 ├── Fitness:     [Declared and compatible | No tech/automation.md declaration — zero-config path]
-├── Installed:   [version observed]
+├── Installed:   [version observed | installed on yes: <version> | declined — HALTed] (pi: vs minimum 0.86.1)
+├── pi-subagents: [n/a — not requested | confirmed <version> | installed <version> (<scope>) | drift <installed> vs pinned <version> — unverified] (pi only)
 ├── Auth:        [Ready — <path> | Missing — <what to obtain, and CI-viability>]
 ├── Config:      [file written/confirmed]
 ├── Skills:      [already discovered — no write | path added: <entry>]
@@ -119,9 +143,10 @@ HARNESS CONFIGURED:
 - **Harness argument unrecognized or has no guide** (Step 1.4).
 - **Harness not among the project's declared supported harnesses** (Step 2.3) — before any write.
 - **Harness cannot satisfy a project-required access path** (Step 2.4) — before any write, e.g. MCP required and `pi` (no MCP by design) requested.
-- **Harness not installed on this machine** (Step 3.2) — reported as an environment fact, not a project error.
+- **Harness not installed on this machine** (Step 3.2) — reported as an environment fact, not a project error; for `pi`, only after the developer declined the proposed install (Step 3.3).
+- **An install the developer approved failed** (Step 3.3, Step 3b) — the command's own error, nothing retried.
 
-None of these HALTs follow a configuration write — fitness (Step 2) and presence (Step 3) are both checked before Step 5 provisions anything.
+None of these HALTs follow a configuration write — fitness (Step 2) and presence (Step 3) are both checked before Step 5 provisions anything. The only writes before Step 5 are the `pi` / `pi-subagents` installs the developer explicitly approved.
 
 ## Composition Interface
 
@@ -152,4 +177,4 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 - **Credentials never pass through this skill (the hard constraint)**: it reads readiness, never a value; it reports what is missing and how a human obtains it. Rationale: pi persists sessions as JSONL and shares them via `/share` — a token that entered a session's context is a token that can leave the machine through that channel.
 - **Adding a harness is one markdown file and zero skill changes** (Business Rule 4): a new `<name>.md` guide following the fixed index is immediately resolvable by `$harness: <name>` — nothing in this file's algorithm names a harness by special case.
-- This skill provisions configuration and reports readiness; it does not install a harness's binary (Step 3 verifies presence and HALTs otherwise) and does not perform the functional smoke run (that is the separate smoke scenario in `scripts/smoke-tests/`).
+- This skill provisions configuration and reports readiness; it installs nothing without an explicit yes, and the only things it can install are `pi` (Step 3.3) and, on request, `pi-subagents` at the pinned version (Step 3b) — every other harness's binary is verified and HALTed on (Step 3.2). It does not perform the functional smoke run (that is the separate smoke scenario in `scripts/smoke-tests/`).
