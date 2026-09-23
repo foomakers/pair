@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { join, posix, win32 } from 'path'
 import { acquireCardLock, LOCK_DIRECTORY, type LockAcquirer } from './card-lock'
 import { parseRunCommand } from './parser'
 import type { RootCandidate } from './root-plan'
@@ -231,6 +231,28 @@ describe('AC3 — card-lock guards the mutex resources across processes', () => 
     if (area) rmSync(area, { recursive: true, force: true })
     area = undefined
   })
+
+  it.each([
+    ['darwin', posix],
+    ['linux', posix],
+    ['win32', win32],
+  ] as const)(
+    'platform %s (darwin, linux, win32): a resource lock id is one valid directory segment',
+    (_platform, path) => {
+      // `skill:a` or `C:\\x` as a raw directory name is invalid on win32 (`:` reserved) and a
+      // path-separated resource would nest directories — the digest key avoids both everywhere.
+      for (const resource of [
+        'skill:a',
+        'apps/pair-cli/src/x.ts',
+        'apps\\pair-cli\\x.ts',
+        'C:\\x',
+      ]) {
+        const id = resourceLockId(resource)
+        expect(path.basename(path.join('locks', id))).toBe(id)
+        expect(id).not.toMatch(/[<>:"/\\|?*]/)
+      }
+    },
+  )
 
   it('keys a resource by digest, as a safe card-lock id', () => {
     expect(resourceLockId('apps/pair-cli/src/x.ts')).toMatch(/^mutex-[0-9a-f]{16}$/)
