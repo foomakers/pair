@@ -95,6 +95,22 @@ function recordBatch({ input, deps, plan, startedAt, outcomes }: BatchRecordInpu
   ;(deps.appendAudit ?? appendAuditLine)(input.context.auditPath, line)
 }
 
+/**
+ * r1-1: `## Workflows` declared and no `## Eligibility` ⇒ every child `run --card` skips as
+ * `automation-off` (decideDispatch) — no DoR fallback, so `--approve-ineligible` cannot admit it.
+ * The fan-out stops before selecting, as tier 1 (`pair-loop` parsePolicyOrHalt) does: nothing
+ * spawned, nothing reported completed for work no child did. Returns whether it stopped.
+ */
+function reportAutomationOff(context: RunContext): boolean {
+  const { policy } = context
+  if (policy.workflows === undefined || policy.eligibility !== undefined) return false
+  console.log(
+    `  Automation is off: the policy declares \`## Workflows\` but no \`## Eligibility\`, so every ` +
+      `run --card would skip (automation-off). Nothing selected, nothing spawned.`,
+  )
+  return true
+}
+
 export async function handleParallelRun(
   input: ParallelRunInput,
   deps: RunHandlerDependencies,
@@ -106,6 +122,8 @@ export async function handleParallelRun(
   const autonomy = resolveAutonomyFor(engine.engine, config, cwd, fs)
   reportHeader(input, describeEngineResolution(engine), root)
   for (const note of autonomy.notes) console.log(`  ${note}`)
+
+  if (reportAutomationOff(context)) return 0
 
   if (config.dryRun) {
     console.log(chalk.dim('  Dry run: no selection was run and nothing was spawned.'))
