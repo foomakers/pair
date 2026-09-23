@@ -2,6 +2,7 @@ import { spawn } from 'child_process'
 import type { EngineDefinition } from './engines'
 import { HEADLESS_STDIN } from './autonomy'
 import { readIterationOutcome, toLines, type IterationResult } from './stream-reader'
+import { isInterrupted, trackEngine } from './interrupt'
 
 /**
  * Spawning one iteration (US-451 T-9).
@@ -19,12 +20,15 @@ export interface EngineArgsInput {
   readonly cwd: string
   /** Autonomy args, already translated through the engine map (empty ⇒ confirmations active). */
   readonly autonomyArgs: readonly string[]
+  /** The model this project pinned for this engine, if any (`engine.model` in pair.config.json). */
+  readonly model?: string | undefined
 }
 
 /** The engine's argv: headless/stream flags, an optional cwd flag, autonomy, then the prompt. */
 export function buildEngineArgs(input: EngineArgsInput): string[] {
   return [
     ...input.engine.headlessArgs,
+    ...(input.engine.modelFlag && input.model ? [input.engine.modelFlag, input.model] : []),
     ...(input.engine.cwdFlag ? [input.engine.cwdFlag, input.cwd] : []),
     ...input.autonomyArgs,
     input.promptText,
@@ -45,10 +49,15 @@ export interface SpawnIterationInput extends EngineArgsInput {
  * fails fail-closed, because no terminal event will have been seen.
  */
 export async function spawnIteration(input: SpawnIterationInput): Promise<IterationResult> {
+  // r1-2: once the driver was signalled, the engine it is stopping must not be replaced by the next.
+  if (isInterrupted())
+    throw new Error('interrupted: the driver received a signal, no engine is started')
   const child = spawn(input.engine.command, buildEngineArgs(input), {
     cwd: input.cwd,
     stdio: [HEADLESS_STDIN, 'pipe', 'inherit'],
   })
+  // Tracked so a SIGTERM/SIGINT on the driver stops it instead of orphaning it (r1-2).
+  trackEngine(child)
 
   const timer = setTimeout(() => child.kill('SIGTERM'), input.timeoutSeconds * 1000)
   try {

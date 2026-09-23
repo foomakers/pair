@@ -11,6 +11,7 @@ describe('parseRunCommand', () => {
       scope: {},
       autonomous: false,
       approveProjectTrust: false,
+      approveIneligible: false,
       iterationTimeoutSeconds: DEFAULT_ITERATION_TIMEOUT_SECONDS,
       dryRun: false,
     })
@@ -46,6 +47,7 @@ describe('parseRunCommand', () => {
       maxIterations: 4,
       autonomous: true,
       approveProjectTrust: true,
+      approveIneligible: false,
       iterationTimeoutSeconds: 90,
       dryRun: true,
     })
@@ -302,4 +304,96 @@ describe('parseRunCommand — tag-driven dispatch (US-217)', () => {
     expect(config.scope.filter).toBe('risk:green')
     expect(config.scope.root).toBeUndefined()
   })
+})
+
+/**
+ * US-487 T-1 — the cycle-coordinator's OWN flags on the SAME `--card` entry (Assumption 1: "the
+ * call side is identical; there is no --stage flag"). `--pr`/`--rounds`/`--run-id` are meaningful
+ * only once a card is dispatched, and the entry-point discriminator (Assumption 2, AC14) that picks
+ * US-217's tag-mapped route OR this story's cycle coordinator for the SAME `--card N` happens later
+ * (handler.ts, after reading adoption/PM-tool state) — so the parser stays pure and only shapes the
+ * flags, never routes. `--card-tags` (US-217's own fact) and `--pr`/`--rounds`/`--run-id` (this
+ * story's) coexist on `config.dispatch`, because BOTH control paths read the same `--card`
+ * invocation; which one acts on which field is `handler.ts`'s decision.
+ */
+describe('parseRunCommand — cycle-coordinator flags on --card (US-487)', () => {
+  it('parses --pr as part of the dispatch', () => {
+    const config = parseRunCommand({ card: '487', pr: '42' })
+
+    expect(config.dispatch?.pr).toBe(42)
+  })
+
+  it('rejects --pr without --card: the card is the unit (US-487 edge case)', () => {
+    expect(() => parseRunCommand({ pr: '42' })).toThrow(/--card/)
+  })
+
+  it.each([
+    ['0', '--pr must be a positive integer (received: 0)'],
+    ['-3', '--pr must be a positive integer (received: -3)'],
+    ['abc', '--pr must be a positive integer (received: abc)'],
+  ])('rejects a malformed --pr %s', (value, message) => {
+    expect(() => parseRunCommand({ card: '487', pr: value })).toThrow(message)
+  })
+
+  it('defaults --run-id to the batch convention story-<id> when omitted', () => {
+    const config = parseRunCommand({ card: '487' })
+
+    expect(config.dispatch?.runId).toBe('story-487')
+  })
+
+  it('accepts an explicit --run-id, overriding the default', () => {
+    const config = parseRunCommand({ card: '487', runId: 'canary-run-11' })
+
+    expect(config.dispatch?.runId).toBe('canary-run-11')
+  })
+
+  it('rejects a --run-id that is not a plain path segment (it names a run directory)', () => {
+    expect(() => parseRunCommand({ card: '487', runId: '../../etc' })).toThrow(/plain identifier/)
+  })
+
+  it('rejects --run-id without --card: there is nothing to run a cycle on', () => {
+    expect(() => parseRunCommand({ runId: 'story-487' })).toThrow(/--card/)
+  })
+
+  it('parses --rounds as a positive integer bound on remediation rounds', () => {
+    const config = parseRunCommand({ card: '487', rounds: '1' })
+
+    expect(config.dispatch?.rounds).toBe(1)
+  })
+
+  it("parses the literal --rounds max (never widened beyond the policy's maxFixRounds)", () => {
+    const config = parseRunCommand({ card: '487', rounds: 'max' })
+
+    expect(config.dispatch?.rounds).toBe('max')
+  })
+
+  it.each([
+    ['0', 'max'],
+    ['-1', 'max'],
+    ['abc', 'max'],
+  ])('rejects a --rounds value that is neither a positive integer nor %s', (value, _literal) => {
+    expect(() => parseRunCommand({ card: '487', rounds: value })).toThrow(/--rounds/)
+  })
+
+  it('rejects --rounds without --card', () => {
+    expect(() => parseRunCommand({ rounds: '1' })).toThrow(/--card/)
+  })
+
+  it('omitted --rounds leaves the policy default (maxFixRounds) to decide, unwidened', () => {
+    const config = parseRunCommand({ card: '487' })
+
+    expect(config.dispatch?.rounds).toBeUndefined()
+  })
+
+  /**
+   * Assumption 9 — reserved until #488 ships per-stage engine/model/effort/timeout: parsed (so
+   * `--help` and a caller seeing the flag both make sense) but refused with a pointer, never
+   * silently accepted and ignored.
+   */
+  it.each(['profile', 'workflowConfig'])(
+    'refuses the reserved --%s with a pointer to #488',
+    key => {
+      expect(() => parseRunCommand({ card: '487', [key]: 'x' })).toThrow(/#488/)
+    },
+  )
 })

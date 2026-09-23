@@ -1,130 +1,45 @@
 import { resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
-import { loadConfigWithOverrides, readEngineDeclaration } from '#config'
-import type { Config } from '#registry'
 import type { RunCommandConfig } from './parser'
 import { assertEngineAvailable, describeEngineResolution, resolveEngine } from './resolve-engine'
 import { createExecutableProbe } from './path-probe'
-import { ENGINE_IDS, isEngineId, type EngineDefinition, type EngineId } from './engines'
 import {
   describeSkillResolution,
   resolveInvocation,
   type ResolvedInvocation,
 } from './resolve-skill'
-import { createSkillProbe } from './skill-probe'
-import { createPerimeter, describePerimeter, type Perimeter } from './perimeter'
-import { resolveAutonomy, type AutonomyDecision } from './autonomy'
-import { createProjectTrustProbe } from './trust-probe'
+import { createPerimeter, describePerimeter } from './perimeter'
+import { describeMergePosture, describeParallelism } from './automation-policy'
+import { describeApprovalPosture, filterDeliveryFor } from './invocation'
+import { describeDispatch, type DispatchDecision } from './dispatch'
+import { driveRun } from './loop-driver'
+import { enterCycleAtReview, handleSkipDecision } from './card-entry'
 import {
-  describeMergePosture,
-  describeParallelism,
-  readAutomationPolicy,
-  type AutomationPolicy,
-} from './automation-policy'
-import { buildPromptText, describeApprovalPosture, filterDeliveryFor } from './invocation'
-import { loopExitCode, runLoop, type IterationContext, type LoopOutcome } from './loop'
-import { spawnIteration } from './spawn'
-import type { IterationResult } from './stream-reader'
-import { decideDispatch, describeDispatch, lockedSkip, type DispatchDecision } from './dispatch'
-import type { SkillProbe } from './resolve-skill'
-import { acquireCardLock, type LockAcquirer } from './card-lock'
-import {
-  appendAuditLine,
-  auditRecordFor,
-  dispatchRecordLine,
-  renderAuditLine,
-  resolveAuditPath,
-  type AuditAppender,
-  type AuditEvent,
-} from './dispatch-audit'
-import { resolveWorkingPathOverride } from '#registry'
-
-/** Injected so the loop can be driven in tests without spawning an engine. */
-export type IterationRunner = (input: {
-  engine: EngineDefinition
-  promptText: string
-  cwd: string
-  autonomyArgs: readonly string[]
-  timeoutSeconds: number
-}) => Promise<IterationResult>
-
-export interface RunHandlerDependencies {
-  runIteration?: IterationRunner
-  /** The per-card concurrency guard. Injected so a test never touches a real working area. */
-  acquireLock?: LockAcquirer
-  /** The audit writer. Injected for the same reason — the trail is a real file, by design. */
-  appendAudit?: AuditAppender
-}
+  declaredEngine,
+  driveLockedCard,
+  resolveAutonomyFor,
+  resolveContext,
+  type ResolvedRun,
+  type RunContext,
+  type RunHandlerDependencies,
+} from './run-context'
 
 /**
- * The engine the project's own `pair.config.json` declares, if any.
- *
- * A malformed block THROWS rather than degrading to the default: an operator whose typo was
- * silently ignored would have no way to tell a working configuration from a broken one.
+ * `pair-cli run` — loop mode (US-451) and tag-driven dispatch (US-217). A `--card` the dispatcher
+ * skips is handed to the DoR fallback (`card-entry.ts`), which owns US-487's routing and reaches the
+ * delivery-cycle coordinator (`cycle-entry.ts`); this module never decides a card's readiness.
  */
-function declaredEngine(config: Config): EngineId | undefined {
-  const outcome = readEngineDeclaration(config, ENGINE_IDS)
-  if (outcome.errors.length > 0) {
-    throw new Error(`pair.config.json is invalid:\n  - ${outcome.errors.join('\n  - ')}`)
-  }
-  return isEngineId(outcome.engine) ? outcome.engine : undefined
-}
 
-interface ResolvedRun {
-  engine: ReturnType<typeof resolveEngine>
-  invocation: ResolvedInvocation
-  perimeter: Perimeter
-  policy: AutomationPolicy
-  autonomy: AutonomyDecision
-  /** Present only on a tag-driven run (US-217), and then always a `route` — a skip returns earlier. */
-  dispatch?: DispatchDecision
-}
-
-/**
- * The policy, and the routing decision it implies for a `--card` run (US-217).
- *
- * Resolved FIRST and on its own, because a dispatch that routes nothing must cost nothing: a card
- * that is ineligible, unmapped, or covered by no declaration at all is reported and the run exits,
- * without resolving an invocation or a perimeter for work that is not going to happen.
- */
-interface RunContext {
-  config: Config
-  probe: SkillProbe
-  policy: AutomationPolicy
-  dispatch?: DispatchDecision
-  /** `<cwd>/<working_path>` — where the lock lives. */
-  workingArea: string
-  /** `<cwd>/<working_path>/<Audit Location>` — where every dispatch record is appended. */
-  auditPath: string
-}
-
-function resolveContext(config: RunCommandConfig, fs: FileSystemService, cwd: string): RunContext {
-  const loaded = loadConfigWithOverrides(fs, { projectRoot: cwd })
-  // One probe per RUN, not per iteration: the installed skill set does not change mid-run.
-  const probe = createSkillProbe(fs, loaded.config, cwd)
-  const policy = readAutomationPolicy(fs, cwd)
-  const dispatch =
-    config.dispatch &&
-    decideDispatch({
-      card: config.dispatch.card,
-      tags: config.dispatch.tags,
-      eligibility: policy.eligibility,
-      mapping: policy.workflows,
-      isInstalled: probe,
-    })
-
-  const workingPath = resolveWorkingPathOverride(loaded.config)
-
-  return {
-    config: loaded.config,
-    probe,
-    policy,
-    ...(dispatch && { dispatch }),
-    workingArea: resolve(cwd, workingPath),
-    auditPath: resolveAuditPath(cwd, workingPath, policy.auditLocation),
-  }
-}
+export type {
+  IterationRunner,
+  CardReadinessProbe,
+  DriveCycleInput,
+  DriveCycleResult,
+  CycleDriver,
+  RunHandlerDependencies,
+} from './run-context'
+export { isDorFallbackReason, ineligibleOverrideApplied, type DorFallbackGate } from './card-entry'
 
 /**
  * The run's scope root — the DISPATCHED CARD whenever there is one, and nothing displaces it.
@@ -178,13 +93,7 @@ function resolveRun(
     // so the check has to happen after skill resolution and before any spawn (round 1, finding 1).
     filterDelivery: filterDeliveryFor(invocation),
   })
-  const autonomy = resolveAutonomy({
-    engine: engine.engine,
-    autonomous: config.autonomous,
-    approveProjectTrust: config.approveProjectTrust,
-    cwd,
-    isProjectTrusted: createProjectTrustProbe(fs),
-  })
+  const autonomy = resolveAutonomyFor(engine.engine, config, cwd, fs)
 
   return {
     engine,
@@ -235,10 +144,19 @@ export async function handleRunCommand(
   // Nothing to run on this card: report the decision and stop. This is a clean exit, never an
   // error — automation is opt-in per card (D21), so "no workflow applies here" is the shipped
   // answer for every card a team has not explicitly tagged.
+  //
+  // AC14 (US-487): `unmapped` / `no-mapping-declared` are no longer unconditionally "nothing
+  // runs" — the card's OWN Definition-of-Ready macrostate now decides. Every OTHER skip reason
+  // (`automation-off`, `ineligible`, `run-in-progress`) is unchanged.
   if (context.dispatch?.kind === 'skip') {
-    reportSkippedDispatch(context)
-    if (!config.dryRun) recordSkip(context, deps, context.dispatch)
-    return 0
+    return await handleSkipDecision({ config, context, fs, cwd, decision: context.dispatch }, deps)
+  }
+
+  // AC2 (r0-2): `--pr` enters the cycle at review even on a card whose tag maps a workflow — the
+  // mapping names what a card STARTS with, and a card with a PR has started. Never silently dropped.
+  const reviewCard = prEntryOnMappedRoute(config, context)
+  if (reviewCard !== undefined) {
+    return await enterCycleAtReview({ config, context, fs, cwd, card: reviewCard }, deps)
   }
 
   const resolved = resolveRun(config, context, cwd, fs)
@@ -257,6 +175,12 @@ export async function handleRunCommand(
     : await driveRun(resolved, config, deps)
 }
 
+/** The routed card, when the invocation ALSO names a `--pr` (AC2 wins over the mapped workflow). */
+function prEntryOnMappedRoute(config: RunCommandConfig, context: RunContext): string | undefined {
+  if (context.dispatch?.kind !== 'route' || config.dispatch?.pr === undefined) return undefined
+  return context.dispatch.card
+}
+
 /** One routed card and everything already resolved about it — one subject, not four arguments. */
 interface DispatchedCard {
   readonly resolved: ResolvedRun
@@ -265,224 +189,11 @@ interface DispatchedCard {
   readonly config: RunCommandConfig
 }
 
-/**
- * A routed card: locked, audited, driven, released — in that order, and the release is unconditional.
- *
- * The lock is taken AFTER every refusal has passed and BEFORE anything spawns, so a run that was
- * never going to start never parks a card, and a run that does start cannot be joined by the next
- * trigger in the burst.
- */
+/** A routed card: the shared locked + audited + interruptible run (`driveLockedCard`). */
 async function driveDispatchedCard(
   card: DispatchedCard,
   deps: RunHandlerDependencies,
 ): Promise<number> {
   const { resolved, decision, context, config } = card
-  const acquisition = (deps.acquireLock ?? acquireCardLock)({
-    workingArea: context.workingArea,
-    card: decision.card,
-  })
-  if (acquisition.kind === 'held') {
-    // The holder's own path and age, as the acquirer reported them — never re-derived here, so the
-    // message names the directory this run actually probed.
-    const skipped = lockedSkip(decision.card, acquisition)
-    console.log(`  ${describeDispatch(skipped)}`)
-    recordSkip(context, deps, skipped)
-    return 0
-  }
-
-  // Whether the `start` record actually reached the trail — the fact that separates "this run
-  // crashed" from "this run never began", which are the same `catch` and NOT the same report.
-  let started = false
-  try {
-    record(context, deps, decision, { event: 'start' })
-    started = true
-    const outcome = await driveRun(resolved, config, deps)
-    record(context, deps, decision, {
-      event: 'end',
-      outcome: outcome === 0 ? 'completed' : 'failed',
-    })
-    return outcome
-  } catch (error) {
-    // Every start gets an end, including this one. Without it the trail stops at `event=start` and
-    // the operator reading it the next morning cannot tell a crashed run from one still in flight —
-    // and the lock, released just below, offers no second signal either.
-    recordCrash(context, deps, decision, { crash: error, started })
-    throw error
-  } finally {
-    acquisition.lock.release()
-  }
-}
-
-/** The re-invocation loop itself — identical whether the run was dispatched or invoked directly. */
-async function driveRun(
-  resolved: ResolvedRun,
-  config: RunCommandConfig,
-  deps: RunHandlerDependencies,
-): Promise<number> {
-  const outcome = await runLoop({
-    maxIterations: resolved.perimeter.maxIterations,
-    runIteration: context => driveIteration(resolved, config, context, deps),
-    onIteration: entry =>
-      console.log(
-        `  Iteration ${entry.iteration}: ${entry.result.outcome} — ${entry.result.detail}`,
-      ),
-  })
-
-  reportOutcome(outcome)
-  return loopExitCode(outcome)
-}
-
-/**
- * The `skip` record, with the failure message the frequent path is owed.
- *
- * A skip is the commonest outcome on a board — every unmapped label edit, every ineligible card,
- * every trigger in a burst — and it is the case this feature promises costs nothing. Fail-closed is
- * still the posture (`appendAuditLine` throws by design: an undecided-but-unrecorded decision is
- * not a mode), but the bare `EACCES: … open '…/audit.md'` it raised named neither the card nor the
- * fact that nothing was spawned, so the operator was handed a filesystem error with no way back to
- * the adoption setting that produced it. Worded like `recordCrash`'s `!started` branch, because it
- * is the same fact: the destination is unwritable, and nothing ran.
- */
-function recordSkip(
-  context: RunContext,
-  deps: RunHandlerDependencies,
-  decision: DispatchDecision,
-): void {
-  try {
-    record(context, deps, decision, { event: 'skip' })
-  } catch (failure) {
-    throw new Error(
-      `The skip on card ${decision.card} could not be audited (${describeError(failure)}): ` +
-        `nothing was spawned, so fix the audit destination before the next trigger fires`,
-      { cause: failure },
-    )
-  }
-}
-
-/**
- * The `end` record a crash owes the trail — written so that neither failure can hide the other.
- *
- * `appendAuditLine` THROWS by design ("an unaudited run is not a mode"), so a working area whose
- * `## Audit Location` cannot be written raises a SECOND error from inside the handler's own catch.
- * Fail-closed is the intended posture — the run still fails — but the engine error is the one an
- * operator needs, and letting a bare `EACCES` replace it sends them to debug the wrong machine. So
- * the audit failure supersedes the plain rethrow and carries the run error with it: both in the
- * message, the original kept as `cause`.
- *
- * `started` is what keeps that message TRUE. The `start` record is the first thing written inside
- * the try, so an unwritable destination makes the start write the very thing that throws — and
- * reporting that as a crash asserts two things that did not happen: that a run crashed (no engine
- * process was ever spawned) and that the trail stops at `event=start` (no start line was ever
- * written; the file may not exist at all). An operator sent to reconcile a run that never happened
- * against a trail with no record of it debugs the wrong thing twice, so the two cases get two
- * messages — and when the start never landed there is no point attempting the `end` at the same
- * unwritable destination.
- */
-function recordCrash(
-  context: RunContext,
-  deps: RunHandlerDependencies,
-  decision: DispatchDecision,
-  { crash, started }: { crash: unknown; started: boolean },
-): void {
-  if (!started) {
-    throw new Error(
-      `The dispatch of card ${decision.card} could not be audited ` +
-        `(${describeError(crash)}): nothing was spawned and the trail carries no record of this ` +
-        `run at all, so fix the audit destination before the next trigger fires`,
-      { cause: crash },
-    )
-  }
-  try {
-    record(context, deps, decision, { event: 'end', outcome: 'crashed' })
-  } catch (auditFailure) {
-    throw new Error(
-      `The run on card ${decision.card} crashed (${describeError(crash)}) and its \`end\` audit ` +
-        `record could not be written (${describeError(auditFailure)}): the trail now stops at ` +
-        `\`event=start\`, so fix the audit destination before reading it as a run still in flight`,
-      { cause: crash },
-    )
-  }
-}
-
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-/**
- * Writes one dispatch record: to the audit file, and — for a `start` — to stdout as the line the
- * trigger's host adapter posts on the card (AC3). Never to the tracker: this process holds no
- * credentials for one, and that is the property that keeps the core host-agnostic.
- */
-function record(
-  context: RunContext,
-  deps: RunHandlerDependencies,
-  decision: DispatchDecision,
-  { event, outcome }: { event: AuditEvent; outcome?: string },
-): void {
-  const entry = auditRecordFor(decision, event, ...(outcome !== undefined ? [{ outcome }] : []))
-  ;(deps.appendAudit ?? appendAuditLine)(context.auditPath, renderAuditLine(entry))
-  if (event === 'start') console.log(dispatchRecordLine(entry))
-}
-
-/**
- * One iteration: a FRESH engine process, given the perimeter and the borrowed policy parameters.
- *
- * The continue-token's iteration counter is carried forward exactly as `pair-loop` documents
- * (`--iteration <n+1>`), so a resumed run does not restart its own counter — nothing else crosses
- * the boundary between iterations.
- */
-function driveIteration(
-  resolved: ResolvedRun,
-  config: RunCommandConfig,
-  context: IterationContext,
-  deps: RunHandlerDependencies,
-): Promise<IterationResult> {
-  const promptText = buildPromptText(resolved.engine.engine, resolved.invocation, {
-    ...(resolved.perimeter.root !== undefined && { root: resolved.perimeter.root }),
-    // Passed ONLY when the invocation actually carries it. `buildSkillArgs` would drop it anyway,
-    // but relying on that is how a flag ends up looking effective while changing nothing: the
-    // decision belongs where the perimeter recorded it (round 1, finding 1).
-    ...(resolved.perimeter.filterDelivery === 'argument' &&
-      resolved.perimeter.filter !== undefined && { filter: resolved.perimeter.filter }),
-    ...(resolved.policy.stopPredicate !== undefined && {
-      predicate: resolved.policy.stopPredicate,
-    }),
-    iteration: context.iteration,
-    // ONE operator intent, two axes (US-464): `--autonomous` already governs the ENGINE's
-    // permission posture; it governs the composed SKILL's approval round too, because "nobody is
-    // watching this run" is the same fact in both places. Passed only when the posture is
-    // autonomous — an absent `$approval` IS the `interactive` default (ADR-021), so the
-    // non-autonomous path renders exactly the bytes it rendered before this story (AC2).
-    ...(resolved.autonomy.autonomous && { approval: 'auto' as const }),
-  })
-
-  const run = deps.runIteration ?? spawnIteration
-  return run({
-    engine: resolved.engine.engine,
-    promptText,
-    cwd: resolved.perimeter.cwd,
-    autonomyArgs: resolved.autonomy.args,
-    timeoutSeconds: config.iterationTimeoutSeconds,
-  })
-}
-
-/** The whole output of a run that routes nothing: the decision, the policy it came from, warnings. */
-function reportSkippedDispatch(context: RunContext): void {
-  console.log(chalk.bold('pair run'))
-  console.log(`  ${describeDispatch(context.dispatch!)}`)
-  console.log(`  Policy: ${context.policy.source} · audit ${context.policy.auditLocation}`)
-  for (const warning of context.policy.warnings) console.log(chalk.yellow(`  ! ${warning}`))
-  console.log(chalk.dim('  Nothing was spawned.'))
-}
-
-function reportOutcome(outcome: LoopOutcome): void {
-  const reason = {
-    'skill-reported-complete':
-      'the skill reported itself finished (predicate satisfied, or nothing eligible)',
-    'iteration-cap': 'the perimeter iteration cap was reached',
-    'iteration-failed': 'an iteration failed (fail-closed: no terminal event counts as failed)',
-  }[outcome.stopReason]
-
-  const line = `  Stopped after ${outcome.iterations} iteration(s): ${reason}`
-  console.log(outcome.stopReason === 'iteration-failed' ? chalk.red(line) : chalk.green(line))
+  return await driveLockedCard({ context, decision }, deps, () => driveRun(resolved, config, deps))
 }

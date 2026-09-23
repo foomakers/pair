@@ -242,6 +242,7 @@ describe('dispatchCommand() - real handlers integration', () => {
       scope: {},
       autonomous: false,
       approveProjectTrust: false,
+      approveIneligible: false,
       iterationTimeoutSeconds: 60,
       dryRun: true,
     }

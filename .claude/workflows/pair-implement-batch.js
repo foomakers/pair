@@ -135,8 +135,14 @@ export const meta = {
 // running workflow), scaled to the step's difficulty. The one MODEL exception is
 // the PR-open step: an implementer doing light checkpoint->PR authoring, dialed
 // down to sonnet/medium via opts (opts win over frontmatter). Spend concentrates
-// where quality pays: coding (implement/fix, sonnet/high) and the adversarial
-// review gate (sonnet/xhigh). NOTE: .claude/workflows/ is outside the packages/apps
+// where quality pays: coding (implement/fix, sonnet/high) and the two ADVERSARIAL
+// GATES — contract validation and final review — both sonnet/xhigh. The validation
+// gate was raised to xhigh on 2026-09-22 after US-487's own run: it sealed an `a0`
+// contract carrying two defects in its own test code (an unused local that made the
+// quality gate red for any implementation, and a `toHaveReturnedWith` on an async
+// mock that discriminated nothing), costing two implement attempts, the whole
+// greenRetries budget and human adjudication. A miss at a gate is paid for by every
+// stage downstream of it, so that is where the effort belongs. NOTE: .claude/workflows/ is outside the packages/apps
 // prettier gate — keep the one-line opts style already used in this file.
 
 // ── Input ────────────────────────────────────────────────────────────────
@@ -1712,7 +1718,7 @@ async function driveStory(story) {
   const validate = n =>
     agentRetry(
       invoke(SK.redVerify, `${common()} $phase=${n.phase}${(n.attempt ?? 1) > 1 ? ` $attempt=${n.attempt}` : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''} $head=${n.base} $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths })}` : ''}`),
-      withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Validate', label: `validate:${tag} ${n.phase}`, effort: 'high', schema: VALIDATE_SCHEMA }),
+      withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Validate', label: `validate:${tag} ${n.phase}`, effort: 'xhigh', schema: VALIDATE_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasValidation(r),
     )
   const implement = n =>
@@ -1733,7 +1739,7 @@ async function driveStory(story) {
         SK.reviewPhase,
         `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $attempt=${n.attempt ?? 1} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${n.regressionRisks?.length ? ` $regressionGuards=${JSON.stringify(n.regressionRisks)}` : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}${CONTRACT.status === 'unresolved' ? ` $contractSpec=${JSON.stringify(contractSpecArg())}` : ''}`,
       ),
-      withModel('reviewer', { agentType: 'pair-reviewer', phase: 'Verify', label: `verify:${tag} ${n.phase}${n.reviewer > 1 ? ` reviewer ${n.reviewer}` : ''}`, effort: 'high', schema: VERIFY_SCHEMA }),
+      withModel('reviewer', { agentType: 'pair-reviewer', phase: 'Verify', label: `verify:${tag} ${n.phase}${n.reviewer > 1 ? ` reviewer ${n.reviewer}` : ''}`, effort: 'xhigh', schema: VERIFY_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasReviewEvidence(r),
     )
 

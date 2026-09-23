@@ -76,6 +76,20 @@ function assertSafePromptText(section: string, value: string): void {
   policyHalt(promptSafetyFailure(`\`## ${section}\``, value))
 }
 
+/**
+ * The two "automation is off" warnings — no `## Eligibility` to select by. Named so the one entry
+ * they would contradict can replace them: an explicit `--card` SELECTS nothing, it names its card
+ * (AC14; the exception the KB states under `## Eligibility`), see `card-entry.ts`.
+ */
+export const ELIGIBILITY_OFF_FILE_ABSENT =
+  `${POLICY_PATH} is absent (a valid, documented state): automation is off — no eligibility ` +
+  `filter is declared, so nothing is selected unattended. Pass --filter to scope a run yourself.`
+export const ELIGIBILITY_OFF_SECTION_ABSENT = `${POLICY_PATH} declares no \`## Eligibility\`: automation is off (fail-safe, never widened to all cards)`
+
+export function isEligibilityOffWarning(warning: string): boolean {
+  return warning === ELIGIBILITY_OFF_FILE_ABSENT || warning === ELIGIBILITY_OFF_SECTION_ABSENT
+}
+
 export function readAutomationPolicy(fs: FileSystemService, projectRoot: string): AutomationPolicy {
   const path = join(projectRoot, POLICY_PATH)
   if (!fs.existsSync(path)) {
@@ -85,10 +99,7 @@ export function readAutomationPolicy(fs: FileSystemService, projectRoot: string)
       maxParallelism: FAIL_SAFE_MAX_PARALLELISM,
       auditLocation: DEFAULT_AUDIT_LOCATION,
       source: 'fail-safe defaults (policy file absent)',
-      warnings: [
-        `${POLICY_PATH} is absent (a valid, documented state): automation is off — no eligibility ` +
-          `filter is declared, so nothing is selected unattended. Pass --filter to scope a run yourself.`,
-      ],
+      warnings: [ELIGIBILITY_OFF_FILE_ABSENT],
     }
   }
 
@@ -137,9 +148,7 @@ export function describeParallelism(policy: AutomationPolicy): string {
 function readEligibility(markdown: string, warnings: string[]): string | undefined {
   const lines = sectionLines(markdown, 'Eligibility')
   if (lines === undefined) {
-    warnings.push(
-      `${POLICY_PATH} declares no \`## Eligibility\`: automation is off (fail-safe, never widened to all cards)`,
-    )
+    warnings.push(ELIGIBILITY_OFF_SECTION_ABSENT)
     return undefined
   }
   if (lines.length === 0)

@@ -20,8 +20,9 @@
 // shell — and every path segment / git ref is validated before it is used.
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, realpathSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve as resolvePath } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { CAPS, CONTEXT_TABLE, PIPELINE_DEFAULTS, DEFAULT_SEVERITY_FLOOR, WORKFLOW_VERSION, effectiveInputs, isWorkflowVersion } from './cycle-state.mjs'
 
 // ── the realization table, as DATA (AC-6) ───────────────────────────────────────────────────
@@ -123,6 +124,32 @@ function fail(halt, detail, extra = {}) {
   // A HALT is typed and fail-closed: a non-zero exit AND a machine-readable `halt`, so neither the
   // skill's prose nor a script consumer can mistake it for a degraded success.
   emit({ halt, detail, ...extra }, 1)
+}
+
+// ── US-487 — the role packet a PROCESS realization carries ─────────────────────────
+// A headless engine process has no `agentType` to select a role by (that is the in-session
+// subagent realization's own mechanism): the role travels in the prompt, as data. The definitions
+// live at `.claude/agents/<agentType>.md`, three levels above this script as it is installed
+// (`.claude/skills/pair-workflow-cycle/scripts/`), so they are located relative to it rather than to
+// whatever directory a caller happened to run from. That guess is the DEFAULT only: a caller that
+// knows the project's `agent-definitions` target (pair-cli reads it from the registry) passes
+// `packet --agents-dir <dir>`, because a skill installed under a redirected skills target
+// (`.agents/skills/`) sits three levels below `.agents/`, not below the agents' own target (r0-9).
+const AGENTS_DIR = resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'agents')
+
+/**
+ * The BODY of a stage's agent definition — frontmatter stripped, since `model`/`tools` are harness
+ * configuration, not role instructions. A missing definition HALTs `agent-definition-missing`
+ * naming the role and the path it was looked for at: dispatching a stage WITHOUT its role would
+ * run, say, the preparation skill with none of the preparer's own constraints (tests only, never
+ * production), and a headless run would give nobody the chance to notice.
+ */
+export function roleBodyFor(agentType, agentsDir = AGENTS_DIR) {
+  const path = join(agentsDir, `${agentType}.md`)
+  if (!existsSync(path)) {
+    fail('agent-definition-missing', `the agent definition for role \`${agentType}\` was not found at ${path} — a stage cannot be dispatched without its role: install the agents alongside the skill, or restore the file`, { role: agentType, path })
+  }
+  return readFileSync(path, 'utf8').replace(/^---\n[\s\S]*?\n---\n/, '').trim()
 }
 
 const git = (cwd, args) => spawnSync('git', args, { cwd, encoding: 'utf8' })
@@ -332,6 +359,9 @@ function packetCommand(opts) {
   // Present but its `effort` unknown ⇒ HALT `profile-unresolved`, never a silent default — the
   // HALT this argument was reserved under before any consumer existed.
   const profile = opts.profile === undefined ? {} : JSON.parse(opts.profile)
+  const agentsDir = opts['agents-dir'] ?? AGENTS_DIR
+  if (typeof agentsDir !== 'string' || !isAbsolute(agentsDir))
+    fail('agents-dir-invalid', `--agents-dir must be an absolute directory; received ${JSON.stringify(opts['agents-dir'])}`)
   if (profile.effort !== undefined && !KNOWN_EFFORTS.includes(profile.effort))
     fail('profile-unresolved', `$profile.effort ${JSON.stringify(profile.effort)} is not one of ${KNOWN_EFFORTS.join(' | ')}`, { profile })
   const effort = profile.effort
@@ -372,8 +402,47 @@ function packetCommand(opts) {
   // defects a Codex-free comparable run did not have (US-486 canary, 2026-09-19) — every other
   // requirement in this prompt (Check/Act/Verify, never improvise) still applies at every level.
   const effortNote = effort ? ` Requested reasoning effort for this dispatch: **${effort}**. This is a request, not an enforced setting: honour it as best you can within your own harness's controls — it changes how much you think, never what you are required to produce or verify.` : ''
+  // The rules every dispatch carries, whichever realization renders it. Shared, not duplicated:
+  // the styled rendering below used to drop this whole paragraph, so a process realization got the
+  // bare invocation line and NONE of it — no reviewer blindness, no "the run directory lives in the
+  // MAIN checkout", no "Do NOT merge". The first of those absences is the one the US-487 canary hit:
+  // stages wrote their handoffs inside the story worktree.
+  const guardrails = `The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines — its Step 0 resolves the durable cycle state and returns \`{ status: "redirect", next }\` when another step is due, spending no judgment. Do NOT read ${blindPaths} except the checkpoint and the run directory \`${runDir}/\` the skill names; that directory lives in the MAIN checkout — the working directory you were started in, before any cd — never inside a story or review worktree. Do NOT merge.${effortNote}`
   const invoke = (skill, args) =>
-    `Invoke **${skill}** for story ${tag} with ${args} $workflowVersion=${workflowVersion}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines — its Step 0 resolves the durable cycle state and returns \`{ status: "redirect", next }\` when another step is due, spending no judgment. Do NOT read ${blindPaths} except the checkpoint and the run directory \`${runDir}/\` the skill names; that directory lives in the MAIN checkout — the working directory you were started in, before any cd — never inside a story or review worktree. Do NOT merge.${effortNote}`
+    `Invoke **${skill}** for story ${tag} with ${args} $workflowVersion=${workflowVersion}. ${guardrails}`
+  // ── US-487 T-3 — the role-packet rendering STYLE ────────────────────────────────────────────
+  // A headless process realization (`pair-cli run --card`, no subagent primitive) needs the SAME
+  // distinction `apps/pair-cli/src/commands/run/engines.ts` already draws for `run --skill`
+  // (`skillInvocationStyle: 'slash' | 'instruction'`): a `claude -p` process reads its ENTIRE
+  // prompt as literal input, so the slash-command line has to be genuinely present for the CLI to
+  // invoke it that way, while `pi`/`opencode` discover skills through natural-language instruction
+  // text with no slash syntax on a one-shot prompt. `--style` omitted renders EXACTLY what #486
+  // already ships (`invoke`, above) — zero regression for the in-session subagent realization,
+  // which never passes it.
+  const KNOWN_STYLES = ['slash', 'instruction']
+  // The story: "the stage's agent definition body first, then the stage skill invocation". Before this,
+  // the styled path returned the invocation line alone — `inline-role-body` was declared in
+  // REALIZATIONS and read by nothing — and the `agent-definition-missing` HALT could not exist,
+  // because the definition it guards was never opened.
+  //
+  // Ordering by style. `instruction` engines read natural language, so the role leads. For `slash`
+  // the invocation line leads and the role follows — the CONSERVATIVE choice, not a proven
+  // necessity: it keeps the documented slash form exactly where `claude -p` has always received
+  // it. Probed live on claude 2.1.278 (2026-09-22) with a diagnostic skill: the skill's token came
+  // back with the command first AND with the role first, so neither order was shown to break
+  // invocation. That probe also cannot tell "the slash command was dispatched" from "the model read
+  // the listed skill and followed it", so it establishes no ordering rule either way — only that
+  // this one does not regress the engine the canary proved.
+  const renderPrompt = (skill, args, style, agentType) => {
+    if (style === undefined) return invoke(skill, args)
+    if (!KNOWN_STYLES.includes(style)) fail('style-invalid', `--style must be one of ${KNOWN_STYLES.join(' | ')}; received ${JSON.stringify(style)}`)
+    const bare = skill.replace(/^\//, '')
+    const body = `${args} $workflowVersion=${workflowVersion}`
+    const role = roleBodyFor(agentType, agentsDir)
+    return style === 'slash'
+      ? `/${bare} ${body}\n\n${role}\n\n${guardrails}`
+      : `${role}\n\nRun the ${bare} skill with these arguments: ${body}\n\n${guardrails}`
+  }
   const notesArg = card.notes ? ` $notes=${JSON.stringify(card.notes)}` : ''
   const findingsArg = list => (list && list.length ? ` $findings=${JSON.stringify(list.map(compactFinding))}` : '')
   const n = next
@@ -450,7 +519,7 @@ function packetCommand(opts) {
     // behavior exactly for every caller that has not adopted a profile yet.
     ...(effort ? { effort } : {}),
     args,
-    prompt: invoke(skill, args),
+    prompt: renderPrompt(skill, args, opts.style, agentType),
   })
 }
 
@@ -483,7 +552,7 @@ function realizationsCommand(opts) {
 // ── CLI ─────────────────────────────────────────────────────────────────────────────────────
 const FLAGS = {
   worktree: ['main', 'story', 'branch', 'base', 'worktree-root'],
-  packet: ['next', 'card', 'policy', 'run', 'workflow-version', 'pipeline', 'profile', 'contract-resolved', 'required', 'severity-floor', 'severities', 'verdicts', 'ranks'],
+  packet: ['next', 'card', 'policy', 'run', 'workflow-version', 'pipeline', 'profile', 'contract-resolved', 'required', 'severity-floor', 'severities', 'verdicts', 'ranks', 'style', 'agents-dir'],
   realizations: ['tools', 'product', 'story', 'pr'],
   'context-table': [],
 }

@@ -22,7 +22,7 @@ export function policyHalt(detail: string): never {
  * is not a heading (the schema documents its own declarations inside fences, so a line scan that
  * ignored fences would read a documentation example as a declaration).
  */
-function sectionBodies(markdown: string, heading: string): string[][] {
+export function sectionBodies(markdown: string, heading: string): string[][] {
   const bodies: string[][] = []
   let current: string[] | undefined
   let fenced = false

@@ -16,6 +16,10 @@ describe('readEngineDeclaration', () => {
   it('reads a valid declaration', () => {
     expect(readEngineDeclaration({ engine: { id: 'pi' } }, KNOWN)).toEqual({
       engine: 'pi',
+      // `bin` and `model` are always present and empty when undeclared: an absent map and an empty
+      // one mean the same thing to the resolver, and one shape is easier to consume than two.
+      bin: {},
+      model: {},
       errors: [],
     })
   })
@@ -51,5 +55,42 @@ describe('readEngineDeclaration', () => {
 
     expect(outcome.engine).toBeUndefined()
     expect(outcome.errors).toEqual(['engine: unknown field(s) args'])
+  })
+
+  it('reads `engine.bin`, the per-machine executable paths the resolver consults first', () => {
+    expect(readEngineDeclaration({ engine: { id: 'pi', bin: { pi: '/opt/pi' } } }, KNOWN)).toEqual({
+      engine: 'pi',
+      bin: { pi: '/opt/pi' },
+      model: {},
+      errors: [],
+    })
+  })
+
+  it('refuses a bin map that names an engine nobody supports, or a blank path', () => {
+    // Both would otherwise be silently ignored, and the operator would keep seeing "not installed"
+    // for a binary they believe they declared.
+    expect(
+      readEngineDeclaration({ engine: { id: 'pi', bin: { nope: '/opt/x' } } }, KNOWN).errors,
+    ).toEqual([`engine.bin: unknown engine 'nope' (supported: ${KNOWN.join(', ')})`])
+    expect(
+      readEngineDeclaration({ engine: { id: 'pi', bin: { pi: '  ' } } }, KNOWN).errors,
+    ).toEqual(['engine.bin.pi: must be a non-empty path'])
+    expect(readEngineDeclaration({ engine: { id: 'pi', bin: 'nope' } }, KNOWN).errors).toHaveLength(
+      1,
+    )
+  })
+
+  it("reads `engine.model`, the run-wide model pin (per-stage selection stays #488's)", () => {
+    expect(
+      readEngineDeclaration({ engine: { id: 'pi', model: { pi: 'openai-codex/gpt-5.5' } } }, KNOWN),
+    ).toEqual({
+      engine: 'pi',
+      bin: {},
+      model: { pi: 'openai-codex/gpt-5.5' },
+      errors: [],
+    })
+    expect(
+      readEngineDeclaration({ engine: { id: 'pi', model: { pi: '' } } }, KNOWN).errors,
+    ).toEqual(['engine.model.pi: must be a non-empty path'])
   })
 })

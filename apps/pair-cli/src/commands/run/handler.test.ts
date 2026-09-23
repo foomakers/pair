@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
+import { chmodSync, mkdtempSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { handleRunCommand, type IterationRunner } from './handler'
 import type { LockAcquirer } from './card-lock'
@@ -7,6 +10,8 @@ import { POLICY_PATH } from './automation-policy'
 import type { IterationResult } from './stream-reader'
 
 const cwd = '/project'
+/** A PATH directory that exists only in the in-memory project — never on the real disk. */
+const ENGINE_ONLY_BIN = '/pair-test-engines-only/bin'
 
 const POLICY = `## Eligibility
 
@@ -44,6 +49,9 @@ function projectFs(files: Record<string, string> = {}) {
       '/bin/claude': '',
       '/bin/pi': '',
       '/bin/opencode': '',
+      [`${ENGINE_ONLY_BIN}/claude`]: '',
+      [`${ENGINE_ONLY_BIN}/pi`]: '',
+      [`${ENGINE_ONLY_BIN}/opencode`]: '',
       ...files,
     },
     cwd,
@@ -68,6 +76,30 @@ function captureLog() {
     lines.push(args.map(String).join(' '))
   })
   return () => lines.join('\n')
+}
+
+/**
+ * A `gh` that is on PATH but cannot read anything (unauthenticated), first on a real PATH so a
+ * host `gh` can never answer instead — the hermetic stand-in for a hosted runner before `gh auth`.
+ * The in-memory engine probe still finds `/bin/<engine>` behind it.
+ */
+function unauthenticatedGhOnPath(): void {
+  const bin = mkdtempSync(join(tmpdir(), 'pair-no-gh-'))
+  writeFileSync(
+    join(bin, 'gh'),
+    '#!/bin/sh\necho "To get started with GitHub CLI, please run:  gh auth login" >&2\nexit 4\n',
+  )
+  chmodSync(join(bin, 'gh'), 0o755)
+  vi.stubEnv('PATH', `${bin}:/bin`)
+}
+
+/**
+ * No `gh` anywhere on PATH: the only entry is a directory that exists solely in the in-memory
+ * project (holding the engines), so the real `execFileSync('gh', …)` finds nothing (ENOENT) on any
+ * host — a Linux `/bin` merged with `/usr/bin` could otherwise carry a real `gh`.
+ */
+function noGhOnPath(): void {
+  vi.stubEnv('PATH', ENGINE_ONLY_BIN)
 }
 
 const ok = (continueToken?: string): IterationResult => ({
@@ -454,10 +486,22 @@ auto-plan ⇒ pair-process-plan-tasks
 Precedence: auto-plan, auto-dev
 `
 
+  // r0-3 made the `## Max Parallelism` refusal unconditional in cycle mode, as AC7 states it. A
+  // fixture that declares it can therefore no longer reach the coordinator — which is the point,
+  // and is asserted on its own fixture below. The AC14 routing cases use this one instead: same
+  // mapping, no loop-mode expectation to refuse.
+  const DISPATCH_POLICY_NO_PARALLELISM = DISPATCH_POLICY.replace(/## Max Parallelism\n\n3\n/, '')
+
   const dispatchFs = (policy = DISPATCH_POLICY) =>
     projectFs({
       [`${cwd}/${POLICY_PATH}`]: policy,
       [`${cwd}/.claude/skills/pair-process-plan-tasks/SKILL.md`]: '',
+      // r0-4 widened AC11's skill-missing HALT to BOTH fallback reasons, so the `unmapped` half of
+      // AC14 now needs the cycle skill present like the `no-mapping-declared` half always did.
+      // The HALT itself keeps its own fixture, which deliberately omits these.
+      [`${cwd}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
+      [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs`]: '',
+      [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs`]: '',
     })
 
   /** Records what was audited, without touching a real working area. */
@@ -535,21 +579,80 @@ Precedence: auto-plan, auto-dev
     expect(calls[0]?.promptText).toContain('pair-process-plan-tasks')
   })
 
-  it('runs NOTHING on a card carrying no mapped tag, and says why (AC2)', async () => {
+  it('runs NOTHING on a card carrying no mapped tag, and says why (AC2) — a Draft card (US-487 AC14 fallback: not yet Ready)', async () => {
+    // US-487 AC14 changed what an `unmapped`/`no-mapping-declared` SKIP means: it is no longer
+    // unconditionally "nothing runs" — the card's OWN readiness now decides. This fixture pins the
+    // Draft sub-case, where US-217's original "nothing runs" claim still holds by a DIFFERENT
+    // route: routed to the matching preparation skill instead, never silently dropped.
     const output = captureLog()
     const { calls, audit, handler } = deps()
+    const cardReadiness = vi.fn(async () => 'draft' as const)
 
     const code = await handleRunCommand(
       parseRunCommand({ card: '218', cardTags: 'risk:green' }),
       dispatchFs(),
-      handler,
+      { ...handler, cardReadiness },
     )
 
     expect(code).toBe(0)
-    expect(calls).toHaveLength(0)
-    expect(output()).toContain('no mapped tag')
-    expect(audit.entries[0]?.line).toContain('event=skip')
-    expect(audit.entries[0]?.line).toContain('reason=unmapped')
+    expect(cardReadiness).toHaveBeenCalledWith('218')
+    expect(output()).toContain('pair-process-refine-story')
+    expect(output()).toContain('Draft')
+    // Routed to the preparation skill exactly as a mapped workflow would be — one engine dispatch,
+    // never the delivery-cycle coordinator (AC14: "routed... instead of entering prepare").
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.promptText).toContain('pair-process-refine-story')
+    // A route that spawns is never audited as a skip (a0 repair, AC14-G2).
+    expect(audit.entries.some(entry => entry.line.includes('event=skip'))).toBe(false)
+  })
+
+  it('AC14: a Refined card with no task breakdown routes to pair-process-plan-tasks instead of entering prepare', async () => {
+    const output = captureLog()
+    const { calls, handler } = deps()
+    const cardReadiness = vi.fn(async () => 'refined-no-breakdown' as const)
+
+    await handleRunCommand(parseRunCommand({ card: '218', cardTags: 'risk:green' }), dispatchFs(), {
+      ...handler,
+      cardReadiness,
+    })
+
+    expect(output()).toContain('pair-process-plan-tasks')
+    expect(calls[0]?.promptText).toContain('pair-process-plan-tasks')
+  })
+
+  it("AC14: a Ready card (DoR satisfied) with no mapping match starts THIS story's cycle coordinator, never a prep skill", async () => {
+    const output = captureLog()
+    const { handler } = deps()
+    const cardReadiness = vi.fn(async () => 'ready' as const)
+    const driveCycle = vi.fn(async () => ({ status: 'ready-for-merge', stagesRun: 3 }))
+
+    const code = await handleRunCommand(
+      parseRunCommand({ card: '218', cardTags: 'risk:green' }),
+      dispatchFs(DISPATCH_POLICY_NO_PARALLELISM),
+      { ...handler, cardReadiness, driveCycle },
+    )
+
+    expect(driveCycle).toHaveBeenCalledTimes(1)
+    expect(code).toBe(0)
+    expect(output()).not.toContain('pair-process-refine-story')
+    expect(output()).not.toContain('pair-process-plan-tasks')
+  })
+
+  it('AC14: `## Workflows` declared and the card carries the mapped tag ⇒ US-217 wins unchanged, the cycle coordinator never starts', async () => {
+    // Precedence, never presence/absence alone (Assumption 2 (a)): even a card that WOULD be Ready
+    // is not consulted for readiness at all when a route already matched — the mapping wins outright.
+    const { handler } = deps()
+    const cardReadiness = vi.fn(async () => 'ready' as const)
+    const driveCycle = vi.fn(async () => ({ status: 'ready-for-merge', stagesRun: 3 }))
+
+    await handleRunCommand(
+      parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+      dispatchFs(),
+      { ...handler, cardReadiness, driveCycle },
+    )
+
+    expect(driveCycle).not.toHaveBeenCalled()
+    expect(cardReadiness).not.toHaveBeenCalled()
   })
 
   it('runs nothing on a mapped but ineligible card, and logs the skip (BR3)', async () => {
@@ -567,19 +670,231 @@ Precedence: auto-plan, auto-dev
     expect(audit.entries[0]?.line).toContain('reason=ineligible')
   })
 
-  it('exits cleanly with "no mapping declared" when the adoption declares no workflows (AC4)', async () => {
+  it('exits cleanly with "no mapping declared" when the adoption declares no workflows (AC4) — Draft fallback (US-487 AC14)', async () => {
     const output = captureLog()
     const { calls, handler } = deps()
+    const cardReadiness = vi.fn(async () => 'draft' as const)
 
     const code = await handleRunCommand(
       parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
       dispatchFs(POLICY),
-      handler,
+      { ...handler, cardReadiness },
     )
 
     expect(code).toBe(0)
-    expect(calls).toHaveLength(0)
     expect(output()).toContain('no mapping declared')
+    // Draft ⇒ routed to the preparation skill, exactly as the `unmapped` Draft case above — the
+    // TWO skip reasons `no-mapping-declared` and `unmapped` share the SAME DoR-gated fallback
+    // (AC14's second half applies to both).
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.promptText).toContain('pair-process-refine-story')
+  })
+
+  // The card-reading half of AC14 on the SHIPPED default — no `tech/automation.md` at all — and on a
+  // present automation.md that declares no `## Workflows`: both are `no-mapping-declared`, neither
+  // declares `## Eligibility`, so nothing stands in the fallback's way and a READABLE card is routed
+  // by its own macrostate (maintainer decision 2026-09-22 (1): AC14 stands exactly as written).
+  const cycleSkill = {
+    [`${cwd}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
+    [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs`]: '',
+    [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs`]: '',
+  }
+  const noMappingProjects = [
+    { name: 'NO automation.md at all (the shipped default)', files: {} },
+    {
+      name: '`## Workflows` absent from a PRESENT automation.md',
+      files: { [`${cwd}/${POLICY_PATH}`]: '## Stop Predicate\n\ntag:risk:red ⇒ Done\n' },
+    },
+  ]
+
+  for (const project of noMappingProjects) {
+    it(`AC14 (${project.name}): a READABLE Ready card starts the delivery cycle — no mapping declared is not "card never read"`, async () => {
+      captureLog()
+      const { calls, handler } = deps()
+      const cardReadiness = vi.fn(async () => 'ready' as const)
+      const driveCycle = vi.fn(async () => ({ status: 'ready-for-merge', stagesRun: 1 }))
+
+      const code = await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev' }),
+        projectFs({ ...project.files, ...cycleSkill }),
+        { ...handler, cardReadiness, driveCycle },
+      )
+
+      expect(code).toBe(0)
+      expect(cardReadiness).toHaveBeenCalledWith('217')
+      expect(driveCycle).toHaveBeenCalledTimes(1)
+      expect(calls).toHaveLength(0)
+    })
+  }
+
+  // AC14-G1 — the ONE class where AC14 and the DoD's "github-dispatch-adapter smoke unchanged" meet
+  // (maintainer decision 2026-09-22 (1)): no mapping declared AND the card is UNREADABLE (`gh`
+  // missing, or on PATH but unauthenticated) ⇒ a clean skip: exit 0, the reason printed, nothing
+  // spawned, no DISPATCH-RECORD. The PRODUCTION readiness probe is used (no `cardReadiness`
+  // injected), so the tracker call really happens and really fails.
+  const unreadableTrackers = [
+    { name: '`gh` on PATH but unauthenticated', arrange: () => unauthenticatedGhOnPath() },
+    { name: 'no `gh` on PATH at all', arrange: () => noGhOnPath() },
+  ]
+  for (const project of noMappingProjects) {
+    for (const tracker of unreadableTrackers) {
+      it(`AC14-G1 (${project.name}, ${tracker.name}): the card is unreadable ⇒ a clean skip — exit 0, "no mapping declared" and card-unreadable printed, nothing spawned, no DISPATCH-RECORD`, async () => {
+        tracker.arrange()
+        const output = captureLog()
+        const { calls, handler } = deps()
+        const driveCycle = vi.fn(async () => ({ status: 'ready-for-merge', stagesRun: 1 }))
+
+        const code = await handleRunCommand(
+          parseRunCommand({ card: '217', cardTags: 'auto-dev' }),
+          projectFs({ ...project.files, ...cycleSkill }),
+          { ...handler, driveCycle },
+        )
+
+        expect(code).toBe(0)
+        expect(output()).toContain('no mapping declared')
+        // The reason is SAID, never swallowed: the skip names that the card could not be read.
+        expect(output()).toContain('card-unreadable')
+        expect(output()).not.toMatch(/^DISPATCH-RECORD:/m)
+        expect(calls).toHaveLength(0)
+        expect(driveCycle).not.toHaveBeenCalled()
+      })
+    }
+  }
+
+  // AC14-G1 × AC15 (a0 repair, mechanism `unreadable-under-declared-eligibility`): this repository's
+  // own shape — `## Eligibility` declared WITHOUT `## Workflows` — is still `no-mapping-declared`.
+  // Every AC15 gate state that lets the fallback READ the card (the label carried; label absent on a
+  // SUPERVISED run; label absent + `--autonomous --approve-ineligible`) meets the same unreadable
+  // tracker, and the answer is the same clean skip — never a card-unreadable throw (exit 1) just
+  // because an eligibility label is declared.
+  const eligibilityOnly = {
+    [`${cwd}/${POLICY_PATH}`]: '## Eligibility\n\nrisk:green\n',
+  }
+  const readingGateStates = [
+    {
+      name: 'the card CARRIES the declared label (autonomous)',
+      options: { card: '217', cardTags: 'risk:green', autonomous: true },
+    },
+    {
+      name: 'label absent, SUPERVISED',
+      options: { card: '217', cardTags: 'risk:red' },
+    },
+    {
+      name: 'label absent, --autonomous --approve-ineligible',
+      options: { card: '217', cardTags: 'risk:red', autonomous: true, approveIneligible: true },
+    },
+  ]
+  for (const state of readingGateStates) {
+    for (const tracker of unreadableTrackers) {
+      it(`AC14-G1 (\`## Eligibility\` declared, no \`## Workflows\`; ${state.name}; ${tracker.name}): the card is unreadable ⇒ a clean skip — exit 0, "no mapping declared" and card-unreadable printed, nothing spawned, no DISPATCH-RECORD`, async () => {
+        tracker.arrange()
+        const output = captureLog()
+        const { calls, handler } = deps()
+        const driveCycle = vi.fn(async () => ({ status: 'ready-for-merge', stagesRun: 1 }))
+
+        const code = await handleRunCommand(
+          parseRunCommand(state.options),
+          projectFs({ ...eligibilityOnly, ...cycleSkill }),
+          { ...handler, driveCycle },
+        )
+
+        expect(code).toBe(0)
+        expect(output()).toContain('no mapping declared')
+        expect(output()).toContain('card-unreadable')
+        expect(output()).not.toMatch(/^DISPATCH-RECORD:/m)
+        expect(calls).toHaveLength(0)
+        expect(driveCycle).not.toHaveBeenCalled()
+      })
+    }
+  }
+
+  it('AC14 (card unreadable under the fallback): a DECLARED mapping, an unmapped card and no reachable `gh` fail closed, typed card-unreadable — nothing spawned, never a guessed macrostate', async () => {
+    // Where a mapping IS declared the fallback applies and needs the card's own macrostate. A
+    // tracker that cannot be read is not "Draft" and not "Ready": the run refuses, naming why.
+    unauthenticatedGhOnPath()
+    captureLog()
+    const { calls, handler } = deps()
+    const driveCycle = vi.fn(async () => ({ status: 'ready-for-merge', stagesRun: 1 }))
+
+    await expect(
+      handleRunCommand(
+        parseRunCommand({ card: '218', cardTags: 'risk:green' }),
+        dispatchFs(DISPATCH_POLICY_NO_PARALLELISM),
+        { ...handler, driveCycle },
+      ),
+    ).rejects.toThrow(/card-unreadable/)
+    expect(calls).toHaveLength(0)
+    expect(driveCycle).not.toHaveBeenCalled()
+  })
+
+  describe('AC14 — a fallback route reports which route and why, and is never reported or audited as a skip', () => {
+    // Both no-mapping reasons reach the same DoR-gated fallback (AC14): `unmapped` (a mapping
+    // declared, the eligible card carries no mapped tag) and `no-mapping-declared` (here: the shipped
+    // default, no automation.md at all, so no `## Eligibility` stands in the way).
+    const entries = [
+      {
+        reason: 'unmapped',
+        printed: 'unmapped',
+        tags: 'risk:green',
+        fs: () => dispatchFs(DISPATCH_POLICY_NO_PARALLELISM),
+      },
+      {
+        reason: 'no-mapping-declared',
+        printed: 'no mapping declared',
+        tags: '',
+        fs: () =>
+          projectFs({
+            ...cycleSkill,
+            [`${cwd}/.claude/skills/pair-process-plan-tasks/SKILL.md`]: '',
+          }),
+      },
+    ]
+    const routes = [
+      { readiness: 'draft' as const, route: 'pair-process-refine-story' },
+      { readiness: 'refined-no-breakdown' as const, route: 'pair-process-plan-tasks' },
+    ]
+    for (const entry of entries) {
+      for (const { readiness, route } of routes) {
+        it(`${entry.reason}, ${readiness} ⇒ ${route}: the route and the reason are printed; no "Nothing was spawned.", no skip record`, async () => {
+          const output = captureLog()
+          const { calls, audit, handler } = deps()
+
+          const code = await handleRunCommand(
+            parseRunCommand({ card: '218', cardTags: entry.tags }),
+            entry.fs(),
+            { ...handler, cardReadiness: async () => readiness },
+          )
+
+          expect(code).toBe(0)
+          expect(calls).toHaveLength(1)
+          expect(output()).toContain(route)
+          expect(output()).toContain(entry.printed)
+          expect(output()).toMatch(/Definition of Ready/)
+          expect(output()).not.toContain('Nothing was spawned.')
+          expect(audit.entries.some(line => line.line.includes('event=skip'))).toBe(false)
+        })
+      }
+
+      it(`${entry.reason}, ready ⇒ the delivery cycle: the route and the reason are printed; no "Nothing was spawned.", no skip record`, async () => {
+        const output = captureLog()
+        const { audit, handler } = deps()
+        const driveCycle = vi.fn(async () => ({ status: 'ready-for-merge', stagesRun: 1 }))
+
+        const code = await handleRunCommand(
+          parseRunCommand({ card: '218', cardTags: entry.tags }),
+          entry.fs(),
+          { ...handler, cardReadiness: async () => 'ready' as const, driveCycle },
+        )
+
+        expect(code).toBe(0)
+        expect(driveCycle).toHaveBeenCalledTimes(1)
+        expect(output()).toMatch(/delivery cycle/i)
+        expect(output()).toContain(entry.printed)
+        expect(output()).toMatch(/Ready/)
+        expect(output()).not.toContain('Nothing was spawned.')
+        expect(audit.entries.some(line => line.line.includes('event=skip'))).toBe(false)
+      })
+    }
   })
 
   it('HALTs before spawning when a mapped workflow is not installed', async () => {
@@ -852,5 +1167,346 @@ Precedence: auto-plan, auto-dev
       // The holder's lock is NOT released by the run that failed to record its own skip.
       expect(lock.events).toEqual(['acquire:217'])
     })
+  })
+})
+
+/**
+ * US-487 — the delivery-cycle coordinator entry (`pair-cli run --card <id> [--pr] [--rounds]`),
+ * reached exactly when AC14's discriminator lands on "start the cycle" (Ready, no mapping match).
+ * `deps.driveCycle` is the SAME kind of seam `deps.runIteration` already is for loop mode: the
+ * outermost collaborator a handler-level test can inject, so this suite proves WIRING (what the
+ * handler decides to call, and what it prints before calling it) without re-proving `runCycle`'s
+ * own state machine (that is `cycle.test.ts`'s job) or the script bridge (`cycle-scripts.test.ts`'s).
+ */
+/**
+ * AC10's transparency block, one labelled line per value — engine AND where it came from, the skills
+ * path the scripts were resolved from, the run directory, the worktree root, the runId, the
+ * `--rounds` bound and the dispatch cap (`cycle-state.mjs`'s own `CAPS.dispatchesPerStory`).
+ */
+function assertTransparencyBlock(
+  output: string,
+  varying: { engine: RegExp; rounds: RegExp },
+): void {
+  expect(output).toMatch(varying.engine)
+  expect(output).toMatch(/^\s*Scripts: \S*\.claude\/skills\/pair-workflow-cycle\/scripts\s*$/m)
+  expect(output).toMatch(/^\s*Run dir: \S*\.pair\/working\/runs\/story-218\/218\s*$/m)
+  expect(output).toMatch(/^\s*Worktree root: \S*pair-worktrees\s*$/m)
+  expect(output).toMatch(/\brunId[=:]\s*story-218\b/)
+  expect(output).toMatch(varying.rounds)
+  expect(output).toMatch(/^\s*Dispatch cap: 40\s*$/m)
+}
+
+describe('handleRunCommand — the delivery-cycle coordinator entry (US-487)', () => {
+  // Carries neither `## Workflows` nor `## Eligibility`: a project that never opted into automation
+  // at all, which is the case AC14's DoR fallback is FOR (the command is being typed by a human).
+  // Keeping `## Eligibility` here while passing `cardTags: ''` would make every case below assert
+  // that an INELIGIBLE card reaches the delivery cycle — the hole `dor-fallback-eligibility.test.ts`
+  // exists to close, and not a property any test in this block is about.
+  // `## Max Parallelism` is deliberately absent too: `assertNoLoopModeConcerns` refuses a policy
+  // that declares it without `## Eligibility`, and the refusal has its own test below (`maxParallelismFs`).
+  const NO_MAPPING_POLICY = `## Stop Predicate
+
+tag:risk:red ⇒ Done
+max-iterations: 20
+`
+
+  const cycleFs = () =>
+    projectFs({
+      [`${cwd}/${POLICY_PATH}`]: NO_MAPPING_POLICY,
+      [`${cwd}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
+      [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs`]: '',
+      [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs`]: '',
+    })
+
+  function readyDeps() {
+    const { calls, runner } = fakeRunner([ok()])
+    const audit = {
+      entries: [] as Array<{ path: string; line: string }>,
+      append: (p: string, l: string) => audit.entries.push({ path: p, line: l }),
+    }
+    const lock = {
+      acquire: (({ card }: { card: string }) => ({
+        kind: 'acquired' as const,
+        lock: { path: `/locks/${card}`, release: () => {} },
+      })) as LockAcquirer,
+    }
+    const cardReadiness = vi.fn(async () => 'ready' as const)
+    const driveCycle = vi.fn(async () => ({ status: 'ready-for-merge', stagesRun: 1 }))
+    return {
+      calls,
+      audit,
+      driveCycle,
+      handler: {
+        runIteration: runner,
+        acquireLock: lock.acquire,
+        appendAudit: audit.append,
+        cardReadiness,
+        driveCycle,
+      },
+    }
+  }
+
+  beforeEach(() => vi.stubEnv('PATH', '/bin'))
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  it('AC10: prints the transparency block (engine, skills path, run dir, worktree root, runId, rounds bound, dispatch cap) before the FIRST spawn', async () => {
+    const output = captureLog()
+    const { handler, driveCycle } = readyDeps()
+    driveCycle.mockImplementation(async () => {
+      // The transparency block must already be on the console by the time the cycle would spawn
+      // its first stage — "resolve and print, then act" (AC10, mirrors #451 AC1).
+      // a0 repair (AC10-W1): each of the SEVEN values on its own labelled line, so removing any
+      // one line fails this row — a bare `toContain('claude')` was satisfied by the scripts path.
+      assertTransparencyBlock(output(), {
+        engine: /^\s*Engine: claude\b.*\(from schema default\)\s*$/m,
+        rounds: /^\s*Rounds bound: .*maxFixRounds/m,
+      })
+      return { status: 'ready-for-merge', stagesRun: 1 }
+    })
+
+    await handleRunCommand(parseRunCommand({ card: '218', cardTags: '' }), cycleFs(), handler)
+
+    expect(driveCycle).toHaveBeenCalledTimes(1)
+  })
+
+  it('AC10: the engine line names where the engine came from, and the rounds line the explicit bound (--engine pi --rounds 1)', async () => {
+    const output = captureLog()
+    const { handler, driveCycle } = readyDeps()
+    driveCycle.mockImplementation(async () => {
+      assertTransparencyBlock(output(), {
+        engine: /^\s*Engine: pi\b.*\(from --engine\)\s*$/m,
+        rounds: /^\s*Rounds bound: 1\b/m,
+      })
+      return { status: 'ready-for-merge', stagesRun: 1 }
+    })
+
+    await handleRunCommand(
+      parseRunCommand({
+        card: '218',
+        cardTags: '',
+        engine: 'pi',
+        rounds: '1',
+        autonomous: true,
+      }),
+      cycleFs(),
+      handler,
+    )
+
+    expect(driveCycle).toHaveBeenCalledTimes(1)
+  })
+
+  describe('AC12/AC8 — every non-merge terminal status is a non-zero exit that says why (a0 repair, AC12-G2)', () => {
+    const stops = [
+      {
+        name: 'failed-prepare (dead dispatch, retry spent)',
+        outcome: {
+          status: 'failed-prepare',
+          stagesRun: 2,
+          next: { step: 'prepare', mode: 'initial', phase: 'a0', attempt: 1 },
+        },
+        printed: ['failed-prepare'],
+      },
+      {
+        name: 'escalate (resolve blocked, a human decision owed)',
+        outcome: {
+          status: 'escalate',
+          stagesRun: 3,
+          next: {
+            step: 'blocked',
+            reason: 'escalate',
+            detail: 'r1-g1 needs a maintainer decision on finding F-3',
+          },
+        },
+        printed: ['escalate', 'r1-g1 needs a maintainer decision on finding F-3'],
+      },
+      {
+        name: 'incompatible (legacy run directory)',
+        outcome: {
+          status: 'incompatible',
+          stagesRun: 0,
+          next: {
+            step: 'blocked',
+            reason: 'schemaVersion 2 != 3 in a0-red-spec',
+            detail:
+              'legacy run directory — bind a new one with cycle-state.mjs migrate-acknowledge',
+          },
+        },
+        printed: ['incompatible', 'schemaVersion 2 != 3 in a0-red-spec', 'migrate-acknowledge'],
+      },
+    ]
+    for (const stop of stops) {
+      it(`${stop.name}: exit non-zero, the status and resolve's own reason printed verbatim`, async () => {
+        const output = captureLog()
+        const { handler, driveCycle } = readyDeps()
+        driveCycle.mockImplementation(async () => stop.outcome as never)
+
+        const code = await handleRunCommand(
+          parseRunCommand({ card: '218', cardTags: '' }),
+          cycleFs(),
+          handler,
+        )
+
+        expect(code).not.toBe(0)
+        for (const text of stop.printed) expect(output()).toContain(text)
+      })
+    }
+
+    it('rounds-bound-reached (--rounds 1): exit non-zero, printing the NEXT step the bound stopped before (AC8)', async () => {
+      const output = captureLog()
+      const { handler, driveCycle } = readyDeps()
+      driveCycle.mockImplementation(
+        async () =>
+          ({
+            status: 'rounds-bound-reached',
+            stagesRun: 4,
+            next: { step: 'green', mode: 'remediation', phase: 'r2-g1', round: 2, attempt: 1 },
+          }) as never,
+      )
+
+      const code = await handleRunCommand(
+        parseRunCommand({ card: '218', cardTags: '', rounds: '1' }),
+        cycleFs(),
+        handler,
+      )
+
+      expect(code).not.toBe(0)
+      expect(output()).toContain('rounds-bound-reached')
+      // AC8: "exits printing the `next` step" — the step and the phase it would have dispatched.
+      expect(output()).toMatch(/\bgreen\b/)
+      expect(output()).toContain('r2-g1')
+    })
+
+    it('ready-for-merge is the one zero exit (control)', async () => {
+      captureLog()
+      const { handler } = readyDeps()
+
+      const code = await handleRunCommand(
+        parseRunCommand({ card: '218', cardTags: '' }),
+        cycleFs(),
+        handler,
+      )
+
+      expect(code).toBe(0)
+    })
+  })
+
+  it('AC1/AC9: --run-id defaults to story-<id>, and reaches the cycle driver as the run identity', async () => {
+    const { handler, driveCycle } = readyDeps()
+
+    await handleRunCommand(parseRunCommand({ card: '218', cardTags: '' }), cycleFs(), handler)
+
+    expect(driveCycle).toHaveBeenCalledWith(
+      expect.objectContaining({ runId: 'story-218', card: '218' }),
+    )
+  })
+
+  it('AC8: an explicit --rounds is carried to the cycle driver, never widened past it', async () => {
+    const { handler, driveCycle } = readyDeps()
+
+    await handleRunCommand(
+      parseRunCommand({ card: '218', cardTags: '', rounds: '1' }),
+      cycleFs(),
+      handler,
+    )
+
+    expect(driveCycle).toHaveBeenCalledWith(expect.objectContaining({ rounds: 1 }))
+  })
+
+  it('AC2: an explicit --pr is carried to the cycle driver, so the FIRST dispatched stage is verify, never prepare', async () => {
+    // Round 2 repair: AC2's own interaction ("--pr flag -> resolve --entry pr -> first dispatched
+    // stage is verify, never prepare") was only proven at the SCRIPT layer (AC2-C1/AC2-W1,
+    // `cycle-scripts.test.ts`) — nothing proved `handler.ts`'s card-mode branch actually threads
+    // the parsed `--pr` value into `driveCycle`, unlike AC8's `--rounds` and AC1/AC9's `runId`.
+    const { handler, driveCycle } = readyDeps()
+
+    await handleRunCommand(
+      parseRunCommand({ card: '218', cardTags: '', pr: '42' }),
+      cycleFs(),
+      handler,
+    )
+
+    expect(driveCycle).toHaveBeenCalledWith(expect.objectContaining({ pr: 42 }))
+  })
+
+  it('AC7: a DECLARED `## Max Parallelism` does NOT block the coordinator — it addresses pair-loop, not this run', async () => {
+    // Rewritten 2026-09-22 with AC7 itself. Review finding r0-3 was right that the old guard
+    // (`eligibility === undefined`) matched nothing the AC said; making the refusal unconditional —
+    // the literal reading — then refused the coordinator on THIS repository, whose automation.md
+    // declares `## Max Parallelism` for pair-loop. The letter of the AC made the feature
+    // unreachable for every project that also runs a parallel loop.
+    //
+    // The distinction AC7 now draws: `--root`/`--filter` are arguments of THIS invocation, so
+    // whoever passes one is asking this run for something the cycle does not do. A declared
+    // `## Max Parallelism` is a key in a shared policy file addressed to ANOTHER consumer.
+    captureLog()
+    const { handler, driveCycle } = readyDeps()
+    const maxParallelismFs = projectFs({
+      [`${cwd}/${POLICY_PATH}`]: '## Max Parallelism\n\n3\n',
+      [`${cwd}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
+      [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs`]: '',
+      [`${cwd}/.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs`]: '',
+    })
+
+    await handleRunCommand(
+      parseRunCommand({ card: '218', cardTags: '' }),
+      maxParallelismFs,
+      handler,
+    )
+
+    expect(driveCycle).toHaveBeenCalledTimes(1)
+  })
+
+  it('AC7: --filter alongside --card is REFUSED once the card resolves to cycle-coordinator mode (Ready, no mapping) — a loop-mode concern', async () => {
+    captureLog()
+    const { handler, driveCycle } = readyDeps()
+
+    await expect(
+      handleRunCommand(
+        parseRunCommand({ card: '218', cardTags: '', filter: 'risk:green' }),
+        cycleFs(),
+        handler,
+      ),
+    ).rejects.toThrow(/--filter/)
+    expect(driveCycle).not.toHaveBeenCalled()
+  })
+
+  it('AC11: HALTs skill-missing, naming pair-workflow-cycle, when the entry resolves to cycle mode but the skill is not installed', async () => {
+    captureLog()
+    const { handler } = readyDeps()
+    const fsWithoutSkill = projectFs({ [`${cwd}/${POLICY_PATH}`]: NO_MAPPING_POLICY })
+
+    await expect(
+      handleRunCommand(parseRunCommand({ card: '218', cardTags: '' }), fsWithoutSkill, handler),
+    ).rejects.toThrow(/skill-missing.*pair-workflow-cycle/s)
+  })
+
+  it('AC9: a converged run reports "done" via the SAME driveCycle seam and spawns no NEW loop iteration', async () => {
+    const { calls, handler, driveCycle } = readyDeps()
+    driveCycle.mockImplementation(async () => ({ status: 'ready-for-merge', stagesRun: 0 }))
+
+    const code = await handleRunCommand(
+      parseRunCommand({ card: '218', cardTags: '' }),
+      cycleFs(),
+      handler,
+    )
+
+    expect(code).toBe(0)
+    expect(calls).toHaveLength(0) // loop-mode's own `runIteration` is never touched by cycle mode
+  })
+
+  it('AC12: never merges — the handler holds no merge-capable collaborator on the cycle-entry path', async () => {
+    const { handler, driveCycle } = readyDeps()
+
+    await handleRunCommand(parseRunCommand({ card: '218', cardTags: '' }), cycleFs(), handler)
+
+    // Structural: `deps` accepted by `handleRunCommand` carries no merge seam at all (see
+    // `RunHandlerDependencies` — `driveCycle` returns a STATUS, never an action), so a converged
+    // cycle cannot have called one.
+    // `driveCycle` is an ASYNC mock: `toHaveReturnedWith` would compare against the Promise it
+    // returns and pass for any resolved value. `toHaveResolvedWith` is what discriminates here.
+    expect(driveCycle).toHaveResolvedWith(expect.objectContaining({ status: 'ready-for-merge' }))
   })
 })

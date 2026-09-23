@@ -931,7 +931,7 @@ test('US-486 canary follow-up: `efforts` routes the five live roles independentl
   const effort = l => calls.find(c => c.opts.label === l).opts.effort
   assert.equal(effort('green:#292 r1-g1'), 'low')
   assert.equal(effort('prepare:#292 r1-g1'), 'medium')
-  assert.equal(effort('verify:#292 r1'), 'high', 'no override for this role: the stage keeps its own hardcoded default')
+  assert.equal(effort('verify:#292 r1'), 'xhigh', 'no override for this role: the stage keeps its own hardcoded default (xhigh for the review gate since 2026-09-22)')
   assert.match(await expectThrow({ args: { cards: [STORY], effort: 'medium-ish' } }), /unknown effort "medium-ish"/)
   assert.match(await expectThrow({ args: { cards: [STORY], efforts: { redd: 'low' } } }), /efforts\.redd/)
   // batch-wide `effort` overrides every stage's own default when no per-role `efforts` entry wins

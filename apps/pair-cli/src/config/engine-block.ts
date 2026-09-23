@@ -26,11 +26,26 @@ export interface EngineDeclaration {
   id: string
 }
 
-const DECLARABLE_FIELDS = ['id'] as const
+const DECLARABLE_FIELDS = ['id', 'bin', 'model'] as const
 
 export interface EngineBlockOutcome {
   /** The declared engine id, present only when the block is valid. */
   engine?: string
+  /**
+   * `engine.bin`: where THIS machine keeps the executable, when it is not resolvable on its own.
+   *
+   * A map keyed by engine id, so one config can pin several. It is the LAST word on resolution and
+   * the FIRST thing consulted — a machine that had to declare a path is a machine where guessing
+   * has already failed once.
+   */
+  bin?: Readonly<Record<string, string>>
+  /**
+   * `engine.model`: the model each engine drives, keyed by engine id.
+   *
+   * Run-wide, the analogue of `engine.id` — one engine, one model, every stage. PER-STAGE
+   * selection is #488's and is deliberately not this.
+   */
+  model?: Readonly<Record<string, string>>
   /** Validation errors, in the same style as the registry ones (empty ⇒ valid or absent). */
   errors: string[]
 }
@@ -75,5 +90,41 @@ export function readEngineDeclaration(
     }
   }
 
-  return { engine: id, errors: [] }
+  const bin = readIdKeyedPaths(block['bin'], knownEngineIds, 'bin')
+  if ('errors' in bin) return bin
+  const model = readIdKeyedPaths(block['model'], knownEngineIds, 'model')
+  if ('errors' in model) return model
+
+  return { engine: id, bin: bin.value, model: model.value, errors: [] }
+}
+
+/** `engine.bin` / `engine.model`: a map keyed by engine id. Absent is legal; a bad entry is not. */
+function readIdKeyedPaths(
+  raw: unknown,
+  knownEngineIds: readonly string[],
+  field: 'bin' | 'model',
+): { value: Record<string, string> } | EngineBlockOutcome {
+  if (raw === undefined) return { value: {} }
+  if (!isPlainObject(raw)) {
+    return {
+      errors: [
+        `engine.${field}: must be an object keyed by engine id, e.g. {"${field}": {"pi": "…"}}`,
+      ],
+    }
+  }
+  const value: Record<string, string> = {}
+  for (const [key, path] of Object.entries(raw)) {
+    if (!knownEngineIds.includes(key)) {
+      return {
+        errors: [
+          `engine.${field}: unknown engine '${key}' (supported: ${knownEngineIds.join(', ')})`,
+        ],
+      }
+    }
+    if (typeof path !== 'string' || path.trim().length === 0) {
+      return { errors: [`engine.${field}.${key}: must be a non-empty path`] }
+    }
+    value[key] = path.trim()
+  }
+  return { value }
 }

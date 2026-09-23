@@ -90,6 +90,13 @@ const PAIRS: MirrorPair[] = [
           '../../../packages/knowledge-hub/dataset/',
         ],
       },
+      'pair-contracts/role-packet.test.mjs': {
+        why:
+          'Same reason as cycle-coordinator: it drives the INSTALLED `pair-workflow-cycle` scripts ' +
+          'through `../../skills/`, a layout the dataset does not have, so a mirrored copy would ' +
+          'test nothing where it landed.',
+        unresolvableIfMirrored: ['../../skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs'],
+      },
     },
   },
   {
