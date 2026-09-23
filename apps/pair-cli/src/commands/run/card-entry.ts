@@ -17,6 +17,7 @@ import {
   recordSkip,
   reportSkippedDispatch,
   resolveAutonomyFor,
+  takeCardLock,
   type ResolvedRun,
   type RunContext,
   type RunHandlerDependencies,
@@ -175,7 +176,7 @@ async function handleDorFallback(
   input: DorFallbackInput,
   deps: RunHandlerDependencies,
 ): Promise<number> {
-  const { config, context, fs, cwd, decision } = input
+  const { config, context, decision } = input
 
   if (config.dryRun) {
     reportSkippedDispatch(context)
@@ -186,23 +187,84 @@ async function handleDorFallback(
   reportFallbackEntry(context, decision)
   announceIneligibleOverride(decision.card, context, config)
 
+  // AC2 (r0-2): a `--pr` entry is fix & review on a PR that already exists — the cycle's own
+  // `{verify, first, r0}`. The card's preparation state is not a question it asks, so a prep skill
+  // can never displace it: the readiness probe is not even consulted.
+  const pr = config.dispatch?.pr
+  if (pr !== undefined) {
+    console.log(
+      `  Fallback: --pr ${pr} — fix & review on an existing PR enters the delivery cycle at its ` +
+        `review stage; the card's preparation state is not consulted (AC2)`,
+    )
+    return await underCardLock(input, deps, () => enterCycle(input, deps))
+  }
+
   const readiness = await readReadiness(input, deps)
   if (readiness === undefined) {
     recordSkip(context, deps, decision)
     return 0
   }
-
   const prep = PREP_ROUTES[readiness]
-  if (prep !== undefined) {
-    return runPrepSkill({ config, context, fs, cwd, card: decision.card, ...prep }, deps)
+  if (prep === undefined) {
+    console.log(
+      `  Fallback: card ${decision.card} is Ready (Definition of Ready met) — entering the delivery cycle`,
+    )
+    return await underCardLock(input, deps, () => enterCycle(input, deps))
   }
-  console.log(
-    `  Fallback: card ${decision.card} is Ready (Definition of Ready met) — entering the delivery cycle`,
+  if (config.autonomous === true) return skipUnattendedPreparation(input, deps, prep)
+  return await underCardLock(input, deps, () =>
+    runPrepSkill(
+      { config, context, fs: input.fs, cwd: input.cwd, card: decision.card, ...prep },
+      deps,
+    ),
   )
+}
+
+function enterCycle(input: DorFallbackInput, deps: RunHandlerDependencies): Promise<number> {
+  const { config, context, fs, cwd, decision } = input
   return enterCycleCoordinator(
     { config, context, fs, cwd, card: decision.card, dorReason: decision.reason },
     deps,
   )
+}
+
+/**
+ * r0-4: both fallback routes SPAWN on the card, so both take the per-card lock the KB automation
+ * policy requires of every consumer — exactly as a mapped route does. Held ⇒ `run-in-progress`,
+ * nothing spawned; acquired ⇒ released on every exit, a throw included.
+ */
+async function underCardLock(
+  input: DorFallbackInput,
+  deps: RunHandlerDependencies,
+  run: () => Promise<number>,
+): Promise<number> {
+  const lock = takeCardLock(input.context, deps, input.decision.card)
+  if (lock === undefined) return 0
+  try {
+    return await run()
+  } finally {
+    lock.release()
+  }
+}
+
+/**
+ * AC14 as amended 2026-09-23 (r0-5): unattended runs never start a preparation skill. Refinement
+ * and planning open with a human interview, and the KB automation policy never runs them without
+ * one — so under `--autonomous` the route is SAID and skipped cleanly, and nothing is spawned.
+ */
+function skipUnattendedPreparation(
+  input: DorFallbackInput,
+  deps: RunHandlerDependencies,
+  prep: { skill: string; label: string },
+): number {
+  console.log(
+    `  Skipped: card ${input.decision.card} is ${prep.label} — needs a human: refinement/planning ` +
+      `is interactive (${prep.skill} opens with a human interview), so an unattended ` +
+      `(--autonomous) run never starts it. Run it without --autonomous, or refine the card first.`,
+  )
+  console.log(chalk.dim('  Nothing was spawned.'))
+  recordSkip(input.context, deps, input.decision)
+  return 0
 }
 
 /**
@@ -253,12 +315,12 @@ function reportFallbackEntry(context: RunContext, decision: SkipDecision): void 
   for (const warning of context.policy.warnings) console.log(chalk.yellow(`  ! ${warning}`))
 }
 
-/** Draft / Refined-without-breakdown ⇒ the preparation skill that moves the card toward Ready. */
+/** Draft / Ready-without-breakdown ⇒ the preparation skill that moves the card toward the cycle. */
 const PREP_ROUTES: Partial<Record<CardReadiness, { skill: string; label: string }>> = {
-  draft: { skill: 'pair-process-refine-story', label: 'Draft' },
+  draft: { skill: 'pair-process-refine-story', label: 'Draft (Definition of Ready not met)' },
   'refined-no-breakdown': {
     skill: 'pair-process-plan-tasks',
-    label: 'Refined (no task breakdown yet)',
+    label: 'Ready without a task breakdown yet',
   },
 }
 
@@ -305,9 +367,7 @@ async function runPrepSkill(input: PrepSkillInput, deps: RunHandlerDependencies)
 
   console.log(chalk.bold('pair-cli run'))
   console.log(`  ${describeEngineResolution(resolved.engine)}`)
-  console.log(
-    `  Fallback: card ${card} is ${label} (Definition of Ready not met) — routing to ${skill}`,
-  )
+  console.log(`  Fallback: card ${card} is ${label} — routing to ${skill}`)
 
   return driveRun(resolved, config, deps)
 }

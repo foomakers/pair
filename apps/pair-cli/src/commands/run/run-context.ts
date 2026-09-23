@@ -14,8 +14,8 @@ import { createProjectTrustProbe } from './trust-probe'
 import { readAutomationPolicy, type AutomationPolicy } from './automation-policy'
 import type { CardReadiness } from './cycle-scripts'
 import type { IterationResult } from './stream-reader'
-import { decideDispatch, describeDispatch, type DispatchDecision } from './dispatch'
-import type { LockAcquirer } from './card-lock'
+import { decideDispatch, describeDispatch, lockedSkip, type DispatchDecision } from './dispatch'
+import { acquireCardLock, type CardLock, type LockAcquirer } from './card-lock'
 import {
   appendAuditLine,
   auditRecordFor,
@@ -277,4 +277,26 @@ export function record(
   const entry = auditRecordFor(decision, event, ...(outcome !== undefined ? [{ outcome }] : []))
   ;(deps.appendAudit ?? appendAuditLine)(context.auditPath, renderAuditLine(entry))
   if (event === 'start') console.log(dispatchRecordLine(entry))
+}
+
+/**
+ * The per-card lock every consumer that SPAWNS on a card takes (KB automation policy: one run per
+ * card, a burst never yields a second). Held ⇒ the `run-in-progress` skip is reported and audited
+ * here and `undefined` is returned: the caller spawns nothing. The holder's own path and age, as
+ * the acquirer reported them — never re-derived, so the message names the directory actually probed.
+ */
+export function takeCardLock(
+  context: RunContext,
+  deps: RunHandlerDependencies,
+  card: string,
+): CardLock | undefined {
+  const acquisition = (deps.acquireLock ?? acquireCardLock)({
+    workingArea: context.workingArea,
+    card,
+  })
+  if (acquisition.kind === 'acquired') return acquisition.lock
+  const skipped = lockedSkip(card, acquisition)
+  console.log(`  ${describeDispatch(skipped)}`)
+  recordSkip(context, deps, skipped)
+  return undefined
 }

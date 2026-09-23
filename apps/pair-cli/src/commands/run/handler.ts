@@ -12,17 +12,16 @@ import {
 import { createPerimeter, describePerimeter } from './perimeter'
 import { describeMergePosture, describeParallelism } from './automation-policy'
 import { describeApprovalPosture, filterDeliveryFor } from './invocation'
-import { describeDispatch, lockedSkip, type DispatchDecision } from './dispatch'
-import { acquireCardLock } from './card-lock'
+import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
 import { handleSkipDecision } from './card-entry'
 import {
   declaredEngine,
   record,
   recordCrash,
-  recordSkip,
   resolveAutonomyFor,
   resolveContext,
+  takeCardLock,
   type ResolvedRun,
   type RunContext,
   type RunHandlerDependencies,
@@ -191,18 +190,8 @@ async function driveDispatchedCard(
   deps: RunHandlerDependencies,
 ): Promise<number> {
   const { resolved, decision, context, config } = card
-  const acquisition = (deps.acquireLock ?? acquireCardLock)({
-    workingArea: context.workingArea,
-    card: decision.card,
-  })
-  if (acquisition.kind === 'held') {
-    // The holder's own path and age, as the acquirer reported them — never re-derived here, so the
-    // message names the directory this run actually probed.
-    const skipped = lockedSkip(decision.card, acquisition)
-    console.log(`  ${describeDispatch(skipped)}`)
-    recordSkip(context, deps, skipped)
-    return 0
-  }
+  const lock = takeCardLock(context, deps, decision.card)
+  if (lock === undefined) return 0
 
   // Whether the `start` record actually reached the trail — the fact that separates "this run
   // crashed" from "this run never began", which are the same `catch` and NOT the same report.
@@ -223,6 +212,6 @@ async function driveDispatchedCard(
     recordCrash(context, deps, decision, { crash: error, started })
     throw error
   } finally {
-    acquisition.lock.release()
+    lock.release()
   }
 }
