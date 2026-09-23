@@ -1,5 +1,5 @@
 // azure-devops.mjs — the Azure DevOps adapter (US-492 T-5): cards on Azure Boards, pull requests
-// on Azure Repos, all through the `az` CLI and its `azure-devops` extension (CLI-first, AC6) —
+// on Azure Repos, all through the `az` CLI and its `azure-devops` extension (CLI-first) —
 // `az boards` / `az repos` where a verb exists, `az devops invoke` (the extension's own REST
 // passthrough) for PR threads, statuses, labels and iterations, which have no `az repos` verb
 // (azure-devops-implementation.md § Review Actions).

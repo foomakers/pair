@@ -27,9 +27,9 @@
 //   node … inputs --json '<effective inputs>'      → { inputsDigest }
 //   node … ac-hash --story <id> [--dir <run/story dir>] → { acHash }   canonical sha256 of the card body (the bound PM tool's readCard)
 //   node … bind-hosts --dir <run/story dir> [--from <project dir>]
-//     → { action: bound | reused, binding }   (US-492 AC2) the coordinator's ONE resolution of `pm-tool` /
+//     → { action: bound | reused, binding }   (US-492) the coordinator's ONE resolution of `pm-tool` /
 //     `code-host` (ADR-018), written to <dir>/.host-binding.json and reused verbatim by every later call
-//     naming that directory; a declared tool without an adapter in scripts/host/ ⇒ { error: 'host-unsupported' }.
+//     naming that directory; a declared tool without an adapter in scripts/host/ ⇒ { halt: 'host-unsupported', detail, side, declared, implemented }, exit 1.
 //   node … migrate-acknowledge --dir <new run/story dir> --legacy <legacy dir>[,<dir>...]
 //        --workflowVersion <v> --story <id> --run <runId> --head <40-hex> [--pr <n>] [--branch <b>]
 //     → { applied, migrationKey, predecessorRuns }   (US-479 B2, S10)
@@ -2744,14 +2744,14 @@ if (isMain()) {
       process.stdout.write(JSON.stringify({ acHash: h.acHash }) + '\n')
       process.exit(0)
     } else if (cmd === 'bind-hosts') {
-      // US-492 AC2: the coordinator's ONE resolution of the PM tool / code host for this run.
+      // US-492: the coordinator's ONE resolution of the PM tool / code host for this run.
       need('dir')
       if (opts.from !== undefined && hasParentHop(opts.from)) throw new Error(`path-escape: --from ${opts.from}`)
       try {
         out = writeBinding({ dir: opts.dir, from: opts.from })
       } catch (e) {
         if (e.kind !== 'host-unsupported') throw e
-        process.stdout.write(JSON.stringify({ error: 'host-unsupported', ...JSON.parse(e.detail), message: e.message }) + '\n')
+        process.stdout.write(JSON.stringify({ halt: 'host-unsupported', detail: e.message, ...JSON.parse(e.detail) }) + '\n')
         process.exit(1)
       }
       process.stdout.write(JSON.stringify(out) + '\n')

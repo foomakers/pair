@@ -14,9 +14,9 @@
 //              code, otherwise undeclared (every PR operation then fails `code-host-undeclared`).
 //   Spellings compare through the alias row of each adapter (case/separator-insensitive).
 //   A declared tool with no adapter file ⇒ `host-unsupported`, naming the declared value and the
-//   implemented set — never a silent fallback to GitHub (AC4).
+//   implemented set — never a silent fallback to GitHub .
 //
-// Binding (AC2): a coordinator resolves ONCE at its start — `cycle-state.mjs bind-hosts --dir
+// Binding: a coordinator resolves ONCE at its start — `cycle-state.mjs bind-hosts --dir
 // <run/story dir>` writes `.host-binding.json` there — and every later call that names the same
 // directory uses that binding, whatever way-of-working says by then. A call with no binding file
 // resolves from way-of-working once per process (memoized by adoption file).
@@ -109,7 +109,7 @@ export function findAdoptionFile(from) {
   }
 }
 
-// Once per process per adoption file (AC2 inside one invocation).
+// Once per process per adoption file (inside one invocation).
 const RESOLVED = new Map()
 function resolveFrom(from, registry) {
   const file = (from && findAdoptionFile(from)) || findAdoptionFile(process.cwd())

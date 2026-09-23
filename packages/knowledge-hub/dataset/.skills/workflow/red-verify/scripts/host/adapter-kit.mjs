@@ -6,17 +6,17 @@
 //
 // Shared here, never re-implemented per adapter:
 //   - the interface itself (INTERFACE_METHODS, and which side of ADR-018's split owns each one);
-//   - the card-hash canonicalization (AC5): `cardHash` is DERIVED from the adapter's `readCard`,
+//   - the card-hash canonicalization: `cardHash` is DERIVED from the adapter's `readCard`,
 //     so two hosts can differ only in how they fetch the card, never in how it is hashed;
 //   - the marker-keyed upsert algorithm (read back, edit in place, refuse ambiguity);
-//   - the CLI spawn (CLI-first, AC6) and the typed failure every caller maps to its own reason.
-// Credentials (AC7): nothing in this kit or in an adapter reads, writes, stores or prints a token —
+//   - the CLI spawn (CLI-first) and the typed failure every caller maps to its own reason.
+// Credentials: nothing in this kit or in an adapter reads, writes, stores or prints a token —
 // the host CLI authenticates itself from its own configuration; the child inherits the environment
 // untouched except for the GIT_* repository-pinning variables a git hook exports.
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 
-// The eight methods of the interface, named from the call sites the cycle scripts had (US-492 AC1).
+// The eight methods of the interface, named from the call sites the cycle scripts had (US-492).
 export const INTERFACE_METHODS = ['readCard', 'cardHash', 'prHead', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'closeAndCascade']
 // `cardHash` is supplied by defineAdapter over `readCard`; an adapter writes the other seven.
 export const REQUIRED_METHODS = INTERFACE_METHODS.filter(m => m !== 'cardHash')
@@ -46,7 +46,7 @@ export class HostError extends Error {
   }
 }
 
-// AC5 — the canonical hash of a card body: sha256 over the body exactly as the adapter's
+// The canonical hash of a card body: sha256 over the body exactly as the adapter's
 // `readCard` returned it (for GitHub, `gh issue view --json body -q .body`'s stdout, as the
 // pre-extraction `cycle-state.mjs cardHash` hashed it — so a handoff stamped before US-492 still
 // compares equal).
@@ -144,7 +144,7 @@ export function upsertByMarker({ marker, body, max, list, create, update }) {
 //   id          the canonical tool id this file implements (the file name without `.mjs`)
 //   aliases     every way-of-working spelling that names this product (pm-resolution alias row)
 //   hostsCode   whether the tool hosts repositories/PRs (ADR-018: omitted `code-host` ⇒ the PM tool)
-//   binaries    the CLI(s) the adapter spawns — CLI-first (AC6), nothing else is ever spawned
+//   binaries    the CLI(s) the adapter spawns — CLI-first, nothing else is ever spawned
 //               (`[]` only for a local, CLI-less tracker)
 //   create(transport) → the methods. `transport` is opaque to every caller: a test's stub binary
 //               path travels through it, the cycle scripts never name it.
@@ -163,7 +163,7 @@ export function defineAdapter(spec) {
     binaries: Object.freeze([...spec.binaries]),
     instantiate(transport = {}) {
       const methods = spec.create(transport) ?? {}
-      if ('cardHash' in methods) throw new HostError('adapter-error', { message: `adapter ${spec.id} must not define cardHash — it is derived from readCard (AC5)`, adapter: spec.id, method: 'cardHash' })
+      if ('cardHash' in methods) throw new HostError('adapter-error', { message: `adapter ${spec.id} must not define cardHash — it is derived from readCard`, adapter: spec.id, method: 'cardHash' })
       const missing = REQUIRED_METHODS.filter(m => typeof methods[m] !== 'function')
       if (missing.length) throw new HostError('adapter-error', { message: `adapter ${spec.id} is incomplete: missing ${missing.join(', ')}`, adapter: spec.id, method: missing[0] })
       const readCard = methods.readCard

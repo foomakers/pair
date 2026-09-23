@@ -58,6 +58,14 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir ".pair/working/runs/$run
   --story $card --inputs <digest> --runsRoot .pair/working/runs [--redirects <n>]
 ```
 
+The PM tool and code host are bound ONCE, here, before the first `resolve` of this invocation — every script a stage runs against this run directory (card hash, PR comment, check, label, scope decision) then goes through that binding, never a re-read of way-of-working mid-cycle (US-492, ADR-018 split):
+
+```bash
+node "$SKILL_DIR/scripts/cycle-state.mjs" bind-hosts --dir ".pair/working/runs/$runId/$card"
+```
+
+`bound` on a new run, `reused` on a resumed one — and on the run an `other-run` answer makes you adopt, bind that directory the same way before its first dispatch. Report `pm-tool` / `code-host` in the same line as the realization. `{ halt: "host-unsupported" }` ⇒ HALT `host-unsupported` (below) before any dispatch.
+
 The workflow version is never typed: `cycle-state.mjs version` prints the one value this cycle speaks, and every command below is handed that capture. A version outside `<major>.<minor>.<patch>` is refused by whichever command receives it, before it does any work — so a literal remembered from a previous session fails the run rather than mints an identity nothing downstream accepts.
 
 The digest is the script's own — never computed by hand, because both realizations must agree on it:
@@ -147,6 +155,7 @@ Two commands replace the hand edits US-487's run needed. They are the maintainer
 | `pipeline-invalid`       | A `--pipeline` key or value is outside the grammar the batch engine enforces on it      | The offending key and why — no argument packet and no prompt are rendered                   |
 | `workflow-version-invalid` | `--workflow-version` is not `<major>.<minor>.<patch>` — the grammar `publish` already enforces | The value, refused verbatim — no argument packet and no prompt are rendered from it. Pass the `version` command's output, never a remembered literal |
 | `profile-unresolved`     | `$profile` was given and cannot be read or does not validate                            | What was asked for and why it did not resolve                                              |
+| `host-unsupported`       | way-of-working declares a `pm-tool` / `code-host` with no adapter in `scripts/host/`  | The declared value, the side, and the implemented set — never a GitHub fallback. Adding one: the host-adapter extension guide |
 | `usage`                  | `$card` and `$pr` both given, or neither                                                | The two valid entries                                                                      |
 
 An unrecognized `resolve` output is a HALT too, never a silent degradation: this skill fails closed everywhere.

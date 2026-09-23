@@ -178,9 +178,9 @@ test('AC5: cardHash is ONE shared canonicalization over readCard — the same bo
 })
 
 test('AC5: the pre-US-492 hash is preserved — sha256 of the raw `gh issue view -q .body` output, so stamped handoffs still compare equal', () => {
-  const gh = fakeGh({ issues: { 42: { body: 'card body of #42\n' } } })
+  const gh = fakeGh({ issues: { 42: { body: 'card body of story 42\n' } } })
   const { acHash } = cardHash({ story: 42, ghBin: gh.ghBin })
-  assert.equal(acHash, 'sha256:' + createHashHex('card body of #42\n'))
+  assert.equal(acHash, 'sha256:' + createHashHex('card body of story 42\n'))
   assert.deepEqual(gh.calls()[0], ['issue', 'view', '42', '--json', 'body', '-q', '.body'], 'argv unchanged by the extraction')
 })
 function createHashHex(s) {
@@ -314,7 +314,8 @@ test('AC4: a declared host without scripts/host/<name>.mjs HALTs host-unsupporte
   const r = spawnSync(process.execPath, [CYCLE_STATE, 'bind-hosts', '--dir', runDir], { encoding: 'utf8' })
   assert.equal(r.status, 1)
   const out = JSON.parse(r.stdout)
-  assert.deepEqual([out.error, out.side, out.declared, out.implemented], ['host-unsupported', 'pm-tool', 'Linear', ['azure-devops', 'github']])
+  assert.deepEqual([out.halt, out.side, out.declared, out.implemented], ['host-unsupported', 'pm-tool', 'Linear', ['azure-devops', 'github']])
+  assert.match(out.detail, /implemented: azure-devops, github/)
   assert.equal(existsSync(join(runDir, BINDING_FILE)), false)
   // a split project whose PM tool hosts no code and declares no code host: PR operations fail typed
   const { runDir: d2 } = wowDir('- `pm-tool`: `github`\n')

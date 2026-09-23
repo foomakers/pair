@@ -141,6 +141,8 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
     )
     copyFileSync(join(realScriptsDir, 'cycle-state.mjs'), join(scriptsDir, 'cycle-state.mjs'))
     copyFileSync(join(realScriptsDir, 'cycle-dispatch.mjs'), join(scriptsDir, 'cycle-dispatch.mjs'))
+    // US-492: the PM/code-host adapters ship beside the scripts, in `host/`.
+    cpSync(join(realScriptsDir, 'host'), join(scriptsDir, 'host'), { recursive: true })
     runsRoot = join(projectRoot, '.pair/working/runs')
   })
   afterEach(() => {
@@ -184,6 +186,20 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
       runsRoot,
     })
     expect(prResult.next).toMatchObject({ step: 'verify', mode: 'first', phase: 'r0' })
+  })
+
+  it('bindHosts() binds the run ONCE (bound, then reused) and relays host-unsupported verbatim (US-492 AC2/AC4)', () => {
+    const dir = join(runsRoot, 'story-492/492')
+    const first = bridge().bindHosts(dir)
+    expect(first.action).toBe('bound')
+    expect(first.binding).toMatchObject({ pmTool: 'github', codeHost: 'github' })
+    expect(existsSync(join(dir, '.host-binding.json'))).toBe(true)
+    expect(bridge().bindHosts(dir).action).toBe('reused')
+
+    mkdirSync(join(projectRoot, '.pair/adoption/tech'), { recursive: true })
+    writeFileSync(join(projectRoot, '.pair/adoption/tech/way-of-working.md'), '- Jira is adopted for project management.\n')
+    expect(() => bridge().bindHosts(join(runsRoot, 'story-492/493'))).toThrow(/host-unsupported: .*"Jira".*implemented: azure-devops, github/)
+    expect(existsSync(join(runsRoot, 'story-492/493/.host-binding.json'))).toBe(false)
   })
 
   it('worktree() propagates a real HALT from cycle-dispatch.mjs verbatim (branch-invalid)', () => {

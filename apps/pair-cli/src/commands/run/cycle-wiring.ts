@@ -259,17 +259,21 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
   const bridge = createCycleScriptsBridge(ctx.location, ctx.cwd)
   const branch = resolveBranch(input.card, record.title, input.pr, ctx.cwd)
   const card = { id: input.card, branch, base: ctx.baseBranch, title: record.title }
+  const runDir = `${runsRoot}/${input.runId}/${input.card}`
+  // US-492 AC2: the run's PM tool / code host are resolved ONCE, here, before any stage runs —
+  // every later script call naming this run directory reuses the binding.
+  bridge.bindHosts(runDir)
   return {
     bridge,
     main,
     branch,
     title: record.title,
-    runDir: `${runsRoot}/${input.runId}/${input.card}`,
+    runDir,
     runsRoot,
     // r0-3: the freshness evidence the in-session coordinator's Step 1 hands `resolve` — both
     // produced by the scripts themselves, never computed here, so the two realizations agree.
     inputs: bridge.inputs(card, ctx.workflowVersion),
-    acHash: bridge.acHash(input.card),
+    acHash: bridge.acHash(input.card, runDir),
   }
 }
 
@@ -376,9 +380,12 @@ function adoptOtherRun(
   console.log(
     `  Run id: story ${input.card}'s cycle lives under run ${runId}, not ${input.runId} — continuing it there`,
   )
+  const runDir = `${co.runsRoot}/${runId}/${input.card}`
+  // The adopted run keeps the binding it was started with (`reused`), or is bound now.
+  co.bridge.bindHosts(runDir)
   return {
     input: { ...input, runId },
-    co: { ...co, runDir: `${co.runsRoot}/${runId}/${input.card}` },
+    co: { ...co, runDir },
   }
 }
 

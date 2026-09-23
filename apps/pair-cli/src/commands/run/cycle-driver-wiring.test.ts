@@ -74,8 +74,8 @@ describe('createDefaultCycleDriver — production wiring over the real scripts (
     // The installed layout the scripts locate their agent definitions from.
     const scripts = join(main, '.claude/skills/pair-workflow-cycle/scripts')
     mkdirSync(scripts, { recursive: true })
-    for (const f of ['cycle-state.mjs', 'cycle-dispatch.mjs'])
-      cpSync(join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts', f), join(scripts, f))
+    for (const f of ['cycle-state.mjs', 'cycle-dispatch.mjs', 'host'])
+      cpSync(join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts', f), join(scripts, f), { recursive: true })
     cpSync(join(REPO_ROOT, '.claude/agents'), join(main, '.claude/agents'), { recursive: true })
 
     // The operator's `gh`: one Ready card, and — for the `--pr` entry — its PR's head branch.
@@ -398,8 +398,8 @@ describe('handleRunCommand over the production driver — a legacy run directory
     git('update-ref', 'refs/remotes/origin/main', 'HEAD')
     const scripts = join(main, '.claude/skills/pair-workflow-cycle/scripts')
     mkdirSync(scripts, { recursive: true })
-    for (const f of ['cycle-state.mjs', 'cycle-dispatch.mjs'])
-      cpSync(join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts', f), join(scripts, f))
+    for (const f of ['cycle-state.mjs', 'cycle-dispatch.mjs', 'host'])
+      cpSync(join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts', f), join(scripts, f), { recursive: true })
     cpSync(join(REPO_ROOT, '.claude/agents'), join(main, '.claude/agents'), { recursive: true })
     const gh = join(bin, 'gh')
     writeFileSync(

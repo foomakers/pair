@@ -93,6 +93,8 @@ describe('r0-10: the cycle defaults come from the installed scripts', () => {
     expect(state).toContain('dispatchesPerStory: 7')
     writeFileSync(join(scripts, 'cycle-state.mjs'), state)
     writeFileSync(join(scripts, 'cycle-dispatch.mjs'), source('cycle-dispatch.mjs'))
+    // US-492: the PM/code-host adapters ship beside the scripts, in `host/`.
+    cpSync(join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts/host'), join(scripts, 'host'), { recursive: true })
     cpSync(join(REPO_ROOT, '.claude/agents'), join(main, '.claude/agents'), { recursive: true })
 
     writeFileSync(
