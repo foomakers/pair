@@ -26,7 +26,10 @@ import { readStateMapping, resolveCardReadiness, type CardDocument } from './car
  * CLI the user already logged into is not the same as embedding a token.
  */
 
-/** The card's own macrostate plus the title the branch name is derived from, in ONE tracker call. */
+/**
+ * The card template's literal `**Status**:` grammar (the a0 contract's). Production routing reads the
+ * board state through `readCardDocumentViaGh` + `card-readiness.ts` instead (review r0-1).
+ */
 export interface CardRecord {
   readonly status: string
   readonly hasTaskBreakdown: boolean
@@ -72,15 +75,6 @@ function ghIssueView(card: string, cwd: string, fields: string): string {
   }
 }
 
-/** Reads one card through the operator's own `gh`. Never parses prose it did not ask for. */
-export function readCardViaGh(card: string, cwd: string): CardRecord {
-  const parsed = JSON.parse(ghIssueView(card, cwd, 'title,body')) as {
-    title?: string
-    body?: string
-  }
-  return parseCardRecord(parsed.title ?? '', parsed.body ?? '')
-}
-
 interface GhCard {
   title?: string
   body?: string
@@ -97,6 +91,7 @@ function boardStateOf(card: GhCard): string | undefined {
   return onBoard ?? STATUS_RE.exec(card.body ?? '')?.[1]
 }
 
+/** Reads one card through the operator's own `gh`. Never parses prose it did not ask for. */
 export function readCardDocumentViaGh(card: string, cwd: string): CardDocument {
   let raw: string
   try {
@@ -257,7 +252,8 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
   // in — never inside a story or review worktree".
   const main = mainCheckout(ctx.cwd)
   const runsRoot = `${main}/.pair/working/runs`
-  const record = readCardViaGh(input.card, ctx.cwd)
+  // Title only: the board state is readiness's question, answered upstream (r0-1).
+  const record = readCardDocumentViaGh(input.card, ctx.cwd)
   const bridge = createCycleScriptsBridge(ctx.location)
   const branch = resolveBranch(input.card, record.title, input.pr, ctx.cwd)
   const card = { id: input.card, branch, base: ctx.baseBranch, title: record.title }
