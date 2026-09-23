@@ -184,17 +184,21 @@ export function computeRootPlan(input: RootPlanInput): RootPlan {
     ...c,
     tier: c.tier === 'untagged' || !c.tier ? FAIL_SAFE_TIER : c.tier,
   }))
-  const eligible =
-    input.eligibility === undefined ? tiered : tiered.filter(c => c.tier === input.eligibility)
-  if (input.eligibility !== undefined) {
-    for (const c of tiered) {
-      if (c.tier !== input.eligibility) {
-        excluded.push({
-          id: c.id,
-          reason: `not eligible (tier ${c.tier} !== ${input.eligibility})`,
-        })
-      }
-    }
+  // The child `run --card` gates `## Eligibility` on the labels it is forwarded, not on this tier:
+  // a card whose tier passes only through the fail-safe (untagged ⇒ risk:red) carries no label its
+  // child could admit it on, so it is excluded here rather than planned, spawned and refused (r0-2).
+  const notEligible = (c: (typeof tiered)[number]): string | undefined => {
+    if (input.eligibility === undefined) return undefined
+    if (c.tier !== input.eligibility) return `not eligible (tier ${c.tier} !== ${input.eligibility})`
+    if (!(c.labels ?? []).includes(input.eligibility))
+      return `not eligible (label ${input.eligibility} absent: its run --card gate reads the labels, tier ${c.tier} is the untagged fail-safe)`
+    return undefined
+  }
+  const eligible: typeof tiered = []
+  for (const c of tiered) {
+    const reason = notEligible(c)
+    if (reason === undefined) eligible.push(c)
+    else excluded.push({ id: c.id, reason })
   }
 
   const { resolved, audit: resolveAudit } = resolveCards(eligible)

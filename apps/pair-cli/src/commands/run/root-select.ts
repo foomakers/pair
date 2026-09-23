@@ -78,6 +78,21 @@ function parseLabels(value: unknown, id: string): string[] {
   return labels
 }
 
+/**
+ * The plan gates `## Eligibility` on `tier`, the card's own `run --card` on the forwarded labels:
+ * the two must name the same `risk:*` — the tier among the labels, or no risk label on an untagged
+ * card — or the plan would run a card its child refuses (r0-2).
+ */
+function checkTierAgainstLabels(id: string, tier: string, labels: readonly string[]): void {
+  const risk = labels.filter(label => label.startsWith('risk:'))
+  const untagged = tier === '' || tier === 'untagged'
+  if (untagged ? risk.length === 0 : risk.length === 1 && risk[0] === tier) return
+  fail(
+    `candidate ${id}: tier ${JSON.stringify(tier)} disagrees with its risk labels ` +
+      `${JSON.stringify(risk)} (labels ${JSON.stringify(labels)}) — the tier must be its one risk:* label`,
+  )
+}
+
 function parsePrerequisites(value: unknown, id: string): RootCandidate['prerequisites'] {
   if (value === undefined) return []
   if (!Array.isArray(value)) fail(`candidate ${id}: \`prerequisites\` must be an array`)
@@ -101,12 +116,15 @@ function parseCandidate(entry: unknown): RootCandidate {
     if (typeof value !== 'string') fail(`candidate ${id}: \`${field}\` must be a string`)
     return value
   }
+  const tier = text('tier')
+  const labels = parseLabels(c['labels'], id)
+  checkTierAgainstLabels(id, tier, labels)
   return {
     id,
     title: text('title'),
     branch: text('branch'),
-    tier: text('tier'),
-    labels: parseLabels(c['labels'], id),
+    tier,
+    labels,
     mutexResources: stringArray(c['mutexResources'], 'mutexResources', id),
     prerequisites: parsePrerequisites(c['prerequisites'], id),
   }
