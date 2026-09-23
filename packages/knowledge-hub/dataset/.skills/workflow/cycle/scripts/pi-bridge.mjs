@@ -200,12 +200,13 @@ function callCommand(opts) {
   const cwd = isAbsolute(packet.worktree) ? packet.worktree : resolvePath(packet.worktree)
   const task = `Read the stage skill first: ${skillFile}\n\n${packet.prompt}`
   let op = packet.context === 'reuse' ? 'resume' : 'fresh'
+  const rejected = op === 'resume' && ledger.pending?.op === 'resume' && ledger.pending.role === packet.agentType
   // `reuse` degrades to a fresh stage whenever the retained run cannot be resumed here. The cycle is
   // re-entrant, so fresh is correct — and said once, never silent.
   const why =
     op !== 'resume'
       ? null
-      : ledger.pending?.op === 'resume' && ledger.pending.role === packet.agentType
+      : rejected
         ? // the previous resume of this role was never recorded: the host rejected it (the call
           // errored, no JSON) — a retry never re-resumes the same id
           `the previous resume of run ${ledger.pending.runId ?? '?'} was never recorded (rejected by the host)`
@@ -225,6 +226,9 @@ function callCommand(opts) {
     op = 'fresh'
     degraded = `reuse→fresh: ${why}`
   }
+  // A host-rejected run stays rejected: drop it from the role in this same write, so a later
+  // overwrite of `pending` (an unrecorded fresh retry, another role's call) cannot revive it.
+  if (rejected && ledger.roles?.[packet.agentType]?.runId === ledger.pending.runId) delete ledger.roles[packet.agentType]
   const args =
     op === 'resume'
       ? { key, runId: prev.runId, task: `${rehydration({ ...prev, role: packet.agentType })}\n\n${task}` }
