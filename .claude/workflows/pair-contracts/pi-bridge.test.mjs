@@ -25,7 +25,10 @@ const CYCLE_SKILL = join(SKILLS, 'pair-workflow-cycle/SKILL.md')
 
 const run = (cli, args, env = {}) => {
   const base = { ...process.env }
+  // pi's own shell markers never leak in from the host running the suite (hermetic).
   delete base.PI_CODING_AGENT
+  delete base.PI_SESSION_ID
+  delete base.PI_SESSION_FILE
   const r = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...base, ...env } })
   let json = null
   try {
@@ -46,6 +49,21 @@ const PINNED_TOOL = {
 const toolJson = (t = PINNED_TOOL) => JSON.stringify(t)
 
 // ── the stub of pi-subagents' `subagent` tool ───────────────────────────────────────────────
+// Held to the pinned package, not to the bridge (US-503 r0-1, r0-2):
+//   - a retained run is resolvable ONLY from the parent session that created it
+//     (pi-subagents@0.71.0 src/runs/foreground/subagent-executor.js resolveForegroundResumeTarget
+//     filters by state.currentSessionId; src/runs/background/async-resume.js throws
+//     "Async run '<id>' was not found in the active session.");
+//   - `runs.run` resolves to a WorkflowScriptChildResult (src/workflows/scripted-workflow.d.ts),
+//     which declares NO `sessionFile` — the host keeps the child's session file to itself and
+//     only prints it in the revive header (async-resume.js buildRevivedAsyncTask).
+//   - every result carries `resumability` ({state:'resumable'} | {state:'not-resumable', reason})
+//     (scripted-workflow.d.ts; set by subagent-executor.js from resolveResumeTarget, reasons from
+//     retained-children.js: stopped run, no/missing session file, external runner, …), and a
+//     resume of a not-resumable child is rejected even inside its own session.
+// `world.session` is the parent pi session the coordinator runs in (pi exports it to its shell
+// tools as PI_SESSION_ID, pi 0.84.3 docs/environment-variables.md). `world.nextNotResumable`,
+// when set, is the reason the NEXT child comes back not resumable.
 function stubSubagent(argumentsObj, world) {
   assert.equal(typeof argumentsObj.workflowScript, 'string', 'a workflowScript call')
   assert.equal(argumentsObj.async, false, 'the coordinator blocks on the stage')
@@ -57,20 +75,36 @@ function stubSubagent(argumentsObj, world) {
       if (opts.resume) {
         const prev = world.retained.get(opts.resume)
         assert.ok(prev, `resume names a retained run: ${opts.resume}`)
-        // pi-subagents' own revive header (src/runs/background/async-resume.js).
-        task = `You are reviving a previous subagent conversation.\n\nOriginal run: ${opts.resume}\nOriginal agent: ${prev.agent}\nOriginal session file: ${prev.sessionFile}\n\nFollow-up:\n${opts.task}`
+        if (prev.parentSession !== world.session) throw new Error(`Async run '${opts.resume}' was not found in the active session.`)
+        if (prev.resumability.state !== 'resumable') throw new Error(`Foreground run '${opts.resume}' is not resumable: ${prev.resumability.reason}`)
+        // pi-subagents' own revive header, line for line (async-resume.js buildRevivedAsyncTask).
+        task = [
+          'You are reviving a previous subagent conversation.',
+          '',
+          `Original run: ${opts.resume}`,
+          `Original agent: ${prev.agent}`,
+          `Original session file: ${prev.sessionFile}`,
+          '',
+          "Use the stored session context as background. Answer the orchestrator's follow-up below. Do not assume the original child session is still running.",
+          '',
+          'Follow-up:',
+          opts.task,
+        ].join('\n')
       } else assert.equal(opts.context, 'fresh')
       const runId = `run-${++world.seq}`
       const sessionFile = join(world.sessions, `${runId}.jsonl`)
       const agent = opts.agent ?? world.retained.get(opts.resume).agent
-      world.retained.set(runId, { agent, sessionFile })
+      const resumability = world.nextNotResumable ? { state: 'not-resumable', reason: world.nextNotResumable } : { state: 'resumable' }
+      world.nextNotResumable = undefined
+      world.retained.set(runId, { agent, sessionFile, parentSession: world.session, resumability })
       children.push({ key, runId, task, resume: opts.resume ?? null })
       // The stage's last act: publish its handoff where its prompt says the run dir is.
       const m = /run directory `([^`]+)\/`/.exec(task)
       assert.ok(m, 'the task carries the run directory the stage publishes to')
       mkdirSync(join(world.main, m[1]), { recursive: true })
       writeFileSync(join(world.main, m[1], `${key}.handoff.json`), JSON.stringify({ runId, key }))
-      return { runId, sessionFile, ok: true, output: 'done' }
+      // Only fields WorkflowScriptChildResult declares.
+      return { key, ok: true, agent, runId, output: 'done', artifactPaths: [], resumability }
     },
   }
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
@@ -81,7 +115,7 @@ function world() {
   const main = mkdtempSync(join(tmpdir(), 'us503-'))
   const sessions = join(main, 'sessions')
   mkdirSync(sessions)
-  return { main, sessions, seq: 0, retained: new Map() }
+  return { main, sessions, seq: 0, retained: new Map(), session: 'pi-session-A' }
 }
 
 function packetFor(w, next) {
@@ -167,9 +201,10 @@ test('AC8: `call` checks the shape before rendering anything, and writes no ledg
 test('T4: fresh dispatch then same-agent resume — both publish the handoff; the resume revives the retained run and rehydrates deterministically', async () => {
   const w = world()
   const ledger = join(w.main, 'ledger.json')
+  const inA = { PI_SESSION_ID: w.session }
   // implement (fresh)
   const impl = packetFor(w, { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1, context: 'fresh' })
-  const c1 = bridge(['call', '--packet', impl.file, '--ledger', ledger, '--tool', toolJson()])
+  const c1 = bridge(['call', '--packet', impl.file, '--ledger', ledger, '--tool', toolJson()], inA)
   assert.equal(c1.status, 0, c1.out)
   assert.equal(c1.json.op, 'fresh')
   assert.equal(c1.json.tool, 'subagent')
@@ -179,26 +214,31 @@ test('T4: fresh dispatch then same-agent resume — both publish the handoff; th
   const s1 = await stubSubagent(c1.json.arguments, w)
   assert.equal(s1.children.length, 1)
   assert.ok(existsSync(join(w.main, '.pair/working/runs/story-42/42', `${s1.children[0].key}.handoff.json`)), 'fresh stage published its handoff')
-  const r1 = bridge(['record', '--ledger', ledger, '--result', JSON.stringify(s1.result)])
+  const r1 = bridge(['record', '--ledger', ledger, '--result', JSON.stringify(s1.result)], inA)
   assert.equal(r1.json.recorded, true)
   // green (reuse ⇒ resume the implementer)
   const green = packetFor(w, { step: 'green', mode: 'remediation', phase: 'r1', round: 1, attempt: 1, context: 'reuse', snapshot: 'a'.repeat(40), contract: '/c.json', base: 'b'.repeat(40), pr: 7 })
   assert.equal(green.packet.agentType, impl.packet.agentType, 'green runs as the same role')
-  const c2 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()])
+  const c2 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], inA)
   assert.equal(c2.status, 0, c2.out)
   assert.equal(c2.json.op, 'resume')
   assert.equal(c2.json.arguments.args.runId, s1.result.runId, 'resumes the retained run, not a new agent')
   assert.notEqual(c2.json.arguments.args.key, s1.children[0].key, 'a new workflow key per pass')
   const task = c2.json.arguments.args.task
   assert.ok(task.startsWith('You are the SAME'), 'rehydration leads the task')
-  assert.ok(task.includes(s1.result.sessionFile), 'names the prior session file by path')
   assert.match(task, /FIRST ACTION, before any other tool call: read that session file in full/)
+  // The pinned result carries no session file: the rehydration points at the header line the
+  // host prints ABOVE the follow-up, and the revived child really does see that line first.
+  assert.match(task, /"Original session file" line above/)
   const s2 = await stubSubagent(c2.json.arguments, w)
   assert.equal(s2.children[0].resume, s1.result.runId)
+  const revived = s2.children[0].task
+  const header = revived.indexOf('Original session file: ')
+  assert.ok(header >= 0 && header < revived.indexOf('You are the SAME'), 'the header line the rehydration names comes first')
   assert.ok(existsSync(join(w.main, '.pair/working/runs/story-42/42', `${s2.children[0].key}.handoff.json`)), 'resumed stage published its handoff')
-  bridge(['record', '--ledger', ledger, '--result', JSON.stringify(s2.result)])
+  bridge(['record', '--ledger', ledger, '--result', JSON.stringify(s2.result)], inA)
   // a second green resumes from the LATEST run id
-  const c3 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()])
+  const c3 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], inA)
   assert.equal(c3.json.arguments.args.runId, s2.result.runId)
 })
 
@@ -218,6 +258,168 @@ test('T4: a stage that returns no runId clears the role, so a later reuse never 
   const r = bridge(['record', '--ledger', ledger, '--result', JSON.stringify({ runId: null })])
   assert.equal(r.json.recorded, false)
   assert.equal(JSON.parse(readFileSync(ledger, 'utf8')).roles['pair-implementer'], undefined)
+})
+
+// ── r0-1: a retained run belongs to the pi session that created it ─────────────────────────
+// Session A dispatches implement and records its run; pi exits; session B resumes the cycle.
+const GREEN_REUSE = { step: 'green', mode: 'remediation', phase: 'r1', round: 1, attempt: 1, context: 'reuse', snapshot: 'a'.repeat(40), contract: '/c.json', base: 'b'.repeat(40), pr: 7 }
+async function implementInSessionA(w, ledger) {
+  const impl = packetFor(w, { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1, context: 'fresh' })
+  const inA = { PI_SESSION_ID: 'pi-session-A' }
+  w.session = 'pi-session-A'
+  const c1 = bridge(['call', '--packet', impl.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assert.equal(c1.status, 0, c1.out)
+  const s1 = await stubSubagent(c1.json.arguments, w)
+  assert.equal(bridge(['record', '--ledger', ledger, '--result', JSON.stringify(s1.result)], inA).json.recorded, true)
+  return { impl, runA: s1.result.runId }
+}
+const assertFreshNotForeign = (c, foreignRunId) => {
+  assert.equal(c.status, 0, c.out)
+  assert.equal(c.json.op, 'fresh', `a run retained by another pi session is never resumed (got ${c.json.op} ${c.json.arguments?.args?.runId ?? ''})`)
+  assert.match(c.json.degraded ?? '', /reuse→fresh/, 'the degradation is said once, never silent')
+  assert.equal(c.json.arguments.args.runId, undefined)
+  assert.notEqual(c.json.arguments.args.runId, foreignRunId)
+  assert.equal(c.json.arguments.args.agent, 'worker')
+}
+
+test('r0-1: reuse in a NEW pi session never resumes the run another session retained — fresh, degraded, and the dispatch runs', async () => {
+  const w = world()
+  const ledger = join(w.main, 'ledger.json')
+  const { runA } = await implementInSessionA(w, ledger)
+  w.session = 'pi-session-B'
+  const green = packetFor(w, GREEN_REUSE)
+  const c2 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], { PI_SESSION_ID: 'pi-session-B' })
+  assertFreshNotForeign(c2, runA)
+  const s2 = await stubSubagent(c2.json.arguments, w)
+  assert.equal(s2.children[0].resume, null, 'the stage ran as a fresh child in session B')
+})
+
+test('r0-1: a ledger entry with no parent-session binding (written before it existed) is never resumed', () => {
+  const w = world()
+  const ledger = join(w.main, 'l.json')
+  const green = packetFor(w, GREEN_REUSE)
+  writeFileSync(ledger, JSON.stringify({ dispatches: 1, roles: { [green.packet.agentType]: { runId: 'run-legacy', sessionFile: null, label: 'implement a0' } } }))
+  const c = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], { PI_SESSION_ID: 'pi-session-B' })
+  assertFreshNotForeign(c, 'run-legacy')
+})
+
+test('r0-1: with no PI_SESSION_ID at call time the session cannot be proven the same — fresh, never a resume', async () => {
+  const w = world()
+  const ledger = join(w.main, 'ledger.json')
+  const { runA } = await implementInSessionA(w, ledger)
+  const green = packetFor(w, GREEN_REUSE)
+  const c = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()])
+  assertFreshNotForeign(c, runA)
+})
+
+test('r0-1: after the degraded fresh stage, session B resumes ITS OWN retained run on the next reuse', async () => {
+  const w = world()
+  const ledger = join(w.main, 'ledger.json')
+  const { runA } = await implementInSessionA(w, ledger)
+  const inB = { PI_SESSION_ID: 'pi-session-B' }
+  w.session = 'pi-session-B'
+  const green = packetFor(w, GREEN_REUSE)
+  const c2 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], inB)
+  assertFreshNotForeign(c2, runA)
+  const s2 = await stubSubagent(c2.json.arguments, w)
+  assert.equal(bridge(['record', '--ledger', ledger, '--result', JSON.stringify(s2.result)], inB).json.recorded, true)
+  const c3 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], inB)
+  assert.equal(c3.status, 0, c3.out)
+  assert.equal(c3.json.op, 'resume')
+  assert.equal(c3.json.arguments.args.runId, s2.result.runId, 'resumes the run session B retained, not session A\'s')
+  const s3 = await stubSubagent(c3.json.arguments, w)
+  assert.equal(s3.children[0].resume, s2.result.runId)
+})
+
+// ── r0-1 (repair): a child the host reports NOT resumable is never resumed, same session or not ──
+test('r0-1: a retained child the host reports not-resumable is never resumed in the SAME session — fresh, degraded', async () => {
+  const w = world()
+  const ledger = join(w.main, 'ledger.json')
+  const inA = { PI_SESSION_ID: w.session }
+  const impl = packetFor(w, { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1, context: 'fresh' })
+  const c1 = bridge(['call', '--packet', impl.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assert.equal(c1.status, 0, c1.out)
+  w.nextNotResumable = 'stopped run'
+  const s1 = await stubSubagent(c1.json.arguments, w)
+  bridge(['record', '--ledger', ledger, '--result', JSON.stringify(s1.result)], inA)
+  const c2 = bridge(['call', '--packet', packetFor(w, GREEN_REUSE).file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assertFreshNotForeign(c2, s1.children[0].runId)
+  const s2 = await stubSubagent(c2.json.arguments, w)
+  assert.equal(s2.children[0].resume, null, 'the stage ran as a fresh child')
+})
+
+test('r0-1: a recorded result marked resumability not-resumable leaves nothing to resume', () => {
+  const w = world()
+  const ledger = join(w.main, 'l.json')
+  const inA = { PI_SESSION_ID: w.session }
+  const green = packetFor(w, GREEN_REUSE)
+  writeFileSync(ledger, JSON.stringify({ dispatches: 1, roles: {}, pending: { key: 'k', role: green.packet.agentType, label: 'implement a0', op: 'fresh', parentSession: w.session } }))
+  bridge(['record', '--ledger', ledger, '--result', JSON.stringify({ runId: 'run-stopped', ok: false, resumability: { state: 'not-resumable', reason: 'stopped run' } })], inA)
+  const c = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assertFreshNotForeign(c, 'run-stopped')
+})
+
+test('r0-1: a resume the host rejects falls back to a same-role fresh stage — record the failed pass, call again', async () => {
+  const w = world()
+  const ledger = join(w.main, 'ledger.json')
+  const inA = { PI_SESSION_ID: w.session }
+  const green = packetFor(w, GREEN_REUSE)
+  writeFileSync(ledger, JSON.stringify({ dispatches: 1, roles: { [green.packet.agentType]: { runId: 'run-gone', sessionFile: null, label: 'implement a0' } } }))
+  const c1 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()])
+  assert.equal(c1.status, 0, c1.out)
+  const r = bridge(['record', '--ledger', ledger, '--result', JSON.stringify({ runId: null, ok: false, error: "Async run 'run-gone' was not found in the active session." })], inA)
+  assert.equal(r.json.recorded, false)
+  const c2 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assertFreshNotForeign(c2, 'run-gone')
+  const s2 = await stubSubagent(c2.json.arguments, w)
+  assert.equal(s2.children[0].resume, null)
+})
+
+test('r0-1: a second call with no record after a resume (the host rejected it, Step 4 retries) runs fresh — never re-resumes the same id', async () => {
+  const w = world()
+  const ledger = join(w.main, 'ledger.json')
+  const inA = { PI_SESSION_ID: w.session }
+  const impl = packetFor(w, { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1, context: 'fresh' })
+  const c1 = bridge(['call', '--packet', impl.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assert.equal(c1.status, 0, c1.out)
+  const s1 = await stubSubagent(c1.json.arguments, w)
+  assert.equal(bridge(['record', '--ledger', ledger, '--result', JSON.stringify(s1.result)], inA).json.recorded, true)
+  const green = packetFor(w, GREEN_REUSE)
+  const c2 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assert.equal(c2.json.op, 'resume', c2.out)
+  // the host rejects that resume: the subagent call errors, there is no JSON to record
+  const c3 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assertFreshNotForeign(c3, c2.json.arguments.args.runId)
+  const s3 = await stubSubagent(c3.json.arguments, w)
+  assert.equal(s3.children[0].resume, null, 'the retry ran as a fresh child')
+  assert.equal(bridge(['record', '--ledger', ledger, '--result', JSON.stringify(s3.result)], inA).json.recorded, true)
+  const c4 = bridge(['call', '--packet', green.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assert.equal(c4.json.op, 'resume', c4.out)
+  assert.equal(c4.json.arguments.args.runId, s3.result.runId, 'the next reuse resumes the fresh retry, not the rejected id')
+})
+
+test('r0-1: Step 3 states the same-role fresh fallback for a rejected resume, so a retry never re-resumes the same id', () => {
+  const step3 = section(readFileSync(CYCLE_SKILL, 'utf8'), '### Step 3:')
+  assert.match(step3, /reject[^\n]*resume[^\n]*\bfresh\b|resume[^\n]*reject[^\n]*\bfresh\b/i, 'a rejected resume has a stated fresh fallback')
+  assert.match(step3, /not-resumable/, 'names the host\'s resumability state the bridge honours')
+  const recovery = step3.split('\n').filter(l => /reject[^\n]*resume|resume[^\n]*reject/i.test(l) && /\brecord\b/.test(l) && /runId[^\n]*null|null[^\n]*runId/.test(l))
+  assert.ok(recovery.length >= 1, 'the rejected-resume line names the recovery it relies on: `record` the failed pass with a null runId before calling again')
+})
+
+// ── r0-2: the workflow scripts read only what the pinned result declares ─────────────────────
+test('r0-2: the rendered workflow scripts never read `sessionFile` — WorkflowScriptChildResult has no such field', async () => {
+  const w = world()
+  const ledger = join(w.main, 'ledger.json')
+  const inA = { PI_SESSION_ID: w.session }
+  const impl = packetFor(w, { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1, context: 'fresh' })
+  const c1 = bridge(['call', '--packet', impl.file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assert.equal(c1.json.op, 'fresh', c1.out)
+  assert.doesNotMatch(c1.json.arguments.workflowScript, /sessionFile/, 'fresh script')
+  const s1 = await stubSubagent(c1.json.arguments, w)
+  bridge(['record', '--ledger', ledger, '--result', JSON.stringify(s1.result)], inA)
+  const c2 = bridge(['call', '--packet', packetFor(w, GREEN_REUSE).file, '--ledger', ledger, '--tool', toolJson()], inA)
+  assert.equal(c2.json.op, 'resume', c2.out)
+  assert.doesNotMatch(c2.json.arguments.workflowScript, /sessionFile/, 'resume script')
 })
 
 test('T4: the bridge spawns nothing — no process, so no stdin to leave open', () => {
@@ -263,6 +465,50 @@ test('T5/AC5/AC7: the cycle skill documents the in-pi consent flow, the decline 
   assert.match(md, /HALT `subagent-tool-mismatch`/)
   assert.match(md, /pi-bridge\.mjs" call/)
   assert.match(md, /pi-bridge\.mjs" record/)
+})
+
+// Section text between a heading and the next heading of the same level.
+const section = (md, heading) => {
+  const start = md.indexOf(heading)
+  assert.ok(start >= 0, `SKILL.md has ${heading}`)
+  const rest = md.slice(start + heading.length)
+  const end = rest.search(/\n### /)
+  return end < 0 ? rest : rest.slice(0, end)
+}
+
+test('r0-1: Step 3 states that a run retained by another pi session is never resumed (PI_SESSION_ID binding)', () => {
+  const step3 = section(readFileSync(CYCLE_SKILL, 'utf8'), '### Step 3:')
+  assert.match(step3, /PI_SESSION_ID/, 'names the session identity the ledger binds to')
+  assert.match(step3, /(another|other|different|new) (pi )?session[^\n]*reuse→fresh|reuse→fresh[^\n]*(another|other|different|new) (pi )?session/i)
+})
+
+test('r0-2: no doc claims the bridge names the session file by path — the pinned result returns none', () => {
+  const PI_DOC = fileURLToPath(new URL('../../../.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/pi.md', import.meta.url))
+  const guide = readFileSync(PI_DOC, 'utf8')
+  const step3 = section(readFileSync(CYCLE_SKILL, 'utf8'), '### Step 3:')
+  for (const [name, text] of [['pi.md', guide], ['SKILL.md Step 3', step3]]) assert.doesNotMatch(text, /session file[^\n]{0,40}by path|first, by path/i, `${name} claims a path the package does not return`)
+  assert.match(guide, /Original session file/, 'pi.md names the header line the rehydration points at')
+})
+
+test('r0-3: the reproduced state — probe finds a pinned project-local install while the session binds no pi row', () => {
+  const w = world()
+  mkdirSync(join(w.main, '.pi', 'npm', 'node_modules', 'pi-subagents'), { recursive: true })
+  writeFileSync(join(w.main, '.pi', 'npm', 'node_modules', 'pi-subagents', 'package.json'), JSON.stringify({ name: 'pi-subagents', version: '0.71.0' }))
+  const probe = bridge(['probe', '--project', w.main, '--agent-dir', join(w.main, 'agent')], { PI_CODING_AGENT: 'true' })
+  assert.deepEqual([probe.json.inPi, probe.json.status, probe.json.scope], [true, 'pinned', 'project'])
+  const r = run(DISPATCH_CLI, ['realizations', '--tools', JSON.stringify(['read', 'bash', 'edit', 'write'])])
+  assert.notEqual(r.status, 0)
+  assert.equal(r.json.halt, 'realization-unavailable')
+})
+
+test('r0-3: Step 0b maps installed-but-not-loaded (pinned/drift, no pi row bound) to ONE HALT with its remedy', () => {
+  const step0b = section(readFileSync(CYCLE_SKILL, 'utf8'), '### Step 0b:')
+  const lines = step0b.split('\n')
+  const halt = lines.filter(l => /HALT `realization-unavailable`/.test(l) && /pinned|drift/.test(l))
+  assert.equal(halt.length, 1, 'one stated HALT for an install the session did not load')
+  assert.match(halt[0], /trust/i, 'names the project-trust step (scope project)')
+  assert.match(halt[0], /new (pi )?session/i, 'names the new-session remedy')
+  for (const l of lines.filter(x => /^- `status: pinned`/.test(x))) assert.match(l, /bound|HALT/, `the pinned outcome is conditioned on the loaded tool: ${l}`)
 })
 
 // ── T-1 / T-2: the pi setup (AC2, AC3) and the pinned version's single record (T-6) ─────────
