@@ -97,6 +97,16 @@ const PAIRS: MirrorPair[] = [
           'test nothing where it landed.',
         unresolvableIfMirrored: ['../../skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs'],
       },
+      'pair-contracts/pi-bridge.test.mjs': {
+        why:
+          'Same reason as cycle-coordinator: it drives the INSTALLED `pair-workflow-cycle` scripts ' +
+          '(`pi-bridge.mjs`, `cycle-dispatch.mjs`) through `../../skills/`, a layout the dataset ' +
+          'does not have, so a mirrored copy would test nothing where it landed.',
+        unresolvableIfMirrored: [
+          '../../skills/pair-workflow-cycle/scripts/pi-bridge.mjs',
+          '../../skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs',
+        ],
+      },
     },
   },
   {
