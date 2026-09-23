@@ -136,7 +136,8 @@ export function readAutomationPolicy(fs: FileSystemService, projectRoot: string)
  * AC9: `max_parallelism > 1` is neither honoured nor silently ignored.
  *
  * One driver process drives one card at a time — the fan-out decision stays `pair-loop`'s, and
- * concurrency comes from running several driver processes. Saying so is the requirement.
+ * concurrency comes from several driver processes — which `--root --parallel` (US-491) starts as a
+ * pool of `run --card` children. Saying so is the requirement.
  */
 export function describeParallelism(policy: AutomationPolicy): string {
   if (policy.maxParallelism <= 1) {
@@ -144,8 +145,8 @@ export function describeParallelism(policy: AutomationPolicy): string {
   }
   return (
     `Parallelism: policy declares max ${policy.maxParallelism}, but a single \`pair-cli run\` process ` +
-    `drives 1 card at a time — run multiple driver processes for concurrency (the batch decision ` +
-    `remains pair-loop's)`
+    `drives 1 card at a time — for concurrency use \`--root <id> --parallel <n>\` (one ` +
+    `\`run --card\` process per card; the batch decision remains pair-loop's)`
   )
 }
 

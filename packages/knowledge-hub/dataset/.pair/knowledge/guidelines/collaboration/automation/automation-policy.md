@@ -177,6 +177,7 @@ risk:green: 5
 - **First line: a single positive integer** — the global ceiling `pair-loop` passes to `implement-batch` as `min(dependency-allowed, max_parallelism)`.
 - **Optional following lines: `<tier>: <positive integer>`** — a per-tier override, consulted only for a batch composed entirely of that tier; a mixed-tier batch uses the global value. A tier named here that the project's Tag Projection does not emit is malformed.
 - **Parallelism is always a ceiling, never a target.** `min(D, P)` with `D` eligible-and-unblocked cards always wins when `D < P`; the loop never pads a batch to reach the cap.
+- **The portable fan-out reads the same key.** `pair-cli run --root <id> --parallel <n>` (US-491) runs `pair-next --root` once, applies `pair-loop`'s dependency + mutex analysis (ported, parity-tested against the workflow), and starts at most `min(dependency-allowed, max_parallelism, n)` `pair-cli run --card` processes at once — the override lines included, applied exactly as above. It prints the plan (cards run, cards excluded and why, the effective limit and which of the three bound it) before any process starts; an over-cap card waits for a free slot, so `--parallel 1` is sequential. One card failing never aborts the others, each card's mutex resources are held through the card lock for the life of its process, and one `event=batch` line is appended to `## Audit Location` next to each card's own `start`/`end` lines. Merge stays each card's own (`## Auto-Advance`); the pool has no merge logic.
 
 ### Fail-safe default
 

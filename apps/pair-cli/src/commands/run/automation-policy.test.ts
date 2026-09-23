@@ -177,6 +177,7 @@ describe('describeParallelism (AC9)', () => {
     expect(describeParallelism(policy)).toContain('policy declares max 3')
     expect(describeParallelism(policy)).toContain('drives 1 card at a time')
     expect(describeParallelism(policy)).toContain("remains pair-loop's")
+    expect(describeParallelism(policy)).toContain('--root <id> --parallel <n>')
   })
 
   it('says nothing surprising when the policy is already sequential', () => {
