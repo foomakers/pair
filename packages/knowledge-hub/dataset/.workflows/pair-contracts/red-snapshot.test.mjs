@@ -1413,3 +1413,44 @@ test('US-506 T-7 w2 (AC11): a merged file edited AFTER the merge differs from th
   assert.ok(codes.includes('src/side.js'), JSON.stringify(codes))
   rmSync(cwd, { recursive: true, force: true })
 })
+
+// ── US-506 F-3 (AC11): only what the MERGE brought in is exempt — never a PR-owned deletion, never a
+// fixer's own revert to base content ──────────────────────────────────────────────────────────────
+function sealedStoryWith(prOwned) {
+  const { cwd } = repo()
+  git(cwd, 'checkout', '-q', '-b', 'story')
+  for (const [rel, content] of Object.entries(prOwned)) write(cwd, rel, content)
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'implement')
+  const head1 = git(cwd, 'rev-parse', 'HEAD')
+  const { contractPath } = redContract(cwd)
+  const s = seal({ pr: PR, phase: 'r1-g1', base: head1, contractPath, cwd })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  rmSync(join(cwd, contractPath))
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  git(cwd, 'checkout', '-q', 'main')
+  write(cwd, 'docs/x.md', '# x\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'main moves on')
+  git(cwd, 'checkout', '-q', 'story')
+  git(cwd, 'merge', '-q', '--no-ff', '--no-edit', 'main')
+  const runDir = runDirWith({ 'r1-g1-red-verify': { skill: 'red-verify', phase: 'r1-g1', verified: true, sealed: true, inputHead: head1 } })
+  return { cwd, head1, runDir }
+}
+test('US-506 F-3 w1 (AC11): a PR-owned file deleted after a base merge, outside fixScope, is still a breach', () => {
+  const { cwd, head1, runDir } = sealedStoryWith({ 'src/pr-only.js': 'export const p = 1\n' })
+  git(cwd, 'rm', '-q', 'src/pr-only.js')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'delete a PR-owned file out of scope')
+  const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
+  assert.deepEqual(chain.breaches.map(b => [b.code, b.path]), [['out-of-scope', 'src/pr-only.js']], JSON.stringify(chain))
+  assert.deepEqual(chain.mergedBase?.paths, ['docs/x.md'], 'only what the merge brought in is exempt')
+  rmSync(cwd, { recursive: true, force: true })
+})
+test('US-506 F-3 w2 (AC11): a fixer\'s own edit that restores an out-of-scope file to the base content — a path the merge never changed — is still a breach', () => {
+  const { cwd, head1, runDir } = sealedStoryWith({ 'src/other.js': 'export const o = 99 // changed by the implement stage\n' })
+  write(cwd, 'src/other.js', 'export const o = 0\n') // byte-identical to main, but the merge did not bring it
+  git(cwd, 'commit', '-q', '--no-verify', '-am', 'revert an out-of-scope file to base')
+  const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
+  assert.deepEqual(chain.breaches.map(b => [b.code, b.path]), [['out-of-scope', 'src/other.js']], JSON.stringify(chain))
+  rmSync(cwd, { recursive: true, force: true })
+})

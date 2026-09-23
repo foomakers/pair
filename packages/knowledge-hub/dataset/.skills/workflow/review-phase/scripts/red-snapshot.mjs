@@ -689,19 +689,38 @@ function readCustodyOverrides(runDir) {
 // With the declared base ref, a path whose blob at the segment end equals its blob at a merged
 // parent that IS the base (an ancestor of the ref) is not a PR change. A file edited after the merge
 // differs from the base and stays a breach; a merged branch that is not the base earns nothing.
+// Each qualifying merge in the segment, with the paths the merge ITSELF changed (its diff against its
+// first parent) and the merge-base it was taken from. Only those paths are candidates (US-506 F-3):
+// a fixer's own later edit that happens to restore base content is not something the merge brought.
 export function mergedBaseParents({ from, to, baseRef, cwd }) {
   if (!baseRef) return []
   const baseCommit = git(['rev-parse', '--verify', '-q', `${baseRef}^{commit}`], cwd, { allowFail: true })
   if (!baseCommit) return []
   const merges = (git(['rev-list', '--first-parent', '--merges', `${from}..${to}`], cwd, { allowFail: true }) ?? '').split('\n').filter(Boolean)
-  const parents = []
-  for (const m of merges)
-    for (const p of (git(['rev-list', '--parents', '-n', '1', m], cwd) ?? '').split(' ').slice(2))
-      if (git(['merge-base', '--is-ancestor', p, baseCommit], cwd, { allowFail: true }) !== null) parents.push(p)
-  return parents
+  const out = []
+  for (const m of merges) {
+    const [, first, ...others] = (git(['rev-list', '--parents', '-n', '1', m], cwd) ?? '').split(' ')
+    for (const p of others) {
+      if (git(['merge-base', '--is-ancestor', p, baseCommit], cwd, { allowFail: true }) === null) continue
+      const changed = new Set((git(['-c', 'core.quotePath=false', 'diff', '--name-only', first, m], cwd) ?? '').split('\n').filter(Boolean))
+      out.push({ merge: m, parent: p, changed, mergeBase: git(['merge-base', first, p], cwd, { allowFail: true }) })
+    }
+  }
+  return out
 }
 const blobAt = (rev, path, cwd) => git(['rev-parse', '--verify', '-q', `${rev}:${path}`], cwd, { allowFail: true })
-const identicalToMergedBase = (path, end, parents, cwd) => parents.some(p => blobAt(p, path, cwd) === blobAt(end, path, cwd))
+// Exempt ONLY a path the merge changed, whose content at the segment end is what the base carries:
+// byte-identical to a non-null base blob, or — for a deletion — a path the BASE removed that existed
+// before the branches split. A path the PR created (absent from the merge-base) deleted anywhere is
+// never exempt: a deletion of a PR-owned file is the PR's change.
+const identicalToMergedBase = (path, end, merged, cwd) =>
+  merged.some(({ parent, changed, mergeBase }) => {
+    if (!changed.has(path)) return false
+    const atEnd = blobAt(end, path, cwd)
+    const atBase = blobAt(parent, path, cwd)
+    if (atBase !== null) return atEnd === atBase
+    return atEnd === null && !!mergeBase && blobAt(mergeBase, path, cwd) !== null
+  })
 
 export function verifyChain({ pr, base, cwd, expectContract, runDir, baseRef }) {
   const overrides = runDir !== undefined ? readCustodyOverrides(runDir) : []
