@@ -195,8 +195,10 @@ function handoff(dir, phase, skill, fields, { pr = 7, predecessor, attempt } = {
   assert.equal(out.published, true, JSON.stringify(out))
   return out
 }
+// US-506 AC7: a contract attempt beyond the first is its own file, `<phase>-red-contract.attempt-N.json`.
+const contractFileOf = (phase, attempt = 1) => `/abs/${phase}-red-contract${attempt > 1 ? `.attempt-${attempt}` : ''}.json`
 const redSpec = (dir, phase, extra = {}, opts) =>
-  handoff(dir, phase, 'red-spec', { status: 'red', mode: phase === 'a0' ? 'initial' : 'remediation', contractPath: `/abs/${phase}-red-contract.json`, contractHash: `sha256:${'1'.repeat(64)}`, ...extra }, opts)
+  handoff(dir, phase, 'red-spec', { status: 'red', mode: phase === 'a0' ? 'initial' : 'remediation', contractPath: contractFileOf(phase, opts?.attempt ?? extra.attempt), contractHash: `sha256:${'1'.repeat(64)}`, ...extra }, opts)
 const redVerify = (dir, phase, extra = {}, opts) =>
   handoff(dir, phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, ...extra }, opts)
 const review = (dir, phase, extra = {}, opts) =>
@@ -415,7 +417,7 @@ test('resolve: a rejected contract goes back to preparation as a REPAIR carrying
   assert.equal(r.next.attempt, 2)
   assert.deepEqual(r.next.rejection, rejection)
   // repair published as attempt 2, rejected again
-  handoff(dir, 'r1-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: '/abs/r1-g1-red-contract.json', contractHash: `sha256:${'3'.repeat(64)}`, attempt: 2 }, { predecessor: 'r1-g1-red-verify' })
+  handoff(dir, 'r1-g1', 'red-spec', { status: 'red', mode: 'remediation', contractPath: '/abs/r1-g1-red-contract.attempt-2.json', contractHash: `sha256:${'3'.repeat(64)}`, attempt: 2 }, { predecessor: 'r1-g1-red-verify' })
   publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-verify', inputHead: SHA('a'), verified: false, findings: rejection, sealed: false }), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V, attempt: 2 })
   r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.equal(r.status, 'blocked')
@@ -924,7 +926,7 @@ test('readHandoffs ignores contracts, drafts, locks and the attempt suffix is pa
   assert.equal(list[0].name, 'a0-red-spec')
   assert.equal(list[0].attempt, 1)
   rmSync(join(dir, '.lock'), { recursive: true })
-  publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath: '/x', contractHash: 'sha256:' + '1'.repeat(64) }), phase: 'a0', skill: 'red-spec', workflowVersion: V, attempt: 2 })
+  publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath: '/x/a0-red-contract.attempt-2.json', contractHash: 'sha256:' + '1'.repeat(64) }), phase: 'a0', skill: 'red-spec', workflowVersion: V, attempt: 2 })
   const two = readHandoffs(dir)
   assert.deepEqual(two.map(h => h.attempt), [1, 2])
 })
@@ -2125,13 +2127,13 @@ test('T-20 (DT-03): a repair must verify every PRIOR closure assertion first —
   ]
   redVerify(dir, 'r1-g1', { verified: false, findings: rejection, sealed: false, snapshot: undefined }, { predecessor: 'r1-g1-red-spec' })
   // repair naming only row-1 in changedRows: refused before the write
-  let f = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: '/abs/r1-g1-red-contract.json', contractHash: `sha256:${'3'.repeat(64)}`, changedRows: ['row-1'] })
+  let f = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: '/abs/r1-g1-red-contract.attempt-2.json', contractHash: `sha256:${'3'.repeat(64)}`, changedRows: ['row-1'] })
   let out = publish({ dir, file: f, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, attempt: 2, predecessor: 'r1-g1-red-verify' })
   assert.equal(out.published, false)
   assert.equal(out.reason, 'repair-incomplete:row-2')
   assert.equal(existsSync(join(dir, 'r1-g1-red-spec.attempt-2.json')), false)
   // both rows named: publishes
-  f = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: '/abs/r1-g1-red-contract.json', contractHash: `sha256:${'3'.repeat(64)}`, changedRows: ['row-1', 'row-2'] })
+  f = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: '/abs/r1-g1-red-contract.attempt-2.json', contractHash: `sha256:${'3'.repeat(64)}`, changedRows: ['row-1', 'row-2'] })
   out = publish({ dir, file: f, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, attempt: 2, predecessor: 'r1-g1-red-verify' })
   assert.equal(out.published, true, JSON.stringify(out))
   assert.deepEqual(JSON.parse(readFileSync(join(dir, 'r1-g1-red-spec.attempt-2.json'), 'utf8')).changedRows, ['row-1', 'row-2'])
@@ -2139,7 +2141,7 @@ test('T-20 (DT-03): a repair must verify every PRIOR closure assertion first —
   const { dir: d2 } = runDir()
   redSpec(d2, 'a0')
   redVerify(d2, 'a0', { verified: false, findings: [{ location: 'x', severity: 'Minor', description: 'd', recommendation: 'r' }], sealed: false, snapshot: undefined }, { predecessor: 'a0-red-spec' })
-  const f2 = writeDraft(d2, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: '/abs/a0-red-contract.json', contractHash: `sha256:${'4'.repeat(64)}` })
+  const f2 = writeDraft(d2, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: '/abs/a0-red-contract.attempt-2.json', contractHash: `sha256:${'4'.repeat(64)}` })
   assert.equal(publish({ dir: d2, file: f2, phase: 'a0', skill: 'red-spec', workflowVersion: V, attempt: 2, predecessor: 'a0-red-verify' }).published, true)
 })
 
@@ -4180,4 +4182,74 @@ test('US-506 T-3 c2 (control, AC4/AC5): a PR-entry cycle and a run on the sealed
   redVerify(legacy, 'a0', {}, { predecessor: 'a0-red-spec' })
   implementOk(legacy, {}, { predecessor: 'a0-red-verify' })
   assert.equal(review(legacy, 'r0', {}, { predecessor: 'a0-implement-phase' }).published, true)
+})
+
+// ══ US-506 T-4 — a repair is checked against the LATEST rejection; every contract attempt is its own file ══
+// US-487's run: attempt 2's repair was checked against attempt 1's rejection (a cumulative `changedRows`
+// was forced), and a repair wrote over the contract the rejection named.
+const writeContract = (dir, name, body) => {
+  const path = join(dir, name)
+  writeFileSync(path, JSON.stringify(body))
+  return { path, hash: contractHash(body) }
+}
+const rejectionOf = rows => rows.map(rowId => ({ rowId, location: 'test/a.test.ts:3', severity: 'Major', description: `row ${rowId} cannot fail`, recommendation: 'fix the row' }))
+function rejectedTwice() {
+  const { dir } = runDir()
+  const c1 = writeContract(dir, 'r1-g1-red-contract.json', { attempt: 1, rows: ['row-1', 'row-2'] })
+  redSpec(dir, 'r1-g1', { contractPath: c1.path, contractHash: c1.hash, plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'x', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] } })
+  redVerify(dir, 'r1-g1', { verified: false, sealed: false, snapshot: undefined, findings: rejectionOf(['row-1']) }, { predecessor: 'r1-g1-red-spec' })
+  const c2 = writeContract(dir, 'r1-g1-red-contract.attempt-2.json', { attempt: 2, rows: ['row-1', 'row-2'] })
+  redSpec(dir, 'r1-g1', { contractPath: c2.path, contractHash: c2.hash, changedRows: ['row-1'], mode: 'repair' }, { predecessor: 'r1-g1-red-verify', attempt: 2 })
+  redVerify(dir, 'r1-g1', { verified: false, sealed: false, snapshot: undefined, findings: rejectionOf(['row-2']) }, { predecessor: 'r1-g1-red-spec', attempt: 2 })
+  return { dir, c1, c2 }
+}
+const repairDraft = (dir, extra) => writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', ...extra })
+
+test('US-506 T-4 w1 (AC6): a repair is checked against the MOST RECENT rejection — never the first one', () => {
+  const { dir } = rejectedTwice()
+  const c3 = writeContract(dir, 'r1-g1-red-contract.attempt-3.json', { attempt: 3 })
+  // answering attempt 2's rejection (row-2) is complete — attempt 1's row-1 was already repaired
+  const ok = publish({ dir, file: repairDraft(dir, { contractPath: c3.path, contractHash: c3.hash, changedRows: ['row-2'] }), phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r1-g1-red-verify', attempt: 3 })
+  assert.equal(ok.published, true, JSON.stringify(ok))
+  // …and answering only the FIRST rejection is incomplete against the latest one
+  const { dir: d2 } = rejectedTwice()
+  const c3b = writeContract(d2, 'r1-g1-red-contract.attempt-3.json', { attempt: 3 })
+  const stale = publish({ dir: d2, file: repairDraft(d2, { contractPath: c3b.path, contractHash: c3b.hash, changedRows: ['row-1'] }), phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r1-g1-red-verify', attempt: 3 })
+  assert.deepEqual([stale.published, stale.reason], [false, 'repair-incomplete:row-2'])
+})
+
+test('US-506 T-4 w2 (AC7): a contract attempt beyond the first is written as `<phase>-red-contract.attempt-N.json` — reusing an earlier attempt\'s file is refused', () => {
+  const { dir, c1 } = rejectedTwice()
+  const reuse = publish({ dir, file: repairDraft(dir, { contractPath: c1.path, contractHash: c1.hash, changedRows: ['row-2'] }), phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r1-g1-red-verify', attempt: 3 })
+  assert.deepEqual([reuse.published, reuse.reason], [false, 'contract-attempt-name:r1-g1-red-contract.attempt-3.json'])
+  const odd = writeContract(dir, 'repair.json', { attempt: 3 })
+  assert.equal(publish({ dir, file: repairDraft(dir, { contractPath: odd.path, contractHash: odd.hash, changedRows: ['row-2'] }), phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r1-g1-red-verify', attempt: 3 }).reason, 'contract-attempt-name:r1-g1-red-contract.attempt-3.json')
+})
+
+test('US-506 T-4 w3 (AC7): a repair that OVERWROTE the contract a rejection names is refused, naming the file', () => {
+  const { dir, c1 } = rejectedTwice()
+  writeFileSync(c1.path, JSON.stringify({ attempt: 1, rows: ['rewritten'] }))
+  const c3 = writeContract(dir, 'r1-g1-red-contract.attempt-3.json', { attempt: 3 })
+  const out = publish({ dir, file: repairDraft(dir, { contractPath: c3.path, contractHash: c3.hash, changedRows: ['row-2'] }), phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r1-g1-red-verify', attempt: 3 })
+  assert.deepEqual([out.published, out.reason], [false, 'contract-attempt-overwritten:r1-g1-red-contract.json'])
+})
+
+test('US-506 T-4 w4 (AC7): each rejection points at its OWN contract file, and `resolve` hands the repair the rejected attempt\'s own path and hash; attempt 1 survives', () => {
+  const { dir, c1, c2 } = rejectedTwice()
+  const v1 = JSON.parse(readFileSync(join(dir, 'r1-g1-red-verify.json'), 'utf8'))
+  const v2 = JSON.parse(readFileSync(join(dir, 'r1-g1-red-verify.attempt-2.json'), 'utf8'))
+  assert.equal(v1.contractPath, c1.path)
+  assert.equal(v2.contractPath, c2.path)
+  const r = resolve({ dir, workflowVersion: V, policy: { ...POLICY, redRepairs: 2 }, entry: 'pr', pr: 7 })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'attempt'), { step: 'prepare', mode: 'repair', attempt: 3 })
+  assert.deepEqual({ path: r.next.contract.path, hash: r.next.contract.hash }, { path: c2.path, hash: c2.hash })
+  assert.equal(contractHash(JSON.parse(readFileSync(c1.path, 'utf8'))), c1.hash, 'attempt 1 is intact')
+  // a rejection that names a contract other than the one it validated is refused; its own is accepted
+  const { dir: d3 } = runDir()
+  const k1 = writeContract(d3, 'r1-g1-red-contract.json', { attempt: 1 })
+  redSpec(d3, 'r1-g1', { contractPath: k1.path, contractHash: k1.hash })
+  const verdictNaming = contractPath => writeDraft(d3, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-verify', inputHead: SHA('a'), verified: false, sealed: false, findings: [], contractPath })
+  const other = publish({ dir: d3, file: verdictNaming(c1.path), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V, predecessor: 'r1-g1-red-spec' })
+  assert.deepEqual([other.published, other.reason], [false, 'contract-path-mismatch'])
+  assert.equal(publish({ dir: d3, file: verdictNaming(k1.path), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V, predecessor: 'r1-g1-red-spec' }).published, true)
 })

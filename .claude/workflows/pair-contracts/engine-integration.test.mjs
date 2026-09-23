@@ -667,8 +667,9 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
     nexts.push({ ...r.next, activeRisks: r.activeRegressionRisks, counters: r.counters })
     return { inputHead: H0, ...fields, next: r.next }
   }
-  const contract = phase => ({ path: join(dir, `${phase}-red-contract.json`), hash: D('1') })
-  const prepared = (phase, mode, extra = {}) => ({
+  // US-506 AC7: a contract attempt beyond the first is its own file
+  const contract = (phase, attempt = 1) => ({ path: join(dir, `${phase}-red-contract${attempt > 1 ? `.attempt-${attempt}` : ''}.json`), hash: D('1') })
+  const prepared = (phase, mode, extra = {}, attempt = 1) => ({
     status: 'red',
     mode,
     sourceOfTruth: 'the installer pipeline',
@@ -677,7 +678,7 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
     matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'c', oracle: 'pnpm test', expected: 'e', covers: ['AC-1'] }],
     redTests: [{ file: 'a.test.ts', kind: 'test', baseline: 'red', sha256: D('3'), command: 'pnpm exec vitest run a.test.ts', observed: 'FAIL 1 test' }],
     testExempt: false,
-    contractPath: contract(phase).path,
+    contractPath: contract(phase, attempt).path,
     contractHash: D('1'),
     ...extra,
   })
@@ -693,7 +694,7 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
       const guards = jsonArg(prompt, 'regressionGuards')
       if (guards) guardPrompts.push({ phase, guards: guards.map(g => g.riskId) })
       const attempt = Number(arg(prompt, 'attempt') ?? 1)
-      return through(phase, 'red-spec', prepared(phase, mode, { groupId: phase, remediationBatchId: `r${/^r(\d+)/.exec(phase)?.[1] ?? 0}`, ...(arg(prompt, 'regressionRepairOf') ? { regressionRepairOf: arg(prompt, 'regressionRepairOf'), regressionGuards: guards.map(g => g.riskId) } : {}), plan: { groups: [{ groupId: phase, findings: (jsonArg(prompt, 'findings') ?? []).map(f => f.id), owner: 'installer', mode: 'behavioral', allowedPaths: ['src/a.ts'], oracle: 'installer', dependsOn: [] }], carried: [] } }), { attempt })
+      return through(phase, 'red-spec', prepared(phase, mode, { groupId: phase, remediationBatchId: `r${/^r(\d+)/.exec(phase)?.[1] ?? 0}`, ...(arg(prompt, 'regressionRepairOf') ? { regressionRepairOf: arg(prompt, 'regressionRepairOf'), regressionGuards: guards.map(g => g.riskId) } : {}), plan: { groups: [{ groupId: phase, findings: (jsonArg(prompt, 'findings') ?? []).map(f => f.id), owner: 'installer', mode: 'behavioral', allowedPaths: ['src/a.ts'], oracle: 'installer', dependsOn: [] }], carried: [] } }, attempt), { attempt })
     }
     if (opts.agentType === 'pair-red-contract-verifier') {
       // US-479 F-RR-03: the independent verifier receives the authoritative guard set and echoes

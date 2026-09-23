@@ -51,7 +51,7 @@ function handoff(dir, phase, skill, fields, { pr = 7, predecessor, attempt } = {
   return out
 }
 const redSpec = (dir, phase, extra = {}, opts) =>
-  handoff(dir, phase, 'red-spec', { status: 'red', mode: phase === 'a0' ? 'initial' : 'remediation', contractPath: `/abs/${phase}-red-contract.json`, contractHash: `sha256:${'1'.repeat(64)}`, ...extra }, opts)
+  handoff(dir, phase, 'red-spec', { status: 'red', mode: phase === 'a0' ? 'initial' : 'remediation', contractPath: `/abs/${phase}-red-contract${(opts?.attempt ?? 1) > 1 ? `.attempt-${opts.attempt}` : ''}.json`, contractHash: `sha256:${'1'.repeat(64)}`, ...extra }, opts)
 const redVerify = (dir, phase, extra = {}, opts) =>
   handoff(dir, phase, 'red-verify', { verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, ...extra }, opts)
 const review = (dir, phase, extra = {}, opts) =>

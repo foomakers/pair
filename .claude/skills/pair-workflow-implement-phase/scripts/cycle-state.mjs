@@ -1273,21 +1273,49 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   // follows a red-verify rejection naming rowId/mechanismId gaps must list every one of them under
   // `changedRows`, or it is refused BEFORE the write (never accepted and reconciled later, canary
   // run 3: two named rewriters, one repaired, the other silently dropped to the next rejection).
+  // US-506 AC6: the rejection a repair answers is the MOST RECENT `red-verify` of that phase — the
+  // `--predecessor` name `<phase>-red-verify` names the STEP, and its latest attempt is the one the
+  // repair was dispatched with. Reading `<predecessor>.json` read attempt 1 forever, so on US-487 the
+  // second repair had to carry a cumulative `changedRows`.
+  const existingHandoffs = existsSync(dir) ? readHandoffs(dir) : []
   if (skill === 'red-spec' && predecessor && /-red-verify$/.test(predecessor)) {
-    const predFile = join(dir, `${predecessor}.json`)
-    if (existsSync(predFile)) {
-      let predData
+    const predPhase = predecessor.replace(/-red-verify$/, '')
+    const predData = existingHandoffs.filter(h => h.skill === 'red-verify' && h.phase === predPhase && h.data).pop()?.data
+    if (predData && predData.verified === false) {
+      const priorIds = (predData.findings ?? []).map(f => f?.rowId ?? f?.mechanismId).filter(Boolean)
+      const covered = new Set(data.changedRows ?? [])
+      const missing = priorIds.filter(id => !covered.has(id))
+      if (missing.length) return { published: false, reason: `repair-incomplete:${missing.join(',')}` }
+    }
+  }
+  const n = Number.isInteger(attempt) ? attempt : Number.isInteger(data.attempt) ? data.attempt : 1
+  // US-506 AC7: every contract attempt is its own file — `<phase>-red-contract.attempt-N.json` beyond
+  // the first — and a new attempt never lands on top of an earlier one. The earlier attempts' files
+  // are checked intact against the hash their own handoff recorded: a rejection names its contract,
+  // and a repair that overwrote it would leave the rejection pointing at bytes nobody validated.
+  if (skill === 'red-spec') {
+    const cp = String(data.contractPath ?? '').trim()
+    if (cp && n > 1) {
+      const expected = `${phase}-red-contract.attempt-${n}.json`
+      if (basename(cp) !== expected) return { published: false, reason: `contract-attempt-name:${expected}` }
+    }
+    for (const h of existingHandoffs.filter(x => x.skill === 'red-spec' && x.phase === phase && x.data)) {
+      const prev = String(h.data.contractPath ?? '').trim()
+      if (!prev || !/^sha256:[0-9a-f]{64}$/.test(String(h.data.contractHash ?? '')) || !existsSync(prev)) continue
+      let intact = false
       try {
-        predData = JSON.parse(readFileSync(predFile, 'utf8'))
-      } catch {
-        predData = null
-      }
-      if (predData && predData.verified === false) {
-        const priorIds = (predData.findings ?? []).map(f => f?.rowId ?? f?.mechanismId).filter(Boolean)
-        const covered = new Set(data.changedRows ?? [])
-        const missing = priorIds.filter(id => !covered.has(id))
-        if (missing.length) return { published: false, reason: `repair-incomplete:${missing.join(',')}` }
-      }
+        intact = contractHash(JSON.parse(readFileSync(prev, 'utf8'))) === h.data.contractHash
+      } catch {}
+      if (!intact) return { published: false, reason: `contract-attempt-overwritten:${basename(prev)}`, path: prev }
+    }
+  }
+  // US-506 AC7: a verdict points at the contract it validated — the one the latest preparation of the
+  // same phase wrote. Stamped when absent; a different one is refused.
+  if (skill === 'red-verify') {
+    const spec = existingHandoffs.filter(h => h.skill === 'red-spec' && h.phase === phase && h.data && String(h.data.contractPath ?? '').trim()).pop()
+    if (spec) {
+      if (data.contractPath !== undefined && data.contractPath !== spec.data.contractPath) return { published: false, reason: 'contract-path-mismatch', stated: data.contractPath, prepared: spec.data.contractPath }
+      data = { ...data, contractPath: spec.data.contractPath }
     }
   }
   // US-479 B1 (S3): the contradiction's budget key is derived HERE from the verified sealed
@@ -1341,7 +1369,6 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   }
   mkdirSync(dir, { recursive: true })
   if (predecessor && !existsSync(join(dir, `${predecessor}.json`))) return { published: false, reason: 'predecessor-missing', predecessor }
-  const n = Number.isInteger(attempt) ? attempt : Number.isInteger(data.attempt) ? data.attempt : 1
   const name = `${phase}-${skill}`
   const target = join(dir, n > 1 ? `${name}.attempt-${n}.json` : `${name}.json`)
   return withLock(dir, lockWaitMs, () => {
