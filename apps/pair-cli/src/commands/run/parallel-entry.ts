@@ -149,11 +149,13 @@ async function runCardInBatch({
   deps,
   card,
   finished,
+  heldLocks,
 }: {
   input: ParallelRunInput
   deps: RunHandlerDependencies
   card: RootCandidate
   finished: Map<string, CardOutcome>
+  heldLocks: Set<() => void>
 }): Promise<CardOutcome> {
   const outcome = await runPlannedCard({
     card,
@@ -162,6 +164,7 @@ async function runCardInBatch({
     workingArea: input.context.workingArea,
     acquireLock: deps.acquireLock ?? acquireCardLock,
     runCardProcess: deps.runCardProcess ?? spawnCardProcess,
+    heldLocks,
   })
   finished.set(card.id, outcome)
   console.log(`  Ended #${card.id}: ${outcome.outcome} — ${outcome.detail}`)
@@ -179,7 +182,12 @@ async function runBatch({
 }): Promise<number> {
   const startedAt = new Date().toISOString()
   const finished = new Map<string, CardOutcome>()
+  // Resource locks of the cards still running. `host.exit` follows `onInterrupt` at once, before a
+  // card's `finally` (it waits on the child's stream 'close'), so the interrupt path releases them.
+  const heldLocks = new Set<() => void>()
   const onInterrupt = (signal: string): void => {
+    for (const release of [...heldLocks]) release()
+    heldLocks.clear()
     const outcomes = plan.run.map(
       c =>
         finished.get(c.id) ?? {
@@ -197,7 +205,7 @@ async function runBatch({
       items: plan.run,
       limit: plan.limit.effective,
       mayStart: () => !isInterrupted(),
-      worker: card => runCardInBatch({ input, deps, card, finished }),
+      worker: card => runCardInBatch({ input, deps, card, finished, heldLocks }),
       notStarted: card => ({ id: card.id, outcome: 'interrupted', detail: 'never started' }),
       onWorkerError: (card, error) => ({
         id: card.id,

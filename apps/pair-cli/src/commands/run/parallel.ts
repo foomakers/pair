@@ -123,8 +123,13 @@ export function acquireResourceLocks(input: {
   readonly acquireLock: LockAcquirer
 }): ResourceLockOutcome {
   const held: CardLock[] = []
+  // Once only: the interrupt path may release before the card's own `finally` does, and a second
+  // release must never remove a lock another run acquired in between.
+  let released = false
   const releaseAll = (): void => {
-    for (const lock of held.reverse()) lock.release()
+    if (released) return
+    released = true
+    for (const lock of [...held].reverse()) lock.release()
   }
   for (const resource of [...new Set(input.card.mutexResources)]) {
     const outcome = input.acquireLock({
@@ -231,6 +236,12 @@ export interface RunPlannedCardInput {
   readonly acquireLock: LockAcquirer
   readonly runCardProcess: CardProcessRunner
   readonly now?: () => string
+  /**
+   * The driver's registry of resource locks still held by a running card: the release is added
+   * once acquired and removed once released, so an interrupted driver releases exactly the locks
+   * it acquired — before it exits, without waiting on the child's streams.
+   */
+  readonly heldLocks?: Set<() => void>
 }
 
 export async function runPlannedCard(input: RunPlannedCardInput): Promise<CardOutcome> {
@@ -250,6 +261,7 @@ export async function runPlannedCard(input: RunPlannedCardInput): Promise<CardOu
         `${locks.since !== undefined ? `, since ${locks.since}` : ''})`,
     }
   }
+  input.heldLocks?.add(locks.release)
   const startedAt = now()
   try {
     console.log(`  Started #${card.id}: pair-cli run --card ${card.id}`)
@@ -264,6 +276,7 @@ export async function runPlannedCard(input: RunPlannedCardInput): Promise<CardOu
     return { ...outcome, startedAt, endedAt: now() }
   } finally {
     locks.release()
+    input.heldLocks?.delete(locks.release)
   }
 }
 
