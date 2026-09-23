@@ -17,11 +17,9 @@ import { driveRun } from './loop-driver'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
 import {
   declaredEngine,
-  record,
-  recordCrash,
+  driveLockedCard,
   resolveAutonomyFor,
   resolveContext,
-  takeCardLock,
   type ResolvedRun,
   type RunContext,
   type RunHandlerDependencies,
@@ -191,40 +189,11 @@ interface DispatchedCard {
   readonly config: RunCommandConfig
 }
 
-/**
- * A routed card: locked, audited, driven, released — in that order, and the release is unconditional.
- *
- * The lock is taken AFTER every refusal has passed and BEFORE anything spawns, so a run that was
- * never going to start never parks a card, and a run that does start cannot be joined by the next
- * trigger in the burst.
- */
+/** A routed card: the shared locked + audited + interruptible run (`driveLockedCard`). */
 async function driveDispatchedCard(
   card: DispatchedCard,
   deps: RunHandlerDependencies,
 ): Promise<number> {
   const { resolved, decision, context, config } = card
-  const lock = takeCardLock(context, deps, decision.card)
-  if (lock === undefined) return 0
-
-  // Whether the `start` record actually reached the trail — the fact that separates "this run
-  // crashed" from "this run never began", which are the same `catch` and NOT the same report.
-  let started = false
-  try {
-    record(context, deps, decision, { event: 'start' })
-    started = true
-    const outcome = await driveRun(resolved, config, deps)
-    record(context, deps, decision, {
-      event: 'end',
-      outcome: outcome === 0 ? 'completed' : 'failed',
-    })
-    return outcome
-  } catch (error) {
-    // Every start gets an end, including this one. Without it the trail stops at `event=start` and
-    // the operator reading it the next morning cannot tell a crashed run from one still in flight —
-    // and the lock, released just below, offers no second signal either.
-    recordCrash(context, deps, decision, { crash: error, started })
-    throw error
-  } finally {
-    lock.release()
-  }
+  return await driveLockedCard({ context, decision }, deps, () => driveRun(resolved, config, deps))
 }

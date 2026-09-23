@@ -237,7 +237,7 @@ export function recordCrash(
   context: RunContext,
   deps: RunHandlerDependencies,
   decision: DispatchDecision,
-  { crash, started }: { crash: unknown; started: boolean },
+  { crash, started, workflow }: { crash: unknown; started: boolean; workflow?: string },
 ): void {
   if (!started) {
     throw new Error(
@@ -248,7 +248,11 @@ export function recordCrash(
     )
   }
   try {
-    record(context, deps, decision, { event: 'end', outcome: 'crashed' })
+    record(context, deps, decision, {
+      event: 'end',
+      outcome: 'crashed',
+      ...(workflow !== undefined && { workflow }),
+    })
   } catch (auditFailure) {
     throw new Error(
       `The run on card ${decision.card} crashed (${describeError(crash)}) and its \`end\` audit ` +
@@ -272,9 +276,12 @@ export function record(
   context: RunContext,
   deps: RunHandlerDependencies,
   decision: DispatchDecision,
-  { event, outcome }: { event: AuditEvent; outcome?: string },
+  { event, outcome, workflow }: { event: AuditEvent; outcome?: string; workflow?: string },
 ): void {
-  const entry = auditRecordFor(decision, event, ...(outcome !== undefined ? [{ outcome }] : []))
+  const entry = auditRecordFor(decision, event, {
+    ...(outcome !== undefined && { outcome }),
+    ...(workflow !== undefined && { workflow }),
+  })
   ;(deps.appendAudit ?? appendAuditLine)(context.auditPath, renderAuditLine(entry))
   if (event === 'start') console.log(dispatchRecordLine(entry))
 }
@@ -299,4 +306,57 @@ export function takeCardLock(
   console.log(`  ${describeDispatch(skipped)}`)
   recordSkip(context, deps, skipped)
   return undefined
+}
+
+/** One card a run spawns on: the decision that led there, and the workflow it actually runs. */
+export interface LockedCardRun {
+  readonly context: RunContext
+  readonly decision: DispatchDecision
+  /** Named when the decision does not say it (the DoR fallback, the `--pr` entry) — see `auditRecordFor`. */
+  readonly workflow?: string
+}
+
+/**
+ * Every route that SPAWNS on a card, mapped or fallback: locked, audited, driven, released — in that
+ * order, and the release is unconditional (KB automation policy: one run per card; every dispatch
+ * leaves start + end in `## Audit Location`, and the start is the `DISPATCH-RECORD:` line the host
+ * adapter posts). One implementation, so a fallback route can never again spawn with less than the
+ * mapped route leaves behind (r1-1).
+ *
+ * The lock is taken AFTER every refusal has passed and BEFORE anything spawns, so a run that was
+ * never going to start never parks a card, and a run that does start cannot be joined by the next
+ * trigger in the burst.
+ */
+export async function driveLockedCard(
+  subject: LockedCardRun,
+  deps: RunHandlerDependencies,
+  run: () => Promise<number>,
+): Promise<number> {
+  const { context, decision, workflow } = subject
+  const named = workflow !== undefined ? { workflow } : {}
+  const lock = takeCardLock(context, deps, decision.card)
+  if (lock === undefined) return 0
+
+  // Whether the `start` record actually reached the trail — the fact that separates "this run
+  // crashed" from "this run never began", which are the same `catch` and NOT the same report.
+  let started = false
+  try {
+    record(context, deps, decision, { event: 'start', ...named })
+    started = true
+    const outcome = await run()
+    record(context, deps, decision, {
+      event: 'end',
+      outcome: outcome === 0 ? 'completed' : 'failed',
+      ...named,
+    })
+    return outcome
+  } catch (error) {
+    // Every start gets an end, including this one. Without it the trail stops at `event=start` and
+    // the operator reading it the next morning cannot tell a crashed run from one still in flight —
+    // and the lock, released just below, offers no second signal either.
+    recordCrash(context, deps, decision, { crash: error, started, ...named })
+    throw error
+  } finally {
+    lock.release()
+  }
 }

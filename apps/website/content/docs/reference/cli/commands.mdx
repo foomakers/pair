@@ -815,7 +815,9 @@ and the order is fixed — **the tag mapping is asked first, always**:
      that one run through, says so, and writes nothing. A supervised run is not held back by it.
    - **`--pr <n>`** goes straight to fix-and-review in the cycle — even on a card whose tag maps a
      workflow; the card's preparation state is not consulted.
-   - **Every route that spawns takes the per-card lock**, like a mapped route.
+   - **Every route that spawns is a dispatch**, like a mapped route: it takes the per-card lock and
+     writes `start`/`end` to the audit trail, printing the start as the `DISPATCH-RECORD:` line with
+     the workflow it runs (`pair-workflow-cycle`, or the preparation skill).
    - **The card cannot be read** (no `gh`, or unauthenticated) and no `## Workflows` is declared ⇒ a
      clean skip that says `card-unreadable`; with a mapping declared it fails closed.
 

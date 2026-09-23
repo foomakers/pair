@@ -14,10 +14,10 @@ import { driveRun } from './loop-driver'
 import { enterCycleCoordinator, resolveEngineFor } from './cycle-entry'
 import {
   declaredEngine,
+  driveLockedCard,
   recordSkip,
   reportSkippedDispatch,
   resolveAutonomyFor,
-  takeCardLock,
   type ResolvedRun,
   type RunContext,
   type RunHandlerDependencies,
@@ -203,10 +203,10 @@ async function handleDorFallback(
     console.log(
       `  Fallback: card ${decision.card} is Ready (Definition of Ready met) — entering the delivery cycle`,
     )
-    return await underCardLock(entry, deps, () => enterCycle(entry, deps))
+    return await underCardLock(entry, deps, CYCLE_WORKFLOW, () => enterCycle(entry, deps))
   }
   if (config.autonomous === true) return skipUnattendedPreparation(input, deps, prep)
-  return await underCardLock(entry, deps, () =>
+  return await underCardLock(entry, deps, prep.skill, () =>
     runPrepSkill(
       { config, context, fs: input.fs, cwd: input.cwd, card: decision.card, ...prep },
       deps,
@@ -251,26 +251,25 @@ export async function enterCycleAtReview(
     console.log(chalk.dim('  Dry run: nothing was spawned.'))
     return 0
   }
-  return await underCardLock(entry, deps, () => enterCycle(entry, deps))
+  return await underCardLock(entry, deps, CYCLE_WORKFLOW, () => enterCycle(entry, deps))
 }
 
+/** The workflow a cycle entry runs, as the audit trail and the `DISPATCH-RECORD:` name it. */
+const CYCLE_WORKFLOW = 'pair-workflow-cycle'
+
 /**
- * r0-4: both fallback routes SPAWN on the card, so both take the per-card lock the KB automation
- * policy requires of every consumer — exactly as a mapped route does. Held ⇒ `run-in-progress`,
- * nothing spawned; acquired ⇒ released on every exit, a throw included.
+ * r0-4 / r1-1: every fallback route SPAWNS on the card, so it runs exactly as a mapped route does
+ * (`driveLockedCard`): the per-card lock, and the start + end audit records with the
+ * `DISPATCH-RECORD:` line. Held ⇒ `run-in-progress`, nothing spawned.
  */
 async function underCardLock(
   entry: CardEntryInput,
   deps: RunHandlerDependencies,
+  workflow: string,
   run: () => Promise<number>,
 ): Promise<number> {
-  const lock = takeCardLock(entry.context, deps, entry.card)
-  if (lock === undefined) return 0
-  try {
-    return await run()
-  } finally {
-    lock.release()
-  }
+  const decision = entry.context.dispatch!
+  return await driveLockedCard({ context: entry.context, decision, workflow }, deps, run)
 }
 
 /**

@@ -42,6 +42,12 @@ export interface AuditRecordOptions {
   readonly at?: string
   /** How the run ended (`end`), or any extra qualifier worth keeping. */
   readonly outcome?: string
+  /**
+   * The workflow a run actually spawns when the decision does not name it — the DoR fallback
+   * (US-487): a `skip` the card's own readiness turned into a cycle or a preparation skill, or a
+   * `--pr` entry that enters the cycle whatever the tag maps. Overrides a route's own workflow.
+   */
+  readonly workflow?: string
 }
 
 /** Builds the record for a decision — the audit says what the dispatcher decided, never more. */
@@ -51,12 +57,13 @@ export function auditRecordFor(
   options: AuditRecordOptions = {},
 ): DispatchAuditRecord {
   const at = options.at ?? new Date().toISOString()
-  const outcome = options.outcome
+  const { outcome, workflow } = options
   return {
     at,
     event,
     card: decision.card,
     ...(decision.kind === 'route' && { tag: decision.tag, workflow: decision.workflow }),
+    ...(workflow !== undefined && { workflow }),
     ...(decision.kind === 'skip' && { reason: decision.reason }),
     ...(outcome !== undefined && { outcome }),
   }
