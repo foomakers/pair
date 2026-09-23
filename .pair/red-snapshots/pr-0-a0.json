@@ -1,0 +1,2673 @@
+{
+  "$meta": {
+    "pr": "0",
+    "phase": "a0",
+    "base": "8da2fe21668b68e87e41270298b675d6a1639c4d",
+    "trailer": "Pair-RED-Snapshot: pr=0; phase=a0; base=8da2fe21668b68e87e41270298b675d6a1639c4d; manifest=.pair/red-snapshots/pr-0-a0.json",
+    "artifacts": [
+      ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      ".claude/workflows/pair-contracts/role-packet.test.mjs",
+      "apps/pair-cli/src/cli.e2e.test.ts",
+      "apps/pair-cli/src/commands/dispatcher.test.ts",
+      "apps/pair-cli/src/commands/run/cycle-contract-gaps.test.ts",
+      "apps/pair-cli/src/commands/run/cycle-defaults-parity.test.ts",
+      "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
+      "apps/pair-cli/src/commands/run/cycle-scripts.test.ts",
+      "apps/pair-cli/src/commands/run/cycle-wiring.test.ts",
+      "apps/pair-cli/src/commands/run/cycle.test.ts",
+      "apps/pair-cli/src/commands/run/dor-fallback-eligibility.test.ts",
+      "apps/pair-cli/src/commands/run/handler.test.ts",
+      "apps/pair-cli/src/commands/run/parser.test.ts",
+      "apps/pair-cli/src/commands/run/path-probe.test.ts",
+      "apps/pair-cli/src/commands/run/run-flags-argv.test.ts",
+      "apps/pair-cli/src/commands/run/spawn.test.ts",
+      "apps/pair-cli/src/commands/run/stage-runner.test.ts",
+      "apps/pair-cli/src/config/engine-block.test.ts",
+      "packages/knowledge-hub/src/tools/workflow-mirror.test.ts",
+      "scripts/smoke-tests/scenarios/github-dispatch-adapter.sh"
+    ]
+  },
+  "story": "487",
+  "phase": "a0",
+  "mode": "repair",
+  "status": "red",
+  "inputHead": "8da2fe21668b68e87e41270298b675d6a1639c4d",
+  "unfixedBase": "1bf7b02db4c3c0cc62280493a5fc7b8642093e50",
+  "sourceOfTruth": {
+    "card": "gh issue view 487 (AC1–AC15 as written 2026-09-23: AC15 amended — the gate bounds UNATTENDED (--autonomous) runs, supervised runs proceed per AC14, plus the per-run --approve-ineligible override; AC13 pi completes, opencode a documented known limitation)",
+    "acHash": "sha256:cfefb98dc0e1af2807fec6a48fe882e1922ab192355543c0736eb1725dca4dd4",
+    "notes": "Maintainer re-plan of a0 (2026-09-22) + a0 repair decisions (2026-09-22/23): (1) AC14 stands exactly as written — no mapping declared + eligibility not in the way + readable card ⇒ routed by macrostate (Ready ⇒ cycle, Draft ⇒ refine-story, Refined w/o breakdown ⇒ plan-tasks); the ONE class that meets the DoD \"github-dispatch-adapter smoke unchanged\" is no mapping declared AND card UNREADABLE (gh missing/unauthenticated) ⇒ clean skip, exit 0, reason printed, no DISPATCH-RECORD. The earlier note \"no mapping ⇒ skip, card never read\" was WRONG and withdrawn; the attempt built on it (superseded-2026-09-23-*) was never validated and is not inherited — its sound answers to the other rejection rows were re-used after re-running every baseline here. AC15 (card amended 2026-09-23): `## Eligibility` declared, no `## Workflows`, label absent ⇒ ineligible skip for an --autonomous run; a supervised run is not held back and proceeds per AC14; --approve-ineligible ⇒ that autonomous run passes the gate, announced. A second attempt that contracted a supervised skip (superseded-2026-09-23-*.v2 / repair-8b7ee0b3) was set aside by the maintainer before validation; its non-AC15 rows are re-used unchanged. (2) STATIC-G1: a platform-injected (darwin/linux) test is listed; merging origin/main (bd144708) into the branch is the implementer's step, never a rebase of sealed history. (3) Every stage starts in the MAIN checkout; verify's $worktree names the detached review worktree. Every baseline re-run by THIS attempt in scratch base (git archive 1bf7b02d + artifacts, pnpm install --offline); every head claim in the story worktree and in scratch head (git archive 8da2fe21 + artifacts, ref-less): identical 22 failing pair-cli tests (2130 pass of 2152). origin/main bd144708 changes no file under apps/, .claude/skills/ or packages/knowledge-hub/src (diff 1bf7b02d..bd144708: 8 files, #505), so the pair-cli baselines hold at bd144708 by construction. Attempt 3 (redRepairs 2, maintainer 2026-09-23) answers only the 4 attempt-2 rejection mechanisms; every other row and the fixScope are unchanged; every changed row's baseline was re-run by this attempt in scratch base (git archive 1bf7b02d + artifacts) and scratch head (git archive 8da2fe21 + artifacts)."
+  },
+  "fixScope": {
+    "owner": "pair-cli run --card cycle coordinator (apps/pair-cli run command + pair-workflow-cycle packet --style)",
+    "mode": "structural",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/",
+      "apps/pair-cli/src/commands/index.ts",
+      "apps/pair-cli/src/config/engine-block.ts",
+      ".claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs",
+      ".pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/",
+      "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/",
+      ".pair/knowledge/guidelines/collaboration/automation/",
+      "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/",
+      ".pair/adoption/decision-log/",
+      ".changeset/",
+      ".pair/llms.txt",
+      "apps/website/content/docs/reference/cli/commands.mdx",
+      "apps/website/content/docs/reference/skills-catalog.mdx",
+      "scripts/smoke-tests/scenarios/"
+    ]
+  },
+  "inventory": [
+    {
+      "id": "AC-1",
+      "producer": "apps/pair-cli/src/commands/run/cycle-wiring.ts createDefaultCycleDriver → apps/pair-cli/src/commands/run/cycle.ts runCycle over apps/pair-cli/src/commands/run/cycle-scripts.ts bridge; entry apps/pair-cli/src/commands/run/handler.ts enterCycleCoordinator",
+      "inputs": [
+        "--card N",
+        "card body via gh",
+        "installed skills registry",
+        "run dir .pair/working/runs/story-N/N"
+      ],
+      "representations": [
+        "CLI `pair-cli run --card` (metadata.ts)",
+        "cycle-state.mjs/cycle-dispatch.mjs installed copies",
+        "docs reference/cli/commands.mdx"
+      ],
+      "consumers": [
+        "operator terminal",
+        "CI/tag trigger"
+      ],
+      "classes": [
+        "fresh card → prepare/initial/a0",
+        "multi-stage loop to terminal",
+        "scripts located via registry (canonical, redirected, traversal refused)",
+        "worktree created/reused via cycle-dispatch",
+        "stage spawned in main checkout",
+        "branch resolved PR>existing (local, origin-only)>derived — hermetic repo",
+        "loop mode unchanged",
+        "worktree-conflict ⇒ HALT before any spawn"
+      ],
+      "interactions": [
+        "registry × real scripts × production driver (AC1-I1)"
+      ]
+    },
+    {
+      "id": "AC-2",
+      "producer": "cycle-wiring.ts resolveFor (entry pr) + parser --pr + cycle-state resolve --entry pr",
+      "inputs": [
+        "--pr P"
+      ],
+      "representations": [
+        "parser.ts dispatch.pr"
+      ],
+      "consumers": [
+        "resolve"
+      ],
+      "classes": [
+        "--pr valid",
+        "--pr malformed",
+        "--pr without --card",
+        "first stage verify/first/r0"
+      ],
+      "interactions": [
+        "--pr × production driver × real resolve (AC2-I1)",
+        "argv through the registered run command (AC15-B2)"
+      ]
+    },
+    {
+      "id": "AC-3",
+      "producer": "cycle-dispatch.mjs packet --style (renderPrompt, roleBodyFor) — root and dataset copies; stage-runner.ts buildStageArgs/runStage",
+      "inputs": [
+        "next",
+        "card",
+        "style from engines.ts skillInvocationStyle",
+        ".claude/agents/<role>.md"
+      ],
+      "representations": [
+        ".claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-dispatch.mjs"
+      ],
+      "consumers": [
+        "engine argv"
+      ],
+      "classes": [
+        "slash",
+        "instruction",
+        "no style (in-session, byte-identical)",
+        "unknown style refused",
+        "guardrails carried",
+        "every stage process (verify included) starts in the MAIN checkout; verify's $worktree = detached review worktree <root>/<id>-review"
+      ],
+      "interactions": [
+        "style × bridge × production driver (AC3-I1, AC3-I2)"
+      ]
+    },
+    {
+      "id": "AC-4",
+      "producer": "cycle.ts settlePreviousDispatch (handoffAdvanced from resolve) + stream-reader via stage-runner.ts",
+      "inputs": [
+        "process terminal event",
+        "next resolve"
+      ],
+      "representations": [],
+      "consumers": [
+        "onStage/audit"
+      ],
+      "classes": [
+        "failed process + advanced handoff",
+        "success process + not-advanced handoff",
+        "no terminal event"
+      ],
+      "interactions": [
+        "success event × no handoff × real cycle-state (AC4-I1)"
+      ]
+    },
+    {
+      "id": "AC-5",
+      "producer": "cycle.ts deadDispatchRetries from policy; cycle-wiring.ts policy = resolve().policy (cycle-state POLICY_DEFAULTS)",
+      "inputs": [
+        "policy"
+      ],
+      "representations": [],
+      "consumers": [],
+      "classes": [
+        "first dead dispatch retried",
+        "second ends failed-<step>",
+        "budget varies with policy"
+      ],
+      "interactions": [
+        "cycle-state defaults × production driver (AC4-I1)"
+      ]
+    },
+    {
+      "id": "AC-6",
+      "producer": "cycle.ts noticeReuseOnce",
+      "inputs": [
+        "next.context"
+      ],
+      "representations": [],
+      "consumers": [
+        "onNotice"
+      ],
+      "classes": [
+        "reuse → fresh spawn",
+        "notice once per run"
+      ],
+      "interactions": []
+    },
+    {
+      "id": "AC-7",
+      "producer": "handler.ts assertNoLoopModeConcerns + productionCycleDriver resolveAutonomyFor; parser.ts --root exclusion; autonomy.ts (unchanged)",
+      "inputs": [
+        "--root",
+        "--filter",
+        "automation.md ## Max Parallelism",
+        "--autonomous"
+      ],
+      "representations": [],
+      "consumers": [],
+      "classes": [
+        "--root refused",
+        "--filter refused",
+        "Max Parallelism declared proceeds",
+        "no --autonomous: claude keeps confirmations",
+        "no --autonomous: pi refused",
+        "hang bounded"
+      ],
+      "interactions": [
+        "card mode × production driver × autonomy (AC7-W3, AC7-I1)"
+      ]
+    },
+    {
+      "id": "AC-8",
+      "producer": "cycle.ts roundsBoundReached; parser --rounds; handler threads rounds",
+      "inputs": [
+        "--rounds n|max|omitted"
+      ],
+      "representations": [],
+      "consumers": [],
+      "classes": [
+        "--rounds 1",
+        "--rounds max",
+        "omitted → policy",
+        "malformed refused",
+        "never widened (driver holds no budget; cycle-state blocks)",
+        "rounds-bound-reached ⇒ exit ≠ 0 printing the next step"
+      ],
+      "interactions": [
+        "argv through the registered run command (AC15-B2)"
+      ]
+    },
+    {
+      "id": "AC-9",
+      "producer": "runCycle re-resolves with no cached state; parser runId default; cycle-scripts mirrored defaults",
+      "inputs": [
+        "run dir on disk",
+        "--run-id"
+      ],
+      "representations": [],
+      "consumers": [],
+      "classes": [
+        "converged → done, zero spawns",
+        "partially advanced → first incomplete step",
+        "cycle started by another realization → continues",
+        "run-id grammar",
+        "resolve other-run (no next) ⇒ adopt runId and resolve again"
+      ],
+      "interactions": [
+        "batch-published handoff × pair-cli inputs (AC9-I1)",
+        "other-run × real cycle-state × production driver (AC9-I2)"
+      ]
+    },
+    {
+      "id": "AC-10",
+      "producer": "handler.ts reportCycleEntry; cycle-scripts.ts CYCLE_* defaults; config/engine-block.ts",
+      "inputs": [
+        "resolved engine",
+        "skills path",
+        "run dir",
+        "worktree root",
+        "runId",
+        "rounds",
+        "cap"
+      ],
+      "representations": [],
+      "consumers": [
+        "console"
+      ],
+      "classes": [
+        "each of the seven values on its own labelled line before the first spawn",
+        "engine source (schema default | --engine | pair.config.json) printed",
+        "defaults equal cycle-state"
+      ],
+      "interactions": []
+    },
+    {
+      "id": "AC-11",
+      "producer": "cycle-scripts.ts locateCycleScripts/rejectIfFailed; cycle-dispatch.mjs roleBodyFor; parser reserved flags",
+      "inputs": [],
+      "representations": [],
+      "consumers": [],
+      "classes": [
+        "skill-missing",
+        "agent-definition-missing",
+        "--profile/--workflow-config refused",
+        "unparseable output",
+        "worktree-conflict halt verbatim, zero spawns"
+      ],
+      "interactions": [
+        "script halt × bridge (AC11-I1)"
+      ]
+    },
+    {
+      "id": "AC-12",
+      "producer": "cycle.ts DISPATCHABLE_STEPS/terminalOutcome; stage-runner argv; handler exit code; cycle-state.mjs resolveState statuses without `next` (incompatible | invalid | other-run)",
+      "inputs": [],
+      "representations": [],
+      "consumers": [],
+      "classes": [
+        "done → ready-for-merge",
+        "blocked/escalate verbatim",
+        "merge step reported, never dispatched",
+        "no merge seam",
+        "resolve incompatible (no next) ⇒ typed stop, reason + migrate-acknowledge, zero spawns",
+        "resolve invalid (no next) ⇒ typed stop, reason, zero spawns",
+        "every non-merge terminal ⇒ exit ≠ 0, status + reason printed; ready-for-merge ⇒ 0"
+      ],
+      "interactions": []
+    },
+    {
+      "id": "AC-13",
+      "producer": "engines.ts skillInvocationStyle; path-probe.ts resolveEngineBinary; engine-block.ts bin/model",
+      "inputs": [
+        "--engine pi|opencode"
+      ],
+      "representations": [
+        "agent-harness/pi.md, opencode.md (+dataset mirrors) — documentation of the opencode limitation"
+      ],
+      "consumers": [],
+      "classes": [
+        "pi instruction rendering",
+        "pi binary found (bin/PATH/repo-bin)",
+        "opencode: no handoff ⇒ failed-<step>, never claimed complete"
+      ],
+      "interactions": [
+        "opencode × production driver (AC13-I1)"
+      ]
+    },
+    {
+      "id": "AC-14",
+      "producer": "handler.ts handleRunCommand → handleDorFallback / runPrepSkill / enterCycleCoordinator (the route, its report and its audit) + the readiness probe (cycle-scripts classifyCardReadiness, cycle-wiring readCardViaGh/parseCardRecord); dispatch.ts decideDispatch (unchanged, US-217)",
+      "inputs": [
+        "automation.md presence",
+        "## Workflows",
+        "## Eligibility",
+        "card tags",
+        "card Status/breakdown via the operator gh (readable / unauthenticated / absent)"
+      ],
+      "representations": [
+        "scripts/smoke-tests/scenarios/github-dispatch-adapter.sh (real install, shipped step, unchanged)",
+        "cli.e2e populated board (command registry)"
+      ],
+      "consumers": [
+        "github-automation.md shipped step (dataset + mirror)",
+        "US-217 audit trail (loop-audit.md)",
+        "DISPATCH-RECORD host comment"
+      ],
+      "classes": [
+        "mapped tag → US-217 unchanged, readiness never read (AC14-C1)",
+        "unmapped + readable Ready → cycle (AC14 base row, AC14-G2, AC14-G3)",
+        "unmapped + Draft → refine-story; + Refined w/o breakdown → plan-tasks (AC14-W1, AC14-G2)",
+        "no-mapping-declared (automation.md absent, or `## Workflows` absent; no `## Eligibility`, or label carried) + readable card → routed exactly like unmapped (AC14-W4, AC14-W1, AC14-G2, AC14-G3)",
+        "no-mapping-declared + card UNREADABLE (gh unauthenticated / gh absent) ⇒ clean skip: exit 0, reason (no mapping declared + card-unreadable) printed, nothing spawned, no DISPATCH-RECORD — the one class meeting the DoD smoke — with no `## Eligibility`, or `## Eligibility` declared in every gate state that reads the card (label carried / supervised label-less / autonomous + --approve-ineligible) (AC14-G1, AC14-C5)",
+        "unmapped (mapping declared) + card unreadable ⇒ typed card-unreadable, fail closed, nothing spawned (AC14-W3)",
+        "a fallback route that spawns reports route + reason and is never \"Nothing was spawned.\" nor an event=skip record (AC14-G2, AC14-G3)",
+        "unknown status refused (AC14-W2)"
+      ],
+      "interactions": [
+        "no-mapping reason × readability × readiness through handleRunCommand (AC14-G1, AC14-G2, AC14-W4)",
+        "board × registry × audit trail (AC14-G3)",
+        "real install × shipped step (AC14-C5)"
+      ]
+    },
+    {
+      "id": "AC-15",
+      "producer": "handler.ts isDorFallbackReason / ineligibleOverrideApplied / gateFor / announceIneligibleOverride; parser --approve-ineligible",
+      "inputs": [
+        "## Eligibility",
+        "## Workflows",
+        "card tags",
+        "--autonomous",
+        "--approve-ineligible"
+      ],
+      "representations": [
+        "cli.e2e populated board (command registry)",
+        "apps/pair-cli/src/commands/run/metadata.ts (registered flags)"
+      ],
+      "consumers": [
+        "handleDorFallback",
+        "console (announcement)",
+        "audit trail"
+      ],
+      "classes": [
+        "`## Eligibility` declared, no `## Workflows`, card without label, --autonomous, no flag ⇒ skipped as ineligible (said and audited as such), never read, cycle never starts (AC15-W1, AC15-W2, AC15-C1, AC15-W4)",
+        "same card, SUPERVISED (no --autonomous) ⇒ not held back, proceeds per AC14 (AC15-W1, AC15-W2, AC15-W4)",
+        "autonomous + --approve-ineligible ⇒ THIS run passes the gate, override announced, routed per AC14; nothing persisted — policy byte-identical, no card write, the next unflagged autonomous run is skipped ineligible (AC15-W1, AC15-W3)",
+        "supervised + --approve-ineligible ⇒ the flag changes nothing, nothing announced (AC15-W1, AC15-W3)",
+        "label carried ⇒ not held back, no announcement (AC15-W1, AC15-W3)",
+        "no `## Eligibility` declared ⇒ gate not in the way (AC15-W1)",
+        "`## Workflows` declared + card without label ⇒ US-217 ineligible skip before routing (AC15-C2)",
+        "automation-off / ineligible / run-in-progress never fall back (AC15-W1)",
+        "flag grammar: --approve-ineligible (and --pr, --rounds) reach the parser as argv through the registered command metadata (AC15-B2)"
+      ],
+      "interactions": [
+        "gate × handleRunCommand (AC15-W2, AC15-W3)",
+        "gate × board e2e (AC15-W4)",
+        "`## Eligibility` declared × gate states that read the card × card unreadable ⇒ clean skip (AC14-G1)",
+        "argv × commander × runCommandMetadata × parseRunCommand (AC15-B2)"
+      ]
+    },
+    {
+      "id": "STATIC-G1",
+      "producer": "packages/dev-tools/src/quality-gates/smoke-ci-platform.test.ts AC6 at origin/main bd144708 (#505)",
+      "inputs": [
+        "git diff --name-only origin/main...HEAD",
+        "git diff --name-only",
+        "changed .test.ts contents"
+      ],
+      "representations": [
+        "CI build job (quality gate)"
+      ],
+      "consumers": [
+        "merge gate of PR #504"
+      ],
+      "classes": [
+        "apps/pair-cli/src production path changed ⇒ a changed .test.ts matches /platform.*(darwin|linux)|(darwin|linux).*platform/"
+      ],
+      "interactions": [
+        "listed artifact path-probe.test.ts × the gate (STATIC-G1 row)"
+      ]
+    }
+  ],
+  "matrix": [
+    {
+      "id": "AC1-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "pure loop over fakes: prepare→validate→implement→done",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle.test.ts",
+        "tests": [
+          "runCycle (US-487 T-4) AC1: drives resolve → worktree → packet → spawnStage → resolve until a terminal step, one fresh dispatch per stage"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle.test.ts"
+      },
+      "expected": "4 resolves, 3 fresh spawns, ready-for-merge",
+      "covers": [
+        "AC-1"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/scratch",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC1-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "real cycle-state.mjs copy, empty run dir",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-scripts.test.ts",
+        "tests": [
+          "createCycleScriptsBridge — real spawn against the installed scripts resolve() on an empty run directory returns the real prepare/initial/a0 next (AC1)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-scripts.test.ts"
+      },
+      "expected": "next = {prepare, initial, a0, attempt 1}",
+      "covers": [
+        "AC-1"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-scripts' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC1-W3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "skills registry (canonical + redirected target)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-scripts.test.ts",
+        "tests": [
+          "locateCycleScripts finds the scripts directory of an installed pair-workflow-cycle, through the skills registry",
+          "locateCycleScripts probes every declared registry target, not just the canonical one (mirrors skill-probe.ts)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-scripts.test.ts"
+      },
+      "expected": "scriptsDir resolved through the registry, never a hardcoded .claude/skills",
+      "covers": [
+        "AC-1",
+        "AC-11"
+      ],
+      "observedAtBase": "FAIL 2/2 at base 1bf7b02d: Cannot find module './cycle-scripts' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46",
+      "observedAtInputHead": "PASS 2/2 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC1-B1",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "traversal-shaped prefix / skill name",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-scripts.test.ts",
+        "tests": [
+          "locateCycleScripts never resolves outside the registry target (traversal, mirrors skill-probe.ts round 7)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-scripts.test.ts"
+      },
+      "expected": "no location outside the registry target",
+      "covers": [
+        "AC-1"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-scripts' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC1-I1",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "PRODUCTION driver (createDefaultCycleDriver) over real scripts, fake gh + fake engine",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
+        "tests": [
+          "createDefaultCycleDriver — production wiring over the real scripts (US-487) creates the story worktree through the real cycle-dispatch, and starts the stage in the MAIN checkout (AC1)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-driver-wiring.test.ts"
+      },
+      "expected": "worktree created via cycle-dispatch at <root>/pair-worktrees/7; every stage spawned with cwd = main checkout",
+      "covers": [
+        "AC-1"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-wiring' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)",
+      "injectedRegression": "M10: spawnStageFor passes the packet worktree instead of co.main ⇒ this row and AC4-I1/AC3-I2/AC2-I1 FAIL (engine never started in the main checkout)"
+    },
+    {
+      "id": "AC1-W4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "bare --card N, no mapping, readiness=ready",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — tag-driven dispatch (US-217) AC14: a Ready card (DoR satisfied) with no mapping match starts THIS story's cycle coordinator, never a prep skill"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "driveCycle called once, no prep skill printed",
+      "covers": [
+        "AC-1",
+        "AC-14"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: AssertionError: expected \"spy\" to be called 1 times, but got 0 times",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21"
+    },
+    {
+      "id": "AC1-B2",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "card body grammar + branch resolution (PR head > existing ref > derived) against a THROWAWAY git repo built in the test (local ref, origin-only ref, none, --pr via a fake gh) — never process.cwd()",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-wiring.test.ts",
+        "tests": [
+          "parseCardRecord reads the status the card template declares, and whether a breakdown is present",
+          "parseCardRecord REFUSES a body with no `**Status**:` line rather than guessing a macrostate",
+          "parseCardRecord does not mistake a `## Task Breakdown` mention inside prose for the section itself",
+          "deriveBranch follows the documented `<type>/<story-id>-<brief-description>` standard",
+          "deriveBranch is deterministic and shell-safe: one slug, no punctuation, bounded length",
+          "deriveBranch still yields a usable branch when the title slugs to nothing",
+          "resolveBranch — ask the authority before deriving falls back to derivation only for a card with no branch anywhere",
+          "resolveBranch — ask the authority before deriving prefers an existing LOCAL branch for the card over anything the title would derive",
+          "resolveBranch — ask the authority before deriving finds a branch that exists only on origin (never checked out locally)",
+          "resolveBranch — ask the authority before deriving a --pr entry takes the PR's own head branch, over an existing ref and the derivation"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-wiring.test.ts"
+      },
+      "expected": "Status/breakdown parsed or refused typed; branch = PR head (--pr) > local feature/US-7-* ref > origin/feature/US-7-* ref > deriveBranch(title), all in a hermetic repo",
+      "covers": [
+        "AC-1",
+        "AC-14"
+      ],
+      "observedAtBase": "FAIL 10/10 at base 1bf7b02d: Cannot find module './cycle-wiring' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/",
+      "observedAtInputHead": "PASS 10/10 at input head 8da2fe21",
+      "rationale": "AC1-B2 repair: the host repository's live refs are no longer read; the four precedence cases each build their own refs."
+    },
+    {
+      "id": "AC1-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "loop mode (run --prompt), unchanged",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — driving the loop passes an explicit --prompt through verbatim, bounded by its declared cwd (AC3)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "loop mode behaves exactly as before — card mode is additive (BR3)",
+      "covers": [
+        "AC-1"
+      ],
+      "observedAtBase": "PASS 1/1 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "already correct at base; guards BR3 (opt-in layer, loop mode untouched)"
+    },
+    {
+      "id": "AC2-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "real cycle-state, --entry pr --pr 42",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-scripts.test.ts",
+        "tests": [
+          "createCycleScriptsBridge — real spawn against the installed scripts resolve() on a PR entry starts at {verify, first, r0} — no prepare precedes it (AC2, ADR-024 b)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-scripts.test.ts"
+      },
+      "expected": "next = {verify, first, r0}; no prepare",
+      "covers": [
+        "AC-2"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-scripts' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC2-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "handler card-mode branch, --pr 42 — entry via `no-mapping-declared` (automation.md with no `## Workflows` and no `## Eligibility`, cardTags '', injected readiness Ready): AC14's fallback with the eligibility gate not in the way (maintainer decision (1) 2026-09-23: AC14 as written)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — the delivery-cycle coordinator entry (US-487) AC2: an explicit --pr is carried to the cycle driver, so the FIRST dispatched stage is verify, never prepare"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "driveCycle called with pr: 42",
+      "covers": [
+        "AC-2"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: AssertionError: expected \"spy\" to be called with arguments: [ ObjectContaining {\"pr\": 42} ][90m",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21"
+    },
+    {
+      "id": "AC2-B1",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "--pr grammar",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/parser.test.ts",
+        "tests": [
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) parses --pr as part of the dispatch",
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) rejects --pr without --card: the card is the unit (US-487 edge case)",
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) rejects a malformed --pr 0",
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) rejects a malformed --pr -3",
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) rejects a malformed --pr abc"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parser.test.ts"
+      },
+      "expected": "positive integer only; --pr without --card refused (edge case)",
+      "covers": [
+        "AC-2"
+      ],
+      "observedAtBase": "FAIL 5/5 at base 1bf7b02d: AssertionError: expected undefined to be 42 // Object.is equality",
+      "observedAtInputHead": "PASS 5/5 at input head 8da2fe21"
+    },
+    {
+      "id": "AC2-I1",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "PRODUCTION driver with pr=42 (gh pr view → head branch)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
+        "tests": [
+          "createDefaultCycleDriver — production wiring over the real scripts (US-487) a --pr entry dispatches verify first — the review stage, never the preparation one (AC2)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-driver-wiring.test.ts"
+      },
+      "expected": "first spawned prompt is /pair-workflow-review-phase; red-spec never dispatched; ends failed-verify (no handoff)",
+      "covers": [
+        "AC-2"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-wiring' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)",
+      "injectedRegression": "resolveFor entry hard-coded to 'fresh' ⇒ FAIL (first prompt is red-spec)"
+    },
+    {
+      "id": "AC3-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "cycle-dispatch.mjs packet --style slash|instruction",
+      "oracle": {
+        "file": ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+        "tests": [
+          "T-3 w2 (witness, once shipped): --style slash starts the prompt with the literal /<skill> form",
+          "T-3 w3 (witness, once shipped): --style instruction never starts the prompt with a bare slash-command",
+          "T-3 i1 (interaction, once shipped): slash and instruction render VISIBLY different prompts for the SAME next/card"
+        ],
+        "command": "node --test .claude/workflows/pair-contracts/cycle-coordinator.test.mjs"
+      },
+      "expected": "slash starts with /<skill>; instruction never starts with a slash; the two differ",
+      "covers": [
+        "AC-3"
+      ],
+      "observedAtBase": "FAIL 3/3 at base 1bf7b02d: ",
+      "observedAtInputHead": "PASS 3/3 at input head 8da2fe21"
+    },
+    {
+      "id": "AC3-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "packet without --style",
+      "oracle": {
+        "file": ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+        "tests": [
+          "T-3 c1 (control): omitting --style renders EXACTLY what #486 already ships — zero regression"
+        ],
+        "command": "node --test .claude/workflows/pair-contracts/cycle-coordinator.test.mjs"
+      },
+      "expected": "byte-identical to what #486 ships (zero regression for the in-session realization)",
+      "covers": [
+        "AC-3"
+      ],
+      "observedAtBase": "PASS 1/1 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "already correct at base"
+    },
+    {
+      "id": "AC3-B1",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "--style xml",
+      "oracle": {
+        "file": ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+        "tests": [
+          "T-3 b1 (boundary, once shipped): an unrecognised --style value is a typed refusal, never a silent default"
+        ],
+        "command": "node --test .claude/workflows/pair-contracts/cycle-coordinator.test.mjs"
+      },
+      "expected": "typed refusal naming style, never a silent default",
+      "covers": [
+        "AC-3"
+      ],
+      "observedAtBase": "PASS 1/1 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "passes at base through the generic unknown-flag refusal; at the input head through style-invalid — both refuse, so it is a control of the refusal, not a witness of --style"
+    },
+    {
+      "id": "AC3-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "packet --style over the real installed scripts and agents",
+      "oracle": {
+        "file": ".claude/workflows/pair-contracts/role-packet.test.mjs",
+        "tests": [
+          "instruction style: the role leads, then the invocation, then the guardrails",
+          "slash style: the command leads, and the role and guardrails still travel",
+          "every styled prompt carries the guardrails the in-session path always had"
+        ],
+        "command": "node --test .claude/workflows/pair-contracts/role-packet.test.mjs"
+      },
+      "expected": "instruction: role body first, then \"Run the <skill> skill…\", no frontmatter; slash: /<skill> first, role carried; both carry Do NOT merge / MAIN checkout / reader blindness",
+      "covers": [
+        "AC-3",
+        "AC-13"
+      ],
+      "observedAtBase": "FAIL 3/3 at base 1bf7b02d: ",
+      "observedAtInputHead": "PASS 3/3 at input head 8da2fe21"
+    },
+    {
+      "id": "AC3-C2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "packet without --style",
+      "oracle": {
+        "file": ".claude/workflows/pair-contracts/role-packet.test.mjs",
+        "tests": [
+          "the in-session path (no --style) is byte-for-byte what the in-session coordinator shipped: no role body"
+        ],
+        "command": "node --test .claude/workflows/pair-contracts/role-packet.test.mjs"
+      },
+      "expected": "no role body in the unstyled prompt",
+      "covers": [
+        "AC-3"
+      ],
+      "observedAtBase": "PASS 1/1 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "already correct at base"
+    },
+    {
+      "id": "AC3-W3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "stage runner argv/prompt (helper level) — the verify-cwd case is REMOVED here: the production driver overwrites every packet worktree with the main checkout, so a helper-level \"verify cwd = review worktree\" case witnessed nothing the product does (see AC3-I3)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/stage-runner.test.ts",
+        "tests": [
+          "buildStageArgs — the packet's prompt and worktree, and NOTHING pair-cli composes itself is IDENTICAL to buildEngineArgs given the packet's own prompt and worktree as cwd (AC3)",
+          "runStage — wiring only: spawns the packet's own prompt, returns the stream's outcome delegates to the injected iteration runner with the packet-derived argv inputs, not a rebuilt prompt"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/stage-runner.test.ts"
+      },
+      "expected": "argv == buildEngineArgs(packet.prompt, cwd); the packet's prompt is spawned verbatim (no prose composed in TypeScript)",
+      "covers": [
+        "AC-3"
+      ],
+      "observedAtBase": "FAIL 2/2 at base 1bf7b02d: Cannot find module './stage-runner' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/",
+      "observedAtInputHead": "PASS 2/2 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC3-I1",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "bridge.packet over real scripts + real agents, style instruction",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-scripts.test.ts",
+        "tests": [
+          "createCycleScriptsBridge — real spawn against the installed scripts packet() hands --style through: with the roles installed, pi's instruction prompt opens with the role body (AC3)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-scripts.test.ts"
+      },
+      "expected": "prompt opens with the preparer role body",
+      "covers": [
+        "AC-3"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-scripts' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)",
+      "injectedRegression": "M11: bridge drops --style ⇒ FAIL"
+    },
+    {
+      "id": "AC3-I2",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "PRODUCTION driver, claude and pi",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
+        "tests": [
+          "createDefaultCycleDriver — production wiring over the real scripts (US-487) claude receives the packet's slash rendering, and no bypass it was not given (AC3, AC7)",
+          "createDefaultCycleDriver — production wiring over the real scripts (US-487) pi receives the packet's instruction rendering: the role body first (AC3, AC13)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-driver-wiring.test.ts"
+      },
+      "expected": "claude prompt starts /pair-workflow-red-spec and carries the role; pi prompt starts with the role body, no leading slash",
+      "covers": [
+        "AC-3",
+        "AC-13"
+      ],
+      "observedAtBase": "FAIL 2/2 at base 1bf7b02d: Cannot find module './cycle-wiring' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/",
+      "observedAtInputHead": "PASS 2/2 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)",
+      "injectedRegression": "M9 (styleFor always 'slash') and M11 (bridge drops --style) ⇒ FAIL"
+    },
+    {
+      "id": "AC3-C3",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "root-only exclusion list names role-packet.test.mjs",
+      "oracle": {
+        "file": "packages/knowledge-hub/src/tools/workflow-mirror.test.ts",
+        "tests": [
+          "'workflows': dataset and root copy are one artifact the enumerated root-only exclusions are exactly the files the root copy holds alone"
+        ],
+        "command": "pnpm --dir packages/knowledge-hub exec vitest run src/tools/workflow-mirror.test.ts"
+      },
+      "expected": "mirror gate stays green with the new root-only test",
+      "covers": [
+        "AC-3"
+      ],
+      "observedAtBase": "PASS 1/1 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "passes at base with the updated list; the ORIGINAL list fails 2 tests once role-packet.test.mjs exists (probed) — a companion edit, not an AC witness"
+    },
+    {
+      "id": "AC4-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "process failed, handoff advanced",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle.test.ts",
+        "tests": [
+          "runCycle (US-487 T-4) AC4: a process outcome of \"failed\" with an ADVANCED handoff still continues (process ≠ stage outcome)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle.test.ts"
+      },
+      "expected": "continues to ready-for-merge; onStage logs {processOutcome: failed, handoffAdvanced: true}",
+      "covers": [
+        "AC-4"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/scratch",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)",
+      "injectedRegression": "M3: handoffAdvanced := processOutcome===\"success\" ⇒ FAIL (failed-prepare)"
+    },
+    {
+      "id": "AC4-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "stream without terminal event",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/stage-runner.test.ts",
+        "tests": [
+          "runStage — wiring only: spawns the packet's own prompt, returns the stream's outcome a failed stream (no terminal event) is reported as processOutcome \"failed\", detail carried through (AC7 of #451, fail-closed)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/stage-runner.test.ts"
+      },
+      "expected": "processOutcome 'failed', detail carried (fail-closed, #451 AC7)",
+      "covers": [
+        "AC-4"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './stage-runner' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC4-I1",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "PRODUCTION driver; engine emits SUCCESS and publishes nothing",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
+        "tests": [
+          "createDefaultCycleDriver — production wiring over the real scripts (US-487) a success event with a NOT-advanced handoff is a dead dispatch, retried exactly the ONCE cycle-state's own budget allows (AC4, AC5)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-driver-wiring.test.ts"
+      },
+      "expected": "exactly 2 spawns, failed-prepare — the engine's success is not evidence",
+      "covers": [
+        "AC-4",
+        "AC-5"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-wiring' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)",
+      "injectedRegression": "M1: driver hands runCycle policy {} instead of resolve().policy ⇒ FAIL (1 spawn); M3 ⇒ suite does not terminate (dispatch loop)"
+    },
+    {
+      "id": "AC5-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "resolve returns the identical next once",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle.test.ts",
+        "tests": [
+          "runCycle (US-487 T-4) AC5: a not-advanced handoff is a dead dispatch — the SAME packet is spawned once more"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle.test.ts"
+      },
+      "expected": "same packet spawned once more, then continues",
+      "covers": [
+        "AC-5"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/scratch",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC5-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "retry budget spent",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle.test.ts",
+        "tests": [
+          "runCycle (US-487 T-4) AC5: a SECOND not-advanced handoff (retry budget spent) ends the run failed-<step>, never a third dispatch"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle.test.ts"
+      },
+      "expected": "failed-prepare after 2 spawns, never a third",
+      "covers": [
+        "AC-5"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/scratch",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC5-W3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "policy.deadDispatchRetries = 2",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle.test.ts",
+        "tests": [
+          "runCycle (US-487 T-4) AC5: the retry budget is READ from cycle-state's policy, never a literal in this file (grep guard)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle.test.ts"
+      },
+      "expected": "3 spawns — the budget is data read from the policy",
+      "covers": [
+        "AC-5"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/scratch",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)",
+      "injectedRegression": "M2: literal 1 in place of policy.deadDispatchRetries ⇒ FAIL (2 spawns)"
+    },
+    {
+      "id": "AC6-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "two consecutive next.context=reuse stages",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle.test.ts",
+        "tests": [
+          "runCycle (US-487 T-4) AC6: next.context \"reuse\" is treated as fresh and reported once per run, never resumed as a session"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle.test.ts"
+      },
+      "expected": "both spawned (fresh), exactly one session/fresh notice per run",
+      "covers": [
+        "AC-6"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/scratch",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)",
+      "injectedRegression": "M4: notice without once-guard ⇒ FAIL (2 notices); M4b: reuse stage skipped ⇒ FAIL (1 spawn)"
+    },
+    {
+      "id": "AC7-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "--card + --filter, card resolves to cycle mode — entry via `no-mapping-declared` (automation.md with no `## Workflows` and no `## Eligibility`, cardTags '', injected readiness Ready): AC14's fallback with the eligibility gate not in the way (maintainer decision (1) 2026-09-23: AC14 as written)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — the delivery-cycle coordinator entry (US-487) AC7: --filter alongside --card is REFUSED once the card resolves to cycle-coordinator mode (Ready, no mapping) — a loop-mode concern"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "rejects naming --filter; driveCycle never called",
+      "covers": [
+        "AC-7"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Error: promise resolved \"+0\" instead of rejecting",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21"
+    },
+    {
+      "id": "AC7-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "--card + --root",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/parser.test.ts",
+        "tests": [
+          "parseRunCommand — tag-driven dispatch (US-217) refuses --root alongside --card: the dispatched card is the whole subject"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parser.test.ts"
+      },
+      "expected": "parser refuses naming --card",
+      "covers": [
+        "AC-7"
+      ],
+      "observedAtBase": "PASS 1/1 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "already correct at base (US-217 parser exclusion) — AC7 --root half is inherited, not new"
+    },
+    {
+      "id": "AC7-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "automation.md declares ONLY `## Max Parallelism` (no `## Workflows`, no `## Eligibility` ⇒ `no-mapping-declared`, gate not in the way), cardTags '', injected readiness Ready — the declared key addresses pair-loop, never this run (AC7 rewrite)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — the delivery-cycle coordinator entry (US-487) AC7: a DECLARED `## Max Parallelism` does NOT block the coordinator — it addresses pair-loop, not this run"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "driveCycle called once (a declaration for pair-loop is not a request of this run)",
+      "covers": [
+        "AC-7"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: AssertionError: expected \"spy\" to be called 1 times, but got 0 times",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21"
+    },
+    {
+      "id": "AC7-C2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "resolveAutonomy, no --autonomous",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-contract-gaps.test.ts",
+        "tests": [
+          "AC7 — no `--autonomous` ⇒ a stage that must write fails loudly, never silently keeps the engine's own confirmations when --autonomous is absent",
+          "AC7 — no `--autonomous` ⇒ a stage that must write fails loudly, never silently refuses outright an engine that has no confirmations to keep",
+          "AC7 — no `--autonomous` ⇒ a stage that must write fails loudly, never silently hands the bypass only on the explicit opt-in"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-contract-gaps.test.ts"
+      },
+      "expected": "claude: no bypass args; pi: refused; bypass only on opt-in",
+      "covers": [
+        "AC-7"
+      ],
+      "observedAtBase": "PASS 3/3 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 3/3 at input head 8da2fe21",
+      "rationale": "already correct at base (#451 AC5/AC6, \"unchanged\" per AC7) — runCycle is imported lazily so these rows do not depend on the new module"
+    },
+    {
+      "id": "AC7-W3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "handleRunCommand card mode via `unmapped` (`## Eligibility` risk:green + `## Workflows` auto-dev ⇒ pair-loop + pair-loop installed, cardTags risk:green, injected readiness Ready — one of the AC14 fallback entries), engine pi, no --autonomous, no driveCycle injected (real git dir as main checkout)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-contract-gaps.test.ts",
+        "tests": [
+          "AC7 — the card-mode entry applies that same decision before any stage starts refuses `run --card` on pi without --autonomous through the PRODUCTION driver, spawning nothing"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-contract-gaps.test.ts"
+      },
+      "expected": "rejects 'cannot run with confirmations active'; no iteration spawned",
+      "covers": [
+        "AC-7"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Error: promise resolved \"+0\" instead of rejecting",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "injectedRegression": "M5: productionCycleDriver passes autonomyArgs [] without resolving autonomy ⇒ FAIL (reaches the card read instead)"
+    },
+    {
+      "id": "AC7-I1",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "PRODUCTION driver with autonomyArgs []",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
+        "tests": [
+          "createDefaultCycleDriver — production wiring over the real scripts (US-487) claude receives the packet's slash rendering, and no bypass it was not given (AC3, AC7)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-driver-wiring.test.ts"
+      },
+      "expected": "argv carries no bypassPermissions — confirmations stay on, a headless write fails at that stage",
+      "covers": [
+        "AC-7"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-wiring' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC7-C3",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "engine that never exits",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/spawn.test.ts",
+        "tests": [
+          "spawnIteration — a real child process emitting fixture JSONL bounds an iteration that hangs, and the bounded iteration fails"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn.test.ts"
+      },
+      "expected": "bounded by the wall-clock timeout, iteration failed — never hangs",
+      "covers": [
+        "AC-7"
+      ],
+      "observedAtBase": "PASS 1/1 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "already correct at base (#451, reused unchanged by the stage runner)"
+    },
+    {
+      "id": "AC8-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "--rounds 1, round 2 becomes due",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle.test.ts",
+        "tests": [
+          "runCycle (US-487 T-4) AC8: --rounds 1 stops after one remediation round and reports the next step without spawning it"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle.test.ts"
+      },
+      "expected": "2 spawns, stops with next {phase r2-g1, round 2} unspawned",
+      "covers": [
+        "AC-8"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/scratch",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC8-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "--rounds omitted, 3 rounds then cycle-state blocks on maxFixRounds",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-contract-gaps.test.ts",
+        "tests": [
+          "AC8 — `--rounds` omitted ⇒ the policy decides, never this driver does NOT stop at any round when --rounds is omitted: the budget belongs to cycle-state"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-contract-gaps.test.ts"
+      },
+      "expected": "3 spawns; stops only on resolve's own terminal — the policy decides, never widened by the driver",
+      "covers": [
+        "AC-8"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Error: Cannot find module './cycle.js' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)",
+      "injectedRegression": "M6: rounds defaulted to 1 ⇒ FAIL (1 spawn)"
+    },
+    {
+      "id": "AC8-B1",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "--rounds 'max'",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-contract-gaps.test.ts",
+        "tests": [
+          "AC8 — `--rounds` omitted ⇒ the policy decides, never this driver `--rounds max` is no bound of its own either: round 2 is dispatched, the policy still decides"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-contract-gaps.test.ts"
+      },
+      "expected": "round 2 dispatched; ends at resolve's escalate",
+      "covers": [
+        "AC-8"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Error: Cannot find module './cycle.js' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)",
+      "injectedRegression": "M6b: 'max' treated as 1 ⇒ FAIL"
+    },
+    {
+      "id": "AC8-W3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "handler, --rounds 1 — entry via `no-mapping-declared` (automation.md with no `## Workflows` and no `## Eligibility`, cardTags '', injected readiness Ready): AC14's fallback with the eligibility gate not in the way (maintainer decision (1) 2026-09-23: AC14 as written)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — the delivery-cycle coordinator entry (US-487) AC8: an explicit --rounds is carried to the cycle driver, never widened past it"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "driveCycle called with rounds: 1",
+      "covers": [
+        "AC-8"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: AssertionError: expected \"spy\" to be called with arguments: [ ObjectContaining {\"rounds\": 1} ][90m",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21"
+    },
+    {
+      "id": "AC8-B2",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "--rounds grammar",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/parser.test.ts",
+        "tests": [
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) parses --rounds as a positive integer bound on remediation rounds",
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) parses the literal --rounds max (never widened beyond the policy's maxFixRounds)",
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) rejects a --rounds value that is neither a positive integer nor 0",
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) rejects a --rounds value that is neither a positive integer nor -1",
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) rejects a --rounds value that is neither a positive integer nor abc",
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) rejects --rounds without --card"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parser.test.ts"
+      },
+      "expected": "positive integer or max; anything else and --rounds without --card refused",
+      "covers": [
+        "AC-8"
+      ],
+      "observedAtBase": "FAIL 6/6 at base 1bf7b02d: AssertionError: expected undefined to be 1 // Object.is equality",
+      "observedAtInputHead": "PASS 6/6 at input head 8da2fe21"
+    },
+    {
+      "id": "AC8-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "--rounds omitted",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/parser.test.ts",
+        "tests": [
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) omitted --rounds leaves the policy default (maxFixRounds) to decide, unwidened"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parser.test.ts"
+      },
+      "expected": "config.dispatch.rounds undefined",
+      "covers": [
+        "AC-8"
+      ],
+      "observedAtBase": "PASS 1/1 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "passes at base because dispatch.rounds never existed there; the discriminating omitted-rounds evidence is AC8-W2"
+    },
+    {
+      "id": "AC9-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "first resolve already terminal",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle.test.ts",
+        "tests": [
+          "runCycle (US-487 T-4) AC9: a converged run directory (already terminal on the FIRST resolve) spawns nothing"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle.test.ts"
+      },
+      "expected": "zero spawns, ready-for-merge",
+      "covers": [
+        "AC-9"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/scratch",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC9-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "re-invocation over partially advanced disk state",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle.test.ts",
+        "tests": [
+          "runCycle (US-487 T-4) AC9 (T1-C1): a re-invocation over PARTIALLY-advanced disk state continues from the first incomplete step, never re-running the completed one"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle.test.ts"
+      },
+      "expected": "only the remaining stage dispatched",
+      "covers": [
+        "AC-9"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/scratch",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC9-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler, driveCycle reports stagesRun 0 — entry via `no-mapping-declared` (automation.md with no `## Workflows` and no `## Eligibility`, cardTags '', injected readiness Ready): AC14's fallback with the eligibility gate not in the way (maintainer decision (1) 2026-09-23: AC14 as written)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — the delivery-cycle coordinator entry (US-487) AC9: a converged run reports \"done\" via the SAME driveCycle seam and spawns no NEW loop iteration"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "exit 0, no loop-mode iteration",
+      "covers": [
+        "AC-9"
+      ],
+      "observedAtBase": "PASS 1/1 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "passes at base (base never reaches driveCycle and spawns nothing either) — non-discriminating at base; AC9-W1 is the witness"
+    },
+    {
+      "id": "AC9-I1",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "a0-red-spec published through the real cycle-state, then resolved with pair-cli's own inputs — HERMETIC: a recording fake `gh` is both PAIR_GH_BIN and the first `gh` on PATH for the publish spawn AND the bridge resolve spawn (vi.stubEnv), so publish stamps acHash from the fake and no real `gh` can start",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-scripts.test.ts",
+        "tests": [
+          "createCycleScriptsBridge — real spawn against the installed scripts AC9: a cycle another realization started on the same runId continues from its next step — never failed-resume"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-scripts.test.ts"
+      },
+      "expected": "status in-progress, next {validate, a0} — never incompatible/failed-resume; the fake gh log is exactly [\"issue view 487 --json body -q .body\"] (the card read went to the fake, once, by publish)",
+      "covers": [
+        "AC-9"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-scripts' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21, 3 of 3 isolated runs in the story worktree with a sentinel `gh` first on PATH and PAIR_GH_BIN unset: 303 ms, 326 ms, <1 s; sentinel marker never written (0 lines). Also 3/3 under a network-denying sandbox-exec profile (440/320/550 ms, sentinel 0). The attempt-2 bytes of this test tripped the same sentinel once (`issue view 487 --json body -q .body`) — the defect this repair closes.",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)",
+      "injectedRegression": "CYCLE_WORKFLOW_VERSION '5.0.0' ⇒ FAIL ('incompatible')",
+      "closureAssertions": [
+        {
+          "id": "AC9-I1-hermetic",
+          "proven": "passes 3/3 well under 5000 ms in the story worktree; sentinel gh on PATH never invoked; the fake gh log asserts the only card read"
+        }
+      ]
+    },
+    {
+      "id": "AC9-W3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "pair-cli's mirrored defaults vs cycle-state.mjs's own exports",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-defaults-parity.test.ts",
+        "tests": [
+          "cycle defaults parity with pair-workflow-cycle (r0-4) the transparency block prints the SAME defaults the real dispatch reads"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-defaults-parity.test.ts"
+      },
+      "expected": "worktree root, dispatch cap, workflow version and base branch equal cycle-state's",
+      "covers": [
+        "AC-9",
+        "AC-10"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-scripts' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC9-W4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "--run-id grammar",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/parser.test.ts",
+        "tests": [
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) defaults --run-id to the batch convention story-<id> when omitted",
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) accepts an explicit --run-id, overriding the default",
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) rejects a --run-id that is not a plain path segment (it names a run directory)",
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) rejects --run-id without --card: there is nothing to run a cycle on"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parser.test.ts"
+      },
+      "expected": "default story-<id> (the batch convention); explicit accepted; traversal and --run-id without --card refused",
+      "covers": [
+        "AC-9",
+        "AC-1"
+      ],
+      "observedAtBase": "FAIL 4/4 at base 1bf7b02d: AssertionError: expected undefined to be 'story-487' // Object.is equality",
+      "observedAtInputHead": "PASS 4/4 at input head 8da2fe21"
+    },
+    {
+      "id": "AC9-W5",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "handler card mode — entry via `no-mapping-declared` (automation.md with no `## Workflows` and no `## Eligibility`, cardTags '', injected readiness Ready): AC14's fallback with the eligibility gate not in the way (maintainer decision (1) 2026-09-23: AC14 as written)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — the delivery-cycle coordinator entry (US-487) AC1/AC9: --run-id defaults to story-<id>, and reaches the cycle driver as the run identity"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "driveCycle called with {runId: 'story-218', card: '218'}",
+      "covers": [
+        "AC-9",
+        "AC-1"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: AssertionError: expected \"spy\" to be called with arguments: [ ObjectContaining{…} ][90m",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21"
+    },
+    {
+      "id": "AC10-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "handler card mode (entry via `no-mapping-declared`, no `## Eligibility`, cardTags ''), assertion inside driveCycle before the first spawn — each of the seven values on its OWN labelled line; plus --engine pi --rounds 1 so the engine SOURCE and the explicit bound are discriminated",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — the delivery-cycle coordinator entry (US-487) AC10: prints the transparency block (engine, skills path, run dir, worktree root, runId, rounds bound, dispatch cap) before the FIRST spawn",
+          "handleRunCommand — the delivery-cycle coordinator entry (US-487) AC10: the engine line names where the engine came from, and the rounds line the explicit bound (--engine pi --rounds 1)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "lines /^\\s*Engine: claude\\b.*\\(from schema default\\)$/ (resp. pi … (from --engine)), /^\\s*Scripts: \\S*\\.claude\\/skills\\/pair-workflow-cycle\\/scripts$/, /^\\s*Run dir: \\S*\\.pair\\/working\\/runs\\/story-218\\/218$/, /^\\s*Worktree root: \\S*pair-worktrees$/, /runId[=:]\\s*story-218/, /^\\s*Rounds bound: .*maxFixRounds/ (resp. /Rounds bound: 1/), /^\\s*Dispatch cap: 40$/",
+      "covers": [
+        "AC-10"
+      ],
+      "observedAtBase": "FAIL 2/2 at base 1bf7b02d: AssertionError: expected \"spy\" to be called 1 times, but got 0 times",
+      "observedAtInputHead": "PASS 2/2 at input head 8da2fe21",
+      "injectedRegression": "removing ANY ONE line of reportCycleEntry in a scratch copy of 8da2fe21 (engine, Delivery cycle/runId, Scripts, Run dir, Worktree root, Rounds bound, Dispatch cap — 7 separate mutations, scratch r2-mut.mjs) ⇒ BOTH AC10 tests FAIL each time",
+      "rationale": "AC10-W1 repair: `toContain('claude')` was satisfied by the .claude/skills scripts path and the run dir was never asserted."
+    },
+    {
+      "id": "AC10-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "pair.config.json engine block",
+      "oracle": {
+        "file": "apps/pair-cli/src/config/engine-block.test.ts",
+        "tests": [
+          "readEngineDeclaration reads a valid declaration",
+          "readEngineDeclaration reads `engine.bin`, the per-machine executable paths the resolver consults first",
+          "readEngineDeclaration refuses a bin map that names an engine nobody supports, or a blank path",
+          "readEngineDeclaration reads `engine.model`, the run-wide model pin (per-stage selection stays #488's)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/config/engine-block.test.ts"
+      },
+      "expected": "bin/model maps read (always present, empty when undeclared); unknown engine or blank path refused",
+      "covers": [
+        "AC-10",
+        "AC-13"
+      ],
+      "observedAtBase": "FAIL 4/4 at base 1bf7b02d: AssertionError: expected { engine: 'pi', errors: [] } to deeply equal { engine: 'pi', bin: {}, …(2) }",
+      "observedAtInputHead": "PASS 4/4 at input head 8da2fe21"
+    },
+    {
+      "id": "AC10-W3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "typed config shape",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/parser.test.ts",
+        "tests": [
+          "parseRunCommand parses the flagless path off schema defaults (AC12)",
+          "parseRunCommand carries every flag into the typed config"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parser.test.ts"
+      },
+      "expected": "config carries approveIneligible: false by default",
+      "covers": [
+        "AC-10",
+        "AC-15"
+      ],
+      "observedAtBase": "FAIL 2/2 at base 1bf7b02d: AssertionError: expected { command: 'run', …(6) } to deeply equal { command: 'run', …(7) }",
+      "observedAtInputHead": "PASS 2/2 at input head 8da2fe21"
+    },
+    {
+      "id": "AC10-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "dispatcher → run handler with approveIneligible in the typed config",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/dispatcher.test.ts",
+        "tests": [
+          "dispatchCommand() - real handlers integration dispatches run command, forwarding the loop outcome as the exit code leaves the exit code untouched on a successful (dry) run",
+          "dispatchCommand() - real handlers integration dispatches run command, forwarding the loop outcome as the exit code propagates a refusal as a thrown error, never as a silent zero",
+          "dispatchCommand() - real handlers integration dispatches run command, forwarding the loop outcome as the exit code forwards a failed iteration as exit code 1, whatever the engine exited with"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/dispatcher.test.ts"
+      },
+      "expected": "dispatch unchanged",
+      "covers": [
+        "AC-10",
+        "AC-15"
+      ],
+      "observedAtBase": "PASS 3/3 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 3/3 at input head 8da2fe21",
+      "rationale": "passes at base; companion shape edit"
+    },
+    {
+      "id": "AC11-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "no pair-workflow-cycle under any target",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-scripts.test.ts",
+        "tests": [
+          "locateCycleScripts HALTs skill-missing, naming pair-workflow-cycle, when the skill is not installed"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-scripts.test.ts"
+      },
+      "expected": "throws skill-missing naming pair-workflow-cycle",
+      "covers": [
+        "AC-11"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-scripts' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC11-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "handler, Ready card, skill absent — entry via `no-mapping-declared` (automation.md with no `## Workflows` and no `## Eligibility`, cardTags '', injected readiness Ready): AC14's fallback with the eligibility gate not in the way (maintainer decision (1) 2026-09-23: AC14 as written)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — the delivery-cycle coordinator entry (US-487) AC11: HALTs skill-missing, naming pair-workflow-cycle, when the entry resolves to cycle mode but the skill is not installed"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "rejects /skill-missing.*pair-workflow-cycle/",
+      "covers": [
+        "AC-11"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Error: promise resolved \"+0\" instead of rejecting",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21"
+    },
+    {
+      "id": "AC11-W3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "installed scripts, empty .claude/agents",
+      "oracle": {
+        "file": ".claude/workflows/pair-contracts/role-packet.test.mjs",
+        "tests": [
+          "a stage whose agent definition is missing HALTs agent-definition-missing, naming the role"
+        ],
+        "command": "node --test .claude/workflows/pair-contracts/role-packet.test.mjs"
+      },
+      "expected": "non-zero exit, halt agent-definition-missing, role pair-fix-test-author named",
+      "covers": [
+        "AC-11"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: ",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "injectedRegression": "roleBodyFor returns \"\" instead of HALTing ⇒ FAIL (and AC11-I1 FAIL)"
+    },
+    {
+      "id": "AC11-I1",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "bridge.packet over scripts without agents",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-scripts.test.ts",
+        "tests": [
+          "createCycleScriptsBridge — real spawn against the installed scripts packet() propagates agent-definition-missing, naming the role, when the install has no agents (AC11)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-scripts.test.ts"
+      },
+      "expected": "throws agent-definition-missing naming pair-fix-test-author",
+      "covers": [
+        "AC-11"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-scripts' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)",
+      "injectedRegression": "M12: bridge swallows the agent-definition-missing halt ⇒ FAIL"
+    },
+    {
+      "id": "AC11-W4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "--profile / --workflow-config",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/parser.test.ts",
+        "tests": [
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) refuses the reserved --profile with a pointer to #488",
+          "parseRunCommand — cycle-coordinator flags on --card (US-487) refuses the reserved --workflowConfig with a pointer to #488"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parser.test.ts"
+      },
+      "expected": "refused with a pointer to #488",
+      "covers": [
+        "AC-11"
+      ],
+      "observedAtBase": "FAIL 2/2 at base 1bf7b02d: AssertionError: expected [Function] to throw an error",
+      "observedAtInputHead": "PASS 2/2 at input head 8da2fe21"
+    },
+    {
+      "id": "AC11-B1",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "the story worktree path is already checked out on ANOTHER branch (real `git worktree add -b someone-else <root>/pair-worktrees/7`) — PRODUCTION driver over the real cycle-dispatch",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
+        "tests": [
+          "createDefaultCycleDriver — production wiring over the real scripts (US-487) AC1/AC11 (worktree-conflict): the story worktree path checked out on ANOTHER branch HALTs the run with the halt verbatim, before any spawn"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-driver-wiring.test.ts"
+      },
+      "expected": "the run ends (rejected or resolved) carrying `worktree-conflict` and the other branch name, never ready-for-merge; engine spawned 0 times",
+      "covers": [
+        "AC-11",
+        "AC-1"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-wiring' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "card edge case \"Worktree exists on another branch: cycle-dispatch reports worktree-conflict; the driver HALTs before any spawn\"; the former bridge-level cases (cycle-state-unreadable, branch-invalid relay) are unchanged and now row AC11-B3.",
+      "injectedRegression": "cycle.ts `await worktree()` → `await worktree().catch(() => undefined)` in scratch r2-head ⇒ the worktree-conflict driver test FAILS (1 failed)"
+    },
+    {
+      "id": "AC11-B3",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "corrupted cycle-state.mjs; invalid branch ref (bridge level, real scripts)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-scripts.test.ts",
+        "tests": [
+          "createCycleScriptsBridge — real spawn against the installed scripts a malformed script output is a typed cycle-state-unreadable HALT, never a silent \"assume prepare\"",
+          "createCycleScriptsBridge — real spawn against the installed scripts worktree() propagates a real HALT from cycle-dispatch.mjs verbatim (branch-invalid)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-scripts.test.ts"
+      },
+      "expected": "cycle-state-unreadable (never assume prepare); branch-invalid propagated verbatim",
+      "covers": [
+        "AC-11"
+      ],
+      "observedAtBase": "FAIL 2/2 at base 1bf7b02d: Cannot find module './cycle-scripts' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46",
+      "observedAtInputHead": "PASS 2/2 at input head 8da2fe21",
+      "rationale": "the two cases AC11-B1 carried before this repair, byte-unchanged in cycle-scripts.test.ts; split out so AC11-B1 names the loop-level halt the rejection asked for."
+    },
+    {
+      "id": "AC12-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "a merge collaborator offered; resolve returns step merge",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle.test.ts",
+        "tests": [
+          "runCycle (US-487 T-4) AC12: never constructs a merge — no branch of the outcome mapping can request one",
+          "runCycle (US-487 T-4) AC12: a `merge` step from resolve (#490, Auto-Advance) is reported, never dispatched by this driver"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle.test.ts"
+      },
+      "expected": "offered merge never called; a merge step is reported (outcome.next.step merge) with no packet and no spawn",
+      "covers": [
+        "AC-12"
+      ],
+      "observedAtBase": "FAIL 2/2 at base 1bf7b02d: Cannot find module './cycle' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/scratch",
+      "observedAtInputHead": "PASS 2/2 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)",
+      "injectedRegression": "M8: 'merge' added to DISPATCHABLE_STEPS ⇒ FAIL"
+    },
+    {
+      "id": "AC12-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "resolve blocked/escalate",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle.test.ts",
+        "tests": [
+          "runCycle (US-487 T-4) a blocked/escalate terminal is reported VERBATIM from resolve.next.reason, never re-derived"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle.test.ts"
+      },
+      "expected": "status 'escalate' as resolve reports it",
+      "covers": [
+        "AC-12"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/scratch",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC12-W3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "argv for every engine",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/stage-runner.test.ts",
+        "tests": [
+          "buildStageArgs — the packet's prompt and worktree, and NOTHING pair-cli composes itself never constructs a merge command, on any engine (AC12, mirrors spawn.test.ts)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/stage-runner.test.ts"
+      },
+      "expected": "no merge command",
+      "covers": [
+        "AC-12"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './stage-runner' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC12-W4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "handler card mode — entry via `no-mapping-declared` (automation.md with no `## Workflows` and no `## Eligibility`, cardTags '', injected readiness Ready): AC14's fallback with the eligibility gate not in the way (maintainer decision (1) 2026-09-23: AC14 as written)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — the delivery-cycle coordinator entry (US-487) AC12: never merges — the handler holds no merge-capable collaborator on the cycle-entry path"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "driveCycle resolves a status (ready-for-merge); no merge seam exists",
+      "covers": [
+        "AC-12"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: AssertionError: expected \"spy\" to resolve with: ObjectContaining{…} at least once[90m",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21"
+    },
+    {
+      "id": "AC13-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "styleFor per engine",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/stage-runner.test.ts",
+        "tests": [
+          "styleFor — the ONE place engine.skillInvocationStyle becomes cycle-dispatch's --style reuses 'pi''s own skillInvocationStyle, never a second table",
+          "styleFor — the ONE place engine.skillInvocationStyle becomes cycle-dispatch's --style reuses 'opencode''s own skillInvocationStyle, never a second table",
+          "styleFor — the ONE place engine.skillInvocationStyle becomes cycle-dispatch's --style reuses 'claude''s own skillInvocationStyle, never a second table",
+          "styleFor — the ONE place engine.skillInvocationStyle becomes cycle-dispatch's --style reuses 'codex''s own skillInvocationStyle, never a second table",
+          "styleFor — the ONE place engine.skillInvocationStyle becomes cycle-dispatch's --style claude renders slash, pi and opencode render instruction (AC3, AC13)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/stage-runner.test.ts"
+      },
+      "expected": "claude slash; pi/opencode/codex instruction — read from the engine map, never a second table",
+      "covers": [
+        "AC-13",
+        "AC-3"
+      ],
+      "observedAtBase": "FAIL 5/5 at base 1bf7b02d: Cannot find module './stage-runner' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/",
+      "observedAtInputHead": "PASS 5/5 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)",
+      "injectedRegression": "M9: styleFor returns 'slash' ⇒ FAIL"
+    },
+    {
+      "id": "AC13-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "pi binary resolution: engine.bin > PATH > repo node_modules/.bin",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/path-probe.test.ts",
+        "tests": [
+          "resolveEngineBinary a declared `engine.bin` that exists wins over PATH and the repo",
+          "resolveEngineBinary a declared path that does not exist is not trusted: PATH answers next",
+          "resolveEngineBinary falls back to the repository's own node_modules/.bin when PATH has no pi",
+          "resolveEngineBinary found nowhere is undefined, never a guessed command"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/path-probe.test.ts"
+      },
+      "expected": "pi is found where the canary had it (repo bin) without a PATH edit",
+      "covers": [
+        "AC-13"
+      ],
+      "observedAtBase": "FAIL 4/4 at base 1bf7b02d: TypeError: (0 , resolveEngineBinary) is not a function",
+      "observedAtInputHead": "PASS 4/4 at input head 8da2fe21",
+      "injectedRegression": "declared-bin branch disabled ⇒ FAIL"
+    },
+    {
+      "id": "AC13-I1",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "PRODUCTION driver, opencode engine, no handoff published (the canary T-6 behaviour)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
+        "tests": [
+          "createDefaultCycleDriver — production wiring over the real scripts (US-487) opencode, which does the file work but publishes no handoff, ends failed-<step> — never claimed complete (AC13 known limitation)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-driver-wiring.test.ts"
+      },
+      "expected": "2 spawns, failed-prepare, never ready-for-merge — the known limitation is reported as a failure, never claimed as completion",
+      "covers": [
+        "AC-13"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-wiring' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code). This row does NOT assert that opencode completes: AC13 excludes that by maintainer decision (2026-09-22); it asserts the driver never misreports it"
+    },
+    {
+      "id": "AC14-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "no mapping matches, card readable and NOT Ready: `unmapped` Draft, `unmapped` Refined-without-breakdown, and `no-mapping-declared` (`## Eligibility` declared, the card CARRIES the label) Draft",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — tag-driven dispatch (US-217) runs NOTHING on a card carrying no mapped tag, and says why (AC2) — a Draft card (US-487 AC14 fallback: not yet Ready)",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14: a Refined card with no task breakdown routes to pair-process-plan-tasks instead of entering prepare",
+          "handleRunCommand — tag-driven dispatch (US-217) exits cleanly with \"no mapping declared\" when the adoption declares no workflows (AC4) — Draft fallback (US-487 AC14)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "routed to pair-process-refine-story (Draft) / pair-process-plan-tasks (no breakdown), reported, exactly one dispatch, never prepare; the Draft route leaves no event=skip audit record (AC14-G2)",
+      "covers": [
+        "AC-14"
+      ],
+      "observedAtBase": "FAIL 3/3 at base 1bf7b02d: AssertionError: expected \"spy\" to be called with arguments: [ '218' ][90m",
+      "observedAtInputHead": "FAIL 1/3 at input head 8da2fe21: AssertionError: expected true to be false // Object.is equality"
+    },
+    {
+      "id": "AC14-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "mapped tag matches",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — tag-driven dispatch (US-217) AC14: `## Workflows` declared and the card carries the mapped tag ⇒ US-217 wins unchanged, the cycle coordinator never starts"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "US-217 route wins; readiness never consulted; driveCycle never called",
+      "covers": [
+        "AC-14"
+      ],
+      "observedAtBase": "PASS 1/1 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "already correct at base (US-217 precedence, zero regression)"
+    },
+    {
+      "id": "AC14-C2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "populated-board e2e: the US-217 refusals and the burst lock, unchanged",
+      "oracle": {
+        "file": "apps/pair-cli/src/cli.e2e.test.ts",
+        "tests": [
+          "pair-cli e2e tag-driven dispatch on a populated board (US-217) refuses --root on a dispatched card, and spawns nothing when it does",
+          "pair-cli e2e tag-driven dispatch on a populated board (US-217) never starts a second run on a card a run already holds (trigger burst)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/cli.e2e.test.ts"
+      },
+      "expected": "US-217 behaviour byte-identical",
+      "covers": [
+        "AC-14"
+      ],
+      "rationale": "the populated-board routing test and the no-mapping board tests moved to AC14-G3 / AC15-W4: under AC14 an unmapped or no-mapping readable Ready card now starts the cycle, so those are witnesses, not controls",
+      "observedAtBase": "PASS 2/2 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 2/2 at input head 8da2fe21"
+    },
+    {
+      "id": "AC14-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "macrostate grammar",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-scripts.test.ts",
+        "tests": [
+          "classifyCardReadiness (AC14) classifies a card with no Status: Refined marker as Draft",
+          "classifyCardReadiness (AC14) classifies Refined with no Task Breakdown section as refined-no-breakdown",
+          "classifyCardReadiness (AC14) classifies Refined WITH a task breakdown as ready (DoR satisfied)",
+          "classifyCardReadiness (AC14) an unrecognised status is refused rather than defaulted to Draft or Ready"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-scripts.test.ts"
+      },
+      "expected": "draft / refined-no-breakdown / ready; unknown status refused",
+      "covers": [
+        "AC-14"
+      ],
+      "observedAtBase": "FAIL 4/4 at base 1bf7b02d: Cannot find module './cycle-scripts' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46",
+      "observedAtInputHead": "PASS 4/4 at input head 8da2fe21",
+      "rationale": "the witness fails because the producer module does not exist at the unfixed base (structural story: the coordinator is new code)"
+    },
+    {
+      "id": "AC15-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "isDorFallbackReason / ineligibleOverrideApplied truth table per AC15 as amended 2026-09-23 (the gate bounds UNATTENDED runs; per-run override): reason × `## Eligibility` declared/absent × label carried/absent × supervised/autonomous × --approve-ineligible",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/dor-fallback-eligibility.test.ts",
+        "tests": [
+          "AC14 fallback vs the eligibility gate falls back on `unmapped`: eligibility was already evaluated upstream, and passed",
+          "AC14 fallback vs the eligibility gate falls back on `no-mapping-declared` when no `## Eligibility` is declared — supervised or autonomous",
+          "AC14 fallback vs the eligibility gate falls back on `no-mapping-declared` when the card CARRIES the declared label",
+          "AC14 fallback vs the eligibility gate REFUSES `no-mapping-declared` on an AUTONOMOUS run whose card lacks the declared label (AC15)",
+          "AC14 fallback vs the eligibility gate ALLOWS a SUPERVISED run on that same label-less card — the gate bounds unattended runs (AC15)",
+          "AC14 fallback vs the eligibility gate --approve-ineligible lets THAT autonomous run through for this one invocation",
+          "AC14 fallback vs the eligibility gate never reaches the fallback for the skip reasons that are not about routing",
+          "ineligibleOverrideApplied — announced, never silent is true exactly when the flag is what let an AUTONOMOUS run on a label-less card through",
+          "ineligibleOverrideApplied — announced, never silent stays quiet when the flag changed nothing — supervised, no label declared, the label carried, or no flag"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/dor-fallback-eligibility.test.ts"
+      },
+      "expected": "unmapped ⇒ true; no-mapping-declared ⇒ true when no `## Eligibility`, or the label carried, or supervised, or --approve-ineligible; false ONLY for autonomous + label declared + label absent + no flag; automation-off/ineligible/run-in-progress ⇒ false; ineligibleOverrideApplied true exactly for no-mapping-declared + autonomous + label declared + label absent + flag",
+      "covers": [
+        "AC-15",
+        "AC-14"
+      ],
+      "observedAtBase": "FAIL 9/9 at base 1bf7b02d: TypeError: (0 , isDorFallbackReason) is not a function",
+      "observedAtInputHead": "PASS 9/9 at input head 8da2fe21"
+    },
+    {
+      "id": "AC15-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handleRunCommand: ## Eligibility declared, no ## Workflows, autonomous, card without the label",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/dor-fallback-eligibility.test.ts",
+        "tests": [
+          "AC15 through handleRunCommand an AUTONOMOUS run on a card without the label never starts the delivery cycle"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/dor-fallback-eligibility.test.ts"
+      },
+      "expected": "driveCycle never called",
+      "covers": [
+        "AC-15"
+      ],
+      "observedAtBase": "PASS 1/1 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "passes at base (base never starts a cycle at all); guards the HEAD implementation — killed by the fallback-ignores-eligibility regression"
+    },
+    {
+      "id": "AC15-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "`## Eligibility` declared, no `## Workflows`, card WITHOUT the label, NO flag: supervised (tags risk:red) proceeds; autonomous (no tags) is skipped and SAYS ineligible",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/dor-fallback-eligibility.test.ts",
+        "tests": [
+          "AC15 through handleRunCommand a SUPERVISED run on that same card is NOT held back: the fallback reads it and the Ready card enters the cycle, no override announced (AC15: the gate bounds unattended runs)",
+          "AC15 through handleRunCommand without the flag the autonomous skip is SAID: it prints ineligible, never routes the card (AC15)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/dor-fallback-eligibility.test.ts"
+      },
+      "expected": "supervised: exit 0, cardReadiness called with the card, driveCycle once, no /overrid/i line. Autonomous: exit 0, stdout contains \"ineligible\" (AC15 \"skips it as ineligible\"), cardReadiness and driveCycle never called",
+      "covers": [
+        "AC-15",
+        "AC-14"
+      ],
+      "rationale": "the autonomous case is RED at the input head for the REPORT only: the gate already refuses (AC15-C1 passes) but the head prints the dispatcher reason \"no mapping declared\", never that the card was skipped as ineligible",
+      "observedAtBase": "FAIL 2/2 at base 1bf7b02d: AssertionError: expected \"spy\" to be called with arguments: [ '218' ][90m",
+      "observedAtInputHead": "FAIL 1/2 at input head 8da2fe21: AssertionError: expected 'pair run\\n  Dispatch: card 218 · no m…' to contain 'ineligible'"
+    },
+    {
+      "id": "AC3-I3",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "PRODUCTION driver, --pr 42 (verify first), claude, fake engine records cwd+argv — the ONE cwd rule (maintainer decision (3)): every stage process starts in the MAIN checkout; verify's $worktree names the detached review worktree it cds into",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
+        "tests": [
+          "createDefaultCycleDriver — production wiring over the real scripts (US-487) AC3/AC2 (verify cwd): the verify stage STARTS in the main checkout like every stage, and its $worktree names the DETACHED review worktree it cds into"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-driver-wiring.test.ts"
+      },
+      "expected": "first prompt starts /pair-workflow-review-phase; realpath(cwd) === main checkout; prompt matches /\\$worktree=\\S*pair-worktrees\\/7-review/",
+      "covers": [
+        "AC-3",
+        "AC-2",
+        "AC-1"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-wiring' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "replaces the helper-level verify-cwd case of AC3-W3 with the production behaviour; the packet's shared prefix also carries the story $worktree (cycle-dispatch's batch-identical argument set, AC3) — not asserted against."
+    },
+    {
+      "id": "AC12-G1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "resolve answers WITHOUT a `next` (status incompatible: a schemaVersion-2 handoff; status invalid: an unparseable handoff) — the REAL resolve over the same run dir, fed to the PRODUCTION driver, and through handleRunCommand with no driveCycle injected",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
+        "tests": [
+          "createDefaultCycleDriver — production wiring over the real scripts (US-487) AC12/AC4 (resolve status incompatible): a legacy run directory stops the run typed, with resolve's reason and the migrate-acknowledge pointer — zero spawns, never a crash",
+          "createDefaultCycleDriver — production wiring over the real scripts (US-487) AC12/AC4 (resolve status invalid): an unreadable handoff stops the run typed, carrying resolve's reason — zero spawns, never a crash",
+          "handleRunCommand over the production driver — a legacy run directory (US-487 a0 repair) exits non-zero, printing resolve's incompatible reason and the migrate-acknowledge pointer, spawning nothing"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-driver-wiring.test.ts"
+      },
+      "expected": "driver RESOLVES outcome.status === resolve.status (incompatible | invalid), stagesRun 0, JSON(outcome) contains resolve's own reason (e.g. \"schemaVersion 2 != 3 in a0-red-spec\"), incompatible ⇒ also /migrate-acknowledge/; handler exit ≠ 0 printing incompatible + reason + migrate-acknowledge; engine/iteration spawned 0 times",
+      "covers": [
+        "AC-12",
+        "AC-4",
+        "AC-9"
+      ],
+      "observedAtBase": "FAIL 3/3 at base 1bf7b02d: Cannot find module './cycle-wiring' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/",
+      "observedAtInputHead": "FAIL 3/3 at input head 8da2fe21: TypeError: Cannot read properties of undefined (reading 'step')",
+      "rationale": "the producer (cycle-state.mjs resolveState) returns incompatible/invalid/other-run with no `next`; the card edge case: legacy run dir ⇒ incompatible, run stops pointing to migrate-acknowledge; the pair-workflow-cycle rule: incompatible/invalid ⇒ stop and report. RED at base AND at the input head."
+    },
+    {
+      "id": "AC9-I2",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "resolve status other-run: a0-red-spec published through the REAL cycle-state under runId batch-run-7; this invocation asks for story-7 (empty dir) — PRODUCTION driver",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
+        "tests": [
+          "createDefaultCycleDriver — production wiring over the real scripts (US-487) AC9/AC12 (resolve status other-run): a cycle another realization started under another runId is CONTINUED on that runId, never crashed on and never restarted"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-driver-wiring.test.ts"
+      },
+      "expected": "real resolve on story-7 = {status: other-run, runId: batch-run-7}; the driver adopts it: first engine prompt starts /pair-workflow-red-verify and carries $run=batch-run-7 (never $run=story-7), no TypeError, no a0-red-spec.json written under story-7",
+      "covers": [
+        "AC-9",
+        "AC-12"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Cannot find module './cycle-wiring' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f46/",
+      "observedAtInputHead": "FAIL 1/1 at input head 8da2fe21: AssertionError: expected 'rejected Cannot read properties of un…' not to match /TypeError|Cannot read properties/",
+      "rationale": "AC9 \"a cycle started by pair-workflow-cycle or pair-implement-batch … continues without failed-resume\"; pair-workflow-cycle Act: other-run ⇒ adopt that run id and resolve again. Part of rejection AC12-G1."
+    },
+    {
+      "id": "AC12-G2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "handler card mode (entry via `no-mapping-declared`, no `## Eligibility`, cardTags ''), driveCycle returns failed-prepare | escalate (blocked, detail) | incompatible (reason, detail)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — the delivery-cycle coordinator entry (US-487) AC12/AC8 — every non-merge terminal status is a non-zero exit that says why (a0 repair, AC12-G2) failed-prepare (dead dispatch, retry spent): exit non-zero, the status and resolve's own reason printed verbatim",
+          "handleRunCommand — the delivery-cycle coordinator entry (US-487) AC12/AC8 — every non-merge terminal status is a non-zero exit that says why (a0 repair, AC12-G2) escalate (resolve blocked, a human decision owed): exit non-zero, the status and resolve's own reason printed verbatim",
+          "handleRunCommand — the delivery-cycle coordinator entry (US-487) AC12/AC8 — every non-merge terminal status is a non-zero exit that says why (a0 repair, AC12-G2) incompatible (legacy run directory): exit non-zero, the status and resolve's own reason printed verbatim"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "exit ≠ 0; output contains the status and resolve's reason/detail verbatim (escalate detail, incompatible reason + migrate-acknowledge)",
+      "covers": [
+        "AC-12",
+        "AC-8"
+      ],
+      "observedAtBase": "FAIL 3/3 at base 1bf7b02d: AssertionError: expected +0 not to be +0 // Object.is equality",
+      "observedAtInputHead": "PASS 3/3 at input head 8da2fe21",
+      "injectedRegression": "handler.ts `return outcome.status === 'ready-for-merge' ? 0 : 1` → `return 0` in scratch r2-head ⇒ all 4 exit rows FAIL (AC12-G2 ×3, AC8-W4)"
+    },
+    {
+      "id": "AC12-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "handler card mode, driveCycle returns ready-for-merge",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — the delivery-cycle coordinator entry (US-487) AC12/AC8 — every non-merge terminal status is a non-zero exit that says why (a0 repair, AC12-G2) ready-for-merge is the one zero exit (control)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "exit 0",
+      "covers": [
+        "AC-12"
+      ],
+      "observedAtBase": "PASS 1/1 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "positive control for the exit mapping; non-discriminating at base by construction, AC12-G2 is the witness."
+    },
+    {
+      "id": "AC8-W4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "handler card mode, --rounds 1, driveCycle returns rounds-bound-reached with next {step: green, phase: r2-g1, round: 2}",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — the delivery-cycle coordinator entry (US-487) AC12/AC8 — every non-merge terminal status is a non-zero exit that says why (a0 repair, AC12-G2) rounds-bound-reached (--rounds 1): exit non-zero, printing the NEXT step the bound stopped before (AC8)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "exit ≠ 0; output contains rounds-bound-reached, the next step (green) and its phase (r2-g1)",
+      "covers": [
+        "AC-8",
+        "AC-12"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: AssertionError: expected +0 not to be +0 // Object.is equality",
+      "observedAtInputHead": "FAIL 1/1 at input head 8da2fe21: AssertionError: expected 'pair run\\n  Dispatch: card 218 · no m…' to match /\\bgreen\\b/",
+      "rationale": "AC8: \"exactly one remediation round runs and the command exits printing the `next` step\". Part of rejection AC12-G2."
+    },
+    {
+      "id": "AC14-G1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "`no-mapping-declared` (automation.md absent / `## Workflows` absent) AND the card UNREADABLE through the PRODUCTION readiness probe: `gh` on PATH but unauthenticated (fake gh, exit 4), or no `gh` on PATH at all (ENOENT) — handler, and the populated-board e2e through the command registry (maintainer decision (1) 2026-09-22/23: AC14 stands exactly as written; no mapping declared + card UNREADABLE is the one clean-skip class); CROSSED with `## Eligibility` declared and no `## Workflows` (this repository's shape) in every AC15 gate state that lets the fallback read the card: label carried (autonomous), label absent SUPERVISED, label absent --autonomous --approve-ineligible — × gh unauthenticated / gh absent",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — tag-driven dispatch (US-217) AC14-G1 (NO automation.md at all (the shipped default), `gh` on PATH but unauthenticated): the card is unreadable ⇒ a clean skip — exit 0, \"no mapping declared\" and card-unreadable printed, nothing spawned, no DISPATCH-RECORD",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14-G1 (NO automation.md at all (the shipped default), no `gh` on PATH at all): the card is unreadable ⇒ a clean skip — exit 0, \"no mapping declared\" and card-unreadable printed, nothing spawned, no DISPATCH-RECORD",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14-G1 (`## Workflows` absent from a PRESENT automation.md, `gh` on PATH but unauthenticated): the card is unreadable ⇒ a clean skip — exit 0, \"no mapping declared\" and card-unreadable printed, nothing spawned, no DISPATCH-RECORD",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14-G1 (`## Workflows` absent from a PRESENT automation.md, no `gh` on PATH at all): the card is unreadable ⇒ a clean skip — exit 0, \"no mapping declared\" and card-unreadable printed, nothing spawned, no DISPATCH-RECORD",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14-G1 (`## Eligibility` declared, no `## Workflows`; the card CARRIES the declared label (autonomous); `gh` on PATH but unauthenticated): the card is unreadable ⇒ a clean skip — exit 0, \"no mapping declared\" and card-unreadable printed, nothing spawned, no DISPATCH-RECORD",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14-G1 (`## Eligibility` declared, no `## Workflows`; the card CARRIES the declared label (autonomous); no `gh` on PATH at all): the card is unreadable ⇒ a clean skip — exit 0, \"no mapping declared\" and card-unreadable printed, nothing spawned, no DISPATCH-RECORD",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14-G1 (`## Eligibility` declared, no `## Workflows`; label absent, SUPERVISED; `gh` on PATH but unauthenticated): the card is unreadable ⇒ a clean skip — exit 0, \"no mapping declared\" and card-unreadable printed, nothing spawned, no DISPATCH-RECORD",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14-G1 (`## Eligibility` declared, no `## Workflows`; label absent, SUPERVISED; no `gh` on PATH at all): the card is unreadable ⇒ a clean skip — exit 0, \"no mapping declared\" and card-unreadable printed, nothing spawned, no DISPATCH-RECORD",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14-G1 (`## Eligibility` declared, no `## Workflows`; label absent, --autonomous --approve-ineligible; `gh` on PATH but unauthenticated): the card is unreadable ⇒ a clean skip — exit 0, \"no mapping declared\" and card-unreadable printed, nothing spawned, no DISPATCH-RECORD",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14-G1 (`## Eligibility` declared, no `## Workflows`; label absent, --autonomous --approve-ineligible; no `gh` on PATH at all): the card is unreadable ⇒ a clean skip — exit 0, \"no mapping declared\" and card-unreadable printed, nothing spawned, no DISPATCH-RECORD"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts",
+        "alsoTests": {
+          "file": "apps/pair-cli/src/cli.e2e.test.ts",
+          "tests": [
+            "pair-cli e2e tag-driven dispatch on a populated board (US-217) with NO automation.md and NO readable card (no `gh` on PATH) — the github-dispatch-adapter smoke condition — every trigger is a clean skip: exit 0, the reason said, no DISPATCH-RECORD"
+          ],
+          "command": "pnpm --dir apps/pair-cli exec vitest run src/cli.e2e.test.ts"
+        }
+      },
+      "expected": "exit 0; stdout contains \"no mapping declared\" AND the typed reason `card-unreadable`; no line starting DISPATCH-RECORD:; no iteration spawned; driveCycle never called. e2e: every board trigger exits 0, each card printed with \"no mapping declared\", one card-unreadable line per card, no DISPATCH-RECORD, no cycle started",
+      "covers": [
+        "AC-14",
+        "AC-1",
+        "AC-15"
+      ],
+      "observedAtBase": "FAIL 11/11 at base 1bf7b02d (10 handler + 1 e2e): AssertionError: expected 'pair run\\n  Dispatch: card 217 · no m…' to contain 'card-unreadable'",
+      "observedAtInputHead": "FAIL 11/11 at input head 8da2fe21: Error: card-unreadable: `gh issue view 217` failed — Command failed: gh issue view 217 --json title,body (unauthenticated) / spawnSync gh ENOENT (absent)",
+      "rationale": "Rejection AC14-G1/unreadable-under-declared-eligibility. Discriminance proven in a scratch copy of 8da2fe21: a fallback that clean-skips every no-mapping-declared unreadable card ⇒ all 10 handler cases PASS (the contract is satisfiable); the validator's counterexample — clean skip only when no `## Eligibility` is declared, card-unreadable thrown otherwise ⇒ the 4 original cases PASS and the 6 new ones FAIL (Error: card-unreadable).",
+      "closureAssertions": [
+        {
+          "id": "AC14-G1-x-eligibility",
+          "proven": "6 new cases (3 gate states × 2 unreadable trackers), each exit 0 + no mapping declared + card-unreadable + zero spawns + no DISPATCH-RECORD + driveCycle never called"
+        }
+      ]
+    },
+    {
+      "id": "AC14-C5",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "the github-dispatch-adapter smoke, byte-unchanged (DoD \"github-dispatch-adapter smoke unchanged\"): real packaging → real tarball install → the shipped `Dispatch the card` step, CARD=217 CARD_TAGS=auto-dev, no automation.md, PATH=<prefix>/bin:<node>:/usr/bin:/bin under env -i (gh absent locally, unauthenticated on a hosted runner) — the AC14-G1 class end to end",
+      "oracle": {
+        "file": "scripts/smoke-tests/scenarios/github-dispatch-adapter.sh",
+        "tests": [
+          "GitHub Dispatch Adapter (real install)"
+        ],
+        "command": "pnpm exec turbo run build --filter @pair/pair-cli... && bash scripts/smoke-tests/scenarios/github-dispatch-adapter.sh"
+      },
+      "expected": "exit 0; both copies (dataset, mirror): the shipped step exits 0, prints `no mapping declared`, emits no DISPATCH-RECORD",
+      "covers": [
+        "AC-14"
+      ],
+      "observedAtBase": "PASS at base 1bf7b02d (scratch git-archive + pnpm install --offline + turbo build): smoke exit 0 — \"[PASS] dataset: the shipped step reached the installed CLI and skipped cleanly\", \"[PASS] mirror: … skipped cleanly\"",
+      "observedAtInputHead": "FAIL at input head 8da2fe21 (scratch git-archive, same procedure): smoke exit 1 — \"[FAIL] dataset: the shipped step exited 1 on an unmapped card (expected a clean skip)\"; stderr \"card-unreadable: `gh issue view 217` failed — spawnSync gh ENOENT\" (the head defect AC14-G1 names)",
+      "rationale": "the real-producer control the rejection asks for; the smoke is sealed byte-identical as an artifact so the DoD \"unchanged\" is enforced, not trusted."
+    },
+    {
+      "id": "AC14-W3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "a mapping DECLARED (`## Workflows` + `## Eligibility`), the eligible card carries no mapped tag (`unmapped`), no readiness injected, an unauthenticated `gh` first on PATH",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — tag-driven dispatch (US-217) AC14 (card unreadable under the fallback): a DECLARED mapping, an unmapped card and no reachable `gh` fail closed, typed card-unreadable — nothing spawned, never a guessed macrostate"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "rejects /card-unreadable/; no iteration spawned; driveCycle never called",
+      "covers": [
+        "AC-14",
+        "AC-11"
+      ],
+      "observedAtBase": "FAIL 1/1 at base 1bf7b02d: Error: promise resolved \"+0\" instead of rejecting",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "only the no-mapping-DECLARED class meets the smoke (maintainer decision (1)); where a mapping IS declared the fallback owes a macrostate it cannot read, so the run fails closed, typed, never guessing Draft or Ready"
+    },
+    {
+      "id": "AC14-G2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "each fallback route for BOTH no-mapping reasons — `unmapped` (mapping declared, eligible card, no mapped tag) and `no-mapping-declared` (no automation.md): draft ⇒ pair-process-refine-story, refined-no-breakdown ⇒ pair-process-plan-tasks, ready ⇒ delivery cycle",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — tag-driven dispatch (US-217) AC14 — a fallback route reports which route and why, and is never reported or audited as a skip unmapped, draft ⇒ pair-process-refine-story: the route and the reason are printed; no \"Nothing was spawned.\", no skip record",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14 — a fallback route reports which route and why, and is never reported or audited as a skip unmapped, refined-no-breakdown ⇒ pair-process-plan-tasks: the route and the reason are printed; no \"Nothing was spawned.\", no skip record",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14 — a fallback route reports which route and why, and is never reported or audited as a skip unmapped, ready ⇒ the delivery cycle: the route and the reason are printed; no \"Nothing was spawned.\", no skip record",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14 — a fallback route reports which route and why, and is never reported or audited as a skip no-mapping-declared, draft ⇒ pair-process-refine-story: the route and the reason are printed; no \"Nothing was spawned.\", no skip record",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14 — a fallback route reports which route and why, and is never reported or audited as a skip no-mapping-declared, refined-no-breakdown ⇒ pair-process-plan-tasks: the route and the reason are printed; no \"Nothing was spawned.\", no skip record",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14 — a fallback route reports which route and why, and is never reported or audited as a skip no-mapping-declared, ready ⇒ the delivery cycle: the route and the reason are printed; no \"Nothing was spawned.\", no skip record"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "exit 0; the route (skill name, or /delivery cycle/i) and the reason (the dispatch reason as printed: \"unmapped\" / \"no mapping declared\", plus \"Definition of Ready\" for a prep route, \"Ready\" for the cycle) printed; never \"Nothing was spawned.\"; no audit entry with event=skip",
+      "covers": [
+        "AC-14"
+      ],
+      "observedAtBase": "FAIL 6/6 at base 1bf7b02d: AssertionError: expected [] to have a length of 1 but got +0",
+      "observedAtInputHead": "FAIL 6/6 at input head 8da2fe21: AssertionError: expected 'pair run\\n  Dispatch: card 218 · skip…' not to contain 'Nothing was spawned.'"
+    },
+    {
+      "id": "STATIC-G1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "the engine-binary cascade (resolveEngineBinary over createExecutableProbe) under INJECTED platforms darwin and linux — the platform-injected unit test smoke-ci-platform.test.ts AC6 (origin/main bd144708, #505) requires when apps/pair-cli/src path handling changes",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/path-probe.test.ts",
+        "tests": [
+          "resolveEngineBinary over the real PATH probe, per injected platform platform darwin: a ':'-separated PATH entry holding pi answers 'path'",
+          "resolveEngineBinary over the real PATH probe, per injected platform platform darwin: no pi on PATH falls back to <repo>/node_modules/.bin/pi",
+          "resolveEngineBinary over the real PATH probe, per injected platform platform darwin: a ';'-joined PATH is ONE directory, never split (a Windows separator means nothing here)",
+          "resolveEngineBinary over the real PATH probe, per injected platform platform darwin: a declared engine.bin that exists wins over PATH and the repo",
+          "resolveEngineBinary over the real PATH probe, per injected platform platform linux: a ':'-separated PATH entry holding pi answers 'path'",
+          "resolveEngineBinary over the real PATH probe, per injected platform platform linux: no pi on PATH falls back to <repo>/node_modules/.bin/pi",
+          "resolveEngineBinary over the real PATH probe, per injected platform platform linux: a ';'-joined PATH is ONE directory, never split (a Windows separator means nothing here)",
+          "resolveEngineBinary over the real PATH probe, per injected platform platform linux: a declared engine.bin that exists wins over PATH and the repo"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/path-probe.test.ts"
+      },
+      "expected": "per platform: PATH hit ⇒ {pi, path}; repo bin ⇒ {/repo/node_modules/.bin/pi, repo-bin}; \";\"-joined PATH ⇒ undefined; declared bin ⇒ {/opt/pi, config}; AND the AC6 gate regex /platform.*(?:darwin|linux)|(?:darwin|linux).*platform/ matches this artifact (line `for (const platform of ['darwin', 'linux'] as const)`)",
+      "covers": [
+        "AC-13",
+        "STATIC-G1"
+      ],
+      "observedAtBase": "FAIL 8/8 at base 1bf7b02d: TypeError: (0 , resolveEngineBinary) is not a function",
+      "observedAtInputHead": "PASS 8/8 at input head 8da2fe21",
+      "rationale": "maintainer decision (2): the contract lists the platform-injected test so the smoke-ci-platform AC6 gate the merge runs is satisfiable by a listed artifact; bringing origin/main into the branch is the implementer's step, never a rebase of sealed history. Rejection STATIC-G1."
+    },
+    {
+      "id": "AC15-C2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "`## Eligibility` AND `## Workflows` declared, card without the label, supervised and autonomous",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/dor-fallback-eligibility.test.ts",
+        "tests": [
+          "AC15 through handleRunCommand with `## Workflows` ALSO declared, a card without the label is skipped `ineligible` before routing — supervised or autonomous, the cycle never starts (BR3)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/dor-fallback-eligibility.test.ts"
+      },
+      "expected": "exit 0; driveCycle and cardReadiness never called",
+      "covers": [
+        "AC-15"
+      ],
+      "observedAtBase": "PASS 1/1 at base 1bf7b02d",
+      "observedAtInputHead": "PASS 1/1 at input head 8da2fe21",
+      "rationale": "with `## Workflows` declared, decideDispatch evaluates `## Eligibility` itself before routing (BR3): the label-less card is an `ineligible` skip that never reaches the fallback — US-217 unchanged, passes at base."
+    },
+    {
+      "id": "AC14-W4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "`no-mapping-declared` with NO `## Eligibility` — automation.md ABSENT (shipped default) and `## Workflows` absent from a PRESENT automation.md — card READABLE and Ready (maintainer decision (1) 2026-09-22/23: AC14 stands exactly as written; no mapping declared + card UNREADABLE is the one clean-skip class)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+        "tests": [
+          "handleRunCommand — tag-driven dispatch (US-217) AC14 (NO automation.md at all (the shipped default)): a READABLE Ready card starts the delivery cycle — no mapping declared is not \"card never read\"",
+          "handleRunCommand — tag-driven dispatch (US-217) AC14 (`## Workflows` absent from a PRESENT automation.md): a READABLE Ready card starts the delivery cycle — no mapping declared is not \"card never read\""
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts"
+      },
+      "expected": "exit 0; cardReadiness called with the card; driveCycle called once; no loop iteration spawned",
+      "covers": [
+        "AC-14",
+        "AC-1"
+      ],
+      "observedAtBase": "FAIL 2/2 at base 1bf7b02d: AssertionError: expected \"spy\" to be called with arguments: [ '217' ][90m",
+      "observedAtInputHead": "PASS 2/2 at input head 8da2fe21"
+    },
+    {
+      "id": "AC14-G3",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "populated-board e2e through the command registry (faked readiness = ready, faked driveCycle): the unmapped eligible card 303 on the mapped board; and every card with NO automation.md",
+      "oracle": {
+        "file": "apps/pair-cli/src/cli.e2e.test.ts",
+        "tests": [
+          "pair-cli e2e tag-driven dispatch on a populated board (US-217) runs exactly the two cards the mapping routes, and leaves the trail to prove the other three",
+          "pair-cli e2e tag-driven dispatch on a populated board (US-217) with NO automation.md at all — the shipped default — a READABLE Ready card starts the cycle on every trigger (AC14 stands as written)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/cli.e2e.test.ts"
+      },
+      "expected": "mapped board: the two mapped routes spawn exactly as US-217 (prompts, start/end trail, DISPATCH-RECORD for them, locks released), 302/305 skipped ineligible, cyclesStarted == [303] and the trail has no event=skip for 303. No automation.md: every trigger exit 0, readiness asked for all 5, cycle started for all 5, no loop spawn, never \"Nothing was spawned.\"",
+      "covers": [
+        "AC-14"
+      ],
+      "rationale": "US-217's own board test is edited only on row 303 (unmapped): AC14 now routes it; whether a delivery-cycle start posts a DISPATCH-RECORD is not decided by any AC and is not asserted",
+      "observedAtBase": "FAIL 2/2 at base 1bf7b02d: AssertionError: expected [] to deeply equal [ '303' ]",
+      "observedAtInputHead": "FAIL 2/2 at input head 8da2fe21: AssertionError: expected '2026-09-23T03:54:46.224Z event=start …' not to match /event=skip card=303\\b/"
+    },
+    {
+      "id": "AC15-W3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "`## Eligibility` declared, no `## Workflows`: autonomous + card WITHOUT the label + --approve-ineligible; supervised + --approve-ineligible (flag changes nothing); card CARRYING the label, no flag; PLUS per-run persistence: a flagged autonomous run then an UNFLAGGED autonomous run on the SAME InMemory fs and card (tags risk:red), with a recording fake `gh` first on PATH and as PAIR_GH_BIN (any tracker write is evidence)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/dor-fallback-eligibility.test.ts",
+        "tests": [
+          "AC15 through handleRunCommand --approve-ineligible lets THIS autonomous run through the gate — the override is announced, the Ready card enters the cycle (AC15 per-run override)",
+          "AC15 through handleRunCommand --approve-ineligible on a SUPERVISED run changes nothing, so nothing is announced — the run proceeds as it would without it",
+          "AC15 through handleRunCommand a card that CARRIES the label is not held back: the fallback reads it and the Ready card enters the cycle, no override announced",
+          "AC15 through handleRunCommand --approve-ineligible is never persisted: the policy and the card are untouched, and the NEXT unflagged autonomous run on the same fs is skipped ineligible (AC15 \"never a standing change\")"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/dor-fallback-eligibility.test.ts"
+      },
+      "expected": "autonomous override: exit 0; stdout matches /overrid/i and contains \"--approve-ineligible\" and the label \"risk:green\"; cardReadiness called with the card; driveCycle once. Supervised + flag: driveCycle once, no /overrid/i. Label carried: readiness read, cycle once, no /overrid/i. Not persisted: after the flagged run the policy file is byte-identical, no fs write/rename/unlink/rm/copy touched it, the fake gh log is empty (no card write); the second, unflagged run exits 0, cardReadiness and driveCycle never called (driveCycle total stays 1), policy still byte-identical, gh log still empty, and its output says `ineligible`",
+      "covers": [
+        "AC-15",
+        "AC-14"
+      ],
+      "observedAtBase": "FAIL 4/4 at base 1bf7b02d: AssertionError: expected 'pair run\\n  Dispatch: card 218 · no m…' to match /overrid/i (3 existing); new case: AssertionError: expected \"spy\" to be called 1 times, but got 0 times",
+      "observedAtInputHead": "FAIL 1/4 at input head 8da2fe21: the 3 existing PASS; the new case passes every persistence and gate assertion and fails only the final report line — AssertionError: expected '\\npair run\\n  Dispatch: card 218 · no…' to contain 'ineligible' (the same report defect as AC15-W2)",
+      "rationale": "Rejection AC15-W3/ineligible-override-not-persisted. Discriminance proven in a scratch copy of 8da2fe21: M-persist (flagged run appends a label to automation.md) ⇒ FAIL at the policy byte-identity assertion; M-cache (approval remembered in process state) ⇒ FAIL at `unflagged.driveCycle not called`; M-tag-card (flagged run spawns `gh issue edit <card> --add-label`) ⇒ FAIL at the empty-gh-log assertion — each before the report line. RED at the input head for the report only.",
+      "closureAssertions": [
+        {
+          "id": "override-per-run",
+          "proven": "policy byte-identical after the flagged run; second run skipped (driveCycle not called again) and prints ineligible once the AC15-W2 report defect is fixed"
+        }
+      ]
+    },
+    {
+      "id": "AC15-W4",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "populated-board e2e through the command registry: automation.md declares `## Eligibility` only (risk:green); every board card triggered UNATTENDED (--autonomous) and SUPERVISED",
+      "oracle": {
+        "file": "apps/pair-cli/src/cli.e2e.test.ts",
+        "tests": [
+          "pair-cli e2e tag-driven dispatch on a populated board (US-217) with `## Eligibility` declared and NO `## Workflows`, UNATTENDED (--autonomous): the labelled cards enter the cycle, the unlabelled ones are skipped ineligible (AC14, AC15)",
+          "pair-cli e2e tag-driven dispatch on a populated board (US-217) with `## Eligibility` declared and NO `## Workflows`, SUPERVISED: no card is held back by the label — every Ready card enters the cycle (AC15: the gate bounds unattended runs)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/cli.e2e.test.ts"
+      },
+      "expected": "every trigger exit 0; no loop spawn. Autonomous: \"no mapping declared\" printed; readinessAsked == cyclesStarted == [301, 303, 304]; trail event=skip reason=ineligible for 302/305, no event=skip for 301/303/304. Supervised: readiness asked and cycle started for all 5; never \"Nothing was spawned.\"",
+      "covers": [
+        "AC-15",
+        "AC-14"
+      ],
+      "rationale": "RED at the input head: autonomous — the gate holds (302/305 never read, never cycled) but the trail records reason=no-mapping-declared instead of ineligible; supervised — \"Nothing was spawned.\" printed on a run that starts the cycle (the AC14-G2 defect)",
+      "observedAtBase": "FAIL 2/2 at base 1bf7b02d: AssertionError: expected [] to deeply equal [ '301', '303', '304' ]",
+      "observedAtInputHead": "FAIL 2/2 at input head 8da2fe21: AssertionError: expected '2026-09-23T03:54:46.248Z event=skip c…' to match /event=skip card=302 reason=ineligible/"
+    },
+    {
+      "id": "AC15-B2",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "the user-facing flag grammar through the REGISTERED run command: runCli (commander built from runCommandMetadata exactly as the shipped binary) with argv, only dispatchCommand replaced by a recorder (no handler, no engine, no gh, no network)",
+      "oracle": {
+        "file": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts",
+        "tests": [
+          "pair-cli run — the cycle-coordinator flags through the registered command (US-487 AC2, AC8, AC15) run --card 7 --pr 12 --rounds 1 --autonomous --approve-ineligible reaches the parser as one card dispatch",
+          "pair-cli run — the cycle-coordinator flags through the registered command (US-487 AC2, AC8, AC15) run --card 7 --rounds max carries the literal max bound (AC8)"
+        ],
+        "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-flags-argv.test.ts"
+      },
+      "expected": "argv `run --card 7 --pr 12 --rounds 1 --autonomous --approve-ineligible` ⇒ one dispatched config { command: run, autonomous: true, approveIneligible: true, dispatch: { card: \"7\", pr: 12, rounds: 1 } }; `run --card 7 --rounds max` ⇒ dispatch.rounds \"max\", autonomous/approveIneligible false",
+      "covers": [
+        "AC-15",
+        "AC-2",
+        "AC-8"
+      ],
+      "observedAtBase": "FAIL 2/2 at base 1bf7b02d: CommanderError: error: unknown option '--pr' / unknown option '--rounds'",
+      "observedAtInputHead": "PASS 2/2 at input head 8da2fe21",
+      "rationale": "Rejection AC15-W3/run-flag-registration: every other AC2/AC8/AC15 row calls parseRunCommand with an options object. Mutations in a scratch copy of 8da2fe21 (repro-flags.mjs renames): metadata.ts `--approve-ineligible` → `--approve-inelig` ⇒ FAIL 1/2 (CommanderError: unknown option '--approve-ineligible'); `--rounds <n|max>` → `--roundz <n|max>` ⇒ FAIL 2/2 (unknown option '--rounds'); also `--pr <n>` → `--prr <n>` ⇒ FAIL 1/2 (unknown option '--pr'). Restored byte-identical after each.",
+      "closureAssertions": [
+        {
+          "id": "run-flags-argv",
+          "proven": "approveIneligible true, pr 12, rounds 1, autonomous true at head; FAILS under both metadata.ts renames"
+        }
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": ".claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      "kind": "test",
+      "sha256": "sha256:378263c780b08d8f2062a44341db5d62c5b05e31eadc55479bc11bfad0e638d7",
+      "baseline": "red",
+      "command": "node --test .claude/workflows/pair-contracts/cycle-coordinator.test.mjs",
+      "observed": "3 fail / 79 pass of 82 at base 1bf7b02d",
+      "editedByThisAttempt": true,
+      "note": "hermeticity only: the script-spawn helper now defaults PAIR_GH_BIN to a path that cannot exist, so the pre-existing #486 publishes with an acHash (14 `gh issue view 41|42` calls observed with a sentinel gh on PATH) never reach a real gh; no test body or assertion changed; same 3 T-3 witnesses fail at base, 82/82 at head, sentinel 0"
+    },
+    {
+      "file": ".claude/workflows/pair-contracts/role-packet.test.mjs",
+      "kind": "test",
+      "sha256": "sha256:aa509f3ec1b7d1bcb67bea748e6c072ed196d56ff3891fbf04dc19adc8e2da63",
+      "baseline": "red",
+      "command": "node --test .claude/workflows/pair-contracts/role-packet.test.mjs",
+      "observed": "4 fail / 1 pass of 5 at base 1bf7b02d",
+      "editedByThisAttempt": false
+    },
+    {
+      "file": "apps/pair-cli/src/cli.e2e.test.ts",
+      "kind": "test",
+      "sha256": "sha256:5f3b61a75d0f2594be89b9f643ff105cfa0d070544bb892a01429ffad9b5cda9",
+      "baseline": "red",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/cli.e2e.test.ts",
+      "observed": "5 fail / 5 pass of 10 at base 1bf7b02d",
+      "editedByThisAttempt": true
+    },
+    {
+      "file": "apps/pair-cli/src/commands/dispatcher.test.ts",
+      "kind": "test",
+      "sha256": "sha256:baf4e387f3a7166fcdca10b7656c18354bc98bfc8ea8a7c25d0f15bb3755bac1",
+      "baseline": "pass",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/dispatcher.test.ts",
+      "observed": "pass 23/23 at base 1bf7b02d",
+      "editedByThisAttempt": false
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/cycle-contract-gaps.test.ts",
+      "kind": "test",
+      "sha256": "sha256:b8a02df931a283e2ffe8e4265ee11844295342d64f4ba31f5fb318e2e2ea29bb",
+      "baseline": "red",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-contract-gaps.test.ts",
+      "observed": "3 fail / 3 pass of 6 at base 1bf7b02d",
+      "editedByThisAttempt": true
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/cycle-defaults-parity.test.ts",
+      "kind": "test",
+      "sha256": "sha256:b4cfcb50e17e4b44bb810b4f4dcce6c68b1592e8c77b0ce98411b64f046da09f",
+      "baseline": "red",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-defaults-parity.test.ts",
+      "observed": "suite failed to load at base 1bf7b02d (0/0): Cannot find module './cycle-scripts' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45",
+      "editedByThisAttempt": false
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/cycle-driver-wiring.test.ts",
+      "kind": "test",
+      "sha256": "sha256:b76be2734d79d63f2dac535333a56378860999e1f75278e80a313f94b0c38f47",
+      "baseline": "red",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-driver-wiring.test.ts",
+      "observed": "suite failed to load at base 1bf7b02d (0/0): Cannot find module './cycle-wiring' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-459",
+      "editedByThisAttempt": true
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/cycle-scripts.test.ts",
+      "kind": "test",
+      "sha256": "sha256:ee531b4ba43fc23bddbb88f668c631a1476b1f573ff865948178b1cf9f6fc70f",
+      "baseline": "red",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-scripts.test.ts",
+      "observed": "suite failed to load at base 1bf7b02d (0/0): Cannot find module './cycle-scripts' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45",
+      "editedByThisAttempt": true
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/cycle-wiring.test.ts",
+      "kind": "test",
+      "sha256": "sha256:af8d319b891a924eb5c95def2d1994b7119626edb85de0cd5f22da892869dc15",
+      "baseline": "red",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-wiring.test.ts",
+      "observed": "suite failed to load at base 1bf7b02d (0/0): Cannot find module './cycle-wiring' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-459",
+      "editedByThisAttempt": true
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/cycle.test.ts",
+      "kind": "test",
+      "sha256": "sha256:00a5173b6be3abf8d9a6c51eb5cc79565408f13a9e7a64bd8f391a9514ab23e2",
+      "baseline": "red",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle.test.ts",
+      "observed": "suite failed to load at base 1bf7b02d (0/0): Cannot find module './cycle' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-45996cfe0f",
+      "editedByThisAttempt": true
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/dor-fallback-eligibility.test.ts",
+      "kind": "test",
+      "sha256": "sha256:b99b75ac07bb903db78149a274b39c1d2375fbcebce46952c35af96916a4e2c0",
+      "baseline": "red",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/dor-fallback-eligibility.test.ts",
+      "observed": "15 fail / 2 pass of 17 at base 1bf7b02d",
+      "editedByThisAttempt": true
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/handler.test.ts",
+      "kind": "test",
+      "sha256": "sha256:845345b92a73e5f2fe24b8956e44d6552a93c1f7d26e953ccbf97332a9c5dc85",
+      "baseline": "red",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/handler.test.ts",
+      "observed": "36 fail / 45 pass of 81 at base 1bf7b02d",
+      "editedByThisAttempt": true
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/parser.test.ts",
+      "kind": "test",
+      "sha256": "sha256:ee4a2039a055174f9f0957bd78c31d8b574cfe993aa8114358681e21c80fdc68",
+      "baseline": "red",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/parser.test.ts",
+      "observed": "19 fail / 61 pass of 80 at base 1bf7b02d",
+      "editedByThisAttempt": false
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/path-probe.test.ts",
+      "kind": "test",
+      "sha256": "sha256:e7762b00db2f302f6b08906043ddaa52e7e4181f502d6d8e34eee9d0639dd81a",
+      "baseline": "red",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/path-probe.test.ts",
+      "observed": "12 fail / 4 pass of 16 at base 1bf7b02d",
+      "editedByThisAttempt": true
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:9618ba607f1cd3e5ce8d8f9857a0035ce55914b5470bd59b7a07ed7ff2eff495",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-flags-argv.test.ts",
+      "observed": "2 fail / 0 pass of 2 at base 1bf7b02d",
+      "editedByThisAttempt": true
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/spawn.test.ts",
+      "kind": "test",
+      "sha256": "sha256:490cbc07c32ad4a2c6e51846e6f18c494240ca8962ca7178423a365a1c52fc7d",
+      "baseline": "pass",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn.test.ts",
+      "observed": "pass 8/8 at base 1bf7b02d",
+      "editedByThisAttempt": false
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/stage-runner.test.ts",
+      "kind": "test",
+      "sha256": "sha256:23ec1a1204e84d70587ac7f0f3441bf046c119df0347d954bf0b77b1fac8d8d9",
+      "baseline": "red",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/stage-runner.test.ts",
+      "observed": "suite failed to load at base 1bf7b02d (0/0): Cannot find module './stage-runner' imported from '/private/tmp/claude-501/-Users-gianlucacarucci5-projects-pair/435e3ecb-1f8c-45a6-a468-459",
+      "editedByThisAttempt": true
+    },
+    {
+      "file": "apps/pair-cli/src/config/engine-block.test.ts",
+      "kind": "test",
+      "sha256": "sha256:92dbad125e2812981f741fb29116ed27d08f7aedba10db305f0b568a73d157d3",
+      "baseline": "red",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/config/engine-block.test.ts",
+      "observed": "4 fail / 6 pass of 10 at base 1bf7b02d",
+      "editedByThisAttempt": false
+    },
+    {
+      "file": "packages/knowledge-hub/src/tools/workflow-mirror.test.ts",
+      "kind": "test",
+      "sha256": "sha256:4292958fd288d5c7b3d8c30b907d4f416900664830c712b01288bff265f678de",
+      "baseline": "pass",
+      "command": "pnpm --dir packages/knowledge-hub exec vitest run src/tools/workflow-mirror.test.ts",
+      "observed": "pass 20/20 at base 1bf7b02d",
+      "editedByThisAttempt": false
+    },
+    {
+      "file": "scripts/smoke-tests/scenarios/github-dispatch-adapter.sh",
+      "kind": "test",
+      "sha256": "sha256:bb11bc34f6573d4d5410fc08f7562ef5290fd85b2b02a3f3ec4e57963f05e0ee",
+      "baseline": "pass",
+      "command": "pnpm exec turbo run build --filter @pair/pair-cli... && bash scripts/smoke-tests/scenarios/github-dispatch-adapter.sh",
+      "observed": "exit 0 at base 1bf7b02d: [PASS] dataset skipped cleanly, [PASS] mirror skipped cleanly",
+      "editedByThisAttempt": false
+    }
+  ],
+  "testExempt": false,
+  "reattest": {
+    "reason": "Maintainer re-plan of a0 after the fact: the story is implemented before this contract. Artifacts not edited by this attempt (cycle-coordinator.test.mjs, role-packet.test.mjs, dispatcher, cycle-defaults-parity, parser, spawn, engine-block, workflow-mirror, the smoke) are committed at 8da2fe21; their sha256 is over the working-tree bytes and their baseline is PROVEN at 1bf7b02d by this attempt's own runs, not inherited."
+  },
+  "outOfContract": [
+    {
+      "item": "T-8, T-9",
+      "why": "carry no AC of this story; queued behind T-1..T-7 and need their own contract (their surface is .claude/skills/pair-workflow-red-verify/**, outside this fixScope)"
+    },
+    {
+      "item": "AC9 live SIGTERM kill/resume and AC13 paired live canary (pi vs claude terminal status)",
+      "why": "need live, authenticated engines; recorded as T-6 canary evidence on the card (DoD Quality Assurance), not reproducible offline. The driver logic they exercise is contracted executably: AC9-W2/AC9-I1 (re-invocation continues), AC4-W1/AC4-I1 (a killed process is judged by resolve), AC3-I2/AC13-W1/AC13-W2 (pi instruction rendering and binary resolution)."
+    },
+    {
+      "item": "opencode completing the cycle",
+      "why": "excluded by AC13 as written (maintainer decision 2026-09-22) — not an obligation, not waived; AC13-I1 contracts the part that IS owed: the driver reports the limitation as failed-<step>, never as completion. The limitation text lives in agent-harness/opencode.md (documentation deliverable, verified at review)."
+    },
+    {
+      "item": "--approve-ineligible when `## Workflows` IS declared (decideDispatch reason `ineligible`)",
+      "why": "AC15 scopes the gate and its per-run override to `## Eligibility` declared WITHOUT `## Workflows`; US-217 BR3 skips an ineligible card before routing and no AC decides that the flag reopens it. AC15-C2 contracts the ineligible skip without the flag; the flag there is neither witnessed nor waived."
+    },
+    {
+      "item": "the audit/DISPATCH-RECORD a delivery-cycle START leaves",
+      "why": "no AC decides it; AC14-G2/G3 contract only that a spawning route is never audited or printed as a skip. Not asserted either way."
+    }
+  ],
+  "staticGates": "At the input head with the artifacts in place (story worktree): prettier-check (apps/pair-cli, after prettier --write; exit 0), tsc --noEmit -p apps/pair-cli (exit 0), pnpm --dir apps/pair-cli lint (exit 0), pnpm dup:check (exit 0). smoke-ci-platform AC6 (origin/main bd144708): evaluated with its own changedPathsAgainstBase logic in the worktree — 12 apps/pair-cli/src production paths changed; the regex /platform.*(?:darwin|linux)|(?:darwin|linux).*platform/ matches the listed artifact path-probe.test.ts (line `for (const platform of ['darwin', 'linux'] as const)`) and matches NO changed .test.ts over the input-head bytes — the listed artifact is what makes the gate satisfiable. Attempt 3 (story worktree, artifacts in place): prettier-check over the edited .ts artifacts (exit 0, after prettier-fix; the adopted gate covers ts/tsx/js/jsx/json/html, so .mjs is outside it), tsc --noEmit -p apps/pair-cli (exit 0), pnpm --dir apps/pair-cli lint (exit 0), pnpm dup:check (exit 0).",
+  "attempt": 3,
+  "repairOf": {
+    "contractHash": "sha256:97c5cb41562301767e484a47d74e79e10caf1725365fce021ad840487259a8b0",
+    "rejectionRowIds": [
+      "AC9-I1",
+      "AC15-W3",
+      "AC14-G1"
+    ],
+    "rejectionMechanismIds": [
+      "publish-cardhash-live-gh",
+      "run-flag-registration",
+      "ineligible-override-not-persisted",
+      "unreadable-under-declared-eligibility"
+    ]
+  },
+  "changedRows": [
+    "AC1-B2",
+    "AC2-W2",
+    "AC3-W3",
+    "AC3-C3",
+    "AC7-W1",
+    "AC7-W2",
+    "AC7-W3",
+    "AC8-W3",
+    "AC9-C1",
+    "AC9-W5",
+    "AC10-W1",
+    "AC11-W2",
+    "AC11-B1",
+    "AC11-B3",
+    "AC12-W4",
+    "AC14-W1",
+    "AC14-C2",
+    "AC15-W1",
+    "AC15-W2",
+    "AC3-I3",
+    "AC12-G1",
+    "AC9-I2",
+    "AC12-G2",
+    "AC12-C1",
+    "AC8-W4",
+    "AC14-G1",
+    "AC14-C5",
+    "AC14-W3",
+    "AC14-G2",
+    "STATIC-G1",
+    "AC15-C2",
+    "AC14-W4",
+    "AC14-G3",
+    "AC15-W3",
+    "AC15-W4",
+    "AC9-I1",
+    "AC15-B2"
+  ],
+  "expectedRedAtInputHead": [
+    "AC14-W1",
+    "AC15-W2",
+    "AC12-G1",
+    "AC9-I2",
+    "AC8-W4",
+    "AC14-G1",
+    "AC14-C5",
+    "AC14-G2",
+    "AC14-G3",
+    "AC15-W4",
+    "AC15-W3"
+  ],
+  "expectedRedAtInputHeadDetail": "29 pair-cli vitest tests FAIL at 8da2fe21 with these artifacts (identical in the story worktree and the ref-less scratch head: 29 failed | 285 passed of 314) plus the github-dispatch-adapter smoke (exit 1): the attempt-2 set of 22 (unchanged) + 6 new AC14-G1 × `## Eligibility` cases (handler.ts throws card-unreadable instead of the clean skip) + 1 new AC15-W3 case (only its final `ineligible` report line — the AC15-W2 report defect). Every one a production defect the implementer fixes. Every other row PASSES at the input head. Hermetic: the whole artifact suite run with a sentinel `gh` first on PATH records 0 invocations (pair-cli 314 tests, cycle-coordinator 82, role-packet, workflow-mirror).",
+  "changedRowsThisAttempt": [
+    "AC9-I1",
+    "AC15-W3",
+    "AC14-G1",
+    "AC15-B2"
+  ],
+  "changedRowsNote": "changedRows is cumulative over the unsealed a0 repair line (attempt 2 vs the attempt-1 rejected contract 03a592b2, plus attempt 3 vs the attempt-2 rejected contract 97c5cb41); changedRowsThisAttempt is what attempt 3 edited or added. Nothing was sealed in between."
+}

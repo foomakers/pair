@@ -1,4 +1,8 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { execFileSync } from 'child_process'
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { parseCardRecord, deriveBranch, resolveBranch } from './cycle-wiring'
 
 /**
@@ -65,25 +69,71 @@ describe('resolveBranch — ask the authority before deriving', () => {
   // `deriveBranch` produced `feature/US-487-pair-cli-run-card-pr-rounds` while the real branch was
   // `…-coordinator`. The worktree guard refused to switch a checkout, correctly — but the driver
   // should never have asked. Derivation is the fallback of last resort, not the first answer.
-  it('falls back to derivation only for a card with no branch anywhere', () => {
-    // A card id nothing in this repository has ever cut a branch for: no PR, no local ref, no
-    // remote ref — the one case where the title is genuinely the only thing to go on.
-    expect(resolveBranch('999999', 'A story never started', undefined, process.cwd())).toBe(
-      deriveBranch('999999', 'A story never started'),
-    )
+  //
+  // Hermetic (a0 repair, finding AC1-B2): every case runs against a THROWAWAY repository built
+  // here — never `process.cwd()`, whose live refs change under the test (a branch deleted at merge
+  // would turn a sealed test red on its own). Precedence: PR head > existing ref > derived.
+  const TITLE = 'A title that no longer matches any branch'
+  let repo: string
+  let bin: string
+
+  const git = (...args: string[]) =>
+    execFileSync('git', args, { cwd: repo, stdio: ['ignore', 'pipe', 'pipe'] })
+
+  beforeEach(() => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'pair-resolve-branch-')))
+    repo = join(root, 'repo')
+    bin = join(root, 'bin')
+    mkdirSync(repo, { recursive: true })
+    mkdirSync(bin, { recursive: true })
+    git('init', '-q', '-b', 'main')
+    git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'init')
   })
 
-  it('prefers an existing branch for the card over anything the title would derive', () => {
-    // This worktree's own story: the title no longer matches the branch, which is exactly the
-    // condition that made derivation wrong.
-    const derived = deriveBranch('487', 'pair-cli run --card [--pr] [--rounds] — coordinator')
-    const resolved = resolveBranch(
-      '487',
-      'pair-cli run --card [--pr] [--rounds] — coordinator',
-      undefined,
-      process.cwd(),
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    rmSync(join(repo, '..'), { recursive: true, force: true })
+  })
+
+  /** The operator's `gh`, answering `pr view --json headRefName` with one fixed head branch. */
+  const ghAnsweringPrHead = (head: string) => {
+    const gh = join(bin, 'gh')
+    writeFileSync(
+      gh,
+      `#!/usr/bin/env node
+const a = process.argv.slice(2)
+if (a[0] === 'pr' && a[1] === 'view') process.stdout.write(${JSON.stringify(head)} + '\\n')
+else process.exit(1)
+`,
     )
-    expect(resolved).toBe('feature/US-487-pair-cli-run-card-coordinator')
-    expect(resolved).not.toBe(derived)
+    chmodSync(gh, 0o755)
+    vi.stubEnv('PATH', `${bin}:${process.env['PATH'] ?? ''}`)
+  }
+
+  it('falls back to derivation only for a card with no branch anywhere', () => {
+    // No PR, no local ref, no remote ref — the one case where the title is the only thing to go on.
+    expect(resolveBranch('7', TITLE, undefined, repo)).toBe(deriveBranch('7', TITLE))
+  })
+
+  it('prefers an existing LOCAL branch for the card over anything the title would derive', () => {
+    git('branch', 'feature/US-7-the-branch-actually-cut')
+
+    const resolved = resolveBranch('7', TITLE, undefined, repo)
+
+    expect(resolved).toBe('feature/US-7-the-branch-actually-cut')
+    expect(resolved).not.toBe(deriveBranch('7', TITLE))
+  })
+
+  it('finds a branch that exists only on origin (never checked out locally)', () => {
+    git('update-ref', 'refs/remotes/origin/feature/US-7-cut-on-another-machine', 'HEAD')
+
+    expect(resolveBranch('7', TITLE, undefined, repo)).toBe('feature/US-7-cut-on-another-machine')
+  })
+
+  it("a --pr entry takes the PR's own head branch, over an existing ref and the derivation", () => {
+    git('branch', 'feature/US-7-the-branch-actually-cut')
+    ghAnsweringPrHead('feature/US-7-the-pr-head')
+
+    expect(resolveBranch('7', TITLE, 42, repo)).toBe('feature/US-7-the-pr-head')
   })
 })

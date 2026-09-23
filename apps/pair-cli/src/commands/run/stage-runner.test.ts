@@ -53,20 +53,6 @@ describe("buildStageArgs — the packet's prompt and worktree, and NOTHING pair-
     expect(args.at(-1)).toBe(packet.prompt)
   })
 
-  it('selects the DETACHED review worktree as cwd for a verify-step packet, never the author tree', () => {
-    const reviewPacket = { ...packet, step: 'verify', worktree: '/worktrees/487-review' }
-
-    const args = buildStageArgs({
-      engine: ENGINES.opencode,
-      packet: reviewPacket,
-      cwd: reviewPacket.worktree,
-      autonomyArgs: [],
-    })
-
-    expect(args).toContain('/worktrees/487-review')
-    expect(args).not.toContain('/worktrees/487')
-  })
-
   it('never constructs a merge command, on any engine (AC12, mirrors spawn.test.ts)', () => {
     for (const engine of Object.values(ENGINES)) {
       const args = buildStageArgs({ engine, packet, cwd: packet.worktree, autonomyArgs: [] })

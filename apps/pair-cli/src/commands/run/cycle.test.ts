@@ -219,6 +219,8 @@ describe('runCycle (US-487 T-4)', () => {
       onNotice: note => notes.push(note),
     })
 
+    // Both `reuse` stages are still dispatched — as fresh processes, never skipped or resumed.
+    expect(spawnStage).toHaveBeenCalledTimes(2)
     // Two stages both carried `context: reuse`, but the "cannot resume a session" notice is printed
     // ONCE for the whole run, not once per stage (ADR-021 §2: content is the implementer's wording,
     // the CONTRACT is "mentions the session cannot be resumed" and "says fresh runs instead").
@@ -272,6 +274,7 @@ describe('runCycle (US-487 T-4)', () => {
     // converges cannot have called one.
     const resolve = scriptedResolve([{ status: 'completed', next: DONE }])
     const spawnStage = vi.fn(async (): Promise<CycleStageResult> => ({ processOutcome: 'success' }))
+    const merge = vi.fn()
 
     const outcome = await runCycle({
       resolve,
@@ -280,10 +283,35 @@ describe('runCycle (US-487 T-4)', () => {
       spawnStage,
       policy: {},
       // @ts-expect-error — `merge` is not a recognised collaborator; the loop's own type has none.
-      merge: vi.fn(),
+      merge,
     })
 
     expect(outcome.status).toBe('ready-for-merge')
+    // Offered one anyway, the loop never calls it.
+    expect(merge).not.toHaveBeenCalled()
+  })
+
+  it('AC12: a `merge` step from resolve (#490, Auto-Advance) is reported, never dispatched by this driver', async () => {
+    // `merge` is another story's stage: this driver exits at it as `resolve` reports it, with no
+    // packet rendered and no engine process spawned for it.
+    const resolve = scriptedResolve([
+      { status: 'in-progress', next: { step: 'merge', phase: 'r1' } },
+    ])
+    const spawnStage = vi.fn(async (): Promise<CycleStageResult> => ({ processOutcome: 'success' }))
+    const mergePacket = vi.fn(packet)
+
+    const outcome = await runCycle({
+      resolve,
+      worktree,
+      packet: mergePacket,
+      spawnStage,
+      policy: {},
+    })
+
+    expect(spawnStage).not.toHaveBeenCalled()
+    expect(mergePacket).not.toHaveBeenCalled()
+    expect(outcome.stagesRun).toBe(0)
+    expect(outcome.next).toMatchObject({ step: 'merge' })
   })
 
   it('appends one audit line per stage dispatched, via the injected appender (never the engine map)', async () => {

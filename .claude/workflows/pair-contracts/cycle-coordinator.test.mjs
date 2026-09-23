@@ -41,8 +41,18 @@ const POLICY = { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 }
 const CARD = { id: '42', title: 'T', branch: 'feature/US-42-x' }
 
 // ── helpers ───────────────────────────────────────────────────────────────────────────────────
+// Hermetic by default (US-487 a0 repair): a `publish` whose draft carries an `acHash` stamps the
+// card hash through `gh issue view` — the REAL tracker and the network unless something stands in.
+// No test here asserts on a live card, so every script spawn gets a `gh` that cannot exist (ENOENT:
+// the hash is recorded unverified, deterministically); a test that needs a fake `gh` passes its own
+// `env`, which replaces this one whole.
+const NO_GH = join(tmpdir(), 'us486-hermetic-no-gh', 'gh')
 const run = (cli, args, opts = {}) => {
-  const r = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8', ...opts })
+  const r = spawnSync(process.execPath, [cli, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, PAIR_GH_BIN: NO_GH },
+    ...opts,
+  })
   let json = null
   try {
     json = JSON.parse(r.stdout.trim().split('\n').pop())

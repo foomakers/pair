@@ -1,13 +1,25 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, copyFileSync, existsSync } from 'fs'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import {
+  mkdtempSync,
+  rmSync,
+  mkdirSync,
+  writeFileSync,
+  copyFileSync,
+  cpSync,
+  existsSync,
+  chmodSync,
+  readFileSync,
+} from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
+import { spawnSync } from 'child_process'
 import {
   locateCycleScripts,
   createCycleScriptsBridge,
   classifyCardReadiness,
+  CYCLE_WORKFLOW_VERSION,
 } from './cycle-scripts'
 
 /**
@@ -131,7 +143,10 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
     copyFileSync(join(realScriptsDir, 'cycle-dispatch.mjs'), join(scriptsDir, 'cycle-dispatch.mjs'))
     runsRoot = join(projectRoot, '.pair/working/runs')
   })
-  afterEach(() => rmSync(projectRoot, { recursive: true, force: true }))
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    rmSync(projectRoot, { recursive: true, force: true })
+  })
 
   const bridge = () =>
     createCycleScriptsBridge({
@@ -192,6 +207,135 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
         runsRoot,
       }),
     ).toThrow(/cycle-state-unreadable/)
+  })
+
+  it('AC9: a cycle another realization started on the same runId continues from its next step — never failed-resume', () => {
+    // The batch / in-session coordinator publishes `a0-red-spec` through the SAME cycle-state; this
+    // driver then resolves that directory with its OWN inputs (its pinned workflow version, `{}` as
+    // policy) and must read the cycle's next step, not an incompatible or unreadable state.
+    const dir = join(runsRoot, 'story-487/487')
+    // Hermetic (a0 repair, AC9-I1): the draft carries an `acHash`, so `publish` stamps the canonical
+    // card hash through `gh issue view` — the REAL tracker, the network and the operator's auth
+    // unless a fake stands in. A recording fake `gh` is BOTH the PAIR_GH_BIN the script honours and
+    // the first `gh` on PATH, for the publish spawn AND the bridge's resolve spawn, so no real `gh`
+    // process can start and the row's outcome never follows the network.
+    const fakeBin = join(projectRoot, 'fake-bin')
+    mkdirSync(fakeBin, { recursive: true })
+    const fakeGh = join(fakeBin, 'gh')
+    const ghLog = join(projectRoot, 'fake-gh.log')
+    writeFileSync(
+      fakeGh,
+      `#!/bin/sh\necho "$@" >> ${JSON.stringify(ghLog)}\nprintf 'the card body'\n`,
+    )
+    chmodSync(fakeGh, 0o755)
+    const hermeticEnv = {
+      ...process.env,
+      PAIR_GH_BIN: fakeGh,
+      PATH: `${fakeBin}:${process.env['PATH'] ?? ''}`,
+    }
+    vi.stubEnv('PAIR_GH_BIN', fakeGh)
+    vi.stubEnv('PATH', hermeticEnv.PATH)
+    const draft = join(projectRoot, 'a0-draft.json')
+    writeFileSync(
+      draft,
+      JSON.stringify({
+        run: 'story-487',
+        story: '487',
+        branch: 'feature/US-487-x',
+        phase: 'a0',
+        skill: 'red-spec',
+        inputHead: 'a'.repeat(40),
+        inputsDigest: 'x',
+        acHash: `sha256:${'0'.repeat(64)}`,
+        attempt: 1,
+        mode: 'initial',
+        status: 'red',
+        contractPath: '/x.json',
+        contractHash: `sha256:${'1'.repeat(64)}`,
+        reconciled: [],
+        preserved: [],
+        findings: { received: [], covered: [] },
+        elapsedMs: 1,
+      }),
+    )
+    const published = spawnSync(
+      'node',
+      [
+        join(projectRoot, '.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs'),
+        'publish',
+        '--dir',
+        dir,
+        '--file',
+        draft,
+        '--phase',
+        'a0',
+        '--skill',
+        'red-spec',
+        '--workflowVersion',
+        '4.0.1',
+        '--attempt',
+        '1',
+      ],
+      { encoding: 'utf8', env: hermeticEnv, timeout: 4000 },
+    )
+    expect(JSON.parse(published.stdout)).toMatchObject({ published: true })
+
+    const result = bridge().resolve({
+      dir,
+      workflowVersion: CYCLE_WORKFLOW_VERSION,
+      policy: {},
+      entry: 'fresh',
+      story: '487',
+      runsRoot,
+    })
+
+    expect(result.status).toBe('in-progress')
+    expect(result.next).toMatchObject({ step: 'validate', phase: 'a0' })
+    // The card was read through the FAKE — exactly once, by publish — never by a real `gh`.
+    expect(readFileSync(ghLog, 'utf8').trim().split('\n')).toEqual([
+      'issue view 487 --json body -q .body',
+    ])
+  })
+
+  const PREPARE = {
+    step: 'prepare',
+    mode: 'initial',
+    phase: 'a0',
+    round: 0,
+    attempt: 1,
+    context: 'fresh',
+  }
+  const CARD = { id: '487', branch: 'feature/US-487-x', base: 'origin/main', title: 't' }
+
+  it('packet() propagates agent-definition-missing, naming the role, when the install has no agents (AC11)', () => {
+    // The fixture installs the scripts WITHOUT `.claude/agents/` — a project that installed the
+    // skill but not its roles. The HALT must reach the driver typed, never a role-less prompt.
+    expect(() =>
+      bridge().packet({
+        next: PREPARE,
+        card: CARD,
+        run: 'story-487',
+        workflowVersion: '4.0.1',
+        style: 'instruction',
+      }),
+    ).toThrow(/agent-definition-missing.*pair-fix-test-author/s)
+  })
+
+  it("packet() hands --style through: with the roles installed, pi's instruction prompt opens with the role body (AC3)", () => {
+    cpSync(join(__dirname, '../../../../../.claude/agents'), join(projectRoot, '.claude/agents'), {
+      recursive: true,
+    })
+
+    const out = bridge().packet({
+      next: PREPARE,
+      card: CARD,
+      run: 'story-487',
+      workflowVersion: '4.0.1',
+      style: 'instruction',
+    })
+
+    expect(out.prompt.startsWith('You own the preparation stage of a delivery cycle')).toBe(true)
+    expect(out.prompt).toMatch(/Run the pair-workflow-red-spec skill with these arguments:/)
   })
 
   it('the scripts directory really exists on disk after the fixture setup (sanity on the harness itself)', () => {

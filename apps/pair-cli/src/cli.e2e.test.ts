@@ -325,11 +325,14 @@ Precedence: auto-plan, auto-dev
       },
       // 303 IS eligible and still runs nothing: eligibility selects, the mapping routes, and there
       // is no default workflow for a card the mapping does not name.
+      // US-487 AC14: an eligible card carrying no mapped tag (`unmapped`) is no longer "nothing
+      // runs" — the DoR fallback reads it (Ready, by this fixture's faked readiness) and starts the
+      // delivery cycle; a route that starts something is never audited as a skip (AC14-G2).
       {
         card: '303',
         tags: ['risk:green'],
         routes: undefined,
-        trail: [/event=skip card=303 reason=unmapped/],
+        trail: [],
       },
       {
         card: '304',
@@ -353,7 +356,9 @@ Precedence: auto-plan, auto-dev
     const routed = BOARD.filter(
       (row): row is BoardRow & { routes: string } => row.routes !== undefined,
     )
-    const unrouted = BOARD.filter(row => row.routes === undefined)
+    /** The cards AC14's DoR fallback hands to the delivery cycle on this board (US-487). */
+    const CYCLED: readonly string[] = ['303']
+    const unrouted = BOARD.filter(row => row.routes === undefined && !CYCLED.includes(row.card))
 
     const AUDIT = '.pair/working/automation/loop-audit.md'
     const LOCKS = '.pair/working/automation/locks'
@@ -361,6 +366,9 @@ Precedence: auto-plan, auto-dev
     let project: string
     let spawned: string[]
     let printed: string[]
+    // Every card whose readiness was asked for, and every card the delivery cycle was started on.
+    let readinessAsked: string[]
+    let cyclesStarted: string[]
     let log: ReturnType<typeof vi.spyOn>
 
     const write = (relative: string, content: string): void => {
@@ -373,6 +381,8 @@ Precedence: auto-plan, auto-dev
       project = mkdtempSync(join(tmpdir(), 'pair-dispatch-e2e-'))
       spawned = []
       printed = []
+      readinessAsked = []
+      cyclesStarted = []
 
       write(
         'config.json',
@@ -420,6 +430,10 @@ Precedence: auto-plan, auto-dev
       card: string,
       tags: readonly string[],
       runIteration?: () => Promise<IterationResult>,
+      {
+        realReadiness = false,
+        autonomous = false,
+      }: { realReadiness?: boolean; autonomous?: boolean } = {},
     ): Promise<number> =>
       commandRegistry.run.handle(
         commandRegistry.run.parse({
@@ -427,6 +441,7 @@ Precedence: auto-plan, auto-dev
           cardTags: tags.join(','),
           cwd: project,
           maxIterations: 1,
+          ...(autonomous && { autonomous: true }),
         }),
         fileSystemService,
         {
@@ -439,8 +454,17 @@ Precedence: auto-plan, auto-dev
           // is faked (never actually driving a real cycle) so this suite stays about ROUTING, the
           // property it has always asserted; `spawned` (via `runIteration`) stays exactly the
           // MAPPED cards' own dispatches, byte-identical to the pre-US-487 assertions below.
-          cardReadiness: async () => 'ready',
-          driveCycle: async () => ({ status: 'ready-for-merge', stagesRun: 0 }),
+          // `realReadiness` leaves the SHIPPED probe (the operator's own `gh`) in place.
+          ...(!realReadiness && {
+            cardReadiness: async (id: string) => {
+              readinessAsked.push(id)
+              return 'ready' as const
+            },
+          }),
+          driveCycle: async input => {
+            cyclesStarted.push(input.card)
+            return { status: 'ready-for-merge', stagesRun: 0 }
+          },
         },
       )
 
@@ -458,6 +482,10 @@ Precedence: auto-plan, auto-dev
       // WHY. Read off the fixture, so a row added above is a row this checks.
       const trail = auditTrail()
       for (const row of BOARD) for (const line of row.trail) expect(trail).toMatch(line)
+      // US-487 AC14: the unmapped, eligible, Ready card started the delivery cycle — and only it —
+      // and the trail never calls a run that started something a skip (AC14-G2).
+      expect(cyclesStarted).toEqual(CYCLED)
+      for (const card of CYCLED) expect(trail).not.toMatch(new RegExp(`event=skip card=${card}\\b`))
       // No card was ever routed to a workflow its tags do not name, and none of them started.
       for (const { card } of unrouted) {
         expect(trail).not.toMatch(new RegExp(`card=${card} (tag|workflow)=`))
@@ -466,7 +494,13 @@ Precedence: auto-plan, auto-dev
 
       // AC3 — the line the host adapter posts on the card exists for the runs that started, and
       // ONLY for those: a card that never ran must not get a comment claiming it did.
-      const records = printed.filter(line => line.startsWith('DISPATCH-RECORD:'))
+      // (Whether a delivery-cycle start posts one is not this suite's contract: only the mapped
+      // routes and the cards that ran nothing are held to it.)
+      const records = printed.filter(
+        line =>
+          line.startsWith('DISPATCH-RECORD:') &&
+          !CYCLED.some(card => line.includes(`card=${card} `)),
+      )
       expect(records).toEqual(routed.map(row => expect.stringContaining(`card=${row.card}`)))
 
       // Every lock was released: the board is left dispatchable, not parked.
@@ -524,19 +558,74 @@ Precedence: auto-plan, auto-dev
       expect(skip).toMatch(/stale/)
     })
 
-    it('routes nothing at all when the project declares no mapping — the shipped default', async () => {
+    it('with `## Eligibility` declared and NO `## Workflows`, UNATTENDED (--autonomous): the labelled cards enter the cycle, the unlabelled ones are skipped ineligible (AC14, AC15)', async () => {
+      write('.pair/adoption/tech/automation.md', '## Eligibility\n\nrisk:green\n')
+
+      for (const { card, tags } of BOARD) {
+        expect(await trigger(card, tags, undefined, { autonomous: true })).toBe(0)
+      }
+
+      // Nothing is ROUTED (no `## Workflows`): no loop-mode iteration spawns on any card.
+      expect(spawned).toHaveLength(0)
+      expect(printed.some(line => line.includes('no mapping declared'))).toBe(true)
+      const labelled = BOARD.filter(row => (row.tags as readonly string[]).includes('risk:green'))
+      const unlabelled = BOARD.filter(
+        row => !(row.tags as readonly string[]).includes('risk:green'),
+      )
+      // AC14: eligibility not in the way (the card carries the label) ⇒ the card is read, and Ready
+      // starts the cycle. AC15: an unattended run on a card without the label is skipped as
+      // ineligible — never read.
+      expect(readinessAsked).toEqual(labelled.map(row => row.card))
+      expect(cyclesStarted).toEqual(labelled.map(row => row.card))
+      const trail = auditTrail()
+      for (const { card } of unlabelled) {
+        expect(trail).toMatch(new RegExp(`event=skip card=${card} reason=ineligible`))
+      }
+      for (const { card } of labelled) {
+        expect(trail).not.toMatch(new RegExp(`event=skip card=${card}\\b`))
+      }
+    })
+
+    it('with `## Eligibility` declared and NO `## Workflows`, SUPERVISED: no card is held back by the label — every Ready card enters the cycle (AC15: the gate bounds unattended runs)', async () => {
       write('.pair/adoption/tech/automation.md', '## Eligibility\n\nrisk:green\n')
 
       for (const { card, tags } of BOARD) expect(await trigger(card, tags)).toBe(0)
 
       expect(spawned).toHaveLength(0)
-      expect(printed.some(line => line.includes('no mapping declared'))).toBe(true)
-      // EVERY card on the board, not just the one that would otherwise have routed: with no
-      // `## Workflows` section nothing is routable, and each card says so in the trail.
-      const trail = auditTrail()
-      for (const { card } of BOARD) {
-        expect(trail).toMatch(new RegExp(`event=skip card=${card} reason=no-mapping-declared`))
+      expect(readinessAsked).toEqual(BOARD.map(row => row.card))
+      expect(cyclesStarted).toEqual(BOARD.map(row => row.card))
+      expect(printed.some(line => line.includes('Nothing was spawned.'))).toBe(false)
+    })
+
+    it('with NO automation.md at all — the shipped default — a READABLE Ready card starts the cycle on every trigger (AC14 stands as written)', async () => {
+      rmSync(join(project, '.pair/adoption/tech/automation.md'))
+
+      for (const { card, tags } of BOARD) expect(await trigger(card, tags)).toBe(0)
+
+      expect(spawned).toHaveLength(0)
+      expect(readinessAsked).toEqual(BOARD.map(row => row.card))
+      expect(cyclesStarted).toEqual(BOARD.map(row => row.card))
+      expect(printed.some(line => line.includes('Nothing was spawned.'))).toBe(false)
+    })
+
+    it('with NO automation.md and NO readable card (no `gh` on PATH) — the github-dispatch-adapter smoke condition — every trigger is a clean skip: exit 0, the reason said, no DISPATCH-RECORD', async () => {
+      rmSync(join(project, '.pair/adoption/tech/automation.md'))
+
+      for (const { card, tags } of BOARD) {
+        expect(await trigger(card, tags, undefined, { realReadiness: true })).toBe(0)
       }
+
+      expect(spawned).toHaveLength(0)
+      expect(cyclesStarted).toEqual([])
+      for (const { card } of BOARD) {
+        expect(
+          printed.some(
+            line => line.includes(`card ${card}`) && line.includes('no mapping declared'),
+          ),
+        ).toBe(true)
+      }
+      expect(printed.filter(line => line.includes('card-unreadable'))).toHaveLength(BOARD.length)
+      expect(printed.some(line => line.startsWith('DISPATCH-RECORD:'))).toBe(false)
     })
   })
 })
