@@ -25,7 +25,11 @@
 //
 //   node … hash --file <contract.json>            → { contractHash }   (canonical, volatile fields excluded)
 //   node … inputs --json '<effective inputs>'      → { inputsDigest }
-//   node … ac-hash --story <id>                    → { acHash }        canonical sha256 of the card body (gh issue view)
+//   node … ac-hash --story <id> [--dir <run/story dir>] → { acHash }   canonical sha256 of the card body (the bound PM tool's readCard)
+//   node … bind-hosts --dir <run/story dir> [--from <project dir>]
+//     → { action: bound | reused, binding }   (US-492 AC2) the coordinator's ONE resolution of `pm-tool` /
+//     `code-host` (ADR-018), written to <dir>/.host-binding.json and reused verbatim by every later call
+//     naming that directory; a declared tool without an adapter in scripts/host/ ⇒ { error: 'host-unsupported' }.
 //   node … migrate-acknowledge --dir <new run/story dir> --legacy <legacy dir>[,<dir>...]
 //        --workflowVersion <v> --story <id> --run <runId> --head <40-hex> [--pr <n>] [--branch <b>]
 //     → { applied, migrationKey, predecessorRuns }   (US-479 B2, S10)
@@ -41,7 +45,7 @@
 //     → reads the PR's comments back and applies every decision-shaped one, oldest first — how a
 //       cycle honours a decision the maintainer already posted before asking again (canary v9, B).
 //     → { applied, reason?, results?, path? }   (US-479 T-22, S5)
-//     Reads the ACTUAL PR comment through `gh`; verifies author type=User and login == the adopted
+//     Reads the ACTUAL PR comment through the bound code host; verifies author type=User and login == the adopted
 //     maintainer (`code-host-assignee`, else `default-assignee`, in .pair/adoption/tech/way-of-working.md
 //     found above --dir; `--maintainer` overrides; unresolvable ⇒ `maintainer-unresolved:*`, fail closed —
 //     t9d-17); applies ignore | new-card | extend-current-card mechanically and persists a
@@ -64,6 +68,23 @@ import { hostname } from 'node:os'
 import { join, basename, dirname, resolve as resolvePath, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+
+// The PM/code-host adapters (US-492) ship next to this file in `host/`. Loaded guarded so that a copy
+// of this script without them still answers every command that never touches a host (resolve,
+// publish without a card hash, packet rendering); a host operation then fails typed.
+const HOSTS = await import('./host/index.mjs').catch(e => {
+  if (e?.code === 'ERR_MODULE_NOT_FOUND' && String(e.message).includes('host/index.mjs')) return null
+  throw e
+})
+const hostsMissing = () => Object.assign(new Error('host-adapters-missing: scripts/host/ is not installed next to cycle-state.mjs'), { kind: 'host-adapters-missing' })
+const bindHosts = opts => {
+  if (!HOSTS) throw hostsMissing()
+  return HOSTS.bindHosts(opts)
+}
+const writeBinding = opts => {
+  if (!HOSTS) throw hostsMissing()
+  return HOSTS.writeBinding(opts)
+}
 
 export const SCHEMA_VERSION = 3
 // Pinned once here (US-479 T-19, S1) so no caller re-spells it: workflow 4.0.0 / handoff schema 3
@@ -737,14 +758,20 @@ export function withLock(dir, waitMs, fn, { staleMs = LOCK_STALE_MS } = {}) {
 
 // The canonical hash of a story card's body — the ONE spelling every handoff records. Computed by
 // the script (never by an agent) so two stages can never disagree on it: canary v4 (run 15) ping-ponged
-// prepare ↔ verify because two agents hashed the card two ways. `gh` is the transport; PAIR_GH_BIN
-// overrides the binary (tests); a failure is reported, never mistaken for a change.
-export function cardHash({ story, ghBin = process.env.PAIR_GH_BIN || 'gh' }) {
+// prepare ↔ verify because two agents hashed the card two ways. The bound PM tool's adapter is the
+// transport (US-492: the fetch differs per host, the canonicalization is shared in scripts/host/);
+// a failure is reported, never mistaken for a change.
+export function cardHash({ story, dir, host, ...transport }) {
   if (story === undefined || story === null || String(story).trim() === '') return { error: 'story-missing' }
-  const r = spawnSync(ghBin, ['issue', 'view', String(story), '--json', 'body', '-q', '.body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
-  if (r.error || r.status !== 0) return { error: `gh issue view ${story} failed: ${(r.stderr || r.error?.message || '').trim()}` }
-  return { acHash: sha256(r.stdout) }
+  try {
+    return { acHash: (host ?? bindHosts({ dir, transport })).pm.cardHash(story) }
+  } catch (e) {
+    return { error: `${e.command ?? e.method ?? 'readCard'} failed: ${hostDetail(e)}` }
+  }
 }
+// The detail a host failure reports (the CLI's stderr), or the adapter's own message.
+const hostDetail = e => (e?.kind === 'failed' ? e.detail : e?.message ?? String(e))
+const hostReason = (host, code, e) => (e?.kind === 'invalid-json' ? `${host.errorPrefix}-${code}-invalid-json` : e?.kind === 'failed' ? `${host.errorPrefix}-${code}-failed:${e.detail}` : `host-${e?.kind ?? 'error'}:${e?.method ?? code}:${e?.message ?? String(e)}`)
 
 // ── scope decisions (US-479 T-22, S5) ──────────────────────────────────────────────────────
 // Canonical hash of the CURRENTLY pending scope proposals — the "did the packet the maintainer
@@ -819,24 +846,24 @@ export function parseScopeDecisionComment(body) {
   return { schemaVersion: 1, scopeBaselineHash: payload.scopeBaselineHash, decisions }
 }
 
-const COMMENT_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:pull|issues)\/(\d+)#issuecomment-(\d+)$/
-const ISSUE_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)$/
-
-// S5: an existing targetIssueUrl is VERIFIED through `gh` — it must resolve, in the same repo — never
-// trusted as text. Returns the read-back canonical url/number, or a typed error; never guesses.
-function verifyExistingIssue({ ghBin, repo, targetIssueUrl }) {
-  const m = ISSUE_URL_RE.exec(String(targetIssueUrl ?? ''))
-  if (!m) return { error: 'targetIssueUrl-invalid' }
-  if (`${m[1]}/${m[2]}` !== repo) return { error: 'targetIssueUrl-repo-mismatch' }
-  const r = spawnSync(ghBin, ['issue', 'view', targetIssueUrl, '--json', 'number,url'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
-  if (r.error || r.status !== 0) return { error: `gh-issue-view-failed:${(r.stderr || r.error?.message || '').trim()}` }
+// S5: an existing targetIssueUrl is VERIFIED through the PM tool — it must resolve, in the same repo —
+// never trusted as text. Returns the read-back canonical url/number, or a typed error; never guesses.
+function verifyExistingIssue({ host, repo, targetIssueUrl }) {
+  let ref
+  try {
+    ref = host.pm.parseCardRef(String(targetIssueUrl ?? ''), { repo })
+  } catch (e) {
+    return { error: hostReason(host.pm, 'issue-view', e) }
+  }
+  if (!ref) return { error: 'targetIssueUrl-invalid' }
+  if (!ref.inScope) return { error: 'targetIssueUrl-repo-mismatch' }
   let data
   try {
-    data = JSON.parse(r.stdout)
-  } catch {
-    return { error: 'gh-issue-view-invalid-json' }
+    data = host.pm.readCard(targetIssueUrl, { fields: ['number', 'url'] })
+  } catch (e) {
+    return { error: hostReason(host.pm, 'issue-view', e) }
   }
-  if (!data?.url || !data?.number) return { error: 'gh-issue-view-incomplete' }
+  if (!data?.url || !data?.number) return { error: `${host.pm.errorPrefix}-issue-view-incomplete` }
   return { url: data.url, number: data.number }
 }
 
@@ -920,19 +947,17 @@ function writeLedger(dir, key, data) {
   writeFileSync(tmp, JSON.stringify(data))
   renameSync(tmp, p)
 }
-// A local process crash between recording `creating` and learning the `gh issue create` outcome
+// A local process crash between recording `creating` and learning the card-create outcome
 // leaves the remote result genuinely unknown. Reconciliation searches ONLY by the hidden marker
 // this decision's OWN attempt would have embedded — a foreign issue sharing the approved title
 // never carries it, so it is never mistaken for this decision's effect.
-function reconcileCreatedIssue({ ghBin, repo, key }) {
+function reconcileCreatedIssue({ host, repo, key }) {
   const marker = newCardMarker(key)
-  const r = spawnSync(ghBin, ['issue', 'list', '--repo', repo, '--search', marker, '--json', 'number,url,title,body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
-  if (r.error || r.status !== 0) return { error: `gh-issue-list-failed:${(r.stderr || r.error?.message || '').trim()}` }
   let rows
   try {
-    rows = JSON.parse(r.stdout)
-  } catch {
-    return { error: 'gh-issue-list-invalid-json' }
+    rows = host.pm.findCards({ repo, search: marker })
+  } catch (e) {
+    return { error: hostReason(host.pm, 'issue-list', e) }
   }
   const matches = (Array.isArray(rows) ? rows : []).filter(x => typeof x.body === 'string' && x.body.includes(marker))
   if (matches.length !== 1) return { error: matches.length ? 'new-card-reconciliation-ambiguous' : 'new-card-remote-outcome-uncertain' }
@@ -946,27 +971,26 @@ function reconcileCreatedIssue({ ghBin, repo, key }) {
 // exact-id parser `extendCard` uses) — never title alone. Missing/wrong/ambiguous content is an
 // explicit error; the caller's ledger is left untouched by this function, so it always stays
 // available for a later reconciliation rather than forcing a second create.
-function verifyCreatedIssueContent({ ghBin, ref, marker, title, ac }) {
-  const v = spawnSync(ghBin, ['issue', 'view', ref, '--json', 'number,url,title,body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
-  if (v.error || v.status !== 0) return { error: `gh-issue-create-readback-failed:${(v.stderr || v.error?.message || '').trim()}` }
+function verifyCreatedIssueContent({ host, ref, marker, title, ac }) {
+  const x = host.pm.errorPrefix
   let data
   try {
-    data = JSON.parse(v.stdout)
-  } catch {
-    return { error: 'gh-issue-create-readback-invalid-json' }
+    data = host.pm.readCard(ref, { fields: ['number', 'url', 'title', 'body'] })
+  } catch (e) {
+    return { error: hostReason(host.pm, 'issue-create-readback', e) }
   }
-  if (!data?.url || !data?.number || data.title !== title) return { error: 'gh-issue-create-readback-mismatch' }
-  if (typeof data.body !== 'string' || !data.body.includes(marker)) return { error: 'gh-issue-create-readback-mismatch' }
+  if (!data?.url || !data?.number || data.title !== title) return { error: `${x}-issue-create-readback-mismatch` }
+  if (typeof data.body !== 'string' || !data.body.includes(marker)) return { error: `${x}-issue-create-readback-mismatch` }
   const card = parseAcCard(data.body)
   for (const a of ac) {
     const entries = card.acById.get(a.id) ?? []
-    if (entries.length !== 1 || entries[0].description !== a.description) return { error: `gh-issue-create-content-mismatch:${a.id}` }
+    if (entries.length !== 1 || entries[0].description !== a.description) return { error: `${x}-issue-create-content-mismatch:${a.id}` }
   }
   return { url: data.url, number: data.number }
 }
 
 // S5 new-card, no existing targetIssueUrl: explicit authorization to create means an approved
-// TITLE (never inferred), plus the AC payload. Creates via `gh issue create` — embedding a hidden,
+// TITLE (never inferred), plus the AC payload. Creates the card through the PM tool — embedding a hidden,
 // decision-specific marker in the body — then reads the created issue back and confirms the title
 // AND the approved AC content stuck before trusting the returned backlink. US-479 remediation
 // (Finding 6, residual): the create is bound to a durable ledger keyed by (decisionRef, scope id)
@@ -974,46 +998,52 @@ function verifyCreatedIssueContent({ ghBin, ref, marker, title, ac }) {
 // failed downstream publish) reconciles onto the SAME issue instead of creating a second one; a
 // genuinely uncertain outcome (no local record of success, nothing found on reconciliation) is
 // refused explicitly, never guessed.
-function createTargetIssue({ ghBin, repo, dir, decisionRef, scopeId, title, ac }) {
+function createTargetIssue({ host, repo, dir, decisionRef, scopeId, title, ac }) {
   const key = newCardKey(decisionRef, scopeId)
   const marker = newCardMarker(key)
   const existing = readLedger(dir, key)
   if (existing?.status === 'created' && existing.url) {
-    return verifyCreatedIssueContent({ ghBin, ref: existing.url, marker, title, ac })
+    return verifyCreatedIssueContent({ host, ref: existing.url, marker, title, ac })
   }
   if (existing?.status === 'creating') {
-    const rec = reconcileCreatedIssue({ ghBin, repo, key })
+    const rec = reconcileCreatedIssue({ host, repo, key })
     if (rec.error) return { error: rec.error }
-    const v = verifyCreatedIssueContent({ ghBin, ref: rec.url, marker, title, ac })
+    const v = verifyCreatedIssueContent({ host, ref: rec.url, marker, title, ac })
     if (v.error) return v
     writeLedger(dir, key, { status: 'created', url: v.url, decisionRef, scopeId, title })
     return v
   }
   writeLedger(dir, key, { status: 'creating', decisionRef, scopeId, title })
   const body = `${marker}\n${ac.map(a => renderCheckboxLine(a.id, a.description)).join('\n')}`
-  const r = spawnSync(ghBin, ['issue', 'create', '--repo', repo, '--title', title, '--body', body], { encoding: 'utf8', env: cleanGitEnv(process.env) })
-  if (r.error || r.status !== 0) {
+  let created
+  let createError
+  try {
+    created = host.pm.createCard({ repo, title, body })
+  } catch (e) {
+    createError = e
+  }
+  if (createError) {
     // A local failure here does NOT prove the remote call never landed — a lost response looks
     // identical locally to a genuine failure. Reconcile ONCE, immediately, before reporting
     // anything: the ledger stays `creating` either way (never a status that would let a LATER
     // retry create fresh on a guess), so an unresolved outcome is retried by reconciling again,
     // never by blindly calling create a second time.
-    const rec = reconcileCreatedIssue({ ghBin, repo, key })
+    const rec = reconcileCreatedIssue({ host, repo, key })
     if (!rec.error) {
-      const v = verifyCreatedIssueContent({ ghBin, ref: rec.url, marker, title, ac })
+      const v = verifyCreatedIssueContent({ host, ref: rec.url, marker, title, ac })
       if (v.error) return v
       writeLedger(dir, key, { status: 'created', url: v.url, decisionRef, scopeId, title })
       return v
     }
-    return { error: `gh-issue-create-uncertain:${rec.error}` }
+    return { error: `${host.pm.errorPrefix}-issue-create-uncertain:${rec.error}` }
   }
-  const url = r.stdout.trim().split('\n').pop()
-  if (!ISSUE_URL_RE.test(url)) return { error: 'gh-issue-create-no-url' }
+  const url = String(created?.url ?? '')
+  if (!host.pm.parseCardRef(url, { repo })) return { error: `${host.pm.errorPrefix}-issue-create-no-url` }
   // The remote effect is now KNOWN to exist — recorded before the local confirming verification, so
   // a lost/failed/mismatched readback never leaves this decision's own retry uncertain about its
   // own creation, and never forces a second create to "fix" a divergent body.
   writeLedger(dir, key, { status: 'created', url, decisionRef, scopeId, title })
-  return verifyCreatedIssueContent({ ghBin, ref: url, marker, title, ac })
+  return verifyCreatedIssueContent({ host, ref: url, marker, title, ac })
 }
 
 // S5 extend-current-card: the approved AC are written into the CURRENT card and read back before
@@ -1024,10 +1054,14 @@ function createTargetIssue({ ghBin, repo, dir, decisionRef, scopeId, title, ac }
 // alongside a new one); a genuinely new id is appended; an id the card carries more than once is
 // AMBIGUOUS and refused outright — never guessed which definition to replace. Idempotent: a body
 // whose targeted ids already carry exactly their approved description, once each, is not re-edited.
-function extendCard({ ghBin, repo, story, ac }) {
-  const read = spawnSync(ghBin, ['issue', 'view', String(story), '--repo', repo, '--json', 'body', '-q', '.body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
-  if (read.error || read.status !== 0) return { error: `gh-issue-view-failed:${(read.stderr || read.error?.message || '').trim()}` }
-  const currentBody = read.stdout
+function extendCard({ host, repo, story, ac }) {
+  const x = host.pm.errorPrefix
+  let currentBody
+  try {
+    currentBody = host.pm.readCard(story, { repo }).body
+  } catch (e) {
+    return { error: hostReason(host.pm, 'issue-view', e) }
+  }
   const card = parseAcCard(currentBody)
   // FAIL-CLOSED on an unrecognized card (ADL 2026-09-10, developer decision): a card speaking NONE
   // of the adopted dialects is refused outright, before any write — the absence of the requested id
@@ -1088,26 +1122,32 @@ function extendCard({ ghBin, repo, story, ac }) {
       const lines = toAppend.map(a => renderAcLine(a.id, a.description, card.appendFormat)).join('\n')
       nextBody = nextBody.includes(marker) ? nextBody.replace(marker, `${marker}\n${lines}`) : `${nextBody}\n\n${marker}\n${lines}\n`
     }
-    const edit = spawnSync(ghBin, ['issue', 'edit', String(story), '--repo', repo, '--body', nextBody], { encoding: 'utf8', env: cleanGitEnv(process.env) })
-    if (edit.error || edit.status !== 0) return { error: `gh-issue-edit-failed:${(edit.stderr || edit.error?.message || '').trim()}` }
+    try {
+      host.pm.updateCard({ repo, id: story, body: nextBody })
+    } catch (e) {
+      return { error: hostReason(host.pm, 'issue-edit', e) }
+    }
   }
-  const readback = spawnSync(ghBin, ['issue', 'view', String(story), '--repo', repo, '--json', 'body', '-q', '.body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
-  if (readback.error || readback.status !== 0) return { error: `gh-issue-view-readback-failed:${(readback.stderr || readback.error?.message || '').trim()}` }
-  const written = readback.stdout
+  let written
+  try {
+    written = host.pm.readCard(story, { repo }).body
+  } catch (e) {
+    return { error: hostReason(host.pm, 'issue-view-readback', e) }
+  }
   const writtenCard = parseAcCard(written)
   for (const r of resolved) {
     if (r.kind === 'gwt-existing') {
       const gw = writtenCard.gwtById.get(gwtKeyOf(r.a.id)) ?? []
-      if (gw.length !== 1 || gw[0].given !== r.parsed.given || gw[0].when !== r.parsed.when || gw[0].then !== r.parsed.then) return { error: `gh-issue-edit-readback-mismatch:${r.a.id}` }
+      if (gw.length !== 1 || gw[0].given !== r.parsed.given || gw[0].when !== r.parsed.when || gw[0].then !== r.parsed.then) return { error: `${x}-issue-edit-readback-mismatch:${r.a.id}` }
     } else {
       const hits = writtenCard.acById.get(r.a.id) ?? []
-      if (hits.length !== 1 || hits[0].description !== r.a.description) return { error: `gh-issue-edit-readback-mismatch:${r.a.id}` }
+      if (hits.length !== 1 || hits[0].description !== r.a.description) return { error: `${x}-issue-edit-readback-mismatch:${r.a.id}` }
     }
   }
   return { body: written }
 }
 
-// Reads the ACTUAL PR comment through `gh` (never a caller-supplied author string), verifies it is
+// Reads the ACTUAL PR comment through the code host (never a caller-supplied author string), verifies it is
 // a `User` in the authorized maintainer set, applies exact approved payloads mechanically — no
 // planner agent — and persists the result as a `recordType: decision` review-phase handoff via the
 // ordinary `publish`. Idempotent: a decisionRef already applied is a no-op, not a duplicate write.
@@ -1149,29 +1189,37 @@ export function resolveMaintainer({ dir, maintainer }) {
   return { error: 'maintainer-unresolved:no-assignee-in-adoption' }
 }
 
-export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer, ghBin = process.env.PAIR_GH_BIN || 'gh', workflowVersion, lockWaitMs = 5000 }) {
+export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer, workflowVersion, lockWaitMs = 5000, host: bound, ...transport }) {
   const { handoffs, reviews, seen, pending } = pendingScopeOf(dir)
   if (!reviews.length) return { applied: false, reason: 'no-review-evidence' }
   if (reviews.some(r => r.data.decisionRef === decisionRef)) return { applied: true, reason: 'already-applied' }
   if (!pending.length) return { applied: false, reason: 'no-pending-scope-changes' }
   const who = resolveMaintainer({ dir, maintainer })
   if (who.error) return { applied: false, reason: who.error }
-  const m = COMMENT_URL_RE.exec(String(decisionRef ?? ''))
-  if (!m) return { applied: false, reason: 'decisionRef-invalid' }
-  const [, owner, repoName, prNum] = m
-  if (`${owner}/${repoName}` !== repo) return { applied: false, reason: 'decisionRef-repo-mismatch' }
-  if (Number(prNum) !== Number(pr)) return { applied: false, reason: 'decisionRef-pr-mismatch' }
-  const r = spawnSync(ghBin, ['api', `repos/${repo}/issues/comments/${m[4]}`], { encoding: 'utf8', env: cleanGitEnv(process.env) })
-  if (r.error || r.status !== 0) return { applied: false, reason: `gh-api-failed:${(r.stderr || r.error?.message || '').trim()}` }
+  let host
+  try {
+    host = bound ?? bindHosts({ dir, transport })
+  } catch (e) {
+    return { applied: false, reason: e.kind === 'host-unsupported' ? 'host-unsupported' : `host-error:${e.message}`, ...(e.kind === 'host-unsupported' ? { detail: e.message } : {}) }
+  }
+  let ref
+  try {
+    ref = host.code.parseCommentRef(String(decisionRef ?? ''), { repo })
+  } catch (e) {
+    return { applied: false, reason: hostReason(host.code, 'api', e) }
+  }
+  if (!ref) return { applied: false, reason: 'decisionRef-invalid' }
+  if (!ref.inScope) return { applied: false, reason: 'decisionRef-repo-mismatch' }
+  if (ref.pr !== Number(pr)) return { applied: false, reason: 'decisionRef-pr-mismatch' }
   let comment
   try {
-    comment = JSON.parse(r.stdout)
-  } catch {
-    return { applied: false, reason: 'gh-api-invalid-json' }
+    comment = host.code.readComment({ id: ref.id, pr: ref.pr, repo })
+  } catch (e) {
+    return { applied: false, reason: hostReason(host.code, 'api', e) }
   }
-  if (comment?.user?.type !== 'User') return { applied: false, reason: 'author-not-a-user' }
-  if (comment.user.login !== who.login) return { applied: false, reason: `author-not-authorized:${comment.user.login}` }
-  if (!new RegExp(`/issues/${prNum}$`).test(String(comment.issue_url ?? ''))) return { applied: false, reason: 'decisionRef-pr-mismatch' }
+  if (!comment?.authorIsUser) return { applied: false, reason: 'author-not-a-user' }
+  if (comment.authorLogin !== who.login) return { applied: false, reason: `author-not-authorized:${comment.authorLogin}` }
+  if (comment.pr !== ref.pr) return { applied: false, reason: 'decisionRef-pr-mismatch' }
   const parsed = parseScopeDecisionComment(comment.body)
   if (parsed.error) return { applied: false, reason: parsed.error }
   const currentHash = scopeBaselineHashOf(pending)
@@ -1193,14 +1241,14 @@ export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer, gh
       results.push({ id: dec.id, applied: true, status: 'ignored', rationale: dec.rationale })
     } else if (dec.action === 'new-card') {
       if (dec.targetIssueUrl) {
-        const v = verifyExistingIssue({ ghBin, repo, targetIssueUrl: dec.targetIssueUrl })
+        const v = verifyExistingIssue({ host, repo, targetIssueUrl: dec.targetIssueUrl })
         if (v.error) {
           results.push({ id: dec.id, applied: false, reason: v.error })
           continue
         }
         results.push({ id: dec.id, applied: true, status: 'deferred', targetIssueUrl: v.url, approvedDelta: dec.approvedDelta })
       } else if (dec.approvedDelta?.title && Array.isArray(dec.approvedDelta.ac) && dec.approvedDelta.ac.length) {
-        const created = createTargetIssue({ ghBin, repo, dir, decisionRef, scopeId: dec.id, title: dec.approvedDelta.title, ac: dec.approvedDelta.ac })
+        const created = createTargetIssue({ host, repo, dir, decisionRef, scopeId: dec.id, title: dec.approvedDelta.title, ac: dec.approvedDelta.ac })
         if (created.error) {
           results.push({ id: dec.id, applied: false, reason: created.error })
           continue
@@ -1214,7 +1262,7 @@ export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer, gh
         results.push({ id: dec.id, applied: false, reason: 'approvedDelta-missing' })
         continue
       }
-      const ext = extendCard({ ghBin, repo, story: lastReview.data.story, ac: dec.approvedDelta.ac })
+      const ext = extendCard({ host, repo, story: lastReview.data.story, ac: dec.approvedDelta.ac })
       if (ext.error) {
         results.push({ id: dec.id, applied: false, reason: ext.error })
         continue
@@ -1250,19 +1298,23 @@ export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer, gh
   const tmp = join(dir, `.scope-decision-${Date.now()}-${Math.random().toString(36).slice(2)}.json`)
   writeFileSync(tmp, JSON.stringify(draft))
   const attempt = handoffs.filter(h => h.phase === lastReview.phase && h.skill === 'review-phase').length + 1
-  const out = publish({ dir, file: tmp, phase: lastReview.phase, skill: 'review-phase', workflowVersion: workflowVersion ?? lastReview.data.workflowVersion, attempt, predecessor: lastReview.name, lockWaitMs, ghBin })
+  const out = publish({ dir, file: tmp, phase: lastReview.phase, skill: 'review-phase', workflowVersion: workflowVersion ?? lastReview.data.workflowVersion, attempt, predecessor: lastReview.name, lockWaitMs, host })
   return { applied: !!out.published, reason: out.published ? undefined : out.reason, results, path: out.path, maintainer: who }
 }
 
+// Oldest first: numeric ids compare as numbers; a host whose ids are composite (Azure DevOps
+// `<thread>:<comment>`) compares them segment-numerically.
+const byCommentId = (a, b) => (Number.isInteger(a.id) && Number.isInteger(b.id) ? a.id - b.id : String(a.id).localeCompare(String(b.id), 'en', { numeric: true }))
+
 // DISCOVERY (canary v9, B): the maintainer's decision lives on the PR, not in the run directory —
 // a new cycle (fresh run dir) must find it there before it declares `awaiting-scope-decision` and
-// asks the same question again. Reads the PR's comment list through `gh`, keeps the ones that
+// asks the same question again. Reads the PR's comment list through the code host, keeps the ones that
 // PARSE as a decision comment (one fenced JSON, schemaVersion 1, decisions[]), and hands each to
 // `applyScopeDecisions` oldest first — every authentication, baseline and payload check stays
 // there, unchanged; this only supplies the `decisionRef`. Never a planner, never an inference:
 // a comment that is not decision-shaped is not a candidate, and one that fails a check is
 // reported with its reason, not retried into acceptance.
-export function discoverScopeDecisions({ dir, repo, pr, maintainer, ghBin = process.env.PAIR_GH_BIN || 'gh', workflowVersion, lockWaitMs = 5000 }) {
+export function discoverScopeDecisions({ dir, repo, pr, maintainer, workflowVersion, lockWaitMs = 5000, host: bound, ...transport }) {
   const { reviews, pending } = pendingScopeOf(dir)
   if (!reviews.length) return { applied: false, reason: 'no-review-evidence', discovered: [] }
   if (!pending.length) return { applied: false, reason: 'no-pending-scope-changes', discovered: [] }
@@ -1270,40 +1322,33 @@ export function discoverScopeDecisions({ dir, repo, pr, maintainer, ghBin = proc
   if (!Number.isInteger(Number(pr)) || Number(pr) <= 0) return { applied: false, reason: 'pr-invalid', discovered: [] }
   const who = resolveMaintainer({ dir, maintainer })
   if (who.error) return { applied: false, reason: who.error }
-  const r = spawnSync(ghBin, ['api', '--paginate', `repos/${repo}/issues/${Number(pr)}/comments`], { encoding: 'utf8', env: cleanGitEnv(process.env) })
-  if (r.error || r.status !== 0) return { applied: false, reason: `gh-api-failed:${(r.stderr || r.error?.message || '').trim()}`, discovered: [] }
-  // --paginate concatenates pages as consecutive JSON arrays.
-  const comments = []
+  let host
   try {
-    let depth = 0
-    let start = -1
-    for (let i = 0; i < r.stdout.length; i++) {
-      const ch = r.stdout[i]
-      if (ch === '[' && depth === 0) start = i
-      if (ch === '[') depth++
-      else if (ch === ']' && --depth === 0 && start >= 0) {
-        comments.push(...JSON.parse(r.stdout.slice(start, i + 1)))
-        start = -1
-      }
-    }
-  } catch {
-    return { applied: false, reason: 'gh-api-invalid-json', discovered: [] }
+    host = bound ?? bindHosts({ dir, transport })
+  } catch (e) {
+    return { applied: false, reason: e.kind === 'host-unsupported' ? 'host-unsupported' : `host-error:${e.message}`, discovered: [] }
+  }
+  let comments
+  try {
+    comments = host.code.listComments({ repo, pr: Number(pr) })
+  } catch (e) {
+    return { applied: false, reason: hostReason(host.code, 'api', e), discovered: [] }
   }
   const candidates = comments
-    .filter(c => c && Number.isInteger(c.id) && typeof c.body === 'string' && !parseScopeDecisionComment(c.body).error)
-    .sort((a, b) => a.id - b.id)
+    .filter(c => c && c.id !== undefined && c.id !== null && typeof c.body === 'string' && !parseScopeDecisionComment(c.body).error)
+    .sort(byCommentId)
   if (!candidates.length) return { applied: false, reason: 'no-decision-comment', discovered: [] }
   const discovered = []
   for (const c of candidates) {
-    const decisionRef = `https://github.com/${repo}/pull/${Number(pr)}#issuecomment-${c.id}`
-    const out = applyScopeDecisions({ dir, decisionRef, repo, pr: Number(pr), maintainer: who, ghBin, workflowVersion, lockWaitMs })
+    const decisionRef = host.code.commentRef({ repo, pr: Number(pr), id: c.id })
+    const out = applyScopeDecisions({ dir, decisionRef, repo, pr: Number(pr), maintainer: who, workflowVersion, lockWaitMs, host })
     discovered.push({ decisionRef, applied: !!out.applied, ...(out.reason ? { reason: out.reason } : {}), ...(out.results ? { results: out.results } : {}) })
     if (out.reason === 'no-pending-scope-changes') break
   }
   return { applied: discovered.some(d => d.applied && d.reason !== 'already-applied'), discovered }
 }
 
-export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, pr, lockWaitMs = 5000, ghBin }) {
+export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, pr, lockWaitMs = 5000, host, ...transport }) {
   const where = safeRunDir(dir)
   if (where.error) return { published: false, reason: where.error, path: where.path }
   if (safePath('file', file).error) return { published: false, reason: 'path-escape', path: String(file) }
@@ -1411,7 +1456,7 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   // An agent that recorded an acHash meant the card: the script stamps the canonical value in its
   // place and marks the source, so `resolve` compares only script-stamped hashes.
   if (data.acHash !== undefined && data.acHash !== null) {
-    const h = cardHash({ story: data.story, ghBin })
+    const h = cardHash({ story: data.story, dir, host, ...transport })
     if (h.acHash) data = { ...data, acHash: h.acHash, acHashSource: 'publish' }
     else {
       const { acHashSource, ...rest } = data
@@ -2637,7 +2682,8 @@ if (isMain()) {
       resolve: ['acHash', 'contextPolicy', 'dir', 'entry', 'head', 'inputs', 'policy', 'pr', 'redirects', 'runsRoot', 'story', 'workflowVersion'],
       publish: ['attempt', 'dir', 'file', 'phase', 'pr', 'predecessor', 'skill', 'workflowVersion'],
       hash: ['file'],
-      'ac-hash': ['story'],
+      'ac-hash': ['dir', 'story'],
+      'bind-hosts': ['dir', 'from'],
       inputs: ['json', 'story', 'workflowVersion'],
       'apply-scope-decisions': ['decision-ref', 'dir', 'maintainer', 'pr', 'repo', 'workflowVersion'],
       'scope-baseline': ['dir'],
@@ -2693,9 +2739,22 @@ if (isMain()) {
     } else if (cmd === 'ac-hash') {
       // The canonical hash of the story card's body, the ONE spelling every stage records as acHash.
       need('story')
-      const h = cardHash({ story: opts.story })
+      const h = cardHash({ story: opts.story, dir: opts.dir })
       if (h.error) throw new Error(h.error)
       process.stdout.write(JSON.stringify({ acHash: h.acHash }) + '\n')
+      process.exit(0)
+    } else if (cmd === 'bind-hosts') {
+      // US-492 AC2: the coordinator's ONE resolution of the PM tool / code host for this run.
+      need('dir')
+      if (opts.from !== undefined && hasParentHop(opts.from)) throw new Error(`path-escape: --from ${opts.from}`)
+      try {
+        out = writeBinding({ dir: opts.dir, from: opts.from })
+      } catch (e) {
+        if (e.kind !== 'host-unsupported') throw e
+        process.stdout.write(JSON.stringify({ error: 'host-unsupported', ...JSON.parse(e.detail), message: e.message }) + '\n')
+        process.exit(1)
+      }
+      process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
     } else if (cmd === 'inputs') {
       // Two surfaces, two digests, both published and both consumed — never one re-keyed into the
