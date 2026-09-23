@@ -14,6 +14,9 @@ import { createProjectTrustProbe } from './trust-probe'
 import { readAutomationPolicy, type AutomationPolicy } from './automation-policy'
 import type { CardReadiness } from './cycle-scripts'
 import type { IterationResult } from './stream-reader'
+import type { SelectRootInput } from './root-select'
+import type { RootCandidate } from './root-plan'
+import type { CardProcessRunner } from './parallel'
 import { decideDispatch, describeDispatch, lockedSkip, type DispatchDecision } from './dispatch'
 import { acquireCardLock, type CardLock, type LockAcquirer } from './card-lock'
 import { isInterrupted, whileInterruptible } from './interrupt'
@@ -72,6 +75,10 @@ export interface RunHandlerDependencies {
   cardReadiness?: CardReadinessProbe
   /** AC1: drives the delivery-cycle coordinator for a Ready card with no mapped route. */
   driveCycle?: CycleDriver
+  /** US-491: the `pair-next --root` selection (one engine process, shipped `selectRootCandidates`). */
+  selectCandidates?: (input: SelectRootInput) => Promise<RootCandidate[]>
+  /** US-491: one `pair-cli run --card` child process (shipped `spawnCardProcess`). */
+  runCardProcess?: CardProcessRunner
 }
 
 export interface ResolvedRun {

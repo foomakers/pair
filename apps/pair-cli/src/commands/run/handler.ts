@@ -15,6 +15,7 @@ import { describeApprovalPosture, filterDeliveryFor } from './invocation'
 import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
+import { handleParallelRun } from './parallel-entry'
 import {
   declaredEngine,
   driveLockedCard,
@@ -140,6 +141,11 @@ export async function handleRunCommand(
   // comparable against an absolute trust-store key.
   const cwd = resolve(config.cwd ?? fs.currentWorkingDirectory())
   const context = resolveContext(config, fs, cwd)
+
+  // US-491: `--root --parallel N` — the fan-out mode, its own entry (the parser guarantees no card).
+  if (config.parallel !== undefined) {
+    return await handleParallelRun({ config, context, fs, cwd }, deps)
+  }
 
   // Nothing to run on this card: report the decision and stop. This is a clean exit, never an
   // error — automation is opt-in per card (D21), so "no workflow applies here" is the shipped
