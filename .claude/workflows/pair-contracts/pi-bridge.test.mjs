@@ -264,3 +264,36 @@ test('T5/AC5/AC7: the cycle skill documents the in-pi consent flow, the decline 
   assert.match(md, /pi-bridge\.mjs" call/)
   assert.match(md, /pi-bridge\.mjs" record/)
 })
+
+// ── T-1 / T-2: the pi setup (AC2, AC3) and the pinned version's single record (T-6) ─────────
+const SETUP_SKILL = join(SKILLS, 'pair-capability-setup-harness/SKILL.md')
+const PI_GUIDE = fileURLToPath(new URL('../../../.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/pi.md', import.meta.url))
+
+test('AC2: setup-harness installs or verifies pi — proposed, run only on yes, confirmed on re-run', () => {
+  const md = readFileSync(SETUP_SKILL, 'utf8')
+  assert.match(md, /`pi` absent ⇒ propose[^\n]*run it only on an explicit \*\*yes\*\*/)
+  assert.match(md, /`pi --version`[^\n]*0\.86\.1/)
+  assert.match(md, /older than `0\.86\.1` ⇒ propose[^\n]*update/)
+  assert.match(md, /at or above it ⇒ \*\*confirmed\*\*, nothing written/)
+  assert.match(md, /standalone, for `pi` only, long after pair was installed/)
+  assert.match(md, /network[^\n]*no half-installed state/i)
+})
+
+test('AC3: pi-subagents only on request, at the pinned version the bridge holds, verifiedAgainst reported', () => {
+  const md = readFileSync(SETUP_SKILL, 'utf8')
+  assert.match(md, /only when the developer asks for it/)
+  assert.match(md, /pi-bridge\.mjs" pin/)
+  assert.match(md, /pi-bridge\.mjs" probe/)
+  assert.match(md, /`pinned` ⇒ \*\*confirmed\*\*/)
+  assert.match(md, /`drift` ⇒ report both versions and propose aligning/)
+  assert.match(md, /project-local[^\n]*trust/)
+  assert.match(md, /`verifiedAgainst`/)
+})
+
+test('T-6: pi.md records the pinned pi-subagents version the bridge holds — one version, two readers', () => {
+  const pin = bridge(['pin']).json
+  const guide = readFileSync(PI_GUIDE, 'utf8')
+  assert.ok(guide.includes(`\`${pin.package}@${pin.version}\``), `pi.md names ${pin.package}@${pin.version}`)
+  assert.ok(guide.includes(pin.piMin), `pi.md names the minimum pi ${pin.piMin}`)
+  assert.match(guide, /stdin closed/)
+})
