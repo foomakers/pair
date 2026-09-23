@@ -1314,3 +1314,127 @@ test('DT-32: a FOREIGN journal is not this cycle`s evidence, and files the CLI d
   }
   assert.equal(readFileSync(bystander, 'utf8'), '# notes a human wrote\n', 'a file the CLI does not own is left exactly as it was')
 })
+
+// ── r1-g2 (finding r0-1): finalize publishes the synthesis through the run's BOUND code host ────
+// The run directory's `.host-binding.json` is the coordinator's one resolution (US-492 AC2); the
+// process cwd's way-of-working is never re-read for a run that carries one. gh and az are both
+// stateful recorders on PATH (and PAIR_*_BIN), so whichever host finalize reaches, its calls are
+// counted — no live GitHub or Azure DevOps call.
+function r1g2Project(wowText, binding) {
+  const root = mkdtempSync(join(tmpdir(), 'r1g2-'))
+  mkdirSync(join(root, '.pair', 'adoption', 'tech'), { recursive: true })
+  writeFileSync(join(root, '.pair', 'adoption', 'tech', 'way-of-working.md'), wowText)
+  const dir = join(root, '.pair', 'working', 'runs', 'run-1', '42')
+  mkdirSync(dir, { recursive: true })
+  if (binding) writeFileSync(join(dir, '.host-binding.json'), JSON.stringify({ schemaVersion: 1, source: 'adoption', ...binding }) + '\n')
+  const file = join(dir, 'd.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') } }))
+  publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.1' })
+  return { root, dir }
+}
+// A stateful `az` recorder answering the pullRequestThreads shapes the Azure adapter uses.
+function r1g2FakeAz() {
+  const d = mkdtempSync(join(tmpdir(), 'az-fake-'))
+  const state = join(d, 'threads.json')
+  const log = join(d, 'calls.log')
+  writeFileSync(state, '[]')
+  writeFileSync(log, '')
+  writeFileSync(join(d, 'az'), `#!/usr/bin/env node
+const fs = require('fs')
+const a = process.argv.slice(2)
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(a) + '\\n')
+const T = JSON.parse(fs.readFileSync(${JSON.stringify(state)}, 'utf8'))
+const opt = k => { const i = a.indexOf(k); return i === -1 ? undefined : a[i + 1] }
+const route = {}; const ri = a.indexOf('--route-parameters')
+if (ri !== -1) for (let j = ri + 1; j < a.length && !a[j].startsWith('--'); j++) { const [k, ...v] = a[j].split('='); route[k] = v.join('=') }
+const out = v => { process.stdout.write(JSON.stringify(v)); process.exit(0) }
+const save = () => fs.writeFileSync(${JSON.stringify(state)}, JSON.stringify(T))
+const res = opt('--resource'); const m = opt('--http-method'); const f = opt('--in-file'); const body = f ? JSON.parse(fs.readFileSync(f, 'utf8')) : undefined
+if (a[0] === 'repos' && a[1] === 'pr' && a[2] === 'show') out({ pullRequestId: Number(opt('--id')), lastMergeSourceCommit: { commitId: '${SHA('c')}' }, repository: { webUrl: 'https://dev.azure.com/acme/Proj/_git/app' }, status: 'active' })
+if (a[0] === 'devops' && a[1] === 'invoke' && res === 'pullRequestThreads' && m === 'GET' && route.threadId) out(T.find(t => String(t.id) === route.threadId))
+if (a[0] === 'devops' && a[1] === 'invoke' && res === 'pullRequestThreads' && m === 'GET') out({ value: T, count: T.length })
+if (a[0] === 'devops' && a[1] === 'invoke' && res === 'pullRequestThreads' && m === 'POST') { const t = { id: 100 + T.length, comments: [{ id: 1, content: body.comments[0].content, author: { uniqueName: 'bot@acme.test', descriptor: 'aad.bot' } }] }; T.push(t); save(); out(t) }
+if (a[0] === 'devops' && a[1] === 'invoke' && res === 'pullRequestThreadComments' && m === 'PATCH') { const t = T.find(t => String(t.id) === route.threadId); t.comments[0].content = body.content; save(); out(t.comments[0]) }
+process.stderr.write('unexpected az call: ' + a.join(' ')); process.exit(3)
+`)
+  chmodSync(join(d, 'az'), 0o755)
+  return { dir: d, bin: join(d, 'az'), threads: () => JSON.parse(readFileSync(state, 'utf8')), calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) }
+}
+// Wraps the stateful gh fake with a call log.
+function r1g2FakeGh() {
+  const d = fakeGhDir()
+  const log = join(d, 'calls.log')
+  writeFileSync(log, '')
+  const real = readFileSync(join(d, 'gh'), 'utf8')
+  writeFileSync(join(d, 'gh'), real.replace("const args = process.argv.slice(2)\n", `const args = process.argv.slice(2)\nfs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(args) + '\\n')\n`))
+  return { dir: d, bin: join(d, 'gh'), comments: () => JSON.parse(readFileSync(join(d, 'state.json'), 'utf8')), calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) }
+}
+const r1g2Finalize = ({ root, dir, repo, gh, az, pr = '7' }) =>
+  spawnSync('node', [CLI, 'finalize', '--dir', dir, '--repo', repo, '--story', '42', '--branch', 'b', ...(pr ? ['--pr', pr] : []), '--runId', 'run-1'], {
+    encoding: 'utf8',
+    cwd: root,
+    env: { ...process.env, PAIR_GH_BIN: gh.bin, PAIR_AZ_BIN: az.bin, PATH: `${gh.dir}:${az.dir}:${process.env.PATH}` },
+  })
+const AZ_WOW = '# Way of Working\n\n- `pm-tool`: `azure-devops`\n'
+const GH_WOW = '# Way of Working\n\n- Github Projects is adopted for project management.\n'
+
+test('r1-g2-w1: finalize on a run bound to github/github publishes the synthesis through gh even when the cwd way-of-working declares azure-devops — zero az calls', () => {
+  const p = r1g2Project(AZ_WOW, { pmTool: 'github', codeHost: 'github' })
+  const gh = r1g2FakeGh()
+  const az = r1g2FakeAz()
+  const r = r1g2Finalize({ ...p, repo: 'foomakers/pair', gh, az })
+  assert.equal(az.calls().length, 0, `az was reached: ${JSON.stringify(az.calls())}`)
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.equal(JSON.parse(r.stdout.trim().split('\n').pop()).publication.state, 'confirmed')
+  assert.equal(gh.comments().length, 1)
+  assert.match(gh.comments()[0].body, /^<!-- pair:synthesis #42 PR#7 run:run-1 -->/)
+})
+
+test('r1-g2-w2: finalize on a run bound to azure-devops/azure-devops publishes through az even when the cwd way-of-working is GitHub — zero gh calls', () => {
+  const p = r1g2Project(GH_WOW, { pmTool: 'azure-devops', codeHost: 'azure-devops' })
+  const gh = r1g2FakeGh()
+  const az = r1g2FakeAz()
+  const r = r1g2Finalize({ ...p, repo: 'Proj/app', gh, az })
+  assert.equal(gh.calls().length, 0, `gh was reached: ${JSON.stringify(gh.calls())}`)
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.equal(JSON.parse(r.stdout.trim().split('\n').pop()).publication.state, 'confirmed')
+  assert.equal(az.threads().length, 1)
+  assert.match(az.threads()[0].comments[0].content, /^<!-- pair:synthesis #42 PR#7 run:run-1 -->/)
+})
+
+test('r1-g2-c1: binding and cwd way-of-working agreeing on github — finalize publishes through gh, as before', () => {
+  const p = r1g2Project(GH_WOW, { pmTool: 'github', codeHost: 'github' })
+  const gh = r1g2FakeGh()
+  const az = r1g2FakeAz()
+  const r = r1g2Finalize({ ...p, repo: 'foomakers/pair', gh, az })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.deepEqual([gh.comments().length, az.calls().length], [1, 0])
+})
+
+test('r1-g2-c2: a run with NO binding file still resolves from the project way-of-working (azure-devops here) — the unbound path is unchanged', () => {
+  const p = r1g2Project(AZ_WOW, null)
+  const gh = r1g2FakeGh()
+  const az = r1g2FakeAz()
+  const r = r1g2Finalize({ ...p, repo: 'Proj/app', gh, az })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.deepEqual([az.threads().length, gh.calls().length], [1, 0])
+})
+
+test('r1-g2-c3: pr-comment find --dir from the same disagreeing cwd already honours the binding (gh) — the reviewer control', () => {
+  const p = r1g2Project(AZ_WOW, { pmTool: 'github', codeHost: 'github' })
+  const gh = r1g2FakeGh()
+  const az = r1g2FakeAz()
+  const PR_COMMENT = fileURLToPath(new URL('../../skills/pair-workflow-review-phase/scripts/pr-comment.mjs', import.meta.url))
+  const r = spawnSync('node', [PR_COMMENT, 'find', '--pr', '7', '--marker', '<!-- pair:synthesis #42 PR#7 run:run-1 -->', '--repo', 'foomakers/pair', '--dir', p.dir], { encoding: 'utf8', cwd: p.root, env: { ...process.env, PAIR_GH_BIN: gh.bin, PAIR_AZ_BIN: az.bin, PATH: `${gh.dir}:${az.dir}:${process.env.PATH}` } })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.deepEqual([gh.calls().length, az.calls().length], [1, 0])
+})
+
+test('r1-g2-c4: finalize without --pr (no PR yet) reaches neither host — publication not-applicable, exit 0', () => {
+  const p = r1g2Project(AZ_WOW, { pmTool: 'github', codeHost: 'github' })
+  const gh = r1g2FakeGh()
+  const az = r1g2FakeAz()
+  const r = r1g2Finalize({ ...p, repo: 'foomakers/pair', gh, az, pr: null })
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.deepEqual([gh.calls().length, az.calls().length], [0, 0])
+})
