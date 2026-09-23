@@ -73,9 +73,72 @@ const unsupported = (side, declared, registry) => {
   })
 }
 
-// Pure: way-of-working text → { pmTool, codeHost, declared }. Throws HostError('host-unsupported').
+// Declarations are read from TOP-LEVEL lines only (CommonMark top-level block rules, nothing more):
+//   - a fenced block opens on 3+ backticks or tildes indented 0-3 spaces and closes only on a fence
+//     of the SAME character at least as long; everything inside it is example text, `<!--` included;
+//     an unterminated fence ⇒ HostError('way-of-working-malformed') naming its opening line — never
+//     a silent default (ADR-018);
+//   - a line indented 4+ columns is indented code, never a declaration;
+//   - an HTML comment (outside a fence) is not read: a comment block opens on a line starting with
+//     `<!--` (0-3 spaces) and ends on the line carrying `-->` — a fence marker inside it opens
+//     nothing, and an unterminated one is malformed as well; a closed `<!-- … -->` span inside a
+//     line is dropped from that line;
+//   - fences nested in list items (list-relative indentation) are out of scope: declare the host on a
+//     top-level line (way-of-working-pm-resolution.md).
+// Returns the text with every non-declaration line blanked (line numbers preserved).
+const FENCE_OPEN = /^ {0,3}(`{3,}(?=[^`]*$)|~{3,})/
+const indentCols = line => {
+  let cols = 0
+  for (const ch of line) {
+    if (ch === ' ') cols += 1
+    else if (ch === '\t') cols += 4 - (cols % 4)
+    else break
+  }
+  return cols
+}
+const malformed = (what, line) =>
+  new HostError('way-of-working-malformed', {
+    message: `way-of-working-malformed: unterminated ${what} opened at line ${line} — close it, or declare the host on a top-level line outside it`,
+    detail: JSON.stringify({ unterminated: what, line }),
+  })
+export function declarationText(text) {
+  const lines = String(text ?? '').split(/\r?\n/)
+  const out = []
+  let fence = null // { ch, len, line }
+  let comment = null // opening line number
+  lines.forEach((line, i) => {
+    if (fence) {
+      const close = new RegExp(`^ {0,3}(\\${fence.ch}{${fence.len},})[ \t]*$`).exec(line)
+      if (close) fence = null
+      out.push('')
+      return
+    }
+    if (comment !== null) {
+      // An HTML comment block ends on the line carrying `-->`; that whole line belongs to it.
+      if (line.includes('-->')) comment = null
+      return out.push('')
+    }
+    if (indentCols(line) >= 4) return out.push('')
+    const open = FENCE_OPEN.exec(line)
+    if (open) {
+      fence = { ch: open[1][0], len: open[1].length, line: i + 1 }
+      return out.push('')
+    }
+    if (/^ {0,3}<!--/.test(line)) {
+      if (!line.slice(line.indexOf('<!--') + 4).includes('-->')) comment = i + 1
+      return out.push('')
+    }
+    out.push(line.replace(/<!--[\s\S]*?-->/g, '')) // an inline comment span inside a line
+  })
+  if (fence) throw malformed('code fence', fence.line)
+  if (comment !== null) throw malformed('HTML comment', comment)
+  return out.join('\n')
+}
+
+// Pure: way-of-working text → { pmTool, codeHost, declared }. Throws HostError('host-unsupported')
+// or HostError('way-of-working-malformed').
 export function resolveHosts({ text, registry = SHIPPED } = {}) {
-  const src = String(text ?? '')
+  const src = declarationText(text)
   const key = k => new RegExp('^\\s*[-*]\\s*`' + k + '`\\s*:\\s*`([^`]+)`', 'm').exec(src)?.[1]
   let declaredPm = key('pm-tool')
   if (declaredPm === undefined) {
@@ -200,8 +263,8 @@ if (isMain()) {
     const r = resolveFrom(value ?? process.cwd(), SHIPPED)
     process.stdout.write(JSON.stringify({ pmTool: r.pmTool, codeHost: r.codeHost, source: r.source, declared: r.declared, implemented: implementedHosts() }) + '\n')
   } catch (e) {
-    const typed = e.kind === 'host-unsupported'
-    process.stdout.write(JSON.stringify({ error: typed ? 'host-unsupported' : e.message, ...(typed ? JSON.parse(e.detail) : {}), message: e.message }) + '\n')
+    const typed = e.kind === 'host-unsupported' || e.kind === 'way-of-working-malformed'
+    process.stdout.write(JSON.stringify({ error: typed ? e.kind : e.message, ...(typed ? JSON.parse(e.detail) : {}), message: e.message }) + '\n')
     process.exit(1)
   }
 }
