@@ -4,7 +4,7 @@ import type { RunCommandConfig } from './parser'
 import { describeEngineResolution, resolveEngine } from './resolve-engine'
 import type { ResolvedInvocation } from './resolve-skill'
 import { createPerimeter } from './perimeter'
-import type { AutomationPolicy } from './automation-policy'
+import { isEligibilityOffWarning, POLICY_PATH, type AutomationPolicy } from './automation-policy'
 import type { CardReadiness } from './cycle-scripts'
 import { CardUnreadableError, createCardReadinessProbe } from './cycle-wiring'
 import { CardOutOfScopeError } from './card-readiness'
@@ -258,9 +258,9 @@ export async function enterCycleAtReview(
 const CYCLE_WORKFLOW = 'pair-workflow-cycle'
 
 /**
- * r0-4 / r1-1: every fallback route SPAWNS on the card, so it runs exactly as a mapped route does
- * (`driveLockedCard`): the per-card lock, and the start + end audit records with the
- * `DISPATCH-RECORD:` line. Held ⇒ `run-in-progress`, nothing spawned.
+ * r0-4 / r1-1 / r1-2: every fallback route SPAWNS on the card, so it runs exactly as a mapped route
+ * does (`driveLockedCard`): the per-card lock, the start + end audit records with the
+ * `DISPATCH-RECORD:` line, and SIGTERM/SIGINT trapped. Held ⇒ `run-in-progress`, nothing spawned.
  */
 async function underCardLock(
   entry: CardEntryInput,
@@ -337,7 +337,26 @@ function reportFallbackEntry(context: RunContext, decision: SkipDecision): void 
       `card's own Definition of Ready (AC14)`,
   )
   console.log(`  Policy: ${context.policy.source} · audit ${context.policy.auditLocation}`)
-  for (const warning of context.policy.warnings) console.log(chalk.yellow(`  ! ${warning}`))
+  for (const warning of fallbackWarnings(context, decision.card)) {
+    console.log(chalk.yellow(`  ! ${warning}`))
+  }
+}
+
+/**
+ * r1-4: "automation is off … nothing is selected unattended" is true of SELECTION (loop mode, a
+ * tag route) and false of what this entry does next — an explicit `--card` names its card, so with
+ * no `## Eligibility` declared there is no label to require and the run proceeds (AC14; the
+ * exception the KB states under `## Eligibility`). Said as what happens, never as its opposite.
+ */
+function fallbackWarnings(context: RunContext, card: string): string[] {
+  const warnings = context.policy.warnings.filter(warning => !isEligibilityOffWarning(warning))
+  if (warnings.length === context.policy.warnings.length) return warnings
+  return [
+    `no \`## Eligibility\` is declared (${POLICY_PATH}): nothing is SELECTED from the board ` +
+      `unattended, but an explicit --card names its own card, so this run proceeds on card ${card} ` +
+      `with no label to require (AC14). Declare \`## Eligibility\` to bound --autonomous card runs.`,
+    ...warnings,
+  ]
 }
 
 /** Draft / Ready-without-breakdown ⇒ the preparation skill that moves the card toward the cycle. */
