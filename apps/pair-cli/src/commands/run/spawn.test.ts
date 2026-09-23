@@ -163,3 +163,29 @@ describe('spawnIteration — a stalled stage is named as one (US-506 T-8, AC12)'
     expect(noEvent.stalled).toBeUndefined()
   }, 20000)
 })
+
+describe('spawnIteration — the stall is classified the same on every CI platform (US-506 T-8)', () => {
+  it.each([{ platform: 'darwin' }, { platform: 'linux' }] as const)(
+    'with process.platform injected as $platform, a time-bound stop is `stalled`',
+    async ({ platform }) => {
+      const original = Object.getOwnPropertyDescriptor(process, 'platform')!
+      Object.defineProperty(process, 'platform', { ...original, value: platform })
+      try {
+        const dir = mkdtempSync(join(tmpdir(), 'pair-run-'))
+        const hang = join(dir, 'engine.js')
+        writeFileSync(hang, `setTimeout(() => {}, 60000)`)
+        const result = await spawnIteration({
+          engine: { ...ENGINES.claude, command: process.execPath, headlessArgs: [hang] },
+          promptText: 'go',
+          cwd: dir,
+          autonomyArgs: [],
+          timeoutSeconds: 1,
+        })
+        expect(result).toMatchObject({ outcome: 'failed', stalled: true })
+      } finally {
+        Object.defineProperty(process, 'platform', original)
+      }
+    },
+    20000,
+  )
+})

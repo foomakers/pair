@@ -505,7 +505,7 @@ const RUN_ID = PARSED.runId
 // each handoff records which coordinator produced it. Bump on any change to the dispatch
 // contract (skill names, argument names, statuses).
 const WORKFLOW_VERSION = '4.0.1'
-// US-506 T-8 (AC12): the bounded-commands guardrail every dispatch carries — spelled exactly as
+// US-506 T-8 (AC-12): the bounded-commands guardrail every dispatch carries — spelled exactly as
 // `cycle-dispatch.mjs` exports it (the sandbox cannot import it); the packet-parity tests hold the
 // two byte-equal.
 const BOUNDED_COMMANDS = 'Run only foreground, time-bounded commands: never start a background process and never wait on one. In your own probes never spawn a real engine or a real `gh` — stub them, and test "engine missing" with a PATH that contains no engine directory at all.'
@@ -1796,7 +1796,7 @@ async function driveStory(story) {
     return errs
   }
 
-  // US-506 AC1: a fresh card has no up-front contract — its first stage is `implement / initial`,
+  // US-506 AC-1: a fresh card has no up-front contract — its first stage is `implement / initial`,
   // exactly what `cycle-state.mjs`'s `deriveNext([], …, { entry: 'fresh' })` answers.
   let next = resuming ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
   const seen = new Set()

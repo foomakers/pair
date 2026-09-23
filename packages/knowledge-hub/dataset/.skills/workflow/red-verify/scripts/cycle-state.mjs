@@ -392,7 +392,7 @@ export function envelopeErrors(data, { phase, skill }) {
   if (data.firstReviewHead !== undefined && !SHA_RE.test(String(data.firstReviewHead))) errs.push('firstReviewHead-invalid')
   if (data.remediationBatchId !== undefined && (typeof data.remediationBatchId !== 'string' || data.remediationBatchId === '')) errs.push('remediationBatchId-invalid')
   if (data.recordType !== undefined && !RECORD_TYPES.includes(data.recordType)) errs.push(`recordType-invalid:${data.recordType}`)
-  // US-506 AC2: the implementer's self-review is informal and UNRECORDED — it happens, it fixes what
+  // US-506 AC-2: the implementer's self-review is informal and UNRECORDED — it happens, it fixes what
   // it finds, and nothing of it reaches a handoff, so the independent reviewer verifies without bias.
   if (skill === 'implement-phase') for (const k of Object.keys(data)) if (/^self[-_ ]?review/i.test(k)) errs.push(`self-review-not-recordable:${k}`)
   // red-spec's envelope carries `findings: { received, covered }` — the obligation ids it was
@@ -461,7 +461,7 @@ export function envelopeErrors(data, { phase, skill }) {
           }
         }
         if (f.reproducer !== undefined) {
-          // A reproducer is a COMMAND or a TEST reference (US-506 AC3: "a reproducer (command or test)").
+          // A reproducer is a COMMAND or a TEST reference (US-506 AC-3: "a reproducer (command or test)").
           const rp = f.reproducer
           const cmd = rp && typeof rp === 'object' && typeof rp.command === 'string' && rp.command.trim() ? rp.command : undefined
           const ref = rp && typeof rp === 'object' && typeof rp.testRef === 'string' && rp.testRef.trim() ? rp.testRef : undefined
@@ -469,7 +469,7 @@ export function envelopeErrors(data, { phase, skill }) {
           else if (cmd && SHELL_METACHAR_RE.test(cmd)) errs.push(`reproducer-command-unsafe:${f.mechanismId ?? f.rowId ?? f.id ?? '?'}`)
           else if (ref && SHELL_METACHAR_RE.test(ref)) errs.push(`reproducer-testRef-unsafe:${f.mechanismId ?? f.rowId ?? f.id ?? '?'}`)
         }
-        // US-506 AC3: every finding a review OPENS is real and evidenced — a reproducer (command or
+        // US-506 AC-3: every finding a review OPENS is real and evidenced — a reproducer (command or
         // test), or a concrete failure scenario (this input ⇒ this wrong result). A difference of taste
         // carries neither and is not a finding. Closures (`resolved`/`superseded`/`human`) transition a
         // finding that was evidenced when it was opened; a `question` claims no defect. Mechanical
@@ -535,7 +535,7 @@ export function envelopeErrors(data, { phase, skill }) {
       }
     }
   }
-  // US-506 AC10: the validator PROVES it executed. Every row it validated carries the command it ran,
+  // US-506 AC-10: the validator PROVES it executed. Every row it validated carries the command it ran,
   // the exit code and the observed output; a witness (`baseline: red`) needs a run that FAILED — at
   // the unfixed base, or on the injected regression a `mode: test` guard is proven against — and a
   // control (`baseline: pass`) a run that PASSED. A test that cannot fail, or cannot pass, is refused.
@@ -1312,7 +1312,7 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   // follows a red-verify rejection naming rowId/mechanismId gaps must list every one of them under
   // `changedRows`, or it is refused BEFORE the write (never accepted and reconciled later, canary
   // run 3: two named rewriters, one repaired, the other silently dropped to the next rejection).
-  // US-506 AC6: the rejection a repair answers is the MOST RECENT `red-verify` of that phase — the
+  // US-506 AC-6: the rejection a repair answers is the MOST RECENT `red-verify` of that phase — the
   // `--predecessor` name `<phase>-red-verify` names the STEP, and its latest attempt is the one the
   // repair was dispatched with. Reading `<predecessor>.json` read attempt 1 forever, so on US-487 the
   // second repair had to carry a cumulative `changedRows`.
@@ -1328,7 +1328,7 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
     }
   }
   const n = Number.isInteger(attempt) ? attempt : Number.isInteger(data.attempt) ? data.attempt : 1
-  // US-506 AC7: every contract attempt is its own file — `<phase>-red-contract.attempt-N.json` beyond
+  // US-506 AC-7: every contract attempt is its own file — `<phase>-red-contract.attempt-N.json` beyond
   // the first — and a new attempt never lands on top of an earlier one. The earlier attempts' files
   // are checked intact against the hash their own handoff recorded: a rejection names its contract,
   // and a repair that overwrote it would leave the rejection pointing at bytes nobody validated.
@@ -1348,7 +1348,7 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       if (!intact) return { published: false, reason: `contract-attempt-overwritten:${basename(prev)}`, path: prev }
     }
   }
-  // US-506 AC7: a verdict points at the contract it validated — the one the latest preparation of the
+  // US-506 AC-7: a verdict points at the contract it validated — the one the latest preparation of the
   // same phase wrote. Stamped when absent; a different one is refused.
   if (skill === 'red-verify') {
     const spec = existingHandoffs.filter(h => h.skill === 'red-spec' && h.phase === phase && h.data && String(h.data.contractPath ?? '').trim()).pop()
@@ -1364,7 +1364,7 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
     const line = successionLineOf(target?.phase)
     data = { ...data, contradictionLine: line ?? null, contradictionKey: contradictionKeyOf({ line, conflictingRowIds: data.conflictingRowIds }) }
   }
-  // US-506 AC3: the FIRST verify of a fresh card's PR (the run began with `a0-implement-phase` and
+  // US-506 AC-3: the FIRST verify of a fresh card's PR (the run began with `a0-implement-phase` and
   // never sealed an `a0` contract) names, per AC, the test that proves it. A PR-entry cycle and a run
   // on the sealed `a0` path keep today's first review.
   if (skill === 'review-phase' && (data.recordType ?? 'judgment') === 'judgment' && String(phase) === 'r0' && data.mode === 'first') {
@@ -1625,7 +1625,7 @@ const orderGroups = groups => {
   for (const g of groups) if (!visit(g)) return null
   return out
 }
-// US-506 AC3 — what makes a finding EVIDENCED: a reproducer (command or test reference), a concrete
+// US-506 AC-3 — what makes a finding EVIDENCED: a reproducer (command or test reference), a concrete
 // failure scenario (input ⇒ actual wrong result, against the expected one), or the executable
 // reproducer a regression risk already carries.
 const nonBlank = v => typeof v === 'string' && v.trim() !== ''
@@ -1637,7 +1637,7 @@ export function findingEvidenced(f) {
   if (fs && typeof fs === 'object' && nonBlank(fs.input) && nonBlank(fs.actual) && nonBlank(fs.expected)) return true
   return nonBlank(f.regressionRisk?.reproducerRef)
 }
-// US-506 AC3 — the per-AC qualitative assessment of a fresh card's tests, owed by its FIRST verify:
+// US-506 AC-3 — the per-AC qualitative assessment of a fresh card's tests, owed by its FIRST verify:
 // every AC named with the test(s) that prove it. A weak or missing test is an ordinary finding, so
 // such a row names an OPEN finding of the same review (`findingId`), never a free-floating note.
 export const AC_ASSESSMENTS = ['proven', 'weak', 'missing']
@@ -1663,10 +1663,10 @@ const EXTERNAL_REFUSALS = new Set(['dirty', 'stale'])
 function deriveNextStep(handoffs, policy, ctx = {}) {
   // US-479 B2: a migration acknowledgment is evidence about provenance, never a cycle position.
   const list = handoffs.filter(h => h.data && h.data.recordType !== 'migration')
-  // US-506 AC1 (ADR-024 amendment 2026-09-23): a FRESH card has no up-front acceptance contract. Its
+  // US-506 AC-1 (ADR-024 amendment 2026-09-23): a FRESH card has no up-front acceptance contract. Its
   // first step is `implement / initial` above the base — tests and code written together, test-first
   // — and independence moves to the verify that follows. A directory that already holds `a0` contract
-  // handoffs is not empty, so it never reaches this line: it finishes under the old transitions (AC5).
+  // handoffs is not empty, so it never reaches this line: it finishes under the old transitions (AC-5).
   if (!list.length) return ctx.entry === 'pr' ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
   const last = list[list.length - 1]
   const d = last.data
@@ -2016,7 +2016,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     if (cycleCounters(list).spentCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', findings: blocking })
     // US-506: `approved-test-failing` and `contract-gap` presuppose a SEALED contract of their group.
     // On a fresh run `a0` never sealed one, so such a finding has nothing to retry or revise: it is an
-    // ordinary finding and routes the test-first remediation below (AC3 — no new finding class).
+    // ordinary finding and routes the test-first remediation below (AC-3 — no new finding class).
     const sealedGroup = f => !!f.groupId && groupPhases(f.groupId).length > 0
     const atf = blocking.filter(f => f.kind === 'approved-test-failing' && sealedGroup(f))
     const gaps = blocking.filter(f => f.kind === 'contract-gap' && sealedGroup(f))
@@ -2448,7 +2448,7 @@ export function migrateAcknowledge({ dir, legacyDirs = [], workflowVersion, stor
   return { applied: !!out.published, reason: out.published ? undefined : out.reason, path: out.path, migrationKey, predecessorRuns: predecessorRuns.map(r => r.runId) }
 }
 
-// ── maintainer recovery (US-506 T-5, AC8) ─────────────────────────────────────────────────
+// ── maintainer recovery (US-506 T-5, AC-8) ─────────────────────────────────────────────────
 // Two commands for what US-487's maintainer did by hand. `supersede` sets an UNVALIDATED
 // preparation attempt aside under a prefix a directory listing shows and NAME_RE ignores, and
 // indexes it in `maintainer-interventions.md`; `decide` records a maintainer's answer to a review's
@@ -2725,14 +2725,14 @@ if (isMain()) {
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.applied || out.reason === 'already-acknowledged' ? 0 : 1)
     } else if (cmd === 'supersede') {
-      // US-506 AC8: set an unvalidated attempt aside (visible to a listing, invisible to NAME_RE),
+      // US-506 AC-8: set an unvalidated attempt aside (visible to a listing, invisible to NAME_RE),
       // index it in maintainer-interventions.md and print the step `resolve` now names.
       need('dir', 'phase', 'reason', 'by', 'workflowVersion')
       out = supersede({ dir: opts.dir, phase: opts.phase, skill: opts.skill, attempt: opts.attempt !== undefined ? Number(opts.attempt) : undefined, reason: opts.reason, by: opts.by, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr !== undefined ? Number(opts.pr) : undefined })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.superseded ? 0 : 1)
     } else if (cmd === 'decide') {
-      // US-506 AC8: record a maintainer's answer to a review's needsHumanDecision as its own handoff.
+      // US-506 AC-8: record a maintainer's answer to a review's needsHumanDecision as its own handoff.
       need('dir', 'phase', 'finding', 'decision', 'by', 'workflowVersion')
       out = decide({ dir: opts.dir, phase: opts.phase, finding: opts.finding, decision: opts.decision, by: opts.by, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr !== undefined ? Number(opts.pr) : undefined })
       process.stdout.write(JSON.stringify(out) + '\n')

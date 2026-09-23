@@ -261,7 +261,7 @@ const CONTRACT_MIRRORS =
   'verdict ← the `## Verdict`-line options; findings[].severity ← the `Findings by severity` severity levels. ' +
   'The RELATIVE severity of those levels is a contract TERM, carried by the top-level `severityRanks` map (one explicit integer per severity, higher = more severe) — the consumer ranks a merge-blocking floor with it and IGNORES the order of the `severities` array entirely'
 
-// US-506 T-8 (AC12): the bounded-commands guardrail every stage carries, whichever realization
+// US-506 T-8 (AC-12): the bounded-commands guardrail every stage carries, whichever realization
 // renders it. US-487's stage agents stalled on background waits (resumed by hand), and two
 // reviewers removed an engine stub to probe "engine missing" — the CLI fell through to the real
 // `claude` on PATH. Spelled identically in `pair-implement-batch.js`; the packet-parity tests hold

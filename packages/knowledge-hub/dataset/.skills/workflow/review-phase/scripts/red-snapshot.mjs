@@ -7,7 +7,7 @@
 //
 //   node <skill dir>/scripts/red-snapshot.mjs seal   --pr <n> --phase <p> --base <sha> --contract <contract.json> --static-gates '<json>' [--root <main checkout>]
 //     Verifies HEAD is exactly <base>, every listed artifact hashes to its stated sha256, and the
-//     working tree is dirty ONLY at those artifacts; runs the PRE-SEAL GUARD (US-506 AC9: the repo's
+//     working tree is dirty ONLY at those artifacts; runs the PRE-SEAL GUARD (US-506 AC-9: the repo's
 //     static gates over every listed test, a hermetic probe of every witness command — no real `gh`,
 //     no network — the `predecessorContractHash` against the sealed predecessors, a revision's
 //     `changedRows` against its own diff); writes the manifest, creates ONE local `--no-verify` commit
@@ -42,7 +42,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-// The ONE canonical contract identity (US-506 AC9: `predecessorContractHash` is checked against it).
+// The ONE canonical contract identity (US-506 AC-9: `predecessorContractHash` is checked against it).
 // `cycle-state.mjs` ships beside this script in every skill that ships this one.
 import { canonical, contractHash } from './cycle-state.mjs'
 
@@ -287,7 +287,7 @@ export function resolveContractPath(contractPath, { cwd, root }) {
   return { path: real }
 }
 
-// ── the pre-seal guard (US-506 T-6, AC9) ─────────────────────────────────────────────────────
+// ── the pre-seal guard (US-506 T-6, AC-9) ─────────────────────────────────────────────────────
 // Carried from US-487 T-8: its `a0` contract sealed a test with an unused local (the quality gate was
 // red for ANY implementation) and a witness that passes for anything — both byte-identical to the
 // seal, so nobody could fix them afterwards. Four refusals, each naming the file:
@@ -479,7 +479,7 @@ export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, he
     if (!reattestOk) return { sealed: false, reason: 'artifact-not-changed', paths: notDirty }
   }
 
-  // ── the pre-seal guard (US-506 AC9): refused with a typed reason naming the file, nothing committed
+  // ── the pre-seal guard (US-506 AC-9): refused with a typed reason naming the file, nothing committed
   const preSeal = { provenance: 'none' }
   if (contract.predecessorContractHash !== undefined) {
     const sealedHashes = sealedContracts(cwd).map(x => x.contractHash)
@@ -682,7 +682,7 @@ function readCustodyOverrides(runDir) {
       !Number.isNaN(Date.parse(o.at)),
   )
 }
-// ── merges from the base (US-506 T-7, AC11) ──────────────────────────────────────────────────
+// ── merges from the base (US-506 T-7, AC-11) ──────────────────────────────────────────────────
 // A story branch that merged its base (`origin/main`) carries, in every later segment's diff, the
 // files that merge brought in — byte-identical to the base, not written by the PR. US-487's r0 walk
 // counted 7 such files as `out-of-scope` / `unlisted-test-changed` and needed 7 custody overrides.
@@ -826,7 +826,7 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [],
       })
       .filter(({ path }) => !manifests.has(path))
     for (const { status, path } of changes) {
-      // US-506 AC11: byte-identical to the base this segment merged ⇒ the base's change, not the PR's.
+      // US-506 AC-11: byte-identical to the base this segment merged ⇒ the base's change, not the PR's.
       // A sealed blob is never exempted this way: its identity is checked below regardless.
       if (mergedParents.length && !contracts.slice(0, i + 1).some(x => x.listed.includes(path)) && identicalToMergedBase(path, end, mergedParents, cwd)) {
         fromBase.add(path)
@@ -913,14 +913,14 @@ if (isMain()) {
       // Only that exact spelling relaxes the check; anything else keeps the strict default.
       // t9d-9: `--run-dir <run/story dir>` derives the expectation from the sealed handoffs there; the flag
       // is then a claim the script checks, never a bypass.
-      // US-506 AC11: `--base-ref <ref>` (the story's base, e.g. origin/main) lets a merge of that base
+      // US-506 AC-11: `--base-ref <ref>` (the story's base, e.g. origin/main) lets a merge of that base
       // bring in files byte-identical to it without counting them as PR changes.
       out = verifyChain({ pr: opts.pr, base: opts.base, cwd, expectContract: String(opts['contract-expected'] ?? 'true') !== 'false', runDir: opts['run-dir'], baseRef: opts['base-ref'] })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.verified ? 0 : 1)
     } else if (cmd === 'seal') {
       if (!opts.contract) throw new Error('--contract <draft.json> is required')
-      // US-506 AC9: the repo's static gates are a REQUIRED input — the sealer never seals blind. `[]`
+      // US-506 AC-9: the repo's static gates are a REQUIRED input — the sealer never seals blind. `[]`
       // is an explicit, recorded "this repository has none"; the hermetic probe always runs.
       if (opts['static-gates'] === undefined) throw new Error("--static-gates '<json array of { name, command: [argv] }>' is required ('[]' when the repository has none)")
       let staticGates
