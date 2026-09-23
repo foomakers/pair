@@ -5,7 +5,6 @@ import type { EngineDefinition } from './engines'
 import { runCycle, type CycleOutcome, type CycleStageResult } from './cycle'
 import {
   createCycleScriptsBridge,
-  CYCLE_WORKTREE_ROOT_DEFAULT,
   type CardReadiness,
   type CycleScriptsLocation,
 } from './cycle-scripts'
@@ -321,7 +320,7 @@ const worktreeFor =
       story: input.card,
       branch: co.branch,
       base: ctx.baseBranch,
-      worktreeRoot: CYCLE_WORKTREE_ROOT_DEFAULT,
+      // No `--worktree-root`: `cycle-dispatch worktree`'s own default applies (r0-10).
     })
 
 const packetFor =

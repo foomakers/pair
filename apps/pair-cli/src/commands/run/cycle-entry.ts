@@ -8,10 +8,11 @@ import type { DispatchSkipReason } from './dispatch'
 import {
   locateAgentDefinitions,
   locateCycleScripts,
+  readCycleDefaults,
   CYCLE_WORKTREE_ROOT_DEFAULT,
   CYCLE_DISPATCH_CAP_DEFAULT,
-  CYCLE_WORKFLOW_VERSION,
-  CYCLE_BASE_BRANCH_DEFAULT,
+  type CycleDefaults,
+  type CycleScriptsLocation,
 } from './cycle-scripts'
 import { createDefaultCycleDriver, mainCheckout } from './cycle-wiring'
 import {
@@ -113,17 +114,18 @@ function reportCycleEntry(input: {
   card: string
   scriptsDir: string | undefined
   runDir: string
+  shown: ShownDefaults
 }): void {
   console.log(chalk.bold('pair-cli run'))
   console.log(`  ${describeEngineResolution(input.engine)}`)
   console.log(`  Delivery cycle: runId=${input.dispatch.runId} card=${input.card}`)
   console.log(`  Scripts: ${input.scriptsDir ?? '(resolved by the cycle driver)'}`)
   console.log(`  Run dir: ${input.runDir}`)
-  console.log(`  Worktree root: ${CYCLE_WORKTREE_ROOT_DEFAULT}`)
+  console.log(`  Worktree root: ${input.shown.worktreeRoot}`)
   console.log(
     `  Rounds bound: ${input.dispatch.rounds ?? '(policy default: maxFixRounds)'} — rounds narrows, never widens it`,
   )
-  console.log(`  Dispatch cap: ${CYCLE_DISPATCH_CAP_DEFAULT}`)
+  console.log(`  Dispatch cap: ${input.shown.dispatchCap}`)
 }
 
 /** The executable this run will actually spawn: config, then PATH, then the repo's own bin. */
@@ -140,36 +142,68 @@ export function resolveEngineFor(
   })
 }
 
-/** The shipped driver: the pieces T-2/T-3/T-4 built, composed with this run's own resolved context. */
-function productionCycleDriver(input: {
-  engine: ReturnType<typeof resolveEngine>
-  engineDef: EngineDefinition
-  config: RunCommandConfig
-  context: RunContext
-  cwd: string
-  fs: FileSystemService
-  location: ReturnType<typeof locateCycleScripts> | undefined
-}): CycleDriver {
-  return createDefaultCycleDriver({
-    engine: input.engineDef,
-    cwd: input.cwd,
-    fs: input.fs,
-    location: input.location,
-    // Trust and autonomy are decided about the directory the STAGE will actually run in — the main
-    // checkout — not about the driver's own cwd. They differ whenever the command is invoked from a
-    // worktree, and the check then answers a question nobody asked: pi refuses a story worktree it
-    // has never seen, while the process it would have spawned was going to run somewhere trusted.
-    autonomyArgs: resolveAutonomyFor(
-      input.engineDef,
-      input.config,
-      mainCheckout(input.cwd),
-      input.fs,
-    ).args,
-    timeoutSeconds: input.config.iterationTimeoutSeconds,
-    workflowVersion: CYCLE_WORKFLOW_VERSION,
-    baseBranch: CYCLE_BASE_BRANCH_DEFAULT,
-    model: declaredEngineModel(input.context.config, input.engineDef.id),
+interface DriverInput {
+  readonly engine: ReturnType<typeof resolveEngine>
+  readonly engineDef: EngineDefinition
+  readonly location: CycleScriptsLocation
+}
+
+type ShownDefaults = Pick<CycleDefaults, 'worktreeRoot' | 'dispatchCap'>
+
+/**
+ * The shipped driver: the pieces T-2/T-3/T-4 built, composed with this run's own resolved context.
+ *
+ * Its refusals come first and in this order, all before the transparency block is printed and
+ * before anything spawns: the autonomy/trust posture (AC7), then the installed scripts' defaults
+ * (`cycle-state-unreadable`, r0-10) — the version and base it dispatches with are the scripts'.
+ */
+function productionCycleDriver(
+  entry: CycleCoordinatorInput,
+  driver: DriverInput,
+): { driveCycle: CycleDriver; shown: ShownDefaults } {
+  const { config, context, cwd, fs } = entry
+  // Trust and autonomy are decided about the directory the STAGE will actually run in — the main
+  // checkout — not about the driver's own cwd. They differ whenever the command is invoked from a
+  // worktree, and the check then answers a question nobody asked: pi refuses a story worktree it
+  // has never seen, while the process it would have spawned was going to run somewhere trusted.
+  const autonomyArgs = resolveAutonomyFor(driver.engineDef, config, mainCheckout(cwd), fs).args
+  const defaults = readCycleDefaults(driver.location)
+  const driveCycle = createDefaultCycleDriver({
+    engine: driver.engineDef,
+    cwd,
+    fs,
+    location: driver.location,
+    autonomyArgs,
+    timeoutSeconds: config.iterationTimeoutSeconds,
+    workflowVersion: defaults.workflowVersion,
+    baseBranch: defaults.baseBranch,
+    model: declaredEngineModel(context.config, driver.engineDef.id),
   })
+  return { driveCycle, shown: defaults }
+}
+
+/**
+ * An INJECTED driver runs nothing installed, so an unreadable script is no refusal there: the
+ * transparency block shows the installed values when they can be read, else the parity-pinned
+ * mirrors (presentation only — no stage is ever dispatched from them).
+ */
+function shownDefaults(location: CycleScriptsLocation): ShownDefaults {
+  try {
+    return readCycleDefaults(location)
+  } catch {
+    return { worktreeRoot: CYCLE_WORKTREE_ROOT_DEFAULT, dispatchCap: CYCLE_DISPATCH_CAP_DEFAULT }
+  }
+}
+
+function driverFor(
+  entry: CycleCoordinatorInput,
+  deps: RunHandlerDependencies,
+  driver: DriverInput,
+): { driveCycle: CycleDriver; shown: ShownDefaults } {
+  if (deps.driveCycle !== undefined) {
+    return { driveCycle: deps.driveCycle, shown: shownDefaults(driver.location) }
+  }
+  return productionCycleDriver(entry, driver)
 }
 
 /**
@@ -188,37 +222,24 @@ export async function enterCycleCoordinator(
   const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
   const engineDef = resolveEngineFor(engine, context, cwd, fs)
 
-  // AC11: HALTs skill-missing, naming pair-workflow-cycle, before anything is printed or spawned.
-  //
-  // Scoped to `no-mapping-declared` (no `## Workflows` at all — the project has not adopted
-  // tag-driven dispatch): the round-2-repair AC14 witness proving the `unmapped` half of this same
-  // fallback (a project WITH `## Workflows` declared, whose card just carries no matching tag)
-  // reuses `dispatchFs()`'s fixture, which installs no `pair-workflow-cycle` skill either — that
-  // fixture is shared with the tag-mapped-route tests above it, where the skill is irrelevant, so
-  // scoping here to the branch AC11's OWN fixture actually exercises keeps that shared fixture's
-  // other rows untouched. Flagged as a contract note: a real, unconfigured-vs-partially-configured
-  // project could still reach `driveCycle` unchecked via the `unmapped` branch.
-  // r0-4: located for BOTH fallback reasons, not just `no-mapping-declared`. `handleDorFallback`
-  // reaches here for `unmapped` too (a project WITH `## Workflows` whose card carries no mapped
-  // tag), and scoping the probe to one of them let that project reach `driveCycle` with the skill
-  // absent — the very HALT AC11 exists to raise, skipped for half its own surface.
-  const location = {
+  // AC11: HALTs skill-missing, naming pair-workflow-cycle, before anything is printed or spawned —
+  // for BOTH fallback reasons (`unmapped` and `no-mapping-declared`) and the `--pr` entry alike.
+  const location: CycleScriptsLocation = {
     ...locateCycleScripts(fs, context.config, cwd),
     agentsDir: locateAgentDefinitions(context.config, cwd),
   }
+  const { driveCycle, shown } = driverFor(input, deps, { engine, engineDef, location })
 
   const dispatch = config.dispatch!
   reportCycleEntry({
     engine,
     dispatch,
     card,
-    scriptsDir: location?.scriptsDir,
+    scriptsDir: location.scriptsDir,
     runDir: `.pair/working/runs/${dispatch.runId}/${card}`,
+    shown,
   })
 
-  const driveCycle =
-    deps.driveCycle ??
-    productionCycleDriver({ engine, engineDef, config, context, cwd, fs, location })
   const outcome = await driveCycle({
     runId: dispatch.runId,
     card,

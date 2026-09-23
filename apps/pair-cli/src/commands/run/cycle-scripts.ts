@@ -1,5 +1,6 @@
 import { spawnSync } from 'child_process'
 import { isAbsolute, join, relative, resolve } from 'path'
+import { pathToFileURL } from 'url'
 import type { FileSystemService } from '@pair/content-ops'
 import { extractRegistries, type Config } from '#registry'
 
@@ -196,50 +197,63 @@ function runScript(
   return parsed
 }
 
+type ScriptArgs = [string, string][]
+
+/** `[flag, value]` for every option that is set — an absent option is never passed as a value. */
+function optional(pairs: ReadonlyArray<readonly [string, string | undefined]>): ScriptArgs {
+  return pairs.filter((pair): pair is [string, string] => pair[1] !== undefined)
+}
+
+function resolveArgs(options: CycleResolveOptions): ScriptArgs {
+  return [
+    ['dir', options.dir],
+    ['workflowVersion', options.workflowVersion],
+    ['policy', JSON.stringify(options.policy ?? {})],
+    ['entry', options.entry],
+    ...optional([
+      ['pr', options.pr === undefined ? undefined : String(options.pr)],
+      ['story', options.story],
+      ['runsRoot', options.runsRoot],
+      ['head', options.head],
+      ['inputs', options.inputs],
+      ['acHash', options.acHash],
+    ]),
+  ]
+}
+
+function packetArgs(options: CyclePacketOptions, location: CycleScriptsLocation): ScriptArgs {
+  const json = (value: unknown) => (value === undefined ? undefined : JSON.stringify(value))
+  return [
+    ['next', JSON.stringify(options.next)],
+    ['card', JSON.stringify(options.card)],
+    ...optional([
+      ['policy', json(options.policy)],
+      ['run', options.run],
+      ['workflow-version', options.workflowVersion],
+      ['pipeline', json(options.pipeline)],
+      ['style', options.style],
+      ['agents-dir', location.agentsDir],
+    ]),
+  ]
+}
+
 export function createCycleScriptsBridge(location: CycleScriptsLocation): CycleScriptsBridge {
   const cycleStatePath = join(location.scriptsDir, 'cycle-state.mjs')
   const cycleDispatchPath = join(location.scriptsDir, 'cycle-dispatch.mjs')
 
   return {
-    resolve(options) {
-      const args: [string, string][] = [
-        ['dir', options.dir],
-        ['workflowVersion', options.workflowVersion],
-        ['policy', JSON.stringify(options.policy ?? {})],
-        ['entry', options.entry],
-      ]
-      if (options.pr !== undefined) args.push(['pr', String(options.pr)])
-      if (options.story !== undefined) args.push(['story', options.story])
-      if (options.runsRoot !== undefined) args.push(['runsRoot', options.runsRoot])
-      if (options.head !== undefined) args.push(['head', options.head])
-      if (options.inputs !== undefined) args.push(['inputs', options.inputs])
-      if (options.acHash !== undefined) args.push(['acHash', options.acHash])
-      return runScript(cycleStatePath, 'resolve', args) as CycleResolveResult
-    },
-    worktree(options) {
-      const args: [string, string][] = [
+    resolve: options =>
+      runScript(cycleStatePath, 'resolve', resolveArgs(options)) as CycleResolveResult,
+    worktree: options =>
+      runScript(cycleDispatchPath, 'worktree', [
         ['main', options.main],
         ['story', options.story],
         ['branch', options.branch],
         ['base', options.base],
-      ]
-      if (options.worktreeRoot !== undefined) args.push(['worktree-root', options.worktreeRoot])
-      return runScript(cycleDispatchPath, 'worktree', args) as CycleWorktreeResult
-    },
-    packet(options) {
-      const args: [string, string][] = [
-        ['next', JSON.stringify(options.next)],
-        ['card', JSON.stringify(options.card)],
-      ]
-      if (options.policy !== undefined) args.push(['policy', JSON.stringify(options.policy)])
-      if (options.run !== undefined) args.push(['run', options.run])
-      if (options.workflowVersion !== undefined)
-        args.push(['workflow-version', options.workflowVersion])
-      if (options.pipeline !== undefined) args.push(['pipeline', JSON.stringify(options.pipeline)])
-      if (options.style !== undefined) args.push(['style', options.style])
-      if (location.agentsDir !== undefined) args.push(['agents-dir', location.agentsDir])
-      return runScript(cycleDispatchPath, 'packet', args) as CyclePacketResult
-    },
+        ...optional([['worktree-root', options.worktreeRoot]]),
+      ]) as CycleWorktreeResult,
+    packet: options =>
+      runScript(cycleDispatchPath, 'packet', packetArgs(options, location)) as CyclePacketResult,
     inputs(story, workflowVersion) {
       const out = runScript(cycleStatePath, 'inputs', [
         ['story', JSON.stringify(story)],
@@ -252,6 +266,59 @@ export function createCycleScriptsBridge(location: CycleScriptsLocation): CycleS
       return String(out.acHash)
     },
   }
+}
+
+// ── the cycle's own defaults, read from the INSTALLED scripts (review r0-10) ───────────────────
+
+/** The values `cycle-state.mjs` itself declares — the version every handoff records, and its pipeline defaults. */
+export interface CycleDefaults {
+  readonly workflowVersion: string
+  readonly worktreeRoot: string
+  readonly baseBranch: string
+  readonly dispatchCap: number
+}
+
+// Imported in a CHILD process, like every other script call: nothing installed is ever evaluated
+// inside pair-cli. The module is named through the environment, never argv, so the script's own
+// entry-point guard (`argv[1]` is the script) stays false and no CLI command runs.
+const READ_DEFAULTS = `const m = await import(process.env.PAIR_CYCLE_STATE_URL)
+process.stdout.write(JSON.stringify({
+  workflowVersion: m.WORKFLOW_VERSION,
+  worktreeRoot: m.PIPELINE_DEFAULTS?.worktreeRoot,
+  baseBranch: m.PIPELINE_DEFAULTS?.baseBranch,
+  dispatchCap: m.CAPS?.dispatchesPerStory,
+}))`
+
+function isCycleDefaults(value: unknown): value is CycleDefaults {
+  const v = (value ?? {}) as Record<string, unknown>
+  return (
+    typeof v['workflowVersion'] === 'string' &&
+    typeof v['worktreeRoot'] === 'string' &&
+    typeof v['baseBranch'] === 'string' &&
+    typeof v['dispatchCap'] === 'number'
+  )
+}
+
+/**
+ * The installed `cycle-state.mjs`'s own `WORKFLOW_VERSION`, `PIPELINE_DEFAULTS.worktreeRoot` /
+ * `.baseBranch` and `CAPS.dispatchesPerStory` — so the version and base this run dispatches with,
+ * and the root and cap it prints, are the scripts' decision, never a TypeScript literal. Unreadable
+ * ⇒ `cycle-state-unreadable`, never a guess.
+ */
+export function readCycleDefaults(location: CycleScriptsLocation): CycleDefaults {
+  const script = join(location.scriptsDir, 'cycle-state.mjs')
+  const result = spawnSync('node', ['--input-type=module', '-e', READ_DEFAULTS], {
+    encoding: 'utf8',
+    env: { ...process.env, PAIR_CYCLE_STATE_URL: pathToFileURL(script).href },
+  })
+  const parsed = parseScriptOutput(script, 'defaults', (result.stdout ?? '').trim(), result.stderr)
+  if (!isCycleDefaults(parsed)) {
+    throw new Error(
+      `cycle-state-unreadable: ${script} does not declare WORKFLOW_VERSION, ` +
+        `PIPELINE_DEFAULTS.worktreeRoot/baseBranch and CAPS.dispatchesPerStory — got ${JSON.stringify(parsed)}`,
+    )
+  }
+  return parsed
 }
 
 // ── AC14 — the DoR-gated fallback half of the entry-point discriminator ────────────────────────
@@ -277,15 +344,13 @@ export function classifyCardReadiness(card: CardMacrostate): CardReadiness {
   )
 }
 
-// ── AC10 transparency defaults — mirrored, never independently invented ────────────────────────
+// ── parity-pinned mirrors of the scripts' defaults — never a decision (review r0-10) ─────────────
 //
-// Printed BEFORE the first stage spawns (AC10), which is BEFORE any real worktree exists to read
-// them off idempotently and BEFORE `resolve()` has a run directory to read a live `caps` value
-// from (that value only exists once a real git worktree / real run directory back it — neither of
-// which the pre-flight transparency line may assume). Mirrored from
-// `.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs`'s own `PIPELINE_DEFAULTS.worktreeRoot`
-// and `CAPS.dispatchesPerStory` — the SAME values `driveCycle`'s real dispatch reads live, via this
-// bridge, once a stage actually spawns; this pre-flight line is presentation only, never a decision.
+// Every value a run DISPATCHES with is read from the installed scripts (`readCycleDefaults`), and
+// the worktree root is left to `cycle-dispatch worktree`'s own default. These mirrors survive only
+// as what the AC10 transparency block prints when the installed `cycle-state.mjs` cannot be read —
+// a run in that state never reaches a stage (the production driver HALTs `cycle-state-unreadable`)
+// — and `cycle-defaults-parity.test.ts` pins them to the in-repo script so the two cannot drift.
 export const CYCLE_WORKTREE_ROOT_DEFAULT = '../pair-worktrees'
 export const CYCLE_DISPATCH_CAP_DEFAULT = 40
 /** `cycle-state.mjs`'s own `WORKFLOW_VERSION` — the version every handoff records and `resolve` checks. */
