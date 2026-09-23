@@ -42,7 +42,7 @@ export type IterationRunner = (input: {
   timeoutSeconds: number
 }) => Promise<IterationResult>
 
-/** AC14: the card's own DoR macrostate — no PM-tool call lives in `cycle-scripts.ts`'s grammar; the adapter call is here. */
+/** AC14: the card's readiness — the shipped probe is `createCardReadinessProbe` (`cycle-wiring.ts`). */
 export type CardReadinessProbe = (card: string) => Promise<CardReadiness>
 
 export interface DriveCycleInput {
@@ -67,7 +67,7 @@ export interface RunHandlerDependencies {
   acquireLock?: LockAcquirer
   /** The audit writer. Injected for the same reason — the trail is a real file, by design. */
   appendAudit?: AuditAppender
-  /** AC14: reads a card's Draft/Refined-without-breakdown/Ready macrostate. */
+  /** AC14: a card's readiness (via the adopted State Mapping); out-of-scope throws CardOutOfScopeError. */
   cardReadiness?: CardReadinessProbe
   /** AC1: drives the delivery-cycle coordinator for a Ready card with no mapped route. */
   driveCycle?: CycleDriver

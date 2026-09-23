@@ -42,9 +42,10 @@ export interface CycleCoordinatorInput {
 }
 
 /**
- * AC7: `--root`/`--filter` and a declared `## Max Parallelism` expectation are LOOP-MODE concerns,
- * refused only once the entry resolves to the cycle coordinator (never at parse time, so US-217's
- * own accepted --filter-alongside---card stays a zero-regression control for a ROUTE decision).
+ * AC7: `--filter` passed on THIS invocation is a loop-mode request, refused once the entry resolves
+ * to the cycle coordinator (never at parse time, so US-217's own accepted --filter-alongside---card
+ * stays a zero-regression control for a ROUTE decision; `--root` is refused with `--card` by the
+ * parser). A DECLARED `## Max Parallelism` is not refused — see below.
  */
 function assertNoLoopModeConcerns(config: RunCommandConfig): void {
   if (config.scope.filter !== undefined) {

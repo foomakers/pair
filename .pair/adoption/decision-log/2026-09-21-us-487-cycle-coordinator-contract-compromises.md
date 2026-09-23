@@ -6,7 +6,13 @@
 
 ## Status
 
-Active
+Active — **partially superseded** (2026-09-23, review r0-12). Item 1 stands. Items 2, 3 and 4 no
+longer describe the code: item 2 was retired by AC7's rewrite (a declared `## Max Parallelism` is
+never refused, whatever `## Eligibility` says); item 3 by the r0-4 repair (`skill-missing` is
+located for every fallback entry — `unmapped`, `no-mapping-declared` and `--pr` alike); item 4 by
+r0-10 (the version, base, worktree root and dispatch cap are read from the installed
+`cycle-state.mjs`; the TypeScript mirrors survive only as the AC10 print when that file cannot be
+read, pinned by `cycle-defaults-parity.test.ts`). Read those three items as history.
 
 ## Category
 

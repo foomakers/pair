@@ -334,7 +334,7 @@ interface PrepSkillInput {
   readonly label: string
 }
 
-/** Draft / Refined-without-breakdown: routed to the matching preparation skill, ONE engine dispatch. */
+/** Draft / Ready-without-breakdown (supervised): routed to the matching preparation skill. */
 async function runPrepSkill(input: PrepSkillInput, deps: RunHandlerDependencies): Promise<number> {
   const { config, context, fs, cwd, card, skill, label } = input
   const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
