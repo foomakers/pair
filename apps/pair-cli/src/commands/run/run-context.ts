@@ -16,7 +16,7 @@ import type { CardReadiness } from './cycle-scripts'
 import type { IterationResult } from './stream-reader'
 import { decideDispatch, describeDispatch, lockedSkip, type DispatchDecision } from './dispatch'
 import { acquireCardLock, type CardLock, type LockAcquirer } from './card-lock'
-import { whileInterruptible } from './interrupt'
+import { isInterrupted, whileInterruptible } from './interrupt'
 import {
   appendAuditLine,
   auditRecordFor,
@@ -358,6 +358,8 @@ export async function driveLockedCard(
       record(context, deps, decision, { event: 'start', ...named })
       started = true
       const outcome = await run()
+      // r2-1: a signal cut this run short — the interrupt handler owns its one `end`.
+      if (isInterrupted()) return outcome
       record(context, deps, decision, {
         event: 'end',
         outcome: outcome === 0 ? 'completed' : 'failed',
@@ -369,7 +371,7 @@ export async function driveLockedCard(
     // Every start gets an end, including this one. Without it the trail stops at `event=start` and
     // the operator reading it the next morning cannot tell a crashed run from one still in flight —
     // and the lock, released just below, offers no second signal either.
-    recordCrash(context, deps, decision, { crash: error, started, ...named })
+    if (!isInterrupted()) recordCrash(context, deps, decision, { crash: error, started, ...named })
     throw error
   } finally {
     lock.release()

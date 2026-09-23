@@ -179,8 +179,11 @@ async function handleDorFallback(
   const { config, context, decision } = input
 
   if (config.dryRun) {
-    reportSkippedDispatch(context)
+    // r2-2: the preview says what the live run does (the same entry report and reworded notice),
+    // never the pre-AC14 "nothing is selected unattended" / "Nothing was spawned." skip wording.
+    reportFallbackEntry(context, decision)
     announceIneligibleOverride(decision.card, context, config)
+    console.log(chalk.dim('  Dry run: nothing was spawned.'))
     return 0
   }
 
