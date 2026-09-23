@@ -529,6 +529,21 @@ describe('r0-2: `--card N --pr P` enters the cycle with the PR or refuses naming
     })
   }
 
+  it('R2-W3: --pr 12 on a card whose tag MAPS a workflow still enters the cycle with the PR — never the mapped workflow, never silently dropped', async () => {
+    captureLog()
+    const { calls, driveCycle, handler } = harness({ readiness: 'draft' })
+
+    const outcome = await run(
+      { card: '9', cardTags: 'auto-dev,risk:green', pr: '12' },
+      project({ [`${cwd}/${POLICY_PATH}`]: MAPPED_POLICY }),
+      handler,
+    )
+
+    expect(outcome.error?.message).toBeUndefined()
+    expect(calls).toHaveLength(0)
+    expect(driveCycle).toHaveBeenCalledWith(expect.objectContaining({ card: '9', pr: 12 }))
+  })
+
   it('R2-C1: --pr 12 on a Ready card reaches the cycle driver carrying pr 12', async () => {
     captureLog()
     const { calls, driveCycle, handler } = harness({ readiness: 'ready' })
