@@ -14,7 +14,7 @@ import { describeMergePosture, describeParallelism } from './automation-policy'
 import { describeApprovalPosture, filterDeliveryFor } from './invocation'
 import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
-import { handleSkipDecision } from './card-entry'
+import { enterCycleAtReview, handleSkipDecision } from './card-entry'
 import {
   declaredEngine,
   record,
@@ -154,6 +154,13 @@ export async function handleRunCommand(
     return await handleSkipDecision({ config, context, fs, cwd, decision: context.dispatch }, deps)
   }
 
+  // AC2 (r0-2): `--pr` enters the cycle at review even on a card whose tag maps a workflow — the
+  // mapping names what a card STARTS with, and a card with a PR has started. Never silently dropped.
+  const reviewCard = prEntryOnMappedRoute(config, context)
+  if (reviewCard !== undefined) {
+    return await enterCycleAtReview({ config, context, fs, cwd, card: reviewCard }, deps)
+  }
+
   const resolved = resolveRun(config, context, cwd, fs)
 
   report(resolved, resolved.policy.warnings)
@@ -168,6 +175,12 @@ export async function handleRunCommand(
   return resolved.dispatch
     ? await driveDispatchedCard({ resolved, decision: resolved.dispatch, context, config }, deps)
     : await driveRun(resolved, config, deps)
+}
+
+/** The routed card, when the invocation ALSO names a `--pr` (AC2 wins over the mapped workflow). */
+function prEntryOnMappedRoute(config: RunCommandConfig, context: RunContext): string | undefined {
+  if (context.dispatch?.kind !== 'route' || config.dispatch?.pr === undefined) return undefined
+  return context.dispatch.card
 }
 
 /** One routed card and everything already resolved about it — one subject, not four arguments. */

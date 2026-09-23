@@ -54,8 +54,8 @@ answers `incompatible` / `invalid` / `other-run` with no `next`.
    audited): an unmapped board state, no board state, `Done`. A malformed mapping HALTs.
 7. **Unattended runs never start a preparation skill** (r0-5, AC14 as amended): `--autonomous` on
    a prep route ⇒ clean skip, "needs a human", nothing spawned, skip audited.
-8. **`--pr` bypasses preparation routing** (r0-2, AC2): the card's readiness is not read; the entry
-   goes to the cycle, whose first stage is `verify`.
+8. **`--pr` bypasses preparation routing** (r0-2, AC2): the card's readiness is not read and a
+   mapped tag does not displace it; the entry goes to the cycle, whose first stage is `verify`.
 9. **Every fallback route that spawns takes the per-card lock** (r0-4), the same helper as a mapped
    route: held ⇒ `run-in-progress` skip, audited; acquired ⇒ released on every exit.
 10. **`resolve` always carries the freshness evidence** (r0-3): `--inputs` (the script's `inputs

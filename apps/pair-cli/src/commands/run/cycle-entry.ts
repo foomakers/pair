@@ -4,7 +4,6 @@ import type { RunCommandConfig, RunDispatchRequest } from './parser'
 import { assertEngineAvailable, describeEngineResolution, resolveEngine } from './resolve-engine'
 import { createExecutableProbe } from './path-probe'
 import type { EngineDefinition } from './engines'
-import type { DispatchSkipReason } from './dispatch'
 import {
   locateAgentDefinitions,
   locateCycleScripts,
@@ -38,7 +37,6 @@ export interface CycleCoordinatorInput {
   readonly fs: FileSystemService
   readonly cwd: string
   readonly card: string
-  readonly dorReason: DispatchSkipReason
 }
 
 /**

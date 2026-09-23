@@ -813,8 +813,8 @@ and the order is fixed — **the tag mapping is asked first, always**:
    - **`## Eligibility` bounds `--autonomous` runs** here too, even with no `## Workflows` declared: a
      card without the label is skipped `ineligible` before it is read. `--approve-ineligible` lets
      that one run through, says so, and writes nothing. A supervised run is not held back by it.
-   - **`--pr <n>`** goes straight to fix-and-review in the cycle; the card's preparation state is
-     not consulted.
+   - **`--pr <n>`** goes straight to fix-and-review in the cycle — even on a card whose tag maps a
+     workflow; the card's preparation state is not consulted.
    - **Every route that spawns takes the per-card lock**, like a mapped route.
    - **The card cannot be read** (no `gh`, or unauthenticated) and no `## Workflows` is declared ⇒ a
      clean skip that says `card-unreadable`; with a mapping declared it fails closed.

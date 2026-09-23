@@ -190,14 +190,8 @@ async function handleDorFallback(
   // AC2 (r0-2): a `--pr` entry is fix & review on a PR that already exists — the cycle's own
   // `{verify, first, r0}`. The card's preparation state is not a question it asks, so a prep skill
   // can never displace it: the readiness probe is not even consulted.
-  const pr = config.dispatch?.pr
-  if (pr !== undefined) {
-    console.log(
-      `  Fallback: --pr ${pr} — fix & review on an existing PR enters the delivery cycle at its ` +
-        `review stage; the card's preparation state is not consulted (AC2)`,
-    )
-    return await underCardLock(input, deps, () => enterCycle(input, deps))
-  }
+  const entry = entryOf(input)
+  if (config.dispatch?.pr !== undefined) return await enterCycleAtReview(entry, deps)
 
   const readiness = await readReadiness(input, deps)
   if (readiness === undefined) {
@@ -209,10 +203,10 @@ async function handleDorFallback(
     console.log(
       `  Fallback: card ${decision.card} is Ready (Definition of Ready met) — entering the delivery cycle`,
     )
-    return await underCardLock(input, deps, () => enterCycle(input, deps))
+    return await underCardLock(entry, deps, () => enterCycle(entry, deps))
   }
   if (config.autonomous === true) return skipUnattendedPreparation(input, deps, prep)
-  return await underCardLock(input, deps, () =>
+  return await underCardLock(entry, deps, () =>
     runPrepSkill(
       { config, context, fs: input.fs, cwd: input.cwd, card: decision.card, ...prep },
       deps,
@@ -220,12 +214,44 @@ async function handleDorFallback(
   )
 }
 
-function enterCycle(input: DorFallbackInput, deps: RunHandlerDependencies): Promise<number> {
+/** The card a `--card` entry spawns on, with everything resolved for it — one subject. */
+export interface CardEntryInput {
+  readonly config: RunCommandConfig
+  readonly context: RunContext
+  readonly fs: FileSystemService
+  readonly cwd: string
+  readonly card: string
+}
+
+function entryOf(input: DorFallbackInput): CardEntryInput {
   const { config, context, fs, cwd, decision } = input
-  return enterCycleCoordinator(
-    { config, context, fs, cwd, card: decision.card, dorReason: decision.reason },
-    deps,
+  return { config, context, fs, cwd, card: decision.card }
+}
+
+function enterCycle(entry: CardEntryInput, deps: RunHandlerDependencies): Promise<number> {
+  return enterCycleCoordinator(entry, deps)
+}
+
+/**
+ * AC2 (r0-2): `--pr` is fix & review on a PR that already exists — the cycle's own
+ * `{verify, first, r0}`, whatever else the card says. Its preparation state is not a question it
+ * asks (the readiness probe is not consulted), and a mapped tag does not displace it either: the
+ * tag names a workflow for a card to START, and a card with a PR has started. Never a silent drop.
+ */
+export async function enterCycleAtReview(
+  entry: CardEntryInput,
+  deps: RunHandlerDependencies,
+): Promise<number> {
+  const pr = entry.config.dispatch?.pr
+  console.log(
+    `  --pr ${pr}: fix & review on an existing PR enters the delivery cycle at its review stage; ` +
+      `the card's preparation state and any mapped tag are not consulted (AC2)`,
   )
+  if (entry.config.dryRun) {
+    console.log(chalk.dim('  Dry run: nothing was spawned.'))
+    return 0
+  }
+  return await underCardLock(entry, deps, () => enterCycle(entry, deps))
 }
 
 /**
@@ -234,11 +260,11 @@ function enterCycle(input: DorFallbackInput, deps: RunHandlerDependencies): Prom
  * nothing spawned; acquired ⇒ released on every exit, a throw included.
  */
 async function underCardLock(
-  input: DorFallbackInput,
+  entry: CardEntryInput,
   deps: RunHandlerDependencies,
   run: () => Promise<number>,
 ): Promise<number> {
-  const lock = takeCardLock(input.context, deps, input.decision.card)
+  const lock = takeCardLock(entry.context, deps, entry.card)
   if (lock === undefined) return 0
   try {
     return await run()
