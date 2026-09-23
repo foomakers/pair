@@ -392,6 +392,14 @@ export function envelopeErrors(data, { phase, skill }) {
   if (data.firstReviewHead !== undefined && !SHA_RE.test(String(data.firstReviewHead))) errs.push('firstReviewHead-invalid')
   if (data.remediationBatchId !== undefined && (typeof data.remediationBatchId !== 'string' || data.remediationBatchId === '')) errs.push('remediationBatchId-invalid')
   if (data.recordType !== undefined && !RECORD_TYPES.includes(data.recordType)) errs.push(`recordType-invalid:${data.recordType}`)
+  // US-506 F-5 (AC8): a review that escalates names the decisions it owes — each one a finding of the
+  // same review — so `decide` can hold the escalate until every one is recorded.
+  if (skill === 'review-phase' && data.humanDecisionIds !== undefined) {
+    const ids = data.humanDecisionIds
+    const known = new Set((Array.isArray(data.findings) ? data.findings : []).map(f => f?.id))
+    if (!Array.isArray(ids) || !ids.length || ids.some(x => typeof x !== 'string' || !x.trim())) errs.push('humanDecisionIds-invalid')
+    else for (const id of ids) if (!known.has(id)) errs.push(`humanDecisionIds-unknown:${id}`)
+  }
   // US-506 AC-2: the implementer's self-review is informal and UNRECORDED — it happens, it fixes what
   // it finds, and nothing of it reaches a handoff, so the independent reviewer verifies without bias.
   if (skill === 'implement-phase') for (const k of Object.keys(data)) if (/^self[-_ ]?review/i.test(k)) errs.push(`self-review-not-recordable:${k}`)
@@ -2534,6 +2542,12 @@ export function decide({ dir, phase, finding, decision, by, now = new Date(), wo
   if (!findings.some(f => f?.id === finding)) return { decided: false, reason: `decide-finding-unknown:${finding}` }
   const prior = Array.isArray(base.humanDecisions) ? base.humanDecisions : []
   if (prior.some(d => d.findingId === finding)) return { decided: false, reason: `decide-already-decided:${finding}` }
+  // US-506 F-5: the decisions OWED are the ones the review named; the escalate stands until every one
+  // is recorded. A review that named none (pre-#506) owes the one answer it asked for.
+  const owed = Array.isArray(asked.data.humanDecisionIds) && asked.data.humanDecisionIds.length ? asked.data.humanDecisionIds : null
+  if (owed && !owed.includes(finding)) return { decided: false, reason: `decide-not-owed:${finding}`, owed }
+  const decidedIds = new Set([...prior.map(d => d.findingId), finding])
+  const pendingDecisions = owed ? owed.filter(id => !decidedIds.has(id)) : []
   const at = (now instanceof Date ? now : new Date(now)).toISOString()
   const entryOf = { findingId: finding, decision: String(decision), by: String(by), at }
   const keep = ['run', 'story', 'pr', 'branch', 'inputHead', 'reviewedHead', 'verdict', 'custody', 'readiness', 'mode', 'tier', 'passes', 'reviewer', 'scopeChanges', 'inputsDigest', 'remediationBatchId', 'scopeEpoch', 'scopeBaselineHash', 'firstReviewHead']
@@ -2543,7 +2557,9 @@ export function decide({ dir, phase, finding, decision, by, now = new Date(), wo
     skill: 'review-phase',
     recordType: 'decision',
     partial: false,
-    needsHumanDecision: false,
+    needsHumanDecision: pendingDecisions.length > 0,
+    ...(owed ? { humanDecisionIds: owed } : {}),
+    ...(base.humanDecisionKind !== undefined ? { humanDecisionKind: base.humanDecisionKind } : {}),
     findings: findings.map(f => (f?.id === finding ? { ...f, humanDecision: { decision: entryOf.decision, by: entryOf.by, at } } : f)),
     humanDecisions: [...prior, entryOf],
     decidedOn: last.name,
@@ -2559,7 +2575,7 @@ export function decide({ dir, phase, finding, decision, by, now = new Date(), wo
     return { decided: false, reason: out.reason, errors: out.errors }
   }
   const after = resolveAfter({ dir, workflowVersion, policy, entry, pr })
-  return { decided: true, path: out.path, attempt: attemptN, status: after.status, next: after.next }
+  return { decided: true, path: out.path, attempt: attemptN, pendingDecisions, status: after.status, next: after.next }
 }
 
 // ── test identity ──────────────────────────────────────────────────────────────────────────

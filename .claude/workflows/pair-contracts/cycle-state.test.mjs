@@ -4329,9 +4329,11 @@ test('US-506 T-5 w3 (AC8): the CLI `supersede` prints JSON — exit 0 when set a
   assert.deepEqual([refused.status, refused.json.reason], [1, 'supersede-validated'])
 })
 
-function escalatedReview() {
+// US-506 F-5: the review names the decisions it owes (`humanDecisionIds`); the escalate stands until
+// every one is recorded.
+function escalatedReview(extra = {}) {
   const { dir } = runDir()
-  review(dir, 'r0', { verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('c') }, needsHumanDecision: true, findings: [finding('r0-5'), finding('r0-15', { external: true })] })
+  review(dir, 'r0', { verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('c') }, needsHumanDecision: true, humanDecisionIds: ['r0-5', 'r0-15'], findings: [finding('r0-5'), finding('r0-15', { external: true })], ...extra })
   return dir
 }
 test('US-506 T-5 w4 (AC8): `decide` records the maintainer\'s answer to `needsHumanDecision` as its OWN handoff — no rename, no review re-run — and `resolve` routes the remediation', () => {
@@ -4340,19 +4342,23 @@ test('US-506 T-5 w4 (AC8): `decide` records the maintainer\'s answer to `needsHu
   assert.deepEqual(pick(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next, 'step', 'reason'), { step: 'blocked', reason: 'escalate' })
   const out = decide({ dir, phase: 'r0', finding: 'r0-5', decision: 'option (a): AC14 amended on the card', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, now: ON })
   assert.equal(out.decided, true, JSON.stringify(out))
-  assert.deepEqual(pick(out.next, 'step', 'mode', 'phase'), { step: 'prepare', mode: 'remediation', phase: 'r1-g1' })
+  // F-5: one of the TWO owed decisions is recorded — the escalate stands until the other one is
+  assert.deepEqual(pick(out.next, 'step', 'reason'), { step: 'blocked', reason: 'escalate' })
+  assert.deepEqual(out.pendingDecisions, ['r0-15'])
   assert.equal(readFileSync(join(dir, 'r0-review-phase.json'), 'utf8'), r0, 'the review is untouched')
   assert.deepEqual(readHandoffs(dir).map(h => [h.name, h.attempt]), [['r0-review-phase', 1], ['r0-review-phase', 2]])
   const rec = JSON.parse(readFileSync(join(dir, 'r0-review-phase.attempt-2.json'), 'utf8'))
   assert.equal(rec.recordType, 'decision')
-  assert.equal(rec.needsHumanDecision, false)
+  assert.equal(rec.needsHumanDecision, true, 'r0-15 is still owed')
   assert.deepEqual(rec.humanDecisions, [{ findingId: 'r0-5', decision: 'option (a): AC14 amended on the card', by: 'rucka', at: ON.toISOString() }])
   assert.equal(rec.reviewedHead, SHA('c'))
   assert.equal(cycleCounters(readHandoffs(dir)).reviewExecutions, 1, 'a decision is not a review execution')
   // a second decision on the same escalation accumulates, and the finding carries its answer
   const two = decide({ dir, phase: 'r0', finding: 'r0-15', decision: 'the maintainer session runs the demos and attaches the evidence', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, now: ON })
   assert.equal(two.decided, true, JSON.stringify(two))
+  assert.deepEqual(pick(two.next, 'step', 'mode', 'phase'), { step: 'prepare', mode: 'remediation', phase: 'r1-g1' }, 'every owed decision recorded ⇒ the remediation')
   const rec3 = JSON.parse(readFileSync(join(dir, 'r0-review-phase.attempt-3.json'), 'utf8'))
+  assert.equal(rec3.needsHumanDecision, false)
   assert.deepEqual(rec3.humanDecisions.map(d => d.findingId), ['r0-5', 'r0-15'])
   assert.equal(rec3.findings.find(f => f.id === 'r0-15').humanDecision.by, 'rucka')
 })
@@ -4372,7 +4378,7 @@ test('US-506 T-5 w5 (AC8): `decide` is refused when the cycle is not escalated o
   // the CLI
   const e2 = escalatedReview()
   const cli = cliState(['decide', '--dir', e2, '--phase', 'r0', '--finding', 'r0-5', '--decision', 'option (a)', '--by', 'rucka', '--workflowVersion', V, '--entry', 'pr', '--pr', '7', '--policy', JSON.stringify(POLICY)])
-  assert.deepEqual([cli.status, cli.json.decided, cli.json.next.step], [0, true, 'prepare'])
+  assert.deepEqual([cli.status, cli.json.decided, cli.json.next.step, cli.json.pendingDecisions], [0, true, 'blocked', ['r0-15']])
   assert.equal(cliState(['decide', '--dir', e2, '--phase', 'r0', '--finding', 'nope', '--decision', 'x', '--by', 'rucka', '--workflowVersion', V]).status, 1)
 })
 
@@ -4439,4 +4445,19 @@ test('US-506 F-4 (AC5 × AC7): an in-flight run whose pre-#506 repair overwrote 
   const c4 = writeContract(dir, 'a0-red-contract.attempt-4.json', { attempt: 4 })
   const refused = publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: c4.path, contractHash: c4.hash, changedRows: ['row-3'] }), phase: 'a0', skill: 'red-spec', workflowVersion: V, predecessor: 'a0-red-verify', attempt: 4 })
   assert.equal(refused.reason, 'contract-attempt-overwritten:a0-red-contract.attempt-3.json')
+})
+
+test('US-506 F-5 (AC8): `decide` refuses a finding the review did not escalate; a review naming an unknown id is refused; a legacy review with no owed list is unblocked by its one decision', () => {
+  const dir = escalatedReview()
+  const extra = decide({ dir, phase: 'r0', finding: 'r0-7', decision: 'd', by: 'rucka', workflowVersion: V })
+  assert.equal(extra.reason, 'decide-finding-unknown:r0-7')
+  const d2 = escalatedReview({ findings: [finding('r0-5'), finding('r0-15', { external: true }), finding('r0-16')] })
+  assert.equal(decide({ dir: d2, phase: 'r0', finding: 'r0-16', decision: 'd', by: 'rucka', workflowVersion: V }).reason, 'decide-not-owed:r0-16')
+  const { dir: bad } = runDir()
+  const f = writeDraft(bad, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1')], custody: { verified: true, contractBreach: false }, readiness: { ready: false, remoteHead: SHA('c') }, mode: 'first', needsHumanDecision: true, humanDecisionIds: ['r0-9'] })
+  assert.equal(publish({ dir: bad, file: f, phase: 'r0', skill: 'review-phase', workflowVersion: V }).reason, 'humanDecisionIds-unknown:r0-9')
+  const { dir: legacy } = runDir()
+  review(legacy, 'r0', { verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('c') }, needsHumanDecision: true, findings: [finding('r0-5')] })
+  const one = decide({ dir: legacy, phase: 'r0', finding: 'r0-5', decision: 'd', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(one.next.step, 'prepare', 'no owed list: the one decision answers the escalate')
 })
