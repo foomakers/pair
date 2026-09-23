@@ -268,6 +268,18 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
     expect(spawnedPrompts()[0]).toMatch(/^\/pair-workflow-review-phase /)
   }, 60_000)
 
+  it('R1-I2 (r0-1 × driver): a card with no `**Status**:` line (its board state read upstream from the project item) is driven, never refused card-status-unreadable', async () => {
+    await converge(scriptDigest())
+    cardBody = '## Task Breakdown\n\n- [ ] T-1\n'
+    writeGh()
+
+    const outcome = await drive().catch((error: unknown) => ({
+      status: `threw ${error instanceof Error ? error.message : String(error)}`,
+    }))
+
+    expect(outcome.status).not.toMatch(/card-status-unreadable/)
+  }, 60_000)
+
   it('R3-W3: the remote head moved past the reviewed head ⇒ a re-review is dispatched, never ready-for-merge', async () => {
     await converge(scriptDigest())
     const origin = join(root, 'origin.git')
