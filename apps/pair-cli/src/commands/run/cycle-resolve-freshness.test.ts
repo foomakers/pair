@@ -77,7 +77,9 @@ describe('r0-3: resolve carries inputs, acHash and the remote head (production d
     git(main, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
     mkdirSync(scripts(), { recursive: true })
     for (const f of ['cycle-state.mjs', 'cycle-dispatch.mjs', 'host'])
-      cpSync(join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts', f), join(scripts(), f), { recursive: true })
+      cpSync(join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts', f), join(scripts(), f), {
+        recursive: true,
+      })
     cpSync(join(REPO_ROOT, '.claude/agents'), join(main, '.claude/agents'), { recursive: true })
     mkdirSync(join(main, '.pair/adoption/tech'), { recursive: true })
     writeFileSync(

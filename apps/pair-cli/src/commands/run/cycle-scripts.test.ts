@@ -197,8 +197,13 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
     expect(bridge().bindHosts(dir).action).toBe('reused')
 
     mkdirSync(join(projectRoot, '.pair/adoption/tech'), { recursive: true })
-    writeFileSync(join(projectRoot, '.pair/adoption/tech/way-of-working.md'), '- Jira is adopted for project management.\n')
-    expect(() => bridge().bindHosts(join(runsRoot, 'story-492/493'))).toThrow(/host-unsupported: .*"Jira".*implemented: azure-devops, github/)
+    writeFileSync(
+      join(projectRoot, '.pair/adoption/tech/way-of-working.md'),
+      '- Jira is adopted for project management.\n',
+    )
+    expect(() => bridge().bindHosts(join(runsRoot, 'story-492/493'))).toThrow(
+      /host-unsupported: .*"Jira".*implemented: azure-devops, github/,
+    )
     expect(existsSync(join(runsRoot, 'story-492/493/.host-binding.json'))).toBe(false)
   })
 

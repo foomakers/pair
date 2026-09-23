@@ -71,7 +71,9 @@ describe('r1-3: gh is asked from the --cwd project, never the process cwd', () =
     const scripts = join(main, '.claude/skills/pair-workflow-cycle/scripts')
     mkdirSync(scripts, { recursive: true })
     for (const f of ['cycle-state.mjs', 'cycle-dispatch.mjs', 'host'])
-      cpSync(join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts', f), join(scripts, f), { recursive: true })
+      cpSync(join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts', f), join(scripts, f), {
+        recursive: true,
+      })
     cpSync(join(REPO_ROOT, '.claude/agents'), join(main, '.claude/agents'), { recursive: true })
     writeFileSync(
       join(root, 'card.json'),

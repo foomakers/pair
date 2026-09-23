@@ -32,7 +32,11 @@ describe('r0-9: the role packet finds its agent definition through the registry 
     agentsDir = join(root, '.claude/agents')
     mkdirSync(scriptsDir, { recursive: true })
     for (const f of ['cycle-state.mjs', 'cycle-dispatch.mjs', 'host'])
-      cpSync(join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts', f), join(scriptsDir, f), { recursive: true })
+      cpSync(
+        join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts', f),
+        join(scriptsDir, f),
+        { recursive: true },
+      )
     cpSync(join(REPO_ROOT, '.claude/agents'), agentsDir, { recursive: true })
   })
 

@@ -142,7 +142,17 @@ export default defineAdapter({
 })
 ```
 
-Then declare it (`- \`pm-tool\`: \`filesystem\`` and, since it `hostsCode: false`, `- \`code-host\`: \`filesystem\``). The coordinator binds it on its next start.
+Then declare it. `hostsCode` is `false`, so `code-host` has to be declared too:
+
+```markdown
+- `pm-tool`: `filesystem`
+
+## Git Workflow
+
+- `code-host`: `filesystem`
+```
+
+The coordinator binds it on its next start.
 
 ## Checklist for a real host
 
