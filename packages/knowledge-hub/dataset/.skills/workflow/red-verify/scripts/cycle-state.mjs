@@ -383,6 +383,9 @@ export function envelopeErrors(data, { phase, skill }) {
   if (data.firstReviewHead !== undefined && !SHA_RE.test(String(data.firstReviewHead))) errs.push('firstReviewHead-invalid')
   if (data.remediationBatchId !== undefined && (typeof data.remediationBatchId !== 'string' || data.remediationBatchId === '')) errs.push('remediationBatchId-invalid')
   if (data.recordType !== undefined && !RECORD_TYPES.includes(data.recordType)) errs.push(`recordType-invalid:${data.recordType}`)
+  // US-506 AC2: the implementer's self-review is informal and UNRECORDED — it happens, it fixes what
+  // it finds, and nothing of it reaches a handoff, so the independent reviewer verifies without bias.
+  if (skill === 'implement-phase') for (const k of Object.keys(data)) if (/^self[-_ ]?review/i.test(k)) errs.push(`self-review-not-recordable:${k}`)
   // red-spec's envelope carries `findings: { received, covered }` — the obligation ids it was
   // handed and the ids its contract covers — NOT review findings (its SKILL.md step 2). Validating
   // it against the review shape refused every preparation that reported what it received

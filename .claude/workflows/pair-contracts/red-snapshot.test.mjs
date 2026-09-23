@@ -1193,3 +1193,51 @@ test('seal: a `reattest` revision re-seals a witness whose content is ALREADY at
 
   rmSync(cwd, { recursive: true, force: true })
 })
+
+// ══ US-506 T-2 — a fresh run has no `a0` seal: custody starts at the base, with no `a0` segment ══
+const freshRunDir = handoffs => {
+  const dir = join(mkdtempSync(join(tmpdir(), 'fresh-run-')), '.pair', 'working', 'runs', 'story-7', '7')
+  mkdirSync(dir, { recursive: true })
+  for (const [name, data] of Object.entries(handoffs)) writeFileSync(join(dir, `${name}.json`), JSON.stringify(data))
+  return dir
+}
+test('US-506 T-2 w1: a fresh run implemented above the base with no seal — its tests and code change freely — verify-chain over the run directory is verified, contract none', () => {
+  const { cwd, base } = repo()
+  // the implement stage: tests and code together, test-first, no RED snapshot anywhere
+  write(cwd, 'test/new.test.js', 'import { a } from "../src/a.js"\nif (a() !== 2) throw new Error("FAIL")\n')
+  write(cwd, 'src/a.js', 'export const a = () => 2\n')
+  write(cwd, 'src/added.js', 'export const b = 1\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'implement')
+  const runDir = freshRunDir({ 'a0-implement-phase': { skill: 'implement-phase', phase: 'a0', status: 'ok', gatesPassed: true } })
+  const chain = verifyChain({ pr: PR, base, cwd, runDir })
+  assert.deepEqual({ verified: chain.verified, contract: chain.contract, breaches: chain.breaches }, { verified: true, contract: 'none', breaches: [] })
+  assert.equal(chain.contractExpectation.expectContract, false)
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('US-506 T-2 w2: a fresh run that reached a remediation round — the implement commits precede the first seal and are never a segment; the r1 segment keeps every guarantee', () => {
+  const { cwd, base } = repo()
+  write(cwd, 'test/new.test.js', 'if (1 !== 1) throw new Error("FAIL")\n')
+  write(cwd, 'src/other.js', 'export const o = 5\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'implement')
+  const head1 = git(cwd, 'rev-parse', 'HEAD')
+  const { contractPath } = redContract(cwd)
+  const s = seal({ pr: PR, phase: 'r1-g1', base: head1, contractPath, cwd })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  rmSync(join(cwd, contractPath))
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  const runDir = freshRunDir({ 'a0-implement-phase': { skill: 'implement-phase', phase: 'a0', status: 'ok' }, 'r1-g1-red-verify': { skill: 'red-verify', phase: 'r1-g1', verified: true, sealed: true, inputHead: head1 } })
+  // walked from the base (no `a0` segment) and from the round base: both verified
+  for (const from of [base, head1]) {
+    const chain = verifyChain({ pr: PR, base: from, cwd, runDir })
+    assert.equal(chain.verified, true, JSON.stringify(chain.breaches))
+    assert.deepEqual(chain.snapshots.map(x => x.phase), ['r1-g1'])
+  }
+  // control: a production change outside the r1 scope, after the seal, is still a breach
+  write(cwd, 'src/other.js', 'export const o = 6\n')
+  git(cwd, 'commit', '-q', '--no-verify', '-am', 'out of scope')
+  assert.deepEqual(verifyChain({ pr: PR, base, cwd, runDir }).breaches.map(b => [b.code, b.path]), [['out-of-scope', 'src/other.js']])
+  rmSync(cwd, { recursive: true, force: true })
+})

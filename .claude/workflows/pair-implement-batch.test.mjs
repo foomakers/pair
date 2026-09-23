@@ -1843,3 +1843,19 @@ test('DR-04: the preparation that PLANS a round — dispatched with no scope —
   assert.doesNotMatch(src, /-g1\$/, 'the plan requirement must not key on the group number')
   assert.match(src, /needPlan:[^,]*!n\.group/, 'it keys on the absence of a dispatched scope, as red-spec`s own contract states')
 })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-506 — the phase skills state the fresh-card process (T-2, T-3)
+// ═══════════════════════════════════════════════════════════════════════════
+test('US-506 T-2: implement-phase states the fresh entry — TDD as practice above the base, an informal self-review that is fixed and NEVER recorded, no predecessor', () => {
+  const md = SKILL('implement-phase')
+  assert.match(md, /\*\*Fresh card\*\*/)
+  assert.match(md, /tests and code \*\*together, test-first, as practice\*\*/)
+  assert.match(md, /Informal self-review — fix, never record/)
+  assert.match(md, /Nothing of this self-review is recorded anywhere/)
+  assert.match(md, /self-review-not-recordable/)
+  assert.match(md, /a fresh card has no predecessor/)
+  // the sealed path is still documented (AC5): the snapshot, the untouchable sealed bytes
+  assert.match(md, /\*\*Sealed `a0`\*\*/)
+  assert.match(md, /--predecessor a0-red-verify` on the sealed path only/)
+})

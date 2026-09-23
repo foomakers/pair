@@ -4096,3 +4096,24 @@ test('US-506 T-1 c1 (control, AC5): a run holding sealed `a0` handoffs keeps the
   r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
   assert.deepEqual(pick(r.next, 'step', 'mode', 'phase'), { step: 'prepare', mode: 'revision', phase: 'a0-rev2' })
 })
+
+// ══ US-506 T-2 — the implement handoff of a fresh run: no snapshot, no predecessor, NO self-review ══
+test('US-506 T-2 w3: a fresh-run implement handoff publishes with no snapshot and no predecessor', () => {
+  const { dir } = runDir()
+  const out = implementOk(dir)
+  assert.equal(out.published, true)
+  const written = JSON.parse(readFileSync(join(dir, 'a0-implement-phase.json'), 'utf8'))
+  assert.equal(written.snapshot, undefined)
+  assert.equal(written.predecessor, undefined)
+})
+
+test('US-506 T-2 w4 (AC2): the self-review is informal and UNRECORDED — an implement handoff carrying any self-review field is refused before the write', () => {
+  const { dir } = runDir()
+  for (const key of ['selfReview', 'self_review', 'selfReviewFindings', 'SelfReview']) {
+    const file = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'implement-phase', inputHead: SHA('a'), status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true, [key]: { findings: ['fixed a typo'] } })
+    const out = publish({ dir, file, phase: 'a0', skill: 'implement-phase', workflowVersion: V })
+    assert.equal(out.published, false, key)
+    assert.equal(out.reason, `self-review-not-recordable:${key}`)
+  }
+  assert.equal(existsSync(join(dir, 'a0-implement-phase.json')), false)
+})
