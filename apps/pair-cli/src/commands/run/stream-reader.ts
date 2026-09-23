@@ -170,6 +170,11 @@ function outcomeFor(rule: TerminalEventRule, payload: unknown): IterationResult 
 export async function readIterationOutcome(
   lines: AsyncIterable<string>,
   engine: EngineDefinition,
+  /**
+   * US-491: sees every decoded event (terminal included) — how a caller reads a marker line.
+   * A DEFAULTED parameter, so the reader's arity stays 2: no exit-code slot exists (AC7 test).
+   */
+  onEvent: ((payload: unknown) => void) | undefined = undefined,
 ): Promise<IterationResult> {
   let continueToken: string | undefined
 
@@ -188,6 +193,7 @@ export async function readIterationOutcome(
     // Searched in the DECODED event, not in the raw JSONL line: the newlines the anchor needs are
     // `\n` escapes on the wire, so a raw-line match could not be anchored at all (finding 5).
     continueToken = findContinueToken(payload) ?? continueToken
+    onEvent?.(payload)
 
     const rule = engine.terminalEvents.find(candidate => matches(payload, candidate.match))
     if (rule) {

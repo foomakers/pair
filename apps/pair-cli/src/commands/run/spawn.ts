@@ -38,6 +38,8 @@ export function buildEngineArgs(input: EngineArgsInput): string[] {
 export interface SpawnIterationInput extends EngineArgsInput {
   /** Wall-clock bound per iteration — the hang guard, never a policy parameter. */
   readonly timeoutSeconds: number
+  /** US-491: observes every decoded stream event (see `readIterationOutcome`). */
+  readonly onEvent?: (payload: unknown) => void
 }
 
 /**
@@ -66,7 +68,7 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   }, input.timeoutSeconds * 1000)
   try {
     child.stdout.setEncoding('utf-8')
-    const result = await readIterationOutcome(toLines(child.stdout), input.engine)
+    const result = await readIterationOutcome(toLines(child.stdout), input.engine, input.onEvent)
     // US-506 T-8 (AC12): stopped by the bound before any terminal event ⇒ a STALL, named as one.
     if (stalled && result.outcome !== 'success')
       return {
