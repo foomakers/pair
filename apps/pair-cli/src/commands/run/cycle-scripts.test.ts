@@ -207,6 +207,26 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
     expect(existsSync(join(runsRoot, 'story-492/493/.host-binding.json'))).toBe(false)
   })
 
+  // Platform-injected (smoke-ci-platform rule): process.platform is set to darwin, then linux.
+  it.each(['darwin', 'linux'] as const)(
+    'bindHosts() on platform %s: the binding lands in the run directory it was given, and a second bind reuses it',
+    platform => {
+      const original = Object.getOwnPropertyDescriptor(process, 'platform')!
+      Object.defineProperty(process, 'platform', { value: platform })
+      try {
+        const dir = join(runsRoot, `story-492-${platform}/492`)
+        expect(bridge().bindHosts(dir).action).toBe('bound')
+        expect(JSON.parse(readFileSync(join(dir, '.host-binding.json'), 'utf8'))).toMatchObject({
+          pmTool: 'github',
+          codeHost: 'github',
+        })
+        expect(bridge().bindHosts(dir).action).toBe('reused')
+      } finally {
+        Object.defineProperty(process, 'platform', original)
+      }
+    },
+  )
+
   it('worktree() propagates a real HALT from cycle-dispatch.mjs verbatim (branch-invalid)', () => {
     expect(() =>
       bridge().worktree({
