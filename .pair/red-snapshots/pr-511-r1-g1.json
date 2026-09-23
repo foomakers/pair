@@ -1,0 +1,269 @@
+{
+  "$meta": {
+    "pr": "511",
+    "phase": "r1-g1",
+    "base": "b2aee81fb5d6b0302ffee9f1126d9bd1b910f28b",
+    "trailer": "Pair-RED-Snapshot: pr=511; phase=r1-g1; base=b2aee81fb5d6b0302ffee9f1126d9bd1b910f28b; manifest=.pair/red-snapshots/pr-511-r1-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts"
+    ]
+  },
+  "run": "story-491",
+  "story": "491",
+  "pr": 511,
+  "phase": "r1-g1",
+  "groupId": "r1-g1",
+  "mode": "repair",
+  "remediationBatchId": "r1",
+  "inputHead": "b2aee81fb5d6b0302ffee9f1126d9bd1b910f28b",
+  "base": "origin/main",
+  "sourceOfTruth": "r0 review findings (r0-1) as resolved by cycle-state; producer apps/pair-cli/src/commands/run/parallel-entry.ts runBatch + parallel.ts runPlannedCard + interrupt.ts whileInterruptible at b2aee81f",
+  "plan": {
+    "round": 1,
+    "remediationBatchId": "r1",
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1"
+        ],
+        "owner": "apps/pair-cli/src/commands/run/parallel-entry.ts runBatch interrupt path (onInterrupt) + parallel.ts runPlannedCard/acquireResourceLocks lock lifecycle",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/parallel-entry.ts",
+          "apps/pair-cli/src/commands/run/parallel.ts",
+          "apps/pair-cli/src/commands/run/interrupt.ts"
+        ],
+        "oracle": "content of <workingArea>/automation/locks (mutex-* entries) at the moment process.exit is called, through the real handleRunCommand + acquireCardLock + spawnCardProcess",
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g2",
+        "findings": [
+          "r0-2"
+        ],
+        "owner": "apps/pair-cli/src/commands/run/root-select.ts parseCandidates (candidate tier vs labels) / root-plan.ts computeRootPlan (## Eligibility guard)",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/root-select.ts",
+          "apps/pair-cli/src/commands/run/root-plan.ts"
+        ],
+        "oracle": "parseCandidates result (throw naming the card) or computeRootPlan result (card excluded with a reason) for a candidate whose tier satisfies ## Eligibility but whose labels omit it; never planned as Run with an argv lacking the eligibility label",
+        "dependsOn": []
+      }
+    ],
+    "carried": [
+      {
+        "id": "r0-3",
+        "disposition": "external: a human runs the real multi-card canary on pi/opencode/claude -p (dependency pair, mutex conflict, deliberate mid-batch failure) and attaches evidence to PR #511, or explicitly waives the DoD QA item; stays blocking until a read-back of PR #511 proves it"
+      }
+    ]
+  },
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "runBatch onInterrupt (apps/pair-cli/src/commands/run/parallel-entry.ts:182) under whileInterruptible (interrupt.ts:73: stopEngines -> onInterrupt -> host.exit), with the resource locks owned by runPlannedCard (parallel.ts:236, released only in its finally after runCardProcess resolves on the child's 'close')",
+      "inputs": [
+        "SIGTERM | SIGINT delivered to the driver",
+        "planned cards with mutexResources (0, 1, n resources; running vs queued)",
+        "the card child: exits on the signal, stdio may close after its exit (an inherited engine holds the pipe)"
+      ],
+      "representations": [
+        "<workingArea>/automation/locks/mutex-<sha256(resource)[0:16]> directories created by acquireCardLock (card-lock.ts)",
+        "batch audit line (renderBatchAuditLine)",
+        "driver exit code 128+signal"
+      ],
+      "consumers": [
+        "every later run --root --parallel (acquireResourceLocks -> held -> card skipped)",
+        "any run --card sharing the lock directory",
+        "operator inspecting the lock dir"
+      ],
+      "classes": [
+        "signal SIGTERM, one running card, one resource",
+        "signal SIGINT, one running card, one resource",
+        "two running cards, one with two resources (multi-lock per card x multi-card)",
+        "running card with no resources + queued card with a resource (never acquired)",
+        "no signal: clean completion releases via finally",
+        "SIGKILL/OOM (not interceptible)",
+        "late finally release after the interrupt path released (stale writer)",
+        "interrupt x mutex lock NOT owned by this driver: an unrelated resource held by another run, and a planned card resource held by another run (card skipped held)"
+      ],
+      "interactions": [
+        "interrupt path x per-card multi-lock x concurrent cards",
+        "interrupt path x batch audit (the one batch line still written before exit)",
+        "interrupt path x acquireResourceLocks held outcome x foreign lock ownership (AC3 cross-run mutex)"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "apps/pair-cli/src/commands/run/parallel-entry.ts runBatch interrupt path (onInterrupt) + parallel.ts runPlannedCard/acquireResourceLocks lock lifecycle",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/parallel-entry.ts",
+      "apps/pair-cli/src/commands/run/parallel.ts",
+      "apps/pair-cli/src/commands/run/interrupt.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r1-g1-W-SIGTERM",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts",
+      "condition": "SIGTERM emitted while card #1 (mutexResources [skill:a]) runs as a real spawnCardProcess child whose stdout is held open by an inherited engine after it exits 143",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel-interrupt.test.ts -t \"r1-g1-W-SIGTERM\"",
+      "expected": "exit code 143; mutex-* entries under <root>/.pair/working/automation/locks at process.exit === []",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1-g1-W-SIGINT",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts",
+      "condition": "same as W-SIGTERM with SIGINT; child exits 130",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel-interrupt.test.ts -t \"r1-g1-W-SIGINT\"",
+      "expected": "exit code 130; mutex-* entries at process.exit === []",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1-g1-I-multi",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts",
+      "condition": "--parallel 2, card #1 [skill:a, apps/x/src/y.ts] and card #2 [skill:b] both running; SIGTERM",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel-interrupt.test.ts -t \"r1-g1-I-multi\"",
+      "expected": "exit code 143; all three mutex-* entries gone at process.exit",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1-g1-C-queued",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts",
+      "condition": "--parallel 1, card #1 [] running, card #2 [skill:q] queued; SIGTERM",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel-interrupt.test.ts -t \"r1-g1-C-queued\"",
+      "expected": "exit code 143; no mutex-* entry at process.exit (a never-started card never takes a lock)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1-g1-C-audit",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts",
+      "condition": "SIGTERM during card #1 [skill:a]",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel-interrupt.test.ts -t \"r1-g1-C-audit\"",
+      "expected": "exactly one batch audit line written by process.exit, event=batch root=66, outcomes=1:interrupted(...) — the fix must keep it",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1-g1-C-clean",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts",
+      "condition": "no signal; card #1 [skill:a, skill:b] child exits 0 at once",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel-interrupt.test.ts -t \"r1-g1-C-clean\"",
+      "expected": "handleRunCommand resolves 0; no mutex-* entry left; process.exit never called",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1-g1-NA-sigkill",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts",
+      "condition": "SIGKILL / OOM kill of the driver",
+      "oracle": "interrupt.ts:4-12 (SIGKILL cannot be trapped; documented stale-lock case, out of #491/#487 scope)",
+      "expected": "n/a",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "no handler runs on SIGKILL; no code path can release anything, same as the #487 card lock; card-interrupt.test.ts documents it as the KB stale-lock case"
+    },
+    {
+      "id": "r1-g1-NA-stale-writer",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts",
+      "condition": "runPlannedCard finally releasing a lock after the interrupt path released it and another run re-acquired it",
+      "oracle": "interrupt.ts:90 host.exit(signalExitCode) is process.exit — synchronous termination after onInterrupt; no later microtask/macrotask (the finally) runs in production",
+      "expected": "n/a",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "the only window is between onInterrupt and process.exit, both in the same finally chain with no await between them; the late finally observed in the test exists only because process.exit is spied"
+    },
+    {
+      "id": "r1-g1-C-foreign",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts",
+      "condition": "the test pre-acquires, via the real acquireCardLock, mutex locks for skill:z (unrelated) and skill:h (the resource of planned card #2, which is therefore skipped held by another run); card #1 [skill:a] runs; SIGTERM",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel-interrupt.test.ts -t \"r1-g1-C-foreign\"",
+      "expected": "exit 143; sorted mutex-* entries at process.exit === sorted [resourceLockId(skill:z), resourceLockId(skill:h)] — own mutex-97a4bf6c75a47bf0 gone, both foreign locks intact",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "discriminates a correct fix (release only locks acquired through deps.acquireLock in this batch: 7/7 pass in a scratch copy) from an over-broad fix (rmSync every mutex-* in onInterrupt: C-foreign fails, expected [] to deeply equal [ mutex-2ffe529af40ba649, …(1) ], the other 6 rows pass); RED at base because the own lock outlives the driver"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:aeb241d6cb13173ab6e499256d43fefc1231cd61bc67c33cf423118c35c184fe",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/parallel-interrupt.test.ts",
+      "observed": "at b2aee81f: Tests 4 failed | 3 passed (7) — FAIL r1-g1-W-SIGTERM and r1-g1-W-SIGINT: expected [ mutex-97a4bf6c75a47bf0 ] to deeply equal []; FAIL r1-g1-I-multi: expected [ mutex-2d9a245b1afa2dd4, …(2) ] to deeply equal []; FAIL r1-g1-C-foreign: expected [ mutex-2ffe529af40ba649, …(2) ] to deeply equal [ mutex-2f…, …(1) ] (own lock still present); identical on 3/3 runs"
+    }
+  ],
+  "testExempt": false,
+  "hermetic": "no gh, no engine, no network: selection and audit writer injected; the card child is a node stub script under a tmp dir; its grandchild is `node -e setTimeout`",
+  "findings": {
+    "received": [
+      "r0-1",
+      "r0-2",
+      "r0-3"
+    ],
+    "covered": [
+      "r0-1"
+    ]
+  },
+  "attempt": 3,
+  "predecessorAttemptContract": {
+    "path": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-491/491/r1-g1-red-contract.attempt-2.json",
+    "hash": "sha256:3b959c3428e939e36998541c88dbe54d9436539f9827611a182049695fd6b775"
+  },
+  "changedRows": [
+    "r1-g1-NA-sigkill",
+    "r1-g1-NA-stale-writer"
+  ],
+  "injectedRegression": {
+    "overBroad": {
+      "patch": "onInterrupt: rmSync every mutex-* under <workingArea>/automation/locks",
+      "result": "Tests 1 failed | 6 passed (7) — r1-g1-C-foreign fails"
+    },
+    "correct": {
+      "patch": "runBatch wraps deps.acquireLock, tracks acquired locks, onInterrupt releases them",
+      "result": "Tests 7 passed (7)"
+    },
+    "where": "scratch copy of apps/pair-cli outside the worktree, deleted after"
+  },
+  "reconciled": [
+    {
+      "path": "apps/pair-cli/src/commands/run/parallel-interrupt.test.ts",
+      "sha256": "sha256:aeb241d6cb13173ab6e499256d43fefc1231cd61bc67c33cf423118c35c184fe",
+      "action": "kept byte-identical (attempt-2 artifact, no test change in attempt 3)"
+    }
+  ]
+}
