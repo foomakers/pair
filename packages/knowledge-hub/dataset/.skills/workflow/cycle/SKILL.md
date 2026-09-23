@@ -1,7 +1,7 @@
 ---
 name: pair-workflow-cycle
-description: "In-session coordinator for pair's delivery cycle: drives ONE card through implement → verify (a fresh card has no up-front contract) and, for each round of review findings, prepare → validate → green → verify, one stage per subagent, from an interactive Claude Code or Codex session — no dependency on Claude Code's Workflow tool. Enters on a fresh card ($card) or straight into fix & review on an existing PR ($pr). Holds zero cycle rules: every transition, budget and freshness decision comes from cycle-state.mjs resolve, every argument packet and worktree from cycle-dispatch.mjs. Binds its harness by PROBING for a subagent primitive, never by product name, and HALTs realization-unavailable with the pair-cli fallback when none is present. Never decides merge."
-version: 0.1.0
+description: "In-session coordinator for pair's delivery cycle: drives ONE card through implement → verify (a fresh card has no up-front contract) and, for each round of review findings, prepare → validate → green → verify, one stage per subagent, from an interactive Claude Code, Codex or pi (with pi-subagents) session — no dependency on Claude Code's Workflow tool. Enters on a fresh card ($card) or straight into fix & review on an existing PR ($pr). Holds zero cycle rules: every transition, budget and freshness decision comes from cycle-state.mjs resolve, every argument packet and worktree from cycle-dispatch.mjs. Binds its harness by PROBING for a subagent primitive, never by product name, and HALTs realization-unavailable with the pair-cli fallback when none is present. Never decides merge."
+version: 0.2.0
 author: Foomakers
 ---
 
@@ -42,10 +42,38 @@ node "$SKILL_DIR/scripts/cycle-dispatch.mjs" realizations --tools '<JSON array o
 | -------- | ------------------ | ----------------------------- | ------------------------------------------ |
 | `claude` | `Agent`            | `SendMessage`                 | `agentType` — the stage's agent definition  |
 | `codex`  | `collaboration.spawn_agent` \| `multi_agent_v1__spawn_agent` | `collaboration.followup_task` \| `multi_agent_v1__resume_agent` | the agent `.md` body + the skill reference  |
+| `pi`     | `subagent` (the `pi-subagents` package; `subagents_enable` is its loader) | `subagent` — `runs.run({ resume })`, rendered by `pi-bridge.mjs` | the agent `.md` body + the skill file path |
 
 Report which realization won and which primitives it bound to, in one line.
 
-**Verify.** The row is bound by the PRIMITIVE the probe found, never by a product name or a version string: a name is a claim about the host, a present tool is evidence of it. No row applies ⇒ HALT `realization-unavailable` (below) **before any dispatch** — including the case where this skill is itself running inside a subagent and the host forbids nesting.
+**Verify.** The row is bound by the PRIMITIVE the probe found, never by a product name or a version string: a name is a claim about the host, a present tool is evidence of it. No row applies ⇒ HALT `realization-unavailable` (below) **before any dispatch** — including the case where this skill is itself running inside a subagent and the host forbids nesting — unless Step 0b applies.
+
+### Step 0b: inside pi — the package, its version and its tool shape
+
+**Check.** Only when the probe bound `pi`, or bound nothing: ask the bridge, through your own shell, whether you run inside pi and what is installed.
+
+```bash
+node "$SKILL_DIR/scripts/pi-bridge.mjs" probe --project "$PWD"
+```
+
+**Skip.** `inPi: false` and no `pi` row bound ⇒ nothing here; Step 0's outcome stands. `inPi` is read off pi's own process marker (`PI_CODING_AGENT=true` on every command its shell runs), never off a product name.
+
+**Act.** You **never** install on your own: every install below is proposed, and runs only on the user's explicit yes.
+
+- `status: missing` (no `pi-subagents`, or removed since the last run) ⇒ tell the user the in-pi cycle needs `pi-subagents@<pinned>` and propose the `install.user` line (or `install.project` if they want it project-local — a project-local package loads only in a trusted project, see `/pair-capability-setup-harness` with `$harness: pi`).
+  - On **yes**: run the install line the probe printed (stdin closed, foreground), then STOP and ask the user to re-run this skill — the tool appears only in a new session.
+  - On **no**: HALT `pi-subagents-missing` — the in-pi cycle cannot run without it; the fallback is `pair-cli run --card N` from a shell.
+- `status: drift` (installed, a version other than the pinned one) ⇒ warn, naming both versions, and propose aligning it via `/pair-capability-setup-harness` with `$harness: pi` (the probe prints the pinned install line). If the user declines, proceed, and state once in your report that the pi-subagents version is unverified.
+- `status: pinned` ⇒ nothing to propose.
+- `activationRequired: subagents_enable` from Step 0 ⇒ call `subagents_enable({})` once; `subagent` is available on your next request.
+
+**Verify.** Before the first dispatch, check the tool's shape as THIS session lists it (its name and its parameter schema, copied from your own tool list, never retyped from memory):
+
+```bash
+node "$SKILL_DIR/scripts/pi-bridge.mjs" check --tool '<JSON {name, parameters} of the subagent tool>'
+```
+
+A mismatch ⇒ HALT `subagent-tool-mismatch` with the bridge's detail (it names the expected version) — no dispatch on a shape nobody verified.
 
 ### Step 1: Resolve what is due
 
@@ -98,7 +126,15 @@ node "$SKILL_DIR/scripts/cycle-dispatch.mjs" packet --next '<next JSON>' --card 
 
 **Skip.** Never compose a stage prompt yourself, not even "the obvious one": the packet is byte-identical to what the batch engine composes, and a hand-written variant is a second process wearing the same name.
 
-**Act.** Dispatch `prompt` under `agentType` (Claude) or as the row's role packet (Codex), honouring `next.context`:
+**Act.** Dispatch `prompt` under `agentType` (Claude) or as the row's role packet (Codex), honouring `next.context`. On `pi`, render the packet with `--style instruction`, write it to a file, and let the bridge turn it into the `subagent` call — both the fresh dispatch and the `reuse` resume, keyed by the role's latest retained run id — then pass the JSON it returned to `record`:
+
+```bash
+node "$SKILL_DIR/scripts/pi-bridge.mjs" call --packet <packet file> --tool '<the same tool JSON>'
+# call `subagent` with exactly its `arguments`; then, with what the workflow returned:
+node "$SKILL_DIR/scripts/pi-bridge.mjs" record --ledger <the `ledger` path call printed> --result '<returned JSON>'
+```
+
+The bridge makes the resume's context deterministic (the task opens by telling the revived agent to read its previous session file, by path), and says `degraded: reuse→fresh` once when no retained run of that role exists:
 
 - `fresh` — spawn a NEW subagent. This is the KB default on every transition, and it is **mandatory** into `validate` and `verify`: an independent verifier that inherits the author's context is not independent.
 - `reuse` — **resume** the previous subagent of that same role instead of spawning one (`SendMessage` on Claude, whichever of `collaboration.followup_task` / `multi_agent_v1__resume_agent` the probe actually bound on Codex — its own tool namespace has renamed twice in one day, so never hardcode either name yourself; read it from the bound realization). `cycle-state.mjs` returns `reuse` only for `prepare→prepare`, `implement→green` and `green→green`; it is never this skill's call. `cycle-dispatch.mjs context-table` prints the table.
@@ -145,6 +181,8 @@ Two commands replace the hand edits US-487's run needed. They are the maintainer
 | `worktree-conflict`      | `<root>/<card>` exists on another branch, or is not a registered worktree               | Both branch names and the path; resolve it by hand — never `--force`, never a checkout switch |
 | `worktree-root-invalid`  | `--worktree-root` is not an absolute path nor a relative one of safe segments with at most one leading `..` | The value, refused verbatim — nothing is created and no worktree is registered |
 | `pipeline-invalid`       | A `--pipeline` key or value is outside the grammar the batch engine enforces on it      | The offending key and why — no argument packet and no prompt are rendered                   |
+| `pi-subagents-missing`   | Inside pi (Step 0b) with no `pi-subagents`, and the user said no to the install          | That the in-pi cycle cannot run without it, the pinned install line, and `pair-cli run --card N` |
+| `subagent-tool-mismatch` | The `subagent` tool's name or parameters differ from the pinned version's (Step 0b)     | The bridge's detail: expected tool, parameters and version, and the setup that aligns it   |
 | `workflow-version-invalid` | `--workflow-version` is not `<major>.<minor>.<patch>` — the grammar `publish` already enforces | The value, refused verbatim — no argument packet and no prompt are rendered from it. Pass the `version` command's output, never a remembered literal |
 | `profile-unresolved`     | `$profile` was given and cannot be read or does not validate                            | What was asked for and why it did not resolve                                              |
 | `usage`                  | `$card` and `$pr` both given, or neither                                                | The two valid entries                                                                      |
@@ -153,7 +191,7 @@ An unrecognized `resolve` output is a HALT too, never a silent degradation: this
 
 ## Graceful Degradation
 
-- **No subagent primitive** (pi, opencode, a nested dispatch): HALT `realization-unavailable` and hand over the `pair-cli run --card` line. Nothing is half-run.
+- **No subagent primitive** (opencode, a nested dispatch, pi without `pi-subagents` once the user declined the install): HALT `realization-unavailable` (or `pi-subagents-missing`) and hand over the `pair-cli run --card` line. Nothing is half-run.
 - **A Codex dispatch returns nothing structured**: irrelevant by construction — the handoff on disk is the contract, and Step 4 reads it.
 - **The remote head moved between stages**: `resolve` reports `failed-resume`. Stop and report; a rebase is never repaired here.
 - **A legacy (pre-schema-3) run directory**: `resolve` reports `incompatible`. Stop and point at `migrate-acknowledge`; never write into the legacy directory.

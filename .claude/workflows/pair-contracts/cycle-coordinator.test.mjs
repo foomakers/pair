@@ -552,7 +552,7 @@ test('AC6-w1: the realization table is data — one structure, tool names as its
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.ok(Array.isArray(r.json.realizations), 'realizations is one array of rows')
   const byId = Object.fromEntries(r.json.realizations.map(x => [x.id, x]))
-  assert.deepEqual(Object.keys(byId).sort(), ['claude', 'codex'])
+  assert.deepEqual(Object.keys(byId).sort(), ['claude', 'codex', 'pi'])
   assert.equal(byId.claude.dispatch, 'Agent')
   assert.equal(byId.claude.resume, 'SendMessage')
   assert.equal(byId.codex.dispatch, 'collaboration.spawn_agent')

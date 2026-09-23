@@ -58,6 +58,21 @@ export const REALIZATIONS = [
     // Codex has no `agentType`: the role travels as the agent `.md` body plus the skill reference.
     rolePacket: 'inline-role-body',
   },
+  {
+    id: 'pi',
+    host: 'pi (with the pi-subagents package)',
+    // pi's base agent has no sub-agent primitive; the third-party `pi-subagents` package adds the
+    // `subagent` tool, and one tool carries both operations (a fresh `runs.run` and a
+    // `runs.run({ resume })`). The exact arguments are rendered by `bridge`, never composed in
+    // prose — and the bridge checks the tool's shape against the pinned version before each call.
+    dispatch: 'subagent',
+    resume: 'subagent',
+    // In a fresh parent session the package exposes only this loader until it is called once:
+    // evidence the package is there, never a dispatch primitive itself.
+    activation: 'subagents_enable',
+    bridge: 'pi-bridge.mjs',
+    rolePacket: 'inline-role-body',
+  },
 ]
 // Alternate dispatch primitives a host may expose instead of the row's canonical one — checked
 // the SAME way as RESUME_ALIASES, because the dispatch name has proven just as volatile as the
@@ -541,7 +556,7 @@ function realizationsCommand(opts) {
   // can say what claimed to be there, and it can never bind a row on its own. Checked against
   // EVERY known dispatch alias for the row, not just its canonical `dispatch` field — a namespace
   // this row's host has renamed to (US-486 canary: Codex, twice in one day) is still a match.
-  const bound = rows.find(r => (DISPATCH_ALIASES[r.id] ?? [r.dispatch]).some(t => tools.has(t)))
+  const bound = rows.find(r => (DISPATCH_ALIASES[r.id] ?? [r.dispatch]).some(t => tools.has(t)) || (r.activation !== undefined && tools.has(r.activation)))
   if (!bound) {
     // AC-6's fallback command. The `--pr` half of `pair-cli run --card N [--pr P]` is OPTIONAL and
     // omitted when there is no PR: a line reading `--pr undefined` hands the operator a command
@@ -554,7 +569,10 @@ function realizationsCommand(opts) {
   const dispatch = dispatchCandidates.find(t => tools.has(t)) ?? bound.dispatch
   const resumeCandidates = RESUME_ALIASES[bound.id] ?? [bound.resume]
   const resume = resumeCandidates.find(t => tools.has(t)) ?? bound.resume
-  return emit({ bound: bound.id, realization: { ...bound, dispatch, resume }, realizations: rows })
+  // Bound through its loader alone ⇒ the dispatch tool is not callable YET: say which call makes it
+  // so, rather than reporting a primitive this session cannot invoke.
+  const activationRequired = bound.activation !== undefined && !dispatchCandidates.some(t => tools.has(t)) ? bound.activation : undefined
+  return emit({ bound: bound.id, realization: { ...bound, dispatch, resume }, ...(activationRequired ? { activationRequired } : {}), realizations: rows })
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────────────────────────────

@@ -21,16 +21,19 @@ import { fileURLToPath } from 'node:url'
 const SKILLS = fileURLToPath(new URL('../../skills/', import.meta.url))
 const BRIDGE = join(SKILLS, 'pair-workflow-cycle/scripts/pi-bridge.mjs')
 const DISPATCH_CLI = join(SKILLS, 'pair-workflow-cycle/scripts/cycle-dispatch.mjs')
+const CYCLE_SKILL = join(SKILLS, 'pair-workflow-cycle/SKILL.md')
 
-const run = (cli, args) => {
-  const r = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+const run = (cli, args, env = {}) => {
+  const base = { ...process.env }
+  delete base.PI_CODING_AGENT
+  const r = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...base, ...env } })
   let json = null
   try {
     json = JSON.parse(r.stdout.trim().split('\n').pop())
   } catch {}
   return { status: r.status, json, out: r.stdout + r.stderr }
 }
-const bridge = args => run(BRIDGE, args)
+const bridge = (args, env) => run(BRIDGE, args, env)
 
 // The tool as a pi session lists it: name + JSON-schema parameters (pinned shape).
 const PINNED_TOOL = {
@@ -120,6 +123,13 @@ test('T4-probe: missing, pinned and drifted installs are told apart, project sco
   put(join(w.main, '.pi', 'npm'), '0.71.0')
   const pinned = bridge(['probe', '--project', w.main, '--agent-dir', agentDir])
   assert.deepEqual([pinned.json.status, pinned.json.scope], ['pinned', 'project'])
+})
+
+test('T5-probe: inside pi is read off pi\'s own process marker, never assumed', () => {
+  const w = world()
+  const args = ['probe', '--project', w.main, '--agent-dir', join(w.main, 'agent')]
+  assert.equal(bridge(args).json.inPi, false)
+  assert.equal(bridge(args, { PI_CODING_AGENT: 'true' }).json.inPi, true)
 })
 
 // ── AC8: the shape check ────────────────────────────────────────────────────────────────────
@@ -213,4 +223,44 @@ test('T4: a stage that returns no runId clears the role, so a later reuse never 
 test('T4: the bridge spawns nothing — no process, so no stdin to leave open', () => {
   const src = readFileSync(BRIDGE, 'utf8')
   assert.doesNotMatch(src, /node:child_process|require\(['"]child_process/)
+})
+
+// ── T-5: the realization row and the in-`pi` Step 0 ─────────────────────────────────────────
+test('T5: one `pi` row, bound by the probed `subagent` primitive and naming the bridge', () => {
+  const r = run(DISPATCH_CLI, ['realizations', '--tools', JSON.stringify(['subagent', 'read', 'bash'])])
+  assert.equal(r.status, 0, r.out)
+  assert.equal(r.json.bound, 'pi')
+  assert.equal(r.json.realization.dispatch, 'subagent')
+  assert.equal(r.json.realization.resume, 'subagent')
+  assert.equal(r.json.realization.rolePacket, 'inline-role-body')
+  assert.equal(r.json.realization.bridge, 'pi-bridge.mjs')
+  assert.equal(r.json.activationRequired, undefined)
+})
+
+test('T5: only the `subagents_enable` loader present still binds `pi`, flagged activationRequired', () => {
+  const r = run(DISPATCH_CLI, ['realizations', '--tools', JSON.stringify(['subagents_enable', 'read'])])
+  assert.equal(r.status, 0, r.out)
+  assert.equal(r.json.bound, 'pi')
+  assert.equal(r.json.realization.dispatch, 'subagent', 'the dispatch primitive is still the tool, never the loader')
+  assert.equal(r.json.activationRequired, 'subagents_enable')
+})
+
+test('T5: a plain pi toolset (no pi-subagents) still HALTs realization-unavailable — never a claimed product', () => {
+  const r = run(DISPATCH_CLI, ['realizations', '--tools', JSON.stringify(['read', 'bash', 'edit', 'write']), '--product', 'pi', '--story', '42'])
+  assert.notEqual(r.status, 0)
+  assert.equal(r.json.halt, 'realization-unavailable')
+})
+
+test('T5/AC5/AC7: the cycle skill documents the in-pi consent flow, the decline paths and the version drift', () => {
+  const md = readFileSync(CYCLE_SKILL, 'utf8')
+  assert.match(md, /pi-bridge\.mjs" probe/, 'Step 0 probes the install through the bridge')
+  assert.match(md, /\*\*never\*\* install(s)? on (its|your) own/i)
+  assert.match(md, /On \*\*yes\*\*: run the install line[^\n]*then STOP and ask the user to re-run/)
+  assert.match(md, /On \*\*no\*\*: HALT `pi-subagents-missing`/)
+  assert.match(md, /`status: drift`[^\n]*propose aligning it/)
+  assert.match(md, /declines[^\n]*proceed[^\n]*unverified/)
+  assert.match(md, /pi-bridge\.mjs" check/, 'the shape check runs before the first dispatch')
+  assert.match(md, /HALT `subagent-tool-mismatch`/)
+  assert.match(md, /pi-bridge\.mjs" call/)
+  assert.match(md, /pi-bridge\.mjs" record/)
 })

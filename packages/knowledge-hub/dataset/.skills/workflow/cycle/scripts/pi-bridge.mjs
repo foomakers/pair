@@ -86,7 +86,12 @@ const parseJson = (text, what) => {
 }
 
 // ── probe: installed or not, and at which version ───────────────────────────────────────────
+// `inPi` is a PROCESS MARKER, not a product name: pi sets `PI_CODING_AGENT=true` on every command
+// its shell tools run (pi 0.84.3 `docs/environment-variables.md`), so a coordinator that runs this
+// script through its own shell learns it is inside pi — and can offer the install instead of a
+// bare `realization-unavailable`.
 function probeCommand(opts) {
+  const inPi = process.env.PI_CODING_AGENT === 'true'
   const project = resolvePath(opts.project ?? process.cwd())
   const agentDir = resolvePath(opts['agent-dir'] ?? join(homedir(), '.pi', 'agent'))
   const scopes = [
@@ -97,9 +102,9 @@ function probeCommand(opts) {
     if (!existsSync(path)) continue
     const version = readJson(path, `${PIN.package} package.json`).version
     const status = version === PIN.version ? 'pinned' : 'drift'
-    return emit({ status, scope, installed: version ?? null, pinned: PIN.version, path, install: INSTALL })
+    return emit({ inPi, status, scope, installed: version ?? null, pinned: PIN.version, path, install: INSTALL })
   }
-  return emit({ status: 'missing', pinned: PIN.version, looked: scopes.map(([, p]) => p), install: INSTALL })
+  return emit({ inPi, status: 'missing', pinned: PIN.version, looked: scopes.map(([, p]) => p), install: INSTALL })
 }
 
 // ── check: the tool's shape, before any dispatch ───────────────────────────────────────────
