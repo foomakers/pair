@@ -16,6 +16,7 @@ import type { CardReadiness } from './cycle-scripts'
 import type { IterationResult } from './stream-reader'
 import { decideDispatch, describeDispatch, lockedSkip, type DispatchDecision } from './dispatch'
 import { acquireCardLock, type CardLock, type LockAcquirer } from './card-lock'
+import { whileInterruptible } from './interrupt'
 import {
   appendAuditLine,
   auditRecordFor,
@@ -325,7 +326,8 @@ export interface LockedCardRun {
  *
  * The lock is taken AFTER every refusal has passed and BEFORE anything spawns, so a run that was
  * never going to start never parks a card, and a run that does start cannot be joined by the next
- * trigger in the burst.
+ * trigger in the burst. SIGTERM/SIGINT are trapped for the run's duration (r1-2): the engine is
+ * stopped, the `end` is written `interrupted`, the lock released, and the process exits 128 + signal.
  */
 export async function driveLockedCard(
   subject: LockedCardRun,
@@ -340,16 +342,29 @@ export async function driveLockedCard(
   // Whether the `start` record actually reached the trail — the fact that separates "this run
   // crashed" from "this run never began", which are the same `catch` and NOT the same report.
   let started = false
+  const onInterrupt = (signal: string): void => {
+    try {
+      if (started)
+        record(context, deps, decision, { event: 'end', outcome: 'interrupted', ...named })
+    } finally {
+      lock.release()
+      console.log(
+        `  Interrupted by ${signal}: engine stopped, card ${decision.card}'s lock released.`,
+      )
+    }
+  }
   try {
-    record(context, deps, decision, { event: 'start', ...named })
-    started = true
-    const outcome = await run()
-    record(context, deps, decision, {
-      event: 'end',
-      outcome: outcome === 0 ? 'completed' : 'failed',
-      ...named,
+    return await whileInterruptible(onInterrupt, async () => {
+      record(context, deps, decision, { event: 'start', ...named })
+      started = true
+      const outcome = await run()
+      record(context, deps, decision, {
+        event: 'end',
+        outcome: outcome === 0 ? 'completed' : 'failed',
+        ...named,
+      })
+      return outcome
     })
-    return outcome
   } catch (error) {
     // Every start gets an end, including this one. Without it the trail stops at `event=start` and
     // the operator reading it the next morning cannot tell a crashed run from one still in flight —

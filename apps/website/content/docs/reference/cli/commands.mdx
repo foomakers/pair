@@ -872,7 +872,9 @@ Four properties decide what actually happens, and all four fail towards *not run
 - **One run per card.** The dispatch takes an exclusive **per-card lock** (a directory under
   `<working_path>/automation/locks/`) before spawning and releases it afterwards; a second trigger on
   a locked card is skipped and logged, never queued, and the skip prints where the lock is and how
-  long it has been held — a run killed by a signal leaves one behind, and nothing reaps it. The lock
+  long it has been held. SIGTERM or SIGINT on the driver is handled: the engine is stopped, the
+  `end` is audited `outcome=interrupted`, the lock released, and the command exits `143`/`130`, so
+  re-running it continues. A SIGKILL (or an OOM kill) leaves the lock behind, and nothing reaps it. The lock
   is **filesystem-local**: it guards dispatches sharing one working area, so a host that gives every
   job a fresh checkout needs its own concurrency group as the cross-job guard.
 
