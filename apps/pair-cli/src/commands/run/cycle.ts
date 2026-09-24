@@ -193,6 +193,13 @@ function noticeReuseOnce(
   state.reuseNoticeGiven = true
 }
 
+/** r1 r0-4: relays `resolve`'s own operator-facing `warnings[]` (e.g. a `max-dispatches` breach) verbatim, never re-derived. */
+function relayWarnings(answer: CycleResolveAnswer, onNotice: RunCycleInput['onNotice']): void {
+  for (const warning of (answer as CycleResolveResult).warnings ?? []) {
+    onNotice?.(warning)
+  }
+}
+
 /** The recovery a human actually has, per status that answers without a `next`. */
 function recoveryFor(answer: CycleResolveStop): string | undefined {
   if (answer.status === 'incompatible') {
@@ -249,9 +256,7 @@ export async function runCycle(input: RunCycleInput): Promise<CycleOutcome> {
   for (;;) {
     const answer = await resolve()
     const next = answer.next
-    for (const warning of (answer as CycleResolveResult).warnings ?? []) {
-      observers.onNotice?.(warning)
-    }
+    relayWarnings(answer, onNotice)
     if (next === undefined) {
       if (state.dispatchedNext !== null) {
         const record = buildStageRecord(state.dispatchedNext, state.dispatchedResult!, false)
