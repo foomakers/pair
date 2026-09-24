@@ -3289,3 +3289,25 @@ test('US-514 r3-3 (r2-1): automation-policy.md (+ mirror) and the ADL no longer 
     assert.doesNotMatch(text, /ranked by the review draft's own/, `${rel} still describes ranks as SOURCED from the review draft rather than the resolved template contract`)
   }
 })
+
+// r2-1 residual (final review #3): the review-phase and red-verify SKILLs (+ dataset copies) still
+// described the DRAFT's/gap's own `severityRanks` as the thing that decides `blocking` — "ranked by
+// THESE" (review-phase Step 6) and "the ranks come from the template contract's severityRanks WHEN
+// THE GAP CARRIES ONE" (red-verify Step 4). Round 4 retired that entirely: `publish` resolves ranks
+// itself (`policy.severityRanks` -> the on-disk template contract -> pair's own default table), and
+// a draft's/gap's own `severityRanks` is checked ONLY for agreement — never a ranking source.
+test('US-514 r2-1 (residual, final review #3): review-phase + red-verify SKILL.md (+ dataset copies) no longer say the draft`s/gap`s own `severityRanks` decides `blocking` — they describe the real resolution order (policy -> template contract -> KB default) and the draft/gap as agreement-only', () => {
+  const docs = [
+    '.claude/skills/pair-workflow-review-phase/SKILL.md',
+    'packages/knowledge-hub/dataset/.skills/workflow/review-phase/SKILL.md',
+    '.claude/skills/pair-workflow-red-verify/SKILL.md',
+    'packages/knowledge-hub/dataset/.skills/workflow/red-verify/SKILL.md',
+  ]
+  for (const rel of docs) {
+    const text = readFileSync(join(US514_REPO, rel), 'utf8')
+    assert.doesNotMatch(text, /ranked by \$policy\.blockingFloor ranked by THESE/, `${rel} still says the draft's severityRanks decide ranking ("ranked by THESE")`)
+    assert.doesNotMatch(text, /ranks? come from the template contract's `?severityRanks`? when the gap carries one/, `${rel} still says a gap's own severityRanks decides ranking ("when the gap carries one")`)
+    assert.match(text, /policy\.severityRanks/, `${rel} does not name policy.severityRanks as a resolution source`)
+    assert.match(text, /(agreement|agree)/, `${rel} does not describe the draft/gap's own ranks as agreement-only`)
+  }
+})
