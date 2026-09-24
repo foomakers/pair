@@ -106,7 +106,7 @@ export const CAPS = { consecutiveRedirects: 3 }
 // A dead dispatch (the agent died, or returned a shape no stage can use) is retried with the SAME
 // prompt: every stage is re-entrant by construction, so the retry RESUMES. Policy data, so a
 // caller may narrow or widen it without a second rule living in the caller.
-// US-514 T-1/T-2 (revised AC1, maintainer 2026-09-24 — a FLOOR compared by RANK, never a list): the
+// US-514 T-1/T-2 (the #514/AC1 revision, maintainer 2026-09-24 — a FLOOR compared by RANK, never a list): the
 // KB default blocking floor is `Minor` — every severity except Questions blocks, today's behaviour
 // byte for byte. A project declares `## Blocking Severities` only to differ (delta-only adoption,
 // ADR-018/D21); pair itself declares nothing.
@@ -1620,7 +1620,7 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       if (acErrs.length) return { published: false, reason: acErrs[0], errors: acErrs }
     }
   }
-  // US-514 T-2 (revised AC1, maintainer 2026-09-24): a policy carrying the retired
+  // US-514 T-2 (the #514/AC1 revision, maintainer 2026-09-24): a policy carrying the retired
   // `blockingSeverities` list key is a typed refusal, never a silent ignore or a mixed-key mix-in
   // (ADR-018: no silent fallback for a malformed declaration).
   if (Object.prototype.hasOwnProperty.call(policy, 'blockingSeverities')) {

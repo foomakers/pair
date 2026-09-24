@@ -359,7 +359,7 @@ risk:red: frontier
 
 A third, independent schema owner (US-514) — disjoint from every section above, all of which are `pair-loop`'s own policy. This one is read by the **delivery cycle** itself, both realizations (`pair-workflow-cycle`'s in-session coordinator, `pair-cli run --card`) and both roles that decide "does this block" (review-phase, red-verify). It answers two questions: which severities BLOCK, and — optionally — how many published handoffs a run may reach before it stops or warns.
 
-**Revised AC1 (maintainer 2026-09-24): a FLOOR, compared by RANK — the same rule as `severityFloor` / `--severity-floor` elsewhere in the chain, never a severity list.**
+**The #514/AC1 revision (maintainer 2026-09-24): a FLOOR, compared by RANK — the same rule as `severityFloor` / `--severity-floor` elsewhere in the chain, never a severity list.**
 
 ```markdown
 ## Blocking Severities

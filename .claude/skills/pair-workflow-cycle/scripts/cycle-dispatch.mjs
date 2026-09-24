@@ -375,7 +375,7 @@ function resolvePipeline(raw) {
 function packetCommand(opts) {
   const next = JSON.parse(opts.next)
   const card = JSON.parse(opts.card)
-  // US-514 r1-g1 g1-w2/g1-w10b/g1-c4 (revised AC1): `--severity-floor F` writes `blockingFloor: F`
+  // US-514 r1-g1 g1-w2/g1-w10b/g1-c4 (the #514/AC1 revision): `--severity-floor F` writes `blockingFloor: F`
   // into `$policy` — REPLACING a declared floor, no conflict error, still never a severity list.
   // With no flag the policy is rendered VERBATIM: the default floor is never stamped into it (a
   // project that declared none keeps declaring none).
