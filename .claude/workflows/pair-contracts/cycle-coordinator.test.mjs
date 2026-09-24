@@ -3196,3 +3196,26 @@ test('US-514 r3-1 (control): with NO on-disk contract and NO `policy.severityRan
   assert.equal(stored.findings[0].blocking, false, 'absent both a policy contract and an on-disk one, the draft`s own ranks still apply')
 })
 
+// ── r1-2 round 3: the red-verify SKILL's documented publish command carries `--policy` too ───────
+test('US-514 r3-2 (r1-2): red-verify SKILL Step 6 publish command passes `--policy \'$policy\'` — installed and dataset copy', () => {
+  for (const rel of ['.claude/skills/pair-workflow-red-verify/SKILL.md', 'packages/knowledge-hub/dataset/.skills/workflow/red-verify/SKILL.md']) {
+    const text = readFileSync(join(US514_REPO, rel), 'utf8')
+    const cmd = /`cycle-state\.mjs publish ([^`]*)`/.exec(text)
+    assert.ok(cmd, `${rel}: no \`cycle-state.mjs publish\` command documented`)
+    assert.match(cmd[1], /(^|\s)--policy\s+'?\$policy'?(\s|$)/, `${rel}: the red-verify publish command drops the dispatched policy: ${cmd[1]}`)
+  }
+})
+
+test('US-514 r3-2 (r1-2, real command): a Minor gap the SKILL`s OWN publish command (with `--policy`) is given under a declared floor `Major` publishes as a non-blocking note; the same gap with NO `--policy` (the pre-fix documented command) is refused', () => {
+  const { dir } = us514RunDir()
+  const r = us514PublishRedVerify(dir, { findings: [us514Gap('r0-1', 'Minor')], verified: true, sealed: true }, ['--policy', JSON.stringify({ maxFixRounds: 3, blockingFloor: 'Major' })])
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.equal(r.json?.published, true)
+
+  const { dir: d2 } = us514RunDir()
+  const r2 = us514PublishRedVerify(d2, { findings: [us514Gap('r0-1', 'Minor')], verified: true, sealed: true }, [])
+  assert.notEqual(r2.status, 0, r2.stdout + r2.stderr)
+  assert.equal(r2.json?.published, false, 'without --policy the default floor Minor still blocks a Minor gap — proving the SKILL fix (adding --policy) is what changes the outcome under a declared floor Major')
+})
+
+// ── r2-1 round 3: KB + ADL no longer document the `Blocker` alias or draft-sourced ranking ────────
