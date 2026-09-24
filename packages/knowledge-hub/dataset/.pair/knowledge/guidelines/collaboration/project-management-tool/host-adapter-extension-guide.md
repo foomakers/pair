@@ -31,8 +31,8 @@ Every `.mjs` file in `scripts/host/` is loaded by `loadAdapters` as a candidate 
 | `cardHash`        | pm-tool        | **Not yours to write.** `defineAdapter` derives it from `readCard` with the shared canonicalization; an adapter that defines it is refused |
 | `prHead`          | code-host      | `prHead({ pr, repo })` → the PR head as a 40-hex sha; a value that is not a 40-hex sha throws `HostError('invalid-output')` |
 | `upsertComment`   | code-host      | `upsertComment({ pr, marker, body, repo })` → `{ action: created \| updated \| unchanged, id, url, marker }`, or `{ error: body-too-long \| marker-ambiguous }` — build it on `upsertByMarker` |
-| `concludeCheck`   | code-host      | `concludeCheck({ pr, sha, repo, state, description, targetUrl })` — `state` ∈ `success \| failure \| pending`, on the EXACT head `sha`; `context` in the return is always `checkContext` (never caller-supplied); a `sha` that is not the current PR head REPORTS `{ published: false }` instead of throwing; returns `{ context, sha, state, published, error }` |
-| `setPrState`      | code-host      | `setPrState({ pr, repo, label })` — leave exactly one `pr-state:*` label, then read back: `{ applied, removed, confirmed, error }`; a `label` outside `stateLabels` is refused with `confirmed: false` (unknown-label) |
+| `concludeCheck`   | code-host      | `concludeCheck({ pr, sha, repo, state, description, targetUrl })` — `state` ∈ `success \| failure \| pending`, posted on the given `sha`; `context` defaults to the adapter's own `checkContext` but is honoured if the caller passes one — cycle callers never do. A well-behaved new adapter refuses to publish when `sha` is not the current PR head, REPORTING `{ published: false }` under its own `checkContext` instead of throwing (the worked example below does this); `github.mjs`/`azure-devops.mjs` post on whatever `sha` and `context` they are given — no cycle caller ever supplies a foreign one. Returns `{ context, sha, state, published, error }` |
+| `setPrState`      | code-host      | `setPrState({ pr, repo, label })` — leave exactly one `pr-state:*` label, then read back: `{ applied, removed, confirmed, error }`; cycle callers (`pr-state.mjs`) pass only `stateLabels` values. A well-behaved new adapter refuses a `label` outside `stateLabels` with `confirmed: false` (unknown-label), as the worked example below does; the shipped adapters apply whatever label they are given |
 | `merge`           | code-host      | `merge({ pr, repo, strategy, message })` — `strategy` ∈ `squash \| merge \| rebase`; an unsupported one throws `HostError('unsupported')`; on success returns `{ merged, pr, strategy }` |
 | `closeAndCascade` | pm-tool        | `closeAndCascade({ id, repo, doneState })` — close the card, then each parent whose children (modelled by the host's own parent field/link) are all done, walking up until a parent has an undone child or none exists; `doneState` defaults to the adapter's own closed/done value (e.g. `'Done'` for Azure DevOps, implicit `completed` for GitHub issues); returns `{ closed: [ids], stoppedAt }` — `stoppedAt` is the id that stopped the cascade, or `null` when it closed every ancestor |
 
@@ -142,6 +142,8 @@ export default defineAdapter({
         })
       },
       concludeCheck({ pr, sha, state }) {
+        // A state outside the three CHECK_STATES is a caller bug, not a reportable outcome: it throws.
+        if (!['success', 'failure', 'pending'].includes(state)) throw new HostError('unsupported', { message: `check state ${JSON.stringify(state)} (expected success | failure | pending)`, method: 'concludeCheck' })
         // The check always speaks under its OWN context (checkContext), never a caller-supplied one,
         // and only ever lands on the PR's current head — anything else is REPORTED, never thrown.
         const context = 'pair-review'
@@ -161,6 +163,8 @@ export default defineAdapter({
         return { applied: label, removed, confirmed: true, error: null }
       },
       merge({ pr, strategy = 'squash' }) {
+        // An unsupported strategy is a caller bug, not a reportable outcome: it throws.
+        if (!['squash', 'merge', 'rebase'].includes(strategy)) throw new HostError('unsupported', { message: `merge strategy ${JSON.stringify(strategy)} (expected squash | merge | rebase)`, method: 'merge' })
         writePr(pr, { ...readPr(pr), merged: strategy })
         return { merged: true, pr: Number(pr), strategy }
       },
@@ -202,6 +206,12 @@ test('the filesystem worked example resolves and serves a PR operation end to en
   writeFileSync(join(root, 'prs', '1.json'), JSON.stringify({ head: SHA, comments: [], checks: [], labels: [] }))
   const merged = code.merge({ pr: 1 })
   assert.equal(merged.merged, true)
+
+  // merge: a strategy outside squash | merge | rebase throws HostError('unsupported'), never merges.
+  assert.throws(() => code.merge({ pr: 1, strategy: 'fast-forward' }), e => e.kind === 'unsupported', 'merge must refuse an unsupported strategy')
+
+  // concludeCheck: a state outside success | failure | pending throws HostError('unsupported'), never publishes.
+  assert.throws(() => code.concludeCheck({ pr: 1, sha: SHA, state: 'bogus' }), e => e.kind === 'unsupported', 'concludeCheck must refuse an unsupported state')
 
   // prHead: only a 40-hex sha is a valid head — anything else is a typed failure, never null.
   assert.throws(() => code.prHead({ pr: 2 }), e => e.kind === 'invalid-output', 'prHead on a PR with no head must throw invalid-output')
