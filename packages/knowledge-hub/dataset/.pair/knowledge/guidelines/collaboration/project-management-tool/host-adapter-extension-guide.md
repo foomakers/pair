@@ -116,7 +116,11 @@ export default defineAdapter({
         const body = readFileSync(card(id), 'utf8')
         return fields ? Object.fromEntries(fields.map(f => [f, { number: Number(id), url: card(id), title: body.split('\n')[0], body }[f]])) : { body }
       },
-      prHead: ({ pr }) => readPr(pr).head,
+      prHead: ({ pr }) => {
+        const head = readPr(pr).head
+        if (!/^[0-9a-f]{40}$/.test(head ?? '')) throw new HostError('invalid-output', { command: `pr ${pr} head`, detail: 'not a 40-hex sha' })
+        return head
+      },
       upsertComment({ pr, marker, body }) {
         const data = readPr(pr)
         return upsertByMarker({
@@ -137,13 +141,19 @@ export default defineAdapter({
           },
         })
       },
-      concludeCheck({ pr, sha, state, context = 'pair-review' }) {
+      concludeCheck({ pr, sha, state }) {
+        // The check always speaks under its OWN context (checkContext), never a caller-supplied one,
+        // and only ever lands on the PR's current head — anything else is REPORTED, never thrown.
+        const context = 'pair-review'
         const data = readPr(pr)
+        if (data.head !== sha) return { context, sha, state, published: false, error: 'not-head' }
         data.checks.push({ sha, state, context })
         writePr(pr, data)
         return { context, sha, state, published: true, error: null }
       },
       setPrState({ pr, label }) {
+        // A label outside stateLabels is refused before anything is read back or written.
+        if (!LABELS.includes(label)) return { applied: null, removed: [], confirmed: false, error: 'unknown-label' }
         const data = readPr(pr)
         const removed = data.labels.filter(l => LABELS.includes(l) && l !== label)
         data.labels = [...data.labels.filter(l => !LABELS.includes(l)), label]
@@ -163,14 +173,19 @@ export default defineAdapter({
 })
 ```
 
-A minimal test proving it end to end — copy it beside your own adapter's tests as a starting point (it never needs the shipped `host-adapter` suite):
+A minimal test proving it end to end — copy it beside your own adapter's tests as a starting point (it never needs the shipped `host-adapter` suite). It gives the adapter an **isolated root** (`transport.root`, a fresh temp directory) rather than the adapter's own `process.cwd()`-relative default, so running it never reads or writes anything under the caller's own `.pair/` and is safe to repeat:
 
 <!-- worked-example:minimal-test -->
 ```js
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadAdapters, resolveHosts, bindHosts } from '../scripts/host/index.mjs'
+
+const SHA = 'a'.repeat(40)
 
 test('the filesystem worked example resolves and serves a PR operation end to end', async () => {
   const hostDir = fileURLToPath(new URL('../scripts/host/', import.meta.url))
@@ -179,11 +194,30 @@ test('the filesystem worked example resolves and serves a PR operation end to en
   const registry = { adapters, broken }
   const declaration = '- `pm-tool`: `filesystem`\n\n## Git Workflow\n\n- `code-host`: `filesystem`\n'
   const { pmTool, codeHost } = resolveHosts({ text: declaration, registry })
-  const { code } = bindHosts({ binding: { pmTool, codeHost }, registry, transport: {} })
+  const root = mkdtempSync(join(tmpdir(), 'filesystem-host-')) // isolated: nothing under the caller's cwd
+  const { code } = bindHosts({ binding: { pmTool, codeHost }, registry, transport: { root } })
   const created = code.upsertComment({ pr: 1, marker: '<!-- m -->', body: '<!-- m -->\nhi' })
   assert.equal(created.action, 'created')
+  mkdirSync(join(root, 'prs'), { recursive: true })
+  writeFileSync(join(root, 'prs', '1.json'), JSON.stringify({ head: SHA, comments: [], checks: [], labels: [] }))
   const merged = code.merge({ pr: 1 })
   assert.equal(merged.merged, true)
+
+  // prHead: only a 40-hex sha is a valid head — anything else is a typed failure, never null.
+  assert.throws(() => code.prHead({ pr: 2 }), e => e.kind === 'invalid-output', 'prHead on a PR with no head must throw invalid-output')
+
+  // setPrState: a label outside stateLabels is refused, never silently confirmed.
+  const rejected = code.setPrState({ pr: 1, label: 'pr-state:bogus' })
+  assert.equal(rejected.confirmed, false)
+  assert.equal(rejected.error, 'unknown-label')
+
+  // concludeCheck: always uses the adapter's own checkContext, and reports (never throws) when the
+  // sha given is not the PR's current head.
+  const offHead = code.concludeCheck({ pr: 1, sha: 'b'.repeat(40), state: 'success', context: 'not-mine' })
+  assert.equal(offHead.published, false)
+  assert.equal(offHead.context, 'pair-review')
+  const onHead = code.concludeCheck({ pr: 1, sha: SHA, state: 'success' })
+  assert.equal(onHead.published, true)
 })
 ```
 
