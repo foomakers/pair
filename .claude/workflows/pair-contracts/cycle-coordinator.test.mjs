@@ -3219,3 +3219,15 @@ test('US-514 r3-2 (r1-2, real command): a Minor gap the SKILL`s OWN publish comm
 })
 
 // ── r2-1 round 3: KB + ADL no longer document the `Blocker` alias or draft-sourced ranking ────────
+test('US-514 r3-3 (r2-1): automation-policy.md (+ mirror) and the ADL no longer mention the `Blocker` default alias or a review-draft-sourced rank', () => {
+  const docs = [
+    '.pair/knowledge/guidelines/collaboration/automation/automation-policy.md',
+    'packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md',
+    '.pair/adoption/decision-log/2026-09-24-blocking-severities-from-adoption.md',
+  ]
+  for (const rel of docs) {
+    const text = readFileSync(join(US514_REPO, rel), 'utf8')
+    assert.doesNotMatch(text, /Blocker/, `${rel} still mentions the retired \`Blocker\` alias`)
+    assert.doesNotMatch(text, /ranked by the review draft's own/, `${rel} still describes ranks as SOURCED from the review draft rather than the resolved template contract`)
+  }
+})
