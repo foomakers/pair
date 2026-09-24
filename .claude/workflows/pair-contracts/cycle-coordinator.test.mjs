@@ -2909,13 +2909,54 @@ test('US-514 r1-g1 g1-c8 (r0-1/r0-2, control): no floor ⇒ the KB default floor
 })
 
 // ── r0-2: the floor is compared by RANK, in the active vocabulary, never by name ────────────────
-test('US-514 r1-g1 g1-w9 (r0-2): no floor, template vocabulary Blocker/Major/Minor — an open Blocker defect stays blocking (with and without the draft`s `severityRanks`) and resolve is not done', () => {
-  for (const extra of [{ severityRanks: US514_TEMPLATE_RANKS }, {}]) {
+test('US-514 r1-g1 g1-w9 (r0-2, revised r1-1): no floor, template vocabulary Blocker/Major/Minor — an open Blocker defect stays blocking whether the ranks arrive as the resolved TEMPLATE CONTRACT (`policy.severityRanks`), as the draft`s own (template unresolved) or as neither, and resolve is not done', () => {
+  const cases = [
+    { policy: { maxFixRounds: 3, severityRanks: US514_TEMPLATE_RANKS }, extra: {} },
+    { policy: { maxFixRounds: 3, severityRanks: US514_TEMPLATE_RANKS }, extra: { severityRanks: US514_TEMPLATE_RANKS } },
+    { policy: { maxFixRounds: 3 }, extra: { severityRanks: US514_TEMPLATE_RANKS } },
+    { policy: { maxFixRounds: 3 }, extra: {} },
+  ]
+  for (const { policy, extra } of cases) {
     const { dir } = us514RunDir()
-    const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Blocker', false)], ['--policy', JSON.stringify({ maxFixRounds: 3 })], extra)
-    assert.equal(stored.findings[0].blocking, true, `Blocker ranks above the default floor Minor (${JSON.stringify(extra)})`)
-    assert.notEqual(us514ResolveNext(dir, { maxFixRounds: 3 }).step, 'done', 'a Blocker must not ship')
+    const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Blocker', false)], ['--policy', JSON.stringify(policy)], extra)
+    assert.equal(stored.findings[0].blocking, true, `Blocker ranks above the default floor Minor (${JSON.stringify({ policy, extra })})`)
+    assert.notEqual(us514ResolveNext(dir, policy).step, 'done', 'a Blocker must not ship')
   }
+})
+
+// r1-1: `publish` takes severity ranks from the resolved TEMPLATE CONTRACT (`policy.severityRanks`),
+// never from the reviewer's own draft. A draft that disagrees with the resolved template is a typed
+// refusal — never silently re-ranked and never shipped as non-blocking.
+test('US-514 r1-1: a draft`s `severityRanks` disagreeing with the resolved template`s is a typed refusal, never `blocking:false`, never `resolve` done', () => {
+  const { dir } = us514RunDir()
+  const file = join(dir, 'draft-r0-review-phase.json')
+  const templateRanks = { Critical: 4, Major: 3, Minor: 2, Questions: 1 }
+  const draftRanks = { Critical: 4, Minor: 2, Major: 1, Questions: 1 } // Major ranked BELOW Minor
+  writeFileSync(
+    file,
+    JSON.stringify({
+      run: 'story-42',
+      story: '42',
+      pr: 7,
+      branch: 'feature/US-42-x',
+      phase: 'r0',
+      skill: 'review-phase',
+      inputHead: US514_SHA('a'),
+      mode: 'first',
+      reviewedHead: US514_SHA('c'),
+      verdict: 'CHANGES-REQUESTED',
+      custody: { verified: true, contractBreach: false },
+      readiness: { ready: true, remoteHead: US514_SHA('c') },
+      findings: [us514Evidenced('r0-1', 'Major', false)],
+      severityRanks: draftRanks,
+    }),
+  )
+  const policy = { maxFixRounds: 3, severityRanks: templateRanks }
+  const r = us514Run(US514_STATE_CLI, ['publish', '--dir', dir, '--file', file, '--phase', 'r0', '--skill', 'review-phase', '--workflowVersion', US514_V, '--pr', '7', '--policy', JSON.stringify(policy)])
+  assert.notEqual(r.status, 0, r.stdout + r.stderr)
+  assert.equal(r.json?.published, false)
+  assert.equal(r.json?.reason, 'severity-ranks-mismatch')
+  assert.notEqual(us514ResolveNext(dir, policy).step, 'done', 'the Major must not ship — resolve is not done, nothing was even published')
 })
 
 test('US-514 r1-g1 g1-w10 (r0-2): a vocabulary with its OWN names is ranked by the draft`s `severityRanks` (keys listed out of rank order) — floor Serious and floor Showstopper', () => {

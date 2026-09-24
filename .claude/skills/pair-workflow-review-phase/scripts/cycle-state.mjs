@@ -112,18 +112,27 @@ export const CAPS = { consecutiveRedirects: 3 }
 // ADR-018/D21); pair itself declares nothing.
 export const POLICY_DEFAULTS = { deadDispatchRetries: 1 }
 export const DEFAULT_BLOCKING_FLOOR = 'Minor'
-// The severity vocabulary a review draft did NOT supply its own `severityRanks` for: pair's own
-// table (Critical/Blocker highest, Questions lowest), case-insensitive by name — the KB vocabulary
-// `Critical | Major | Minor | Questions` plus the historical `Blocker` alias for `Critical`. A
-// severity outside both this table and the draft's own ranks is unrankable and blocks (fail-safe).
-const DEFAULT_SEVERITY_RANKS = { critical: 4, blocker: 4, major: 3, minor: 2, questions: 1 }
-// Rank a severity by the review draft's OWN `severityRanks` (the template contract's exact names,
-// case-sensitive — a reviewer's vocabulary is exactly what it declares) when the draft supplies
-// one; otherwise pair's own case-insensitive default table. Returns `undefined` when the severity
-// is covered by neither — the caller's fail-safe (an unrankable value blocks).
-function rankOf(severity, draftRanks) {
-  if (draftRanks && typeof draftRanks === 'object' && !Array.isArray(draftRanks)) {
-    return Object.prototype.hasOwnProperty.call(draftRanks, severity) ? draftRanks[severity] : undefined
+// r1-1: no `Blocker` alias — `Blocker` is one entry OF a resolved template contract's OWN
+// `severityRanks`, never pair's guess at what it means. The severity vocabulary neither the
+// template contract (`policy.severityRanks`) nor a review draft supplies ranks for: pair's own
+// table (Critical highest, Questions lowest), case-insensitive by name — the KB vocabulary
+// `Critical | Major | Minor | Questions`. A severity outside both this table and the resolved
+// ranks is unrankable and blocks (fail-safe).
+const DEFAULT_SEVERITY_RANKS = { critical: 4, major: 3, minor: 2, questions: 1 }
+// Two rank maps agree iff they name exactly the same severities with exactly the same rank each.
+function ranksAgree(a, b) {
+  const ak = Object.keys(a)
+  const bk = Object.keys(b)
+  return ak.length === bk.length && ak.every(k => Object.prototype.hasOwnProperty.call(b, k) && b[k] === a[k])
+}
+// Rank a severity by the resolved ranks (the TEMPLATE CONTRACT's `policy.severityRanks` when
+// present, r1-1 — never the reviewer's own draft; a draft is what an LLM wrote, not evidence of
+// what the template says) when one is resolved; otherwise pair's own case-insensitive default
+// table. Returns `undefined` when the severity is covered by neither — the caller's fail-safe (an
+// unrankable value blocks).
+function rankOf(severity, ranks) {
+  if (ranks && typeof ranks === 'object' && !Array.isArray(ranks)) {
+    return Object.prototype.hasOwnProperty.call(ranks, severity) ? ranks[severity] : undefined
   }
   return DEFAULT_SEVERITY_RANKS[String(severity).toLowerCase()]
 }
@@ -1629,27 +1638,38 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   // US-514 T-2 (#514/AC1, revised): a finding's `blocking` flag is DERIVED here from its own
   // `severity` ranked against `policy.blockingFloor` (absent ⇒ the KB default floor `Minor` — every
   // severity except Questions blocks, today's behaviour unchanged) — never trusted as the
-  // reviewer's own claim, the same reason `acHash` is stamped rather than read. The floor and every
-  // severity are ranked by the review draft's OWN top-level `severityRanks` (the template
-  // contract's ranks, exact names) when the draft supplies one; otherwise pair's default table
-  // (`rankOf`). `blocking = rank(severity) >= rank(floor)`; a severity no rank covers blocks
-  // (fail-safe), and a floor no rank covers releases nothing — every finding stays blocking
-  // (fail-safe). Scoped to OPEN, non-`question`, non-`regressionRisk` findings: a CLOSED finding's
-  // `blocking` is the closure's own record (transition already gates it in `isBlocking`); a
-  // `question` carries no defect to weigh and is never blocking, whatever severity it is filed
-  // under; a `regressionRisk` finding's `blocking` is governed by the regression-risk ledger's own
-  // coherence rule (DR-10: ACTIVE risk ⇔ blocking), a stricter, more specific invariant a
-  // severity-only derivation must not override.
+  // reviewer's own claim, the same reason `acHash` is stamped rather than read. r1-1: the floor and
+  // every severity are ranked by the TEMPLATE CONTRACT's OWN `severityRanks` — threaded through
+  // `policy.severityRanks`, the same channel `blockingFloor`/`maxDispatches` already ride in on, the
+  // caller having resolved it from the review template's `*.contract.json` (`ensure-contract.mjs`)
+  // — NEVER from the reviewer's own draft. A draft that ALSO carries `severityRanks` once the
+  // template's are resolved must agree with them exactly (same names, same ranks) or publish is a
+  // typed refusal (`severity-ranks-mismatch`): a disagreeing draft is proof the reviewer ranked with
+  // a different scale than the one that will gate it. Absent a resolved template (the first review
+  // of a run, before `$contractSpec` names one), the draft's own `severityRanks` is used as before,
+  // then pair's default table (`rankOf`). `blocking = rank(severity) >= rank(floor)`; a severity no
+  // rank covers blocks (fail-safe), and a floor no rank covers releases nothing — every finding
+  // stays blocking (fail-safe). Scoped to OPEN, non-`question`, non-`regressionRisk` findings: a
+  // CLOSED finding's `blocking` is the closure's own record (transition already gates it in
+  // `isBlocking`); a `question` carries no defect to weigh and is never blocking, whatever severity
+  // it is filed under; a `regressionRisk` finding's `blocking` is governed by the regression-risk
+  // ledger's own coherence rule (DR-10: ACTIVE risk ⇔ blocking), a stricter, more specific
+  // invariant a severity-only derivation must not override.
   if (skill === 'review-phase' && Array.isArray(data.findings)) {
-    const draftRanks = data.severityRanks
+    const templateRanks = policy.severityRanks && typeof policy.severityRanks === 'object' && !Array.isArray(policy.severityRanks) ? policy.severityRanks : undefined
+    const draftRanks = data.severityRanks && typeof data.severityRanks === 'object' && !Array.isArray(data.severityRanks) ? data.severityRanks : undefined
+    if (templateRanks && draftRanks && !ranksAgree(templateRanks, draftRanks)) {
+      return { published: false, reason: 'severity-ranks-mismatch', template: templateRanks, draft: draftRanks }
+    }
+    const ranks = templateRanks ?? draftRanks
     const floor = typeof policy.blockingFloor === 'string' && policy.blockingFloor.length ? policy.blockingFloor : DEFAULT_BLOCKING_FLOOR
-    const floorRank = rankOf(floor, draftRanks)
+    const floorRank = rankOf(floor, ranks)
     data = {
       ...data,
       findings: data.findings.map(f => {
         if (!f || typeof f !== 'object' || (f.transition ?? 'open') !== 'open' || f.regressionRisk !== undefined) return f
         if (f.kind === 'question') return { ...f, blocking: false }
-        const r = rankOf(f.severity, draftRanks)
+        const r = rankOf(f.severity, ranks)
         return { ...f, blocking: r === undefined || floorRank === undefined || r >= floorRank }
       }),
     }
