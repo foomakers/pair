@@ -119,48 +119,66 @@ export const DEFAULT_BLOCKING_FLOOR = 'Minor'
 // `Critical | Major | Minor | Questions`. A severity outside both this table and the resolved
 // ranks is unrankable and blocks (fail-safe).
 const DEFAULT_SEVERITY_RANKS = { critical: 4, major: 3, minor: 2, questions: 1 }
-// Two rank maps agree iff they name exactly the same severities with exactly the same rank each.
+// The default table, spelled with the KB's own casing — used as the RESOLVED ranks (never a
+// draft's own claim) when neither `policy.severityRanks` nor an on-disk template contract
+// resolves any. r1-1 round 4: there is NO draft-ranks fallback left anywhere in this file — ranks
+// are ALWAYS one of (1) `policy.severityRanks`, (2) the on-disk template contract, (3) this table.
+const DEFAULT_SEVERITY_RANKS_CANONICAL = { Critical: 4, Major: 3, Minor: 2, Questions: 1 }
+// Two rank maps agree iff they name exactly the same severities (case-insensitively) with exactly
+// the same rank each.
 function ranksAgree(a, b) {
-  const ak = Object.keys(a)
-  const bk = Object.keys(b)
-  return ak.length === bk.length && ak.every(k => Object.prototype.hasOwnProperty.call(b, k) && b[k] === a[k])
+  const norm = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [String(k).toLowerCase(), v]))
+  const an = norm(a)
+  const bn = norm(b)
+  const ak = Object.keys(an)
+  const bk = Object.keys(bn)
+  return ak.length === bk.length && ak.every(k => Object.prototype.hasOwnProperty.call(bn, k) && bn[k] === an[k])
 }
-// Rank a severity by the resolved ranks (the TEMPLATE CONTRACT's `policy.severityRanks` when
-// present, r1-1 — never the reviewer's own draft; a draft is what an LLM wrote, not evidence of
-// what the template says) when one is resolved; otherwise pair's own case-insensitive default
-// table. Returns `undefined` when the severity is covered by neither — the caller's fail-safe (an
-// unrankable value blocks).
+// Rank a severity by the resolved ranks, matched case-insensitively by name. `ranks` here is
+// ALWAYS the fully resolved map (`policy.severityRanks`, the on-disk contract, or pair's own
+// default table — see `us514Ranks` below) — never a reviewer's own draft, and never absent by the
+// time this runs. Returns `undefined` when the severity is covered by neither — the caller's
+// fail-safe (an unrankable value blocks).
 function rankOf(severity, ranks) {
   if (ranks && typeof ranks === 'object' && !Array.isArray(ranks)) {
-    return Object.prototype.hasOwnProperty.call(ranks, severity) ? ranks[severity] : undefined
+    const key = Object.keys(ranks).find(k => String(k).toLowerCase() === String(severity).toLowerCase())
+    return key !== undefined ? ranks[key] : undefined
   }
   return DEFAULT_SEVERITY_RANKS[String(severity).toLowerCase()]
 }
-// r1-1 (round 3): NO real dispatch path (in-session `blocking-severities.mjs read` → `packet`,
+// r1-1 (round 3/4): NO real dispatch path (in-session `blocking-severities.mjs read` → `packet`,
 // pair-cli `cycle-wiring.ts`, batch `pair-implement-batch.js`) ever puts the template contract's
 // `severityRanks` into `$policy` — only a test does, by hand. `publish` itself now resolves them,
 // from the SAME cache `ensure-contract.mjs` writes and the review stage reads
-// (`.claude/workflows/pair-contracts/code-review.contract.json`, fixed relative to this script:
-// every one of the 12 byte-identical `cycle-state.mjs` copies ships at
-// `.claude/skills/<skill>/scripts/cycle-state.mjs`, four directories under the repo root), so a
-// draft can never rank on its own — a resolved policy `severityRanks` (the one test fixtures set)
-// still wins when present, letting a caller override or a fixture avoid touching the real
-// filesystem; absent, the on-disk contract is the source; absent that too, a draft's own ranks are
-// used (today's behaviour, unchanged) and finally pair's own default table. Anything not
-// `{severity: integer}` on disk is treated as no contract (fail-safe: falls through, never throws).
-function loadResolvedContractSeverityRanks() {
-  try {
-    const repoRoot = resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..')
-    const contractPath = join(repoRoot, '.claude', 'workflows', 'pair-contracts', 'code-review.contract.json')
-    if (!existsSync(contractPath)) return undefined
-    const contract = JSON.parse(readFileSync(contractPath, 'utf8'))
-    const ranks = contract && typeof contract === 'object' ? contract.severityRanks : undefined
-    if (!ranks || typeof ranks !== 'object' || Array.isArray(ranks)) return undefined
-    if (!Object.values(ranks).every(v => Number.isInteger(v))) return undefined
-    return ranks
-  } catch {
-    return undefined
+// (`.claude/workflows/pair-contracts/code-review.contract.json`). Tried at TWO locations, in order:
+// (1) `repoRoot`-relative — `publish`'s own `repoRoot` option (default `process.cwd()`, the same
+// one the batch's in-process `publish()` call and every CLI invocation from a repo checkout
+// already use for `sealedContractHashOf`), so an INSTALLED project's own repo root resolves
+// correctly whatever depth this script ships at there; (2) this-script-relative, four directories
+// up (`.claude/skills/<skill>/scripts/cycle-state.mjs` in every one of the 12 byte-identical
+// copies here), for a bare CLI invocation from outside the repo root. A draft can never rank on
+// its own. Round 4: the draft-ranks fallback is GONE — absent a policy value and an on-disk
+// contract at EITHER location, ranking falls straight to `DEFAULT_SEVERITY_RANKS_CANONICAL`, never
+// to `data.severityRanks`. Anything not `{severity: integer}` on disk is treated as no contract
+// (fail-safe: falls through, never throws, never partial-trusts a malformed cache).
+function loadResolvedContractSeverityRanks(repoRoot) {
+  const candidates = [
+    repoRoot ? join(repoRoot, '.claude', 'workflows', 'pair-contracts', 'code-review.contract.json') : undefined,
+    join(resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..'), '.claude', 'workflows', 'pair-contracts', 'code-review.contract.json'),
+  ].filter(Boolean)
+  for (const contractPath of candidates) {
+    try {
+      if (!existsSync(contractPath)) continue
+      const contract = JSON.parse(readFileSync(contractPath, 'utf8'))
+      const ranks = contract && typeof contract === 'object' ? contract.severityRanks : undefined
+      if (!ranks || typeof ranks !== 'object' || Array.isArray(ranks)) continue
+      if (!Object.values(ranks).every(v => Number.isInteger(v))) continue
+      return ranks
+    } catch {
+      // fail-safe: an unreadable/malformed cache at this candidate is treated as absent, never thrown
+    }
   }
+  return undefined
 }
 // ── transition context policy (US-486 AC-7) ────────────────────────────────────────────────
 // `next.context` says whether the stage about to run gets a FRESH subagent or RESUMES the previous
@@ -1664,33 +1682,33 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   // US-514 T-2 (#514/AC1, revised): a finding's `blocking` flag is DERIVED here from its own
   // `severity` ranked against `policy.blockingFloor` (absent ⇒ the KB default floor `Minor` — every
   // severity except Questions blocks, today's behaviour unchanged) — never trusted as the
-  // reviewer's own claim, the same reason `acHash` is stamped rather than read. r1-1: the floor and
-  // every severity are ranked by the TEMPLATE CONTRACT's OWN `severityRanks` — threaded through
-  // `policy.severityRanks`, the same channel `blockingFloor`/`maxDispatches` already ride in on, the
-  // caller having resolved it from the review template's `*.contract.json` (`ensure-contract.mjs`)
-  // — NEVER from the reviewer's own draft. A draft that ALSO carries `severityRanks` once the
-  // template's are resolved must agree with them exactly (same names, same ranks) or publish is a
-  // typed refusal (`severity-ranks-mismatch`): a disagreeing draft is proof the reviewer ranked with
-  // a different scale than the one that will gate it. Absent a resolved template (the first review
-  // of a run, before `$contractSpec` names one), the draft's own `severityRanks` is used as before,
-  // then pair's default table (`rankOf`). `blocking = rank(severity) >= rank(floor)`; a severity no
-  // rank covers blocks (fail-safe), and a floor no rank covers releases nothing — every finding
-  // stays blocking (fail-safe). Scoped to OPEN, non-`question`, non-`regressionRisk` findings: a
-  // CLOSED finding's `blocking` is the closure's own record (transition already gates it in
-  // `isBlocking`); a `question` carries no defect to weigh and is never blocking, whatever severity
-  // it is filed under; a `regressionRisk` finding's `blocking` is governed by the regression-risk
-  // ledger's own coherence rule (DR-10: ACTIVE risk ⇔ blocking), a stricter, more specific
-  // invariant a severity-only derivation must not override.
-  // r1-1/r1-2 shared: severity ranks come from the resolved TEMPLATE CONTRACT (`policy.severityRanks`),
-  // never a handoff's own draft — a draft's own ranks, once the template's are resolved, must agree
+  // reviewer's own claim, the same reason `acHash` is stamped rather than read. r1-1 (round 4): a
+  // handoff's own `severityRanks` is NEVER a ranking source, period — not even when neither a
+  // policy value nor an on-disk template contract resolves. Ranks are ALWAYS one of, in order:
+  // (1) `policy.severityRanks` (threaded through the same channel `blockingFloor`/`maxDispatches`
+  // ride in on); (2) the on-disk resolved template contract `publish` loads itself
+  // (`loadResolvedContractSeverityRanks`, the same cache `ensure-contract.mjs` writes and the
+  // review stage reads); (3) pair's own default table (`DEFAULT_SEVERITY_RANKS_CANONICAL`). A
+  // draft's OWN `severityRanks`, when present, is checked ONLY for agreement with whichever of the
+  // three above resolved — disagreement is a typed refusal (`severity-ranks-mismatch`), agreement
+  // changes nothing (the resolved ranks were already what is used). `blocking = rank(severity) >=
+  // rank(floor)`; a severity no rank covers blocks (fail-safe), and a floor no rank covers releases
+  // nothing — every finding stays blocking (fail-safe). Scoped to OPEN, non-`question`,
+  // non-`regressionRisk` findings: a CLOSED finding's `blocking` is the closure's own record
+  // (transition already gates it in `isBlocking`); a `question` carries no defect to weigh and is
+  // never blocking, whatever severity it is filed under; a `regressionRisk` finding's `blocking` is
+  // governed by the regression-risk ledger's own coherence rule (DR-10: ACTIVE risk ⇔ blocking), a
+  // stricter, more specific invariant a severity-only derivation must not override.
+  // r1-1/r1-2 shared: severity ranks come from the resolved policy/contract/default chain above,
+  // never a handoff's own draft — a draft's own ranks, whatever the resolved source, must agree
   // with them exactly or publish is a typed refusal. Shared by review-phase (T-2) and red-verify (r1-2).
   const us514PolicyRanks = policy.severityRanks && typeof policy.severityRanks === 'object' && !Array.isArray(policy.severityRanks) ? policy.severityRanks : undefined
-  const us514TemplateRanks = us514PolicyRanks ?? ((skill === 'review-phase' || skill === 'red-verify') ? loadResolvedContractSeverityRanks() : undefined)
+  const us514ContractRanks = (skill === 'review-phase' || skill === 'red-verify') ? loadResolvedContractSeverityRanks(repoRoot) : undefined
+  const us514Ranks = us514PolicyRanks ?? us514ContractRanks ?? DEFAULT_SEVERITY_RANKS_CANONICAL
   const us514DraftRanks = data.severityRanks && typeof data.severityRanks === 'object' && !Array.isArray(data.severityRanks) ? data.severityRanks : undefined
-  if ((skill === 'review-phase' || skill === 'red-verify') && us514TemplateRanks && us514DraftRanks && !ranksAgree(us514TemplateRanks, us514DraftRanks)) {
-    return { published: false, reason: 'severity-ranks-mismatch', template: us514TemplateRanks, draft: us514DraftRanks }
+  if ((skill === 'review-phase' || skill === 'red-verify') && us514DraftRanks && !ranksAgree(us514Ranks, us514DraftRanks)) {
+    return { published: false, reason: 'severity-ranks-mismatch', template: us514Ranks, draft: us514DraftRanks }
   }
-  const us514Ranks = us514TemplateRanks ?? us514DraftRanks
   const us514Floor = typeof policy.blockingFloor === 'string' && policy.blockingFloor.length ? policy.blockingFloor : DEFAULT_BLOCKING_FLOOR
   const us514FloorRank = rankOf(us514Floor, us514Ranks)
   if (skill === 'review-phase' && Array.isArray(data.findings)) {

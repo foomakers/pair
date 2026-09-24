@@ -2909,11 +2909,10 @@ test('US-514 r1-g1 g1-c8 (r0-1/r0-2, control): no floor ⇒ the KB default floor
 })
 
 // ── r0-2: the floor is compared by RANK, in the active vocabulary, never by name ────────────────
-test('US-514 r1-g1 g1-w9 (r0-2, revised r1-1): no floor, template vocabulary Blocker/Major/Minor — an open Blocker defect stays blocking whether the ranks arrive as the resolved TEMPLATE CONTRACT (`policy.severityRanks`), as the draft`s own (template unresolved) or as neither, and resolve is not done', () => {
+test('US-514 r1-g1 g1-w9 (r0-2, round 4): no floor, template vocabulary Blocker/Major/Minor — an open Blocker defect stays blocking whether the ranks arrive as the resolved policy `severityRanks` (agreeing draft, or none at all) or, absent any resolved template, from pair`s own default table (Blocker unrankable there, fail-safe) — never from a draft ranking alone', () => {
   const cases = [
     { policy: { maxFixRounds: 3, severityRanks: US514_TEMPLATE_RANKS }, extra: {} },
     { policy: { maxFixRounds: 3, severityRanks: US514_TEMPLATE_RANKS }, extra: { severityRanks: US514_TEMPLATE_RANKS } },
-    { policy: { maxFixRounds: 3 }, extra: { severityRanks: US514_TEMPLATE_RANKS } },
     { policy: { maxFixRounds: 3 }, extra: {} },
   ]
   for (const { policy, extra } of cases) {
@@ -2922,6 +2921,23 @@ test('US-514 r1-g1 g1-w9 (r0-2, revised r1-1): no floor, template vocabulary Blo
     assert.equal(stored.findings[0].blocking, true, `Blocker ranks above the default floor Minor (${JSON.stringify({ policy, extra })})`)
     assert.notEqual(us514ResolveNext(dir, policy).step, 'done', 'a Blocker must not ship')
   }
+})
+
+// r1-1 round 4: a draft's `severityRanks` is NEVER a ranking source by itself — absent a
+// `policy.severityRanks` and an on-disk template contract, ranking falls straight to pair's own
+// default table, and a draft naming a DIFFERENT vocabulary than that table is a typed refusal
+// (never silently ranked by the draft's own claim, whatever the reason no template resolved).
+test('US-514 r1-1 (round 4): a handoff`s OWN `severityRanks`, with NO `policy.severityRanks` and NO on-disk template contract, is checked for agreement against the DEFAULT table — never used to rank on its own — so a draft in a different vocabulary is a typed refusal, not a silently-accepted alternate ranking', () => {
+  const { dir } = us514RunDir()
+  const draftOnlyRanks = { Critical: 4, Minor: 2, Major: 1, Questions: 1 } // Major ranked BELOW Minor — the exact #492/r1-1-round-3 scenario
+  const file = join(dir, 'draft-r0-review-phase.json')
+  writeFileSync(file, JSON.stringify({ run: 'story-42', story: '42', pr: 7, branch: 'feature/US-42-x', phase: 'r0', skill: 'review-phase', inputHead: US514_SHA('a'), mode: 'first', reviewedHead: US514_SHA('c'), verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: US514_SHA('c') }, findings: [us514Evidenced('r0-1', 'Major', false)], severityRanks: draftOnlyRanks }))
+  const policy = { maxFixRounds: 3 } // no severityRanks — and no on-disk contract exists in this test env
+  const r = us514Run(US514_STATE_CLI, ['publish', '--dir', dir, '--file', file, '--phase', 'r0', '--skill', 'review-phase', '--workflowVersion', US514_V, '--pr', '7', '--policy', JSON.stringify(policy)])
+  assert.notEqual(r.status, 0, r.stdout + r.stderr)
+  assert.equal(r.json?.published, false)
+  assert.equal(r.json?.reason, 'severity-ranks-mismatch', 'the draft`s ranks disagree with the DEFAULT table (Major ranked below Minor there vs. above it in the default) — never silently used')
+  assert.notEqual(us514ResolveNext(dir, policy).step, 'done', 'the Major must not ship — resolve is not done, nothing was even published')
 })
 
 // r1-1: `publish` takes severity ranks from the resolved TEMPLATE CONTRACT (`policy.severityRanks`),
@@ -3023,20 +3039,26 @@ test('US-514 r1-4: `policy.blockingSeverities` is a typed refusal in `publish`, 
   }
 })
 
-test('US-514 r1-g1 g1-w10 (r0-2): a vocabulary with its OWN names is ranked by the draft`s `severityRanks` (keys listed out of rank order) — floor Serious and floor Showstopper', () => {
+test('US-514 r1-g1 g1-w10 (r0-2, round 4): a vocabulary with its OWN names, carried on `policy.severityRanks` (never the draft alone), ranks correctly (keys listed out of rank order) — floor Serious and floor Showstopper; the SAME draft ranks with NO matching `policy.severityRanks` is a typed refusal, not an alternate ranking', () => {
   const ranks = { Cosmetic: 1, Showstopper: 3, Serious: 2 }
   const findings = [us514Evidenced('r0-1', 'Showstopper', false), us514Evidenced('r0-2', 'Serious', false), us514Evidenced('r0-3', 'Cosmetic', true)]
   const { dir } = us514RunDir()
-  const serious = us514PublishReview(dir, findings, ['--policy', JSON.stringify({ ...US514_POLICY, blockingFloor: 'Serious' })], { severityRanks: ranks })
+  const serious = us514PublishReview(dir, findings, ['--policy', JSON.stringify({ ...US514_POLICY, blockingFloor: 'Serious', severityRanks: ranks })], { severityRanks: ranks })
   assert.deepEqual(serious.findings.map(f => f.blocking), [true, true, false])
   const { dir: d2 } = us514RunDir()
-  const top = us514PublishReview(d2, findings, ['--policy', JSON.stringify({ ...US514_POLICY, blockingFloor: 'Showstopper' })], { severityRanks: ranks })
+  const top = us514PublishReview(d2, findings, ['--policy', JSON.stringify({ ...US514_POLICY, blockingFloor: 'Showstopper', severityRanks: ranks })], { severityRanks: ranks })
   assert.deepEqual(top.findings.map(f => f.blocking), [true, false, false])
+  // Round 4: the draft alone (no policy.severityRanks, no on-disk contract) never ranks — this
+  // vocabulary disagrees with the default table, so it is a typed refusal, not a fallback ranking.
+  const { dir: d3 } = us514RunDir()
+  const r = us514Run(US514_STATE_CLI, ['publish', '--dir', d3, '--file', (() => { const f = join(d3, 'draft-r0-review-phase.json'); writeFileSync(f, JSON.stringify({ run: 'story-42', story: '42', pr: 7, branch: 'feature/US-42-x', phase: 'r0', skill: 'review-phase', inputHead: US514_SHA('a'), mode: 'first', reviewedHead: US514_SHA('c'), verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: US514_SHA('c') }, findings, severityRanks: ranks })); return f })(), '--phase', 'r0', '--skill', 'review-phase', '--workflowVersion', US514_V, '--pr', '7', '--policy', JSON.stringify({ ...US514_POLICY, blockingFloor: 'Serious' })])
+  assert.notEqual(r.status, 0, r.stdout + r.stderr)
+  assert.equal(r.json?.reason, 'severity-ranks-mismatch')
 })
 
 test('US-514 r1-g1 g1-b1 (r0-2, boundary): a severity no rank covers blocks (fail-safe), and an unrankable floor never releases a finding', () => {
   const { dir } = us514RunDir()
-  const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Weird', false)], ['--policy', JSON.stringify({ ...US514_POLICY, blockingFloor: 'Major' })], { severityRanks: US514_TEMPLATE_RANKS })
+  const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Weird', false)], ['--policy', JSON.stringify({ ...US514_POLICY, blockingFloor: 'Major', severityRanks: US514_TEMPLATE_RANKS })], { severityRanks: US514_TEMPLATE_RANKS })
   assert.equal(stored.findings[0].blocking, true)
   const { dir: d2 } = us514RunDir()
   const stored2 = us514PublishReview(d2, [us514Evidenced('r0-1', 'Minor', false)], ['--policy', JSON.stringify({ ...US514_POLICY, blockingFloor: 'Serious' })])
@@ -3093,10 +3115,14 @@ test('US-514 r1-g1 g1-w5p (r0-2, interaction): floor Major on the FIRST review (
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.ok(r.json.prompt.includes('$contractSpec='), 'the first review resolves the template contract itself')
   const policy = us514PolicyOf(r.json.prompt)
-  for (const extra of [{ severityRanks: US514_TEMPLATE_RANKS }, {}]) {
+  // Round 4: absent a resolved template (no policy.severityRanks, no on-disk contract in this test
+  // env), `Blocker` is unrankable against the DEFAULT table (fail-safe: blocks) — a draft naming
+  // `severityRanks` here would disagree with the default table and be a typed refusal instead, so
+  // only the no-draft-ranks case is exercised as a positive publish.
+  {
     const { dir } = us514RunDir()
-    const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Blocker', false), us514Evidenced('r0-2', 'Minor', true)], ['--policy', JSON.stringify(policy)], extra)
-    assert.deepEqual(stored.findings.map(f => f.blocking), [true, false], JSON.stringify(extra))
+    const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Blocker', false), us514Evidenced('r0-2', 'Minor', true)], ['--policy', JSON.stringify(policy)], {})
+    assert.deepEqual(stored.findings.map(f => f.blocking), [true, false])
     assert.notEqual(us514ResolveNext(dir, policy).step, 'done')
   }
 })
@@ -3188,12 +3214,44 @@ test('US-514 r3-1: publish prefers the ON-DISK contract`s ranks over the DEFAULT
   }
 })
 
-test('US-514 r3-1 (control): with NO on-disk contract and NO `policy.severityRanks`, a draft`s own `severityRanks` still ranks (today`s pre-r3 behaviour, unchanged)', () => {
-  assert.equal(existsSync(US514_CONTRACT_PATH), false, 'a stray contract cache would make this control lie')
-  const { dir } = us514RunDir()
-  const draftRanks = { Critical: 4, Minor: 3, Major: 2, Questions: 1 }
-  const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Major', true)], ['--policy', JSON.stringify({ maxFixRounds: 3, blockingFloor: 'Minor' })], { severityRanks: draftRanks })
-  assert.equal(stored.findings[0].blocking, false, 'absent both a policy contract and an on-disk one, the draft`s own ranks still apply')
+// r1-1 round 4 (maintainer-reported regression): the round-3 fix still fell back to a draft's OWN
+// `severityRanks` when neither `policy.severityRanks` nor an on-disk contract resolved — exactly
+// the shape every real dispatch produces (none of them carries `severityRanks`) with NO
+// `code-review.contract.json` on disk (a gitignored cache, absent in a fresh checkout/worktree and
+// at the installed layout's relative path alike). Proven here through the SAME three real
+// producers as r3-1, with NO contract file written to disk anywhere in this test — the exact
+// scenario the maintainer's own `r11-e2e-wt.mjs` reproduced against a real worktree.
+test('US-514 r1-1 (round 4): the three REAL dispatch policies (in-session packet, pair-cli, batch) — none carrying severityRanks — refuse (or block) a draft ranking Major below Minor, with NO on-disk contract anywhere in this test', () => {
+  assert.equal(existsSync(US514_CONTRACT_PATH), false, 'setup: a stray contract cache would make this test lie about a fresh checkout')
+  const inSession = us514Run(US514_BLOCKING_SEVERITIES_CLI, ['read', '/nonexistent/automation.md']).json
+  const pkt = us514Packet(inSession, [])
+  assert.equal(pkt.status, 0, pkt.stdout + pkt.stderr)
+  const packetPolicy = us514PolicyOf(pkt.json.prompt)
+  const policies = {
+    'in-session packet': packetPolicy,
+    'pair-cli': { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1, blockingFloor: 'Minor' },
+    batch: { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 },
+  }
+  const draftRanks = { Critical: 4, Minor: 2, Major: 1, Questions: 1 } // Major ranked BELOW Minor
+  for (const [name, policy] of Object.entries(policies)) {
+    assert.equal(policy.severityRanks, undefined, `${name}: the fixture itself hand-supplies severityRanks — invalid test`)
+    const { dir } = us514RunDir()
+    const file = join(dir, 'draft-r0-review-phase.json')
+    writeFileSync(file, JSON.stringify({ run: 'story-42', story: '42', pr: 7, branch: 'feature/US-42-x', phase: 'r0', skill: 'review-phase', inputHead: US514_SHA('a'), mode: 'first', reviewedHead: US514_SHA('c'), verdict: 'APPROVED', custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: US514_SHA('c') }, severityRanks: draftRanks, findings: [us514Evidenced('r0-1', 'Major', false)] }))
+    const p = us514Run(US514_STATE_CLI, ['publish', '--dir', dir, '--file', file, '--phase', 'r0', '--skill', 'review-phase', '--workflowVersion', US514_V, '--pr', '7', '--policy', JSON.stringify(policy)])
+    let stored = null
+    try {
+      stored = JSON.parse(readFileSync(join(dir, 'r0-review-phase.json'), 'utf8'))
+    } catch {}
+    const next = us514ResolveNext(dir, policy)
+    // Required rule: publish either typed-refuses (severity-ranks-mismatch, the draft disagreeing
+    // with pair's own default table) or stores the Major as blocking — NEVER `blocking:false` and
+    // NEVER `resolve.next.step === 'done'`.
+    const refused = p.json?.published === false
+    assert.ok(refused || stored?.findings?.[0]?.blocking === true, `${name}: the Major must never ship — got publish=${JSON.stringify(p.json)} stored.blocking=${stored?.findings?.[0]?.blocking}`)
+    if (refused) assert.equal(p.json?.reason, 'severity-ranks-mismatch', name)
+    assert.notEqual(next.step, 'done', `${name}: resolve must not be done`)
+  }
 })
 
 // ── r1-2 round 3: the red-verify SKILL's documented publish command carries `--policy` too ───────

@@ -1903,12 +1903,21 @@ import { join as us514Join } from 'node:path'
 const US514_BASE_POLICY = { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 }
 // Publishes a first review of the given findings under `policy` (the batch's dispatched `$policy`)
 // through the REAL cycle-state `publish`, and returns the stored `blocking` per finding.
-function us514StoredBlocking(findings, policy, extra = {}) {
+// r1-1 round 4: a draft's OWN `severityRanks` is never a ranking source by itself — `withContract`
+// writes the resolved TEMPLATE CONTRACT to `repoRoot`'s own `.claude/workflows/pair-contracts/
+// code-review.contract.json` cache (the real on-disk source `publish` now resolves itself), so
+// this proves ranking through the SAME resolved-contract path the engine uses, never a draft claim.
+function us514StoredBlocking(findings, policy, { withContract = false } = {}) {
   const root = us514Mkdtemp(us514Join(us514Tmpdir(), 'us514-batch-'))
   const dir = us514Join(root, '.pair', 'working', 'runs', 'run-1', '292')
   us514Mkdir(dir, { recursive: true })
+  if (withContract) {
+    const contractDir = us514Join(root, '.claude', 'workflows', 'pair-contracts')
+    us514Mkdir(contractDir, { recursive: true })
+    us514Write(us514Join(contractDir, 'code-review.contract.json'), JSON.stringify(validContract()))
+  }
   const file = us514Join(dir, 'draft.json')
-  us514Write(file, JSON.stringify({ run: 'run-1', story: '292', pr: 7, branch: STORY.branch, phase: 'r0', skill: 'review-phase', inputHead: HEAD, mode: 'first', reviewedHead: HEAD, verdict: 'Rework', custody: { verified: true, contractBreach: false }, readiness: { ready: false, remoteHead: HEAD }, findings: findings.map((f, k) => ({ id: `r0-${k + 1}`, transition: 'open', kind: 'defect', blocking: false, reproducer: { command: 'node --test t.test.mjs' }, ...f })), ...extra }))
+  us514Write(file, JSON.stringify({ run: 'run-1', story: '292', pr: 7, branch: STORY.branch, phase: 'r0', skill: 'review-phase', inputHead: HEAD, mode: 'first', reviewedHead: HEAD, verdict: 'Rework', custody: { verified: true, contractBreach: false }, readiness: { ready: false, remoteHead: HEAD }, findings: findings.map((f, k) => ({ id: `r0-${k + 1}`, transition: 'open', kind: 'defect', blocking: false, reproducer: { command: 'node --test t.test.mjs' }, ...f })) }))
   const out = us514Publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.1', pr: 7, repoRoot: root, policy })
   assert.equal(out.published, true, JSON.stringify(out))
   return JSON.parse(readFileSync(us514Join(dir, 'r0-review-phase.json'), 'utf8')).findings.map(f => f.blocking)
@@ -1929,7 +1938,7 @@ test('US-514 r1-g1 g1-w5 (r0-2): `severityFloor: Major` rides in EVERY dispatch`
   assert.deepEqual(jsonArg(calls.find(c => c.opts.label === 'prepare:#292 r1-g1').prompt, 'findings').map(f => f.severity), ['Blocker'])
   // the durable state, derived by the real publish from the policy the first review was handed
   const firstPolicy = jsonArg(stages[0].prompt, 'policy')
-  for (const extra of [{ severityRanks: validContract().severityRanks }, {}]) assert.deepEqual(us514StoredBlocking([blocker, minor], firstPolicy, extra), [true, false], JSON.stringify(extra))
+  for (const withContract of [true, false]) assert.deepEqual(us514StoredBlocking([blocker, minor], firstPolicy, { withContract }), [true, false], `withContract=${withContract}`)
 })
 
 test('US-514 r1-g1 g1-c5 (r0-2): no `severityFloor` ⇒ the dispatched $policy is exactly the budgets (TC-11) — and under it the real publish keeps an open Blocker blocking, agreeing with the engine (default floor Minor, compared by rank)', async () => {
@@ -1942,7 +1951,7 @@ test('US-514 r1-g1 g1-c5 (r0-2): no `severityFloor` ⇒ the dispatched $policy i
   const order = stageLabels(calls)
   assert.equal(order[order.indexOf('verify:#292 r0') + 1], 'prepare:#292 r1-g1', 'the engine treats the Blocker as blocking')
   const firstPolicy = jsonArg(stages[0].prompt, 'policy')
-  for (const extra of [{ severityRanks: validContract().severityRanks }, {}]) assert.deepEqual(us514StoredBlocking([blocker], firstPolicy, extra), [true], `durable state disagrees with the engine ${JSON.stringify(extra)}`)
+  for (const withContract of [true, false]) assert.deepEqual(us514StoredBlocking([blocker], firstPolicy, { withContract }), [true], `durable state disagrees with the engine withContract=${withContract}`)
 })
 
 test('US-514 r1-g1 g1-w6 (r0-5): a converging cycle that needs more than 200 dispatches in one invocation runs to ready-for-merge — the engine holds no dispatch ceiling of its own', async () => {
