@@ -976,3 +976,366 @@ test('r1-g3-c2: the conservative stub encodes the oracle — plain CONTAINS on S
   assert.notEqual(rawUpd.status, 0, 'update refuses the raw-marker tag too')
   assert.equal(create(`System.Tags=${G3_TAG}`).status, 0, 'the hex-derived tag is an ordinary tag')
 })
+
+// ── r1-g4: undeclared-default resolution vs a registry without github (blind item 10) + guide self-sufficiency ──
+const G4_JSONFILE_SRC = `import { defineAdapter, upsertByMarker, HostError } from './adapter-kit.mjs'
+const LABELS = ['pr-state:to-be-reviewed', 'pr-state:ready-to-merge', 'pr-state:not-approved']
+export default defineAdapter({
+  id: 'jsonfile',
+  aliases: ['JSON_File'],
+  hostsCode: true,
+  binaries: [],
+  create(transport = {}) {
+    const store = { cards: {}, prs: {} }
+    const pr = n => (store.prs[n] ??= { head: null, comments: [], checks: [], labels: [] })
+    return {
+      readCard: id => ({ body: (store.cards[id] ??= '') }),
+      prHead: ({ pr: n }) => pr(n).head,
+      upsertComment: ({ pr: n, marker, body }) => upsertByMarker({ marker, body, max: 65536, list: () => pr(n).comments, update: (h, full) => { h.body = full; return h }, create: full => { const nextId = pr(n).comments.length + 1; const c = { id: nextId, body: full, url: 'jsonfile://' + nextId }; pr(n).comments.push(c); return c } }),
+      concludeCheck: ({ pr: n, sha, state, context = 'pair-review' }) => { pr(n).checks.push({ sha, state, context }); return { context, sha, state, published: true, error: null } },
+      setPrState: ({ pr: n, label }) => {
+        if (!LABELS.includes(label)) return { applied: null, removed: [], confirmed: false, error: 'unknown-label' }
+        const removed = pr(n).labels.filter(l => LABELS.includes(l) && l !== label)
+        pr(n).labels = [...pr(n).labels.filter(l => !LABELS.includes(l)), label]
+        return { applied: label, removed, confirmed: true, error: null }
+      },
+      merge: ({ pr: n, strategy = 'squash' }) => { if (strategy !== 'squash') throw new HostError('unsupported', { message: 'jsonfile only supports squash' }); pr(n).head = 'merged'; return { merged: true, pr: Number(n), strategy } },
+      closeAndCascade: ({ id }) => ({ closed: [Number(id)], stoppedAt: null }),
+      checkContext: 'pair-review',
+      stateLabels: LABELS,
+      errorPrefix: 'jsonfile',
+    }
+  },
+})
+`
+
+// A registry (adapter-kit.mjs + jsonfile.mjs only, no github.mjs) copied into a fresh tmp scripts/host dir.
+function g4RegistryDir() {
+  const dir = mkdtempSync(join(tmpdir(), 'g4-reg-'))
+  cpSync(join(HOST_DIR, 'adapter-kit.mjs'), join(dir, 'adapter-kit.mjs'))
+  cpSync(join(HOST_DIR, 'index.mjs'), join(dir, 'index.mjs'))
+  writeFileSync(join(dir, 'jsonfile.mjs'), G4_JSONFILE_SRC)
+  return dir
+}
+
+// A dir carrying an EMPTY way-of-working.md (r1-g4-w10b/c fix): resolveFrom hits THIS file — never
+// falls back to process.cwd() — because findAdoptionFile(from) finds it directly. Never nested under
+// the repo (a tmpdir), so before this fix the ONLY way it stayed hermetic was accidental.
+function g4EmptyAdoptionDir() {
+  const dir = mkdtempSync(join(tmpdir(), 'g4-wow-'))
+  mkdirSync(join(dir, '.pair', 'adoption', 'tech'), { recursive: true })
+  writeFileSync(join(dir, '.pair', 'adoption', 'tech', 'way-of-working.md'), '')
+  return dir
+}
+
+test('r1-g4-w10a: registry without github, nothing declared — resolveHosts must throw a typed HostError, never a TypeError', async () => {
+  const dir = g4RegistryDir()
+  const { adapters, broken } = await loadAdapters(dir)
+  assert.deepEqual([...broken.keys()], [], JSON.stringify([...broken.entries()]))
+  const registry = { adapters, broken }
+  assert.throws(
+    () => resolveHosts({ text: '', registry }),
+    e => {
+      assert.ok(e instanceof Error)
+      assert.notEqual(e.constructor.name, 'TypeError', `expected a typed HostError, got ${e.constructor.name}: ${e.message}`)
+      assert.equal(e.name, 'HostError', e.stack)
+      assert.match(e.kind, /^[a-z]+(-[a-z]+)*$/, e.kind)
+      assert.match(e.message, /github/, e.message)
+      return true
+    },
+  )
+})
+
+test('r1-g4-w10b: bindHosts({ from: <tmp dir with an EMPTY way-of-working.md>, registry }) never falls back to process.cwd() — hermetic from BOTH the contract cwd and a neutral cwd', async () => {
+  const dir = g4RegistryDir()
+  const { adapters } = await loadAdapters(dir)
+  const registry = { adapters, broken: new Map() }
+  const from = g4EmptyAdoptionDir()
+  const assertHermetic = () => {
+    assert.throws(
+      () => bindHosts({ from, registry }),
+      e => {
+        assert.notEqual(e.constructor.name, 'TypeError', `resolveFrom leaked to process.cwd(): got TypeError ${e.message}`)
+        assert.equal(e.name, 'HostError', e.stack)
+        assert.match(e.kind, /^[a-z]+(-[a-z]+)*$/, e.kind)
+        assert.match(e.message, /github/, e.message)
+        assert.doesNotMatch(e.message, /Github Projects/, 'must never answer the declared "Github Projects" case — from carries an EMPTY adoption file')
+        return true
+      },
+    )
+  }
+  const before = process.cwd()
+  try {
+    process.chdir(join(REPO, '.claude', 'workflows')) // the contract's own command cwd
+    assertHermetic()
+    process.chdir('/') // a neutral cwd with no reachable adoption file at all
+    assertHermetic()
+  } finally {
+    process.chdir(before)
+  }
+})
+
+test('r1-g4-w10c: CLI `index.mjs resolve --from <empty-adoption dir>` spawned WITH cwd + a hermetic env — never inherits the parent cwd, from either parent cwd; the kebab kind is read from out.error', async () => {
+  const dir = g4RegistryDir()
+  const from = g4EmptyAdoptionDir()
+  const run = parentCwd => {
+    const before = process.cwd()
+    try {
+      process.chdir(parentCwd)
+      return spawnSync(process.execPath, [join(dir, 'index.mjs'), 'resolve', '--from', from], {
+        cwd: from, // (2) the fix: pin the CLI's cwd to the empty-adoption dir itself
+        env: { PATH: process.env.PATH ?? '' }, // (2) hermetic env — nothing else inherited
+        encoding: 'utf8',
+      })
+    } finally {
+      process.chdir(before)
+    }
+  }
+  for (const parentCwd of [join(REPO, '.claude', 'workflows'), '/']) {
+    const r = run(parentCwd)
+    assert.notEqual(r.status, 0, r.stdout + r.stderr)
+    const out = JSON.parse(r.stdout)
+    assert.ok(!('kind' in out), 'the CLI never emits a `kind` field — the kind lives in `error`')
+    // (3) the fix: read the kind from out.error, not out.kind
+    assert.match(out.error ?? '', /^[a-z]+(-[a-z]+)*$/, JSON.stringify(out))
+    assert.match(out.message ?? '', /github/, JSON.stringify(out))
+    assert.doesNotMatch(out.message ?? '', /Github Projects/, 'must never answer the declared "Github Projects" case')
+  }
+})
+
+test('r1-g4-w10d: pm-tool UNDECLARED, code-host DECLARED (jsonfile), registry lacks github — resolve-time typed HostError, never a silent {pmTool:"github",codeHost:"jsonfile"}', async () => {
+  const dir = g4RegistryDir()
+  const { adapters } = await loadAdapters(dir)
+  const registry = { adapters, broken: new Map() }
+  assert.throws(
+    () => resolveHosts({ text: '- `code-host`: `jsonfile`\n', registry }),
+    e => {
+      assert.notEqual(e.constructor.name, 'TypeError')
+      assert.equal(e.name, 'HostError', e.stack)
+      assert.equal(e.kind, 'host-unsupported', e.kind)
+      assert.equal(JSON.parse(e.detail).side, 'pm-tool', e.detail)
+      assert.match(e.message, /github/, e.message)
+      return true
+    },
+  )
+})
+
+test('r1-g4-c1: control — registry without github, pm-tool: JSON_File declared (alias spelling) resolves jsonfile/jsonfile untouched by the item-10 fix', async () => {
+  const dir = g4RegistryDir()
+  const { adapters } = await loadAdapters(dir)
+  const registry = { adapters, broken: new Map() }
+  const r = resolveHosts({ text: '- `pm-tool`: `JSON_File`\n', registry })
+  assert.equal(r.pmTool, 'jsonfile')
+  assert.equal(r.codeHost, 'jsonfile')
+})
+
+test('r1-g4-c2: control — a non-author third adapter (jsonfile) implemented purely from the guide binds and serves all eight methods', async () => {
+  const dir = g4RegistryDir()
+  const { adapters } = await loadAdapters(dir)
+  const registry = { adapters, broken: new Map() }
+  const { pm, code } = bindHosts({ binding: { pmTool: 'jsonfile', codeHost: 'jsonfile' }, registry, transport: {} })
+  assert.deepEqual(pm.readCard('1'), { body: '' })
+  assert.equal(code.prHead({ pr: 1 }), null)
+  const c = code.upsertComment({ pr: 1, marker: '<!-- m -->', body: '<!-- m -->\nhi' })
+  assert.equal(c.action, 'created')
+  const c2 = code.upsertComment({ pr: 1, marker: '<!-- m -->', body: '<!-- m -->\nhi2' })
+  assert.equal(c2.action, 'updated')
+  assert.equal(code.concludeCheck({ pr: 1, sha: SHA, state: 'success' }).published, true)
+  assert.equal(code.concludeCheck({ pr: 1, sha: SHA, state: 'success' }).sha, SHA)
+  const applied = code.setPrState({ pr: 1, label: 'pr-state:ready-to-merge' })
+  assert.equal(applied.confirmed, true)
+  assert.throws(() => code.merge({ pr: 1, strategy: 'rebase' }), e => e.kind === 'unsupported')
+  assert.equal(code.merge({ pr: 1, strategy: 'squash' }).merged, true)
+  assert.deepEqual(pm.closeAndCascade({ id: '1' }), { closed: [1], stoppedAt: null })
+})
+
+test('r1-g4-c3: control — defineAdapter without hostsCode/aliases defaults them: hostsCode === true, aliases === [id]', () => {
+  assert.equal(defineAdapter({ id: 'probe', binaries: [], create: () => ({}) }).hostsCode, true)
+  assert.deepEqual(defineAdapter({ id: 'probe', binaries: [], create: () => ({}) }).aliases, ['probe'])
+})
+
+// ── guide self-sufficiency (d1-d9): the interface doc must stand alone ────────────────────────
+const G4_GUIDE_PATH = join(REPO, '.pair', 'knowledge', 'guidelines', 'collaboration', 'project-management-tool', 'host-adapter-extension-guide.md')
+const G4_GUIDE_MIRROR = join(REPO, 'packages', 'knowledge-hub', 'dataset', '.pair', 'knowledge', 'guidelines', 'collaboration', 'project-management-tool', 'host-adapter-extension-guide.md')
+const g4Guide = () => readFileSync(G4_GUIDE_PATH, 'utf8')
+
+test('r1-g4-d1: the guide names every interface identifier an implementer needs, from the guide alone', () => {
+  const g = g4Guide()
+  for (const id of ['adapter-kit.mjs', 'index.mjs', 'HostError', 'defineAdapter', 'upsertByMarker', 'runCli', 'MERGE_STRATEGIES', 'CHECK_STATES', 'loadAdapters', 'resolveHosts', 'bindHosts']) {
+    assert.ok(g.includes(id), `guide is missing identifier: ${id}`)
+  }
+})
+
+// r1-g4-d2 harness: the guide's OWN minimal test (the `<!-- worked-example:minimal-test -->` js fence) is
+// run against the guide's filesystem example laid out as <root>/scripts/host/{adapter-kit,index,filesystem}.mjs,
+// the test file in <root>/test/ — OUTSIDE the adapter directory, so loadAdapters never imports it — through
+// a child `node --test` whose env is PATH + HOME only: no NODE_TEST_CONTEXT, no other inherited test env.
+function g4RunMinimalTest(adapterSrc, testSrc) {
+  const root = mkdtempSync(join(tmpdir(), 'g4-minimal-'))
+  const hostDir = join(root, 'scripts', 'host')
+  mkdirSync(hostDir, { recursive: true })
+  mkdirSync(join(root, 'test'))
+  cpSync(join(HOST_DIR, 'adapter-kit.mjs'), join(hostDir, 'adapter-kit.mjs'))
+  cpSync(join(HOST_DIR, 'index.mjs'), join(hostDir, 'index.mjs'))
+  writeFileSync(join(hostDir, 'filesystem.mjs'), adapterSrc)
+  const file = join(root, 'test', 'minimal.test.mjs')
+  writeFileSync(file, testSrc)
+  return spawnSync(process.execPath, ['--test', '--test-reporter=tap', file], { cwd: root, env: { PATH: process.env.PATH ?? '', HOME: root }, encoding: 'utf8', timeout: 60000 })
+}
+
+test('r1-g4-d2 / r1-g4-d2n: the guide carries a runnable minimal test (loadAdapters + resolveHosts + bindHosts) that passes on the worked example and fails on a broken adapter', () => {
+  const g = g4Guide()
+  const example = /<!-- worked-example:filesystem -->\s*```js\n([\s\S]*?)```/.exec(g)
+  assert.ok(example, 'worked-example:filesystem fence not found')
+  const m = /<!-- worked-example:minimal-test -->\s*```js\n([\s\S]*?)```/.exec(g)
+  assert.ok(m, 'blind item 2: the guide carries no runnable minimal test — expected a `<!-- worked-example:minimal-test -->` js fence')
+  for (const id of ['loadAdapters', 'resolveHosts', 'bindHosts']) assert.ok(m[1].includes(id), `the minimal test does not use ${id}`)
+  assert.doesNotMatch(m[1], /fakeAz|host-adapter\.test\.mjs/, 'the minimal test must not need the shipped suite')
+  const ok = g4RunMinimalTest(example[1], m[1])
+  assert.equal(ok.status, 0, ok.stdout + ok.stderr)
+  assert.match(ok.stdout, /^# pass [1-9]\d*$/m, ok.stdout + ok.stderr)
+  assert.match(ok.stdout, /^# fail 0$/m, ok.stdout)
+  // r1-g4-d2n: the same minimal test rejects an adapter that lost readCard
+  const brokenSrc = example[1].replace('readCard(id,', 'readCardBroken(id,')
+  assert.notEqual(brokenSrc, example[1], 'broken variant did not change the example')
+  const bad = g4RunMinimalTest(brokenSrc, m[1])
+  assert.notEqual(bad.status, 0, bad.stdout + bad.stderr)
+  assert.match(bad.stdout, /^# fail [1-9]\d*$/m, bad.stdout + bad.stderr)
+})
+
+test('r1-g4-d3: every SUPPORT_METHODS name has a guide table row carrying its call shape and result', async () => {
+  const { SUPPORT_METHODS } = await import('../../skills/pair-workflow-review-phase/scripts/host/index.mjs')
+  assert.ok(SUPPORT_METHODS.length > 0)
+  const rows = g4Guide()
+    .split('\n')
+    .filter(l => l.startsWith('|'))
+  for (const name of SUPPORT_METHODS) {
+    const row = rows.find(l => l.startsWith('| `' + name + '`'))
+    assert.ok(row, `no table row for optional method ${name}`)
+    assert.ok(row.includes('`' + name + '('), `row for ${name} carries no call shape \`${name}(…)\`: ${row}`)
+    assert.match(row, /→|returns|throws/, `row for ${name} states no result: ${row}`)
+  }
+})
+
+test('r1-g4-d4: every N-word-methods phrase in the guide names one distinct N', () => {
+  const g = g4Guide()
+  const ns = [...g.matchAll(/\b(\w+)\s+methods\b/gi)].map(m => m[1]).filter(w => /^\d+$|^eight$|^seven$/i.test(w))
+  assert.ok(ns.length >= 1, 'no N-methods phrase found')
+  assert.equal(new Set(ns.map(n => n.toLowerCase())).size, 1, `inconsistent method counts: ${ns.join(', ')}`)
+})
+
+test('r1-g4-d5: aliases and hostsCode are both documented, hostsCode default stated as true', () => {
+  const g = g4Guide()
+  assert.match(g, /aliases/)
+  assert.match(g, /hostsCode/)
+  assert.match(g, /hostsCode[^\n]*default[^\n]*true|default[^\n]*true[^\n]*hostsCode/i, 'guide must state hostsCode defaults to true')
+})
+
+test('r1-g4-d6: the CLI-first bullet itself fits a no-CLI host — `binaries: []`, `transport.*` and `PAIR_<CLI>_BIN` on that same line', () => {
+  const line = g4Guide()
+    .split('\n')
+    .find(l => /CLI-first/.test(l))
+  assert.ok(line, 'CLI-first bullet not found')
+  assert.ok(line.includes('binaries: []'), `blind item 6: the CLI-first bullet does not name \`binaries: []\`: ${line}`)
+  assert.match(line, /transport\.[A-Za-z<]/, `blind item 6: the CLI-first bullet names no \`transport.*\` for a host with no CLI: ${line}`)
+  assert.match(line, /PAIR_[A-Z<>_]*_BIN/, `blind item 6: the CLI-first bullet names no PAIR_<CLI>_BIN override: ${line}`)
+})
+
+// r1-g4-d7*: blind item 7 — one assertion per listed semantic, each scoped to the method's own table row.
+const g4Row = name => g4Guide()
+  .split('\n')
+  .find(l => l.startsWith('| `' + name + '`'))
+
+test('r1-g4-d7: the setPrState row states the outcome for a label outside stateLabels', () => {
+  const row = g4Row('setPrState')
+  assert.ok(row, 'setPrState row not found')
+  assert.match(row, /unknown-label|outside `?stateLabels`?|confirmed: false/, `blind item 7: setPrState row states no outcome for an unknown label: ${row}`)
+})
+
+test('r1-g4-d7b: the prHead row states the outcome when the host returns something that is not a 40-hex sha', () => {
+  const row = g4Row('prHead')
+  assert.ok(row, 'prHead row not found')
+  assert.ok(row.includes('invalid-output'), `blind item 7: prHead row states no outcome for an invalid value: ${row}`)
+})
+
+test('r1-g4-d7c: the concludeCheck row says where `context` comes from (checkContext)', () => {
+  const row = g4Row('concludeCheck')
+  assert.ok(row, 'concludeCheck row not found')
+  assert.ok(row.includes('checkContext'), `blind item 7: concludeCheck row does not tie context to checkContext: ${row}`)
+})
+
+test('r1-g4-d7d: the concludeCheck row states the outcome for a sha that is not the PR head (published: false)', () => {
+  const row = g4Row('concludeCheck')
+  assert.ok(row, 'concludeCheck row not found')
+  assert.ok(row.includes('published: false'), `blind item 7: concludeCheck row states no non-head-sha outcome: ${row}`)
+})
+
+test('r1-g4-d7e: the merge row states its return shape { merged, pr, strategy }', () => {
+  const row = g4Row('merge')
+  assert.ok(row, 'merge row not found')
+  assert.ok(row.includes('{ merged, pr, strategy }'), `blind item 7: merge row states no return shape: ${row}`)
+})
+
+test('r1-g4-d7f: the closeAndCascade row states what stoppedAt holds, null included', () => {
+  const row = g4Row('closeAndCascade')
+  assert.ok(row, 'closeAndCascade row not found')
+  assert.match(row, /stoppedAt.*\bnull\b/, `blind item 7: closeAndCascade row does not say what stoppedAt holds: ${row}`)
+})
+
+test('r1-g4-d7g: the closeAndCascade row states doneState and its default', () => {
+  const row = g4Row('closeAndCascade')
+  assert.ok(row, 'closeAndCascade row not found')
+  assert.match(row, /doneState.*\bdefault/i, `blind item 7: closeAndCascade row does not define doneState: ${row}`)
+})
+
+test('r1-g4-d7h: the closeAndCascade row states how parents and children are modelled', () => {
+  const row = g4Row('closeAndCascade')
+  assert.ok(row, 'closeAndCascade row not found')
+  assert.match(row, /parent.*\b(field|link|relation|modell?ed)\b/i, `blind item 7: closeAndCascade row does not say how parent/child is modelled: ${row}`)
+})
+
+test('r1-g4-d7i: the guide states what `repo` means on a local host', () => {
+  const hit = g4Guide()
+    .split('\n')
+    .find(l => /`repo`/.test(l) && /\blocal\b/i.test(l))
+  assert.ok(hit, 'blind item 7: no line states what `repo` means on a local host')
+})
+
+test('r1-g4-d8: one guide line warns that EVERY .mjs in scripts/host/ is loaded, so a helper or test placed there is recorded broken', () => {
+  const hit = g4Guide()
+    .split('\n')
+    .find(l => /\bevery\b/i.test(l) && /\.mjs/.test(l) && /helper/i.test(l) && /\btests?\b/i.test(l) && /broken/i.test(l))
+  assert.ok(hit, 'blind item 8: no single line states every .mjs in scripts/host/ is loaded, so helpers or tests there are recorded broken')
+})
+
+test('r1-g4-d9: the guide names each workflow skill by id, not an unqualified blanket phrase', () => {
+  const g = g4Guide()
+  for (const skill of ['cycle', 'green-fix', 'implement-phase', 'red-spec', 'red-verify', 'review-phase']) {
+    assert.match(g, new RegExp('`' + skill + '`'), `guide does not name skill: ${skill}`)
+  }
+})
+
+test('r1-g4-c4: control (existing) — the guide ships byte-identical in the dataset mirror', () => {
+  assert.equal(readFileSync(G4_GUIDE_PATH, 'utf8'), readFileSync(G4_GUIDE_MIRROR, 'utf8'))
+})
+
+test('r1-g4-c5: control (existing) — ADR-018 default: shipped registry (github present), nothing declared resolves github/github', () => {
+  const r = resolveHosts({ text: '' })
+  assert.equal(r.pmTool, 'github')
+  assert.equal(r.codeHost, 'github')
+})
+
+test('r1-g4-c6: control (existing) — host/ ships byte-identical in every workflow skill that runs a cycle script', () => {
+  let first
+  for (const skill of SKILLS) {
+    const dir = join(REPO, '.claude', 'skills', `pair-workflow-${skill}`, 'scripts', 'host')
+    const files = readdirSync(dir).filter(f => f.endsWith('.mjs')).sort()
+    const bundle = files.map(f => readFileSync(join(dir, f), 'utf8')).join('\u0000')
+    if (first === undefined) first = bundle
+    else assert.equal(bundle, first, `host/ diverged in pair-workflow-${skill}`)
+  }
+})
+
+test('r1-g4-mirror: the guide and its dataset mirror stay byte-identical', () => {
+  assert.equal(readFileSync(G4_GUIDE_PATH, 'utf8'), readFileSync(G4_GUIDE_MIRROR, 'utf8'))
+})
