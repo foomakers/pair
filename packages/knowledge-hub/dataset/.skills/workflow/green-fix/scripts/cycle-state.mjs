@@ -169,6 +169,92 @@ const VOLATILE = new Set(['contractPath', 'createdAt', '$meta', 'contractHash', 
 export const contractHash = contract =>
   sha256(canonical(Object.fromEntries(Object.entries(contract ?? {}).filter(([k]) => !VOLATILE.has(k)))))
 export const inputsDigest = inputs => sha256(canonical(inputs ?? {}))
+// ── contract shape (US-514 T-5, AC5) — checked BEFORE validation, never after ───────────────
+// A DELIBERATE duplicate of `red-snapshot.mjs`'s own `contractErrors`/`isRelPath`/`SHA256_RE`
+// (the canonical definitions, and the ones `verify`/`seal` apply): this file ships beside
+// `cycle-state.mjs` in every skill that ships it, but NOT beside `red-spec`'s or `cycle`'s own
+// copy — importing it there would mean shipping a second file this story does not otherwise
+// touch. `publish`'s own shape check below has to run wherever a red-spec handoff is published,
+// so the check travels with the file that already does. Parity with the canonical definition is
+// a fixture test (`cycle-state.test.mjs`), not a runtime guarantee — the same mitigation T-1's
+// two policy parsers use.
+const SHA256_RE_LOCAL = /^sha256:[0-9a-f]{64}$/
+const isRelPathLocal = p =>
+  typeof p === 'string' &&
+  p.length > 0 &&
+  !p.startsWith('/') &&
+  !p.startsWith('-') &&
+  !p.replace(/\/$/, '').split('/').some(seg => seg === '' || seg === '.' || seg === '..')
+const artifactBaselineLocal = a => String(a?.baseline ?? 'red')
+export function contractErrors(c) {
+  const errs = []
+  if (!c || typeof c !== 'object' || Array.isArray(c)) return ['contract must be an object']
+  const scope = c.fixScope
+  if (!scope || typeof scope !== 'object') errs.push('fixScope missing')
+  else {
+    if (!String(scope.owner ?? '').trim()) errs.push('fixScope.owner missing')
+    if (!['behavioral', 'structural', 'test'].includes(scope.mode)) errs.push('fixScope.mode must be behavioral | structural | test')
+    if (scope.mode === 'test') {
+      if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length !== 0) errs.push('fixScope.allowedPaths must be an empty array for mode test')
+    } else if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length === 0) errs.push('fixScope.allowedPaths must be a non-empty array')
+    else for (const p of scope.allowedPaths) if (!isRelPathLocal(p)) errs.push(`fixScope.allowedPaths has an invalid path: ${JSON.stringify(p)}`)
+  }
+  if (c.testExempt === true) {
+    if (!String(c.exemptionRationale ?? '').trim()) errs.push('testExempt requires exemptionRationale')
+    return errs
+  }
+  if (!Array.isArray(c.redTests) || c.redTests.length === 0) errs.push('redTests must be a non-empty array')
+  else {
+    const seen = new Set()
+    let witnesses = 0
+    for (const [i, a] of c.redTests.entries()) {
+      const kind = a?.kind ?? 'test'
+      const baseline = artifactBaselineLocal(a)
+      if (!isRelPathLocal(a?.file)) errs.push(`redTests[${i}].file must be a repository-relative path`)
+      else if (seen.has(a.file)) errs.push(`redTests[${i}].file is listed twice: ${a.file}`)
+      else seen.add(a.file)
+      if (!SHA256_RE_LOCAL.test(String(a?.sha256 ?? ''))) errs.push(`redTests[${i}].sha256 must be sha256:<64 hex>`)
+      if (!['red', 'pass'].includes(baseline)) errs.push(`redTests[${i}].baseline must be red | pass`)
+      if (kind === 'test') {
+        if (!String(a?.command ?? '').trim()) errs.push(`redTests[${i}] (test) needs its ${baseline === 'pass' ? 'passing' : 'failing'} command`)
+        const observed = String(a?.observed ?? '')
+        if (baseline === 'pass') {
+          if (/fail/i.test(observed) || !/pass|ok|green|\d+\/\d+/i.test(observed)) errs.push(`redTests[${i}] (control) needs an observed PASSING run, not ${JSON.stringify(observed)}`)
+        } else if (!/fail/i.test(observed)) errs.push(`redTests[${i}] (test) needs an observed RED failure`)
+        else witnesses++
+      } else if (kind === 'fixture') {
+        if (!String(a?.consumedBy ?? '').trim()) errs.push(`redTests[${i}] (fixture) needs consumedBy`)
+      } else errs.push(`redTests[${i}].kind must be test | fixture`)
+    }
+    for (const [i, a] of c.redTests.entries())
+      if ((a?.kind ?? 'test') === 'fixture' && a.consumedBy) {
+        const consumer = c.redTests.find(t => t.file === a.consumedBy && (t.kind ?? 'test') === 'test')
+        if (!consumer) errs.push(`redTests[${i}] (fixture) consumedBy does not name a listed RED test: ${a.consumedBy}`)
+      }
+    if (witnesses === 0 && scope?.mode !== 'test' && !errs.some(e => /RED failure/.test(e))) errs.push('redTests needs at least one red witness (baseline red, observed failing) — a contract made only of controls proves nothing')
+  }
+  if (c.matrix !== undefined) {
+    if (!Array.isArray(c.matrix)) errs.push('matrix must be an array')
+    else {
+      const ids = new Set()
+      for (const [i, row] of c.matrix.entries()) {
+        if (!String(row?.id ?? '').trim()) errs.push(`matrix[${i}].id is required (stable row id)`)
+        else if (ids.has(row.id)) errs.push(`matrix[${i}].id is listed twice: ${row.id}`)
+        else ids.add(row.id)
+        if (!['witness', 'control', 'boundary', 'interaction', 'not-applicable'].includes(row?.kind)) errs.push(`matrix[${i}].kind must be witness | control | boundary | interaction | not-applicable`)
+        if (!['red', 'pass'].includes(row?.baseline)) errs.push(`matrix[${i}].baseline must be red | pass`)
+        if (!Array.isArray(row?.covers) || row.covers.length === 0) errs.push(`matrix[${i}].covers must name at least one obligation`)
+        if (row?.kind === 'not-applicable' && !String(row?.rationale ?? '').trim()) errs.push(`matrix[${i}].rationale is required for a not-applicable row`)
+      }
+    }
+  }
+  if (c.reattest !== undefined) {
+    const r = c.reattest
+    if (!r || typeof r !== 'object' || Array.isArray(r)) errs.push('reattest must be an object when present')
+    else if (!String(r.reason ?? '').trim()) errs.push('reattest.reason missing')
+  }
+  return errs
+}
 // ── effective inputs of a card (US-486 AC-10/AC-12) ────────────────────────────────────────
 // The digest every realization stamps into `$inputs`: the cycle state compares it with the one
 // persisted in the last review handoff, and a change re-validates the review evidence instead of
@@ -1385,6 +1471,23 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   // the first — and a new attempt never lands on top of an earlier one. The earlier attempts' files
   // are checked intact against the hash their own handoff recorded: a rejection names its contract,
   // and a repair that overwrote it would leave the rejection pointing at bytes nobody validated.
+  // US-514 T-5 (AC5): a shape error never reaches the validator, and never consumes a repair
+  // attempt — checked BEFORE any of the attempt/overwrite bookkeeping below. Only when the
+  // contract is actually on disk and parseable: a test naming a fictitious `contractPath` (never
+  // written) is a different kind of fixture and stays exactly as it was.
+  if (skill === 'red-spec' && data.status === 'red') {
+    const cp0 = String(data.contractPath ?? '').trim()
+    if (cp0 && existsSync(cp0)) {
+      let parsed
+      try {
+        parsed = JSON.parse(readFileSync(cp0, 'utf8'))
+      } catch {
+        return { published: false, reason: 'contract-invalid', errors: ['contract file is not valid JSON'] }
+      }
+      const shapeErrs = contractErrors(parsed)
+      if (shapeErrs.length) return { published: false, reason: 'contract-invalid', errors: shapeErrs }
+    }
+  }
   if (skill === 'red-spec') {
     const cp = String(data.contractPath ?? '').trim()
     if (cp && n > 1) {

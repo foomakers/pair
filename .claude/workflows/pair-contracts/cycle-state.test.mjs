@@ -933,6 +933,51 @@ test('readHandoffs ignores contracts, drafts, locks and the attempt suffix is pa
   assert.deepEqual(two.map(h => h.attempt), [1, 2])
 })
 
+// ── US-514 T-5: shape checked BEFORE validation — publish refuses an invalid contract, typed,
+// listing each error, and never lets it reach the validator (#491, #492 r1-g4 reproduced) ────
+test('T-5 (AC5): publish refuses a red-spec contract with a `baseline: "n/a"` artifact (#491) — typed, before it reaches red-verify', () => {
+  const { dir } = runDir()
+  const contractPath = join(dir, 'a0-red-contract.json')
+  writeFileSync(contractPath, JSON.stringify({
+    fixScope: { owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] },
+    redTests: [{ file: 'test/a.test.ts', sha256: `sha256:${'1'.repeat(64)}`, command: 'node --test', baseline: 'n/a', observed: 'FAIL' }],
+  }))
+  const f = writeDraft(dir, { run: 'run-1', story: '42', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath, contractHash: contractHash(JSON.parse(readFileSync(contractPath, 'utf8'))) })
+  const out = publish({ dir, file: f, phase: 'a0', skill: 'red-spec', workflowVersion: V })
+  assert.equal(out.published, false)
+  assert.equal(out.reason, 'contract-invalid')
+  assert.ok(out.errors.some(e => /baseline must be red \| pass/.test(e)), JSON.stringify(out.errors))
+  assert.equal(existsSync(join(dir, 'a0-red-spec.json')), false)
+})
+
+test('T-5 (AC5): publish refuses a fixture artifact with a prose `consumedBy` (#492 r1-g4) — no repair attempt is consumed', () => {
+  const { dir } = runDir()
+  const contractPath = join(dir, 'a0-red-contract.json')
+  writeFileSync(contractPath, JSON.stringify({
+    fixScope: { owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] },
+    redTests: [
+      { file: 'test/a.test.ts', sha256: `sha256:${'1'.repeat(64)}`, command: 'node --test', baseline: 'red', observed: 'FAIL 1 of 1' },
+      { file: 'test/fixture.json', kind: 'fixture', sha256: `sha256:${'2'.repeat(64)}`, consumedBy: 'the test above, read informally' },
+    ],
+  }))
+  const f = writeDraft(dir, { run: 'run-1', story: '42', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath, contractHash: contractHash(JSON.parse(readFileSync(contractPath, 'utf8'))) })
+  const out = publish({ dir, file: f, phase: 'a0', skill: 'red-spec', workflowVersion: V })
+  assert.equal(out.published, false)
+  assert.equal(out.reason, 'contract-invalid')
+  assert.ok(out.errors.some(e => /does not name a listed RED test/.test(e)), JSON.stringify(out.errors))
+})
+
+test('T-5 (AC5): a well-formed contract on disk publishes cleanly (control)', () => {
+  const { dir } = runDir()
+  const contractPath = join(dir, 'a0-red-contract.json')
+  writeFileSync(contractPath, JSON.stringify({
+    fixScope: { owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] },
+    redTests: [{ file: 'test/a.test.ts', sha256: `sha256:${'1'.repeat(64)}`, command: 'node --test', baseline: 'red', observed: 'FAIL 1 of 1' }],
+  }))
+  const f = writeDraft(dir, { run: 'run-1', story: '42', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath, contractHash: contractHash(JSON.parse(readFileSync(contractPath, 'utf8'))) })
+  assert.equal(publish({ dir, file: f, phase: 'a0', skill: 'red-spec', workflowVersion: V }).published, true)
+})
+
 // ── US-479 T-19: schema 3 / workflow 4.0.0 / metrics schema 1 (DT-11/12/17/33) ─────────────
 test('T-19: schema is pinned at 3, metrics view at 1, and the new non-ready statuses are exactly the four ADR-024-amendment ones', () => {
   assert.equal(SCHEMA_VERSION, 3)
@@ -4189,10 +4234,19 @@ test('US-506 T-3 c2 (control, AC4/AC5): a PR-entry cycle and a run on the sealed
 // ══ US-506 T-4 — a repair is checked against the LATEST rejection; every contract attempt is its own file ══
 // US-487's run: attempt 2's repair was checked against attempt 1's rejection (a cumulative `changedRows`
 // was forced), and a repair wrote over the contract the rejection named.
+// US-514 T-5: publish now shape-checks any REAL file at `contractPath` (`contractErrors`), so
+// these fixtures — testing attempt-naming/supersede bookkeeping, never shape — carry a minimal
+// well-formed contract underneath whatever extra bookkeeping fields (`attempt`, `rows`, …) a
+// caller adds; `body` layers ON TOP, so a caller that needs to test shape itself still can.
+const VALID_CONTRACT_SHAPE = {
+  fixScope: { owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] },
+  redTests: [{ file: 'test/a.test.ts', sha256: `sha256:${'1'.repeat(64)}`, command: 'node --test', baseline: 'red', observed: 'FAIL 1 of 1' }],
+}
 const writeContract = (dir, name, body) => {
+  const full = { ...VALID_CONTRACT_SHAPE, ...body }
   const path = join(dir, name)
-  writeFileSync(path, JSON.stringify(body))
-  return { path, hash: contractHash(body) }
+  writeFileSync(path, JSON.stringify(full))
+  return { path, hash: contractHash(full) }
 }
 const rejectionOf = rows => rows.map(rowId => ({ rowId, location: 'test/a.test.ts:3', severity: 'Major', description: `row ${rowId} cannot fail`, recommendation: 'fix the row' }))
 function rejectedTwice() {
@@ -4428,12 +4482,14 @@ test('US-506 T-6 c2 (control, AC10): an executed, discriminating witness and a p
 test('US-506 F-4 (AC5 × AC7): an in-flight run whose pre-#506 repair overwrote the shared contract file publishes its next repair; a new-rule overwrite is still refused', () => {
   const { dir } = runDir()
   const shared = join(dir, 'a0-red-contract.json')
-  writeFileSync(shared, JSON.stringify({ attempt: 1 }))
-  redSpec(dir, 'a0', { contractPath: shared, contractHash: contractHash({ attempt: 1 }) })
+  const body1 = { ...VALID_CONTRACT_SHAPE, attempt: 1 }
+  writeFileSync(shared, JSON.stringify(body1))
+  redSpec(dir, 'a0', { contractPath: shared, contractHash: contractHash(body1) })
   redVerify(dir, 'a0', { verified: false, sealed: false, snapshot: undefined, reproduced: undefined, findings: rejectionOf(['row-1']) }, { predecessor: 'a0-red-spec' })
   // attempt 2 as the pre-#506 engine published it: the SAME file, rewritten (no attempt-file rule then)
-  writeFileSync(shared, JSON.stringify({ attempt: 2 }))
-  writeFileSync(join(dir, 'a0-red-spec.attempt-2.json'), JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: shared, contractHash: contractHash({ attempt: 2 }), changedRows: ['row-1'], schemaVersion: SCHEMA_VERSION, workflowVersion: V, seq: 3, attempt: 2, predecessor: 'a0-red-verify' }))
+  const body2 = { ...VALID_CONTRACT_SHAPE, attempt: 2 }
+  writeFileSync(shared, JSON.stringify(body2))
+  writeFileSync(join(dir, 'a0-red-spec.attempt-2.json'), JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'repair', contractPath: shared, contractHash: contractHash(body2), changedRows: ['row-1'], schemaVersion: SCHEMA_VERSION, workflowVersion: V, seq: 3, attempt: 2, predecessor: 'a0-red-verify' }))
   redVerify(dir, 'a0', { verified: false, sealed: false, snapshot: undefined, reproduced: undefined, findings: rejectionOf(['row-2']) }, { predecessor: 'a0-red-spec', attempt: 2 })
   assert.deepEqual(pick(resolve({ dir, workflowVersion: V, policy: { ...POLICY, redRepairs: 2 }, entry: 'fresh' }).next, 'step', 'mode', 'attempt'), { step: 'prepare', mode: 'repair', attempt: 3 })
   const c3 = writeContract(dir, 'a0-red-contract.attempt-3.json', { attempt: 3 })
