@@ -2782,3 +2782,235 @@ test('US-506 T-8: the coordinator skill resumes a STALLED stage once on the same
     assert.match(body, /a second failure of the step, of either kind, ends the cycle `failed-<step>`/)
   }
 })
+
+// ══ US-514 r1-g1 (findings r0-1, r0-2) — ONE owner for what blocks a review finding: a FLOOR ═══════
+// Revised AC1 (maintainer, 2026-09-24): `## Blocking Severities` declares a severity FLOOR compared by
+// RANK (policy field `blockingFloor`, default `Minor`), the same rule as `severityFloor` /
+// `--severity-floor` — no list, no list-vs-floor mapping, no conflict error. `publish` in
+// `cycle-state.mjs` derives an OPEN, non-question finding's `blocking` = rank(severity) >= rank(floor),
+// ranked by the draft's own `severityRanks` (the template contract's ranks the reviewer ranked with)
+// or, absent them, pair's default table (Critical/Blocker > Major > Minor > Questions); a severity no
+// rank covers blocks (fail-safe). Every path that feeds publish hands it the SAME policy it dispatched.
+// Hermetic: every script spawn gets a `gh` that cannot exist (PAIR_GH_BIN → ENOENT) and a PATH whose
+// first entry is a `gh` trap (any call is logged, the suite fails) followed by system dirs only.
+import { after as us514After } from 'node:test'
+import { dirname as us514Dirname } from 'node:path'
+const US514_REPO = fileURLToPath(new URL('../../../', import.meta.url))
+const US514_STATE_CLI = join(US514_REPO, '.claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs')
+const US514_DISPATCH_CLI = join(US514_REPO, '.claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs')
+const US514_V = '4.0.1'
+const US514_SHA = c => c.repeat(40)
+const US514_POLICY = { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 }
+const US514_CARD = { id: '42', title: 'T', branch: 'feature/US-42-x', prNumber: 7 }
+const US514_VERIFY_NEXT = { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1, base: US514_SHA('a'), pr: 7 }
+// The review template vocabulary of the batch fixture: it spells the top severity `Blocker`, not `Critical`.
+const US514_TEMPLATE_RANKS = { Blocker: 3, Major: 2, Minor: 1 }
+
+const US514_NO_GH = join(tmpdir(), 'us514-hermetic-no-gh', 'gh')
+// A `gh` trap first on PATH (any call is logged and fails), then only the system dirs `git` lives in.
+const US514_TRAP_DIR = mkdtempSync(join(tmpdir(), 'us514-gh-trap-'))
+const US514_TRAP_LOG = join(US514_TRAP_DIR, 'calls.log')
+writeFileSync(US514_TRAP_LOG, '')
+writeFileSync(join(US514_TRAP_DIR, 'gh'), `#!/bin/sh\necho "$@" >> ${JSON.stringify(US514_TRAP_LOG)}\nexit 1\n`)
+chmodSync(join(US514_TRAP_DIR, 'gh'), 0o755)
+const US514_HERMETIC_ENV = { ...process.env, PAIR_GH_BIN: US514_NO_GH, PATH: [US514_TRAP_DIR, us514Dirname(process.execPath), '/usr/bin', '/bin'].join(':') }
+us514After(() => assert.equal(readFileSync(US514_TRAP_LOG, 'utf8'), '', 'a script reached `gh` — the suite is not hermetic'))
+const us514Run = (cli, args) => {
+  const r = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8', env: US514_HERMETIC_ENV })
+  let json = null
+  try {
+    json = JSON.parse(r.stdout.trim().split('\n').pop())
+  } catch {}
+  return { status: r.status, json, stdout: r.stdout, stderr: r.stderr }
+}
+
+function us514RunDir() {
+  const root = mkdtempSync(join(tmpdir(), 'us514-'))
+  const dir = join(root, '.pair', 'working', 'runs', 'story-42', '42')
+  mkdirSync(dir, { recursive: true })
+  mkdirSync(join(root, '.pair', 'adoption', 'tech'), { recursive: true })
+  writeFileSync(join(root, '.pair', 'adoption', 'tech', 'way-of-working.md'), '## Assignment\n\n- `default-assignee`: `rucka` — the maintainer.\n')
+  return { root, dir }
+}
+const us514Evidenced = (id, severity, blocking) => ({ id, severity, location: 'src/a.ts:1', description: 'd', recommendation: 'r', blocking, transition: 'open', kind: 'defect', reproducer: { command: 'node --test test/a.test.mjs' } })
+// A first review of a PR-entry cycle, ready on its reviewed head: `resolve` answers `done` exactly
+// when no stored finding is blocking. `extra` carries draft fields (e.g. `severityRanks`).
+function us514PublishReview(dir, findings, policyArgs, extra = {}) {
+  const file = join(dir, 'draft-r0-review-phase.json')
+  writeFileSync(file, JSON.stringify({ run: 'story-42', story: '42', pr: 7, branch: 'feature/US-42-x', phase: 'r0', skill: 'review-phase', inputHead: US514_SHA('a'), mode: 'first', reviewedHead: US514_SHA('c'), verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: US514_SHA('c') }, findings, ...extra }))
+  const r = us514Run(US514_STATE_CLI, ['publish', '--dir', dir, '--file', file, '--phase', 'r0', '--skill', 'review-phase', '--workflowVersion', US514_V, '--pr', '7', ...policyArgs])
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  return JSON.parse(readFileSync(join(dir, 'r0-review-phase.json'), 'utf8'))
+}
+const us514ResolveNext = (dir, policy) => {
+  const r = us514Run(US514_STATE_CLI, ['resolve', '--dir', dir, '--workflowVersion', US514_V, '--policy', JSON.stringify(policy), '--entry', 'pr', '--pr', '7', '--story', '42'])
+  assert.ok(r.json, r.stdout + r.stderr)
+  return r.json.next
+}
+// The `$policy=<json>` a packet renders, parsed by brace depth (it is followed by more arguments).
+const us514PolicyOf = prompt => {
+  const i = prompt.indexOf('$policy=')
+  assert.ok(i >= 0, 'the packet renders no $policy')
+  const start = i + '$policy='.length
+  let depth = 0
+  for (let j = start; j < prompt.length; j++) {
+    if (prompt[j] === '{') depth++
+    else if (prompt[j] === '}' && --depth === 0) return JSON.parse(prompt.slice(start, j + 1))
+  }
+  throw new Error('unterminated $policy')
+}
+const us514Packet = (policy, extra = []) => us514Run(US514_DISPATCH_CLI, ['packet', '--next', JSON.stringify(US514_VERIFY_NEXT), '--card', JSON.stringify(US514_CARD), '--policy', JSON.stringify(policy), '--run', 'story-42', '--workflow-version', US514_V, ...extra])
+
+// ── r0-1: the documented publish command hands publish the dispatched policy ─────────────────────
+test('US-514 r1-g1 g1-w1 (r0-1): review-phase Step 6 publish command passes `--policy \'$policy\'` — installed and dataset copy', () => {
+  for (const rel of ['.claude/skills/pair-workflow-review-phase/SKILL.md', 'packages/knowledge-hub/dataset/.skills/workflow/review-phase/SKILL.md']) {
+    const text = readFileSync(join(US514_REPO, rel), 'utf8')
+    const step6 = text.split('\n').find(l => /^6\. Publish the handoff/.test(l))
+    assert.ok(step6, `${rel}: no Step 6 publish line`)
+    const cmd = /`cycle-state\.mjs publish ([^`]*)`/.exec(step6)
+    assert.ok(cmd, `${rel}: Step 6 names no \`cycle-state.mjs publish\` command`)
+    assert.match(cmd[1], /(^|\s)--policy\s+'?\$policy'?(\s|$)/, `${rel}: the publish command drops the dispatched policy: ${cmd[1]}`)
+  }
+})
+
+test('US-514 r1-g1 g1-w11 (r0-1): review-phase Step 6 handoff carries `severityRanks` — the ranks publish compares the floor with — installed and dataset copy', () => {
+  for (const rel of ['.claude/skills/pair-workflow-review-phase/SKILL.md', 'packages/knowledge-hub/dataset/.skills/workflow/review-phase/SKILL.md']) {
+    const step6 = readFileSync(join(US514_REPO, rel), 'utf8').split('\n').find(l => /^6\. Publish the handoff/.test(l))
+    assert.ok(step6, `${rel}: no Step 6 publish line`)
+    const fields = /^6\. Publish the handoff \((.*?)\) with `cycle-state\.mjs publish/.exec(step6)
+    assert.ok(fields, `${rel}: Step 6 lists no handoff fields before its publish command`)
+    assert.match(fields[1], /`severityRanks`/, `${rel}: the handoff Step 6 publishes carries no \`severityRanks\``)
+  }
+})
+
+test('US-514 r1-g1 g1-c1 (r0-1): CLI publish WITH `--policy` {blockingFloor: Major} stores a Minor finding non-blocking, keeps a Major blocking, and resolve (same policy) is done only once the Major is gone', () => {
+  const policy = { ...US514_POLICY, blockingFloor: 'Major' }
+  const { dir } = us514RunDir()
+  const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Minor', true)], ['--policy', JSON.stringify(policy)])
+  assert.equal(stored.findings[0].blocking, false)
+  assert.equal(us514ResolveNext(dir, policy).step, 'done')
+  const { dir: d2 } = us514RunDir()
+  const stored2 = us514PublishReview(d2, [us514Evidenced('r0-1', 'Major', false), us514Evidenced('r0-2', 'Minor', true)], ['--policy', JSON.stringify(policy)])
+  assert.deepEqual(stored2.findings.map(f => f.blocking), [true, false])
+  assert.notEqual(us514ResolveNext(d2, policy).step, 'done')
+})
+
+test('US-514 r1-g1 g1-c2 (r0-1/r0-2, control): CLI publish with NO policy keeps the KB default — a Minor finding blocks, resolve is not done', () => {
+  const { dir } = us514RunDir()
+  const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Minor', false)], [])
+  assert.equal(stored.findings[0].blocking, true)
+  assert.notEqual(us514ResolveNext(dir, US514_POLICY).step, 'done')
+})
+
+test('US-514 r1-g1 g1-c8 (r0-1/r0-2, control): no floor ⇒ the KB default floor `Minor` — a defect filed `Questions` ranks below it and does not block, a `Critical` one does', () => {
+  const { dir } = us514RunDir()
+  const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Questions', true), us514Evidenced('r0-2', 'Critical', false)], ['--policy', JSON.stringify(US514_POLICY)])
+  assert.deepEqual(stored.findings.map(f => f.blocking), [false, true])
+})
+
+// ── r0-2: the floor is compared by RANK, in the active vocabulary, never by name ────────────────
+test('US-514 r1-g1 g1-w9 (r0-2): no floor, template vocabulary Blocker/Major/Minor — an open Blocker defect stays blocking (with and without the draft`s `severityRanks`) and resolve is not done', () => {
+  for (const extra of [{ severityRanks: US514_TEMPLATE_RANKS }, {}]) {
+    const { dir } = us514RunDir()
+    const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Blocker', false)], ['--policy', JSON.stringify({ maxFixRounds: 3 })], extra)
+    assert.equal(stored.findings[0].blocking, true, `Blocker ranks above the default floor Minor (${JSON.stringify(extra)})`)
+    assert.notEqual(us514ResolveNext(dir, { maxFixRounds: 3 }).step, 'done', 'a Blocker must not ship')
+  }
+})
+
+test('US-514 r1-g1 g1-w10 (r0-2): a vocabulary with its OWN names is ranked by the draft`s `severityRanks` (keys listed out of rank order) — floor Serious and floor Showstopper', () => {
+  const ranks = { Cosmetic: 1, Showstopper: 3, Serious: 2 }
+  const findings = [us514Evidenced('r0-1', 'Showstopper', false), us514Evidenced('r0-2', 'Serious', false), us514Evidenced('r0-3', 'Cosmetic', true)]
+  const { dir } = us514RunDir()
+  const serious = us514PublishReview(dir, findings, ['--policy', JSON.stringify({ ...US514_POLICY, blockingFloor: 'Serious' })], { severityRanks: ranks })
+  assert.deepEqual(serious.findings.map(f => f.blocking), [true, true, false])
+  const { dir: d2 } = us514RunDir()
+  const top = us514PublishReview(d2, findings, ['--policy', JSON.stringify({ ...US514_POLICY, blockingFloor: 'Showstopper' })], { severityRanks: ranks })
+  assert.deepEqual(top.findings.map(f => f.blocking), [true, false, false])
+})
+
+test('US-514 r1-g1 g1-b1 (r0-2, boundary): a severity no rank covers blocks (fail-safe), and an unrankable floor never releases a finding', () => {
+  const { dir } = us514RunDir()
+  const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Weird', false)], ['--policy', JSON.stringify({ ...US514_POLICY, blockingFloor: 'Major' })], { severityRanks: US514_TEMPLATE_RANKS })
+  assert.equal(stored.findings[0].blocking, true)
+  const { dir: d2 } = us514RunDir()
+  const stored2 = us514PublishReview(d2, [us514Evidenced('r0-1', 'Minor', false)], ['--policy', JSON.stringify({ ...US514_POLICY, blockingFloor: 'Serious' })])
+  assert.equal(stored2.findings[0].blocking, true)
+})
+
+// ── r0-2: an explicit floor rides in the one policy, as a floor — never mapped into a list ──────
+test('US-514 r1-g1 g1-w2 (r0-2): packet `--severity-floor <F>` renders $policy.blockingFloor = F verbatim and no severity list — for Major and Minor, on the default and on a custom (out-of-rank-order) vocabulary', () => {
+  const cases = [
+    { floor: 'Major', extra: [] },
+    { floor: 'Minor', extra: [] },
+    { floor: 'Major', extra: ['--severities', 'Minor, Blocker, Major', '--ranks', JSON.stringify(US514_TEMPLATE_RANKS)] },
+  ]
+  for (const { floor, extra } of cases) {
+    const r = us514Packet(US514_POLICY, ['--severity-floor', floor, ...extra])
+    assert.equal(r.status, 0, r.stdout + r.stderr)
+    const policy = us514PolicyOf(r.json.prompt)
+    assert.deepEqual(policy, { ...US514_POLICY, blockingFloor: floor }, `floor ${floor} ${extra.join(' ')}`)
+    assert.ok(r.json.prompt.includes(`$floor=${floor} `), `the reviewer's $floor is the policy's floor (${floor})`)
+  }
+})
+
+test('US-514 r1-g1 g1-w10b (r0-2): packet with NO `--severity-floor` and a declared `policy.blockingFloor` renders that floor as $floor — one value, never a second default', () => {
+  const policy = { ...US514_POLICY, blockingFloor: 'Major' }
+  const r = us514Packet(policy)
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.deepEqual(us514PolicyOf(r.json.prompt), policy)
+  assert.ok(r.json.prompt.includes('$floor=Major '), 'the rendered $floor disagrees with the policy floor')
+  // an explicit flag is the same field, written once: it replaces the declared floor, no conflict error
+  const r2 = us514Packet(policy, ['--severity-floor', 'Critical'])
+  assert.equal(r2.status, 0, r2.stdout + r2.stderr)
+  assert.deepEqual(us514PolicyOf(r2.json.prompt), { ...US514_POLICY, blockingFloor: 'Critical' })
+  assert.ok(r2.json.prompt.includes('$floor=Critical '))
+})
+
+test('US-514 r1-g1 g1-c4 (r0-2, control): no explicit floor ⇒ the policy is rendered verbatim — the DEFAULT floor is never written into it', () => {
+  const r = us514Packet(US514_POLICY)
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.deepEqual(us514PolicyOf(r.json.prompt), US514_POLICY)
+})
+
+test('US-514 r1-g1 g1-w4 (r0-2, interaction): floor Major, no declaration — the packet\'s own $policy handed to publish and resolve keeps a Minor finding non-blocking and the cycle done (origin/main behaviour)', () => {
+  const r = us514Packet(US514_POLICY, ['--severity-floor', 'Major'])
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const policy = us514PolicyOf(r.json.prompt)
+  const { dir } = us514RunDir()
+  const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Minor', false)], ['--policy', JSON.stringify(policy)])
+  assert.equal(stored.findings[0].blocking, false)
+  assert.equal(us514ResolveNext(dir, policy).step, 'done')
+})
+
+test('US-514 r1-g1 g1-w5p (r0-2, interaction): floor Major on the FIRST review (template contract unresolved, $contractSpec) — a Blocker filed in the template vocabulary, published under the packet`s own $policy, blocks and resolve is not done', () => {
+  const r = us514Packet(US514_POLICY, ['--severity-floor', 'Major'])
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.ok(r.json.prompt.includes('$contractSpec='), 'the first review resolves the template contract itself')
+  const policy = us514PolicyOf(r.json.prompt)
+  for (const extra of [{ severityRanks: US514_TEMPLATE_RANKS }, {}]) {
+    const { dir } = us514RunDir()
+    const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Blocker', false), us514Evidenced('r0-2', 'Minor', true)], ['--policy', JSON.stringify(policy)], extra)
+    assert.deepEqual(stored.findings.map(f => f.blocking), [true, false], JSON.stringify(extra))
+    assert.notEqual(us514ResolveNext(dir, policy).step, 'done')
+  }
+})
+
+// ── the documented realizations say the same thing: a floor, never a list ─────────────────────────
+test('US-514 r1-g1 g1-w14 (r0-1/r0-2): the chain`s skills and the KB schema no longer document `blockingSeverities`; red-verify and the in-session reader name `blockingFloor` — installed and dataset copies', () => {
+  const docs = [
+    ['.claude/skills/pair-workflow-review-phase/SKILL.md', false],
+    ['packages/knowledge-hub/dataset/.skills/workflow/review-phase/SKILL.md', false],
+    ['.claude/skills/pair-workflow-red-verify/SKILL.md', true],
+    ['packages/knowledge-hub/dataset/.skills/workflow/red-verify/SKILL.md', true],
+    ['.claude/skills/pair-workflow-cycle/SKILL.md', true],
+    ['packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md', true],
+    ['.pair/knowledge/guidelines/collaboration/automation/automation-policy.md', false],
+    ['packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md', false],
+  ]
+  for (const [rel, namesFloor] of docs) {
+    const text = readFileSync(join(US514_REPO, rel), 'utf8')
+    assert.doesNotMatch(text, /blockingSeverities/, `${rel} still documents the retired severity list`)
+    if (namesFloor) assert.match(text, /blockingFloor/, `${rel} does not name the policy floor`)
+  }
+})

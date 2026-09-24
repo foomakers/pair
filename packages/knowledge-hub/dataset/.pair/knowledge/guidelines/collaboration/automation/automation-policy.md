@@ -359,32 +359,37 @@ risk:red: frontier
 
 A third, independent schema owner (US-514) — disjoint from every section above, all of which are `pair-loop`'s own policy. This one is read by the **delivery cycle** itself, both realizations (`pair-workflow-cycle`'s in-session coordinator, `pair-cli run --card`) and both roles that decide "does this block" (review-phase, red-verify). It answers two questions: which severities BLOCK, and — optionally — how many published handoffs a run may reach before it stops or warns.
 
+**Revised AC1 (maintainer 2026-09-24): a FLOOR, compared by RANK — the same rule as `severityFloor` / `--severity-floor` elsewhere in the chain, never a severity list.**
+
 ```markdown
 ## Blocking Severities
 
-Critical, Major
+Major
 max-dispatches: 40 block
 ```
 
-- **First line: a comma-separated list of severities**, each one of `Critical | Major | Minor` (`Questions` is never blocking by definition — a review finding filed as a question carries no defect to weigh at all, and is never listed here). A severity BLOCKS a finding or a contract gap when, and only when, it appears in this list; one that does not appear is recorded as a **non-blocking note** — the finding/gap is still reported, it simply does not refuse merge or refuse the seal.
-- **Optional second line: `max-dispatches: <positive integer> [warn|block]`** — a ceiling on the run's own published handoffs (a durable, cumulative count — every resume and every attempt is another file). `warn` is the mode when the word is omitted: at or above the ceiling, the cycle prints a warning naming the count and continues. `block` stops the run at the ceiling with the typed reason `max-dispatches`, naming the count and the recovery (`cycle-state.mjs migrate-acknowledge`).
+- **First line: ONE severity — the blocking floor**, one of `Critical | Major | Minor` (`Questions` is never blocking by definition — a review finding filed as a question carries no defect to weigh at all, and is never a valid floor). A finding or contract gap BLOCKS when its severity's RANK is `>=` the floor's rank — ranked by the template contract's own `severityRanks` (the vocabulary the reviewer ranked with, exact names) when one applies, else pair's default table (`Critical`/`Blocker` highest, `Questions` lowest, case-insensitive). A severity no rank covers blocks (fail-safe); a floor no rank covers releases nothing (fail-safe — every finding stays blocking). A comma-separated LIST on this line (the pre-revision shape) is malformed — see below.
+- **Optional second line: `max-dispatches: <positive integer> [warn|block]`** — a ceiling on the run's own published handoffs (a durable, cumulative count — every resume and every attempt is another file). `warn` is the mode when the word is omitted: at or above the ceiling, the cycle prints a warning naming the count and continues, and the coordinator RELAYS that warning to the operator (it is not silently swallowed). `block` stops the run at the ceiling with the typed reason `max-dispatches`, naming the count and the recovery (`cycle-state.mjs migrate-acknowledge`).
 
-### Fail-safe default — every severity blocks, no ceiling
+### Fail-safe default — the floor `Minor`, no ceiling
 
-**Absent file, absent section, or a section body containing only the severity line with no `max-dispatches` ⇒**:
+**Absent file or absent section ⇒**:
 
-- `blockingSeverities`: the KB default, `Critical, Major, Minor` — every severity blocks, exactly today's behaviour, byte for byte;
+- `blockingFloor`: the KB default, `Minor` — every severity except `Questions` blocks, exactly today's behaviour, byte for byte;
 - `maxDispatches`: none — no ceiling at all. A consumer **MUST NOT** invent a number (there was never a "40" a project could read off this file — the pre-US-514 ceiling was a hard-coded engine constant, never adoption).
 
-`.pair/adoption/` is delta-only (ADR-018 / D21): a project declares this section only to differ from the KB default. **pair itself declares nothing here**, and keeps "every severity blocks" — consistent with its own recommended-defaults posture throughout this file.
+`.pair/adoption/` is delta-only (ADR-018 / D21): a project declares this section only to differ from the KB default. **pair itself declares nothing here**, and keeps the floor `Minor` — consistent with its own recommended-defaults posture throughout this file.
 
 ### Malformed ⇒ HALT, naming the file and the offending line
 
 A consumer **MUST HALT** (`automation-policy-malformed`) rather than fall back to the default, when:
 
-1. the severity line is empty, or names a token other than `Critical`, `Major` or `Minor`;
-2. the `max-dispatches` line is not `<positive integer> [warn|block]` — a non-integer, zero, negative, or a third token that is neither `warn` nor `block`;
-3. more than one `max-dispatches` line is present.
+1. the section is **present but declares nothing** (an empty body) — naming the section, never the default;
+2. the floor line is empty, names a comma-separated LIST, or names a token other than `Critical`, `Major` or `Minor`;
+3. the `max-dispatches` line is not `<positive integer> [warn|block]` — a non-integer, zero, negative, or a third token that is neither `warn` nor `block`;
+4. more than one `max-dispatches` line is present.
+
+A declared policy still carrying the retired severity-LIST key (the pre-revision shape) is refused, typed — never silently ignored or honoured alongside `blockingFloor`.
 
 ### What this declaration does not encode
 

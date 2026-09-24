@@ -106,10 +106,27 @@ export const CAPS = { consecutiveRedirects: 3 }
 // A dead dispatch (the agent died, or returned a shape no stage can use) is retried with the SAME
 // prompt: every stage is re-entrant by construction, so the retry RESUMES. Policy data, so a
 // caller may narrow or widen it without a second rule living in the caller.
-// US-514 T-1/T-2: `blockingSeverities` is the KB default — `Critical, Major, Minor` — every
-// severity blocks, today's behaviour byte for byte. A project declares `## Blocking Severities`
-// only to differ (delta-only adoption, ADR-018/D21); pair itself declares nothing.
-export const POLICY_DEFAULTS = { deadDispatchRetries: 1, blockingSeverities: ['Critical', 'Major', 'Minor'] }
+// US-514 T-1/T-2 (revised AC1, maintainer 2026-09-24 — a FLOOR compared by RANK, never a list): the
+// KB default blocking floor is `Minor` — every severity except Questions blocks, today's behaviour
+// byte for byte. A project declares `## Blocking Severities` only to differ (delta-only adoption,
+// ADR-018/D21); pair itself declares nothing.
+export const POLICY_DEFAULTS = { deadDispatchRetries: 1 }
+export const DEFAULT_BLOCKING_FLOOR = 'Minor'
+// The severity vocabulary a review draft did NOT supply its own `severityRanks` for: pair's own
+// table (Critical/Blocker highest, Questions lowest), case-insensitive by name — the KB vocabulary
+// `Critical | Major | Minor | Questions` plus the historical `Blocker` alias for `Critical`. A
+// severity outside both this table and the draft's own ranks is unrankable and blocks (fail-safe).
+const DEFAULT_SEVERITY_RANKS = { critical: 4, blocker: 4, major: 3, minor: 2, questions: 1 }
+// Rank a severity by the review draft's OWN `severityRanks` (the template contract's exact names,
+// case-sensitive — a reviewer's vocabulary is exactly what it declares) when the draft supplies
+// one; otherwise pair's own case-insensitive default table. Returns `undefined` when the severity
+// is covered by neither — the caller's fail-safe (an unrankable value blocks).
+function rankOf(severity, draftRanks) {
+  if (draftRanks && typeof draftRanks === 'object' && !Array.isArray(draftRanks)) {
+    return Object.prototype.hasOwnProperty.call(draftRanks, severity) ? draftRanks[severity] : undefined
+  }
+  return DEFAULT_SEVERITY_RANKS[String(severity).toLowerCase()]
+}
 // ── transition context policy (US-486 AC-7) ────────────────────────────────────────────────
 // `next.context` says whether the stage about to run gets a FRESH subagent or RESUMES the previous
 // subagent of the same role. The KB default is `fresh` on every transition (ADR-024: freeze the
@@ -1603,25 +1620,37 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       if (acErrs.length) return { published: false, reason: acErrs[0], errors: acErrs }
     }
   }
-  // US-514 T-2 (#514/AC1): a finding's `blocking` flag is DERIVED here from its own `severity` against
-  // `policy.blockingSeverities` (absent ⇒ POLICY_DEFAULTS, every severity — today's behaviour
-  // unchanged) — never trusted as the reviewer's own claim, the same reason `acHash` is stamped
-  // rather than read. Scoped to OPEN, non-`question`, non-`regressionRisk` findings: a CLOSED
-  // finding's `blocking` is the closure's own record (transition already gates it in
-  // `isBlocking`); a `question` carries no defect to weigh and is never blocking, whatever
-  // severity it is filed under; a `regressionRisk` finding's `blocking` is governed by the
-  // regression-risk ledger's own coherence rule (DR-10: ACTIVE risk ⇔ blocking), a stricter,
-  // more specific invariant a severity-only derivation must not override.
+  // US-514 T-2 (revised AC1, maintainer 2026-09-24): a policy carrying the retired
+  // `blockingSeverities` list key is a typed refusal, never a silent ignore or a mixed-key mix-in
+  // (ADR-018: no silent fallback for a malformed declaration).
+  if (Object.prototype.hasOwnProperty.call(policy, 'blockingSeverities')) {
+    return { published: false, reason: 'policy-legacy-blocking-severities', detail: '`policy.blockingSeverities` is retired — declare `policy.blockingFloor` (a single severity), never a list' }
+  }
+  // US-514 T-2 (#514/AC1, revised): a finding's `blocking` flag is DERIVED here from its own
+  // `severity` ranked against `policy.blockingFloor` (absent ⇒ the KB default floor `Minor` — every
+  // severity except Questions blocks, today's behaviour unchanged) — never trusted as the
+  // reviewer's own claim, the same reason `acHash` is stamped rather than read. The floor and every
+  // severity are ranked by the review draft's OWN top-level `severityRanks` (the template
+  // contract's ranks, exact names) when the draft supplies one; otherwise pair's default table
+  // (`rankOf`). `blocking = rank(severity) >= rank(floor)`; a severity no rank covers blocks
+  // (fail-safe), and a floor no rank covers releases nothing — every finding stays blocking
+  // (fail-safe). Scoped to OPEN, non-`question`, non-`regressionRisk` findings: a CLOSED finding's
+  // `blocking` is the closure's own record (transition already gates it in `isBlocking`); a
+  // `question` carries no defect to weigh and is never blocking, whatever severity it is filed
+  // under; a `regressionRisk` finding's `blocking` is governed by the regression-risk ledger's own
+  // coherence rule (DR-10: ACTIVE risk ⇔ blocking), a stricter, more specific invariant a
+  // severity-only derivation must not override.
   if (skill === 'review-phase' && Array.isArray(data.findings)) {
-    const allowedSeverities = new Set(
-      Array.isArray(policy.blockingSeverities) && policy.blockingSeverities.length ? policy.blockingSeverities : POLICY_DEFAULTS.blockingSeverities,
-    )
+    const draftRanks = data.severityRanks
+    const floor = typeof policy.blockingFloor === 'string' && policy.blockingFloor.length ? policy.blockingFloor : DEFAULT_BLOCKING_FLOOR
+    const floorRank = rankOf(floor, draftRanks)
     data = {
       ...data,
       findings: data.findings.map(f => {
         if (!f || typeof f !== 'object' || (f.transition ?? 'open') !== 'open' || f.regressionRisk !== undefined) return f
         if (f.kind === 'question') return { ...f, blocking: false }
-        return { ...f, blocking: allowedSeverities.has(f.severity) }
+        const r = rankOf(f.severity, draftRanks)
+        return { ...f, blocking: r === undefined || floorRank === undefined || r >= floorRank }
       }),
     }
   }
@@ -2934,7 +2963,7 @@ if (isMain()) {
     } else if (cmd === 'publish') {
       need('dir', 'file', 'phase', 'skill', 'workflowVersion')
       // US-514 T-2: the SAME policy `resolve` was dispatched with — review-phase's `blocking`
-      // derivation reads `policy.blockingSeverities` from it, never a re-read of adoption here.
+      // derivation reads `policy.blockingFloor` from it, never a re-read of adoption here.
       out = publish({ dir: opts.dir, file: opts.file, phase: opts.phase, skill: opts.skill, workflowVersion: opts.workflowVersion, predecessor: opts.predecessor, attempt: opts.attempt ? Number(opts.attempt) : undefined, pr: opts.pr !== undefined ? Number(opts.pr) : undefined, policy: opts.policy ? JSON.parse(opts.policy) : {} })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.published ? 0 : 1)

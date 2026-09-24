@@ -893,18 +893,11 @@ const MAX_GREEN_RETRIES = 1
 // US-514 T-3 (#514/AC3): `dispatchesPerStory` — a hard-coded 40 — is GONE from `cycle-state.mjs`'s own
 // `CAPS`, so it is gone from this mirror too (a drift a hand-edit could otherwise hide). This
 // sandbox has no adoption read at all (no filesystem), so it cannot apply `policy.maxDispatches`
-// either — the loop-safety backstop #514/AC3's removal needs here is `MAX_DISPATCHES_SAFETY` below,
-// which is deliberately NOT part of this mirror: it is this engine's own, never claimed as
-// `cycle-state.mjs`'s.
+// itself — that ceiling is `cycle-state.mjs resolve`'s own, enforced against the SAME `policy` this
+// engine dispatches (`blockingFloor`/`maxDispatches`, above). The loop's OWN backstops
+// (`consecutiveRedirects` below, and the self-redirect guard, DT-10) stay: removing the ceiling
+// must not remove them, only the second, engine-private dispatch cap.
 const CYCLE_CAPS = { consecutiveRedirects: 3 }
-// A stage that keeps redirecting to an ever-advancing round (a new phase/attempt/reviewer each
-// time) produces a new `seen` key every time, so the self-redirect guard never fires — only a
-// ceiling stops that loop (DT-10). Deliberately generous (an adoption-declared `max-dispatches`,
-// T-1, is the ceiling a project actually chooses; this is only the backstop against a genuine
-// infinite loop in a sandbox with no other escape hatch) and deliberately NOT part of `CYCLE_CAPS`
-// — it mirrors nothing in `cycle-state.mjs`, so `pair-implement-batch.test.mjs`'s CAPS-equality
-// proof does not, and must not, cover it.
-const MAX_DISPATCHES_SAFETY = 200
 
 // ── Schemas (orchestration return-value contracts) ─────────────────────────
 // These are the compact values agents RETURN for control-flow — NOT the artifact
@@ -1675,7 +1668,14 @@ async function driveStory(story) {
   const synthesisMarker = () => `<!-- pair:synthesis #${story.id} PR#${pr} run:${runId} -->`
   // US-479 AC-32: `rollbackTo` is the maintainer's call, taken per card after its budget escalated
   // and they read the dossier — the engine never infers it and has no default for it.
-  const policy = { maxFixRounds: MAX_FIX_ROUNDS, redRepairs: MAX_RED_CONTRACT_REPAIRS, greenRetries: MAX_GREEN_RETRIES, reviewers: PIPELINE.reviewers, ...(story.rollbackTo ? { rollbackTo: story.rollbackTo } : {}) }
+  // US-514 r1-g1 (r0-2): the engine's explicit `severityFloor` rides in EVERY dispatch's `$policy`
+  // as `blockingFloor` — the same floor `cycle-state.mjs publish` ranks a finding's `blocking`
+  // against. No floor at all ⇒ the budgets policy exactly (TC-11), never a stamped default.
+  // g1-c5 (TC-11): `SEVERITY_FLOOR` is always set (it defaults SOFTLY to `Minor` for the review
+  // gate above) — `blockingFloor` rides only when the CALLER explicitly declared `severityFloor`,
+  // never the soft default, or `$policy` would never equal the budgets exactly.
+  const explicitSeverityFloor = String(PARSED.severityFloor ?? '').trim() ? SEVERITY_FLOOR : undefined
+  const policy = { maxFixRounds: MAX_FIX_ROUNDS, redRepairs: MAX_RED_CONTRACT_REPAIRS, greenRetries: MAX_GREEN_RETRIES, reviewers: PIPELINE.reviewers, ...(story.rollbackTo ? { rollbackTo: story.rollbackTo } : {}), ...(explicitSeverityFloor ? { blockingFloor: explicitSeverityFloor.name } : {}) }
   const inputs = fnv1a(canonical({ workflowMajor: WORKFLOW_VERSION.split('.')[0], story: story.id, branch: story.branch, base: baseOf(story), title: story.title, notes: story.notes ?? null, severityFloor: SEVERITY_FLOOR?.name ?? null, skills: SK, reviewTemplate: PIPELINE.reviewTemplate, reviewers: PIPELINE.reviewers }))
   const storyMetrics = { dispatches: 0, retries: 0, redirects: 0 }
   const common = () =>
@@ -1815,7 +1815,6 @@ async function driveStory(story) {
   while (true) {
     if (next.step === 'done') return result('ready-for-merge', { reviewedHead: next.reviewedHead, verdict: next.verdict, round: next.round })
     if (next.step === 'blocked') return blockedResult(next)
-    if (storyMetrics.dispatches >= MAX_DISPATCHES_SAFETY) return result('failed-resume', { reason: `the cycle asked for more than ${MAX_DISPATCHES_SAFETY} dispatches in one run — looping, not converging` })
     const key = `${next.step}:${next.phase}:${next.mode ?? ''}:${next.attempt ?? 1}:${next.reviewer ?? 1}`
     if (seen.has(key)) return result('failed-resume', { reason: `the cycle state asked for ${key} twice in one run` })
     seen.add(key)

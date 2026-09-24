@@ -337,7 +337,7 @@ function isCycleDefaults(value: unknown): value is CycleDefaults {
  * the scripts' decision, never a TypeScript literal. Unreadable ⇒ `cycle-state-unreadable`, never
  * a guess. (US-514 T-3: the dispatch ceiling used to live here too, as `CAPS.dispatchesPerStory` —
  * a hard-coded 40. It is GONE from the script; the only ceiling left is `policy.maxDispatches`, an
- * ADOPTION value (T-1), read separately — see `blockingSeverities.ts` / `describeMaxDispatches`.)
+ * ADOPTION value (T-1), read separately — see `blocking-severities.ts` / `describeMaxDispatches`.)
  */
 export function readCycleDefaults(location: CycleScriptsLocation): CycleDefaults {
   const script = join(location.scriptsDir, 'cycle-state.mjs')

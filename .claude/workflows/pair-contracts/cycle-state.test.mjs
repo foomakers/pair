@@ -1295,7 +1295,7 @@ test('T-2 (AC1): default policy (absent) ⇒ every listed severity blocks — to
   assert.deepEqual(written.findings.map(x => x.blocking), [true, true], 'the reviewer\'s own false claim is overridden by severity')
 })
 
-test('T-2 (AC1): a `Critical, Major` policy makes a Minor finding non-blocking, whatever the reviewer claimed', () => {
+test('T-2 (AC1): a `blockingFloor: Major` policy makes a Minor finding non-blocking, whatever the reviewer claimed', () => {
   const { dir } = runDir()
   const f = writeDraft(dir, {
     run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'),
@@ -1305,7 +1305,7 @@ test('T-2 (AC1): a `Critical, Major` policy makes a Minor finding non-blocking, 
       { id: 'r0-2', severity: 'Minor', location: 'x', description: 'd', recommendation: 'r', blocking: true, transition: 'open', kind: 'defect', reproducer: { command: 'node --test' } },
     ],
   })
-  const out = publish({ dir, file: f, phase: 'r0', skill: 'review-phase', workflowVersion: V, policy: { blockingSeverities: ['Critical', 'Major'] } })
+  const out = publish({ dir, file: f, phase: 'r0', skill: 'review-phase', workflowVersion: V, policy: { blockingFloor: 'Major' } })
   assert.equal(out.published, true, JSON.stringify(out))
   const written = JSON.parse(readFileSync(join(dir, 'r0-review-phase.json'), 'utf8'))
   assert.deepEqual(written.findings.map(x => x.blocking), [true, false])

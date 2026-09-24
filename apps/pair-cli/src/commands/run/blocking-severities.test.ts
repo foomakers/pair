@@ -3,7 +3,6 @@ import { InMemoryFileSystemService } from '@pair/content-ops'
 import {
   readBlockingSeverities,
   resolveBlockingSeverities,
-  DEFAULT_BLOCKING_SEVERITIES,
   POLICY_PATH,
 } from './blocking-severities'
 
@@ -19,49 +18,51 @@ function policyFrom(markdown?: string) {
 }
 
 describe('readBlockingSeverities — US-514 T-1 (AC1/AC2)', () => {
-  it('absent section ⇒ the KB default, Critical/Major/Minor, no ceiling', () => {
+  it('absent section ⇒ the KB default floor, Minor, no ceiling', () => {
     expect(readBlockingSeverities('## Something Else\n\nx\n')).toEqual({
-      blockingSeverities: [...DEFAULT_BLOCKING_SEVERITIES],
+      blockingFloor: 'Minor',
     })
   })
 
-  it('`Critical, Major` ⇒ two severities, no ceiling', () => {
-    expect(readBlockingSeverities('## Blocking Severities\n\nCritical, Major\n')).toEqual({
-      blockingSeverities: ['Critical', 'Major'],
+  it('`Major` ⇒ the floor Major, no ceiling', () => {
+    expect(readBlockingSeverities('## Blocking Severities\n\nMajor\n')).toEqual({
+      blockingFloor: 'Major',
     })
+  })
+
+  it('US-514 r1-g1 g1-w13: a severity LIST is not a floor — `Critical, Major` HALTs, naming the line', () => {
+    expect(() => readBlockingSeverities('## Blocking Severities\n\nCritical, Major\n')).toThrow(
+      /Critical, Major/,
+    )
   })
 
   it('`max-dispatches: 40` ⇒ { n: 40, mode: warn } — warn is the default mode', () => {
-    expect(
-      readBlockingSeverities(
-        '## Blocking Severities\n\nCritical, Major, Minor\nmax-dispatches: 40\n',
-      ),
-    ).toEqual({
-      blockingSeverities: ['Critical', 'Major', 'Minor'],
-      maxDispatches: { n: 40, mode: 'warn' },
-    })
+    expect(readBlockingSeverities('## Blocking Severities\n\nMinor\nmax-dispatches: 40\n')).toEqual(
+      {
+        blockingFloor: 'Minor',
+        maxDispatches: { n: 40, mode: 'warn' },
+      },
+    )
   })
 
   it('`max-dispatches: 40 block` ⇒ mode block', () => {
     expect(
-      readBlockingSeverities(
-        '## Blocking Severities\n\nCritical, Major\nmax-dispatches: 40 block\n',
-      ),
+      readBlockingSeverities('## Blocking Severities\n\nMajor\nmax-dispatches: 40 block\n'),
     ).toEqual({
-      blockingSeverities: ['Critical', 'Major'],
+      blockingFloor: 'Major',
       maxDispatches: { n: 40, mode: 'block' },
     })
   })
 
   it('an unknown severity HALTs, naming the value', () => {
-    expect(() => readBlockingSeverities('## Blocking Severities\n\nCritical, Yikes\n')).toThrow(
+    expect(() => readBlockingSeverities('## Blocking Severities\n\nYikes\n')).toThrow(
       /unknown severity `Yikes`/,
     )
   })
 
-  it('an empty declared list HALTs', () => {
+  it('an empty declared floor HALTs', () => {
     expect(() => readBlockingSeverities('## Blocking Severities\n\n,  ,\n')).toThrow(
-      /empty severity list/,
+      /Blocking Severities/,
     )
   })
 
@@ -82,14 +83,14 @@ describe('readBlockingSeverities — US-514 T-1 (AC1/AC2)', () => {
 
   it('resolveBlockingSeverities: absent file ⇒ the same KB default as an absent section', () => {
     expect(policyFrom(undefined).resolve()).toEqual({
-      blockingSeverities: [...DEFAULT_BLOCKING_SEVERITIES],
+      blockingFloor: 'Minor',
     })
   })
 
   it("resolveBlockingSeverities: pair itself declares nothing — the default reproduces today's behaviour byte for byte", () => {
     // pair's own adoption/tech/automation.md carries no `## Blocking Severities` section.
     const { resolve } = policyFrom('## Eligibility\n\nrisk:green\n')
-    expect(resolve()).toEqual({ blockingSeverities: [...DEFAULT_BLOCKING_SEVERITIES] })
+    expect(resolve()).toEqual({ blockingFloor: 'Minor' })
   })
 
   // #135 AC6: `resolveBlockingSeverities` joins `projectRoot` and `POLICY_PATH` with node's own
@@ -101,6 +102,6 @@ describe('readBlockingSeverities — US-514 T-1 (AC1/AC2)', () => {
       cwd,
       cwd,
     )
-    expect(resolveBlockingSeverities(fs, cwd)).toEqual({ blockingSeverities: ['Major'] })
+    expect(resolveBlockingSeverities(fs, cwd)).toEqual({ blockingFloor: 'Major' })
   })
 })
