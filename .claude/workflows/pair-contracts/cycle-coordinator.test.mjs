@@ -2170,7 +2170,7 @@ test('r1-2 i1 (interaction): the pinned version is accepted by packet, resolve A
 // place a version enters the state machine. That table is read here, and a declaring subcommand
 // with no invocation below fails loudly rather than being skipped.
 
-import { chmodSync, readdirSync, statSync } from 'node:fs'
+import { chmodSync, readdirSync, statSync, rmSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 
 function declaringSubcommands() {
@@ -3119,3 +3119,80 @@ test('US-514 r1-g1 g1-w14 (r0-1/r0-2): the chain`s skills and the KB schema no l
     if (namesFloor) assert.match(text, /blockingFloor/, `${rel} does not name the policy floor`)
   }
 })
+
+// ── r1-1 round 3: publish resolves severityRanks ITSELF — no real coordinator ever stamps ────────
+// `policy.severityRanks`; the fix must therefore work with the policies the REAL producers emit
+// (in-session `blocking-severities.mjs read` → `packet`; a pair-cli-shaped policy; a batch-shaped
+// policy — none of the three ever carries `severityRanks`, r11-e2e.mjs) once a resolved
+// `code-review.contract.json` exists on disk, and it must NOT rank on the draft's own claim when
+// no contract is resolved and no policy carries ranks either.
+const US514_BLOCKING_SEVERITIES_CLI = join(US514_REPO, '.claude/skills/pair-workflow-cycle/scripts/blocking-severities.mjs')
+const US514_CONTRACT_PATH = join(US514_REPO, '.claude/workflows/pair-contracts/code-review.contract.json')
+
+test('US-514 r3-1: publish loads `severityRanks` from the on-disk resolved template contract when the POLICY carries none — proven through the three real dispatch policies (in-session packet, pair-cli, batch), never a hand-injected `policy.severityRanks`', () => {
+  assert.equal(existsSync(US514_CONTRACT_PATH), false, 'setup: a stray contract cache would make this test lie about a fresh checkout')
+  // Major ranked BELOW Minor here — the OPPOSITE of pair's default table (Major 3 > Minor 2) — so a
+  // Major finding is non-blocking against a Minor floor ONLY if the on-disk contract, not the
+  // default fallback table, actually decided. A reproducer this discriminates: red pre-fix (the
+  // default table blocks it), green post-fix (the contract releases it).
+  writeFileSync(US514_CONTRACT_PATH, JSON.stringify({ severityRanks: { Critical: 4, Minor: 3, Major: 2, Questions: 1 } }))
+  try {
+    // The in-session reader on a project with NO `## Blocking Severities` declared: `blockingFloor`
+    // only, exactly as `blocking-severities.mjs read` really returns it.
+    const inSession = us514Run(US514_BLOCKING_SEVERITIES_CLI, ['read', '/nonexistent/automation.md']).json
+    assert.deepEqual(inSession, { blockingFloor: 'Minor' }, 'the in-session reader now carries severityRanks — this test is stale')
+    const pkt = us514Packet(inSession, [])
+    assert.equal(pkt.status, 0, pkt.stdout + pkt.stderr)
+    const packetPolicy = us514PolicyOf(pkt.json.prompt)
+    assert.equal(packetPolicy.severityRanks, undefined, 'the packet now threads severityRanks — this test is stale')
+
+    const policies = {
+      'in-session packet': packetPolicy,
+      'pair-cli': { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1, blockingFloor: 'Minor' },
+      batch: { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 },
+    }
+    for (const [name, policy] of Object.entries(policies)) {
+      assert.equal(policy.severityRanks, undefined, `${name}: the fixture itself hand-supplies severityRanks — invalid test`)
+      const { dir } = us514RunDir()
+      const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Major', /* unused */ true)], ['--policy', JSON.stringify(policy)])
+      // Under the on-disk contract (Major: 2 < Minor floor: 3) the finding is released; the default
+      // table (Major 3 > Minor 2) would have blocked it — so this only passes when the ON-DISK
+      // contract, reached from a policy that never carries severityRanks, actually decided.
+      assert.equal(stored.findings[0].blocking, false, `${name}: the on-disk contract's inverted ranks should have released this Major, proving publish read the real policy this coordinator emits`)
+    }
+  } finally {
+    rmSync(US514_CONTRACT_PATH, { force: true })
+  }
+})
+
+test('US-514 r3-1: publish prefers the ON-DISK contract`s ranks over the DEFAULT table — proves the contract, not the fallback, decided, and a disagreeing draft is refused exactly as when the ranks arrive via `policy.severityRanks`', () => {
+  assert.equal(existsSync(US514_CONTRACT_PATH), false, 'setup: a stray contract cache would make this test lie about a fresh checkout')
+  // A contract ranking `Major` BELOW `Minor` — the OPPOSITE of the default table — so a Major
+  // finding is non-blocking only if the on-disk contract, not the default table, was consulted.
+  writeFileSync(US514_CONTRACT_PATH, JSON.stringify({ severityRanks: { Critical: 4, Minor: 3, Major: 2, Questions: 1 } }))
+  try {
+    const { dir } = us514RunDir()
+    const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Major', true)], ['--policy', JSON.stringify({ maxFixRounds: 3, blockingFloor: 'Minor' })])
+    assert.equal(stored.findings[0].blocking, false, 'the on-disk contract ranks Major (2) below the Minor floor (3) — the default table would have blocked it')
+
+    // A draft disagreeing with the on-disk contract is still a typed refusal, same as r1-1's
+    // policy-carried case.
+    const { dir: d2 } = us514RunDir()
+    const file = join(d2, 'draft-r0-review-phase.json')
+    writeFileSync(file, JSON.stringify({ run: 'story-42', story: '42', pr: 7, branch: 'feature/US-42-x', phase: 'r0', skill: 'review-phase', inputHead: US514_SHA('a'), mode: 'first', reviewedHead: US514_SHA('c'), verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: US514_SHA('c') }, findings: [us514Evidenced('r0-1', 'Major', false)], severityRanks: { Critical: 4, Major: 3, Minor: 2, Questions: 1 } }))
+    const r = us514Run(US514_STATE_CLI, ['publish', '--dir', d2, '--file', file, '--phase', 'r0', '--skill', 'review-phase', '--workflowVersion', US514_V, '--pr', '7', '--policy', JSON.stringify({ maxFixRounds: 3 })])
+    assert.notEqual(r.status, 0, r.stdout + r.stderr)
+    assert.equal(r.json?.reason, 'severity-ranks-mismatch')
+  } finally {
+    rmSync(US514_CONTRACT_PATH, { force: true })
+  }
+})
+
+test('US-514 r3-1 (control): with NO on-disk contract and NO `policy.severityRanks`, a draft`s own `severityRanks` still ranks (today`s pre-r3 behaviour, unchanged)', () => {
+  assert.equal(existsSync(US514_CONTRACT_PATH), false, 'a stray contract cache would make this control lie')
+  const { dir } = us514RunDir()
+  const draftRanks = { Critical: 4, Minor: 3, Major: 2, Questions: 1 }
+  const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Major', true)], ['--policy', JSON.stringify({ maxFixRounds: 3, blockingFloor: 'Minor' })], { severityRanks: draftRanks })
+  assert.equal(stored.findings[0].blocking, false, 'absent both a policy contract and an on-disk one, the draft`s own ranks still apply')
+})
+

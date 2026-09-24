@@ -136,6 +136,32 @@ function rankOf(severity, ranks) {
   }
   return DEFAULT_SEVERITY_RANKS[String(severity).toLowerCase()]
 }
+// r1-1 (round 3): NO real dispatch path (in-session `blocking-severities.mjs read` → `packet`,
+// pair-cli `cycle-wiring.ts`, batch `pair-implement-batch.js`) ever puts the template contract's
+// `severityRanks` into `$policy` — only a test does, by hand. `publish` itself now resolves them,
+// from the SAME cache `ensure-contract.mjs` writes and the review stage reads
+// (`.claude/workflows/pair-contracts/code-review.contract.json`, fixed relative to this script:
+// every one of the 12 byte-identical `cycle-state.mjs` copies ships at
+// `.claude/skills/<skill>/scripts/cycle-state.mjs`, four directories under the repo root), so a
+// draft can never rank on its own — a resolved policy `severityRanks` (the one test fixtures set)
+// still wins when present, letting a caller override or a fixture avoid touching the real
+// filesystem; absent, the on-disk contract is the source; absent that too, a draft's own ranks are
+// used (today's behaviour, unchanged) and finally pair's own default table. Anything not
+// `{severity: integer}` on disk is treated as no contract (fail-safe: falls through, never throws).
+function loadResolvedContractSeverityRanks() {
+  try {
+    const repoRoot = resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..')
+    const contractPath = join(repoRoot, '.claude', 'workflows', 'pair-contracts', 'code-review.contract.json')
+    if (!existsSync(contractPath)) return undefined
+    const contract = JSON.parse(readFileSync(contractPath, 'utf8'))
+    const ranks = contract && typeof contract === 'object' ? contract.severityRanks : undefined
+    if (!ranks || typeof ranks !== 'object' || Array.isArray(ranks)) return undefined
+    if (!Object.values(ranks).every(v => Number.isInteger(v))) return undefined
+    return ranks
+  } catch {
+    return undefined
+  }
+}
 // ── transition context policy (US-486 AC-7) ────────────────────────────────────────────────
 // `next.context` says whether the stage about to run gets a FRESH subagent or RESUMES the previous
 // subagent of the same role. The KB default is `fresh` on every transition (ADR-024: freeze the
@@ -1658,7 +1684,8 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   // r1-1/r1-2 shared: severity ranks come from the resolved TEMPLATE CONTRACT (`policy.severityRanks`),
   // never a handoff's own draft — a draft's own ranks, once the template's are resolved, must agree
   // with them exactly or publish is a typed refusal. Shared by review-phase (T-2) and red-verify (r1-2).
-  const us514TemplateRanks = policy.severityRanks && typeof policy.severityRanks === 'object' && !Array.isArray(policy.severityRanks) ? policy.severityRanks : undefined
+  const us514PolicyRanks = policy.severityRanks && typeof policy.severityRanks === 'object' && !Array.isArray(policy.severityRanks) ? policy.severityRanks : undefined
+  const us514TemplateRanks = us514PolicyRanks ?? ((skill === 'review-phase' || skill === 'red-verify') ? loadResolvedContractSeverityRanks() : undefined)
   const us514DraftRanks = data.severityRanks && typeof data.severityRanks === 'object' && !Array.isArray(data.severityRanks) ? data.severityRanks : undefined
   if ((skill === 'review-phase' || skill === 'red-verify') && us514TemplateRanks && us514DraftRanks && !ranksAgree(us514TemplateRanks, us514DraftRanks)) {
     return { published: false, reason: 'severity-ranks-mismatch', template: us514TemplateRanks, draft: us514DraftRanks }
