@@ -2994,6 +2994,35 @@ test('US-514 r1-2: a gap BELOW the floor is accepted as a non-blocking note — 
   assert.equal(r.json?.published, true)
 })
 
+// r1-4: the retired `policy.blockingSeverities` (a list) is refused by EVERY entry point, not
+// just `publish` — `resolve` and `packet` (`cycle-dispatch.mjs`) too, each naming the same reason.
+test('US-514 r1-4: `policy.blockingSeverities` is a typed refusal in `publish`, `resolve` AND `packet`, each naming `policy-legacy-blocking-severities`', () => {
+  const legacyPolicy = { maxFixRounds: 3, blockingSeverities: ['Critical', 'Major'] }
+  // publish (already covered elsewhere, re-asserted here alongside its siblings for the SAME reason)
+  {
+    const { dir } = us514RunDir()
+    const file = join(dir, 'draft-r0-review-phase.json')
+    writeFileSync(file, JSON.stringify({ run: 'story-42', story: '42', pr: 7, branch: 'feature/US-42-x', phase: 'r0', skill: 'review-phase', inputHead: US514_SHA('a'), mode: 'first', reviewedHead: US514_SHA('c'), verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: US514_SHA('c') }, findings: [] }))
+    const r = us514Run(US514_STATE_CLI, ['publish', '--dir', dir, '--file', file, '--phase', 'r0', '--skill', 'review-phase', '--workflowVersion', US514_V, '--pr', '7', '--policy', JSON.stringify(legacyPolicy)])
+    assert.notEqual(r.status, 0, r.stdout + r.stderr)
+    assert.equal(r.json?.reason, 'policy-legacy-blocking-severities')
+  }
+  // resolve
+  {
+    const { dir } = us514RunDir()
+    const r = us514Run(US514_STATE_CLI, ['resolve', '--dir', dir, '--workflowVersion', US514_V, '--policy', JSON.stringify(legacyPolicy), '--entry', 'fresh'])
+    assert.ok(r.json, r.stdout + r.stderr)
+    assert.equal(r.json.reason, 'policy-legacy-blocking-severities')
+    assert.notEqual(r.json.status, 'done')
+  }
+  // packet (cycle-dispatch.mjs)
+  {
+    const r = us514Packet(legacyPolicy, [])
+    assert.notEqual(r.status, 0, r.stdout + r.stderr)
+    assert.equal(r.json?.halt, 'policy-legacy-blocking-severities')
+  }
+})
+
 test('US-514 r1-g1 g1-w10 (r0-2): a vocabulary with its OWN names is ranked by the draft`s `severityRanks` (keys listed out of rank order) — floor Serious and floor Showstopper', () => {
   const ranks = { Cosmetic: 1, Showstopper: 3, Serious: 2 }
   const findings = [us514Evidenced('r0-1', 'Showstopper', false), us514Evidenced('r0-2', 'Serious', false), us514Evidenced('r0-3', 'Cosmetic', true)]

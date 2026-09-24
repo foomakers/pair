@@ -380,6 +380,9 @@ function packetCommand(opts) {
   // With no flag the policy is rendered VERBATIM: the default floor is never stamped into it (a
   // project that declared none keeps declaring none).
   const declaredPolicy = JSON.parse(opts.policy ?? '{}')
+  // r1-4: the retired `policy.blockingSeverities` (a severity LIST) is refused HERE too — the same
+  // reason `publish` refuses it — never silently rendered into a stage's own `$policy`.
+  must(!Object.prototype.hasOwnProperty.call(declaredPolicy, 'blockingSeverities'), 'policy-legacy-blocking-severities', '`policy.blockingSeverities` is retired — declare `policy.blockingFloor` (a single severity), never a list')
   const policy = opts['severity-floor'] !== undefined ? { ...declaredPolicy, blockingFloor: opts['severity-floor'] } : declaredPolicy
   // Omitted ⇒ the ONE pin, imported from cycle-state (never a literal here: a second spelling of
   // the state machine's identity is a fork of it — AC-12). The coordinator is an agent session, and

@@ -2547,6 +2547,11 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   // Fail closed before ANY state is read: an unusable freshness policy is never resolved around.
   const policyError = contextPolicyError(contextPolicy)
   if (policyError) throw new Error(policyError)
+  // r1-4: the retired `policy.blockingSeverities` (a severity LIST) is refused HERE too — the same
+  // reason `publish` and `packet` refuse it — never silently accepted and acted on as if it named a floor.
+  if (Object.prototype.hasOwnProperty.call(policy, 'blockingSeverities')) {
+    return { status: 'invalid', reason: 'policy-legacy-blocking-severities', workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
+  }
   const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects })
   // The budgets a coordinator spends are the cycle's data, never the coordinator's own constants.
   return { ...out, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
