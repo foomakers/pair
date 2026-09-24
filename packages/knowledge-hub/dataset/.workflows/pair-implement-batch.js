@@ -508,7 +508,7 @@ const WORKFLOW_VERSION = '4.0.1'
 // US-506 T-8 (AC-12): the bounded-commands guardrail every dispatch carries — spelled exactly as
 // `cycle-dispatch.mjs` exports it (the sandbox cannot import it); the packet-parity tests hold the
 // two byte-equal.
-const BOUNDED_COMMANDS = 'Run only foreground, time-bounded commands: never start a background process and never wait on one. In your own probes never spawn a real engine or a real `gh` — stub them, and test "engine missing" with a PATH that contains no engine directory at all.'
+const BOUNDED_COMMANDS = 'Run only foreground, time-bounded commands: never start a background process and never wait on one. Only the stage\'s own experimental probes stub a real engine or a real `gh` — the skill\'s own read/publish/finalize/conclude steps run for real. In your own probes never spawn a real engine or a real `gh` — stub them, and test "engine missing" with a PATH that contains no engine directory at all.'
 
 // ── Pipeline configuration: what makes this engine reusable ─────────────────
 // Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved

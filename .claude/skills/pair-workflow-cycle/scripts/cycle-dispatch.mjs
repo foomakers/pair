@@ -281,7 +281,13 @@ const CONTRACT_MIRRORS =
 // reviewers removed an engine stub to probe "engine missing" — the CLI fell through to the real
 // `claude` on PATH. Spelled identically in `pair-implement-batch.js`; the packet-parity tests hold
 // the two renderings byte-equal.
-export const BOUNDED_COMMANDS = 'Run only foreground, time-bounded commands: never start a background process and never wait on one. In your own probes never spawn a real engine or a real `gh` — stub them, and test "engine missing" with a PATH that contains no engine directory at all.'
+// US-514 T-7 (AC9): the pre-T-7 wording ("In your own probes never spawn a real engine or a real
+// `gh`") read as covering the SKILL's own steps too — a coordinator dispatching this story's own
+// packet had to add "the skill's own push and PR-publish steps run for real" by hand, every time,
+// to stop an implementer stubbing its own required publish. Stated here instead: only the STAGE's
+// own EXPERIMENTAL probes stub `gh`/an engine; the skill's own read/publish/finalize/conclude
+// steps always run for real.
+export const BOUNDED_COMMANDS = 'Run only foreground, time-bounded commands: never start a background process and never wait on one. Only the stage\'s own experimental probes stub a real engine or a real `gh` — the skill\'s own read/publish/finalize/conclude steps run for real. In your own probes never spawn a real engine or a real `gh` — stub them, and test "engine missing" with a PATH that contains no engine directory at all.'
 const templateLabel = p => String(p).split('/').filter(Boolean).pop() || String(p)
 const compactFinding = f => ({
   id: f.id,
