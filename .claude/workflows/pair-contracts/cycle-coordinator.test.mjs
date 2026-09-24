@@ -3305,9 +3305,16 @@ test('US-514 r2-1 (residual, final review #3): review-phase + red-verify SKILL.m
   ]
   for (const rel of docs) {
     const text = readFileSync(join(US514_REPO, rel), 'utf8')
-    assert.doesNotMatch(text, /ranked by \$policy\.blockingFloor ranked by THESE/, `${rel} still says the draft's severityRanks decide ranking ("ranked by THESE")`)
-    assert.doesNotMatch(text, /ranks? come from the template contract's `?severityRanks`? when the gap carries one/, `${rel} still says a gap's own severityRanks decides ranking ("when the gap carries one")`)
+    assert.doesNotMatch(text, /ranked by THESE/, `${rel} still says the draft's severityRanks decide ranking ("ranked by THESE")`)
+    assert.doesNotMatch(text, /when the gap carries one/i, `${rel} still says a gap's own severityRanks decides ranking ("when the gap carries one")`)
     assert.match(text, /policy\.severityRanks/, `${rel} does not name policy.severityRanks as a resolution source`)
     assert.match(text, /(agreement|agree)/, `${rel} does not describe the draft/gap's own ranks as agreement-only`)
+  }
+  // r2-1 (final review #4): red-verify's own agreement check runs against the handoff's TOP-LEVEL
+  // severityRanks (cycle-state.mjs's `data.severityRanks`, never a per-gap field) — the SKILL prose
+  // must say so, not just "a gap's severityRanks".
+  for (const rel of ['.claude/skills/pair-workflow-red-verify/SKILL.md', 'packages/knowledge-hub/dataset/.skills/workflow/red-verify/SKILL.md']) {
+    const text = readFileSync(join(US514_REPO, rel), 'utf8')
+    assert.match(text, /top-level `?severityRanks`?/, `${rel} does not say the handoff's TOP-LEVEL severityRanks is what's checked for agreement`)
   }
 })
