@@ -135,7 +135,8 @@ module.exports = [
       // `.claude/skills/<skill>/scripts/` at the repo root (outside every package, unlinted),
       // exercised by the dry-run suites under `.claude/workflows/pair-contracts/`. Same
       // one-artifact rule as the workflows above: one lint policy for both copies — none.
-      'dataset/.skills/**/scripts/*.mjs',
+      // (and their `scripts/host/` adapters, US-492 — same artifact, same policy)
+      'dataset/.skills/**/scripts/**/*.mjs',
     ],
   },
 ]

@@ -61,7 +61,8 @@
         "pair-contracts/recipe.test.mjs",
         "pair-contracts/pr-comment.test.mjs",
         "pair-contracts/pr-state.test.mjs",
-        "pair-contracts/engine-boundaries.test.mjs"
+        "pair-contracts/engine-boundaries.test.mjs",
+        "pair-contracts/host-adapter.test.mjs"
       ],
       "targets": [{ "path": ".claude/workflows/", "mode": "canonical" }],
       "description": "Batch orchestration workflows (Claude Code only; inert elsewhere)"

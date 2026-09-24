@@ -68,6 +68,18 @@ The **code host** is the tool that owns repositories, branches, pull requests an
 
 First hit wins. Moving a legacy declaration up to `## Git Workflow` is optional tidying, never a prerequisite — and because the order lives here rather than in one skill, two readers can never disagree on which branch a PR targets.
 
+## Declaration grammar (what counts as a declaration)
+
+`pm-tool`, the "`<Tool>` is adopted for project management" line and `code-host` are read from **top-level lines** of way-of-working.md only — the CommonMark rules for top-level blocks, and nothing more. Everything else is documentation of a declaration, never one:
+
+- **Fenced code blocks are examples.** A fence opens on 3+ backticks or tildes indented 0–3 spaces and closes only on a fence of the **same character** that is **at least as long**; nothing inside it is read, a `<!--` included.
+- **An unterminated fence HALTs** with `way-of-working-malformed: unterminated code fence opened at line N` — it never runs to the end of the file, which would silently default the project to GitHub. An unterminated HTML comment HALTs the same way.
+- **A line indented 4+ spaces** at top level is indented code, not a declaration.
+- **HTML comments are not read** — only outside fenced blocks: a comment block opens on a line starting with `<!--` and ends on the line carrying `-->`; a fence marker inside it opens nothing. A closed `<!-- … -->` span inside a line is dropped from that line.
+- **Limit:** fences nested in list items (list-relative indentation) are out of scope. **Declare the host on a top-level line**, outside any list, fence or comment.
+
+A declaration that is actually read keeps its typed outcome — an unknown host is still `host-unsupported`, never a silent fallback.
+
 ## Routing table (which field an operation reads)
 
 Skills route by field, never by assumption. The `Reads` column names the field each operation class resolves; the one operation whose side depends on its **target** (classification, which writes a card in refinement and a PR in review) has its own row and says so.

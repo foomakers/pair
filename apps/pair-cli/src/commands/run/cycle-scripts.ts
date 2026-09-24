@@ -151,8 +151,23 @@ export interface CycleScriptsBridge {
   packet(options: CyclePacketOptions): CyclePacketResult
   /** `inputs --story <card JSON>`: the effective-inputs digest both realizations must agree on. */
   inputs(story: Record<string, unknown>, workflowVersion: string): string
-  /** `ac-hash --story <id>`: the card body's canonical hash, the one every handoff records. */
-  acHash(story: string): string
+  /**
+   * `ac-hash --story <id> [--dir <run dir>]`: the card body's canonical hash, the one every handoff
+   * records — read through the PM tool the run directory is bound to, when it is.
+   */
+  acHash(story: string, dir?: string): string
+  /**
+   * `bind-hosts --dir <run dir>` (US-492 AC2): the ONE resolution of the run's PM tool / code host,
+   * written once and reused by every later script call naming that directory. A declared host with
+   * no adapter throws `host-unsupported: …`, verbatim.
+   */
+  bindHosts(dir: string): CycleHostBinding
+}
+
+/** What `bind-hosts` answers: `bound` on a new run, `reused` when the run already carries one. */
+export interface CycleHostBinding {
+  readonly action: 'bound' | 'reused'
+  readonly binding: { readonly pmTool: string; readonly codeHost: string | null }
 }
 
 /** Parses `stdout` as the ONE line of JSON a script writes, or throws `cycle-state-unreadable`. */
@@ -275,9 +290,15 @@ export function createCycleScriptsBridge(
       ]) as { inputsDigest?: unknown }
       return String(out.inputsDigest)
     },
-    acHash(story) {
-      const out = runScript(cycleStatePath, 'ac-hash', [['story', story]]) as { acHash?: unknown }
+    acHash(story, dir) {
+      const out = runScript(cycleStatePath, 'ac-hash', [
+        ['story', story],
+        ...optional([['dir', dir]]),
+      ]) as { acHash?: unknown }
       return String(out.acHash)
+    },
+    bindHosts(dir) {
+      return runScript(cycleStatePath, 'bind-hosts', [['dir', dir]]) as CycleHostBinding
     },
   }
 }

@@ -141,6 +141,8 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
     )
     copyFileSync(join(realScriptsDir, 'cycle-state.mjs'), join(scriptsDir, 'cycle-state.mjs'))
     copyFileSync(join(realScriptsDir, 'cycle-dispatch.mjs'), join(scriptsDir, 'cycle-dispatch.mjs'))
+    // US-492: the PM/code-host adapters ship beside the scripts, in `host/`.
+    cpSync(join(realScriptsDir, 'host'), join(scriptsDir, 'host'), { recursive: true })
     runsRoot = join(projectRoot, '.pair/working/runs')
   })
   afterEach(() => {
@@ -185,6 +187,45 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
     })
     expect(prResult.next).toMatchObject({ step: 'verify', mode: 'first', phase: 'r0' })
   })
+
+  it('bindHosts() binds the run ONCE (bound, then reused) and relays host-unsupported verbatim (US-492 AC2/AC4)', () => {
+    const dir = join(runsRoot, 'story-492/492')
+    const first = bridge().bindHosts(dir)
+    expect(first.action).toBe('bound')
+    expect(first.binding).toMatchObject({ pmTool: 'github', codeHost: 'github' })
+    expect(existsSync(join(dir, '.host-binding.json'))).toBe(true)
+    expect(bridge().bindHosts(dir).action).toBe('reused')
+
+    mkdirSync(join(projectRoot, '.pair/adoption/tech'), { recursive: true })
+    writeFileSync(
+      join(projectRoot, '.pair/adoption/tech/way-of-working.md'),
+      '- Jira is adopted for project management.\n',
+    )
+    expect(() => bridge().bindHosts(join(runsRoot, 'story-492/493'))).toThrow(
+      /host-unsupported: .*"Jira".*implemented: azure-devops, github/,
+    )
+    expect(existsSync(join(runsRoot, 'story-492/493/.host-binding.json'))).toBe(false)
+  })
+
+  // Platform-injected (smoke-ci-platform rule): process.platform is set to darwin, then linux.
+  it.each(['darwin', 'linux'] as const)(
+    'bindHosts() on platform %s: the binding lands in the run directory it was given, and a second bind reuses it',
+    platform => {
+      const original = Object.getOwnPropertyDescriptor(process, 'platform')!
+      Object.defineProperty(process, 'platform', { value: platform })
+      try {
+        const dir = join(runsRoot, `story-492-${platform}/492`)
+        expect(bridge().bindHosts(dir).action).toBe('bound')
+        expect(JSON.parse(readFileSync(join(dir, '.host-binding.json'), 'utf8'))).toMatchObject({
+          pmTool: 'github',
+          codeHost: 'github',
+        })
+        expect(bridge().bindHosts(dir).action).toBe('reused')
+      } finally {
+        Object.defineProperty(process, 'platform', original)
+      }
+    },
+  )
 
   it('worktree() propagates a real HALT from cycle-dispatch.mjs verbatim (branch-invalid)', () => {
     expect(() =>

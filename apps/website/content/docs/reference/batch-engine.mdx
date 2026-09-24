@@ -201,6 +201,16 @@ no register, no projector.
   `interrupted` and `abandoned` (an explicit developer abandonment). `pair-loop` halts on every
   one but the first.
 
+### PM tool and code host: one adapter layer
+
+The cycle's scripts do not spawn `gh` or `az` themselves. Every write to a card or a pull request goes through the adapter in `scripts/host/`, which ships inside each workflow skill. That covers the card hash, PR comments, the `pair-review` check, the `pr-state:*` label, scope decisions, merge and close. Two adapters are implemented: **GitHub** (`gh`, the default) and **Azure DevOps** (`az boards`, `az repos`, `az devops invoke`).
+
+- **Which one.** It is read from `way-of-working.md`, using the existing `pm-tool` / `code-host` split. Card operations go to the PM tool and PR operations go to the code host. A project that declares nothing stays on GitHub.
+- **Resolved once.** The coordinator runs `cycle-state.mjs bind-hosts --dir <run/story dir>` at its start. Every later call against that run reuses the binding, even if `way-of-working.md` changes mid-cycle.
+- **An unknown host stops the run.** A declared tool without an adapter HALTs with `host-unsupported`, naming the declared value and the adapters that exist. It never falls back to GitHub.
+- **Azure DevOps.** The adapter supports `squash` and `merge` only, with no `rebase`. New cards are created as `User Story`. The `pair-review` check is a PR status bound to the reviewed head's iteration.
+- **Adding a host.** Write one new `scripts/host/<id>.mjs` file and add one `way-of-working.md` line. The steps are in the KB's `host-adapter-extension-guide.md`: the eight methods, how an adapter registers, and a worked filesystem stub.
+
 ### Scope proposals are never defects (`4.0.0`)
 
 A finding that violates an accepted obligation (an AC, an adoption rule, a supported boundary) is

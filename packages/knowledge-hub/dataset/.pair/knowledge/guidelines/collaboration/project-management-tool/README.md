@@ -40,6 +40,8 @@ This framework does not cover:
 
 ### Implementation Guides
 
+**[host-adapter-extension-guide.md](host-adapter-extension-guide.md)** - How the delivery cycle's scripts reach a PM tool / code host (`scripts/host/`), the eight adapter methods, registration by file + way-of-working declaration, and a worked filesystem stub — read to add a host beyond GitHub and Azure DevOps
+
 **[filesystem-implementation.md](filesystem-implementation.md)** - Complete setup and usage guide for filesystem-based project management
 
 - Local markdown file management
