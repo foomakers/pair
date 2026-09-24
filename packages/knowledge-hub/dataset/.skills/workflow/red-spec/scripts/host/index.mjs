@@ -146,8 +146,14 @@ export function resolveHosts({ text, registry = SHIPPED } = {}) {
     if (m) declaredPm = m[1]
   }
   const declaredCode = key('code-host')
-  const pmTool = declaredPm === undefined ? DEFAULT_PM_TOOL : canonicalHost(declaredPm, registry)
-  if (!pmTool) throw unsupported('pm-tool', declaredPm, registry)
+  let pmTool
+  if (declaredPm === undefined) {
+    if (!registry.adapters.has(DEFAULT_PM_TOOL)) throw unsupported('pm-tool', DEFAULT_PM_TOOL, registry)
+    pmTool = DEFAULT_PM_TOOL
+  } else {
+    pmTool = canonicalHost(declaredPm, registry)
+    if (!pmTool) throw unsupported('pm-tool', declaredPm, registry)
+  }
   let codeHost
   if (declaredCode !== undefined) {
     codeHost = canonicalHost(declaredCode, registry)

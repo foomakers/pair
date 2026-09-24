@@ -15,33 +15,54 @@ Every workflow skill that runs a cycle script ships the same directory, byte-ide
 └── <id>.mjs           ← your adapter
 ```
 
-**Registration is the file itself.** `index.mjs` loads every `<id>.mjs` in the directory whose default export is `defineAdapter({ id: '<id>', … })`. There is no list to edit. A file that fails to load is recorded as broken and can never be bound; the other adapters keep working.
+**Registration is the file itself.** `index.mjs` exports `loadAdapters(dir)`, which loads every `<id>.mjs` in the directory whose default export is `defineAdapter({ id: '<id>', … })`; there is no list to edit. A file that fails to load is recorded as broken and can never be bound; the other adapters keep working. `resolveHosts({ text, registry })` is the pure function from way-of-working text to `{ pmTool, codeHost }`; `bindHosts({ dir, from, registry, transport })` turns a resolution (or a registry) into the `{ pm, code }` pair a caller uses.
 
-Ship the file in **every** skill's `scripts/host/` (the dataset copies under `packages/knowledge-hub/dataset/.skills/workflow/*/scripts/host/`, then `pnpm mirrors:regenerate` for the installed copies) — the `host-adapter` suite asserts the directories stay identical.
+Ship the file in **every** workflow skill's `scripts/host/` — `cycle`, `green-fix`, `implement-phase`, `red-spec`, `red-verify`, `review-phase` (the dataset copies under `packages/knowledge-hub/dataset/.skills/workflow/*/scripts/host/`, then `pnpm mirrors:regenerate` for the installed copies) — the `host-adapter` suite asserts the directories stay identical.
+
+Every `.mjs` file in `scripts/host/` is loaded by `loadAdapters` as a candidate adapter, so a stray helper or test placed there is recorded broken, not run — keep helpers and tests outside the directory.
 
 ## The eight methods
+
+`INTERFACE_METHODS` (exported by `index.mjs`, re-exported from `adapter-kit.mjs`) is this list, in order:
 
 | Method            | Side (ADR-018) | Contract                                                                                                                             |
 | ----------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `readCard`        | pm-tool        | `readCard(id, { repo, fields })` — no `fields`: `{ body }`, the card text exactly as stored; `fields`: an object with those keys (`number`, `url`, `title`, `body`) |
 | `cardHash`        | pm-tool        | **Not yours to write.** `defineAdapter` derives it from `readCard` with the shared canonicalization; an adapter that defines it is refused |
-| `prHead`          | code-host      | `prHead({ pr, repo })` → the PR head as a 40-hex sha                                                                                   |
+| `prHead`          | code-host      | `prHead({ pr, repo })` → the PR head as a 40-hex sha; a value that is not a 40-hex sha throws `HostError('invalid-output')` |
 | `upsertComment`   | code-host      | `upsertComment({ pr, marker, body, repo })` → `{ action: created \| updated \| unchanged, id, url, marker }`, or `{ error: body-too-long \| marker-ambiguous }` — build it on `upsertByMarker` |
-| `concludeCheck`   | code-host      | `concludeCheck({ pr, sha, repo, state, description, targetUrl })` — `state` ∈ `success \| failure \| pending`, on the EXACT head `sha`; returns `{ context, sha, state, published, error }` and REPORTS a refused write instead of throwing |
-| `setPrState`      | code-host      | `setPrState({ pr, repo, label })` — leave exactly one `pr-state:*` label, then read back: `{ applied, removed, confirmed, error }` |
-| `merge`           | code-host      | `merge({ pr, repo, strategy, message })` — `strategy` ∈ `squash \| merge \| rebase`; an unsupported one throws `HostError('unsupported')` |
-| `closeAndCascade` | pm-tool        | `closeAndCascade({ id, repo, doneState })` — close the card, then each parent whose children are all done; `{ closed: [ids], stoppedAt }` |
+| `concludeCheck`   | code-host      | `concludeCheck({ pr, sha, repo, state, description, targetUrl })` — `state` ∈ `success \| failure \| pending`, on the EXACT head `sha`; `context` in the return is always `checkContext` (never caller-supplied); a `sha` that is not the current PR head REPORTS `{ published: false }` instead of throwing; returns `{ context, sha, state, published, error }` |
+| `setPrState`      | code-host      | `setPrState({ pr, repo, label })` — leave exactly one `pr-state:*` label, then read back: `{ applied, removed, confirmed, error }`; a `label` outside `stateLabels` is refused with `confirmed: false` (unknown-label) |
+| `merge`           | code-host      | `merge({ pr, repo, strategy, message })` — `strategy` ∈ `squash \| merge \| rebase`; an unsupported one throws `HostError('unsupported')`; on success returns `{ merged, pr, strategy }` |
+| `closeAndCascade` | pm-tool        | `closeAndCascade({ id, repo, doneState })` — close the card, then each parent whose children (modelled by the host's own parent field/link) are all done, walking up until a parent has an undone child or none exists; `doneState` defaults to the adapter's own closed/done value (e.g. `'Done'` for Azure DevOps, implicit `completed` for GitHub issues); returns `{ closed: [ids], stoppedAt }` — `stoppedAt` is the id that stopped the cascade, or `null` when it closed every ancestor |
 
-Optional primitives (`createCard`, `findCards`, `updateCard`, `parseCardRef`, `listComments`, `readComment`, `parseCommentRef`, `commentRef`, `readCheck`, `readLabels`) serve the scope-decision and `pr-state find` paths. Omit one and only the feature that needs it fails, typed `not-implemented` with the method name. Their shapes are the two shipped adapters'.
+On a **local** host (no repository at all, `hostsCode: false`), `repo` is simply ignored by every method — there is nothing to scope to, so adapters accept and drop it (see the `filesystem` worked example below, whose methods never read `repo`).
+
+Optional primitives (`SUPPORT_METHODS`, exported the same way) serve the scope-decision and `pr-state find` paths:
+
+| Method            | Side (ADR-018) | Contract                                                                                                       |
+| ----------------- | -------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `createCard`      | pm-tool        | `createCard({ repo, title, body })` → returns the created card (adapter-shaped, at least a `url`)               |
+| `findCards`       | pm-tool        | `findCards({ repo, search })` → an array of matching cards                                                       |
+| `updateCard`      | pm-tool        | `updateCard({ repo, id, body })` → `{ id }`                                                                       |
+| `parseCardRef`    | pm-tool        | `parseCardRef(ref, { repo })` → `{ number, inScope }` or `null` when `ref` is not a card reference                |
+| `listComments`    | code-host      | `listComments({ pr, repo })` → an array of `{ id, body, url }`                                                    |
+| `readComment`     | code-host      | `readComment({ id, repo })` → `{ body, authorLogin, authorIsUser, pr }`                                           |
+| `parseCommentRef` | code-host      | `parseCommentRef(ref, { repo })` → `{ pr, id, inScope }` or `null`                                                |
+| `commentRef`      | code-host      | `commentRef({ repo, pr, id })` → the comment's URL string                                                         |
+| `readCheck`       | code-host      | `readCheck({ sha, repo, context })` → the check's state string, or `null` when absent                            |
+| `readLabels`      | code-host      | `readLabels({ pr, repo })` → an array of label name strings                                                       |
+
+Omit one and only the feature that needs it fails, typed `not-implemented` with the method name. Their shapes are the two shipped adapters' (`github.mjs`, `azure-devops.mjs`).
 
 Also expose `checkContext` (the check name, `pair-review`), `stateLabels` (the three `pr-state:*` labels) and `errorPrefix` (a short tag the cycle puts in its failure reasons, e.g. `gh`, `az`).
 
 ## The rules every adapter keeps
 
-- **CLI-first.** Every method is a CLI spawn through `runCli` from `adapter-kit.mjs`. No MCP, no HTTP client, no network module. List the CLIs in `binaries`; `[]` only for a local tracker with no CLI.
+- **CLI-first.** Every method is a CLI spawn through `runCli` from `adapter-kit.mjs`. No MCP, no HTTP client, no network module. List the CLIs in `binaries: []` only for a local tracker with no CLI — its methods take a stub or nothing through `transport.<x>`, with a `PAIR_<CLI>_BIN` override only mattering when `binaries` is non-empty.
 - **No credentials.** Never read, write, store or print a token. The CLI authenticates itself from its own configuration.
 - **Take the transport from `create(transport)`.** A test's stub binary comes in there (`transport.<cli>Bin`), with an env override (`PAIR_<CLI>_BIN`) and the bare CLI name as fallbacks. The cycle scripts never name a binary.
-- **Fail typed.** Throw `HostError` (`failed`, `invalid-json`, `invalid-output`, `unsupported`). Any other exception is reported as an adapter bug, with the method name.
+- **Fail typed.** Throw `HostError` (`failed`, `invalid-json`, `invalid-output`, `unsupported`). `merge`'s `MERGE_STRATEGIES` and `concludeCheck`'s `CHECK_STATES` (both exported by `adapter-kit.mjs`) are the only accepted values for `strategy` and `state`. Any other exception is reported as an adapter bug, with the method name.
 
 ## Registering the host for a project
 
@@ -55,8 +76,8 @@ Declare it in `.pair/adoption/tech/way-of-working.md`. `index.mjs` resolves the 
 - `code-host`: `<id>`          ← only when the code lives on a different tool
 ```
 
-- The value matches the adapter's `id` or one of its `aliases`, case- and separator-insensitively.
-- `hostsCode: false` (a tracker with no repositories) means `code-host` has to be declared. Without it, every PR operation fails `code-host-undeclared`.
+- The value matches the adapter's `id` or one of its `aliases` (omitted `aliases` default to `[id]`), case- and separator-insensitively.
+- `hostsCode` defaults to `true` when omitted from `defineAdapter`. `hostsCode: false` (a tracker with no repositories) means `code-host` has to be declared. Without it, every PR operation fails `code-host-undeclared`.
 - A declared value with no adapter file stops the coordinator with `host-unsupported`, naming the value and the implemented set. The cycle never falls back to GitHub.
 - The coordinator binds with `cycle-state.mjs bind-hosts --dir <run/story dir>`. That writes `.host-binding.json`, and every later call naming the directory reuses it, even after way-of-working changes mid-cycle.
 
@@ -142,6 +163,30 @@ export default defineAdapter({
 })
 ```
 
+A minimal test proving it end to end — copy it beside your own adapter's tests as a starting point (it never needs the shipped `host-adapter` suite):
+
+<!-- worked-example:minimal-test -->
+```js
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { fileURLToPath } from 'node:url'
+import { loadAdapters, resolveHosts, bindHosts } from '../scripts/host/index.mjs'
+
+test('the filesystem worked example resolves and serves a PR operation end to end', async () => {
+  const hostDir = fileURLToPath(new URL('../scripts/host/', import.meta.url))
+  const { adapters, broken } = await loadAdapters(hostDir)
+  assert.equal(broken.size, 0, JSON.stringify([...broken.entries()]))
+  const registry = { adapters, broken }
+  const declaration = '- `pm-tool`: `filesystem`\n\n## Git Workflow\n\n- `code-host`: `filesystem`\n'
+  const { pmTool, codeHost } = resolveHosts({ text: declaration, registry })
+  const { code } = bindHosts({ binding: { pmTool, codeHost }, registry, transport: {} })
+  const created = code.upsertComment({ pr: 1, marker: '<!-- m -->', body: '<!-- m -->\nhi' })
+  assert.equal(created.action, 'created')
+  const merged = code.merge({ pr: 1 })
+  assert.equal(merged.merged, true)
+})
+```
+
 Then declare it. `hostsCode` is `false`, so `code-host` has to be declared too:
 
 ```markdown
@@ -156,7 +201,7 @@ The coordinator binds it on its next start.
 
 ## Checklist for a real host
 
-1. `scripts/host/<id>.mjs` with the seven methods you write, `binaries`, `aliases`, `hostsCode`.
+1. `scripts/host/<id>.mjs` with the eight methods you write (`cardHash` is derived, never written), `binaries`, `aliases`, `hostsCode`.
 2. A recorder stub for its CLI and tests of all eight methods against it, modeled on `host-adapter.test.mjs`'s `fakeAz`. Tests never call a live service.
 3. An implementation guide next to this one (`<id>-implementation.md`), carrying the CLI setup and the auth pointer the adapter assumes.
 4. The alias row in [way-of-working / PM-tool + code-host resolution](../../technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md) if the product has more than one spelling.
