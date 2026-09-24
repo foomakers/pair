@@ -78,7 +78,9 @@ A mismatch ⇒ HALT `subagent-tool-mismatch` with the bridge's detail (it names 
 
 ### Step 1: Resolve what is due
 
-**Check.** Ask the one authority, from the MAIN checkout:
+**Check.** Before the first `resolve`, read `## Blocking Severities` from the MAIN checkout's `.pair/adoption/tech/automation.md` (US-514 T-1) — the same file, the same fenced/HTML-comment-blind extraction `## Eligibility` already documents. **Absent file or absent section** ⇒ the KB default `{ "blockingSeverities": ["Critical", "Major", "Minor"] }` — today's behaviour, byte for byte, and `pair` itself declares nothing (delta-only adoption, ADR-018/D21). **Present**: the first line is a comma-separated list of `Critical | Major | Minor` — an unrecognised token, an empty list, or a `max-dispatches` line that is not `<positive integer> [warn|block]` all HALT `automation-policy-malformed`, naming the file and the offending line — never a silent fallback. An optional second line, `max-dispatches: <n> [warn|block]` (mode defaults to `warn` when omitted), becomes `"maxDispatches": { "n": <n>, "mode": "<warn|block>" }`; absent ⇒ no ceiling at all — never invent `40`. Merge the result into `<policy JSON>` below (`{ "blockingSeverities": […], "maxDispatches": {…} }`, the `maxDispatches` key omitted when there is no line) — the SAME object every later `resolve`/`packet`/`bind-hosts` call in this invocation reuses, so red-verify and review-phase (T-2) and this run's own dispatch ceiling (T-3) all act on one value.
+
+Ask the one authority, from the MAIN checkout:
 
 ```bash
 WV="$(node "$SKILL_DIR/scripts/cycle-state.mjs" version)"

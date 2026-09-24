@@ -11,6 +11,7 @@ import {
 import { runStage, styleFor } from './stage-runner'
 import { spawnIteration } from './spawn'
 import { readStateMapping, resolveCardReadiness, type CardDocument } from './card-readiness'
+import { resolveBlockingSeverities } from './blocking-severities'
 
 /**
  * The PRODUCTION wiring for `run --card`'s two injected collaborators.
@@ -301,10 +302,16 @@ function remoteHead(main: string, branch: string): string | undefined {
 const resolveFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => async () => {
     const head = remoteHead(co.main, co.branch)
+    // US-514 T-1: `## Blocking Severities` (+ `max-dispatches`) is read from the MAIN checkout's
+    // adoption once, here — the same file both realizations read, so review-phase and red-verify
+    // (T-2) and the resolve ceiling (T-3) act on the SAME value. Absent section/file ⇒ the KB
+    // default (`Critical, Major, Minor`), byte-for-byte today's behaviour (`readBlockingSeverities`
+    // HALTs on a malformed declaration — never a silent fallback).
+    const blocking = resolveBlockingSeverities(ctx.fs, co.main)
     return co.bridge.resolve({
       dir: co.runDir,
       workflowVersion: ctx.workflowVersion,
-      policy: {},
+      policy: { blockingSeverities: blocking.blockingSeverities, ...(blocking.maxDispatches !== undefined && { maxDispatches: blocking.maxDispatches }) },
       entry: input.pr === undefined ? 'fresh' : 'pr',
       story: input.card,
       runsRoot: co.runsRoot,
