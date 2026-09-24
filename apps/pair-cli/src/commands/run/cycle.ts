@@ -20,6 +20,8 @@ export interface CycleResolveResult {
     readonly reason?: string
     readonly [key: string]: unknown
   }
+  /** `resolve`'s own operator-facing warnings (e.g. a `max-dispatches: N warn` breach) — relayed VERBATIM via `onNotice`, never re-derived. */
+  readonly warnings?: readonly string[]
 }
 
 /** `spawnStage`'s own grammar — `stream-reader.ts`'s `'success' | 'failed'`, relayed, never invented. */
@@ -247,6 +249,9 @@ export async function runCycle(input: RunCycleInput): Promise<CycleOutcome> {
   for (;;) {
     const answer = await resolve()
     const next = answer.next
+    for (const warning of (answer as CycleResolveResult).warnings ?? []) {
+      observers.onNotice?.(warning)
+    }
     if (next === undefined) {
       if (state.dispatchedNext !== null) {
         const record = buildStageRecord(state.dispatchedNext, state.dispatchedResult!, false)

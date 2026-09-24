@@ -364,6 +364,31 @@ describe('runCycle — stall resume (US-506 T-8, AC12)', () => {
     expect(stages[0]).toMatchObject({ step: 'implement', stalled: true, handoffAdvanced: false })
   })
 
+  it('r1 r0-4: resolve\'s warnings[] (e.g. a max-dispatches warning) are relayed via onNotice, naming the count', async () => {
+    const resolve = scriptedResolve([
+      {
+        status: 'in-progress',
+        next: VALIDATE_A0,
+        warnings: ['40 published handoff files exceed max-dispatches: 40 warn'],
+      } as CycleResolveResult,
+      { status: 'completed', next: DONE },
+    ])
+    const spawnStage = vi.fn(async (): Promise<CycleStageResult> => ({ processOutcome: 'success' }))
+    const notes: string[] = []
+
+    const outcome = await runCycle({
+      resolve,
+      worktree,
+      packet,
+      spawnStage,
+      policy: {},
+      onNotice: note => notes.push(note),
+    })
+
+    expect(outcome.status).toBe('ready-for-merge')
+    expect(notes.some(n => /40/.test(n))).toBe(true)
+  })
+
   it('a second failure ends `failed-<step>` — a stall resume and a dead-dispatch retry spend the SAME deadDispatchRetries budget', async () => {
     for (const second of [STALL, { processOutcome: 'success' } as CycleStageResult]) {
       const resolve = scriptedResolve([{ status: 'empty', next: IMPLEMENT_A0 }])
