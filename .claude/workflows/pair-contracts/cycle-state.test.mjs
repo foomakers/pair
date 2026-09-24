@@ -1181,6 +1181,44 @@ test('T-6 (AC8): bind-hosts returns the typed `way-of-working-malformed` error, 
   assert.equal(cli.status, 1)
 })
 
+// ── US-514 T-4 (AC4): supersede accepts every stage's handoff — tail only, sealed refused ────
+test('T-4 (AC4): supersede accepts a failed-custody review-phase handoff (tail only) — resolve names the review again', () => {
+  const { dir } = runDir()
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true }, { predecessor: undefined })
+  review(dir, 'r0', { mode: 'partial', custody: { verified: false, contractBreach: true, breaches: ['x'] } })
+  assert.equal(resolve({ dir, workflowVersion: V, policy: {}, entry: 'fresh' }).next.step, 'blocked')
+  const out = supersede({ dir, phase: 'r0', skill: 'review-phase', reason: 'custody false positive — the merge base moved under it', by: 'rucka', workflowVersion: V })
+  assert.equal(out.superseded, true, JSON.stringify(out))
+  assert.match(out.to, /^superseded-\d{4}-\d{2}-\d{2}-r0-review-phase\.json$/)
+  assert.equal(out.next.step, 'verify')
+  assert.ok(out.index)
+})
+
+test('T-4 (AC4): supersede refuses a handoff that is NOT the run\'s last one', () => {
+  const { dir } = runDir()
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true })
+  review(dir, 'r0', { mode: 'partial', custody: { verified: false, contractBreach: true, breaches: ['x'] } })
+  const out = supersede({ dir, phase: 'a0', skill: 'implement-phase', reason: 'not the tail', by: 'rucka', workflowVersion: V })
+  assert.deepEqual(out, { superseded: false, reason: 'supersede-not-last' })
+})
+
+test("T-4 (AC4, control): a sealed a0 contract is still refused, whatever the skill argument", () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0')
+  redVerify(dir, 'a0', {}, { predecessor: 'a0-red-spec' })
+  const out = supersede({ dir, phase: 'a0', skill: 'red-spec', reason: 'try anyway', by: 'rucka', workflowVersion: V })
+  assert.equal(out.superseded, false)
+  assert.equal(out.reason, 'supersede-sealed')
+})
+
+test('T-4 (AC4, control): an unknown skill is still refused, typed', () => {
+  const { dir } = runDir()
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true })
+  const out = supersede({ dir, phase: 'a0', skill: 'not-a-real-stage', reason: 'x', by: 'rucka', workflowVersion: V })
+  assert.equal(out.superseded, false)
+  assert.match(out.reason, /supersede-skill-unsupported:not-a-real-stage/)
+})
+
 test('T-22 (DT-14): an authenticated ignore decision preserves quality evidence, records the rationale, never touches source/severity — readiness follows once every proposal is dispositioned', () => {
   const { dir } = runDir()
   review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
@@ -4401,7 +4439,7 @@ test('US-506 T-5 w2 (AC8): a sealed attempt, a validated (rejected) attempt, an 
   redSpec(rejected, 'a0')
   redVerify(rejected, 'a0', { verified: false, sealed: false, snapshot: undefined, findings: [] }, { predecessor: 'a0-red-spec' })
   const b2 = listing(rejected)
-  assert.equal(supersede({ dir: rejected, phase: 'a0', reason: 'r', by: 'rucka', workflowVersion: V }).reason, 'supersede-validated')
+  assert.equal(supersede({ dir: rejected, phase: 'a0', reason: 'r', by: 'rucka', workflowVersion: V }).reason, 'supersede-not-last')  // US-514 T-4: the tail rule now catches this case with the more general reason
   const { dir: d3 } = unvalidatedRepair()
   const b3 = listing(d3)
   assert.equal(supersede({ dir: d3, phase: 'r7-g1', reason: 'r', by: 'rucka', workflowVersion: V }).reason, 'supersede-not-found')
@@ -4416,7 +4454,7 @@ test('US-506 T-5 w3 (AC8): the CLI `supersede` prints JSON — exit 0 when set a
   const ok = cliState(['supersede', '--dir', dir, '--phase', 'a0', '--reason', 'wrong note', '--by', 'rucka', '--workflowVersion', V, '--policy', JSON.stringify(POLICY), '--entry', 'fresh'])
   assert.deepEqual([ok.status, ok.json.superseded, ok.json.next.step], [0, true, 'prepare'])
   const refused = cliState(['supersede', '--dir', dir, '--phase', 'a0', '--reason', 'again', '--by', 'rucka', '--workflowVersion', V])
-  assert.deepEqual([refused.status, refused.json.reason], [1, 'supersede-validated'])
+  assert.deepEqual([refused.status, refused.json.reason], [1, 'supersede-not-last'])  // US-514 T-4: the tail rule now catches this case with the more general reason
 })
 
 // US-506 F-5: the review names the decisions it owes (`humanDecisionIds`); the escalate stands until

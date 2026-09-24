@@ -2648,16 +2648,26 @@ export function supersede({ dir, phase, skill = 'red-spec', attempt, reason, by,
   if (where.error) return { superseded: false, reason: where.error, path: where.path }
   if (!String(reason ?? '').trim()) return { superseded: false, reason: 'supersede-reason-missing' }
   if (!String(by ?? '').trim()) return { superseded: false, reason: 'supersede-by-missing' }
-  if (skill !== 'red-spec') return { superseded: false, reason: `supersede-skill-unsupported:${skill}` }
+  // US-514 T-4 (AC4): generalized from red-spec-only to every stage handoff — a maintainer
+  // recovery command for any stage's mistake (a false-positive custody breach, a bookkeeping
+  // error), never only the contract-preparation one #487 first needed it for.
+  if (!SKILLS.includes(skill)) return { superseded: false, reason: `supersede-skill-unsupported:${skill}` }
   return withLock(dir, lockWaitMs, () => {
     const handoffs = readHandoffs(dir)
     const ofPhase = handoffs.filter(h => h.skill === skill && h.phase === phase && h.data)
     const target = attempt !== undefined ? ofPhase.find(h => h.attempt === Number(attempt)) : ofPhase[ofPhase.length - 1]
     if (!target) return { superseded: false, reason: 'supersede-not-found', phase, attempt: attempt ?? null }
     const verdicts = handoffs.filter(h => h.skill === 'red-verify' && h.phase === phase && h.data)
+    // Sealed is checked BEFORE the tail rule: a sealed contract is refused as `supersede-sealed`
+    // (the specific, actionable reason) even though a later red-verify also makes it a non-tail
+    // handoff — the maintainer needs to know WHY, not just that it isn't last.
     if (verdicts.some(v => v.data.sealed === true && (!target.data.contractHash || v.data.contractHash === target.data.contractHash))) return { superseded: false, reason: 'supersede-sealed', file: basename(target.file) }
+    // US-514 T-4 (AC4, business rule): only the TAIL of the run can be set aside — a maintainer
+    // recovers the last mistake, never rewrites history underneath evidence already built on it.
+    if (handoffs[handoffs.length - 1] !== target) return { superseded: false, reason: 'supersede-not-last' }
     // A verdict published AFTER this attempt answered it: a rejection is evidence the next repair
-    // is checked against, never something to set aside.
+    // is checked against, never something to set aside. (Subsumed by the tail check above for most
+    // cases — kept as a second, independent guard against phase-label collisions across skills.)
     if (verdicts.some(v => handoffs.indexOf(v) > handoffs.indexOf(target))) return { superseded: false, reason: 'supersede-validated', file: basename(target.file) }
     const prefix = `superseded-${dayOf(now)}-`
     const from = basename(target.file)
