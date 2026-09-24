@@ -559,6 +559,9 @@ test('AC8: the extension guide names the eight methods, the registration wiring 
   const root = mkdtempSync(join(tmpdir(), 'fs-host-'))
   const host = bindHosts({ binding: r, registry, transport: { root } })
   mkdirSync(join(root, 'cards'), { recursive: true })
+  // r2-g1-ac8: PR 1 carries a 40-hex head (the guide table: prHead is a 40-hex sha; a check lands on the head only)
+  mkdirSync(join(root, 'prs'), { recursive: true })
+  writeFileSync(join(root, 'prs', '1.json'), JSON.stringify({ head: SHA, comments: [], checks: [], labels: [] }))
   writeFileSync(join(root, 'cards', '9.md'), 'AC-1: x\n')
   assert.equal(host.pm.cardHash(9), canonicalCardHash('AC-1: x\n'))
   const marker = '<!-- pair:first-review #9 PR#1 -->'
@@ -566,7 +569,7 @@ test('AC8: the extension guide names the eight methods, the registration wiring 
   assert.equal(host.code.upsertComment({ pr: 1, marker, body: 'b' }).action, 'updated')
   assert.equal(host.code.concludeCheck({ pr: 1, sha: SHA, state: 'success' }).published, true)
   assert.equal(host.code.setPrState({ pr: 1, label: 'pr-state:ready-to-merge' }).confirmed, true)
-  assert.equal(host.code.prHead({ pr: 1 }), null)
+  assert.equal(host.code.prHead({ pr: 1 }), SHA)
   assert.deepEqual(host.code.merge({ pr: 1, strategy: 'squash', message: 'm' }).merged, true)
   assert.deepEqual(host.pm.closeAndCascade({ id: 9 }).closed, [9])
 })
@@ -1338,4 +1341,235 @@ test('r1-g4-c6: control (existing) — host/ ships byte-identical in every workf
 
 test('r1-g4-mirror: the guide and its dataset mirror stay byte-identical', () => {
   assert.equal(readFileSync(G4_GUIDE_PATH, 'utf8'), readFileSync(G4_GUIDE_MIRROR, 'utf8'))
+})
+
+// ── r2-g1: the guide's worked example honours its own contract table (r1-6) and its minimal test is repeatable (r1-5) ──
+const r2g1Fence = name => {
+  const m = new RegExp('<!-- worked-example:' + name + ' -->\\s*```js\\n([\\s\\S]*?)```').exec(g4Guide())
+  assert.ok(m, `worked-example:${name} fence not found`)
+  return m[1]
+}
+
+// r1-5 harness: the guide's fences laid out as <tmp>/skill/{scripts/host,tests}, the child `node --test`
+// run from a SEPARATE fresh project dir (<tmp>/project) with an env of PATH + HOME only — no
+// NODE_TEST_CONTEXT, no inherited test env — as many times as asked, all from that one cwd.
+function r2g1RunFromOneCwd(adapterSrc, testSrc, times) {
+  const tmp = mkdtempSync(join(tmpdir(), 'r2g1-'))
+  const hostDir = join(tmp, 'skill', 'scripts', 'host')
+  mkdirSync(hostDir, { recursive: true })
+  mkdirSync(join(tmp, 'skill', 'tests'))
+  mkdirSync(join(tmp, 'project'))
+  mkdirSync(join(tmp, 'home'))
+  cpSync(join(HOST_DIR, 'adapter-kit.mjs'), join(hostDir, 'adapter-kit.mjs'))
+  cpSync(join(HOST_DIR, 'index.mjs'), join(hostDir, 'index.mjs'))
+  writeFileSync(join(hostDir, 'filesystem.mjs'), adapterSrc)
+  const file = join(tmp, 'skill', 'tests', 'fs.test.mjs')
+  writeFileSync(file, testSrc)
+  const cwd = join(tmp, 'project')
+  const env = { PATH: process.env.PATH ?? '', HOME: join(tmp, 'home') }
+  const runs = []
+  for (let i = 0; i < times; i++) runs.push(spawnSync(process.execPath, ['--test', '--test-reporter=tap', file], { cwd, env, encoding: 'utf8', timeout: 60000 }))
+  return { cwd, runs }
+}
+const r2g1Green = r => r.status === 0 && /^# pass [1-9]\d*$/m.test(r.stdout) && /^# fail 0$/m.test(r.stdout)
+
+test('r2-g1-5a: the guide minimal test, run TWICE from the same cwd, passes both times and leaves the cwd untouched', () => {
+  const { cwd, runs } = r2g1RunFromOneCwd(r2g1Fence('filesystem'), r2g1Fence('minimal-test'), 2)
+  for (const [i, r] of runs.entries()) assert.ok(r2g1Green(r), `run ${i + 1} is not pass>=1/fail 0:\n${r.stdout}${r.stderr}`)
+  assert.deepEqual(readdirSync(cwd), [], 'the minimal test wrote into the cwd it was run from')
+})
+
+test('r2-g1-5b: one run of the guide minimal test writes nothing under the project cwd .pair/', () => {
+  const { cwd, runs } = r2g1RunFromOneCwd(r2g1Fence('filesystem'), r2g1Fence('minimal-test'), 1)
+  assert.ok(r2g1Green(runs[0]), runs[0].stdout + runs[0].stderr)
+  assert.equal(existsSync(join(cwd, '.pair')), false, 'the minimal test persisted state into <cwd>/.pair (the implementer project)')
+})
+
+test('r2-g1-5c: control — the first run of the guide minimal test from a fresh cwd passes', () => {
+  const { runs } = r2g1RunFromOneCwd(r2g1Fence('filesystem'), r2g1Fence('minimal-test'), 1)
+  assert.ok(r2g1Green(runs[0]), runs[0].stdout + runs[0].stderr)
+})
+
+// r1-6 harness: the guide's worked example bound in-process from a tmp copy of scripts/host/, with an
+// isolated transport.root; a PR is seeded in the layout the example documents (<root>/prs/<n>.json).
+async function r2g1Bind() {
+  const dir = mkdtempSync(join(tmpdir(), 'r2g1-host-'))
+  for (const f of readdirSync(HOST_DIR)) cpSync(join(HOST_DIR, f), join(dir, f))
+  writeFileSync(join(dir, 'filesystem.mjs'), r2g1Fence('filesystem'))
+  const registry = await loadAdapters(dir)
+  assert.equal(registry.broken.size, 0, JSON.stringify([...registry.broken]))
+  const root = mkdtempSync(join(tmpdir(), 'r2g1-root-'))
+  const { code } = bindHosts({ binding: { pmTool: 'filesystem', codeHost: 'filesystem' }, registry, transport: { root } })
+  const seed = (pr, data) => {
+    mkdirSync(join(root, 'prs'), { recursive: true })
+    writeFileSync(join(root, 'prs', `${pr}.json`), JSON.stringify({ head: null, comments: [], checks: [], labels: [], ...data }))
+  }
+  const stored = pr => (existsSync(join(root, 'prs', `${pr}.json`)) ? JSON.parse(readFileSync(join(root, 'prs', `${pr}.json`), 'utf8')) : null)
+  return { code, seed, stored }
+}
+const r2g1InvalidOutput = e => e?.name === 'HostError' && e?.kind === 'invalid-output'
+
+test('r2-g1-6a: prHead on a PR with no head throws HostError(invalid-output), never returns null', async () => {
+  const { code } = await r2g1Bind()
+  assert.throws(() => code.prHead({ pr: 2 }), r2g1InvalidOutput)
+})
+
+test('r2-g1-6a2: prHead on a stored head that is not a 40-hex sha (word, 39 hex) throws HostError(invalid-output)', async () => {
+  const { code, seed } = await r2g1Bind()
+  seed(3, { head: 'not-a-sha' })
+  assert.throws(() => code.prHead({ pr: 3 }), r2g1InvalidOutput)
+  seed(4, { head: 'a'.repeat(39) })
+  assert.throws(() => code.prHead({ pr: 4 }), r2g1InvalidOutput)
+})
+
+// r2-g1-6a3/6a4: the 40-hex grammar has two INDEPENDENT dimensions — length exactly 40 and alphabet
+// [0-9a-f], anchored. 6a2 varies length only (39); 6a3 holds length at 40 and breaks the alphabet;
+// 6a4 holds the alphabet and breaks length (41). A length-only or an unanchored check fails one of them.
+test('r2-g1-6a3: prHead on a stored 40-char non-hex head (z x40) throws HostError(invalid-output)', async () => {
+  const { code, seed } = await r2g1Bind()
+  seed(7, { head: 'z'.repeat(40) })
+  assert.throws(() => code.prHead({ pr: 7 }), r2g1InvalidOutput)
+})
+
+test('r2-g1-6a4: prHead on a stored 41-hex head (a x41) throws HostError(invalid-output)', async () => {
+  const { code, seed } = await r2g1Bind()
+  seed(8, { head: 'a'.repeat(41) })
+  assert.throws(() => code.prHead({ pr: 8 }), r2g1InvalidOutput)
+})
+
+test('r2-g1-6ac: control — prHead on a stored 40-hex head returns it', async () => {
+  const { code, seed } = await r2g1Bind()
+  seed(5, { head: SHA })
+  assert.equal(code.prHead({ pr: 5 }), SHA)
+})
+
+test('r2-g1-6b: setPrState with a label outside stateLabels is refused — confirmed:false, unknown-label, labels untouched', async () => {
+  const { code, seed, stored } = await r2g1Bind()
+  seed(2, { labels: ['pr-state:to-be-reviewed'] })
+  const r = code.setPrState({ pr: 2, label: 'pr-state:bogus' })
+  assert.equal(r.confirmed, false, JSON.stringify(r))
+  assert.equal(r.error, 'unknown-label', JSON.stringify(r))
+  assert.notEqual(r.applied, 'pr-state:bogus', JSON.stringify(r))
+  assert.deepEqual(stored(2).labels, ['pr-state:to-be-reviewed'])
+})
+
+test('r2-g1-6bc: control — setPrState with a stateLabels label leaves exactly that pr-state label, confirmed', async () => {
+  const { code, seed, stored } = await r2g1Bind()
+  seed(2, { labels: ['pr-state:to-be-reviewed'] })
+  const r = code.setPrState({ pr: 2, label: 'pr-state:ready-to-merge' })
+  assert.equal(r.confirmed, true, JSON.stringify(r))
+  assert.equal(r.applied, 'pr-state:ready-to-merge')
+  assert.deepEqual(stored(2).labels.filter(l => l.startsWith('pr-state:')), ['pr-state:ready-to-merge'])
+})
+
+test('r2-g1-6c: concludeCheck ignores a caller-supplied context — the returned context is always checkContext', async () => {
+  const { code, seed } = await r2g1Bind()
+  seed(2, { head: SHA })
+  const r = code.concludeCheck({ pr: 2, sha: SHA, state: 'success', context: 'x' })
+  assert.equal(r.context, 'pair-review', JSON.stringify(r))
+})
+
+test('r2-g1-6c2: concludeCheck on a sha that is not the PR head reports published:false, context checkContext, no throw', async () => {
+  const { code, seed } = await r2g1Bind()
+  seed(2, { head: SHA2 })
+  const r = code.concludeCheck({ pr: 2, sha: SHA, state: 'success', context: 'x' })
+  assert.equal(r.published, false, JSON.stringify(r))
+  assert.equal(r.context, 'pair-review', JSON.stringify(r))
+})
+
+test('r2-g1-6c3: concludeCheck on a PR with no head at all reports published:false, no throw', async () => {
+  const { code } = await r2g1Bind()
+  const r = code.concludeCheck({ pr: 2, sha: SHA, state: 'success' })
+  assert.equal(r.published, false, JSON.stringify(r))
+})
+
+test('r2-g1-6cc: control — concludeCheck on the PR head without a context publishes under checkContext', async () => {
+  const { code, seed } = await r2g1Bind()
+  seed(2, { head: SHA })
+  const r = code.concludeCheck({ pr: 2, sha: SHA, state: 'success' })
+  assert.equal(r.published, true, JSON.stringify(r))
+  assert.equal(r.context, 'pair-review')
+  assert.equal(r.sha, SHA)
+})
+
+test('r2-g1-6d: the guide minimal test asserts the three table rows the worked example must honour', () => {
+  const t = r2g1Fence('minimal-test')
+  assert.ok(t.includes('invalid-output'), 'minimal test does not assert prHead invalid-output')
+  assert.ok(t.includes('unknown-label'), 'minimal test does not assert setPrState unknown-label refusal')
+  assert.match(t, /published/, 'minimal test does not assert concludeCheck published:false on a non-head sha')
+})
+
+// r2-g1-6e: an adapter with exactly the three r1-6 defects (prHead null on no head, unknown label confirmed,
+// caller context echoed and published on any sha), otherwise the worked example's own layout and methods.
+const R2G1_DEFECTIVE_FS = `import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { defineAdapter, upsertByMarker, HostError } from './adapter-kit.mjs'
+const LABELS = ['pr-state:to-be-reviewed', 'pr-state:ready-to-merge', 'pr-state:not-approved']
+export default defineAdapter({
+  id: 'filesystem',
+  hostsCode: false,
+  binaries: [],
+  create(transport = {}) {
+    const root = transport.root ?? join(process.cwd(), '.pair', 'fs-host')
+    const card = id => join(root, 'cards', id + '.md')
+    const prFile = pr => join(root, 'prs', pr + '.json')
+    const readPr = pr => (existsSync(prFile(pr)) ? JSON.parse(readFileSync(prFile(pr), 'utf8')) : { head: null, comments: [], checks: [], labels: [] })
+    const writePr = (pr, data) => { mkdirSync(join(root, 'prs'), { recursive: true }); writeFileSync(prFile(pr), JSON.stringify(data)) }
+    return {
+      checkContext: 'pair-review',
+      stateLabels: LABELS,
+      errorPrefix: 'fs',
+      readCard(id) { if (!existsSync(card(id))) throw new HostError('failed', { detail: 'no such card' }); return { body: readFileSync(card(id), 'utf8') } },
+      prHead: ({ pr }) => readPr(pr).head,
+      upsertComment({ pr, marker, body }) {
+        const data = readPr(pr)
+        return upsertByMarker({ marker, body, max: 65536, list: () => data.comments, update: (hit, full) => { hit.body = full; writePr(pr, data); return hit }, create: full => { const c = { id: data.comments.length + 1, body: full, url: prFile(pr) + '#' + (data.comments.length + 1) }; data.comments.push(c); writePr(pr, data); return c } })
+      },
+      concludeCheck({ pr, sha, state, context = 'pair-review' }) { const data = readPr(pr); data.checks.push({ sha, state, context }); writePr(pr, data); return { context, sha, state, published: true, error: null } },
+      setPrState({ pr, label }) { const data = readPr(pr); const removed = data.labels.filter(l => LABELS.includes(l) && l !== label); data.labels = [...data.labels.filter(l => !LABELS.includes(l)), label]; writePr(pr, data); return { applied: label, removed, confirmed: true, error: null } },
+      merge({ pr, strategy = 'squash' }) { writePr(pr, { ...readPr(pr), merged: strategy }); return { merged: true, pr: Number(pr), strategy } },
+      closeAndCascade({ id }) { writeFileSync(card(id), readFileSync(card(id), 'utf8') + '\\n<!-- closed -->\\n'); return { closed: [Number(id)], stoppedAt: null } },
+    }
+  },
+})
+`
+
+// r2-g1-6e1..6e3: one run per SINGLE r1-6 defect. Each stand-in is R2G1_DEFECTIVE_FS with the other two
+// defects repaired to the guide table, so the minimal test must catch each defect on its own.
+const r2g1Fix = (src, from, to) => {
+  assert.ok(src.includes(from), 'stand-in fix anchor missing: ' + from)
+  return src.replace(from, to)
+}
+const R2G1_FIX = {
+  prHead: s => r2g1Fix(s, 'prHead: ({ pr }) => readPr(pr).head,', "prHead: ({ pr }) => { const h = readPr(pr).head; if (!/^[0-9a-f]{40}$/.test(h ?? '')) throw new HostError('invalid-output', { detail: 'head' }); return h },"),
+  label: s => r2g1Fix(s, 'setPrState({ pr, label }) { const data = readPr(pr);', "setPrState({ pr, label }) { if (!LABELS.includes(label)) return { applied: null, removed: [], confirmed: false, error: 'unknown-label' }; const data = readPr(pr);"),
+  offHead: s => r2g1Fix(s, "concludeCheck({ pr, sha, state, context = 'pair-review' }) { const data = readPr(pr);", "concludeCheck({ pr, sha, state }) { const context = 'pair-review'; const data = readPr(pr); if (data.head !== sha) return { context, sha, state, published: false, error: 'not-head' };"),
+}
+const r2g1OnlyDefect = keep => Object.entries(R2G1_FIX).reduce((s, [k, fix]) => (k === keep ? s : fix(s)), R2G1_DEFECTIVE_FS)
+const r2g1AllFixed = () => Object.values(R2G1_FIX).reduce((s, f) => f(s), R2G1_DEFECTIVE_FS)
+const r2g1PassesAllFixed = () => {
+  const { runs } = r2g1RunFromOneCwd(r2g1AllFixed(), r2g1Fence('minimal-test'), 1)
+  assert.ok(r2g1Green(runs[0]), 'the minimal test fails the stand-in with ALL three r1-6 fixes applied:\n' + runs[0].stdout + runs[0].stderr)
+}
+const r2g1RejectsOnly = keep => {
+  r2g1PassesAllFixed()
+  const { runs } = r2g1RunFromOneCwd(r2g1OnlyDefect(keep), r2g1Fence('minimal-test'), 1)
+  assert.notEqual(runs[0].status, 0, `the minimal test passed on an adapter whose only defect is ${keep}:\n` + runs[0].stdout + runs[0].stderr)
+  assert.match(runs[0].stdout, /^# fail [1-9]\d*$/m, runs[0].stdout + runs[0].stderr)
+}
+
+test('r2-g1-6e0: control — the guide minimal test PASSES the stand-in with all three r1-6 fixes applied', () => {
+  r2g1PassesAllFixed()
+})
+
+test('r2-g1-6e1: the guide minimal test REJECTS an adapter whose only defect is prHead returning a non-sha (null)', () => {
+  r2g1RejectsOnly('prHead')
+})
+
+test('r2-g1-6e2: the guide minimal test REJECTS an adapter whose only defect is setPrState confirming an unknown label', () => {
+  r2g1RejectsOnly('label')
+})
+
+test('r2-g1-6e3: the guide minimal test REJECTS an adapter whose only defect is concludeCheck publishing off-head', () => {
+  r2g1RejectsOnly('offHead')
 })
