@@ -1525,9 +1525,9 @@ export default defineAdapter({
         const data = readPr(pr)
         return upsertByMarker({ marker, body, max: 65536, list: () => data.comments, update: (hit, full) => { hit.body = full; writePr(pr, data); return hit }, create: full => { const c = { id: data.comments.length + 1, body: full, url: prFile(pr) + '#' + (data.comments.length + 1) }; data.comments.push(c); writePr(pr, data); return c } })
       },
-      concludeCheck({ pr, sha, state, context = 'pair-review' }) { const data = readPr(pr); data.checks.push({ sha, state, context }); writePr(pr, data); return { context, sha, state, published: true, error: null } },
+      concludeCheck({ pr, sha, state, context = 'pair-review' }) { if (!['success', 'failure', 'pending'].includes(state)) throw new HostError('unsupported', { detail: 'state' }); const data = readPr(pr); data.checks.push({ sha, state, context }); writePr(pr, data); return { context, sha, state, published: true, error: null } },
       setPrState({ pr, label }) { const data = readPr(pr); const removed = data.labels.filter(l => LABELS.includes(l) && l !== label); data.labels = [...data.labels.filter(l => !LABELS.includes(l)), label]; writePr(pr, data); return { applied: label, removed, confirmed: true, error: null } },
-      merge({ pr, strategy = 'squash' }) { writePr(pr, { ...readPr(pr), merged: strategy }); return { merged: true, pr: Number(pr), strategy } },
+      merge({ pr, strategy = 'squash' }) { if (!['squash', 'merge', 'rebase'].includes(strategy)) throw new HostError('unsupported', { detail: 'strategy' }); writePr(pr, { ...readPr(pr), merged: strategy }); return { merged: true, pr: Number(pr), strategy } },
       closeAndCascade({ id }) { writeFileSync(card(id), readFileSync(card(id), 'utf8') + '\\n<!-- closed -->\\n'); return { closed: [Number(id)], stoppedAt: null } },
     }
   },
@@ -1543,7 +1543,7 @@ const r2g1Fix = (src, from, to) => {
 const R2G1_FIX = {
   prHead: s => r2g1Fix(s, 'prHead: ({ pr }) => readPr(pr).head,', "prHead: ({ pr }) => { const h = readPr(pr).head; if (!/^[0-9a-f]{40}$/.test(h ?? '')) throw new HostError('invalid-output', { detail: 'head' }); return h },"),
   label: s => r2g1Fix(s, 'setPrState({ pr, label }) { const data = readPr(pr);', "setPrState({ pr, label }) { if (!LABELS.includes(label)) return { applied: null, removed: [], confirmed: false, error: 'unknown-label' }; const data = readPr(pr);"),
-  offHead: s => r2g1Fix(s, "concludeCheck({ pr, sha, state, context = 'pair-review' }) { const data = readPr(pr);", "concludeCheck({ pr, sha, state }) { const context = 'pair-review'; const data = readPr(pr); if (data.head !== sha) return { context, sha, state, published: false, error: 'not-head' };"),
+  offHead: s => r2g1Fix(s, "concludeCheck({ pr, sha, state, context = 'pair-review' }) { if (!['success', 'failure', 'pending'].includes(state)) throw new HostError('unsupported', { detail: 'state' }); const data = readPr(pr);", "concludeCheck({ pr, sha, state }) { if (!['success', 'failure', 'pending'].includes(state)) throw new HostError('unsupported', { detail: 'state' }); const context = 'pair-review'; const data = readPr(pr); if (data.head !== sha) return { context, sha, state, published: false, error: 'not-head' };"),
 }
 const r2g1OnlyDefect = keep => Object.entries(R2G1_FIX).reduce((s, [k, fix]) => (k === keep ? s : fix(s)), R2G1_DEFECTIVE_FS)
 const r2g1AllFixed = () => Object.values(R2G1_FIX).reduce((s, f) => f(s), R2G1_DEFECTIVE_FS)
@@ -1572,4 +1572,100 @@ test('r2-g1-6e2: the guide minimal test REJECTS an adapter whose only defect is 
 
 test('r2-g1-6e3: the guide minimal test REJECTS an adapter whose only defect is concludeCheck publishing off-head', () => {
   r2g1RejectsOnly('offHead')
+})
+
+// ── r2-2: the guide's contract table agrees with the shipped github.mjs, and the worked example
+// refuses an unsupported merge strategy / concludeCheck state (off-cycle review finding r2-1) ──
+
+test('r2-2-a: the worked example throws HostError(unsupported) on a merge strategy outside squash | merge | rebase', async () => {
+  const { code } = await r2g1Bind()
+  assert.throws(() => code.merge({ pr: 1, strategy: 'fast-forward' }), e => e?.name === 'HostError' && e?.kind === 'unsupported')
+})
+
+test('r2-2-ac: control — the worked example still merges on an allowed strategy', async () => {
+  const { code, seed } = await r2g1Bind()
+  seed(1, {})
+  assert.deepEqual(code.merge({ pr: 1, strategy: 'squash' }), { merged: true, pr: 1, strategy: 'squash' })
+})
+
+test('r2-2-b: the worked example throws HostError(unsupported) on a concludeCheck state outside success | failure | pending', async () => {
+  const { code, seed } = await r2g1Bind()
+  seed(1, { head: SHA })
+  assert.throws(() => code.concludeCheck({ pr: 1, sha: SHA, state: 'bogus' }), e => e?.name === 'HostError' && e?.kind === 'unsupported')
+})
+
+test('r2-2-bc: control — the worked example still concludes on an allowed state', async () => {
+  const { code, seed } = await r2g1Bind()
+  seed(1, { head: SHA })
+  assert.equal(code.concludeCheck({ pr: 1, sha: SHA, state: 'success' }).published, true)
+})
+
+test('r2-2-c: the guide minimal test asserts both new refusals (unsupported merge strategy, unsupported concludeCheck state)', () => {
+  const t = r2g1Fence('minimal-test')
+  assert.match(t, /merge\(\{[^}]*strategy:\s*'fast-forward'[^}]*\}\)/, 'minimal test does not exercise an unsupported merge strategy')
+  assert.match(t, /concludeCheck\(\{[^}]*state:\s*'bogus'[^}]*\}\)/, 'minimal test does not exercise an unsupported concludeCheck state')
+  assert.match(t, /unsupported/, 'minimal test does not assert HostError(unsupported)')
+})
+
+test('r2-2-d: the reworded concludeCheck/setPrState table rows still name checkContext, published: false, and an unknown-label refusal (unchanged sealed assertions)', () => {
+  const ccRow = g4Row('concludeCheck')
+  const spRow = g4Row('setPrState')
+  assert.ok(ccRow.includes('checkContext'))
+  assert.ok(ccRow.includes('published: false'))
+  assert.match(spRow, /unknown-label|outside `?stateLabels`?|confirmed: false/)
+})
+
+test('r2-2-e: the reworded rows no longer claim github.mjs itself refuses a caller-supplied context or an unknown label — they name the shipped adapters as posting/applying as given', () => {
+  const ccRow = g4Row('concludeCheck')
+  const spRow = g4Row('setPrState')
+  assert.match(ccRow, /github\.mjs.*post|post.*whatever|no cycle caller/i, `concludeCheck row does not scope the caller-context claim off the shipped adapters: ${ccRow}`)
+  assert.match(spRow, /shipped adapters apply whatever|shipped adapters.*given/i, `setPrState row does not scope the unknown-label claim off the shipped adapters: ${spRow}`)
+})
+
+test('r2-2-f: github.mjs concludeCheck posts a caller-supplied context and does not refuse an off-head sha (the reworded table describes this, not a table promise it breaks)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gh-statuses-'))
+  const log = join(dir, 'calls.log')
+  writeFileSync(log, '')
+  const bin = join(dir, 'gh')
+  writeFileSync(
+    bin,
+    `#!/usr/bin/env node
+const fs = require('fs')
+const a = process.argv.slice(2)
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(a) + '\\n')
+if (a[0] === 'api' && a[1] === '-X' && a[2] === 'POST' && /\\/statuses\\//.test(a[3])) process.exit(0)
+process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(3)
+`,
+  )
+  chmodSync(bin, 0o755)
+  const h = github.instantiate({ ghBin: bin })
+  // sha not the PR's own head at all — github.mjs has no notion of "the PR head" here, it just posts.
+  const r = h.concludeCheck({ pr: 1, repo: 'o/r', sha: SHA2, state: 'success', context: 'not-mine' })
+  assert.equal(r.context, 'not-mine', 'github.mjs honours a caller-supplied context, per the reworded row')
+  assert.equal(r.published, true, 'github.mjs posts on whatever sha it is given, per the reworded row')
+  const call = readFileSync(log, 'utf8').trim().split('\n').map(l => JSON.parse(l))[0]
+  assert.ok(call.includes('context=not-mine'), 'the caller-supplied context reached gh, unfiltered')
+})
+
+test('r2-2-g: github.mjs setPrState applies a label outside stateLabels rather than refusing it (the reworded table describes this, not a table promise it breaks)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gh-labels-'))
+  const state = join(dir, 'labels.json')
+  writeFileSync(state, JSON.stringify([]))
+  const bin = join(dir, 'gh')
+  writeFileSync(
+    bin,
+    `#!/usr/bin/env node
+const fs = require('fs')
+const a = process.argv.slice(2)
+const S = JSON.parse(fs.readFileSync(${JSON.stringify(state)}, 'utf8'))
+const save = v => fs.writeFileSync(${JSON.stringify(state)}, JSON.stringify(v))
+if (a[0] === 'api' && /\\/labels$/.test(a[1]) && !a.includes('-X')) { process.stdout.write(JSON.stringify(S.map(name => ({ name })))); process.exit(0) }
+if (a[0] === 'api' && a[1] === '-X' && a[2] === 'POST' && /\\/labels$/.test(a[3])) { const input = JSON.parse(fs.readFileSync(0, 'utf8')); save([...S, ...input.labels]); process.exit(0) }
+process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(3)
+`,
+  )
+  chmodSync(bin, 0o755)
+  const h = github.instantiate({ ghBin: bin })
+  const r = h.setPrState({ pr: 1, repo: 'o/r', label: 'pr-state:bogus' })
+  assert.equal(r.confirmed, true, 'github.mjs applies whatever label it is given, per the reworded row')
 })
