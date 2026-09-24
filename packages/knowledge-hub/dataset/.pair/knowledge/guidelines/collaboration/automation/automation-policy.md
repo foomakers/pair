@@ -321,11 +321,11 @@ Nothing in this file starts a run. A **trigger** does: a thin, per-host piece th
 
 ## Harness and Model Policy
 
-A second, independent section of the same file — disjoint from `## Eligibility` above (which cards run unattended) and from `## Auto-Advance` / `## Stop Predicate` / `## Max Parallelism` / `## Audit Location` (the rest-of-file schema ADR-017 §6/#250 lands). This section answers two different questions: **which agent harnesses this project supports**, and **which model class each risk tier gets**. `/setup-harness` reads exactly these two declarations; the [agent-harness framework](../../technical-standards/ai-development/agent-harness/README.md) documents what each harness value means.
+A second, independent section of the same file — disjoint from `## Eligibility` above (which cards run unattended) and from `## Auto-Advance` / `## Stop Predicate` / `## Max Parallelism` / `## Audit Location` (the rest-of-file schema ADR-017 §6/#250 lands). This section answers two different questions: **which agent harnesses this project supports**, and **which model class each risk tier gets**. `/pair-capability-setup-harness` reads exactly these two declarations; the [agent-harness framework](../../technical-standards/ai-development/agent-harness/README.md) documents what each harness value means.
 
 ### Zero-configuration path — stated first, on purpose
 
-`tech/automation.md` is optional (D21); this section inherits that. **Absent file, or present file with no `## Harness` / `## Model Policy` heading ⇒ every harness in the framework is presumed supported, and no model-class policy applies** — `/setup-harness` proceeds without a fitness check against a declared list (there is nothing declared to fail against) and provisions whichever harness `$harness` names or the developer picks. This is a valid, common, and expected state — most projects run one harness (frequently Claude Code, already in use) and never need this section. Presence of the section is what turns fitness-checking on, not the other way around.
+`tech/automation.md` is optional (D21); this section inherits that. **Absent file, or present file with no `## Harness` / `## Model Policy` heading ⇒ every harness in the framework is presumed supported, and no model-class policy applies** — `/pair-capability-setup-harness` proceeds without a fitness check against a declared list (there is nothing declared to fail against) and provisions whichever harness `$harness` names or the developer picks. This is a valid, common, and expected state — most projects run one harness (frequently Claude Code, already in use) and never need this section. Presence of the section is what turns fitness-checking on, not the other way around.
 
 ### `## Harness` — supported harnesses, never a pinned one
 
@@ -339,7 +339,7 @@ Requires: mcp
 - **First line: a comma-separated list of harness names**, matching the guide filenames in the [agent-harness framework](../../technical-standards/ai-development/agent-harness/README.md) (`pi`, `opencode`, `claude-code`, or a future one added there). Order carries no meaning.
 - **Declares what the project supports, never what to use.** Business Rule: the choice of which supported harness runs a given session belongs to the developer or their local configuration (`$harness`, or the interactive prompt when it is omitted) — this list is never read as a default or a preference order.
 - **Second line, optional: `Requires: <access-path>`** — a declared access-path requirement, comma-separated if more than one (today, the only value the framework defines is `mcp`). **This line is what makes an access-path incompatibility checkable at all** — a consumer never infers a requirement from a project's tooling or way-of-working; absent this line, no access-path requirement exists to fail against, harness-fitness checking on access paths is a no-op, and only the harness list (line 1) is checked.
-- **A harness not in the list ⇒ `/setup-harness` stops before writing any configuration**, naming the incompatibility precisely (e.g. "this project supports pi, opencode — claude-code is not declared"). **A declared `Requires:` value the resolved harness cannot satisfy ⇒ same stop** (e.g. `Requires: mcp` and `pi` — which has none by design — is the one requested).
+- **A harness not in the list ⇒ `/pair-capability-setup-harness` stops before writing any configuration**, naming the incompatibility precisely (e.g. "this project supports pi, opencode — claude-code is not declared"). **A declared `Requires:` value the resolved harness cannot satisfy ⇒ same stop** (e.g. `Requires: mcp` and `pi` — which has none by design — is the one requested).
 
 ### `## Model Policy` — classes anchored to `risk:*` tiers, never concrete model names
 
@@ -355,8 +355,51 @@ risk:red: frontier
 - **Classes, never concrete model names.** Model names and pricing are volatile — they live in each harness's guide (e.g. which free/cheap model a harness's provider offers today), never in adoption. A project that pins `claude-opus-5` here would need an adoption edit every time a vendor renames or retires a model; a class does not.
 - **Untagged work, or a tier the policy omits, resolves to no declared class** — the consumer (the automation loop, #250) falls back to its own default rather than this file inventing one.
 
+## Blocking Severities — what blocks the delivery cycle, and its dispatch ceiling
+
+A third, independent schema owner (US-514) — disjoint from every section above, all of which are `pair-loop`'s own policy. This one is read by the **delivery cycle** itself, both realizations (`pair-workflow-cycle`'s in-session coordinator, `pair-cli run --card`) and both roles that decide "does this block" (review-phase, red-verify). It answers two questions: which severities BLOCK, and — optionally — how many published handoffs a run may reach before it stops or warns.
+
+```markdown
+## Blocking Severities
+
+Critical, Major
+max-dispatches: 40 block
+```
+
+- **First line: a comma-separated list of severities**, each one of `Critical | Major | Minor` (`Questions` is never blocking by definition — a review finding filed as a question carries no defect to weigh at all, and is never listed here). A severity BLOCKS a finding or a contract gap when, and only when, it appears in this list; one that does not appear is recorded as a **non-blocking note** — the finding/gap is still reported, it simply does not refuse merge or refuse the seal.
+- **Optional second line: `max-dispatches: <positive integer> [warn|block]`** — a ceiling on the run's own published handoffs (a durable, cumulative count — every resume and every attempt is another file). `warn` is the mode when the word is omitted: at or above the ceiling, the cycle prints a warning naming the count and continues. `block` stops the run at the ceiling with the typed reason `max-dispatches`, naming the count and the recovery (`cycle-state.mjs migrate-acknowledge`).
+
+### Fail-safe default — every severity blocks, no ceiling
+
+**Absent file, absent section, or a section body containing only the severity line with no `max-dispatches` ⇒**:
+
+- `blockingSeverities`: the KB default, `Critical, Major, Minor` — every severity blocks, exactly today's behaviour, byte for byte;
+- `maxDispatches`: none — no ceiling at all. A consumer **MUST NOT** invent a number (there was never a "40" a project could read off this file — the pre-US-514 ceiling was a hard-coded engine constant, never adoption).
+
+`.pair/adoption/` is delta-only (ADR-018 / D21): a project declares this section only to differ from the KB default. **pair itself declares nothing here**, and keeps "every severity blocks" — consistent with its own recommended-defaults posture throughout this file.
+
+### Malformed ⇒ HALT, naming the file and the offending line
+
+A consumer **MUST HALT** (`automation-policy-malformed`) rather than fall back to the default, when:
+
+1. the severity line is empty, or names a token other than `Critical`, `Major` or `Minor`;
+2. the `max-dispatches` line is not `<positive integer> [warn|block]` — a non-integer, zero, negative, or a third token that is neither `warn` nor `block`;
+3. more than one `max-dispatches` line is present.
+
+### What this declaration does not encode
+
+| Question | Answered by |
+| --- | --- |
+| Which gates must be green before a card auto-advances? | [`quality-model.md`](../../quality-assurance/quality-model.md) §4 — per-tier requirements (D10). Not restated here |
+| Which cards an unattended run may pick up | `## Eligibility` above — a different consumer (`pair-loop`), a different question |
+| The two per-story engine ceilings this key does NOT touch | `consecutiveRedirects` (the durable state and the dispatched step disagree) stays the engine's own constant, never adoption — only the dispatch-count ceiling moved here |
+
+### Recovery — a maintainer's own commands, generalized (US-514 T-4)
+
+`pair-workflow-cycle`'s `supersede` command sets the run's own LAST handoff aside (any stage, not only the original preparation attempt) — see that skill's Maintainer Recovery section. This key changes only what BLOCKS; the recovery commands are unchanged in shape.
+
 ## Related
 
 - [Quality Model](../../quality-assurance/quality-model.md) — the classification matrix, tier resolution, per-tier requirements (§4), tag projection (§5) and the `tech/risk-matrix.md` adoption delta (§6)
-- [Agent Harness Framework](../../technical-standards/ai-development/agent-harness/README.md) — what each declared harness name means, and the per-harness guides `/setup-harness` applies
+- [Agent Harness Framework](../../technical-standards/ai-development/agent-harness/README.md) — what each declared harness name means, and the per-harness guides `/pair-capability-setup-harness` applies
 - [Collaboration Automation Framework](README.md) — the surrounding automation guidelines

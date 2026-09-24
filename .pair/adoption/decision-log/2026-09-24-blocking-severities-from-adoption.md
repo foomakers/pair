@@ -1,0 +1,54 @@
+# Decision: what blocks the delivery cycle comes from adoption, not a workflow rule
+
+## Date
+
+2026-09-24
+
+## Status
+
+Active
+
+## Category
+
+Tooling Preference
+
+## Context
+
+The delivery cycle (`cycle-state.mjs`, both realizations — `pair-workflow-cycle` in-session and `pair-cli run --card`) had two hard-coded rules with no adoption escape hatch:
+
+1. **Every severity blocks, unconditionally.** review-phase's `blocking` flag and red-verify's rejection decision were the agent's own judgment call, with no policy field to consult — a Minor finding on a tolerant project blocked exactly like a Critical one, and there was no way to declare otherwise short of the reviewer quietly under-reporting severity (never the right fix).
+2. **`CAPS.dispatchesPerStory = 40`** was a literal in `cycle-state.mjs`, checked unconditionally in `resolve`. A story that legitimately needed more than 40 published handoffs (a long remediation history, several revisions) hit a permanent block with no adoption-level relief — the only recovery was `migrate-acknowledge`, binding a fresh run directory, which is bookkeeping, not a policy the project could have declared in advance.
+
+Both defects trace to the same cause: a rule that should be a project's own choice was instead the workflow's own constant. ADR-024 §7 already states the principle for cycle rules generally ("one owner, `cycle-state.mjs`") — the fix is not to relocate the rule, it is to make `cycle-state.mjs` read it from the one place project-specific choices already live, `.pair/adoption/`.
+
+Two related but separate defects motivated the story's other tasks: #491's repair author computed `predecessorContractHash` by hand and got it wrong (a correct repair was refused by the sealer after consuming the repair budget); #492's `resolveMaintainer` read `default-assignee`/`code-host-assignee` with a plain line-scan regex, so a documented example inside a fenced code block was indistinguishable from a real declaration.
+
+## Decision
+
+**One adoption key, `## Blocking Severities` in `tech/automation.md`, decides both what blocks and the optional dispatch ceiling — for both realizations and both roles.**
+
+1. **Schema**: a comma-separated severity list (`Critical | Major | Minor`; `Questions` is never blocking and never listed) plus an optional `max-dispatches: <n> [warn|block]` line. Absent file or section ⇒ the KB default `Critical, Major, Minor` (today's behaviour, byte for byte) and no dispatch ceiling at all — never a silently substituted `40`. Malformed ⇒ HALT `automation-policy-malformed`, naming the file and the line (ADR-018/D21: delta-only adoption, never a silent fallback).
+
+2. **Read in both realizations, independently, from the same schema**: `apps/pair-cli/src/commands/run/blocking-severities.ts` (console) and `pair-workflow-cycle/SKILL.md` Step 1 (in-session, prose-documented since there is no script realization of the in-session coordinator). Both merge the result into the SAME `policy` object every later `resolve`/`publish`/`packet` call in the run reuses — never re-read mid-cycle, so a review and a validator dispatched from the same run never disagree.
+
+3. **`publish()` derives `blocking` from severity, never trusts the reviewer's claim** — the same reason `acHash` is stamped rather than read. Scoped to OPEN, non-`question`, non-`regressionRisk` findings (a closed finding's `blocking` is its own closure record; a `regressionRisk` finding is governed by the stricter DR-10 ledger coherence rule, not re-derived by severity alone). The validator half (which contract gaps reject `verified: true` vs. seal past as a non-blocking note) is the verifier's own judgment at seal time, not a mechanical post-hoc derivation — documented in `pair-workflow-red-verify/SKILL.md` Step 4 instead.
+
+4. **`CAPS.dispatchesPerStory` is deleted.** The only per-story dispatch ceiling left is `policy.maxDispatches`: `warn` (default) prints a warning on `resolve`'s output and continues; `block` stops the run typed (`reason: max-dispatches`), naming the count and `migrate-acknowledge`. `consecutiveRedirects` (a different quantity — the durable state and the dispatched step disagreeing) is untouched.
+
+5. **`supersede` (the maintainer's own recovery command) is generalized from red-spec-only to every stage handoff** (`--skill`, defaulting to `red-spec`), bounded to the run's own LAST handoff (`supersede-not-last`) — a maintainer recovers the last mistake of any stage, not only a preparation attempt, without rewriting history underneath evidence already built on it.
+
+6. **A shape error never reaches the validator or consumes a repair attempt.** `publish()` runs `contractErrors()` on a red-spec contract before accepting the handoff — the shape check `verify()`/`seal()` already apply, moved earlier. A repair/revision's `predecessorContractHash` is derived by the engine (from the actual sealed manifest in git history) rather than hand-computed, closing #491's exact defect class.
+
+7. **`resolveMaintainer` reads through the same CommonMark-aware declaration reader `#492`'s host resolution already uses** (`declarationText`, fence/HTML-comment blind) — a documented example is never mistaken for a real declaration, closing #492's exact defect class.
+
+## Alternatives Considered
+
+- **Leave "every severity blocks" as the workflow's own rule, with a per-project override flag threaded through CLI args.** Rejected: a flag is invisible in a diff and has to be remembered on every invocation; an adoption file is committed, reviewed, and read the same way by every run.
+- **Compute `blocking`/rejection entirely in the reviewer's/validator's own judgment, with the policy value only advisory.** Rejected for review-phase findings specifically: a mechanical derivation from severity is unambiguous and removable from the reviewer's own math entirely, the same reasoning that stamps `acHash` rather than trusting it. Kept as the reviewer's/validator's own judgment only where the engine cannot safely act after the fact (the seal already happened by publish time).
+- **Give `max-dispatches` its own section, separate from `## Blocking Severities`.** Rejected: both are "what blocks/stops" — one per-finding, one per-run — and the refinement session's own instruction was to simplify by removing causes of blocks rather than adding new adoption surface. One key, two related knobs.
+
+## Consequences
+
+- **Positive**: a project can declare a tolerant severity bar and an explicit dispatch ceiling without touching workflow code; the default reproduces today's behaviour exactly, so no existing project's runs change; `supersede` covers every stage's mistake, not only red-spec's; #491 and #492's defect classes are closed with regression tests.
+- **Negative**: `publish()` now derives `blocking` mechanically for review-phase findings — a reviewer that deliberately wants a Major finding non-blocking for a reason severity does not capture has to file it under the right severity (or, if it is truly a defect that will not block, the `nonActionable` path already exists for that).
+- **Follow-up**: the validator half of AC1 (red-verify's own severity-aware rejection judgment) is documentation-only, not mechanically enforced by `cycle-state.mjs` — a future story could add a lighter mechanical check once the seal-timing question (the real cryptographic seal already ran by the time a handoff publishes) has its own answer.
