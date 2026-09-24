@@ -1277,6 +1277,66 @@ test('T-5 (AC6, control): with no git repo at repoRoot, the declared predecessor
   rmSync(noGit, { recursive: true, force: true })
 })
 
+// ── US-514 T-2 (AC1): a review finding's `blocking` is DERIVED from severity vs
+// `policy.blockingSeverities` — the reviewer's own claim is never trusted, exactly like `acHash` ──
+test('T-2 (AC1): default policy (absent) ⇒ every listed severity blocks — today\'s behaviour, unchanged', () => {
+  const { dir } = runDir()
+  const f = writeDraft(dir, {
+    run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'),
+    reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', mode: 'first', custody: { verified: true, contractBreach: false }, readiness: { ready: false, remoteHead: SHA('c') },
+    findings: [
+      { id: 'r0-1', severity: 'Major', location: 'x', description: 'd', recommendation: 'r', blocking: false, transition: 'open', kind: 'defect', reproducer: { command: 'node --test' } },
+      { id: 'r0-2', severity: 'Minor', location: 'x', description: 'd', recommendation: 'r', blocking: false, transition: 'open', kind: 'defect', reproducer: { command: 'node --test' } },
+    ],
+  })
+  const out = publish({ dir, file: f, phase: 'r0', skill: 'review-phase', workflowVersion: V })
+  assert.equal(out.published, true, JSON.stringify(out))
+  const written = JSON.parse(readFileSync(join(dir, 'r0-review-phase.json'), 'utf8'))
+  assert.deepEqual(written.findings.map(x => x.blocking), [true, true], 'the reviewer\'s own false claim is overridden by severity')
+})
+
+test('T-2 (AC1): a `Critical, Major` policy makes a Minor finding non-blocking, whatever the reviewer claimed', () => {
+  const { dir } = runDir()
+  const f = writeDraft(dir, {
+    run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'),
+    reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', mode: 'first', custody: { verified: true, contractBreach: false }, readiness: { ready: false, remoteHead: SHA('c') },
+    findings: [
+      { id: 'r0-1', severity: 'Major', location: 'x', description: 'd', recommendation: 'r', blocking: true, transition: 'open', kind: 'defect', reproducer: { command: 'node --test' } },
+      { id: 'r0-2', severity: 'Minor', location: 'x', description: 'd', recommendation: 'r', blocking: true, transition: 'open', kind: 'defect', reproducer: { command: 'node --test' } },
+    ],
+  })
+  const out = publish({ dir, file: f, phase: 'r0', skill: 'review-phase', workflowVersion: V, policy: { blockingSeverities: ['Critical', 'Major'] } })
+  assert.equal(out.published, true, JSON.stringify(out))
+  const written = JSON.parse(readFileSync(join(dir, 'r0-review-phase.json'), 'utf8'))
+  assert.deepEqual(written.findings.map(x => x.blocking), [true, false])
+})
+
+test('T-2 (AC1, control): a CLOSED finding\'s `blocking` is left as the closure recorded it — severity is not re-applied to history', () => {
+  const { dir } = runDir()
+  const f = writeDraft(dir, {
+    run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1', skill: 'review-phase', inputHead: SHA('a'),
+    reviewedHead: SHA('c'), verdict: 'APPROVED', mode: 're-review', custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') },
+    findings: [{ id: 'r0-1', severity: 'Major', location: 'x', description: 'd', recommendation: 'r', blocking: false, transition: 'resolved', kind: 'defect', reproducer: { command: 'node --test' } }],
+  })
+  const out = publish({ dir, file: f, phase: 'r1', skill: 'review-phase', workflowVersion: V })
+  assert.equal(out.published, true, JSON.stringify(out))
+  const written = JSON.parse(readFileSync(join(dir, 'r1-review-phase.json'), 'utf8'))
+  assert.equal(written.findings[0].blocking, false)
+})
+
+test('T-2 (AC1, control): a `question` finding is never blocking, whatever severity it is filed under', () => {
+  const { dir } = runDir()
+  const f = writeDraft(dir, {
+    run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'),
+    reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', mode: 'first', custody: { verified: true, contractBreach: false }, readiness: { ready: false, remoteHead: SHA('c') },
+    findings: [{ id: 'r0-1', severity: 'Questions', location: 'x', description: 'd', recommendation: 'r', blocking: true, transition: 'open', kind: 'question' }],
+  })
+  const out = publish({ dir, file: f, phase: 'r0', skill: 'review-phase', workflowVersion: V })
+  assert.equal(out.published, true, JSON.stringify(out))
+  const written = JSON.parse(readFileSync(join(dir, 'r0-review-phase.json'), 'utf8'))
+  assert.equal(written.findings[0].blocking, false)
+})
+
 test('T-22 (DT-14): an authenticated ignore decision preserves quality evidence, records the rationale, never touches source/severity — readiness follows once every proposal is dispositioned', () => {
   const { dir } = runDir()
   review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })

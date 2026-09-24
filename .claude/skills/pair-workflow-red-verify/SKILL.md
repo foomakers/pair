@@ -59,7 +59,9 @@ Independently derive, from the authoritative producer named by each `inventory` 
 
 ### Step 4: Decide — ALL gaps in one answer
 
-Return `verified: false` with **every** concrete gap found in this pass as findings `{ rowId?, mechanismId?, location, severity, description (the failing example / the violated rule), recommendation (the evidence required), obligationIds?, sourceRef?, observedHead?, closureAssertions?, reproducer?, applicability?, counterexampleToCurrentContract?, changedRows? }` — stable `rowId`s so the repair can be traced. Never return the first gap and stop; a second pass on the repaired contract may only add gaps that the repair introduced or that need new evidence. `verified: true` only with zero findings and every command reproduced.
+Report **every** concrete gap found in this pass as findings `{ rowId?, mechanismId?, location, severity, description (the failing example / the violated rule), recommendation (the evidence required), obligationIds?, sourceRef?, observedHead?, closureAssertions?, reproducer?, applicability?, counterexampleToCurrentContract?, changedRows? }` — stable `rowId`s so the repair can be traced. Never return the first gap and stop; a second pass on the repaired contract may only add gaps that the repair introduced or that need new evidence.
+
+**US-514 T-2 (AC1) — which gaps REJECT is `$policy.blockingSeverities` (absent ⇒ `Critical, Major, Minor` — today's behaviour: every gap blocks).** A gap whose `severity` is in that list blocks: `verified: false`, no seal this pass. A gap whose `severity` is NOT listed is recorded on the contract as a **non-blocking note** — it does NOT by itself refuse `verified: true`, and does not consume the repair budget. **Structural shape is never a severity-filtered gap**: `contractErrors()` (the shape check `publish` runs before you are even dispatched, US-514 T-5) is orthogonal to this — a shape defect never reaches you as a finding to weigh at all. `verified: true` requires zero BLOCKING findings and every command reproduced; a run with only non-blocking notes still seals, and the notes travel with it (a Minor-only gap on a project declaring `Critical, Major` is the concrete case: it seals on the first pass, the note visible on the contract).
 
 **Naming a mechanism makes it a debt you must close in THIS answer (US-479 T-20, S3):** when a gap concerns a distinct mechanism (e.g. one of several independent producers/rewriters this contract touches), give it `mechanismId` and either:
 
@@ -101,6 +103,6 @@ a matrix you could not reproduce.
 
 - Read-only on the repository except the seal commit the script makes. Never edit, format, push, publish, comment, create a card or merge; never rehash a changed artifact into approval.
 - Blind: read nothing under `.pair/working/` except `$RUN_DIR`.
-- A typed rejection is the cycle's answer: the coordinator routes it to ONE repair; a second rejection exhausts the unchanged budget. Never soften a gap to let the contract through.
+- A typed rejection is the cycle's answer: the coordinator routes it to ONE repair; a second rejection exhausts the unchanged budget. Never soften a gap's SEVERITY to let the contract through — `$policy.blockingSeverities` is the only thing that ever changes whether a correctly-severed gap blocks.
 - A repair naming `changedRows` that drops one of this rejection's `rowId`s (when this rejection's findings carried one) is refused by `publish` before it is written — verify every prior closure assertion holds before treating anything as newly closed.
 - Your handoff publish is observed by the host runtime (`cycle-runtime.mjs`, US-479 T-25) as a phase-level progress point, through `cycle-state.mjs` — never something you invoke yourself.

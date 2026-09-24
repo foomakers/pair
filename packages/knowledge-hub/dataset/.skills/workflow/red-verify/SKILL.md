@@ -1,11 +1,11 @@
 ---
-name: red-verify
+name: pair-workflow-red-verify
 description: "Stage 2 of the delivery workflow — independent contract validation and deterministic seal in one execution: reproduces every witness and control of a prepared acceptance contract against the unfixed base, re-derives the inventory's classes and interactions from the authoritative producer, checks discriminance (a witness fails for the intended defect, a control may pass, a test-only fix fails on the injected regression), fixture consumption and fixScope, emits ALL concrete gaps it found in one typed rejection with stable row ids — and, when the contract is verified, runs red-snapshot.mjs seal in the same execution and returns the snapshot. Never repairs a contract, never edits production. Dispatched by the batch engine (pair-implement-batch)."
 version: 0.2.0
 author: Foomakers
 ---
 
-# /red-verify — Prove the Contract, Then Freeze It
+# /pair-workflow-red-verify — Prove the Contract, Then Freeze It
 
 A contract is evidence only once someone who did not write it reproduces it. You are that someone. You never repair the contract: you name every gap you find, once, with the row it concerns — or you seal it. Sealing is Git custody, not reasoning: the script decides.
 
@@ -59,7 +59,9 @@ Independently derive, from the authoritative producer named by each `inventory` 
 
 ### Step 4: Decide — ALL gaps in one answer
 
-Return `verified: false` with **every** concrete gap found in this pass as findings `{ rowId?, mechanismId?, location, severity, description (the failing example / the violated rule), recommendation (the evidence required), obligationIds?, sourceRef?, observedHead?, closureAssertions?, reproducer?, applicability?, counterexampleToCurrentContract?, changedRows? }` — stable `rowId`s so the repair can be traced. Never return the first gap and stop; a second pass on the repaired contract may only add gaps that the repair introduced or that need new evidence. `verified: true` only with zero findings and every command reproduced.
+Report **every** concrete gap found in this pass as findings `{ rowId?, mechanismId?, location, severity, description (the failing example / the violated rule), recommendation (the evidence required), obligationIds?, sourceRef?, observedHead?, closureAssertions?, reproducer?, applicability?, counterexampleToCurrentContract?, changedRows? }` — stable `rowId`s so the repair can be traced. Never return the first gap and stop; a second pass on the repaired contract may only add gaps that the repair introduced or that need new evidence.
+
+**US-514 T-2 (AC1) — which gaps REJECT is `$policy.blockingSeverities` (absent ⇒ `Critical, Major, Minor` — today's behaviour: every gap blocks).** A gap whose `severity` is in that list blocks: `verified: false`, no seal this pass. A gap whose `severity` is NOT listed is recorded on the contract as a **non-blocking note** — it does NOT by itself refuse `verified: true`, and does not consume the repair budget. **Structural shape is never a severity-filtered gap**: `contractErrors()` (the shape check `publish` runs before you are even dispatched, US-514 T-5) is orthogonal to this — a shape defect never reaches you as a finding to weigh at all. `verified: true` requires zero BLOCKING findings and every command reproduced; a run with only non-blocking notes still seals, and the notes travel with it (a Minor-only gap on a project declaring `Critical, Major` is the concrete case: it seals on the first pass, the note visible on the contract).
 
 **Naming a mechanism makes it a debt you must close in THIS answer (US-479 T-20, S3):** when a gap concerns a distinct mechanism (e.g. one of several independent producers/rewriters this contract touches), give it `mechanismId` and either:
 
@@ -77,7 +79,7 @@ cd $worktree && node "$SKILL_DIR/scripts/red-snapshot.mjs" seal --pr $SEAL_PR --
 
 **The pre-seal guard (US-506 AC-9)** runs inside `seal`, before anything is committed, and refuses with a typed reason naming the file: `static-gate-failed` (a listed test fails one of the repo's static gates — pass the ones `way-of-working.md` adopts, `{file}` runs a gate per test file, `{files}` once over all; `'[]'` only when the repository has none: the flag is required, the sealer never seals blind), `test-spawns-gh` / `test-reaches-network` (every witness command is probed once with a `gh` trap first on PATH and a preload that refuses non-loopback sockets — a test stubs its own `gh`, never reaches the real one), `predecessor-hash-unmatched` (a `predecessorContractHash` that is no sealed predecessor's contract hash), `changed-rows-omit-witness` / `changed-rows-omit-row` (a revision whose `changedRows` misses a witness file its diff modifies, or a row it adds or edits). Each is a gap in the contract: return it as a finding, never work around it.
 
-The script (shipped beside this file, [scripts/red-snapshot.mjs](scripts/red-snapshot.mjs)) validates the contract path ONCE against the declared main checkout (`--root`: no `..`, under `<root>/.pair/working/runs/`, real path inside it — a symlink pointing elsewhere is an escape; a relative path resolves against the root, never the worktree), then verifies `HEAD == $head`, every artifact's `sha256`, that the tree is dirty only at those artifacts (a `pass` control may be unchanged), writes `.pair/red-snapshots/pr-$pr-$phase.json`, and creates exactly one local `--no-verify` commit carrying `Pair-RED-Snapshot: pr=…; phase=…; base=…; manifest=…`. It is idempotent: re-running after a lost response returns the existing snapshot. A revision (`-rev<m>`) seals as a SUCCESSOR snapshot on `$head`; the earlier seal stays history. Do not retry with a different contract, edit any file, amend, rebase, reset, push or post to make it seal: `{ sealed: false, reason }` is the answer, returned as `sealed: false` with `reason`.
+The script (shipped beside this file, [scripts/red-snapshot.mjs](./scripts/red-snapshot.mjs)) validates the contract path ONCE against the declared main checkout (`--root`: no `..`, under `<root>/.pair/working/runs/`, real path inside it — a symlink pointing elsewhere is an escape; a relative path resolves against the root, never the worktree), then verifies `HEAD == $head`, every artifact's `sha256`, that the tree is dirty only at those artifacts (a `pass` control may be unchanged), writes `.pair/red-snapshots/pr-$pr-$phase.json`, and creates exactly one local `--no-verify` commit carrying `Pair-RED-Snapshot: pr=…; phase=…; base=…; manifest=…`. It is idempotent: re-running after a lost response returns the existing snapshot. A revision (`-rev<m>`) seals as a SUCCESSOR snapshot on `$head`; the earlier seal stays history. Do not retry with a different contract, edit any file, amend, rebase, reset, push or post to make it seal: `{ sealed: false, reason }` is the answer, returned as `sealed: false` with `reason`.
 
 ### Step 6: Persist and hand off
 
@@ -101,6 +103,6 @@ a matrix you could not reproduce.
 
 - Read-only on the repository except the seal commit the script makes. Never edit, format, push, publish, comment, create a card or merge; never rehash a changed artifact into approval.
 - Blind: read nothing under `.pair/working/` except `$RUN_DIR`.
-- A typed rejection is the cycle's answer: the coordinator routes it to ONE repair; a second rejection exhausts the unchanged budget. Never soften a gap to let the contract through.
+- A typed rejection is the cycle's answer: the coordinator routes it to ONE repair; a second rejection exhausts the unchanged budget. Never soften a gap's SEVERITY to let the contract through — `$policy.blockingSeverities` is the only thing that ever changes whether a correctly-severed gap blocks.
 - A repair naming `changedRows` that drops one of this rejection's `rowId`s (when this rejection's findings carried one) is refused by `publish` before it is written — verify every prior closure assertion holds before treating anything as newly closed.
 - Your handoff publish is observed by the host runtime (`cycle-runtime.mjs`, US-479 T-25) as a phase-level progress point, through `cycle-state.mjs` — never something you invoke yourself.

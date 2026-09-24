@@ -104,7 +104,10 @@ export const CAPS = { dispatchesPerStory: 40, consecutiveRedirects: 3 }
 // A dead dispatch (the agent died, or returned a shape no stage can use) is retried with the SAME
 // prompt: every stage is re-entrant by construction, so the retry RESUMES. Policy data, so a
 // caller may narrow or widen it without a second rule living in the caller.
-export const POLICY_DEFAULTS = { deadDispatchRetries: 1 }
+// US-514 T-1/T-2: `blockingSeverities` is the KB default — `Critical, Major, Minor` — every
+// severity blocks, today's behaviour byte for byte. A project declares `## Blocking Severities`
+// only to differ (delta-only adoption, ADR-018/D21); pair itself declares nothing.
+export const POLICY_DEFAULTS = { deadDispatchRetries: 1, blockingSeverities: ['Critical', 'Major', 'Minor'] }
 // ── transition context policy (US-486 AC-7) ────────────────────────────────────────────────
 // `next.context` says whether the stage about to run gets a FRESH subagent or RESUMES the previous
 // subagent of the same role. The KB default is `fresh` on every transition (ADR-024: freeze the
@@ -1483,7 +1486,7 @@ function sealedContractHashOf({ cwd, phase }) {
   }
   return null
 }
-export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, pr, lockWaitMs = 5000, host, repoRoot = process.cwd(), ...transport }) {
+export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, pr, lockWaitMs = 5000, host, repoRoot = process.cwd(), policy = {}, ...transport }) {
   const where = safeRunDir(dir)
   if (where.error) return { published: false, reason: where.error, path: where.path }
   if (safePath('file', file).error) return { published: false, reason: 'path-escape', path: String(file) }
@@ -1596,6 +1599,28 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
     if (freshRun) {
       const acErrs = acAssessmentErrors(data)
       if (acErrs.length) return { published: false, reason: acErrs[0], errors: acErrs }
+    }
+  }
+  // US-514 T-2 (AC1): a finding's `blocking` flag is DERIVED here from its own `severity` against
+  // `policy.blockingSeverities` (absent ⇒ POLICY_DEFAULTS, every severity — today's behaviour
+  // unchanged) — never trusted as the reviewer's own claim, the same reason `acHash` is stamped
+  // rather than read. Scoped to OPEN, non-`question`, non-`regressionRisk` findings: a CLOSED
+  // finding's `blocking` is the closure's own record (transition already gates it in
+  // `isBlocking`); a `question` carries no defect to weigh and is never blocking, whatever
+  // severity it is filed under; a `regressionRisk` finding's `blocking` is governed by the
+  // regression-risk ledger's own coherence rule (DR-10: ACTIVE risk ⇔ blocking), a stricter,
+  // more specific invariant a severity-only derivation must not override.
+  if (skill === 'review-phase' && Array.isArray(data.findings)) {
+    const allowedSeverities = new Set(
+      Array.isArray(policy.blockingSeverities) && policy.blockingSeverities.length ? policy.blockingSeverities : POLICY_DEFAULTS.blockingSeverities,
+    )
+    data = {
+      ...data,
+      findings: data.findings.map(f => {
+        if (!f || typeof f !== 'object' || (f.transition ?? 'open') !== 'open' || f.regressionRisk !== undefined) return f
+        if (f.kind === 'question') return { ...f, blocking: false }
+        return { ...f, blocking: allowedSeverities.has(f.severity) }
+      }),
     }
   }
   // US-479 T-29 (S11): the risk identity is derived HERE, and the claim is checked against what
@@ -2855,7 +2880,7 @@ if (isMain()) {
     // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
     const FLAGS = {
       resolve: ['acHash', 'contextPolicy', 'dir', 'entry', 'head', 'inputs', 'policy', 'pr', 'redirects', 'runsRoot', 'story', 'workflowVersion'],
-      publish: ['attempt', 'dir', 'file', 'phase', 'pr', 'predecessor', 'skill', 'workflowVersion'],
+      publish: ['attempt', 'dir', 'file', 'phase', 'policy', 'pr', 'predecessor', 'skill', 'workflowVersion'],
       hash: ['file'],
       'ac-hash': ['dir', 'story'],
       'bind-hosts': ['dir', 'from'],
@@ -2903,7 +2928,9 @@ if (isMain()) {
       process.exit(0)
     } else if (cmd === 'publish') {
       need('dir', 'file', 'phase', 'skill', 'workflowVersion')
-      out = publish({ dir: opts.dir, file: opts.file, phase: opts.phase, skill: opts.skill, workflowVersion: opts.workflowVersion, predecessor: opts.predecessor, attempt: opts.attempt ? Number(opts.attempt) : undefined, pr: opts.pr !== undefined ? Number(opts.pr) : undefined })
+      // US-514 T-2: the SAME policy `resolve` was dispatched with — review-phase's `blocking`
+      // derivation reads `policy.blockingSeverities` from it, never a re-read of adoption here.
+      out = publish({ dir: opts.dir, file: opts.file, phase: opts.phase, skill: opts.skill, workflowVersion: opts.workflowVersion, predecessor: opts.predecessor, attempt: opts.attempt ? Number(opts.attempt) : undefined, pr: opts.pr !== undefined ? Number(opts.pr) : undefined, policy: opts.policy ? JSON.parse(opts.policy) : {} })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.published ? 0 : 1)
     } else if (cmd === 'hash') {

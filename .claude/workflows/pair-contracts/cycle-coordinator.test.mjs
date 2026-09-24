@@ -2759,9 +2759,12 @@ test('T-3 b1 (boundary, once shipped): an unrecognised --style value is a typed 
 test('US-506 T-5: the coordinator skill names `supersede` and `decide` as the recovery commands, with their refusals', () => {
   for (const md of [CYCLE_SKILL, join(DATASET, '.skills/workflow/cycle/SKILL.md')]) {
     const body = readFileSync(md, 'utf8')
-    assert.match(body, /cycle-state\.mjs" supersede --dir <run dir> --phase <p> --reason/)
+    // US-514 T-4: `supersede` now takes `--skill` (any stage) before `--reason` — the run's LAST
+    // handoff only.
+    assert.match(body, /cycle-state\.mjs" supersede --dir <run dir> --phase <p> --skill <.*> --reason/)
     assert.match(body, /cycle-state\.mjs" decide --dir <run dir> --phase <r<n>> --finding <id> --decision/)
-    for (const code of ['supersede-sealed', 'supersede-validated', 'supersede-not-found']) assert.ok(body.includes(code), `${md}: ${code}`)
+    for (const code of ['supersede-sealed', 'supersede-validated', 'supersede-not-found', 'supersede-not-last', 'supersede-skill-unsupported'])
+      assert.ok(body.includes(code), `${md}: ${code}`)
     assert.match(body, /`resolve` yields `implement \/ initial \/ a0`/)
   }
 })
