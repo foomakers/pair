@@ -99,7 +99,7 @@ export const STEPS = ['prepare', 'validate', 'implement', 'green', 'verify', 'do
 // redefining them.
 //   consecutiveRedirects the durable state and the dispatched step disagree this many times in a
 //                        row only when one of the two is wrong.
-// US-514 T-3 (AC3): `dispatchesPerStory` — a hard-coded 40 — is GONE. The only per-story dispatch
+// US-514 T-3 (#514/AC3): `dispatchesPerStory` — a hard-coded 40 — is GONE. The only per-story dispatch
 // ceiling left is `policy.maxDispatches`, a project's own `## Blocking Severities` declaration
 // (T-1); with none declared there is no ceiling at all, never a silent 40.
 export const CAPS = { consecutiveRedirects: 3 }
@@ -174,7 +174,7 @@ const VOLATILE = new Set(['contractPath', 'createdAt', '$meta', 'contractHash', 
 export const contractHash = contract =>
   sha256(canonical(Object.fromEntries(Object.entries(contract ?? {}).filter(([k]) => !VOLATILE.has(k)))))
 export const inputsDigest = inputs => sha256(canonical(inputs ?? {}))
-// ── contract shape (US-514 T-5, AC5) — checked BEFORE validation, never after ───────────────
+// ── contract shape (US-514 T-5, #514/AC5) — checked BEFORE validation, never after ───────────────
 // A DELIBERATE duplicate of `red-snapshot.mjs`'s own `contractErrors`/`isRelPath`/`SHA256_RE`
 // (the canonical definitions, and the ones `verify`/`seal` apply): this file ships beside
 // `cycle-state.mjs` in every skill that ships it, but NOT beside `red-spec`'s or `cycle`'s own
@@ -1273,7 +1273,7 @@ export function resolveMaintainer({ dir, maintainer }) {
   } catch {
     return { error: 'maintainer-unresolved:way-of-working-unreadable' }
   }
-  // US-514 T-6 (AC7): read through the SAME CommonMark declaration reader #492's host resolution
+  // US-514 T-6 (#514/AC7): read through the SAME CommonMark declaration reader #492's host resolution
   // uses — a fenced or HTML-commented example naming `default-assignee`/`code-host-assignee` is
   // blanked before the regex ever sees it, exactly as it already is for `pm-tool`/`code-host`.
   let src = text
@@ -1450,7 +1450,7 @@ export function discoverScopeDecisions({ dir, repo, pr, maintainer, workflowVers
   return { applied: discovered.some(d => d.applied && d.reason !== 'already-applied'), discovered }
 }
 
-// US-514 T-5 (AC6): the correct `predecessorContractHash` for a repair/revision contract — the
+// US-514 T-5 (#514/AC6): the correct `predecessorContractHash` for a repair/revision contract — the
 // canonical hash (`contractHash`, `$meta` and friends already stripped) of the manifest a SEALED
 // snapshot of `phase` actually committed, read from git history. Best-effort, not a security
 // boundary: `seal()` in `red-snapshot.mjs` is the authoritative check this only tries to satisfy
@@ -1525,7 +1525,7 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   // the first — and a new attempt never lands on top of an earlier one. The earlier attempts' files
   // are checked intact against the hash their own handoff recorded: a rejection names its contract,
   // and a repair that overwrote it would leave the rejection pointing at bytes nobody validated.
-  // US-514 T-5 (AC5): a shape error never reaches the validator, and never consumes a repair
+  // US-514 T-5 (#514/AC5): a shape error never reaches the validator, and never consumes a repair
   // attempt — checked BEFORE any of the attempt/overwrite bookkeeping below. Only when the
   // contract is actually on disk and parseable: a test naming a fictitious `contractPath` (never
   // written) is a different kind of fixture and stays exactly as it was.
@@ -1538,7 +1538,7 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       } catch {
         return { published: false, reason: 'contract-invalid', errors: ['contract file is not valid JSON'] }
       }
-      // US-514 T-5 (AC6): a repair/revision names the predecessor it repairs by `supersedes`
+      // US-514 T-5 (#514/AC6): a repair/revision names the predecessor it repairs by `supersedes`
       // (falling back to the `-rev<m>` phase the sealer itself derives) — the engine derives the
       // hash the sealer will check against and STAMPS it here, with no manual edit and no math
       // the implementer can get wrong (the #491 repair-vs-sealer mismatch this reproduces).
@@ -1603,7 +1603,7 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       if (acErrs.length) return { published: false, reason: acErrs[0], errors: acErrs }
     }
   }
-  // US-514 T-2 (AC1): a finding's `blocking` flag is DERIVED here from its own `severity` against
+  // US-514 T-2 (#514/AC1): a finding's `blocking` flag is DERIVED here from its own `severity` against
   // `policy.blockingSeverities` (absent ⇒ POLICY_DEFAULTS, every severity — today's behaviour
   // unchanged) — never trusted as the reviewer's own claim, the same reason `acHash` is stamped
   // rather than read. Scoped to OPEN, non-`question`, non-`regressionRisk` findings: a CLOSED
@@ -2729,7 +2729,7 @@ export function supersede({ dir, phase, skill = 'red-spec', attempt, reason, by,
   if (where.error) return { superseded: false, reason: where.error, path: where.path }
   if (!String(reason ?? '').trim()) return { superseded: false, reason: 'supersede-reason-missing' }
   if (!String(by ?? '').trim()) return { superseded: false, reason: 'supersede-by-missing' }
-  // US-514 T-4 (AC4): generalized from red-spec-only to every stage handoff — a maintainer
+  // US-514 T-4 (#514/AC4): generalized from red-spec-only to every stage handoff — a maintainer
   // recovery command for any stage's mistake (a false-positive custody breach, a bookkeeping
   // error), never only the contract-preparation one #487 first needed it for.
   if (!SKILLS.includes(skill)) return { superseded: false, reason: `supersede-skill-unsupported:${skill}` }
@@ -2743,7 +2743,7 @@ export function supersede({ dir, phase, skill = 'red-spec', attempt, reason, by,
     // (the specific, actionable reason) even though a later red-verify also makes it a non-tail
     // handoff — the maintainer needs to know WHY, not just that it isn't last.
     if (verdicts.some(v => v.data.sealed === true && (!target.data.contractHash || v.data.contractHash === target.data.contractHash))) return { superseded: false, reason: 'supersede-sealed', file: basename(target.file) }
-    // US-514 T-4 (AC4, business rule): only the TAIL of the run can be set aside — a maintainer
+    // US-514 T-4 (#514/AC4, business rule): only the TAIL of the run can be set aside — a maintainer
     // recovers the last mistake, never rewrites history underneath evidence already built on it.
     if (handoffs[handoffs.length - 1] !== target) return { superseded: false, reason: 'supersede-not-last' }
     // A verdict published AFTER this attempt answered it: a rejection is evidence the next repair
@@ -2957,7 +2957,7 @@ if (isMain()) {
       try {
         out = writeBinding({ dir: opts.dir, from: opts.from })
       } catch (e) {
-        // US-514 T-6 (AC8): a malformed way-of-working (an unterminated fence/comment the #492
+        // US-514 T-6 (#514/AC8): a malformed way-of-working (an unterminated fence/comment the #492
         // CommonMark reader refuses) is a SECOND typed HostError kind, not an untyped rethrow.
         if (e.kind === 'host-unsupported') {
           process.stdout.write(JSON.stringify({ halt: 'host-unsupported', detail: e.message, ...JSON.parse(e.detail) }) + '\n')

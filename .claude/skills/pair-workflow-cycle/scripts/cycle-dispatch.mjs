@@ -281,7 +281,7 @@ const CONTRACT_MIRRORS =
 // reviewers removed an engine stub to probe "engine missing" — the CLI fell through to the real
 // `claude` on PATH. Spelled identically in `pair-implement-batch.js`; the packet-parity tests hold
 // the two renderings byte-equal.
-// US-514 T-7 (AC9): the pre-T-7 wording ("In your own probes never spawn a real engine or a real
+// US-514 T-7 (#514/AC9): the pre-T-7 wording ("In your own probes never spawn a real engine or a real
 // `gh`") read as covering the SKILL's own steps too — a coordinator dispatching this story's own
 // packet had to add "the skill's own push and PR-publish steps run for real" by hand, every time,
 // to stop an implementer stubbing its own required publish. Stated here instead: only the STAGE's
