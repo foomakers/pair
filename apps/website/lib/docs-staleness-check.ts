@@ -601,85 +601,6 @@ export function checkCatalogContent(expected: Map<string, ExpectedRow>, catalog:
   return errors
 }
 
-/** The dataset skills tree, relative to the repo root — the source the catalog header names. */
-export const SKILLS_SOURCE_REL = 'packages/knowledge-hub/dataset/.skills'
-
-/** The catalog header's own `> **Last updated:** YYYY-MM-DD` claim (null when absent or malformed). */
-export function parseCatalogLastUpdated(catalog: string): string | null {
-  return /^>\s*\*\*Last updated:\*\*\s*(\d{4}-\d{2}-\d{2})\b/m.exec(catalog)?.[1] ?? null
-}
-
-/**
- * The date (YYYY-MM-DD) of the newest commit touching `pathRel`, or null when git cannot say.
- *
- * A SHALLOW clone is one of the ways git cannot say — and the one way it does not admit it.
- * The grafted tip has no parents, so git reads it as ADDING every file and
- * `git log -1 -- <path>` answers with the TIP's own date whatever that commit touched. On a
- * `pull_request` event the tip is the synthetic merge commit GitHub creates the moment the run
- * starts, i.e. TODAY, so check 2d accused every correct header dated before the run day and
- * could only pass on the header's own date (CI 35305574304 on ce10aea9, green the day before
- * on byte-identical content). Refusing is the honest answer: null reaches
- * `checkCatalogFreshness`'s loud "cannot resolve ..." branch, which names the real cause,
- * instead of an accusation about a commit that never touched the path (r1-1).
- *
- * Two independent corrections, both needed: `.github/workflows/ci.yml` now gives the gate the
- * history it reads (`fetch-depth: 0`, as `secret-scan` already did), and this guard keeps the
- * function from inventing a date wherever else it is ever run.
- */
-export function newestChangeDate(root: string, pathRel: string): string | null {
-  try {
-    // Fail-closed: anything but a literal `false` (older git prints the shallow file's path)
-    // is treated as shallow. Outside a repository this exits non-zero and the catch answers,
-    // exactly as the `git log` call did before.
-    const shallow = execFileSync('git', ['rev-parse', '--is-shallow-repository'], {
-      cwd: root,
-      encoding: 'utf8',
-    }).trim()
-    if (shallow !== 'false') return null
-    const out = execFileSync('git', ['log', '-1', '--format=%cs', '--', pathRel], {
-      cwd: root,
-      encoding: 'utf8',
-    }).trim()
-    return /^\d{4}-\d{2}-\d{2}$/.test(out) ? out : null
-  } catch {
-    return null
-  }
-}
-
-/**
- * Check 2d: the catalog's `Last updated` header is not OLDER than the dataset skills it describes.
- *
- * Every sibling catalog gate compares skills — the row list (2), the row Command/Description (2c),
- * the "N skills" counts. None read the header's date, so the page kept claiming 2026-09-08 through
- * every later dataset change with the whole gate green (q-10, independent pass over review
- * 5190603055). The date is the one claim a reader uses to decide whether to trust the page, so it
- * is gated the same way its rows are: against the source, not against a human's memory. Both
- * degenerate cases fail LOUDLY rather than pass vacuously — an unparsable header, and a source
- * date git cannot produce.
- */
-export function checkCatalogFreshness(
-  catalog: string,
-  newestSourceChange: string | null,
-  sourceLabel = `${SKILLS_SOURCE_REL}/`,
-): string[] {
-  const lastUpdated = parseCatalogLastUpdated(catalog)
-  if (lastUpdated === null) {
-    return [
-      'skills-catalog.mdx has no `> **Last updated:** YYYY-MM-DD` header — the catalog freshness check cannot run',
-    ]
-  }
-  if (newestSourceChange === null) {
-    return [
-      `cannot resolve the last change date of ${sourceLabel} from git — the catalog freshness check cannot run`,
-    ]
-  }
-  // ISO dates compare lexicographically; a header dated AFTER the source is fine (a doc-only edit).
-  if (lastUpdated >= newestSourceChange) return []
-  return [
-    `skills-catalog.mdx says "Last updated: ${lastUpdated}" but ${sourceLabel} changed on ${newestSourceChange} — the page dates itself before the content it describes (bump the header when the catalog changes)`,
-  ]
-}
-
 /** Check 2: catalog lists every skill dir, and no catalog row lacks a dir (both directions). */
 export function checkCatalogSync(allSkills: string[], catalog: string): string[] {
   const errors: string[] = []
@@ -1115,21 +1036,12 @@ function readmeErrors(path: string, skillCount: number, howToCount: number | nul
 }
 
 /**
- * Every check the skills catalog owns: the row LIST (Check 2), the row CONTENT (2c) and the
- * header's own `Last updated` date (2d). Grouped in one function so `runAllChecks` stays inside
- * the line ceiling, the same reason `checkPaths` is extracted.
+ * Every check the skills catalog owns: the row LIST (Check 2) and the row CONTENT (2c). Grouped
+ * in one function so `runAllChecks` stays inside the line ceiling, the same reason `checkPaths`
+ * is extracted. (US-514 T-8: the header-date check, 2d, was removed — see `runAllChecks`.)
  */
-function catalogErrors(
-  catalog: string,
-  allSkills: string[],
-  skillsDir: string,
-  root: string,
-): string[] {
-  return [
-    ...checkCatalogSync(allSkills, catalog),
-    ...checkCatalogContent(generateCatalogRows(skillsDir), catalog),
-    ...checkCatalogFreshness(catalog, newestChangeDate(repoRootOf(root), SKILLS_SOURCE_REL)),
-  ]
+function catalogErrors(catalog: string, allSkills: string[], skillsDir: string): string[] {
+  return [...checkCatalogSync(allSkills, catalog), ...checkCatalogContent(generateCatalogRows(skillsDir), catalog)]
 }
 
 /** Run every check against a repo root and collect all drift errors. */
@@ -1395,10 +1307,13 @@ export function runAllChecks(root: string): RunResult {
     }),
   )
 
-  // Checks 2 / 2c / 2d: everything the skills catalog claims — rows, row content, header date
+  // Checks 2 / 2c: everything the skills catalog claims — rows, row content (US-514 T-8: the
+  // header-date check, 2d, was removed — it failed on a content-correct skill change whenever the
+  // header's own date was not also bumped in the same commit, which the content checks above
+  // already catch independently)
   const catalog = readFileSync(paths.CATALOG_FILE, 'utf-8')
   errors.push(...cliConfigDerivedErrors(paths))
-  errors.push(...catalogErrors(catalog, allSkills, SKILLS_DIR, root))
+  errors.push(...catalogErrors(catalog, allSkills, SKILLS_DIR))
 
   // Checks 3 & 4: CLI command anchors + tutorial references
   const docs = docsFiles.map(file => ({
