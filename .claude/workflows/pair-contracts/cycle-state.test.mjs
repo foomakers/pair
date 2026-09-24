@@ -152,7 +152,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, predecessorEvidence, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions, discoverScopeDecisions, withLock, supersede, decide } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, predecessorEvidence, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions, discoverScopeDecisions, withLock, supersede, decide, resolveMaintainer } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
 const V = '3.0.0'
@@ -1143,6 +1143,42 @@ test('t9d-17: the authorized principal is READ FROM ADOPTION — `code-host-assi
   assert.equal(cli.status, 0, cli.stdout + cli.stderr)
   const parsed = JSON.parse(cli.stdout.trim().split('\n').pop())
   assert.deepEqual({ applied: parsed.applied, maintainer: parsed.maintainer }, { applied: true, maintainer: { login: 'rucka', source: 'flag' } })
+})
+
+// ── US-514 T-6 (AC7): resolveMaintainer reads through the #492 CommonMark declaration reader —
+// a fenced or HTML-commented example is never mistaken for the real declaration ─────────────
+test('T-6 (AC7): resolveMaintainer ignores a `default-assignee` example inside a fenced code block', () => {
+  const { root, dir } = runDir()
+  seedAdoption(
+    root,
+    '## Assignment\n\nExample:\n\n```markdown\n- `default-assignee`: `example-bot`\n```\n\n- `default-assignee`: `alice`\n',
+  )
+  assert.deepEqual(resolveMaintainer({ dir }), { login: 'alice', source: 'default-assignee' })
+})
+
+test('T-6 (AC7): resolveMaintainer ignores a `default-assignee` example inside an HTML comment', () => {
+  const { root, dir } = runDir()
+  seedAdoption(
+    root,
+    '## Assignment\n\n<!-- example: - `default-assignee`: `example-bot` -->\n\n- `default-assignee`: `alice`\n',
+  )
+  assert.deepEqual(resolveMaintainer({ dir }), { login: 'alice', source: 'default-assignee' })
+})
+
+test('T-6 (AC7, control): with only the fenced example and no real declaration, resolveMaintainer reports unresolved rather than reading the example', () => {
+  const { root, dir } = runDir()
+  seedAdoption(root, '## Assignment\n\n```markdown\n- `default-assignee`: `example-bot`\n```\n')
+  assert.deepEqual(resolveMaintainer({ dir }), { error: 'maintainer-unresolved:no-assignee-in-adoption' })
+})
+
+test('T-6 (AC8): bind-hosts returns the typed `way-of-working-malformed` error, naming the line, never an untyped exception', () => {
+  const { root, dir } = runDir()
+  writeFileSync(join(root, '.pair', 'adoption', 'tech', 'way-of-working.md'), '## Git Workflow\n\n```markdown\nunterminated fence\n')
+  const cli = spawnSync(process.execPath, [CLI, 'bind-hosts', '--dir', dir], { encoding: 'utf8' })
+  const out = JSON.parse(cli.stdout.trim().split('\n').pop())
+  assert.equal(out.halt, 'way-of-working-malformed', JSON.stringify(out))
+  assert.match(out.detail, /unterminated code fence opened at line \d+/)
+  assert.equal(cli.status, 1)
 })
 
 test('T-22 (DT-14): an authenticated ignore decision preserves quality evidence, records the rationale, never touches source/severity — readiness follows once every proposal is dispositioned', () => {

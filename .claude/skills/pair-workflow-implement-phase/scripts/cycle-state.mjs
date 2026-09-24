@@ -1268,8 +1268,19 @@ export function resolveMaintainer({ dir, maintainer }) {
   } catch {
     return { error: 'maintainer-unresolved:way-of-working-unreadable' }
   }
+  // US-514 T-6 (AC7): read through the SAME CommonMark declaration reader #492's host resolution
+  // uses — a fenced or HTML-commented example naming `default-assignee`/`code-host-assignee` is
+  // blanked before the regex ever sees it, exactly as it already is for `pm-tool`/`code-host`.
+  let src = text
+  if (HOSTS) {
+    try {
+      src = HOSTS.declarationText(text)
+    } catch (e) {
+      return { error: `maintainer-unresolved:${e.kind ?? 'way-of-working-malformed'}` }
+    }
+  }
   for (const key of ASSIGNEE_KEYS) {
-    const m = new RegExp('^\\s*[-*]\\s*`' + key + '`\\s*:\\s*`([^`\\s]+)`', 'm').exec(text)
+    const m = new RegExp('^\\s*[-*]\\s*`' + key + '`\\s*:\\s*`([^`\\s]+)`', 'm').exec(src)
     if (m) return { login: m[1], source: key }
   }
   return { error: 'maintainer-unresolved:no-assignee-in-adoption' }
@@ -2853,9 +2864,17 @@ if (isMain()) {
       try {
         out = writeBinding({ dir: opts.dir, from: opts.from })
       } catch (e) {
-        if (e.kind !== 'host-unsupported') throw e
-        process.stdout.write(JSON.stringify({ halt: 'host-unsupported', detail: e.message, ...JSON.parse(e.detail) }) + '\n')
-        process.exit(1)
+        // US-514 T-6 (AC8): a malformed way-of-working (an unterminated fence/comment the #492
+        // CommonMark reader refuses) is a SECOND typed HostError kind, not an untyped rethrow.
+        if (e.kind === 'host-unsupported') {
+          process.stdout.write(JSON.stringify({ halt: 'host-unsupported', detail: e.message, ...JSON.parse(e.detail) }) + '\n')
+          process.exit(1)
+        }
+        if (e.kind === 'way-of-working-malformed') {
+          process.stdout.write(JSON.stringify({ halt: 'way-of-working-malformed', detail: e.message }) + '\n')
+          process.exit(1)
+        }
+        throw e
       }
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
