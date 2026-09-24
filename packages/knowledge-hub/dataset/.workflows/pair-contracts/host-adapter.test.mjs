@@ -1669,3 +1669,62 @@ process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(3)
   const r = h.setPrState({ pr: 1, repo: 'o/r', label: 'pr-state:bogus' })
   assert.equal(r.confirmed, true, 'github.mjs applies whatever label it is given, per the reworded row')
 })
+
+// ── r2-3: "the rules every adapter keeps" agrees with the shipped adapters on `state`, and the
+// concludeCheck row's sha claim does not overclaim for azure-devops.mjs (off-cycle review r2-1 residual) ──
+
+const rulesLine = () => g4Guide()
+  .split('\n')
+  .find(l => /Fail typed/.test(l))
+
+test('r2-3-a: "the rules every adapter keeps" no longer claims CHECK_STATES is enforced by every adapter', () => {
+  const line = rulesLine()
+  assert.ok(line, 'Fail typed bullet not found')
+  assert.doesNotMatch(
+    line,
+    /concludeCheck.*CHECK_STATES.*(are the only accepted|only accepted values for `strategy` and `state`)/,
+    `Fail typed bullet still claims CHECK_STATES is enforced for every adapter's state: ${line}`,
+  )
+})
+
+test('r2-3-b: "the rules every adapter keeps" still requires MERGE_STRATEGIES for merge (unweakened), and scopes CHECK_STATES to a well-behaved new adapter vs. the shipped adapters', () => {
+  const line = rulesLine()
+  assert.match(line, /MERGE_STRATEGIES.*(only accepted|enforc)/i, `merge's MERGE_STRATEGIES obligation must not be weakened: ${line}`)
+  assert.match(line, /well-behaved new adapter.*refuses.*CHECK_STATES|CHECK_STATES.*well-behaved new adapter/i, `bullet does not scope CHECK_STATES to a well-behaved new adapter: ${line}`)
+  assert.match(line, /shipped adapters.*pass.*through|pass.*(the\s+)?state.*through.*shipped adapters/i, `bullet does not state the shipped adapters pass state through unchecked: ${line}`)
+  assert.match(line, /success \| failure|only.*success.*failure/i, `bullet does not name what cycle callers actually pass: ${line}`)
+})
+
+test('r2-3-c: github.mjs concludeCheck publishes a state outside CHECK_STATES (e.g. "error"), confirming the rules bullet cannot claim universal enforcement', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gh-state-'))
+  const log = join(dir, 'calls.log')
+  writeFileSync(log, '')
+  const bin = join(dir, 'gh')
+  writeFileSync(
+    bin,
+    `#!/usr/bin/env node
+const fs = require('fs')
+const a = process.argv.slice(2)
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(a) + '\\n')
+if (a[0] === 'api' && a[1] === '-X' && a[2] === 'POST' && /\\/statuses\\//.test(a[3])) process.exit(0)
+process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(3)
+`,
+  )
+  chmodSync(bin, 0o755)
+  const h = github.instantiate({ ghBin: bin })
+  const r = h.concludeCheck({ pr: 1, repo: 'o/r', sha: SHA, state: 'error' })
+  assert.equal(r.published, true, 'github.mjs does not enforce CHECK_STATES; it publishes an out-of-enum state')
+  const call = readFileSync(log, 'utf8').trim().split('\n').map(l => JSON.parse(l))[0]
+  assert.ok(call.some(arg => arg === 'state=error'), 'the out-of-enum state reached gh unfiltered')
+})
+
+test('r2-3-d: the concludeCheck row does not claim azure-devops.mjs posts on whatever sha — it maps sha to a PR iteration and reports published:false when the sha is none', () => {
+  const row = g4Row('concludeCheck')
+  assert.doesNotMatch(
+    row,
+    /github\\?\.mjs.{0,4}\/.{0,4}azure-devops\\?\.mjs post on whatever `?sha`?/,
+    `concludeCheck row still claims azure-devops.mjs posts on whatever sha, unqualified: ${row}`,
+  )
+  assert.match(row, /azure-devops\.mjs.*iteration|iteration.*azure-devops\.mjs/i, `concludeCheck row does not describe azure-devops.mjs's iteration mapping for sha: ${row}`)
+  assert.match(row, /published:\s*false|published: false/, `concludeCheck row does not state the published:false outcome for a sha that is not an iteration: ${row}`)
+})
