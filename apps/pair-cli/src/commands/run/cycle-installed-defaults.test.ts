@@ -19,15 +19,19 @@ import { parseRunCommand } from './parser'
 import type { LockAcquirer } from './card-lock'
 
 /**
- * US-487 review r0-10 — the cycle's defaults (workflow version, base branch, worktree root,
- * dispatch cap) are the INSTALLED scripts' decision, never a TypeScript literal passed as one.
+ * US-487 review r0-10 — the cycle's defaults (workflow version, base branch, worktree root) are
+ * the INSTALLED scripts' decision, never a TypeScript literal passed as one.
  *
  * The installed `cycle-state.mjs` here declares values that differ from pair-cli's mirrors
- * (`4.0.9`, `origin/trunk`, `../elsewhere-worktrees`, cap 7). The run goes through
- * `handleRunCommand` and the PRODUCTION driver over those real scripts; only `gh` and the engine
- * binary (a dead dispatch) are stood in for. Every observable — the transparency block, the
- * worktree the script created, the base it was cut from, the version the packet carries — must be
- * the installed scripts' own.
+ * (`4.0.9`, `origin/trunk`, `../elsewhere-worktrees`). The run goes through `handleRunCommand` and
+ * the PRODUCTION driver over those real scripts; only `gh` and the engine binary (a dead dispatch)
+ * are stood in for. Every observable — the transparency block, the worktree the script created,
+ * the base it was cut from, the version the packet carries — must be the installed scripts' own.
+ *
+ * US-514 T-3: the dispatch ceiling used to be one of these (`CAPS.dispatchesPerStory`, cap 7 in
+ * this fixture). It is GONE from `cycle-state.mjs` — the ceiling is now `policy.maxDispatches`, an
+ * ADOPTION value; with none declared here (this fixture's main checkout carries no
+ * `## Blocking Severities`), the transparency block prints `none`.
  */
 
 const REPO_ROOT = join(__dirname, '..', '..', '..', '..', '..')
@@ -86,11 +90,9 @@ describe('r0-10: the cycle defaults come from the installed scripts', () => {
       .replace(/export const WORKFLOW_VERSION = '[^']+'/, "export const WORKFLOW_VERSION = '4.0.9'")
       .replace("worktreeRoot: '../pair-worktrees'", "worktreeRoot: '../elsewhere-worktrees'")
       .replace("baseBranch: 'origin/main'", "baseBranch: 'origin/trunk'")
-      .replace('dispatchesPerStory: 40', 'dispatchesPerStory: 7')
     expect(state).toContain("'4.0.9'")
     expect(state).toContain('elsewhere-worktrees')
     expect(state).toContain("'origin/trunk'")
-    expect(state).toContain('dispatchesPerStory: 7')
     writeFileSync(join(scripts, 'cycle-state.mjs'), state)
     writeFileSync(join(scripts, 'cycle-dispatch.mjs'), source('cycle-dispatch.mjs'))
     // US-492: the PM/code-host adapters ship beside the scripts, in `host/`.
@@ -170,11 +172,11 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
     return { code, output: lines.join('\n') }
   }
 
-  it('R10-W1: the transparency block prints the installed worktree root and dispatch cap', async () => {
+  it('R10-W1: the transparency block prints the installed worktree root; the dispatch ceiling is adoption\'s, not the script\'s — `none` with no `## Blocking Severities` declared', async () => {
     const { output } = await run()
 
     expect(output).toMatch(/^\s*Worktree root: \.\.\/elsewhere-worktrees\s*$/m)
-    expect(output).toMatch(/^\s*Dispatch cap: 7\s*$/m)
+    expect(output).toMatch(/^\s*Dispatch ceiling: none\s*$/m)
   }, 60_000)
 
   it('R10-W2: the story worktree lands under the installed root, cut from the installed base', async () => {

@@ -1181,7 +1181,10 @@ Precedence: auto-plan, auto-dev
 /**
  * AC10's transparency block, one labelled line per value — engine AND where it came from, the skills
  * path the scripts were resolved from, the run directory, the worktree root, the runId, the
- * `--rounds` bound and the dispatch cap (`cycle-state.mjs`'s own `CAPS.dispatchesPerStory`).
+ * `--rounds` bound and the dispatch ceiling. US-514 T-3: the ceiling used to be
+ * `cycle-state.mjs`'s own hard-coded `CAPS.dispatchesPerStory` (40); it is now `policy.maxDispatches`,
+ * an ADOPTION value — `none` on every fixture in this file, none of which declares
+ * `## Blocking Severities`.
  */
 function assertTransparencyBlock(
   output: string,
@@ -1193,7 +1196,7 @@ function assertTransparencyBlock(
   expect(output).toMatch(/^\s*Worktree root: \S*pair-worktrees\s*$/m)
   expect(output).toMatch(/\brunId[=:]\s*story-218\b/)
   expect(output).toMatch(varying.rounds)
-  expect(output).toMatch(/^\s*Dispatch cap: 40\s*$/m)
+  expect(output).toMatch(/^\s*Dispatch ceiling: none\s*$/m)
 }
 
 describe('handleRunCommand — the delivery-cycle coordinator entry (US-487)', () => {

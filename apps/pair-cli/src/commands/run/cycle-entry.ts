@@ -9,11 +9,11 @@ import {
   locateCycleScripts,
   readCycleDefaults,
   CYCLE_WORKTREE_ROOT_DEFAULT,
-  CYCLE_DISPATCH_CAP_DEFAULT,
   type CycleDefaults,
   type CycleScriptsLocation,
 } from './cycle-scripts'
 import { createDefaultCycleDriver, mainCheckout } from './cycle-wiring'
+import { resolveBlockingSeverities, describeMaxDispatches } from './blocking-severities'
 import {
   declaredEngine,
   declaredEngineBin,
@@ -124,7 +124,7 @@ function reportCycleEntry(input: {
   console.log(
     `  Rounds bound: ${input.dispatch.rounds ?? '(policy default: maxFixRounds)'} — rounds narrows, never widens it`,
   )
-  console.log(`  Dispatch cap: ${input.shown.dispatchCap}`)
+  console.log(`  Dispatch ceiling: ${input.shown.maxDispatchesDisplay}`)
 }
 
 /** The executable this run will actually spawn: config, then PATH, then the repo's own bin. */
@@ -147,7 +147,7 @@ interface DriverInput {
   readonly location: CycleScriptsLocation
 }
 
-type ShownDefaults = Pick<CycleDefaults, 'worktreeRoot' | 'dispatchCap'>
+type ShownDefaults = Pick<CycleDefaults, 'worktreeRoot'> & { readonly maxDispatchesDisplay: string }
 
 /**
  * The shipped driver: the pieces T-2/T-3/T-4 built, composed with this run's own resolved context.
@@ -178,19 +178,40 @@ function productionCycleDriver(
     baseBranch: defaults.baseBranch,
     model: declaredEngineModel(context.config, driver.engineDef.id),
   })
-  return { driveCycle, shown: defaults }
+  return { driveCycle, shown: { worktreeRoot: defaults.worktreeRoot, maxDispatchesDisplay: maxDispatchesDisplayFor(fs, mainCheckout(cwd)) } }
+}
+
+/**
+ * US-514 T-3: `max-dispatches` is an ADOPTION value (T-1), not a script default — read directly
+ * from the MAIN checkout, the same root the installed scripts dispatch relative to. Unreadable or
+ * absent ⇒ `none`, never a guessed number (`resolveBlockingSeverities` itself never throws on an
+ * absent file; a malformed declaration's HALT is left to propagate — the same fail-loud posture
+ * every other adoption read on this path already has).
+ */
+function maxDispatchesDisplayFor(fs: FileSystemService, mainCheckoutPath: string): string {
+  return describeMaxDispatches(resolveBlockingSeverities(fs, mainCheckoutPath))
 }
 
 /**
  * An INJECTED driver runs nothing installed, so an unreadable script is no refusal there: the
  * transparency block shows the installed values when they can be read, else the parity-pinned
- * mirrors (presentation only — no stage is ever dispatched from them).
+ * mirrors (presentation only — no stage is ever dispatched from them). `cwd` is often a test
+ * double with no real git repository behind it on this path, so resolving the main checkout (and
+ * therefore the adoption read) is wrapped the same way `readCycleDefaults` already is — a
+ * PRESENTATION fallback, never a refusal a production dispatch would ever reach.
  */
-function shownDefaults(location: CycleScriptsLocation): ShownDefaults {
+function shownDefaults(location: CycleScriptsLocation, fs: FileSystemService, cwd: string): ShownDefaults {
+  let maxDispatchesDisplay = 'none'
   try {
-    return readCycleDefaults(location)
+    maxDispatchesDisplay = maxDispatchesDisplayFor(fs, mainCheckout(cwd))
   } catch {
-    return { worktreeRoot: CYCLE_WORKTREE_ROOT_DEFAULT, dispatchCap: CYCLE_DISPATCH_CAP_DEFAULT }
+    // presentation only — see the function comment above
+  }
+  try {
+    const defaults = readCycleDefaults(location)
+    return { worktreeRoot: defaults.worktreeRoot, maxDispatchesDisplay }
+  } catch {
+    return { worktreeRoot: CYCLE_WORKTREE_ROOT_DEFAULT, maxDispatchesDisplay }
   }
 }
 
@@ -200,7 +221,7 @@ function driverFor(
   driver: DriverInput,
 ): { driveCycle: CycleDriver; shown: ShownDefaults } {
   if (deps.driveCycle !== undefined) {
-    return { driveCycle: deps.driveCycle, shown: shownDefaults(driver.location) }
+    return { driveCycle: deps.driveCycle, shown: shownDefaults(driver.location, entry.fs, entry.cwd) }
   }
   return productionCycleDriver(entry, driver)
 }

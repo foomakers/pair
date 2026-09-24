@@ -97,10 +97,12 @@ export const STEPS = ['prepare', 'validate', 'implement', 'green', 'verify', 'do
 // `pair-workflow-cycle` in-session coordinator, `pair-cli` — reads these from this file. A second
 // copy in a consumer is a fork of the state machine, so the consumers are grep-guarded against
 // redefining them.
-//   dispatchesPerStory   one run that asks for more than this is looping, not converging.
 //   consecutiveRedirects the durable state and the dispatched step disagree this many times in a
 //                        row only when one of the two is wrong.
-export const CAPS = { dispatchesPerStory: 40, consecutiveRedirects: 3 }
+// US-514 T-3 (AC3): `dispatchesPerStory` — a hard-coded 40 — is GONE. The only per-story dispatch
+// ceiling left is `policy.maxDispatches`, a project's own `## Blocking Severities` declaration
+// (T-1); with none declared there is no ceiling at all, never a silent 40.
+export const CAPS = { consecutiveRedirects: 3 }
 // A dead dispatch (the agent died, or returned a shape no stage can use) is retried with the SAME
 // prompt: every stage is re-entrant by construction, so the retry RESUMES. Policy data, so a
 // caller may narrow or widen it without a second rule living in the caller.
@@ -2572,25 +2574,28 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // US-479 B2: the provenance binding travels with EVERY resolve — a resumed cycle never forgets
   // which runs it continues, and a reader never mistakes it for a clean new PR.
   const predecessorRuns = [...new Set(handoffs.filter(h => h.data?.recordType === 'migration').flatMap(h => (h.data.predecessorRuns ?? []).map(r => r.runId)))].sort()
-  // US-486 AC-12: the per-story ceilings are enforced HERE, from the durable evidence alone, so
-  // every realization reads the same run directory and reaches the same verdict on it. The two
-  // ceilings count DIFFERENT things and each says which: this one counts the PUBLISHED HANDOFFS in
-  // the run directory — a durable, cumulative quantity (every resume and every attempt is another
-  // file), not the engine's per-invocation `storyMetrics.dispatches`; consecutive redirects publish
-  // no handoff at all, so the coordinator that observed them hands that count in instead. Because
-  // the handoff count only grows, the block is permanent for this run directory, which is why its
-  // detail names the recovery a human actually has (`migrate-acknowledge` binds a fresh run
-  // directory to this one) rather than implying a retry would clear it.
+  // US-486 AC-12 (US-514 T-3: the hard-coded dispatchesPerStory ceiling is GONE — the only ceiling
+  // left is the one a project DECLARES, `policy.maxDispatches`). The consecutive-redirects cap is
+  // enforced HERE, from the durable evidence alone, so every realization reads the same run
+  // directory and reaches the same verdict on it: consecutive redirects publish no handoff at all,
+  // so the coordinator that observed them hands that count in instead.
+  const warnings = []
   if (next.step !== 'done' && next.step !== 'blocked') {
-    if (handoffs.length >= CAPS.dispatchesPerStory)
-      next = { step: 'blocked', reason: 'failed-resume', cap: 'dispatchesPerStory', detail: `${handoffs.length} published handoff files in this run directory, at or above the ceiling of ${CAPS.dispatchesPerStory} — the count is cumulative across every resume (attempts included), never per invocation, and nothing here asked for another dispatch. A human resumes by binding a NEW run directory to this one: \`cycle-state.mjs migrate-acknowledge --dir <new run dir> --legacy <this dir> …\`` }
-    else if (Number.isInteger(Number(redirects)) && Number(redirects) >= CAPS.consecutiveRedirects)
+    const md = policy.maxDispatches
+    if (md && typeof md === 'object' && Number.isInteger(md.n) && md.n > 0 && handoffs.length >= md.n) {
+      if (md.mode === 'block') {
+        next = { step: 'blocked', reason: 'max-dispatches', cap: 'maxDispatches', detail: `${handoffs.length} published handoff files in this run directory, at or above the declared \`max-dispatches: ${md.n} block\` ceiling — the count is cumulative across every resume (attempts included), never per invocation. A human resumes by binding a NEW run directory to this one: \`cycle-state.mjs migrate-acknowledge --dir <new run dir> --legacy <this dir> …\`` }
+      } else {
+        warnings.push(`${handoffs.length} published handoff files in this run directory, at or above the declared \`max-dispatches: ${md.n}\` ceiling (mode: warn) — continuing.`)
+      }
+    }
+    if (next.step !== 'blocked' && Number.isInteger(Number(redirects)) && Number(redirects) >= CAPS.consecutiveRedirects)
       next = { step: 'blocked', reason: 'failed-resume', cap: 'consecutiveRedirects', detail: `${CAPS.consecutiveRedirects} consecutive redirects — the durable state and the dispatched step disagree` }
   }
   next = withContext(next, handoffs, contextPolicy)
   const status = next.step === 'done' ? 'completed' : next.step === 'blocked' ? 'blocked' : 'in-progress'
   const nextFindingSeq = handoffs.filter(h => h.skill === 'review-phase').reduce((m, h) => Math.max(m, ...(h.data.findings ?? []).map(f => Number(/-(\d+)$/.exec(String(f.id ?? ''))?.[1] ?? 0))), 0) + 1
-  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs, ledger), predecessorRuns, activeRegressionRisks: ledger.filter(r => r.state === 'active'), rollbackNotes: rollbackNotes(handoffs, ledger) }
+  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs, ledger), predecessorRuns, activeRegressionRisks: ledger.filter(r => r.state === 'active'), rollbackNotes: rollbackNotes(handoffs, ledger), ...(warnings.length ? { warnings } : {}) }
 }
 
 // ── migration (US-479 T-19, S10) ───────────────────────────────────────────────────────────

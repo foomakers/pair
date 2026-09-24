@@ -112,3 +112,13 @@ export function resolveBlockingSeverities(
   if (!fs.existsSync(path)) return { blockingSeverities: [...DEFAULT_BLOCKING_SEVERITIES] }
   return readBlockingSeverities(fs.readFileSync(path))
 }
+
+/**
+ * The AC10 transparency block's dispatch-ceiling line (US-514 T-3): the declared `max-dispatches`
+ * with its mode, or `none` when the project declares no ceiling at all — never a number nobody
+ * declared (the pre-T-3 line printed a hard-coded 40 whether or not a project wanted a ceiling).
+ */
+export function describeMaxDispatches(policy: BlockingSeverityPolicy): string {
+  if (policy.maxDispatches === undefined) return 'none'
+  return `${policy.maxDispatches.n} (${policy.maxDispatches.mode})`
+}

@@ -1176,10 +1176,10 @@ test('AC11-w1: the coordinator skill holds no merge logic and ends at the status
 
 // ══ AC12 — one owner for the rules ══════════════════════════════════════════════════════════════
 
-test('AC12-w1: the caps are exported data of `cycle-state.mjs`', async () => {
+test('AC12-w1: the caps are exported data of `cycle-state.mjs` — US-514 T-3: `dispatchesPerStory` is GONE, the only per-story ceiling left is `policy.maxDispatches` (adoption, not a cap)', async () => {
   const mod = await import(STATE_CLI)
   assert.ok(mod.CAPS, '`CAPS` is not exported by cycle-state.mjs')
-  assert.equal(mod.CAPS.dispatchesPerStory, 40)
+  assert.equal(mod.CAPS.dispatchesPerStory, undefined)
   assert.equal(mod.CAPS.consecutiveRedirects, 3)
 })
 
@@ -1743,7 +1743,7 @@ function capRunDir(count, { converged = false } = {}) {
     })
   return dir
 }
-const resolveCap = (dir, ...extra) =>
+const resolveCap = (dir, policy, ...extra) =>
   state([
     'resolve',
     '--dir',
@@ -1751,7 +1751,7 @@ const resolveCap = (dir, ...extra) =>
     '--workflowVersion',
     WORKFLOW_VERSION,
     '--policy',
-    JSON.stringify(POLICY),
+    JSON.stringify(policy ?? POLICY),
     '--entry',
     'pr',
     '--pr',
@@ -1763,13 +1763,30 @@ const resolveCap = (dir, ...extra) =>
     ...extra,
   ])
 
-test('r0-4 w1: at the cap, the block says what it COUNTED and how a human gets out', () => {
-  const r = resolveCap(capRunDir(40))
+// ── US-514 T-3 (AC2/AC3): the hard-coded 40 is GONE — the only per-story dispatch ceiling left is
+// `policy.maxDispatches`, a project's own declaration. No option ⇒ no ceiling at all (AC3); `warn`
+// (the default mode) prints a warning and continues; `block` stops the run, typed, at the ceiling.
+test("r0-4 w0 (AC3): 45 published handoffs and NO declared option ⇒ not blocked — there is no hard-coded ceiling anymore", () => {
+  const r = resolveCap(capRunDir(45), POLICY)
+  assert.equal(r.status, 0, r.stderr)
+  assert.notEqual(r.json.next.step, 'blocked', JSON.stringify(r.json.next))
+})
+
+test('r0-4 w1 (AC2): `max-dispatches: 40` (mode warn) — at the ceiling, the run WARNS and continues, never blocks', () => {
+  const r = resolveCap(capRunDir(40), { ...POLICY, maxDispatches: { n: 40, mode: 'warn' } })
+  assert.equal(r.status, 0, r.stderr)
+  assert.notEqual(r.json.next.step, 'blocked', JSON.stringify(r.json.next))
+  assert.ok(Array.isArray(r.json.warnings) && r.json.warnings.length > 0, JSON.stringify(r.json))
+  assert.match(String(r.json.warnings[0]), /\b40\b/)
+})
+
+test('r0-4 w2 (AC2): `max-dispatches: 40 block` — at the ceiling, the block says what it counted and how a human gets out', () => {
+  const r = resolveCap(capRunDir(40), { ...POLICY, maxDispatches: { n: 40, mode: 'block' } })
   assert.equal(r.status, 0, r.stderr)
   const n = r.json.next
   assert.equal(n.step, 'blocked')
-  assert.equal(n.reason, 'failed-resume')
-  assert.equal(n.cap, 'dispatchesPerStory', 'the cap key is exported data — AC12-w1 owns its name')
+  assert.equal(n.reason, 'max-dispatches')
+  assert.equal(n.cap, 'maxDispatches')
   assert.match(
     String(n.detail),
     /published handoff/i,
@@ -1783,35 +1800,20 @@ test('r0-4 w1: at the cap, the block says what it COUNTED and how a human gets o
   assert.match(String(n.detail), /\b40\b/)
 })
 
-test('r0-4 w2: the count is CUMULATIVE across resumes and the detail states the real number', () => {
-  const r = resolveCap(capRunDir(44))
-  const detail = String(r.json.next.detail)
-  assert.equal(r.json.next.step, 'blocked')
-  assert.match(detail, /\b44\b/, 'the detail must state how many handoffs were actually counted')
-  assert.match(detail, /\b40\b/, 'and the cap it compared them against')
-  assert.doesNotMatch(
-    detail,
-    /asked for more than/,
-    'nothing asked for a dispatch here: 44 published handoffs were counted, across every resume',
-  )
-  assert.match(detail, /published handoff/i)
-  assert.match(detail, /migrate-acknowledge/)
-})
-
-test('r0-4 b1 (boundary): one handoff below the cap the cycle still advances', () => {
-  const r = resolveCap(capRunDir(39))
+test('r0-4 b1 (boundary): one handoff below the declared block ceiling the cycle still advances', () => {
+  const r = resolveCap(capRunDir(39), { ...POLICY, maxDispatches: { n: 40, mode: 'block' } })
   assert.equal(r.status, 0, r.stderr)
   assert.notEqual(r.json.next.step, 'blocked', JSON.stringify(r.json.next))
 })
 
-test('r0-4 b2 (boundary): a CONVERGED cycle above the cap is `done`, never blocked', () => {
-  const r = resolveCap(capRunDir(44, { converged: true }))
+test('r0-4 b2 (boundary): a CONVERGED cycle above a declared block ceiling is `done`, never blocked', () => {
+  const r = resolveCap(capRunDir(44, { converged: true }), { ...POLICY, maxDispatches: { n: 40, mode: 'block' } })
   assert.equal(r.status, 0, r.stderr)
   assert.equal(r.json.next.step, 'done', JSON.stringify(r.json.next))
 })
 
 test('r0-4 c1 (control): the sibling redirect cap is untouched and keeps its own wording', () => {
-  const r = resolveCap(capRunDir(3), '--redirects', '3')
+  const r = resolveCap(capRunDir(3), POLICY, '--redirects', '3')
   assert.equal(r.json.next.step, 'blocked')
   assert.equal(r.json.next.cap, 'consecutiveRedirects')
   assert.match(String(r.json.next.detail), /redirect/i)
