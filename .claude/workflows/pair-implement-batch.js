@@ -884,16 +884,27 @@ const MAX_RED_CONTRACT_REPAIRS = 1
 const MAX_GREEN_RETRIES = 1
 // US-486 AC-12: the per-story ceilings are OWNED by `cycle-state.mjs` (`CAPS`) and enforced there
 // by `resolve` itself, so every realization of the cycle hits the same wall. This sandbox has no
-// filesystem, no shell and no imports, so it cannot read them at run time — and it cannot do
-// without them either: a stage that keeps redirecting to an ever-advancing round produces a new
-// (step, phase, mode, attempt, reviewer) key every time, so `seen` never fires and only a ceiling
-// stops the loop (DT-10).
+// filesystem, no shell and no imports, so it cannot read them at run time.
 // What it holds is therefore a MIRROR, not a second definition: the values are declared once, in
 // one structure, named after the owner's export, and `pair-implement-batch.test.mjs` asserts this
 // object equals `CAPS` imported from `cycle-state.mjs`. Drift fails a test — it does not wait for
 // a canary. This is the same "one owner, N guarded copies" idiom the six byte-identical
 // `cycle-state.mjs` installs already use.
-const CYCLE_CAPS = { dispatchesPerStory: 40, consecutiveRedirects: 3 }
+// US-514 T-3 (#514/AC3): `dispatchesPerStory` — a hard-coded 40 — is GONE from `cycle-state.mjs`'s own
+// `CAPS`, so it is gone from this mirror too (a drift a hand-edit could otherwise hide). This
+// sandbox has no adoption read at all (no filesystem), so it cannot apply `policy.maxDispatches`
+// either — the loop-safety backstop #514/AC3's removal needs here is `MAX_DISPATCHES_SAFETY` below,
+// which is deliberately NOT part of this mirror: it is this engine's own, never claimed as
+// `cycle-state.mjs`'s.
+const CYCLE_CAPS = { consecutiveRedirects: 3 }
+// A stage that keeps redirecting to an ever-advancing round (a new phase/attempt/reviewer each
+// time) produces a new `seen` key every time, so the self-redirect guard never fires — only a
+// ceiling stops that loop (DT-10). Deliberately generous (an adoption-declared `max-dispatches`,
+// T-1, is the ceiling a project actually chooses; this is only the backstop against a genuine
+// infinite loop in a sandbox with no other escape hatch) and deliberately NOT part of `CYCLE_CAPS`
+// — it mirrors nothing in `cycle-state.mjs`, so `pair-implement-batch.test.mjs`'s CAPS-equality
+// proof does not, and must not, cover it.
+const MAX_DISPATCHES_SAFETY = 200
 
 // ── Schemas (orchestration return-value contracts) ─────────────────────────
 // These are the compact values agents RETURN for control-flow — NOT the artifact
@@ -1804,7 +1815,7 @@ async function driveStory(story) {
   while (true) {
     if (next.step === 'done') return result('ready-for-merge', { reviewedHead: next.reviewedHead, verdict: next.verdict, round: next.round })
     if (next.step === 'blocked') return blockedResult(next)
-    if (storyMetrics.dispatches >= CYCLE_CAPS.dispatchesPerStory) return result('failed-resume', { reason: `the cycle asked for more than ${CYCLE_CAPS.dispatchesPerStory} dispatches in one run — looping, not converging` })
+    if (storyMetrics.dispatches >= MAX_DISPATCHES_SAFETY) return result('failed-resume', { reason: `the cycle asked for more than ${MAX_DISPATCHES_SAFETY} dispatches in one run — looping, not converging` })
     const key = `${next.step}:${next.phase}:${next.mode ?? ''}:${next.attempt ?? 1}:${next.reviewer ?? 1}`
     if (seen.has(key)) return result('failed-resume', { reason: `the cycle state asked for ${key} twice in one run` })
     seen.add(key)
