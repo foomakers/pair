@@ -364,7 +364,7 @@ describe('runCycle — stall resume (US-506 T-8, AC12)', () => {
     expect(stages[0]).toMatchObject({ step: 'implement', stalled: true, handoffAdvanced: false })
   })
 
-  it('r1 r0-4: resolve\'s warnings[] (e.g. a max-dispatches warning) are relayed via onNotice, naming the count', async () => {
+  it("r1 r0-4: resolve's warnings[] (e.g. a max-dispatches warning) are relayed via onNotice, naming the count", async () => {
     const resolve = scriptedResolve([
       {
         status: 'in-progress',

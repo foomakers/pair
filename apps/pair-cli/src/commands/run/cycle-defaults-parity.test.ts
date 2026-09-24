@@ -14,9 +14,16 @@ import { readBlockingSeverities, DEFAULT_BLOCKING_FLOOR } from './blocking-sever
  * prose match `g1-w14` (`/blockingFloor/`), which cannot catch a divergent DEFAULT or grammar edge.
  */
 
-const SCRIPT = join(__dirname, '../../../../../.claude/skills/pair-workflow-cycle/scripts/blocking-severities.mjs')
+const SCRIPT = join(
+  __dirname,
+  '../../../../../.claude/skills/pair-workflow-cycle/scripts/blocking-severities.mjs',
+)
 
-function inSession(markdown: string | undefined): { blockingFloor?: string; halt?: string; maxDispatches?: unknown } {
+function inSession(markdown: string | undefined): {
+  blockingFloor?: string
+  halt?: string
+  maxDispatches?: unknown
+} {
   if (markdown === undefined) {
     const dir = mkdtempSync(join(tmpdir(), 'us514-parity-'))
     const missing = join(dir, 'automation.md')
@@ -32,7 +39,11 @@ function inSession(markdown: string | undefined): { blockingFloor?: string; halt
   return JSON.parse(r.stdout.trim())
 }
 
-function pairCli(markdown: string | undefined): { blockingFloor?: string; halt?: string; maxDispatches?: unknown } {
+function pairCli(markdown: string | undefined): {
+  blockingFloor?: string
+  halt?: string
+  maxDispatches?: unknown
+} {
   if (markdown === undefined) return { blockingFloor: DEFAULT_BLOCKING_FLOOR }
   try {
     return readBlockingSeverities(markdown)
@@ -51,7 +62,10 @@ describe('US-514 r1-3: pair-cli reader / in-session reader parity', () => {
       markdown: '## Blocking Severities\n\nMajor\nmax-dispatches: 40 block\n',
     },
     { name: 'empty section ⇒ HALT', markdown: '## Blocking Severities\n\n' },
-    { name: 'a comma-separated LIST ⇒ HALT', markdown: '## Blocking Severities\n\nCritical, Major\n' },
+    {
+      name: 'a comma-separated LIST ⇒ HALT',
+      markdown: '## Blocking Severities\n\nCritical, Major\n',
+    },
   ]
 
   for (const { name, markdown } of fixtures) {
