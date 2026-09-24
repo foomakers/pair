@@ -5,13 +5,16 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
   checkCatalogContent,
-  checkCatalogFreshness,
   checkCatalogSync,
   collectSkills,
   findSkillCountMismatches,
   generateCatalogRows,
-  SKILLS_SOURCE_REL,
 } from './docs-staleness-check'
+
+// US-514 T-8: `SKILLS_SOURCE_REL` (+ `checkCatalogFreshness`) was check 2d's own export — removed
+// with check 2d. This path is still the dataset skills tree every OTHER check here still gates
+// against, so it stays local to this file rather than disappearing with the freshness check.
+const SKILLS_SOURCE_REL = 'packages/knowledge-hub/dataset/.skills'
 
 /**
  * r0-6 — the branch must MERGE into its base, and the merged skills catalog must still
@@ -125,16 +128,8 @@ function materializeSkills(treeish: string): { skillsDir: string; cleanup: () =>
   }
 }
 
-/** Newest commit date of `.skills/` across BOTH sides — what the merged header must cover. */
-function newestSkillsDateAcross(base: string): string | null {
-  const dates = [base, 'HEAD']
-    .map(ref => tryGit(['log', '-1', '--format=%cs', ref, '--', SKILLS_SOURCE_REL])?.trim() ?? null)
-    .filter((d): d is string => d !== null && /^\d{4}-\d{2}-\d{2}$/.test(d))
-  return dates.length === 0 ? null : dates.sort().at(-1)!
-}
-
 /** Every catalog error `docs:staleness` would raise for one (catalog, skills-tree) pair. */
-function catalogErrorsOf(treeish: string, base: string): string[] {
+function catalogErrorsOf(treeish: string): string[] {
   const catalog = blob(treeish, CATALOG_REL)
   const skills = skillsOfTree(treeish)
   const { skillsDir, cleanup } = materializeSkills(treeish)
@@ -143,7 +138,6 @@ function catalogErrorsOf(treeish: string, base: string): string[] {
       ...checkCatalogSync(skills, catalog),
       ...checkCatalogContent(generateCatalogRows(skillsDir), catalog),
       ...findSkillCountMismatches(catalog, CATALOG_REL, skills.length),
-      ...checkCatalogFreshness(catalog, newestSkillsDateAcross(base)),
     ]
   } finally {
     cleanup()
@@ -210,14 +204,6 @@ describe('r0-6 — the branch merges into its base and the merged catalog stays 
     expect(markers).toEqual([])
   })
 
-  it.runIf(BASE !== null)(
-    'r0-6 w3: the merged catalog Last updated is not older than the merged .skills',
-    () => {
-      const merged = blob(MERGE!.tree, CATALOG_REL)
-      expect(checkCatalogFreshness(merged, newestSkillsDateAcross(BASE!))).toEqual([])
-    },
-  )
-
   it('r0-6 c1 (control): HEAD alone is catalog-coherent — the branch is not the broken side', () => {
     const skillsDir = join(REPO_ROOT, SKILLS_SOURCE_REL)
     expect(existsSync(skillsDir)).toBe(true)
@@ -247,7 +233,7 @@ describe('r0-6 — the branch merges into its base and the merged catalog stays 
   it.runIf(BASE !== null)(
     'r0-6 i1 (interaction): a clean merge is not enough — the merged catalog raises zero catalog errors',
     () => {
-      expect(catalogErrorsOf(MERGE!.tree, BASE!)).toEqual([])
+      expect(catalogErrorsOf(MERGE!.tree)).toEqual([])
     },
   )
 })
