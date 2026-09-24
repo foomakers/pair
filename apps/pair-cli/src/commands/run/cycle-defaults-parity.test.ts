@@ -1,57 +1,69 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync } from 'fs'
-import { join } from 'path'
-import { pathToFileURL } from 'url'
-import {
-  CYCLE_WORKTREE_ROOT_DEFAULT,
-  CYCLE_WORKFLOW_VERSION,
-  CYCLE_BASE_BRANCH_DEFAULT,
-} from './cycle-scripts'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { readBlockingSeverities, DEFAULT_BLOCKING_FLOOR } from './blocking-severities'
 
 /**
- * CROSS-IMPLEMENTATION PARITY — review finding r0-4 (US-487).
- *
- * AC10's transparency block must print the worktree root BEFORE `resolve()` has a run directory
- * to read a live value from, so `cycle-scripts.ts` mirrors a literal from `cycle-state.mjs` by
- * hand. Nothing tied them together: a change on the skill's side would leave this driver printing
- * a value the real dispatch no longer uses — and the one line whose entire job is to tell the
- * operator the truth would be the line lying to them.
- *
- * This repository has already been bitten by exactly this class of drift (the byte-identical copies
- * of `cycle-state.mjs`, the mirror gates, the custody scanner's own trailer bug), so the invariant
- * gets a test rather than a comment. `cycle-state.mjs` guards its CLI behind `isMain()`, so importing
- * it here runs no command; the values below are the ones the real dispatch reads.
- *
- * Follows `tier-parity.test.ts`'s precedent: assert against the OTHER implementation's own source,
- * never against a second copy of the expected value.
- *
- * US-514 T-3: the dispatch ceiling (`CAPS.dispatchesPerStory`, a hard-coded 40) used to be
- * mirrored here too. It is GONE from `cycle-state.mjs` — the only ceiling left is
- * `policy.maxDispatches`, an ADOPTION value read separately (see `blocking-severities.test.ts`),
- * never a script constant this parity test could pin.
+ * r1-3: the pair-cli reader (`blocking-severities.ts`) and the in-session reader the cycle SKILL
+ * documents (ported into `blocking-severities.mjs`, a dependency-free script the SKILL now runs
+ * instead of hand-parsing) must resolve the SAME `## Blocking Severities` fixture to the SAME
+ * policy — including the KB default when the section (or the file) is absent. Before this test
+ * (and the SKILL's own script), nothing checked the two stayed in step: `git grep` found only the
+ * prose match `g1-w14` (`/blockingFloor/`), which cannot catch a divergent DEFAULT or grammar edge.
  */
 
-// apps/pair-cli/src/commands/run -> repo root
-const REPO_ROOT = join(__dirname, '..', '..', '..', '..', '..')
-const CYCLE_STATE = join(REPO_ROOT, '.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs')
+const SCRIPT = join(__dirname, '../../../../../.claude/skills/pair-workflow-cycle/scripts/blocking-severities.mjs')
 
-interface CycleStateModule {
-  readonly PIPELINE_DEFAULTS: { readonly worktreeRoot: string; readonly baseBranch: string }
-  readonly WORKFLOW_VERSION: string
+function inSession(markdown: string | undefined): { blockingFloor?: string; halt?: string; maxDispatches?: unknown } {
+  if (markdown === undefined) {
+    const dir = mkdtempSync(join(tmpdir(), 'us514-parity-'))
+    const missing = join(dir, 'automation.md')
+    const r = spawnSync(process.execPath, [SCRIPT, 'read', missing], { encoding: 'utf8' })
+    rmSync(dir, { recursive: true, force: true })
+    return JSON.parse(r.stdout.trim())
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'us514-parity-'))
+  const file = join(dir, 'automation.md')
+  writeFileSync(file, markdown)
+  const r = spawnSync(process.execPath, [SCRIPT, 'read', file], { encoding: 'utf8' })
+  rmSync(dir, { recursive: true, force: true })
+  return JSON.parse(r.stdout.trim())
 }
 
-describe('cycle defaults parity with pair-workflow-cycle (r0-4)', () => {
-  it('the transparency block prints the SAME defaults the real dispatch reads', async () => {
-    // ASSERTED, not assumed: a moved or renamed skill path would otherwise fail as an obscure
-    // import error, whose natural reading is "the test is broken" rather than "the source moved".
-    expect(existsSync(CYCLE_STATE), `cycle-state.mjs not found at ${CYCLE_STATE}`).toBe(true)
+function pairCli(markdown: string | undefined): { blockingFloor?: string; halt?: string; maxDispatches?: unknown } {
+  if (markdown === undefined) return { blockingFloor: DEFAULT_BLOCKING_FLOOR }
+  try {
+    return readBlockingSeverities(markdown)
+  } catch (e) {
+    return { halt: String((e as Error).message) }
+  }
+}
 
-    const cycleState = (await import(pathToFileURL(CYCLE_STATE).href)) as CycleStateModule
+describe('US-514 r1-3: pair-cli reader / in-session reader parity', () => {
+  const fixtures: Array<{ name: string; markdown: string | undefined }> = [
+    { name: 'absent file', markdown: undefined },
+    { name: 'absent section', markdown: '## Something Else\n\nx\n' },
+    { name: '`Major`, no ceiling', markdown: '## Blocking Severities\n\nMajor\n' },
+    {
+      name: '`Major` + `max-dispatches: 40 block`',
+      markdown: '## Blocking Severities\n\nMajor\nmax-dispatches: 40 block\n',
+    },
+    { name: 'empty section ⇒ HALT', markdown: '## Blocking Severities\n\n' },
+    { name: 'a comma-separated LIST ⇒ HALT', markdown: '## Blocking Severities\n\nCritical, Major\n' },
+  ]
 
-    expect(CYCLE_WORKTREE_ROOT_DEFAULT).toBe(cycleState.PIPELINE_DEFAULTS.worktreeRoot)
-    // The driver sends both of these to the scripts on every dispatch, so a drift is not cosmetic:
-    // a stale version is refused by `publish`, and a stale base cuts the worktree from the wrong ref.
-    expect(CYCLE_WORKFLOW_VERSION).toBe(cycleState.WORKFLOW_VERSION)
-    expect(CYCLE_BASE_BRANCH_DEFAULT).toBe(cycleState.PIPELINE_DEFAULTS.baseBranch)
-  })
+  for (const { name, markdown } of fixtures) {
+    it(`${name}: pair-cli and the in-session reader resolve to the SAME policy`, () => {
+      const cli = pairCli(markdown)
+      const session = inSession(markdown)
+      if ('halt' in cli || cli.blockingFloor === undefined) {
+        // Both must HALT (never one halting while the other silently defaults).
+        expect(session.blockingFloor).toBeUndefined()
+      } else {
+        expect(session).toEqual(cli)
+      }
+    })
+  }
 })
