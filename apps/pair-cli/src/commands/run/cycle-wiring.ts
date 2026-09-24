@@ -311,7 +311,10 @@ const resolveFor =
     return co.bridge.resolve({
       dir: co.runDir,
       workflowVersion: ctx.workflowVersion,
-      policy: { blockingSeverities: blocking.blockingSeverities, ...(blocking.maxDispatches !== undefined && { maxDispatches: blocking.maxDispatches }) },
+      policy: {
+        blockingSeverities: blocking.blockingSeverities,
+        ...(blocking.maxDispatches !== undefined && { maxDispatches: blocking.maxDispatches }),
+      },
       entry: input.pr === undefined ? 'fresh' : 'pr',
       story: input.card,
       runsRoot: co.runsRoot,

@@ -1041,7 +1041,10 @@ function readmeErrors(path: string, skillCount: number, howToCount: number | nul
  * is extracted. (US-514 T-8: the header-date check, 2d, was removed — see `runAllChecks`.)
  */
 function catalogErrors(catalog: string, allSkills: string[], skillsDir: string): string[] {
-  return [...checkCatalogSync(allSkills, catalog), ...checkCatalogContent(generateCatalogRows(skillsDir), catalog)]
+  return [
+    ...checkCatalogSync(allSkills, catalog),
+    ...checkCatalogContent(generateCatalogRows(skillsDir), catalog),
+  ]
 }
 
 /** Run every check against a repo root and collect all drift errors. */

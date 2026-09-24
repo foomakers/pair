@@ -172,7 +172,7 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
     return { code, output: lines.join('\n') }
   }
 
-  it('R10-W1: the transparency block prints the installed worktree root; the dispatch ceiling is adoption\'s, not the script\'s — `none` with no `## Blocking Severities` declared', async () => {
+  it("R10-W1: the transparency block prints the installed worktree root; the dispatch ceiling is adoption's, not the script's — `none` with no `## Blocking Severities` declared", async () => {
     const { output } = await run()
 
     expect(output).toMatch(/^\s*Worktree root: \.\.\/elsewhere-worktrees\s*$/m)

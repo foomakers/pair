@@ -1374,4 +1374,3 @@ describe('checkListTargetsSamples', () => {
     expect(checkListTargetsSamples(rebehaved, [{ rel: 'a.mdx', content: real }])).toHaveLength(1)
   })
 })
-

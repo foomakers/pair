@@ -178,7 +178,13 @@ function productionCycleDriver(
     baseBranch: defaults.baseBranch,
     model: declaredEngineModel(context.config, driver.engineDef.id),
   })
-  return { driveCycle, shown: { worktreeRoot: defaults.worktreeRoot, maxDispatchesDisplay: maxDispatchesDisplayFor(fs, mainCheckout(cwd)) } }
+  return {
+    driveCycle,
+    shown: {
+      worktreeRoot: defaults.worktreeRoot,
+      maxDispatchesDisplay: maxDispatchesDisplayFor(fs, mainCheckout(cwd)),
+    },
+  }
 }
 
 /**
@@ -200,7 +206,11 @@ function maxDispatchesDisplayFor(fs: FileSystemService, mainCheckoutPath: string
  * therefore the adoption read) is wrapped the same way `readCycleDefaults` already is — a
  * PRESENTATION fallback, never a refusal a production dispatch would ever reach.
  */
-function shownDefaults(location: CycleScriptsLocation, fs: FileSystemService, cwd: string): ShownDefaults {
+function shownDefaults(
+  location: CycleScriptsLocation,
+  fs: FileSystemService,
+  cwd: string,
+): ShownDefaults {
   let maxDispatchesDisplay = 'none'
   try {
     maxDispatchesDisplay = maxDispatchesDisplayFor(fs, mainCheckout(cwd))
@@ -221,7 +231,10 @@ function driverFor(
   driver: DriverInput,
 ): { driveCycle: CycleDriver; shown: ShownDefaults } {
   if (deps.driveCycle !== undefined) {
-    return { driveCycle: deps.driveCycle, shown: shownDefaults(driver.location, entry.fs, entry.cwd) }
+    return {
+      driveCycle: deps.driveCycle,
+      shown: shownDefaults(driver.location, entry.fs, entry.cwd),
+    }
   }
   return productionCycleDriver(entry, driver)
 }

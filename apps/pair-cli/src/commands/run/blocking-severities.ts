@@ -80,11 +80,15 @@ function readMaxDispatches(rest: readonly string[]): MaxDispatches | undefined {
   }
   const n = Number(match[1])
   if (!Number.isInteger(n) || n <= 0) {
-    policyHalt(`\`## Blocking Severities\` \`max-dispatches\` must be a positive integer, got \`${match[1]}\``)
+    policyHalt(
+      `\`## Blocking Severities\` \`max-dispatches\` must be a positive integer, got \`${match[1]}\``,
+    )
   }
   const modeToken = match[2]
   if (modeToken !== undefined && !VALID_MODES.has(modeToken)) {
-    policyHalt(`\`## Blocking Severities\` \`max-dispatches\` mode must be warn | block, got \`${modeToken}\``)
+    policyHalt(
+      `\`## Blocking Severities\` \`max-dispatches\` mode must be warn | block, got \`${modeToken}\``,
+    )
   }
   return { n, mode: (modeToken as 'warn' | 'block' | undefined) ?? 'warn' }
 }
