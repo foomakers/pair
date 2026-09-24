@@ -83,4 +83,12 @@ describe('readBlockingSeverities — US-514 T-1 (AC1/AC2)', () => {
     const { resolve } = policyFrom('## Eligibility\n\nrisk:green\n')
     expect(resolve()).toEqual({ blockingSeverities: [...DEFAULT_BLOCKING_SEVERITIES] })
   })
+
+  // #135 AC6: `resolveBlockingSeverities` joins `projectRoot` and `POLICY_PATH` with node's own
+  // `path.join` — platform-abstracted (backslash on win32, forward slash on darwin/linux), never a
+  // hand-built separator this project would have to test per platform itself.
+  it('the policy path join is platform-abstracted (darwin/linux/win32 all resolve through node\'s own path.join, never a hand-built separator)', () => {
+    const fs = new InMemoryFileSystemService({ [`${cwd}/${POLICY_PATH}`]: '## Blocking Severities\n\nMajor\n' }, cwd, cwd)
+    expect(resolveBlockingSeverities(fs, cwd)).toEqual({ blockingSeverities: ['Major'] })
+  })
 })
