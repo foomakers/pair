@@ -1219,6 +1219,64 @@ test('T-4 (AC4, control): an unknown skill is still refused, typed', () => {
   assert.match(out.reason, /supersede-skill-unsupported:not-a-real-stage/)
 })
 
+// ── US-514 T-5 (AC6): repair lineage — the predecessor contract hash a revision records is the
+// ONE the sealer checks against, computed by the engine, with no manual edit (#491 reproduced) ──
+test('T-5 (AC6): publish auto-corrects a revision\'s predecessorContractHash to the one the sealer will accept — no manual edit', () => {
+  const gitEnv = { GIT_AUTHOR_NAME: 'pair', GIT_AUTHOR_EMAIL: 'pair@example.com', GIT_COMMITTER_NAME: 'pair', GIT_COMMITTER_EMAIL: 'pair@example.com' }
+  const git = (cwd, ...args) => spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...gitEnv } })
+  const repo = mkdtempSync(join(tmpdir(), 'seal-lineage-'))
+  git(repo, 'init', '-q', '-b', 'main')
+  // Seal `a0`: a manifest committed at `.pair/red-snapshots/pr-7-a0.json` with the trailer `seal()`
+  // itself writes (`sealedContracts` in `red-snapshot.mjs` reads exactly this shape).
+  const sealedManifest = {
+    fixScope: { owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] },
+    redTests: [{ file: 'test/a.test.ts', sha256: `sha256:${'1'.repeat(64)}`, command: 'node --test', baseline: 'red', observed: 'FAIL 1 of 1' }],
+  }
+  mkdirSync(join(repo, '.pair', 'red-snapshots'), { recursive: true })
+  const manifestRel = '.pair/red-snapshots/pr-7-a0.json'
+  writeFileSync(join(repo, manifestRel), JSON.stringify(sealedManifest))
+  git(repo, 'add', '-A')
+  const base = SHA('b')
+  git(repo, 'commit', '-q', '-m', `red: seal a0\n\nPair-RED-Snapshot: pr=7; phase=a0; base=${base}; manifest=${manifestRel}`)
+  const correctHash = contractHash(sealedManifest)
+
+  // The repair author, exactly like #491, declares the WRONG predecessorContractHash on the
+  // revision contract (an agent's own mis-computation — never trusted).
+  const { dir } = runDir()
+  const revisionPath = join(dir, 'a0-rev2-red-contract.json')
+  const revisionDraft = { ...sealedManifest, revision: 2, supersedes: 'a0', predecessorContractHash: `sha256:${'f'.repeat(64)}`, changedRows: [] }
+  writeFileSync(revisionPath, JSON.stringify(revisionDraft))
+  const f = writeDraft(dir, { run: 'run-1', story: '42', phase: 'a0-rev2', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'revision', contractPath: revisionPath, contractHash: contractHash(revisionDraft) })
+  const out = publish({ dir, file: f, phase: 'a0-rev2', skill: 'red-spec', workflowVersion: V, repoRoot: repo })
+  assert.equal(out.published, true, JSON.stringify(out))
+
+  const onDisk = JSON.parse(readFileSync(revisionPath, 'utf8'))
+  assert.equal(onDisk.predecessorContractHash, correctHash, 'the engine derived it from the sealed manifest, not the agent\'s own number')
+  // The published handoff's own contractHash was re-derived too, so it stays consistent with the
+  // rewritten file (the attempt-overwritten integrity check compares against THIS value later).
+  assert.equal(JSON.parse(readFileSync(join(dir, 'a0-rev2-red-spec.json'), 'utf8')).contractHash, contractHash(onDisk))
+  rmSync(repo, { recursive: true, force: true })
+})
+
+test('T-5 (AC6, control): with no git repo at repoRoot, the declared predecessorContractHash is left exactly as written — contractErrors/seal stay the authority', () => {
+  const { dir } = runDir()
+  const noGit = mkdtempSync(join(tmpdir(), 'no-git-'))
+  const contractPath = join(dir, 'a0-rev2-red-contract.json')
+  const draft = {
+    fixScope: { owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] },
+    redTests: [{ file: 'test/a.test.ts', sha256: `sha256:${'1'.repeat(64)}`, command: 'node --test', baseline: 'red', observed: 'FAIL 1 of 1' }],
+    revision: 2,
+    supersedes: 'a0',
+    predecessorContractHash: `sha256:${'f'.repeat(64)}`,
+    changedRows: [],
+  }
+  writeFileSync(contractPath, JSON.stringify(draft))
+  const f = writeDraft(dir, { run: 'run-1', story: '42', phase: 'a0-rev2', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'revision', contractPath, contractHash: contractHash(draft) })
+  publish({ dir, file: f, phase: 'a0-rev2', skill: 'red-spec', workflowVersion: V, repoRoot: noGit })
+  assert.equal(JSON.parse(readFileSync(contractPath, 'utf8')).predecessorContractHash, `sha256:${'f'.repeat(64)}`)
+  rmSync(noGit, { recursive: true, force: true })
+})
+
 test('T-22 (DT-14): an authenticated ignore decision preserves quality evidence, records the rationale, never touches source/severity — readiness follows once every proposal is dispositioned', () => {
   const { dir } = runDir()
   review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })

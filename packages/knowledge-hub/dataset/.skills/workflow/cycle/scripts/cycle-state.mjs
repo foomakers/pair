@@ -1445,7 +1445,45 @@ export function discoverScopeDecisions({ dir, repo, pr, maintainer, workflowVers
   return { applied: discovered.some(d => d.applied && d.reason !== 'already-applied'), discovered }
 }
 
-export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, pr, lockWaitMs = 5000, host, ...transport }) {
+// US-514 T-5 (AC6): the correct `predecessorContractHash` for a repair/revision contract — the
+// canonical hash (`contractHash`, `$meta` and friends already stripped) of the manifest a SEALED
+// snapshot of `phase` actually committed, read from git history. Best-effort, not a security
+// boundary: `seal()` in `red-snapshot.mjs` is the authoritative check this only tries to satisfy
+// on the first pass; a `null` here (no git repo, no match) leaves the declared value exactly as
+// the contract wrote it, and that authoritative check still runs at seal time.
+const SNAP_TRAILER_RE_LOCAL = /^Pair-RED-Snapshot: pr=(\d+); phase=([^;]+); base=([0-9a-f]{40}); manifest=(\S+)$/
+// Mirrors `red-snapshot.mjs`'s own `predecessorPhase` (a `-rev<m>` phase's predecessor is `-rev<m-1>`
+// or the base phase at `m<=2`) — duplicated for the same reason `contractErrors` is above.
+const predecessorPhaseLocal = phase => {
+  const m = /^(.+)-rev(\d+)$/.exec(String(phase ?? ''))
+  if (!m) return null
+  const n = Number(m[2])
+  return n > 2 ? `${m[1]}-rev${n - 1}` : m[1]
+}
+function sealedContractHashOf({ cwd, phase }) {
+  if (!phase || !cwd) return null
+  const git = args => {
+    const r = spawnSync('git', args, { cwd, encoding: 'utf8', env: cleanGitEnv() })
+    return r.status === 0 ? r.stdout.replace(/\n$/, '') : null
+  }
+  const log = git(['log', '--format=%H%x00%B%x1e']) ?? ''
+  for (const rec of log.split('\x1e').map(r => r.replace(/^\n/, '')).filter(Boolean)) {
+    const [sha, body] = rec.split('\x00')
+    for (const line of String(body ?? '').split('\n')) {
+      const m = SNAP_TRAILER_RE_LOCAL.exec(line.trim())
+      if (!m || m[2] !== phase) continue
+      const raw = git(['show', `${sha}:${m[4]}`])
+      if (!raw) continue
+      try {
+        return contractHash(JSON.parse(raw))
+      } catch {
+        continue
+      }
+    }
+  }
+  return null
+}
+export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, pr, lockWaitMs = 5000, host, repoRoot = process.cwd(), ...transport }) {
   const where = safeRunDir(dir)
   if (where.error) return { published: false, reason: where.error, path: where.path }
   if (safePath('file', file).error) return { published: false, reason: 'path-escape', path: String(file) }
@@ -1494,6 +1532,19 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
         parsed = JSON.parse(readFileSync(cp0, 'utf8'))
       } catch {
         return { published: false, reason: 'contract-invalid', errors: ['contract file is not valid JSON'] }
+      }
+      // US-514 T-5 (AC6): a repair/revision names the predecessor it repairs by `supersedes`
+      // (falling back to the `-rev<m>` phase the sealer itself derives) — the engine derives the
+      // hash the sealer will check against and STAMPS it here, with no manual edit and no math
+      // the implementer can get wrong (the #491 repair-vs-sealer mismatch this reproduces).
+      if (parsed && typeof parsed === 'object' && parsed.predecessorContractHash !== undefined) {
+        const targetPhase = typeof parsed.supersedes === 'string' && parsed.supersedes.trim() ? parsed.supersedes.trim() : predecessorPhaseLocal(phase)
+        const correct = targetPhase ? sealedContractHashOf({ cwd: repoRoot, phase: targetPhase }) : null
+        if (correct && correct !== parsed.predecessorContractHash) {
+          parsed = { ...parsed, predecessorContractHash: correct }
+          writeFileSync(cp0, JSON.stringify(parsed))
+          data = { ...data, contractHash: contractHash(parsed) }
+        }
       }
       const shapeErrs = contractErrors(parsed)
       if (shapeErrs.length) return { published: false, reason: 'contract-invalid', errors: shapeErrs }
