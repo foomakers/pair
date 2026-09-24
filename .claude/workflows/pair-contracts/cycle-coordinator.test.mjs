@@ -2959,6 +2959,41 @@ test('US-514 r1-1: a draft`s `severityRanks` disagreeing with the resolved templ
   assert.notEqual(us514ResolveNext(dir, policy).step, 'done', 'the Major must not ship — resolve is not done, nothing was even published')
 })
 
+// r1-2: `publish` mechanically enforces the SAME floor comparison against a `red-verify` handoff's
+// own gaps — documented in the SKILL (Step 4) but never enforced in code until this fix.
+function us514PublishRedVerify(dir, { findings, verified, sealed }, policyArgs) {
+  const file = join(dir, 'draft-r0-red-verify.json')
+  const reproduced = verified ? [{ rowId: 'w1', baseline: 'red', command: 'node --test test/a.test.mjs', exitCode: 1, observed: 'fail' }] : undefined
+  writeFileSync(file, JSON.stringify({ run: 'story-42', story: '42', pr: 7, phase: 'r0', skill: 'red-verify', inputHead: US514_SHA('a'), verified, sealed, findings, ...(reproduced ? { reproduced } : {}) }))
+  return us514Run(US514_STATE_CLI, ['publish', '--dir', dir, '--file', file, '--phase', 'r0', '--skill', 'red-verify', '--workflowVersion', US514_V, '--pr', '7', ...policyArgs])
+}
+const us514Gap = (rowId, severity) => ({ rowId, location: 'src/a.ts:1', severity, description: 'd', recommendation: 'r' })
+
+test('US-514 r1-2: a `verified:true`/`sealed:true` red-verify handoff carrying a gap AT/ABOVE the floor is a typed refusal, under the default floor and under a declared floor Major', () => {
+  // Default floor (Minor): a Major gap blocks.
+  {
+    const { dir } = us514RunDir()
+    const r = us514PublishRedVerify(dir, { findings: [us514Gap('r0-1', 'Major')], verified: true, sealed: true }, ['--policy', JSON.stringify({ maxFixRounds: 3 })])
+    assert.notEqual(r.status, 0, r.stdout + r.stderr)
+    assert.equal(r.json?.published, false)
+    assert.equal(r.json?.reason, 'red-verify-blocking-gap')
+  }
+  // Declared floor Major: a Major gap still blocks (at the floor).
+  {
+    const { dir } = us514RunDir()
+    const r = us514PublishRedVerify(dir, { findings: [us514Gap('r0-1', 'Major')], verified: true, sealed: true }, ['--policy', JSON.stringify({ maxFixRounds: 3, blockingFloor: 'Major' })])
+    assert.notEqual(r.status, 0, r.stdout + r.stderr)
+    assert.equal(r.json?.reason, 'red-verify-blocking-gap')
+  }
+})
+
+test('US-514 r1-2: a gap BELOW the floor is accepted as a non-blocking note — `verified:true` still publishes, under a declared floor Major', () => {
+  const { dir } = us514RunDir()
+  const r = us514PublishRedVerify(dir, { findings: [us514Gap('r0-1', 'Minor')], verified: true, sealed: true }, ['--policy', JSON.stringify({ maxFixRounds: 3, blockingFloor: 'Major' })])
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.equal(r.json?.published, true)
+})
+
 test('US-514 r1-g1 g1-w10 (r0-2): a vocabulary with its OWN names is ranked by the draft`s `severityRanks` (keys listed out of rank order) — floor Serious and floor Showstopper', () => {
   const ranks = { Cosmetic: 1, Showstopper: 3, Serious: 2 }
   const findings = [us514Evidenced('r0-1', 'Showstopper', false), us514Evidenced('r0-2', 'Serious', false), us514Evidenced('r0-3', 'Cosmetic', true)]

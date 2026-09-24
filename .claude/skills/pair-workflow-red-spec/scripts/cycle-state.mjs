@@ -1655,23 +1655,38 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   // it is filed under; a `regressionRisk` finding's `blocking` is governed by the regression-risk
   // ledger's own coherence rule (DR-10: ACTIVE risk ⇔ blocking), a stricter, more specific
   // invariant a severity-only derivation must not override.
+  // r1-1/r1-2 shared: severity ranks come from the resolved TEMPLATE CONTRACT (`policy.severityRanks`),
+  // never a handoff's own draft — a draft's own ranks, once the template's are resolved, must agree
+  // with them exactly or publish is a typed refusal. Shared by review-phase (T-2) and red-verify (r1-2).
+  const us514TemplateRanks = policy.severityRanks && typeof policy.severityRanks === 'object' && !Array.isArray(policy.severityRanks) ? policy.severityRanks : undefined
+  const us514DraftRanks = data.severityRanks && typeof data.severityRanks === 'object' && !Array.isArray(data.severityRanks) ? data.severityRanks : undefined
+  if ((skill === 'review-phase' || skill === 'red-verify') && us514TemplateRanks && us514DraftRanks && !ranksAgree(us514TemplateRanks, us514DraftRanks)) {
+    return { published: false, reason: 'severity-ranks-mismatch', template: us514TemplateRanks, draft: us514DraftRanks }
+  }
+  const us514Ranks = us514TemplateRanks ?? us514DraftRanks
+  const us514Floor = typeof policy.blockingFloor === 'string' && policy.blockingFloor.length ? policy.blockingFloor : DEFAULT_BLOCKING_FLOOR
+  const us514FloorRank = rankOf(us514Floor, us514Ranks)
   if (skill === 'review-phase' && Array.isArray(data.findings)) {
-    const templateRanks = policy.severityRanks && typeof policy.severityRanks === 'object' && !Array.isArray(policy.severityRanks) ? policy.severityRanks : undefined
-    const draftRanks = data.severityRanks && typeof data.severityRanks === 'object' && !Array.isArray(data.severityRanks) ? data.severityRanks : undefined
-    if (templateRanks && draftRanks && !ranksAgree(templateRanks, draftRanks)) {
-      return { published: false, reason: 'severity-ranks-mismatch', template: templateRanks, draft: draftRanks }
-    }
-    const ranks = templateRanks ?? draftRanks
-    const floor = typeof policy.blockingFloor === 'string' && policy.blockingFloor.length ? policy.blockingFloor : DEFAULT_BLOCKING_FLOOR
-    const floorRank = rankOf(floor, ranks)
     data = {
       ...data,
       findings: data.findings.map(f => {
         if (!f || typeof f !== 'object' || (f.transition ?? 'open') !== 'open' || f.regressionRisk !== undefined) return f
         if (f.kind === 'question') return { ...f, blocking: false }
-        const r = rankOf(f.severity, ranks)
-        return { ...f, blocking: r === undefined || floorRank === undefined || r >= floorRank }
+        const r = rankOf(f.severity, us514Ranks)
+        return { ...f, blocking: r === undefined || us514FloorRank === undefined || r >= us514FloorRank }
       }),
+    }
+  }
+  // r1-2: red-verify's own floor comparison — DOCUMENTED in the SKILL (Step 4) but never mechanically
+  // enforced. A `verified: true`/`sealed: true` handoff carrying a gap AT OR ABOVE the floor is a typed
+  // refusal (`red-verify-blocking-gap`); a gap BELOW the floor is accepted as a non-blocking note.
+  if (skill === 'red-verify' && Array.isArray(data.findings) && (data.verified === true || data.sealed === true)) {
+    const blockers = data.findings.filter(f => f && typeof f === 'object' && f.severity !== undefined).filter(f => {
+      const r = rankOf(f.severity, us514Ranks)
+      return r === undefined || us514FloorRank === undefined || r >= us514FloorRank
+    })
+    if (blockers.length) {
+      return { published: false, reason: 'red-verify-blocking-gap', findings: blockers.map(f => f.rowId ?? f.location ?? f.description) }
     }
   }
   // US-479 T-29 (S11): the risk identity is derived HERE, and the claim is checked against what
