@@ -136,7 +136,7 @@ One row, and it is inert unless a project turns it on. When **all four** hold �
 
 | Actor | Responsibility |
 | --- | --- |
-| `/pair-capability-publish-pr` | Creates the PR, propagates the story's classification tags, registers `pair-review` as **pending**, labels the PR `pr-state:to-be-reviewed`, and triggers the review in a clean-context subagent |
+| `/pair-capability-publish-pr` | Creates the PR **without classification tags** (the review classifies it; untagged = fail-safe red until then), registers `pair-review` as **pending**, labels the PR `pr-state:to-be-reviewed`, and triggers the review in a clean-context subagent |
 | `/pair-process-review` | Produces the judgment verdict in the native review, publishes the `pair-review` check conclusion (`review_check_conclusion`), computes the state (`resolve_pr_state`), swaps the `pr-state:*` label, and refuses to merge unless `merge_allowed` passes |
 | `/pair-workflow-review-phase` (delivery workflow, batch engine) | The final non-partial reviewer of a cycle publishes the `pair-review` conclusion on the exact head it verified and swaps the `pr-state:*` label (`scripts/pr-state.mjs conclude`, the same mapping as `pr-state.sh`); a non-decision publishes nothing, so the pending check keeps the merge blocked. Never merges — merging is the loop's, not the reviewer's. |
 | `/pair-loop` (unattended, adoption-gated) | The **only** unattended merge path: when the card's tier is in `## Auto-Advance`, executes the merge on freshly re-verified signals (tier, remote head, both conclusions, gate set — the `merge_allowed` conjunction), then the merge-and-cascade close. It executes merges the synthesis authorizes; it judges nothing |

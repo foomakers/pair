@@ -176,6 +176,7 @@
 - [Decision: `run --root --parallel` ports `pair-loop`'s dependency + mutex analysis under a parity test, selects through one `pair-next` engine process, and locks mutex resources through `card-lock`](.pair/adoption/decision-log/2026-09-23-us-491-portable-fan-out-ports-pair-loop-analysis.md)
 - [Decision: US-506 — the validator proves it executed; one pre-seal guard](.pair/adoption/decision-log/2026-09-23-us-506-validator-execution-evidence-and-pre-seal-guard.md)
 - [Decision: what blocks the delivery cycle comes from adoption, not a workflow rule](.pair/adoption/decision-log/2026-09-24-blocking-severities-from-adoption.md)
+- [Decision: A PR's classification tags come only from the review, never copied from the story](.pair/adoption/decision-log/2026-09-25-pr-tags-only-from-review-classification.md)
 
 ## How-To Guides
 
