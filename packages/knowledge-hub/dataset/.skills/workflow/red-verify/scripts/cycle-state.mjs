@@ -97,14 +97,89 @@ export const STEPS = ['prepare', 'validate', 'implement', 'green', 'verify', 'do
 // `pair-workflow-cycle` in-session coordinator, `pair-cli` — reads these from this file. A second
 // copy in a consumer is a fork of the state machine, so the consumers are grep-guarded against
 // redefining them.
-//   dispatchesPerStory   one run that asks for more than this is looping, not converging.
 //   consecutiveRedirects the durable state and the dispatched step disagree this many times in a
 //                        row only when one of the two is wrong.
-export const CAPS = { dispatchesPerStory: 40, consecutiveRedirects: 3 }
+// US-514 T-3 (#514/AC3): `dispatchesPerStory` — a hard-coded 40 — is GONE. The only per-story dispatch
+// ceiling left is `policy.maxDispatches`, a project's own `## Blocking Severities` declaration
+// (T-1); with none declared there is no ceiling at all, never a silent 40.
+export const CAPS = { consecutiveRedirects: 3 }
 // A dead dispatch (the agent died, or returned a shape no stage can use) is retried with the SAME
 // prompt: every stage is re-entrant by construction, so the retry RESUMES. Policy data, so a
 // caller may narrow or widen it without a second rule living in the caller.
+// US-514 T-1/T-2 (the #514/AC1 revision, maintainer 2026-09-24 — a FLOOR compared by RANK, never a list): the
+// KB default blocking floor is `Minor` — every severity except Questions blocks, today's behaviour
+// byte for byte. A project declares `## Blocking Severities` only to differ (delta-only adoption,
+// ADR-018/D21); pair itself declares nothing.
 export const POLICY_DEFAULTS = { deadDispatchRetries: 1 }
+export const DEFAULT_BLOCKING_FLOOR = 'Minor'
+// r1-1: no `Blocker` alias — `Blocker` is one entry OF a resolved template contract's OWN
+// `severityRanks`, never pair's guess at what it means. The severity vocabulary neither the
+// template contract (`policy.severityRanks`) nor a review draft supplies ranks for: pair's own
+// table (Critical highest, Questions lowest), case-insensitive by name — the KB vocabulary
+// `Critical | Major | Minor | Questions`. A severity outside both this table and the resolved
+// ranks is unrankable and blocks (fail-safe).
+const DEFAULT_SEVERITY_RANKS = { critical: 4, major: 3, minor: 2, questions: 1 }
+// The default table, spelled with the KB's own casing — used as the RESOLVED ranks (never a
+// draft's own claim) when neither `policy.severityRanks` nor an on-disk template contract
+// resolves any. r1-1 round 4: there is NO draft-ranks fallback left anywhere in this file — ranks
+// are ALWAYS one of (1) `policy.severityRanks`, (2) the on-disk template contract, (3) this table.
+const DEFAULT_SEVERITY_RANKS_CANONICAL = { Critical: 4, Major: 3, Minor: 2, Questions: 1 }
+// Two rank maps agree iff they name exactly the same severities (case-insensitively) with exactly
+// the same rank each.
+function ranksAgree(a, b) {
+  const norm = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [String(k).toLowerCase(), v]))
+  const an = norm(a)
+  const bn = norm(b)
+  const ak = Object.keys(an)
+  const bk = Object.keys(bn)
+  return ak.length === bk.length && ak.every(k => Object.prototype.hasOwnProperty.call(bn, k) && bn[k] === an[k])
+}
+// Rank a severity by the resolved ranks, matched case-insensitively by name. `ranks` here is
+// ALWAYS the fully resolved map (`policy.severityRanks`, the on-disk contract, or pair's own
+// default table — see `us514Ranks` below) — never a reviewer's own draft, and never absent by the
+// time this runs. Returns `undefined` when the severity is covered by neither — the caller's
+// fail-safe (an unrankable value blocks).
+function rankOf(severity, ranks) {
+  if (ranks && typeof ranks === 'object' && !Array.isArray(ranks)) {
+    const key = Object.keys(ranks).find(k => String(k).toLowerCase() === String(severity).toLowerCase())
+    return key !== undefined ? ranks[key] : undefined
+  }
+  return DEFAULT_SEVERITY_RANKS[String(severity).toLowerCase()]
+}
+// r1-1 (round 3/4): NO real dispatch path (in-session `blocking-severities.mjs read` → `packet`,
+// pair-cli `cycle-wiring.ts`, batch `pair-implement-batch.js`) ever puts the template contract's
+// `severityRanks` into `$policy` — only a test does, by hand. `publish` itself now resolves them,
+// from the SAME cache `ensure-contract.mjs` writes and the review stage reads
+// (`.claude/workflows/pair-contracts/code-review.contract.json`). Tried at TWO locations, in order:
+// (1) `repoRoot`-relative — `publish`'s own `repoRoot` option (default `process.cwd()`, the same
+// one the batch's in-process `publish()` call and every CLI invocation from a repo checkout
+// already use for `sealedContractHashOf`), so an INSTALLED project's own repo root resolves
+// correctly whatever depth this script ships at there; (2) this-script-relative, four directories
+// up (`.claude/skills/<skill>/scripts/cycle-state.mjs` in every one of the 12 byte-identical
+// copies here), for a bare CLI invocation from outside the repo root. A draft can never rank on
+// its own. Round 4: the draft-ranks fallback is GONE — absent a policy value and an on-disk
+// contract at EITHER location, ranking falls straight to `DEFAULT_SEVERITY_RANKS_CANONICAL`, never
+// to `data.severityRanks`. Anything not `{severity: integer}` on disk is treated as no contract
+// (fail-safe: falls through, never throws, never partial-trusts a malformed cache).
+function loadResolvedContractSeverityRanks(repoRoot) {
+  const candidates = [
+    repoRoot ? join(repoRoot, '.claude', 'workflows', 'pair-contracts', 'code-review.contract.json') : undefined,
+    join(resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..'), '.claude', 'workflows', 'pair-contracts', 'code-review.contract.json'),
+  ].filter(Boolean)
+  for (const contractPath of candidates) {
+    try {
+      if (!existsSync(contractPath)) continue
+      const contract = JSON.parse(readFileSync(contractPath, 'utf8'))
+      const ranks = contract && typeof contract === 'object' ? contract.severityRanks : undefined
+      if (!ranks || typeof ranks !== 'object' || Array.isArray(ranks)) continue
+      if (!Object.values(ranks).every(v => Number.isInteger(v))) continue
+      return ranks
+    } catch {
+      // fail-safe: an unreadable/malformed cache at this candidate is treated as absent, never thrown
+    }
+  }
+  return undefined
+}
 // ── transition context policy (US-486 AC-7) ────────────────────────────────────────────────
 // `next.context` says whether the stage about to run gets a FRESH subagent or RESUMES the previous
 // subagent of the same role. The KB default is `fresh` on every transition (ADR-024: freeze the
@@ -169,6 +244,92 @@ const VOLATILE = new Set(['contractPath', 'createdAt', '$meta', 'contractHash', 
 export const contractHash = contract =>
   sha256(canonical(Object.fromEntries(Object.entries(contract ?? {}).filter(([k]) => !VOLATILE.has(k)))))
 export const inputsDigest = inputs => sha256(canonical(inputs ?? {}))
+// ── contract shape (US-514 T-5, #514/AC5) — checked BEFORE validation, never after ───────────────
+// A DELIBERATE duplicate of `red-snapshot.mjs`'s own `contractErrors`/`isRelPath`/`SHA256_RE`
+// (the canonical definitions, and the ones `verify`/`seal` apply): this file ships beside
+// `cycle-state.mjs` in every skill that ships it, but NOT beside `red-spec`'s or `cycle`'s own
+// copy — importing it there would mean shipping a second file this story does not otherwise
+// touch. `publish`'s own shape check below has to run wherever a red-spec handoff is published,
+// so the check travels with the file that already does. Parity with the canonical definition is
+// a fixture test (`cycle-state.test.mjs`), not a runtime guarantee — the same mitigation T-1's
+// two policy parsers use.
+const SHA256_RE_LOCAL = /^sha256:[0-9a-f]{64}$/
+const isRelPathLocal = p =>
+  typeof p === 'string' &&
+  p.length > 0 &&
+  !p.startsWith('/') &&
+  !p.startsWith('-') &&
+  !p.replace(/\/$/, '').split('/').some(seg => seg === '' || seg === '.' || seg === '..')
+const artifactBaselineLocal = a => String(a?.baseline ?? 'red')
+export function contractErrors(c) {
+  const errs = []
+  if (!c || typeof c !== 'object' || Array.isArray(c)) return ['contract must be an object']
+  const scope = c.fixScope
+  if (!scope || typeof scope !== 'object') errs.push('fixScope missing')
+  else {
+    if (!String(scope.owner ?? '').trim()) errs.push('fixScope.owner missing')
+    if (!['behavioral', 'structural', 'test'].includes(scope.mode)) errs.push('fixScope.mode must be behavioral | structural | test')
+    if (scope.mode === 'test') {
+      if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length !== 0) errs.push('fixScope.allowedPaths must be an empty array for mode test')
+    } else if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length === 0) errs.push('fixScope.allowedPaths must be a non-empty array')
+    else for (const p of scope.allowedPaths) if (!isRelPathLocal(p)) errs.push(`fixScope.allowedPaths has an invalid path: ${JSON.stringify(p)}`)
+  }
+  if (c.testExempt === true) {
+    if (!String(c.exemptionRationale ?? '').trim()) errs.push('testExempt requires exemptionRationale')
+    return errs
+  }
+  if (!Array.isArray(c.redTests) || c.redTests.length === 0) errs.push('redTests must be a non-empty array')
+  else {
+    const seen = new Set()
+    let witnesses = 0
+    for (const [i, a] of c.redTests.entries()) {
+      const kind = a?.kind ?? 'test'
+      const baseline = artifactBaselineLocal(a)
+      if (!isRelPathLocal(a?.file)) errs.push(`redTests[${i}].file must be a repository-relative path`)
+      else if (seen.has(a.file)) errs.push(`redTests[${i}].file is listed twice: ${a.file}`)
+      else seen.add(a.file)
+      if (!SHA256_RE_LOCAL.test(String(a?.sha256 ?? ''))) errs.push(`redTests[${i}].sha256 must be sha256:<64 hex>`)
+      if (!['red', 'pass'].includes(baseline)) errs.push(`redTests[${i}].baseline must be red | pass`)
+      if (kind === 'test') {
+        if (!String(a?.command ?? '').trim()) errs.push(`redTests[${i}] (test) needs its ${baseline === 'pass' ? 'passing' : 'failing'} command`)
+        const observed = String(a?.observed ?? '')
+        if (baseline === 'pass') {
+          if (/fail/i.test(observed) || !/pass|ok|green|\d+\/\d+/i.test(observed)) errs.push(`redTests[${i}] (control) needs an observed PASSING run, not ${JSON.stringify(observed)}`)
+        } else if (!/fail/i.test(observed)) errs.push(`redTests[${i}] (test) needs an observed RED failure`)
+        else witnesses++
+      } else if (kind === 'fixture') {
+        if (!String(a?.consumedBy ?? '').trim()) errs.push(`redTests[${i}] (fixture) needs consumedBy`)
+      } else errs.push(`redTests[${i}].kind must be test | fixture`)
+    }
+    for (const [i, a] of c.redTests.entries())
+      if ((a?.kind ?? 'test') === 'fixture' && a.consumedBy) {
+        const consumer = c.redTests.find(t => t.file === a.consumedBy && (t.kind ?? 'test') === 'test')
+        if (!consumer) errs.push(`redTests[${i}] (fixture) consumedBy does not name a listed RED test: ${a.consumedBy}`)
+      }
+    if (witnesses === 0 && scope?.mode !== 'test' && !errs.some(e => /RED failure/.test(e))) errs.push('redTests needs at least one red witness (baseline red, observed failing) — a contract made only of controls proves nothing')
+  }
+  if (c.matrix !== undefined) {
+    if (!Array.isArray(c.matrix)) errs.push('matrix must be an array')
+    else {
+      const ids = new Set()
+      for (const [i, row] of c.matrix.entries()) {
+        if (!String(row?.id ?? '').trim()) errs.push(`matrix[${i}].id is required (stable row id)`)
+        else if (ids.has(row.id)) errs.push(`matrix[${i}].id is listed twice: ${row.id}`)
+        else ids.add(row.id)
+        if (!['witness', 'control', 'boundary', 'interaction', 'not-applicable'].includes(row?.kind)) errs.push(`matrix[${i}].kind must be witness | control | boundary | interaction | not-applicable`)
+        if (!['red', 'pass'].includes(row?.baseline)) errs.push(`matrix[${i}].baseline must be red | pass`)
+        if (!Array.isArray(row?.covers) || row.covers.length === 0) errs.push(`matrix[${i}].covers must name at least one obligation`)
+        if (row?.kind === 'not-applicable' && !String(row?.rationale ?? '').trim()) errs.push(`matrix[${i}].rationale is required for a not-applicable row`)
+      }
+    }
+  }
+  if (c.reattest !== undefined) {
+    const r = c.reattest
+    if (!r || typeof r !== 'object' || Array.isArray(r)) errs.push('reattest must be an object when present')
+    else if (!String(r.reason ?? '').trim()) errs.push('reattest.reason missing')
+  }
+  return errs
+}
 // ── effective inputs of a card (US-486 AC-10/AC-12) ────────────────────────────────────────
 // The digest every realization stamps into `$inputs`: the cycle state compares it with the one
 // persisted in the last review handoff, and a change re-validates the review evidence instead of
@@ -1182,8 +1343,19 @@ export function resolveMaintainer({ dir, maintainer }) {
   } catch {
     return { error: 'maintainer-unresolved:way-of-working-unreadable' }
   }
+  // US-514 T-6 (#514/AC7): read through the SAME CommonMark declaration reader #492's host resolution
+  // uses — a fenced or HTML-commented example naming `default-assignee`/`code-host-assignee` is
+  // blanked before the regex ever sees it, exactly as it already is for `pm-tool`/`code-host`.
+  let src = text
+  if (HOSTS) {
+    try {
+      src = HOSTS.declarationText(text)
+    } catch (e) {
+      return { error: `maintainer-unresolved:${e.kind ?? 'way-of-working-malformed'}` }
+    }
+  }
   for (const key of ASSIGNEE_KEYS) {
-    const m = new RegExp('^\\s*[-*]\\s*`' + key + '`\\s*:\\s*`([^`\\s]+)`', 'm').exec(text)
+    const m = new RegExp('^\\s*[-*]\\s*`' + key + '`\\s*:\\s*`([^`\\s]+)`', 'm').exec(src)
     if (m) return { login: m[1], source: key }
   }
   return { error: 'maintainer-unresolved:no-assignee-in-adoption' }
@@ -1348,7 +1520,45 @@ export function discoverScopeDecisions({ dir, repo, pr, maintainer, workflowVers
   return { applied: discovered.some(d => d.applied && d.reason !== 'already-applied'), discovered }
 }
 
-export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, pr, lockWaitMs = 5000, host, ...transport }) {
+// US-514 T-5 (#514/AC6): the correct `predecessorContractHash` for a repair/revision contract — the
+// canonical hash (`contractHash`, `$meta` and friends already stripped) of the manifest a SEALED
+// snapshot of `phase` actually committed, read from git history. Best-effort, not a security
+// boundary: `seal()` in `red-snapshot.mjs` is the authoritative check this only tries to satisfy
+// on the first pass; a `null` here (no git repo, no match) leaves the declared value exactly as
+// the contract wrote it, and that authoritative check still runs at seal time.
+const SNAP_TRAILER_RE_LOCAL = /^Pair-RED-Snapshot: pr=(\d+); phase=([^;]+); base=([0-9a-f]{40}); manifest=(\S+)$/
+// Mirrors `red-snapshot.mjs`'s own `predecessorPhase` (a `-rev<m>` phase's predecessor is `-rev<m-1>`
+// or the base phase at `m<=2`) — duplicated for the same reason `contractErrors` is above.
+const predecessorPhaseLocal = phase => {
+  const m = /^(.+)-rev(\d+)$/.exec(String(phase ?? ''))
+  if (!m) return null
+  const n = Number(m[2])
+  return n > 2 ? `${m[1]}-rev${n - 1}` : m[1]
+}
+function sealedContractHashOf({ cwd, phase }) {
+  if (!phase || !cwd) return null
+  const git = args => {
+    const r = spawnSync('git', args, { cwd, encoding: 'utf8', env: cleanGitEnv() })
+    return r.status === 0 ? r.stdout.replace(/\n$/, '') : null
+  }
+  const log = git(['log', '--format=%H%x00%B%x1e']) ?? ''
+  for (const rec of log.split('\x1e').map(r => r.replace(/^\n/, '')).filter(Boolean)) {
+    const [sha, body] = rec.split('\x00')
+    for (const line of String(body ?? '').split('\n')) {
+      const m = SNAP_TRAILER_RE_LOCAL.exec(line.trim())
+      if (!m || m[2] !== phase) continue
+      const raw = git(['show', `${sha}:${m[4]}`])
+      if (!raw) continue
+      try {
+        return contractHash(JSON.parse(raw))
+      } catch {
+        continue
+      }
+    }
+  }
+  return null
+}
+export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, pr, lockWaitMs = 5000, host, repoRoot = process.cwd(), policy = {}, ...transport }) {
   const where = safeRunDir(dir)
   if (where.error) return { published: false, reason: where.error, path: where.path }
   if (safePath('file', file).error) return { published: false, reason: 'path-escape', path: String(file) }
@@ -1385,6 +1595,36 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   // the first — and a new attempt never lands on top of an earlier one. The earlier attempts' files
   // are checked intact against the hash their own handoff recorded: a rejection names its contract,
   // and a repair that overwrote it would leave the rejection pointing at bytes nobody validated.
+  // US-514 T-5 (#514/AC5): a shape error never reaches the validator, and never consumes a repair
+  // attempt — checked BEFORE any of the attempt/overwrite bookkeeping below. Only when the
+  // contract is actually on disk and parseable: a test naming a fictitious `contractPath` (never
+  // written) is a different kind of fixture and stays exactly as it was.
+  if (skill === 'red-spec' && data.status === 'red') {
+    const cp0 = String(data.contractPath ?? '').trim()
+    if (cp0 && existsSync(cp0)) {
+      let parsed
+      try {
+        parsed = JSON.parse(readFileSync(cp0, 'utf8'))
+      } catch {
+        return { published: false, reason: 'contract-invalid', errors: ['contract file is not valid JSON'] }
+      }
+      // US-514 T-5 (#514/AC6): a repair/revision names the predecessor it repairs by `supersedes`
+      // (falling back to the `-rev<m>` phase the sealer itself derives) — the engine derives the
+      // hash the sealer will check against and STAMPS it here, with no manual edit and no math
+      // the implementer can get wrong (the #491 repair-vs-sealer mismatch this reproduces).
+      if (parsed && typeof parsed === 'object' && parsed.predecessorContractHash !== undefined) {
+        const targetPhase = typeof parsed.supersedes === 'string' && parsed.supersedes.trim() ? parsed.supersedes.trim() : predecessorPhaseLocal(phase)
+        const correct = targetPhase ? sealedContractHashOf({ cwd: repoRoot, phase: targetPhase }) : null
+        if (correct && correct !== parsed.predecessorContractHash) {
+          parsed = { ...parsed, predecessorContractHash: correct }
+          writeFileSync(cp0, JSON.stringify(parsed))
+          data = { ...data, contractHash: contractHash(parsed) }
+        }
+      }
+      const shapeErrs = contractErrors(parsed)
+      if (shapeErrs.length) return { published: false, reason: 'contract-invalid', errors: shapeErrs }
+    }
+  }
   if (skill === 'red-spec') {
     const cp = String(data.contractPath ?? '').trim()
     if (cp && n > 1) {
@@ -1431,6 +1671,67 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
     if (freshRun) {
       const acErrs = acAssessmentErrors(data)
       if (acErrs.length) return { published: false, reason: acErrs[0], errors: acErrs }
+    }
+  }
+  // US-514 T-2 (the #514/AC1 revision, maintainer 2026-09-24): a policy carrying the retired
+  // `blockingSeverities` list key is a typed refusal, never a silent ignore or a mixed-key mix-in
+  // (ADR-018: no silent fallback for a malformed declaration).
+  if (Object.prototype.hasOwnProperty.call(policy, 'blockingSeverities')) {
+    return { published: false, reason: 'policy-legacy-blocking-severities', detail: '`policy.blockingSeverities` is retired — declare `policy.blockingFloor` (a single severity), never a list' }
+  }
+  // US-514 T-2 (#514/AC1, revised): a finding's `blocking` flag is DERIVED here from its own
+  // `severity` ranked against `policy.blockingFloor` (absent ⇒ the KB default floor `Minor` — every
+  // severity except Questions blocks, today's behaviour unchanged) — never trusted as the
+  // reviewer's own claim, the same reason `acHash` is stamped rather than read. r1-1 (round 4): a
+  // handoff's own `severityRanks` is NEVER a ranking source, period — not even when neither a
+  // policy value nor an on-disk template contract resolves. Ranks are ALWAYS one of, in order:
+  // (1) `policy.severityRanks` (threaded through the same channel `blockingFloor`/`maxDispatches`
+  // ride in on); (2) the on-disk resolved template contract `publish` loads itself
+  // (`loadResolvedContractSeverityRanks`, the same cache `ensure-contract.mjs` writes and the
+  // review stage reads); (3) pair's own default table (`DEFAULT_SEVERITY_RANKS_CANONICAL`). A
+  // draft's OWN `severityRanks`, when present, is checked ONLY for agreement with whichever of the
+  // three above resolved — disagreement is a typed refusal (`severity-ranks-mismatch`), agreement
+  // changes nothing (the resolved ranks were already what is used). `blocking = rank(severity) >=
+  // rank(floor)`; a severity no rank covers blocks (fail-safe), and a floor no rank covers releases
+  // nothing — every finding stays blocking (fail-safe). Scoped to OPEN, non-`question`,
+  // non-`regressionRisk` findings: a CLOSED finding's `blocking` is the closure's own record
+  // (transition already gates it in `isBlocking`); a `question` carries no defect to weigh and is
+  // never blocking, whatever severity it is filed under; a `regressionRisk` finding's `blocking` is
+  // governed by the regression-risk ledger's own coherence rule (DR-10: ACTIVE risk ⇔ blocking), a
+  // stricter, more specific invariant a severity-only derivation must not override.
+  // r1-1/r1-2 shared: severity ranks come from the resolved policy/contract/default chain above,
+  // never a handoff's own draft — a draft's own ranks, whatever the resolved source, must agree
+  // with them exactly or publish is a typed refusal. Shared by review-phase (T-2) and red-verify (r1-2).
+  const us514PolicyRanks = policy.severityRanks && typeof policy.severityRanks === 'object' && !Array.isArray(policy.severityRanks) ? policy.severityRanks : undefined
+  const us514ContractRanks = (skill === 'review-phase' || skill === 'red-verify') ? loadResolvedContractSeverityRanks(repoRoot) : undefined
+  const us514Ranks = us514PolicyRanks ?? us514ContractRanks ?? DEFAULT_SEVERITY_RANKS_CANONICAL
+  const us514DraftRanks = data.severityRanks && typeof data.severityRanks === 'object' && !Array.isArray(data.severityRanks) ? data.severityRanks : undefined
+  if ((skill === 'review-phase' || skill === 'red-verify') && us514DraftRanks && !ranksAgree(us514Ranks, us514DraftRanks)) {
+    return { published: false, reason: 'severity-ranks-mismatch', template: us514Ranks, draft: us514DraftRanks }
+  }
+  const us514Floor = typeof policy.blockingFloor === 'string' && policy.blockingFloor.length ? policy.blockingFloor : DEFAULT_BLOCKING_FLOOR
+  const us514FloorRank = rankOf(us514Floor, us514Ranks)
+  if (skill === 'review-phase' && Array.isArray(data.findings)) {
+    data = {
+      ...data,
+      findings: data.findings.map(f => {
+        if (!f || typeof f !== 'object' || (f.transition ?? 'open') !== 'open' || f.regressionRisk !== undefined) return f
+        if (f.kind === 'question') return { ...f, blocking: false }
+        const r = rankOf(f.severity, us514Ranks)
+        return { ...f, blocking: r === undefined || us514FloorRank === undefined || r >= us514FloorRank }
+      }),
+    }
+  }
+  // r1-2: red-verify's own floor comparison — DOCUMENTED in the SKILL (Step 4) but never mechanically
+  // enforced. A `verified: true`/`sealed: true` handoff carrying a gap AT OR ABOVE the floor is a typed
+  // refusal (`red-verify-blocking-gap`); a gap BELOW the floor is accepted as a non-blocking note.
+  if (skill === 'red-verify' && Array.isArray(data.findings) && (data.verified === true || data.sealed === true)) {
+    const blockers = data.findings.filter(f => f && typeof f === 'object' && f.severity !== undefined).filter(f => {
+      const r = rankOf(f.severity, us514Ranks)
+      return r === undefined || us514FloorRank === undefined || r >= us514FloorRank
+    })
+    if (blockers.length) {
+      return { published: false, reason: 'red-verify-blocking-gap', findings: blockers.map(f => f.rowId ?? f.location ?? f.description) }
     }
   }
   // US-479 T-29 (S11): the risk identity is derived HERE, and the claim is checked against what
@@ -2291,6 +2592,11 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   // Fail closed before ANY state is read: an unusable freshness policy is never resolved around.
   const policyError = contextPolicyError(contextPolicy)
   if (policyError) throw new Error(policyError)
+  // r1-4: the retired `policy.blockingSeverities` (a severity LIST) is refused HERE too — the same
+  // reason `publish` and `packet` refuse it — never silently accepted and acted on as if it named a floor.
+  if (Object.prototype.hasOwnProperty.call(policy, 'blockingSeverities')) {
+    return { status: 'invalid', reason: 'policy-legacy-blocking-severities', workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
+  }
   const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects })
   // The budgets a coordinator spends are the cycle's data, never the coordinator's own constants.
   return { ...out, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
@@ -2382,25 +2688,28 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // US-479 B2: the provenance binding travels with EVERY resolve — a resumed cycle never forgets
   // which runs it continues, and a reader never mistakes it for a clean new PR.
   const predecessorRuns = [...new Set(handoffs.filter(h => h.data?.recordType === 'migration').flatMap(h => (h.data.predecessorRuns ?? []).map(r => r.runId)))].sort()
-  // US-486 AC-12: the per-story ceilings are enforced HERE, from the durable evidence alone, so
-  // every realization reads the same run directory and reaches the same verdict on it. The two
-  // ceilings count DIFFERENT things and each says which: this one counts the PUBLISHED HANDOFFS in
-  // the run directory — a durable, cumulative quantity (every resume and every attempt is another
-  // file), not the engine's per-invocation `storyMetrics.dispatches`; consecutive redirects publish
-  // no handoff at all, so the coordinator that observed them hands that count in instead. Because
-  // the handoff count only grows, the block is permanent for this run directory, which is why its
-  // detail names the recovery a human actually has (`migrate-acknowledge` binds a fresh run
-  // directory to this one) rather than implying a retry would clear it.
+  // US-486 AC-12 (US-514 T-3: the hard-coded dispatchesPerStory ceiling is GONE — the only ceiling
+  // left is the one a project DECLARES, `policy.maxDispatches`). The consecutive-redirects cap is
+  // enforced HERE, from the durable evidence alone, so every realization reads the same run
+  // directory and reaches the same verdict on it: consecutive redirects publish no handoff at all,
+  // so the coordinator that observed them hands that count in instead.
+  const warnings = []
   if (next.step !== 'done' && next.step !== 'blocked') {
-    if (handoffs.length >= CAPS.dispatchesPerStory)
-      next = { step: 'blocked', reason: 'failed-resume', cap: 'dispatchesPerStory', detail: `${handoffs.length} published handoff files in this run directory, at or above the ceiling of ${CAPS.dispatchesPerStory} — the count is cumulative across every resume (attempts included), never per invocation, and nothing here asked for another dispatch. A human resumes by binding a NEW run directory to this one: \`cycle-state.mjs migrate-acknowledge --dir <new run dir> --legacy <this dir> …\`` }
-    else if (Number.isInteger(Number(redirects)) && Number(redirects) >= CAPS.consecutiveRedirects)
+    const md = policy.maxDispatches
+    if (md && typeof md === 'object' && Number.isInteger(md.n) && md.n > 0 && handoffs.length >= md.n) {
+      if (md.mode === 'block') {
+        next = { step: 'blocked', reason: 'max-dispatches', cap: 'maxDispatches', detail: `${handoffs.length} published handoff files in this run directory, at or above the declared \`max-dispatches: ${md.n} block\` ceiling — the count is cumulative across every resume (attempts included), never per invocation. A human resumes by binding a NEW run directory to this one: \`cycle-state.mjs migrate-acknowledge --dir <new run dir> --legacy <this dir> …\`` }
+      } else {
+        warnings.push(`${handoffs.length} published handoff files in this run directory, at or above the declared \`max-dispatches: ${md.n}\` ceiling (mode: warn) — continuing.`)
+      }
+    }
+    if (next.step !== 'blocked' && Number.isInteger(Number(redirects)) && Number(redirects) >= CAPS.consecutiveRedirects)
       next = { step: 'blocked', reason: 'failed-resume', cap: 'consecutiveRedirects', detail: `${CAPS.consecutiveRedirects} consecutive redirects — the durable state and the dispatched step disagree` }
   }
   next = withContext(next, handoffs, contextPolicy)
   const status = next.step === 'done' ? 'completed' : next.step === 'blocked' ? 'blocked' : 'in-progress'
   const nextFindingSeq = handoffs.filter(h => h.skill === 'review-phase').reduce((m, h) => Math.max(m, ...(h.data.findings ?? []).map(f => Number(/-(\d+)$/.exec(String(f.id ?? ''))?.[1] ?? 0))), 0) + 1
-  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs, ledger), predecessorRuns, activeRegressionRisks: ledger.filter(r => r.state === 'active'), rollbackNotes: rollbackNotes(handoffs, ledger) }
+  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs, ledger), predecessorRuns, activeRegressionRisks: ledger.filter(r => r.state === 'active'), rollbackNotes: rollbackNotes(handoffs, ledger), ...(warnings.length ? { warnings } : {}) }
 }
 
 // ── migration (US-479 T-19, S10) ───────────────────────────────────────────────────────────
@@ -2534,16 +2843,26 @@ export function supersede({ dir, phase, skill = 'red-spec', attempt, reason, by,
   if (where.error) return { superseded: false, reason: where.error, path: where.path }
   if (!String(reason ?? '').trim()) return { superseded: false, reason: 'supersede-reason-missing' }
   if (!String(by ?? '').trim()) return { superseded: false, reason: 'supersede-by-missing' }
-  if (skill !== 'red-spec') return { superseded: false, reason: `supersede-skill-unsupported:${skill}` }
+  // US-514 T-4 (#514/AC4): generalized from red-spec-only to every stage handoff — a maintainer
+  // recovery command for any stage's mistake (a false-positive custody breach, a bookkeeping
+  // error), never only the contract-preparation one #487 first needed it for.
+  if (!SKILLS.includes(skill)) return { superseded: false, reason: `supersede-skill-unsupported:${skill}` }
   return withLock(dir, lockWaitMs, () => {
     const handoffs = readHandoffs(dir)
     const ofPhase = handoffs.filter(h => h.skill === skill && h.phase === phase && h.data)
     const target = attempt !== undefined ? ofPhase.find(h => h.attempt === Number(attempt)) : ofPhase[ofPhase.length - 1]
     if (!target) return { superseded: false, reason: 'supersede-not-found', phase, attempt: attempt ?? null }
     const verdicts = handoffs.filter(h => h.skill === 'red-verify' && h.phase === phase && h.data)
+    // Sealed is checked BEFORE the tail rule: a sealed contract is refused as `supersede-sealed`
+    // (the specific, actionable reason) even though a later red-verify also makes it a non-tail
+    // handoff — the maintainer needs to know WHY, not just that it isn't last.
     if (verdicts.some(v => v.data.sealed === true && (!target.data.contractHash || v.data.contractHash === target.data.contractHash))) return { superseded: false, reason: 'supersede-sealed', file: basename(target.file) }
+    // US-514 T-4 (#514/AC4, business rule): only the TAIL of the run can be set aside — a maintainer
+    // recovers the last mistake, never rewrites history underneath evidence already built on it.
+    if (handoffs[handoffs.length - 1] !== target) return { superseded: false, reason: 'supersede-not-last' }
     // A verdict published AFTER this attempt answered it: a rejection is evidence the next repair
-    // is checked against, never something to set aside.
+    // is checked against, never something to set aside. (Subsumed by the tail check above for most
+    // cases — kept as a second, independent guard against phase-label collisions across skills.)
     if (verdicts.some(v => handoffs.indexOf(v) > handoffs.indexOf(target))) return { superseded: false, reason: 'supersede-validated', file: basename(target.file) }
     const prefix = `superseded-${dayOf(now)}-`
     const from = basename(target.file)
@@ -2680,7 +2999,7 @@ if (isMain()) {
     // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
     const FLAGS = {
       resolve: ['acHash', 'contextPolicy', 'dir', 'entry', 'head', 'inputs', 'policy', 'pr', 'redirects', 'runsRoot', 'story', 'workflowVersion'],
-      publish: ['attempt', 'dir', 'file', 'phase', 'pr', 'predecessor', 'skill', 'workflowVersion'],
+      publish: ['attempt', 'dir', 'file', 'phase', 'policy', 'pr', 'predecessor', 'skill', 'workflowVersion'],
       hash: ['file'],
       'ac-hash': ['dir', 'story'],
       'bind-hosts': ['dir', 'from'],
@@ -2728,7 +3047,9 @@ if (isMain()) {
       process.exit(0)
     } else if (cmd === 'publish') {
       need('dir', 'file', 'phase', 'skill', 'workflowVersion')
-      out = publish({ dir: opts.dir, file: opts.file, phase: opts.phase, skill: opts.skill, workflowVersion: opts.workflowVersion, predecessor: opts.predecessor, attempt: opts.attempt ? Number(opts.attempt) : undefined, pr: opts.pr !== undefined ? Number(opts.pr) : undefined })
+      // US-514 T-2: the SAME policy `resolve` was dispatched with — review-phase's `blocking`
+      // derivation reads `policy.blockingFloor` from it, never a re-read of adoption here.
+      out = publish({ dir: opts.dir, file: opts.file, phase: opts.phase, skill: opts.skill, workflowVersion: opts.workflowVersion, predecessor: opts.predecessor, attempt: opts.attempt ? Number(opts.attempt) : undefined, pr: opts.pr !== undefined ? Number(opts.pr) : undefined, policy: opts.policy ? JSON.parse(opts.policy) : {} })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.published ? 0 : 1)
     } else if (cmd === 'hash') {
@@ -2750,9 +3071,17 @@ if (isMain()) {
       try {
         out = writeBinding({ dir: opts.dir, from: opts.from })
       } catch (e) {
-        if (e.kind !== 'host-unsupported') throw e
-        process.stdout.write(JSON.stringify({ halt: 'host-unsupported', detail: e.message, ...JSON.parse(e.detail) }) + '\n')
-        process.exit(1)
+        // US-514 T-6 (#514/AC8): a malformed way-of-working (an unterminated fence/comment the #492
+        // CommonMark reader refuses) is a SECOND typed HostError kind, not an untyped rethrow.
+        if (e.kind === 'host-unsupported') {
+          process.stdout.write(JSON.stringify({ halt: 'host-unsupported', detail: e.message, ...JSON.parse(e.detail) }) + '\n')
+          process.exit(1)
+        }
+        if (e.kind === 'way-of-working-malformed') {
+          process.stdout.write(JSON.stringify({ halt: 'way-of-working-malformed', detail: e.message }) + '\n')
+          process.exit(1)
+        }
+        throw e
       }
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)

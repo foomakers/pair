@@ -108,7 +108,7 @@ log_info "Test 4: Ready card, --autonomous ⇒ transparency block, real scripts,
 : >"$ENGINE_LOG"
 if run_pair run --card 12 --autonomous; then fail "a dead dispatch reported success"; fi
 assert_output_contains "Worktree root: ../pair-worktrees" || FAILED=1
-assert_output_contains "Dispatch cap: 40" || FAILED=1
+assert_output_contains "Dispatch ceiling: none" || FAILED=1
 assert_output_contains "Cycle status: failed-implement" || FAILED=1
 grep -q "/pair-workflow-implement-phase" "$ENGINE_LOG" || fail "the implement stage was never dispatched"
 if grep -q "/pair-workflow-red-spec" "$ENGINE_LOG"; then fail "a fresh card dispatched a preparation before any code"; fi

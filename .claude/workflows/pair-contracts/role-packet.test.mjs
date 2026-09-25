@@ -91,7 +91,17 @@ test('a stage whose agent definition is missing HALTs agent-definition-missing, 
 // ══ US-506 T-8 (AC12) — the bounded-commands guardrail rides EVERY packet, styled and unstyled ══
 // US-487: three stage agents stalled on background waits and were resumed by hand; two reviewers
 // removed an engine stub to test "engine missing" and the CLI fell through to the real `claude`.
-const GUARD_RE = [/Run only foreground, time-bounded commands: never start a background process and never wait on one\./, /never spawn a real engine or a real `gh`/, /a PATH that contains no engine directory at all/]
+// US-514 T-7: the guardrail must say WHOSE probes stub `gh`/engines — the stage's own
+// EXPERIMENTAL probes, never the skill's own read/publish/finalize/conclude steps, which run for
+// real. An unqualified "never a real gh" (pre-T-7) reads as covering the skill's own steps too, and
+// a coordinator's dispatch note had to add that qualification by hand every time (US-514 packet).
+const GUARD_RE = [
+  /Run only foreground, time-bounded commands: never start a background process and never wait on one\./,
+  /never spawn a real engine or a real `gh`/,
+  /a PATH that contains no engine directory at all/,
+  /Only the stage's own experimental probes stub a real engine or a real `gh`/,
+  /the skill's own read\/publish\/finalize\/conclude steps run for real/,
+]
 const CONTRACT = { path: '/main/.pair/working/runs/story-135/135/r1-g1-red-contract.json', hash: `sha256:${'1'.repeat(64)}`, snapshot: 'c'.repeat(40) }
 const NEXTS = [
   { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1 },

@@ -1889,3 +1889,75 @@ test('US-506 F-2: implement-phase redirects a dispatch that lacks the contract i
   const md = SKILL('implement-phase')
   assert.match(md, /`next` names this dispatch but carries a `contract` while the dispatch has no `\$snapshot`/)
 })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-514 r1-g1 (r0-2, r0-5) — the batch hands `cycle-state.mjs publish` the ONE blocking floor, and
+// holds no dispatch ceiling of its own. Revised AC1: `blockingFloor` is compared by RANK at publish,
+// so the durable state agrees with the engine's own `expectedBlocking` on any template vocabulary.
+// The real `publish` runs in-process on a temp run directory (no process, no `gh`).
+// ═══════════════════════════════════════════════════════════════════════════
+import { publish as us514Publish } from '../skills/pair-workflow-review-phase/scripts/cycle-state.mjs'
+import { mkdtempSync as us514Mkdtemp, mkdirSync as us514Mkdir, writeFileSync as us514Write } from 'node:fs'
+import { tmpdir as us514Tmpdir } from 'node:os'
+import { join as us514Join } from 'node:path'
+const US514_BASE_POLICY = { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 }
+// Publishes a first review of the given findings under `policy` (the batch's dispatched `$policy`)
+// through the REAL cycle-state `publish`, and returns the stored `blocking` per finding.
+// r1-1 round 4: a draft's OWN `severityRanks` is never a ranking source by itself — `withContract`
+// writes the resolved TEMPLATE CONTRACT to `repoRoot`'s own `.claude/workflows/pair-contracts/
+// code-review.contract.json` cache (the real on-disk source `publish` now resolves itself), so
+// this proves ranking through the SAME resolved-contract path the engine uses, never a draft claim.
+function us514StoredBlocking(findings, policy, { withContract = false } = {}) {
+  const root = us514Mkdtemp(us514Join(us514Tmpdir(), 'us514-batch-'))
+  const dir = us514Join(root, '.pair', 'working', 'runs', 'run-1', '292')
+  us514Mkdir(dir, { recursive: true })
+  if (withContract) {
+    const contractDir = us514Join(root, '.claude', 'workflows', 'pair-contracts')
+    us514Mkdir(contractDir, { recursive: true })
+    us514Write(us514Join(contractDir, 'code-review.contract.json'), JSON.stringify(validContract()))
+  }
+  const file = us514Join(dir, 'draft.json')
+  us514Write(file, JSON.stringify({ run: 'run-1', story: '292', pr: 7, branch: STORY.branch, phase: 'r0', skill: 'review-phase', inputHead: HEAD, mode: 'first', reviewedHead: HEAD, verdict: 'Rework', custody: { verified: true, contractBreach: false }, readiness: { ready: false, remoteHead: HEAD }, findings: findings.map((f, k) => ({ id: `r0-${k + 1}`, transition: 'open', kind: 'defect', blocking: false, reproducer: { command: 'node --test t.test.mjs' }, ...f })) }))
+  const out = us514Publish({ dir, file, phase: 'r0', skill: 'review-phase', workflowVersion: '4.0.1', pr: 7, repoRoot: root, policy })
+  assert.equal(out.published, true, JSON.stringify(out))
+  return JSON.parse(readFileSync(us514Join(dir, 'r0-review-phase.json'), 'utf8')).findings.map(f => f.blocking)
+}
+
+test('US-514 r1-g1 g1-w5 (r0-2): `severityFloor: Major` rides in EVERY dispatch`s $policy as `blockingFloor` (the first review included, before the template contract resolves); a Blocker the first review files blocks in the durable state exactly as the engine expects, and r0 is not ready-for-merge', async () => {
+  const blocker = finding({ severity: 'Blocker', description: 'a blocker' })
+  const minor = finding({ severity: 'Minor', description: 'a nit below the floor' })
+  const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [blocker, minor] } : { verdict: 'Approved', findings: [] })
+  const { result, calls } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], severityFloor: 'Major' }, dispatch: stdDispatch({ review }) })
+  assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+  const stages = calls.filter(c => !c.opts.label.startsWith('contract:'))
+  assert.ok(stages.length >= 5, stageLabels(calls).join(', '))
+  assert.ok(stages[0].prompt.includes('$contractSpec='), 'the first review resolves the template contract')
+  for (const c of stages) assert.deepEqual(jsonArg(c.prompt, 'policy'), { ...US514_BASE_POLICY, blockingFloor: 'Major' }, c.opts.label)
+  const order = stageLabels(calls)
+  assert.equal(order[order.indexOf('verify:#292 r0') + 1], 'prepare:#292 r1-g1', 'the Blocker must open a fix round, never ship')
+  assert.deepEqual(jsonArg(calls.find(c => c.opts.label === 'prepare:#292 r1-g1').prompt, 'findings').map(f => f.severity), ['Blocker'])
+  // the durable state, derived by the real publish from the policy the first review was handed
+  const firstPolicy = jsonArg(stages[0].prompt, 'policy')
+  for (const withContract of [true, false]) assert.deepEqual(us514StoredBlocking([blocker, minor], firstPolicy, { withContract }), [true, false], `withContract=${withContract}`)
+})
+
+test('US-514 r1-g1 g1-c5 (r0-2): no `severityFloor` ⇒ the dispatched $policy is exactly the budgets (TC-11) — and under it the real publish keeps an open Blocker blocking, agreeing with the engine (default floor Minor, compared by rank)', async () => {
+  const blocker = finding({ severity: 'Blocker', description: 'a blocker' })
+  const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [blocker] } : { verdict: 'Approved', findings: [] })
+  const { result, calls } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review }) })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  const stages = calls.filter(c => !c.opts.label.startsWith('contract:'))
+  for (const c of stages) assert.deepEqual(jsonArg(c.prompt, 'policy'), US514_BASE_POLICY, c.opts.label)
+  const order = stageLabels(calls)
+  assert.equal(order[order.indexOf('verify:#292 r0') + 1], 'prepare:#292 r1-g1', 'the engine treats the Blocker as blocking')
+  const firstPolicy = jsonArg(stages[0].prompt, 'policy')
+  for (const withContract of [true, false]) assert.deepEqual(us514StoredBlocking([blocker], firstPolicy, { withContract }), [true], `durable state disagrees with the engine withContract=${withContract}`)
+})
+
+test('US-514 r1-g1 g1-w6 (r0-5): a converging cycle that needs more than 200 dispatches in one invocation runs to ready-for-merge — the engine holds no dispatch ceiling of its own', async () => {
+  const REWORK_ROUNDS = 55 // 1 first review + 55 rounds x (prepare, validate, green, verify) = 221 dispatches
+  const review = pass => (pass < REWORK_ROUNDS ? { verdict: 'Rework', findings: [finding({ description: `defect ${pass}` })] } : { verdict: 'Approved', findings: [] })
+  const { result } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], pipeline: { maxFixRounds: 60 } }, dispatch: stdDispatch({ review }) })
+  assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+  assert.ok(result.metrics.dispatches > 200, `only ${result.metrics.dispatches} dispatches ran`)
+})

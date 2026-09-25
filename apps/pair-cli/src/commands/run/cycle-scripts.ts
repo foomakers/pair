@@ -310,7 +310,6 @@ export interface CycleDefaults {
   readonly workflowVersion: string
   readonly worktreeRoot: string
   readonly baseBranch: string
-  readonly dispatchCap: number
 }
 
 // Imported in a CHILD process, like every other script call: nothing installed is ever evaluated
@@ -321,7 +320,6 @@ process.stdout.write(JSON.stringify({
   workflowVersion: m.WORKFLOW_VERSION,
   worktreeRoot: m.PIPELINE_DEFAULTS?.worktreeRoot,
   baseBranch: m.PIPELINE_DEFAULTS?.baseBranch,
-  dispatchCap: m.CAPS?.dispatchesPerStory,
 }))`
 
 function isCycleDefaults(value: unknown): value is CycleDefaults {
@@ -329,16 +327,17 @@ function isCycleDefaults(value: unknown): value is CycleDefaults {
   return (
     typeof v['workflowVersion'] === 'string' &&
     typeof v['worktreeRoot'] === 'string' &&
-    typeof v['baseBranch'] === 'string' &&
-    typeof v['dispatchCap'] === 'number'
+    typeof v['baseBranch'] === 'string'
   )
 }
 
 /**
- * The installed `cycle-state.mjs`'s own `WORKFLOW_VERSION`, `PIPELINE_DEFAULTS.worktreeRoot` /
- * `.baseBranch` and `CAPS.dispatchesPerStory` — so the version and base this run dispatches with,
- * and the root and cap it prints, are the scripts' decision, never a TypeScript literal. Unreadable
- * ⇒ `cycle-state-unreadable`, never a guess.
+ * The installed `cycle-state.mjs`'s own `WORKFLOW_VERSION` and `PIPELINE_DEFAULTS.worktreeRoot` /
+ * `.baseBranch` — so the version and base this run dispatches with, and the root it prints, are
+ * the scripts' decision, never a TypeScript literal. Unreadable ⇒ `cycle-state-unreadable`, never
+ * a guess. (US-514 T-3: the dispatch ceiling used to live here too, as `CAPS.dispatchesPerStory` —
+ * a hard-coded 40. It is GONE from the script; the only ceiling left is `policy.maxDispatches`, an
+ * ADOPTION value (T-1), read separately — see `blocking-severities.ts` / `describeMaxDispatches`.)
  */
 export function readCycleDefaults(location: CycleScriptsLocation): CycleDefaults {
   const script = join(location.scriptsDir, 'cycle-state.mjs')
@@ -349,8 +348,8 @@ export function readCycleDefaults(location: CycleScriptsLocation): CycleDefaults
   const parsed = parseScriptOutput(script, 'defaults', (result.stdout ?? '').trim(), result.stderr)
   if (!isCycleDefaults(parsed)) {
     throw new Error(
-      `cycle-state-unreadable: ${script} does not declare WORKFLOW_VERSION, ` +
-        `PIPELINE_DEFAULTS.worktreeRoot/baseBranch and CAPS.dispatchesPerStory — got ${JSON.stringify(parsed)}`,
+      `cycle-state-unreadable: ${script} does not declare WORKFLOW_VERSION or ` +
+        `PIPELINE_DEFAULTS.worktreeRoot/baseBranch — got ${JSON.stringify(parsed)}`,
     )
   }
   return parsed
@@ -387,7 +386,6 @@ export function classifyCardReadiness(card: CardMacrostate): CardReadiness {
 // a run in that state never reaches a stage (the production driver HALTs `cycle-state-unreadable`)
 // — and `cycle-defaults-parity.test.ts` pins them to the in-repo script so the two cannot drift.
 export const CYCLE_WORKTREE_ROOT_DEFAULT = '../pair-worktrees'
-export const CYCLE_DISPATCH_CAP_DEFAULT = 40
 /** `cycle-state.mjs`'s own `WORKFLOW_VERSION` — the version every handoff records and `resolve` checks. */
 export const CYCLE_WORKFLOW_VERSION = '4.0.1'
 /** `cycle-state.mjs`'s own `PIPELINE_DEFAULTS.baseBranch` — what a fresh story's worktree is cut from. */

@@ -20,6 +20,8 @@ export interface CycleResolveResult {
     readonly reason?: string
     readonly [key: string]: unknown
   }
+  /** `resolve`'s own operator-facing warnings (e.g. a `max-dispatches: N warn` breach) — relayed VERBATIM via `onNotice`, never re-derived. */
+  readonly warnings?: readonly string[]
 }
 
 /** `spawnStage`'s own grammar — `stream-reader.ts`'s `'success' | 'failed'`, relayed, never invented. */
@@ -191,6 +193,13 @@ function noticeReuseOnce(
   state.reuseNoticeGiven = true
 }
 
+/** r1 r0-4: relays `resolve`'s own operator-facing `warnings[]` (e.g. a `max-dispatches` breach) verbatim, never re-derived. */
+function relayWarnings(answer: CycleResolveAnswer, onNotice: RunCycleInput['onNotice']): void {
+  for (const warning of (answer as CycleResolveResult).warnings ?? []) {
+    onNotice?.(warning)
+  }
+}
+
 /** The recovery a human actually has, per status that answers without a `next`. */
 function recoveryFor(answer: CycleResolveStop): string | undefined {
   if (answer.status === 'incompatible') {
@@ -247,6 +256,7 @@ export async function runCycle(input: RunCycleInput): Promise<CycleOutcome> {
   for (;;) {
     const answer = await resolve()
     const next = answer.next
+    relayWarnings(answer, onNotice)
     if (next === undefined) {
       if (state.dispatchedNext !== null) {
         const record = buildStageRecord(state.dispatchedNext, state.dispatchedResult!, false)

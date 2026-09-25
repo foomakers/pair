@@ -355,6 +355,54 @@ risk:red: frontier
 - **Classes, never concrete model names.** Model names and pricing are volatile — they live in each harness's guide (e.g. which free/cheap model a harness's provider offers today), never in adoption. A project that pins `claude-opus-5` here would need an adoption edit every time a vendor renames or retires a model; a class does not.
 - **Untagged work, or a tier the policy omits, resolves to no declared class** — the consumer (the automation loop, #250) falls back to its own default rather than this file inventing one.
 
+## Blocking Severities — what blocks the delivery cycle, and its dispatch ceiling
+
+A third, independent schema owner (US-514) — disjoint from every section above, all of which are `pair-loop`'s own policy. This one is read by the **delivery cycle** itself, both realizations (`pair-workflow-cycle`'s in-session coordinator, `pair-cli run --card`) and both roles that decide "does this block" (review-phase, red-verify). It answers two questions: which severities BLOCK, and — optionally — how many published handoffs a run may reach before it stops or warns.
+
+**The #514/AC1 revision (maintainer 2026-09-24): a FLOOR, compared by RANK — the same rule as `severityFloor` / `--severity-floor` elsewhere in the chain, never a severity list.**
+
+```markdown
+## Blocking Severities
+
+Major
+max-dispatches: 40 block
+```
+
+- **First line: ONE severity — the blocking floor**, one of `Critical | Major | Minor` (`Questions` is never blocking by definition — a review finding filed as a question carries no defect to weigh at all, and is never a valid floor). A finding or contract gap BLOCKS when its severity's RANK is `>=` the floor's rank — ranked by the resolved review template contract's own `severityRanks` (published mechanically, never a reviewer's own draft) when one is resolved, else pair's default table (`Critical` highest, `Questions` lowest, case-insensitive). A severity no rank covers blocks (fail-safe); a floor no rank covers releases nothing (fail-safe — every finding stays blocking). A comma-separated LIST on this line (the pre-revision shape) is malformed — see below.
+- **Optional second line: `max-dispatches: <positive integer> [warn|block]`** — a ceiling on the run's own published handoffs (a durable, cumulative count — every resume and every attempt is another file). `warn` is the mode when the word is omitted: at or above the ceiling, the cycle prints a warning naming the count and continues, and the coordinator RELAYS that warning to the operator (it is not silently swallowed). `block` stops the run at the ceiling with the typed reason `max-dispatches`, naming the count and the recovery (`cycle-state.mjs migrate-acknowledge`).
+
+### Fail-safe default — the floor `Minor`, no ceiling
+
+**Absent file or absent section ⇒**:
+
+- `blockingFloor`: the KB default, `Minor` — every severity except `Questions` blocks, exactly today's behaviour, byte for byte;
+- `maxDispatches`: none — no ceiling at all. A consumer **MUST NOT** invent a number (there was never a "40" a project could read off this file — the pre-US-514 ceiling was a hard-coded engine constant, never adoption).
+
+`.pair/adoption/` is delta-only (ADR-018 / D21): a project declares this section only to differ from the KB default. **pair itself declares nothing here**, and keeps the floor `Minor` — consistent with its own recommended-defaults posture throughout this file.
+
+### Malformed ⇒ HALT, naming the file and the offending line
+
+A consumer **MUST HALT** (`automation-policy-malformed`) rather than fall back to the default, when:
+
+1. the section is **present but declares nothing** (an empty body) — naming the section, never the default;
+2. the floor line is empty, names a comma-separated LIST, or names a token other than `Critical`, `Major` or `Minor`;
+3. the `max-dispatches` line is not `<positive integer> [warn|block]` — a non-integer, zero, negative, or a third token that is neither `warn` nor `block`;
+4. more than one `max-dispatches` line is present.
+
+A declared policy still carrying the retired severity-LIST key (the pre-revision shape) is refused, typed — never silently ignored or honoured alongside `blockingFloor`.
+
+### What this declaration does not encode
+
+| Question | Answered by |
+| --- | --- |
+| Which gates must be green before a card auto-advances? | [`quality-model.md`](../../quality-assurance/quality-model.md) §4 — per-tier requirements (D10). Not restated here |
+| Which cards an unattended run may pick up | `## Eligibility` above — a different consumer (`pair-loop`), a different question |
+| The two per-story engine ceilings this key does NOT touch | `consecutiveRedirects` (the durable state and the dispatched step disagree) stays the engine's own constant, never adoption — only the dispatch-count ceiling moved here |
+
+### Recovery — a maintainer's own commands, generalized (US-514 T-4)
+
+`pair-workflow-cycle`'s `supersede` command sets the run's own LAST handoff aside (any stage, not only the original preparation attempt) — see that skill's Maintainer Recovery section. This key changes only what BLOCKS; the recovery commands are unchanged in shape.
+
 ## Related
 
 - [Quality Model](../../quality-assurance/quality-model.md) — the classification matrix, tier resolution, per-tier requirements (§4), tag projection (§5) and the `tech/risk-matrix.md` adoption delta (§6)

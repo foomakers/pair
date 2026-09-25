@@ -281,7 +281,13 @@ const CONTRACT_MIRRORS =
 // reviewers removed an engine stub to probe "engine missing" — the CLI fell through to the real
 // `claude` on PATH. Spelled identically in `pair-implement-batch.js`; the packet-parity tests hold
 // the two renderings byte-equal.
-export const BOUNDED_COMMANDS = 'Run only foreground, time-bounded commands: never start a background process and never wait on one. In your own probes never spawn a real engine or a real `gh` — stub them, and test "engine missing" with a PATH that contains no engine directory at all.'
+// US-514 T-7 (#514/AC9): the pre-T-7 wording ("In your own probes never spawn a real engine or a real
+// `gh`") read as covering the SKILL's own steps too — a coordinator dispatching this story's own
+// packet had to add "the skill's own push and PR-publish steps run for real" by hand, every time,
+// to stop an implementer stubbing its own required publish. Stated here instead: only the STAGE's
+// own EXPERIMENTAL probes stub `gh`/an engine; the skill's own read/publish/finalize/conclude
+// steps always run for real.
+export const BOUNDED_COMMANDS = 'Run only foreground, time-bounded commands: never start a background process and never wait on one. Only the stage\'s own experimental probes stub a real engine or a real `gh` — the skill\'s own read/publish/finalize/conclude steps run for real. In your own probes never spawn a real engine or a real `gh` — stub them, and test "engine missing" with a PATH that contains no engine directory at all.'
 const templateLabel = p => String(p).split('/').filter(Boolean).pop() || String(p)
 const compactFinding = f => ({
   id: f.id,
@@ -369,7 +375,15 @@ function resolvePipeline(raw) {
 function packetCommand(opts) {
   const next = JSON.parse(opts.next)
   const card = JSON.parse(opts.card)
-  const policy = JSON.parse(opts.policy ?? '{}')
+  // US-514 r1-g1 g1-w2/g1-w10b/g1-c4 (the #514/AC1 revision): `--severity-floor F` writes `blockingFloor: F`
+  // into `$policy` — REPLACING a declared floor, no conflict error, still never a severity list.
+  // With no flag the policy is rendered VERBATIM: the default floor is never stamped into it (a
+  // project that declared none keeps declaring none).
+  const declaredPolicy = JSON.parse(opts.policy ?? '{}')
+  // r1-4: the retired `policy.blockingSeverities` (a severity LIST) is refused HERE too — the same
+  // reason `publish` refuses it — never silently rendered into a stage's own `$policy`.
+  must(!Object.prototype.hasOwnProperty.call(declaredPolicy, 'blockingSeverities'), 'policy-legacy-blocking-severities', '`policy.blockingSeverities` is retired — declare `policy.blockingFloor` (a single severity), never a list')
+  const policy = opts['severity-floor'] !== undefined ? { ...declaredPolicy, blockingFloor: opts['severity-floor'] } : declaredPolicy
   // Omitted ⇒ the ONE pin, imported from cycle-state (never a literal here: a second spelling of
   // the state machine's identity is a fork of it — AC-12). The coordinator is an agent session, and
   // a value it has no producer for is a value it invents.
@@ -408,7 +422,10 @@ function packetCommand(opts) {
   const firstReviewMarker = `<!-- pair:first-review #${card.id} PR#${pr} run:${runId} -->`
   const synthesisMarker = `<!-- pair:synthesis #${card.id} PR#${pr} run:${runId} -->`
   const inputs = effectiveInputs(card, { workflowVersion, pipeline, severityFloor: opts['severity-floor'] ?? DEFAULT_SEVERITY_FLOOR })
-  const severityFloor = opts['severity-floor'] ?? DEFAULT_SEVERITY_FLOOR
+  // US-514 r1-g1 g1-w10b: `$floor` rendered to the reviewer is the ONE floor the policy carries —
+  // an explicit flag (already folded into `policy.blockingFloor` above), else the declared floor,
+  // else the KB default — never a second, disagreeing default.
+  const severityFloor = policy.blockingFloor ?? DEFAULT_SEVERITY_FLOOR
   const blindPaths = [...new Set(['.pair/working/', pipeline.auditLogDir])].map(p => `\`${p}\``).join(' or ')
 
   const common = `$run=${runId} $story=${card.id} $branch=${card.branch} $worktree=${worktreePath} $base=${storyBase} $stacked=${stacked}${pr ? ` $pr=${pr}` : ''} $entry=${pr ? 'pr' : 'fresh'} $policy=${JSON.stringify(policy)} $inputs=${inputs}`

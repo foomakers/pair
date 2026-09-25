@@ -596,3 +596,37 @@ describe('drift-injection on sub-docs and nested references (non-SKILL.md artifa
     expect(message).toContain('.claude/skills/pair-catalog-nested/references/deep.md')
   })
 })
+
+// #514: the dataset keeps each skill's SHORT name (its directory's basename) in `name:`; the
+// installer's frontmatter sync is what turns it into the prefixed `pair-<category>-<name>`.
+// A dataset copy that already carries the prefixed name installs identically, which is exactly
+// why the drift went unnoticed (red-verify was rewritten to `pair-workflow-red-verify` by a
+// byte copy of the installed file). This pins the convention for every dataset skill.
+// The one deliberate exception: `workflow/cycle` ships byte-identical to its installed copy
+// (#486 AC12, pinned by cycle-coordinator.test.mjs "AC12-w4"), so it carries the prefixed name.
+const PREFIXED_BY_DESIGN = new Set(['workflow/cycle'])
+
+describe('dataset SKILL.md `name:` is the skill directory basename', () => {
+  it('every dataset skill declares its short name (except the byte-identical cycle skill)', () => {
+    const root = join(__dirname, '../../dataset/.skills')
+    const mismatches: string[] = []
+    for (const category of readdirSync(root, { withFileTypes: true })) {
+      if (!category.isDirectory()) continue
+      const catDir = join(root, category.name)
+      const skillDirs = existsSync(join(catDir, 'SKILL.md'))
+        ? [catDir]
+        : readdirSync(catDir, { withFileTypes: true })
+            .filter(d => d.isDirectory() && existsSync(join(catDir, d.name, 'SKILL.md')))
+            .map(d => join(catDir, d.name))
+      for (const dir of skillDirs) {
+        const name = /^name:\s*(\S+)/m.exec(readFileSync(join(dir, 'SKILL.md'), 'utf-8'))?.[1]
+        const expected = dir.split('/').pop()
+        const rel = dir.slice(root.length + 1)
+        if (PREFIXED_BY_DESIGN.has(rel)) continue
+        if (name !== expected)
+          mismatches.push(`${dir.slice(root.length + 1)}: name "${name}", expected "${expected}"`)
+      }
+    }
+    expect(mismatches, mismatches.join('\n')).toEqual([])
+  })
+})

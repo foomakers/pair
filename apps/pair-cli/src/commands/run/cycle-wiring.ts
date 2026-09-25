@@ -11,6 +11,7 @@ import {
 import { runStage, styleFor } from './stage-runner'
 import { spawnIteration } from './spawn'
 import { readStateMapping, resolveCardReadiness, type CardDocument } from './card-readiness'
+import { resolveBlockingSeverities } from './blocking-severities'
 
 /**
  * The PRODUCTION wiring for `run --card`'s two injected collaborators.
@@ -301,10 +302,20 @@ function remoteHead(main: string, branch: string): string | undefined {
 const resolveFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => async () => {
     const head = remoteHead(co.main, co.branch)
+    // US-514 T-1 (revised AC1): `## Blocking Severities` (+ `max-dispatches`) is read from the MAIN
+    // checkout's adoption once, here — the same file both realizations read, so review-phase and
+    // red-verify (T-2) and the resolve ceiling (T-3) act on the SAME floor. Absent section/file ⇒
+    // the KB default floor `Minor` (every severity except Questions blocks), byte-for-byte today's
+    // behaviour (`readBlockingSeverities` HALTs on a malformed declaration — never a silent
+    // fallback).
+    const blocking = resolveBlockingSeverities(ctx.fs, co.main)
     return co.bridge.resolve({
       dir: co.runDir,
       workflowVersion: ctx.workflowVersion,
-      policy: {},
+      policy: {
+        blockingFloor: blocking.blockingFloor,
+        ...(blocking.maxDispatches !== undefined && { maxDispatches: blocking.maxDispatches }),
+      },
       entry: input.pr === undefined ? 'fresh' : 'pr',
       story: input.card,
       runsRoot: co.runsRoot,
@@ -326,9 +337,19 @@ const worktreeFor =
     })
 
 const packetFor =
-  (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => async (next: unknown) =>
-    co.bridge.packet({
+  (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) =>
+  async (next: unknown) => {
+    // US-514 r1-g1 g1-w7/g1-w8: the SAME policy `resolveFor` resolves with (T-1's `## Blocking
+    // Severities` read of the MAIN checkout) rides into every stage packet — `resolve()`'s own
+    // `next` carries no `policy` field (it lives at the RESULT's top level, one call up), so this
+    // re-derives it from the SAME source (`resolveBlockingSeverities`), never a second value.
+    const blocking = resolveBlockingSeverities(ctx.fs, co.main)
+    return co.bridge.packet({
       next: next as never,
+      policy: {
+        blockingFloor: blocking.blockingFloor,
+        ...(blocking.maxDispatches !== undefined && { maxDispatches: blocking.maxDispatches }),
+      },
       // `--card` is the card OBJECT the dispatch script validates field by field (`card.id`,
       // `card.branch`, `card.base`, `card.title`, `card.prNumber`), never the bare id — the
       // bridge types it `unknown`, so only a real dispatch catches the difference.
@@ -343,6 +364,7 @@ const packetFor =
       style: styleFor(ctx.engine),
       workflowVersion: ctx.workflowVersion,
     }) as never
+  }
 
 const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packet: unknown) =>
   (await runStage({

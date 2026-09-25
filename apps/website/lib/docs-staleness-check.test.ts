@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { resolve } from 'node:path'
 import {
   findSkillCountMismatches,
@@ -26,14 +26,9 @@ import {
   checkBatchEngineWorkflows,
   batchEngineErrors,
   checkListTargetsSamples,
-  checkCatalogFreshness,
-  parseCatalogLastUpdated,
-  newestChangeDate,
 } from './docs-staleness-check'
 import { join } from 'node:path'
-import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 
 // White-box unit tests for the docs-staleness gate LOGIC. Exported functions are
 // tested directly — no spawning of any CLI/script. The thin `tsx` CLI wrapper is
@@ -1134,62 +1129,61 @@ describe('generateCatalogRows + committed catalog parity (Check 2c integration)'
   })
 })
 
-// ── The catalog's own "Last updated" claim (q-10, independent pass over review 5190603055) ──
-// Every other catalog gate counts or compares SKILLS: the row list, the row content, the "N skills"
-// prose. None looked at the header's date, so `skills-catalog.mdx` sat on 2026-09-08 through every
-// later dataset change with the whole gate green — the page dated itself before the content it
-// describes, and the date is the one claim a reader uses to decide whether to trust the page.
-describe('checkCatalogFreshness', () => {
-  const header = (d: string) =>
-    `---\ntitle: Skills Catalog\n---\n\n> **Last updated:** ${d}. Source: \`packages/knowledge-hub/dataset/.skills/\`\n`
-
-  it('passes when the header date equals the newest source change', () => {
-    expect(checkCatalogFreshness(header('2026-09-13'), '2026-09-13')).toEqual([])
+// US-514 T-8: check 2d — the catalog header's `Last updated` date compared against the dataset's
+// newest git change — is REMOVED. It failed `pnpm docs:staleness` on a content-correct skill
+// change whenever the header's own date was not also bumped in the same commit, which every
+// other catalog check (row list, row content) already catches independently on its own terms.
+describe('US-514 T-8: check 2d removed — a stale header no longer fails docs:staleness', () => {
+  it('checkCatalogFreshness/newestChangeDate/parseCatalogLastUpdated no longer exist', async () => {
+    const mod = (await import('./docs-staleness-check')) as Record<string, unknown>
+    expect(mod['checkCatalogFreshness']).toBeUndefined()
+    expect(mod['newestChangeDate']).toBeUndefined()
+    expect(mod['parseCatalogLastUpdated']).toBeUndefined()
   })
 
-  it('passes when the header date is NEWER than the newest source change', () => {
-    expect(checkCatalogFreshness(header('2026-09-20'), '2026-09-13')).toEqual([])
+  // A full `runAllChecks(REPO_ROOT)` walk timed out in CI (>5000ms) — deterministic and fast
+  // instead: since check 2d (`checkCatalogFreshness`) is gone (proven above), the ONLY way
+  // `runAllChecks` could still fail on the header date alone is if its own retired error message
+  // ("dates itself before the content") were emitted by some other check in the source. It never
+  // is — confirmed by reading the production module's own text once, no repo walk required.
+  it('no check in the module can emit the retired header-date error message', () => {
+    const source = readFileSync(join(__dirname, 'docs-staleness-check.ts'), 'utf-8')
+    expect(source.includes('dates itself before the content')).toBe(false)
   })
 
-  it('fails when the header date predates the newest source change (the q-10 defect)', () => {
-    const errors = checkCatalogFreshness(header('2026-09-08'), '2026-09-13')
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toContain('2026-09-08')
-    expect(errors[0]).toContain('2026-09-13')
-  })
-
-  it('fails loudly when the header carries no parsable date — the check must not pass vacuously', () => {
-    expect(checkCatalogFreshness('> **Last updated:** soon.\n', '2026-09-13')).toEqual([
-      'skills-catalog.mdx has no `> **Last updated:** YYYY-MM-DD` header — the catalog freshness check cannot run',
-    ])
-  })
-
-  it('fails loudly when the source change date cannot be resolved', () => {
-    expect(checkCatalogFreshness(header('2026-09-13'), null)).toEqual([
-      'cannot resolve the last change date of packages/knowledge-hub/dataset/.skills/ from git — the catalog freshness check cannot run',
-    ])
-  })
-
-  it('parses the header date, and returns null when it is absent or malformed', () => {
-    expect(parseCatalogLastUpdated(header('2026-09-13'))).toBe('2026-09-13')
-    expect(parseCatalogLastUpdated('> **Last updated:** 13-09-2026.\n')).toBeNull()
-    expect(parseCatalogLastUpdated('no header at all')).toBeNull()
-  })
-})
-
-describe('the committed skills-catalog dates itself no earlier than its source (q-10 integration)', () => {
-  it('passes against the real git history of the dataset skills tree', () => {
-    const newest = newestChangeDate(REPO_ROOT, 'packages/knowledge-hub/dataset/.skills')
-    expect(newest, 'git could not date the dataset skills tree').toMatch(/^\d{4}-\d{2}-\d{2}$/)
-    const errors = checkCatalogFreshness(
-      readFileSync(
+  // AC10, proven for real: the repo's own catalog header date equals the newest skill change today,
+  // so a plain `runAllChecks(REPO_ROOT)` never exercises a STALE header. Here the module is re-imported
+  // with `node:fs` mocked so that ONLY the catalog's `Last updated` line reads as 2000-01-01; every
+  // other file (skills, docs, CLI config) is read for real. Zero errors means no header-date check is
+  // alive under any name.
+  it('AC10: runAllChecks reports ZERO errors when the catalog header is far OLDER than the newest skill change', async () => {
+    vi.resetModules()
+    vi.doMock('node:fs', async importOriginal => {
+      const actual = await importOriginal<typeof import('node:fs')>()
+      const readFileSync = ((...args: Parameters<typeof actual.readFileSync>) => {
+        const result = actual.readFileSync(...args)
+        const path = String(args[0])
+        return path.endsWith('skills-catalog.mdx') && typeof result === 'string'
+          ? result.replace(/(\*\*Last updated:\*\*\s*)\d{4}-\d{2}-\d{2}/, '$12000-01-01')
+          : result
+      }) as typeof actual.readFileSync
+      return { ...actual, readFileSync, default: { ...actual, readFileSync } }
+    })
+    try {
+      const mod = await import('./docs-staleness-check')
+      const { readFileSync: mockedRead } = await import('node:fs')
+      const catalog = mockedRead(
         join(REPO_ROOT, 'apps/website/content/docs/reference/skills-catalog.mdx'),
         'utf-8',
-      ),
-      newest,
-    )
-    expect(errors, errors.join('\n')).toHaveLength(0)
-  })
+      )
+      expect(catalog).toContain('**Last updated:** 2000-01-01')
+      const { errors } = mod.runAllChecks(REPO_ROOT)
+      expect(errors, errors.join('\n')).toHaveLength(0)
+    } finally {
+      vi.doUnmock('node:fs')
+      vi.resetModules()
+    }
+  }, 60_000)
 })
 
 // ── The batch-engine page's claims (#219, review of #432) ─────────────────────
@@ -1417,141 +1411,5 @@ describe('checkListTargetsSamples', () => {
   it('flags a behavior change the sample does not follow', () => {
     const rebehaved = { ...registries, github: { behavior: 'add', targets: [{ path: '.github' }] } }
     expect(checkListTargetsSamples(rebehaved, [{ rel: 'a.mdx', content: real }])).toHaveLength(1)
-  })
-})
-
-// ── The gate's answer must not depend on the DAY it runs (r1-1) ──────────────
-// `newestChangeDate` dates a path with `git log -1 --format=%cs -- <path>`. In a SHALLOW
-// clone the grafted tip has no parents, so git sees it as ADDING every file and answers
-// with the tip's own date for any path — whatever that commit touched. CI's `build` job
-// (the one that runs `pnpm docs:staleness`) checks out at the default depth 1, and on a
-// `pull_request` event the tip is the synthetic merge commit GitHub creates when the run
-// starts: TODAY. Check 2d therefore accused every PR whose header predates the run day
-// (CI 35305574304 on ce10aea9) and passed the day before on the same content — and has
-// never once compared the catalog against its real source in CI.
-//
-// The repository under test here is a REAL git repo built in a temp dir and cloned
-// `--depth 1` over file://, not a simulation of one: the producer is the actual git
-// invocation, so the row moves only when git's answer does.
-describe('newestChangeDate refuses a shallow repository instead of dating the tip (r1-1)', () => {
-  const git = (cwd: string, ...args: string[]): string =>
-    execFileSync('git', args, {
-      cwd,
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        GIT_AUTHOR_NAME: 'pair',
-        GIT_AUTHOR_EMAIL: 'pair@example.com',
-        GIT_COMMITTER_NAME: 'pair',
-        GIT_COMMITTER_EMAIL: 'pair@example.com',
-      },
-    }).trim()
-
-  const SOURCE_DATE = '2026-01-01' // the commit that touches `src/`
-  const TIP_DATE = '2026-02-02' // the tip, which touches nothing under `src/`
-
-  let tmp: string
-  let full: string
-  let shallow: string
-
-  beforeAll(() => {
-    tmp = mkdtempSync(join(tmpdir(), 'pair-staleness-shallow-'))
-    full = join(tmp, 'origin')
-    shallow = join(tmp, 'shallow')
-    mkdirSync(join(full, 'src'), { recursive: true })
-    git(full, 'init', '-q', '-b', 'main')
-    writeFileSync(join(full, 'src', 'a.txt'), 'a\n')
-    git(full, 'add', '-A')
-    execFileSync('git', ['commit', '-qm', 'source change'], {
-      cwd: full,
-      env: {
-        ...process.env,
-        GIT_AUTHOR_NAME: 'pair',
-        GIT_AUTHOR_EMAIL: 'pair@example.com',
-        GIT_COMMITTER_NAME: 'pair',
-        GIT_COMMITTER_EMAIL: 'pair@example.com',
-        GIT_AUTHOR_DATE: `${SOURCE_DATE}T10:00:00Z`,
-        GIT_COMMITTER_DATE: `${SOURCE_DATE}T10:00:00Z`,
-      },
-    })
-    writeFileSync(join(full, 'unrelated.txt'), 'b\n')
-    git(full, 'add', '-A')
-    execFileSync('git', ['commit', '-qm', 'unrelated tip'], {
-      cwd: full,
-      env: {
-        ...process.env,
-        GIT_AUTHOR_NAME: 'pair',
-        GIT_AUTHOR_EMAIL: 'pair@example.com',
-        GIT_COMMITTER_NAME: 'pair',
-        GIT_COMMITTER_EMAIL: 'pair@example.com',
-        GIT_AUTHOR_DATE: `${TIP_DATE}T10:00:00Z`,
-        GIT_COMMITTER_DATE: `${TIP_DATE}T10:00:00Z`,
-      },
-    })
-    execFileSync('git', ['clone', '-q', '--depth', '1', `file://${full}`, shallow], {
-      encoding: 'utf8',
-    })
-  })
-
-  afterAll(() => {
-    if (tmp) rmSync(tmp, { recursive: true, force: true })
-  })
-
-  it('the fixture is genuinely shallow, and git really does date `src/` by the tip there', () => {
-    expect(git(full, 'rev-parse', '--is-shallow-repository')).toBe('false')
-    expect(git(shallow, 'rev-parse', '--is-shallow-repository')).toBe('true')
-    expect(git(full, 'log', '-1', '--format=%cs', '--', 'src')).toBe(SOURCE_DATE)
-    expect(
-      git(shallow, 'log', '-1', '--format=%cs', '--', 'src'),
-      'the defect mechanism is gone: fix the row, not the guard',
-    ).toBe(TIP_DATE)
-  })
-
-  // r1-1-c1 — CONTROL: the full clone is already right and must stay right.
-  it('dates the path by the commit that changed it in a complete clone', () => {
-    expect(newestChangeDate(full, 'src')).toBe(SOURCE_DATE)
-  })
-
-  // r1-1-w1 — WITNESS: today it returns TIP_DATE, an answer about the tip, not about `src/`.
-  it('returns null from a shallow clone rather than the tip commit date', () => {
-    expect(newestChangeDate(shallow, 'src')).toBeNull()
-  })
-
-  // r1-1-c2 — CONTROL: a path with no history is an empty `git log`, already null.
-  it('returns null for a path no commit ever touched', () => {
-    expect(newestChangeDate(full, 'no/such/path')).toBeNull()
-  })
-
-  // r1-1-c3 — CONTROL: outside a repository git exits non-zero, already null.
-  it('returns null when the directory is not a git repository at all', () => {
-    const plain = join(tmp, 'plain')
-    mkdirSync(plain, { recursive: true })
-    expect(newestChangeDate(plain, 'src')).toBeNull()
-  })
-
-  // r1-1-i1 — INTERACTION: the gate's composed verdict (line 1107 composes exactly these two).
-  // Today the shallow tip date drives the freshness comparison and check 2d accuses a header
-  // that is in fact correct; the loud "cannot resolve" branch is the only honest answer when
-  // the repository cannot date its own source.
-  it('makes check 2d refuse loudly in a shallow clone instead of accusing a correct header', () => {
-    const catalog = `> **Last updated:** ${SOURCE_DATE}. Source: \`packages/knowledge-hub/dataset/.skills/\`\n`
-    const errors = checkCatalogFreshness(catalog, newestChangeDate(shallow, 'src'), 'src/')
-    expect(errors).toEqual([
-      'cannot resolve the last change date of src/ from git — the catalog freshness check cannot run',
-    ])
-  })
-
-  // r1-1-i2 — INTERACTION: the same header + the same tree, read from the two checkouts CI can
-  // produce, must give the SAME verdict. A gate whose answer depends on the clone depth is a
-  // gate whose answer depends on the day CI runs.
-  it('never invents a staleness failure a complete checkout of the same tree does not report', () => {
-    const catalog = `> **Last updated:** ${SOURCE_DATE}. Source: \`packages/knowledge-hub/dataset/.skills/\`\n`
-    const fromFull = checkCatalogFreshness(catalog, newestChangeDate(full, 'src'), 'src/')
-    const fromShallow = checkCatalogFreshness(catalog, newestChangeDate(shallow, 'src'), 'src/')
-    expect(fromFull).toEqual([])
-    expect(
-      fromShallow.some(e => e.includes('dates itself before')),
-      `shallow checkout invented a staleness failure: ${fromShallow.join(' | ')}`,
-    ).toBe(false)
   })
 })

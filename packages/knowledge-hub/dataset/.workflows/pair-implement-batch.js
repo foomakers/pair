@@ -508,7 +508,7 @@ const WORKFLOW_VERSION = '4.0.1'
 // US-506 T-8 (AC-12): the bounded-commands guardrail every dispatch carries — spelled exactly as
 // `cycle-dispatch.mjs` exports it (the sandbox cannot import it); the packet-parity tests hold the
 // two byte-equal.
-const BOUNDED_COMMANDS = 'Run only foreground, time-bounded commands: never start a background process and never wait on one. In your own probes never spawn a real engine or a real `gh` — stub them, and test "engine missing" with a PATH that contains no engine directory at all.'
+const BOUNDED_COMMANDS = 'Run only foreground, time-bounded commands: never start a background process and never wait on one. Only the stage\'s own experimental probes stub a real engine or a real `gh` — the skill\'s own read/publish/finalize/conclude steps run for real. In your own probes never spawn a real engine or a real `gh` — stub them, and test "engine missing" with a PATH that contains no engine directory at all.'
 
 // ── Pipeline configuration: what makes this engine reusable ─────────────────
 // Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved
@@ -884,16 +884,20 @@ const MAX_RED_CONTRACT_REPAIRS = 1
 const MAX_GREEN_RETRIES = 1
 // US-486 AC-12: the per-story ceilings are OWNED by `cycle-state.mjs` (`CAPS`) and enforced there
 // by `resolve` itself, so every realization of the cycle hits the same wall. This sandbox has no
-// filesystem, no shell and no imports, so it cannot read them at run time — and it cannot do
-// without them either: a stage that keeps redirecting to an ever-advancing round produces a new
-// (step, phase, mode, attempt, reviewer) key every time, so `seen` never fires and only a ceiling
-// stops the loop (DT-10).
+// filesystem, no shell and no imports, so it cannot read them at run time.
 // What it holds is therefore a MIRROR, not a second definition: the values are declared once, in
 // one structure, named after the owner's export, and `pair-implement-batch.test.mjs` asserts this
 // object equals `CAPS` imported from `cycle-state.mjs`. Drift fails a test — it does not wait for
 // a canary. This is the same "one owner, N guarded copies" idiom the six byte-identical
 // `cycle-state.mjs` installs already use.
-const CYCLE_CAPS = { dispatchesPerStory: 40, consecutiveRedirects: 3 }
+// US-514 T-3 (#514/AC3): `dispatchesPerStory` — a hard-coded 40 — is GONE from `cycle-state.mjs`'s own
+// `CAPS`, so it is gone from this mirror too (a drift a hand-edit could otherwise hide). This
+// sandbox has no adoption read at all (no filesystem), so it cannot apply `policy.maxDispatches`
+// itself — that ceiling is `cycle-state.mjs resolve`'s own, enforced against the SAME `policy` this
+// engine dispatches (`blockingFloor`/`maxDispatches`, above). The loop's OWN backstops
+// (`consecutiveRedirects` below, and the self-redirect guard, DT-10) stay: removing the ceiling
+// must not remove them, only the second, engine-private dispatch cap.
+const CYCLE_CAPS = { consecutiveRedirects: 3 }
 
 // ── Schemas (orchestration return-value contracts) ─────────────────────────
 // These are the compact values agents RETURN for control-flow — NOT the artifact
@@ -1664,7 +1668,14 @@ async function driveStory(story) {
   const synthesisMarker = () => `<!-- pair:synthesis #${story.id} PR#${pr} run:${runId} -->`
   // US-479 AC-32: `rollbackTo` is the maintainer's call, taken per card after its budget escalated
   // and they read the dossier — the engine never infers it and has no default for it.
-  const policy = { maxFixRounds: MAX_FIX_ROUNDS, redRepairs: MAX_RED_CONTRACT_REPAIRS, greenRetries: MAX_GREEN_RETRIES, reviewers: PIPELINE.reviewers, ...(story.rollbackTo ? { rollbackTo: story.rollbackTo } : {}) }
+  // US-514 r1-g1 (r0-2): the engine's explicit `severityFloor` rides in EVERY dispatch's `$policy`
+  // as `blockingFloor` — the same floor `cycle-state.mjs publish` ranks a finding's `blocking`
+  // against. No floor at all ⇒ the budgets policy exactly (TC-11), never a stamped default.
+  // g1-c5 (TC-11): `SEVERITY_FLOOR` is always set (it defaults SOFTLY to `Minor` for the review
+  // gate above) — `blockingFloor` rides only when the CALLER explicitly declared `severityFloor`,
+  // never the soft default, or `$policy` would never equal the budgets exactly.
+  const explicitSeverityFloor = String(PARSED.severityFloor ?? '').trim() ? SEVERITY_FLOOR : undefined
+  const policy = { maxFixRounds: MAX_FIX_ROUNDS, redRepairs: MAX_RED_CONTRACT_REPAIRS, greenRetries: MAX_GREEN_RETRIES, reviewers: PIPELINE.reviewers, ...(story.rollbackTo ? { rollbackTo: story.rollbackTo } : {}), ...(explicitSeverityFloor ? { blockingFloor: explicitSeverityFloor.name } : {}) }
   const inputs = fnv1a(canonical({ workflowMajor: WORKFLOW_VERSION.split('.')[0], story: story.id, branch: story.branch, base: baseOf(story), title: story.title, notes: story.notes ?? null, severityFloor: SEVERITY_FLOOR?.name ?? null, skills: SK, reviewTemplate: PIPELINE.reviewTemplate, reviewers: PIPELINE.reviewers }))
   const storyMetrics = { dispatches: 0, retries: 0, redirects: 0 }
   const common = () =>
@@ -1804,7 +1815,6 @@ async function driveStory(story) {
   while (true) {
     if (next.step === 'done') return result('ready-for-merge', { reviewedHead: next.reviewedHead, verdict: next.verdict, round: next.round })
     if (next.step === 'blocked') return blockedResult(next)
-    if (storyMetrics.dispatches >= CYCLE_CAPS.dispatchesPerStory) return result('failed-resume', { reason: `the cycle asked for more than ${CYCLE_CAPS.dispatchesPerStory} dispatches in one run — looping, not converging` })
     const key = `${next.step}:${next.phase}:${next.mode ?? ''}:${next.attempt ?? 1}:${next.reviewer ?? 1}`
     if (seen.has(key)) return result('failed-resume', { reason: `the cycle state asked for ${key} twice in one run` })
     seen.add(key)
