@@ -1,5 +1,5 @@
 ---
-name: pair-workflow-red-verify
+name: red-verify
 description: "Stage 2 of the delivery workflow — independent contract validation and deterministic seal in one execution: reproduces every witness and control of a prepared acceptance contract against the unfixed base, re-derives the inventory's classes and interactions from the authoritative producer, checks discriminance (a witness fails for the intended defect, a control may pass, a test-only fix fails on the injected regression), fixture consumption and fixScope, emits ALL concrete gaps it found in one typed rejection with stable row ids — and, when the contract is verified, runs red-snapshot.mjs seal in the same execution and returns the snapshot. Never repairs a contract, never edits production. Dispatched by the batch engine (pair-implement-batch)."
 version: 0.2.0
 author: Foomakers
