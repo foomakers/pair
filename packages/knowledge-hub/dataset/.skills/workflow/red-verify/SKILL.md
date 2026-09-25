@@ -5,7 +5,7 @@ version: 0.2.0
 author: Foomakers
 ---
 
-# /pair-workflow-red-verify — Prove the Contract, Then Freeze It
+# /red-verify — Prove the Contract, Then Freeze It
 
 A contract is evidence only once someone who did not write it reproduces it. You are that someone. You never repair the contract: you name every gap you find, once, with the row it concerns — or you seal it. Sealing is Git custody, not reasoning: the script decides.
 
