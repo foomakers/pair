@@ -25,9 +25,9 @@ Two related but separate defects motivated the story's other tasks: #491's repai
 
 ## Decision
 
-**One adoption key, `## Blocking Severities` in `tech/automation.md`, decides both what blocks and the optional dispatch ceiling — for both realizations and both roles.**
+**One adoption key, `## Blocking Severities` in `tech/automation.md`, decides both what blocks (a severity floor) and the optional dispatch ceiling — for both realizations and both roles.**
 
-1. **Schema**: a comma-separated severity list (`Critical | Major | Minor`; `Questions` is never blocking and never listed) plus an optional `max-dispatches: <n> [warn|block]` line. Absent file or section ⇒ the KB default `Critical, Major, Minor` (today's behaviour, byte for byte) and no dispatch ceiling at all — never a silently substituted `40`. Malformed ⇒ HALT `automation-policy-malformed`, naming the file and the line (ADR-018/D21: delta-only adoption, never a silent fallback).
+1. **Schema**: a single severity **floor** compared by rank (`Critical | Major | Minor | Questions`, the KB vocabulary) plus an optional `max-dispatches: <n> [warn|block]` line. Absent file or section ⇒ the KB default floor `Minor` (every severity except `Questions` blocks — today's behaviour) and no dispatch ceiling at all — never a silently substituted `40`. Malformed (including a present-but-empty section or a comma list) ⇒ HALT `automation-policy-malformed`, naming the file and the line (ADR-018/D21: delta-only adoption, never a silent fallback). See the Addendum for how the floor replaced the first list-based draft.
 
 2. **Read in both realizations, independently, from the same schema**: `apps/pair-cli/src/commands/run/blocking-severities.ts` (console) and `pair-workflow-cycle/scripts/blocking-severities.mjs`, which the cycle SKILL's Step 1 runs (in-session); a parity test (`cycle-defaults-parity.test.ts`) holds the two readers to the same policy for the same adoption files. Both merge the result into the SAME `policy` object every later `resolve`/`publish`/`packet` call in the run reuses — never re-read mid-cycle, so a review and a validator dispatched from the same run never disagree.
 
@@ -44,7 +44,7 @@ Two related but separate defects motivated the story's other tasks: #491's repai
 ## Alternatives Considered
 
 - **Leave "every severity blocks" as the workflow's own rule, with a per-project override flag threaded through CLI args.** Rejected: a flag is invisible in a diff and has to be remembered on every invocation; an adoption file is committed, reviewed, and read the same way by every run.
-- **Compute `blocking`/rejection entirely in the reviewer's/validator's own judgment, with the policy value only advisory.** Rejected for review-phase findings specifically: a mechanical derivation from severity is unambiguous and removable from the reviewer's own math entirely, the same reasoning that stamps `acHash` rather than trusting it. Kept as the reviewer's/validator's own judgment only where the engine cannot safely act after the fact (the seal already happened by publish time).
+- **Compute `blocking`/rejection entirely in the reviewer's/validator's own judgment, with the policy value only advisory.** Rejected for review-phase findings specifically: a mechanical derivation from severity is unambiguous and removable from the reviewer's own math entirely, the same reasoning that stamps `acHash` rather than trusting it. The same mechanical rule applies to the validator: `publish` refuses a `verified`/`sealed` red-verify handoff carrying a gap at or above the floor (`red-verify-blocking-gap`).
 - **Give `max-dispatches` its own section, separate from `## Blocking Severities`.** Rejected: both are "what blocks/stops" — one per-finding, one per-run — and the refinement session's own instruction was to simplify by removing causes of blocks rather than adding new adoption surface. One key, two related knobs.
 
 ## Consequences
