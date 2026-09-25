@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { resolve } from 'node:path'
 import {
   findSkillCountMismatches,
@@ -1150,6 +1150,40 @@ describe('US-514 T-8: check 2d removed — a stale header no longer fails docs:s
     const source = readFileSync(join(__dirname, 'docs-staleness-check.ts'), 'utf-8')
     expect(source.includes('dates itself before the content')).toBe(false)
   })
+
+  // AC10, proven for real: the repo's own catalog header date equals the newest skill change today,
+  // so a plain `runAllChecks(REPO_ROOT)` never exercises a STALE header. Here the module is re-imported
+  // with `node:fs` mocked so that ONLY the catalog's `Last updated` line reads as 2000-01-01; every
+  // other file (skills, docs, CLI config) is read for real. Zero errors means no header-date check is
+  // alive under any name.
+  it('AC10: runAllChecks reports ZERO errors when the catalog header is far OLDER than the newest skill change', async () => {
+    vi.resetModules()
+    vi.doMock('node:fs', async importOriginal => {
+      const actual = await importOriginal<typeof import('node:fs')>()
+      const readFileSync = ((...args: Parameters<typeof actual.readFileSync>) => {
+        const result = actual.readFileSync(...args)
+        const path = String(args[0])
+        return path.endsWith('skills-catalog.mdx') && typeof result === 'string'
+          ? result.replace(/(\*\*Last updated:\*\*\s*)\d{4}-\d{2}-\d{2}/, '$12000-01-01')
+          : result
+      }) as typeof actual.readFileSync
+      return { ...actual, readFileSync, default: { ...actual, readFileSync } }
+    })
+    try {
+      const mod = await import('./docs-staleness-check')
+      const { readFileSync: mockedRead } = await import('node:fs')
+      const catalog = mockedRead(
+        join(REPO_ROOT, 'apps/website/content/docs/reference/skills-catalog.mdx'),
+        'utf-8',
+      )
+      expect(catalog).toContain('**Last updated:** 2000-01-01')
+      const { errors } = mod.runAllChecks(REPO_ROOT)
+      expect(errors, errors.join('\n')).toHaveLength(0)
+    } finally {
+      vi.doUnmock('node:fs')
+      vi.resetModules()
+    }
+  }, 60_000)
 })
 
 // ── The batch-engine page's claims (#219, review of #432) ─────────────────────
