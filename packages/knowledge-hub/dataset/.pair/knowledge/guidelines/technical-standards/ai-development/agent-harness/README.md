@@ -2,7 +2,7 @@
 
 ## Overview
 
-pair's process lives in skills, not in any one AI coding agent. This framework covers **agent harnesses** — the CLI/TUI programs that read `AGENTS.md`, load skills, hold a model connection, and execute a session (Claude Code, pi, opencode, and any future one) — the way `collaboration/project-management-tool/` covers PM tools: a framework README with the fixed contract every implementation guide follows, plus one guide per harness.
+pair's process lives in skills, not in any one AI coding agent. This framework covers **agent harnesses** — the CLI/TUI programs that read `AGENTS.md`, load skills, hold a model connection, and execute a session (Claude Code, Codex, pi, opencode, and any future one) — the way `collaboration/project-management-tool/` covers PM tools: a framework README with the fixed contract every implementation guide follows, plus one guide per harness.
 
 **Harness ≠ engine ≠ model provider.** Three separate axes, easy to conflate:
 
@@ -57,6 +57,7 @@ A conformance test asserts every guide carries all nine section headings, in ord
 - **[pi.md](pi.md)** — the no-MCP-by-design case; proves the framework doesn't assume MCP.
 - **[opencode.md](opencode.md)** — MCP-native, and the only harness with a persistent headless server (`opencode serve`).
 - **[claude-code.md](claude-code.md)** — the control case pair was built on; documents `claude -p` and `Workflow` as two distinct execution layers.
+- **[codex.md](codex.md)** — MCP-native, with an in-session sub-agent primitive (`collaboration.*`) that `pair-workflow-cycle` binds as its `codex` realization.
 
 ## Credentials Never Pass Through This Framework or Its Skill
 

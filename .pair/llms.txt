@@ -512,6 +512,7 @@
 - [AI Development Standards](.pair/knowledge/guidelines/technical-standards/ai-development/README.md)
 - [Agent Harness Framework](.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/README.md)
 - [Claude Code](.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/claude-code.md)
+- [Codex](.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/codex.md)
 - [opencode](.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/opencode.md)
 - [pi](.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/pi.md)
 - [AI Development Tools](.pair/knowledge/guidelines/technical-standards/ai-development/ai-tools.md)
