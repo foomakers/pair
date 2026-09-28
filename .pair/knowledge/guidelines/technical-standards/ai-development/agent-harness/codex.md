@@ -61,10 +61,10 @@ Same card, same stage (`verify / first / r0` on PR #516), 2026-09-28, `gpt-6-lun
 
 | | Codex in-session (`pair-workflow-cycle`) | `pair-cli run --card 441 --pr 516 --engine codex` |
 | --- | --- | --- |
-| Wall time | 18 min (coordinator start → second `resolve`) | 21 min (start → handoff) |
+| Wall time | 18 min (coordinator start → second `resolve`) | 21 min (start → handoff; the run was then stopped on purpose with SIGINT, so its log reads "process failed, handoff advanced") |
 | Processes | one `codex exec`; the stage is a sub-agent inside it | one new `codex exec` per stage |
 | `reuse` transitions | same agent via `followup_task` | not possible — every stage is a new process |
-| Result | CHANGES-REQUESTED, same two findings | CHANGES-REQUESTED, same two findings |
+| Result (the stage's handoff) | CHANGES-REQUESTED — r0-1 Major, r0-2 Major | CHANGES-REQUESTED — r0-1 Minor, r0-2 Major |
 
 Both realizations drive the same state (`cycle-state.mjs`): `pair-cli` even adopted the run the in-session coordinator had left (`prepare r1-g1`) and continued it. **Go:** the in-session realization is the one that honours `next.context: reuse` and spawns no extra process per stage; `pair-cli` stays the fallback when a session has no sub-agent primitive.
 
