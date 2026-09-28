@@ -19,11 +19,43 @@
 // The host is the bound code-host adapter (US-492, scripts/host/): `--dir <run/story dir>` reuses the
 // coordinator's binding there; without it, way-of-working is resolved once for this process. The
 // check context and the state-label set are the ADAPTER's (GitHub: `pair-review`, `pr-state:*`).
-import { realpathSync } from 'node:fs'
+import { realpathSync, readFileSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { bindHosts } from './host/index.mjs'
+import { CLASSIFICATION_FAMILIES } from './host/adapter-kit.mjs'
 
 const SHA_RE = /^[0-9a-f]{40}$/
+
+// quality-model.md §5/§6: `## Tag Projection` in `<repo root>/.pair/adoption/tech/risk-matrix.md`
+// declares which classification families get tagged (`Active: risk`, `Active: risk, cost`,
+// `Active: none`). Absent file, or file present but without the section, means the same thing:
+// nothing is projected (D21) — the caller reports it as `skipped`, never a silent no-op.
+export function readTagProjection(repoRoot) {
+  const file = join(repoRoot, '.pair', 'adoption', 'tech', 'risk-matrix.md')
+  if (!existsSync(file)) return null
+  const text = readFileSync(file, 'utf8')
+  const section = /^##\s+Tag Projection\s*$([\s\S]*?)(?=^##\s|\s*$(?![\s\S]))/m.exec(text)
+  if (!section) return null
+  const m = /^Active:\s*(.+)$/m.exec(section[1])
+  if (!m) return null
+  const list = m[1].split(',').map(s => s.trim()).filter(Boolean)
+  return list.length === 1 && list[0] === 'none' ? [] : list
+}
+
+// Applies only the active families, via the host's setClassification — the review is the sole
+// writer of a PR's classification tags (off-cycle fix for PR #516). `tier` undefined ⇒ this whole
+// step is skipped (unchanged behaviour, no `classification` key at all in the caller's output).
+export function classifyPr({ tier, cost, repoRoot, pr, repo, host }) {
+  if (tier === undefined) return undefined
+  const active = readTagProjection(repoRoot)
+  if (active === null) return { skipped: 'no-tag-projection-declared' }
+  if (active.length === 0) return { skipped: 'tag-projection-opted-out' }
+  const result = {}
+  if (active.includes('risk')) result.risk = host.setClassification({ pr, repo, family: 'risk', value: tier })
+  if (active.includes('cost') && cost !== undefined) result.cost = host.setClassification({ pr, repo, family: 'cost', value: cost })
+  return result
+}
 
 // pr-state.sh `review_check_conclusion`, verbatim in semantics.
 export const conclusionOf = verdict => (verdict === 'approved' ? 'success' : verdict === 'changes-requested' ? 'failure' : 'pending')
@@ -46,21 +78,26 @@ export function applyStateLabel({ pr, repo, label, dir }) {
   return codeHost(dir).setPrState({ pr, repo, label })
 }
 
-export function conclude({ pr, sha, verdict, repo, description, targetUrl, dir }) {
+export function conclude({ pr, sha, verdict, repo, description, targetUrl, dir, tier, cost, repoRoot = process.cwd() }) {
   const state = conclusionOf(verdict)
   const label = stateLabelOf(verdict)
   if (state === 'pending' || !label) throw new Error(`verdict ${JSON.stringify(verdict)} is not a decision — nothing is published, the pending check keeps the merge blocked`)
   const host = codeHost(dir)
   const STATE_LABELS = host.stateLabels
+  const classification = classifyPr({ tier, cost, repoRoot, pr, repo, host })
   // idempotent: the head already carries this conclusion and the PR this exact label
   let already = false
   try {
     already = host.readCheck({ pr, sha, repo }) === state && (() => { const ls = host.readLabels({ pr, repo }); return ls.includes(label) && !ls.some(l => STATE_LABELS.includes(l) && l !== label) })()
   } catch {}
-  if (already) return { action: 'unchanged', check: { context: host.checkContext, sha, state, published: true, error: null }, label: { applied: label, removed: [], confirmed: true, error: null }, advisory: false }
+  if (already) {
+    const out = { action: 'unchanged', check: { context: host.checkContext, sha, state, published: true, error: null }, label: { applied: label, removed: [], confirmed: true, error: null }, advisory: false }
+    return classification === undefined ? out : { ...out, classification }
+  }
   const check = host.concludeCheck({ pr, sha, repo, state, description, targetUrl })
   const labelOut = host.setPrState({ pr, repo, label })
-  return { action: 'concluded', check, label: labelOut, advisory: !check.published }
+  const out = { action: 'concluded', check, label: labelOut, advisory: !check.published }
+  return classification === undefined ? out : { ...out, classification }
 }
 
 function parseCli(argv) {
@@ -85,7 +122,7 @@ if (isMain()) {
   try {
     const { cmd, opts } = parseCli(process.argv.slice(2))
     // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
-    const FLAGS = { conclude: ['pr', 'sha', 'verdict', 'repo', 'description', 'target-url', 'dir'], find: ['pr', 'sha', 'repo', 'dir'] }
+    const FLAGS = { conclude: ['pr', 'sha', 'verdict', 'repo', 'description', 'target-url', 'dir', 'tier', 'cost', 'repo-root'], find: ['pr', 'sha', 'repo', 'dir'] }
     if (FLAGS[cmd]) {
       const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
       if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
@@ -96,7 +133,9 @@ if (isMain()) {
     if (opts.repo !== undefined && !/^[^/\s]+\/[^/\s]+$/.test(opts.repo)) throw new Error(`--repo must be owner/name, got ${JSON.stringify(opts.repo)}`)
     if (cmd === 'conclude') {
       if (!opts.verdict) throw new Error('--verdict approved|changes-requested is required')
-      const out = conclude({ pr: opts.pr, sha: opts.sha, verdict: opts.verdict, repo: opts.repo, description: opts.description, targetUrl: opts['target-url'], dir: opts.dir })
+      if (opts.tier !== undefined && !CLASSIFICATION_FAMILIES.risk.includes(opts.tier)) throw new Error(`--tier must be one of ${CLASSIFICATION_FAMILIES.risk.join(' | ')}, got ${JSON.stringify(opts.tier)}`)
+      if (opts.cost !== undefined && !CLASSIFICATION_FAMILIES.cost.includes(opts.cost)) throw new Error(`--cost must be one of ${CLASSIFICATION_FAMILIES.cost.join(' | ')}, got ${JSON.stringify(opts.cost)}`)
+      const out = conclude({ pr: opts.pr, sha: opts.sha, verdict: opts.verdict, repo: opts.repo, description: opts.description, targetUrl: opts['target-url'], dir: opts.dir, tier: opts.tier, cost: opts.cost, repoRoot: opts['repo-root'] })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.check.published || out.label.confirmed ? 0 : 1)
     } else if (cmd === 'find') {

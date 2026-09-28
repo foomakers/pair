@@ -8,7 +8,7 @@
 for (const k of Object.keys(process.env)) if (/^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX|NAMESPACE|CEILING_DIRECTORIES|IMPLICIT_WORK_TREE|DISCOVERY_ACROSS_FILESYSTEM)$/.test(k)) delete process.env[k]
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, readFileSync, chmodSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, chmodSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -65,6 +65,18 @@ process.stderr.write('unexpected gh call: ' + args.join(' ')); process.exit(1)
 }
 const run = (fake, ...args) => spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8', env: { ...process.env, PATH: `${fake.dir}:${process.env.PATH}` } })
 const out = r => JSON.parse(r.stdout.trim().split('\n').pop())
+
+// A repo root carrying `.pair/adoption/tech/risk-matrix.md` with a given `## Tag Projection` body
+// (or none at all) — the classification step's source of truth (quality-model.md §5).
+const repoRootWithProjection = text => {
+  const root = mkdtempSync(join(tmpdir(), 'risk-matrix-'))
+  if (text !== null) {
+    mkdirSync(join(root, '.pair', 'adoption', 'tech'), { recursive: true })
+    writeFileSync(join(root, '.pair', 'adoption', 'tech', 'risk-matrix.md'), text)
+  }
+  return root
+}
+const runWithRoot = (fake, root, ...args) => spawnSync(process.execPath, [CLI, ...args, '--repo-root', root], { encoding: 'utf8', env: { ...process.env, PATH: `${fake.dir}:${process.env.PATH}` } })
 
 test('conclude approved: ONE `pair-review` success status on the exact sha, `pr-state:ready-to-merge` applied, every other pr-state:* removed, labels read back — exit 0', () => {
   const fake = fakeGh({ labels: ['risk:green', 'pr-state:to-be-reviewed'] })
@@ -127,6 +139,65 @@ test('t9d-19 (DT-32): an unknown flag is refused before any call to gh', () => {
   assert.equal(r.status, 2)
   assert.match(out(r).error, /unknown flag.*--bogusFlag/)
   assert.equal(fake.calls().length, 0)
+})
+
+// ── off-cycle fix for PR #516: the review writes the classification tags at conclude, per the
+// adoption's Tag Projection (quality-model.md §5) — never publish-pr ────────────────────────────
+test('conclude --tier red with `Active: risk` projected: risk:red applied, risk:green removed, reported under classification.risk', () => {
+  const fake = fakeGh({ labels: ['pr-state:to-be-reviewed', 'risk:green'] })
+  const root = repoRootWithProjection('## Tag Projection\n\nActive: risk\n')
+  const r = runWithRoot(fake, root, 'conclude', '--pr', '7', '--sha', SHA, '--verdict', 'approved', '--repo', 'foomakers/pair', '--tier', 'red')
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const o = out(r)
+  assert.deepEqual(o.classification, { risk: { applied: 'risk:red', removed: ['risk:green'], confirmed: true, error: null } })
+  assert.deepEqual(fake.state().labels.sort(), ['pr-state:ready-to-merge', 'risk:red'])
+})
+
+test('conclude --tier red with `Active: none`: nothing is applied, classification reports skipped', () => {
+  const fake = fakeGh({ labels: ['pr-state:to-be-reviewed', 'risk:green'] })
+  const root = repoRootWithProjection('## Tag Projection\n\nActive: none\n')
+  const r = runWithRoot(fake, root, 'conclude', '--pr', '7', '--sha', SHA, '--verdict', 'approved', '--repo', 'foomakers/pair', '--tier', 'red')
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const o = out(r)
+  assert.equal(typeof o.classification.skipped, 'string')
+  assert.deepEqual(fake.state().labels.sort(), ['pr-state:ready-to-merge', 'risk:green'], 'risk:green untouched — nothing projected')
+})
+
+test('conclude --tier red with no Tag Projection declared (file absent): classification reports skipped, nothing applied', () => {
+  const fake = fakeGh({ labels: ['pr-state:to-be-reviewed'] })
+  const root = repoRootWithProjection(null)
+  const r = runWithRoot(fake, root, 'conclude', '--pr', '7', '--sha', SHA, '--verdict', 'approved', '--repo', 'foomakers/pair', '--tier', 'red')
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const o = out(r)
+  assert.equal(typeof o.classification.skipped, 'string')
+  assert.ok(!fake.state().labels.some(l => l.startsWith('risk:')), 'no risk:* label was ever applied')
+})
+
+test('conclude without --tier: unchanged behaviour, no classification key at all', () => {
+  const fake = fakeGh({ labels: ['pr-state:to-be-reviewed'] })
+  const root = repoRootWithProjection('## Tag Projection\n\nActive: risk\n')
+  const r = runWithRoot(fake, root, 'conclude', '--pr', '7', '--sha', SHA, '--verdict', 'approved', '--repo', 'foomakers/pair')
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.ok(!('classification' in out(r)), 'no --tier ⇒ no classification key')
+})
+
+test('conclude --tier bogus is refused before any write (bad tier value)', () => {
+  const fake = fakeGh({ labels: ['pr-state:to-be-reviewed'] })
+  const root = repoRootWithProjection('## Tag Projection\n\nActive: risk\n')
+  const r = runWithRoot(fake, root, 'conclude', '--pr', '7', '--sha', SHA, '--verdict', 'approved', '--repo', 'foomakers/pair', '--tier', 'bogus')
+  assert.equal(r.status, 2)
+  assert.match(out(r).error, /--tier/)
+  assert.equal(fake.calls().length, 0, 'no call reached gh')
+})
+
+test('conclude --tier green --cost red with `Active: risk, cost` projected: both families applied', () => {
+  const fake = fakeGh({ labels: ['risk:red', 'cost:green'] })
+  const root = repoRootWithProjection('## Tag Projection\n\nActive: risk, cost\n')
+  const r = runWithRoot(fake, root, 'conclude', '--pr', '7', '--sha', SHA, '--verdict', 'approved', '--repo', 'foomakers/pair', '--tier', 'green', '--cost', 'red')
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const o = out(r)
+  assert.deepEqual(o.classification.risk, { applied: 'risk:green', removed: ['risk:red'], confirmed: true, error: null })
+  assert.deepEqual(o.classification.cost, { applied: 'cost:red', removed: ['cost:green'], confirmed: true, error: null })
 })
 
 test('conclude is idempotent: the same conclusion on a head that already carries it changes nothing and reports `unchanged`; find is read-only', () => {
