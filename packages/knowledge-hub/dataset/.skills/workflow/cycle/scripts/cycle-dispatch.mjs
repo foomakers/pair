@@ -52,7 +52,9 @@ export const REALIZATIONS = [
     // introspection-only probe reported NEITHER namespace at all (the tools were plainly absent).
     // A single hardcoded name breaks every time this surface shifts (it already has, twice); the
     // fix is DISPATCH_ALIASES below, checked the same way RESUME_ALIASES always has been — never
-    // another hardcoded string here.
+    // another hardcoded string here. Re-probed 2026-09-28 (codex-cli 0.157.1, #441): `collaboration.*`
+    // again — spawn_agent / followup_task / wait_agent / send_message / interrupt_agent / list_agents;
+    // followup_task proven to resume the same agent with its session.
     dispatch: 'collaboration.spawn_agent',
     resume: 'collaboration.followup_task',
     // Codex has no `agentType`: the role travels as the agent `.md` body plus the skill reference.

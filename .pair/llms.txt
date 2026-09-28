@@ -178,6 +178,7 @@
 - [Decision: what blocks the delivery cycle comes from adoption, not a workflow rule](.pair/adoption/decision-log/2026-09-24-blocking-severities-from-adoption.md)
 - [Decision: Only substantive findings cost a review round](.pair/adoption/decision-log/2026-09-25-only-substantive-findings-cost-a-review-round.md)
 - [Decision: A PR's classification tags come only from the review, never copied from the story](.pair/adoption/decision-log/2026-09-25-pr-tags-only-from-review-classification.md)
+- [Decision: Codex in-session realization of the delivery cycle — go](.pair/adoption/decision-log/2026-09-28-codex-in-session-realization-go.md)
 
 ## How-To Guides
 

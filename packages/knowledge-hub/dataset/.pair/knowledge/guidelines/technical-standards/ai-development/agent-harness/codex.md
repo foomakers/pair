@@ -53,6 +53,21 @@ With the `multi_agent` feature on (`codex features list`: `multi_agent stable tr
 | `interrupt_agent` | `target` | stop a stalled stage (the cycle's one stall resume / dead-dispatch retry) |
 | `list_agents` | `path_prefix?` | list live agents |
 
+**Resume, proven (#441, 2026-09-28):** a spawned agent (`/root/reuse_probe`) was given a secret; a later `followup_task` to the same target made it repeat the secret without reading any file, and `list_agents` showed no second agent — the same agent, the same session. That is what `next.context: reuse` needs.
+
+### In-session vs `pair-cli run --engine codex` (#441 go/no-go)
+
+Same card, same stage (`verify / first / r0` on PR #516), 2026-09-28, `gpt-6-luna`:
+
+| | Codex in-session (`pair-workflow-cycle`) | `pair-cli run --card 441 --pr 516 --engine codex` |
+| --- | --- | --- |
+| Wall time | 18 min (coordinator start → second `resolve`) | 21 min (start → handoff) |
+| Processes | one `codex exec`; the stage is a sub-agent inside it | one new `codex exec` per stage |
+| `reuse` transitions | same agent via `followup_task` | not possible — every stage is a new process |
+| Result | CHANGES-REQUESTED, same two findings | CHANGES-REQUESTED, same two findings |
+
+Both realizations drive the same state (`cycle-state.mjs`): `pair-cli` even adopted the run the in-session coordinator had left (`prepare r1-g1`) and continued it. **Go:** the in-session realization is the one that honours `next.context: reuse` and spawns no extra process per stage; `pair-cli` stays the fallback when a session has no sub-agent primitive.
+
 `pair-workflow-cycle` binds these by probing the session's tool list (`cycle-dispatch.mjs realizations`), never by product name: the `codex` row carries `collaboration.spawn_agent` / `collaboration.followup_task` plus aliases for the namespaces Codex has used before (`multi_agent_v1__*`).
 
 ## 8. What Codex Does NOT Support
@@ -63,4 +78,4 @@ With the `multi_agent` feature on (`codex features list`: `multi_agent stable tr
 
 ## 9. Verified-Against Version
 
-`codex-cli 0.157.1`, observed 2026-09-28 on macOS, model `gpt-6-luna`: two probe sessions (tool list and `collaboration.*` signatures) and one `pair-workflow-cycle` run coordinated by Codex (#441) — realization bound, `resolve` → `packet` → `collaboration.spawn_agent` (fresh) → the stage's structured result, the dead-dispatch retry and `interrupt_agent` on a stall, all as in the Claude realization.
+`codex-cli 0.157.1`, observed 2026-09-28 on macOS, model `gpt-6-luna`: two probe sessions (tool list and `collaboration.*` signatures) and two `pair-workflow-cycle` runs coordinated by Codex (#441) — realization bound, `resolve` → `packet` → `collaboration.spawn_agent` (fresh) → the stage's structured result and published handoff (a real `verify` on PR #516), the dead-dispatch retry and `interrupt_agent` on a stall, all as in the Claude realization — plus a `followup_task` resume probe and a same-stage comparison with `pair-cli run --engine codex`.
