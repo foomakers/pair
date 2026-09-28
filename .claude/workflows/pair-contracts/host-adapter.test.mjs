@@ -277,6 +277,41 @@ test('T-2: github prHead / merge / closeAndCascade speak the documented gh shape
   assert.deepEqual(h.closeAndCascade({ id: 3 }), { closed: [3], stoppedAt: null })
 })
 
+// ── setClassification (off-cycle fix for PR #516): the review is the only writer of the PR's
+// classification tags — exactly one `<family>:<value>` label of that family, the other values of
+// the same family removed, read back like setPrState ─────────────────────────────────────────────
+test('github setClassification: exactly one risk:* label applied, the others removed, read back — and an invalid family/value is refused before any write', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gh-classify-'))
+  const state = join(dir, 'labels.json')
+  writeFileSync(state, JSON.stringify(['risk:green', 'cost:yellow', 'pr-state:to-be-reviewed']))
+  const log = join(dir, 'calls.log')
+  writeFileSync(log, '')
+  const bin = join(dir, 'gh')
+  writeFileSync(
+    bin,
+    `#!/usr/bin/env node
+const fs = require('fs')
+const a = process.argv.slice(2)
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(a) + '\\n')
+const S = JSON.parse(fs.readFileSync(${JSON.stringify(state)}, 'utf8'))
+const save = v => fs.writeFileSync(${JSON.stringify(state)}, JSON.stringify(v))
+if (a[0] === 'api' && /\\/labels$/.test(a[1]) && !a.includes('-X')) { process.stdout.write(JSON.stringify(S.map(name => ({ name })))); process.exit(0) }
+if (a[0] === 'api' && a[1] === '-X' && a[2] === 'DELETE' && /\\/labels\\//.test(a[3])) { const n = decodeURIComponent(a[3].split('/labels/')[1]); save(S.filter(x => x !== n)); process.exit(0) }
+if (a[0] === 'api' && a[1] === '-X' && a[2] === 'POST' && /\\/labels$/.test(a[3])) { const input = JSON.parse(fs.readFileSync(0, 'utf8')); save([...S, ...input.labels]); process.exit(0) }
+process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(3)
+`,
+  )
+  chmodSync(bin, 0o755)
+  const h = github.instantiate({ ghBin: bin })
+  const r = h.setClassification({ pr: 1, repo: 'o/r', family: 'risk', value: 'red' })
+  assert.deepEqual(r, { applied: 'risk:red', removed: ['risk:green'], confirmed: true, error: null })
+  const after = JSON.parse(readFileSync(state, 'utf8'))
+  assert.deepEqual(after.sort(), ['cost:yellow', 'pr-state:to-be-reviewed', 'risk:red'].sort(), 'the other family and non-classification labels are untouched')
+  assert.throws(() => h.setClassification({ pr: 1, repo: 'o/r', family: 'priority', value: 'red' }), e => e.kind === 'invalid-input', 'an unknown family is refused')
+  assert.throws(() => h.setClassification({ pr: 1, repo: 'o/r', family: 'risk', value: 'blue' }), e => e.kind === 'invalid-input', 'an out-of-enum value for the family is refused')
+  assert.equal(readFileSync(log, 'utf8').trim().split('\n').filter(l => l.includes('POST') || l.includes('DELETE')).length, 2, 'the two refused calls never reached gh')
+})
+
 // ── T-5 / AC3: Azure DevOps, all eight methods ─────────────────────────────────────────────────
 test('AC3: azure-devops readCard/cardHash/closeAndCascade drive Azure Boards through az boards, cascading up the hierarchy', () => {
   const az = fakeAz({
@@ -326,6 +361,17 @@ test('AC3: azure-devops PR side — prHead, marker-keyed upsert (create / unchan
   assert.deepEqual(h.merge({ pr: 3, strategy: 'squash', message: '[#9] feat: y' }), { merged: true, pr: 3, strategy: 'squash' })
   assert.deepEqual([az.state().prs[3].status, az.state().prs[3].squash, az.state().prs[3].message], ['completed', 'true', '[#9] feat: y'])
   assert.throws(() => h.merge({ pr: 3, strategy: 'rebase' }), /not supported/, 'a genuine parity gap is a stated, typed limitation')
+})
+
+test('azure-devops setClassification: exactly one cost:* label applied, the others removed, read back — an invalid family/value is refused before any write', () => {
+  const az = fakeAz({ prs: { 3: { head: SHA, iterations: [SHA], labels: ['cost:orange', 'risk:yellow'] } } })
+  const h = azure.instantiate({ azBin: az.azBin })
+  const repo = 'Proj/app'
+  const r = h.setClassification({ pr: 3, repo, family: 'cost', value: 'red' })
+  assert.deepEqual(r, { applied: 'cost:red', removed: ['cost:orange'], confirmed: true, error: null })
+  assert.deepEqual(az.state().prs[3].labels.sort(), ['cost:red', 'risk:yellow'])
+  assert.throws(() => h.setClassification({ pr: 3, repo, family: 'risk', value: 'orange' }), e => e.kind === 'invalid-input', 'orange is not a valid risk value')
+  assert.throws(() => h.setClassification({ pr: 3, repo, family: 'bogus', value: 'red' }), e => e.kind === 'invalid-input')
 })
 
 test('AC3: a refused Azure status write degrades to advisory (reported), a malformed repo is refused before any call', () => {
