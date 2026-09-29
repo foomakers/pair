@@ -245,10 +245,13 @@ export default defineAdapter({
         }
       },
       // merge-and-cascade.md CLI fallback: `gh pr merge <n> --squash --subject <title> --body <body>`.
-      merge({ pr, repo, strategy = 'squash', message = '' }) {
+      merge({ pr, repo, strategy = 'squash', message = '', headSha }) {
         if (!['squash', 'merge', 'rebase'].includes(strategy)) throw new HostError('unsupported', { message: `merge strategy ${JSON.stringify(strategy)} (expected squash | merge | rebase)`, method: 'merge' })
+        if (headSha !== undefined && !(typeof headSha === 'string' && SHA_RE.test(headSha))) throw new HostError('invalid-input', { message: `merge headSha is not a 40-hex sha: ${JSON.stringify(headSha)}`, method: 'merge' })
         const [subject, ...rest] = String(message).split('\n')
         const args = withRepo(['pr', 'merge', String(pr), `--${strategy}`], repo)
+        // Pinned to the reviewed head: the host refuses when the PR head moved since it was read.
+        if (headSha) args.push('--match-head-commit', headSha)
         if (subject) args.push('--subject', subject)
         if (rest.join('\n').trim()) args.push('--body', rest.join('\n').replace(/^\n+/, ''))
         gh(args)

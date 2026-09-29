@@ -221,7 +221,7 @@ export function runMerge({ message, branch, root, git, fs, ...input }) {
   const parkWith = (d, merged) => ({ ...out, ...d, merged, comment: park({ hosts: input.hosts, story: input.story, pr: input.pr, repo: input.repo, decision: d, merged }) })
   if (!decision.mergeAllowed) return parkWith(decision, false)
   try {
-    input.hosts.code.merge({ pr: input.pr, repo: input.repo, strategy: 'squash', message })
+    input.hosts.code.merge({ pr: input.pr, repo: input.repo, strategy: 'squash', message, headSha: input.reviewedHead })
   } catch (e) {
     const failed = [{ code: 'merge-failed', detail: `the code host refused the merge: ${e.message}` }]
     return parkWith({ mergeAllowed: false, failed, reason: failed[0].detail, parkKind: 'halted' }, false)
