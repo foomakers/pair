@@ -41,6 +41,16 @@ function assertBuilt(): void {
   if (!existsSync(CLI)) throw new Error(`${CLI} is missing: build @pair/pair-cli first`)
 }
 
+/**
+ * #518: the environment every `git` and driver here runs under — the caller's, minus the
+ * repository-selecting `GIT_*` variables a git hook exports (same set cycle-state.test.mjs
+ * scrubs). Read at CALL time, so a variable set after import is stripped too.
+ */
+const GIT_REPO_VARS =
+  /^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX|NAMESPACE|CEILING_DIRECTORIES|IMPLICIT_WORK_TREE|DISCOVERY_ACROSS_FILESYSTEM)$/
+const hermeticEnv = (): NodeJS.ProcessEnv =>
+  Object.fromEntries(Object.entries(process.env).filter(([k]) => !GIT_REPO_VARS.test(k)))
+
 const alive = (pid: number): boolean => {
   try {
     process.kill(pid, 0)
@@ -66,7 +76,12 @@ describe('r1-2: a signalled driver releases the card lock, stops its engine, and
   const spawnedPids: number[] = []
 
   const git = (cwd: string, ...args: string[]) =>
-    execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+    execFileSync('git', args, {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: hermeticEnv(),
+    }).trim()
   const lockDir = () => join(main, '.pair/working/automation/locks', CARD)
   const auditFile = () => join(main, '.pair/working/automation/loop-audit.md')
   const engineLog = () => join(root, 'engine.log')
@@ -157,7 +172,7 @@ else done()
       {
         cwd: main,
         env: {
-          ...process.env,
+          ...hermeticEnv(),
           PATH: `${bin}:${process.env['PATH'] ?? ''}`,
           PAIR_GH_BIN: join(bin, 'gh'),
           STUB_ENGINE_SLEEP_MS: String(sleepMs),
