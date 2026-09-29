@@ -462,6 +462,23 @@ Absent file or absent section ⇒ no hook step is attempted and nothing is logge
 | `post-cycle` | notify the outcome, clean up what `pre-cycle` created |
 | `on-halt` | alert a human: the deterministic notification point for every failure path |
 
+Worked examples, one per hook type:
+
+```markdown
+## Cycle Hooks
+
+- `pre-cycle`: `pnpm mirrors:regenerate`
+- `pre-verify`: `pnpm build`
+- `post-implement`: `./scripts/notify.sh "implementation published"`
+- `post-cycle`: `./scripts/notify.sh "cycle finished"`
+- `on-halt`: `./scripts/alert.sh "delivery cycle stopped"`
+```
+
+- `pre-cycle` fixes the tree once before any stage judges it; a failure stops the invocation before a token is spent.
+- `pre-verify` is an external gate: a red build stops `verify` from dispatching, and the build's own output is what the operator reads.
+- `post-implement` and `post-cycle` are notifications: they run after the fact, so a failed webhook is logged and the cycle moves on.
+- `on-halt` is the alert: it fires on every `failed-*` and `escalate` stop, never on `ready-for-merge`.
+
 A `pre-*` hook that writes files (mirror realignment) must be local and idempotent: the guard that detects drift is the checker, the hook is what fixes the tree before the gate judges it.
 
 ## Related

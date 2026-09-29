@@ -47,6 +47,21 @@ describe.each(Object.entries(policies))('US-489 T-1: ## Cycle Hooks schema (%s)'
     }
   })
 
+  it('the per-phase usage table covers every hook point, and each type has a worked example', async () => {
+    const usage = section.slice(section.indexOf('### Hook points and their typical use'))
+    const points = ['pre-cycle', 'post-cycle', 'on-halt']
+    for (const id of await stageIds()) points.push(`pre-${id}`, `post-${id}`)
+    const rows = usage.split('\n').filter(line => line.startsWith('|'))
+    for (const point of points) {
+      const covered = rows.some(
+        row => row.includes(`\`${point}\``) || row.includes(`\`${point.split('-')[0]}-<stage-id>\``),
+      )
+      expect(covered, point).toBe(true)
+    }
+    for (const type of ['pre-cycle', 'pre-verify', 'post-implement', 'post-cycle', 'on-halt'])
+      expect(usage, type).toMatch(new RegExp(`^- \`${type}\`: \``, 'm'))
+  })
+
   it('states absent ⇒ no hooks and pre-* blocks while post-*/on-halt never do', () => {
     expect(section).toMatch(/absent[^\n]*⇒ no hooks/i)
     expect(section).toMatch(/never a HALT/)
