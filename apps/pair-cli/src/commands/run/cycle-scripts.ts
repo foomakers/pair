@@ -112,8 +112,38 @@ export interface CycleResolveOptions {
   readonly head?: string
   readonly inputs?: string
   readonly acHash?: string
+  /** US-490: the card's current `risk:*` label — with `policy.autoAdvance.tiers`, what lets `resolve` offer `merge`. */
+  readonly tier?: string
   /** US-488: the workflow profile's `reuse` stages as `cycle-state`'s own transition-keyed policy. */
   readonly contextPolicy?: Readonly<Record<string, string>>
+}
+
+/** The flags `cycle-merge.mjs check|run` share — pinned to the head the verifier reviewed. */
+export interface CycleMergeOptions {
+  readonly dir: string
+  readonly story: string
+  readonly pr: number
+  readonly reviewedHead: string
+  readonly cardTier: string
+  readonly autoAdvance: readonly string[]
+}
+
+export interface CycleMergeRunOptions extends CycleMergeOptions {
+  readonly gate: 'green' | 'red'
+  readonly message: string
+  readonly branch?: string
+  readonly root?: string
+}
+
+/** `cycle-merge.mjs`'s own JSON answer, relayed — `merged` / `cascaded` / `reason` never re-derived. */
+export interface CycleMergeResult {
+  readonly stage?: string
+  readonly mode?: string
+  readonly mergeAllowed?: boolean
+  readonly merged?: boolean
+  readonly cascaded?: boolean
+  readonly reason?: string | null
+  readonly [key: string]: unknown
 }
 
 export interface CycleWorktreeOptions {
@@ -153,6 +183,10 @@ export interface CyclePacketResult {
 export interface CycleScriptsBridge {
   resolve(options: CycleResolveOptions): CycleResolveResult
   worktree(options: CycleWorktreeOptions): CycleWorktreeResult
+  /** `cycle-merge.mjs check`: conditions 1-5 re-read live; a failure PARKS the card. */
+  mergeCheck(options: CycleMergeOptions): CycleMergeResult
+  /** `cycle-merge.mjs run`: conditions 1-6 (`gate`), then merge + Story Closure. */
+  mergeRun(options: CycleMergeRunOptions): CycleMergeResult
   packet(options: CyclePacketOptions): CyclePacketResult
   /** `inputs --story <card JSON>`: the effective-inputs digest both realizations must agree on. */
   inputs(story: Record<string, unknown>, workflowVersion: string): string
@@ -264,6 +298,7 @@ function resolveArgs(options: CycleResolveOptions): ScriptArgs {
       ['head', options.head],
       ['inputs', options.inputs],
       ['acHash', options.acHash],
+      ['tier', options.tier],
       [
         'contextPolicy',
         options.contextPolicy === undefined || Object.keys(options.contextPolicy).length === 0
@@ -271,6 +306,17 @@ function resolveArgs(options: CycleResolveOptions): ScriptArgs {
           : JSON.stringify(options.contextPolicy),
       ],
     ]),
+  ]
+}
+
+function mergeArgs(options: CycleMergeOptions): ScriptArgs {
+  return [
+    ['dir', options.dir],
+    ['story', options.story],
+    ['pr', String(options.pr)],
+    ['reviewedHead', options.reviewedHead],
+    ['cardTier', options.cardTier],
+    ['autoAdvance', JSON.stringify(options.autoAdvance)],
   ]
 }
 
@@ -299,6 +345,26 @@ function bindProfileArgs(dir: string, identity: CycleProfileIdentity): ScriptArg
   ]
 }
 
+/** `cycle-merge.mjs check|run` as typed calls over the same script runner. */
+function mergeMethods(
+  runScript: (script: string, cmd: string, args: ScriptArgs) => unknown,
+  script: string,
+): Pick<CycleScriptsBridge, 'mergeCheck' | 'mergeRun'> {
+  return {
+    mergeCheck: options => runScript(script, 'check', mergeArgs(options)) as CycleMergeResult,
+    mergeRun: options =>
+      runScript(script, 'run', [
+        ...mergeArgs(options),
+        ['gate', options.gate],
+        ['message', options.message],
+        ...optional([
+          ['branch', options.branch],
+          ['root', options.root],
+        ]),
+      ]) as CycleMergeResult,
+  }
+}
+
 /**
  * `cwd` is the PROJECT directory the scripts run in (r1-3): `ac-hash` shells out to `gh`, which
  * resolves the repository from its cwd, so a script run from anywhere else hashes another
@@ -310,11 +376,8 @@ export function createCycleScriptsBridge(
 ): CycleScriptsBridge {
   const cycleStatePath = join(location.scriptsDir, 'cycle-state.mjs')
   const cycleDispatchPath = join(location.scriptsDir, 'cycle-dispatch.mjs')
-  const runScript = (
-    script: string,
-    cmd: string,
-    args: readonly (readonly [string, string])[],
-  ): unknown => runScriptIn(script, cmd, args, cwd)
+  const runScript = (script: string, cmd: string, args: ScriptArgs): unknown =>
+    runScriptIn(script, cmd, args, cwd)
 
   return {
     resolve: options =>
@@ -327,6 +390,7 @@ export function createCycleScriptsBridge(
         ['base', options.base],
         ...optional([['worktree-root', options.worktreeRoot]]),
       ]) as CycleWorktreeResult,
+    ...mergeMethods(runScript, join(location.scriptsDir, 'cycle-merge.mjs')),
     packet: options =>
       runScript(cycleDispatchPath, 'packet', packetArgs(options, location)) as CyclePacketResult,
     inputs(story, workflowVersion) {

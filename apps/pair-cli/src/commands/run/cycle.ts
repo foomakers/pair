@@ -63,6 +63,8 @@ export interface CycleOutcome {
   readonly status: string
   readonly stagesRun: number
   readonly next?: CycleNext
+  /** US-490: the `merge` stage's answer — `cycle-merge.mjs`'s own JSON (`merged`, `cascaded`, `reason`), relayed verbatim. */
+  readonly merge?: unknown
 }
 
 export interface CyclePolicy {
@@ -100,11 +102,23 @@ export interface RunCycleInput {
   }>
   readonly spawnStage: (packet: unknown) => Promise<CycleStageResult>
   readonly policy: CyclePolicy
+  /**
+   * US-490: runs the `merge` stage (a script, never an agent) for a `merge` next — `cycle-merge.mjs
+   * check`, then `run`. Absent ⇒ `merge` is as terminal as any step this loop cannot dispatch.
+   */
+  readonly mergeStage?: (next: CycleNext, answer: CycleResolveAnswer) => Promise<CycleMergeOutcome>
   /** `--rounds` bound: a positive integer, `'max'` (unbounded) or omitted (policy default decides). */
   readonly rounds?: number | 'max'
   readonly onStage?: (record: CycleStageRecord) => void
   readonly onNotice?: (note: string) => void
   readonly appendAudit?: (record: CycleStageRecord) => void
+}
+
+/** What the merge collaborator reports: the outcome status, the stages it dispatched, and the script's own answer. */
+export interface CycleMergeOutcome {
+  readonly status: string
+  readonly stagesRun: number
+  readonly merge: unknown
 }
 
 /** The steps `cycle-dispatch.mjs packet` can render a prompt for; anything else is terminal. */
@@ -253,9 +267,40 @@ function stoppedWithoutNext(answer: CycleResolveStop, stagesRun: number): CycleO
 }
 
 /**
+ * A `next` this loop dispatches no agent stage for: `merge` runs through the injected `mergeStage`
+ * (its dispatched stages added to the loop's own count); anything else is the terminal it names.
+ */
+async function terminalStep(
+  input: RunCycleInput,
+  state: LoopState,
+  next: CycleNext,
+  answer: CycleResolveAnswer,
+): Promise<CycleOutcome> {
+  const { mergeStage, hooks, onNotice } = input
+  if (next.step !== 'merge' || mergeStage === undefined) return terminalOutcome(next, state.stagesRun)
+  // US-489 x US-490: `merge` is a stage like the others — `pre-merge` (blocking) runs in the story
+  // worktree before `check`; `post-merge` (logged) after `run`, i.e. only when the merge executed.
+  state.worktreePath = worktreePathOf(await input.worktree())
+  const halted = await runHookPoint(hooks, 'pre-merge', onNotice, { cwd: state.worktreePath })
+  if (halted !== null) return hookFailure(halted, state.stagesRun)
+  const merged = await mergeStage(next, answer)
+  if (MERGE_RAN.has(merged.status))
+    await runHookPoint(hooks, 'post-merge', onNotice, { cwd: state.worktreePath })
+  return {
+    status: merged.status,
+    stagesRun: state.stagesRun + merged.stagesRun,
+    next,
+    merge: merged.merge,
+  }
+}
+
+/** Merge-stage statuses where `run` executed (so `post-merge` is due). */
+const MERGE_RAN = new Set(['merged', 'merged-closure-unfinished'])
+
+/**
  * Drives one cycle to its next terminal state (or to the `--rounds` bound), one fresh dispatch at
- * a time. Never judges a stage's content, never merges (AC12: no branch of the outcome mapping —
- * or the collaborator surface above — can request one).
+ * a time. Never judges a stage's content. The only merge is the injected `mergeStage`
+ * collaborator's (US-490: `cycle-merge.mjs` re-verifies its own conjunction) — never this loop.
  */
 async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
   const { resolve, packet, spawnStage, policy, onNotice, hooks } = input
@@ -291,7 +336,8 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     if (settled !== null) return settled
     await runPostStageHook(state, next, hooks, onNotice)
 
-    if (!DISPATCHABLE_STEPS.has(next.step)) return terminalOutcome(next, state.stagesRun)
+    if (!DISPATCHABLE_STEPS.has(next.step))
+      return await terminalStep(input, state, next, answer)
     noticeReuseOnce(state, next, onNotice)
     const gated = await gateDispatch(state, next, input)
     if (gated !== null) return gated
