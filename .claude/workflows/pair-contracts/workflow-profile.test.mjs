@@ -4,8 +4,10 @@
 // RUNS FROM `.claude/workflows` ONLY (same rule as cycle-state.test.mjs): `pnpm workflows:test`.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { validateProfile, effectiveStage, STAGES, KB_DEFAULT } from '../../skills/pair-workflow-cycle/scripts/workflow-profile.mjs'
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { validateProfile, effectiveStage, resolveProfile, ProfileError, STAGES, KB_DEFAULT } from '../../skills/pair-workflow-cycle/scripts/workflow-profile.mjs'
 import { CONTEXT_TABLE } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 
 const errorsOf = p => validateProfile(p).errors
@@ -81,4 +83,102 @@ test('T-1: workflow-profile.mjs ships byte-identical in the installed skill and 
     read('../../../packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/workflow-profile.mjs'),
     read('../../skills/pair-workflow-cycle/scripts/workflow-profile.mjs'),
   )
+})
+
+// ── T-2: resolver — cascade, collision, unresolved (AC2, AC3, AC8) ───────────────────────────
+const project = ({ config, files = {} } = {}) => {
+  const root = mkdtempSync(join(tmpdir(), 'wfp-'))
+  if (config !== undefined) writeFileSync(join(root, 'pair.config.json'), typeof config === 'string' ? config : JSON.stringify(config))
+  for (const [rel, body] of Object.entries(files)) {
+    mkdirSync(join(root, rel, '..'), { recursive: true })
+    writeFileSync(join(root, rel), typeof body === 'string' ? body : JSON.stringify(body))
+  }
+  return root
+}
+const GLOB = '.pair/adoption/tech/workflow-profiles/*.json'
+const cheap = { name: 'cheap-green', defaults: { model: 'small' } }
+const pricey = { name: 'pricey', defaults: { model: 'big' } }
+const halt = (fn, code) => assert.throws(fn, e => e instanceof ProfileError && e.code === code, code)
+
+test('T-2/AC2: --profile resolves from files and reports source `argument`', () => {
+  const root = project({ config: { workflowProfiles: { default: 'pricey', files: GLOB } }, files: { '.pair/adoption/tech/workflow-profiles/a.json': cheap, '.pair/adoption/tech/workflow-profiles/b.json': pricey } })
+  const r = resolveProfile({ root, profile: 'cheap-green' })
+  assert.equal(r.name, 'cheap-green')
+  assert.equal(r.source, 'argument')
+  assert.equal(r.stages.green.model.value, 'small')
+  assert.match(r.hash, /^[0-9a-f]{64}$/)
+})
+
+test('T-2/AC2: no argument resolves workflowProfiles.default; source `pair.config.json`', () => {
+  const root = project({ config: { workflowProfiles: { default: 'pricey', files: GLOB } }, files: { '.pair/adoption/tech/workflow-profiles/b.json': pricey } })
+  const r = resolveProfile({ root })
+  assert.deepEqual([r.name, r.source], ['pricey', 'pair.config.json'])
+})
+
+test('T-2/AC2/AC9: neither argument nor default (or no pair.config.json at all) is the KB default; source `KB default`', () => {
+  for (const config of [undefined, {}, { workflowProfiles: { files: GLOB } }]) {
+    const r = resolveProfile({ root: project({ config }) })
+    assert.deepEqual([r.name, r.source], ['KB default', 'KB default'])
+    for (const stage of STAGES) assert.deepEqual(Object.fromEntries(Object.entries(r.stages[stage]).map(([k, v]) => [k, v.value])), KB_DEFAULT)
+  }
+})
+
+test('T-2/AC2: profiles are indexed by their own `name`, never the filename', () => {
+  const root = project({ config: { workflowProfiles: { files: [GLOB] } }, files: { '.pair/adoption/tech/workflow-profiles/zzz-not-the-name.json': cheap } })
+  assert.equal(resolveProfile({ root, profile: 'cheap-green' }).name, 'cheap-green')
+})
+
+test('T-2: inline profiles resolve, and inline wins over a file with the same name (reported)', () => {
+  const root = project({
+    config: { workflowProfiles: { files: GLOB, inline: { 'cheap-green': { name: 'cheap-green', defaults: { model: 'from-inline' } } } } },
+    files: { '.pair/adoption/tech/workflow-profiles/a.json': cheap },
+  })
+  const r = resolveProfile({ root, profile: 'cheap-green' })
+  assert.equal(r.stages.green.model.value, 'from-inline')
+  assert.match(r.notes.join('\n'), /inline.*wins.*a\.json/)
+})
+
+test('T-2/AC3: --workflow-config wins over --profile and over the configured default, verbatim; source says so', () => {
+  const root = project({ config: { workflowProfiles: { default: 'pricey', files: GLOB } }, files: { '.pair/adoption/tech/workflow-profiles/b.json': pricey, 'ext/mine.json': { name: 'mine', defaults: { model: 'ext' } } } })
+  const r = resolveProfile({ root, profile: 'pricey', workflowConfig: join(root, 'ext/mine.json') })
+  assert.deepEqual([r.name, r.source], ['mine', '--workflow-config'])
+  assert.equal(r.stages.implement.model.value, 'ext')
+  assert.equal(r.sourceDetail, join(root, 'ext/mine.json'))
+})
+
+test('T-2/AC3: a malformed --workflow-config is profile-invalid with the parse error; a missing one is profile-unresolved', () => {
+  const root = project({ files: { 'bad.json': '{ nope' } })
+  assert.throws(() => resolveProfile({ root, workflowConfig: join(root, 'bad.json') }), e => e.code === 'profile-invalid' && /JSON/i.test(e.detail) && e.detail.includes('bad.json'))
+  halt(() => resolveProfile({ root, workflowConfig: join(root, 'absent.json') }), 'profile-unresolved')
+})
+
+test('T-2/AC8: an unresolvable --profile HALTs profile-unresolved naming the searched sources — never the KB default', () => {
+  const root = project({ config: { workflowProfiles: { files: GLOB, inline: { x: { name: 'x' } } } }, files: { '.pair/adoption/tech/workflow-profiles/a.json': cheap } })
+  assert.throws(() => resolveProfile({ root, profile: 'does-not-exist' }), e => e.code === 'profile-unresolved' && e.detail.includes(GLOB) && e.detail.includes('inline') && e.detail.includes('does-not-exist') && e.detail.includes('cheap-green'))
+})
+
+test('T-2/AC8: an unresolvable configured default HALTs too; with no pair.config.json an --profile name is unresolved', () => {
+  halt(() => resolveProfile({ root: project({ config: { workflowProfiles: { default: 'ghost', files: GLOB } } }) }), 'profile-unresolved')
+  halt(() => resolveProfile({ root: project(), profile: 'anything' }), 'profile-unresolved')
+})
+
+test('T-2: two files declaring the same name HALT profile-name-collision naming both paths', () => {
+  const root = project({ config: { workflowProfiles: { files: GLOB } }, files: { '.pair/adoption/tech/workflow-profiles/a.json': cheap, '.pair/adoption/tech/workflow-profiles/b.json': cheap } })
+  assert.throws(() => resolveProfile({ root, profile: 'cheap-green' }), e => e.code === 'profile-name-collision' && e.detail.includes('a.json') && e.detail.includes('b.json'))
+})
+
+test('T-2: the selected profile is validated on load — a bad context is profile-invalid through the resolver too', () => {
+  const root = project({ config: { workflowProfiles: { files: GLOB } }, files: { '.pair/adoption/tech/workflow-profiles/a.json': { name: 'bad', stages: { verify: { context: 'reuse' } } } } })
+  assert.throws(() => resolveProfile({ root, profile: 'bad' }), e => e.code === 'profile-invalid' && /stages\.verify\.context/.test(e.detail))
+})
+
+test('T-2: a malformed workflowProfiles block (unknown key, wrong types) is profile-invalid', () => {
+  halt(() => resolveProfile({ root: project({ config: { workflowProfiles: { defualt: 'x' } } }) }), 'profile-invalid')
+  halt(() => resolveProfile({ root: project({ config: { workflowProfiles: { files: 3 } } }) }), 'profile-invalid')
+})
+
+test('T-2: `**` globs recurse and a glob never escapes the project root', () => {
+  const root = project({ config: { workflowProfiles: { files: 'profiles/**/*.json' } }, files: { 'profiles/deep/er/a.json': cheap } })
+  assert.equal(resolveProfile({ root, profile: 'cheap-green' }).name, 'cheap-green')
+  halt(() => resolveProfile({ root: project({ config: { workflowProfiles: { files: '../*.json' } } }), profile: 'x' }), 'profile-invalid')
 })
