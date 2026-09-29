@@ -14,7 +14,7 @@ import {
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
-import { createDefaultCycleDriver } from './cycle-wiring'
+import { createDefaultCycleDriver, readCardTier } from './cycle-wiring'
 import { POLICY_PATH } from './automation-policy'
 import {
   createCycleScriptsBridge,
@@ -541,6 +541,50 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
 
     expect(outcome.status).toBe('ready-for-merge')
     expect(mergeCalls()).toHaveLength(0)
+  }, 60_000)
+
+  // ── the card tier's label grammar: the family:tier shape cycle-merge.mjs readCurrentTier applies
+  // (LABEL_SHAPE_RE, /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/i). One reader per flow, one grammar: a label
+  // readCurrentTier refuses is never a card tier either — the reader's fail-safe (undefined: resolve
+  // never offers merge), not the malformed text passed on as --tier / --cardTier.
+
+  it.each(['risk:a.b', 'risk:a/b', 'risk:', 'risk:1x', 'risk:green:x', 'risk:gre en', 'risk:_x'])(
+    'g3-w1: a malformed risk label %j is no card tier (fail-safe undefined), never itself',
+    label => {
+      vi.stubEnv('FAKE_CARD_LABELS', label)
+
+      expect(readCardTier('7', main)).toBeUndefined()
+    },
+  )
+
+  it.each(['risk:green', 'risk:yellow', 'risk:red', 'risk:Green', 'risk:red-2'])(
+    'g3-c1: a well-formed risk label %j is the card tier, verbatim',
+    label => {
+      vi.stubEnv('FAKE_CARD_LABELS', `bug,${label},auto-dev`)
+
+      expect(readCardTier('7', main)).toBe(label)
+    },
+  )
+
+  it.each([
+    ['two well-formed', 'risk:green,risk:yellow'],
+    ['a well-formed and a malformed', 'risk:green,risk:a.b'],
+    ['none', 'bug,auto-dev'],
+  ])('g3-c2: %s risk label(s) is no card tier (fail-safe undefined)', (_name, labels) => {
+    vi.stubEnv('FAKE_CARD_LABELS', labels)
+
+    expect(readCardTier('7', main)).toBeUndefined()
+  })
+
+  it('g3-w2: a malformed risk label is never handed to resolve as --tier, and no merge script runs', async () => {
+    vi.stubEnv('FAKE_CARD_LABELS', 'risk:a.b')
+
+    const outcome = await settle(drive(adopt(ELIGIBLE)))
+
+    expect(resolveCalls().length).toBeGreaterThan(0)
+    for (const call of resolveCalls()) expect(call['tier']).not.toBe('risk:a.b')
+    expect(mergeCalls()).toHaveLength(0)
+    expect(outcome).not.toContain('"merged":true')
   }, 60_000)
 
   it("g2-c5: resolve answering invalid is a typed stop carrying resolve's reason — never a merge", async () => {
