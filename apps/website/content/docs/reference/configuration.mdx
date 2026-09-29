@@ -371,8 +371,8 @@ declares (`engine`, `model`, `effort`, `context`), falling back to `defaults`, t
 (`cheap`, `balanced`, `frontier`) or `by-tier`, resolved against the card's `risk:*` label through
 `## Model Policy`.
 
-Resolution is once per run: `--workflow-config` (verbatim) > `--profile` > `workflowProfiles.default`
-> KB default, and the coordinator prints the resolved profile, its source and the per-stage table
+Resolution is once per run, in this order: `--workflow-config` (verbatim), then `--profile`, then
+`workflowProfiles.default`, then the KB default. The coordinator prints the resolved profile, its source and the per-stage table
 before the first dispatch. An unknown name is `profile-unresolved`; `context: "reuse"` on a stage the
 cycle's transition table forbids (`validate`, `verify`, …), an unknown stage or key, or a name
 collision is refused at load — never a silent fallback. The profile's name and hash are recorded in

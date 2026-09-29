@@ -47,7 +47,7 @@ export interface RunStageInput {
   readonly engine: EngineDefinition
   readonly packet: StagePacket
   readonly autonomyArgs: readonly string[]
-  /** The model pinned for this engine, threaded to the spawn (run-wide; per-stage is #488's). */
+  /** The model pinned for this engine, threaded to the spawn (per stage: the profile's model for this stage, resolved once per run). */
   readonly model?: string | undefined
   /** US-488: the stage's profile effort — applied only by an engine declaring an effort flag. */
   readonly effort?: string | undefined
