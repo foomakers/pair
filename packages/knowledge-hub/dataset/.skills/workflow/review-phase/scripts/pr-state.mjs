@@ -46,14 +46,28 @@ export function readTagProjection(repoRoot) {
 // Applies only the active families, via the host's setClassification — the review is the sole
 // writer of a PR's classification tags (off-cycle fix for PR #516). `tier` undefined ⇒ this whole
 // step is skipped (unchanged behaviour, no `classification` key at all in the caller's output).
+// Never a silent `{}`: an unknown/renamed family (quality-model.md §5, e.g. `Active: priority`)
+// gets its own `{ skipped: 'unknown-family:<name>' }` entry, and a host that omits the SUPPORT_METHOD
+// (allowed by the extension guide) degrades the whole step to `{ skipped: 'unsupported' }` rather
+// than throwing — the caller (conclude) has already published the check and the state label by then.
 export function classifyPr({ tier, cost, repoRoot, pr, repo, host }) {
   if (tier === undefined) return undefined
   const active = readTagProjection(repoRoot)
   if (active === null) return { skipped: 'no-tag-projection-declared' }
   if (active.length === 0) return { skipped: 'tag-projection-opted-out' }
+  const values = { risk: tier, cost }
   const result = {}
-  if (active.includes('risk')) result.risk = host.setClassification({ pr, repo, family: 'risk', value: tier })
-  if (active.includes('cost') && cost !== undefined) result.cost = host.setClassification({ pr, repo, family: 'cost', value: cost })
+  for (const family of active) {
+    if (!(family in CLASSIFICATION_FAMILIES)) { result[family] = { skipped: `unknown-family:${family}` }; continue }
+    const value = values[family]
+    if (value === undefined) { result[family] = { skipped: 'no-value-provided' }; continue }
+    try {
+      result[family] = host.setClassification({ pr, repo, family, value })
+    } catch (e) {
+      if (e?.kind === 'not-implemented') return { skipped: 'unsupported' }
+      result[family] = { applied: null, removed: [], confirmed: false, error: e?.message ?? String(e) }
+    }
+  }
   return result
 }
 
@@ -78,25 +92,28 @@ export function applyStateLabel({ pr, repo, label, dir }) {
   return codeHost(dir).setPrState({ pr, repo, label })
 }
 
-export function conclude({ pr, sha, verdict, repo, description, targetUrl, dir, tier, cost, repoRoot = process.cwd() }) {
+export function conclude({ pr, sha, verdict, repo, description, targetUrl, dir, tier, cost, repoRoot = process.cwd(), host = codeHost(dir) }) {
   const state = conclusionOf(verdict)
   const label = stateLabelOf(verdict)
   if (state === 'pending' || !label) throw new Error(`verdict ${JSON.stringify(verdict)} is not a decision — nothing is published, the pending check keeps the merge blocked`)
-  const host = codeHost(dir)
   const STATE_LABELS = host.stateLabels
-  const classification = classifyPr({ tier, cost, repoRoot, pr, repo, host })
   // idempotent: the head already carries this conclusion and the PR this exact label
   let already = false
   try {
     already = host.readCheck({ pr, sha, repo }) === state && (() => { const ls = host.readLabels({ pr, repo }); return ls.includes(label) && !ls.some(l => STATE_LABELS.includes(l) && l !== label) })()
   } catch {}
+  let out
   if (already) {
-    const out = { action: 'unchanged', check: { context: host.checkContext, sha, state, published: true, error: null }, label: { applied: label, removed: [], confirmed: true, error: null }, advisory: false }
-    return classification === undefined ? out : { ...out, classification }
+    out = { action: 'unchanged', check: { context: host.checkContext, sha, state, published: true, error: null }, label: { applied: label, removed: [], confirmed: true, error: null }, advisory: false }
+  } else {
+    const check = host.concludeCheck({ pr, sha, repo, state, description, targetUrl })
+    const labelOut = host.setPrState({ pr, repo, label })
+    out = { action: 'concluded', check, label: labelOut, advisory: !check.published }
   }
-  const check = host.concludeCheck({ pr, sha, repo, state, description, targetUrl })
-  const labelOut = host.setPrState({ pr, repo, label })
-  const out = { action: 'concluded', check, label: labelOut, advisory: !check.published }
+  // Classification runs LAST (off-cycle fix for PR #516, finding 1): the check and the state label
+  // are always published first, so a host that can't classify (missing SUPPORT_METHOD, an unknown
+  // family) never blocks the review's required output.
+  const classification = classifyPr({ tier, cost, repoRoot, pr, repo, host })
   return classification === undefined ? out : { ...out, classification }
 }
 
@@ -137,7 +154,11 @@ if (isMain()) {
       if (opts.cost !== undefined && !CLASSIFICATION_FAMILIES.cost.includes(opts.cost)) throw new Error(`--cost must be one of ${CLASSIFICATION_FAMILIES.cost.join(' | ')}, got ${JSON.stringify(opts.cost)}`)
       const out = conclude({ pr: opts.pr, sha: opts.sha, verdict: opts.verdict, repo: opts.repo, description: opts.description, targetUrl: opts['target-url'], dir: opts.dir, tier: opts.tier, cost: opts.cost, repoRoot: opts['repo-root'] })
       process.stdout.write(JSON.stringify(out) + '\n')
-      process.exit(out.check.published || out.label.confirmed ? 0 : 1)
+      // A required classification write that failed (declared active in the Tag Projection, attempted,
+      // `confirmed: false`) fails `conclude` even though the check/label already landed — the tag is a
+      // required output when the projection declares it (off-cycle fix for PR #516, finding 3).
+      const classificationFailed = !!out.classification && !out.classification.skipped && Object.values(out.classification).some(v => v && v.confirmed === false)
+      process.exit((out.check.published || out.label.confirmed) && !classificationFailed ? 0 : 1)
     } else if (cmd === 'find') {
       let check = null
       let label = null
