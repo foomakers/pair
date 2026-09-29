@@ -83,12 +83,12 @@ export const runCommandMetadata = {
     {
       flags: '--profile <name>',
       description:
-        'Reserved until #488 (per-stage engine/model/effort/timeout): refused with a pointer',
+        'With --card: the named workflow profile (per-stage engine/model/effort/context) from pair.config.json workflowProfiles; an unknown name halts profile-unresolved',
     },
     {
       flags: '--workflow-config <path>',
       description:
-        'Reserved until #488 (per-stage engine/model/effort/timeout): refused with a pointer',
+        'With --card: an external workflow profile file, used verbatim — wins over --profile and pair.config.json',
     },
     {
       flags: '--dry-run',

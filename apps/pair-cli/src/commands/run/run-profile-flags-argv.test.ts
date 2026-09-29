@@ -3,8 +3,8 @@ import { InMemoryFileSystemService } from '@pair/content-ops'
 import type { CommandConfig } from '../index'
 
 /**
- * US-487 review r0-8 (AC11): `--profile` / `--workflow-config` are RESERVED until #488 — refused
- * with a pointer to #488, never commander's generic `unknown option`. Driven as argv through the
+ * US-488: `--profile` / `--workflow-config` (reserved by US-487 r0-8/AC11) are REAL now — accepted
+ * with `--card`, refused without it, never commander's generic `unknown option`. Driven as argv through the
  * REAL registered `run` command (`runCli` builds commander from `runCommandMetadata`), because a
  * parser test with an options object cannot see a flag commander never registered. Only
  * `dispatchCommand` is replaced — no handler, no engine, no `gh`.
@@ -22,7 +22,7 @@ vi.mock('../dispatcher', async importOriginal => {
   }
 })
 
-describe('pair-cli run — reserved #488 flags through the registered command (r0-8, AC11)', () => {
+describe('pair-cli run — --profile / --workflow-config through the registered command (US-488)', () => {
   afterEach(() => {
     dispatched.length = 0
     vi.restoreAllMocks()
@@ -52,11 +52,21 @@ describe('pair-cli run — reserved #488 flags through the registered command (r
   }
 
   for (const flag of ['--profile', '--workflow-config']) {
-    it(`run --card 1 ${flag} x is refused naming #488, never "unknown option"`, async () => {
+    it(`run --card 1 ${flag} x reaches the dispatcher — neither "unknown option" nor "reserved"`, async () => {
       const output = await runArgv(['--card', '1', flag, 'x'])
 
-      expect(output).not.toMatch(/unknown option/i)
-      expect(output).toContain('#488')
+      expect(output).not.toMatch(/unknown option|reserved/i)
+      expect(dispatched).toHaveLength(1)
+      expect(dispatched[0]).toMatchObject(
+        flag === '--profile' ? { profile: 'x' } : { workflowConfig: 'x' },
+      )
+    })
+
+    it(`run --skill s ${flag} x (no --card) is refused naming the flag and --card`, async () => {
+      const output = await runArgv(['--skill', 'pair-next', flag, 'x'])
+
+      expect(output).toContain(flag)
+      expect(output).toContain('--card')
       expect(dispatched).toHaveLength(0)
     })
   }

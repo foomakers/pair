@@ -385,17 +385,33 @@ describe('parseRunCommand — cycle-coordinator flags on --card (US-487)', () =>
     expect(config.dispatch?.rounds).toBeUndefined()
   })
 
-  /**
-   * Assumption 9 — reserved until #488 ships per-stage engine/model/effort/timeout: parsed (so
-   * `--help` and a caller seeing the flag both make sense) but refused with a pointer, never
-   * silently accepted and ignored.
-   */
-  it.each(['profile', 'workflowConfig'])(
-    'refuses the reserved --%s with a pointer to #488',
-    key => {
-      expect(() => parseRunCommand({ card: '487', [key]: 'x' })).toThrow(/#488/)
-    },
-  )
+  /** US-488 — the flags US-487 reserved now carry the workflow profile selection. */
+  it('carries --profile and --workflow-config next to --card', () => {
+    const config = parseRunCommand({ card: '488', profile: ' cheap-green ', workflowConfig: '/tmp/p.json' })
+
+    expect(config.profile).toBe('cheap-green')
+    expect(config.workflowConfig).toBe('/tmp/p.json')
+  })
+
+  it('leaves both absent without the flags (zero-configuration path unchanged)', () => {
+    const config = parseRunCommand({ card: '488' })
+
+    expect(config).not.toHaveProperty('profile')
+    expect(config).not.toHaveProperty('workflowConfig')
+  })
+
+  it.each([
+    ['profile', '--profile'],
+    ['workflowConfig', '--workflow-config'],
+  ])('refuses %s without --card, naming the flag (it selects the delivery-cycle profile)', (key, flag) => {
+    expect(() => parseRunCommand({ skill: 'pair-next', [key]: 'x' })).toThrow(
+      new RegExp(`${flag} .*--card`),
+    )
+  })
+
+  it.each(['profile', 'workflowConfig'])('refuses an empty --%s value', key => {
+    expect(() => parseRunCommand({ card: '488', [key]: '  ' })).toThrow(/empty value/)
+  })
 })
 
 describe('parseRunCommand — --root --parallel N (US-491 T-3)', () => {
