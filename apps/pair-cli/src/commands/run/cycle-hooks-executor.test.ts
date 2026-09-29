@@ -54,7 +54,6 @@ function drive(
   }
 }
 
-
 describe('pair-cli ## Cycle Hooks against the real executor (US-489)', () => {
   it('AC1/AC7: a real failing pre-verify blocks verify; a real post-implement runs in the repo root', async () => {
     const { root, policyPath } = project(
