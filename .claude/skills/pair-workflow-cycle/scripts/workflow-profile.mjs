@@ -27,11 +27,34 @@ const TOP_KEYS = ['name', 'description', 'defaults', 'stages', 'modelClasses']
 
 const isObject = v => typeof v === 'object' && v !== null && !Array.isArray(v)
 
+const MODEL_TOKENS = ['default', BY_TIER, ...MODEL_CLASSES]
+const squash = v => v.toLowerCase().replace(/[-_\s]/g, '')
+
+/** Optimal-string-alignment distance <= 1: one insert, delete, substitute or adjacent swap. */
+function withinOneEdit(a, b) {
+  if (a === b) return true
+  if (Math.abs(a.length - b.length) > 1) return false
+  let i = 0
+  while (i < a.length && i < b.length && a[i] === b[i]) i++
+  if (a.length === b.length) return a.slice(i + 1) === b.slice(i + 1) || (a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2))
+  const [long, short] = a.length > b.length ? [a, b] : [b, a]
+  return long.slice(i + 1) === short.slice(i)
+}
+
+/** A model value that is not a reserved token but is a near-miss of one (case/separator or one edit). */
+function isModelTypo(value) {
+  if (MODEL_TOKENS.includes(value)) return false
+  const lower = value.toLowerCase()
+  return MODEL_TOKENS.some(t => squash(value) === squash(t) || withinOneEdit(lower, t))
+}
+
 function fieldErrors(where, entry) {
   const errs = []
   if (!isObject(entry)) return [`${where}: must be an object`]
   for (const k of Object.keys(entry)) if (!FIELDS.includes(k)) errs.push(`${where}: unknown field '${k}' (allowed: ${FIELDS.join(', ')})`)
   for (const k of ['engine', 'model']) if (entry[k] !== undefined && (typeof entry[k] !== 'string' || entry[k].trim() === '')) errs.push(`${where}.${k}: must be a non-empty string`)
+  if (typeof entry.model === 'string' && isModelTypo(entry.model))
+    errs.push(`${where}.model: '${entry.model}' looks like a mistyped model keyword — expected default | by-tier | ${MODEL_CLASSES.join(' | ')}, or an explicit model id that is not a near-miss of them`)
   if (entry.effort !== undefined && !EFFORTS.includes(entry.effort)) errs.push(`${where}.effort: '${entry.effort}' is not one of ${EFFORTS.join(' | ')}`)
   if (entry.context !== undefined && !CONTEXTS.includes(entry.context)) errs.push(`${where}.context: '${entry.context}' is not one of ${CONTEXTS.join(' | ')}`)
   return errs

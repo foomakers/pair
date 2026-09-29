@@ -64,7 +64,7 @@ Anything else — an unknown top-level key, an unknown stage (`verfy`), an unkno
 
 ### Model classes
 
-`model` may be an explicit id, a class, or `by-tier`. A class resolves through the profile's own `modelClasses`; `by-tier` reads the card's `risk:*` label, maps it to a class through [`## Model Policy`](automation-policy.md) (`risk:yellow: balanced`) and then to an id — the same convention `/pair-capability-setup-harness` reads, no second taxonomy. The resolution line names the class, the tier and the concrete id. No `## Model Policy`, an untagged card, a tier the policy omits, or a class the profile gives no id ⇒ the engine's own default, never a HALT.
+`model` may be an explicit id, a class, or `by-tier`. A `defaults.model` or `stages.<stage>.model` that is not exactly `default`, `by-tier`, `cheap`, `balanced` or `frontier` but is a near-miss of one (same after lowercasing and dropping `-`, `_` and spaces, or one edit away) is a typo and `profile-invalid` at load; any other string is an explicit id, and `modelClasses` values are never checked. A class resolves through the profile's own `modelClasses`; `by-tier` reads the card's `risk:*` label, maps it to a class through [`## Model Policy`](automation-policy.md) (`risk:yellow: balanced`) and then to an id — the same convention `/pair-capability-setup-harness` reads, no second taxonomy. The resolution line names the class, the tier and the concrete id. No `## Model Policy`, an untagged card, a tier the policy omits, or a class the profile gives no id ⇒ the engine's own default, never a HALT.
 
 ## Resolution cascade — once per run
 
