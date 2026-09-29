@@ -450,6 +450,38 @@ function adoptOtherRun(
   }
 }
 
+/**
+ * US-488 AC7: the run's profile identity is recorded ONCE, after any `other-run` adoption settled
+ * which directory this run really is — `publish` then stamps it into every handoff.
+ */
+function recordRunProfile(ctx: CycleDriverContext, co: Coordinates): void {
+  if (ctx.profile !== undefined) {
+    co.bridge.bindProfile(co.runDir, {
+      name: ctx.profile.name,
+      hash: ctx.profile.hash,
+      source: ctx.profile.source,
+    })
+  } else {
+    // Zero-config: this invocation runs on the KB default, so an earlier invocation's (or the
+    // in-session coordinator's) binding must not be stamped into the handoffs it publishes.
+    rmSync(join(co.runDir, '.workflow-profile.json'), { force: true })
+  }
+}
+
+/**
+ * US-489: `## Cycle Hooks`, executed HERE (the coordinator), through the shared script — the
+ * same one `pair-workflow-cycle` calls. Absent section/file ⇒ the script answers no hooks and
+ * nothing is reported (AC6); only a typo'd key surfaces, once, as a warning.
+ */
+function loadCycleHooks(ctx: CycleDriverContext, co: Coordinates) {
+  const hooks = createCycleHooksBridge(ctx.location!, {
+    policyPath: cycleHooksPolicyPath(co.main),
+    cwd: co.main,
+  })
+  for (const warning of hooks.warnings()) console.log(`  ${warning}`)
+  return hooks
+}
+
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {
   return async (requested: CycleDriverRequest): Promise<CycleOutcome> => {
     let input = requested
@@ -465,27 +497,8 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       first = await resolveFor(ctx, input, co)()
     }
     const policy = (first as { policy?: Record<string, unknown> }).policy ?? {}
-    // US-488 AC7: the run's profile identity is recorded ONCE, after any `other-run` adoption settled
-    // which directory this run really is — `publish` then stamps it into every handoff.
-    if (ctx.profile !== undefined) {
-      co.bridge.bindProfile(co.runDir, {
-        name: ctx.profile.name,
-        hash: ctx.profile.hash,
-        source: ctx.profile.source,
-      })
-    } else {
-      // Zero-config: this invocation runs on the KB default, so an earlier invocation's (or the
-      // in-session coordinator's) binding must not be stamped into the handoffs it publishes.
-      rmSync(join(co.runDir, '.workflow-profile.json'), { force: true })
-    }
-    // US-489: `## Cycle Hooks`, executed HERE (the coordinator), through the shared script — the
-    // same one `pair-workflow-cycle` calls. Absent section/file ⇒ the script answers no hooks and
-    // nothing is reported (AC6); only a typo'd key surfaces, once, as a warning.
-    const hooks = createCycleHooksBridge(ctx.location!, {
-      policyPath: cycleHooksPolicyPath(co.main),
-      cwd: co.main,
-    })
-    for (const warning of hooks.warnings()) console.log(`  ${warning}`)
+    recordRunProfile(ctx, co)
+    const hooks = loadCycleHooks(ctx, co)
     return await runCycle({
       hooks,
       resolve: resolveFor(ctx, input, co),
