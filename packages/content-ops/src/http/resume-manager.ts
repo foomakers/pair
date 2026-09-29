@@ -2,9 +2,9 @@
  * Download resume management utilities for HTTP downloads
  */
 
-import * as https from 'https'
 import type { FileSystemService } from '../file-system'
 import { cleanupFile } from '../file-system'
+import type { HttpClientService } from './http-client-service'
 import type { ProgressWriter } from './progress-reporter'
 
 // Diagnostic logging (PAIR_DIAG=1)
@@ -23,16 +23,18 @@ export interface DownloadContext {
   url: string
   destination: string
   fs: FileSystemService
+  httpClient: HttpClientService
   progressWriter?: ProgressWriter | undefined
   isTTY?: boolean | undefined
 }
 
 /**
- * Get content length via HEAD request
+ * Get content length via HEAD request, through the injected client (never `https` directly:
+ * a hardwired probe made every mocked download hit the real network).
  */
-export function getContentLength(url: string): Promise<number> {
+export function getContentLength(url: string, httpClient: HttpClientService): Promise<number> {
   return new Promise(resolve => {
-    const request = https.request(url, { method: 'HEAD' }, response => {
+    const request = httpClient.request(url, { method: 'HEAD' }, response => {
       const contentLength = parseInt(response.headers['content-length'] || '0', 10)
       resolve(contentLength)
     })
@@ -45,7 +47,7 @@ export function getContentLength(url: string): Promise<number> {
  * Setup resume context by checking content length and partial file
  */
 export async function setupResumeContext(ctx: DownloadContext) {
-  const totalBytes = await getContentLength(ctx.url)
+  const totalBytes = await getContentLength(ctx.url, ctx.httpClient)
   const resumeDecision = await shouldResume(ctx.destination, totalBytes, ctx.fs)
 
   if (resumeDecision.shouldResume) {
