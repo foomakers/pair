@@ -1,0 +1,328 @@
+{
+  "$meta": {
+    "pr": "519",
+    "phase": "r1-g1",
+    "base": "37bbe57c0f910f9d8a83adf01bcdd53e8598c7e6",
+    "trailer": "Pair-RED-Snapshot: pr=519; phase=r1-g1; base=37bbe57c0f910f9d8a83adf01bcdd53e8598c7e6; manifest=.pair/red-snapshots/pr-519-r1-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/cycle-hooks-stage-worktree.test.ts",
+      "packages/knowledge-hub/src/conformance/cycle-hooks-cwd.test.ts",
+      "packages/knowledge-hub/src/conformance/cycle-hooks-schema.test.ts"
+    ]
+  },
+  "run": "story-489",
+  "story": "489",
+  "phase": "r1-g1",
+  "mode": "repair",
+  "inputHead": "37bbe57c0f910f9d8a83adf01bcdd53e8598c7e6",
+  "sourceOfTruth": "review r0 finding r0-1 (r0-review-phase handoff) + producers: apps/pair-cli/src/commands/run/cycle.ts (runCycleLoop/gateDispatch/runPostStageHook order vs worktree()), apps/pair-cli/src/commands/run/cycle-wiring.ts loadCycleHooks (cwd: co.main), .claude/skills/pair-workflow-cycle/SKILL.md Cycle hooks run line (--cwd \"$MAIN\"), automation-policy.md ## Cycle Hooks (KB mirror + dataset); verify-stage tree: .claude/skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs:418,524 (verify packet $worktree = <worktreeRoot>/<story>-review) + .claude/skills/pair-workflow-review-phase/SKILL.md:57 (verify agent creates/removes that detached tree) + cycle-state.mjs resolve (PR entry, empty run dir => next verify r0 first)",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "The coordinators' choice of the directory a stage hook runs in: pair-cli createDefaultCycleDriver -> loadCycleHooks(createCycleHooksBridge cwd: co.main) + runCycleLoop (pre-<step> in gateDispatch before worktree(); post-<step> in runPostStageHook); in-session pair-workflow-cycle SKILL.md `cycle-hooks.mjs run ... --cwd \"$MAIN\"`; schema text automation-policy.md ## Cycle Hooks",
+      "inputs": [
+        "## Cycle Hooks declaration in MAIN/.pair/adoption/tech/automation.md",
+        "story worktree (cycle-dispatch worktree -> <worktreeRoot>/<story>)",
+        "main checkout",
+        "PR head branch (gh pr view headRefName) checked out in the story worktree",
+        "verify packet $worktree = <worktreeRoot>/<story>-review (absent until the verify agent creates it)"
+      ],
+      "representations": [
+        "apps/pair-cli/src/commands/run/cycle.ts + cycle-wiring.ts + cycle-scripts.ts (pair-cli coordinator)",
+        ".claude/skills/pair-workflow-cycle/SKILL.md (installed) == packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md (source)",
+        ".pair/knowledge/guidelines/collaboration/automation/automation-policy.md == packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md",
+        "apps/website/content/docs/concepts/adoption-files.mdx (no run-location claim)",
+        ".pair/adoption/decision-log/2026-09-29-cycle-hooks-one-executor-two-coordinators.md (no run-location claim)"
+      ],
+      "consumers": [
+        "operator declaring pre-verify/pre-implement gates",
+        "pair-cli run --card",
+        "in-session pair-workflow-cycle coordinator"
+      ],
+      "classes": [
+        "pre-<stage> blocking hook, red only in story tree (must HALT failed-hook, zero spawns)",
+        "pre-<stage> blocking hook, red only in main checkout (must NOT halt)",
+        "pre-<stage> hook that writes files (lands in story tree; main checkout git status unchanged)",
+        "post-<stage> hook after an advanced stage (runs in story tree)",
+        "pre-verify blocking hook, red only in story tree at the PR head (must HALT failed-hook, zero verify spawns, main unchanged)",
+        "pre-verify blocking hook, red only in main checkout (must NOT halt; verify dispatches)",
+        "pre-verify cwd = story worktree <worktreeRoot>/<story> on the PR head branch — not main, not the review worktree <worktreeRoot>/<story>-review (absent at pre-verify time)",
+        "post-verify after an advanced verify runs in the story worktree — not main, not the review worktree (removed by then)",
+        "cycle-level pre-cycle HALT (unchanged: failed-hook, zero spawns) — run location left to the fixer, must be stated in docs",
+        "in-session coordinator instructions (SKILL.md, both copies): pre-<step> paragraph names the story worktree; verify hooks stated to gate the story worktree at the PR head, not the review worktree",
+        "schema text (automation-policy.md, both copies): <stage-id> line names the story worktree; verify-hook tree statement (story worktree at PR head, not review worktree); pre-cycle example consistency",
+        "website/ADL representations: no location claim (not-applicable)"
+      ],
+      "interactions": [
+        "pre-cycle example `pnpm mirrors:regenerate` x pre-cycle run location (main) x claim 'fixes the tree before any stage judges it'"
+      ],
+      "verifyTreeRule": "A verify hook (pre-verify / post-verify) gates the STORY worktree <worktreeRoot>/<story>, checked out at the PR head — the tree the verifier judges. It never runs in the main checkout and never in the review worktree <worktreeRoot>/<story>-review: that detached tree is created and removed by the verify agent itself (review-phase SKILL.md:57), so it does not exist when pre-verify runs and is gone by post-verify. The packet-level $worktree override for verify is therefore NOT the hook cwd. Every other stage: packet $worktree == story worktree, so the rule is one rule: stage hooks run in the story worktree.",
+      "equivalence": "pre-<stage>/post-<stage> for prepare/validate/implement/green share one rule (packet $worktree == story worktree), exercised through implement (g1-w1..w4); verify is a distinct class (packet $worktree is the review tree) with its own rows g1-w8..w11."
+    }
+  ],
+  "fixScope": {
+    "owner": "cycle-hook run location (stage hooks -> stage worktree) in both coordinators and the schema text",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/cycle.ts",
+      "apps/pair-cli/src/commands/run/cycle-wiring.ts",
+      "apps/pair-cli/src/commands/run/cycle-scripts.ts",
+      ".claude/skills/pair-workflow-cycle/SKILL.md",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md",
+      ".claude/skills/pair-workflow-cycle/scripts/cycle-hooks.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-hooks.mjs",
+      ".pair/knowledge/guidelines/collaboration/automation/automation-policy.md",
+      "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md",
+      "apps/website/content/docs/concepts/adoption-files.mdx",
+      ".pair/adoption/decision-log/"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "g1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/cycle-hooks-stage-worktree.test.ts",
+      "condition": "fresh card; main checkout has green.txt, story worktree (cut from origin/main) does not; `pre-implement`: `test -f green.txt`",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-hooks-stage-worktree.test.ts -t g1-w1",
+      "expected": "createDefaultCycleDriver outcome failed-hook; 0 engine spawns; main `git status --porcelain --untracked-files=all` unchanged",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-w2",
+      "kind": "boundary",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/cycle-hooks-stage-worktree.test.ts",
+      "condition": "inverse: `pre-implement`: `test ! -f green.txt` (red only in the main checkout)",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-hooks-stage-worktree.test.ts -t g1-w2",
+      "expected": "outcome not failed-hook; engine spawned >= 1",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-w3",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/cycle-hooks-stage-worktree.test.ts",
+      "condition": "`pre-implement`: `touch hook-wrote.txt`",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-hooks-stage-worktree.test.ts -t g1-w3",
+      "expected": "hook-wrote.txt in <root>/pair-worktrees/7, absent in main; main git status unchanged",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-w4",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/cycle-hooks-stage-worktree.test.ts",
+      "condition": "`post-implement`: `pwd > post-cwd.txt`; stub engine's first spawn publishes a real a0 red-spec handoff via cycle-state.mjs so the implement dispatch ADVANCES",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-hooks-stage-worktree.test.ts -t g1-w4",
+      "expected": "a0-red-spec.json published (precondition); post-cwd.txt absent in main; story worktree post-cwd.txt == realpath(story worktree)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/cycle-hooks-stage-worktree.test.ts",
+      "condition": "`pre-cycle`: `echo pre-cycle-broke; exit 5`",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-hooks-stage-worktree.test.ts -t g1-c1",
+      "expected": "failed-hook, detail contains pre-cycle-broke, 0 engine spawns (cwd-agnostic; cycle-level location is the fixer's choice)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-w5",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/knowledge-hub/src/conformance/cycle-hooks-cwd.test.ts",
+      "condition": "pair-workflow-cycle SKILL.md, dataset + installed copies (file targets that one artifact only)",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/cycle-hooks-cwd.test.ts -t g1-w5",
+      "expected": "(a) some `cycle-hooks.mjs run` --cwd is not \"$MAIN\"/\"$PWD\"; no 'Hook points, all run in the repo root'; some paragraph naming `pre-<step>` says 'story worktree'. (b, verify) some line contains 'verify' + 'story worktree' + 'PR head' + 'review worktree'; no '`pre-verify`/`post-verify` ... runs in the review worktree'",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-w6",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/knowledge-hub/src/conformance/cycle-hooks-schema.test.ts",
+      "condition": "automation-policy.md ## Cycle Hooks, dataset + KB mirror (rows moved into the schema artifact's own conformance file)",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/cycle-hooks-schema.test.ts -t g1-w6",
+      "expected": "no 'Commands run in the repo root (the main checkout)'; some line names `<stage-id>` and 'story worktree'; (verify) some line contains 'verify' + 'story worktree' + 'PR head' + 'review worktree'; no '`pre|post-verify` ... runs in the review worktree'",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-w7",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "packages/knowledge-hub/src/conformance/cycle-hooks-schema.test.ts",
+      "condition": "pre-cycle example x pre-cycle run location",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/cycle-hooks-schema.test.ts -t g1-w7",
+      "expected": "unless a line states `pre-cycle` runs in the story/stage worktree: no '`pre-cycle` fixes the tree once before any stage judges it' and no '- `pre-cycle`: `pnpm mirrors:regenerate`' example",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-w8",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/cycle-hooks-stage-worktree.test.ts",
+      "condition": "PR entry (pr=12, empty run dir => resolve next verify r0 first); PR head branch feature/US-7-a-story cut from origin/main (no green.txt), main has green.txt; `pre-verify`: `test -f green.txt`",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-hooks-stage-worktree.test.ts -t g1-w8",
+      "expected": "outcome failed-hook, detail names pre-verify; 0 verify spawns; main git status --porcelain --untracked-files=all unchanged",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-w9",
+      "kind": "boundary",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/cycle-hooks-stage-worktree.test.ts",
+      "condition": "inverse: `pre-verify`: `test ! -f green.txt` (red only in the main checkout)",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-hooks-stage-worktree.test.ts -t g1-w9",
+      "expected": "outcome not failed-hook; verify spawned >= 1",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-w10",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/cycle-hooks-stage-worktree.test.ts",
+      "condition": "`pre-verify`: `pwd > pre-verify-cwd.txt; git rev-parse --abbrev-ref HEAD >> pre-verify-cwd.txt`",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-hooks-stage-worktree.test.ts -t g1-w10",
+      "expected": "not failed-hook; file absent in main and in <root>/pair-worktrees/7-review; story worktree file: realpath(line1) == realpath(<root>/pair-worktrees/7), line2 == feature/US-7-a-story (a hook resolved from the verify packet $worktree ENOENTs or lands elsewhere)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-w11",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/cycle-hooks-stage-worktree.test.ts",
+      "condition": "`post-verify`: `pwd > post-verify-cwd.txt`; stub engine publishes a real r0 review-phase APPROVED handoff via cycle-state.mjs so verify ADVANCES (next done)",
+      "oracle": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-hooks-stage-worktree.test.ts -t g1-w11",
+      "expected": "r0-review-phase.json published (precondition); post-verify-cwd.txt absent in main and in 7-review; story worktree post-verify-cwd.txt == realpath(story worktree)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-na1",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "file": "apps/website/content/docs/concepts/adoption-files.mdx",
+      "condition": "website docs and ADL 2026-09-29-cycle-hooks-one-executor-two-coordinators.md as representations",
+      "oracle": "grep -nE 'root|checkout|worktree|cwd' on the ## Cycle Hooks bullets of adoption-files.mdx and on the ADL",
+      "expected": "no run-location claim, nothing to contradict",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "Neither file states where hooks run (verified by grep at 37bbe57c); they stay in allowedPaths so the fixer may add the location statement, but no witness can be RED there."
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/cycle-hooks-stage-worktree.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:13f29c608ff9c2d0e9192956ab6a3475dd19c91097d8a1b758556e5741eb8921",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/cycle-hooks-stage-worktree.test.ts",
+      "observed": "Tests 8 failed | 1 passed (9): g1-w1 expected 'failed-implement' to be 'failed-hook'; g1-w2 expected 'failed-hook' not to be 'failed-hook'; g1-w3 expected false to be true; g1-w4 expected true to be false; g1-w8 expected 'failed-verify' to be 'failed-hook'; g1-w9 expected 'failed-hook' not to be 'failed-hook'; g1-w10 main pre-verify-cwd.txt expected true to be false; g1-w11 main post-verify-cwd.txt expected true to be false (r0-review-phase.json precondition held); g1-c1 passes"
+    },
+    {
+      "file": "packages/knowledge-hub/src/conformance/cycle-hooks-cwd.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:9fe1106d309bfc306e0d3dca561c9b538a73a4cc5e1c438fe124c09eadb1b1f3",
+      "command": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/cycle-hooks-cwd.test.ts",
+      "observed": "Tests 4 failed (4): g1-w5 (dataset, installed) 'every hook run uses the main checkout: , \"$MAIN\"'; g1-w5 (verify) (dataset, installed) 'no line states that `pre-verify`/`post-verify` gate the story worktree at the PR head (not the review worktree)'"
+    },
+    {
+      "file": "packages/knowledge-hub/src/conformance/cycle-hooks-schema.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:e73da8cf3cb637b7808fc59126b641344879355da95bf7a4c2aaa5faa7599bbd",
+      "command": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/cycle-hooks-schema.test.ts",
+      "observed": "Tests 6 failed | 10 passed (16): the 10 pre-existing US-489 T-1 schema rows pass; g1-w6 (dataset, mirror) matches 'Commands run in the repo root (the main checkout)'; g1-w6 (verify) (dataset, mirror) 'no line states ... story worktree at the PR head (not the review worktree)'; g1-w7 (dataset, mirror) matches '`pre-cycle` fixes the tree once before any stage judges it'"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "round": 1,
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1"
+        ],
+        "owner": "cycle-hook run location (stage hooks -> stage worktree): pair-cli coordinator + pair-workflow-cycle SKILL.md + ## Cycle Hooks schema text",
+        "mode": "behavioral",
+        "oracle": "createDefaultCycleDriver over real scripts, stage hook red only in story tree; conformance on SKILL.md/automation-policy copies",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/cycle.ts",
+          "apps/pair-cli/src/commands/run/cycle-wiring.ts",
+          "apps/pair-cli/src/commands/run/cycle-scripts.ts",
+          ".claude/skills/pair-workflow-cycle/SKILL.md",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md",
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-hooks.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-hooks.mjs",
+          ".pair/knowledge/guidelines/collaboration/automation/automation-policy.md",
+          "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md",
+          "apps/website/content/docs/concepts/adoption-files.mdx",
+          ".pair/adoption/decision-log/"
+        ],
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g2",
+        "findings": [
+          "r0-2"
+        ],
+        "owner": "createCycleHooksBridge hook-run output transport (runScriptArgv maxBuffer / embedded output bound)",
+        "mode": "behavioral",
+        "oracle": "runCycle with createCycleHooksBridge against the real cycle-hooks.mjs, pre-verify printing 2 MB then exit 1: status failed-hook, on-halt side effect exists",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/cycle-scripts.ts",
+          ".claude/skills/pair-workflow-cycle/scripts/cycle-hooks.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-hooks.mjs"
+        ],
+        "dependsOn": [
+          "r1-g1"
+        ],
+        "dependsOnRationale": "r1-g1 changes how the hook cwd reaches createCycleHooksBridge.run (its options/call signature), which is the exact input r1-g2's oracle constructs"
+      }
+    ],
+    "carried": []
+  },
+  "attempt": 2,
+  "repairs": {
+    "contract": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-489/489/r1-g1-red-contract.json",
+    "contractHash": "sha256:0dc1239783646e8458e8247d943ff009187563d6cb0a7b3b90f38352fdc23131"
+  },
+  "changedRows": [
+    "g1-w8",
+    "verify-stage-worktree",
+    "g1-w5",
+    "g1-w6",
+    "g1-w7",
+    "g1-w9",
+    "g1-w10",
+    "g1-w11"
+  ]
+}

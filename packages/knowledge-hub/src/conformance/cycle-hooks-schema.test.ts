@@ -67,3 +67,43 @@ describe.each(Object.entries(policies))('US-489 T-1: ## Cycle Hooks schema (%s)'
     expect(section).toMatch(/HALTs the cycle before the stage runs/)
   })
 })
+
+// US-489 review r0-1: a STAGE hook (`pre-<stage-id>` / `post-<stage-id>`) gates the tree that stage
+// works on — the STORY worktree — never the developer's main checkout; a verify hook gates the
+// story worktree at the PR head, not the detached review worktree the verify agent creates itself.
+describe.each(Object.entries(policies))('r0-1: ## Cycle Hooks run location (%s)', (_n, path) => {
+  const doc = readFileSync(path, 'utf-8')
+  const section = doc.slice(doc.indexOf('\n## Cycle Hooks'), doc.indexOf('\n## Related'))
+  const lines = section.split('\n')
+
+  it('g1-w6: states that stage hooks run in the story worktree, not that every command runs in the main checkout', () => {
+    expect(section).not.toMatch(/Commands run in the repo root \(the main checkout\)/)
+    expect(
+      lines.some(line => line.includes('<stage-id>') && /story worktree/i.test(line)),
+      'no line ties `pre-<stage-id>`/`post-<stage-id>` to the story worktree',
+    ).toBe(true)
+  })
+
+  it('g1-w6 (verify): states that a verify hook gates the story worktree at the PR head, not the review worktree', () => {
+    expect(
+      lines.some(
+        line =>
+          /verify/.test(line) &&
+          /story worktree/i.test(line) &&
+          /PR head/i.test(line) &&
+          /review worktree/i.test(line),
+      ),
+      'no line states that `pre-verify`/`post-verify` gate the story worktree at the PR head (not the review worktree)',
+    ).toBe(true)
+    expect(section).not.toMatch(/`(pre|post)-verify`[^.\n]*runs? in the review worktree/i)
+  })
+
+  it('g1-w7: the pre-cycle example does not promise to fix the judged tree while it runs in the main checkout', () => {
+    const preCycleInWorktree = lines.some(
+      line => line.includes('`pre-cycle`') && /(story|stage)[’']?s? worktree/i.test(line),
+    )
+    if (preCycleInWorktree) return
+    expect(section).not.toMatch(/`pre-cycle` fixes the tree once before any stage judges it/)
+    expect(section).not.toMatch(/^- `pre-cycle`: `pnpm mirrors:regenerate`/m)
+  })
+})
