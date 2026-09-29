@@ -403,6 +403,67 @@ A declared policy still carrying the retired severity-LIST key (the pre-revision
 
 `pair-workflow-cycle`'s `supersede` command sets the run's own LAST handoff aside (any stage, not only the original preparation attempt) — see that skill's Maintainer Recovery section. This key changes only what BLOCKS; the recovery commands are unchanged in shape.
 
+## Cycle Hooks — deterministic commands around the delivery cycle
+
+A fourth independent schema owner (US-489). Same semantics as `## Publish-PR Hooks` in `tech/automation.md`, generalized from the publication step to **every stage boundary** of the delivery cycle. The hooks are executed by the **coordinator** — `pair-workflow-cycle` (in-session) or `pair-cli run --card` (console) — never by the stage's own agent, through ONE shared executor, `pair-workflow-cycle/scripts/cycle-hooks.mjs`, so the two coordinators cannot drift.
+
+```markdown
+## Cycle Hooks
+
+- `pre-cycle`: `pnpm mirrors:regenerate`
+- `pre-verify`: `pnpm build`
+- `post-implement`: `./notify-slack.sh implement-done`
+- `post-cycle`: `./notify-slack.sh cycle-over`
+- `on-halt`: `./alert.sh`
+```
+
+One bullet per command: `` - `<hook name>`: `<shell command>` ``. Several bullets with the same name run in declaration order. Commands run in the repo root (the main checkout), through `sh -c`. They are the project's own declared strings — never generated, never carrying untrusted input.
+
+### Hook names are a pattern, never a list
+
+| Name | Runs | Non-zero exit |
+| --- | --- | --- |
+| `pre-<stage-id>` | before that stage dispatches | **HALTs the cycle before the stage runs** (`failed-hook`), reporting the command's own output verbatim |
+| `post-<stage-id>` | after that stage's handoff advanced | logged, never a HALT — the stage already happened; remaining commands still run |
+| `pre-cycle` | once per invocation, before the first stage | HALTs (`failed-hook`) |
+| `post-cycle` | once per invocation, after the cycle reaches a terminal status (`ready-for-merge`, `escalate`, `failed-*`) | logged |
+| `on-halt` | when the cycle stops on any `failed-*` or `escalate` status — never on `ready-for-merge` | logged, never compounds the failure |
+
+`<stage-id>` is any stage id `cycle-state.mjs` enumerates (its `STEPS`, minus the terminal `done`/`blocked`), so a stage added later gets `pre-<id>`/`post-<id>` with no schema change. Today:
+
+| Stage id | Hook names |
+| --- | --- |
+| `prepare` | `pre-prepare`, `post-prepare` |
+| `validate` | `pre-validate`, `post-validate` |
+| `implement` | `pre-implement`, `post-implement` |
+| `green` | `pre-green`, `post-green` |
+| `verify` | `pre-verify`, `post-verify` |
+
+`pre-cycle` and `post-cycle` are scoped per **invocation**, not per card across `--rounds`: an invocation that spends several remediation rounds runs each once.
+
+### Fail-safe default — absent ⇒ no hooks
+
+Absent file or absent section ⇒ no hook step is attempted and nothing is logged about it (D21, identical to `## Publish-PR Hooks`). A command that is not found on `PATH` is a non-zero exit. A name that is not `pre-cycle`/`post-cycle`/`on-halt` or `pre|post-<known stage id>` (a typo such as `pre-verfy`) is reported once as an unrecognized hook key when the section is loaded — a **warning, never a HALT**: the typo'd hook simply never fires.
+
+### Where hooks do not run
+
+`pair-implement-batch.js` (the Claude Workflow sandbox has no shell) executes no cycle hook, and says so once per batch run. A project relying on hooks runs the portable coordinators instead.
+
+### Hook points and their typical use
+
+| Hook point | Typical use |
+| --- | --- |
+| `pre-cycle` | realign the generated mirrors, check the toolchain, fail fast on a dirty environment |
+| `pre-prepare`, `pre-validate` | fetch/refresh fixtures the contract stages read |
+| `pre-implement` | install dependencies, start a local service the tests need |
+| `pre-green` | same as `pre-implement`, for a remediation round |
+| `pre-verify` | an external gate the verifier must find green (`pnpm build`) — blocks `verify` on failure |
+| `post-<stage-id>` | notifications, metrics, audit lines — anything whose failure must not stop the cycle |
+| `post-cycle` | notify the outcome, clean up what `pre-cycle` created |
+| `on-halt` | alert a human: the deterministic notification point for every failure path |
+
+A `pre-*` hook that writes files (mirror realignment) must be local and idempotent: the guard that detects drift is the checker, the hook is what fixes the tree before the gate judges it.
+
 ## Related
 
 - [Quality Model](../../quality-assurance/quality-model.md) — the classification matrix, tier resolution, per-tier requirements (§4), tag projection (§5) and the `tech/risk-matrix.md` adoption delta (§6)
