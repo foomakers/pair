@@ -136,7 +136,10 @@ describe('runCycle with ## Cycle Hooks (US-489)', () => {
 
   it.each([
     ['failed-implement', [step('implement'), step('implement'), step('implement')]],
-    ['escalate', [step('implement'), { status: 'x', next: { step: 'blocked', reason: 'escalate' } }]],
+    [
+      'escalate',
+      [step('implement'), { status: 'x', next: { step: 'blocked', reason: 'escalate' } }],
+    ],
   ])('AC5: on-halt runs when the cycle stops on %s', async (status, sequence) => {
     const h = harness()
     const outcome = await runCycle({

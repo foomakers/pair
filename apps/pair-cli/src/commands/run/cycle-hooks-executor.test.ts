@@ -105,11 +105,17 @@ describe('pair-cli ## Cycle Hooks against the real executor (US-489)', () => {
     const empty = mkdtempSync(join(tmpdir(), 'us489-noscript-'))
     const none = project('## Eligibility\n\nrisk:green')
     expect(
-      createCycleHooksBridge({ scriptsDir: empty }, { policyPath: none.policyPath, cwd: none.root }).warnings(),
+      createCycleHooksBridge(
+        { scriptsDir: empty },
+        { policyPath: none.policyPath, cwd: none.root },
+      ).warnings(),
     ).toEqual([])
     const some = project('## Cycle Hooks\n\n- `pre-verify`: `true`')
     expect(() =>
-      createCycleHooksBridge({ scriptsDir: empty }, { policyPath: some.policyPath, cwd: some.root }).warnings(),
+      createCycleHooksBridge(
+        { scriptsDir: empty },
+        { policyPath: some.policyPath, cwd: some.root },
+      ).warnings(),
     ).toThrow(/skill-outdated/)
   })
 })

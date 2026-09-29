@@ -9,10 +9,7 @@ import { pathToFileURL } from 'url'
 
 const REPO_ROOT = join(__dirname, '../../../..')
 const POLICY_REL = '.pair/knowledge/guidelines/collaboration/automation/automation-policy.md'
-const CYCLE_STATE = join(
-  __dirname,
-  '../../dataset/.skills/workflow/cycle/scripts/cycle-state.mjs',
-)
+const CYCLE_STATE = join(__dirname, '../../dataset/.skills/workflow/cycle/scripts/cycle-state.mjs')
 
 const policies = {
   dataset: join(__dirname, '../../dataset', POLICY_REL),
@@ -30,7 +27,8 @@ describe.each(Object.entries(policies))('US-489 T-1: ## Cycle Hooks schema (%s)'
 
   it('documents the section and the three names outside the per-stage pattern', () => {
     expect(section).toContain('## Cycle Hooks')
-    for (const name of ['pre-cycle', 'post-cycle', 'on-halt']) expect(section).toContain(`\`${name}\``)
+    for (const name of ['pre-cycle', 'post-cycle', 'on-halt'])
+      expect(section).toContain(`\`${name}\``)
   })
 
   it('states the pattern pre-<stage-id>/post-<stage-id>, not a fixed enum', () => {
@@ -54,7 +52,8 @@ describe.each(Object.entries(policies))('US-489 T-1: ## Cycle Hooks schema (%s)'
     const rows = usage.split('\n').filter(line => line.startsWith('|'))
     for (const point of points) {
       const covered = rows.some(
-        row => row.includes(`\`${point}\``) || row.includes(`\`${point.split('-')[0]}-<stage-id>\``),
+        row =>
+          row.includes(`\`${point}\``) || row.includes(`\`${point.split('-')[0]}-<stage-id>\``),
       )
       expect(covered, point).toBe(true)
     }
