@@ -120,6 +120,15 @@ if (cmd === 'check') {
   process.stdout.write(JSON.stringify({ stage: 'merge', mode: 'check', ...answer }) + '\\n')
 } else if (cmd === 'run') {
   const green = opts.gate === 'green'
+  // FAKE_MERGE_REMOVE_WORKTREE: an executed merge removes the worktree holding the story branch,
+  // as the real run's \`branch\` step does (AC3) — before the driver's post-merge.
+  if (green && process.env.FAKE_MERGE_REMOVE_WORKTREE) {
+    const { execFileSync } = await import('node:child_process')
+    const list = execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd: opts.root, encoding: 'utf8' })
+    const held = list.split('\\n\\n').find(b => b.includes('branch refs/heads/' + opts.branch))
+    const path = held && held.split('\\n')[0].replace(/^worktree /, '')
+    if (path && path !== opts.root) execFileSync('git', ['worktree', 'remove', '--force', path], { cwd: opts.root })
+  }
   const landed = process.env.FAKE_MERGE_RUN ? JSON.parse(process.env.FAKE_MERGE_RUN) : { merged: true, cascaded: true, reason: null }
   process.stdout.write(JSON.stringify(green
     ? { stage: 'merge', mode: 'run', mergeAllowed: true, failed: [], ...landed }
@@ -618,4 +627,65 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
     expect(answer.status).toBe('invalid')
     expect(answer['reason']).toBe('policy-auto-advance-invalid')
   })
+
+  // ── r3 (review r3-1 / r3-2): the merge hooks through the REAL executor. The r3 blind spot was a
+  // scripts dir without cycle-hooks.mjs (the bridge a no-op) and a merge stub that removed no
+  // worktree. These rows install the real executor and remove the story worktree on an executed
+  // merge, as cycle-merge.mjs run's `branch` step does (AC3).
+
+  const hooksLog = () => join(root, 'hooks.log')
+  const hookRuns = (point: string) =>
+    lines(hooksLog())
+      .filter(l => l.startsWith(`${point} `))
+      .map(l => l.slice(point.length + 1))
+  const hook = (point: string, code = 0) =>
+    `- \`${point}\`: \`echo "${point} $(pwd -P)" >> ${hooksLog()}${code === 0 ? '' : `; exit ${code}`}\``
+
+  /** The real `cycle-hooks.mjs` in the scripts dir, and `## Cycle Hooks` appended to the policy. */
+  function withRealHooks(bullets: string[]): InMemoryFileSystemService {
+    cpSync(
+      join(INSTALLED_SCRIPTS, 'cycle-hooks.mjs'),
+      join(main, '.claude/skills/pair-workflow-cycle/scripts/cycle-hooks.mjs'),
+    )
+    vi.stubEnv('FAKE_MERGE_REMOVE_WORKTREE', '1')
+    return adopt(`${ELIGIBLE}\n## Cycle Hooks\n\n${bullets.join('\n')}\n`)
+  }
+
+  it('g4-w1 (r3-1): an executed merge that removed the story worktree runs post-merge in the MAIN checkout, then post-cycle — merged, no throw', async () => {
+    vi.stubEnv('FAKE_GATE_RESULT', GATE_PASS)
+    const fs = withRealHooks([hook('pre-merge'), hook('post-merge'), hook('post-cycle')])
+
+    const outcome = await settle(drive(fs))
+
+    expect(runCalls()).toHaveLength(1)
+    expect(outcome).toMatch(/^resolved /)
+    expect(outcome).toContain('"status":"merged"')
+    expect(hookRuns('pre-merge')).toEqual([join(root, 'pair-worktrees', '7')])
+    expect(existsSync(join(root, 'pair-worktrees', '7'))).toBe(false)
+    expect(hookRuns('post-merge')).toEqual([main])
+    expect(hookRuns('post-cycle')).toEqual([main])
+  }, 60_000)
+
+  it('g4-w2 (r3-1): the same executed merge with a ## Cycle Hooks section declaring NO post-merge — merged, no throw', async () => {
+    vi.stubEnv('FAKE_GATE_RESULT', GATE_PASS)
+    const fs = withRealHooks([hook('post-cycle')])
+
+    const outcome = await settle(drive(fs))
+
+    expect(outcome).toMatch(/^resolved /)
+    expect(outcome).toContain('"status":"merged"')
+    expect(hookRuns('post-cycle')).toEqual([main])
+  }, 60_000)
+
+  it('g4-c1 (r3-2): a failing pre-merge (real executor) is failed-hook — zero check/run calls, no gate stage', async () => {
+    vi.stubEnv('FAKE_GATE_RESULT', GATE_PASS)
+    const fs = withRealHooks([hook('pre-merge', 3), hook('post-merge')])
+
+    const outcome = await drive(fs)
+
+    expect(outcome.status).toBe('failed-hook')
+    expect(mergeCalls()).toHaveLength(0)
+    expect(gatePrompts()).toHaveLength(0)
+    expect(hookRuns('post-merge')).toEqual([])
+  }, 60_000)
 })

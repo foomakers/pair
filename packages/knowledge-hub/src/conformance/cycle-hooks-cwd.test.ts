@@ -71,3 +71,42 @@ describe.each(Object.entries(skills))('r0-1: pair-workflow-cycle stage hooks (%s
     expect(doc).not.toMatch(/`(pre|post)-verify`[^.\n]*runs? in the review worktree/i)
   })
 })
+
+// US-490 review r3-1 — `post-merge` runs after `cycle-merge.mjs run`, which has already removed the
+// story worktree (AC3): the docs that tell a coordinator where to run it must name the MAIN
+// checkout. Target artifacts: pair-workflow-cycle SKILL.md and automation-policy.md `## Cycle Hooks`
+// (dataset sources + installed/mirror copies).
+
+const POLICY_REL = '.pair/knowledge/guidelines/collaboration/automation/automation-policy.md'
+const postMergeDocs = {
+  'SKILL.md (dataset)': skills.dataset,
+  'SKILL.md (installed)': skills.installed,
+  'automation-policy.md (dataset)': join(DATASET, POLICY_REL),
+  'automation-policy.md (mirror)': join(REPO_ROOT, POLICY_REL),
+}
+
+/** Sentences, then `;`-clauses: the smallest unit a "`post-merge` runs in X" statement lives in. */
+function clausesWith(doc: string, re: RegExp): string[] {
+  return doc
+    .split(/(?<=[.!?])\s+(?=[A-Z`(*])/)
+    .flatMap(sentence => sentence.split(/;\s+/))
+    .filter(clause => re.test(clause))
+}
+
+describe.each(Object.entries(postMergeDocs))('r3-1: where `post-merge` runs (%s)', (_n, path) => {
+  const doc = readFileSync(path, 'utf-8')
+
+  it('r3-1-d1: a statement naming `post-merge` says it runs in the main checkout', () => {
+    const clauses = clausesWith(doc, /`post-merge`/)
+    expect(clauses.length, 'no statement names `post-merge`').toBeGreaterThan(0)
+    expect(
+      clauses.some(c => /main checkout/i.test(c)),
+      `no statement says \`post-merge\` runs in the main checkout:\n${clauses.join('\n---\n')}`,
+    ).toBe(true)
+  })
+
+  it('r3-1-d2: no statement places `post-merge` in the story worktree', () => {
+    const inStory = clausesWith(doc, /`post-merge`[^.;]*\bruns?\b[^.;]*story worktree/i)
+    expect(inStory, inStory.join('\n---\n')).toEqual([])
+  })
+})
