@@ -107,3 +107,69 @@ describe.each(Object.entries(policies))('r0-1: ## Cycle Hooks run location (%s)'
     expect(section).not.toMatch(/^- `pre-cycle`: `pnpm mirrors:regenerate`/m)
   })
 })
+
+// US-489 PR analysis — the PUBLIC page (`apps/website/.../adoption-files.mdx`) must say what the KB
+// schema says: where each hook kind runs (r0-1) and the AC9 per-hook timeout. It describes the
+// `pre-<stage-id>` pattern and never hand-lists the stage ids (`cycle-state.mjs` is the authority;
+// a hand-kept list drifts the day a stage is added).
+describe('US-489: adoption-files.mdx ## Cycle Hooks conformance', () => {
+  const page = readFileSync(
+    join(REPO_ROOT, 'apps/website/content/docs/concepts/adoption-files.mdx'),
+    'utf-8',
+  )
+  const start = page.indexOf('**`## Cycle Hooks`**')
+  const section = page.slice(start, page.indexOf('\n### ', start))
+  const lines = section.split('\n')
+
+  it('d-c1 (control): the section exists and names pre-cycle, post-cycle, on-halt', () => {
+    expect(start).toBeGreaterThan(-1)
+    for (const name of ['pre-cycle', 'post-cycle', 'on-halt'])
+      expect(section).toContain(`\`${name}\``)
+  })
+
+  it('d-c2 (control): states the `pre-<stage-id>` / `post-<stage-id>` pattern', () => {
+    expect(section).toContain('`pre-<stage-id>`')
+    expect(section).toContain('`post-<stage-id>`')
+  })
+
+  it('d-w1: states that stage hooks run in the story worktree', () => {
+    expect(
+      lines.some(line => line.includes('<stage-id>') && /story worktree/i.test(line)),
+      'no line ties `pre-<stage-id>`/`post-<stage-id>` to the story worktree',
+    ).toBe(true)
+  })
+
+  it('d-w2: states that a verify hook runs in the story worktree at the PR head', () => {
+    expect(
+      lines.some(
+        line => /verify/.test(line) && /story worktree/i.test(line) && /PR head/i.test(line),
+      ),
+      'no line states that a verify hook runs in the story worktree at the PR head',
+    ).toBe(true)
+  })
+
+  it('d-w3: states that pre-cycle, post-cycle and on-halt run in the main checkout', () => {
+    for (const name of ['pre-cycle', 'post-cycle', 'on-halt'])
+      expect(
+        lines.some(line => line.includes(`\`${name}\``) && /main checkout/i.test(line)),
+        `no line says \`${name}\` runs in the main checkout`,
+      ).toBe(true)
+  })
+
+  it('d-w4: documents the AC9 `timeout` key, its default and that `0` disables it', async () => {
+    const { DEFAULT_TIMEOUT } = (await import(
+      pathToFileURL(join(__dirname, '../../dataset/.skills/workflow/cycle/scripts/cycle-hooks.mjs'))
+        .href
+    )) as { DEFAULT_TIMEOUT: number }
+    const timeoutLines = lines.filter(line => line.includes('`timeout`'))
+    expect(timeoutLines.length, 'the `timeout` key is not documented').toBeGreaterThan(0)
+    const text = timeoutLines.join('\n')
+    expect(text, `default ${DEFAULT_TIMEOUT}`).toContain(String(DEFAULT_TIMEOUT))
+    expect(text).toMatch(/`0`[^\n]*(disabl|no timeout)/i)
+  })
+
+  it('d-w5: does not hand-list the stage ids', async () => {
+    const listed = (await stageIds()).filter(id => section.includes(`\`${id}\``))
+    expect(listed.length, `hand-listed stage ids: ${listed.join(', ')}`).toBeLessThan(3)
+  })
+})

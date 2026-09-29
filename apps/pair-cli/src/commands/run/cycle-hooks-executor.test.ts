@@ -30,8 +30,11 @@ function drive(
   root: string,
   policyPath: string,
   sequence: CycleResolveResult[],
-  spawned: string[] = [],
+  // `created`: the story worktree `input.worktree()` answers; defaults to `root` so a test about
+  // something else still hands every stage hook a tree. `{}` = no path (the r0-1 hazard).
+  opts: { spawned?: string[]; created?: { path?: string } } = {},
 ) {
+  const { spawned = [], created = { path: root } } = opts
   let call = 0
   const notices: string[] = []
   const hooks = createCycleHooksBridge({ scriptsDir: SCRIPTS_DIR }, { policyPath, cwd: root })
@@ -42,7 +45,7 @@ function drive(
       runCycle({
         hooks,
         resolve: async () => sequence[Math.min(call++, sequence.length - 1)]!,
-        worktree: async () => ({}),
+        worktree: async () => created,
         packet: async (n: { step: string }) => ({ step: n.step, prompt: 'p', worktree: '/w' }),
         spawnStage: async p => {
           spawned.push((p as { step: string }).step)
@@ -55,12 +58,16 @@ function drive(
 }
 
 describe('pair-cli ## Cycle Hooks against the real executor (US-489)', () => {
-  it('AC1/AC7: a real failing pre-verify blocks verify; a real post-implement runs in the repo root', async () => {
+  it('AC1/AC7: a real failing pre-verify blocks verify; a real post-implement runs in the story worktree', async () => {
     const { root, policyPath } = project(
       '## Cycle Hooks\n\n- `post-implement`: `pwd > post-cwd.txt`\n- `pre-verify`: `echo build-broke; exit 4`\n- `on-halt`: `echo halted >> alert.txt`',
     )
+    const tree = mkdtempSync(join(tmpdir(), 'us489-tree-'))
     const spawned: string[] = []
-    const d = drive(root, policyPath, [step('implement'), step('verify'), DONE], spawned)
+    const d = drive(root, policyPath, [step('implement'), step('verify'), DONE], {
+      spawned,
+      created: { path: tree },
+    })
 
     const outcome = await d.run()
 
@@ -68,8 +75,56 @@ describe('pair-cli ## Cycle Hooks against the real executor (US-489)', () => {
     expect(outcome.next?.['detail']).toContain('`pre-verify` `echo build-broke; exit 4` exited 4')
     expect(outcome.next?.['detail']).toContain('build-broke')
     expect(spawned).toEqual(['implement'])
-    expect(readFileSync(join(root, 'post-cwd.txt'), 'utf8').trim()).toMatch(/us489-cli-/)
+    expect(readFileSync(join(tree, 'post-cwd.txt'), 'utf8').trim()).toMatch(/us489-tree-/)
+    expect(existsSync(join(root, 'post-cwd.txt'))).toBe(false)
+    // on-halt is cycle-level: the main checkout.
     expect(readFileSync(join(root, 'alert.txt'), 'utf8')).toBe('halted\n')
+  })
+
+  // r3 (PR analysis, latent r0-1): the bridge used `cwd ?? options.cwd`, so a stage hook handed no
+  // worktree path silently ran in the MAIN checkout. A stage point with no cwd is refused, naming
+  // the point; it never falls back to main.
+  it('r3-w1: a stage hook with no story worktree path is refused, naming the point; it never runs in main', async () => {
+    const { root, policyPath } = project('## Cycle Hooks\n\n- `pre-implement`: `pwd > pre-cwd.txt`')
+    const spawned: string[] = []
+    const d = drive(root, policyPath, [step('implement'), DONE], { spawned, created: {} })
+    await expect(d.run()).rejects.toThrow(/pre-implement/)
+    expect(existsSync(join(root, 'pre-cwd.txt'))).toBe(false)
+    expect(spawned).toEqual([])
+  })
+
+  it.each(['pre-verify', 'post-implement'])(
+    'r3-w2: bridge.run(%s) with no cwd rejects naming the point; nothing runs in main',
+    async point => {
+      const { root, policyPath } = project(`## Cycle Hooks\n\n- \`${point}\`: \`touch ran.txt\``)
+      const hooks = createCycleHooksBridge({ scriptsDir: SCRIPTS_DIR }, { policyPath, cwd: root })
+      await expect(hooks.run(point, undefined, undefined)).rejects.toThrow(point)
+      expect(existsSync(join(root, 'ran.txt'))).toBe(false)
+    },
+  )
+
+  it.each([
+    ['pre-cycle', undefined],
+    ['post-cycle', 'ready-for-merge'],
+    ['on-halt', 'failed-hook'],
+  ])(
+    'r3-c1 (control): cycle-level %s with no cwd runs in the main checkout',
+    async (point, status) => {
+      const { root, policyPath } = project(`## Cycle Hooks\n\n- \`${point}\`: \`pwd > ran.txt\``)
+      const hooks = createCycleHooksBridge({ scriptsDir: SCRIPTS_DIR }, { policyPath, cwd: root })
+      const result = await hooks.run(point, status, undefined)
+      expect(result.halted).toBeUndefined()
+      expect(readFileSync(join(root, 'ran.txt'), 'utf8').trim()).toMatch(/us489-cli-/)
+    },
+  )
+
+  it('r3-c2 (control): a stage hook handed the story worktree runs there, not in main', async () => {
+    const { root, policyPath } = project('## Cycle Hooks\n\n- `pre-verify`: `pwd > ran.txt`')
+    const tree = mkdtempSync(join(tmpdir(), 'us489-tree-'))
+    const hooks = createCycleHooksBridge({ scriptsDir: SCRIPTS_DIR }, { policyPath, cwd: root })
+    expect((await hooks.run('pre-verify', undefined, tree)).halted).toBeUndefined()
+    expect(readFileSync(join(tree, 'ran.txt'), 'utf8').trim()).toMatch(/us489-tree-/)
+    expect(existsSync(join(root, 'ran.txt'))).toBe(false)
   })
 
   it('AC2: a failing real post-* hook is relayed and the cycle still converges; no on-halt at ready-for-merge', async () => {

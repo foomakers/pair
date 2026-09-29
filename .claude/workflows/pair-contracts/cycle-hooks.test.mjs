@@ -44,7 +44,7 @@ test('a section-scoped read: a hook-looking bullet in another section or a fence
   assert.deepEqual(parseCycleHooks(doc).hooks, { 'post-verify': ['echo real'] })
 })
 
-test('AC1: pre-* runs in the repo root, in order; first non-zero HALTs with verbatim output and the rest do not run', () => {
+test('AC1: pre-* runs in the given --cwd, in order; first non-zero HALTs with verbatim output and the rest do not run', () => {
   const dir = tmp()
   const doc = join(dir, 'automation.md')
   writeFileSync(doc, md(['- `pre-verify`: `pwd > ran-in.txt; echo first >> order.txt`', '- `pre-verify`: `echo boom-out; echo boom-err 1>&2; exit 3`', '- `pre-verify`: `echo third >> order.txt`']))

@@ -54,7 +54,8 @@ function drive(
     runCycle({
       hooks,
       resolve: async () => sequence[Math.min(call++, sequence.length - 1)]!,
-      worktree: async () => (worktreePath === undefined ? {} : { path: worktreePath }),
+      // Absent ⇒ the story worktree is `root`: every stage hook gets a tree (never the r0-1 fallback).
+      worktree: async () => ({ path: worktreePath ?? root }),
       packet: async (n: { step: string }) => ({ step: n.step, prompt: 'p', worktree: '/w' }),
       spawnStage: async p => {
         spawned.push((p as { step: string }).step)
