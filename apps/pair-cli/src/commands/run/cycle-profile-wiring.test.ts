@@ -15,7 +15,11 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { createDefaultCycleDriver } from './cycle-wiring'
-import { createCycleScriptsBridge, CYCLE_WORKFLOW_VERSION, CYCLE_BASE_BRANCH_DEFAULT } from './cycle-scripts'
+import {
+  createCycleScriptsBridge,
+  CYCLE_WORKFLOW_VERSION,
+  CYCLE_BASE_BRANCH_DEFAULT,
+} from './cycle-scripts'
 import { ENGINES, type EngineDefinition } from './engines'
 import { buildEngineArgs } from './spawn'
 import { resolveWorkflowProfile } from './workflow-profile'
@@ -166,7 +170,9 @@ process.stdout.write(JSON.stringify({ type: 'agent_settled' }) + '\\n')
   it('no profile: nothing is bound and the run directory is exactly what it was (AC9)', async () => {
     await drive()
 
-    expect(existsSync(join(main, '.pair/working/runs/story-7/7/.workflow-profile.json'))).toBe(false)
+    expect(existsSync(join(main, '.pair/working/runs/story-7/7/.workflow-profile.json'))).toBe(
+      false,
+    )
   }, 60_000)
 
   it('the profile’s contextPolicy reaches the real `resolve`: an admissible transition is accepted, a forbidden one refused', () => {
@@ -178,10 +184,12 @@ process.stdout.write(JSON.stringify({ type: 'agent_settled' }) + '\\n')
       entry: 'fresh',
       story: '7',
     }
-    expect(bridge.resolve({ ...base, contextPolicy: { 'green->green': 'reuse' } }).status).toBe('empty')
-    expect(() => bridge.resolve({ ...base, contextPolicy: { 'validate->validate': 'reuse' } })).toThrow(
-      /context-policy-invalid/,
+    expect(bridge.resolve({ ...base, contextPolicy: { 'green->green': 'reuse' } }).status).toBe(
+      'empty',
     )
+    expect(() =>
+      bridge.resolve({ ...base, contextPolicy: { 'validate->validate': 'reuse' } }),
+    ).toThrow(/context-policy-invalid/)
   })
 
   it('effort is sent only to an engine that declares an effort flag; none is invented for the others', () => {

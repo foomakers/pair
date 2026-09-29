@@ -387,7 +387,11 @@ describe('parseRunCommand — cycle-coordinator flags on --card (US-487)', () =>
 
   /** US-488 — the flags US-487 reserved now carry the workflow profile selection. */
   it('carries --profile and --workflow-config next to --card', () => {
-    const config = parseRunCommand({ card: '488', profile: ' cheap-green ', workflowConfig: '/tmp/p.json' })
+    const config = parseRunCommand({
+      card: '488',
+      profile: ' cheap-green ',
+      workflowConfig: '/tmp/p.json',
+    })
 
     expect(config.profile).toBe('cheap-green')
     expect(config.workflowConfig).toBe('/tmp/p.json')
@@ -403,11 +407,14 @@ describe('parseRunCommand — cycle-coordinator flags on --card (US-487)', () =>
   it.each([
     ['profile', '--profile'],
     ['workflowConfig', '--workflow-config'],
-  ])('refuses %s without --card, naming the flag (it selects the delivery-cycle profile)', (key, flag) => {
-    expect(() => parseRunCommand({ skill: 'pair-next', [key]: 'x' })).toThrow(
-      new RegExp(`${flag} .*--card`),
-    )
-  })
+  ])(
+    'refuses %s without --card, naming the flag (it selects the delivery-cycle profile)',
+    (key, flag) => {
+      expect(() => parseRunCommand({ skill: 'pair-next', [key]: 'x' })).toThrow(
+        new RegExp(`${flag} .*--card`),
+      )
+    },
+  )
 
   it.each(['profile', 'workflowConfig'])('refuses an empty --%s value', key => {
     expect(() => parseRunCommand({ card: '488', [key]: '  ' })).toThrow(/empty value/)

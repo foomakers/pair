@@ -54,7 +54,10 @@ const profileOf = (engine = 'default'): ResolvedWorkflowProfile => ({
   sourceDetail: '/project/p.json',
   hash: 'f'.repeat(64),
   stages: { implement: stage(engine) },
-  table: ['Profile: cheap-green (source: argument — /project/p.json) hash ffffffffffff', '  implement | TABLE-ROW'],
+  table: [
+    'Profile: cheap-green (source: argument — /project/p.json) hash ffffffffffff',
+    '  implement | TABLE-ROW',
+  ],
   contextPolicy: {},
   notes: [],
 })
@@ -71,7 +74,10 @@ function capture(): () => string {
 }
 
 const baseDeps = (overrides: Partial<RunHandlerDependencies> = {}): RunHandlerDependencies => ({
-  acquireLock: ({ card }) => ({ kind: 'acquired', lock: { path: `/locks/${card}`, release: () => {} } }),
+  acquireLock: ({ card }) => ({
+    kind: 'acquired',
+    lock: { path: `/locks/${card}`, release: () => {} },
+  }),
   appendAudit: () => {},
   cardReadiness: async () => 'ready',
   driveCycle: async () => {
@@ -86,15 +92,22 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-const run = (argv: Parameters<typeof parseRunCommand>[0], fs: InMemoryFileSystemService, deps: RunHandlerDependencies) =>
-  handleRunCommand(parseRunCommand(argv), fs, deps)
+const run = (
+  argv: Parameters<typeof parseRunCommand>[0],
+  fs: InMemoryFileSystemService,
+  deps: RunHandlerDependencies,
+) => handleRunCommand(parseRunCommand(argv), fs, deps)
 
 describe('the profile at the run --card entry (US-488 T-5)', () => {
   it('AC9/AC2: no flag and no workflowProfiles block ⇒ the resolver is never asked; the KB default is reported in one line', async () => {
     const resolver = vi.fn()
     const output = capture()
 
-    const code = await run({ card: '12', cardTags: '' }, files(), baseDeps({ resolveWorkflowProfile: resolver }))
+    const code = await run(
+      { card: '12', cardTags: '' },
+      files(),
+      baseDeps({ resolveWorkflowProfile: resolver }),
+    )
 
     expect(code).toBe(0)
     expect(resolver).not.toHaveBeenCalled()
@@ -112,10 +125,12 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
     )
 
     expect(resolver).toHaveBeenCalledTimes(1)
-    expect(resolver).toHaveBeenCalledWith(
-      `${cwd}/.claude/skills/pair-workflow-cycle/scripts`,
-      { root: cwd, profile: 'cheap-green', workflowConfig: undefined, tier: 'risk:yellow' },
-    )
+    expect(resolver).toHaveBeenCalledWith(`${cwd}/.claude/skills/pair-workflow-cycle/scripts`, {
+      root: cwd,
+      profile: 'cheap-green',
+      workflowConfig: undefined,
+      tier: 'risk:yellow',
+    })
     expect(output().match(/TABLE-ROW/g)).toHaveLength(1)
     expect(events.findIndex(e => e.includes('TABLE-ROW'))).toBeLessThan(events.indexOf('drive'))
   })
@@ -158,7 +173,11 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
     const output = capture()
 
     await expect(
-      run({ card: '12', cardTags: '', profile: 'nope' }, files(), baseDeps({ resolveWorkflowProfile: resolver })),
+      run(
+        { card: '12', cardTags: '', profile: 'nope' },
+        files(),
+        baseDeps({ resolveWorkflowProfile: resolver }),
+      ),
     ).rejects.toThrow(/profile-unresolved: profile 'nope'/)
 
     expect(events).not.toContain('drive')
@@ -196,7 +215,8 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
   it('a profile flag on a card the mapping routes to a workflow (not the cycle) is refused, never silently ignored', async () => {
     capture()
     const fs = files({
-      [`${cwd}/${POLICY_PATH}`]: '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-loop\n',
+      [`${cwd}/${POLICY_PATH}`]:
+        '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-loop\n',
     })
 
     await expect(

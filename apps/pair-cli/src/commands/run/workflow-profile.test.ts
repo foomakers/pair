@@ -57,7 +57,9 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
   it('--profile is reported as `argument`; --workflow-config wins over it', () => {
     write('ext.json', { name: 'ext' })
 
-    expect(resolveWorkflowProfile(SCRIPTS, { root, profile: 'cheap-green' }).source).toBe('argument')
+    expect(resolveWorkflowProfile(SCRIPTS, { root, profile: 'cheap-green' }).source).toBe(
+      'argument',
+    )
     const external = resolveWorkflowProfile(SCRIPTS, {
       root,
       profile: 'cheap-green',
@@ -75,9 +77,9 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
   it('an invalid profile throws profile-invalid before anything can dispatch', () => {
     write('bad.json', { name: 'bad', stages: { verify: { context: 'reuse' } } })
 
-    expect(() =>
-      resolveWorkflowProfile(SCRIPTS, { root, workflowConfig: 'bad.json' }),
-    ).toThrow(/profile-invalid: .*stages\.verify\.context/)
+    expect(() => resolveWorkflowProfile(SCRIPTS, { root, workflowConfig: 'bad.json' })).toThrow(
+      /profile-invalid: .*stages\.verify\.context/,
+    )
   })
 
   it('stageSettings: the stage engine, resolved model id and effort — `default` means the run’s own', () => {
@@ -89,7 +91,9 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
       effort: 'medium',
     })
     expect(stageSettings(p, 'verify')).toEqual({ engine: 'pi', model: 'm-front', effort: 'high' })
-    const kb = resolveWorkflowProfile(SCRIPTS, { root: mkdtempSync(join(tmpdir(), 'pair-wfp-kb-')) })
+    const kb = resolveWorkflowProfile(SCRIPTS, {
+      root: mkdtempSync(join(tmpdir(), 'pair-wfp-kb-')),
+    })
     expect(stageSettings(kb, 'implement')).toEqual({})
   })
 
