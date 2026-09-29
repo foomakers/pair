@@ -23,10 +23,13 @@ export const REQUIRED_METHODS = INTERFACE_METHODS.filter(m => m !== 'cardHash')
 // Primitives the cycle's scope-decision and pr-state paths already used through `gh` beyond the
 // eight (card create/search/edit, one comment read, the check/label read-backs, ref parsing). An
 // adapter MAY omit them: the feature that needs one then fails typed, naming the method.
-export const SUPPORT_METHODS = ['createCard', 'findCards', 'updateCard', 'parseCardRef', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readLabels']
+export const SUPPORT_METHODS = ['createCard', 'findCards', 'updateCard', 'parseCardRef', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readLabels', 'setClassification']
 // ADR-018's split: card operations resolve `pm-tool`, pull-request operations resolve `code-host`.
 export const PM_METHODS = ['readCard', 'cardHash', 'closeAndCascade', 'createCard', 'findCards', 'updateCard', 'parseCardRef']
-export const CODE_METHODS = ['prHead', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readLabels']
+export const CODE_METHODS = ['prHead', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readLabels', 'setClassification']
+// setClassification's family/value vocabulary (the review's classification tags, pr-states.md /
+// quality-model.md §5): each family carries its own chromatic enum — never shared across families.
+export const CLASSIFICATION_FAMILIES = { risk: ['green', 'yellow', 'red'], cost: ['green', 'yellow', 'orange', 'red'] }
 // The ONE check context and the ONE label set the review publishes (pr-states.md). Each adapter
 // declares its own spelling of them; these are the vocabulary pr-state.mjs maps a verdict onto.
 export const MERGE_STRATEGIES = ['squash', 'merge', 'rebase']
@@ -34,7 +37,7 @@ export const CHECK_STATES = ['success', 'failure', 'pending']
 
 export class HostError extends Error {
   // kind: failed (the CLI exited non-zero) | invalid-json | invalid-output | not-implemented |
-  //       unsupported | code-host-undeclared | adapter-error
+  //       unsupported | invalid-input | code-host-undeclared | adapter-error
   constructor(kind, { message, method, command, detail, adapter } = {}) {
     super(message ?? `${kind}${method ? ` (${method})` : ''}${detail ? `: ${detail}` : ''}`)
     this.name = 'HostError'

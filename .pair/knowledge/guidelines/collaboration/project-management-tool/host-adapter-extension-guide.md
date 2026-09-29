@@ -52,6 +52,7 @@ Optional primitives (`SUPPORT_METHODS`, exported the same way) serve the scope-d
 | `commentRef`      | code-host      | `commentRef({ repo, pr, id })` → the comment's URL string                                                         |
 | `readCheck`       | code-host      | `readCheck({ sha, repo, context })` → the check's state string, or `null` when absent                            |
 | `readLabels`      | code-host      | `readLabels({ pr, repo })` → an array of label name strings                                                       |
+| `setClassification` | code-host   | `setClassification({ pr, repo, family, value })` — `family` ∈ `risk \| cost`; leaves exactly one `<family>:<value>` label of that family, the family's other values removed, then reads back: `{ applied, removed, confirmed, error }`, like `setPrState`. An out-of-enum `family`/`value` throws `HostError('invalid-input')` before any write. Written by `pr-state.mjs conclude` (`--tier`/`--cost`) — the review is the only writer of a PR's classification tags (pr-states.md) |
 
 Omit one and only the feature that needs it fails, typed `not-implemented` with the method name. Their shapes are the two shipped adapters' (`github.mjs`, `azure-devops.mjs`).
 

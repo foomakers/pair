@@ -7,7 +7,7 @@
 //
 // Transport: `gh` from PATH, or `transport.ghBin` / PAIR_GH_BIN (a test's recorder). `gh`
 // authenticates itself; this file never reads a token.
-import { defineAdapter, runCli, parseJson, HostError, upsertByMarker, splitPages } from './adapter-kit.mjs'
+import { defineAdapter, runCli, parseJson, HostError, upsertByMarker, splitPages, CLASSIFICATION_FAMILIES } from './adapter-kit.mjs'
 
 export const CHECK_CONTEXT = 'pair-review'
 export const STATE_LABELS = ['pr-state:to-be-reviewed', 'pr-state:ready-to-merge', 'pr-state:not-approved']
@@ -173,6 +173,26 @@ export default defineAdapter({
           if (!before.includes(label)) gh(['api', '-X', 'POST', `${apiRepo(repo)}/issues/${pr}/labels`, '--input', '-'], { input: JSON.stringify({ labels: [label] }) })
           const after = readLabels({ pr, repo })
           const confirmed = after.includes(label) && !after.some(l => STATE_LABELS.includes(l) && l !== label)
+          return { applied: label, removed, confirmed, error: confirmed ? null : `read-back: labels are ${JSON.stringify(after)}` }
+        } catch (e) {
+          return { applied: label, removed: [], confirmed: false, error: e.message }
+        }
+      },
+      // Exactly one `<family>:<value>` label of that family: the family's other values removed, this
+      // one added, then READ BACK — a family/value outside CLASSIFICATION_FAMILIES is refused before
+      // any write (off-cycle fix for PR #516: the review is the only writer of these tags).
+      setClassification({ pr, repo, family, value }) {
+        const values = CLASSIFICATION_FAMILIES[family]
+        if (!values) throw new HostError('invalid-input', { message: `setClassification: unknown family ${JSON.stringify(family)} (expected ${Object.keys(CLASSIFICATION_FAMILIES).join(' | ')})`, method: 'setClassification' })
+        if (!values.includes(value)) throw new HostError('invalid-input', { message: `setClassification: ${family} has no value ${JSON.stringify(value)} (expected ${values.join(' | ')})`, method: 'setClassification' })
+        const label = `${family}:${value}`
+        try {
+          const before = readLabels({ pr, repo })
+          const removed = before.filter(l => l.startsWith(`${family}:`) && l !== label)
+          for (const l of removed) gh(['api', '-X', 'DELETE', `${apiRepo(repo)}/issues/${pr}/labels/${encodeURIComponent(l)}`])
+          if (!before.includes(label)) gh(['api', '-X', 'POST', `${apiRepo(repo)}/issues/${pr}/labels`, '--input', '-'], { input: JSON.stringify({ labels: [label] }) })
+          const after = readLabels({ pr, repo })
+          const confirmed = after.includes(label) && !after.some(l => l.startsWith(`${family}:`) && l !== label)
           return { applied: label, removed, confirmed, error: confirmed ? null : `read-back: labels are ${JSON.stringify(after)}` }
         } catch (e) {
           return { applied: label, removed: [], confirmed: false, error: e.message }

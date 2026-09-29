@@ -29,7 +29,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { defineAdapter, runCli, parseJson, HostError, upsertByMarker } from './adapter-kit.mjs'
+import { defineAdapter, runCli, parseJson, HostError, upsertByMarker, CLASSIFICATION_FAMILIES } from './adapter-kit.mjs'
 
 export const CHECK_CONTEXT = 'pair-review'
 export const CHECK_GENRE = 'pair'
@@ -252,6 +252,25 @@ export default defineAdapter({
           if (!before.includes(label)) invoke({ resource: 'pullRequestLabels', repo, route: { pullRequestId: pr }, method: 'POST', body: { name: label } })
           const after = readLabels({ pr, repo })
           const confirmed = after.includes(label) && !after.some(l => STATE_LABELS.includes(l) && l !== label)
+          return { applied: label, removed, confirmed, error: confirmed ? null : `read-back: labels are ${JSON.stringify(after)}` }
+        } catch (e) {
+          return { applied: label, removed: [], confirmed: false, error: e.message }
+        }
+      },
+      // Exactly one `<family>:<value>` label of that family, like setPrState — off-cycle fix for
+      // PR #516: the review is the only writer of these tags.
+      setClassification({ pr, repo, family, value }) {
+        const values = CLASSIFICATION_FAMILIES[family]
+        if (!values) throw new HostError('invalid-input', { message: `setClassification: unknown family ${JSON.stringify(family)} (expected ${Object.keys(CLASSIFICATION_FAMILIES).join(' | ')})`, method: 'setClassification' })
+        if (!values.includes(value)) throw new HostError('invalid-input', { message: `setClassification: ${family} has no value ${JSON.stringify(value)} (expected ${values.join(' | ')})`, method: 'setClassification' })
+        const label = `${family}:${value}`
+        try {
+          const before = readLabels({ pr, repo })
+          const removed = before.filter(l => l.startsWith(`${family}:`) && l !== label)
+          for (const l of removed) invoke({ resource: 'pullRequestLabels', repo, route: { pullRequestId: pr, labelIdOrName: encodeURIComponent(l) }, method: 'DELETE' })
+          if (!before.includes(label)) invoke({ resource: 'pullRequestLabels', repo, route: { pullRequestId: pr }, method: 'POST', body: { name: label } })
+          const after = readLabels({ pr, repo })
+          const confirmed = after.includes(label) && !after.some(l => l.startsWith(`${family}:`) && l !== label)
           return { applied: label, removed, confirmed, error: confirmed ? null : `read-back: labels are ${JSON.stringify(after)}` }
         } catch (e) {
           return { applied: label, removed: [], confirmed: false, error: e.message }
