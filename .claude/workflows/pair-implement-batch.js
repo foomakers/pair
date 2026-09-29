@@ -1979,6 +1979,11 @@ async function driveStory(story) {
 }
 
 // ── Fan-out over the mutex-safe batch ────────────────────────────────────
+// US-489 AC8: `## Cycle Hooks` (tech/automation.md) are executed by the two portable coordinators,
+// never here — this sandbox has no shell. Reported ONCE per run (never per card, never silently);
+// the engine cannot read the adoption file, so the notice is unconditional and states the rule.
+const CYCLE_HOOKS_NOTICE = 'cycle hooks are NOT executed by pair-implement-batch (no shell in the Workflow sandbox): a `## Cycle Hooks` declared in tech/automation.md is skipped for every card of this run — drive the cards with pair-workflow-cycle or `pair-cli run --card` for hooks to fire'
+if (STORIES.length) log(CYCLE_HOOKS_NOTICE)
 const results = await boundedParallel(
   STORIES.map((s) => () => driveStory(s)),
   MAX_PARALLELISM,
@@ -2009,6 +2014,7 @@ return {
   contracts: [{ name: CONTRACT.spec.name, status: CONTRACT.status }],
   batch,
   died: STORIES.filter((s) => !batch.some((b) => b.story?.id === s.id)).map((s) => s.id),
+  cycleHooks: { executed: false, notice: CYCLE_HOOKS_NOTICE },
   metrics: { dispatches: METRICS.dispatches.length, retries: METRICS.retries, redirects: METRICS.redirects, wallMs: 'unknown', tokens: 'unknown', perDispatch: METRICS.dispatches },
   note,
 }

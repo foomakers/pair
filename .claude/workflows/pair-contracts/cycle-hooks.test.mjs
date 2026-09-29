@@ -137,3 +137,18 @@ test('the shipped copies of the executor are byte-identical (dataset source, ins
   const b = readFileSync(new URL('../../../packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-hooks.mjs', import.meta.url), 'utf8')
   assert.equal(a, b)
 })
+
+// ── T-4 / AC8: the Claude parallel batch executes no hook and says so once per run ──────────────
+test('AC8: pair-implement-batch reports once per run that cycle hooks are not executed, however many cards', async () => {
+  const src = readFileSync(new URL('../pair-implement-batch.js', import.meta.url), 'utf8').replace(/^export /gm, '')
+  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
+  const logs = []
+  const calls = []
+  const agent = async (prompt, opts) => (calls.push(opts?.label ?? ''), null)
+  const cards = [1, 2, 3].map(n => ({ id: String(500 + n), title: 'T', branch: `feature/US-${500 + n}-x` }))
+  const result = await new AsyncFunction('args', 'agent', 'parallel', 'log', src)({ cards }, agent, fns => Promise.all(fns.map(f => f())), m => logs.push(m)).catch(e => ({ threw: String(e) }))
+  const notices = logs.filter(l => /cycle hooks are NOT executed/.test(l))
+  assert.equal(notices.length, 1, JSON.stringify(logs))
+  assert.equal(result.cycleHooks?.executed, false, JSON.stringify(result).slice(0, 300))
+  assert.match(result.cycleHooks.notice, /pair-workflow-cycle|pair-cli run --card/)
+})
