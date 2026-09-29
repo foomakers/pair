@@ -1,5 +1,6 @@
 import { execFileSync } from 'child_process'
-import { dirname } from 'path'
+import { rmSync } from 'fs'
+import { dirname, join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import type { EngineDefinition } from './engines'
 import { runCycle, type CycleOutcome, type CycleStageResult } from './cycle'
@@ -470,6 +471,10 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
         hash: ctx.profile.hash,
         source: ctx.profile.source,
       })
+    } else {
+      // Zero-config: this invocation runs on the KB default, so an earlier invocation's (or the
+      // in-session coordinator's) binding must not be stamped into the handoffs it publishes.
+      rmSync(join(co.runDir, '.workflow-profile.json'), { force: true })
     }
     return await runCycle({
       resolve: resolveFor(ctx, input, co),

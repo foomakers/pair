@@ -8,7 +8,7 @@ Profiles are **adoption content**, and read-only configuration: the KB ships the
 
 ## Zero-configuration path — stated first, on purpose
 
-No `pair.config.json`, no `workflowProfiles` block, no `--profile` / `--workflow-config` ⇒ the **KB default**: the schema-default engine and model, default effort, a `fresh` context on every stage. Nothing is resolved, nothing is written, and the cycle runs exactly as it did before profiles existed. The coordinator says so in one line (`Profile: KB default (source: KB default)`).
+No `pair.config.json`, no `workflowProfiles` block, no `--profile` / `--workflow-config` ⇒ the **KB default**: the schema-default engine and model, default effort, a `fresh` context on every stage. On a fresh run nothing is resolved and nothing is written, and the cycle runs exactly as it did before profiles existed. Over a run directory that already holds an earlier `.workflow-profile.json`, the binding is replaced by the KB default (the in-session coordinator rebinds it through `--dir`; a `pair-cli run --card` zero-config resume removes it), so every handoff records the profile its run really used. The coordinator says so in one line (`Profile: KB default (source: KB default)`).
 
 ## Where profiles live
 
