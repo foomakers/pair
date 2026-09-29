@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { publish, resolve, autoAdvancePolicyError, STEPS } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 import { decideMerge, checkMerge, runMerge, closeStory, checkDodBoxes, parseArgs, readCurrentTier, readSignals, PARK_MARKER } from '../../skills/pair-workflow-cycle/scripts/cycle-merge.mjs'
 import github from '../../skills/pair-workflow-cycle/scripts/host/github.mjs'
+import azure from '../../skills/pair-workflow-cycle/scripts/host/azure-devops.mjs'
 
 const CYCLE_MERGE = fileURLToPath(new URL('../../skills/pair-workflow-cycle/scripts/cycle-merge.mjs', import.meta.url))
 const V = '3.0.0'
@@ -261,7 +262,7 @@ test('AC3: all green -> squash merge with the message, DoD boxes, close+cascade,
   const out = runMerge({ ...input(h), gate: 'green', message: '[#42] feat: thing\n\nbody', branch: 'feature/US-42-x', root: g.main })
   assert.deepEqual({ merged: out.merged, cascaded: out.cascaded, mergeAllowed: out.mergeAllowed }, { merged: true, cascaded: true, mergeAllowed: true }, JSON.stringify(out))
   assert.deepEqual(h.calls.map(c => c[0]).filter(n => n !== 'readCard' && n !== 'prHead' && n !== 'readCheck' && n !== 'readCheckRun'), ['merge', 'updateCard', 'closeAndCascade', 'setBoardState', 'setBoardState'])
-  assert.deepEqual(h.calls.find(c => c[0] === 'merge')[1], { pr: 7, repo: 'o/r', strategy: 'squash', message: '[#42] feat: thing\n\nbody' })
+  assert.deepEqual(h.calls.find(c => c[0] === 'merge')[1], { pr: 7, repo: 'o/r', strategy: 'squash', message: '[#42] feat: thing\n\nbody', headSha: SHA('a') })
   assert.deepEqual(h.calls.filter(c => c[0] === 'setBoardState').map(c => c[1].id), [42, 9]) // the story AND every closed parent
   assert.equal(h.calls.some(c => c[0] === 'commentOnCard'), false)
   assert.equal(existsSync(g.wt), false, 'worktree removed')
@@ -338,7 +339,9 @@ test('parseArgs: every value that reaches gh/git is validated as a safe segment'
 function fakeGh(seed = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'gh-fake-'))
   const log = join(dir, 'calls.log')
+  const merged = join(dir, 'merged.log')
   writeFileSync(log, '')
+  writeFileSync(merged, '')
   const cfg = { labels: [GREEN], head: SHA('a'), statuses: [{ context: 'pair-review', state: 'success' }, { context: 'pair-explicit-approval', state: 'success' }], ...seed }
   writeFileSync(
     join(dir, 'gh'),
@@ -359,13 +362,21 @@ if (a[0] === 'api' && a.includes('POST') && a[a.indexOf('POST') - 1] === '-X' &&
 if (a[0] === 'api' && /\\/parent$/.test(a[1])) { process.stderr.write('gh: Not Found (HTTP 404)'); process.exit(1) }
 if (a[0] === 'api' && a[1] === 'graphql' && j.includes('projectItems')) out({ data: { repository: { issue: { projectItems: { nodes: [{ id: 'PVTI_1', project: { id: 'PVT_1', title: 'Board', fields: { nodes: [{ id: 'PVTSSF_1', name: 'Status', options: [{ id: 'opt-done', name: 'Done' }] }] } } }] } } } } })
 if (a[0] === 'api' && a[1] === 'graphql') out({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { id: 'PVTI_1', fieldValueByName: { name: 'Done' } } } } })
-if (a[0] === 'pr' && a[1] === 'merge') out('')
+// gh pr merge semantics: --match-head-commit <sha> is refused when the remote head is not <sha>;
+// without it the CURRENT remote head (mergeHead: a push that landed after pr view) is merged.
+if (a[0] === 'pr' && a[1] === 'merge') {
+  const now = cfg.mergeHead ?? cfg.head
+  const i = a.indexOf('--match-head-commit')
+  if (i !== -1 && a[i + 1] !== now) { process.stderr.write('GraphQL: Head branch was modified. Review and try the merge again. (mergePullRequest)'); process.exit(1) }
+  fs.appendFileSync(${JSON.stringify(merged)}, now + '\\n')
+  out('')
+}
 if (a[0] === 'issue' && (a[1] === 'close' || a[1] === 'edit')) out('')
 process.stderr.write('fake gh: unhandled ' + j); process.exit(1)
 `,
   )
   chmodSync(join(dir, 'gh'), 0o755)
-  return { bin: join(dir, 'gh'), calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) }
+  return { bin: join(dir, 'gh'), calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)), merged: () => readFileSync(merged, 'utf8').split('\n').filter(Boolean) }
 }
 
 function runCli(cmd, gh, extra = {}) {
@@ -452,4 +463,121 @@ test('github.readCheckRun: the most recent run of the name; in-flight is pending
   const a = github.instantiate({ ghBin: bin })
   assert.equal(a.readCheckRun({ sha: SHA('a'), repo: 'o/r', context: 'pair-explicit-approval' }), 'success')
   assert.equal(a.readCheckRun({ sha: SHA('a'), repo: 'o/r', context: 'missing' }), null)
+})
+
+// ── r0-1: the merge is PINNED to the reviewed head (gh pr merge --match-head-commit) ────────────
+const mergeCall = gh => gh.calls().find(c => c[0] === 'pr' && c[1] === 'merge')
+const pinOf = c => (c && c.indexOf('--match-head-commit') !== -1 ? c[c.indexOf('--match-head-commit') + 1] : null)
+
+test('r1-g1-w1: runMerge hands the adapter merge the reviewed head as headSha', () => {
+  const h = fakeHosts()
+  const out = runMerge({ ...input(h), gate: 'green', message: 'm' })
+  assert.equal(out.merged, true, JSON.stringify(out))
+  assert.equal(h.calls.find(c => c[0] === 'merge')[1].headSha, SHA('a'))
+})
+
+test('r1-g1-w2: github.merge with headSha pins the merge: --match-head-commit <headSha>', () => {
+  const gh = fakeGh()
+  const a = github.instantiate({ ghBin: gh.bin })
+  assert.deepEqual(a.merge({ pr: 7, repo: 'o/r', strategy: 'squash', message: 'm', headSha: SHA('a') }), { merged: true, pr: 7, strategy: 'squash' })
+  assert.equal(pinOf(mergeCall(gh)), SHA('a'), JSON.stringify(mergeCall(gh)))
+})
+
+test('r1-g1-w3: github.merge refuses a malformed headSha before any gh call', () => {
+  const gh = fakeGh()
+  const a = github.instantiate({ ghBin: gh.bin })
+  for (const headSha of ['', 'abc', SHA('A'), `${SHA('a')} --admin`, 42]) assert.throws(() => a.merge({ pr: 7, repo: 'o/r', strategy: 'squash', message: 'm', headSha }), e => e?.name === 'HostError', JSON.stringify(headSha))
+  assert.equal(gh.calls().length, 0)
+})
+
+test('r1-g1-c1: github.merge without headSha keeps the unpinned argv (the adapter interface stays backward compatible)', () => {
+  const gh = fakeGh()
+  const a = github.instantiate({ ghBin: gh.bin })
+  a.merge({ pr: 7, repo: 'o/r', strategy: 'squash', message: 'm' })
+  assert.deepEqual(mergeCall(gh), ['pr', 'merge', '7', '--squash', '--repo', 'o/r', '--subject', 'm'])
+})
+
+test('r1-g1-w4: CLI run all green -> the gh pr merge argv carries --match-head-commit equal to --reviewedHead', () => {
+  const gh = fakeGh()
+  const { out } = runCli('run', gh, { gate: 'green', message: 'm', branch: 'feature/US-42-x' })
+  assert.equal(out.merged, true, JSON.stringify(out))
+  assert.equal(pinOf(mergeCall(gh)), SHA('a'), JSON.stringify(mergeCall(gh)))
+  assert.deepEqual(gh.merged(), [SHA('a')])
+})
+
+test('r1-g1-w5: CLI run — a push landing between the signals read and gh pr merge is refused by the host: merged:false, merge-failed, parked, nothing closed', () => {
+  const gh = fakeGh({ head: SHA('a'), mergeHead: SHA('b') })
+  const { out, status } = runCli('run', gh, { gate: 'green', message: 'm', branch: 'feature/US-42-x' })
+  assert.equal(status, 0)
+  assert.deepEqual(gh.merged(), [], 'the unreviewed head was never merged')
+  assert.deepEqual({ merged: out.merged, cascaded: out.cascaded, code: out.failed?.[0]?.code, parkKind: out.parkKind }, { merged: false, cascaded: false, code: 'merge-failed', parkKind: 'halted' }, JSON.stringify(out))
+  assert.equal(gh.calls().some(c => c[0] === 'issue' && c[1] === 'close'), false)
+  assert.equal(out.comment?.posted, true)
+})
+
+test('r1-g1-c2: CLI run — a head already moved at the signals read parks head-moved and never reaches gh pr merge', () => {
+  const gh = fakeGh({ head: SHA('a'), mergeHead: SHA('b') })
+  const { out } = runCli('run', gh, { gate: 'green', message: 'm', reviewedHead: SHA('b') })
+  assert.equal(out.merged, false)
+  assert.equal(out.failed[0].code, 'head-moved')
+  assert.equal(mergeCall(gh), undefined)
+})
+
+// An `az` recorder: one PR whose source head is `head`. Completion is recorded ONLY when it happens —
+// through `repos pr update --status completed`, or a REST PATCH whose lastMergeSourceCommit (when
+// given) matches the head (Azure DevOps refuses a stale one). `raceTo` models the r0-1 race window:
+// every read (`repos pr show`, any non-PATCH `devops invoke`) keeps reporting the seeded head, while the
+// real source head becomes `raceTo` at the first read or the first completion call, whichever comes first.
+function fakeAzPr(seed = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'az-fake-'))
+  const state = join(dir, 'state.json')
+  writeFileSync(state, JSON.stringify({ head: seed.head ?? SHA('a'), readHead: seed.head ?? SHA('a'), raceTo: seed.raceTo ?? null, status: 'active', completedHead: null }))
+  writeFileSync(
+    join(dir, 'az'),
+    `#!/usr/bin/env node
+const fs = require('fs')
+const a = process.argv.slice(2)
+const S = JSON.parse(fs.readFileSync(${JSON.stringify(state)}, 'utf8'))
+const save = () => fs.writeFileSync(${JSON.stringify(state)}, JSON.stringify(S))
+const opt = k => a[a.indexOf(k) + 1]
+const out = v => { process.stdout.write(JSON.stringify(v)); process.exit(0) }
+const pr = () => ({ pullRequestId: 3, lastMergeSourceCommit: { commitId: S.raceTo === null ? S.head : S.readHead }, status: S.status, repository: { webUrl: 'https://dev.azure.com/acme/Proj/_git/app' } })
+const race = () => { if (S.raceTo !== null && S.head !== S.raceTo) { S.head = S.raceTo; save() } }
+if (a[0] === 'repos' && a[1] === 'pr' && a[2] === 'show') { const r = pr(); race(); out(r) }
+if (a[0] === 'repos' && a[1] === 'pr' && a[2] === 'update') { if (opt('--status') === 'completed') { race(); S.status = 'completed'; S.completedHead = S.head; save() } out(pr()) }
+if (a[0] === 'devops' && a[1] === 'invoke' && a.includes('PATCH') && a.includes('--in-file')) {
+  race()
+  const body = JSON.parse(fs.readFileSync(opt('--in-file'), 'utf8'))
+  const pin = body && body.lastMergeSourceCommit && body.lastMergeSourceCommit.commitId
+  if (pin && pin !== S.head) { process.stderr.write('TF401181: The pull request cannot be completed: the source branch was updated.'); process.exit(1) }
+  if (body && body.status === 'completed') { S.status = 'completed'; S.completedHead = S.head; save() }
+  out(pr())
+}
+if (a[0] === 'devops' && a[1] === 'invoke') { const r = pr(); race(); out(r) }
+process.stderr.write('fake az: unhandled ' + a.join(' ')); process.exit(1)
+`,
+  )
+  chmodSync(join(dir, 'az'), 0o755)
+  return { bin: join(dir, 'az'), state: () => JSON.parse(readFileSync(state, 'utf8')) }
+}
+
+test('r1-g1-w6: azure-devops merge with a headSha that is not the PR source head never completes the PR', () => {
+  const az = fakeAzPr({ head: SHA('b') })
+  const a = azure.instantiate({ azBin: az.bin })
+  assert.throws(() => a.merge({ pr: 3, repo: 'Proj/app', strategy: 'squash', message: 'm', headSha: SHA('a') }), e => e?.name === 'HostError')
+  assert.deepEqual({ status: az.state().status, completedHead: az.state().completedHead }, { status: 'active', completedHead: null })
+})
+
+test('r1-g1-c3: azure-devops merge with the matching headSha completes the PR on that head', () => {
+  const az = fakeAzPr({ head: SHA('a') })
+  const a = azure.instantiate({ azBin: az.bin })
+  assert.equal(a.merge({ pr: 3, repo: 'Proj/app', strategy: 'squash', message: 'm', headSha: SHA('a') }).merged, true)
+  assert.deepEqual({ status: az.state().status, completedHead: az.state().completedHead }, { status: 'completed', completedHead: SHA('a') })
+})
+
+test('r1-g1-w6-race: azure-devops merge — head reads as the reviewed head, a push lands before completion: HostError, the PR stays active', () => {
+  const az = fakeAzPr({ head: SHA('a'), raceTo: SHA('b') })
+  const a = azure.instantiate({ azBin: az.bin })
+  assert.throws(() => a.merge({ pr: 3, repo: 'Proj/app', strategy: 'squash', message: 'm', headSha: SHA('a') }), e => e?.name === 'HostError')
+  assert.deepEqual({ status: az.state().status, completedHead: az.state().completedHead }, { status: 'active', completedHead: null })
 })

@@ -1,0 +1,327 @@
+{
+  "$meta": {
+    "pr": "520",
+    "phase": "r1-g1",
+    "base": "849ef33ff5736d11a04d4921816133a9da256504",
+    "trailer": "Pair-RED-Snapshot: pr=520; phase=r1-g1; base=849ef33ff5736d11a04d4921816133a9da256504; manifest=.pair/red-snapshots/pr-520-r1-g1.json",
+    "artifacts": [
+      ".claude/workflows/pair-contracts/cycle-merge.test.mjs",
+      "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-merge.test.mjs"
+    ]
+  },
+  "run": "story-490",
+  "story": "490",
+  "pr": 520,
+  "branch": "feature/US-490-merge-stage",
+  "phase": "r1-g1",
+  "mode": "repair",
+  "groupId": "r1-g1",
+  "remediationBatchId": "r1",
+  "inputHead": "849ef33ff5736d11a04d4921816133a9da256504",
+  "sourceOfTruth": "r0 review finding r0-1 (r0-review-phase handoff) + gh pr merge --match-head-commit semantics (merge refused unless the PR head equals the given sha) + Azure DevOps lastMergeSourceCommit completion semantics",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "runMerge (packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-merge.mjs:218-234) -> hosts.code.merge(), the code-host adapter interface method (github.mjs merge: `gh pr merge <n> --<strategy>`; azure-devops.mjs merge: `az repos pr update --status completed`)",
+      "inputs": [
+        "pr",
+        "repo",
+        "strategy (runMerge: squash literal)",
+        "message",
+        "headSha (new: = --reviewedHead)",
+        "remote head at merge time (host state, may differ from the head readSignals saw)"
+      ],
+      "representations": [
+        "canonical: dataset .skills/workflow/cycle/scripts/cycle-merge.mjs + host/{github,azure-devops}.mjs in the 6 workflow skills",
+        "installed mirrors: .claude/skills/pair-workflow-*/scripts/{cycle-merge.mjs,host/*.mjs} (pnpm mirrors:regenerate)",
+        "documented: host-adapter-extension-guide.md merge row (dataset + .pair/knowledge mirror), cycle SKILL.md Step 5 merge branch",
+        "CLI: node cycle-merge.mjs run --reviewedHead <sha> --gate green"
+      ],
+      "consumers": [
+        "cycle SKILL.md Step 5 (in-session cycle)",
+        "pair-loop.js Advance phase (delegates to cycle-merge.mjs)",
+        "pair-cli run --card (r0-2, group r1-g2)",
+        "host-adapter.test.mjs merge conformance (no headSha)",
+        "host-adapter-extension-guide.md sample conformance check"
+      ],
+      "classes": [
+        "runMerge all-green: merge receives headSha === reviewedHead",
+        "github merge, headSha 40-hex lowercase: argv carries --match-head-commit <headSha>",
+        "github merge, headSha malformed (short, uppercase, argv-injection, non-string): typed HostError, no gh call",
+        "github merge, headSha absent: unpinned argv unchanged (interface backward compatible; only caller runMerge always passes it)",
+        "CLI run, remote head at merge time == reviewedHead: merged:true on the reviewed head",
+        "CLI run, push lands between readSignals and gh pr merge (remote head != reviewedHead): host refuses; merged:false, failed[0].code merge-failed, parkKind halted, card comment, no closure",
+        "CLI run, head already moved at readSignals: head-moved park, merge never called (pre-existing)",
+        "host refusal (any error thrown by merge): merge-failed park, no closure (pre-existing)",
+        "azure-devops merge, headSha != PR lastMergeSourceCommit: HostError, PR not completed",
+        "azure-devops merge, headSha == PR source head: completed on that head",
+        "strategy merge|rebase with headSha: not reachable from runMerge",
+        "azure-devops merge, head reads as headSha on every read but the source head moves before completion (race window): HostError, PR not completed — only an atomic pinned completion (REST PATCH pullRequests with lastMergeSourceCommit.commitId = headSha, refused by the host when stale) passes; a read-then-complete check does not",
+        "github merge, headSha empty string: malformed, typed HostError, no gh call"
+      ],
+      "interactions": [
+        "readSignals(headSha=a) x remote push (b) x adapter merge pin x park/closeStory: the race window of the finding (w5)",
+        "adapter pin x host refusal x runMerge catch -> merge-failed (w5 + c4)",
+        "azure adapter read(a) x remote push (b) before completion x completion call pin: the r0-1 race window on the Azure adapter (w6-race)"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "cycle-merge.mjs runMerge + code-host adapter merge() (github, azure-devops)",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-merge.mjs",
+      ".claude/skills/pair-workflow-cycle/scripts/cycle-merge.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/github.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/azure-devops.mjs",
+      ".claude/skills/pair-workflow-cycle/scripts/host/github.mjs",
+      ".claude/skills/pair-workflow-cycle/scripts/host/azure-devops.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/host/github.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/host/azure-devops.mjs",
+      ".claude/skills/pair-workflow-green-fix/scripts/host/github.mjs",
+      ".claude/skills/pair-workflow-green-fix/scripts/host/azure-devops.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/host/github.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/host/azure-devops.mjs",
+      ".claude/skills/pair-workflow-implement-phase/scripts/host/github.mjs",
+      ".claude/skills/pair-workflow-implement-phase/scripts/host/azure-devops.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/host/github.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/host/azure-devops.mjs",
+      ".claude/skills/pair-workflow-red-spec/scripts/host/github.mjs",
+      ".claude/skills/pair-workflow-red-spec/scripts/host/azure-devops.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/host/github.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/host/azure-devops.mjs",
+      ".claude/skills/pair-workflow-red-verify/scripts/host/github.mjs",
+      ".claude/skills/pair-workflow-red-verify/scripts/host/azure-devops.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/host/github.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/host/azure-devops.mjs",
+      ".claude/skills/pair-workflow-review-phase/scripts/host/github.mjs",
+      ".claude/skills/pair-workflow-review-phase/scripts/host/azure-devops.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md",
+      ".claude/skills/pair-workflow-cycle/SKILL.md",
+      "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/project-management-tool/host-adapter-extension-guide.md",
+      ".pair/knowledge/guidelines/collaboration/project-management-tool/host-adapter-extension-guide.md",
+      ".pair/adoption/decision-log/"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r1-g1-w0",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "runMerge all green with fake hosts; the AC3 call-shape assertion now expects headSha",
+      "oracle": ".claude/workflows/pair-contracts/cycle-merge.test.mjs AC3: all green -> squash merge ... in order; cd .claude/workflows && node --test --test-name-pattern=\"AC3: all green\" pair-contracts/cycle-merge.test.mjs",
+      "expected": "merge call args deepEqual { pr: 7, repo: 'o/r', strategy: 'squash', message, headSha: SHA('a') }",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs"
+    },
+    {
+      "id": "r1-g1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "runMerge all green, fake hosts",
+      "oracle": ".claude/workflows/pair-contracts/cycle-merge.test.mjs r1-g1-w1; cd .claude/workflows && node --test --test-name-pattern=\"r1-g1-w1\" pair-contracts/cycle-merge.test.mjs",
+      "expected": "merge args .headSha === SHA('a') (the --reviewedHead)",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs"
+    },
+    {
+      "id": "r1-g1-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "github.instantiate(ghBin stub).merge({ ..., headSha: SHA(a) })",
+      "oracle": ".claude/workflows/pair-contracts/cycle-merge.test.mjs r1-g1-w2; cd .claude/workflows && node --test --test-name-pattern=\"r1-g1-w2\" pair-contracts/cycle-merge.test.mjs",
+      "expected": "gh pr merge argv contains --match-head-commit followed by SHA(a); returns { merged, pr, strategy }",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs"
+    },
+    {
+      "id": "r1-g1-w3",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "github merge with headSha '' | 'abc' | 40x'A' | '<sha> --admin' | 42",
+      "oracle": ".claude/workflows/pair-contracts/cycle-merge.test.mjs r1-g1-w3; cd .claude/workflows && node --test --test-name-pattern=\"r1-g1-w3\" pair-contracts/cycle-merge.test.mjs",
+      "expected": "each throws HostError; the gh recorder logs zero calls",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs"
+    },
+    {
+      "id": "r1-g1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "github merge without headSha",
+      "oracle": ".claude/workflows/pair-contracts/cycle-merge.test.mjs r1-g1-c1; cd .claude/workflows && node --test --test-name-pattern=\"r1-g1-c1\" pair-contracts/cycle-merge.test.mjs",
+      "expected": "argv exactly ['pr','merge','7','--squash','--repo','o/r','--subject','m']",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs"
+    },
+    {
+      "id": "r1-g1-w4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "CLI run --gate green through the real GitHub adapter; gh stub implements --match-head-commit semantics, remote head stays a",
+      "oracle": ".claude/workflows/pair-contracts/cycle-merge.test.mjs r1-g1-w4; cd .claude/workflows && node --test --test-name-pattern=\"r1-g1-w4\" pair-contracts/cycle-merge.test.mjs",
+      "expected": "merged:true; gh pr merge argv pin === --reviewedHead; merged heads [SHA(a)]",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs"
+    },
+    {
+      "id": "r1-g1-w5",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "CLI run: pr view returns a (signals all green), remote head is b when gh pr merge runs; stub refuses a mismatched pin, merges the current head when unpinned (real gh semantics)",
+      "oracle": ".claude/workflows/pair-contracts/cycle-merge.test.mjs r1-g1-w5; cd .claude/workflows && node --test --test-name-pattern=\"r1-g1-w5\" pair-contracts/cycle-merge.test.mjs",
+      "expected": "no head merged; merged:false, cascaded:false, failed[0].code merge-failed, parkKind halted; no gh issue close; comment.posted true",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs"
+    },
+    {
+      "id": "r1-g1-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "CLI run, --reviewedHead b, remote head a at readSignals",
+      "oracle": ".claude/workflows/pair-contracts/cycle-merge.test.mjs r1-g1-c2; cd .claude/workflows && node --test --test-name-pattern=\"r1-g1-c2\" pair-contracts/cycle-merge.test.mjs",
+      "expected": "merged:false, failed[0].code head-moved, gh pr merge never called",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs"
+    },
+    {
+      "id": "r1-g1-c4",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "fake code host whose merge throws",
+      "oracle": ".claude/workflows/pair-contracts/cycle-merge.test.mjs AC4: a code host that refuses the merge; cd .claude/workflows && node --test --test-name-pattern=\"AC4: a code host that refuses\" pair-contracts/cycle-merge.test.mjs",
+      "expected": "merged:false, merge-failed, no closeAndCascade, card comment",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs"
+    },
+    {
+      "id": "r1-g1-c5",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "CLI run all green (pre-existing row, stub now enforces pin semantics)",
+      "oracle": ".claude/workflows/pair-contracts/cycle-merge.test.mjs CLI run: all green -> gh pr merge --squash; cd .claude/workflows && node --test --test-name-pattern=\"CLI run: all green\" pair-contracts/cycle-merge.test.mjs",
+      "expected": "merged:true, card closed, board written, cascaded:true",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs"
+    },
+    {
+      "id": "r1-g1-w6",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "azure.instantiate(azBin stub).merge({ pr: 3, repo: Proj/app, headSha: SHA(a) }) with PR source head b (fakeAzPr without raceTo: reads and completion see the same head)",
+      "oracle": ".claude/workflows/pair-contracts/cycle-merge.test.mjs r1-g1-w6; cd .claude/workflows && node --test --test-name-pattern=\"r1-g1-w6\" pair-contracts/cycle-merge.test.mjs",
+      "expected": "throws HostError; stub state status active, completedHead null (completion via az repos pr update or a REST PATCH with a mismatched lastMergeSourceCommit both observed)",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs",
+      "rationale": "fakeAzPr extended with an opt-in raceTo seed for r1-g1-w6-race; w6's own seed and assertions unchanged"
+    },
+    {
+      "id": "r1-g1-w6-race",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "azure.instantiate(azBin stub).merge({ pr: 3, repo: Proj/app, headSha: SHA(a) }); fakeAzPr({ head: SHA(a), raceTo: SHA(b) }): every read (repos pr show, non-PATCH devops invoke) reports SHA(a); the real source head becomes SHA(b) at the first read or the first completion call, whichever comes first",
+      "oracle": ".claude/workflows/pair-contracts/cycle-merge.test.mjs r1-g1-w6-race; cd .claude/workflows && node --test --test-name-pattern=\"r1-g1-w6-race\" pair-contracts/cycle-merge.test.mjs",
+      "expected": "throws HostError; stub state status active, completedHead null. Discriminance (scratchpad isolated copies): unfixed base FAILS (az repos pr update completes on bbbb, no throw); check-then-complete adapter (repos pr show lastMergeSourceCommit === headSha, then az repos pr update --status completed) FAILS while w6 and c3 pass; pinned REST PATCH pullRequests { status: completed, lastMergeSourceCommit.commitId: headSha } PASSES with w6 and c3",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs"
+    },
+    {
+      "id": "r1-g1-c3",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "azure merge with headSha === PR source head a",
+      "oracle": ".claude/workflows/pair-contracts/cycle-merge.test.mjs r1-g1-c3; cd .claude/workflows && node --test --test-name-pattern=\"r1-g1-c3\" pair-contracts/cycle-merge.test.mjs",
+      "expected": "merged:true; status completed, completedHead SHA(a)",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs"
+    },
+    {
+      "id": "r1-g1-c6",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "existing adapter merge conformance without headSha (github T-2, azure PR side)",
+      "oracle": ".claude/workflows/pair-contracts/host-adapter.test.mjs T-2: github prHead / merge / closeAndCascade; AC3: azure-devops PR side; cd .claude/workflows && node --test --test-name-pattern=\"T-2: github prHead|azure-devops PR side\" pair-contracts/host-adapter.test.mjs",
+      "expected": "both pass unchanged: the headSha field is additive",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/host-adapter.test.mjs"
+    },
+    {
+      "id": "r1-g1-na1",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "condition": "headSha with strategy merge | rebase",
+      "oracle": ".claude/workflows/pair-contracts/cycle-merge.test.mjs (no row): cycle-merge.mjs:224 passes strategy 'squash' literally; runMerge is the only code.merge caller (grep .merge( over dataset + apps/pair-cli/src)",
+      "expected": "unreachable from the merge stage",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs",
+      "rationale": "runMerge hard-codes strategy 'squash'; --match-head-commit is strategy-agnostic in gh, so a pin implementation covering squash covers the only reachable class"
+    }
+  ],
+  "redTests": [
+    {
+      "file": ".claude/workflows/pair-contracts/cycle-merge.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:6f6218ed77931a632b71b8e3756b5a284fb0b00575faa6bb97827ba70475bfe9",
+      "command": "cd .claude/workflows && node --test pair-contracts/cycle-merge.test.mjs",
+      "observed": "8 of 53 fail (red): AC3 all-green call-shape (merge args lack headSha), r1-g1-w1 (headSha undefined), r1-g1-w2 + r1-g1-w4 (argv has no --match-head-commit), r1-g1-w3 (Missing expected exception on the malformed headSha set), r1-g1-w5 (unreviewed head bbbb merged), r1-g1-w6 (Missing expected exception: azure completed the PR), r1-g1-w6-race (Missing expected exception: azure completed the PR on the raced head); 45 pass"
+    },
+    {
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-merge.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:6f6218ed77931a632b71b8e3756b5a284fb0b00575faa6bb97827ba70475bfe9",
+      "command": "cmp packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-merge.test.mjs .claude/workflows/pair-contracts/cycle-merge.test.mjs && cd .claude/workflows && node --test pair-contracts/cycle-merge.test.mjs",
+      "observed": "byte-identical canonical source of the mirror (dataset imports resolve only from .claude/workflows); 8 of 53 fail (red): AC3 all-green call-shape (merge args lack headSha), r1-g1-w1 (headSha undefined), r1-g1-w2 + r1-g1-w4 (argv has no --match-head-commit), r1-g1-w3 (Missing expected exception on the malformed headSha set), r1-g1-w5 (unreviewed head bbbb merged), r1-g1-w6 (Missing expected exception: azure completed the PR), r1-g1-w6-race (Missing expected exception: azure completed the PR on the raced head); 45 pass"
+    }
+  ],
+  "testExempt": false,
+  "notes": {
+    "mirrors": "the fixer edits the dataset canonical copies and realigns .claude/** with pnpm mirrors:regenerate; the two test copies stay byte-identical (workflow-mirror guard)",
+    "worked": [
+      "w-1 decideMerge conjunction/precedence stays unchanged",
+      "w-2 resolve merge offer stays unchanged"
+    ],
+    "repair": "attempt 2 answers red-verify rejection r1-g1-w6 / azure-devops-merge-pin: adds r1-g1-w6-race (Azure race window); r1-g1-w3 gains '' in the malformed set (non-blocking note). The pinned completion is REST PATCH git/pullRequests (api 7.1) through the adapter's own invoke(); the fixer adds that resource inside fixScope."
+  },
+  "attempt": 2,
+  "repairOf": {
+    "contractPath": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-490/490/r1-g1-red-contract.json",
+    "contractHash": "sha256:9c5ed133bac792299b60c206f7e28ea2cc939cfff2c8c3d9d701c1355bb47da8"
+  },
+  "changedRows": [
+    "r1-g1-w6",
+    "r1-g1-w6-race",
+    "r1-g1-w3"
+  ]
+}
