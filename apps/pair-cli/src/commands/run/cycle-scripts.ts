@@ -467,6 +467,16 @@ export function cycleHooksScriptPath(
  */
 const HOOK_ANSWER_MAX_BUFFER = 512 * 1024 * 1024
 
+/** The only hook points that may default to the main checkout; every stage hook needs its worktree. */
+const CYCLE_LEVEL = new Set(['pre-cycle', 'post-cycle', 'on-halt'])
+
+function requireStageCwd(point: string, cwd: string | undefined): void {
+  if (cwd === undefined && !CYCLE_LEVEL.has(point))
+    throw new Error(
+      `stage hook \`${point}\` has no story worktree path — refusing to run it in the main checkout`,
+    )
+}
+
 export interface CycleHooksBridge extends CycleHooks {
   /** `load`: the section's unrecognized-key / unparseable-line warnings, reported once per run. */
   warnings(): readonly string[]
@@ -511,6 +521,7 @@ export function createCycleHooksBridge(
       return out.warnings ?? []
     },
     async run(point, status, cwd) {
+      requireStageCwd(point, cwd)
       const where = cwd ?? options.cwd
       const args: [string, string][] = [
         ['point', point],

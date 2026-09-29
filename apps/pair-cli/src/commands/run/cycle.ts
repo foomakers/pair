@@ -82,7 +82,7 @@ export interface CycleHookResult {
 
 /** The shared hook executor, as the loop sees it: one call per hook point, zero rules of its own. */
 export interface CycleHooks {
-  /** `cwd`: where the hook runs — the story worktree for stage hooks, absent (main) for cycle-level ones. */
+  /** `cwd`: where the hook runs — REQUIRED for stage hooks (the story worktree; the bridge refuses without it), absent (main) only for `pre-cycle`/`post-cycle`/`on-halt`. */
   run(point: string, status?: string, cwd?: string): Promise<CycleHookResult>
 }
 
