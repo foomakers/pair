@@ -70,7 +70,24 @@ export interface CyclePolicy {
   readonly [key: string]: unknown
 }
 
+/**
+ * What one hook point answered — `cycle-hooks.mjs run`'s own shape, relayed (US-489). The blocking
+ * vs logging semantics live in THAT shared executor; the loop only reacts to `halted`.
+ */
+export interface CycleHookResult {
+  readonly halted?: { readonly command: string; readonly exitCode: number; readonly output: string }
+  /** Failures of logging hooks (`post-*`, `on-halt`) — relayed via `onNotice`, never a stop. */
+  readonly logged?: readonly string[]
+}
+
+/** The shared hook executor, as the loop sees it: one call per hook point, zero rules of its own. */
+export interface CycleHooks {
+  run(point: string, status?: string): Promise<CycleHookResult>
+}
+
 export interface RunCycleInput {
+  /** US-489: `## Cycle Hooks`, executed by the coordinator. Absent ⇒ no hook step attempted at all. */
+  readonly hooks?: CycleHooks
   readonly resolve: () => Promise<CycleResolveAnswer>
   readonly worktree: () => Promise<unknown>
   readonly packet: (next: CycleNext) => Promise<{
@@ -237,8 +254,8 @@ function stoppedWithoutNext(answer: CycleResolveStop, stagesRun: number): CycleO
  * a time. Never judges a stage's content, never merges (AC12: no branch of the outcome mapping —
  * or the collaborator surface above — can request one).
  */
-export async function runCycle(input: RunCycleInput): Promise<CycleOutcome> {
-  const { resolve, worktree, packet, spawnStage, policy, rounds, onNotice } = input
+async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
+  const { resolve, worktree, packet, spawnStage, policy, rounds, onNotice, hooks } = input
   const observers: StageObservers = {
     onStage: input.onStage,
     appendAudit: input.appendAudit,
@@ -266,8 +283,14 @@ export async function runCycle(input: RunCycleInput): Promise<CycleOutcome> {
       return stoppedWithoutNext(answer as CycleResolveStop, state.stagesRun)
     }
 
+    const advanced = state.dispatchedNext !== null && !sameNext(state.dispatchedNext, next)
+    const previousStep = state.dispatchedNext?.step
     const settled = settlePreviousDispatch(state, next, deadDispatchRetries, observers)
     if (settled !== null) return settled
+    // US-489 AC2: `post-<stage>` runs once the stage's handoff advanced — logged, never a stop.
+    if (advanced && previousStep !== undefined) {
+      await runHookPoint(hooks, `post-${previousStep}`, undefined, onNotice)
+    }
 
     if (!DISPATCHABLE_STEPS.has(next.step)) return terminalOutcome(next, state.stagesRun)
     if (roundsBoundReached(rounds, next)) {
@@ -276,10 +299,69 @@ export async function runCycle(input: RunCycleInput): Promise<CycleOutcome> {
 
     noticeReuseOnce(state, next, onNotice)
 
+    // US-489 AC1: `pre-<stage>` runs before the stage dispatches; a non-zero exit HALTs here, so
+    // the stage never runs and the hook's own output is what the operator reads.
+    const blocked = await runHookPoint(hooks, `pre-${next.step}`, undefined, onNotice)
+    if (blocked !== null) return hookFailure(blocked, state.stagesRun)
+
     await worktree()
     const stagePacket = await packet(next)
     state.dispatchedResult = await spawnStage(stagePacket)
     state.stagesRun += 1
     state.dispatchedNext = next
   }
+}
+
+type HaltedHook = { point: string; command: string; exitCode: number; output: string }
+
+/**
+ * Runs one hook point through the shared executor. Returns the HALT (blocking hooks only — the
+ * executor decides that, never this loop) or `null`; relays logged failures via `onNotice`.
+ * No `hooks` collaborator ⇒ nothing attempted, nothing said (AC6).
+ */
+async function runHookPoint(
+  hooks: CycleHooks | undefined,
+  point: string,
+  status: string | undefined,
+  onNotice: RunCycleInput['onNotice'],
+): Promise<HaltedHook | null> {
+  if (hooks === undefined) return null
+  const result = await hooks.run(point, status)
+  for (const line of result.logged ?? []) onNotice?.(line)
+  return result.halted === undefined ? null : { point, ...result.halted }
+}
+
+/** A blocking hook's HALT as the cycle's own terminal: `failed-hook`, the command's output verbatim. */
+function hookFailure(halted: HaltedHook, stagesRun: number): CycleOutcome {
+  return {
+    status: 'failed-hook',
+    stagesRun,
+    next: {
+      step: 'blocked',
+      reason: 'failed-hook',
+      detail:
+        `hook \`${halted.point}\` \`${halted.command}\` exited ${halted.exitCode}` +
+        `${halted.output.length > 0 ? ` — output:\n${halted.output}` : ''}`,
+    },
+  }
+}
+
+/** Statuses that are an invocation ending, not the cycle reaching a terminal status. */
+const NOT_TERMINAL = new Set(['rounds-bound-reached', 'incompatible', 'invalid', 'other-run'])
+const isHalt = (status: string): boolean => status.startsWith('failed-') || status === 'escalate'
+
+/**
+ * Drives one cycle to its next terminal state (or to the `--rounds` bound). US-489: wraps the stage
+ * loop in `## Cycle Hooks` — `pre-cycle` once before the first stage, `on-halt` on a `failed-*` /
+ * `escalate` stop, `post-cycle` once after a terminal status; once per INVOCATION, never per round.
+ */
+export async function runCycle(input: RunCycleInput): Promise<CycleOutcome> {
+  const { hooks, onNotice } = input
+  const blocked = await runHookPoint(hooks, 'pre-cycle', undefined, onNotice)
+  const outcome = blocked !== null ? hookFailure(blocked, 0) : await runCycleLoop(input)
+  if (isHalt(outcome.status)) await runHookPoint(hooks, 'on-halt', outcome.status, onNotice)
+  if (!NOT_TERMINAL.has(outcome.status)) {
+    await runHookPoint(hooks, 'post-cycle', outcome.status, onNotice)
+  }
+  return outcome
 }

@@ -1,8 +1,10 @@
 import { spawnSync } from 'child_process'
+import { existsSync, readFileSync } from 'fs'
 import { isAbsolute, join, relative, resolve } from 'path'
 import { pathToFileURL } from 'url'
 import type { FileSystemService } from '@pair/content-ops'
 import { extractRegistries, type Config } from '#registry'
+import type { CycleHookResult, CycleHooks } from './cycle'
 
 /**
  * The script bridge — US-487 T-2.
@@ -218,8 +220,9 @@ function runScriptIn(
   cmd: string,
   args: readonly (readonly [string, string])[],
   cwd?: string,
+  positional: readonly string[] = [],
 ): unknown {
-  const argv = [script, cmd]
+  const argv = [script, cmd, ...positional]
   for (const [flag, value] of args) argv.push(`--${flag}`, value)
   const result = spawnSync('node', argv, { encoding: 'utf8', ...(cwd !== undefined && { cwd }) })
   const parsed = parseScriptOutput(script, cmd, (result.stdout ?? '').trim(), result.stderr)
@@ -425,3 +428,58 @@ export const CYCLE_WORKTREE_ROOT_DEFAULT = '../pair-worktrees'
 export const CYCLE_WORKFLOW_VERSION = '4.0.1'
 /** `cycle-state.mjs`'s own `PIPELINE_DEFAULTS.baseBranch` — what a fresh story's worktree is cut from. */
 export const CYCLE_BASE_BRANCH_DEFAULT = 'origin/main'
+
+// ── `## Cycle Hooks` (US-489) — the SAME shared executor the in-session skill calls ────────────
+
+export interface CycleHooksBridge extends CycleHooks {
+  /** `load`: the section's unrecognized-key / unparseable-line warnings, reported once per run. */
+  warnings(): readonly string[]
+}
+
+/**
+ * Spawns the installed `cycle-hooks.mjs` (never a TypeScript port of its rules): the blocking vs
+ * logging semantics, the pattern-derived names and the `on-halt` gate all live in that one script,
+ * so `pair-workflow-cycle` and `pair-cli run --card` cannot drift. `policyPath` is the MAIN
+ * checkout's `tech/automation.md`; hooks run in `cwd`, the repo root.
+ */
+export function createCycleHooksBridge(
+  location: CycleScriptsLocation,
+  options: { readonly policyPath: string; readonly cwd: string },
+): CycleHooksBridge {
+  const script = join(location.scriptsDir, 'cycle-hooks.mjs')
+  // An installed skill older than US-489 has no executor. That is silent ONLY when the project
+  // declares no `## Cycle Hooks` — a declared hook that cannot run is never a quiet no-op.
+  if (!existsSync(script)) {
+    const declared =
+      existsSync(options.policyPath) &&
+      /^##\s+Cycle Hooks\s*$/m.test(readFileSync(options.policyPath, 'utf8'))
+    return {
+      warnings() {
+        if (declared) {
+          throw new Error(
+            `skill-outdated: ${options.policyPath} declares \`## Cycle Hooks\` but ${script} is not ` +
+              `installed — update the skill (\`pair-cli update\`) before running with hooks.`,
+          )
+        }
+        return []
+      },
+      run: async () => ({}),
+    }
+  }
+  return {
+    warnings() {
+      const out = runScriptIn(script, 'load', [], undefined, [options.policyPath]) as {
+        warnings?: readonly string[]
+      }
+      return out.warnings ?? []
+    },
+    async run(point, status) {
+      const args: [string, string][] = [
+        ['point', point],
+        ['cwd', options.cwd],
+        ...optional([['status', status]]),
+      ]
+      return runScriptIn(script, 'run', args, options.cwd, [options.policyPath]) as CycleHookResult
+    },
+  }
+}

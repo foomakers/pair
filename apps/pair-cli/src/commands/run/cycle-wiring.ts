@@ -6,6 +6,7 @@ import type { EngineDefinition } from './engines'
 import { runCycle, type CycleOutcome, type CycleStageResult } from './cycle'
 import {
   createCycleScriptsBridge,
+  createCycleHooksBridge,
   type CardReadiness,
   type CycleScriptsLocation,
 } from './cycle-scripts'
@@ -13,7 +14,11 @@ import { runStage, styleFor } from './stage-runner'
 import { spawnIteration } from './spawn'
 import { readStateMapping, resolveCardReadiness, type CardDocument } from './card-readiness'
 import { resolveBlockingSeverities } from './blocking-severities'
+<<<<<<< HEAD
 import { stageSettings, type ResolvedWorkflowProfile } from './workflow-profile'
+=======
+import { POLICY_PATH } from './policy-sections'
+>>>>>>> c6b2b078 ([#489] feat: pair-cli run --card executes Cycle Hooks via shared executor (T-4))
 
 /**
  * The PRODUCTION wiring for `run --card`'s two injected collaborators.
@@ -463,6 +468,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       first = await resolveFor(ctx, input, co)()
     }
     const policy = (first as { policy?: Record<string, unknown> }).policy ?? {}
+<<<<<<< HEAD
     // US-488 AC7: the run's profile identity is recorded ONCE, after any `other-run` adoption settled
     // which directory this run really is — `publish` then stamps it into every handoff.
     if (ctx.profile !== undefined) {
@@ -476,7 +482,18 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       // in-session coordinator's) binding must not be stamped into the handoffs it publishes.
       rmSync(join(co.runDir, '.workflow-profile.json'), { force: true })
     }
+=======
+    // US-489: `## Cycle Hooks`, executed HERE (the coordinator), through the shared script — the
+    // same one `pair-workflow-cycle` calls. Absent section/file ⇒ the script answers no hooks and
+    // nothing is reported (AC6); only a typo'd key surfaces, once, as a warning.
+    const hooks = createCycleHooksBridge(ctx.location!, {
+      policyPath: `${co.main}/${POLICY_PATH}`,
+      cwd: co.main,
+    })
+    for (const warning of hooks.warnings()) console.log(`  ${warning}`)
+>>>>>>> c6b2b078 ([#489] feat: pair-cli run --card executes Cycle Hooks via shared executor (T-4))
     return await runCycle({
+      hooks,
       resolve: resolveFor(ctx, input, co),
       worktree: worktreeFor(ctx, input, co),
       packet: packetFor(ctx, input, co) as never,
