@@ -284,6 +284,7 @@
 - [Azure DevOps Automation](.pair/knowledge/guidelines/collaboration/automation/azure-devops-automation.md)
 - [Filesystem Automation](.pair/knowledge/guidelines/collaboration/automation/filesystem-automation.md)
 - [GitHub Automation](.pair/knowledge/guidelines/collaboration/automation/github-automation.md)
+- [Workflow Profiles — engine, model, effort and context per delivery-cycle stage](.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md)
 - [Decision Records: ADR, ADL, DDR, and Analysis-Log](.pair/knowledge/guidelines/collaboration/decision-records.md)
 - [Estimation Framework](.pair/knowledge/guidelines/collaboration/estimation/README.md)
 - [AI-Assisted Estimation](.pair/knowledge/guidelines/collaboration/estimation/ai-assisted-estimation.md)

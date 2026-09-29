@@ -760,8 +760,8 @@ pair-cli run [options]
 | `--autonomous`                  | Explicit opt-in: run without confirmations, **and** without the skill's approval rounds — see below   |
 | `--approve-project-trust`       | Explicit authorization to run where the engine does not trust the project                            |
 | `--approve-ineligible`          | Let THIS `--autonomous` run through `## Eligibility` on a card that does not carry the label. Announced, never persisted |
-| `--profile <name>`              | Reserved until #488 (per-stage engine/model/effort/timeout): refused with a pointer                   |
-| `--workflow-config <path>`      | Reserved until #488: refused with a pointer                                                          |
+| `--profile <name>`              | With `--card`: the named workflow profile (per-stage engine/model/effort/context) from `pair.config.json`'s `workflowProfiles`. An unknown name halts `profile-unresolved` — never the KB default |
+| `--workflow-config <path>`      | With `--card`: an external profile file, used verbatim — wins over `--profile` and `pair.config.json`  |
 | `--iteration-timeout <seconds>` | Per-iteration wall-clock bound (hang guard, default `1800`)                                           |
 | `--dry-run`                     | Resolve engine, skill, perimeter and policy, print them, spawn nothing                               |
 

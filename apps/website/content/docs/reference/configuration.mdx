@@ -316,7 +316,7 @@ id, sit beside it:
 - **`bin`** — where THIS machine keeps an engine's executable, when PATH cannot find it
   (`{"bin": {"pi": "/opt/pi/bin/pi"}}`). Consulted first when the engine is resolved.
 - **`model`** — the model an engine drives, run-wide (`{"model": {"codex": "gpt-5.5"}}`). Per-stage
-  selection is not this block's (#488).
+  selection is the [workflow profile](#workflow-profiles-workflowprofiles)'s.
 
 ```json
 { "engine": { "id": "codex", "bin": { "codex": "/usr/local/bin/codex" }, "model": { "codex": "gpt-5.5" } } }
@@ -343,6 +343,43 @@ it executes anything.
   never be able to grant an unattended run permission to skip confirmations or to execute code
   from a repository the engine does not trust.
 </Callout>
+
+## Workflow Profiles (`workflowProfiles`)
+
+An optional top-level `workflowProfiles` field declares which engine, model, effort level and
+context policy each delivery-cycle stage (`prepare`, `validate`, `implement`, `green`, `verify`,
+`contract`, `merge`) uses — for both `pair-cli run --card` and the in-session `pair-workflow-cycle`
+skill, through one shared resolver.
+
+```json
+{
+  "workflowProfiles": {
+    "default": "cheap-green",
+    "files": ".pair/adoption/tech/workflow-profiles/*.json",
+    "inline": { "quick": { "name": "quick", "defaults": { "effort": "low" } } }
+  }
+}
+```
+
+- **`default`** — the profile used when no `--profile` / `--workflow-config` is passed.
+- **`files`** — a glob or array of globs; each file is one profile, indexed by its own `name`.
+- **`inline`** — profiles declared directly, keyed by name. Wins over a file of the same name.
+
+A profile is `{ name, defaults, stages, modelClasses }`; a stage entry overrides only the fields it
+declares (`engine`, `model`, `effort`, `context`), falling back to `defaults`, then to the KB default
+(schema-default engine and model, default effort, `fresh` context). `model` is an id, a class
+(`cheap`, `balanced`, `frontier`) or `by-tier`, resolved against the card's `risk:*` label through
+`## Model Policy`.
+
+Resolution is once per run: `--workflow-config` (verbatim) > `--profile` > `workflowProfiles.default`
+> KB default, and the coordinator prints the resolved profile, its source and the per-stage table
+before the first dispatch. An unknown name is `profile-unresolved`; `context: "reuse"` on a stage the
+cycle's transition table forbids (`validate`, `verify`, …), an unknown stage or key, or a name
+collision is refused at load — never a silent fallback. The profile's name and hash are recorded in
+every handoff but are not part of what invalidates prior evidence. No `workflowProfiles` field and no
+flag: nothing changes.
+
+Full reference: the KB's `workflow-profiles.md` (automation guidelines).
 
 ## Validation
 

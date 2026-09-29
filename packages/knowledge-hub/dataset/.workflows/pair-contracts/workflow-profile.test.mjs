@@ -416,3 +416,30 @@ test('T-5: pair-workflow-cycle SKILL.md resolves the profile through workflow-pr
   assert.match(skill, /legacy/i)
   assert.match(skill, /packet[^\n]*--profile '\{"effort"/)
 })
+
+// ── T-6: the KB slice cannot drift from the resolver — its examples ARE run against it ────────
+test('T-6: the KB workflow-profiles.md example profile validates and resolves, and the config example is a legal workflowProfiles block', () => {
+  const read = rel => readFileSync(new URL(rel, import.meta.url), 'utf8')
+  const kb = read('../../../.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md')
+  assert.equal(kb, read('../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md'), 'KB mirror drifted from the dataset source')
+  const blocks = [...kb.matchAll(/```json\n([\s\S]*?)```/g)].map(m => JSON.parse(m[1]))
+  const example = blocks.find(b => b.name === 'cheap-green')
+  const config = blocks.find(b => b.workflowProfiles)
+  assert.ok(example && config)
+  assert.deepEqual(errorsOf(example), [])
+  // the doc's own claim: prepare/green cheap + reuse, validate/verify frontier + fresh
+  const root = project({ config: { workflowProfiles: { default: 'cheap-green', files: GLOB } }, files: { '.pair/adoption/tech/workflow-profiles/cheap-green.json': example, '.pair/adoption/tech/automation.md': POLICY_MD } })
+  const r = resolveProfile({ root, tier: 'risk:yellow' })
+  assert.deepEqual([r.stages.prepare.model.resolved.class, r.stages.prepare.context.value], ['cheap', 'reuse'])
+  assert.deepEqual([r.stages.green.model.resolved.class, r.stages.green.context.value], ['cheap', 'reuse'])
+  for (const s of ['validate', 'verify']) assert.deepEqual([r.stages[s].model.resolved.class, r.stages[s].context.value], ['frontier', 'fresh'])
+  assert.equal(r.stages.implement.model.resolved.class, 'balanced', 'by-tier on risk:yellow')
+  // every key the config example uses is one the resolver accepts
+  const inlineOnly = project({ config: { workflowProfiles: { inline: config.workflowProfiles.inline } } })
+  assert.equal(resolveProfile({ root: inlineOnly, profile: 'quick' }).stages.implement.effort.value, 'low')
+})
+
+test('T-6: every HALT the KB slice names is one the resolver actually raises', () => {
+  const kb = readFileSync(new URL('../../../.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md', import.meta.url), 'utf8')
+  for (const code of ['profile-unresolved', 'profile-invalid', 'profile-name-collision']) assert.ok(kb.includes(code) && readFileSync(CLI, 'utf8').includes(code), code)
+})
