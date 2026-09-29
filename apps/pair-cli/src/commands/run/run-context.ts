@@ -13,6 +13,7 @@ import { resolveAutonomy, type AutonomyDecision } from './autonomy'
 import { createProjectTrustProbe } from './trust-probe'
 import { readAutomationPolicy, type AutomationPolicy } from './automation-policy'
 import type { CardReadiness } from './cycle-scripts'
+import type { ProfileRequest, ResolvedWorkflowProfile } from './workflow-profile'
 import type { IterationResult } from './stream-reader'
 import type { SelectRootInput } from './root-select'
 import type { RootCandidate } from './root-plan'
@@ -75,6 +76,11 @@ export interface RunHandlerDependencies {
   cardReadiness?: CardReadinessProbe
   /** AC1: drives the delivery-cycle coordinator for a Ready card with no mapped route. */
   driveCycle?: CycleDriver
+  /** US-488: resolves the run's workflow profile (default: the installed `workflow-profile.mjs`). */
+  resolveWorkflowProfile?: (
+    scriptsDir: string,
+    request: ProfileRequest,
+  ) => ResolvedWorkflowProfile
   /** US-491: the `pair-next --root` selection (one engine process, shipped `selectRootCandidates`). */
   selectCandidates?: (input: SelectRootInput) => Promise<RootCandidate[]>
   /** US-491: one `pair-cli run --card` child process (shipped `spawnCardProcess`). */

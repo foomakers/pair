@@ -77,6 +77,28 @@ export function resolveWorkflowProfile(
   return parsed as unknown as ResolvedWorkflowProfile
 }
 
+/**
+ * A profile flag names the DELIVERY-CYCLE profile: on a card the mapping routes to a workflow, or a
+ * Draft card routed to a preparation skill, no cycle runs — so the flag would be accepted and
+ * silently ignored. It is refused instead.
+ */
+export function refuseProfileOffCycle(
+  flags: { readonly profile?: string | undefined; readonly workflowConfig?: string | undefined },
+  route: string,
+): void {
+  const flag =
+    flags.profile !== undefined
+      ? '--profile'
+      : flags.workflowConfig !== undefined
+        ? '--workflow-config'
+        : undefined
+  if (flag === undefined) return
+  throw new Error(
+    `${flag} selects the delivery-cycle workflow profile, but this card routes to ${route}, not the ` +
+      'delivery cycle — no stage would use it. Drop the flag, or run a Ready card with no mapped tag.',
+  )
+}
+
 export interface StageSettings {
   /** Absent ⇒ the run's own engine. */
   readonly engine?: string

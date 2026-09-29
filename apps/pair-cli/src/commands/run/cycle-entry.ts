@@ -14,6 +14,13 @@ import {
 } from './cycle-scripts'
 import { createDefaultCycleDriver, mainCheckout } from './cycle-wiring'
 import { resolveBlockingSeverities, describeMaxDispatches } from './blocking-severities'
+import { ENGINE_IDS, type EngineId } from './engines'
+import {
+  resolveWorkflowProfile,
+  stageEngineIds,
+  workflowProfileRequested,
+  type ResolvedWorkflowProfile,
+} from './workflow-profile'
 import {
   declaredEngine,
   declaredEngineBin,
@@ -114,9 +121,17 @@ function reportCycleEntry(input: {
   scriptsDir: string | undefined
   runDir: string
   shown: ShownDefaults
+  profile: ResolvedWorkflowProfile | undefined
 }): void {
   console.log(chalk.bold('pair-cli run'))
   console.log(`  ${describeEngineResolution(input.engine)}`)
+  // US-488 AC6: resolved ONCE at the entry and printed ONCE, before anything can dispatch — the
+  // driver receives this very object, so nothing is re-resolved from a config that changed mid-run.
+  if (input.profile === undefined) {
+    console.log('  Profile: KB default (source: KB default)')
+  } else {
+    for (const line of input.profile.table) console.log(`  ${line}`)
+  }
   console.log(`  Delivery cycle: runId=${input.dispatch.runId} card=${input.card}`)
   console.log(`  Scripts: ${input.scriptsDir ?? '(resolved by the cycle driver)'}`)
   console.log(`  Run dir: ${input.runDir}`)
@@ -145,6 +160,9 @@ interface DriverInput {
   readonly engine: ReturnType<typeof resolveEngine>
   readonly engineDef: EngineDefinition
   readonly location: CycleScriptsLocation
+  readonly profile: ResolvedWorkflowProfile | undefined
+  /** Availability-checked engines the profile names beyond the run's own (resolved before any print). */
+  readonly stageEngineDefs: Readonly<Record<string, EngineDefinition>>
 }
 
 type ShownDefaults = Pick<CycleDefaults, 'worktreeRoot'> & { readonly maxDispatchesDisplay: string }
@@ -177,6 +195,19 @@ function productionCycleDriver(
     workflowVersion: defaults.workflowVersion,
     baseBranch: defaults.baseBranch,
     model: declaredEngineModel(context.config, driver.engineDef.id),
+    ...(driver.profile !== undefined && {
+      profile: driver.profile,
+      stageEngines: Object.fromEntries(
+        Object.entries(driver.stageEngineDefs).map(([id, engine]) => [
+          id,
+          {
+            engine,
+            autonomyArgs: resolveAutonomyFor(engine, config, mainCheckout(cwd), fs).args,
+            model: declaredEngineModel(context.config, id),
+          },
+        ]),
+      ),
+    }),
   })
   return {
     driveCycle,
@@ -240,6 +271,43 @@ function driverFor(
 }
 
 /**
+ * US-488 AC2/AC9: the profile is resolved only when the run asked for one — a flag, or a
+ * `workflowProfiles` block in the project config. Otherwise nothing is spawned and the run is what it
+ * was without this story (the KB default, reported in one line by the transparency block).
+ */
+function resolveRunProfile(
+  input: CycleCoordinatorInput,
+  deps: RunHandlerDependencies,
+  location: CycleScriptsLocation,
+): ResolvedWorkflowProfile | undefined {
+  const { config, context, cwd } = input
+  if (!workflowProfileRequested(config, context.config)) return undefined
+  const tier = config.dispatch?.tags.find(tag => tag.startsWith('risk:'))
+  return (deps.resolveWorkflowProfile ?? resolveWorkflowProfile)(location.scriptsDir, {
+    root: cwd,
+    profile: config.profile,
+    workflowConfig: config.workflowConfig,
+    tier,
+  })
+}
+
+/** The engines a profile names beyond the run's own, each proven installed before the first print. */
+function stageEnginesOf(
+  profile: ResolvedWorkflowProfile | undefined,
+  runEngine: EngineDefinition,
+  input: CycleCoordinatorInput,
+): Record<string, EngineDefinition> {
+  if (profile === undefined) return {}
+  const { context, fs, cwd } = input
+  const out: Record<string, EngineDefinition> = {}
+  for (const id of stageEngineIds(profile, ENGINE_IDS)) {
+    if (id === runEngine.id) continue
+    out[id] = resolveEngineFor(resolveEngine({ flag: id as EngineId }), context, cwd, fs)
+  }
+  return out
+}
+
+/**
  * Ready (DoR satisfied): this story's own delivery-cycle coordinator, never a prep skill and
  * never the loop-mode re-invocation machinery (AC9, AC12) — `driveCycle` reports a STATUS, and
  * nothing on this path ever merges.
@@ -266,7 +334,18 @@ export function prepareCycleCoordinator(
     ...locateCycleScripts(fs, context.config, cwd),
     agentsDir: locateAgentDefinitions(context.config, cwd),
   }
-  const { driveCycle, shown } = driverFor(input, deps, { engine, engineDef, location })
+  // US-488: resolved before anything is printed or spawned. A HALT (`profile-unresolved`,
+  // `profile-invalid`, a stage engine that is unknown or not installed) is raised here, never at a
+  // dispatch three stages in.
+  const profile = resolveRunProfile(input, deps, location)
+  const stageEngineDefs = stageEnginesOf(profile, engineDef, input)
+  const { driveCycle, shown } = driverFor(input, deps, {
+    engine,
+    engineDef,
+    location,
+    profile,
+    stageEngineDefs,
+  })
 
   const dispatch = config.dispatch!
   reportCycleEntry({
@@ -276,6 +355,7 @@ export function prepareCycleCoordinator(
     scriptsDir: location.scriptsDir,
     runDir: `.pair/working/runs/${dispatch.runId}/${card}`,
     shown,
+    profile,
   })
 
   return async () => {

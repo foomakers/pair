@@ -15,6 +15,7 @@ import { describeApprovalPosture, filterDeliveryFor } from './invocation'
 import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
+import { refuseProfileOffCycle } from './workflow-profile'
 import { handleParallelRun } from './parallel-entry'
 import {
   declaredEngine,
@@ -163,6 +164,12 @@ export async function handleRunCommand(
   const reviewCard = prEntryOnMappedRoute(config, context)
   if (reviewCard !== undefined) {
     return await enterCycleAtReview({ config, context, fs, cwd, card: reviewCard }, deps)
+  }
+
+  // US-488: past the cycle entries above, a `--card` is a mapped workflow (or a plain run) — no cycle
+  // stage exists for a profile to configure, so the flag is refused rather than silently ignored.
+  if (context.dispatch?.kind === 'route') {
+    refuseProfileOffCycle(config, `the mapped workflow \`${context.dispatch.workflow}\``)
   }
 
   const resolved = resolveRun(config, context, cwd, fs)

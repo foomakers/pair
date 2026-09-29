@@ -12,6 +12,7 @@ import { filterDeliveryFor } from './invocation'
 import type { DispatchSkipReason } from './dispatch'
 import { driveRun } from './loop-driver'
 import { prepareCycleCoordinator, resolveEngineFor } from './cycle-entry'
+import { refuseProfileOffCycle } from './workflow-profile'
 import {
   declaredEngine,
   driveLockedCard,
@@ -392,6 +393,7 @@ function preparePrepSkill(
   deps: RunHandlerDependencies,
 ): () => Promise<number> {
   const { config, context, fs, cwd, card, skill, label } = input
+  refuseProfileOffCycle(config, `the preparation skill \`${skill}\` (card is ${label})`)
   const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
   const engineDef = resolveEngineFor(engine, context, cwd, fs)
 
