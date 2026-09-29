@@ -429,7 +429,7 @@ One bullet per command: `` - `<hook name>`: `<shell command>` ``. Several bullet
 | `pre-<stage-id>` | before that stage dispatches | **HALTs the cycle before the stage runs** (`failed-hook`), reporting the command's own output verbatim |
 | `post-<stage-id>` | after that stage's handoff advanced | logged, never a HALT — the stage already happened; remaining commands still run |
 | `pre-cycle` | once per invocation, before the first stage | HALTs (`failed-hook`) |
-| `post-cycle` | once per invocation, after the cycle reaches a terminal status (`ready-for-merge`, `escalate`, `failed-*`) | logged |
+| `post-cycle` | once per invocation, after the cycle reaches a terminal status (`ready-for-merge`, `merged`, `merge-parked`, `merged-closure-unfinished`, `escalate`, `failed-*`) | logged |
 | `on-halt` | when the cycle stops on any `failed-*` or `escalate` status, a halted `merge-parked`, or `merged-closure-unfinished` — never on `ready-for-merge`, `merged` or an `awaiting-human` park | logged, never compounds the failure |
 
 `verify` is the one stage whose agent works in another tree (a detached review worktree it creates and removes itself): `pre-verify`/`post-verify` still run in the story worktree at the PR head — the tree under verification — never in the review worktree.
