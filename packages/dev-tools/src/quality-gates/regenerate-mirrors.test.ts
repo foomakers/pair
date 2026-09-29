@@ -7,6 +7,7 @@ import {
   readFileSync,
   readdirSync,
   copyFileSync,
+  cpSync,
   chmodSync,
   existsSync,
   rmSync,
@@ -300,6 +301,34 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
 
       expect(result.status).toBe(0)
       expect(readFileSync(mirror, 'utf-8')).toBe(KB_INDEX)
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
+
+  it(
+    "this repo's own decision records are a fixed point of the skill-reference rewrite (a clean main regenerates clean)",
+    () => {
+      tmp = makeFixture()
+      // The rewrite runs over the whole installed tree, target-only adoption files included
+      // (see the script header), and knows a skill by the dataset's `.skills/**` names. So the
+      // real skill names + the real decision log are what a record can drift against.
+      cpSync(
+        join(REPO_ROOT, 'packages/knowledge-hub/dataset/.skills'),
+        join(tmp, 'packages/knowledge-hub/dataset/.skills'),
+        { recursive: true },
+      )
+      cpSync(
+        join(REPO_ROOT, '.pair/adoption/decision-log'),
+        join(tmp, '.pair/adoption/decision-log'),
+        { recursive: true },
+      )
+      git(tmp, ['add', '-A'])
+      git(tmp, ['commit', '-q', '-m', 'real skills and decision log'])
+
+      const result = run(tmp, isolatedHome(tmp))
+
+      expect(result.status).toBe(0)
+      expect(git(tmp, ['status', '--porcelain', '--', '.pair/adoption/decision-log'])).toBe('')
     },
     SCRIPT_RUN_TIMEOUT_MS,
   )

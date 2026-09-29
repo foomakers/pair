@@ -51,6 +51,7 @@ CI_TESTS=(
   "no-dataset-in-artifacts.sh"
   "github-dispatch-adapter.sh"
   "run-card.sh"
+  "cycle-hooks.sh"
   "runner-outcomes.sh"
 )
 

@@ -1,8 +1,11 @@
 import { spawnSync } from 'child_process'
-import { isAbsolute, join, relative, resolve } from 'path'
+import { existsSync, readFileSync } from 'fs'
+import { isAbsolute, join, posix, relative, resolve, win32 } from 'path'
 import { pathToFileURL } from 'url'
 import type { FileSystemService } from '@pair/content-ops'
 import { extractRegistries, type Config } from '#registry'
+import type { CycleHookResult, CycleHooks } from './cycle'
+import { POLICY_PATH } from './policy-sections'
 
 /**
  * The script bridge — US-487 T-2.
@@ -219,10 +222,24 @@ function runScriptIn(
   args: readonly (readonly [string, string])[],
   cwd?: string,
 ): unknown {
-  const argv = [script, cmd]
+  return runScriptArgv([script, cmd], args, cwd)
+}
+
+/** `runScriptIn` with a caller-built argv head (positional arguments before the flags). */
+function runScriptArgv(
+  head: readonly string[],
+  args: readonly (readonly [string, string])[],
+  cwd?: string,
+  maxBuffer?: number,
+): unknown {
+  const argv = [...head]
   for (const [flag, value] of args) argv.push(`--${flag}`, value)
-  const result = spawnSync('node', argv, { encoding: 'utf8', ...(cwd !== undefined && { cwd }) })
-  const parsed = parseScriptOutput(script, cmd, (result.stdout ?? '').trim(), result.stderr)
+  const result = spawnSync('node', argv, {
+    encoding: 'utf8',
+    ...(cwd !== undefined && { cwd }),
+    ...(maxBuffer !== undefined && { maxBuffer }),
+  })
+  const parsed = parseScriptOutput(head[0]!, head[1]!, (result.stdout ?? '').trim(), result.stderr)
   rejectIfFailed(parsed)
   return parsed
 }
@@ -425,3 +442,98 @@ export const CYCLE_WORKTREE_ROOT_DEFAULT = '../pair-worktrees'
 export const CYCLE_WORKFLOW_VERSION = '4.0.1'
 /** `cycle-state.mjs`'s own `PIPELINE_DEFAULTS.baseBranch` — what a fresh story's worktree is cut from. */
 export const CYCLE_BASE_BRANCH_DEFAULT = 'origin/main'
+
+// ── `## Cycle Hooks` (US-489) — the SAME shared executor the in-session skill calls ────────────
+
+const pathFor = (platform: NodeJS.Platform) => (platform === 'win32' ? win32 : posix)
+
+/** The MAIN checkout's `tech/automation.md`, joined with the injected platform's separator. */
+export function cycleHooksPolicyPath(main: string, platform: NodeJS.Platform = process.platform) {
+  return pathFor(platform).join(main, ...POLICY_PATH.split('/'))
+}
+
+/** The installed `cycle-hooks.mjs` under the skill's scripts directory, platform-injected. */
+export function cycleHooksScriptPath(
+  scriptsDir: string,
+  platform: NodeJS.Platform = process.platform,
+) {
+  return pathFor(platform).join(scriptsDir, 'cycle-hooks.mjs')
+}
+
+/**
+ * The executor answers with ONE JSON line holding a hook's output, which it captures up to 64 MiB
+ * (and JSON escaping can grow it). Node's default 1 MiB `spawnSync` buffer truncated that line into
+ * unparseable JSON — an unreadable cycle instead of `failed-hook`. Well above the cap, never near it.
+ */
+const HOOK_ANSWER_MAX_BUFFER = 512 * 1024 * 1024
+
+/** The only hook points that may default to the main checkout; every stage hook needs its worktree. */
+const CYCLE_LEVEL = new Set(['pre-cycle', 'post-cycle', 'on-halt'])
+
+function requireStageCwd(point: string, cwd: string | undefined): void {
+  if (cwd === undefined && !CYCLE_LEVEL.has(point))
+    throw new Error(
+      `stage hook \`${point}\` has no story worktree path — refusing to run it in the main checkout`,
+    )
+}
+
+export interface CycleHooksBridge extends CycleHooks {
+  /** `load`: the section's unrecognized-key / unparseable-line warnings, reported once per run. */
+  warnings(): readonly string[]
+}
+
+/**
+ * Spawns the installed `cycle-hooks.mjs` (never a TypeScript port of its rules): the blocking vs
+ * logging semantics, the pattern-derived names and the `on-halt` gate all live in that one script,
+ * so `pair-workflow-cycle` and `pair-cli run --card` cannot drift. `policyPath` is the MAIN
+ * checkout's `tech/automation.md`. Cycle-level hooks run in `options.cwd` (the main checkout); a
+ * stage hook passes the story worktree per call.
+ */
+export function createCycleHooksBridge(
+  location: CycleScriptsLocation,
+  options: { readonly policyPath: string; readonly cwd: string },
+): CycleHooksBridge {
+  const script = cycleHooksScriptPath(location.scriptsDir)
+  // An installed skill older than US-489 has no executor. That is silent ONLY when the project
+  // declares no `## Cycle Hooks` — a declared hook that cannot run is never a quiet no-op.
+  if (!existsSync(script)) {
+    const declared =
+      existsSync(options.policyPath) &&
+      /^##\s+Cycle Hooks\s*$/m.test(readFileSync(options.policyPath, 'utf8'))
+    return {
+      warnings() {
+        if (declared) {
+          throw new Error(
+            `skill-outdated: ${options.policyPath} declares \`## Cycle Hooks\` but ${script} is not ` +
+              `installed — update the skill (\`pair-cli update\`) before running with hooks.`,
+          )
+        }
+        return []
+      },
+      run: async () => ({}),
+    }
+  }
+  return {
+    warnings() {
+      const out = runScriptArgv([script, 'load', options.policyPath], []) as {
+        warnings?: readonly string[]
+      }
+      return out.warnings ?? []
+    },
+    async run(point, status, cwd) {
+      requireStageCwd(point, cwd)
+      const where = cwd ?? options.cwd
+      const args: [string, string][] = [
+        ['point', point],
+        ['cwd', where],
+        ...optional([['status', status]]),
+      ]
+      return runScriptArgv(
+        [script, 'run', options.policyPath],
+        args,
+        where,
+        HOOK_ANSWER_MAX_BUFFER,
+      ) as CycleHookResult
+    },
+  }
+}

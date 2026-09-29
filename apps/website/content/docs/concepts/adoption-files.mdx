@@ -206,6 +206,16 @@ Five properties are worth knowing before you write one:
 
 Eligibility is applied **before** routing, so a mapped card that does not carry the eligibility label is skipped and logged without ever being routed. A trigger passes the card and its labels to the entry point — [`pair-cli run --card <id> --card-tags <list>`](/docs/reference/cli/commands#run) — which is where the routing happens.
 
+**`## Cycle Hooks`** — deterministic shell commands the delivery cycle's coordinator runs around its stages, the same semantics as `## Publish-PR Hooks` generalized to every stage. One bullet per command: ``- `pre-verify`: `pnpm build` ``.
+
+- **Names are a pattern.** `pre-<stage-id>` / `post-<stage-id>` for every stage the cycle has (a stage added later gets its hooks with no schema change), plus `pre-cycle`, `post-cycle` and `on-halt`.
+- **`pre-*` blocks, everything else logs.** A non-zero `pre-*` (or `pre-cycle`) stops the cycle before the stage runs (`failed-hook`), printing the command's own output. `post-*`, `post-cycle` and `on-halt` failures are reported and never stop anything.
+- **Once per invocation.** `pre-cycle` and `post-cycle` run once per run, not per remediation round; `on-halt` runs on any `failed-*` or `escalate` stop, never on `ready-for-merge`.
+- **Absent ⇒ nothing runs**, silently. A misspelled hook name is reported once as a warning and never fires.
+- **Where they run.** `pre-<stage-id>` / `post-<stage-id>` run in the story worktree; a verify hook runs in the story worktree at the PR head, not the review worktree. `pre-cycle`, `post-cycle` and `on-halt` run in the main checkout.
+- **Per-hook timeout.** ``- `timeout`: `<seconds>` `` bounds each command; absent means 600 seconds; `0` disables it. A timed-out `pre-*` is `failed-hook`; the others are logged.
+- **Who runs them.** `pair-workflow-cycle` and `pair-cli run --card`, through one shared executor. `pair-implement-batch` has no shell and runs none — it says so once per run.
+
 ### risk-matrix.md
 
 Optional, and the other half of the optional-adoption-file pattern: `tech/risk-matrix.md` records your project's **delta to the quality model** — which classification tags are projected onto cards (`## Tag Projection`), a criticality table (service/domain → High/Medium/Low), and threshold/reviewer overrides. Fully absent means the KB defaults apply and no tags are emitted — nothing fails.
