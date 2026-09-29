@@ -87,7 +87,7 @@ export function effectiveStage(profile, stage) {
   return out
 }
 
-// ── resolution (AC2, AC3, AC8) ───────────────────────────────────────────────────────────────
+// ── resolution ───────────────────────────────────────────────────────────────
 // Cascade, resolved ONCE per run: --workflow-config (an external file, verbatim) > --profile (looked up
 // in `files`/`inline`) > pair.config.json's `workflowProfiles.default` > the KB default.
 
@@ -283,7 +283,7 @@ export function resolveProfile({ root, profile, workflowConfig, tier }) {
   return finish(root, { name: 'KB default' }, 'KB default', 'KB default', [], tier)
 }
 
-// ── the run's binding (AC7) ──────────────────────────────────────────────────────────────────
+// ── the run's binding ──────────────────────────────────────────────────────────────────
 // The resolved profile's identity is written beside the run's handoffs, and `cycle-state.mjs publish`
 // stamps `workflowProfile: { name, hash }` from it into every handoff (the same file name is spelled
 // there — a test pins the pair). It is AUDIT only: it is never an effective input, so swapping the
@@ -306,7 +306,7 @@ export function bindProfile({ dir, resolved }) {
   return previous ? { action: 'rebound', binding, previous } : { action: 'bound', binding }
 }
 
-// ── what the coordinators print and pass on (AC6, AC5) ───────────────────────────────────────
+// ── what the coordinators print and pass on ───────────────────────────────────────
 
 /** The one transparency block printed BEFORE the first dispatch: profile, source, hash, then every stage. */
 export function describeProfile(resolved) {

@@ -273,6 +273,15 @@ function packetArgs(options: CyclePacketOptions, location: CycleScriptsLocation)
   ]
 }
 
+function bindProfileArgs(dir: string, identity: CycleProfileIdentity): ScriptArgs {
+  return [
+    ['dir', dir],
+    ['name', identity.name],
+    ['hash', identity.hash],
+    ['source', identity.source],
+  ]
+}
+
 /**
  * `cwd` is the PROJECT directory the scripts run in (r1-3): `ac-hash` shells out to `gh`, which
  * resolves the repository from its cwd, so a script run from anywhere else hashes another
@@ -320,14 +329,12 @@ export function createCycleScriptsBridge(
     bindHosts(dir) {
       return runScript(cycleStatePath, 'bind-hosts', [['dir', dir]]) as CycleHostBinding
     },
-    bindProfile(dir, identity) {
-      return runScript(join(location.scriptsDir, 'workflow-profile.mjs'), 'bind', [
-        ['dir', dir],
-        ['name', identity.name],
-        ['hash', identity.hash],
-        ['source', identity.source],
-      ]) as { action: string }
-    },
+    bindProfile: (dir, identity) =>
+      runScript(
+        join(location.scriptsDir, 'workflow-profile.mjs'),
+        'bind',
+        bindProfileArgs(dir, identity),
+      ) as { action: string },
   }
 }
 

@@ -101,6 +101,24 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
     )
   })
 
+  it('globs resolve identically on every platform (darwin and linux differ in filesystem case-sensitivity): matching is by the listed name, exactly, in a root with spaces', () => {
+    const spaced = join(root, 'my project')
+    write('my project/profiles/cheap-green.json', { name: 'cheap-green' })
+    const declare = (files: string) =>
+      write('my project/pair.config.json', { workflowProfiles: { files } })
+
+    declare('profiles/*.json')
+    expect(resolveWorkflowProfile(SCRIPTS, { root: spaced, profile: 'cheap-green' }).name).toBe(
+      'cheap-green',
+    )
+    // A differently-cased glob must not match here either: a case-insensitive volume would otherwise
+    // find the profile on macOS and lose it on Linux CI.
+    declare('Profiles/*.json')
+    expect(() => resolveWorkflowProfile(SCRIPTS, { root: spaced, profile: 'cheap-green' })).toThrow(
+      /profile-unresolved/,
+    )
+  })
+
   it('workflowProfileRequested: only a flag or a declared workflowProfiles block asks for a profile (AC9)', () => {
     expect(workflowProfileRequested({}, {})).toBe(false)
     expect(workflowProfileRequested({}, { engine: { id: 'pi' } })).toBe(false)

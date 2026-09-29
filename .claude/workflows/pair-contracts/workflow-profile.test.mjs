@@ -203,7 +203,7 @@ test('T-3/AC4: a class resolves to its concrete id and the line names the class,
   assert.match(m.resolved.line, /risk:yellow/)
 })
 
-test('T-3/AC4: `by-tier` reads #450 `## Model Policy` — every tier x class combination resolves to the policy class and its id', () => {
+test('T-3/AC4: `by-tier` reads the `## Model Policy` convention — every tier x class combination resolves to the policy class and its id', () => {
   for (const [tier, klass] of [['risk:green', 'cheap'], ['risk:yellow', 'balanced'], ['risk:red', 'frontier']]) {
     const m = resolveProfile({ root: withProfile('by-tier'), tier }).stages.verify.model
     assert.deepEqual([m.resolved.class, m.resolved.id], [klass, CLASSES[klass]], tier)

@@ -74,6 +74,10 @@ function resolveRun(
   fs: FileSystemService,
 ): ResolvedRun {
   const { policy } = context
+  // US-488: a routed card runs a mapped workflow — no cycle stage exists for a profile to configure.
+  if (context.dispatch?.kind === 'route') {
+    refuseProfileOffCycle(config, `the mapped workflow \`${context.dispatch.workflow}\``)
+  }
   const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
   // On a routed run the WORKFLOW is the invocation: the card's tag chose it through the adoption
   // mapping, which is the whole point of tag-driven automation — the cascade never gets a say, and
@@ -164,12 +168,6 @@ export async function handleRunCommand(
   const reviewCard = prEntryOnMappedRoute(config, context)
   if (reviewCard !== undefined) {
     return await enterCycleAtReview({ config, context, fs, cwd, card: reviewCard }, deps)
-  }
-
-  // US-488: past the cycle entries above, a `--card` is a mapped workflow (or a plain run) — no cycle
-  // stage exists for a profile to configure, so the flag is refused rather than silently ignored.
-  if (context.dispatch?.kind === 'route') {
-    refuseProfileOffCycle(config, `the mapped workflow \`${context.dispatch.workflow}\``)
   }
 
   const resolved = resolveRun(config, context, cwd, fs)

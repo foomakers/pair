@@ -291,6 +291,21 @@ function resolveRunProfile(
   })
 }
 
+/**
+ * The profile (when asked for) and the engines it names beyond the run's own, all proven usable —
+ * resolved before anything is printed or spawned, so a HALT (`profile-unresolved`, `profile-invalid`,
+ * a stage engine unknown or not installed) is raised here, never at a dispatch three stages in.
+ */
+function resolveProfileSetup(
+  input: CycleCoordinatorInput,
+  deps: RunHandlerDependencies,
+  location: CycleScriptsLocation,
+  engineDef: EngineDefinition,
+) {
+  const profile = resolveRunProfile(input, deps, location)
+  return { profile, stageEngineDefs: stageEnginesOf(profile, engineDef, input) }
+}
+
 /** The engines a profile names beyond the run's own, each proven installed before the first print. */
 function stageEnginesOf(
   profile: ResolvedWorkflowProfile | undefined,
@@ -334,18 +349,8 @@ export function prepareCycleCoordinator(
     ...locateCycleScripts(fs, context.config, cwd),
     agentsDir: locateAgentDefinitions(context.config, cwd),
   }
-  // US-488: resolved before anything is printed or spawned. A HALT (`profile-unresolved`,
-  // `profile-invalid`, a stage engine that is unknown or not installed) is raised here, never at a
-  // dispatch three stages in.
-  const profile = resolveRunProfile(input, deps, location)
-  const stageEngineDefs = stageEnginesOf(profile, engineDef, input)
-  const { driveCycle, shown } = driverFor(input, deps, {
-    engine,
-    engineDef,
-    location,
-    profile,
-    stageEngineDefs,
-  })
+  const setup = resolveProfileSetup(input, deps, location, engineDef)
+  const { driveCycle, shown } = driverFor(input, deps, { engine, engineDef, location, ...setup })
 
   const dispatch = config.dispatch!
   reportCycleEntry({
@@ -355,7 +360,7 @@ export function prepareCycleCoordinator(
     scriptsDir: location.scriptsDir,
     runDir: `.pair/working/runs/${dispatch.runId}/${card}`,
     shown,
-    profile,
+    profile: setup.profile,
   })
 
   return async () => {
