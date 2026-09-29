@@ -127,7 +127,7 @@ test('T-3: the skill runs every hook point through cycle-hooks.mjs, at the docum
 
 test('AC7: pair-cli calls the same points through the same script', () => {
   assert.match(CLI_BRIDGE, /cycle-hooks\.mjs/)
-  for (const point of ["'pre-cycle'", '`pre-${next.step}`', '`post-${previousStep}`', "'on-halt'", "'post-cycle'"]) assert.ok(CLI_LOOP.includes(point), point)
+  for (const point of ["'pre-cycle'", '`pre-${next.step}`', '`post-${state.dispatchedNext.step}`', "'on-halt'", "'post-cycle'"]) assert.ok(CLI_LOOP.includes(point), point)
   // neither realization re-implements the semantics: the loop never mentions an exit code decision
   assert.doesNotMatch(CLI_LOOP, /exitCode\s*[!=]==?\s*0/)
 })
