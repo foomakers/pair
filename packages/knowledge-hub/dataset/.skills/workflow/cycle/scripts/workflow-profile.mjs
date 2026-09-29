@@ -10,7 +10,7 @@
 // own table (`contextReuseAdmissibleInto`), the single owner (#486 T-2).
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { isAbsolute, join, relative, resolve as resolvePath, sep } from 'node:path'
+import { isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { contextReuseAdmissibleInto } from './cycle-state.mjs'
 
 export const STAGES = ['prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge']
@@ -18,6 +18,9 @@ export const FIELDS = ['engine', 'model', 'effort', 'context']
 export const EFFORTS = ['default', 'low', 'medium', 'high', 'xhigh', 'max']
 export const CONTEXTS = ['fresh', 'reuse']
 // The KB default (D21): the schema default for engine and model, default effort, a fresh context.
+export const MODEL_CLASSES = ['cheap', 'balanced', 'frontier']
+/** A model value meaning "the class `## Model Policy` assigns to the card's risk tier". */
+export const BY_TIER = 'by-tier'
 export const KB_DEFAULT = { engine: 'default', model: 'default', effort: 'default', context: 'fresh' }
 const TOP_KEYS = ['name', 'description', 'defaults', 'stages', 'modelClasses']
 
@@ -40,6 +43,14 @@ export function validateProfile(profile) {
   if (typeof profile.name !== 'string' || profile.name.trim() === '') errs.push('name: must be a non-empty string')
   for (const k of Object.keys(profile)) if (!TOP_KEYS.includes(k)) errs.push(`profile: unknown key '${k}' (allowed: ${TOP_KEYS.join(', ')})`)
   if (profile.defaults !== undefined) errs.push(...fieldErrors('defaults', profile.defaults))
+  if (profile.modelClasses !== undefined) {
+    if (!isObject(profile.modelClasses)) errs.push('modelClasses: must be an object keyed by model class')
+    else
+      for (const [k, v] of Object.entries(profile.modelClasses)) {
+        if (!MODEL_CLASSES.includes(k)) errs.push(`modelClasses: unknown class '${k}' (allowed: ${MODEL_CLASSES.join(', ')})`)
+        else if (typeof v !== 'string' || v.trim() === '') errs.push(`modelClasses.${k}: must be a non-empty model id`)
+      }
+  }
   if (profile.stages !== undefined) {
     if (!isObject(profile.stages)) errs.push('stages: must be an object keyed by stage id')
     else
@@ -178,14 +189,62 @@ function loadIndex(root, block) {
   return { byName, unparsable, notes }
 }
 
-function finish(root, profile, source, sourceDetail, notes) {
+// `## Model Policy` (#450): `risk:<tier>: cheap|balanced|frontier`, one line per tier, in
+// `.pair/adoption/tech/automation.md`. Fence-blind like every reader of that file; absent file or
+// section ⇒ no policy (never a HALT); a class outside the three is malformed.
+function readModelPolicy(root) {
+  const path = join(root, '.pair', 'adoption', 'tech', 'automation.md')
+  if (!existsSync(path)) return {}
+  const policy = {}
+  let inSection = false
+  let fenced = false
+  for (const raw of readFileSync(path, 'utf8').split(/\r?\n/)) {
+    const line = raw.trim()
+    if (line.startsWith('```')) {
+      fenced = !fenced
+      continue
+    }
+    if (fenced) continue
+    if (/^##\s+/.test(line)) {
+      inSection = line.replace(/^##\s+/, '') === 'Model Policy'
+      continue
+    }
+    const m = inSection && /^(risk:[A-Za-z0-9_-]+):\s*(\S+)\s*$/.exec(line)
+    if (!m) continue
+    if (!MODEL_CLASSES.includes(m[2])) throw new ProfileError('profile-invalid', `${path}: \`## Model Policy\` maps ${m[1]} to '${m[2]}' — expected one of ${MODEL_CLASSES.join(' | ')}`)
+    policy[m[1]] = m[2]
+  }
+  return policy
+}
+
+// A stage's model, resolved: explicit id (unchanged) | class → its concrete id | by-tier → the tier's
+// class → its id | default → the engine's own default. An unknown class id is `null`, never a HALT.
+function resolveModel(value, { tier, modelClasses = {}, policyOf }) {
+  if (value === KB_DEFAULT.model) return { id: null, line: 'engine default' }
+  const named = value === BY_TIER ? policyOf()[tier] : MODEL_CLASSES.includes(value) ? value : undefined
+  if (named === undefined && value === BY_TIER) return { id: null, tier, line: `by-tier (${tier ?? 'untagged card'}) → engine default (no class declared for it in ## Model Policy)` }
+  if (named === undefined) return { id: value, line: value }
+  const id = modelClasses[named] ?? null
+  const via = `${named}${tier ? ` (${tier})` : ''}`
+  return { class: named, id, ...(tier ? { tier } : {}), line: id === null ? `${via} → engine default (no modelClasses.${named} declared)` : `${via} → ${id}` }
+}
+
+function finish(root, profile, source, sourceDetail, notes, tier) {
   const { errors } = validateProfile(profile)
   if (errors.length) throw new ProfileError('profile-invalid', `${sourceDetail}: ${errors.join('; ')}`)
-  const stages = Object.fromEntries(STAGES.map(stage => [stage, effectiveStage(profile, stage)]))
+  let policy
+  const policyOf = () => (policy ??= readModelPolicy(root))
+  const stages = Object.fromEntries(
+    STAGES.map(stage => {
+      const eff = effectiveStage(profile, stage)
+      eff.model = { ...eff.model, resolved: resolveModel(eff.model.value, { tier, modelClasses: profile.modelClasses, policyOf }) }
+      return [stage, eff]
+    }),
+  )
   return { name: profile.name, source, sourceDetail, hash: profileHash(profile), profile, stages, notes }
 }
 
-function lookup(root, block, name, source) {
+function lookup(root, block, name, source, tier) {
   const { byName, unparsable, notes } = loadIndex(root, block)
   const hit = byName.get(name)
   if (!hit) {
@@ -196,7 +255,7 @@ function lookup(root, block, name, source) {
         `Known profiles: ${[...byName.keys()].join(', ') || 'none'}.${unparsable.length ? ` Unreadable profile files: ${unparsable.join(', ')}.` : ''}`,
     )
   }
-  return finish(root, hit.profile, source, hit.path, notes)
+  return finish(root, hit.profile, source, hit.path, notes, tier)
 }
 
 /**
@@ -204,7 +263,7 @@ function lookup(root, block, name, source) {
  * Throws a `ProfileError` — never falls back to the KB default on an error (a typo must not quietly
  * run the whole cycle on the wrong model).
  */
-export function resolveProfile({ root, profile, workflowConfig }) {
+export function resolveProfile({ root, profile, workflowConfig, tier }) {
   if (workflowConfig !== undefined) {
     const path = resolvePath(root, workflowConfig)
     if (!existsSync(path)) throw new ProfileError('profile-unresolved', `--workflow-config ${path} does not exist`)
@@ -215,10 +274,10 @@ export function resolveProfile({ root, profile, workflowConfig }) {
       throw new ProfileError('profile-invalid', `${path} is not valid JSON: ${e.message}`)
     }
     const notes = profile !== undefined ? [`--profile '${profile}' ignored: --workflow-config wins`] : []
-    return finish(root, body, '--workflow-config', path, notes)
+    return finish(root, body, '--workflow-config', path, notes, tier)
   }
   const block = readBlock(root)
-  if (profile !== undefined) return lookup(root, block, profile, 'argument')
-  if (block.default !== undefined) return lookup(root, block, block.default, 'pair.config.json')
-  return finish(root, { name: 'KB default' }, 'KB default', 'KB default', [])
+  if (profile !== undefined) return lookup(root, block, profile, 'argument', tier)
+  if (block.default !== undefined) return lookup(root, block, block.default, 'pair.config.json', tier)
+  return finish(root, { name: 'KB default' }, 'KB default', 'KB default', [], tier)
 }

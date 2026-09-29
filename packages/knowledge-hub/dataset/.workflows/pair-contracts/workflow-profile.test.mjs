@@ -182,3 +182,60 @@ test('T-2: `**` globs recurse and a glob never escapes the project root', () => 
   assert.equal(resolveProfile({ root, profile: 'cheap-green' }).name, 'cheap-green')
   halt(() => resolveProfile({ root: project({ config: { workflowProfiles: { files: '../*.json' } } }), profile: 'x' }), 'profile-invalid')
 })
+
+// ── T-3: model class → concrete id, against the card's tier (AC4) ────────────────────────────
+const POLICY_MD = '# Automation\n\n## Model Policy\n\nrisk:green: cheap\nrisk:yellow: balanced\nrisk:red: frontier\n'
+const CLASSES = { cheap: 'm-cheap', balanced: 'm-balanced', frontier: 'm-frontier' }
+const withProfile = (model, { policy = POLICY_MD, modelClasses = CLASSES } = {}) => {
+  const files = { '.pair/adoption/tech/workflow-profiles/p.json': { name: 'p', defaults: { model }, ...(modelClasses !== null ? { modelClasses } : {}) } }
+  if (policy !== null) files['.pair/adoption/tech/automation.md'] = policy
+  return project({ config: { workflowProfiles: { default: 'p', files: GLOB } }, files })
+}
+
+test('T-3/AC4: a class resolves to its concrete id and the line names the class, the id and the card tier', () => {
+  const r = resolveProfile({ root: withProfile('balanced'), tier: 'risk:yellow' })
+  const m = r.stages.implement.model
+  assert.deepEqual([m.value, m.resolved.class, m.resolved.id, m.resolved.tier], ['balanced', 'balanced', 'm-balanced', 'risk:yellow'])
+  assert.match(m.resolved.line, /balanced/)
+  assert.match(m.resolved.line, /m-balanced/)
+  assert.match(m.resolved.line, /risk:yellow/)
+})
+
+test('T-3/AC4: `by-tier` reads #450 `## Model Policy` — every tier x class combination resolves to the policy class and its id', () => {
+  for (const [tier, klass] of [['risk:green', 'cheap'], ['risk:yellow', 'balanced'], ['risk:red', 'frontier']]) {
+    const m = resolveProfile({ root: withProfile('by-tier'), tier }).stages.verify.model
+    assert.deepEqual([m.resolved.class, m.resolved.id], [klass, CLASSES[klass]], tier)
+  }
+})
+
+test('T-3: an explicit model id passes through unchanged, with no class', () => {
+  const m = resolveProfile({ root: withProfile('claude-opus-x'), tier: 'risk:red' }).stages.green.model
+  assert.deepEqual([m.resolved.id, m.resolved.class], ['claude-opus-x', undefined])
+})
+
+test('T-3: `default` (and the KB default) means the engine default — no id', () => {
+  assert.equal(resolveProfile({ root: withProfile('default'), tier: 'risk:red' }).stages.green.model.resolved.id, null)
+  assert.equal(resolveProfile({ root: project() }).stages.green.model.resolved.id, null)
+})
+
+test('T-3: no `## Model Policy`, an untagged card or an omitted tier is never a HALT — by-tier resolves to the engine default', () => {
+  assert.equal(resolveProfile({ root: withProfile('by-tier', { policy: null }), tier: 'risk:red' }).stages.green.model.resolved.id, null)
+  assert.equal(resolveProfile({ root: withProfile('by-tier'), tier: undefined }).stages.green.model.resolved.id, null)
+  assert.equal(resolveProfile({ root: withProfile('by-tier', { policy: '## Model Policy\n\nrisk:green: cheap\n' }), tier: 'risk:red' }).stages.green.model.resolved.id, null)
+})
+
+test('T-3: a class the profile gives no concrete id resolves to the engine default (no second taxonomy, no HALT)', () => {
+  const m = resolveProfile({ root: withProfile('frontier', { modelClasses: null }), tier: 'risk:red' }).stages.green.model
+  assert.deepEqual([m.resolved.class, m.resolved.id], ['frontier', null])
+})
+
+test('T-3: a fenced or malformed Model Policy line is never read as policy; an unknown class is profile-invalid', () => {
+  const fenced = '```\n## Model Policy\nrisk:red: frontier\n```\n'
+  assert.equal(resolveProfile({ root: withProfile('by-tier', { policy: fenced }), tier: 'risk:red' }).stages.green.model.resolved.id, null)
+  assert.throws(() => resolveProfile({ root: withProfile('by-tier', { policy: '## Model Policy\n\nrisk:red: turbo\n' }), tier: 'risk:red' }), e => e.code === 'profile-invalid' && /turbo/.test(e.detail))
+})
+
+test('T-3: modelClasses is validated (unknown class name, non-string id)', () => {
+  assert.match(errorsOf({ name: 'p', modelClasses: { huge: 'x' } })[0], /modelClasses: unknown class 'huge'/)
+  assert.match(errorsOf({ name: 'p', modelClasses: { cheap: 3 } })[0], /modelClasses\.cheap/)
+})
