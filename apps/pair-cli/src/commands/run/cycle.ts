@@ -82,7 +82,8 @@ export interface CycleHookResult {
 
 /** The shared hook executor, as the loop sees it: one call per hook point, zero rules of its own. */
 export interface CycleHooks {
-  run(point: string, status?: string): Promise<CycleHookResult>
+  /** `cwd`: where the hook runs — the story worktree for stage hooks, absent (main) for cycle-level ones. */
+  run(point: string, status?: string, cwd?: string): Promise<CycleHookResult>
 }
 
 export interface RunCycleInput {
@@ -118,6 +119,8 @@ interface LoopState {
   dispatchedResult: CycleStageResult | null
   retryCount: number
   reuseNoticeGiven: boolean
+  /** The story worktree, once created: where `pre-<stage>`/`post-<stage>` hooks run. */
+  worktreePath: string | undefined
 }
 
 function buildStageRecord(
@@ -255,7 +258,7 @@ function stoppedWithoutNext(answer: CycleResolveStop, stagesRun: number): CycleO
  * or the collaborator surface above — can request one).
  */
 async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
-  const { resolve, worktree, packet, spawnStage, policy, onNotice, hooks } = input
+  const { resolve, packet, spawnStage, policy, onNotice, hooks } = input
   const observers: StageObservers = {
     onStage: input.onStage,
     appendAudit: input.appendAudit,
@@ -268,6 +271,7 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     dispatchedResult: null,
     retryCount: 0,
     reuseNoticeGiven: false,
+    worktreePath: undefined,
   }
 
   for (;;) {
@@ -292,7 +296,6 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     const gated = await gateDispatch(state, next, input)
     if (gated !== null) return gated
 
-    await worktree()
     const stagePacket = await packet(next)
     state.dispatchedResult = await spawnStage(stagePacket)
     state.stagesRun += 1
@@ -313,7 +316,9 @@ async function runPostStageHook(
   onNotice: RunCycleInput['onNotice'],
 ): Promise<void> {
   if (state.dispatchedNext === null || sameNext(state.dispatchedNext, next)) return
-  await runHookPoint(hooks, `post-${state.dispatchedNext.step}`, undefined, onNotice)
+  await runHookPoint(hooks, `post-${state.dispatchedNext.step}`, onNotice, {
+    cwd: state.worktreePath,
+  })
 }
 
 /**
@@ -329,8 +334,18 @@ async function gateDispatch(
   if (roundsBoundReached(rounds, next)) {
     return { status: 'rounds-bound-reached', stagesRun: state.stagesRun, next }
   }
-  const halted = await runHookPoint(hooks, `pre-${next.step}`, undefined, onNotice)
+  // The stage's worktree exists BEFORE its `pre-<stage>` hook: the hook gates the tree the stage
+  // will judge (the story worktree), never the main checkout.
+  state.worktreePath = worktreePathOf(await input.worktree())
+  const halted = await runHookPoint(hooks, `pre-${next.step}`, onNotice, {
+    cwd: state.worktreePath,
+  })
   return halted === null ? null : hookFailure(halted, state.stagesRun)
+}
+
+const worktreePathOf = (created: unknown): string | undefined => {
+  const path = (created as { path?: unknown } | null | undefined)?.path
+  return typeof path === 'string' ? path : undefined
 }
 
 type HaltedHook = { point: string; command: string; exitCode: number; output: string }
@@ -343,11 +358,11 @@ type HaltedHook = { point: string; command: string; exitCode: number; output: st
 async function runHookPoint(
   hooks: CycleHooks | undefined,
   point: string,
-  status: string | undefined,
   onNotice: RunCycleInput['onNotice'],
+  where: { status?: string | undefined; cwd?: string | undefined } = {},
 ): Promise<HaltedHook | null> {
   if (hooks === undefined) return null
-  const result = await hooks.run(point, status)
+  const result = await hooks.run(point, where.status, where.cwd)
   for (const line of result.logged ?? []) onNotice?.(line)
   return result.halted === undefined ? null : { point, ...result.halted }
 }
@@ -378,11 +393,12 @@ const isHalt = (status: string): boolean => status.startsWith('failed-') || stat
  */
 export async function runCycle(input: RunCycleInput): Promise<CycleOutcome> {
   const { hooks, onNotice } = input
-  const blocked = await runHookPoint(hooks, 'pre-cycle', undefined, onNotice)
+  const blocked = await runHookPoint(hooks, 'pre-cycle', onNotice)
   const outcome = blocked !== null ? hookFailure(blocked, 0) : await runCycleLoop(input)
-  if (isHalt(outcome.status)) await runHookPoint(hooks, 'on-halt', outcome.status, onNotice)
+  if (isHalt(outcome.status))
+    await runHookPoint(hooks, 'on-halt', onNotice, { status: outcome.status })
   if (!NOT_TERMINAL.has(outcome.status)) {
-    await runHookPoint(hooks, 'post-cycle', outcome.status, onNotice)
+    await runHookPoint(hooks, 'post-cycle', onNotice, { status: outcome.status })
   }
   return outcome
 }

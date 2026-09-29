@@ -464,7 +464,8 @@ export interface CycleHooksBridge extends CycleHooks {
  * Spawns the installed `cycle-hooks.mjs` (never a TypeScript port of its rules): the blocking vs
  * logging semantics, the pattern-derived names and the `on-halt` gate all live in that one script,
  * so `pair-workflow-cycle` and `pair-cli run --card` cannot drift. `policyPath` is the MAIN
- * checkout's `tech/automation.md`; hooks run in `cwd`, the repo root.
+ * checkout's `tech/automation.md`. Cycle-level hooks run in `options.cwd` (the main checkout); a
+ * stage hook passes the story worktree per call.
  */
 export function createCycleHooksBridge(
   location: CycleScriptsLocation,
@@ -497,17 +498,14 @@ export function createCycleHooksBridge(
       }
       return out.warnings ?? []
     },
-    async run(point, status) {
+    async run(point, status, cwd) {
+      const where = cwd ?? options.cwd
       const args: [string, string][] = [
         ['point', point],
-        ['cwd', options.cwd],
+        ['cwd', where],
         ...optional([['status', status]]),
       ]
-      return runScriptArgv(
-        [script, 'run', options.policyPath],
-        args,
-        options.cwd,
-      ) as CycleHookResult
+      return runScriptArgv([script, 'run', options.policyPath], args, where) as CycleHookResult
     },
   }
 }
