@@ -51,8 +51,11 @@ Optional primitives (`SUPPORT_METHODS`, exported the same way) serve the scope-d
 | `parseCommentRef` | code-host      | `parseCommentRef(ref, { repo })` → `{ pr, id, inScope }` or `null`                                                |
 | `commentRef`      | code-host      | `commentRef({ repo, pr, id })` → the comment's URL string                                                         |
 | `readCheck`       | code-host      | `readCheck({ sha, repo, context })` → the check's state string, or `null` when absent                            |
+| `readCheckRun`    | code-host      | `readCheckRun({ sha, repo, context })` → the conclusion of the most recent check RUN of that name (`pending` while in flight), or `null` when none — for a required check published as a workflow job rather than a commit status. `merge` stage: consulted when `readCheck` is `null` |
 | `readLabels`      | code-host      | `readLabels({ pr, repo })` → an array of label name strings                                                       |
 | `setClassification` | code-host   | `setClassification({ pr, repo, family, value })` — `family` ∈ `risk \| cost`; leaves exactly one `<family>:<value>` label of that family, the family's other values removed, then reads back: `{ applied, removed, confirmed, error }`, like `setPrState`. An out-of-enum `family`/`value` throws `HostError('invalid-input')` before any write. Written by `pr-state.mjs conclude` (`--tier`/`--cost`) — the review is the only writer of a PR's classification tags (pr-states.md) |
+| `commentOnCard`   | pm-tool        | `commentOnCard({ id, marker, body, repo })` → the marker-keyed upsert result (`{ action, id, url, marker }` or `{ error }`) on the CARD's thread, never the PR's. `merge` stage: the park comment |
+| `setBoardState`   | pm-tool        | `setBoardState({ id, state, repo })` → `{ applied, confirmed, error }`; writes the card's board `Status` and reads it back. A card that is not a board item, sits on several boards or lacks the option is `confirmed: false` with the reason, never a silent skip. `merge` stage: `Done` after the merge |
 
 Omit one and only the feature that needs it fails, typed `not-implemented` with the method name. Their shapes are the two shipped adapters' (`github.mjs`, `azure-devops.mjs`).
 
