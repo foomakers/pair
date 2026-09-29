@@ -86,7 +86,16 @@ export class MockHttpClientService implements HttpClientService {
     return this.createMockRequest()
   }
 
-  request(_url: string, _options: unknown, callback?: unknown): ClientRequest {
+  /**
+   * Fails fast when nothing is queued: a request with a callback and no response would otherwise
+   * never call back, and the caller would hang until the test runner's timeout.
+   */
+  request(url: string, _options: unknown, callback?: unknown): ClientRequest {
+    if (typeof callback === 'function' && this.requestResponses.length === 0) {
+      throw new Error(
+        `MockHttpClientService.request: no response queued for ${url} — call setRequestResponses() first`,
+      )
+    }
     const response =
       this.requestResponses[this.requestCallIndex++] ||
       this.requestResponses[this.requestResponses.length - 1]

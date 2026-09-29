@@ -101,6 +101,14 @@ describe('MockHttpClientService', () => {
     })
   })
 
+  describe('request with nothing queued', () => {
+    it('throws a clear error instead of never calling back', () => {
+      expect(() =>
+        mockHttp.request('https://example.com/kb.zip', { method: 'HEAD' }, () => {}),
+      ).toThrow(/no response queued for https:\/\/example\.com\/kb\.zip/)
+    })
+  })
+
   describe('separate queues', () => {
     it('maintains independent get and request queues', async () => {
       const getResp = toIncomingMessage(buildTestResponse(200))
