@@ -443,3 +443,71 @@ test('T-6: every HALT the KB slice names is one the resolver actually raises', (
   const kb = readFileSync(new URL('../../../.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md', import.meta.url), 'utf8')
   for (const code of ['profile-unresolved', 'profile-invalid', 'profile-name-collision']) assert.ok(kb.includes(code) && readFileSync(CLI, 'utf8').includes(code), code)
 })
+
+// ── PR #517 finding: a mistyped model class is refused at load, never sent to an engine ──────────
+// The KB slice allows `model` = `default` | `by-tier` | a class (cheap | balanced | frontier) | an
+// explicit model id, with NO prefix — so an id is any other string (`x`, `big`, `sonnet`, `m-frontier`).
+// A value that is a NEAR-MISS of one of the reserved tokens is not an id, it is a typo: same token
+// after case-folding and dropping `-`/`_`/spaces, or one edit away (insert, delete, substitute or
+// swap two adjacent characters) on the case-folded value. It is `profile-invalid` at load, naming the
+// field path, the value and the allowed classes.
+const NEAR_MISS_CLASSES = ['frontir', 'fronteir', 'Frontier', 'FRONTIER', 'balnced', 'balanced ', 'chaep', 'cheep']
+const NEAR_MISS_KEYWORDS = ['by_tier', 'bytier', 'By-Tier', 'by-teir', 'defualt', 'Default']
+const LEGIT_IDS = ['claude-opus-x', 'claude-opus-4-1', 'claude-sonnet-4-5', 'sonnet', 'opus', 'haiku', 'gpt-5-codex', 'o3', 'x', 'big', 'small', 'm-frontier', 'frontier-2', 'claude-haiku-x']
+const namesTypo = (msg, where, value) =>
+  msg.includes(`${where}.model`) && msg.includes(`'${value}'`) && ['cheap', 'balanced', 'frontier'].every(c => msg.includes(c))
+
+test('PR517-W1: validateProfile refuses a near-miss model class on a stage, naming stage, value and the allowed classes', () => {
+  for (const value of NEAR_MISS_CLASSES) {
+    const errs = errorsOf({ name: 'p', stages: { verify: { model: value } } })
+    assert.ok(errs.some(e => namesTypo(e, 'stages.verify', value)), `${JSON.stringify(value)} accepted: ${JSON.stringify(errs)}`)
+  }
+})
+
+test('PR517-W2: validateProfile refuses a near-miss model class in defaults, naming defaults.model', () => {
+  const errs = errorsOf({ name: 'p', defaults: { model: 'frontir' } })
+  assert.ok(errs.some(e => namesTypo(e, 'defaults', 'frontir')), JSON.stringify(errs))
+})
+
+test('PR517-W3: validateProfile refuses a near-miss of the `by-tier` / `default` keywords the same way', () => {
+  for (const value of NEAR_MISS_KEYWORDS) {
+    const errs = errorsOf({ name: 'p', stages: { green: { model: value } } })
+    assert.ok(errs.some(e => namesTypo(e, 'stages.green', value)), `${JSON.stringify(value)} accepted: ${JSON.stringify(errs)}`)
+  }
+})
+
+test('PR517-W4: resolveProfile HALTs profile-invalid on a mistyped class — from files and from --workflow-config — never resolving it to an id', () => {
+  const fromFiles = project({ config: { workflowProfiles: { default: 'p', files: GLOB } }, files: { '.pair/adoption/tech/workflow-profiles/p.json': { name: 'p', modelClasses: CLASSES, stages: { verify: { model: 'frontir' } } } } })
+  assert.throws(() => resolveProfile({ root: fromFiles, tier: 'risk:red' }), e => e instanceof ProfileError && e.code === 'profile-invalid' && namesTypo(e.detail, 'stages.verify', 'frontir'))
+  const ext = project({ files: { 'ext.json': { name: 'ext', stages: { implement: { model: 'balnced' } } } } })
+  assert.throws(() => resolveProfile({ root: ext, workflowConfig: 'ext.json' }), e => e instanceof ProfileError && e.code === 'profile-invalid' && namesTypo(e.detail, 'stages.implement', 'balnced'))
+})
+
+test('PR517-W5: the `resolve` CLI exits 1 with {halt: profile-invalid} on a mistyped class and prints no resolved stages', () => {
+  const root = project({ files: { 'ext.json': { name: 'ext', stages: { verify: { model: 'frontir' } } } } })
+  const r = cli('resolve', '--root', root, '--workflow-config', 'ext.json')
+  assert.equal(r.code, 1, JSON.stringify(r.out).slice(0, 300))
+  assert.equal(r.out.halt, 'profile-invalid')
+  assert.ok(namesTypo(r.out.detail, 'stages.verify', 'frontir'), r.out.detail)
+  assert.equal(r.out.stages, undefined)
+})
+
+test('PR517-C1: every reserved token and every explicit model id still validates and resolves — ids pass through unchanged', () => {
+  for (const value of ['default', 'by-tier', 'cheap', 'balanced', 'frontier', ...LEGIT_IDS])
+    assert.deepEqual(errorsOf({ name: 'p', stages: { verify: { model: value } } }), [], value)
+  for (const id of LEGIT_IDS) {
+    const m = resolveProfile({ root: withProfile(id), tier: 'risk:red' }).stages.green.model
+    assert.deepEqual([m.resolved.id, m.resolved.class], [id, undefined], id)
+  }
+})
+
+test('PR517-C2: a concrete id inside modelClasses is an id, never class-checked — even one that looks like a class', () => {
+  assert.deepEqual(errorsOf({ name: 'p', modelClasses: { cheap: 'frontir', balanced: 'Balanced', frontier: 'm-frontier' }, stages: { verify: { model: 'cheap' } } }), [])
+})
+
+test('PR517-C3: the CLI still resolves a class and an explicit id side by side (exit 0)', () => {
+  const root = project({ files: { 'ext.json': { name: 'ext', modelClasses: CLASSES, stages: { verify: { model: 'frontier' }, green: { model: 'sonnet' } } } } })
+  const r = cli('resolve', '--root', root, '--workflow-config', 'ext.json')
+  assert.equal(r.code, 0, JSON.stringify(r.out))
+  assert.deepEqual([r.out.stages.verify.model.resolved.id, r.out.stages.green.model.resolved.id], ['m-frontier', 'sonnet'])
+})

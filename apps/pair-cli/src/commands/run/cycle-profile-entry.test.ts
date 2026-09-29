@@ -3,7 +3,10 @@ import { InMemoryFileSystemService } from '@pair/content-ops'
 import { handleRunCommand, type RunHandlerDependencies } from './handler'
 import { parseRunCommand } from './parser'
 import { POLICY_PATH } from './automation-policy'
-import type { ResolvedWorkflowProfile } from './workflow-profile'
+import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { resolveWorkflowProfile, type ResolvedWorkflowProfile } from './workflow-profile'
 
 /**
  * US-488 T-5 — the `pair-cli run --card` entry resolves the workflow profile ONCE, prints its table
@@ -238,5 +241,68 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
         baseDeps({ cardReadiness: async () => 'draft', resolveWorkflowProfile: () => profileOf() }),
       ),
     ).rejects.toThrow(/--workflow-config.*delivery cycle/)
+  })
+
+  // PR #517 finding: the entry wired to the REAL resolver (`workflow-profile.mjs`) refuses a mistyped
+  // model class before the first dispatch — the driver is never called.
+  const REAL_SCRIPTS = join(
+    __dirname,
+    '..',
+    '..',
+    '..',
+    '..',
+    '..',
+    '.claude/skills/pair-workflow-cycle/scripts',
+  )
+  const withRealResolver = (body: Record<string, unknown>) => {
+    const dir = mkdtempSync(join(tmpdir(), 'pair-entry-profile-'))
+    writeFileSync(join(dir, 'p.json'), JSON.stringify(body))
+    const resolver: RunHandlerDependencies['resolveWorkflowProfile'] = (_scripts, request) =>
+      resolveWorkflowProfile(REAL_SCRIPTS, { ...request, root: dir, workflowConfig: 'p.json' })
+    return { dir, resolver }
+  }
+
+  it('PR517-W7: --workflow-config with a mistyped class (`frontir`) halts profile-invalid at the entry, naming stage, value and classes, and never drives', async () => {
+    capture()
+    const { dir, resolver } = withRealResolver({
+      name: 'p',
+      stages: { verify: { model: 'frontir' } },
+    })
+    let error: Error | undefined
+    try {
+      await run(
+        { card: '12', cardTags: '', workflowConfig: '/tmp/p.json' },
+        files(),
+        baseDeps({ resolveWorkflowProfile: resolver }),
+      )
+    } catch (e) {
+      error = e as Error
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+
+    expect(events).not.toContain('drive')
+    expect(error?.message).toMatch(/^profile-invalid: .*stages\.verify\.model.*'frontir'/)
+    for (const c of ['cheap', 'balanced', 'frontier']) expect(error?.message).toContain(c)
+  })
+
+  it('PR517-C5: the same entry with a valid class and a literal id resolves through the real resolver and drives', async () => {
+    capture()
+    const { dir, resolver } = withRealResolver({
+      name: 'p',
+      modelClasses: { frontier: 'm-frontier' },
+      stages: { verify: { model: 'frontier' }, green: { model: 'claude-sonnet-4-5' } },
+    })
+    try {
+      const code = await run(
+        { card: '12', cardTags: '', workflowConfig: '/tmp/p.json' },
+        files(),
+        baseDeps({ resolveWorkflowProfile: resolver }),
+      )
+      expect(code).toBe(0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+    expect(events).toContain('drive')
   })
 })

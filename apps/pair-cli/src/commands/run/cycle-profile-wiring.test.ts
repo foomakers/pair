@@ -253,4 +253,43 @@ process.stdout.write(JSON.stringify({ type: 'agent_settled' }) + '\\n')
 
     expect(publishHandoff().workflowProfile).toMatchObject({ name: 'then-b', hash: b.hash })
   }, 60_000)
+
+  // PR #517 finding: a mistyped model class is refused when the profile is LOADED — the run never
+  // reaches a stage, so nothing is spawned and `--model frontir` is never sent to an engine.
+  const loadThenDrive = async (body: Record<string, unknown>) => {
+    let error: Error | undefined
+    try {
+      await drive({ profile: profile(body) })
+    } catch (e) {
+      error = e as Error
+    }
+    return error
+  }
+
+  it('PR517-W6: a mistyped class (`frontir`) is profile-invalid at load, naming stage, value and classes — no engine is spawned', async () => {
+    const error = await loadThenDrive({ name: 'p', stages: { implement: { model: 'frontir' } } })
+
+    expect(calls().map(c => c.argv.slice(0, -1).join(' '))).toEqual([])
+    expect(error?.message).toMatch(/^profile-invalid: /)
+    expect(error?.message).toContain('stages.implement.model')
+    expect(error?.message).toContain("'frontir'")
+    for (const c of ['cheap', 'balanced', 'frontier']) expect(error?.message).toContain(c)
+  }, 60_000)
+
+  it('PR517-C4: a valid class and a literal model id still load and spawn with the engine model flag', async () => {
+    await drive({
+      profile: profile({
+        name: 'p',
+        modelClasses: { frontier: 'm-frontier' },
+        stages: { implement: { model: 'frontier' } },
+      }),
+    })
+    const [first] = calls()
+    expect(first!.argv[first!.argv.indexOf('--model') + 1]).toBe('m-frontier')
+
+    rmSync(log)
+    await drive({ profile: profile({ name: 'p', stages: { implement: { model: 'sonnet' } } }) })
+    const [second] = calls()
+    expect(second!.argv[second!.argv.indexOf('--model') + 1]).toBe('sonnet')
+  }, 60_000)
 })
