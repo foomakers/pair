@@ -11,6 +11,7 @@ import {
   existsSync,
   rmSync,
   realpathSync,
+  statSync,
 } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve, dirname } from 'path'
@@ -1213,6 +1214,30 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       await exited
 
       expect(readdirSync(tmpEnvDir)).toEqual([])
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
+
+  // #518: turbo replays a cache hit by rewriting `dist/**` IN PLACE (same inode, new mtime).
+  // Run against THIS repo's toolchain, every success-path case here rewrote
+  // `apps/pair-cli/dist` while `@pair/pair-cli#test` — scheduled in parallel by the same
+  // turbo run — spawned `dist/cli.js`: a driver that required a half-written module died
+  // with `SyntaxError: Invalid or unexpected token` (card-interrupt.test.ts, S2-W-SIGINT).
+  it(
+    'a successful regeneration never rewrites the REAL pair-cli build another suite is running (#518)',
+    () => {
+      tmp = makeFixture()
+      write(join(tmp, '.pair/knowledge/index.md'), '# hand-edited drift\n')
+      const probes = ['cli.js', 'commands/run/card-entry.js'].map(f =>
+        join(REPO_ROOT, 'apps/pair-cli/dist', f),
+      )
+      const stamp = () => probes.map(p => statSync(p).mtimeMs)
+      const before = stamp()
+
+      const result = run(tmp, isolatedHome(tmp))
+
+      expect(result.status).toBe(0)
+      expect(stamp(), 'the real apps/pair-cli/dist was rewritten').toEqual(before)
     },
     SCRIPT_RUN_TIMEOUT_MS,
   )
