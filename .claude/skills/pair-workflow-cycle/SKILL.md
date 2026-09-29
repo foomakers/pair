@@ -1,6 +1,6 @@
 ---
 name: pair-workflow-cycle
-description: "In-session coordinator for pair's delivery cycle: drives ONE card through implement → verify (a fresh card has no up-front contract) and, for each round of review findings, prepare → validate → green → verify, one stage per subagent, from an interactive Claude Code, Codex or pi (with pi-subagents) session — no dependency on Claude Code's Workflow tool. Enters on a fresh card ($card) or straight into fix & review on an existing PR ($pr). Holds zero cycle rules: every transition, budget and freshness decision comes from cycle-state.mjs resolve, every argument packet and worktree from cycle-dispatch.mjs. Binds its harness by PROBING for a subagent primitive, never by product name, and HALTs realization-unavailable with the pair-cli fallback when none is present. Never decides merge."
+description: "In-session coordinator for pair's delivery cycle: drives ONE card through implement → verify (a fresh card has no up-front contract) and, for each round of review findings, prepare → validate → green → verify, one stage per subagent, from an interactive Claude Code, Codex or pi (with pi-subagents) session — no dependency on Claude Code's Workflow tool. Enters on a fresh card ($card) or straight into fix & review on an existing PR ($pr). Holds zero cycle rules: every transition, budget and freshness decision comes from cycle-state.mjs resolve, every argument packet and worktree from cycle-dispatch.mjs. Binds its harness by PROBING for a subagent primitive, never by product name, and HALTs realization-unavailable with the pair-cli fallback when none is present. Never decides merge — the `merge` stage's script does."
 version: 0.2.0
 author: Foomakers
 ---
@@ -127,7 +127,7 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" inputs --story '<card JSON>' --workflo
 
 **Act.** Read `next` and nothing else. `status: other-run` ⇒ the cycle already lives under that run id: adopt it and resolve again. `incompatible` ⇒ stop and report (a legacy run directory is pointed at `migrate-acknowledge`, never migrated in place). `invalid` ⇒ stop and report.
 
-**Verify.** `next.step` is `done` or `blocked` ⇒ go to Step 5. Otherwise it names the one stage due now.
+**Verify.** `next.step` is `merge`, `done` or `blocked` ⇒ go to Step 5. Otherwise it names the one stage due now.
 
 ### Step 2: Put the stage's worktree in place
 
@@ -191,13 +191,15 @@ The bridge makes the resume's context deterministic: the task opens by telling t
 
 ### Step 5: Report the terminal state
 
-**Check.** `next.step` is `done` or `blocked`.
+**Check.** `next.step` is `merge`, `done` or `blocked`. `merge` appears only when you passed `resolve` the project's `## Auto-Advance` tiers as `--policy '{…,"autoAdvance":{"tiers":[…]}}'` and the card's current `risk:*` label as `--tier`, and that tier is among them; without both, a converged cycle is `done` — today's behavior, byte for byte.
 
 **Skip.** Never.
 
 **Act.** Close the hooks first: on a `failed-*` or `escalate` terminal (including `failed-hook`) run `on-halt --status <terminal>` (never on `ready-for-merge`; the executor gates it), then `post-cycle --status <terminal>` once — both logged, never a stop — but not when this invocation only stopped at the `$rounds` bound. Report exactly what `resolve` said: `ready-for-merge` when the cycle converged, `escalate` when a human decision is owed, `failed-<stage>` otherwise — with the run directory, the PR and the reviewed head.
 
-**Verify.** You have not merged, not closed the card, not deleted a branch and not posted a review. A converged cycle is a card ready for a human; the `merge` stage is another story's, and `resolve` returns it only when the project's auto-advance policy admits the card's tier.
+**Merge (`next.step: merge`).** The stage is a script, never a subagent, and this skill still decides nothing: run `node "$SKILL_DIR/scripts/cycle-merge.mjs" check --dir <run dir> --story $card --pr <next.pr> --reviewedHead <next.reviewedHead> --cardTier <next.tier> --autoAdvance '<the tiers JSON array>'`. It re-reads the tier, the remote head and the `pair-review` / `pair-explicit-approval` conclusions live; on `mergeAllowed: false` it has already parked the card with a comment naming the failed condition — report its `reason`. On `true`, run `/pair-capability-verify-quality` for the tier, then `cycle-merge.mjs run` with the same flags plus `--gate green|red`, `--message '<squash message per the commit template>'` and `--branch <card branch>` (run from the main checkout), and report its `merged` / `cascaded` / `reason` verbatim. `merged: true, cascaded: false` names the closure step left for a human.
+
+**Verify.** Without the `merge` stage, you have not merged, not closed the card, not deleted a branch and not posted a review: a converged cycle is a card ready for a human. With it, every one of those was done by `cycle-merge.mjs`, and only after it had re-verified the conjunction itself.
 
 ## Maintainer Recovery
 

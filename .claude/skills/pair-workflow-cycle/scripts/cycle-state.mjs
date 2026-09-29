@@ -91,7 +91,7 @@ export const SCHEMA_VERSION = 3
 // consume this; cycle-metrics.mjs (T-24) stamps its own views with METRICS_SCHEMA_VERSION.
 export const METRICS_SCHEMA_VERSION = 1
 export const SKILLS = ['red-spec', 'red-verify', 'implement-phase', 'green-fix', 'review-phase']
-export const STEPS = ['prepare', 'validate', 'implement', 'green', 'verify', 'done', 'blocked']
+export const STEPS = ['prepare', 'validate', 'implement', 'green', 'verify', 'merge', 'done', 'blocked']
 // ── the cycle's rules, held HERE as data (US-486 AC-12) ─────────────────────────────────────
 // Every realization of the cycle — the `pair-implement-batch` Workflow script, the
 // `pair-workflow-cycle` in-session coordinator, `pair-cli` — reads these from this file. A second
@@ -2582,6 +2582,16 @@ const profileStamp = dir => {
 // US-488: may a stage ever RESUME (`reuse`)? Answered from CONTEXT_TABLE alone — the workflow profiles'
 // loader asks this, it never restates the rule (single owner).
 export const contextReuseAdmissibleInto = stage => CONTEXT_TABLE.reuseAllowed.some(transition => transition.split('->')[1] === stage)
+// US-490 — the `## Auto-Advance` policy object and the one rule that turns `done` into `merge`.
+const TIER_LABEL_RE = /^[A-Za-z0-9][A-Za-z0-9:_./-]*$/
+export function autoAdvancePolicyError(autoAdvance) {
+  if (autoAdvance === undefined) return null
+  const tiers = autoAdvance?.tiers
+  if (!autoAdvance || typeof autoAdvance !== 'object' || !Array.isArray(tiers) || tiers.some(t => typeof t !== 'string' || !TIER_LABEL_RE.test(t)))
+    return 'policy-auto-advance-invalid'
+  return null
+}
+export const mergeOffered = (autoAdvance, tier) => typeof tier === 'string' && Array.isArray(autoAdvance?.tiers) && autoAdvance.tiers.includes(tier)
 const contextOf = (fromStep, toStep, contextPolicy) => {
   if (!fromStep || !toStep) return CONTEXT_TABLE.default
   const transition = `${fromStep}->${toStep}`
@@ -2601,7 +2611,7 @@ const priorStepOfRole = (handoffs, toStep) => {
 const withContext = (next, handoffs, contextPolicy) =>
   next && typeof next === 'object' && next.context === undefined ? { ...next, context: contextOf(priorStepOfRole(handoffs, next.step), next.step, contextPolicy) } : next
 
-export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects }) {
+export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier }) {
   // Fail closed before ANY state is read: an unusable freshness policy is never resolved around.
   const policyError = contextPolicyError(contextPolicy)
   if (policyError) throw new Error(policyError)
@@ -2610,12 +2620,16 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   if (Object.prototype.hasOwnProperty.call(policy, 'blockingSeverities')) {
     return { status: 'invalid', reason: 'policy-legacy-blocking-severities', workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
   }
-  const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects })
+  // US-490: `policy.autoAdvance` is `{ tiers: [<risk:* label>…] }` — the `## Auto-Advance` declaration,
+  // read by the coordinator like `blockingFloor`. A malformed one is refused here, never read as "off".
+  const autoAdvanceError = autoAdvancePolicyError(policy.autoAdvance)
+  if (autoAdvanceError) return { status: 'invalid', reason: autoAdvanceError, workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
+  const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier })
   // The budgets a coordinator spends are the cycle's data, never the coordinator's own constants.
   return { ...out, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
 }
 
-function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects }) {
+function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier }) {
   const where = safeRunDir(dir)
   if (where.error) return { status: 'invalid', reason: where.error, path: where.path, workflowVersion }
   const handoffs = readHandoffs(dir)
@@ -2706,8 +2720,13 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // enforced HERE, from the durable evidence alone, so every realization reads the same run
   // directory and reaches the same verdict on it: consecutive redirects publish no handoff at all,
   // so the coordinator that observed them hands that count in instead.
+  // US-490: `merge` is the ONE stage past `ready-for-merge` (`done`), offered only when the card's
+  // tier is named in `## Auto-Advance`. Everything else — no declaration, no tier, another tier — is
+  // the unchanged `done` terminal the caller parks. `resolve` only OFFERS the stage: the conjunction
+  // that permits the merge is re-read live by `cycle-merge.mjs`, never taken from this answer.
+  if (next.step === 'done' && mergeOffered(policy.autoAdvance, tier)) next = { ...next, step: 'merge', tier }
   const warnings = []
-  if (next.step !== 'done' && next.step !== 'blocked') {
+  if (next.step !== 'done' && next.step !== 'blocked' && next.step !== 'merge') {
     const md = policy.maxDispatches
     if (md && typeof md === 'object' && Number.isInteger(md.n) && md.n > 0 && handoffs.length >= md.n) {
       if (md.mode === 'block') {
@@ -2838,7 +2857,7 @@ export const INTERVENTIONS_FILE = 'maintainer-interventions.md'
 const INTERVENTIONS_HEADER = '| file | what it is | why it was set aside | set aside by | what supersedes it |'
 const dayOf = d => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10)
 const cell = v => String(v ?? '').replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ').trim()
-const describeNext = n => (n?.step === 'blocked' ? `blocked (${n.reason})` : n?.step === 'done' ? 'done' : `${n?.step} ${n?.mode ?? ''} ${n?.phase ?? ''} attempt ${n?.attempt ?? 1}`.replace(/\s+/g, ' ').trim())
+const describeNext = n => (n?.step === 'blocked' ? `blocked (${n.reason})` : n?.step === 'done' ? 'done' : n?.step === 'merge' ? 'merge' : `${n?.step} ${n?.mode ?? ''} ${n?.phase ?? ''} attempt ${n?.attempt ?? 1}`.replace(/\s+/g, ' ').trim())
 function appendIntervention(dir, row) {
   const file = join(dir, INTERVENTIONS_FILE)
   const line = `| ${row.map(cell).join(' | ')} |`
@@ -3011,7 +3030,7 @@ if (isMain()) {
     const { cmd, opts } = parseCli(process.argv.slice(2))
     // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
     const FLAGS = {
-      resolve: ['acHash', 'contextPolicy', 'dir', 'entry', 'head', 'inputs', 'policy', 'pr', 'redirects', 'runsRoot', 'story', 'workflowVersion'],
+      resolve: ['acHash', 'contextPolicy', 'dir', 'entry', 'head', 'inputs', 'policy', 'pr', 'redirects', 'runsRoot', 'story', 'tier', 'workflowVersion'],
       publish: ['attempt', 'dir', 'file', 'phase', 'policy', 'pr', 'predecessor', 'skill', 'workflowVersion'],
       hash: ['file'],
       'ac-hash': ['dir', 'story'],
@@ -3055,7 +3074,7 @@ if (isMain()) {
     let out
     if (cmd === 'resolve') {
       need('dir', 'workflowVersion', 'entry')
-      out = resolve({ dir: opts.dir, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr, head: opts.head, inputs: opts.inputs, acHash: opts.acHash, runsRoot: opts.runsRoot, story: opts.story, contextPolicy: opts.contextPolicy ? JSON.parse(opts.contextPolicy) : undefined, redirects: opts.redirects })
+      out = resolve({ dir: opts.dir, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr, head: opts.head, inputs: opts.inputs, acHash: opts.acHash, runsRoot: opts.runsRoot, story: opts.story, contextPolicy: opts.contextPolicy ? JSON.parse(opts.contextPolicy) : undefined, redirects: opts.redirects, tier: opts.tier })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
     } else if (cmd === 'publish') {

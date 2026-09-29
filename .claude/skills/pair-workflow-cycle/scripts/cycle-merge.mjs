@@ -1,0 +1,293 @@
+#!/usr/bin/env node
+// cycle-merge.mjs — the `merge` stage of the delivery cycle (US-490). A SCRIPT, never an agent: the
+// rule that lets an unattended cycle merge lives here, once, and every coordinator (the in-session
+// cycle skill, `pair-cli run --card`, `pair-loop.js`'s Advance phase) reaches it through the same two
+// commands. It is a behavior-preserving extraction of the block `pair-loop.js` used to hold — no
+// condition added, none relaxed:
+//
+//   1. the card's `risk:*` tier, re-read NOW, is the tier the cycle was driven under (a mid-run raise
+//      parks the card even with an approved PR) …
+//   2. … and it is still named in `## Auto-Advance`;
+//   3. the PR's remote head, `pair-review` and `pair-explicit-approval` conclusions are re-read NOW,
+//      and any of them unreadable parks the card;
+//   4. the remote head is the head the verifier reviewed (`reviewedHead`);
+//   5. both conclusions are `success`;
+//   6. the tier's gate set is green — `--gate green`, produced by the caller running
+//      `/pair-capability-verify-quality` (a skill, so an agent's job; the script only refuses to
+//      merge on any other value, an absent one included).
+//
+// CLI (both print one JSON object and exit 0 when a decision was produced, 2 on a usage error):
+//   check --dir <run dir> --story <n> --pr <n> --reviewedHead <sha> --cardTier <risk:*>
+//         --autoAdvance '<JSON array of tiers>' [--repo <owner/name>]
+//       Conditions 1-5 only (no gate yet). A failure PARKS: one marker-keyed comment on the card.
+//   run   <the same flags> --gate <green|red> --message <squash commit message>
+//         [--branch <b>] [--worktree <path>] [--root <main checkout>]
+//       Conditions 1-6, then merge + Story Closure (DoD boxes, close, board `Done`, parent cascade,
+//       branch remote+local with its worktree first, story checkpoint) — or park + comment.
+//
+// `merged` and `cascaded` are separate signals: a merge that landed with any closure step unfinished
+// is `{ merged: true, cascaded: false }` with every step's outcome in `cascade`, never a plain success.
+import { existsSync, rmSync, realpathSync } from 'node:fs'
+import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+
+const SHA_RE = /^[0-9a-f]{40}$/
+const TIER_RE = /^[A-Za-z0-9][A-Za-z0-9:_./-]*$/
+const SAFE_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/#-]*$/
+export const PR_CHECK = 'pair-review'
+export const APPROVAL_CHECK = 'pair-explicit-approval'
+export const PARK_MARKER = pr => `<!-- pair-merge-park:PR#${pr} -->`
+
+// ── the decision — pure ────────────────────────────────────────────────────────────────────
+// Order = the precedence `pair-loop.js` applied (first failure is the `reason`); every failing
+// condition is listed, because each is independent evidence a human will want.
+export function decideMerge({ cardTier, currentTier, autoAdvanceTiers, reviewedHead, signals, gate, requireGate }) {
+  const failed = []
+  const add = (code, detail) => failed.push({ code, detail })
+  if (currentTier !== cardTier) add('tier-changed', `tier changed ${cardTier} -> ${currentTier} mid-run, never auto-advanced on a stale read`)
+  if (!Array.isArray(autoAdvanceTiers) || !autoAdvanceTiers.includes(currentTier)) add('tier-not-auto-advance', `tier ${currentTier} not in Auto-Advance`)
+  const readable = signals && SHA_RE.test(String(signals.headSha ?? '')) && typeof signals.pairReview === 'string' && typeof signals.explicitApproval === 'string'
+  if (!readable) add('signals-unreadable', 'PR SIGNALS unreadable at merge time, never merged on unread evidence')
+  else {
+    if (signals.headSha !== reviewedHead) add('head-moved', `PR head moved since the review (reviewed ${reviewedHead}, remote ${signals.headSha}), never merged unreviewed code`)
+    if (signals.pairReview !== 'success') add('pair-review', `pair-review conclusion on head ${signals.headSha} is ${signals.pairReview}, never merged without a published approval`)
+    if (signals.explicitApproval !== 'success') add('explicit-approval', `pair-explicit-approval conclusion on head ${signals.headSha} is ${signals.explicitApproval} (D10: no recorded human approval), never merged`)
+  }
+  if (requireGate) {
+    if (gate === 'red') add('gate-red', "the tier's gate set came back red at merge time")
+    else if (gate !== 'green') add('gate-unverified', `no green gate evidence (got ${JSON.stringify(gate ?? null)}) — /pair-capability-verify-quality must run first`)
+  }
+  return { mergeAllowed: failed.length === 0, failed, reason: failed[0]?.detail ?? null, parkKind: failed.length === 0 ? null : failed[0].code === 'tier-not-auto-advance' ? 'awaiting-human' : 'halted' }
+}
+
+// ── live reads — through the bound adapters, never a host CLI of our own ─────────────────────
+export function readCurrentTier({ pm, story, repo }) {
+  try {
+    const labels = (pm.readCard(story, { repo, fields: ['labels'] })?.labels ?? []).map(l => String(l?.name ?? l))
+    const risk = [...new Set(labels.filter(l => l.startsWith('risk:')))]
+    // Untagged, or ambiguously tagged, is red: the fail-safe every tier read in this cycle uses.
+    return risk.length === 1 && TIER_RE.test(risk[0]) ? risk[0] : 'risk:red'
+  } catch {
+    return 'risk:red'
+  }
+}
+
+export function readSignals({ code, pr, repo }) {
+  try {
+    const headSha = code.prHead({ pr, repo })
+    const conclusion = context => {
+      const status = code.readCheck({ sha: headSha, repo, context })
+      if (status) return status
+      let run = null
+      try {
+        run = code.readCheckRun({ sha: headSha, repo, context })
+      } catch (e) {
+        if (e?.kind !== 'not-implemented') throw e
+      }
+      return run ?? 'missing'
+    }
+    return { headSha, pairReview: conclusion(PR_CHECK), explicitApproval: conclusion(APPROVAL_CHECK) }
+  } catch {
+    return null
+  }
+}
+
+function evaluate({ hosts, story, pr, repo, reviewedHead, cardTier, autoAdvanceTiers, gate, requireGate }) {
+  const currentTier = readCurrentTier({ pm: hosts.pm, story, repo })
+  const signals = readSignals({ code: hosts.code, pr, repo })
+  return { currentTier, signals, ...decideMerge({ cardTier, currentTier, autoAdvanceTiers, reviewedHead, signals, gate, requireGate }) }
+}
+
+// ── park ───────────────────────────────────────────────────────────────────────────────────
+// Never a HALT and never audit-only: the awaited action is recorded ON THE CARD, once per PR
+// (marker-keyed, edited in place on a re-run).
+export function park({ hosts, story, pr, repo, decision, merged = false }) {
+  const lines = decision.failed.map(f => `- \`${f.code}\` — ${f.detail}`)
+  const body = [
+    merged ? `PR #${pr} MERGED, but the story is not fully closed — a human finishes it:` : `PR #${pr} is review-approved but was **not** merged automatically — it awaits human action:`,
+    '',
+    ...lines,
+  ].join('\n')
+  try {
+    const r = hosts.pm.commentOnCard({ id: story, marker: PARK_MARKER(pr), body, repo })
+    return { posted: !r?.error, ...(r?.error ? { error: r.error } : {}) }
+  } catch (e) {
+    return { posted: false, error: e.message }
+  }
+}
+
+// ── Story Closure ──────────────────────────────────────────────────────────────────────────
+// Check every unchecked box under the card's `## Definition of Done…` heading. Anything else in the
+// body is returned byte-identical.
+export function checkDodBoxes(body) {
+  let inDod = false
+  return String(body ?? '')
+    .split('\n')
+    .map(line => {
+      if (/^##\s+/.test(line)) inDod = /^##\s+Definition of Done/i.test(line)
+      return inDod ? line.replace(/^(\s*[-*]\s+)\[ \]/, '$1[x]') : line
+    })
+    .join('\n')
+}
+
+const defaultGit = (args, cwd) => {
+  const r = spawnSync('git', args, { encoding: 'utf8', cwd })
+  return { status: r.status, stdout: r.stdout ?? '', stderr: (r.stderr ?? '').trim() }
+}
+
+function worktreeHolding({ git, branch, root }) {
+  const out = git(['worktree', 'list', '--porcelain'], root)
+  if (out.status !== 0) return { error: out.stderr }
+  let path
+  for (const line of out.stdout.split('\n')) {
+    if (line.startsWith('worktree ')) path = line.slice(9)
+    if (line === `branch refs/heads/${branch}`) return { path }
+  }
+  return { path: null }
+}
+
+export function closeStory({ hosts, story, repo, branch, root = process.cwd(), git = defaultGit, fs = { exists: existsSync, rm: rmSync } }) {
+  const steps = {}
+  const run = (name, fn) => {
+    try {
+      steps[name] = fn()
+    } catch (e) {
+      steps[name] = { ok: false, error: e?.message ?? String(e) }
+    }
+  }
+  run('dod', () => {
+    const { body } = hosts.pm.readCard(story, { repo })
+    const next = checkDodBoxes(body)
+    if (next === body) return { ok: true, changed: false }
+    hosts.pm.updateCard({ repo, id: story, body: next })
+    return { ok: true, changed: true }
+  })
+  let closed = [Number(story)]
+  run('close', () => {
+    const r = hosts.pm.closeAndCascade({ id: story, repo })
+    closed = r.closed ?? closed
+    return { ok: true, closed, stoppedAt: r.stoppedAt ?? null }
+  })
+  run('board', () => {
+    const per = closed.map(id => ({ id, ...hosts.pm.setBoardState({ id, state: 'Done', repo }) }))
+    const bad = per.filter(p => !p.confirmed)
+    return { ok: bad.length === 0, per, ...(bad.length ? { error: bad.map(b => `#${b.id}: ${b.error}`).join('; ') } : {}) }
+  })
+  run('branch', () => {
+    if (!branch) return { ok: false, error: 'no --branch given: branch and worktree left in place' }
+    if (!SAFE_REF_RE.test(branch)) return { ok: false, error: `unsafe branch name ${JSON.stringify(branch)}` }
+    const notes = []
+    const held = worktreeHolding({ git, branch, root })
+    if (held.error) return { ok: false, error: `git worktree list failed: ${held.error}` }
+    if (held.path && held.path !== root) {
+      const rm = git(['worktree', 'remove', held.path], root)
+      if (rm.status !== 0) return { ok: false, error: `worktree ${held.path} not removed: ${rm.stderr}`, notes }
+      notes.push(`worktree ${held.path} removed`)
+    }
+    const remote = git(['push', 'origin', '--delete', branch], root)
+    if (remote.status !== 0 && !/remote ref does not exist|unable to delete .*: remote ref/i.test(remote.stderr)) return { ok: false, error: `remote branch not deleted: ${remote.stderr}`, notes }
+    notes.push(remote.status === 0 ? 'remote branch deleted' : 'remote branch already gone')
+    const exists = git(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], root).status === 0
+    if (exists) {
+      // The PR is verified merged: a squash merge leaves the branch "unmerged" to git, hence -D.
+      const local = git(['branch', '-D', branch], root)
+      if (local.status !== 0) return { ok: false, error: `local branch not deleted: ${local.stderr}`, notes }
+      notes.push('local branch deleted')
+    } else notes.push('local branch already gone')
+    return { ok: true, notes }
+  })
+  run('checkpoint', () => {
+    const p = join(root, '.pair', 'working', 'checkpoints', `${story}.md`)
+    if (!fs.exists(p)) return { ok: true, removed: false }
+    fs.rm(p)
+    return { ok: true, removed: true }
+  })
+  const failedSteps = Object.entries(steps).filter(([, v]) => v.ok === false)
+  return { cascaded: failedSteps.length === 0, steps, ...(failedSteps.length ? { reason: `post-merge closure unfinished: ${failedSteps.map(([k, v]) => `${k} (${v.error})`).join('; ')}` } : {}) }
+}
+
+// ── the two commands ───────────────────────────────────────────────────────────────────────
+export function checkMerge(input) {
+  const decision = evaluate({ ...input, requireGate: false })
+  const out = { stage: 'merge', mode: 'check', ...decision }
+  if (!decision.mergeAllowed) out.comment = park({ hosts: input.hosts, story: input.story, pr: input.pr, repo: input.repo, decision })
+  return out
+}
+
+export function runMerge({ message, branch, root, git, fs, ...input }) {
+  const decision = evaluate({ ...input, requireGate: true })
+  const out = { stage: 'merge', mode: 'run', ...decision, merged: false, cascaded: false }
+  const parkWith = (d, merged) => ({ ...out, ...d, merged, comment: park({ hosts: input.hosts, story: input.story, pr: input.pr, repo: input.repo, decision: d, merged }) })
+  if (!decision.mergeAllowed) return parkWith(decision, false)
+  try {
+    input.hosts.code.merge({ pr: input.pr, repo: input.repo, strategy: 'squash', message })
+  } catch (e) {
+    const failed = [{ code: 'merge-failed', detail: `the code host refused the merge: ${e.message}` }]
+    return parkWith({ mergeAllowed: false, failed, reason: failed[0].detail, parkKind: 'halted' }, false)
+  }
+  const closure = closeStory({ hosts: input.hosts, story: input.story, repo: input.repo, branch, root, git, fs })
+  const merged = { ...out, merged: true, cascaded: closure.cascaded, cascade: closure.steps, ...(closure.reason ? { reason: closure.reason } : {}) }
+  if (closure.cascaded) return merged
+  const failed = [{ code: 'cascade-incomplete', detail: closure.reason }]
+  return { ...merged, parkKind: 'halted', comment: park({ hosts: input.hosts, story: input.story, pr: input.pr, repo: input.repo, decision: { failed }, merged: true }) }
+}
+
+// ── CLI ────────────────────────────────────────────────────────────────────────────────────
+const FLAGS = {
+  check: ['dir', 'story', 'pr', 'reviewedHead', 'cardTier', 'autoAdvance', 'repo'],
+  run: ['dir', 'story', 'pr', 'reviewedHead', 'cardTier', 'autoAdvance', 'repo', 'gate', 'message', 'branch', 'root'],
+}
+
+export function parseArgs(argv) {
+  const [cmd, ...rest] = argv
+  const opts = {}
+  for (let i = 0; i < rest.length; i += 2) {
+    if (!rest[i]?.startsWith('--') || rest[i + 1] === undefined) throw new Error(`bad argument: ${rest[i]}`)
+    opts[rest[i].slice(2)] = rest[i + 1]
+  }
+  if (!FLAGS[cmd]) throw new Error(`unknown command: ${cmd} (expected check | run)`)
+  const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
+  if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
+  const need = (...ks) => {
+    for (const k of ks) if (opts[k] === undefined) throw new Error(`--${k} is required`)
+  }
+  need('dir', 'story', 'pr', 'reviewedHead', 'cardTier', 'autoAdvance')
+  if (!/^\d+$/.test(opts.story)) throw new Error(`--story must be a number, got ${JSON.stringify(opts.story)}`)
+  if (!/^\d+$/.test(opts.pr)) throw new Error(`--pr must be a number, got ${JSON.stringify(opts.pr)}`)
+  if (!SHA_RE.test(opts.reviewedHead)) throw new Error('--reviewedHead must be a 40-hex sha')
+  if (!TIER_RE.test(opts.cardTier)) throw new Error('--cardTier must be a label-shaped tier')
+  let tiers
+  try {
+    tiers = JSON.parse(opts.autoAdvance)
+  } catch {
+    throw new Error('--autoAdvance must be a JSON array of tiers')
+  }
+  if (!Array.isArray(tiers) || tiers.some(t => typeof t !== 'string' || !TIER_RE.test(t))) throw new Error('--autoAdvance must be a JSON array of label-shaped tiers')
+  if (opts.repo !== undefined && !/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(opts.repo)) throw new Error('--repo must be owner/name')
+  if (cmd === 'run') need('gate', 'message')
+  if (cmd === 'run' && !['green', 'red'].includes(opts.gate)) throw new Error('--gate must be green | red')
+  return { cmd, opts: { ...opts, story: Number(opts.story), pr: Number(opts.pr), autoAdvanceTiers: tiers } }
+}
+
+const isMain = () => {
+  try {
+    return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+  } catch {
+    return false
+  }
+}
+if (isMain()) {
+  try {
+    const { cmd, opts } = parseArgs(process.argv.slice(2))
+    const HOSTS = await import('./host/index.mjs')
+    const hosts = HOSTS.bindHosts({ dir: opts.dir })
+    const base = { hosts, story: opts.story, pr: opts.pr, repo: opts.repo, reviewedHead: opts.reviewedHead, cardTier: opts.cardTier, autoAdvanceTiers: opts.autoAdvanceTiers }
+    const out = cmd === 'check' ? checkMerge(base) : runMerge({ ...base, gate: opts.gate, message: opts.message, branch: opts.branch, root: opts.root ?? process.cwd() })
+    process.stdout.write(JSON.stringify(out) + '\n')
+    process.exit(0)
+  } catch (e) {
+    process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
+    process.exit(2)
+  }
+}
