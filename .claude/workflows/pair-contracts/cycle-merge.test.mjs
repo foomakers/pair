@@ -172,6 +172,18 @@ test('readCurrentTier: one risk label is the tier; untagged, ambiguous or unread
   assert.equal(readCurrentTier({ pm: { readCard: () => { throw new Error('boom') } }, story: 42 }), RED)
 })
 
+// Paired-canary finding: the tier grammar is the removed `pair-loop.js` `isLabelShape`
+// (`/^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/i`), which normalised any other shape to red. A label that
+// only the looser `TIER_RE` accepts must read as unreadable -> `risk:red`, never verbatim (verbatim
+// turned a risk:red card's re-read into `tier-changed` and parked a merge the old rule made).
+test('readCurrentTier: a risk label outside the family:tier grammar is unreadable and fails safe to red', async t => {
+  const pm = labels => fakeHosts({ labels }).hosts.pm
+  for (const shape of ['risk:a.b', 'risk:a/b', 'risk:a_b', 'risk:a:b', 'risk:1x', 'risk:'])
+    await t.test(`witness ${shape}`, () => assert.equal(readCurrentTier({ pm: pm([{ name: 'bug' }, { name: shape }]), story: 42 }), RED))
+  for (const tier of [GREEN, 'risk:yellow', RED])
+    await t.test(`control ${tier}`, () => assert.equal(readCurrentTier({ pm: pm([{ name: tier }]), story: 42 }), tier))
+})
+
 test('readSignals: conclusions come from the remote head; a check run is the fallback; anything unreadable is null', () => {
   const h = fakeHosts({ checks: { 'pair-review': 'success' }, runs: { 'pair-explicit-approval': 'success' } })
   assert.deepEqual(readSignals({ code: h.hosts.code, pr: 7 }), OK)

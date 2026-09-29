@@ -196,15 +196,28 @@ describe('describeMergePosture (round 1, finding 3)', () => {
     expect(posture).not.toContain('the gate stays human')
   })
 
-  it('states plainly that the SKILL may merge the declared tier itself', () => {
-    const posture = describeMergePosture(
-      policyFrom('## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n').read(),
+  it('keeps the off text verbatim when no tier is declared (control)', () => {
+    expect(describeMergePosture(policyFrom(THIS_PROJECTS_POLICY).read())).toBe(
+      'Merge: the driver never merges, and `## Auto-Advance` is (none) — ' +
+        'nothing is pushed or merged unattended; every gate stays human (AC10)',
     )
-
-    expect(posture).toContain('never merges')
-    expect(posture).toContain('risk:green')
-    expect(posture).toMatch(/skill may push and merge/i)
   })
+
+  // US-490: `run --card` now reaches the merge stage (cycle-merge.mjs check -> gate -> run), so
+  // with a tier under `## Auto-Advance` the run itself merges that tier — "the driver never
+  // merges" is false there and must not be printed.
+  it.each(['risk:green', 'risk:yellow', 'risk:red'])(
+    'states that merge is automatic for the declared tier %s',
+    tier => {
+      const posture = describeMergePosture(
+        policyFrom(`## Eligibility\n\n${tier}\n\n## Auto-Advance\n\n${tier}\n`).read(),
+      )
+
+      expect(posture).not.toContain('never merges')
+      expect(posture).toContain(tier)
+      expect(posture).toMatch(/automatic/i)
+    },
+  )
 
   it('falls back to off when the policy file is absent', () => {
     const policy = policyFrom().read()
