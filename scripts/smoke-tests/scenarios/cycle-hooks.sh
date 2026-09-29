@@ -5,7 +5,9 @@
 # Same harness as run-card.sh: only the two EXTERNAL processes are stood in for — the operator's
 # `gh` (the card) and the engine (`claude` on PATH: records how it was started, emits a success
 # terminal event and publishes NO handoff, a dead dispatch, so the cycle stops `failed-implement`).
-# The hooks themselves are real shell commands run in the repo root.
+# The hooks themselves are real shell commands: stage hooks (`pre-/post-<stage>`) run in the story
+# worktree `<worktreeRoot>/<story>`; cycle-level hooks (`pre-cycle`, `post-cycle`, `on-halt`) in the
+# main checkout.
 #
 # Hermetic: no network, no real engine, no real tracker.
 
@@ -75,28 +77,39 @@ spawns() { [ -f "$ENGINE_LOG" ] && wc -l <"$ENGINE_LOG" | tr -d ' ' || echo 0; }
 FAILED=0
 fail() { log_fail "$1"; FAILED=1; }
 policy() { printf '# Automation\n\n%s\n' "$1" >"$MAIN/.pair/adoption/tech/automation.md"; }
-reset_run() { rm -rf "$MAIN/.pair/working/runs" "$MAIN"/*.ran; : >"$ENGINE_LOG"; }
 main_real="$(pwd -P)"
+# The story worktree, derived as the real CLI does: the main checkout (git common dir's parent),
+# `cycle-dispatch worktree`'s own default root (`PIPELINE_DEFAULTS.worktreeRoot`, no
+# `--worktree-root` passed) resolved against it, then `/<story>`.
+common_main="$(cd "$(git rev-parse --git-common-dir)/.." && pwd -P)"
+WT_ROOT_DEFAULT="$(node --input-type=module -e "import { PIPELINE_DEFAULTS } from '$MAIN/.claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs'; process.stdout.write(PIPELINE_DEFAULTS.worktreeRoot)")"
+story_wt="$(node -e "process.stdout.write(require('path').join(require('path').resolve(process.argv[1], process.argv[2]), '12'))" "$common_main" "$WT_ROOT_DEFAULT")"
+reset_run() { rm -rf "$MAIN/.pair/working/runs" "$MAIN"/*.ran "$story_wt"/*.ran; : >"$ENGINE_LOG"; }
+# every line of a hook's `pwd -P` record is the main checkout, and there are exactly $2 of them
+ran_in_main() { [ -f "$1" ] && [ "$(wc -l <"$1" | tr -d ' ')" = "$2" ] && ! grep -vxF "$main_real" "$1" >/dev/null; }
 
-# ── 1. AC1/AC4/AC5: a passing pre-implement hook runs in the repo root before the stage; the dead
-#    dispatch ends failed-implement, so on-halt (a failure path) and post-cycle run, once each ─────
+# ── 1. AC1/AC4/AC5: a passing pre-implement hook runs in the story worktree before the stage; the
+#    dead dispatch ends failed-implement, so on-halt (a failure path) and post-cycle run, once each,
+#    in the main checkout ─────
 log_info "Test 1: pre-cycle + pre-implement run, stage dispatched, failed-implement ⇒ on-halt + post-cycle"
 policy '## Cycle Hooks
 
-- `pre-cycle`: `echo x >> pre-cycle.ran`
+- `pre-cycle`: `pwd -P >> pre-cycle.ran`
 - `pre-implement`: `pwd -P > pre-implement.ran`
 - `post-implement`: `echo x >> post-implement.ran`
-- `on-halt`: `echo x >> on-halt.ran`
-- `post-cycle`: `echo x >> post-cycle.ran`'
+- `on-halt`: `pwd -P >> on-halt.ran`
+- `post-cycle`: `pwd -P >> post-cycle.ran`'
 reset_run
 if run_pair run --card 12 --autonomous; then fail "a dead dispatch reported success"; fi
 assert_output_contains "Cycle status: failed-implement" || FAILED=1
 grep -q "/pair-workflow-implement-phase" "$ENGINE_LOG" || fail "the implement stage was never dispatched"
-[ "$(cat pre-implement.ran 2>/dev/null)" = "$main_real" ] || fail "pre-implement did not run in the repo root"
-[ "$(wc -l <pre-cycle.ran 2>/dev/null | tr -d ' ')" = "1" ] || fail "pre-cycle did not run exactly once"
-[ ! -f post-implement.ran ] || fail "post-implement ran although the stage's handoff never advanced"
-[ "$(wc -l <on-halt.ran 2>/dev/null | tr -d ' ')" = "1" ] || fail "on-halt did not run exactly once on a failed-* stop"
-[ "$(wc -l <post-cycle.ran 2>/dev/null | tr -d ' ')" = "1" ] || fail "post-cycle did not run exactly once"
+[ -d "$story_wt" ] || fail "the story worktree was not created at $story_wt"
+[ "$(cat "$story_wt/pre-implement.ran" 2>/dev/null)" = "$(cd "$story_wt" 2>/dev/null && pwd -P)" ] || fail "pre-implement did not run in the story worktree ($story_wt)"
+[ ! -f pre-implement.ran ] || fail "pre-implement ran in the main checkout, not the story worktree"
+ran_in_main pre-cycle.ran 1 || fail "pre-cycle did not run exactly once in the main checkout"
+[ ! -f post-implement.ran ] && [ ! -f "$story_wt/post-implement.ran" ] || fail "post-implement ran although the stage's handoff never advanced"
+ran_in_main on-halt.ran 1 || fail "on-halt did not run exactly once in the main checkout on a failed-* stop"
+ran_in_main post-cycle.ran 1 || fail "post-cycle did not run exactly once in the main checkout"
 
 # ── 2. AC1: a failing pre-* HALTs the cycle before the stage dispatches, output verbatim ─────────
 log_info "Test 2: failing pre-implement ⇒ failed-hook, output verbatim, zero spawns, on-halt runs"
