@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -53,6 +53,9 @@ function drive(
       }),
   }
 }
+
+// Each case spawns the real executor (a node child + shells): generous bound for a loaded machine.
+vi.setConfig({ testTimeout: 60_000 })
 
 describe('pair-cli ## Cycle Hooks against the real executor (US-489)', () => {
   it('AC1/AC7: a real failing pre-verify blocks verify; a real post-implement runs in the repo root', async () => {
