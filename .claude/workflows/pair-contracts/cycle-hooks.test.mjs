@@ -109,3 +109,31 @@ test('runHooks is pure over {hooks, point}: injected exec, unknown point throws'
   assert.equal(r.logged.length, 1)
   assert.throws(() => runHooks({ hooks: {}, point: 'pre-nonsense', cwd: '/x', exec }), /unknown hook point/)
 })
+
+// ── T-3 / AC7: the in-session skill and pair-cli call the SAME executor at the SAME points ──────
+const SKILL_MD = readFileSync(new URL('../../skills/pair-workflow-cycle/SKILL.md', import.meta.url), 'utf8')
+const CLI_LOOP = readFileSync(new URL('../../../apps/pair-cli/src/commands/run/cycle.ts', import.meta.url), 'utf8')
+const CLI_BRIDGE = readFileSync(new URL('../../../apps/pair-cli/src/commands/run/cycle-scripts.ts', import.meta.url), 'utf8')
+
+test('T-3: the skill runs every hook point through cycle-hooks.mjs, at the documented boundaries, and holds no hook rule', () => {
+  assert.match(SKILL_MD, /cycle-hooks\.mjs" load/)
+  assert.match(SKILL_MD, /cycle-hooks\.mjs" run .*--point <point>/)
+  for (const point of ['`pre-cycle`', '`pre-<step>`', '`post-<step>`', '`on-halt`', '`post-cycle`']) assert.ok(SKILL_MD.includes(point), point)
+  assert.match(SKILL_MD, /pre-cycle` once, before the first stage of this invocation \(not per round\)/)
+  assert.match(SKILL_MD, /halted.*HALTs the cycle \*\*`failed-hook`\*\* before the stage runs/s)
+  assert.match(SKILL_MD, /never on `ready-for-merge`/)
+  assert.match(SKILL_MD, /`\$rounds` bound/)
+})
+
+test('AC7: pair-cli calls the same points through the same script', () => {
+  assert.match(CLI_BRIDGE, /cycle-hooks\.mjs/)
+  for (const point of ["'pre-cycle'", '`pre-${next.step}`', '`post-${previousStep}`', "'on-halt'", "'post-cycle'"]) assert.ok(CLI_LOOP.includes(point), point)
+  // neither realization re-implements the semantics: the loop never mentions an exit code decision
+  assert.doesNotMatch(CLI_LOOP, /exitCode\s*[!=]==?\s*0/)
+})
+
+test('the shipped copies of the executor are byte-identical (dataset source, installed mirror)', () => {
+  const a = readFileSync(new URL('../../skills/pair-workflow-cycle/scripts/cycle-hooks.mjs', import.meta.url), 'utf8')
+  const b = readFileSync(new URL('../../../packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-hooks.mjs', import.meta.url), 'utf8')
+  assert.equal(a, b)
+})

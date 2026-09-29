@@ -107,6 +107,14 @@ node "$SKILL_DIR/scripts/workflow-profile.mjs" resolve --root "$PWD" [--profile 
 
 Print its `table` to the operator **once** — profile name, source (`--workflow-config` | `argument` | `pair.config.json` | `KB default`), hash, then every stage's engine/model/effort/context, each with the level that decided it — and never resolve again mid-cycle (a `pair.config.json` edited while the cycle runs changes nothing until the next invocation). Keep `.contextPolicy` and pass it as `--contextPolicy` to every `resolve` of this invocation: it names only the transitions `cycle-state.mjs`'s own table admits, so `resolve` accepts it by construction. `--dir` records the profile's name and hash beside the run's handoffs; `publish` stamps them into every handoff. The profile is audit only — never part of the input digest, so changing it between invocations invalidates no evidence. A `{ halt, detail }` (exit 1) is `profile-unresolved`, `profile-invalid` or `profile-name-collision` ⇒ HALT (below) before any dispatch. When `$profile` starts with `{` it is the legacy inline `{effort}` object: skip this block (there is no name to resolve) and use it as before. No `$profile`, no `$workflowConfig` and no `workflowProfiles` block ⇒ the KB default: run the script anyway, so the table says so.
 
+**Cycle hooks (US-489).** Before the first `resolve`, load the project's `## Cycle Hooks` once — `node "$SKILL_DIR/scripts/cycle-hooks.mjs" load "$MAIN/.pair/adoption/tech/automation.md"` — and print its `warnings` (an unrecognized hook key) verbatim, once. Absent file or section ⇒ `{ hooks: {}, warnings: [] }`: nothing to run and nothing to say (zero-configuration default). YOU execute the hooks, never a stage's agent, and always through the ONE shared executor, `cycle-hooks.mjs run` — the same script `pair-cli run --card` spawns, so both coordinators give the same blocking/logging semantics; this skill holds no hook rule. Hook points, all run in the repo root: `pre-cycle` once, before the first stage of this invocation (not per round); `pre-<step>` before each dispatch of `next.step`; `post-<step>` after that stage's handoff advanced; `on-halt` and `post-cycle` in Step 5.
+
+```bash
+node "$SKILL_DIR/scripts/cycle-hooks.mjs" run "$MAIN/.pair/adoption/tech/automation.md" --point <point> --cwd "$MAIN" [--status <terminal status>]
+```
+
+Read the answer, never the exit code: a `halted` object (only a `pre-*` point can carry one) HALTs the cycle **`failed-hook`** before the stage runs — print `halted.output` verbatim, never a summary; `logged` lines (`post-*`, `on-halt`) are printed to the operator and the cycle continues. `pre-cycle` halting ends the invocation before any stage (then Step 5's `on-halt`/`post-cycle` still close it).
+
 The workflow version is never typed: `cycle-state.mjs version` prints the one value this cycle speaks, and every command below is handed that capture. A version outside `<major>.<minor>.<patch>` is refused by whichever command receives it, before it does any work — so a literal remembered from a previous session fails the run rather than mints an identity nothing downstream accepts.
 
 The digest is the script's own — never computed by hand, because both realizations must agree on it:
@@ -123,7 +131,7 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" inputs --story '<card JSON>' --workflo
 
 ### Step 2: Put the stage's worktree in place
 
-**Check.** The authoring chain runs in the persistent story worktree; the final verifier gets a detached throwaway one.
+**Check.** Run `pre-cycle` once (first pass of this invocation only). The authoring chain runs in the persistent story worktree; the final verifier gets a detached throwaway one.
 
 ```bash
 node "$SKILL_DIR/scripts/cycle-dispatch.mjs" worktree --main "$PWD" --story $card \
@@ -138,7 +146,7 @@ node "$SKILL_DIR/scripts/cycle-dispatch.mjs" worktree --main "$PWD" --story $car
 
 ### Step 3: Render the packet and dispatch exactly one stage
 
-**Check.**
+**Check.** Run the hook point `pre-<next.step>` (Step 1's Cycle hooks); a `halted` answer ends the cycle `failed-hook` here — nothing below runs.
 
 ```bash
 node "$SKILL_DIR/scripts/cycle-dispatch.mjs" packet --next '<next JSON>' --card '<card JSON>' \
@@ -175,7 +183,7 @@ The bridge makes the resume's context deterministic: the task opens by telling t
 
 **Act.** Compare the durable state with what it was before the dispatch:
 
-- the handoff ADVANCED ⇒ the stage succeeded, whatever it printed;
+- the handoff ADVANCED ⇒ the stage succeeded, whatever it printed — run the hook point `post-<step>` of the stage that just advanced (logged, never a stop);
 - the handoff did NOT advance ⇒ a **dead dispatch**: re-dispatch the SAME prompt once (every stage is re-entrant, so the retry resumes), then a second unadvanced handoff ends the cycle `failed-<step>`. The budget is `policy.deadDispatchRetries` from `resolve`, defaulted to 1 — it is data, not a number written here.
 - the stage **STALLED** — it is still running but makes no progress (no message and no handoff advance for the stage's time bound; typically a wait on a background process the packet forbids) ⇒ **resume it once on the same subagent** with the bound realization's resume primitive (`SendMessage` on Claude, the resume tool the probe bound on Codex), telling it to continue its step with foreground, time-bounded commands only. Where the realization cannot resume that subagent (it is gone, or resume is unavailable), re-dispatch the SAME prompt fresh instead. A stall resume and a dead-dispatch retry spend the SAME `policy.deadDispatchRetries` budget (US-506 AC-12): a second failure of the step, of either kind, ends the cycle `failed-<step>`. Never wait on a stage yourself beyond its time bound, and never start a background wait of your own.
 
@@ -187,7 +195,7 @@ The bridge makes the resume's context deterministic: the task opens by telling t
 
 **Skip.** Never.
 
-**Act.** Report exactly what `resolve` said: `ready-for-merge` when the cycle converged, `escalate` when a human decision is owed, `failed-<stage>` otherwise — with the run directory, the PR and the reviewed head.
+**Act.** Close the hooks first: on a `failed-*` or `escalate` terminal (including `failed-hook`) run `on-halt --status <terminal>` (never on `ready-for-merge`; the executor gates it), then `post-cycle --status <terminal>` once — both logged, never a stop — but not when this invocation only stopped at the `$rounds` bound. Report exactly what `resolve` said: `ready-for-merge` when the cycle converged, `escalate` when a human decision is owed, `failed-<stage>` otherwise — with the run directory, the PR and the reviewed head.
 
 **Verify.** You have not merged, not closed the card, not deleted a branch and not posted a review. A converged cycle is a card ready for a human; the `merge` stage is another story's, and `resolve` returns it only when the project's auto-advance policy admits the card's tier.
 
@@ -228,7 +236,7 @@ An unrecognized `resolve` output is a HALT too, never a silent degradation: this
 
 ## Output Format
 
-`{ status, card, pr, runId, realization, terminal, reviewedHead?, roundsSpent, roundsBound, stages: [{ step, phase, context, dispatches, outcome }], halt?, detail? }` — `terminal` is one of `ready-for-merge | escalate | failed-preparation | failed-contract | failed-implement | failed-fix | failed-verify | failed-resume | awaiting-scope-decision`, copied from `resolve`, never synthesized.
+`{ status, card, pr, runId, realization, terminal, reviewedHead?, roundsSpent, roundsBound, stages: [{ step, phase, context, dispatches, outcome }], halt?, detail? }` — `terminal` is one of `ready-for-merge | escalate | failed-preparation | failed-contract | failed-implement | failed-fix | failed-verify | failed-resume | failed-hook | awaiting-scope-decision`, copied from `resolve`, never synthesized.
 
 ## Notes
 
