@@ -373,6 +373,10 @@ export function prepareCycleCoordinator(
 
     console.log(`  Cycle status: ${outcome.status} (${outcome.stagesRun} stage(s) dispatched)`)
     reportCycleReason(outcome.next)
-    return outcome.status === 'ready-for-merge' || outcome.status === 'merged' ? 0 : 1
+    const parkKind = (outcome.merge as { parkKind?: unknown } | undefined)?.parkKind
+    const awaitingHuman = outcome.status === 'merge-parked' && parkKind === 'awaiting-human'
+    return outcome.status === 'ready-for-merge' || outcome.status === 'merged' || awaitingHuman
+      ? 0
+      : 1
   }
 }

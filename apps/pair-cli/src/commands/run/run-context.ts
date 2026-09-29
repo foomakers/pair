@@ -61,6 +61,7 @@ export interface DriveCycleResult {
   readonly status: string
   readonly stagesRun: number
   readonly next?: unknown
+  readonly merge?: unknown
 }
 
 /** US-487: drives one story's delivery cycle to its next terminal state (or the `--rounds` bound). */
