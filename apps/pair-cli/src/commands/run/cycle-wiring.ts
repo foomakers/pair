@@ -7,6 +7,7 @@ import { runCycle, type CycleOutcome, type CycleStageResult } from './cycle'
 import {
   createCycleScriptsBridge,
   createCycleHooksBridge,
+  cycleHooksPolicyPath,
   type CardReadiness,
   type CycleScriptsLocation,
 } from './cycle-scripts'
@@ -15,7 +16,6 @@ import { spawnIteration } from './spawn'
 import { readStateMapping, resolveCardReadiness, type CardDocument } from './card-readiness'
 import { resolveBlockingSeverities } from './blocking-severities'
 import { stageSettings, type ResolvedWorkflowProfile } from './workflow-profile'
-import { POLICY_PATH } from './policy-sections'
 
 /**
  * The PRODUCTION wiring for `run --card`'s two injected collaborators.
@@ -482,7 +482,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
     // same one `pair-workflow-cycle` calls. Absent section/file ⇒ the script answers no hooks and
     // nothing is reported (AC6); only a typo'd key surfaces, once, as a warning.
     const hooks = createCycleHooksBridge(ctx.location!, {
-      policyPath: `${co.main}/${POLICY_PATH}`,
+      policyPath: cycleHooksPolicyPath(co.main),
       cwd: co.main,
     })
     for (const warning of hooks.warnings()) console.log(`  ${warning}`)

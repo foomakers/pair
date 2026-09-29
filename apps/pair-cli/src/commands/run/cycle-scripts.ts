@@ -1,10 +1,11 @@
 import { spawnSync } from 'child_process'
 import { existsSync, readFileSync } from 'fs'
-import { isAbsolute, join, relative, resolve } from 'path'
+import { isAbsolute, join, posix, relative, resolve, win32 } from 'path'
 import { pathToFileURL } from 'url'
 import type { FileSystemService } from '@pair/content-ops'
 import { extractRegistries, type Config } from '#registry'
 import type { CycleHookResult, CycleHooks } from './cycle'
+import { POLICY_PATH } from './policy-sections'
 
 /**
  * The script bridge — US-487 T-2.
@@ -439,6 +440,21 @@ export const CYCLE_BASE_BRANCH_DEFAULT = 'origin/main'
 
 // ── `## Cycle Hooks` (US-489) — the SAME shared executor the in-session skill calls ────────────
 
+const pathFor = (platform: NodeJS.Platform) => (platform === 'win32' ? win32 : posix)
+
+/** The MAIN checkout's `tech/automation.md`, joined with the injected platform's separator. */
+export function cycleHooksPolicyPath(main: string, platform: NodeJS.Platform = process.platform) {
+  return pathFor(platform).join(main, ...POLICY_PATH.split('/'))
+}
+
+/** The installed `cycle-hooks.mjs` under the skill's scripts directory, platform-injected. */
+export function cycleHooksScriptPath(
+  scriptsDir: string,
+  platform: NodeJS.Platform = process.platform,
+) {
+  return pathFor(platform).join(scriptsDir, 'cycle-hooks.mjs')
+}
+
 export interface CycleHooksBridge extends CycleHooks {
   /** `load`: the section's unrecognized-key / unparseable-line warnings, reported once per run. */
   warnings(): readonly string[]
@@ -454,7 +470,7 @@ export function createCycleHooksBridge(
   location: CycleScriptsLocation,
   options: { readonly policyPath: string; readonly cwd: string },
 ): CycleHooksBridge {
-  const script = join(location.scriptsDir, 'cycle-hooks.mjs')
+  const script = cycleHooksScriptPath(location.scriptsDir)
   // An installed skill older than US-489 has no executor. That is silent ONLY when the project
   // declares no `## Cycle Hooks` — a declared hook that cannot run is never a quiet no-op.
   if (!existsSync(script)) {
