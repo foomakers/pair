@@ -10,10 +10,11 @@
 //
 // CLI (always exits 0 on a well-formed call; the answer is the JSON line on stdout):
 //   node cycle-hooks.mjs load <automation.md>
-//        → { hooks: { <key>: [command…] }, warnings: [string…] }   (absent file ⇒ no hooks)
+//        → { hooks: { <key>: [command…] }, warnings: [string…], timeout? }   (absent file ⇒ no hooks)
+//        → { error } (exit 1) on a malformed `timeout` value
 //   node cycle-hooks.mjs run <automation.md> --point <key> [--cwd <dir>] [--status <terminal status>]
 //        → { point, mode, skipped?, ran: [{command, exitCode, output}], halted?: {command, exitCode, output},
-//            logged: [string…] }
+//            logged: [string…], timeout }   (`timeout` = effective per-command seconds; 0 = none)
 //   `pre-*` ⇒ mode `blocking` (first non-zero HALTs: `halted` set, the rest not run);
 //   `post-*` / `on-halt` ⇒ mode `logging` (every command runs, failures land in `logged`).
 //   `on-halt` needs `--status` and is skipped unless it is `failed-*` or `escalate`.
@@ -26,6 +27,8 @@ export const NON_STAGE_STEPS = ['done', 'blocked']
 export const STAGE_IDS = STEPS.filter(step => !NON_STAGE_STEPS.includes(step))
 export const CYCLE_POINTS = ['pre-cycle', 'post-cycle', 'on-halt']
 export const HEADING = 'Cycle Hooks'
+/** Per-command timeout (seconds) when `## Cycle Hooks` declares no `timeout`; `0` disables it. */
+export const DEFAULT_TIMEOUT = 600
 
 /** The hook names a stage id set yields — derived, so a new stage needs no edit here. */
 export const hookKeysFor = (stageIds = STAGE_IDS) => [
@@ -77,6 +80,7 @@ export function parseCycleHooks(markdown, { stageIds = STAGE_IDS } = {}) {
   const bodies = sectionBodies(markdown ?? '', HEADING)
   const hooks = {}
   const warnings = []
+  let timeout
   for (const body of bodies) {
     let fenced = false
     for (const raw of body) {
@@ -87,6 +91,14 @@ export function parseCycleHooks(markdown, { stageIds = STAGE_IDS } = {}) {
       }
       if (fenced || !/^[-*]\s+`/.test(line)) continue
       const m = BULLET.exec(line)
+      if (m && m[1] === 'timeout') {
+        const value = m[2].trim()
+        if (!/^\d+$/.test(value)) {
+          return { hooks: {}, warnings, error: `## Cycle Hooks: malformed \`timeout\` value \`${value}\` — expected a non-negative integer of seconds (\`0\` = no timeout)` }
+        }
+        timeout = Number(value)
+        continue
+      }
       if (!m) {
         warnings.push(`## Cycle Hooks: unparseable hook line ignored — ${line}`)
         continue
@@ -99,15 +111,34 @@ export function parseCycleHooks(markdown, { stageIds = STAGE_IDS } = {}) {
       ;(hooks[key] ??= []).push(command.trim())
     }
   }
-  return { hooks, warnings }
+  return timeout === undefined ? { hooks, warnings } : { hooks, warnings, timeout }
 }
 
-/** Runs one command through `sh -c` in `cwd`; a missing executable is a non-zero exit (127 from sh). */
-export function shellExec(command, cwd) {
-  const r = spawnSync('sh', ['-c', command], { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
-  const exitCode = typeof r.status === 'number' ? r.status : 1
-  const output = `${r.stdout ?? ''}${r.stderr ?? ''}${r.error ? String(r.error.message) : ''}`
-  return { exitCode, output }
+/**
+ * Runs one command through `sh -c` in `cwd`; a missing executable is a non-zero exit (127 from sh).
+ * Spawned detached (own process group): on expiry the whole GROUP is SIGKILLed, so a hook that
+ * traps TERM or leaves grandchildren behind still dies. `seconds` 0 arms no timer.
+ */
+export function shellExec(command, cwd, seconds = DEFAULT_TIMEOUT) {
+  const r = spawnSync('sh', ['-c', command], {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    detached: true,
+    killSignal: 'SIGKILL',
+    ...(seconds > 0 && { timeout: seconds * 1000 }),
+  })
+  const expired = r.error?.code === 'ETIMEDOUT'
+  if (expired && r.pid) {
+    try {
+      process.kill(-r.pid, 'SIGKILL')
+    } catch {
+      // group already gone (or no process groups on this platform)
+    }
+  }
+  const exitCode = expired ? 124 : typeof r.status === 'number' ? r.status : 1
+  const note = expired ? `hook timed out after ${seconds}s and was killed` : r.error ? String(r.error.message) : ''
+  return { exitCode, output: `${r.stdout ?? ''}${r.stderr ?? ''}${note ? `${r.stdout || r.stderr ? '\n' : ''}${note}` : ''}` }
 }
 
 /**
@@ -115,13 +146,14 @@ export function shellExec(command, cwd) {
  * report it verbatim (`halted`). Logging: run everything, collect failures in `logged`.
  * `status` gates `on-halt` only.
  */
-export function runHooks({ hooks, point, cwd, status, exec = shellExec, stageIds = STAGE_IDS }) {
+export function runHooks({ hooks, point, cwd, status, timeout, exec = shellExec, stageIds = STAGE_IDS }) {
   const mode = modeOf(point, stageIds)
   if (mode === undefined) throw new Error(`unknown hook point \`${point}\``)
-  const result = { point, mode, ran: [], logged: [] }
+  const seconds = timeout ?? DEFAULT_TIMEOUT // resolved ONCE; `0` stays 0 (no timeout)
+  const result = { point, mode, ran: [], logged: [], timeout: seconds }
   if (point === 'on-halt' && !haltsOn(status)) return { ...result, skipped: true }
   for (const command of hooks?.[point] ?? []) {
-    const { exitCode, output } = exec(command, cwd)
+    const { exitCode, output } = exec(command, cwd, seconds)
     // The output is embedded ONCE (in `halted` / `logged`); `ran` is the audit of what executed.
     result.ran.push({ command, exitCode })
     if (exitCode === 0) continue
@@ -139,13 +171,17 @@ function main(argv) {
     const i = rest.indexOf(`--${name}`)
     return i >= 0 ? rest[i + 1] : undefined
   }
-  if (cmd === 'load') return parseCycleHooks(readPolicy(file))
+  if (cmd === 'load') {
+    const { hooks, warnings, error } = parseCycleHooks(readPolicy(file))
+    return error ? { error } : { hooks, warnings }
+  }
   if (cmd === 'run') {
     const point = flag('point')
     if (!point) return { error: 'usage: run <automation.md> --point <key> [--cwd <dir>] [--status <s>]' }
-    const { hooks } = parseCycleHooks(readPolicy(file))
+    const { hooks, timeout, error } = parseCycleHooks(readPolicy(file))
+    if (error) return { error }
     try {
-      return runHooks({ hooks, point, cwd: flag('cwd') ?? process.cwd(), status: flag('status') })
+      return runHooks({ hooks, point, timeout, cwd: flag('cwd') ?? process.cwd(), status: flag('status') })
     } catch (e) {
       return { error: e.message }
     }

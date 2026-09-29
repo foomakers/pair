@@ -407,9 +407,12 @@ A declared policy still carrying the retired severity-LIST key (the pre-revision
 
 A fourth independent schema owner (US-489). Same semantics as `## Publish-PR Hooks` in `tech/automation.md`, generalized from the publication step to **every stage boundary** of the delivery cycle. The hooks are executed by the **coordinator** — `pair-workflow-cycle` (in-session) or `pair-cli run --card` (console) — never by the stage's own agent, through ONE shared executor, `pair-workflow-cycle/scripts/cycle-hooks.mjs`, so the two coordinators cannot drift.
 
+**Per-hook timeout.** An optional bullet inside `## Cycle Hooks` bounds **each command** (never the whole point): `` - `timeout`: `<seconds>` ``. It is a non-negative integer; absent ⇒ the default **600** seconds; `0` disables the timeout. On expiry the command's whole process group is killed (SIGKILL — a hook that traps TERM still dies) and the command counts as failed with a `timed out` message: a `pre-*` hook HALTs (`failed-hook`), `post-*` and `on-halt` are logged. A malformed value (`-5`, `1.5`, `abc`) is a load-time `error` naming the value: the cycle HALTs before the first stage. Every `run` answer carries the effective `timeout`.
+
 ```markdown
 ## Cycle Hooks
 
+- `timeout`: `600`
 - `pre-cycle`: `./scripts/check-toolchain.sh`
 - `pre-verify`: `pnpm build`
 - `post-implement`: `./notify-slack.sh implement-done`
