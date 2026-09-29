@@ -404,3 +404,15 @@ test('T-5/AC7: `bind` records an ALREADY-resolved identity (no re-resolution) �
   assert.equal(cli('bind', '--dir', dir, '--name', 'mixed', '--hash', 'a'.repeat(64), '--source', 'argument').out.action, 'reused')
   assert.equal(cli('bind', '--dir', dir, '--name', 'mixed', '--hash', 'not-a-hash', '--source', 'x').code, 2)
 })
+
+// ── T-5: the in-session coordinator's SKILL.md drives the same resolver (AC2, AC3, AC5, AC6, AC8) ──
+test('T-5: pair-workflow-cycle SKILL.md resolves the profile through workflow-profile.mjs, prints its table once, passes the context policy and names every HALT', () => {
+  const read = rel => readFileSync(new URL(rel, import.meta.url), 'utf8')
+  const skill = read('../../skills/pair-workflow-cycle/SKILL.md')
+  assert.equal(skill, read('../../../packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md'), 'installed copy drifted from the dataset source')
+  for (const needle of ['$workflowConfig', 'workflow-profile.mjs" resolve', '--workflow-config', '--contextPolicy', 'profile-unresolved', 'profile-invalid', 'profile-name-collision', 'once', '.contextPolicy'])
+    assert.ok(skill.includes(needle), `SKILL.md lacks ${needle}`)
+  // the legacy inline `{effort}` object keeps working, and the per-stage profile effort feeds the packet's own --profile flag
+  assert.match(skill, /legacy/i)
+  assert.match(skill, /packet[^\n]*--profile '\{"effort"/)
+})

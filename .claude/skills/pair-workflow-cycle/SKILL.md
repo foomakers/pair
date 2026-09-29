@@ -20,7 +20,8 @@ Two entries, one cycle: a refined card with no PR runs the whole thing; a PR tha
 | `$rounds`   | No       | How many remediation rounds THIS invocation may spend. Default: the policy's `maxFixRounds`. It only ever narrows: a `$rounds` above `maxFixRounds` is **clamped** to the policy value and the clamp is reported — it can never widen the ceiling, because the ceiling is the cycle's, not the invocation's. |
 | `$runId`    | No       | Run directory to drive: `.pair/working/runs/$runId/<card>/`. Default `story-<card>` — the batch engine's own convention, so a cycle started by `pair-implement-batch` resumes here and back.    |
 | `$notes`    | No       | Scope directive from the card; threaded into every stage packet, overriding the issue body where they conflict.                                                                              |
-| `$profile`  | No       | The execution profile. JSON object; today carries `effort` (one of `low \| medium \| high \| xhigh \| max`, mirrors `pair-implement-batch.js`'s own `agent()` effort dial) — applied to every stage's dispatch instruction. Enforced for Codex (`-c model_reasoning_effort=<value>` on the dispatch call); a best-effort PROMPT REQUEST only for Claude, whose `Agent` tool exposes no effort parameter at all — never claim it is enforced there. Per-stage `context`/model roles remain reserved (#488). Unresolvable ⇒ HALT `profile-unresolved`; never a silent default; absent ⇒ today's behavior, unchanged.                                                         |
+| `$profile`  | No       | The workflow profile to use (US-488): a NAME, looked up in `pair.config.json`'s `workflowProfiles.files` / `.inline`. Cascade, resolved once per run: `$workflowConfig` > `$profile` > `workflowProfiles.default` > the KB default (schema-default engine and model, default effort, `fresh` context). Unresolvable ⇒ HALT `profile-unresolved`, never a silent fallback. A value starting with `{` is the **legacy** inline object `{ "effort": … }` (one of `low \| medium \| high \| xhigh \| max`, applied to every stage's dispatch instruction exactly as before — enforced for Codex, a best-effort prompt request only for Claude); absent ⇒ today's behavior, unchanged. |
+| `$workflowConfig` | No | Path of an external profile file, used verbatim; wins over `$profile` and `pair.config.json`. Malformed ⇒ HALT `profile-invalid`. |
 
 Everything else a stage receives — `$run $story $branch $worktree $base $stacked $entry $policy $inputs $workflowVersion` and the phase-specific arguments — is **rendered by the script**, never composed here in prose.
 
@@ -86,7 +87,7 @@ Ask the one authority, from the MAIN checkout:
 WV="$(node "$SKILL_DIR/scripts/cycle-state.mjs" version)"
 node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir ".pair/working/runs/$runId/$card" \
   --workflowVersion "$WV" --policy '<policy JSON>' --entry <fresh|pr> [--pr $pr] \
-  --story $card --inputs <digest> --runsRoot .pair/working/runs [--redirects <n>]
+  --story $card --inputs <digest> --runsRoot .pair/working/runs [--contextPolicy '<contextPolicy JSON>'] [--redirects <n>]
 ```
 
 The PM tool and code host are bound ONCE, here, before the first `resolve` of this invocation — every script a stage runs against this run directory (card hash, PR comment, check, label, scope decision) then goes through that binding, never a re-read of way-of-working mid-cycle (US-492, ADR-018 split):
@@ -96,6 +97,15 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" bind-hosts --dir ".pair/working/runs/$
 ```
 
 `bound` on a new run, `reused` on a resumed one — and on the run an `other-run` answer makes you adopt, bind that directory the same way before its first dispatch. Report `pm-tool` / `code-host` in the same line as the realization. `{ halt: "host-unsupported" }` ⇒ HALT `host-unsupported` (below) before any dispatch.
+
+The workflow profile is resolved ONCE, here, right after the binding and before the first `resolve` — by the ONE shared resolver `pair-cli run --card` calls too, never by hand-reading `pair.config.json`:
+
+```bash
+node "$SKILL_DIR/scripts/workflow-profile.mjs" resolve --root "$PWD" [--profile $profile] [--workflow-config $workflowConfig] \
+  [--tier <the card's risk:* label>] --dir ".pair/working/runs/$runId/$card"
+```
+
+Print its `table` to the operator **once** — profile name, source (`--workflow-config` | `argument` | `pair.config.json` | `KB default`), hash, then every stage's engine/model/effort/context, each with the level that decided it — and never resolve again mid-cycle (a `pair.config.json` edited while the cycle runs changes nothing until the next invocation). Keep `.contextPolicy` and pass it as `--contextPolicy` to every `resolve` of this invocation: it names only the transitions `cycle-state.mjs`'s own table admits, so `resolve` accepts it by construction. `--dir` records the profile's name and hash beside the run's handoffs; `publish` stamps them into every handoff. The profile is audit only — never part of the input digest, so changing it between invocations invalidates no evidence. A `{ halt, detail }` (exit 1) is `profile-unresolved`, `profile-invalid` or `profile-name-collision` ⇒ HALT (below) before any dispatch. When `$profile` starts with `{` it is the legacy inline `{effort}` object: skip this block (there is no name to resolve) and use it as before. No `$profile`, no `$workflowConfig` and no `workflowProfiles` block ⇒ the KB default: run the script anyway, so the table says so.
 
 The workflow version is never typed: `cycle-state.mjs version` prints the one value this cycle speaks, and every command below is handed that capture. A version outside `<major>.<minor>.<patch>` is refused by whichever command receives it, before it does any work — so a literal remembered from a previous session fails the run rather than mints an identity nothing downstream accepts.
 
@@ -153,7 +163,7 @@ The bridge makes the resume's context deterministic: the task opens by telling t
 
 - `fresh` — spawn a NEW subagent. This is the KB default on every transition, and it is **mandatory** into `validate` and `verify`: an independent verifier that inherits the author's context is not independent.
 - `reuse` — **resume** the previous subagent of that same role instead of spawning one (`SendMessage` on Claude, whichever of `collaboration.followup_task` / `multi_agent_v1__resume_agent` the probe actually bound on Codex — its own tool namespace has renamed twice in one day, so never hardcode either name yourself; read it from the bound realization). `cycle-state.mjs` returns `reuse` only for `prepare→prepare`, `implement→green` and `green→green`; it is never this skill's call. `cycle-dispatch.mjs context-table` prints the table.
-- `$profile.effort`, when given: for Codex, pass it as a real dispatch-call parameter (`-c model_reasoning_effort=<value>`), never only as prose — the packet's `effort` field names the value, this skill applies it to the primitive. For Claude, there is no such parameter to set: the packet's prompt already carries the request in text (rendered by `cycle-dispatch.mjs`); do nothing further, and never report it as enforced.
+- **Per-stage profile** (the resolved profile's row for `next.step`): pass its `effort`, when not `default`, to `packet` as `--profile '{"effort":"<effort>"}'` — the packet then carries the value and the prompt requests it (the legacy `$profile` object is passed the same way, unchanged). For Codex apply it as a real dispatch-call parameter (`-c model_reasoning_effort=<value>`), never only as prose; for Claude there is no such parameter — never report it as enforced. Apply the stage's resolved model id (`stages.<step>.model.resolved.id`, when not null) to whichever model parameter the bound primitive exposes; where it exposes none, say so once — never claim it was applied. `engine` is a `pair-cli` notion (which binary a stage spawns): in-session, the session's own harness IS the engine, so a stage `engine` is reported in the table and otherwise ignored. `context` reaches you only as `next.context`.
 
 **Verify.** `halt: pipeline-invalid` ⇒ HALT (below): every `--pipeline` value is held to the same grammar the batch engine holds it to, and no packet is rendered from a refused one. Otherwise one stage, one dispatch. Keep only the compact `resolve` output; never read a handoff whole into this session, and never retain a subagent's transcript.
 
@@ -199,7 +209,9 @@ Two commands replace the hand edits US-487's run needed. They are the maintainer
 | `pi-subagents-missing`   | Inside pi (Step 0b) with no `pi-subagents`, and the user said no to the install          | That the in-pi cycle cannot run without it, the pinned install line, and `pair-cli run --card N` |
 | `subagent-tool-mismatch` | The `subagent` tool's name or parameters differ from the pinned version's (Step 0b)     | The bridge's detail: expected tool, parameters and version, and the setup that aligns it   |
 | `workflow-version-invalid` | `--workflow-version` is not `<major>.<minor>.<patch>` — the grammar `publish` already enforces | The value, refused verbatim — no argument packet and no prompt are rendered from it. Pass the `version` command's output, never a remembered literal |
-| `profile-unresolved`     | `$profile` was given and cannot be read or does not validate                            | What was asked for and why it did not resolve                                              |
+| `profile-unresolved`     | `$profile` / `$workflowConfig` / `workflowProfiles.default` names a profile no source has (or a `$workflowConfig` path that does not exist) | The script's `detail`: the name, the sources searched, the profiles known — never a silent fall back to the KB default |
+| `profile-invalid`        | The selected profile does not validate: unknown key or stage, `context: reuse` into a stage the transition table forbids (`validate`, `verify`, …), malformed JSON or `workflowProfiles` block | The script's `detail`, naming the offending field — nothing is dispatched |
+| `profile-name-collision` | Two profile files under `workflowProfiles.files` declare the same `name`                | Both paths, from the script's `detail`                                                      |
 | `host-unsupported`       | way-of-working declares a `pm-tool` / `code-host` with no adapter in `scripts/host/`  | The declared value, the side, and the implemented set — never a GitHub fallback. Adding one: the host-adapter extension guide |
 | `usage`                  | `$card` and `$pr` both given, or neither                                                | The two valid entries                                                                      |
 
