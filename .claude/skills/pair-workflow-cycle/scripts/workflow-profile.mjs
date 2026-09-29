@@ -9,7 +9,7 @@
 // The `context` rule is NOT restated here: whether a stage may `reuse` is asked of `cycle-state.mjs`'s
 // own table (`contextReuseAdmissibleInto`), the single owner (#486 T-2).
 import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { contextReuseAdmissibleInto } from './cycle-state.mjs'
 
@@ -280,4 +280,27 @@ export function resolveProfile({ root, profile, workflowConfig, tier }) {
   if (profile !== undefined) return lookup(root, block, profile, 'argument', tier)
   if (block.default !== undefined) return lookup(root, block, block.default, 'pair.config.json', tier)
   return finish(root, { name: 'KB default' }, 'KB default', 'KB default', [], tier)
+}
+
+// ── the run's binding (AC7) ──────────────────────────────────────────────────────────────────
+// The resolved profile's identity is written beside the run's handoffs, and `cycle-state.mjs publish`
+// stamps `workflowProfile: { name, hash }` from it into every handoff (the same file name is spelled
+// there — a test pins the pair). It is AUDIT only: it is never an effective input, so swapping the
+// profile mid-cycle invalidates nothing.
+export const PROFILE_BINDING_FILE = '.workflow-profile.json'
+
+/** `bound` (first time), `reused` (same content hash), `rebound` (the profile changed; `previous` says from what). */
+export function bindProfile({ dir, resolved }) {
+  const path = join(dir, PROFILE_BINDING_FILE)
+  const binding = { name: resolved.name, hash: resolved.hash, source: resolved.source }
+  let previous
+  if (existsSync(path))
+    try {
+      previous = JSON.parse(readFileSync(path, 'utf8'))
+    } catch {}
+  if (previous?.hash === binding.hash && previous?.name === binding.name) return { action: 'reused', binding }
+  const tmp = `${path}.${process.pid}.tmp`
+  writeFileSync(tmp, JSON.stringify(binding, null, 2) + '\n')
+  renameSync(tmp, path)
+  return previous ? { action: 'rebound', binding, previous } : { action: 'bound', binding }
 }

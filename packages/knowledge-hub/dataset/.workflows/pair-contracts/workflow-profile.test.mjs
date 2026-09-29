@@ -4,11 +4,11 @@
 // RUNS FROM `.claude/workflows` ONLY (same rule as cycle-state.test.mjs): `pnpm workflows:test`.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { validateProfile, effectiveStage, resolveProfile, ProfileError, STAGES, KB_DEFAULT } from '../../skills/pair-workflow-cycle/scripts/workflow-profile.mjs'
-import { CONTEXT_TABLE } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
+import { join, dirname } from 'node:path'
+import { validateProfile, effectiveStage, resolveProfile, bindProfile, ProfileError, STAGES, KB_DEFAULT } from '../../skills/pair-workflow-cycle/scripts/workflow-profile.mjs'
+import { CONTEXT_TABLE, publish, resolve, effectiveInputs } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 
 const errorsOf = p => validateProfile(p).errors
 
@@ -238,4 +238,69 @@ test('T-3: a fenced or malformed Model Policy line is never read as policy; an u
 test('T-3: modelClasses is validated (unknown class name, non-string id)', () => {
   assert.match(errorsOf({ name: 'p', modelClasses: { huge: 'x' } })[0], /modelClasses: unknown class 'huge'/)
   assert.match(errorsOf({ name: 'p', modelClasses: { cheap: 3 } })[0], /modelClasses\.cheap/)
+})
+
+// ── T-4: recorded in every handoff, excluded from the digest (AC7) ───────────────────────────
+const SHA = c => c.repeat(40)
+const V = '4.0.1'
+const runDirOf = () => {
+  const root = mkdtempSync(join(tmpdir(), 'wfp-run-'))
+  const dir = join(root, '.pair', 'working', 'runs', 'run-1', '42')
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+const implementHandoff = (dir, attempt) => {
+  const file = join(dir, `draft-${attempt}.json`)
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'implement-phase', inputHead: SHA('a'), status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true }))
+  const out = publish({ dir, file, phase: 'a0', skill: 'implement-phase', workflowVersion: V, attempt, pr: 7 })
+  assert.equal(out.published, true, JSON.stringify(out))
+  return JSON.parse(readFileSync(out.path, 'utf8'))
+}
+const resolvedProfile = (name, model) => resolveProfile({ root: project({ config: { workflowProfiles: { default: name, inline: { [name]: { name, defaults: { model } } } } } }) })
+
+test('T-4/AC7: bindProfile records the run profile once; a same-hash re-bind is `reused`, a changed profile is `rebound`', () => {
+  const dir = runDirOf()
+  const a = resolvedProfile('A', 'm1')
+  assert.equal(bindProfile({ dir, resolved: a }).action, 'bound')
+  assert.equal(bindProfile({ dir, resolved: a }).action, 'reused')
+  const b = resolvedProfile('B', 'm2')
+  const out = bindProfile({ dir, resolved: b })
+  assert.deepEqual([out.action, out.previous.name, out.previous.hash], ['rebound', 'A', a.hash])
+})
+
+test('T-4/AC7: every handoff records the profile name + content hash bound when it was published', () => {
+  const dir = runDirOf()
+  const a = resolvedProfile('A', 'm1')
+  const b = resolvedProfile('B', 'm2')
+  assert.notEqual(a.hash, b.hash)
+  assert.equal(implementHandoffWithout(dir).workflowProfile, undefined, 'no profile bound ⇒ nothing stamped (AC9)')
+  bindProfile({ dir, resolved: a })
+  assert.deepEqual(implementHandoff(dir, 2).workflowProfile, { name: 'A', hash: a.hash })
+  bindProfile({ dir, resolved: b })
+  assert.deepEqual(implementHandoff(dir, 3).workflowProfile, { name: 'B', hash: b.hash })
+})
+const implementHandoffWithout = dir => implementHandoff(dir, 1)
+
+test('T-4/AC7: the profile is never an effective input — two runs differing only by profile digest identically', () => {
+  const story = { id: '42', branch: 'b', base: 'origin/main', title: 't' }
+  const base = effectiveInputs(story, { workflowVersion: V })
+  assert.equal(effectiveInputs(story, { workflowVersion: V, profile: resolvedProfile('A', 'm1') }), base)
+  assert.equal(effectiveInputs(story, { workflowVersion: V, profile: resolvedProfile('B', 'm2') }), base)
+})
+
+test('T-4/AC7: resuming after the profile changed is not an input change — resolve answers the same next step and status', () => {
+  const dir = runDirOf()
+  const root = dirname(dirname(dirname(dirname(dirname(dir)))))
+  const story = { id: '42', branch: 'b', base: 'origin/main', title: 't' }
+  const inputs = effectiveInputs(story, { workflowVersion: V })
+  bindProfile({ dir, resolved: resolvedProfile('A', 'm1') })
+  implementHandoff(dir, 1)
+  const ask = () => resolve({ dir, workflowVersion: V, policy: {}, entry: 'fresh', inputs, story: '42', runsRoot: join(root, '.pair', 'working', 'runs') })
+  const before = ask()
+  bindProfile({ dir, resolved: resolvedProfile('B', 'm2') })
+  const after = ask()
+  assert.equal(before.status, after.status)
+  assert.deepEqual(after.next, before.next)
+  assert.equal(after.next.inputsChanged, undefined)
+  assert.equal(after.next.step, 'verify')
 })
