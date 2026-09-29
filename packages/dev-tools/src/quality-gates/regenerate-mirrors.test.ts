@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, afterAll } from 'vitest'
 import { execFileSync, spawn, spawnSync } from 'child_process'
 import {
   mkdtempSync,
@@ -12,6 +12,7 @@ import {
   rmSync,
   realpathSync,
   statSync,
+  symlinkSync,
 } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve, dirname } from 'path'
@@ -36,7 +37,46 @@ interface RunResult {
   stderr: string
 }
 
-function run(cwd: string, env?: Record<string, string>, script: string = REGENERATE): RunResult {
+/**
+ * #518: the toolchain every success-path case runs the script from — NOT this repo's.
+ *
+ * The script builds the CLI with turbo, and turbo replays a cache hit by rewriting `dist/**`
+ * IN PLACE. From this repo's toolchain, each case rewrote `apps/pair-cli/dist` while
+ * `@pair/pair-cli#test`, scheduled in parallel by the same turbo run, was spawning it. So the
+ * script runs from a byte-for-byte copy whose turbo is a no-op and whose
+ * `apps/pair-cli/dist` is a read-only symlink to the real build — which turbo guarantees
+ * fresh BEFORE this suite starts (`@pair/dev-tools#test` dependsOn `@pair/pair-cli#build`),
+ * never rebuilt while another suite runs it. The build step's own branches keep their
+ * fixture-owned turbo (`makeToolchainFixture` + `writeTurboStub`).
+ */
+let sharedToolchain = ''
+function toolchainScript(): string {
+  if (!sharedToolchain) {
+    const dist = join(REPO_ROOT, 'apps/pair-cli/dist')
+    if (!existsSync(join(dist, 'cli.js')))
+      throw new Error(
+        `${dist}/cli.js is missing: build @pair/pair-cli first (turbo does, before this suite)`,
+      )
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'regen-toolchain-')))
+    mkdirSync(join(dir, 'scripts'), { recursive: true })
+    copyFileSync(REGENERATE, join(dir, 'scripts/regenerate-mirrors.sh'))
+    chmodSync(join(dir, 'scripts/regenerate-mirrors.sh'), 0o755)
+    writeTurboStub(dir, 'exit 0\n')
+    mkdirSync(join(dir, 'apps/pair-cli'), { recursive: true })
+    symlinkSync(dist, join(dir, 'apps/pair-cli/dist'))
+    sharedToolchain = dir
+  }
+  return join(sharedToolchain, 'scripts/regenerate-mirrors.sh')
+}
+afterAll(() => {
+  if (sharedToolchain) rmSync(sharedToolchain, { recursive: true, force: true })
+})
+
+function run(
+  cwd: string,
+  env?: Record<string, string>,
+  script: string = toolchainScript(),
+): RunResult {
   try {
     const stdout = execFileSync(script, [], {
       cwd,
@@ -233,8 +273,8 @@ function isolatedHome(dir: string): Record<string, string> {
   return { HOME: home }
 }
 
-// Every test here shells out to the REAL script, which builds the CLI (turbo, cached
-// after the first) and then runs a full 7-registry regeneration over a fixture tree.
+// Every test here shells out to the REAL script (a byte copy, see `toolchainScript`) and
+// then runs a full 7-registry regeneration over a fixture tree.
 // That is seconds, not milliseconds, and vitest's 5s default is measured while turbo
 // runs every other package's suite in parallel — so the default is a flake, not a
 // budget. `SCRIPT_RUN_TIMEOUT_MS` is per test, and the same explicit-timeout treatment
@@ -1255,13 +1295,13 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
 // the REAL writer: `packages/knowledge-hub/src/tools/mirror-realign.ts` (tested source)
 // → `.pair/knowledge/assets/mirror-realign.cjs` (the file `pair install` puts in every
 // adopter's tree, and the path the skill names) → `node <asset> --command <the adoption's
-// mirror-realign-command>`. Nothing here is stubbed: the asset spawns
-// `scripts/regenerate-mirrors.sh`, which builds and runs the CLI over the fixture.
+// mirror-realign-command>`. Only the build is stubbed (`toolchainScript`, #518): the asset
+// spawns the real `scripts/regenerate-mirrors.sh`, which runs the real built CLI over the fixture.
 const MIRROR_REALIGN_ASSET = resolve(REPO_ROOT, '.pair/knowledge/assets/mirror-realign.cjs')
 const REGEN_MESSAGE = '[#419] chore: regenerate mirrors from local dataset'
 
 function realignViaAsset(cwd: string, env: Record<string, string>, unsafe: string[]): RunResult {
-  const args = [MIRROR_REALIGN_ASSET, '--command', REGENERATE, '--message', REGEN_MESSAGE]
+  const args = [MIRROR_REALIGN_ASSET, '--command', toolchainScript(), '--message', REGEN_MESSAGE]
   for (const tree of unsafe) args.push('--unsafe', tree)
   const child = spawnSync('node', args, { cwd, env: { ...process.env, ...env }, encoding: 'utf-8' })
   return { status: child.status, stdout: child.stdout, stderr: child.stderr }
