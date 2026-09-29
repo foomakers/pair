@@ -202,4 +202,55 @@ process.stdout.write(JSON.stringify({ type: 'agent_settled' }) + '\\n')
     expect(args({ ...ENGINES.claude, effortFlag: '--effort' }, undefined)).not.toContain('--effort')
     expect(args(ENGINES.claude, 'high')).not.toContain('high')
   })
+
+  // US-488 r1-g1 (r0-1): every handoff records the profile the run REALLY used — a binding left by an
+  // earlier invocation must not be stamped into a handoff a later, differently-profiled one publishes.
+  const publishHandoff = (): { workflowProfile?: { name?: string } } => {
+    const dir = join(main, '.pair/working/runs/story-7/7')
+    const draft = join(root, 'handoff-draft.json')
+    writeFileSync(
+      draft,
+      JSON.stringify({
+        run: 'story-7',
+        story: '7',
+        pr: 7,
+        branch: 'b',
+        phase: 'a0',
+        skill: 'implement-phase',
+        inputHead: 'a'.repeat(40),
+        status: 'ok',
+        prNumber: 7,
+        outputHead: 'c'.repeat(40),
+        gatesPassed: true,
+      }),
+    )
+    const out = JSON.parse(
+      execFileSync(
+        'node',
+        [
+          join(scriptsDir(), 'cycle-state.mjs'),
+          'publish',
+          ...['--dir', dir, '--file', draft, '--phase', 'a0', '--skill', 'implement-phase'],
+          ...['--workflowVersion', CYCLE_WORKFLOW_VERSION, '--attempt', '1', '--pr', '7'],
+        ],
+        { encoding: 'utf8', cwd: main },
+      ),
+    ) as { path: string }
+    return JSON.parse(readFileSync(out.path, 'utf8')) as { workflowProfile?: { name?: string } }
+  }
+
+  it('r0-1 witness: bound to A, then resumed zero-config — the handoff it publishes does not record A (AC7)', async () => {
+    await drive({ profile: profile({ name: 'stale-a', stages: { implement: { model: 'm' } } }) })
+    await drive()
+
+    expect(publishHandoff().workflowProfile?.name).not.toBe('stale-a')
+  }, 60_000)
+
+  it('r0-1 control: bound to A, then resumed with profile B — the handoff records B (AC7)', async () => {
+    await drive({ profile: profile({ name: 'stale-a', stages: { implement: { model: 'm' } } }) })
+    const b = profile({ name: 'then-b', stages: { implement: { model: 'n' } } })
+    await drive({ profile: b })
+
+    expect(publishHandoff().workflowProfile).toMatchObject({ name: 'then-b', hash: b.hash })
+  }, 60_000)
 })
