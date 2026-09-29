@@ -255,7 +255,7 @@ function stoppedWithoutNext(answer: CycleResolveStop, stagesRun: number): CycleO
  * or the collaborator surface above — can request one).
  */
 async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
-  const { resolve, worktree, packet, spawnStage, policy, rounds, onNotice, hooks } = input
+  const { resolve, worktree, packet, spawnStage, policy, onNotice, hooks } = input
   const observers: StageObservers = {
     onStage: input.onStage,
     appendAudit: input.appendAudit,
@@ -283,26 +283,14 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
       return stoppedWithoutNext(answer as CycleResolveStop, state.stagesRun)
     }
 
-    const advanced = state.dispatchedNext !== null && !sameNext(state.dispatchedNext, next)
-    const previousStep = state.dispatchedNext?.step
     const settled = settlePreviousDispatch(state, next, deadDispatchRetries, observers)
     if (settled !== null) return settled
-    // US-489 AC2: `post-<stage>` runs once the stage's handoff advanced — logged, never a stop.
-    if (advanced && previousStep !== undefined) {
-      await runHookPoint(hooks, `post-${previousStep}`, undefined, onNotice)
-    }
+    await runPostStageHook(state, next, hooks, onNotice)
 
     if (!DISPATCHABLE_STEPS.has(next.step)) return terminalOutcome(next, state.stagesRun)
-    if (roundsBoundReached(rounds, next)) {
-      return { status: 'rounds-bound-reached', stagesRun: state.stagesRun, next }
-    }
-
     noticeReuseOnce(state, next, onNotice)
-
-    // US-489 AC1: `pre-<stage>` runs before the stage dispatches; a non-zero exit HALTs here, so
-    // the stage never runs and the hook's own output is what the operator reads.
-    const blocked = await runHookPoint(hooks, `pre-${next.step}`, undefined, onNotice)
-    if (blocked !== null) return hookFailure(blocked, state.stagesRun)
+    const gated = await gateDispatch(state, next, input)
+    if (gated !== null) return gated
 
     await worktree()
     const stagePacket = await packet(next)
@@ -310,6 +298,39 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     state.stagesRun += 1
     state.dispatchedNext = next
   }
+}
+
+/**
+ * US-489 AC2: `post-<stage>` runs once the previous dispatch's handoff ADVANCED (`next` differs
+ * from what was dispatched) — logged, never a stop. A dead dispatch runs no `post-*`.
+ * (AC1's `pre-<stage>` runs inline before each dispatch; a non-zero exit HALTs there, so the stage
+ * never runs and the hook's own output is what the operator reads.)
+ */
+async function runPostStageHook(
+  state: LoopState,
+  next: CycleNext,
+  hooks: CycleHooks | undefined,
+  onNotice: RunCycleInput['onNotice'],
+): Promise<void> {
+  if (state.dispatchedNext === null || sameNext(state.dispatchedNext, next)) return
+  await runHookPoint(hooks, `post-${state.dispatchedNext.step}`, undefined, onNotice)
+}
+
+/**
+ * What may stop a dispatch: the `--rounds` bound, then US-489 AC1's `pre-<stage>` hook — a HALT is
+ * the cycle's `failed-hook` terminal. `null` ⇒ dispatch.
+ */
+async function gateDispatch(
+  state: LoopState,
+  next: CycleNext,
+  input: RunCycleInput,
+): Promise<CycleOutcome | null> {
+  const { rounds, hooks, onNotice } = input
+  if (roundsBoundReached(rounds, next)) {
+    return { status: 'rounds-bound-reached', stagesRun: state.stagesRun, next }
+  }
+  const halted = await runHookPoint(hooks, `pre-${next.step}`, undefined, onNotice)
+  return halted === null ? null : hookFailure(halted, state.stagesRun)
 }
 
 type HaltedHook = { point: string; command: string; exitCode: number; output: string }

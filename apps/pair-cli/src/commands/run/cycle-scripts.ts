@@ -220,12 +220,20 @@ function runScriptIn(
   cmd: string,
   args: readonly (readonly [string, string])[],
   cwd?: string,
-  positional: readonly string[] = [],
 ): unknown {
-  const argv = [script, cmd, ...positional]
+  return runScriptArgv([script, cmd], args, cwd)
+}
+
+/** `runScriptIn` with a caller-built argv head (positional arguments before the flags). */
+function runScriptArgv(
+  head: readonly string[],
+  args: readonly (readonly [string, string])[],
+  cwd?: string,
+): unknown {
+  const argv = [...head]
   for (const [flag, value] of args) argv.push(`--${flag}`, value)
   const result = spawnSync('node', argv, { encoding: 'utf8', ...(cwd !== undefined && { cwd }) })
-  const parsed = parseScriptOutput(script, cmd, (result.stdout ?? '').trim(), result.stderr)
+  const parsed = parseScriptOutput(head[0]!, head[1]!, (result.stdout ?? '').trim(), result.stderr)
   rejectIfFailed(parsed)
   return parsed
 }
@@ -468,7 +476,7 @@ export function createCycleHooksBridge(
   }
   return {
     warnings() {
-      const out = runScriptIn(script, 'load', [], undefined, [options.policyPath]) as {
+      const out = runScriptArgv([script, 'load', options.policyPath], []) as {
         warnings?: readonly string[]
       }
       return out.warnings ?? []
@@ -479,7 +487,11 @@ export function createCycleHooksBridge(
         ['cwd', options.cwd],
         ...optional([['status', status]]),
       ]
-      return runScriptIn(script, 'run', args, options.cwd, [options.policyPath]) as CycleHookResult
+      return runScriptArgv(
+        [script, 'run', options.policyPath],
+        args,
+        options.cwd,
+      ) as CycleHookResult
     },
   }
 }

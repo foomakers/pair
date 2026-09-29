@@ -171,7 +171,9 @@ describe('runCycle with ## Cycle Hooks (US-489)', () => {
 
   it('AC6: no hooks collaborator ⇒ behaviour unchanged, no notice about hooks', async () => {
     const h = harness()
-    const { hooks: _omit, ...withoutHooks } = h.base
+    const withoutHooks = Object.fromEntries(
+      Object.entries(h.base).filter(([key]) => key !== 'hooks'),
+    ) as Omit<typeof h.base, 'hooks'>
     const outcome = await runCycle({
       ...withoutHooks,
       resolve: scripted([step('implement'), DONE]),
