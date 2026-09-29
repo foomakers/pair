@@ -43,7 +43,7 @@ export function modeOf(key, stageIds = STAGE_IDS) {
 }
 
 /** `on-halt` fires on every `failed-*` and on `escalate`, never on `ready-for-merge`. */
-export const haltsOn = status => typeof status === 'string' && (status.startsWith('failed-') || status === 'escalate')
+export const haltsOn = status => typeof status === 'string' && (status.startsWith('failed-') || status === 'escalate' || status === 'merge-parked' || status === 'merged-closure-unfinished')
 
 // The fence-blind level-2 extraction every `tech/automation.md` reader shares (deliberate copy of
 // `blocking-severities.mjs`: this script ships beside the skill with no cross-import).

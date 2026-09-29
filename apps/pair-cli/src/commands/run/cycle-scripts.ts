@@ -532,7 +532,7 @@ export function cycleHooksScriptPath(
 const HOOK_ANSWER_MAX_BUFFER = 512 * 1024 * 1024
 
 /** The only hook points that may default to the main checkout; every stage hook needs its worktree. */
-const CYCLE_LEVEL = new Set(['pre-cycle', 'post-cycle', 'on-halt'])
+const CYCLE_LEVEL = new Set(['pre-cycle', 'post-cycle', 'on-halt', 'post-merge'])
 
 function requireStageCwd(point: string, cwd: string | undefined): void {
   if (cwd === undefined && !CYCLE_LEVEL.has(point))

@@ -84,7 +84,7 @@ export interface CycleHookResult {
 
 /** The shared hook executor, as the loop sees it: one call per hook point, zero rules of its own. */
 export interface CycleHooks {
-  /** `cwd`: where the hook runs — REQUIRED for stage hooks (the story worktree; the bridge refuses without it), absent (main) only for `pre-cycle`/`post-cycle`/`on-halt`. */
+  /** `cwd`: where the hook runs — REQUIRED for stage hooks (the story worktree; the bridge refuses without it), absent (main) only for the cycle-level points `pre-cycle`/`post-cycle`/`on-halt`/`post-merge` (the story worktree is already removed after a merge). */
   run(point: string, status?: string, cwd?: string): Promise<CycleHookResult>
 }
 
@@ -280,13 +280,12 @@ async function terminalStep(
   if (next.step !== 'merge' || mergeStage === undefined)
     return terminalOutcome(next, state.stagesRun)
   // US-489 x US-490: `merge` is a stage like the others — `pre-merge` (blocking) runs in the story
-  // worktree before `check`; `post-merge` (logged) after `run`, i.e. only when the merge executed.
+  // worktree before `check`; `post-merge` (logged) after `run`, only when the merge executed, in the MAIN checkout (the story worktree is gone by then).
   state.worktreePath = worktreePathOf(await input.worktree())
   const halted = await runHookPoint(hooks, 'pre-merge', onNotice, { cwd: state.worktreePath })
   if (halted !== null) return hookFailure(halted, state.stagesRun)
   const merged = await mergeStage(next, answer)
-  if (MERGE_RAN.has(merged.status))
-    await runHookPoint(hooks, 'post-merge', onNotice, { cwd: state.worktreePath })
+  if (MERGE_RAN.has(merged.status)) await runHookPoint(hooks, 'post-merge', onNotice)
   return {
     status: merged.status,
     stagesRun: state.stagesRun + merged.stagesRun,
@@ -430,7 +429,12 @@ function hookFailure(halted: HaltedHook, stagesRun: number): CycleOutcome {
 
 /** Statuses that are an invocation ending, not the cycle reaching a terminal status. */
 const NOT_TERMINAL = new Set(['rounds-bound-reached', 'incompatible', 'invalid', 'other-run'])
-const isHalt = (status: string): boolean => status.startsWith('failed-') || status === 'escalate'
+const isHaltOutcome = (o: CycleOutcome): boolean =>
+  o.status.startsWith('failed-') ||
+  o.status === 'escalate' ||
+  o.status === 'merged-closure-unfinished' ||
+  (o.status === 'merge-parked' &&
+    (o.merge as { parkKind?: unknown } | undefined)?.parkKind !== 'awaiting-human')
 
 /**
  * Drives one cycle to its next terminal state (or to the `--rounds` bound). US-489: wraps the stage
@@ -441,7 +445,7 @@ export async function runCycle(input: RunCycleInput): Promise<CycleOutcome> {
   const { hooks, onNotice } = input
   const blocked = await runHookPoint(hooks, 'pre-cycle', onNotice)
   const outcome = blocked !== null ? hookFailure(blocked, 0) : await runCycleLoop(input)
-  if (isHalt(outcome.status))
+  if (isHaltOutcome(outcome))
     await runHookPoint(hooks, 'on-halt', onNotice, { status: outcome.status })
   if (!NOT_TERMINAL.has(outcome.status)) {
     await runHookPoint(hooks, 'post-cycle', onNotice, { status: outcome.status })
