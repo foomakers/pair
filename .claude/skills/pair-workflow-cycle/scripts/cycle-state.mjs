@@ -2569,6 +2569,9 @@ export function contextPolicyError(contextPolicy) {
   }
   return null
 }
+// US-488: may a stage ever RESUME (`reuse`)? Answered from CONTEXT_TABLE alone — the workflow profiles'
+// loader asks this, it never restates the rule (single owner).
+export const contextReuseAdmissibleInto = stage => CONTEXT_TABLE.reuseAllowed.some(transition => transition.split('->')[1] === stage)
 const contextOf = (fromStep, toStep, contextPolicy) => {
   if (!fromStep || !toStep) return CONTEXT_TABLE.default
   const transition = `${fromStep}->${toStep}`
