@@ -277,7 +277,8 @@ async function terminalStep(
   answer: CycleResolveAnswer,
 ): Promise<CycleOutcome> {
   const { mergeStage, hooks, onNotice } = input
-  if (next.step !== 'merge' || mergeStage === undefined) return terminalOutcome(next, state.stagesRun)
+  if (next.step !== 'merge' || mergeStage === undefined)
+    return terminalOutcome(next, state.stagesRun)
   // US-489 x US-490: `merge` is a stage like the others — `pre-merge` (blocking) runs in the story
   // worktree before `check`; `post-merge` (logged) after `run`, i.e. only when the merge executed.
   state.worktreePath = worktreePathOf(await input.worktree())
@@ -336,8 +337,7 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     if (settled !== null) return settled
     await runPostStageHook(state, next, hooks, onNotice)
 
-    if (!DISPATCHABLE_STEPS.has(next.step))
-      return await terminalStep(input, state, next, answer)
+    if (!DISPATCHABLE_STEPS.has(next.step)) return await terminalStep(input, state, next, answer)
     noticeReuseOnce(state, next, onNotice)
     const gated = await gateDispatch(state, next, input)
     if (gated !== null) return gated

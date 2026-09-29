@@ -21,7 +21,7 @@
 //         --autoAdvance '<JSON array of tiers>' [--repo <owner/name>]
 //       Conditions 1-5 only (no gate yet). A failure PARKS: one marker-keyed comment on the card.
 //   run   <the same flags> --gate <green|red> --message <squash commit message>
-//         [--branch <b>] [--worktree <path>] [--root <main checkout>]
+//         [--branch <b>] [--root <main checkout>]
 //       Conditions 1-6, then merge + Story Closure (DoD boxes, close, board `Done`, parent cascade,
 //       branch remote+local with its worktree first, story checkpoint) — or park + comment.
 //

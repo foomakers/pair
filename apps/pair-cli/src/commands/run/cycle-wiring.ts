@@ -88,9 +88,11 @@ function ghIssueView(card: string, cwd: string, fields: string): string {
   }
 }
 
+const LABEL_SHAPE_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/i
+
 /**
- * The card's `risk:*` tier — the one the cycle is driven under. Exactly one such label, else
- * `undefined` (none, several, or the tracker cannot say): `resolve` then never offers `merge`, the
+ * The card's `risk:*` tier — the one the cycle is driven under. Exactly one well-formed `family:tier` label, else
+ * `undefined` (none, several, malformed, or the tracker cannot say): `resolve` then never offers `merge`, the
  * unchanged `done` terminal — fail-safe, never a guess.
  */
 export function readCardTier(card: string, cwd: string): string | undefined {
@@ -101,7 +103,7 @@ export function readCardTier(card: string, cwd: string): string | undefined {
     const tiers = (parsed.labels ?? [])
       .map(label => label.name ?? '')
       .filter(name => name.startsWith('risk:'))
-    return tiers.length === 1 ? tiers[0] : undefined
+    return tiers.length === 1 && LABEL_SHAPE_RE.test(tiers[0]!) ? tiers[0] : undefined
   } catch {
     return undefined
   }

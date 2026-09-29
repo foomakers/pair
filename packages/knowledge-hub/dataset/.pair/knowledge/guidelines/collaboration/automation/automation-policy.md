@@ -434,6 +434,8 @@ One bullet per command: `` - `<hook name>`: `<shell command>` ``. Several bullet
 
 `verify` is the one stage whose agent works in another tree (a detached review worktree it creates and removes itself): `pre-verify`/`post-verify` still run in the story worktree at the PR head — the tree under verification — never in the review worktree.
 
+`merge` (US-490, when `## Auto-Advance` offers it) is a script stage, not an agent dispatch: `pre-merge` runs in the story worktree before `cycle-merge.mjs check` and HALTs like any `pre-*`; `post-merge` runs after `cycle-merge.mjs run`, only when the merge executed (`merged`, `merged-closure-unfinished`) — never after a park — and is logged.
+
 `<stage-id>` is any stage id `cycle-state.mjs` enumerates (its `STEPS`, minus the terminal `done`/`blocked`), so a stage added later gets `pre-<id>`/`post-<id>` with no schema change. Today:
 
 | Stage id | Hook names |
@@ -443,6 +445,7 @@ One bullet per command: `` - `<hook name>`: `<shell command>` ``. Several bullet
 | `implement` | `pre-implement`, `post-implement` |
 | `green` | `pre-green`, `post-green` |
 | `verify` | `pre-verify`, `post-verify` |
+| `merge` | `pre-merge`, `post-merge` |
 
 `pre-cycle` and `post-cycle` are scoped per **invocation**, not per card across `--rounds`: an invocation that spends several remediation rounds runs each once.
 
@@ -463,6 +466,7 @@ Absent file or absent section ⇒ no hook step is attempted and nothing is logge
 | `pre-implement` | install dependencies, realign the generated mirrors (`pnpm mirrors:regenerate`), start a local service the tests need — all in the story worktree |
 | `pre-green` | same as `pre-implement`, for a remediation round |
 | `pre-verify` | an external gate the verifier must find green (`pnpm build`) — blocks `verify` on failure |
+| `pre-merge` | a last local check before an automatic merge (`check`, gate, `run` stay pinned to the reviewed head) — blocks the merge on failure |
 | `post-<stage-id>` | notifications, metrics, audit lines — anything whose failure must not stop the cycle |
 | `post-cycle` | notify the outcome, clean up what `pre-cycle` created |
 | `on-halt` | alert a human: the deterministic notification point for every failure path |
