@@ -122,7 +122,8 @@ export function runHooks({ hooks, point, cwd, status, exec = shellExec, stageIds
   if (point === 'on-halt' && !haltsOn(status)) return { ...result, skipped: true }
   for (const command of hooks?.[point] ?? []) {
     const { exitCode, output } = exec(command, cwd)
-    result.ran.push({ command, exitCode, output })
+    // The output is embedded ONCE (in `halted` / `logged`); `ran` is the audit of what executed.
+    result.ran.push({ command, exitCode })
     if (exitCode === 0) continue
     if (mode === 'blocking') return { ...result, halted: { command, exitCode, output } }
     result.logged.push(`hook \`${point}\` \`${command}\` exited ${exitCode}${output.trim() ? ` — ${output.trim()}` : ''}`)

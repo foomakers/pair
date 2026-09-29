@@ -230,10 +230,15 @@ function runScriptArgv(
   head: readonly string[],
   args: readonly (readonly [string, string])[],
   cwd?: string,
+  maxBuffer?: number,
 ): unknown {
   const argv = [...head]
   for (const [flag, value] of args) argv.push(`--${flag}`, value)
-  const result = spawnSync('node', argv, { encoding: 'utf8', ...(cwd !== undefined && { cwd }) })
+  const result = spawnSync('node', argv, {
+    encoding: 'utf8',
+    ...(cwd !== undefined && { cwd }),
+    ...(maxBuffer !== undefined && { maxBuffer }),
+  })
   const parsed = parseScriptOutput(head[0]!, head[1]!, (result.stdout ?? '').trim(), result.stderr)
   rejectIfFailed(parsed)
   return parsed
@@ -455,6 +460,13 @@ export function cycleHooksScriptPath(
   return pathFor(platform).join(scriptsDir, 'cycle-hooks.mjs')
 }
 
+/**
+ * The executor answers with ONE JSON line holding a hook's output, which it captures up to 64 MiB
+ * (and JSON escaping can grow it). Node's default 1 MiB `spawnSync` buffer truncated that line into
+ * unparseable JSON — an unreadable cycle instead of `failed-hook`. Well above the cap, never near it.
+ */
+const HOOK_ANSWER_MAX_BUFFER = 512 * 1024 * 1024
+
 export interface CycleHooksBridge extends CycleHooks {
   /** `load`: the section's unrecognized-key / unparseable-line warnings, reported once per run. */
   warnings(): readonly string[]
@@ -505,7 +517,12 @@ export function createCycleHooksBridge(
         ['cwd', where],
         ...optional([['status', status]]),
       ]
-      return runScriptArgv([script, 'run', options.policyPath], args, where) as CycleHookResult
+      return runScriptArgv(
+        [script, 'run', options.policyPath],
+        args,
+        where,
+        HOOK_ANSWER_MAX_BUFFER,
+      ) as CycleHookResult
     },
   }
 }
