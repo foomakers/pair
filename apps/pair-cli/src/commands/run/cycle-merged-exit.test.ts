@@ -189,3 +189,99 @@ describe('r1-1 controls — unchanged exits', () => {
     },
   )
 })
+
+/**
+ * Maintainer decision (merge-parked exit): a park that AWAITS A HUMAN is a terminal like
+ * `ready-for-merge` — exit 0, `--parallel` completed; a park caused by a PROBLEM is a failure —
+ * exit 1, `--parallel` failed. The discriminator is `cycle-merge.mjs`'s own `parkKind`
+ * (`evaluate`: `'awaiting-human'` only for `tier-not-auto-advance`, `'halted'` otherwise; `runMerge`
+ * forces `'halted'` for a refused merge or an unfinished closure), relayed verbatim by the merge
+ * stage as the outcome's `merge` (`cycle.ts CycleOutcome.merge`, `cycle-wiring.ts mergeFor`).
+ *
+ * Contract pinned here: the cycle driver's result carries `merge` — the script's JSON — and
+ * `run --card` reads `merge.parkKind`: `merge-parked` exits 0 ONLY for `'awaiting-human'`; `'halted'`,
+ * a missing `merge` or an absent/unknown `parkKind` exit 1 (fail-safe: never a silent success).
+ */
+const parked = (parkKind: string | null | undefined, code: string, detail: string) => ({
+  status: 'merge-parked',
+  stagesRun: 0,
+  next: { step: 'merge' },
+  merge: {
+    stage: 'merge',
+    mode: 'check',
+    mergeAllowed: false,
+    failed: [{ code, detail }],
+    reason: detail,
+    ...(parkKind !== undefined && { parkKind }),
+  },
+})
+const AWAITING_HUMAN = parked(
+  'awaiting-human',
+  'tier-not-auto-advance',
+  'card tier risk:yellow is not in ## Auto-Advance',
+)
+const HALTED = [
+  ['head-moved', 'the PR head moved since review'],
+  ['gate-red', "the tier's gate set came back red at merge time"],
+  ['signals-unreadable', 'pair-review conclusion unreadable'],
+  ['tier-changed', 'the card tier changed since the cycle started'],
+] as const
+
+describe('merge-parked — awaiting a human is a terminal, a halted park is a failure', () => {
+  it('K1: an awaiting-human park exits 0, prints the status, audits outcome=completed', async () => {
+    const { code, stdout, audit } = await runCard('51', AWAITING_HUMAN)
+
+    expect(code).toBe(0)
+    expect(stdout.some(l => l.includes('Cycle status: merge-parked'))).toBe(true)
+    expect(audit[audit.length - 1]).toMatch(/event=end card=51\b.*outcome=completed/)
+  })
+
+  it('K2: an awaiting-human park is a completed --parallel child (exit 0)', async () => {
+    const outcome = await batchChild('52', AWAITING_HUMAN)
+
+    expect([outcome.outcome, outcome.detail]).toEqual(['completed', 'exit 0'])
+  })
+
+  it.each(HALTED)(
+    'H1: a halted park (%s) exits 1 and is a failed --parallel child',
+    async (c, d) => {
+      const outcome = parked('halted', c, d)
+      expect((await runCard('53', outcome)).code).toBe(1)
+      expect((await batchChild('53', outcome)).outcome).toBe('failed')
+    },
+  )
+
+  it('B1: mixed batch — awaiting-human + merged + ready-for-merge exits 0', async () => {
+    const outcomes = [
+      await batchChild('61', AWAITING_HUMAN),
+      await batchChild('62', MERGED),
+      await batchChild('63', { status: 'ready-for-merge', stagesRun: 3 }),
+    ]
+
+    expect(outcomes.map(o => o.outcome)).toEqual(['completed', 'completed', 'completed'])
+    expect(batchExitCode(outcomes)).toBe(0)
+  })
+
+  it('B2: mixed batch — awaiting-human + halted exits 1, each child classified by its own park', async () => {
+    const outcomes = [
+      await batchChild('64', AWAITING_HUMAN),
+      await batchChild('65', parked('halted', 'head-moved', 'the PR head moved since review')),
+    ]
+
+    expect(outcomes.map(o => [o.id, o.outcome])).toEqual([
+      ['64', 'completed'],
+      ['65', 'failed'],
+    ])
+    expect(batchExitCode(outcomes)).toBe(1)
+  })
+
+  it.each([
+    ['no merge answer', { status: 'merge-parked', stagesRun: 0 }],
+    ['no parkKind', parked(undefined, 'gate-red', 'red')],
+    ['parkKind null', parked(null, 'gate-red', 'red')],
+    ['unknown parkKind', parked('someday', 'gate-red', 'red')],
+  ])('F1: fail-safe — merge-parked with %s exits 1', async (_name, outcome) => {
+    expect((await runCard('66', outcome)).code).toBe(1)
+    expect((await batchChild('66', outcome)).outcome).toBe('failed')
+  })
+})
