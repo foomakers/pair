@@ -23,7 +23,7 @@ for (const k of Object.keys(process.env))
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, cpSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -2815,8 +2815,8 @@ writeFileSync(join(US514_TRAP_DIR, 'gh'), `#!/bin/sh\necho "$@" >> ${JSON.string
 chmodSync(join(US514_TRAP_DIR, 'gh'), 0o755)
 const US514_HERMETIC_ENV = { ...process.env, PAIR_GH_BIN: US514_NO_GH, PATH: [US514_TRAP_DIR, us514Dirname(process.execPath), '/usr/bin', '/bin'].join(':') }
 us514After(() => assert.equal(readFileSync(US514_TRAP_LOG, 'utf8'), '', 'a script reached `gh` — the suite is not hermetic'))
-const us514Run = (cli, args) => {
-  const r = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8', env: US514_HERMETIC_ENV })
+const us514Run = (cli, args, cwd) => {
+  const r = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8', env: US514_HERMETIC_ENV, ...(cwd ? { cwd } : {}) })
   let json = null
   try {
     json = JSON.parse(r.stdout.trim().split('\n').pop())
@@ -2835,15 +2835,15 @@ function us514RunDir() {
 const us514Evidenced = (id, severity, blocking) => ({ id, severity, location: 'src/a.ts:1', description: 'd', recommendation: 'r', blocking, transition: 'open', kind: 'defect', reproducer: { command: 'node --test test/a.test.mjs' } })
 // A first review of a PR-entry cycle, ready on its reviewed head: `resolve` answers `done` exactly
 // when no stored finding is blocking. `extra` carries draft fields (e.g. `severityRanks`).
-function us514PublishReview(dir, findings, policyArgs, extra = {}) {
+function us514PublishReview(dir, findings, policyArgs, extra = {}, run = args => us514Run(US514_STATE_CLI, args)) {
   const file = join(dir, 'draft-r0-review-phase.json')
   writeFileSync(file, JSON.stringify({ run: 'story-42', story: '42', pr: 7, branch: 'feature/US-42-x', phase: 'r0', skill: 'review-phase', inputHead: US514_SHA('a'), mode: 'first', reviewedHead: US514_SHA('c'), verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: US514_SHA('c') }, findings, ...extra }))
-  const r = us514Run(US514_STATE_CLI, ['publish', '--dir', dir, '--file', file, '--phase', 'r0', '--skill', 'review-phase', '--workflowVersion', US514_V, '--pr', '7', ...policyArgs])
+  const r = run(['publish', '--dir', dir, '--file', file, '--phase', 'r0', '--skill', 'review-phase', '--workflowVersion', US514_V, '--pr', '7', ...policyArgs])
   assert.equal(r.status, 0, r.stdout + r.stderr)
   return JSON.parse(readFileSync(join(dir, 'r0-review-phase.json'), 'utf8'))
 }
-const us514ResolveNext = (dir, policy) => {
-  const r = us514Run(US514_STATE_CLI, ['resolve', '--dir', dir, '--workflowVersion', US514_V, '--policy', JSON.stringify(policy), '--entry', 'pr', '--pr', '7', '--story', '42'])
+const us514ResolveNext = (dir, policy, run = args => us514Run(US514_STATE_CLI, args)) => {
+  const r = run(['resolve', '--dir', dir, '--workflowVersion', US514_V, '--policy', JSON.stringify(policy), '--entry', 'pr', '--pr', '7', '--story', '42'])
   assert.ok(r.json, r.stdout + r.stderr)
   return r.json.next
 }
@@ -3153,19 +3153,25 @@ test('US-514 r1-g1 g1-w14 (r0-1/r0-2): the chain`s skills and the KB schema no l
 // `code-review.contract.json` exists on disk, and it must NOT rank on the draft's own claim when
 // no contract is resolved and no policy carries ranks either.
 const US514_BLOCKING_SEVERITIES_CLI = join(US514_REPO, '.claude/skills/pair-workflow-cycle/scripts/blocking-severities.mjs')
-const US514_CONTRACT_PATH = join(US514_REPO, '.claude/workflows/pair-contracts/code-review.contract.json')
 // The contract cache is a real, gitignored file in a developer checkout (every review run writes
-// it). These tests must neither depend on its absence nor destroy it: set the state they need
-// (`content` written, or `null` = absent) and put the original back byte for byte afterwards.
+// it), and every suite of this directory runs CONCURRENTLY under `node --test` — cycle-state.test.mjs
+// publishes in-process through the script-relative fallback, i.e. THIS repository's cache. So the
+// fixture never touches it (#518): each call builds a throwaway repository holding a copy of the
+// review-phase scripts, sets the cache state there (`content` written, or `null` = absent), and
+// hands `fn` a runner bound to that copy, spawned from that root — both lookup locations
+// (`repoRoot` = cwd, and script-relative) resolve inside the throwaway repository only.
+const US514_SCRIPTS_REL = '.claude/skills/pair-workflow-review-phase/scripts'
 function us514WithContractCache(content, fn) {
-  const original = existsSync(US514_CONTRACT_PATH) ? readFileSync(US514_CONTRACT_PATH) : null
+  const root = mkdtempSync(join(tmpdir(), 'us514-cache-repo-'))
   try {
-    if (content === null) rmSync(US514_CONTRACT_PATH, { force: true })
-    else writeFileSync(US514_CONTRACT_PATH, content)
-    return fn()
+    cpSync(join(US514_REPO, US514_SCRIPTS_REL), join(root, US514_SCRIPTS_REL), { recursive: true })
+    const contractDir = join(root, '.claude/workflows/pair-contracts')
+    mkdirSync(contractDir, { recursive: true })
+    if (content !== null) writeFileSync(join(contractDir, 'code-review.contract.json'), content)
+    const cli = join(root, US514_SCRIPTS_REL, 'cycle-state.mjs')
+    return fn({ cli, run: args => us514Run(cli, args, root) })
   } finally {
-    if (original === null) rmSync(US514_CONTRACT_PATH, { force: true })
-    else writeFileSync(US514_CONTRACT_PATH, original)
+    rmSync(root, { recursive: true, force: true })
   }
 }
 
@@ -3188,7 +3194,7 @@ test('US-514 r3-1: publish loads `severityRanks` from the on-disk resolved templ
   // Major finding is non-blocking against a Minor floor ONLY if the on-disk contract, not the
   // default fallback table, actually decided. A reproducer this discriminates: red pre-fix (the
   // default table blocks it), green post-fix (the contract releases it).
-  us514WithContractCache(JSON.stringify({ severityRanks: { Critical: 4, Minor: 3, Major: 2, Questions: 1 } }), () => {
+  us514WithContractCache(JSON.stringify({ severityRanks: { Critical: 4, Minor: 3, Major: 2, Questions: 1 } }), ({ run }) => {
     // The in-session reader on a project with NO `## Blocking Severities` declared: `blockingFloor`
     // only, exactly as `blocking-severities.mjs read` really returns it.
     const inSession = us514Run(US514_BLOCKING_SEVERITIES_CLI, ['read', '/nonexistent/automation.md']).json
@@ -3206,7 +3212,7 @@ test('US-514 r3-1: publish loads `severityRanks` from the on-disk resolved templ
     for (const [name, policy] of Object.entries(policies)) {
       assert.equal(policy.severityRanks, undefined, `${name}: the fixture itself hand-supplies severityRanks — invalid test`)
       const { dir } = us514RunDir()
-      const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Major', /* unused */ true)], ['--policy', JSON.stringify(policy)])
+      const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Major', /* unused */ true)], ['--policy', JSON.stringify(policy)], {}, run)
       // Under the on-disk contract (Major: 2 < Minor floor: 3) the finding is released; the default
       // table (Major 3 > Minor 2) would have blocked it — so this only passes when the ON-DISK
       // contract, reached from a policy that never carries severityRanks, actually decided.
@@ -3218,9 +3224,9 @@ test('US-514 r3-1: publish loads `severityRanks` from the on-disk resolved templ
 test('US-514 r3-1: publish prefers the ON-DISK contract`s ranks over the DEFAULT table — proves the contract, not the fallback, decided, and a disagreeing draft is refused exactly as when the ranks arrive via `policy.severityRanks`', () => {
   // A contract ranking `Major` BELOW `Minor` — the OPPOSITE of the default table — so a Major
   // finding is non-blocking only if the on-disk contract, not the default table, was consulted.
-  us514WithContractCache(JSON.stringify({ severityRanks: { Critical: 4, Minor: 3, Major: 2, Questions: 1 } }), () => {
+  us514WithContractCache(JSON.stringify({ severityRanks: { Critical: 4, Minor: 3, Major: 2, Questions: 1 } }), ({ run }) => {
     const { dir } = us514RunDir()
-    const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Major', true)], ['--policy', JSON.stringify({ maxFixRounds: 3, blockingFloor: 'Minor' })])
+    const stored = us514PublishReview(dir, [us514Evidenced('r0-1', 'Major', true)], ['--policy', JSON.stringify({ maxFixRounds: 3, blockingFloor: 'Minor' })], {}, run)
     assert.equal(stored.findings[0].blocking, false, 'the on-disk contract ranks Major (2) below the Minor floor (3) — the default table would have blocked it')
 
     // A draft disagreeing with the on-disk contract is still a typed refusal, same as r1-1's
@@ -3228,7 +3234,7 @@ test('US-514 r3-1: publish prefers the ON-DISK contract`s ranks over the DEFAULT
     const { dir: d2 } = us514RunDir()
     const file = join(d2, 'draft-r0-review-phase.json')
     writeFileSync(file, JSON.stringify({ run: 'story-42', story: '42', pr: 7, branch: 'feature/US-42-x', phase: 'r0', skill: 'review-phase', inputHead: US514_SHA('a'), mode: 'first', reviewedHead: US514_SHA('c'), verdict: 'CHANGES-REQUESTED', custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: US514_SHA('c') }, findings: [us514Evidenced('r0-1', 'Major', false)], severityRanks: { Critical: 4, Major: 3, Minor: 2, Questions: 1 } }))
-    const r = us514Run(US514_STATE_CLI, ['publish', '--dir', d2, '--file', file, '--phase', 'r0', '--skill', 'review-phase', '--workflowVersion', US514_V, '--pr', '7', '--policy', JSON.stringify({ maxFixRounds: 3 })])
+    const r = run(['publish', '--dir', d2, '--file', file, '--phase', 'r0', '--skill', 'review-phase', '--workflowVersion', US514_V, '--pr', '7', '--policy', JSON.stringify({ maxFixRounds: 3 })])
     assert.notEqual(r.status, 0, r.stdout + r.stderr)
     assert.equal(r.json?.reason, 'severity-ranks-mismatch')
   })
@@ -3242,7 +3248,7 @@ test('US-514 r3-1: publish prefers the ON-DISK contract`s ranks over the DEFAULT
 // producers as r3-1, with NO contract file written to disk anywhere in this test — the exact
 // scenario the maintainer's own `r11-e2e-wt.mjs` reproduced against a real worktree.
 test('US-514 r1-1 (round 4): the three REAL dispatch policies (in-session packet, pair-cli, batch) — none carrying severityRanks — refuse (or block) a draft ranking Major below Minor, with NO on-disk contract anywhere in this test', () => {
-  us514WithContractCache(null, () => {
+  us514WithContractCache(null, ({ run }) => {
     const inSession = us514Run(US514_BLOCKING_SEVERITIES_CLI, ['read', '/nonexistent/automation.md']).json
     const pkt = us514Packet(inSession, [])
     assert.equal(pkt.status, 0, pkt.stdout + pkt.stderr)
@@ -3258,12 +3264,12 @@ test('US-514 r1-1 (round 4): the three REAL dispatch policies (in-session packet
       const { dir } = us514RunDir()
       const file = join(dir, 'draft-r0-review-phase.json')
       writeFileSync(file, JSON.stringify({ run: 'story-42', story: '42', pr: 7, branch: 'feature/US-42-x', phase: 'r0', skill: 'review-phase', inputHead: US514_SHA('a'), mode: 'first', reviewedHead: US514_SHA('c'), verdict: 'APPROVED', custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: US514_SHA('c') }, severityRanks: draftRanks, findings: [us514Evidenced('r0-1', 'Major', false)] }))
-      const p = us514Run(US514_STATE_CLI, ['publish', '--dir', dir, '--file', file, '--phase', 'r0', '--skill', 'review-phase', '--workflowVersion', US514_V, '--pr', '7', '--policy', JSON.stringify(policy)])
+      const p = run(['publish', '--dir', dir, '--file', file, '--phase', 'r0', '--skill', 'review-phase', '--workflowVersion', US514_V, '--pr', '7', '--policy', JSON.stringify(policy)])
       let stored = null
       try {
         stored = JSON.parse(readFileSync(join(dir, 'r0-review-phase.json'), 'utf8'))
       } catch {}
-      const next = us514ResolveNext(dir, policy)
+      const next = us514ResolveNext(dir, policy, run)
       // Required rule: publish either typed-refuses (severity-ranks-mismatch, the draft disagreeing
       // with pair's own default table) or stores the Major as blocking — NEVER `blocking:false` and
       // NEVER `resolve.next.step === 'done'`.
