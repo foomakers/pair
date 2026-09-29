@@ -34,6 +34,7 @@ import { fileURLToPath } from 'node:url'
 
 const SHA_RE = /^[0-9a-f]{40}$/
 const TIER_RE = /^[A-Za-z0-9][A-Za-z0-9:_./-]*$/
+const LABEL_SHAPE_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/i
 const SAFE_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/#-]*$/
 export const PR_CHECK = 'pair-review'
 export const APPROVAL_CHECK = 'pair-explicit-approval'
@@ -67,7 +68,7 @@ export function readCurrentTier({ pm, story, repo }) {
     const labels = (pm.readCard(story, { repo, fields: ['labels'] })?.labels ?? []).map(l => String(l?.name ?? l))
     const risk = [...new Set(labels.filter(l => l.startsWith('risk:')))]
     // Untagged, or ambiguously tagged, is red: the fail-safe every tier read in this cycle uses.
-    return risk.length === 1 && TIER_RE.test(risk[0]) ? risk[0] : 'risk:red'
+    return risk.length === 1 && LABEL_SHAPE_RE.test(risk[0]) ? risk[0] : 'risk:red'
   } catch {
     return 'risk:red'
   }

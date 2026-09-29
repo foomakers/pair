@@ -245,9 +245,9 @@ export function describeMergePosture(policy: AutomationPolicy): string {
     )
   }
   return (
-    `Merge: the driver never merges (AC10), but \`## Auto-Advance\` declares ` +
-    `${policy.autoAdvance} — the invoked skill may push and merge that tier itself once its PR ` +
-    `is review-approved and its gates are green (ADR-021 §5, quality-model §4)`
+    `Merge: \`## Auto-Advance\` names ${policy.autoAdvance} — merge is automatic for ${policy.autoAdvance} ` +
+    `once the PR is review-approved and its gates are green (ADR-021 §5, quality-model §4); ` +
+    `every other tier stays human`
   )
 }
 
