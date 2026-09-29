@@ -3169,6 +3169,20 @@ function us514WithContractCache(content, fn) {
   }
 }
 
+// #518 (flaky under `pnpm workflows:test`): `node --test` runs every suite file of this directory
+// CONCURRENTLY, and cycle-state.test.mjs publishes reviews in-process through the script-relative
+// fallback — the SAME repository cache path. A fixture that writes inverted ranks there flips any
+// Major finding another suite publishes meanwhile to non-blocking (`prepare r2-g1` became
+// `verify r2`). The fixture must never touch the repository's own cache, in either state.
+test('#518: the contract-cache fixture never writes nor removes the repository`s shared `code-review.contract.json` — a concurrent suite reads it', () => {
+  const REAL = join(US514_REPO, '.claude/workflows/pair-contracts/code-review.contract.json')
+  const snap = () => (existsSync(REAL) ? readFileSync(REAL, 'utf8') : null)
+  const before = snap()
+  for (const content of [JSON.stringify({ severityRanks: { Critical: 4, Minor: 3, Major: 2, Questions: 1 } }), null])
+    us514WithContractCache(content, () => assert.equal(snap(), before, `the fixture ${content === null ? 'removed' : 'overwrote'} the shared repository cache while it ran`))
+  assert.equal(snap(), before)
+})
+
 test('US-514 r3-1: publish loads `severityRanks` from the on-disk resolved template contract when the POLICY carries none — proven through the three real dispatch policies (in-session packet, pair-cli, batch), never a hand-injected `policy.severityRanks`', () => {
   // Major ranked BELOW Minor here — the OPPOSITE of pair's default table (Major 3 > Minor 2) — so a
   // Major finding is non-blocking against a Minor floor ONLY if the on-disk contract, not the
