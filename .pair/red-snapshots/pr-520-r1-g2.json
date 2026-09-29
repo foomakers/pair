@@ -1,0 +1,389 @@
+{
+  "$meta": {
+    "pr": "520",
+    "phase": "r1-g2",
+    "base": "bb57924c6ca83ffae8e7e1edc4f341d88c3707d5",
+    "trailer": "Pair-RED-Snapshot: pr=520; phase=r1-g2; base=bb57924c6ca83ffae8e7e1edc4f341d88c3707d5; manifest=.pair/red-snapshots/pr-520-r1-g2.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts"
+    ]
+  },
+  "run": "story-490",
+  "story": "490",
+  "pr": 520,
+  "branch": "feature/US-490-merge-stage",
+  "phase": "r1-g2",
+  "mode": "remediation",
+  "groupId": "r1-g2",
+  "remediationBatchId": "r1",
+  "inputHead": "bb57924c6ca83ffae8e7e1edc4f341d88c3707d5",
+  "sourceOfTruth": "AC1 + cycle SKILL.md Step 5 merge branch (packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md:186-194); cycle-state.mjs resolve --tier / policy.autoAdvance.tiers (autoAdvancePolicyError, mergeOffered, :2586-2594, :2727); cycle-merge.mjs check|run CLI (:19-27, FLAGS :238-240)",
+  "inventory": [
+    {
+      "id": "r0-2",
+      "producer": "createDefaultCycleDriver (apps/pair-cli/src/commands/run/cycle-wiring.ts resolveFor -> cycle-scripts.ts resolveArgs) + runCycle terminal mapping (cycle.ts DISPATCHABLE_STEPS/terminalOutcome)",
+      "inputs": [
+        "card risk:* label (gh issue/pr view labels)",
+        "MAIN .pair/adoption/tech/automation.md ## Auto-Advance (readAutoAdvance)",
+        "resolve answer next {step:merge, reviewedHead, round, tier} + top-level pr",
+        "cycle-merge.mjs check/run JSON answers",
+        "tier gate evidence",
+        "gate evidence file <run dir>/merge-gate.json {tier, reviewedHead, result} written by the verify-quality dispatch"
+      ],
+      "representations": [
+        "cycle-state.mjs resolve --tier / --policy {autoAdvance:{tiers}} (installed .claude/skills/pair-workflow-cycle/scripts, dataset mirror)",
+        "cycle-merge.mjs check|run CLI flags (--dir --story --pr --reviewedHead --cardTier --autoAdvance [--gate --message --branch])",
+        "cycle SKILL.md Step 5 merge branch",
+        "pair-capability-verify-quality Output Format RESULT line (ALL GATES PASS | BLOCKED — N gates failing)"
+      ],
+      "consumers": [
+        "cycle-merge.mjs check/run",
+        "pair-cli run --card outcome/console report"
+      ],
+      "classes": [
+        "eligible tier named in Auto-Advance -> merge offered -> check then run",
+        "tier outside Auto-Advance -> done/ready-for-merge",
+        "Auto-Advance (none) -> done",
+        "automation.md absent -> done",
+        "card without risk:* label -> done",
+        "malformed ## Auto-Advance -> halt, no merge",
+        "resolve invalid (malformed policy.autoAdvance) -> typed stop",
+        "check parks (mergeAllowed:false) -> no run, reason relayed",
+        "no green gate evidence -> run --gate red, never green, not merged",
+        "green evidence for card tier+reviewed head -> run --gate green, merged/cascaded relayed",
+        "landed with closure unfinished -> merged:true cascaded:false reason relayed",
+        "evidence ran and failed (BLOCKED) -> --gate red, BLOCKED line reported",
+        "gate stage ran, no evidence written -> --gate red",
+        "passing evidence for another tier -> red",
+        "passing evidence for another head -> red",
+        "stale evidence from an earlier dispatch -> red",
+        "parked check -> no gate dispatch",
+        "squash message per commit template"
+      ],
+      "interactions": [
+        "reviewedHead (resolve next) x remote head (ls-remote, differs) -> both check and run pinned to reviewedHead",
+        "tier (label) x Auto-Advance tiers x resolve rule (real mergeOffered/autoAdvancePolicyError)",
+        "check verdict x gate result x run invocation",
+        "check verdict x gate dispatch (gate only after mergeAllowed:true)",
+        "evidence tier/head x card tier/reviewedHead -> gate",
+        "run merged x cascaded -> outcome"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "pair-cli run --card cycle driver (apps/pair-cli/src/commands/run/cycle.ts DISPATCHABLE_STEPS + cycle-scripts.ts resolve argv)",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/cycle.ts",
+      "apps/pair-cli/src/commands/run/cycle-scripts.ts",
+      "apps/pair-cli/src/commands/run/cycle-wiring.ts",
+      "apps/pair-cli/src/commands/run/automation-policy.ts",
+      "apps/pair-cli/src/commands/run/policy-sections.ts",
+      "apps/pair-cli/src/commands/run/run-context.ts",
+      "apps/pair-cli/src/commands/run/stage-runner.ts",
+      "apps/pair-cli/src/commands/run/card-entry.ts",
+      "apps/pair-cli/README.md",
+      ".pair/adoption/decision-log/"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "g2-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "eligible risk:green card, Auto-Advance risk:green",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-w1'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-w1\"",
+      "expected": "every resolve call carries tier=risk:green and policy.autoAdvance.tiers=['risk:green']",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "rationale": "base: resolve argv has no --tier (received undefined)"
+    },
+    {
+      "id": "g2-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "eligible card; resolve (real merge-offer rule) answers merge",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-w2'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-w2\"",
+      "expected": "cycle-merge.mjs check invoked first, then run, once each; outcome not ready-for-merge",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "rationale": "base: zero cycle-merge calls, outcome ready-for-merge/'merge' terminal"
+    },
+    {
+      "id": "g2-w3",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "merge next reviewedHead=abcdef01..., origin branch head differs",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-w3'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-w3\"",
+      "expected": "check and run argv: reviewedHead=REVIEWED_HEAD, pr=42, story=7, cardTier=risk:green, autoAdvance=['risk:green'], dir=run dir; run also --branch feature/US-7-a-story, non-empty --message",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "rationale": "base: no merge calls"
+    },
+    {
+      "id": "g2-w4",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "eligible card, check allowed, the verify-quality gate stage IS dispatched but writes no evidence file",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-w4'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-w4\"",
+      "expected": "exactly one gate dispatch, no merge-gate.json, run called once with --gate red, never green, not merged:true, gate-red reason reported",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "rationale": "repair: distinguishes absent evidence (stage ran, wrote nothing) from failing evidence (g2-w9); base: no gate dispatch, run never invoked"
+    },
+    {
+      "id": "g2-w5",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "check answers mergeAllowed:false tier-changed",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-w5'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-w5\"",
+      "expected": "merge calls exactly ['check'] (no run), check reason reported verbatim, not merged",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "rationale": "base: check never invoked"
+    },
+    {
+      "id": "g2-w6",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "## Auto-Advance 'risk:green AND risk:red'",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-w6'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-w6\"",
+      "expected": "driver rejects naming Auto-Advance (or status invalid); zero merge calls, zero engine spawns",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "rationale": "base: Auto-Advance never read -> resolved ready-for-merge"
+    },
+    {
+      "id": "g2-w7",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "FAKE_GATE_RESULT='RESULT: ALL GATES PASS' (evidence for risk:green at REVIEWED_HEAD)",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-w7'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-w7\"",
+      "expected": "merge calls ['check','run'], run --gate green, outcome resolved and carries \"merged\":true and \"cascaded\":true",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "rationale": "base: no merge calls; kills a constant --gate red fix"
+    },
+    {
+      "id": "g2-w8",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "green evidence; run answers merged:true cascaded:false reason 'post-merge closure unfinished: board (...)'",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-w8'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-w8\"",
+      "expected": "run once --gate green; outcome carries \"merged\":true and \"cascaded\":false (never true); reason reported",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "rationale": "base: no run; kills constant red and a cascaded-flattening relay"
+    },
+    {
+      "id": "g2-w9",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "FAKE_GATE_RESULT='RESULT: BLOCKED — 2 gates failing'",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-w9'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-w9\"",
+      "expected": "one gate dispatch, run once --gate red, not merged:true, the BLOCKED line reported verbatim",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "rationale": "base: no dispatch; kills a constant --gate green fix"
+    },
+    {
+      "id": "g2-w10",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "green evidence",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-w10'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-w10\"",
+      "expected": "exactly one gate dispatch whose prompt names pair-capability-verify-quality, risk:green, REVIEWED_HEAD, 42 and <realpath main>/.pair/working/runs/story-7/7/merge-gate.json",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "rationale": "base: no dispatch"
+    },
+    {
+      "id": "g2-w11",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "passing evidence written for tier risk:yellow (card risk:green)",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-w11'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-w11\"",
+      "expected": "run once --gate red, not merged",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "rationale": "base: no run; kills a gate that ignores the tier"
+    },
+    {
+      "id": "g2-w12",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "passing evidence written for the remote head (not reviewed)",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-w12'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-w12\"",
+      "expected": "run once --gate red, not merged",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "rationale": "base: no run; kills a gate that ignores the reviewed head"
+    },
+    {
+      "id": "g2-w13",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "green evidence for risk:green/REVIEWED_HEAD pre-exists in the run dir; the gate stage writes nothing",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-w13'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-w13\"",
+      "expected": "one gate dispatch, run once --gate red, not merged",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "rationale": "base: no run; kills reuse of stale evidence (file must be removed before dispatch)"
+    },
+    {
+      "id": "g2-w14",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "check answers mergeAllowed:false (pair-review), green evidence available",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-w14'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-w14\"",
+      "expected": "merge calls exactly ['check'], zero gate dispatches",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "rationale": "base: check never invoked"
+    },
+    {
+      "id": "g2-w15",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "green evidence",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-w15'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-w15\"",
+      "expected": "run --message matches /^\\[(#7|US-7)\\] [a-z]+: \\S/ (commit template [STORY_CODE] type: description)",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "rationale": "base: no run"
+    },
+    {
+      "id": "g2-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "card risk:yellow, Auto-Advance risk:green",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-c1'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-c1\"",
+      "expected": "outcome ready-for-merge, next.step done, zero merge calls",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts"
+    },
+    {
+      "id": "g2-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "Auto-Advance (none)",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-c2'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-c2\"",
+      "expected": "ready-for-merge, zero merge calls",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts"
+    },
+    {
+      "id": "g2-c3",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "automation.md absent",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-c3'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-c3\"",
+      "expected": "ready-for-merge, zero merge calls",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts"
+    },
+    {
+      "id": "g2-c4",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "card has no risk:* label",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-c4'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-c4\"",
+      "expected": "ready-for-merge, zero merge calls",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts"
+    },
+    {
+      "id": "g2-c5",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "resolve answers {status:invalid, reason:policy-auto-advance-invalid}",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-c5'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-c5\"",
+      "expected": "outcome.status invalid, next.step blocked, reason carried, zero merge calls, zero engine spawns",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts"
+    },
+    {
+      "id": "g2-c6",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "REAL installed cycle-state.mjs via createCycleScriptsBridge, policy.autoAdvance.tiers not an array",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'g2-c6'; cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts -t \"g2-c6\"",
+      "expected": "status invalid, reason policy-auto-advance-invalid",
+      "covers": [
+        "r0-2"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:927d0b578cee34fc9468950fb64b4e484384983a46a140ed86cd3b9f2d73df78",
+      "command": "cd apps/pair-cli && npx vitest run src/commands/run/cycle-merge-stage.test.ts",
+      "observed": "15 of 21 fail (red): g2-w1..g2-w15 (base passes no --tier, never invokes cycle-merge.mjs, dispatches no gate stage, never reads ## Auto-Advance); 6 pass (g2-c1..g2-c6)"
+    }
+  ],
+  "testExempt": false,
+  "notes": {
+    "hermetic": "gh, engine, cycle-merge.mjs and cycle-state.mjs resolve are stubs recording argv; resolve's merge-offer decision imports the REAL autoAdvancePolicyError/mergeOffered from a copy of the installed cycle-state.mjs; every other cycle-state command delegates to the real script; origin is a local bare repo",
+    "gate": "PINNED SEAM (repair attempt 2): only after check mergeAllowed:true the driver dispatches ONE engine stage whose prompt invokes pair-capability-verify-quality for the PR, naming the card tier, the reviewed head and the absolute evidence path <run dir>/merge-gate.json; the stage writes {tier, reviewedHead, result} (result = verify-quality's RESULT line verbatim). The driver removes any evidence file before that dispatch; --gate green only when the fresh file names the card tier, the reviewed head and 'RESULT: ALL GATES PASS'; otherwise --gate red, a BLOCKED line reported verbatim. run's merged/cascaded/reason relayed in the outcome verbatim. merge-gate.json is not a handoff name (cycle-state NAME_RE ignores it).",
+    "policyRead": "automation.md is seeded both on disk and in the injected FileSystemService so either read path is exercised",
+    "discriminance": "probed in an isolated scratch copy (deleted): a prototype fix inside fixScope (cycle.ts merge collaborator, cycle-scripts.ts tier arg + merge bridge, cycle-wiring.ts Auto-Advance/tier/check/gate/run) passes 21/21; the same fix with a constant --gate 'green' fails g2-w4, w9, w11, w12, w13; with a constant --gate 'red' fails g2-w7, w8"
+  },
+  "attempt": 2,
+  "changedRows": [
+    "pair-cli-merge-gate-production",
+    "g2-w4",
+    "g2-w7",
+    "g2-w8",
+    "g2-w9",
+    "g2-w10",
+    "g2-w11",
+    "g2-w12",
+    "g2-w13",
+    "g2-w14",
+    "g2-w15"
+  ]
+}
