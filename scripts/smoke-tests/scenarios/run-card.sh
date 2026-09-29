@@ -97,10 +97,27 @@ run_pair run --card 11 --autonomous || fail "autonomous Todo card exited non-zer
 assert_output_contains "needs a human" || FAILED=1
 [ "$(spawns)" = "$before" ] || fail "an unattended preparation skill was spawned"
 
-# ── 3. AC11: reserved flags carry the #488 pointer ─────────────────────────────────────────────
-log_info "Test 3: --profile is refused with a pointer to #488"
-if run_pair run --card 12 --profile x; then fail "--profile was accepted"; fi
-assert_output_contains "#488" || FAILED=1
+# ── 3. US-488: an unknown --profile HALTs profile-unresolved naming the sources it searched, before
+#    any spawn (never a silent fall back to the KB default, never the retired #487 reserved refusal) ─
+log_info "Test 3a: unknown --profile, no workflowProfiles declared ⇒ profile-unresolved, searched nothing"
+: >"$ENGINE_LOG"
+if run_pair run --card 12 --profile x; then fail "an unknown --profile was accepted"; fi
+assert_output_contains "profile-unresolved: profile 'x' (argument) was not found" || FAILED=1
+assert_output_contains "Searched: nothing — pair.config.json declares no workflowProfiles.files/inline" || FAILED=1
+assert_output_contains "Known profiles: none" || FAILED=1
+if grep -Fq "reserved until #488" "$TMP_DIR/last_cmd_output.log"; then fail "--profile still refused as reserved"; fi
+[ "$(spawns)" = "0" ] || fail "a stage was spawned under an unresolved profile"
+
+log_info "Test 3b: unknown --profile, files + inline declared ⇒ profile-unresolved naming both sources"
+mkdir -p "$MAIN/profiles"
+printf '{"name":"deep"}\n' >"$MAIN/profiles/deep.json"
+printf '{"workflowProfiles":{"files":["profiles/*.json"],"inline":{"fast":{}}}}\n' >"$MAIN/pair.config.json"
+if run_pair run --card 12 --profile x; then fail "an unknown --profile was accepted"; fi
+assert_output_contains "profile-unresolved: profile 'x' (argument) was not found" || FAILED=1
+assert_output_contains "Searched: files profiles/*.json; inline (fast)" || FAILED=1
+assert_output_contains "Known profiles: deep, fast" || FAILED=1
+[ "$(spawns)" = "0" ] || fail "a stage was spawned under an unresolved profile"
+rm -rf "$MAIN/profiles" "$MAIN/pair.config.json"
 
 # ── 4. AC1/AC10: a Ready card enters the real cycle at implement (US-506: no up-front contract);
 #    a dead dispatch ends failed-implement ─────────────────────────────────────────────────────
