@@ -395,3 +395,12 @@ test('T-5: the CLI flag set is closed — an unknown flag is refused, never igno
   assert.equal(r.code, 2)
   assert.match(r.out.error, /unknown flag/)
 })
+
+test('T-5/AC7: `bind` records an ALREADY-resolved identity (no re-resolution) — the path pair-cli takes once the run directory is known', () => {
+  const dir = runDirOf()
+  const first = cli('bind', '--dir', dir, '--name', 'mixed', '--hash', 'a'.repeat(64), '--source', 'argument')
+  assert.equal(first.out.action, 'bound')
+  assert.deepEqual(implementHandoff(dir, 1).workflowProfile, { name: 'mixed', hash: 'a'.repeat(64) })
+  assert.equal(cli('bind', '--dir', dir, '--name', 'mixed', '--hash', 'a'.repeat(64), '--source', 'argument').out.action, 'reused')
+  assert.equal(cli('bind', '--dir', dir, '--name', 'mixed', '--hash', 'not-a-hash', '--source', 'x').code, 2)
+})

@@ -339,7 +339,10 @@ export function profileContextPolicy(resolved) {
 // ── CLI ──────────────────────────────────────────────────────────────────────────────────────
 //   node workflow-profile.mjs resolve --root <project root> [--profile <name>] [--workflow-config <path>]
 //        [--tier risk:<tier>] [--dir <run/story dir>]
-//     → the resolved profile as JSON { name, source, sourceDetail, hash, stages, table, contextPolicy,
+//   node workflow-profile.mjs bind --dir <run/story dir> --name <n> --hash <sha256> [--source <s>]
+//     → { action: bound | reused | rebound, binding } — records an identity already resolved, never re-resolving.
+//   resolve →
+//     the resolved profile as JSON { name, source, sourceDetail, hash, stages, table, contextPolicy,
 //       notes, binding? }; `--dir` also binds it to the run (stamped into every later handoff).
 //     A refusal is `{ halt, detail }` on stdout, exit 1 (profile-unresolved | profile-invalid |
 //     profile-name-collision); a usage error is `{ error }`, exit 2.
@@ -359,9 +362,17 @@ if (isMain()) {
       if (!rest[i].startsWith('--') || rest[i + 1] === undefined) throw new Error(`malformed arguments near ${rest[i]}`)
       opts[rest[i].slice(2)] = rest[i + 1]
     }
-    if (cmd !== 'resolve') throw new Error(`unknown command: ${cmd} (expected resolve)`)
-    const unknown = Object.keys(opts).filter(k => !['root', 'profile', 'workflow-config', 'tier', 'dir'].includes(k))
-    if (unknown.length) throw new Error(`unknown flag(s) for resolve: ${unknown.map(k => `--${k}`).join(', ')}`)
+    const FLAGS = { resolve: ['root', 'profile', 'workflow-config', 'tier', 'dir'], bind: ['dir', 'name', 'hash', 'source'] }
+    if (!FLAGS[cmd]) throw new Error(`unknown command: ${cmd} (expected resolve | bind)`)
+    const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
+    if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
+    if (cmd === 'bind') {
+      // Records an identity a coordinator ALREADY resolved (and printed) — it never re-resolves.
+      for (const k of ['dir', 'name', 'hash']) if (opts[k] === undefined) throw new Error(`--${k} is required`)
+      if (!/^[0-9a-f]{64}$/.test(opts.hash)) throw new Error('--hash must be a sha256 hex digest')
+      out(bindProfile({ dir: opts.dir, resolved: { name: opts.name, hash: opts.hash, source: opts.source ?? 'unknown' } }))
+      process.exit(0)
+    }
     if (opts.root === undefined) throw new Error('--root is required')
     const resolved = resolveProfile({ root: opts.root, profile: opts.profile, workflowConfig: opts['workflow-config'], tier: opts.tier })
     const binding = opts.dir !== undefined ? bindProfile({ dir: opts.dir, resolved }) : undefined
