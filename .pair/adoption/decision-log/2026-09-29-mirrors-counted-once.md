@@ -14,7 +14,7 @@ Process Decision
 
 ## Context
 
-`packages/knowledge-hub/dataset/**` is the canonical source; `pnpm mirrors:regenerate` writes generated copies into `.claude/**` (skills, workflows, agents), `.pair/knowledge/**` and `.github/agents/**` — plain copies for `.claude/workflows` and `.claude/agents`, copies with skill references rewritten (e.g. `/record-decision` → `/pair-capability-record-decision`) for `.claude/skills`, `.pair/knowledge` and `.github/agents`. A PR that changes a skill or a workflow script therefore shows the same change twice. On PR #517 the analysis counted 148 added tests, 55 of them the `.claude` copy of a dataset test: the doubled numbers made the PR look larger and riskier than it is and skewed the review's diff-risk reading.
+`packages/knowledge-hub/dataset/**` is the canonical source; `pnpm mirrors:regenerate` writes generated copies into `.claude/**` (skills, workflows, agents), `.pair/knowledge/**` and `.github/agents/**` — plain copies for `.claude/workflows` and `.claude/agents`, copies with skill references rewritten (a bare skill name gets its installed, prefixed form) for `.claude/skills`, `.pair/knowledge` and `.github/agents`. A PR that changes a skill or a workflow script therefore shows the same change twice. On PR #517 the analysis counted 148 added tests, 55 of them the `.claude` copy of a dataset test: the doubled numbers made the PR look larger and riskier than it is and skewed the review's diff-risk reading.
 
 ## Decision
 
