@@ -4,10 +4,12 @@
 // RUNS FROM `.claude/workflows` ONLY (same rule as cycle-state.test.mjs): `pnpm workflows:test`.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
-import { validateProfile, effectiveStage, resolveProfile, bindProfile, ProfileError, STAGES, KB_DEFAULT } from '../../skills/pair-workflow-cycle/scripts/workflow-profile.mjs'
+import { validateProfile, effectiveStage, resolveProfile, bindProfile, describeProfile, profileContextPolicy, ProfileError, STAGES, KB_DEFAULT } from '../../skills/pair-workflow-cycle/scripts/workflow-profile.mjs'
 import { CONTEXT_TABLE, publish, resolve, effectiveInputs } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 
 const errorsOf = p => validateProfile(p).errors
@@ -303,4 +305,93 @@ test('T-4/AC7: resuming after the profile changed is not an input change — res
   assert.deepEqual(after.next, before.next)
   assert.equal(after.next.inputsChanged, undefined)
   assert.equal(after.next.step, 'verify')
+})
+
+// ── T-5: the transparency table, the context policy, and the CLI both coordinators run (AC6) ──
+const CLI = fileURLToPath(new URL('../../skills/pair-workflow-cycle/scripts/workflow-profile.mjs', import.meta.url))
+const cli = (...args) => {
+  const r = spawnSync('node', [CLI, ...args], { encoding: 'utf8' })
+  return { code: r.status, out: JSON.parse(r.stdout.trim()) }
+}
+const mixed = {
+  name: 'mixed',
+  defaults: { engine: 'pi', model: 'by-tier', effort: 'medium' },
+  modelClasses: CLASSES,
+  stages: { prepare: { model: 'cheap', context: 'reuse' }, green: { model: 'cheap', context: 'reuse' }, validate: { model: 'frontier' }, verify: { model: 'frontier', effort: 'high' } },
+}
+const mixedRoot = () => project({ config: { workflowProfiles: { default: 'mixed', files: GLOB } }, files: { '.pair/adoption/tech/workflow-profiles/mixed.json': mixed, '.pair/adoption/tech/automation.md': POLICY_MD } })
+
+test('T-5/AC6: the transparency table names profile, source and hash once, then every stage with engine/model/effort/context each carrying its source', () => {
+  const r = resolveProfile({ root: mixedRoot(), tier: 'risk:yellow' })
+  const lines = describeProfile(r)
+  const text = lines.join('\n')
+  assert.match(lines[0], /Profile: mixed/)
+  assert.match(lines[0], /pair\.config\.json/)
+  assert.ok(lines[0].includes(r.hash.slice(0, 12)))
+  for (const stage of STAGES) assert.ok(lines.some(l => l.trimStart().startsWith(stage)), stage)
+  const verify = lines.find(l => l.trimStart().startsWith('verify'))
+  assert.match(verify, /pi \(defaults\)/)
+  assert.match(verify, /frontier[^|]*m-frontier[^|]*\(stage\)/)
+  assert.match(verify, /high \(stage\)/)
+  assert.match(verify, /fresh \(KB default\)/)
+  const green = lines.find(l => l.trimStart().startsWith('green'))
+  assert.match(green, /cheap[^|]*m-cheap/)
+  assert.match(green, /reuse \(stage\)/)
+  assert.match(text, /risk:yellow/)
+})
+
+test('T-5/AC2: the KB default prints as a table too, source `KB default`', () => {
+  const lines = describeProfile(resolveProfile({ root: project() }))
+  assert.match(lines[0], /Profile: KB default \(source: KB default\)/)
+  assert.ok(lines.some(l => /implement.*default \(KB default\).*fresh \(KB default\)/.test(l)))
+})
+
+test('T-5/AC5: the profile becomes a cycle-state contextPolicy naming only admissible transitions — and cycle-state accepts it', async () => {
+  const policy = profileContextPolicy(resolveProfile({ root: mixedRoot() }))
+  assert.deepEqual(policy, { 'prepare->prepare': 'reuse', 'implement->green': 'reuse', 'green->green': 'reuse' })
+  const { contextPolicyError } = await import('../../skills/pair-workflow-cycle/scripts/cycle-state.mjs')
+  assert.equal(contextPolicyError(policy), null)
+  assert.deepEqual(profileContextPolicy(resolveProfile({ root: project() })), {})
+})
+
+test('T-5: `resolve` CLI prints the resolved profile as JSON, with the table and the context policy', () => {
+  const { code, out } = cli('resolve', '--root', mixedRoot(), '--tier', 'risk:red')
+  assert.equal(code, 0)
+  assert.deepEqual([out.name, out.source], ['mixed', 'pair.config.json'])
+  assert.equal(out.stages.verify.model.resolved.id, 'm-frontier')
+  assert.equal(out.stages.implement.model.resolved.id, 'm-frontier', 'by-tier → risk:red → frontier')
+  assert.equal(out.contextPolicy['implement->green'], 'reuse')
+  assert.match(out.table[0], /Profile: mixed/)
+})
+
+test('T-5/AC2/AC3: the CLI takes --profile and --workflow-config with the same cascade', () => {
+  const root = mixedRoot()
+  writeFileSync(join(root, 'ext.json'), JSON.stringify({ name: 'ext' }))
+  assert.equal(cli('resolve', '--root', root, '--profile', 'mixed').out.source, 'argument')
+  assert.deepEqual([cli('resolve', '--root', root, '--workflow-config', 'ext.json').out.name], ['ext'])
+})
+
+test('T-5/AC8: the CLI HALTs with `{halt, detail}` and exit 1 — profile-unresolved, profile-invalid, profile-name-collision', () => {
+  const root = mixedRoot()
+  const bad = cli('resolve', '--root', root, '--profile', 'nope')
+  assert.deepEqual([bad.code, bad.out.halt], [1, 'profile-unresolved'])
+  assert.match(bad.out.detail, /nope/)
+  writeFileSync(join(root, 'inv.json'), JSON.stringify({ name: 'inv', stages: { verify: { context: 'reuse' } } }))
+  assert.equal(cli('resolve', '--root', root, '--workflow-config', 'inv.json').out.halt, 'profile-invalid')
+  writeFileSync(join(root, '.pair/adoption/tech/workflow-profiles/dup.json'), JSON.stringify(mixed))
+  assert.equal(cli('resolve', '--root', root).out.halt, 'profile-name-collision')
+})
+
+test('T-5/AC7: `resolve --dir` binds the run profile; a later publish stamps it', () => {
+  const dir = runDirOf()
+  const { out } = cli('resolve', '--root', mixedRoot(), '--dir', dir)
+  assert.equal(out.binding.action, 'bound')
+  assert.deepEqual(implementHandoff(dir, 1).workflowProfile, { name: 'mixed', hash: out.hash })
+  assert.equal(cli('resolve', '--root', mixedRoot(), '--dir', dir).out.binding.action, 'reused')
+})
+
+test('T-5: the CLI flag set is closed — an unknown flag is refused, never ignored', () => {
+  const r = cli('resolve', '--root', mixedRoot(), '--profil', 'x')
+  assert.equal(r.code, 2)
+  assert.match(r.out.error, /unknown flag/)
 })

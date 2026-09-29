@@ -9,9 +9,10 @@
 // The `context` rule is NOT restated here: whether a stage may `reuse` is asked of `cycle-state.mjs`'s
 // own table (`contextReuseAdmissibleInto`), the single owner (#486 T-2).
 import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
-import { contextReuseAdmissibleInto } from './cycle-state.mjs'
+import { fileURLToPath } from 'node:url'
+import { CONTEXT_TABLE, contextReuseAdmissibleInto } from './cycle-state.mjs'
 
 export const STAGES = ['prepare', 'validate', 'implement', 'green', 'verify', 'contract', 'merge']
 export const FIELDS = ['engine', 'model', 'effort', 'context']
@@ -241,7 +242,7 @@ function finish(root, profile, source, sourceDetail, notes, tier) {
       return [stage, eff]
     }),
   )
-  return { name: profile.name, source, sourceDetail, hash: profileHash(profile), profile, stages, notes }
+  return { name: profile.name, source, sourceDetail, hash: profileHash(profile), profile, stages, notes, ...(tier ? { tier } : {}) }
 }
 
 function lookup(root, block, name, source, tier) {
@@ -303,4 +304,74 @@ export function bindProfile({ dir, resolved }) {
   writeFileSync(tmp, JSON.stringify(binding, null, 2) + '\n')
   renameSync(tmp, path)
   return previous ? { action: 'rebound', binding, previous } : { action: 'bound', binding }
+}
+
+// ── what the coordinators print and pass on (AC6, AC5) ───────────────────────────────────────
+
+/** The one transparency block printed BEFORE the first dispatch: profile, source, hash, then every stage. */
+export function describeProfile(resolved) {
+  const where = resolved.sourceDetail && resolved.sourceDetail !== resolved.source ? ` — ${resolved.sourceDetail}` : ''
+  const lines = [`Profile: ${resolved.name} (source: ${resolved.source}${where}) hash ${resolved.hash.slice(0, 12)}`]
+  if (resolved.tier) lines.push(`  Card tier: ${resolved.tier}`)
+  for (const stage of STAGES) {
+    const s = resolved.stages[stage]
+    const cell = f => `${f.text ?? f.value} (${f.source})`
+    lines.push(
+      `  ${stage.padEnd(9)} | engine ${cell(s.engine)} | model ${cell({ ...s.model, text: s.model.resolved.line })} | effort ${cell(s.effort)} | context ${cell(s.context)}`,
+    )
+  }
+  for (const n of resolved.notes ?? []) lines.push(`  note: ${n}`)
+  return lines
+}
+
+/**
+ * The profile's `reuse` stages as `cycle-state.mjs`'s own `contextPolicy` (keyed by transition). Only
+ * transitions the table admits are ever named, so `resolve` accepts it by construction.
+ */
+export function profileContextPolicy(resolved) {
+  const policy = {}
+  for (const stage of STAGES)
+    if (resolved.stages[stage].context.value === 'reuse')
+      for (const transition of CONTEXT_TABLE.reuseAllowed) if (transition.split('->')[1] === stage) policy[transition] = 'reuse'
+  return policy
+}
+
+// ── CLI ──────────────────────────────────────────────────────────────────────────────────────
+//   node workflow-profile.mjs resolve --root <project root> [--profile <name>] [--workflow-config <path>]
+//        [--tier risk:<tier>] [--dir <run/story dir>]
+//     → the resolved profile as JSON { name, source, sourceDetail, hash, stages, table, contextPolicy,
+//       notes, binding? }; `--dir` also binds it to the run (stamped into every later handoff).
+//     A refusal is `{ halt, detail }` on stdout, exit 1 (profile-unresolved | profile-invalid |
+//     profile-name-collision); a usage error is `{ error }`, exit 2.
+const isMain = () => {
+  try {
+    return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+  } catch {
+    return false
+  }
+}
+if (isMain()) {
+  const out = o => process.stdout.write(JSON.stringify(o) + '\n')
+  try {
+    const [cmd, ...rest] = process.argv.slice(2)
+    const opts = {}
+    for (let i = 0; i < rest.length; i += 2) {
+      if (!rest[i].startsWith('--') || rest[i + 1] === undefined) throw new Error(`malformed arguments near ${rest[i]}`)
+      opts[rest[i].slice(2)] = rest[i + 1]
+    }
+    if (cmd !== 'resolve') throw new Error(`unknown command: ${cmd} (expected resolve)`)
+    const unknown = Object.keys(opts).filter(k => !['root', 'profile', 'workflow-config', 'tier', 'dir'].includes(k))
+    if (unknown.length) throw new Error(`unknown flag(s) for resolve: ${unknown.map(k => `--${k}`).join(', ')}`)
+    if (opts.root === undefined) throw new Error('--root is required')
+    const resolved = resolveProfile({ root: opts.root, profile: opts.profile, workflowConfig: opts['workflow-config'], tier: opts.tier })
+    const binding = opts.dir !== undefined ? bindProfile({ dir: opts.dir, resolved }) : undefined
+    out({ ...resolved, table: describeProfile(resolved), contextPolicy: profileContextPolicy(resolved), ...(binding ? { binding } : {}) })
+  } catch (e) {
+    if (e instanceof ProfileError) {
+      out({ halt: e.code, detail: e.detail })
+      process.exit(1)
+    }
+    out({ error: e.message })
+    process.exit(2)
+  }
 }
