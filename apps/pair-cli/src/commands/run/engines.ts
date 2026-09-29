@@ -87,10 +87,16 @@ export interface EngineDefinition {
   readonly headlessArgs: readonly string[]
   /**
    * The flag this engine takes a model under, when a project pins one (`engine.model` in
-   * pair.config.json). PER-STAGE model selection is #488's; this is the run-wide analogue of
-   * `--engine` — one engine, one model, for every stage of the run.
+   * pair.config.json), or a workflow profile gives a stage one (US-488). Run-wide `engine.model`
+   * is the analogue of `--engine`; a profile's per-stage model overrides it for that stage.
    */
   readonly modelFlag?: string
+  /**
+   * The flag this engine takes a reasoning-effort level under (US-488). ABSENT on every engine
+   * today: no engine's effort flag has been verified against its real CLI, so a profile's `effort`
+   * is recorded and printed but NEVER sent to an engine that does not declare a verified flag.
+   */
+  readonly effortFlag?: string
   /** Flag carrying the working directory, when the engine has one (`undefined` ⇒ spawn cwd). */
   readonly cwdFlag?: string
   readonly skillInvocationStyle: SkillInvocationStyle

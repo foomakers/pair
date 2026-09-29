@@ -179,6 +179,8 @@
 - [Decision: Only substantive findings cost a review round](.pair/adoption/decision-log/2026-09-25-only-substantive-findings-cost-a-review-round.md)
 - [Decision: A PR's classification tags come only from the review, never copied from the story](.pair/adoption/decision-log/2026-09-25-pr-tags-only-from-review-classification.md)
 - [Decision: Codex in-session realization of the delivery cycle — go](.pair/adoption/decision-log/2026-09-28-codex-in-session-realization-go.md)
+- [Decision: workflow profiles are the first JSON under `.pair/adoption/`](.pair/adoption/decision-log/2026-09-29-first-json-adoption-file-workflow-profiles.md)
+- [Decision: Mirrored files are counted once](.pair/adoption/decision-log/2026-09-29-mirrors-counted-once.md)
 
 ## How-To Guides
 
@@ -284,6 +286,7 @@
 - [Azure DevOps Automation](.pair/knowledge/guidelines/collaboration/automation/azure-devops-automation.md)
 - [Filesystem Automation](.pair/knowledge/guidelines/collaboration/automation/filesystem-automation.md)
 - [GitHub Automation](.pair/knowledge/guidelines/collaboration/automation/github-automation.md)
+- [Workflow Profiles — engine, model, effort and context per delivery-cycle stage](.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md)
 - [Decision Records: ADR, ADL, DDR, and Analysis-Log](.pair/knowledge/guidelines/collaboration/decision-records.md)
 - [Estimation Framework](.pair/knowledge/guidelines/collaboration/estimation/README.md)
 - [AI-Assisted Estimation](.pair/knowledge/guidelines/collaboration/estimation/ai-assisted-estimation.md)

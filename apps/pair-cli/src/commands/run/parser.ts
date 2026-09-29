@@ -73,6 +73,10 @@ export interface RunCommandConfig {
   iterationTimeoutSeconds: number
   /** Present only when `--card` was passed: the run is a tag-driven dispatch (US-217). */
   dispatch?: RunDispatchRequest
+  /** US-488: `--profile <name>` — present only when passed (with `--card`). */
+  profile?: string
+  /** US-488: `--workflow-config <path>` — present only when passed (with `--card`). */
+  workflowConfig?: string
   /** Resolve, print and exit without spawning anything. */
   dryRun: boolean
   /**
@@ -105,9 +109,9 @@ interface ParseRunOptions {
   rounds?: string
   /** US-491: `--parallel N` — meaningful only with `--root`. */
   parallel?: string | number
-  /** Reserved until #488 ships per-stage engine/model/effort/timeout overrides. */
+  /** US-488: `--profile <name>` — the workflow profile (per-stage engine/model/effort/context); needs `--card`. */
   profile?: string
-  /** Reserved until #488 ships per-stage engine/model/effort/timeout overrides. */
+  /** US-488: `--workflow-config <path>` — an external profile file, wins over every other source; needs `--card`. */
   workflowConfig?: string
 }
 
@@ -362,6 +366,27 @@ function resolveParallel(options: ParseRunOptions): { parallel?: number } {
   return { parallel }
 }
 
+/**
+ * US-488: `--profile` / `--workflow-config` select the DELIVERY-CYCLE profile, so they mean something
+ * only on a `--card` entry — anywhere else they would be accepted and silently ignored, which is the
+ * one thing a profile flag must never be (a typo'd model class quietly not applying).
+ */
+function resolveProfileSelection(options: ParseRunOptions): {
+  profile?: string
+  workflowConfig?: string
+} {
+  const profile = optionalText(options.profile, '--profile')
+  const workflowConfig = optionalText(options.workflowConfig, '--workflow-config')
+  if ((profile !== undefined || workflowConfig !== undefined) && options.card === undefined) {
+    const flag = profile !== undefined ? '--profile' : '--workflow-config'
+    throw new Error(
+      `${flag} selects the delivery-cycle workflow profile and is only meaningful with --card ` +
+        '(the cycle coordinator entry)',
+    )
+  }
+  return { ...(profile && { profile }), ...(workflowConfig && { workflowConfig }) }
+}
+
 function resolveScope(options: ParseRunOptions): RunScopeOptions {
   const root = identifierText(options.root, '--root')
   const filter = promptSafeText(options.filter, '--filter')
@@ -381,29 +406,17 @@ export function parseRunCommand(options: ParseRunOptions, args: string[] = []): 
     throw new Error(`Command 'run' does not accept positional arguments: ${args.join(', ')}`)
   }
 
-  // Reserved (Assumption 9, US-487): parsed — so `--help` and a caller seeing the flag both make
-  // sense — but refused with a pointer, never silently accepted and ignored, until #488 ships
-  // per-stage engine/model/effort/timeout overrides.
-  if (options.profile !== undefined) {
-    throw new Error(
-      '--profile is reserved until #488 ships per-stage engine/model/effort/timeout overrides',
-    )
-  }
-  if (options.workflowConfig !== undefined) {
-    throw new Error(
-      '--workflow-config is reserved until #488 ships per-stage engine/model/effort/timeout overrides',
-    )
-  }
-
   const engine = resolveEngineFlag(options.engine)
   const cwd = optionalText(options.cwd, '--cwd')
   const parallel = resolveParallel(options)
   const dispatch = resolveDispatch(options)
+  const profileSelection = resolveProfileSelection(options)
 
   return {
     command: 'run',
     ...(engine && { engine }),
     ...(dispatch && { dispatch }),
+    ...profileSelection,
     invocation: resolveInvocation(options),
     scope: resolveScope(options),
     ...(cwd && { cwd }),

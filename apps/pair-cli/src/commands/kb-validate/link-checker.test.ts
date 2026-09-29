@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type { FileSystemService } from '@pair/content-ops'
 import InMemoryFileSystemService from '@pair/content-ops/test-utils/in-memory-fs'
 import { MockHttpClientService } from '@pair/content-ops'
 import { validateLinks } from './link-checker'
-import type { IncomingMessage } from 'http'
+import type { ClientRequest, IncomingMessage } from 'http'
 
 // Helper to create a mock HTTP response
 function createMockResponse(statusCode: number): IncomingMessage {
@@ -11,6 +11,20 @@ function createMockResponse(statusCode: number): IncomingMessage {
     statusCode,
     headers: {},
   } as IncomingMessage
+}
+
+// Models an unreachable host explicitly: the request emits a network error (no 2s timeout wait).
+function failRequestsWithNetworkError(client: MockHttpClientService): void {
+  vi.spyOn(client, 'request').mockImplementation(() => {
+    const req = {
+      on: (event: string, handler: (err: Error) => void) => {
+        if (event === 'error') setImmediate(() => handler(new Error('ENOTFOUND')))
+        return req
+      },
+      end: () => undefined,
+    } as unknown as ClientRequest
+    return req
+  })
 }
 
 describe('validateLinks', () => {
@@ -161,6 +175,7 @@ describe('validateLinks', () => {
     })
 
     it('should warn about unreachable external links in strict mode', async () => {
+      failRequestsWithNetworkError(httpClient)
       fs.writeFile('/kb/README.md', '[Link](https://unreachable.example.com)')
 
       const { results } = await validateLinks({
@@ -384,6 +399,7 @@ describe('validateLinks', () => {
     })
 
     it('should report both broken internal and unreachable external links', async () => {
+      failRequestsWithNetworkError(httpClient)
       fs.writeFile('/kb/README.md', '[Internal](./missing.md)\n[External](https://unreachable.com)')
 
       const { results } = await validateLinks({

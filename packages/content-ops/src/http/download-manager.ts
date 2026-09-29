@@ -315,9 +315,9 @@ export async function downloadFile(
   destination: string,
   options: DownloadOptions,
 ): Promise<void> {
-  const { fs } = options
+  const { fs, httpClient } = options
   const { progressWriter, isTTY, label } = options
-  const ctx: DownloadContext = { url, destination, fs, progressWriter, isTTY }
+  const ctx: DownloadContext = { url, destination, fs, httpClient, progressWriter, isTTY }
   const { totalBytes, resumeFrom } = await setupResumeContext(ctx)
 
   const partialPath = getPartialFilePath(destination)

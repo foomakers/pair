@@ -15,6 +15,7 @@ import { describeApprovalPosture, filterDeliveryFor } from './invocation'
 import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
+import { refuseProfileOffCycle } from './workflow-profile'
 import { handleParallelRun } from './parallel-entry'
 import {
   declaredEngine,
@@ -73,6 +74,10 @@ function resolveRun(
   fs: FileSystemService,
 ): ResolvedRun {
   const { policy } = context
+  // US-488: a routed card runs a mapped workflow — no cycle stage exists for a profile to configure.
+  if (context.dispatch?.kind === 'route') {
+    refuseProfileOffCycle(config, `the mapped workflow \`${context.dispatch.workflow}\``)
+  }
   const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
   // On a routed run the WORKFLOW is the invocation: the card's tag chose it through the adoption
   // mapping, which is the whole point of tag-driven automation — the cascade never gets a say, and

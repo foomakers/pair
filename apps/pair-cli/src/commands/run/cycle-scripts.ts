@@ -109,6 +109,8 @@ export interface CycleResolveOptions {
   readonly head?: string
   readonly inputs?: string
   readonly acHash?: string
+  /** US-488: the workflow profile's `reuse` stages as `cycle-state`'s own transition-keyed policy. */
+  readonly contextPolicy?: Readonly<Record<string, string>>
 }
 
 export interface CycleWorktreeOptions {
@@ -162,6 +164,18 @@ export interface CycleScriptsBridge {
    * no adapter throws `host-unsupported: …`, verbatim.
    */
   bindHosts(dir: string): CycleHostBinding
+  /**
+   * `workflow-profile.mjs bind --dir <run dir>` (US-488 AC7): records the run's ALREADY-resolved
+   * profile (name + hash) beside its handoffs; `publish` stamps it into every handoff. Audit only —
+   * never an effective input.
+   */
+  bindProfile(dir: string, identity: CycleProfileIdentity): { readonly action: string }
+}
+
+export interface CycleProfileIdentity {
+  readonly name: string
+  readonly hash: string
+  readonly source: string
 }
 
 /** What `bind-hosts` answers: `bound` on a new run, `reused` when the run already carries one. */
@@ -233,6 +247,12 @@ function resolveArgs(options: CycleResolveOptions): ScriptArgs {
       ['head', options.head],
       ['inputs', options.inputs],
       ['acHash', options.acHash],
+      [
+        'contextPolicy',
+        options.contextPolicy === undefined || Object.keys(options.contextPolicy).length === 0
+          ? undefined
+          : JSON.stringify(options.contextPolicy),
+      ],
     ]),
   ]
 }
@@ -250,6 +270,15 @@ function packetArgs(options: CyclePacketOptions, location: CycleScriptsLocation)
       ['style', options.style],
       ['agents-dir', location.agentsDir],
     ]),
+  ]
+}
+
+function bindProfileArgs(dir: string, identity: CycleProfileIdentity): ScriptArgs {
+  return [
+    ['dir', dir],
+    ['name', identity.name],
+    ['hash', identity.hash],
+    ['source', identity.source],
   ]
 }
 
@@ -300,6 +329,12 @@ export function createCycleScriptsBridge(
     bindHosts(dir) {
       return runScript(cycleStatePath, 'bind-hosts', [['dir', dir]]) as CycleHostBinding
     },
+    bindProfile: (dir, identity) =>
+      runScript(
+        join(location.scriptsDir, 'workflow-profile.mjs'),
+        'bind',
+        bindProfileArgs(dir, identity),
+      ) as { action: string },
   }
 }
 

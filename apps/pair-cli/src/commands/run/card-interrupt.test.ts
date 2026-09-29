@@ -41,6 +41,16 @@ function assertBuilt(): void {
   if (!existsSync(CLI)) throw new Error(`${CLI} is missing: build @pair/pair-cli first`)
 }
 
+/**
+ * #518: the environment every `git` and driver here runs under — the caller's, minus the
+ * repository-selecting `GIT_*` variables a git hook exports (same set cycle-state.test.mjs
+ * scrubs). Read at CALL time, so a variable set after import is stripped too.
+ */
+const GIT_REPO_VARS =
+  /^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX|NAMESPACE|CEILING_DIRECTORIES|IMPLICIT_WORK_TREE|DISCOVERY_ACROSS_FILESYSTEM)$/
+const hermeticEnv = (): NodeJS.ProcessEnv =>
+  Object.fromEntries(Object.entries(process.env).filter(([k]) => !GIT_REPO_VARS.test(k)))
+
 const alive = (pid: number): boolean => {
   try {
     process.kill(pid, 0)
@@ -66,7 +76,12 @@ describe('r1-2: a signalled driver releases the card lock, stops its engine, and
   const spawnedPids: number[] = []
 
   const git = (cwd: string, ...args: string[]) =>
-    execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+    execFileSync('git', args, {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: hermeticEnv(),
+    }).trim()
   const lockDir = () => join(main, '.pair/working/automation/locks', CARD)
   const auditFile = () => join(main, '.pair/working/automation/loop-audit.md')
   const engineLog = () => join(root, 'engine.log')
@@ -80,7 +95,7 @@ describe('r1-2: a signalled driver releases the card lock, stops its engine, and
 
   beforeAll(assertBuilt)
 
-  beforeEach(() => {
+  function buildFixture(): void {
     root = realpathSync(mkdtempSync(join(tmpdir(), 'pair-r12-signal-')))
     main = join(root, 'main')
     bin = join(root, 'bin')
@@ -141,7 +156,9 @@ else done()
     )
     chmodSync(join(bin, 'gh'), 0o755)
     chmodSync(join(bin, 'claude'), 0o755)
-  })
+  }
+
+  beforeEach(buildFixture)
 
   afterEach(() => {
     for (const pid of spawnedPids.splice(0)) if (alive(pid)) process.kill(pid, 'SIGKILL')
@@ -155,7 +172,7 @@ else done()
       {
         cwd: main,
         env: {
-          ...process.env,
+          ...hermeticEnv(),
           PATH: `${bin}:${process.env['PATH'] ?? ''}`,
           PAIR_GH_BIN: join(bin, 'gh'),
           STUB_ENGINE_SLEEP_MS: String(sleepMs),
@@ -202,4 +219,48 @@ else done()
       expect(resumed[0]!.prompt).toMatch(/^\/pair-workflow-implement-phase /)
     }, 120_000)
   }
+
+  // #518: git exports GIT_DIR (and friends) to the hooks it runs, and turbo hands the
+  // environment on to this suite. Inherited, it points every `git` here — the fixture's
+  // init/commit/update-ref and the driver's own — at the REAL repository.
+  it('#518: an inherited GIT_DIR never receives the fixture`s or the driver`s git writes', async () => {
+    const sentinel = realpathSync(mkdtempSync(join(tmpdir(), 'pair-r12-sentinel-')))
+    const saved = process.env['GIT_DIR']
+    try {
+      git(sentinel, 'init', '-q', '-b', 'main')
+      git(
+        sentinel,
+        '-c',
+        'user.name=s',
+        '-c',
+        'user.email=s@s',
+        'commit',
+        '-q',
+        '--allow-empty',
+        '-m',
+        's',
+      )
+      const state = () =>
+        [
+          git(sentinel, 'for-each-ref'),
+          git(sentinel, 'worktree', 'list', '--porcelain'),
+          git(sentinel, 'config', '--list', '--local'),
+        ].join('\n')
+      const before = state()
+      process.env['GIT_DIR'] = join(sentinel, '.git')
+      rmSync(root, { recursive: true, force: true })
+      buildFixture()
+      const run = driver(0)
+      await run.exited
+      delete process.env['GIT_DIR']
+      expect(state(), 'the sentinel repository received git writes').toBe(before)
+      expect(git(main, 'rev-list', '--count', 'HEAD'), 'the fixture commit landed elsewhere').toBe(
+        '1',
+      )
+    } finally {
+      if (saved === undefined) delete process.env['GIT_DIR']
+      else process.env['GIT_DIR'] = saved
+      rmSync(sentinel, { recursive: true, force: true })
+    }
+  }, 120_000)
 })

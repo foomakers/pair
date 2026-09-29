@@ -1772,7 +1772,7 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   return withLock(dir, lockWaitMs, () => {
     if (existsSync(target)) return { published: false, reason: 'stale-write', path: target }
     const seq = readHandoffs(dir).reduce((m, h) => Math.max(m, Number.isInteger(h.data?.seq) ? h.data.seq : 0), 0) + 1
-    const stamped = { ...data, schemaVersion: SCHEMA_VERSION, workflowVersion, seq, attempt: n, createdAt: new Date().toISOString(), ...(predecessor ? { predecessor } : {}) }
+    const stamped = { ...data, schemaVersion: SCHEMA_VERSION, workflowVersion, seq, attempt: n, createdAt: new Date().toISOString(), ...(predecessor ? { predecessor } : {}), ...profileStamp(dir) }
     const tmp = join(dir, `.tmp-${process.pid}-${Date.now()}.json`)
     writeFileSync(tmp, JSON.stringify(stamped, null, 2) + '\n')
     renameSync(tmp, target)
@@ -2569,6 +2569,19 @@ export function contextPolicyError(contextPolicy) {
   }
   return null
 }
+// US-488: the run's bound workflow profile (`workflow-profile.mjs bind` writes it), recorded in every
+// handoff for audit. It is NEVER part of `effectiveInputs`: a profile change invalidates no evidence.
+const profileStamp = dir => {
+  try {
+    const { name, hash } = JSON.parse(readFileSync(join(dir, '.workflow-profile.json'), 'utf8'))
+    return typeof name === 'string' && typeof hash === 'string' ? { workflowProfile: { name, hash } } : {}
+  } catch {
+    return {}
+  }
+}
+// US-488: may a stage ever RESUME (`reuse`)? Answered from CONTEXT_TABLE alone — the workflow profiles'
+// loader asks this, it never restates the rule (single owner).
+export const contextReuseAdmissibleInto = stage => CONTEXT_TABLE.reuseAllowed.some(transition => transition.split('->')[1] === stage)
 const contextOf = (fromStep, toStep, contextPolicy) => {
   if (!fromStep || !toStep) return CONTEXT_TABLE.default
   const transition = `${fromStep}->${toStep}`

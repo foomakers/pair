@@ -1,5 +1,6 @@
 import { execFileSync } from 'child_process'
-import { dirname } from 'path'
+import { rmSync } from 'fs'
+import { dirname, join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import type { EngineDefinition } from './engines'
 import { runCycle, type CycleOutcome, type CycleStageResult } from './cycle'
@@ -12,6 +13,7 @@ import { runStage, styleFor } from './stage-runner'
 import { spawnIteration } from './spawn'
 import { readStateMapping, resolveCardReadiness, type CardDocument } from './card-readiness'
 import { resolveBlockingSeverities } from './blocking-severities'
+import { stageSettings, type ResolvedWorkflowProfile } from './workflow-profile'
 
 /**
  * The PRODUCTION wiring for `run --card`'s two injected collaborators.
@@ -232,6 +234,34 @@ export interface CycleDriverContext {
   readonly baseBranch: string
   /** The model pinned for this engine, if the project declared one. */
   readonly model?: string | undefined
+  /**
+   * US-488: the run's workflow profile, resolved ONCE at the entry (and printed there). Absent ⇒ the
+   * zero-configuration path: the run's own engine/model on every stage, exactly as before.
+   */
+  readonly profile?: ResolvedWorkflowProfile | undefined
+  /**
+   * US-488: the availability-checked engines a profile names beyond the run's own, with the autonomy
+   * posture and declared `engine.model` of each (resolved at the entry, like the run's engine).
+   */
+  readonly stageEngines?: Readonly<Record<string, StageEngine>> | undefined
+}
+
+export interface StageEngine {
+  readonly engine: EngineDefinition
+  readonly autonomyArgs: readonly string[]
+  readonly model?: string | undefined
+}
+
+/** One stage's spawn settings: the profile's, falling back to the run's own engine and model. */
+function stageSpawnFor(ctx: CycleDriverContext, step: string) {
+  const settings = ctx.profile === undefined ? {} : stageSettings(ctx.profile, step)
+  const other = settings.engine === undefined ? undefined : ctx.stageEngines?.[settings.engine]
+  return {
+    engine: other?.engine ?? ctx.engine,
+    autonomyArgs: other?.autonomyArgs ?? ctx.autonomyArgs,
+    model: settings.model ?? (other === undefined ? ctx.model : other.model),
+    effort: settings.effort,
+  }
 }
 
 export interface CycleDriverRequest {
@@ -323,6 +353,9 @@ const resolveFor =
       acHash: co.acHash,
       ...(head !== undefined && { head }),
       ...(input.pr !== undefined && { pr: input.pr }),
+      // US-488: the profile's `reuse` stages, as `cycle-state`'s OWN policy (admissible transitions
+      // only — the validation was the resolver's, against the same table).
+      ...(ctx.profile !== undefined && { contextPolicy: ctx.profile.contextPolicy }),
     })
   }
 
@@ -361,14 +394,16 @@ const packetFor =
         ...(input.pr !== undefined && { prNumber: input.pr }),
       },
       run: input.runId,
-      style: styleFor(ctx.engine),
+      // The stage's OWN engine decides the rendering (a profile may run `verify` on another engine).
+      style: styleFor(stageSpawnFor(ctx, (next as { step?: string }).step ?? '').engine),
       workflowVersion: ctx.workflowVersion,
     }) as never
   }
 
-const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packet: unknown) =>
-  (await runStage({
-    engine: ctx.engine,
+const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packet: unknown) => {
+  const spawn = stageSpawnFor(ctx, (packet as { step?: string }).step ?? '')
+  return (await runStage({
+    engine: spawn.engine,
     // The stage starts in the MAIN CHECKOUT, never in the story's worktree. Every phase skill's
     // Step 0 reads `MAIN="$(pwd)"` — "the main checkout, you have not cd'd yet" — and resolves the
     // run directory from it; the packet's own `$worktree` is what tells the agent where to cd, and
@@ -379,11 +414,13 @@ const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packe
     // `failed-<step>` — for a stage that actually succeeded. Silent, and invisible to any test
     // whose bridge is a fake.
     packet: { ...(packet as object), worktree: co.main } as never,
-    autonomyArgs: ctx.autonomyArgs,
-    ...(ctx.model !== undefined && { model: ctx.model }),
+    autonomyArgs: spawn.autonomyArgs,
+    ...(spawn.model !== undefined && { model: spawn.model }),
+    ...(spawn.effort !== undefined && { effort: spawn.effort }),
     timeoutSeconds: ctx.timeoutSeconds,
     runIteration: spawnIteration,
   })) as CycleStageResult
+}
 
 /**
  * `resolve` answered `other-run`: this story's cycle was started under ANOTHER run id (by
@@ -426,6 +463,19 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       first = await resolveFor(ctx, input, co)()
     }
     const policy = (first as { policy?: Record<string, unknown> }).policy ?? {}
+    // US-488 AC7: the run's profile identity is recorded ONCE, after any `other-run` adoption settled
+    // which directory this run really is — `publish` then stamps it into every handoff.
+    if (ctx.profile !== undefined) {
+      co.bridge.bindProfile(co.runDir, {
+        name: ctx.profile.name,
+        hash: ctx.profile.hash,
+        source: ctx.profile.source,
+      })
+    } else {
+      // Zero-config: this invocation runs on the KB default, so an earlier invocation's (or the
+      // in-session coordinator's) binding must not be stamped into the handoffs it publishes.
+      rmSync(join(co.runDir, '.workflow-profile.json'), { force: true })
+    }
     return await runCycle({
       resolve: resolveFor(ctx, input, co),
       worktree: worktreeFor(ctx, input, co),

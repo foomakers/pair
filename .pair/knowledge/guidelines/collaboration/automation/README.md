@@ -16,6 +16,7 @@ This framework covers:
 - Project management automation (sprint planning, progress reporting)
 - Notification and communication automation
 - Unattended-development policy: which cards may run without a human (`tech/automation.md` — [automation-policy.md](automation-policy.md))
+- Workflow profiles: which engine, model, effort and context each delivery-cycle stage uses ([workflow-profiles.md](workflow-profiles.md))
 
 ## Out of Scope
 
@@ -29,6 +30,8 @@ This framework does not cover:
 ## Directory Contents
 
 **[automation-policy.md](automation-policy.md)** - `tech/automation.md` schema: the `## Eligibility` declaration that selects which cards may run unattended, and the `## Workflows` mapping that routes a tagged card to the workflow that runs on it
+
+**[workflow-profiles.md](workflow-profiles.md)** - named JSON profiles declaring the engine, model, effort and context each delivery-cycle stage uses; the resolution cascade, the `context` validation against the cycle's transition table, model classes, and the example `cheap-green` profile
 
 **[github-automation.md](github-automation.md)** - GitHub Actions and workflow automation strategies, including the reference tag-driven dispatch trigger adapter
 

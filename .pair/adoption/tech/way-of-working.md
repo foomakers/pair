@@ -57,6 +57,7 @@ Resolution order, the split-tool routing and why the fallback is never the authe
 
 ## Review Convergence
 
+- **Mirrors counted once:** code review (including the classification footprint), the PR body and the PR analysis count a mirror copy (`.claude/**`, `.pair/knowledge/**`, `.github/agents/**`, generated from `packages/knowledge-hub/dataset/**`) **zero times** when its canonical `dataset` file changed in the same diff and the copy equals what the regenerator produces from it — checked on the head by `pnpm mirrors:regenerate` leaving the tree unchanged (skill references are rewritten, so `cmp` is valid only for `.claude/workflows` and `.claude/agents`). Files, lines, tests and code blocks are counted on the canonical file only; the mirrors are reported once as `mirrors regenerated: N files, match the regenerator`. A mirror-side file with no canonical counterpart is counted and listed as mirror-only; a copy that differs from the regenerator output is counted and flagged as drift. See ADL [2026-09-29-mirrors-counted-once.md](../decision-log/2026-09-29-mirrors-counted-once.md).
 - **Baseline then delta:** the first review is complete and returns the immutable 40-character
   head it inspected. A re-review verifies prior findings plus only the diff from that head and
   directly changed producer/consumer boundaries; an unchanged PR surface does not create another

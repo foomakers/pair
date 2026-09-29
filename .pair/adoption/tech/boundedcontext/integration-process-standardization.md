@@ -48,7 +48,8 @@ This context manages all integration logic and process standardization for the p
 | Harness fitness | Whether a resolved harness can satisfy a project's declared access-path requirements (e.g. MCP), checked before any configuration write |
 | Access path | The channel a skill uses to reach a tool's data — CLI (the portable baseline) or MCP (opt-in enrichment where a harness offers it) |
 | Model provider | Who serves the model to a harness — direct (Anthropic, OpenAI, ...), an OAuth subscription, or a third-party gateway (e.g. opencode Zen/Go) |
-| Model class | A cost/capability tier (`cheap`, `balanced`, `frontier`) a project's `tech/automation.md` maps onto its `risk:*` tiers, never a concrete model name |
+| Model class | A cost/capability tier (`cheap`, `balanced`, `frontier`) a project's `tech/automation.md` maps onto its `risk:*` tiers, never a concrete model name; a workflow profile's `modelClasses` maps a class to a model id |
+| Workflow profile | A named JSON profile declaring the engine, model, effort and context policy of each delivery-cycle stage, resolved once per run by one resolver (`workflow-profile.mjs`); a mistyped model keyword is refused at load |
 | Harness guide | The per-harness KB document in the agent-harness framework, following a fixed nine-section index so any two harnesses compare like with like |
 | KB cache | Local storage for downloaded KB artifacts, one slot per source identity: `~/.pair/kb/{version}/` for the official KB, `~/.pair/kb/external/{kind}-{hash}/` for every other source that needs materializing (only the remote-URL form keeps a `{label}`: `~/.pair/kb/external/url-{label}-{hash}/`; a `--source` directory is read in place and owns no slot) (see the [2026-08-11 ADL](../../decision-log/2026-08-11-kb-cache-slots-keyed-by-source-identity.md)) |
 

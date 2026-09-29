@@ -54,6 +54,13 @@
         "$TURBO_ROOT$/turbo.json"
       ]
     },
+    // #518: regenerate-mirrors.test.ts runs the script over the BUILT pair CLI and never builds
+    // it itself — a build replayed from cache rewrites apps/pair-cli/dist in place while
+    // @pair/pair-cli#test, scheduled in parallel, spawns it. The build is ordered before instead.
+    "@pair/dev-tools#test": {
+      "dependsOn": ["build", "@pair/pair-cli#build"],
+      "outputs": []
+    },
     "test:coverage": {
       "dependsOn": ["build"],
       "outputs": ["coverage/**"]
