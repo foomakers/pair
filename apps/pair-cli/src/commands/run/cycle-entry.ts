@@ -373,6 +373,6 @@ export function prepareCycleCoordinator(
 
     console.log(`  Cycle status: ${outcome.status} (${outcome.stagesRun} stage(s) dispatched)`)
     reportCycleReason(outcome.next)
-    return outcome.status === 'ready-for-merge' ? 0 : 1
+    return outcome.status === 'ready-for-merge' || outcome.status === 'merged' ? 0 : 1
   }
 }
