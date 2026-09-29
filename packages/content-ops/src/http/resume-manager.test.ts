@@ -146,6 +146,27 @@ describe('Resume Manager - Content length probe', () => {
     )
   })
 
+  // #135 AC6: no path handling changes here — the probe takes the URL as-is and never builds a
+  // path, so its behaviour is independent of the host platform (darwin/linux alike).
+  it.each(['darwin', 'linux'] as const)(
+    'probes the same way on platform %s (no platform-specific branch)',
+    async platform => {
+      const original = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: platform })
+      try {
+        const httpClient = new MockHttpClientService()
+        httpClient.setRequestResponses([
+          toIncomingMessage(buildTestResponse(200, { 'content-length': '42' })),
+        ])
+        await expect(
+          getContentLength('https://unreachable.invalid/kb.zip', httpClient),
+        ).resolves.toBe(42)
+      } finally {
+        if (original) Object.defineProperty(process, 'platform', original)
+      }
+    },
+  )
+
   it('resolves 0 when the probe errors', async () => {
     const httpClient = new MockHttpClientService()
     vi.spyOn(httpClient, 'request').mockImplementation(() => {
