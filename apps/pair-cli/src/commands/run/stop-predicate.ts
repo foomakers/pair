@@ -50,7 +50,9 @@ export function evaluateStopPredicate(
   const conditions = predicate.condition.split(/\s+and\s+/i).map(c => c.trim())
   const holds = (card: PredicateCard): boolean =>
     conditions.every(c =>
-      c.startsWith(TAG_PREFIX) ? card.tags.includes(c.slice(TAG_PREFIX.length)) : card.macrostate === c,
+      c.startsWith(TAG_PREFIX)
+        ? card.tags.includes(c.slice(TAG_PREFIX.length))
+        : card.macrostate === c,
     )
   return { satisfied: snapshot.every(holds), reason: null }
 }

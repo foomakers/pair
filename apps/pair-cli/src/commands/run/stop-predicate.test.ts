@@ -127,6 +127,8 @@ describe('parity with .claude/workflows/pair-loop.js', () => {
   })
 
   it.each(TABLE)('$name', ({ predicate, snapshot }) => {
-    expect(evaluateStopPredicate(predicate, snapshot)).toEqual(original(predicate ?? null, snapshot))
+    expect(evaluateStopPredicate(predicate, snapshot)).toEqual(
+      original(predicate ?? null, snapshot),
+    )
   })
 })
