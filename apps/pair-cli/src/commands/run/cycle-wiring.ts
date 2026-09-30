@@ -572,6 +572,16 @@ function readGateResult(file: string, tier: string, head: string): string | unde
   }
 }
 
+/**
+ * The tier the merge stage pins. Under an ACTIVE autonomy gate an untagged or ambiguously tagged card
+ * pins `risk:red` — the fail-safe every tier read in the cycle uses (`cycle-merge.mjs readCurrentTier`
+ * reads the same value back, so the pin and the live re-read agree and the strictest gate set runs).
+ * Without a gate the legacy rule stands: no tier, no merge.
+ */
+export function pinnedTier(tier: string | undefined, gateActive: boolean): string | undefined {
+  return tier ?? (gateActive ? 'risk:red' : undefined)
+}
+
 /** What `resolve` offered `merge` on, pinned once: the reviewed head, the PR and the card tier. */
 function mergePinsFor(
   input: CycleDriverRequest,
@@ -581,7 +591,8 @@ function mergePinsFor(
 ): MergePins {
   const reviewedHead = next['reviewedHead']
   const pr = input.pr ?? (answer as { pr?: number }).pr
-  if (typeof reviewedHead !== 'string' || pr === undefined || co.tier === undefined) {
+  const cardTier = pinnedTier(co.tier, co.autonomy !== undefined)
+  if (typeof reviewedHead !== 'string' || pr === undefined || cardTier === undefined) {
     throw new Error(
       `merge-inputs-unreadable: resolve offered merge without a reviewed head, a PR or a card tier ` +
         `(reviewedHead=${String(reviewedHead)}, pr=${String(pr)}, tier=${String(co.tier)})`,
@@ -592,7 +603,7 @@ function mergePinsFor(
     story: input.card,
     pr,
     reviewedHead,
-    cardTier: co.tier,
+    cardTier,
     ...(co.autonomy !== undefined
       ? { mergeGate: co.autonomy.merge }
       : { autoAdvance: co.autoAdvanceTiers }),
