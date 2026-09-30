@@ -128,6 +128,24 @@ const PAIRS: MirrorPair[] = [
           '../../skills/pair-workflow-cycle/scripts/cycle-dispatch.mjs',
         ],
       },
+      'pair-contracts/merge-canary.test.mjs': {
+        why:
+          "The paired merge canary replays a frozen block of this repo's pre-extraction " +
+          '`pair-loop.js` against the INSTALLED `cycle-merge.mjs` through `../../skills/`, a ' +
+          'layout the dataset does not have; it is a one-repo regression oracle, never adopter ' +
+          'content (its own header states it runs from `.claude/workflows` only).',
+        unresolvableIfMirrored: ['../../skills/pair-workflow-cycle/scripts/cycle-merge.mjs'],
+      },
+      'pair-contracts/fixtures/merge-canary-report.md': {
+        why:
+          'The committed expected report of `merge-canary.test.mjs` — consumed by that root-only ' +
+          'test alone, so it travels with it.',
+      },
+      'pair-contracts/fixtures/pair-loop-advance.f9e48eb7.js.txt': {
+        why:
+          'The frozen oracle of `merge-canary.test.mjs` (verbatim `pair-loop.js` lines at ' +
+          'f9e48eb7, sha256-pinned by the test) — consumed by that root-only test alone.',
+      },
     },
   },
   {

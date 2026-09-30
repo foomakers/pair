@@ -48,7 +48,7 @@ const markerTag = hex => `pair-scope-decision-${hex}`
 const STATE_TO_AZ = { success: 'succeeded', failure: 'failed', pending: 'pending' }
 const STATE_FROM_AZ = { succeeded: 'success', failed: 'failure', pending: 'pending', error: 'failure' }
 // REST api-versions per resource (Azure DevOps REST 7.1 reference).
-const API = { pullRequestThreads: '7.1', pullRequestThreadComments: '7.1', pullRequestIterations: '7.1', pullRequestStatuses: '7.1-preview.1', pullRequestLabels: '7.1-preview.1' }
+const API = { pullRequestThreads: '7.1', pullRequestThreadComments: '7.1', pullRequestIterations: '7.1', pullRequestStatuses: '7.1-preview.1', pullRequestLabels: '7.1-preview.1', pullRequests: '7.1' }
 
 const splitRepo = repo => {
   const [project, repository] = String(repo ?? '').split('/')
@@ -276,8 +276,14 @@ export default defineAdapter({
           return { applied: label, removed: [], confirmed: false, error: e.message }
         }
       },
-      merge({ pr, strategy = 'squash', message = '' }) {
+      merge({ pr, repo, strategy = 'squash', message = '', headSha }) {
         if (!['squash', 'merge'].includes(strategy)) throw new HostError('unsupported', { message: `azure-devops: merge strategy ${JSON.stringify(strategy)} is not supported (squash | merge)`, method: 'merge' })
+        if (headSha !== undefined) {
+          if (!(typeof headSha === 'string' && SHA_RE.test(headSha))) throw new HostError('invalid-input', { message: `azure-devops: merge headSha is not a 40-hex sha: ${JSON.stringify(headSha)}`, method: 'merge' })
+          // ONE pinned PATCH: the service refuses completion when lastMergeSourceCommit is stale.
+          invoke({ resource: 'pullRequests', repo, route: { pullRequestId: pr }, method: 'PATCH', body: { status: 'completed', lastMergeSourceCommit: { commitId: headSha }, completionOptions: { squashMerge: strategy === 'squash', ...(message ? { mergeCommitMessage: String(message) } : {}) } } })
+          return { merged: true, pr: Number(pr), strategy }
+        }
         const args = ['repos', 'pr', 'update', '--id', String(pr), '--status', 'completed', '--squash', strategy === 'squash' ? 'true' : 'false']
         if (message) args.push('--merge-commit-message', String(message))
         azJson(args, 'repos pr update')

@@ -43,7 +43,18 @@ export default defineAdapter({
     const readCheck = ({ sha, repo, context = CHECK_CONTEXT }) => {
       const combined = JSON.parse(gh(['api', `${apiRepo(repo)}/commits/${sha}/status`]))
       const own = (combined.statuses ?? []).filter(s => s.context === context)
-      return own.length ? String(own[own.length - 1].state) : null
+      if (own.length) return String(own[own.length - 1].state)
+      return null
+    }
+    // A required check may be published as a CHECK RUN (a workflow job) rather than a commit status:
+    // `conclusion` is its verdict (`success`, `failure`, …); a run still in flight has none and reads
+    // `pending`. The most recent run of that name wins. No run either ⇒ null.
+    const readCheckRun = ({ sha, repo, context }) => {
+      const out = JSON.parse(gh(['api', `${apiRepo(repo)}/commits/${sha}/check-runs?check_name=${encodeURIComponent(context)}`]))
+      const runs = (out.check_runs ?? []).filter(r => r.name === context).sort((a, b) => String(a.started_at ?? '').localeCompare(String(b.started_at ?? '')))
+      if (!runs.length) return null
+      const last = runs[runs.length - 1]
+      return last.status === 'completed' ? String(last.conclusion ?? 'pending') : 'pending'
     }
     const readLabels = ({ pr, repo }) => JSON.parse(gh(['api', `${apiRepo(repo)}/issues/${pr}/labels`])).map(l => String(l.name))
     const closeIssue = (id, repo) => gh(withRepo(['issue', 'close', String(id), '--reason', 'completed'], repo))
@@ -59,6 +70,25 @@ export default defineAdapter({
         throw e
       }
     }
+
+    // Marker-keyed upsert on ONE issue-or-PR thread (GitHub serves both from `issues/<n>/comments`).
+    const upsertOnIssue = ({ number, marker, body, repo }) =>
+      upsertByMarker({
+        marker,
+        body,
+        max: MAX_COMMENT_CHARS,
+        list: () => listComments({ pr: number, repo }),
+        update: (hit, full) => {
+          const res = JSON.parse(gh(['api', '-X', 'PATCH', `${apiRepo(repo)}/issues/comments/${hit.id}`, '--input', '-'], { input: JSON.stringify({ body: full }) }))
+          return { id: res.id, url: res.html_url }
+        },
+        create: full => {
+          const res = JSON.parse(gh(['api', '-X', 'POST', `${apiRepo(repo)}/issues/${number}/comments`, '--input', '-'], { input: JSON.stringify({ body: full }) }))
+          return { id: res.id, url: res.html_url }
+        },
+      })
+    const BOARD_QUERY = 'query($owner:String!,$name:String!,$n:Int!){repository(owner:$owner,name:$name){issue(number:$n){projectItems(first:20){nodes{id project{id title fields(first:30){nodes{... on ProjectV2SingleSelectField{id name options{id name}}}}}}}}}}'
+    const BOARD_MUTATION = 'mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){updateProjectV2ItemFieldValue(input:{projectId:$project,itemId:$item,fieldId:$field,value:{singleSelectOptionId:$option}}){projectV2Item{id fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}'
 
     return {
       checkContext: CHECK_CONTEXT,
@@ -113,6 +143,34 @@ export default defineAdapter({
         }
       },
 
+      // The card's board `Status` field, written through GraphQL variables (never interpolated) and
+      // READ BACK from the mutation's own payload (github-implementation.md, Project Board Status
+      // Transitions). Reported, never thrown and never a silent skip: a card that is not a project
+      // item, sits on several boards, or whose board has no such option is `confirmed: false`.
+      setBoardState({ id, state, repo }) {
+        try {
+          const nameWithOwner = repo || gh(['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner']).trim()
+          const [owner, name] = nameWithOwner.split('/')
+          const q = parseJson(gh(['api', 'graphql', '-f', `query=${BOARD_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `n=${Number(id)}`]), { command: 'gh api graphql board' })
+          const items = q?.data?.repository?.issue?.projectItems?.nodes ?? []
+          if (items.length === 0) return { applied: state, confirmed: false, error: `issue #${id} is not a project item — no board field to write` }
+          if (items.length > 1) return { applied: state, confirmed: false, error: `issue #${id} sits on ${items.length} projects (${items.map(i => i.project?.title).join(', ')}) — the board is never guessed` }
+          const [item] = items
+          const field = (item.project?.fields?.nodes ?? []).find(f => f?.name === 'Status')
+          const option = field?.options?.find(o => o.name === state)
+          if (!field || !option) return { applied: state, confirmed: false, error: `board "${item.project?.title}" has no Status option "${state}"` }
+          const out = parseJson(gh(['api', 'graphql', '-f', `query=${BOARD_MUTATION}`, '-F', `project=${item.project.id}`, '-F', `item=${item.id}`, '-F', `field=${field.id}`, '-f', `option=${option.id}`]), { command: 'gh api graphql mutation' })
+          const now = out?.data?.updateProjectV2ItemFieldValue?.projectV2Item?.fieldValueByName?.name
+          return { applied: state, confirmed: now === state, error: now === state ? null : `read-back: Status is ${JSON.stringify(now)}` }
+        } catch (e) {
+          return { applied: state, confirmed: false, error: e.message }
+        }
+      },
+      // One marker-keyed comment on the CARD (never the PR thread): the park path's "awaits action".
+      commentOnCard({ id, marker, body, repo }) {
+        return upsertOnIssue({ number: id, marker, body, repo })
+      },
+
       // ── pull-request side (code-host) ──
       prHead({ pr, repo }) {
         const out = gh(withRepo(['pr', 'view', String(pr)], repo).concat(['--json', 'headRefOid', '-q', '.headRefOid'])).trim()
@@ -121,20 +179,7 @@ export default defineAdapter({
       },
       listComments,
       upsertComment({ pr, marker, body, repo }) {
-        return upsertByMarker({
-          marker,
-          body,
-          max: MAX_COMMENT_CHARS,
-          list: () => listComments({ pr, repo }),
-          update: (hit, full) => {
-            const res = JSON.parse(gh(['api', '-X', 'PATCH', `${apiRepo(repo)}/issues/comments/${hit.id}`, '--input', '-'], { input: JSON.stringify({ body: full }) }))
-            return { id: res.id, url: res.html_url }
-          },
-          create: full => {
-            const res = JSON.parse(gh(['api', '-X', 'POST', `${apiRepo(repo)}/issues/${pr}/comments`, '--input', '-'], { input: JSON.stringify({ body: full }) }))
-            return { id: res.id, url: res.html_url }
-          },
-        })
+        return upsertOnIssue({ number: pr, marker, body, repo })
       },
       readComment({ id, repo }) {
         const c = parseJson(gh(['api', `repos/${repo}/issues/comments/${id}`]), { command: 'gh api comment' })
@@ -149,6 +194,7 @@ export default defineAdapter({
         return `https://github.com/${repo}/pull/${Number(pr)}#issuecomment-${id}`
       },
       readCheck,
+      readCheckRun,
       readLabels,
       // The required check on the EXACT head sha (a commit status). A refused write is reported, not
       // thrown: a token without `repo:status` degrades to advisory (github-implementation.md).
@@ -199,10 +245,13 @@ export default defineAdapter({
         }
       },
       // merge-and-cascade.md CLI fallback: `gh pr merge <n> --squash --subject <title> --body <body>`.
-      merge({ pr, repo, strategy = 'squash', message = '' }) {
+      merge({ pr, repo, strategy = 'squash', message = '', headSha }) {
         if (!['squash', 'merge', 'rebase'].includes(strategy)) throw new HostError('unsupported', { message: `merge strategy ${JSON.stringify(strategy)} (expected squash | merge | rebase)`, method: 'merge' })
+        if (headSha !== undefined && !(typeof headSha === 'string' && SHA_RE.test(headSha))) throw new HostError('invalid-input', { message: `merge headSha is not a 40-hex sha: ${JSON.stringify(headSha)}`, method: 'merge' })
         const [subject, ...rest] = String(message).split('\n')
         const args = withRepo(['pr', 'merge', String(pr), `--${strategy}`], repo)
+        // Pinned to the reviewed head: the host refuses when the PR head moved since it was read.
+        if (headSha) args.push('--match-head-commit', headSha)
         if (subject) args.push('--subject', subject)
         if (rest.join('\n').trim()) args.push('--body', rest.join('\n').replace(/^\n+/, ''))
         gh(args)

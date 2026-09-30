@@ -1,9 +1,17 @@
 import { execFileSync } from 'child_process'
-import { rmSync } from 'fs'
+import { existsSync, readFileSync, rmSync } from 'fs'
 import { dirname, join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import type { EngineDefinition } from './engines'
-import { runCycle, type CycleOutcome, type CycleStageResult } from './cycle'
+import {
+  runCycle,
+  type CycleMergeOutcome,
+  type CycleNext,
+  type CycleOutcome,
+  type CycleResolveAnswer,
+  type CycleStageResult,
+} from './cycle'
+import { AUTO_ADVANCE_OFF, readAutomationPolicy } from './automation-policy'
 import {
   createCycleScriptsBridge,
   createCycleHooksBridge,
@@ -78,6 +86,34 @@ function ghIssueView(card: string, cwd: string, fields: string): string {
         `pair-cli reads the tracker through your own authenticated \`gh\`; check \`gh auth status\`.`,
     )
   }
+}
+
+const LABEL_SHAPE_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/i
+
+/**
+ * The card's `risk:*` tier — the one the cycle is driven under. Exactly one well-formed `family:tier` label, else
+ * `undefined` (none, several, malformed, or the tracker cannot say): `resolve` then never offers `merge`, the
+ * unchanged `done` terminal — fail-safe, never a guess.
+ */
+export function readCardTier(card: string, cwd: string): string | undefined {
+  try {
+    const parsed = JSON.parse(ghIssueView(card, cwd, 'labels')) as {
+      labels?: ReadonlyArray<{ name?: string }>
+    }
+    const tiers = (parsed.labels ?? [])
+      .map(label => label.name ?? '')
+      .filter(name => name.startsWith('risk:'))
+    return tiers.length === 1 && LABEL_SHAPE_RE.test(tiers[0]!) ? tiers[0] : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** `## Auto-Advance`'s tiers as `resolve` takes them; `(none)` / absent ⇒ none. A malformed section HALTs. */
+export function readAutoAdvanceTiers(fs: FileSystemService, main: string): readonly string[] {
+  const { autoAdvance } = readAutomationPolicy(fs, main)
+  if (autoAdvance === AUTO_ADVANCE_OFF) return []
+  return autoAdvance.split(',').map(tier => tier.trim())
 }
 
 interface GhCard {
@@ -307,6 +343,9 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
     // produced by the scripts themselves, never computed here, so the two realizations agree.
     inputs: bridge.inputs(card, ctx.workflowVersion),
     acHash: bridge.acHash(input.card, runDir),
+    // US-490: what lets `resolve` OFFER `merge` — read once, like the scripts' own inputs.
+    tier: readCardTier(input.card, ctx.cwd),
+    autoAdvanceTiers: readAutoAdvanceTiers(ctx.fs, main),
   }
 }
 
@@ -347,7 +386,9 @@ const resolveFor =
       policy: {
         blockingFloor: blocking.blockingFloor,
         ...(blocking.maxDispatches !== undefined && { maxDispatches: blocking.maxDispatches }),
+        ...(co.autoAdvanceTiers.length > 0 && { autoAdvance: { tiers: co.autoAdvanceTiers } }),
       },
+      ...(co.tier !== undefined && { tier: co.tier }),
       entry: input.pr === undefined ? 'fresh' : 'pr',
       story: input.card,
       runsRoot: co.runsRoot,
@@ -423,6 +464,141 @@ const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packe
     runIteration: spawnIteration,
   })) as CycleStageResult
 }
+
+const GATE_SKILL = 'pair-capability-verify-quality'
+const GATE_PASS = 'RESULT: ALL GATES PASS'
+const GATE_FILE = 'merge-gate.json'
+
+interface MergePins {
+  readonly dir: string
+  readonly story: string
+  readonly pr: number
+  readonly reviewedHead: string
+  readonly cardTier: string
+  readonly autoAdvance: readonly string[]
+}
+
+/**
+ * The tier-gate stage's prompt. The tier and the reviewed head come FIRST — they are what the
+ * evidence must name — then the PR, the story branch and the absolute evidence path.
+ */
+function gatePrompt(pins: MergePins, branch: string, file: string): string {
+  const { cardTier: tier, reviewedHead: head, pr } = pins
+  return (
+    `Merge-stage tier gate for card tier ${tier} at reviewed head ${head}. ` +
+    `Invoke the ${GATE_SKILL} skill for PR ${pr} (story branch ${branch}), checked out at that ` +
+    `head, for tier ${tier}. Then write this JSON to ${file} — nothing else, no other file: ` +
+    `{"tier": "${tier}", "reviewedHead": "${head}", "result": "<its RESULT line, verbatim>"} ` +
+    `where the result is exactly the RESULT line ${GATE_SKILL} printed ("${GATE_PASS}" or ` +
+    `"RESULT: BLOCKED — N gates failing"). Never write the passing line unless the skill printed ` +
+    `it for this tier and this head. Run only foreground, time-bounded commands. Do not merge.`
+  )
+}
+
+/** The squash message, per the commit template: `[<story code>] <type>: <description>`. */
+function squashMessage(card: string, title: string): string {
+  const description = title.replace(/\s+/g, ' ').trim() || `story ${card}`
+  return `[#${card}] feat: ${description}`
+}
+
+/** The verify-quality RESULT line the gate stage wrote for THIS tier and head, or `undefined`. */
+function readGateResult(file: string, tier: string, head: string): string | undefined {
+  if (!existsSync(file)) return undefined
+  try {
+    const evidence = JSON.parse(readFileSync(file, 'utf-8')) as Record<string, unknown>
+    if (evidence['tier'] !== tier || evidence['reviewedHead'] !== head) return undefined
+    const result = evidence['result']
+    return typeof result === 'string' ? result.trim() : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** What `resolve` offered `merge` on, pinned once: the reviewed head, the PR and the card tier. */
+function mergePinsFor(
+  input: CycleDriverRequest,
+  co: Coordinates,
+  next: CycleNext,
+  answer: CycleResolveAnswer,
+): MergePins {
+  const reviewedHead = next['reviewedHead']
+  const pr = input.pr ?? (answer as { pr?: number }).pr
+  if (typeof reviewedHead !== 'string' || pr === undefined || co.tier === undefined) {
+    throw new Error(
+      `merge-inputs-unreadable: resolve offered merge without a reviewed head, a PR or a card tier ` +
+        `(reviewedHead=${String(reviewedHead)}, pr=${String(pr)}, tier=${String(co.tier)})`,
+    )
+  }
+  return {
+    dir: co.runDir,
+    story: input.card,
+    pr,
+    reviewedHead,
+    cardTier: co.tier,
+    autoAdvance: co.autoAdvanceTiers,
+  }
+}
+
+/**
+ * The tier gate: ONE engine stage runs `pair-capability-verify-quality` and hands its answer back
+ * through `<run dir>/merge-gate.json`. Green only for evidence written by THIS dispatch (any older
+ * file is removed first) that names this tier and head with the passing RESULT line.
+ */
+async function runTierGate(
+  ctx: CycleDriverContext,
+  co: Coordinates,
+  pins: MergePins,
+): Promise<{ readonly green: boolean; readonly result: string | undefined }> {
+  const file = join(co.runDir, GATE_FILE)
+  rmSync(file, { force: true })
+  const stage = await spawnStageFor(
+    ctx,
+    co,
+  )({ step: 'merge-gate', prompt: gatePrompt(pins, co.branch, file), worktree: co.main })
+  const result =
+    stage.processOutcome === 'success'
+      ? readGateResult(file, pins.cardTier, pins.reviewedHead)
+      : undefined
+  if (result === undefined)
+    console.log('  Merge gate: no gate evidence for this tier and head — red')
+  else if (result !== GATE_PASS) console.log(`  Merge gate: ${result}`)
+  return { green: result === GATE_PASS, result }
+}
+
+function mergeStatus(run: { merged?: boolean; cascaded?: boolean }): string {
+  if (run.merged !== true) return 'merge-parked'
+  return run.cascaded === true ? 'merged' : 'merged-closure-unfinished'
+}
+
+/**
+ * The `merge` stage (US-490, cycle SKILL.md Step 5): `cycle-merge.mjs check` first, pinned to the
+ * head the verifier reviewed; only when it allows, the tier gate, then `run` with `--gate green` or
+ * `red`. This driver decides nothing itself: `merged` / `cascaded` / `reason` are relayed verbatim.
+ */
+const mergeFor =
+  (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) =>
+  async (next: CycleNext, answer: CycleResolveAnswer): Promise<CycleMergeOutcome> => {
+    const pins = mergePinsFor(input, co, next, answer)
+    const check = co.bridge.mergeCheck(pins)
+    if (check.mergeAllowed !== true) {
+      console.log(`  Merge: parked — ${check.reason ?? 'the merge check did not allow it'}`)
+      return { status: 'merge-parked', stagesRun: 0, merge: check }
+    }
+    const gate = await runTierGate(ctx, co, pins)
+    const run = co.bridge.mergeRun({
+      ...pins,
+      gate: gate.green ? 'green' : 'red',
+      message: squashMessage(input.card, co.title),
+      branch: co.branch,
+      root: co.main,
+    })
+    console.log(
+      `  Merge: merged=${String(run.merged)} cascaded=${String(run.cascaded)}` +
+        `${run.reason ? ` — ${run.reason}` : ''}`,
+    )
+    const merge = { ...run, ...(gate.result !== undefined && { gateResult: gate.result }) }
+    return { status: mergeStatus(run), stagesRun: 1, merge }
+  }
 
 /**
  * `resolve` answered `other-run`: this story's cycle was started under ANOTHER run id (by
@@ -505,6 +681,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       worktree: worktreeFor(ctx, input, co),
       packet: packetFor(ctx, input, co) as never,
       spawnStage: spawnStageFor(ctx, co),
+      mergeStage: mergeFor(ctx, input, co),
       policy,
       ...(input.rounds !== undefined && { rounds: input.rounds }),
       onNotice: note => console.log(`  ${note}`),

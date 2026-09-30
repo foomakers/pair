@@ -17,7 +17,8 @@
 //            logged: [string…], timeout }   (`timeout` = effective per-command seconds; 0 = none)
 //   `pre-*` ⇒ mode `blocking` (first non-zero HALTs: `halted` set, the rest not run);
 //   `post-*` / `on-halt` ⇒ mode `logging` (every command runs, failures land in `logged`).
-//   `on-halt` needs `--status` and is skipped unless it is `failed-*` or `escalate`.
+//   `on-halt` needs `--status` and is skipped unless it is `failed-*`, `escalate`, `merge-parked` or
+//   `merged-closure-unfinished` (the caller filters an `awaiting-human` park out first).
 import { readFileSync, existsSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -25,6 +26,8 @@ import { STEPS } from './cycle-state.mjs'
 
 export const NON_STAGE_STEPS = ['done', 'blocked']
 export const STAGE_IDS = STEPS.filter(step => !NON_STAGE_STEPS.includes(step))
+// Not listed here: `pre-merge`/`post-merge` — `merge` is in `STEPS`, so `hookKeysFor` derives them like any stage id
+// (`post-merge` is a logging point the caller runs in the main checkout, US-490).
 export const CYCLE_POINTS = ['pre-cycle', 'post-cycle', 'on-halt']
 export const HEADING = 'Cycle Hooks'
 /** Per-command timeout (seconds) when `## Cycle Hooks` declares no `timeout`; `0` disables it. */
@@ -42,8 +45,12 @@ export function modeOf(key, stageIds = STAGE_IDS) {
   return key.startsWith('pre-') ? 'blocking' : 'logging'
 }
 
-/** `on-halt` fires on every `failed-*` and on `escalate`, never on `ready-for-merge`. */
-export const haltsOn = status => typeof status === 'string' && (status.startsWith('failed-') || status === 'escalate')
+/**
+ * `on-halt` fires on every `failed-*`, on `escalate`, on `merge-parked` and on
+ * `merged-closure-unfinished` — never on `ready-for-merge` or `merged`. The executor cannot see a
+ * park's kind: the caller MUST NOT call it for an `awaiting-human` park.
+ */
+export const haltsOn = status => typeof status === 'string' && (status.startsWith('failed-') || status === 'escalate' || status === 'merge-parked' || status === 'merged-closure-unfinished')
 
 // The fence-blind level-2 extraction every `tech/automation.md` reader shares (deliberate copy of
 // `blocking-severities.mjs`: this script ships beside the skill with no cross-import).

@@ -14,6 +14,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+// US-490: the loop no longer decides a merge — it invokes the `merge` stage of the delivery cycle.
+// The dry-run harness below answers that stage with the REAL decision rule (`decideMerge`), fed by the
+// very same tier / PR-signal / gate fixtures the scenarios always declared.
+import { decideMerge } from '../skills/pair-workflow-cycle/scripts/cycle-merge.mjs'
 
 const FULL_SRC = readFileSync(new URL('./pair-loop.js', import.meta.url), 'utf8').replace(
   /^export /gm,
@@ -427,10 +431,30 @@ test('validateArgs: startIteration must be a non-negative integer', () => {
 // that test actually varies.
 function runWorkflow({ args, dispatch, workflowDispatch, auditWritten = true, resumeHaltedIds = [] }) {
   const calls = []
+  const flag = (prompt, name) => new RegExp(`--${name} (\\S+)`).exec(prompt)?.[1]
+  // The `merge` stage, as a script would answer it: the scenario's own fixtures (the card's CURRENT
+  // tier, the PR SIGNALS on the remote head) go through the real `decideMerge`.
+  const mergeStage = async (prompt, opts) => {
+    if (prompt.includes('cycle-merge.mjs check')) {
+      const fresh = await dispatch('re-read: what is its CURRENT `risk:*` label', opts)
+      const currentTier = fresh?.tier === 'untagged' || !fresh?.tier ? 'risk:red' : fresh.tier
+      // The real stage reads the signals regardless (read-only, and `failed` lists every failing
+      // condition); the harness skips the fixture read once the tier already differs, because the
+      // scenarios that raise the tier declare no signals fixture at all.
+      const signals = currentTier === flag(prompt, 'cardTier') ? await dispatch('re-read PR SIGNALS', opts) : null
+      const autoAdvanceTiers = JSON.parse(/--autoAdvance '([^']*)'/.exec(prompt)[1])
+      const decision = decideMerge({ cardTier: flag(prompt, 'cardTier'), currentTier, autoAdvanceTiers, reviewedHead: flag(prompt, 'reviewedHead'), signals, requireGate: false })
+      if (decision.mergeAllowed || decision.failed[0].code !== 'tier-not-auto-advance') return decision
+      const posted = await dispatch('Post a comment on the issue recording that it awaits human merge/action', opts)
+      return { ...decision, comment: { posted: posted?.posted === true } }
+    }
+    return dispatch('Card review-approved on PR (merge stage run)', opts)
+  }
   const agent = async (prompt, opts) => {
     calls.push({ prompt, opts })
     if (opts.phase === 'Policy' && prompt.includes('audit file')) return { haltedCardIds: resumeHaltedIds }
     if (opts.phase === 'Audit') return { written: auditWritten, path: 'x' }
+    if (opts.phase === 'Advance' && prompt.includes('cycle-merge.mjs')) return mergeStage(prompt, opts)
     return dispatch(prompt, opts)
   }
   const parallel = fns => Promise.all(fns.map(f => Promise.resolve().then(f).catch(() => null)))

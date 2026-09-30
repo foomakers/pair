@@ -133,7 +133,7 @@ A consumer **MUST HALT**, naming the file and the offending value, when the sect
 
 ### Merge execution — what auto-advance verifies at merge time
 
-The switch above authorizes **which tiers** may merge unattended; it does not merge by itself. When a review-approved card's tier is in `## Auto-Advance`, `pair-loop` executes the merge ONLY after re-verifying, on freshly re-read signals, the conjunction that IS `merge_allowed` ([pr-states.md](../../collaboration/project-management-tool/pr-states.md) synthesis): the card's tier re-read (a mid-run raise parks the card), the PR's current remote head identical to the reviewed head (a moved head is never merged), `pair-review` conclusion `success` on that head, `pair-explicit-approval` conclusion `success` on that head (below 🔴 it auto-passes; at 🔴 without a recorded human approval it cannot be success — D10), and the tier's gate set green. Anything unreadable, moved, or not `success` parks the card with the failing item named — never merged. The merge itself follows merge-and-cascade (adopted strategy, commit message per template, story close + parent cascade with read-back, branch deletion, checkpoint removal). The loop therefore executes exactly the merges the synthesis authorizes, on tiers the project named — coherent with the adoption-gated light row, which authorizes the *approving review* under the same below-🔴 synthesis while this switch authorizes the *merge execution*.
+The switch above authorizes **which tiers** may merge unattended; it does not merge by itself. When a review-approved card's tier is in `## Auto-Advance`, `pair-loop` executes the merge ONLY after re-verifying, on freshly re-read signals, the conjunction that IS `merge_allowed` ([pr-states.md](../../collaboration/project-management-tool/pr-states.md) synthesis): the card's tier re-read (a mid-run raise parks the card), the PR's current remote head identical to the reviewed head (a moved head is never merged), `pair-review` conclusion `success` on that head, `pair-explicit-approval` conclusion `success` on that head (below 🔴 it auto-passes; at 🔴 without a recorded human approval it cannot be success — D10), and the tier's gate set green. Anything unreadable, moved, or not `success` parks the card with the failing item named — never merged. The merge itself follows merge-and-cascade (adopted strategy, commit message per template, story close + parent cascade with read-back, branch deletion, checkpoint removal). That conjunction is the `merge` stage of the delivery cycle (US-490): `cycle-state.mjs resolve` offers it only when this section names the card's tier, and `cycle-merge.mjs` — a script, not an agent — re-reads every signal and either merges and closes the story or parks the card with a comment on it. `pair-loop`, the in-session cycle and `pair-cli run --card` all reach it through the same script, so the rule has one owner. The loop therefore executes exactly the merges the synthesis authorizes, on tiers the project named — coherent with the adoption-gated light row, which authorizes the *approving review* under the same below-🔴 synthesis while this switch authorizes the *merge execution*.
 
 ## Stop Predicate — when an unattended run stops
 
@@ -420,7 +420,7 @@ A fourth independent schema owner (US-489). Same semantics as `## Publish-PR Hoo
 - `on-halt`: `./alert.sh`
 ```
 
-One bullet per command: `` - `<hook name>`: `<shell command>` ``. Several bullets with the same name run in declaration order. Commands run through `sh -c`: stage hooks (`pre-<stage-id>`, `post-<stage-id>`) in the **story worktree** — the tree the stage works on, created before `pre-<stage-id>` runs — and the cycle-level hooks (`pre-cycle`, `post-cycle`, `on-halt`) in the main checkout, so a cycle-level hook never writes into the story's tree and a stage hook never touches the developer's main checkout. They are the project's own declared strings — never generated, never carrying untrusted input.
+One bullet per command: `` - `<hook name>`: `<shell command>` ``. Several bullets with the same name run in declaration order. Commands run through `sh -c`: stage hooks (`pre-<stage-id>`, `post-<stage-id>`) in the **story worktree** — the tree the stage works on, created before `pre-<stage-id>` runs — and the cycle-level hooks (`pre-cycle`, `post-cycle`, `on-halt`, and `post-merge`) in the main checkout, so a cycle-level hook never writes into the story's tree and a stage hook never touches the developer's main checkout. They are the project's own declared strings — never generated, never carrying untrusted input.
 
 ### Hook names are a pattern, never a list
 
@@ -429,10 +429,12 @@ One bullet per command: `` - `<hook name>`: `<shell command>` ``. Several bullet
 | `pre-<stage-id>` | before that stage dispatches | **HALTs the cycle before the stage runs** (`failed-hook`), reporting the command's own output verbatim |
 | `post-<stage-id>` | after that stage's handoff advanced | logged, never a HALT — the stage already happened; remaining commands still run |
 | `pre-cycle` | once per invocation, before the first stage | HALTs (`failed-hook`) |
-| `post-cycle` | once per invocation, after the cycle reaches a terminal status (`ready-for-merge`, `escalate`, `failed-*`) | logged |
-| `on-halt` | when the cycle stops on any `failed-*` or `escalate` status — never on `ready-for-merge` | logged, never compounds the failure |
+| `post-cycle` | once per invocation, after the cycle reaches a terminal status (`ready-for-merge`, `merged`, `merge-parked`, `merged-closure-unfinished`, `escalate`, `failed-*`) | logged |
+| `on-halt` | when the cycle stops on any `failed-*` or `escalate` status, a halted `merge-parked`, or `merged-closure-unfinished` — never on `ready-for-merge`, `merged` or an `awaiting-human` park | logged, never compounds the failure |
 
 `verify` is the one stage whose agent works in another tree (a detached review worktree it creates and removes itself): `pre-verify`/`post-verify` still run in the story worktree at the PR head — the tree under verification — never in the review worktree.
+
+`merge` (US-490, when `## Auto-Advance` offers it) is a script stage, not an agent dispatch: `pre-merge` runs in the story worktree before `cycle-merge.mjs check` and HALTs like any `pre-*`; `post-merge` runs after `cycle-merge.mjs run`, only when the merge executed (`merged`, `merged-closure-unfinished`) — never after a park — and is logged. It runs in the **main checkout**: the story worktree is already removed by then, so `post-merge` is a cycle-level point, not a stage hook. `on-halt` fires on a halted merge park and on `merged-closure-unfinished`, and not on an `awaiting-human` park.
 
 `<stage-id>` is any stage id `cycle-state.mjs` enumerates (its `STEPS`, minus the terminal `done`/`blocked`), so a stage added later gets `pre-<id>`/`post-<id>` with no schema change. Today:
 
@@ -443,6 +445,7 @@ One bullet per command: `` - `<hook name>`: `<shell command>` ``. Several bullet
 | `implement` | `pre-implement`, `post-implement` |
 | `green` | `pre-green`, `post-green` |
 | `verify` | `pre-verify`, `post-verify` |
+| `merge` | `pre-merge`, `post-merge` |
 
 `pre-cycle` and `post-cycle` are scoped per **invocation**, not per card across `--rounds`: an invocation that spends several remediation rounds runs each once.
 
@@ -463,6 +466,7 @@ Absent file or absent section ⇒ no hook step is attempted and nothing is logge
 | `pre-implement` | install dependencies, realign the generated mirrors (`pnpm mirrors:regenerate`), start a local service the tests need — all in the story worktree |
 | `pre-green` | same as `pre-implement`, for a remediation round |
 | `pre-verify` | an external gate the verifier must find green (`pnpm build`) — blocks `verify` on failure |
+| `pre-merge` | a last local check before an automatic merge (`check`, gate, `run` stay pinned to the reviewed head) — blocks the merge on failure |
 | `post-<stage-id>` | notifications, metrics, audit lines — anything whose failure must not stop the cycle |
 | `post-cycle` | notify the outcome, clean up what `pre-cycle` created |
 | `on-halt` | alert a human: the deterministic notification point for every failure path |
@@ -483,7 +487,7 @@ Worked examples, one per hook type:
 - `pre-implement` realigns the mirrors in the story worktree, the tree the stage will commit from.
 - `pre-verify` is an external gate on the story worktree at the PR head: a red build there stops `verify` from dispatching, and the build's own output is what the operator reads.
 - `post-implement` and `post-cycle` are notifications: they run after the fact, so a failed webhook is logged and the cycle moves on.
-- `on-halt` is the alert: it fires on every `failed-*` and `escalate` stop, never on `ready-for-merge`.
+- `on-halt` is the alert: it fires on every `failed-*` and `escalate` stop, a halted merge park and `merged-closure-unfinished`, never on `ready-for-merge` or an `awaiting-human` park.
 
 A `pre-*` hook that writes files (mirror realignment) must be local and idempotent: the guard that detects drift is the checker, the hook is what fixes the story worktree before the gate judges it.
 
