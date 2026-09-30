@@ -364,7 +364,6 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
       'pair-loop',
       'pair-capability-verify-quality',
       'pair-process-bootstrap',
-      'pair-process-refine-story',
       'pair-process-implement',
       'pair-capability-assess-cost',
       'pair-capability-assess-coupling',
