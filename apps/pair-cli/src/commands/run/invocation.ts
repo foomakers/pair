@@ -174,6 +174,8 @@ export const APPROVAL_DECLARING_SKILLS: ReadonlySet<string> = Object.freeze(
     'pair-capability-assess-testing',
     'pair-capability-map-contexts',
     'pair-capability-map-subdomains',
+    'pair-process-plan-tasks',
+    'pair-process-refine-story',
   ]),
 )
 

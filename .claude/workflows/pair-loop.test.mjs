@@ -848,6 +848,8 @@ test('APPROVAL_DECLARING_SKILLS: exactly the eleven members ADR-021 converted', 
     'pair-capability-assess-testing',
     'pair-capability-map-contexts',
     'pair-capability-map-subdomains',
+    'pair-process-plan-tasks',
+    'pair-process-refine-story',
   ])
 })
 
