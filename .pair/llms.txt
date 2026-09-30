@@ -47,6 +47,7 @@
 - [ADR-025: The unit a process profile configures is the STEP, never one of its representations](.pair/adoption/tech/adr/adr-025-process-profile-unit-is-the-step.md)
 - [ADR-026: PM/code-host adapter interface for the delivery-cycle scripts](.pair/adoption/tech/adr/adr-026-pm-code-host-adapter-interface.md)
 - [ADR-027: Autonomy model — selection, target and two gates, resolved by one function](.pair/adoption/tech/adr/adr-027-autonomy-model-selection-gates.md)
+- [ADR-027: Autonomous prepare is a maintainer-chosen exception to R3.11](.pair/adoption/tech/adr/adr-027-autonomous-prepare-r3-11-exception.md)
 - [Architecture](.pair/adoption/tech/architecture.md)
 - [Automation Policy — this project's delta](.pair/adoption/tech/automation.md)
 - [Bounded Context Catalog (Grouped)](.pair/adoption/tech/boundedcontext/README.md)
