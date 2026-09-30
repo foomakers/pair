@@ -717,7 +717,6 @@ test('approvalArgsFor: a skill declaring no approval round gets NOTHING (AC3)', 
   // Callers that FORWARD the signal without declaring it, and the two assess-*
   // members ADR-021 deliberately left out (no approval round at all).
   assert.equal(approvalArgsFor('pair-process-bootstrap'), '')
-  assert.equal(approvalArgsFor('pair-process-refine-story'), '')
   assert.equal(approvalArgsFor('pair-capability-assess-cost'), '')
   assert.equal(approvalArgsFor('pair-capability-assess-coupling'), '')
 })

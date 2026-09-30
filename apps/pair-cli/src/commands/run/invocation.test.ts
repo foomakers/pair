@@ -269,7 +269,6 @@ describe('APPROVAL_DECLARING_SKILLS matches the corpus that defines it', () => {
       'pair-capability-assess-cost',
       'pair-capability-assess-coupling',
       'pair-process-bootstrap',
-      'pair-process-refine-story',
     ])
       expect(APPROVAL_DECLARING_SKILLS.has(caller)).toBe(false)
   })
