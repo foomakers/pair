@@ -33,7 +33,15 @@ const CONSUMERS: readonly Consumer[] = [
   {
     name: 'pair-cli run (metadata)',
     file: join(REPO_ROOT, 'apps/pair-cli/src/commands/run/metadata.ts'),
-    names: ['--filter <tag>', '--assignee <login|@me>', '--status <macrostates>', '--until <ready|pr|merged>', '--prepare <gate>', '--merge <gate>', '--root <id>'],
+    names: [
+      '--filter <tag>',
+      '--assignee <login|@me>',
+      '--status <macrostates>',
+      '--until <ready|pr|merged>',
+      '--prepare <gate>',
+      '--merge <gate>',
+      '--root <id>',
+    ],
   },
   {
     name: 'KB automation-policy guideline',
@@ -58,7 +66,9 @@ describe('US-521 T-9: one vocabulary across the autonomy consumers', () => {
 
   it('every consumer states the SAME precedence sentence, owned by the shared script', async () => {
     const { PRECEDENCE_SENTENCE } = await script()
-    expect(PRECEDENCE_SENTENCE).toMatch(/argument > adoption .* > KB default .* printed with its source/)
+    expect(PRECEDENCE_SENTENCE).toMatch(
+      /argument > adoption .* > KB default .* printed with its source/,
+    )
     for (const { name, file } of CONSUMERS) expect(read(file), name).toContain(PRECEDENCE_SENTENCE)
   })
 
@@ -68,7 +78,10 @@ describe('US-521 T-9: one vocabulary across the autonomy consumers', () => {
   })
 
   it('the mirror of each consumer carries the same names (source and installed copy agree)', () => {
-    for (const rel of ['.claude/skills/pair-next/SKILL.md', '.claude/skills/pair-workflow-cycle/SKILL.md']) {
+    for (const rel of [
+      '.claude/skills/pair-next/SKILL.md',
+      '.claude/skills/pair-workflow-cycle/SKILL.md',
+    ]) {
       const text = read(join(REPO_ROOT, rel))
       expect(text, rel).toContain('Precedence: argument > adoption')
     }
@@ -96,7 +109,9 @@ describe('US-521 T-3: the KB examples are parsed by the shared script', () => {
     expect(doc).toContain('| `## Eligibility` `<label>` | `filter: <label>` |')
     expect(doc).toContain('| `## Auto-Advance` `(none)` | `merge: always` |')
     expect(doc).toContain('`merge: when; lacks: <tier>`')
-    const t = parse('## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n') as unknown as {
+    const t = parse(
+      '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n',
+    ) as unknown as {
       translated: Record<string, { value: unknown }>
     }
     expect(t.translated['filter']?.value).toEqual(['risk:green'])

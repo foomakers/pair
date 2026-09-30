@@ -64,7 +64,11 @@ export interface DriveCycleInput {
 export interface AutonomyPolicyShape {
   readonly until: string
   readonly prepare: unknown
-  readonly merge: { readonly mode: string; readonly has: readonly string[]; readonly lacks: readonly string[] }
+  readonly merge: {
+    readonly mode: string
+    readonly has: readonly string[]
+    readonly lacks: readonly string[]
+  }
   readonly legacyTiers?: readonly string[]
 }
 
