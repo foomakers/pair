@@ -260,6 +260,8 @@ describe('APPROVAL_DECLARING_SKILLS matches the corpus that defines it', () => {
       'pair-capability-assess-testing',
       'pair-capability-map-contexts',
       'pair-capability-map-subdomains',
+      'pair-process-plan-tasks',
+      'pair-process-refine-story',
     ])
     // `assess-cost`/`assess-coupling` have no approval round; `bootstrap` PASSES the signal to the
     // family rather than declaring it. All three would be invented arguments (ADR-021 Trade-offs).
