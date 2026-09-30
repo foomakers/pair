@@ -13,6 +13,13 @@ import {
   type CycleScriptsLocation,
 } from './cycle-scripts'
 import { createDefaultCycleDriver, mainCheckout } from './cycle-wiring'
+import {
+  autonomyArgumentsOf,
+  describeAutonomy,
+  resolveAutonomyPolicy,
+  spawnAutonomyResolver,
+} from './autonomy-policy'
+import type { AutonomyResolution } from './cycle-scripts'
 import { resolveBlockingSeverities, describeMaxDispatches } from './blocking-severities'
 import { ENGINE_IDS, type EngineId } from './engines'
 import {
@@ -31,6 +38,15 @@ import {
   type RunContext,
   type RunHandlerDependencies,
 } from './run-context'
+
+/** `cwd` is often a test double with no git repository behind it: the policy read falls back to `cwd` itself. */
+function mainCheckoutOrCwd(cwd: string): string {
+  try {
+    return mainCheckout(cwd)
+  } catch {
+    return cwd
+  }
+}
 
 /**
  * The delivery-cycle entry of `pair-cli run --card` (US-487 AC1/AC10/AC11/AC12): a Ready card no
@@ -122,6 +138,7 @@ function reportCycleEntry(input: {
   runDir: string
   shown: ShownDefaults
   profile: ResolvedWorkflowProfile | undefined
+  autonomy: AutonomyResolution | undefined
 }): void {
   console.log(chalk.bold('pair-cli run'))
   console.log(`  ${describeEngineResolution(input.engine)}`)
@@ -140,6 +157,7 @@ function reportCycleEntry(input: {
     `  Rounds bound: ${input.dispatch.rounds ?? '(policy default: maxFixRounds)'} — rounds narrows, never widens it`,
   )
   console.log(`  Dispatch ceiling: ${input.shown.maxDispatchesDisplay}`)
+  if (input.autonomy !== undefined) for (const line of describeAutonomy(input.autonomy)) console.log(`  ${line}`)
 }
 
 /** The executable this run will actually spawn: config, then PATH, then the repo's own bin. */
@@ -350,6 +368,14 @@ export function prepareCycleCoordinator(
     agentsDir: locateAgentDefinitions(context.config, cwd),
   }
   const setup = resolveProfileSetup(input, deps, location, engineDef)
+  // US-521: the ONE effective-policy resolution, by the shared script — a malformed policy HALTs here,
+  // before anything is printed as running or spawned.
+  const autonomy = resolveAutonomyPolicy(deps.resolveAutonomy ?? spawnAutonomyResolver, {
+    location,
+    main: mainCheckoutOrCwd(cwd),
+    cwd,
+    args: autonomyArgumentsOf(config),
+  })
   const { driveCycle, shown } = driverFor(input, deps, { engine, engineDef, location, ...setup })
 
   const dispatch = config.dispatch!
@@ -361,6 +387,7 @@ export function prepareCycleCoordinator(
     runDir: `.pair/working/runs/${dispatch.runId}/${card}`,
     shown,
     profile: setup.profile,
+    autonomy,
   })
 
   return async () => {
@@ -369,13 +396,18 @@ export function prepareCycleCoordinator(
       card,
       ...(dispatch.pr !== undefined && { pr: dispatch.pr }),
       ...(dispatch.rounds !== undefined && { rounds: dispatch.rounds }),
+      // Only an ACTIVE policy (an argument or `## Autonomy` declared a target/merge gate) changes behavior.
+      ...(autonomy?.active === true && { autonomy: { policy: autonomy.policy } }),
     })
 
     console.log(`  Cycle status: ${outcome.status} (${outcome.stagesRun} stage(s) dispatched)`)
     reportCycleReason(outcome.next)
     const parkKind = (outcome.merge as { parkKind?: unknown } | undefined)?.parkKind
     const awaitingHuman = outcome.status === 'merge-parked' && parkKind === 'awaiting-human'
-    return outcome.status === 'ready-for-merge' || outcome.status === 'merged' || awaitingHuman
+    return outcome.status === 'ready-for-merge' ||
+      outcome.status === 'target-ready' ||
+      outcome.status === 'merged' ||
+      awaitingHuman
       ? 0
       : 1
   }

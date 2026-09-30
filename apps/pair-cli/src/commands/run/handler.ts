@@ -11,7 +11,7 @@ import {
 } from './resolve-skill'
 import { createPerimeter, describePerimeter } from './perimeter'
 import { describeMergePosture, describeParallelism } from './automation-policy'
-import { describeApprovalPosture, filterDeliveryFor } from './invocation'
+import { describeApprovalPosture, filterDeliveryFor, selectionDeliveredBy } from './invocation'
 import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
@@ -89,6 +89,9 @@ function resolveRun(
   const perimeter = createPerimeter({
     root: scopeRoot(config, context.dispatch),
     filter: config.scope.filter,
+    assignee: config.scope.assignee,
+    status: config.scope.status,
+    selectionDelivered: selectionDeliveredBy(invocation),
     eligibility: policy.eligibility,
     cwd,
     cwdDeclared: config.cwd !== undefined,

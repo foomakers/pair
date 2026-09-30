@@ -65,6 +65,8 @@ export interface CycleOutcome {
   readonly next?: CycleNext
   /** US-490: the `merge` stage's answer — `cycle-merge.mjs`'s own JSON (`merged`, `cascaded`, `reason`), relayed verbatim. */
   readonly merge?: unknown
+  /** US-521: the escalation comment's own answer (`{ posted, error? }`), relayed verbatim. */
+  readonly escalation?: unknown
 }
 
 export interface CyclePolicy {
@@ -107,6 +109,11 @@ export interface RunCycleInput {
    * check`, then `run`. Absent ⇒ `merge` is as terminal as any step this loop cannot dispatch.
    */
   readonly mergeStage?: (next: CycleNext, answer: CycleResolveAnswer) => Promise<CycleMergeOutcome>
+  /**
+   * US-521: posts the ONE idempotent escalation comment for an `escalated` resolve (`cycle-merge.mjs
+   * escalate`). A failed post never changes the outcome — the status stays `escalated`.
+   */
+  readonly escalate?: (next: CycleNext) => Promise<unknown>
   /** `--rounds` bound: a positive integer, `'max'` (unbounded) or omitted (policy default decides). */
   readonly rounds?: number | 'max'
   readonly onStage?: (record: CycleStageRecord) => void
@@ -207,7 +214,13 @@ function roundsBoundReached(rounds: RunCycleInput['rounds'], next: CycleNext): b
 /** A terminal `next` (not one of the dispatchable steps), as the outcome it reports. */
 function terminalOutcome(next: CycleNext, stagesRun: number): CycleOutcome {
   return {
-    status: next.step === 'done' ? 'ready-for-merge' : String(next.reason ?? next.step),
+    // US-521: `done` with a `target` is an `until: ready` stop, not a review-approved PR.
+    status:
+      next.step === 'done'
+        ? next['target'] === 'ready'
+          ? 'target-ready'
+          : 'ready-for-merge'
+        : String(next.reason ?? next.step),
     stagesRun,
     next,
   }
@@ -277,6 +290,10 @@ async function terminalStep(
   answer: CycleResolveAnswer,
 ): Promise<CycleOutcome> {
   const { mergeStage, hooks, onNotice } = input
+  if (next.step === 'blocked' && next.reason === 'escalated' && input.escalate !== undefined) {
+    const escalation = await input.escalate(next)
+    return { ...terminalOutcome(next, state.stagesRun), escalation }
+  }
   if (next.step !== 'merge' || mergeStage === undefined)
     return terminalOutcome(next, state.stagesRun)
   // US-489 x US-490: `merge` is a stage like the others — `pre-merge` (blocking) runs in the story
@@ -432,6 +449,7 @@ const NOT_TERMINAL = new Set(['rounds-bound-reached', 'incompatible', 'invalid',
 const isHaltOutcome = (o: CycleOutcome): boolean =>
   o.status.startsWith('failed-') ||
   o.status === 'escalate' ||
+  o.status === 'escalated' ||
   o.status === 'merged-closure-unfinished' ||
   (o.status === 'merge-parked' &&
     (o.merge as { parkKind?: unknown } | undefined)?.parkKind !== 'awaiting-human')

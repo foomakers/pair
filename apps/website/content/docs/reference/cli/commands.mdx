@@ -748,7 +748,12 @@ pair-cli run [options]
 | `--skill <name>`                | Skill to invoke. Explicit, and **never** falls back — a missing skill is an error                     |
 | `--prompt <text>`               | Run this text instead of a skill invocation (mutually exclusive with `--skill`)                       |
 | `--root <id>`                   | Scope root, passed on under the resolved skill's own name for it (`--root` for `pair-next`/`pair-loop`, `--story` for the `pair-process-*` workflows). Not combinable with `--card` — a dispatched card **is** the scope |
-| `--filter <tag>`                | Label filter, for a skill that declares one (`pair-next`). **Refused** for `pair-loop` — see below     |
+| `--filter <tag>`                | Label filter — one label or a comma-separated any-of list (`risk:green,risk:yellow`) — for a skill that declares one (`pair-next`). **Refused** for `pair-loop` — see below     |
+| `--assignee <login\|@me>`       | Keep issues assigned to this user (`@me` = the authenticated code-host user), for a skill that declares it (`pair-next`). **Refused** for `pair-loop` until #524 |
+| `--status <macrostates>`        | Comma-separated canonical macrostates (e.g. `Draft,Ready`), for a skill that declares it (`pair-next`). **Refused** for `pair-loop` until #524 |
+| `--until <ready\|pr\|merged>`   | With `--card`: how far the delivery cycle goes — `ready` (stop before implement), `pr` (default), `merged` (enter the merge stage; the only value that evaluates the merge gate). Argument > `## Autonomy` > default, every effective value printed with its source |
+| `--prepare <gate>`              | With `--card`: the prepare gate `<always\|never\|when>[; has: …][; lacks: …]`. Parsed and validated; execution lands in #523 (treated as `always`) |
+| `--merge <gate>`                | With `--card`: the merge gate, same grammar. `always` (default) parks `awaiting-human`; `never`/`when` merge under `--until merged` unless a `has`/`lacks` condition escalates (`escalated`, exit 1, `on-halt`, one comment on the card). #490's signal checks stay mandatory |
 | `--card <id>`                   | Work this card. With a mapped tag it dispatches that workflow; with no mapping it drives the **whole delivery cycle** — see below. Not combinable with `--skill`/`--prompt`/`--root` |
 | `--card-tags <list>`            | Comma-separated labels the trigger observed on `--card`. Empty, absent or unmapped ⇒ the card's own readiness decides |
 | `--pr <n>`                      | Enter the cycle straight at fix-and-review on an existing PR: the first stage is `verify`, no `prepare` before it. Requires `--card` |

@@ -53,10 +53,12 @@ describe('buildSkillArgs', () => {
 
     expect([...new Set(declared)].sort()).toEqual([
       '--approval',
+      '--assignee',
       '--filter',
       '--iteration',
       '--predicate',
       '--root',
+      '--status',
       '--story',
     ])
   })

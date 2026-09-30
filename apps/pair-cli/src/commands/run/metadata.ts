@@ -13,6 +13,8 @@ export const runCommandMetadata = {
     'pair-cli run --card 487 --pr 42                        # enters the cycle at {verify, first, r0} — never prepare',
     'pair-cli run --card 487 --rounds 1                     # bounds remediation to one round, never widened',
     'pair-cli run --root 66 --parallel 3 --autonomous       # fan-out: up to 3 `run --card` processes at once',
+    "pair-cli run --card 521 --until merged --merge 'when; has: cost:red'   # merge unless escalated; prints every effective value and its source",
+    'pair-cli run --skill pair-next --filter risk:green,risk:yellow --assignee @me --status Draft,Ready --max-iterations 1',
   ],
   options: [
     { flags: '--engine <id>', description: 'Engine to run: pi | opencode | claude | codex' },
@@ -25,7 +27,32 @@ export const runCommandMetadata = {
     {
       flags: '--filter <tag>',
       description:
-        'Label filter, for a skill that declares one (pair-next). REFUSED for pair-loop, which reads `## Eligibility` from tech/automation.md itself',
+        'Label filter, for a skill that declares one (pair-next): one label or a comma-separated any-of list (risk:green,risk:yellow). REFUSED for pair-loop, which reads `## Eligibility` from tech/automation.md itself',
+    },
+    {
+      flags: '--assignee <login|@me>',
+      description:
+        'US-521: keep issues assigned to this user (@me = the authenticated code-host user), for a skill that declares it (pair-next); refused for pair-loop until #524',
+    },
+    {
+      flags: '--status <macrostates>',
+      description:
+        'US-521: comma-separated canonical macrostates (e.g. Draft,Ready), for a skill that declares it (pair-next); refused for pair-loop until #524',
+    },
+    {
+      flags: '--until <ready|pr|merged>',
+      description:
+        "US-521: how far the card's delivery cycle goes — ready (stop before implement), pr (default: the review-approved PR), merged (enter the merge stage; the only value that evaluates the merge gate). Requires --card. Precedence: argument > adoption (`## Autonomy`, then translated legacy sections) > KB default — every effective value is printed with its source.",
+    },
+    {
+      flags: '--prepare <gate>',
+      description:
+        'US-521: the prepare gate `<always|never|when>[; has: <labels>][; lacks: <labels>]` — parsed and validated, execution lands in #523 (treated as always). Requires --card',
+    },
+    {
+      flags: '--merge <gate>',
+      description:
+        "US-521: the merge gate, same grammar: always parks awaiting-human (default), never/when enter the merge stage unless a has/lacks escalation fires (status escalated, exit 1, on-halt). #490's signal checks stay mandatory. Requires --card",
     },
     {
       flags: '--card <id>',

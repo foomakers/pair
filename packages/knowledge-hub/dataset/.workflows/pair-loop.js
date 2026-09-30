@@ -424,7 +424,20 @@ export function renderContinueToken({ root, predicateText, iteration }) {
 // ── Args validation (review M4) — every value below reaches an agent prompt
 // that runs `gh`, so each is validated by TYPE and CONTENT before any card is
 // touched, exactly like the sibling workflows in this directory.
+const AUTONOMY_ARG_KEYS = ['until', 'prepare', 'merge', 'assignee', 'status', 'filter']
+// US-521 — the autonomy model is NOT honoured here until #524 (batch = cycle): a declared `## Autonomy` or a new
+// argument is REFUSED with the pointer, never silently ignored. The legacy `## Auto-Advance` path is unchanged.
+export function autonomyRefusal(args, policyText) {
+  const passed = AUTONOMY_ARG_KEYS.filter(k => args && typeof args === 'object' && Object.hasOwn(args, k) && args[k] !== undefined && args[k] !== null)
+  if (passed.length) return `autonomy-not-supported-until-#524: pair-loop does not honour the autonomy model yet (args ${passed.map(k => `\`${k}\``).join(', ')}) — it merges only through its legacy \`## Auto-Advance\` path. Batch = cycle lands in #524.`
+  if (typeof policyText === 'string' && sectionBody(policyText, 'Autonomy') !== null)
+    return 'autonomy-not-supported-until-#524: `## Autonomy` is declared in tech/automation.md, but pair-loop does not honour it yet — it merges only through its legacy `## Auto-Advance` path, and a declared gate is never silently ignored. Batch = cycle lands in #524.'
+  return null
+}
+
 export function validateArgs(args) {
+  const refusal = autonomyRefusal(args, args?.policyText)
+  if (refusal) HALT(refusal)
   if (args?.root !== undefined && args?.root !== null) {
     if (!isSafeId(args.root)) HALT(`args.root \`${args.root}\` is not a safe issue id.`)
   }

@@ -16,6 +16,7 @@ import {
   createCycleScriptsBridge,
   createCycleHooksBridge,
   cycleHooksPolicyPath,
+  type AutonomyResolution,
   type CardReadiness,
   type CycleScriptsLocation,
 } from './cycle-scripts'
@@ -104,6 +105,21 @@ export function readCardTier(card: string, cwd: string): string | undefined {
       .map(label => label.name ?? '')
       .filter(name => name.startsWith('risk:'))
     return tiers.length === 1 && LABEL_SHAPE_RE.test(tiers[0]!) ? tiers[0] : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * US-521: the card's labels RIGHT NOW (every one, not just `risk:*`) — what a `when` merge gate reads.
+ * `undefined` when the tracker cannot say: `decide` then escalates (fail-safe), never proceeds on a guess.
+ */
+export function readCardLabels(card: string, cwd: string): readonly string[] | undefined {
+  try {
+    const parsed = JSON.parse(ghIssueView(card, cwd, 'labels')) as {
+      labels?: ReadonlyArray<{ name?: string }>
+    }
+    return (parsed.labels ?? []).map(label => label.name ?? '')
   } catch {
     return undefined
   }
@@ -307,6 +323,11 @@ export interface CycleDriverRequest {
   readonly card: string
   readonly pr?: number
   readonly rounds?: number | 'max'
+  /**
+   * US-521: the ACTIVE autonomy policy, exactly as `autonomy-policy.mjs resolve` produced it (this driver
+   * re-derives nothing). Absent ⇒ today's behavior: the legacy `## Auto-Advance` tier path.
+   */
+  readonly autonomy?: Pick<AutonomyResolution, 'policy'>
 }
 
 /** The run's own coordinates, resolved once per invocation and shared by every collaborator below. */
@@ -345,7 +366,9 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
     acHash: bridge.acHash(input.card, runDir),
     // US-490: what lets `resolve` OFFER `merge` — read once, like the scripts' own inputs.
     tier: readCardTier(input.card, ctx.cwd),
-    autoAdvanceTiers: readAutoAdvanceTiers(ctx.fs, main),
+    // An active autonomy policy replaces the tier list; otherwise the legacy read is unchanged (default off).
+    autoAdvanceTiers: input.autonomy === undefined ? readAutoAdvanceTiers(ctx.fs, main) : [],
+    autonomy: input.autonomy?.policy,
   }
 }
 
@@ -370,6 +393,11 @@ function remoteHead(main: string, branch: string): string | undefined {
   }
 }
 
+const liveLabels = (ctx: CycleDriverContext, input: CycleDriverRequest) => {
+  const labels = readCardLabels(input.card, ctx.cwd)
+  return labels === undefined ? {} : { labels }
+}
+
 const resolveFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => async () => {
     const head = remoteHead(co.main, co.branch)
@@ -387,7 +415,14 @@ const resolveFor =
         blockingFloor: blocking.blockingFloor,
         ...(blocking.maxDispatches !== undefined && { maxDispatches: blocking.maxDispatches }),
         ...(co.autoAdvanceTiers.length > 0 && { autoAdvance: { tiers: co.autoAdvanceTiers } }),
+        ...(co.autonomy !== undefined && {
+          autonomy: { until: co.autonomy.until, merge: co.autonomy.merge },
+        }),
       },
+      // Labels are re-read live at EVERY boundary, and only when a `when` gate can read them.
+      ...(co.autonomy?.until === 'merged' && co.autonomy.merge.mode === 'when'
+        ? liveLabels(ctx, input)
+        : {}),
       ...(co.tier !== undefined && { tier: co.tier }),
       entry: input.pr === undefined ? 'fresh' : 'pr',
       story: input.card,
@@ -401,6 +436,28 @@ const resolveFor =
       ...(ctx.profile !== undefined && { contextPolicy: ctx.profile.contextPolicy }),
     })
   }
+
+/** `cycle-merge.mjs escalate`: the ONE marker-keyed card comment; a failed post is reported, never thrown. */
+const escalateFor = (input: CycleDriverRequest, co: Coordinates) => async (next: CycleNext) => {
+  const conditions = Array.isArray(next['conditions']) ? (next['conditions'] as string[]) : []
+  const stage = String(next['stage'] ?? 'unknown')
+  console.log(`  Escalated at stage ${stage}: ${conditions.join(', ')}`)
+  try {
+    const out = co.bridge.escalate({ dir: co.runDir, story: input.card, stage, conditions }) as {
+      comment?: { posted?: boolean; error?: string }
+    }
+    console.log(
+      out.comment?.posted === true
+        ? '  Escalation comment posted on the card (one marker-keyed comment, edited in place)'
+        : `  Escalation comment NOT posted: ${out.comment?.error ?? 'unknown error'}`,
+    )
+    return out
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    console.log(`  Escalation comment NOT posted: ${reason}`)
+    return { comment: { posted: false, error: reason } }
+  }
+}
 
 const worktreeFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => async () =>
@@ -475,7 +532,8 @@ interface MergePins {
   readonly pr: number
   readonly reviewedHead: string
   readonly cardTier: string
-  readonly autoAdvance: readonly string[]
+  readonly autoAdvance?: readonly string[]
+  readonly mergeGate?: AutonomyResolution['policy']['merge']
 }
 
 /**
@@ -535,7 +593,9 @@ function mergePinsFor(
     pr,
     reviewedHead,
     cardTier: co.tier,
-    autoAdvance: co.autoAdvanceTiers,
+    ...(co.autonomy !== undefined
+      ? { mergeGate: co.autonomy.merge }
+      : { autoAdvance: co.autoAdvanceTiers }),
   }
 }
 
@@ -565,8 +625,9 @@ async function runTierGate(
   return { green: result === GATE_PASS, result }
 }
 
-function mergeStatus(run: { merged?: boolean; cascaded?: boolean }): string {
-  if (run.merged !== true) return 'merge-parked'
+function mergeStatus(run: { merged?: boolean; cascaded?: boolean; parkKind?: string }): string {
+  // US-521: an escalation is its own terminal status — the script's park kind, relayed, never re-derived.
+  if (run.merged !== true) return run.parkKind === 'escalated' ? 'escalated' : 'merge-parked'
   return run.cascaded === true ? 'merged' : 'merged-closure-unfinished'
 }
 
@@ -582,7 +643,7 @@ const mergeFor =
     const check = co.bridge.mergeCheck(pins)
     if (check.mergeAllowed !== true) {
       console.log(`  Merge: parked — ${check.reason ?? 'the merge check did not allow it'}`)
-      return { status: 'merge-parked', stagesRun: 0, merge: check }
+      return { status: mergeStatus(check), stagesRun: 0, merge: check }
     }
     const gate = await runTierGate(ctx, co, pins)
     const run = co.bridge.mergeRun({
@@ -682,6 +743,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       packet: packetFor(ctx, input, co) as never,
       spawnStage: spawnStageFor(ctx, co),
       mergeStage: mergeFor(ctx, input, co),
+      escalate: escalateFor(input, co),
       policy,
       ...(input.rounds !== undefined && { rounds: input.rounds }),
       onNotice: note => console.log(`  ${note}`),

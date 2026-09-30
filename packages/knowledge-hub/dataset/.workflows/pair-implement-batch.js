@@ -164,6 +164,26 @@ export const meta = {
 // must fail, not report success. An EXPLICIT empty list stays a legal no-op: a caller that
 // computed "nothing to do" is not making a mistake.
 
+// US-521 — the autonomy model (`## Autonomy`, `until`/`prepare`/`merge`, `assignee`/`status`, a list `filter`) is NOT
+// honoured here until #524 (batch = cycle). A declared gate is never silently ignored: it is REFUSED, with the pointer.
+const AUTONOMY_ARG_KEYS = ['until', 'prepare', 'merge', 'assignee', 'status', 'filter']
+const AUTONOMY_REFUSAL = 'autonomy-not-supported-until-#524'
+export function autonomyRefusal(a) {
+  const passed = AUTONOMY_ARG_KEYS.filter(k => a && typeof a === 'object' && Object.hasOwn(a, k) && a[k] !== undefined && a[k] !== null)
+  if (passed.length)
+    return `${AUTONOMY_REFUSAL}: implement-batch does not honour the autonomy model yet (args ${passed.map(k => `\`${k}\``).join(', ')}) — it never merges, and a declared gate is never silently ignored. Batch = cycle lands in #524.`
+  const text = a && typeof a === 'object' ? a.policyText : undefined
+  if (typeof text === 'string') {
+    let fenced = false
+    for (const line of text.split('\n')) {
+      if (line.trim().startsWith('```')) fenced = !fenced
+      else if (!fenced && line.trim() === '## Autonomy')
+        return `${AUTONOMY_REFUSAL}: \`## Autonomy\` is declared in tech/automation.md, but implement-batch does not honour it yet — it never merges, and a declared gate is never silently ignored. Batch = cycle lands in #524.`
+    }
+  }
+  return null
+}
+
 // Every caller-facing object validates its key SET, not just the keys it recognises.
 function rejectUnknownKeys(obj, allowed, where) {
   for (const k of Object.keys(obj ?? {}))
@@ -411,7 +431,9 @@ function parseBatchArgs(raw) {
   })
   // Return the NORMALIZED container, not just the list. Every option must be read from the
   // parsed object, once.
-  rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'models', 'effort', 'efforts', 'pipeline', 'maxParallelism', 'runId', 'entryCapsules'], 'args')
+  const refusal = autonomyRefusal(a)
+  if (refusal) throw new Error(`implement-batch: ${refusal}`)
+  rejectUnknownKeys(a, ['cards', 'stories', 'policyText', 'severityFloor', 'model', 'models', 'effort', 'efforts', 'pipeline', 'maxParallelism', 'runId', 'entryCapsules'], 'args')
   // Reject the TYPE before anything coerces it, the same rule `constrain` applies to card
   // fields. Checked HERE, at parse time, not where each is consumed: `severityFloor` is only
   // rankable after the contract dispatch, and a wrong TYPE should not wait on an agent to be

@@ -7,7 +7,22 @@ import { idSafetyFailure, isSafeId, isSafePromptText, promptSafetyFailure } from
  */
 export interface RunScopeOptions {
   root?: string
+  /** One label, or a comma-separated any-of list (US-521); validated as a list by the shared script. */
   filter?: string
+  /** US-521: `@me` or a login — `pair-next --assignee`. */
+  assignee?: string
+  /** US-521: comma-separated canonical macrostates — `pair-next --status`. */
+  status?: string
+}
+
+/**
+ * US-521: the autonomy arguments of the delivery cycle (`run --card`), RAW — the grammar, the precedence and
+ * the decision belong to `autonomy-policy.mjs`, which this CLI only spawns (pair-cli owns no cycle rule).
+ */
+export interface RunAutonomyArguments {
+  until?: string
+  prepare?: string
+  merge?: string
 }
 
 /**
@@ -60,6 +75,8 @@ export interface RunCommandConfig {
   engine?: EngineId
   invocation: RunInvocationRequest
   scope: RunScopeOptions
+  /** US-521: `--until` / `--prepare` / `--merge` — present only when passed (with `--card`). */
+  autonomy?: RunAutonomyArguments
   /** Present only when `--cwd` was passed; otherwise the process working directory. */
   cwd?: string
   /** Present only when `--max-iterations` was passed; the policy supplies the cap otherwise. */
@@ -92,6 +109,11 @@ interface ParseRunOptions {
   prompt?: string
   root?: string
   filter?: string
+  assignee?: string
+  status?: string
+  until?: string
+  prepare?: string
+  merge?: string
   cwd?: string
   maxIterations?: string | number
   autonomous?: boolean
@@ -343,6 +365,8 @@ const FLAGS_CONFLICTING_WITH_PARALLEL = [
   ['skill', '--skill'],
   ['prompt', '--prompt'],
   ['filter', '--filter'],
+  ['assignee', '--assignee'],
+  ['status', '--status'],
   ['maxIterations', '--max-iterations'],
 ] as const
 
@@ -390,7 +414,34 @@ function resolveProfileSelection(options: ParseRunOptions): {
 function resolveScope(options: ParseRunOptions): RunScopeOptions {
   const root = identifierText(options.root, '--root')
   const filter = promptSafeText(options.filter, '--filter')
-  return { ...(root && { root }), ...(filter && { filter }) }
+  const assignee = promptSafeText(options.assignee, '--assignee')
+  const status = promptSafeText(options.status, '--status')
+  return {
+    ...(root && { root }),
+    ...(filter && { filter }),
+    ...(assignee && { assignee }),
+    ...(status && { status }),
+  }
+}
+
+/**
+ * US-521: `--until`, `--prepare`, `--merge` drive ONE card's delivery cycle, so they need `--card`. The
+ * loop flavours (`--root`, `--watch`) honour them in #522/#524 — refused here, never silently ignored.
+ * Content is only safety-checked (prompt/shell); the grammar is the shared script's.
+ */
+function resolveAutonomyArguments(options: ParseRunOptions): RunAutonomyArguments | undefined {
+  const until = promptSafeText(options.until, '--until')
+  const prepare = promptSafeText(options.prepare, '--prepare')
+  const merge = promptSafeText(options.merge, '--merge')
+  if (until === undefined && prepare === undefined && merge === undefined) return undefined
+  if (options.card === undefined) {
+    const flag = until !== undefined ? '--until' : prepare !== undefined ? '--prepare' : '--merge'
+    throw new Error(
+      `${flag} sets how far ONE card's delivery cycle goes and is only meaningful with --card ` +
+        '(the loop and batch realizations honour it in #522/#524 — autonomy-not-supported-until-#524)',
+    )
+  }
+  return { ...(until && { until }), ...(prepare && { prepare }), ...(merge && { merge }) }
 }
 
 /**
@@ -411,6 +462,7 @@ export function parseRunCommand(options: ParseRunOptions, args: string[] = []): 
   const parallel = resolveParallel(options)
   const dispatch = resolveDispatch(options)
   const profileSelection = resolveProfileSelection(options)
+  const autonomy = resolveAutonomyArguments(options)
 
   return {
     command: 'run',
@@ -419,6 +471,7 @@ export function parseRunCommand(options: ParseRunOptions, args: string[] = []): 
     ...profileSelection,
     invocation: resolveInvocation(options),
     scope: resolveScope(options),
+    ...(autonomy && { autonomy }),
     ...(cwd && { cwd }),
     ...(options.maxIterations !== undefined && {
       maxIterations: parsePositiveInteger('--max-iterations', options.maxIterations),

@@ -48,6 +48,8 @@ function driveIteration(
     // decision belongs where the perimeter recorded it (round 1, finding 1).
     ...(resolved.perimeter.filterDelivery === 'argument' &&
       resolved.perimeter.filter !== undefined && { filter: resolved.perimeter.filter }),
+    ...(resolved.perimeter.assignee !== undefined && { assignee: resolved.perimeter.assignee }),
+    ...(resolved.perimeter.status !== undefined && { status: resolved.perimeter.status }),
     ...(resolved.policy.stopPredicate !== undefined && {
       predicate: resolved.policy.stopPredicate,
     }),

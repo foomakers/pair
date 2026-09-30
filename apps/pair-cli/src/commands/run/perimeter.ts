@@ -24,6 +24,9 @@ export interface Perimeter {
   readonly root?: string
   /** Label filter — from `--filter`, or borrowed from the policy's `## Eligibility`. */
   readonly filter?: string
+  /** US-521: `--assignee` / `--status`, delivered to a skill that declares them (`pair-next`). */
+  readonly assignee?: string
+  readonly status?: string
   /** The directory every iteration runs in. */
   readonly cwd: string
   /** Hard cap on iterations — the backstop for a stop condition that never becomes true. */
@@ -54,6 +57,10 @@ export interface PerimeterInput {
   root?: string | undefined
   /** `--filter`, if passed. */
   filter?: string | undefined
+  /** US-521: `--assignee` / `--status`, if passed, and whether the resolved invocation can carry them. */
+  assignee?: string | undefined
+  status?: string | undefined
+  selectionDelivered?: boolean | undefined
   /** The policy's `## Eligibility` label, if the adoption file declares one. */
   eligibility?: string | undefined
   /** The resolved working directory. */
@@ -102,7 +109,18 @@ const UNHONOURABLE_FILTER_MESSAGE =
  * perimeter line naming a label the run does not apply is worse than no line at all (round 1,
  * finding 1).
  */
+export const UNHONOURABLE_SELECTION_MESSAGE =
+  '--assignee/--status cannot be honoured by this invocation: only `pair-next` declares them. ' +
+  '`pair-loop` and the batch do not honour the autonomy model yet (autonomy-not-supported-until-#524; ' +
+  'the portable loop is #522) — drop them, or pass `--skill pair-next`.'
+
 export function createPerimeter(input: PerimeterInput): Perimeter {
+  if (
+    (input.assignee !== undefined || input.status !== undefined) &&
+    input.selectionDelivered !== true
+  ) {
+    throw new Error(UNHONOURABLE_SELECTION_MESSAGE)
+  }
   const filter = resolveFilter(input)
   assertScopeDeclared(input, filter.value)
 
@@ -111,6 +129,8 @@ export function createPerimeter(input: PerimeterInput): Perimeter {
   return {
     ...(input.root !== undefined && { root: input.root }),
     ...(filter.value !== undefined && { filter: filter.value }),
+    ...(input.assignee !== undefined && { assignee: input.assignee }),
+    ...(input.status !== undefined && { status: input.status }),
     ...(filter.source && { filterSource: filter.source }),
     ...(filter.delivery && { filterDelivery: filter.delivery }),
     cwd: input.cwd,
@@ -190,6 +210,8 @@ export function describePerimeter(perimeter: Perimeter): string {
   const scope = [
     perimeter.root !== undefined ? `root ${perimeter.root}` : undefined,
     perimeter.filter !== undefined ? label : undefined,
+    perimeter.assignee !== undefined ? `assignee ${perimeter.assignee}` : undefined,
+    perimeter.status !== undefined ? `status ${perimeter.status}` : undefined,
   ]
     .filter(Boolean)
     .join(', ')

@@ -1,3 +1,4 @@
+import type { AutonomyResolver } from './autonomy-policy'
 import { resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
@@ -55,6 +56,16 @@ export interface DriveCycleInput {
   readonly card: string
   readonly pr?: number
   readonly rounds?: number | 'max'
+  /** US-521: the ACTIVE autonomy policy as the shared script resolved it (absent ⇒ today's legacy path). */
+  readonly autonomy?: { readonly policy: AutonomyPolicyShape }
+}
+
+/** `autonomy-policy.mjs resolve`'s `policy` object, relayed. */
+export interface AutonomyPolicyShape {
+  readonly until: string
+  readonly prepare: unknown
+  readonly merge: { readonly mode: string; readonly has: readonly string[]; readonly lacks: readonly string[] }
+  readonly legacyTiers?: readonly string[]
 }
 
 export interface DriveCycleResult {
@@ -79,6 +90,8 @@ export interface RunHandlerDependencies {
   driveCycle?: CycleDriver
   /** US-488: resolves the run's workflow profile (default: the installed `workflow-profile.mjs`). */
   resolveWorkflowProfile?: (scriptsDir: string, request: ProfileRequest) => ResolvedWorkflowProfile
+  /** US-521: resolves the run's autonomy policy (default: the installed `autonomy-policy.mjs`). */
+  resolveAutonomy?: AutonomyResolver
   /** US-491: the `pair-next --root` selection (one engine process, shipped `selectRootCandidates`). */
   selectCandidates?: (input: SelectRootInput) => Promise<RootCandidate[]>
   /** US-491: one `pair-cli run --card` child process (shipped `spawnCardProcess`). */
