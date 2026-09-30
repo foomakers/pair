@@ -101,7 +101,9 @@ describe('refine-story — $approval + $prepare (ADR-027)', () => {
         expect(g.text).toMatch(/HALT/)
       }
       expect(p0).toMatch(/Compose `\/(?:pair-capability-)?grill` with `\$mode: sync`/)
-      expect(p0).toMatch(/`\$prepare` (?:is )?(?:absent|omitted)[^\n]*`always`|`always`[^\n]*(?:absent|omitted)/i)
+      expect(p0).toMatch(
+        /`\$prepare` (?:is )?(?:absent|omitted)[^\n]*`always`|`always`[^\n]*(?:absent|omitted)/i,
+      )
       expect(p0).toMatch(/no shared understanding[\s\S]{0,200}HALT|HALT[\s\S]{0,300}unaligned/i)
     })
 
@@ -117,7 +119,9 @@ describe('refine-story — $approval + $prepare (ADR-027)', () => {
     it(`${label} — the exception needs BOTH signals and does not compose grill`, () => {
       const p0 = section(skill, /Phase 0/)
       expect(p0).toMatch(/both[^\n]*`\$approval: auto`[^\n]*`\$prepare: never\|when`/i)
-      expect(p0).toMatch(/(?:not|never) compos\w*[^\n]*`\/(?:pair-capability-)?grill`|`\/(?:pair-capability-)?grill`[^\n]*(?:is )?not composed/i)
+      expect(p0).toMatch(
+        /(?:not|never) compos\w*[^\n]*`\/(?:pair-capability-)?grill`|`\/(?:pair-capability-)?grill`[^\n]*(?:is )?not composed/i,
+      )
       expect(p0).toMatch(/## Assumptions/)
     })
 
@@ -130,7 +134,9 @@ describe('refine-story — $approval + $prepare (ADR-027)', () => {
 
     it(`${label} — Step 5 holds back the Ready status write under $prepare never|when`, () => {
       const step5 = section(skill, /Step 5:/)
-      expect(step5).toMatch(/\$prepare: never\|when[\s\S]{0,300}(?:omit|withh|hold)[\s\S]{0,120}`\$status/i)
+      expect(step5).toMatch(
+        /\$prepare: never\|when[\s\S]{0,300}(?:omit|withh|hold)[\s\S]{0,120}`\$status/i,
+      )
       // default path unchanged
       expect(step5).toMatch(/`\$status: Ready` — \*\*pass it only when a board state maps/)
     })
