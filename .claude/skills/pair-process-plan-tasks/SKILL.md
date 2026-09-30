@@ -1,7 +1,7 @@
 ---
 name: pair-process-plan-tasks
 description: "Breaks a refined user story into implementation tasks — checklist, dependency graph, AC-coverage table — added to the story body; no separate task issues are created. Composes /pair-capability-write-issue."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -27,6 +27,7 @@ Executable form of the **`plan-tasks`** step, and a composer of `define-bounded-
 | Argument | Required | Description                                                                                              |
 | -------- | -------- | -------------------------------------------------------------------------------------------------------- |
 | `$story` | No       | Story identifier (e.g., `#42`). If omitted, selects the highest-priority Refined story from the backlog. |
+| `$approval` | No    | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing: the presented technical context, context-map delta and task list are accepted and reported; Step 0's selection needs `$story`). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Algorithm
 
@@ -38,6 +39,8 @@ Executable form of the **`plan-tasks`** step, and a composer of `define-bounded-
    - **Priority**: P0 > P1 > P2
    - **Sprint need**: stories required for upcoming sprint
    - **Dependency chain**: stories unblocking other work
+Step 0's selection question is asked only when `$story` is absent; an autonomous caller always passes `$story`, and under `$approval: auto` without it the skill returns to the caller.
+
 4. **Act**: Present recommendation and ask developer to confirm:
 
    > Recommend task breakdown for Story `#[ID]: [Title]` (Priority: [P0/P1/P2]).
@@ -65,15 +68,19 @@ Executable form of the **`plan-tasks`** step, and a composer of `define-bounded-
    - Read [architecture.md](../../../.pair/adoption/tech/architecture.md) for architectural patterns.
    - Read [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) for implementation choices.
    - Map story to [bounded contexts](../../../.pair/adoption/tech/boundedcontext).
-2. **Act**: Present technical context summary to developer for validation.
-3. **Verify**: Developer approves. Context established.
+2. **Act**: Present technical context summary to developer for validation. <!-- approval-round: kind=confirm; auto=accept -->
+3. **Verify**: Developer approves. Context established. <!-- approval-round: kind=confirm; auto=accept -->
+
+   Under `$approval: auto` items 2–3 are not asked: the summary is accepted and reported.
 
 ### Step 2.5: Context Mapping (scoped)
 
 1. **Check**: Is `/pair-capability-map-contexts` installed, and is `define-bounded-contexts` enabled by the project's process profile?
 2. **Skip**: If not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) → skip with a note and proceed to Step 3 without context mapping. A composed disabled step never prompts.
 3. **Act**: Compose `/pair-capability-map-contexts` with `$scope` set to the bounded contexts/services touched by this story (from Step 2's mapping) — not `all` — full-catalog remapping stays `/pair-process-bootstrap`-only.
-4. **Verify**: Bounded context catalog delta (if any) approved by developer. Task breakdown always proceeds to Step 3 regardless of the context-mapping outcome.
+4. **Verify**: Bounded context catalog delta (if any) approved by developer. Task breakdown always proceeds to Step 3 regardless of the context-mapping outcome. <!-- approval-round: kind=confirm; auto=accept -->
+
+   Under `$approval: auto` the delta is passed through to `/pair-capability-map-contexts` with `$approval: auto` and reported.
 
 ### Step 3: Task Identification
 
@@ -88,9 +95,11 @@ Executable form of the **`plan-tasks`** step, and a composer of `define-bounded-
    > Proposed [N] tasks for `#[ID]`:
    > [Numbered list with task title, type, bounded context, estimated hours]
    > AC coverage: [all ACs mapped]
-   > Approve or adjust?
+   > Approve or adjust? <!-- approval-round: kind=confirm; auto=accept -->
 
-4. **Verify**: Developer approves. Task list finalized.
+4. **Verify**: Developer approves. Task list finalized. <!-- approval-round: kind=confirm; auto=accept -->
+
+   Under `$approval: auto` items 3–4 are not asked: the task list is accepted and reported.
 
 ### Step 4: Task Definition
 
@@ -127,7 +136,7 @@ For each task (skipping tasks that already exist in the story body):
 
 ### Step 7: Already-Complete Update (optional path)
 
-Reached only when Step 1 detects all tasks are present with full AC coverage.
+Reached only when Step 1 detects all tasks are present with full AC coverage. Under `$approval: auto` a complete breakdown is confirmed and the skill exits — the update path is interactive-only.
 
 1. **Act**: Ask the developer what to update:
 
