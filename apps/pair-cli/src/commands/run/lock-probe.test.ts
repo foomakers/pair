@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mkdtempSync, rmSync, existsSync, writeFileSync, mkdirSync, readdirSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -100,6 +100,17 @@ describe('lock probes', () => {
         resource: 'a.ts',
         path,
       })
+    })
+  })
+
+  describe.each(['darwin', 'linux'] as const)('platform %s', platform => {
+    afterEach(() => vi.unstubAllGlobals())
+
+    it('builds the same lock path under an injected platform', () => {
+      vi.stubGlobal('process', Object.create(process, { platform: { value: platform } }))
+      const path = join(workingArea, LOCK_DIRECTORY, '217')
+      mkdirSync(path, { recursive: true })
+      expect(probeCardLock({ workingArea, card: '217' })).toEqual({ kind: 'held', path })
     })
   })
 })
