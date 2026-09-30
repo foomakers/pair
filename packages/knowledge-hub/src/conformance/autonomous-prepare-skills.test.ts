@@ -136,3 +136,41 @@ describe('refine-story — $approval + $prepare (ADR-027)', () => {
     })
   }
 })
+
+describe('plan-tasks — $approval + markers (ADR-027)', () => {
+  for (const [label, path] of COPIES('plan-tasks')) {
+    const skill = read(path)
+
+    it(`${label} — Arguments carry an $approval row pointing at the convention`, () => {
+      const row = argRow(skill, '$approval')
+      expect(row, '$approval row').toBeDefined()
+      expect(row).toMatch(/interactive/)
+      expect(row).toMatch(/approval-rounds\.md/)
+    })
+
+    it(`${label} — every round is marked and the guided half carries no auto-only text`, () => {
+      const rounds = governed(skill)
+      expect(rounds.length).toBeGreaterThan(0)
+      for (const r of rounds) {
+        expect(r.qualified, `line ${r.line} unmarked: ${r.text.slice(0, 80)}`).toBe(true)
+      }
+      expect(findGuidedDrift(skill)).toEqual([])
+    })
+
+    it(`${label} — Steps 2, 2.5 and 3 rounds are confirm/accept`, () => {
+      for (const step of [/Step 2:/, /Step 2\.5/, /Step 3:/]) {
+        const rounds = findApprovalRounds(section(skill, step))
+        expect(rounds.length, `${step} has no detected round`).toBeGreaterThan(0)
+        for (const r of rounds) {
+          expect(r.marker?.kind).toBe('confirm')
+          expect(r.marker?.auto).toBe('accept')
+        }
+      }
+    })
+
+    it(`${label} — Step 0 asks only when $story is absent; no board write is added`, () => {
+      expect(section(skill, /Step 0:/)).toMatch(/only when `\$story` is absent/i)
+      expect(skill).not.toMatch(/\$status/)
+    })
+  }
+})
