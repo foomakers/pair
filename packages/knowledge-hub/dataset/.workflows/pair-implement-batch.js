@@ -171,14 +171,14 @@ const AUTONOMY_REFUSAL = 'autonomy-not-supported-until-#524'
 export function autonomyRefusal(a) {
   const passed = AUTONOMY_ARG_KEYS.filter(k => a && typeof a === 'object' && Object.hasOwn(a, k) && a[k] !== undefined && a[k] !== null)
   if (passed.length)
-    return `${AUTONOMY_REFUSAL}: implement-batch does not honour the autonomy model yet (args ${passed.map(k => `\`${k}\``).join(', ')}) — it never merges, and a declared gate is never silently ignored. Batch = cycle lands in #524.`
+    return `${AUTONOMY_REFUSAL}: implement-batch does not honour the autonomy model yet (args ${passed.map(k => `\`${k}\``).join(', ')}) — it never merges, and a declared gate is never silently ignored. Batch = cycle is a later story.`
   const text = a && typeof a === 'object' ? a.policyText : undefined
   if (typeof text === 'string') {
     let fenced = false
     for (const line of text.split('\n')) {
       if (line.trim().startsWith('```')) fenced = !fenced
       else if (!fenced && line.trim() === '## Autonomy')
-        return `${AUTONOMY_REFUSAL}: \`## Autonomy\` is declared in tech/automation.md, but implement-batch does not honour it yet — it never merges, and a declared gate is never silently ignored. Batch = cycle lands in #524.`
+        return `${AUTONOMY_REFUSAL}: \`## Autonomy\` is declared in tech/automation.md, but implement-batch does not honour it yet — it never merges, and a declared gate is never silently ignored. Batch = cycle is a later story.`
     }
   }
   return null

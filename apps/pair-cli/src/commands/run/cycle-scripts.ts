@@ -130,7 +130,11 @@ export interface CycleMergeOptions {
   /** The legacy `--autoAdvance '<tiers>'` call (pair-loop's, and every run without an active autonomy policy). */
   readonly autoAdvance?: readonly string[]
   /** US-521: the merge gate of an active autonomy policy (`--mergeGate`) — replaces the tier check only. */
-  readonly mergeGate?: { readonly mode: string; readonly has: readonly string[]; readonly lacks: readonly string[] }
+  readonly mergeGate?: {
+    readonly mode: string
+    readonly has: readonly string[]
+    readonly lacks: readonly string[]
+  }
 }
 
 export interface CycleMergeRunOptions extends CycleMergeOptions {
@@ -196,7 +200,12 @@ export interface CycleScriptsBridge {
   /** US-521 `autonomy-policy.mjs resolve`: the ONE effective-policy resolution (grammar, translation, precedence). */
   autonomyResolve(options: { adoption: string; args: Record<string, string> }): AutonomyResolution
   /** US-521 `cycle-merge.mjs escalate`: the ONE idempotent escalation comment on the card. */
-  escalate(options: { dir: string; story: string; stage: string; conditions: readonly string[] }): unknown
+  escalate(options: {
+    dir: string
+    story: string
+    stage: string
+    conditions: readonly string[]
+  }): unknown
   /** `inputs --story <card JSON>`: the effective-inputs digest both realizations must agree on. */
   inputs(story: Record<string, unknown>, workflowVersion: string): string
   /**
@@ -225,13 +234,19 @@ export interface AutonomyResolution {
   readonly policy: {
     readonly until: string
     readonly prepare: unknown
-    readonly merge: { readonly mode: string; readonly has: readonly string[]; readonly lacks: readonly string[] }
+    readonly merge: {
+      readonly mode: string
+      readonly has: readonly string[]
+      readonly lacks: readonly string[]
+    }
     readonly legacyTiers?: readonly string[]
   }
   readonly lines: readonly string[]
   readonly warnings: readonly string[]
   readonly errors: readonly { readonly key: string; readonly reason: string }[]
-  readonly translated: Readonly<Record<string, { readonly from: string; readonly equivalent: string }>>
+  readonly translated: Readonly<
+    Record<string, { readonly from: string; readonly equivalent: string }>
+  >
 }
 
 export interface CycleProfileIdentity {
@@ -393,6 +408,27 @@ function mergeMethods(
   }
 }
 
+/** US-521: `autonomy-policy.mjs resolve` and `cycle-merge.mjs escalate` as typed calls — the rule stays in the scripts. */
+function autonomyMethods(
+  runScript: (script: string, cmd: string, args: ScriptArgs) => unknown,
+  scriptsDir: string,
+): Pick<CycleScriptsBridge, 'autonomyResolve' | 'escalate'> {
+  return {
+    autonomyResolve: options =>
+      runScript(join(scriptsDir, 'autonomy-policy.mjs'), 'resolve', [
+        ['adoption', options.adoption],
+        ['args', JSON.stringify(options.args)],
+      ]) as AutonomyResolution,
+    escalate: options =>
+      runScript(join(scriptsDir, 'cycle-merge.mjs'), 'escalate', [
+        ['dir', options.dir],
+        ['story', options.story],
+        ['stage', options.stage],
+        ['conditions', JSON.stringify(options.conditions)],
+      ]),
+  }
+}
+
 /**
  * `cwd` is the PROJECT directory the scripts run in (r1-3): `ac-hash` shells out to `gh`, which
  * resolves the repository from its cwd, so a script run from anywhere else hashes another
@@ -419,18 +455,7 @@ export function createCycleScriptsBridge(
         ...optional([['worktree-root', options.worktreeRoot]]),
       ]) as CycleWorktreeResult,
     ...mergeMethods(runScript, join(location.scriptsDir, 'cycle-merge.mjs')),
-    autonomyResolve: options =>
-      runScript(join(location.scriptsDir, 'autonomy-policy.mjs'), 'resolve', [
-        ['adoption', options.adoption],
-        ['args', JSON.stringify(options.args)],
-      ]) as AutonomyResolution,
-    escalate: options =>
-      runScript(join(location.scriptsDir, 'cycle-merge.mjs'), 'escalate', [
-        ['dir', options.dir],
-        ['story', options.story],
-        ['stage', options.stage],
-        ['conditions', JSON.stringify(options.conditions)],
-      ]),
+    ...autonomyMethods(runScript, location.scriptsDir),
     packet: options =>
       runScript(cycleDispatchPath, 'packet', packetArgs(options, location)) as CyclePacketResult,
     inputs(story, workflowVersion) {

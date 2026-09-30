@@ -398,6 +398,28 @@ const liveLabels = (ctx: CycleDriverContext, input: CycleDriverRequest) => {
   return labels === undefined ? {} : { labels }
 }
 
+/** The `policy` object `resolve` takes: blocking floor, ceiling, and exactly ONE merge-offer source. */
+function resolvePolicyFor(
+  blocking: ReturnType<typeof resolveBlockingSeverities>,
+  co: Coordinates,
+): Record<string, unknown> {
+  return {
+    blockingFloor: blocking.blockingFloor,
+    ...(blocking.maxDispatches !== undefined && { maxDispatches: blocking.maxDispatches }),
+    ...(co.autoAdvanceTiers.length > 0 && { autoAdvance: { tiers: co.autoAdvanceTiers } }),
+    ...(co.autonomy !== undefined && {
+      autonomy: { until: co.autonomy.until, merge: co.autonomy.merge },
+    }),
+  }
+}
+
+/** Labels are re-read live at EVERY boundary, and only when a `when` gate can read them. */
+function labelsFor(ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) {
+  return co.autonomy?.until === 'merged' && co.autonomy.merge.mode === 'when'
+    ? liveLabels(ctx, input)
+    : {}
+}
+
 const resolveFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => async () => {
     const head = remoteHead(co.main, co.branch)
@@ -411,18 +433,8 @@ const resolveFor =
     return co.bridge.resolve({
       dir: co.runDir,
       workflowVersion: ctx.workflowVersion,
-      policy: {
-        blockingFloor: blocking.blockingFloor,
-        ...(blocking.maxDispatches !== undefined && { maxDispatches: blocking.maxDispatches }),
-        ...(co.autoAdvanceTiers.length > 0 && { autoAdvance: { tiers: co.autoAdvanceTiers } }),
-        ...(co.autonomy !== undefined && {
-          autonomy: { until: co.autonomy.until, merge: co.autonomy.merge },
-        }),
-      },
-      // Labels are re-read live at EVERY boundary, and only when a `when` gate can read them.
-      ...(co.autonomy?.until === 'merged' && co.autonomy.merge.mode === 'when'
-        ? liveLabels(ctx, input)
-        : {}),
+      policy: resolvePolicyFor(blocking, co),
+      ...labelsFor(ctx, input, co),
       ...(co.tier !== undefined && { tier: co.tier }),
       entry: input.pr === undefined ? 'fresh' : 'pr',
       story: input.card,

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { execFileSync } from 'child_process'
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
@@ -11,7 +11,10 @@ import { spawnAutonomyResolver } from './autonomy-policy'
  * relayed verbatim (the same answer `/pair-workflow-cycle` reads). Real script, real spawn — no stub.
  */
 
-const SCRIPTS = join(__dirname, '../../../../../packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts')
+const SCRIPTS = join(
+  __dirname,
+  '../../../../../packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts',
+)
 const location = { scriptsDir: SCRIPTS } as never
 
 function project(automation: string): string {
@@ -24,9 +27,20 @@ function project(automation: string): string {
 
 const direct = (adoption: string, args: object): unknown =>
   JSON.parse(
-    execFileSync('node', [join(SCRIPTS, 'autonomy-policy.mjs'), 'resolve', '--adoption', adoption, '--args', JSON.stringify(args)], {
-      encoding: 'utf8',
-    }),
+    execFileSync(
+      'node',
+      [
+        join(SCRIPTS, 'autonomy-policy.mjs'),
+        'resolve',
+        '--adoption',
+        adoption,
+        '--args',
+        JSON.stringify(args),
+      ],
+      {
+        encoding: 'utf8',
+      },
+    ),
   )
 
 describe('autonomy policy relay (verbatim, no re-derivation)', () => {
@@ -71,16 +85,45 @@ describe('autonomy policy relay (verbatim, no re-derivation)', () => {
 
   it('V5: an installation without the script resolves nothing when nothing is passed, and refuses when something is', () => {
     const empty = { scriptsDir: mkdtempSync(join(tmpdir(), 'no-script-')) } as never
-    expect(spawnAutonomyResolver({ location: empty, main: '/m', cwd: '/m', args: {} })).toBeUndefined()
-    expect(() => spawnAutonomyResolver({ location: empty, main: '/m', cwd: '/m', args: { until: 'merged' } })).toThrow(
-      /skill-outdated/,
-    )
+    expect(
+      spawnAutonomyResolver({ location: empty, main: '/m', cwd: '/m', args: {} }),
+    ).toBeUndefined()
+    expect(() =>
+      spawnAutonomyResolver({ location: empty, main: '/m', cwd: '/m', args: { until: 'merged' } }),
+    ).toThrow(/skill-outdated/)
   })
 
   it('V6: pair-cli carries no autonomy decision of its own (grep-verifiable): no decide()/gate evaluation in run/*.ts', () => {
     const offenders = readdirSync(__dirname)
       .filter(f => f.endsWith('.ts') && !f.endsWith('.test.ts'))
-      .filter(f => /escalationConditions|\.lacks\.|lacks\.some|has\.some|decideAutonomy/.test(readFileSync(join(__dirname, f), 'utf8')))
+      .filter(f =>
+        /escalationConditions|\.lacks\.|lacks\.some|has\.some|decideAutonomy/.test(
+          readFileSync(join(__dirname, f), 'utf8'),
+        ),
+      )
     expect(offenders).toEqual([])
   })
+})
+
+describe('platform independence on darwin and linux of the policy read (AC6 path handling)', () => {
+  const original = process.platform
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: original })
+    vi.restoreAllMocks()
+  })
+
+  it.each(['darwin', 'linux'] as const)(
+    'W1: on platform %s the adoption path and the script path are joined the same way and the answer is identical',
+    platform => {
+      Object.defineProperty(process, 'platform', { value: platform })
+      const root = project('## Autonomy\n\nuntil: pr\n')
+      const out = spawnAutonomyResolver({ location, main: root, cwd: root, args: {} })!
+      expect(out.lines).toContain('until: pr (adoption)')
+      // an installation without the script resolves nothing on either platform
+      const empty = { scriptsDir: mkdtempSync(join(tmpdir(), 'no-script-')) } as never
+      expect(
+        spawnAutonomyResolver({ location: empty, main: root, cwd: root, args: {} }),
+      ).toBeUndefined()
+    },
+  )
 })

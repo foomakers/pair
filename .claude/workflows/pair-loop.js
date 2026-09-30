@@ -429,9 +429,9 @@ const AUTONOMY_ARG_KEYS = ['until', 'prepare', 'merge', 'assignee', 'status', 'f
 // argument is REFUSED with the pointer, never silently ignored. The legacy `## Auto-Advance` path is unchanged.
 export function autonomyRefusal(args, policyText) {
   const passed = AUTONOMY_ARG_KEYS.filter(k => args && typeof args === 'object' && Object.hasOwn(args, k) && args[k] !== undefined && args[k] !== null)
-  if (passed.length) return `autonomy-not-supported-until-#524: pair-loop does not honour the autonomy model yet (args ${passed.map(k => `\`${k}\``).join(', ')}) — it merges only through its legacy \`## Auto-Advance\` path. Batch = cycle lands in #524.`
+  if (passed.length) return `autonomy-not-supported-until-#524: pair-loop does not honour the autonomy model yet (args ${passed.map(k => `\`${k}\``).join(', ')}) — it merges only through its legacy \`## Auto-Advance\` path. Batch = cycle is a later story.`
   if (typeof policyText === 'string' && sectionBody(policyText, 'Autonomy') !== null)
-    return 'autonomy-not-supported-until-#524: `## Autonomy` is declared in tech/automation.md, but pair-loop does not honour it yet — it merges only through its legacy `## Auto-Advance` path, and a declared gate is never silently ignored. Batch = cycle lands in #524.'
+    return 'autonomy-not-supported-until-#524: `## Autonomy` is declared in tech/automation.md, but pair-loop does not honour it yet — it merges only through its legacy `## Auto-Advance` path, and a declared gate is never silently ignored. Batch = cycle is a later story.'
   return null
 }
 
