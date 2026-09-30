@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted — **Q2b is revised by [ADR-027](adr-027-autonomy-model-selection-gates.md)** (2026-09-30): eligibility is an any-of `filter` (single label stays valid), precedence stays argument > adoption > default.
 
 ## Date
 

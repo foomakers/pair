@@ -11,14 +11,16 @@ Analyze project state and recommend the single most relevant next skill to invok
 
 ## Arguments (optional)
 
-`/pair-next` accepts two **optional** arguments that SCOPE which backlog items it may select. With neither, it behaves exactly as before — the whole backlog is in scope. This scoping is what makes `/pair-next` the parametrizable atom of automation.
+`/pair-next` accepts **optional** arguments (`--root`, `--filter`, `--assignee`, `--status`) that SCOPE which backlog items it may select. With neither, it behaves exactly as before — the whole backlog is in scope. This scoping is what makes `/pair-next` the parametrizable atom of automation.
 
 | Argument   | Value                                          | Effect                                                          |
 | ---------- | ---------------------------------------------- | -------------------------------------------------------------- |
 | `--root`   | an issue id (epic or story)                    | Restrict selection to that issue's subtree in the PM hierarchy. |
-| `--filter` | a single tag/label (e.g. `ui`, `risk:red`)     | Restrict selection to issues carrying that exact label.         |
+| `--filter` | one label, or a comma-separated any-of list (e.g. `ui`, `risk:red`, `risk:green,risk:yellow`) | Restrict selection to issues carrying ANY listed label (exact string equality). |
+| `--assignee` | `@me` or a login                             | Restrict selection to issues assigned to that user (`@me` = the authenticated code-host user, resolved through the host adapter; any other value is an opaque login). |
+| `--status` | a comma-separated list of canonical macrostates (e.g. `Draft,Ready`) | Restrict selection to issues in ANY listed macrostate, resolved through the state mapping. Default: all open. |
 
-Both may be combined — the effective scope is the **intersection**: `subtree ∩ matching tags` (see Step 0).
+All may be combined — the effective scope is the **intersection**: `subtree ∩ matching tags ∩ assignee ∩ macrostates` (see Step 0). These are the same names the Autonomy policy uses (`filter`, `assignee`, `status`, `root`). Precedence: argument > adoption (`## Autonomy`, then translated legacy sections) > KB default — every effective value is printed with its source. Selection stays here: `/pair-next` has no loop state and no `--until` (ADR-017 §1 as amended by ADR-027).
 
 ### `--root <issue-id>` — subtree scope
 
@@ -31,7 +33,7 @@ The root issue is itself a **first-class member** of the candidate set, alongsid
 
 ### `--filter <tag>` — generic tag match
 
-Keep only candidate issues that carry the given label. `--filter` takes a **single label string**, not a boolean expression — there is no AND/OR/NOT grammar; the whole argument is matched literally against each issue's labels. The tag is interpreted **GENERICALLY: `/pair-next` assigns NO meaning to any tag value.** `risk:red` is matched by exactly the same string-equality predicate as `team:ui` — there is no classification, tiering, or severity logic anywhere in this skill (D18). A namespaced-looking label such as `tag:ui` carries **no** namespace semantics either: the whole string (colon included) is one opaque label, matched entire — so `--filter tag:ui` selects issues labelled literally `tag:ui`, exactly as `--filter ui` selects issues labelled `ui`. A filter is a plain PM-tool label query, nothing more.
+Keep only candidate issues that carry ANY of the given labels. `--filter` takes **one label or a comma-separated any-of list** (`a,b` = carries `a` OR `b`) — there is no AND/OR/NOT grammar, and the comma is only a list separator (an AND is a classification tag that synthesises it, upstream); each element is matched literally against each issue's labels. **A single-label `--filter` behaves exactly as before.** An empty element, a duplicate, or an element that could become a command fragment (backtick, `$(`, control character, over 50 characters) **HALTs** naming the element. The tag is interpreted **GENERICALLY: `/pair-next` assigns NO meaning to any tag value.** `risk:red` is matched by exactly the same string-equality predicate as `team:ui` — there is no classification, tiering, or severity logic anywhere in this skill (D18). A namespaced-looking label such as `tag:ui` carries **no** namespace semantics either: the whole string (colon included) is one opaque label, matched entire — so `--filter tag:ui` selects issues labelled literally `tag:ui`, exactly as `--filter ui` selects issues labelled `ui`. A filter is a plain PM-tool label query, nothing more.
 
 ### Re-evaluation — selection is never cached
 
@@ -129,8 +131,10 @@ Run this before every other step, on **every** invocation — the result is neve
    - **Root not found** (id does not resolve to an issue): **HALT** with a clear message (`root <id> not found`) and propose no action.
    - **Root resolves to a Done issue**: report that the root is already Done and exit; propose no work.
    - Otherwise: the candidate set is **the root issue itself plus its transitive children** through the PM-tool hierarchy (parent/child links). The root is a **first-class member** — a childless story or epic root yields a **one-issue** set, not an empty one — and is itself subject to the item-selection rows (a Draft story root → `/pair-process-refine-story`; a Ready story root → `/pair-process-implement` or `/pair-process-plan-tasks`). Later steps read this set instead of the full backlog.
-3. **`--filter <tag>`** → narrow the candidate set to issues carrying the tag, using a plain string-equality label query (tag-agnostic — no tag value gets special treatment). **When `--root` is absent the candidate set defaults to the full backlog, which `--filter` then narrows**; when `--root` is present it narrows that subtree.
-4. **Both** → apply the intersection: `subtree ∩ matching tags`.
+3. **`--filter <tag>`** → narrow the candidate set to issues carrying ANY listed tag (a single tag is a list of one), using a plain string-equality label query (tag-agnostic — no tag value gets special treatment). **When `--root` is absent the candidate set defaults to the full backlog, which `--filter` then narrows**; when `--root` is present it narrows that subtree.
+   - **`--assignee <login|@me>`** → keep issues assigned to that user. `@me` resolves to the code-host user through the host adapter (`gh api user`); with no authenticated code host **HALT** naming the host — never a silent unassigned scope.
+   - **`--status <macrostates>`** → keep issues in ANY listed canonical macrostate, resolved through the state mapping; a value the board does not map **HALTs** naming the value and the mapped set. Absent ⇒ all open.
+4. **Several** → apply the intersection of every argument given: `subtree ∩ matching tags ∩ assignee ∩ macrostates`.
 5. **Empty candidate set** — **zero issues** (e.g. `--filter` matches no issue): report `no matching issues` and exit cleanly — an empty result is normal, **not an error**. A childless `--root` (root with no children) is **one** issue, not empty: it flows into the cascade (see item 2). A **non-empty** set whose issues happen to be all non-actionable (e.g. all Done) is likewise not empty here — it falls through to the Step 5 fallback; actionability is decided in Steps 3–4, not by this emptiness check. Item 5's clean exit governs **backlog-item selection only**: a scoped run that finds no actionable item exits here and does **not** surface the project-wide config rows 12–15.
 
 The resolved candidate set feeds the scoped Step 3 item-selection (rows 6–11) and Step 4 row 16 (`/pair-capability-grill`). Step 2 and rows 12–15 (project-wide) are not surfaced under a scope; rows 3–5 are evaluated **root-relatively** (epic root → row 5 only; story root → skipped) — see Step 3. A scope **presupposes an established project** (adoption files populated, a real backlog): on a fresh template project `--root`/`--filter` are never passed — Step 2 fresh-project detection governs and steers to `/pair-process-bootstrap`, so the Step 3 "all adoption files populated" premise always holds under a scope. Because Step 0 re-runs each time, a tag mutation between steps changes the selection on the next step automatically.
@@ -283,7 +287,7 @@ PROJECT STATE:
 ├── Subdomains: [populated | template]
 ├── Bounded Contexts: [populated | template]
 ├── PM Tool: [tool name | not configured]
-├── Scope: [full backlog | root #ID (subtree) | filter <tag> | root #ID ∩ <tag>]
+├── Scope: [full backlog | root #ID (subtree) | filter <tag[,tag…]> | assignee <login> | status <macrostates> | any intersection of them]
 ├── Profile: [default (no section) | poc | custom — N/M steps enabled]
 └── Backlog: [summary of current items — within scope]
 

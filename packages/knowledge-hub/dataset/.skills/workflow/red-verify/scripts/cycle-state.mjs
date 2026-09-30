@@ -76,6 +76,12 @@ const HOSTS = await import('./host/index.mjs').catch(e => {
   if (e?.code === 'ERR_MODULE_NOT_FOUND' && String(e.message).includes('host/index.mjs')) return null
   throw e
 })
+// US-521: the shared autonomy rule ships next to this file. Loaded guarded (like `host/`) so a partial copy
+// of this script still answers every command that never carries `policy.autonomy`; a policy that does fails typed.
+const AUTONOMY = await import('./autonomy-policy.mjs').catch(e => {
+  if (e?.code === 'ERR_MODULE_NOT_FOUND' && String(e.message).includes('autonomy-policy.mjs')) return null
+  throw e
+})
 const hostsMissing = () => Object.assign(new Error('host-adapters-missing: scripts/host/ is not installed next to cycle-state.mjs'), { kind: 'host-adapters-missing' })
 const bindHosts = opts => {
   if (!HOSTS) throw hostsMissing()
@@ -92,6 +98,9 @@ export const SCHEMA_VERSION = 3
 export const METRICS_SCHEMA_VERSION = 1
 export const SKILLS = ['red-spec', 'red-verify', 'implement-phase', 'green-fix', 'review-phase']
 export const STEPS = ['prepare', 'validate', 'implement', 'green', 'verify', 'merge', 'done', 'blocked']
+// US-521: `escalated` is a cycle STATUS (resolve's top-level `status`, `next.reason`), never a step and never the
+// batch's own row status `escalate` (a review/fix budget exhausted) — the two names stay distinct on purpose.
+export const CYCLE_STATUSES = ['in-progress', 'completed', 'blocked', 'escalated', 'empty', 'other-run', 'incompatible', 'invalid']
 // ── the cycle's rules, held HERE as data (US-486 AC-12) ─────────────────────────────────────
 // Every realization of the cycle — the `pair-implement-batch` Workflow script, the
 // `pair-workflow-cycle` in-session coordinator, `pair-cli` — reads these from this file. A second
@@ -2592,6 +2601,33 @@ export function autoAdvancePolicyError(autoAdvance) {
   return null
 }
 export const mergeOffered = (autoAdvance, tier) => typeof tier === 'string' && Array.isArray(autoAdvance?.tiers) && autoAdvance.tiers.includes(tier)
+// US-521 — `policy.autonomy` is `{ until, merge: { mode, has, lacks } }`, the RESOLVED autonomy policy
+// (`autonomy-policy.mjs resolve` produced it; this file only consumes it). Malformed is refused, never read as "off".
+export function autonomyPolicyError(autonomy) {
+  if (autonomy === undefined) return null
+  if (!AUTONOMY) return 'policy-autonomy-missing'
+  if (!autonomy || typeof autonomy !== 'object') return 'policy-autonomy-invalid'
+  if (autonomy.until !== undefined && !AUTONOMY.UNTIL_VALUES.includes(autonomy.until)) return 'policy-autonomy-invalid'
+  if (autonomy.merge !== undefined) {
+    const g = autonomy.merge
+    if (!g || typeof g !== 'object' || AUTONOMY.parseGate('merge', `${g.mode}${g.has?.length ? `; has: ${g.has.join(',')}` : ''}${g.lacks?.length ? `; lacks: ${g.lacks.join(',')}` : ''}`).errors) return 'policy-autonomy-invalid'
+  }
+  return null
+}
+// The one place `resolve` turns a terminal/stage `next` into the autonomy decision. The rule itself lives in
+// `autonomy-policy.mjs decide`; this only maps the answer onto the cycle's vocabulary. Without `policy.autonomy`
+// the US-490 tier rule applies UNCHANGED (default off: nothing new can merge or escalate).
+const GATED_STAGES = new Set(['prepare', 'validate', 'implement', 'green', 'verify'])
+function applyAutonomy(next, { policy, tier, labels }) {
+  if (!policy.autonomy) return next.step === 'done' && mergeOffered(policy.autoAdvance, tier) ? { ...next, step: 'merge', tier } : next
+  const boundary = next.step === 'done' ? { kind: 'merge' } : GATED_STAGES.has(next.step) ? { kind: 'stage', stage: next.step } : null
+  if (!boundary) return next
+  const d = AUTONOMY.decide({ boundary, labels, policy: policy.autonomy })
+  if (d.decision === 'escalate') return { step: 'blocked', reason: 'escalated', stage: d.stage, conditions: d.conditions, detail: d.reason, resumeStep: next.step }
+  if (d.decision === 'stop-at-target') return next.step === 'done' && d.target === 'pr' ? next : { step: 'done', target: d.target, stage: d.stage, detail: d.reason }
+  if (d.decision === 'proceed' && next.step === 'done') return { ...next, step: 'merge', ...(tier !== undefined ? { tier } : {}) }
+  return next
+}
 const contextOf = (fromStep, toStep, contextPolicy) => {
   if (!fromStep || !toStep) return CONTEXT_TABLE.default
   const transition = `${fromStep}->${toStep}`
@@ -2611,7 +2647,7 @@ const priorStepOfRole = (handoffs, toStep) => {
 const withContext = (next, handoffs, contextPolicy) =>
   next && typeof next === 'object' && next.context === undefined ? { ...next, context: contextOf(priorStepOfRole(handoffs, next.step), next.step, contextPolicy) } : next
 
-export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier }) {
+export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels }) {
   // Fail closed before ANY state is read: an unusable freshness policy is never resolved around.
   const policyError = contextPolicyError(contextPolicy)
   if (policyError) throw new Error(policyError)
@@ -2624,12 +2660,14 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   // read by the coordinator like `blockingFloor`. A malformed one is refused here, never read as "off".
   const autoAdvanceError = autoAdvancePolicyError(policy.autoAdvance)
   if (autoAdvanceError) return { status: 'invalid', reason: autoAdvanceError, workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
-  const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier })
+  const autonomyError = autonomyPolicyError(policy.autonomy)
+  if (autonomyError) return { status: 'invalid', reason: autonomyError, workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
+  const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels })
   // The budgets a coordinator spends are the cycle's data, never the coordinator's own constants.
   return { ...out, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
 }
 
-function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier }) {
+function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels }) {
   const where = safeRunDir(dir)
   if (where.error) return { status: 'invalid', reason: where.error, path: where.path, workflowVersion }
   const handoffs = readHandoffs(dir)
@@ -2660,7 +2698,10 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
       if (candidates.length === 1) return { status: 'other-run', runId: candidates[0], legacyRuns, workflowVersion }
       if (candidates.length > 1) return { status: 'incompatible', reason: 'ambiguous-runs', candidates, legacyRuns, workflowVersion }
     }
-    return { status: 'empty', next: withContext(deriveNext([], policy, { entry }), [], contextPolicy), handoffs: [], legacyRuns, workflowVersion }
+    // US-521: the autonomy decision applies to a card with no handoff yet too (`until: ready` stops it before
+    // `implement`; an escalation fires before its first dispatch).
+    const first = withContext(applyAutonomy(deriveNext([], policy, { entry }), { policy, tier, labels }), [], contextPolicy)
+    return { status: first.step === 'blocked' && first.reason === 'escalated' ? 'escalated' : first.step === 'done' ? 'completed' : 'empty', next: first, handoffs: [], legacyRuns, workflowVersion }
   }
   for (const h of handoffs) {
     if (h.data.schemaVersion !== SCHEMA_VERSION) return { status: 'incompatible', reason: `schemaVersion ${JSON.stringify(h.data.schemaVersion)} != ${SCHEMA_VERSION} in ${h.name}`, workflowVersion }
@@ -2724,7 +2765,9 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // tier is named in `## Auto-Advance`. Everything else — no declaration, no tier, another tier — is
   // the unchanged `done` terminal the caller parks. `resolve` only OFFERS the stage: the conjunction
   // that permits the merge is re-read live by `cycle-merge.mjs`, never taken from this answer.
-  if (next.step === 'done' && mergeOffered(policy.autoAdvance, tier)) next = { ...next, step: 'merge', tier }
+  // US-521: with `policy.autonomy` the decision is the shared `decide` — a stage boundary may escalate or stop at
+  // the `until` target, `ready-for-merge` is offered to `merge` only under `until: merged`.
+  next = applyAutonomy(next, { policy, tier, labels })
   const warnings = []
   if (next.step !== 'done' && next.step !== 'blocked' && next.step !== 'merge') {
     const md = policy.maxDispatches
@@ -2739,7 +2782,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
       next = { step: 'blocked', reason: 'failed-resume', cap: 'consecutiveRedirects', detail: `${CAPS.consecutiveRedirects} consecutive redirects — the durable state and the dispatched step disagree` }
   }
   next = withContext(next, handoffs, contextPolicy)
-  const status = next.step === 'done' ? 'completed' : next.step === 'blocked' ? 'blocked' : 'in-progress'
+  const status = next.step === 'done' ? 'completed' : next.reason === 'escalated' && next.step === 'blocked' ? 'escalated' : next.step === 'blocked' ? 'blocked' : 'in-progress'
   const nextFindingSeq = handoffs.filter(h => h.skill === 'review-phase').reduce((m, h) => Math.max(m, ...(h.data.findings ?? []).map(f => Number(/-(\d+)$/.exec(String(f.id ?? ''))?.[1] ?? 0))), 0) + 1
   return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs, ledger), predecessorRuns, activeRegressionRisks: ledger.filter(r => r.state === 'active'), rollbackNotes: rollbackNotes(handoffs, ledger), ...(warnings.length ? { warnings } : {}) }
 }
@@ -3030,7 +3073,7 @@ if (isMain()) {
     const { cmd, opts } = parseCli(process.argv.slice(2))
     // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
     const FLAGS = {
-      resolve: ['acHash', 'contextPolicy', 'dir', 'entry', 'head', 'inputs', 'policy', 'pr', 'redirects', 'runsRoot', 'story', 'tier', 'workflowVersion'],
+      resolve: ['acHash', 'contextPolicy', 'dir', 'entry', 'head', 'inputs', 'labels', 'policy', 'pr', 'redirects', 'runsRoot', 'story', 'tier', 'workflowVersion'],
       publish: ['attempt', 'dir', 'file', 'phase', 'policy', 'pr', 'predecessor', 'skill', 'workflowVersion'],
       hash: ['file'],
       'ac-hash': ['dir', 'story'],
@@ -3074,7 +3117,7 @@ if (isMain()) {
     let out
     if (cmd === 'resolve') {
       need('dir', 'workflowVersion', 'entry')
-      out = resolve({ dir: opts.dir, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr, head: opts.head, inputs: opts.inputs, acHash: opts.acHash, runsRoot: opts.runsRoot, story: opts.story, contextPolicy: opts.contextPolicy ? JSON.parse(opts.contextPolicy) : undefined, redirects: opts.redirects, tier: opts.tier })
+      out = resolve({ dir: opts.dir, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr, head: opts.head, inputs: opts.inputs, acHash: opts.acHash, runsRoot: opts.runsRoot, story: opts.story, contextPolicy: opts.contextPolicy ? JSON.parse(opts.contextPolicy) : undefined, redirects: opts.redirects, tier: opts.tier, labels: opts.labels ? JSON.parse(opts.labels) : undefined })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
     } else if (cmd === 'publish') {

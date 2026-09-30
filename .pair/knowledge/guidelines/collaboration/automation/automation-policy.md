@@ -135,6 +135,44 @@ A consumer **MUST HALT**, naming the file and the offending value, when the sect
 
 The switch above authorizes **which tiers** may merge unattended; it does not merge by itself. When a review-approved card's tier is in `## Auto-Advance`, `pair-loop` executes the merge ONLY after re-verifying, on freshly re-read signals, the conjunction that IS `merge_allowed` ([pr-states.md](../../collaboration/project-management-tool/pr-states.md) synthesis): the card's tier re-read (a mid-run raise parks the card), the PR's current remote head identical to the reviewed head (a moved head is never merged), `pair-review` conclusion `success` on that head, `pair-explicit-approval` conclusion `success` on that head (below 🔴 it auto-passes; at 🔴 without a recorded human approval it cannot be success — D10), and the tier's gate set green. Anything unreadable, moved, or not `success` parks the card with the failing item named — never merged. The merge itself follows merge-and-cascade (adopted strategy, commit message per template, story close + parent cascade with read-back, branch deletion, checkpoint removal). That conjunction is the `merge` stage of the delivery cycle (US-490): `cycle-state.mjs resolve` offers it only when this section names the card's tier, and `cycle-merge.mjs` — a script, not an agent — re-reads every signal and either merges and closes the story or parks the card with a comment on it. `pair-loop`, the in-session cycle and `pair-cli run --card` all reach it through the same script, so the rule has one owner. The loop therefore executes exactly the merges the synthesis authorizes, on tiers the project named — coherent with the adoption-gated light row, which authorizes the *approving review* under the same below-🔴 synthesis while this switch authorizes the *merge execution*.
 
+## Autonomy — selection, target and gates (US-521, ADR-027)
+
+One declaration for "which cards, how far, when a human takes over". It is resolved by ONE shared function (`autonomy-policy.mjs`, shipped with the cycle scripts) and honoured by `/pair-workflow-cycle`, `pair-cli run` and `/pair-next`; no consumer re-derives it. `pair-implement-batch` and `pair-loop` do not honour it yet (#524): they HALT with `autonomy-not-supported-until-#524` when it is declared or a new argument is passed, never run while ignoring it.
+
+```autonomy
+filter: risk:green, risk:yellow
+assignee: @me
+status: Draft, Ready
+root: 485
+until: merged
+prepare: always
+merge: when; has: cost:red; lacks: risk:green
+```
+
+- **Keys**: `filter` (any-of labels), `assignee` (`@me` = the code-host user, else an opaque login), `status` (canonical macrostates, resolved through the state mapping; default all open), `root` (optional), `until` (`ready` | `pr` | `merged`, default `pr`), `prepare` and `merge` (gates, default `always`). Unknown key, duplicate key, empty list, duplicate label, unknown mode or an `until` outside the enum HALTs naming the key.
+- **Gate grammar**: `<always|never|when>[; has: <labels>][; lacks: <labels>]`. `has:`/`lacks:` are valid only with `when`; `always; has: …` is a parse error. `when` needs at least one list.
+- **Labels are opaque**: exact string equality, each list any-of, no boolean grammar (an AND is a classification tag that synthesises it, upstream). Every list element passes the label validators (50-character host cap, markdown-wrapper, prompt/shell safety).
+- **`until`**: `ready` stops the card at the prepare→implement boundary (nothing is implemented); `pr` (default) stops at the review-approved PR; `merged` is the ONLY value under which the merge gate is evaluated.
+- **`merge` gate** (under `until: merged`, at `ready-for-merge`): `always` parks `awaiting-human` (exit 0, today's behaviour); `never` and `when` enter the `merge` stage unless an escalation fires. `merge: never` is not a bypass: remote head = `reviewedHead`, `pair-review` = success, `pair-explicit-approval` where the tier requires it and the tier gate set green all stay mandatory; the gate only replaces the tier-membership check.
+- **Escalation**: before every stage dispatch of an `until: merged` run and before `merge`, labels are re-read live; a `when` gate whose `has:` label is present or whose `lacks:` label is absent stops the cycle with status `escalated` (exit 1, `on-halt`, ONE marker-keyed comment on the card naming the condition(s) and the stage; the PR stays open). A card with no labels under `lacks: risk:green` escalates; unreadable labels under a `when` gate escalate. A re-invocation re-reads the labels: still matching ⇒ escalated again, no duplicate comment; gone ⇒ the cycle resumes. `escalated` (a cycle status) is distinct from the batch's row status `escalate`; `awaiting-human` (a park, exit 0) and `halted` (a problem, exit 1) are unchanged.
+- **`prepare` gate**: parsed and validated here with the same grammar and printed as `parsed; execution lands in #523 — treated as always`; no refinement or task breakdown runs autonomously.
+
+### Precedence — always printed
+
+Precedence: argument > adoption (`## Autonomy`, then translated legacy sections) > KB default — every effective value is printed with its source.
+
+Sources are `argument`, `adoption`, `adoption (translated from ## Auto-Advance)` / `adoption (translated from ## Eligibility)` and `default`. The arguments are the same everywhere: `--filter`, `--assignee`, `--status`, `--root`, `--until`, `--prepare`, `--merge` on `pair-cli run` and `/pair-next` (selection keys), `$until`, `$prepare`, `$merge` on `/pair-workflow-cycle`.
+
+### Legacy sections are translated, never broken
+
+| Legacy | Equivalent |
+| ------ | ---------- |
+| `## Eligibility` `<label>` | `filter: <label>` |
+| `## Auto-Advance` `(none)` | `merge: always` |
+| `## Auto-Advance` `<tier>` | `merge: when; lacks: <tier>` (and, with no `until` declared, `until: merged` — today's behaviour) |
+
+Every existing HALT of the old sections still fires (`## Eligibility` keeps its one-literal-label rule). `## Autonomy` coexisting with a legacy section whose translation **differs** for a key both declare HALTs naming both; an identical one is a warning. The run prints the `## Autonomy` equivalent of every translated section. Default off: a project with no `## Autonomy`, no arguments and unchanged legacy sections behaves exactly as before.
+
 ## Stop Predicate — when an unattended run stops
 
 ```markdown

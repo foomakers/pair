@@ -17,7 +17,7 @@
 //            logged: [string…], timeout }   (`timeout` = effective per-command seconds; 0 = none)
 //   `pre-*` ⇒ mode `blocking` (first non-zero HALTs: `halted` set, the rest not run);
 //   `post-*` / `on-halt` ⇒ mode `logging` (every command runs, failures land in `logged`).
-//   `on-halt` needs `--status` and is skipped unless it is `failed-*`, `escalate`, `merge-parked` or
+//   `on-halt` needs `--status` and is skipped unless it is `failed-*`, `escalate`, `escalated` (US-521), `merge-parked` or
 //   `merged-closure-unfinished` (the caller filters an `awaiting-human` park out first).
 import { readFileSync, existsSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -46,11 +46,11 @@ export function modeOf(key, stageIds = STAGE_IDS) {
 }
 
 /**
- * `on-halt` fires on every `failed-*`, on `escalate`, on `merge-parked` and on
+ * `on-halt` fires on every `failed-*`, on `escalate`, on `escalated` (US-521), on `merge-parked` and on
  * `merged-closure-unfinished` — never on `ready-for-merge` or `merged`. The executor cannot see a
  * park's kind: the caller MUST NOT call it for an `awaiting-human` park.
  */
-export const haltsOn = status => typeof status === 'string' && (status.startsWith('failed-') || status === 'escalate' || status === 'merge-parked' || status === 'merged-closure-unfinished')
+export const haltsOn = status => typeof status === 'string' && (status.startsWith('failed-') || status === 'escalate' || status === 'escalated' || status === 'merge-parked' || status === 'merged-closure-unfinished')
 
 // The fence-blind level-2 extraction every `tech/automation.md` reader shares (deliberate copy of
 // `blocking-severities.mjs`: this script ships beside the skill with no cross-import).

@@ -7,7 +7,9 @@
 //
 //   1. the card's `risk:*` tier, re-read NOW, is the tier the cycle was driven under (a mid-run raise
 //      parks the card even with an approved PR) …
-//   2. … and it is still named in `## Auto-Advance`;
+//   2. … and it is still named in `## Auto-Advance` (US-521: or, with `--mergeGate`, the merge gate of
+//      `## Autonomy` allows it — `autonomy-policy.mjs decide` — and the legacy tier list is that gate
+//      `merge: when; lacks: <tier>` read in its compatible form, so `pair-loop`'s call is unchanged);
 //   3. the PR's remote head, `pair-review` and `pair-explicit-approval` conclusions are re-read NOW,
 //      and any of them unreadable parks the card;
 //   4. the remote head is the head the verifier reviewed (`reviewedHead`);
@@ -18,12 +20,14 @@
 //
 // CLI (both print one JSON object and exit 0 when a decision was produced, 2 on a usage error):
 //   check --dir <run dir> --story <n> --pr <n> --reviewedHead <sha> --cardTier <risk:*>
-//         --autoAdvance '<JSON array of tiers>' [--repo <owner/name>]
+//         (--autoAdvance '<JSON array of tiers>' | --mergeGate '<JSON {mode,has,lacks}>') [--repo <owner/name>]
 //       Conditions 1-5 only (no gate yet). A failure PARKS: one marker-keyed comment on the card.
 //   run   <the same flags> --gate <green|red> --message <squash commit message>
 //         [--branch <b>] [--root <main checkout>]
 //       Conditions 1-6, then merge + Story Closure (DoD boxes, close, board `Done`, parent cascade,
 //       branch remote+local with its worktree first, story checkpoint) — or park + comment.
+//   escalate --dir <run dir> --story <n> --stage <step> --conditions '<JSON array>' [--repo <owner/name>]
+//       US-521: the ONE idempotent escalation comment on the card (marker-keyed), for any stage boundary.
 //
 // `merged` and `cascaded` are separate signals: a merge that landed with any closure step unfinished
 // is `{ merged: true, cascaded: false }` with every step's outcome in `cascade`, never a plain success.
@@ -31,6 +35,7 @@ import { existsSync, rmSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { decide as decideAutonomy, gateFromLegacyTiers, escalationComment, ESCALATION_MARKER, parseGate } from './autonomy-policy.mjs'
 
 const SHA_RE = /^[0-9a-f]{40}$/
 const TIER_RE = /^[A-Za-z0-9][A-Za-z0-9:_./-]*$/
@@ -43,11 +48,19 @@ export const PARK_MARKER = pr => `<!-- pair-merge-park:PR#${pr} -->`
 // ── the decision — pure ────────────────────────────────────────────────────────────────────
 // Order = the precedence `pair-loop.js` applied (first failure is the `reason`); every failing
 // condition is listed, because each is independent evidence a human will want.
-export function decideMerge({ cardTier, currentTier, autoAdvanceTiers, reviewedHead, signals, gate, requireGate }) {
+// US-521: `mergeGate` (`{ mode, has, lacks }`) replaces ONLY the tier-membership check; every signal below stays mandatory.
+export function decideMerge({ cardTier, currentTier, autoAdvanceTiers, mergeGate, labels, reviewedHead, signals, gate, requireGate }) {
   const failed = []
   const add = (code, detail) => failed.push({ code, detail })
   if (currentTier !== cardTier) add('tier-changed', `tier changed ${cardTier} -> ${currentTier} mid-run, never auto-advanced on a stale read`)
-  if (!Array.isArray(autoAdvanceTiers) || !autoAdvanceTiers.includes(currentTier)) add('tier-not-auto-advance', `tier ${currentTier} not in Auto-Advance`)
+  let conditions = null
+  if (mergeGate) {
+    const d = decideAutonomy({ boundary: { kind: 'merge' }, labels, policy: { until: 'merged', merge: mergeGate } })
+    if (d.decision === 'escalate') {
+      conditions = d.conditions
+      add('escalated', `merge gate escalates: ${d.conditions.join(', ')} — a human decides`)
+    } else if (d.decision === 'await-human') add('tier-not-auto-advance', 'merge: always — the merge gate parks the card for a human')
+  } else if (!Array.isArray(autoAdvanceTiers) || !autoAdvanceTiers.includes(currentTier)) add('tier-not-auto-advance', `tier ${currentTier} not in Auto-Advance`)
   const readable = signals && SHA_RE.test(String(signals.headSha ?? '')) && typeof signals.pairReview === 'string' && typeof signals.explicitApproval === 'string'
   if (!readable) add('signals-unreadable', 'PR SIGNALS unreadable at merge time, never merged on unread evidence')
   else {
@@ -59,7 +72,8 @@ export function decideMerge({ cardTier, currentTier, autoAdvanceTiers, reviewedH
     if (gate === 'red') add('gate-red', "the tier's gate set came back red at merge time")
     else if (gate !== 'green') add('gate-unverified', `no green gate evidence (got ${JSON.stringify(gate ?? null)}) — /pair-capability-verify-quality must run first`)
   }
-  return { mergeAllowed: failed.length === 0, failed, reason: failed[0]?.detail ?? null, parkKind: failed.length === 0 ? null : failed[0].code === 'tier-not-auto-advance' ? 'awaiting-human' : 'halted' }
+  const first = failed[0]?.code
+  return { mergeAllowed: failed.length === 0, failed, reason: failed[0]?.detail ?? null, parkKind: failed.length === 0 ? null : first === 'tier-not-auto-advance' ? 'awaiting-human' : first === 'escalated' ? 'escalated' : 'halted', ...(conditions ? { conditions } : {}) }
 }
 
 // ── live reads — through the bound adapters, never a host CLI of our own ─────────────────────
@@ -71,6 +85,15 @@ export function readCurrentTier({ pm, story, repo }) {
     return risk.length === 1 && LABEL_SHAPE_RE.test(risk[0]) ? risk[0] : 'risk:red'
   } catch {
     return 'risk:red'
+  }
+}
+
+// Every label on the card, read NOW — `null` when unreadable (a `when` gate then escalates, fail-safe).
+export function readCurrentLabels({ pm, story, repo }) {
+  try {
+    return (pm.readCard(story, { repo, fields: ['labels'] })?.labels ?? []).map(l => String(l?.name ?? l))
+  } catch {
+    return null
   }
 }
 
@@ -94,10 +117,11 @@ export function readSignals({ code, pr, repo }) {
   }
 }
 
-function evaluate({ hosts, story, pr, repo, reviewedHead, cardTier, autoAdvanceTiers, gate, requireGate }) {
+function evaluate({ hosts, story, pr, repo, reviewedHead, cardTier, autoAdvanceTiers, mergeGate, gate, requireGate }) {
   const currentTier = readCurrentTier({ pm: hosts.pm, story, repo })
+  const labels = mergeGate ? readCurrentLabels({ pm: hosts.pm, story, repo }) : undefined
   const signals = readSignals({ code: hosts.code, pr, repo })
-  return { currentTier, signals, ...decideMerge({ cardTier, currentTier, autoAdvanceTiers, reviewedHead, signals, gate, requireGate }) }
+  return { currentTier, signals, ...decideMerge({ cardTier, currentTier, autoAdvanceTiers, mergeGate, ...(mergeGate ? { labels: labels ?? undefined } : {}), reviewedHead, signals, gate, requireGate }) }
 }
 
 // ── park ───────────────────────────────────────────────────────────────────────────────────
@@ -112,6 +136,18 @@ export function park({ hosts, story, pr, repo, decision, merged = false }) {
   ].join('\n')
   try {
     const r = hosts.pm.commentOnCard({ id: story, marker: PARK_MARKER(pr), body, repo })
+    return { posted: !r?.error, ...(r?.error ? { error: r.error } : {}) }
+  } catch (e) {
+    return { posted: false, error: e.message }
+  }
+}
+
+// ── escalation ─────────────────────────────────────────────────────────────────────────────
+// US-521: one marker-keyed comment per card (edited in place on a re-run — no duplicate) naming the
+// condition(s) and the stage. A failed post never changes the escalation: the caller still exits 1.
+export function escalate({ hosts, story, repo, stage, conditions }) {
+  try {
+    const r = hosts.pm.commentOnCard({ id: story, marker: ESCALATION_MARKER(story), body: escalationComment({ story, stage, conditions }), repo })
     return { posted: !r?.error, ...(r?.error ? { error: r.error } : {}) }
   } catch (e) {
     return { posted: false, error: e.message }
@@ -209,17 +245,23 @@ export function closeStory({ hosts, story, repo, branch, root = process.cwd(), g
 }
 
 // ── the two commands ───────────────────────────────────────────────────────────────────────
+// A park whose kind is `escalated` is recorded with the escalation comment, never the merge-park one.
+const record = (input, decision, merged = false) =>
+  decision.parkKind === 'escalated'
+    ? escalate({ hosts: input.hosts, story: input.story, repo: input.repo, stage: 'merge', conditions: decision.conditions ?? [] })
+    : park({ hosts: input.hosts, story: input.story, pr: input.pr, repo: input.repo, decision, merged })
+
 export function checkMerge(input) {
   const decision = evaluate({ ...input, requireGate: false })
   const out = { stage: 'merge', mode: 'check', ...decision }
-  if (!decision.mergeAllowed) out.comment = park({ hosts: input.hosts, story: input.story, pr: input.pr, repo: input.repo, decision })
+  if (!decision.mergeAllowed) out.comment = record(input, decision)
   return out
 }
 
 export function runMerge({ message, branch, root, git, fs, ...input }) {
   const decision = evaluate({ ...input, requireGate: true })
   const out = { stage: 'merge', mode: 'run', ...decision, merged: false, cascaded: false }
-  const parkWith = (d, merged) => ({ ...out, ...d, merged, comment: park({ hosts: input.hosts, story: input.story, pr: input.pr, repo: input.repo, decision: d, merged }) })
+  const parkWith = (d, merged) => ({ ...out, ...d, merged, comment: record(input, d, merged) })
   if (!decision.mergeAllowed) return parkWith(decision, false)
   try {
     input.hosts.code.merge({ pr: input.pr, repo: input.repo, strategy: 'squash', message, headSha: input.reviewedHead })
@@ -236,8 +278,9 @@ export function runMerge({ message, branch, root, git, fs, ...input }) {
 
 // ── CLI ────────────────────────────────────────────────────────────────────────────────────
 const FLAGS = {
-  check: ['dir', 'story', 'pr', 'reviewedHead', 'cardTier', 'autoAdvance', 'repo'],
-  run: ['dir', 'story', 'pr', 'reviewedHead', 'cardTier', 'autoAdvance', 'repo', 'gate', 'message', 'branch', 'root'],
+  check: ['dir', 'story', 'pr', 'reviewedHead', 'cardTier', 'autoAdvance', 'mergeGate', 'repo'],
+  run: ['dir', 'story', 'pr', 'reviewedHead', 'cardTier', 'autoAdvance', 'mergeGate', 'repo', 'gate', 'message', 'branch', 'root'],
+  escalate: ['dir', 'story', 'stage', 'conditions', 'repo'],
 }
 
 export function parseArgs(argv) {
@@ -253,22 +296,51 @@ export function parseArgs(argv) {
   const need = (...ks) => {
     for (const k of ks) if (opts[k] === undefined) throw new Error(`--${k} is required`)
   }
-  need('dir', 'story', 'pr', 'reviewedHead', 'cardTier', 'autoAdvance')
+  if (cmd === 'escalate') {
+    need('dir', 'story', 'stage', 'conditions')
+    if (!/^\d+$/.test(opts.story)) throw new Error(`--story must be a number, got ${JSON.stringify(opts.story)}`)
+    if (!/^[a-z-]+$/.test(opts.stage)) throw new Error('--stage must be a step name')
+    let conditions
+    try {
+      conditions = JSON.parse(opts.conditions)
+    } catch {
+      throw new Error('--conditions must be a JSON array of conditions')
+    }
+    if (!Array.isArray(conditions) || !conditions.length || conditions.some(c => typeof c !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9:_./-]*$/.test(c))) throw new Error('--conditions must be a non-empty JSON array of label-shaped conditions')
+    if (opts.repo !== undefined && !/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(opts.repo)) throw new Error('--repo must be owner/name')
+    return { cmd, opts: { ...opts, story: Number(opts.story), conditions } }
+  }
+  need('dir', 'story', 'pr', 'reviewedHead', 'cardTier')
+  if ((opts.autoAdvance === undefined) === (opts.mergeGate === undefined)) throw new Error('exactly one of --autoAdvance or --mergeGate is required')
   if (!/^\d+$/.test(opts.story)) throw new Error(`--story must be a number, got ${JSON.stringify(opts.story)}`)
   if (!/^\d+$/.test(opts.pr)) throw new Error(`--pr must be a number, got ${JSON.stringify(opts.pr)}`)
   if (!SHA_RE.test(opts.reviewedHead)) throw new Error('--reviewedHead must be a 40-hex sha')
   if (!TIER_RE.test(opts.cardTier)) throw new Error('--cardTier must be a label-shaped tier')
   let tiers
-  try {
-    tiers = JSON.parse(opts.autoAdvance)
-  } catch {
-    throw new Error('--autoAdvance must be a JSON array of tiers')
+  let mergeGate
+  if (opts.autoAdvance !== undefined) {
+    try {
+      tiers = JSON.parse(opts.autoAdvance)
+    } catch {
+      throw new Error('--autoAdvance must be a JSON array of tiers')
+    }
+    if (!Array.isArray(tiers) || tiers.some(t => typeof t !== 'string' || !TIER_RE.test(t))) throw new Error('--autoAdvance must be a JSON array of label-shaped tiers')
+  } else {
+    let raw
+    try {
+      raw = JSON.parse(opts.mergeGate)
+    } catch {
+      throw new Error('--mergeGate must be a JSON gate object {mode, has, lacks}')
+    }
+    const text = raw && typeof raw === 'object' ? `${raw.mode}${raw.has?.length ? `; has: ${raw.has.join(',')}` : ''}${raw.lacks?.length ? `; lacks: ${raw.lacks.join(',')}` : ''}` : ''
+    const g = parseGate('merge', text)
+    if (g.errors) throw new Error(`--mergeGate is invalid: ${g.errors.map(e => `${e.key} ${e.reason}`).join('; ')}`)
+    mergeGate = g.value
   }
-  if (!Array.isArray(tiers) || tiers.some(t => typeof t !== 'string' || !TIER_RE.test(t))) throw new Error('--autoAdvance must be a JSON array of label-shaped tiers')
   if (opts.repo !== undefined && !/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(opts.repo)) throw new Error('--repo must be owner/name')
   if (cmd === 'run') need('gate', 'message')
   if (cmd === 'run' && !['green', 'red'].includes(opts.gate)) throw new Error('--gate must be green | red')
-  return { cmd, opts: { ...opts, story: Number(opts.story), pr: Number(opts.pr), autoAdvanceTiers: tiers } }
+  return { cmd, opts: { ...opts, story: Number(opts.story), pr: Number(opts.pr), ...(tiers ? { autoAdvanceTiers: tiers } : {}), ...(mergeGate ? { mergeGate } : {}) } }
 }
 
 const isMain = () => {
@@ -283,7 +355,11 @@ if (isMain()) {
     const { cmd, opts } = parseArgs(process.argv.slice(2))
     const HOSTS = await import('./host/index.mjs')
     const hosts = HOSTS.bindHosts({ dir: opts.dir })
-    const base = { hosts, story: opts.story, pr: opts.pr, repo: opts.repo, reviewedHead: opts.reviewedHead, cardTier: opts.cardTier, autoAdvanceTiers: opts.autoAdvanceTiers }
+    if (cmd === 'escalate') {
+      process.stdout.write(JSON.stringify({ stage: opts.stage, conditions: opts.conditions, comment: escalate({ hosts, story: opts.story, repo: opts.repo, stage: opts.stage, conditions: opts.conditions }) }) + '\n')
+      process.exit(0)
+    }
+    const base = { hosts, story: opts.story, pr: opts.pr, repo: opts.repo, reviewedHead: opts.reviewedHead, cardTier: opts.cardTier, ...(opts.autoAdvanceTiers ? { autoAdvanceTiers: opts.autoAdvanceTiers } : {}), ...(opts.mergeGate ? { mergeGate: opts.mergeGate } : {}) }
     const out = cmd === 'check' ? checkMerge(base) : runMerge({ ...base, gate: opts.gate, message: opts.message, branch: opts.branch, root: opts.root ?? process.cwd() })
     process.stdout.write(JSON.stringify(out) + '\n')
     process.exit(0)

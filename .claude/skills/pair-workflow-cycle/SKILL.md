@@ -21,6 +21,9 @@ Two entries, one cycle: a refined card with no PR runs the whole thing; a PR tha
 | `$runId`    | No       | Run directory to drive: `.pair/working/runs/$runId/<card>/`. Default `story-<card>` — the batch engine's own convention, so a cycle started by `pair-implement-batch` resumes here and back.    |
 | `$notes`    | No       | Scope directive from the card; threaded into every stage packet, overriding the issue body where they conflict.                                                                              |
 | `$profile`  | No       | The workflow profile to use (US-488): a NAME, looked up in `pair.config.json`'s `workflowProfiles.files` / `.inline`. Cascade, resolved once per run: `$workflowConfig` > `$profile` > `workflowProfiles.default` > the KB default (schema-default engine and model, default effort, `fresh` context). Unresolvable ⇒ HALT `profile-unresolved`, never a silent fallback. A value starting with `{` is the **legacy** inline object `{ "effort": … }` (one of `low \| medium \| high \| xhigh \| max`, applied to every stage's dispatch instruction exactly as before — enforced for Codex, a best-effort prompt request only for Claude); absent ⇒ today's behavior, unchanged. |
+| `$until`    | No       | The target (US-521, ADR-027): `ready` (stop at the prepare→implement boundary), `pr` (default: the review-approved PR) or `merged` (enter the merge stage — the only value under which the merge gate is evaluated). Precedence: argument > adoption (`## Autonomy`, then translated legacy sections) > KB default — every effective value is printed with its source. |
+| `$prepare`  | No       | The prepare gate, `<always\|never\|when>[; has: <labels>][; lacks: <labels>]`: parsed and validated, printed as `parsed; execution lands in #523 — treated as always`. |
+| `$merge`    | No       | The merge gate, same grammar. `always` (default) parks `awaiting-human`; `never`/`when` enter the merge stage under `until: merged` unless an escalation fires. #490's signal checks stay mandatory under every mode. |
 | `$workflowConfig` | No | Path of an external profile file, used verbatim; wins over `$profile` and `pair.config.json`. Malformed ⇒ HALT `profile-invalid`. |
 
 Everything else a stage receives — `$run $story $branch $worktree $base $stacked $entry $policy $inputs $workflowVersion` and the phase-specific arguments — is **rendered by the script**, never composed here in prose.
@@ -98,6 +101,15 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" bind-hosts --dir ".pair/working/runs/$
 
 `bound` on a new run, `reused` on a resumed one — and on the run an `other-run` answer makes you adopt, bind that directory the same way before its first dispatch. Report `pm-tool` / `code-host` in the same line as the realization. `{ halt: "host-unsupported" }` ⇒ HALT `host-unsupported` (below) before any dispatch.
 
+**Autonomy policy (US-521).** Resolve the effective autonomy policy ONCE, before the first `resolve`, by the ONE shared script (the same one `pair-cli run` spawns; this skill holds no autonomy rule):
+
+```bash
+node "$SKILL_DIR/scripts/autonomy-policy.mjs" resolve --adoption "$MAIN/.pair/adoption/tech/automation.md" \
+  --args '{"until":"<$until>","prepare":"<$prepare>","merge":"<$merge>"}'   # only the arguments actually passed
+```
+
+Print its `lines` verbatim (every key, its effective value and its source: `argument` | `adoption` | `adoption (translated from ## Auto-Advance)` | `default`), then its `warnings`. `ok: false` ⇒ HALT `automation-policy-malformed` naming each `errors[].key` and reason, before any card is touched. A project that declares nothing and passes nothing resolves to `until: pr`, gates `always`: nothing below changes. Hand `resolve` the result as `--policy '{…,"autonomy":<policy>}'` (the script's `policy` object), and — only when `policy.until` is `merged` and the merge gate is `when` — the card's CURRENT labels as `--labels '<JSON array>'`, re-read from the PM tool before EVERY `resolve` (labels are live at each boundary). With no `## Autonomy` but a legacy `## Auto-Advance` tier, keep passing `--policy '{…,"autoAdvance":{"tiers":[…]}}'` and `--tier` exactly as before.
+
 The workflow profile is resolved ONCE, here, right after the binding and before the first `resolve` — by the ONE shared resolver `pair-cli run --card` calls too, never by hand-reading `pair.config.json`:
 
 ```bash
@@ -127,7 +139,7 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" inputs --story '<card JSON>' --workflo
 
 **Act.** Read `next` and nothing else. `status: other-run` ⇒ the cycle already lives under that run id: adopt it and resolve again. `incompatible` ⇒ stop and report (a legacy run directory is pointed at `migrate-acknowledge`, never migrated in place). `invalid` ⇒ stop and report.
 
-**Verify.** `next.step` is `merge`, `done` or `blocked` ⇒ go to Step 5. Otherwise it names the one stage due now.
+**Verify.** `next.step` is `merge`, `done` or `blocked` ⇒ go to Step 5 (`status: escalated` is a `blocked` step with `reason: escalated`; a `done` with `target: ready` is the `until: ready` stop). Otherwise it names the one stage due now.
 
 ### Step 2: Put the stage's worktree in place
 
@@ -191,13 +203,17 @@ The bridge makes the resume's context deterministic: the task opens by telling t
 
 ### Step 5: Report the terminal state
 
-**Check.** `next.step` is `merge`, `done` or `blocked`. `merge` appears only when you passed `resolve` the project's `## Auto-Advance` tiers as `--policy '{…,"autoAdvance":{"tiers":[…]}}'` and the card's current `risk:*` label as `--tier`, and that tier is among them; without both, a converged cycle is `done` — today's behavior, byte for byte.
+**Check.** `next.step` is `merge`, `done` or `blocked`. With the autonomy policy, `merge` appears only under `until: merged` when the merge gate allows it; `next.reason: escalated` (top-level `status: escalated`) is the escalation terminal. Legacy: `merge` appears only when you passed `resolve` the project's `## Auto-Advance` tiers as `--policy '{…,"autoAdvance":{"tiers":[…]}}'` and the card's current `risk:*` label as `--tier`, and that tier is among them; without both, a converged cycle is `done` — today's behavior, byte for byte.
 
 **Skip.** Never.
 
-**Act.** Close the hooks first: on a `failed-*` or `escalate` terminal (including `failed-hook`), a `merge-parked` whose park kind is not `awaiting-human`, or `merged-closure-unfinished`, run `on-halt --status <terminal>`. EXACTLY these trigger it: any `failed-*` (including `failed-hook`); `escalate`; `merge-parked` with park kind `halted` (a park kind absent or unreadable counts as `halted`); `merged-closure-unfinished`. It runs never on `ready-for-merge`, never on `merged`, and never on `merge-parked` with park kind `awaiting-human`. The executor cannot see the park kind, so YOU skip the `on-halt` call for an `awaiting-human` park; the executor only gates the status name, then `post-cycle --status <terminal>` once — both logged, never a stop — but not when this invocation only stopped at the `$rounds` bound. Report exactly what `resolve` said: `ready-for-merge` when the cycle converged, `escalate` when a human decision is owed, `failed-<stage>` otherwise — with the run directory, the PR and the reviewed head.
+**Act.** Close the hooks first: on a `failed-*` or `escalate` terminal (including `failed-hook`), a `merge-parked` whose park kind is not `awaiting-human` (park kind `escalated` included), or `merged-closure-unfinished`, run `on-halt --status <terminal>`. EXACTLY these trigger it: any `failed-*` (including `failed-hook`); `escalate`; `escalated`; `merge-parked` with park kind `halted` (a park kind absent or unreadable counts as `halted`); `merged-closure-unfinished`. It runs never on `ready-for-merge`, never on `merged`, and never on `merge-parked` with park kind `awaiting-human`. The executor cannot see the park kind, so YOU skip the `on-halt` call for an `awaiting-human` park; the executor only gates the status name, then `post-cycle --status <terminal>` once — both logged, never a stop — but not when this invocation only stopped at the `$rounds` bound. Report exactly what `resolve` said: `ready-for-merge` when the cycle converged, `escalate` when a human decision is owed, `failed-<stage>` otherwise — with the run directory, the PR and the reviewed head.
 
-**Merge (`next.step: merge`).** The stage is a script, never a subagent, and this skill still decides nothing: run `node "$SKILL_DIR/scripts/cycle-merge.mjs" check --dir <run dir> --story $card --pr <next.pr> --reviewedHead <next.reviewedHead> --cardTier <next.tier> --autoAdvance '<the tiers JSON array>'`. It re-reads the tier, the remote head and the `pair-review` / `pair-explicit-approval` conclusions live; on `mergeAllowed: false` it has already parked the card with a comment naming the failed condition — report its `reason`. On `true`, run `/pair-capability-verify-quality` for the tier, then `cycle-merge.mjs run` with the same flags plus `--gate green|red`, `--message '<squash message per the commit template>'` and `--branch <card branch>` (run from the main checkout), and report its `merged` / `cascaded` / `reason` verbatim. `merged: true, cascaded: false` names the closure step left for a human.
+**Escalated (`status: escalated`, US-521).** A `when` gate condition fired at `next.stage`. Post the ONE idempotent card comment — `node "$SKILL_DIR/scripts/cycle-merge.mjs" escalate --dir <run dir> --story $card --stage <next.stage> --conditions '<next.conditions JSON array>'` — report `comment.posted` (a failed post never changes the outcome), run `on-halt --status escalated` then `post-cycle`, and stop with terminal `escalated` (the invocation fails: exit 1 for `pair-cli run`). The PR stays open; merging it manually stays possible. Re-invoking re-reads the labels: still matching ⇒ escalated again, no work and no duplicate comment (marker-keyed); gone ⇒ the cycle resumes from its first incomplete step. `escalated` is distinct from the batch's row status `escalate` (a review/fix budget exhausted).
+
+**`until: ready` / `until: pr`.** `done` with `target: ready` (nothing implemented past the prepare→implement boundary) or the converged `ready-for-merge` under `pr`: report it; `merge` is never reached whatever the merge gate says.
+
+**Merge (`next.step: merge`).** The stage is a script, never a subagent, and this skill still decides nothing: run `node "$SKILL_DIR/scripts/cycle-merge.mjs" check --dir <run dir> --story $card --pr <next.pr> --reviewedHead <next.reviewedHead> --cardTier <next.tier> (--autoAdvance '<the tiers JSON array>' | --mergeGate '<the merge gate JSON {mode,has,lacks}>')`. It re-reads the tier, the remote head and the `pair-review` / `pair-explicit-approval` conclusions live; on `mergeAllowed: false` it has already parked the card with a comment naming the failed condition — report its `reason`. On `true`, run `/pair-capability-verify-quality` for the tier, then `cycle-merge.mjs run` with the same flags plus `--gate green|red`, `--message '<squash message per the commit template>'` and `--branch <card branch>` (run from the main checkout), and report its `merged` / `cascaded` / `reason` verbatim. `merged: true, cascaded: false` names the closure step left for a human.
 
 **Verify.** Without the `merge` stage, you have not merged, not closed the card, not deleted a branch and not posted a review: a converged cycle is a card ready for a human. With it, every one of those was done by `cycle-merge.mjs`, and only after it had re-verified the conjunction itself.
 
@@ -223,6 +239,7 @@ Two commands replace the hand edits US-487's run needed. They are the maintainer
 | `profile-invalid`        | The selected profile does not validate: unknown key or stage, `context: reuse` into a stage the transition table forbids (`validate`, `verify`, …), malformed JSON or `workflowProfiles` block | The script's `detail`, naming the offending field — nothing is dispatched |
 | `profile-name-collision` | Two profile files under `workflowProfiles.files` declare the same `name`                | Both paths, from the script's `detail`                                                      |
 | `host-unsupported`       | way-of-working declares a `pm-tool` / `code-host` with no adapter in `scripts/host/`  | The declared value, the side, and the implemented set — never a GitHub fallback. Adding one: the host-adapter extension guide |
+| `automation-policy-malformed` | `autonomy-policy.mjs resolve` answers `ok: false` (unknown key, malformed gate, `has:`/`lacks:` without `when`, an `until` outside the enum, differing legacy coexistence) | Each `errors[].key` and reason, verbatim |
 | `usage`                  | `$card` and `$pr` both given, or neither                                                | The two valid entries                                                                      |
 
 An unrecognized `resolve` output is a HALT too, never a silent degradation: this skill fails closed everywhere.
@@ -238,7 +255,7 @@ An unrecognized `resolve` output is a HALT too, never a silent degradation: this
 
 ## Output Format
 
-`{ status, card, pr, runId, realization, terminal, reviewedHead?, roundsSpent, roundsBound, stages: [{ step, phase, context, dispatches, outcome }], halt?, detail? }` — `terminal` is one of `ready-for-merge | escalate | failed-preparation | failed-contract | failed-implement | failed-fix | failed-verify | failed-resume | failed-hook | awaiting-scope-decision`, copied from `resolve`, never synthesized.
+`{ status, card, pr, runId, realization, terminal, reviewedHead?, roundsSpent, roundsBound, stages: [{ step, phase, context, dispatches, outcome }], halt?, detail? }` — `terminal` is one of `ready-for-merge | target-ready | escalated | escalate | failed-preparation | failed-contract | failed-implement | failed-fix | failed-verify | failed-resume | failed-hook | awaiting-scope-decision`, copied from `resolve`, never synthesized.
 
 ## Notes
 
