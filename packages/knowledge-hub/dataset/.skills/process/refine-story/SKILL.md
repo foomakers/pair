@@ -1,7 +1,7 @@
 ---
 name: refine-story
 description: "Refines a user story from Draft to Ready — the single Draft→Ready path (D24): phase 0 grill(sync), Given-When-Then acceptance criteria, map-subdomains/map-contexts scoped analysis, classify matrix, sprint readiness. Composes /grill, /map-subdomains, /map-contexts, /classify, /write-issue. Not for sizing an already-refined story (use /estimate)."
-version: 0.8.0
+version: 0.9.0
 author: Foomakers
 ---
 
@@ -30,6 +30,8 @@ Executable form of the **`refine-story`** step, and a composer of `define-subdom
 | Argument | Required | Description                                                                                                     |
 | -------- | -------- | --------------------------------------------------------------------------------------------------------------- |
 | `$story` | No       | Story identifier (e.g., `#42`). If omitted, the skill selects the highest-priority `Draft` story from the backlog. |
+| `$approval` | No    | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (Steps 2–4 rounds ask nothing: the presented criteria, analysis and sizing are accepted and reported; Step 0's selection needs `$story`). Phase 0 is a judgement gate and **HALTs under every value of `$approval`** unless `$prepare` also lifts it. See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
+| `$prepare` | No     | Prepare mode (ADR-027): `always` (default, R3.11 intact — phase 0 composes `/grill` and blocks), `never` or `when` (the maintainer-declared exception — with `$approval: auto`, phase 0 self-answers into `## Assumptions` and the Ready write is held back). `$approval: auto` alone never lifts phase 0 — it still HALTs. |
 
 ## Algorithm
 
@@ -49,6 +51,8 @@ Executable form of the **`refine-story`** step, and a composer of `define-subdom
 
 5. **Verify**: A story is identified (from `$story` or developer confirmation) and its current body is available for Step 1's section detection.
 
+Under `$approval: auto` there is nobody to confirm a pick: `$story` is required, and without it the skill returns to the caller instead of selecting.
+
 ### Phase 0: Shared-Understanding Sync (grill — BLOCKING)
 
 **This is the R3.11 AI↔human alignment gate — a prerequisite, not optional.** No DoR section is authored until shared understanding is explicit; it is the reason no separate "make-ready" step exists (D24). Phase 0 runs between Step 0 (selection) and Step 1 (detection): the already-Ready check below is a light read of the body to decide whether to skip the sync — Step 1's detection table is where that state is formally determined.
@@ -56,9 +60,15 @@ Executable form of the **`refine-story`** step, and a composer of `define-subdom
 1. **Check**: Has phase 0 already reached explicit shared understanding this session, or does a prior `/grill` sync handoff for this story exist in `.pair/working/`, or is the story already Ready (Step 1 confirms-and-exits)?
 2. **Skip**: If shared understanding is already confirmed (or the story is already Ready), move to Step 1.
 3. **Act**: Is `/grill` installed?
-   - **Yes**: Compose `/grill` with `$mode: sync`, `$story: [story-id]`, and `$context: <current story body>` so grill doesn't re-fetch it. Grill systematically covers all six aspects (goal, AC, edge cases, dependencies, design, risks) one question at a time and returns the alignment synthesis pre-mapped to the Refined template sections. **Resume**: if a prior sync was interrupted, its partial synthesis handoff is loaded and the sync resumes from the first open aspect — prior answers are not re-asked.
+   - **Yes** (`$prepare` absent or `always` — the default, and the only value a caller that passes nothing gets): Compose `/grill` with `$mode: sync`, `$story: [story-id]`, and `$context: <current story body>` so grill doesn't re-fetch it. Grill systematically covers all six aspects (goal, AC, edge cases, dependencies, design, risks) one question at a time and returns the alignment synthesis pre-mapped to the Refined template sections. **Resume**: if a prior sync was interrupted, its partial synthesis handoff is loaded and the sync resumes from the first open aspect — prior answers are not re-asked.
    - **No**: Warn (`/grill not installed — skipping the phase 0 sync; alignment falls to the per-step human-judgment gates in Steps 2–4`) and proceed; the explicit approval gates in Steps 2–4 remain the alignment mechanism.
-4. **Verify**: `/grill` returned **explicit shared understanding** (grill never auto-exits on an empty queue — only an explicit human "yes" ends it), or the skip was warned. Without shared understanding → **HALT**: refinement does not proceed on an unaligned story.
+4. **Verify**: `/grill` returned **explicit shared understanding** (grill never auto-exits on an empty queue — only an explicit human "yes" ends it), or the skip was warned. Without shared understanding → **HALT**: refinement does not proceed on an unaligned story. <!-- approval-round: kind=gate; auto=halt -->
+
+**Exception — autonomous prepare (ADR-027, maintainer-declared).** Phase 0 is lifted only when the caller passes both `$approval: auto` and `$prepare: never|when`. `$approval: auto` alone (or with `$prepare` absent or `always`) still HALTs at phase 0 exactly as above — the generic signal never bypasses R3.11 (ADR-021). Under the exception `/grill` is not composed, and instead:
+
+1. **Act**: For each question the sync would have asked (goal, AC, edge cases, dependencies, design, risks), answer it from code, KB and the linked context, and record it in the story's `## Assumptions` section — each entry: question, answer chosen, evidence, how to overturn.
+2. **Act**: A question that needs a product decision (evidence cannot settle it) is **not** self-answered: return it as `open-question` to the caller, write nothing, and leave the story Draft.
+3. **Verify**: `## Assumptions` is non-empty, or carries the explicit line `none: every question settled from repository evidence` with the evidence list. Then continue at Step 1.
 
 ### Step 1: Detect Refinement State
 
@@ -115,9 +125,11 @@ Executable form of the **`refine-story`** step, and a composer of `define-subdom
    > [Edge cases]
    > [Dropped by a recorded decision: [criterion] — [decision id] rejected this]
    > [Reshaped by a recorded decision: [criterion] — [decision id]]
-   > Approve or adjust?
+   > Approve or adjust? <!-- approval-round: kind=confirm; auto=accept -->
 
-5. **Verify**: Human-judgment gate — the developer explicitly approves the presented Given-When-Then scenarios, business rules, and edge cases (or requests changes, looping back to Step 2's Act). **Every criterion a record dropped or reshaped is shown in item 4's prompt with that record named** — an approval is never taken on a list the developer cannot tell is shorter. Only an explicit approval finalizes the criteria.
+5. **Verify**: Human-judgment gate — the developer explicitly approves the presented Given-When-Then scenarios, business rules, and edge cases (or requests changes, looping back to Step 2's Act). **Every criterion a record dropped or reshaped is shown in item 4's prompt with that record named** — an approval is never taken on a list the developer cannot tell is shorter. Only an explicit approval finalizes the criteria. <!-- approval-round: kind=confirm; auto=accept -->
+
+   Under `$approval: auto` items 4–5 are not asked: the criteria are accepted and reported (records named, as in item 4).
 
 ### Step 3: Technical Analysis
 
@@ -131,8 +143,10 @@ Executable form of the **`refine-story`** step, and a composer of `define-subdom
    - Reference [architecture.md](../../../.pair/adoption/tech/architecture.md) and [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md).
    - **Adoption-informed** (Step 1b): an approach a live record already settled is followed and **cited** rather than re-proposed; an approach a live record rejected is not proposed at all, and the rejection is reported instead. An approach that genuinely reopens a record is presented in item 3 labelled `Revisits <id>: <one-line why>` for the developer to accept or reject.
 2. **Act**: Touched-context mapping (technical). Is `/map-contexts` installed? Compose `/map-contexts` with `$scope: [the contexts/services this story touches]` — **scoped, never `$scope: all`** (that is `/bootstrap`-only). It maps the touched subdomains to bounded contexts and assesses each relationship (integration strength, socio-technical distance, volatility) to derive a balanced/unbalanced verdict. **When it reports an unbalanced integration this story introduces — strong coupling toward a distant and/or volatile context — record it as a row in the Technical Risks and Mitigation table** (D38): the coupling risk this story adds, its impact, and the mitigation. This same map-contexts output feeds the **Coupling balance** dimension of the classification matrix (Step 3b) — refine-story runs no coupling assessment of its own; the inputs come from the scoped map-contexts output and the subdomain catalog volatility (D24). Not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md), or no domain artifacts → coupling is "not assessed", excluded from the matrix max, never blocks (D21).
-3. **Act**: Present technical analysis (strategy, key components, integration points, and any coupling risk from the mapping) to developer for validation — with each decision cited and each `Revisits <id>` flag shown, so the developer approves the decisions applied, not just the approach.
-4. **Verify**: Human-judgment gate — the developer explicitly approves the presented strategy, key components, and risks (or requests changes, looping back to Step 3's Act). Only an explicit approval finalizes the analysis.
+3. **Act**: Present technical analysis (strategy, key components, integration points, and any coupling risk from the mapping) to developer for validation — with each decision cited and each `Revisits <id>` flag shown, so the developer approves the decisions applied, not just the approach. <!-- approval-round: kind=confirm; auto=accept -->
+4. **Verify**: Human-judgment gate — the developer explicitly approves the presented strategy, key components, and risks (or requests changes, looping back to Step 3's Act). Only an explicit approval finalizes the analysis. <!-- approval-round: kind=confirm; auto=accept -->
+
+   Under `$approval: auto` items 3–4 are not asked: the analysis is accepted and reported (citations and `Revisits <id>` flags shown).
 
 ### Step 3b: Classification (shift-left matrix)
 
@@ -152,24 +166,27 @@ Executable form of the **`refine-story`** step, and a composer of `define-subdom
    - Assess sprint fit — split if oversized while preserving user value.
    - Map dependencies (prerequisite and dependent stories).
    - Define validation and testing strategy.
-2. **Act**: Present sizing assessment to developer.
-3. **Verify**: Human-judgment gate — the developer explicitly approves the sizing, dependencies, and validation strategy presented in Step 4's Act. Only an explicit approval confirms sprint readiness.
+2. **Act**: Present sizing assessment to developer. <!-- approval-round: kind=confirm; auto=accept -->
+3. **Verify**: Human-judgment gate — the developer explicitly approves the sizing, dependencies, and validation strategy presented in Step 4's Act. Only an explicit approval confirms sprint readiness. <!-- approval-round: kind=confirm; auto=accept -->
+
+   Under `$approval: auto` items 2–3 are not asked: sizing, dependencies and validation strategy are accepted and reported.
 
 ### Step 5: Documentation and PM Tool Update
 
 1. **Act**: Assemble the complete refined story body using the [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)) Refined template:
    - **Functional sections first**: Story Statement → Epic Context → Classification (the Step 3b matrix) → Acceptance Criteria → Definition of Done → Story Sizing → Dependencies → Validation → Notes.
    - **Technical sections last**: Technical Analysis → (Task Breakdown added later by `/plan-tasks`).
+   - **Under `$prepare: never|when`**: the body also carries `## Assumptions` (phase 0 exception) and a Notes line `Prepared autonomously under prepare: <value> (<source>) — ADR-027`.
 2. **Act**: Compose `/write-issue` with:
    - `$type: story`
    - `$content`: the assembled refined story body
    - `$id`: the story identifier (update mode — story already exists)
-   - `$status: Ready` — **pass it only when a board state maps to the `Ready` macrostate** (a presence check on the `state-mapping`, not a resolution). `/write-issue` owns the board-field write: it resolves `Ready` to the target board state via the [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) writing rule (first board state mapped to `Ready`; e.g. `Refined` on pair's own board) and updates the Status field (its Step 6). **Omit `$status` when no board state maps to `Ready`** (a minimal board, D4): the completed DoR sections on the body are themselves the readiness signal per the [definition-of-ready-and-done.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md) **Readiness Fallback**, and omitting it avoids `/write-issue`'s unmapped-macrostate HALT (its Step 6). Idempotent: a story already at `Ready` is confirmed, not re-moved — refine-story runs no board-field write of its own (D24).
-3. **Verify**: Either `/write-issue` wrote the board state resolved from `$status: Ready` (mapping present), or (no mapping, `$status` omitted) all six DoR criteria are satisfied on the body as the readiness signal.
+   - `$status: Ready` — **pass it only when a board state maps to the `Ready` macrostate** (a presence check on the `state-mapping`, not a resolution). `/write-issue` owns the board-field write: it resolves `Ready` to the target board state via the [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) writing rule (first board state mapped to `Ready`; e.g. `Refined` on pair's own board) and updates the Status field (its Step 6). **Omit `$status` when no board state maps to `Ready`** (a minimal board, D4): the completed DoR sections on the body are themselves the readiness signal per the [definition-of-ready-and-done.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md) **Readiness Fallback**, and omitting it avoids `/write-issue`'s unmapped-macrostate HALT (its Step 6). Idempotent: a story already at `Ready` is confirmed, not re-moved — refine-story runs no board-field write of its own (D24). **Under `$prepare: never|when`, omit `$status: Ready` always** — the card stays Draft until the task breakdown exists, and the caller writes Ready after it (the body still carries the DoR sections, but the board state is not moved here).
+3. **Verify**: Either `/write-issue` wrote the board state resolved from `$status: Ready` (mapping present), or (no mapping, `$status` omitted) all six DoR criteria are satisfied on the body as the readiness signal. Under `$prepare: never|when` `$status` is omitted by design and Ready is not claimed.
 
 ### Step 6: Already-Ready Update (optional path)
 
-Reached only when Step 1 detects all sections are present.
+Reached only when Step 1 detects all sections are present. Under `$approval: auto` an already-Ready story is confirmed and exits — the update path is interactive-only.
 
 1. **Act**: Ask the developer which sections to update:
 
@@ -179,7 +196,7 @@ Reached only when Step 1 detects all sections are present.
    > 3. Sprint Sizing
    > 4. All sections
 
-2. **Act**: For selected sections, re-execute the corresponding step (2, 3, or 4). Step 1b already ran on this invocation (it has no skip condition), so the in-scope records — including any recorded **since** the last refinement — are available to the re-authored section, with its citations and `Revisits <id>` flags shown in that step's own confirmation prompt.
+2. **Act**: For selected sections, re-execute the corresponding step (2, 3, or 4). Step 1b already ran on this invocation (it has no skip condition), so the in-scope records — including any recorded **since** the last refinement — are available to the re-authored section, with its citations and `Revisits <id>` flags shown in that step's own confirmation prompt. <!-- approval-round: kind=confirm; auto=accept -->
 3. **Act**: Compose `/write-issue` with `$type: story`, `$id: [story-id]`, and updated `$content`.
 4. **Verify**: Story updated.
 
@@ -188,8 +205,8 @@ Reached only when Step 1 detects all sections are present.
 ```text
 STORY REFINEMENT COMPLETE:
 ├── Story:    [#ID: Title]
-├── Status:   [Ready | Updated | Ready (DoR-on-body — no board mapping)]
-├── Sync:     [shared understanding confirmed | grill skipped — per-step gates]
+├── Status:   [Ready | Updated | Ready (DoR-on-body — no board mapping) | Draft (Ready held — prepare exception)]
+├── Sync:     [shared understanding confirmed | grill skipped — per-step gates | self-answered — N assumptions recorded]
 ├── Sections: [N/N complete]
 ├── Matrix:   [risk:<tier> · cost:<class> | classify not installed — no matrix]
 ├── Domain:   [subdomain placement + touched contexts | map-* not installed — skipped]
@@ -207,6 +224,8 @@ The `Next:` line names only steps enabled by the project's [process profile](../
 - **Story not found** (Step 0) — invalid `$story` identifier.
 - **No shared understanding** (Phase 0) — `/grill` sync ended without an explicit human "yes"; refinement never proceeds on an unaligned story.
 - **PM tool not accessible** — cannot read or update stories.
+- **`$approval: auto` without `$prepare: never|when`** (Phase 0) — the judgement gate is not lifted by the generic signal; the run HALTs.
+- **Open question** (Phase 0 exception) — a product decision evidence cannot settle is returned as `open-question`; the story stays Draft.
 - **Developer rejects criteria** (Steps 2–4) — must resolve before proceeding.
 
 ## Graceful Degradation
@@ -225,6 +244,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 - **The single Draft→Ready path** (R3.12, D24): refinement IS the transition to `Ready` — there is no separate "make-ready" skill and none is ever added. Phase 0's grill sync is the R3.11 alignment gate that makes this one skill sufficient.
 - **R3.11 is "not optional" as a gate, not as a specific skill**: the AI↔human alignment gate always runs. When `/grill` is installed it runs the systematic phase 0 sync; when it is not, the explicit per-step human-judgment approval gates in Steps 2–4 are the accepted satisfaction of R3.11 (graceful-degradation convention). What is never skipped is explicit human alignment before the story reaches `Ready`.
+- **Autonomous prepare (ADR-027)** is the only exception to R3.11, is maintainer-declared, and needs both `$approval: auto` and `$prepare: never|when`; every self-answer is recorded in `## Assumptions` for a human to overturn. ADR-024 §8 is unchanged: tag dispatch still refuses this skill.
 - This skill **modifies PM tool state** — it updates story issues and transitions the item to `Ready`.
 - **Adoption-informed** (Step 1b) — the read is **read-only**: refinement never writes a decision record. Recording stays with the developer and `/record-decision`; what refinement does with the records is constrain, cite, and flag a revisit, per the shared convention. The context map's inline glossary maintenance (Step 2) is the separate, guideline-authorized write — not part of this read.
 - **Composes, never re-derives**: domain placement comes from `/map-subdomains`, touched-context/coupling from `/map-contexts`, the matrix from `/classify` — refine-story orchestrates them scoped to the story and owns no assessment criteria of its own (D24).
