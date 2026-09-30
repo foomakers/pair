@@ -30,17 +30,16 @@ export function createWait(deps: WaitDeps = realDeps): Wait {
     new Promise<WaitOutcome>(resolve => {
       if (deps.isInterrupted()) return resolve('interrupted')
       let settled = false
-      let handle: unknown
-      let unsubscribe: () => void = () => undefined
-      const settle = (outcome: WaitOutcome): void => {
+      // Both are assigned below, before any callback can fire (timers and signals are async).
+      const handle = deps.setTimer(() => settle('elapsed'), ms)
+      const unsubscribe = deps.onInterrupt(() => settle('interrupted'))
+      function settle(outcome: WaitOutcome): void {
         if (settled) return
         settled = true
         deps.clearTimer(handle)
         unsubscribe()
         resolve(outcome)
       }
-      handle = deps.setTimer(() => settle('elapsed'), ms)
-      unsubscribe = deps.onInterrupt(() => settle('interrupted'))
     })
 }
 
