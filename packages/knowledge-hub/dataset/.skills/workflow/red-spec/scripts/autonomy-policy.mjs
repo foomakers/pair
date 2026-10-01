@@ -154,17 +154,32 @@ const sectionLines = (markdown, heading) => {
   return { lines: bodies[0].map(l => l.trim()).filter(Boolean) }
 }
 
+// `## Eligibility` keeps ITS OWN grammar (the guideline's HALT triggers, in the same order as pair-cli's
+// `readEligibility` + `assertLabelValue` + `isSafePromptText`): translating it with the stricter `labelError`
+// would HALT a legacy-only project that declares nothing new. A label the legacy reader accepts goes into
+// `filter` verbatim; `labelError` stays for the `## Autonomy` keys.
+function legacyEligibilityError(lines) {
+  if (lines.length === 0) return 'is present but empty (a half-written declaration)'
+  if (lines.length > 1) return 'takes exactly one label'
+  const v = lines[0]
+  if (v.includes(',') || /(^|\s)(AND|OR|NOT)(\s|$)/.test(v)) return `declares \`${v}\`, but the declaration takes exactly one label`
+  if (MARKDOWN_MARKERS.some(m => v.startsWith(m))) return `declares \`${v}\`, which is a copied markdown wrapper, not a bare label`
+  if (v.length > LABEL_CAP) return `declares a ${v.length}-character value, longer than the host's label cap (${LABEL_CAP})`
+  if (v.split(/\s+/).filter(t => t.includes(':')).length > 1) return `declares \`${v}\`, which juxtaposes several labels on one line`
+  if (v.length === 0 || v.length > MAX_TEXT || v.includes('`') || v.includes('$(') || hasControl(v)) return 'declares a value that contains a character that could turn it into a command fragment once inlined in an agent prompt (backtick, `$(`, a newline or control character, or over ' + MAX_TEXT + ' characters)'
+  return null
+}
+
 // `## Eligibility` -> filter; `## Auto-Advance` -> merge. Old sections keep their single-label rule.
 function translateLegacy(markdown) {
   const errors = []
   const translated = {}
   const elig = sectionLines(markdown, 'Eligibility')
   if (elig.errors) errors.push(...elig.errors)
-  else if (elig.lines !== undefined && elig.lines.length > 0) {
-    const v = elig.lines[0]
-    const why = elig.lines.length > 1 ? 'takes exactly one label' : v.includes(',') ? 'takes exactly one label' : labelError(v)
+  else if (elig.lines !== undefined) {
+    const why = legacyEligibilityError(elig.lines)
     if (why) errors.push(err('Eligibility', `\`## Eligibility\` ${why}`))
-    else translated.filter = { value: [v], from: '## Eligibility' }
+    else translated.filter = { value: [elig.lines[0]], from: '## Eligibility' }
   }
   const aa = sectionLines(markdown, 'Auto-Advance')
   if (aa.errors) errors.push(...aa.errors)
