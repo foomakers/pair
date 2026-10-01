@@ -3,10 +3,14 @@ import { join } from 'path'
 import { POLICY_PATH, policyHalt } from './policy-sections'
 import {
   createCycleScriptsBridge,
+  locateCycleScripts,
   type AutonomyResolution,
   type CycleScriptsLocation,
 } from './cycle-scripts'
 import type { RunCommandConfig } from './parser'
+import { mainCheckout } from './cycle-wiring'
+import type { FileSystemService } from '@pair/content-ops'
+import type { Config } from '#registry'
 
 /**
  * The autonomy policy of `run --card` (US-521, ADR-027) — READ through the shared script, never derived.
@@ -80,4 +84,53 @@ export function describeAutonomy(resolution: AutonomyResolution): string[] {
     ),
     ...resolution.warnings.map(warning => `  ! ${warning}`),
   ]
+}
+
+/**
+ * The ONE resolution at the `run` entry (r0-2/r0-3) — before the route is chosen, so a malformed policy HALTs
+ * on every route (DoR fallback, dry run, `--pr`, mapped, unattended skip) before anything is touched, and the
+ * effective values are printed once. `undefined` only when the cycle scripts are not installed and nothing
+ * autonomy-related was passed (the legacy path, byte for byte).
+ */
+export function resolveRunAutonomy(input: {
+  readonly resolver: AutonomyResolver
+  readonly config: RunCommandConfig
+  readonly projectConfig: Config
+  readonly fs: FileSystemService
+  readonly cwd: string
+}): AutonomyResolution | undefined {
+  const args = autonomyArgumentsOf(input.config)
+  let location: CycleScriptsLocation
+  try {
+    location = locateCycleScripts(input.fs, input.projectConfig, input.cwd)
+  } catch (error) {
+    if (Object.keys(args).length > 0) throw error
+    return undefined
+  }
+  let main = input.cwd
+  try {
+    main = mainCheckout(input.cwd)
+  } catch {
+    // no git repository behind cwd: the policy is read from cwd itself
+  }
+  const resolution = resolveAutonomyPolicy(input.resolver, {
+    location,
+    main,
+    cwd: input.cwd,
+    args,
+  })
+  if (resolution !== undefined)
+    for (const line of describeAutonomy(resolution)) console.log(`  ${line}`)
+  return resolution
+}
+
+/** A selection value the adoption declared (`## Autonomy`, source `adoption` exactly), never an argument or default. */
+export function adoptionSelection(
+  resolution: AutonomyResolution | undefined,
+  key: 'filter' | 'assignee' | 'status' | 'root',
+): string | undefined {
+  const entry = resolution?.effective?.[key]
+  if (entry === undefined || entry.source !== 'adoption' || entry.value === undefined)
+    return undefined
+  return Array.isArray(entry.value) ? entry.value.join(',') : String(entry.value)
 }

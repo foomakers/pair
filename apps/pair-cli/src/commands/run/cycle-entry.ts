@@ -15,7 +15,6 @@ import {
 import { createDefaultCycleDriver, mainCheckout } from './cycle-wiring'
 import {
   autonomyArgumentsOf,
-  describeAutonomy,
   resolveAutonomyPolicy,
   spawnAutonomyResolver,
 } from './autonomy-policy'
@@ -157,8 +156,6 @@ function reportCycleEntry(input: {
     `  Rounds bound: ${input.dispatch.rounds ?? '(policy default: maxFixRounds)'} — rounds narrows, never widens it`,
   )
   console.log(`  Dispatch ceiling: ${input.shown.maxDispatchesDisplay}`)
-  if (input.autonomy !== undefined)
-    for (const line of describeAutonomy(input.autonomy)) console.log(`  ${line}`)
 }
 
 /** The executable this run will actually spawn: config, then PATH, then the repo's own bin. */

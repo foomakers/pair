@@ -126,7 +126,8 @@ Execute these checks **in order**. Stop at the first match.
 
 Run this before every other step, on **every** invocation — the result is never carried over from a previous run or step.
 
-1. **No arguments** → the candidate set is the full backlog; skip to Step 1.
+0. **Resolve the effective selection first** — run `node <pair-workflow-cycle skill dir>/scripts/autonomy-policy.mjs resolve --adoption .pair/adoption/tech/automation.md --args '<JSON of the arguments given>'` (the one shared script `pair-cli run` and `/pair-workflow-cycle` also use; `## Autonomy` is read there, with the legacy `## Eligibility` translation) and use its `effective` `root`/`filter`/`assignee`/`status` as the arguments below: argument > adoption (`## Autonomy`) > default, per key. A non-empty `errors` ⇒ **HALT** naming each key; never read a malformed key as absent. **Print** the script's `lines` (every effective value with its source) and its `warnings` before anything else.
+1. **No arguments and no adoption selection** (every selection key `default`) → the candidate set is the full backlog; skip to Step 1.
 2. **`--root <id>`** → resolve the issue via the PM tool.
    - **Root not found** (id does not resolve to an issue): **HALT** with a clear message (`root <id> not found`) and propose no action.
    - **Root resolves to a Done issue**: report that the root is already Done and exit; propose no work.
@@ -287,7 +288,7 @@ PROJECT STATE:
 ├── Subdomains: [populated | template]
 ├── Bounded Contexts: [populated | template]
 ├── PM Tool: [tool name | not configured]
-├── Scope: [full backlog | root #ID (subtree) | filter <tag[,tag…]> | assignee <login> | status <macrostates> | any intersection of them]
+├── Scope: [full backlog | root #ID (subtree) | filter <tag[,tag…]> | assignee <login> | status <macrostates> | any intersection of them], each value with its source (argument | adoption | default)
 ├── Profile: [default (no section) | poc | custom — N/M steps enabled]
 └── Backlog: [summary of current items — within scope]
 

@@ -9,11 +9,12 @@ import {
   resolveInvocation,
   type ResolvedInvocation,
 } from './resolve-skill'
-import { createPerimeter, describePerimeter } from './perimeter'
+import { createPerimeter, describePerimeter, type Perimeter } from './perimeter'
 import { describeMergePosture, describeParallelism } from './automation-policy'
 import { describeApprovalPosture, filterDeliveryFor, selectionDeliveredBy } from './invocation'
 import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
+import { adoptionSelection, resolveRunAutonomy, spawnAutonomyResolver } from './autonomy-policy'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
 import { refuseProfileOffCycle } from './workflow-profile'
 import { handleParallelRun } from './parallel-entry'
@@ -60,6 +61,39 @@ function scopeRoot(config: RunCommandConfig, dispatch?: DispatchDecision): strin
 }
 
 /**
+ * US-521 (r0-3): `## Autonomy` selection keys are borrowed exactly like `## Eligibility` — argument >
+ * adoption per key, from the ONE shared resolution; a key the skill cannot carry is never invented.
+ */
+function perimeterFor(input: {
+  config: RunCommandConfig
+  context: RunContext
+  cwd: string
+  invocation: ResolvedInvocation
+}): Perimeter {
+  const { config, context, cwd, invocation } = input
+  const selection = context.autonomySelection
+  const selectionDelivered = selectionDeliveredBy(invocation)
+  const adopted = (key: 'assignee' | 'status') =>
+    selectionDelivered ? adoptionSelection(selection, key) : undefined
+  return createPerimeter({
+    root: scopeRoot(config, context.dispatch) ?? adoptionSelection(selection, 'root'),
+    filter: config.scope.filter,
+    assignee: config.scope.assignee ?? adopted('assignee'),
+    status: config.scope.status ?? adopted('status'),
+    selectionDelivered,
+    eligibility: adoptionSelection(selection, 'filter') ?? context.policy.eligibility,
+    cwd,
+    cwdDeclared: config.cwd !== undefined,
+    requestedCap: config.maxIterations,
+    policyCap: context.policy.maxIterations,
+    invocationKind: invocation.kind,
+    // Whether `--filter` can be HONOURED, and by whom, depends on the skill the cascade resolved,
+    // so the check has to happen after skill resolution and before any spawn (round 1, finding 1).
+    filterDelivery: filterDeliveryFor(invocation),
+  })
+}
+
+/**
  * Everything is resolved BEFORE anything is spawned, and every resolution is printed: engine and
  * the level it came from (AC1), skill and any fallback (AC2), the perimeter (AC5), the autonomy
  * and trust posture (AC6), the borrowed policy and the declared parallelism limit (AC8/AC9).
@@ -86,22 +120,7 @@ function resolveRun(
     context.dispatch?.kind === 'route'
       ? { kind: 'skill', name: context.dispatch.workflow, source: 'mapping' }
       : resolveInvocation(config.invocation, context.probe)
-  const perimeter = createPerimeter({
-    root: scopeRoot(config, context.dispatch),
-    filter: config.scope.filter,
-    assignee: config.scope.assignee,
-    status: config.scope.status,
-    selectionDelivered: selectionDeliveredBy(invocation),
-    eligibility: policy.eligibility,
-    cwd,
-    cwdDeclared: config.cwd !== undefined,
-    requestedCap: config.maxIterations,
-    policyCap: policy.maxIterations,
-    invocationKind: invocation.kind,
-    // Whether `--filter` can be HONOURED, and by whom, depends on the skill the cascade resolved,
-    // so the check has to happen after skill resolution and before any spawn (round 1, finding 1).
-    filterDelivery: filterDeliveryFor(invocation),
-  })
+  const perimeter = perimeterFor({ config, context, cwd, invocation })
   const autonomy = resolveAutonomyFor(engine.engine, config, cwd, fs)
 
   return {
@@ -134,6 +153,31 @@ function report(resolved: ResolvedRun, policyWarnings: readonly string[]): void 
 }
 
 /**
+ * US-521 (r0-2): the autonomy policy is resolved and printed ONCE here, before the route is chosen: a
+ * malformed one HALTs on every route before any card is touched. Downstream consumers receive this very
+ * resolution (through the context and the injected resolver) instead of re-resolving it.
+ */
+function resolveEntry(
+  config: RunCommandConfig,
+  fs: FileSystemService,
+  cwd: string,
+  callerDeps: RunHandlerDependencies,
+): { context: RunContext; deps: RunHandlerDependencies } {
+  const base = resolveContext(config, fs, cwd)
+  const selection = resolveRunAutonomy({
+    resolver: callerDeps.resolveAutonomy ?? spawnAutonomyResolver,
+    config,
+    projectConfig: base.config,
+    fs,
+    cwd,
+  })
+  return {
+    context: { ...base, ...(selection && { autonomySelection: selection }) },
+    deps: { ...callerDeps, resolveAutonomy: () => selection },
+  }
+}
+
+/**
  * Handles `pair-cli run` — the execution adapter (US-451).
  *
  * Composes resolution → refusals → the re-invocation loop. The process logic stays in the skill:
@@ -142,13 +186,13 @@ function report(resolved: ResolvedRun, policyWarnings: readonly string[]): void 
 export async function handleRunCommand(
   config: RunCommandConfig,
   fs: FileSystemService,
-  deps: RunHandlerDependencies = {},
+  callerDeps: RunHandlerDependencies = {},
 ): Promise<number> {
   // ABSOLUTE, always: the perimeter's directory is printed as the run's containment boundary and
   // probed against the engine's trust store, and `--cwd .` is neither legible as a boundary nor
   // comparable against an absolute trust-store key.
   const cwd = resolve(config.cwd ?? fs.currentWorkingDirectory())
-  const context = resolveContext(config, fs, cwd)
+  const { context, deps } = resolveEntry(config, fs, cwd, callerDeps)
 
   // US-491: `--root --parallel N` — the fan-out mode, its own entry (the parser guarantees no card).
   if (config.parallel !== undefined) {

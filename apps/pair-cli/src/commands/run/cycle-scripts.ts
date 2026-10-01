@@ -241,6 +241,10 @@ export interface AutonomyResolution {
     }
     readonly legacyTiers?: readonly string[]
   }
+  /** Per-key effective value and the source that won (argument | adoption | default | translated). */
+  readonly effective?: Readonly<
+    Record<string, { readonly value?: unknown; readonly source: string }>
+  >
   readonly lines: readonly string[]
   readonly warnings: readonly string[]
   readonly errors: readonly { readonly key: string; readonly reason: string }[]

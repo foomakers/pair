@@ -10,6 +10,7 @@ import { ENGINE_IDS, isEngineId, type EngineDefinition, type EngineId } from './
 import type { ResolvedInvocation, SkillProbe } from './resolve-skill'
 import { createSkillProbe } from './skill-probe'
 import type { Perimeter } from './perimeter'
+import type { AutonomyResolution } from './cycle-scripts'
 import { resolveAutonomy, type AutonomyDecision } from './autonomy'
 import { createProjectTrustProbe } from './trust-probe'
 import { readAutomationPolicy, type AutomationPolicy } from './automation-policy'
@@ -124,6 +125,8 @@ export interface RunContext {
   probe: SkillProbe
   policy: AutomationPolicy
   dispatch?: DispatchDecision
+  /** US-521: the run's ONE autonomy resolution (entry), or undefined when nothing applies. */
+  autonomySelection?: AutonomyResolution
   /** `<cwd>/<working_path>` — where the lock lives. */
   workingArea: string
   /** `<cwd>/<working_path>/<Audit Location>` — where every dispatch record is appended. */
