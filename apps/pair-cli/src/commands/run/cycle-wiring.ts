@@ -277,6 +277,15 @@ export function mainCheckout(cwd: string): string {
   }
 }
 
+/** `cwd` is often a test double with no git repository behind it: the policy read falls back to `cwd` itself. */
+export function mainCheckoutOrCwd(cwd: string): string {
+  try {
+    return mainCheckout(cwd)
+  } catch {
+    return cwd
+  }
+}
+
 export interface CycleDriverContext {
   readonly engine: EngineDefinition
   readonly cwd: string

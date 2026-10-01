@@ -8,7 +8,7 @@ import {
   type CycleScriptsLocation,
 } from './cycle-scripts'
 import type { RunCommandConfig } from './parser'
-import { mainCheckout } from './cycle-wiring'
+import { mainCheckoutOrCwd } from './cycle-wiring'
 import type { FileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
 
@@ -107,15 +107,9 @@ export function resolveRunAutonomy(input: {
     if (Object.keys(args).length > 0) throw error
     return undefined
   }
-  let main = input.cwd
-  try {
-    main = mainCheckout(input.cwd)
-  } catch {
-    // no git repository behind cwd: the policy is read from cwd itself
-  }
   const resolution = resolveAutonomyPolicy(input.resolver, {
     location,
-    main,
+    main: mainCheckoutOrCwd(input.cwd),
     cwd: input.cwd,
     args,
   })

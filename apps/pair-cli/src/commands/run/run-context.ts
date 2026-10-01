@@ -58,19 +58,7 @@ export interface DriveCycleInput {
   readonly pr?: number
   readonly rounds?: number | 'max'
   /** US-521: the ACTIVE autonomy policy as the shared script resolved it (absent ⇒ today's legacy path). */
-  readonly autonomy?: { readonly policy: AutonomyPolicyShape }
-}
-
-/** `autonomy-policy.mjs resolve`'s `policy` object, relayed. */
-export interface AutonomyPolicyShape {
-  readonly until: string
-  readonly prepare: unknown
-  readonly merge: {
-    readonly mode: string
-    readonly has: readonly string[]
-    readonly lacks: readonly string[]
-  }
-  readonly legacyTiers?: readonly string[]
+  readonly autonomy?: { readonly policy: AutonomyResolution['policy'] }
 }
 
 export interface DriveCycleResult {

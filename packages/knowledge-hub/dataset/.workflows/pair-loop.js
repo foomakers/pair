@@ -33,7 +33,9 @@ function findHeadingLine(lines, heading) {
       inFence = !inFence
       continue
     }
-    if (!inFence && line.trim() === `## ${heading}`) return i
+    // The policy's own rule (autonomy-policy.mjs sectionBodies): a trimmed `##\s+` line whose remaining text is the heading.
+    const t = line.trim()
+    if (!inFence && /^##\s+/.test(t) && t.replace(/^##\s+/, '') === heading) return i
   }
   return -1
 }
@@ -44,7 +46,7 @@ function sectionBody(text, heading) {
   if (idx === -1) return null // absent — caller applies its own fail-safe default
   let end = lines.length
   for (let i = idx + 1; i < lines.length; i++) {
-    if (/^## /.test(lines[i])) {
+    if (/^##\s+/.test(lines[i].trim())) {
       end = i
       break
     }

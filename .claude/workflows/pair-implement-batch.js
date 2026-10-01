@@ -179,7 +179,7 @@ export function autonomyRefusal(a) {
     let fenced = false
     for (const line of text.split('\n')) {
       if (line.trim().startsWith('```')) fenced = !fenced
-      else if (!fenced && line.trim() === '## Autonomy')
+      else if (!fenced && /^##\s+/.test(line.trim()) && line.trim().replace(/^##\s+/, '') === 'Autonomy') // the policy's own heading rule (autonomy-policy.mjs sectionBodies)
         return `${AUTONOMY_REFUSAL}: \`## Autonomy\` is declared in tech/automation.md, but implement-batch does not honour it yet — it never merges, and a declared gate is never silently ignored. Batch = cycle is a later story.`
     }
   }

@@ -12,7 +12,7 @@ import {
   type CycleDefaults,
   type CycleScriptsLocation,
 } from './cycle-scripts'
-import { createDefaultCycleDriver, mainCheckout } from './cycle-wiring'
+import { createDefaultCycleDriver, mainCheckout, mainCheckoutOrCwd } from './cycle-wiring'
 import {
   autonomyArgumentsOf,
   resolveAutonomyPolicy,
@@ -37,15 +37,6 @@ import {
   type RunContext,
   type RunHandlerDependencies,
 } from './run-context'
-
-/** `cwd` is often a test double with no git repository behind it: the policy read falls back to `cwd` itself. */
-function mainCheckoutOrCwd(cwd: string): string {
-  try {
-    return mainCheckout(cwd)
-  } catch {
-    return cwd
-  }
-}
 
 /**
  * The delivery-cycle entry of `pair-cli run --card` (US-487 AC1/AC10/AC11/AC12): a Ready card no

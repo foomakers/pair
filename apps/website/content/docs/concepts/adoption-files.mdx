@@ -161,10 +161,6 @@ risk:green
 
 **`## Auto-Advance`** — which tier, once its PR is review-approved, `pair-loop` may push and merge to the default branch with no human. A comma-separated list, or the literal `(none)`. Only the one tier the quality model already lets a machine self-merge (typically `risk:green`) may ever appear here — `risk:yellow`/`risk:red` is a malformed value. **Absent, or `(none)`, is the shipped default: auto-merge is off** until a project explicitly writes the tier here.
 
-```text
-
-## Autonomy
-
 ```markdown
 ## Autonomy
 
@@ -179,6 +175,7 @@ merge: when; has: cost:red; lacks: risk:green
 
 Precedence is argument > `## Autonomy` > KB default, and every run prints each effective value with its source. A legacy `## Eligibility` reads as `filter`, `## Auto-Advance` as `merge` (`(none)` = `always`, a tier = `when; lacks: <tier>`); a differing `## Autonomy` alongside them is refused. The `prepare` gate is parsed and validated; autonomous preparation lands in #523. `pair-implement-batch` and `pair-loop` do not honour `## Autonomy` yet (#524): they refuse it with `autonomy-not-supported-until-#524`.
 
+```text
 ## Stop Predicate
 
 tag:risk:red ⇒ Done
