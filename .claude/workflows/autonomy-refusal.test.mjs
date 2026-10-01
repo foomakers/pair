@@ -7,7 +7,8 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
-const src = name => readFileSync(new URL(`./${name}`, import.meta.url), 'utf8').replace(/^export /gm, '')
+const src = name =>
+  readFileSync(new URL(`./${name}`, import.meta.url), 'utf8').replace(/^export /gm, '')
 const BATCH = src('pair-implement-batch.js')
 const LOOP = src('pair-loop.js')
 const POINTER = /autonomy-not-supported-until-#524/
@@ -16,8 +17,17 @@ const STORY = { id: '292', title: 'T', branch: 'feat/#292-x' }
 const never = async () => {
   throw new Error('no agent may run')
 }
-const runBatch = args => new AsyncFunction('args', 'agent', 'parallel', 'log', BATCH)(args, never, never, () => {})
-const runLoop = args => new AsyncFunction('args', 'agent', 'parallel', 'workflow', 'phase', 'log', LOOP)(args, never, never, never, () => {}, () => {})
+const runBatch = args =>
+  new AsyncFunction('args', 'agent', 'parallel', 'log', BATCH)(args, never, never, () => {})
+const runLoop = args =>
+  new AsyncFunction('args', 'agent', 'parallel', 'workflow', 'phase', 'log', LOOP)(
+    args,
+    never,
+    never,
+    never,
+    () => {},
+    () => {},
+  )
 
 const POLICY = '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\n(none)\n'
 const AUTONOMY_POLICY = `${POLICY}\n## Autonomy\n\nuntil: merged\nmerge: never\n`
@@ -36,17 +46,24 @@ test('batch refuses a declared `## Autonomy` (policyText), naming the pointer', 
 })
 
 test('loop refuses a declared `## Autonomy` in policyText before any card is touched', async () => {
-  await assert.rejects(runLoop({ policyText: AUTONOMY_POLICY }), /autonomy-not-supported-until-#524/)
+  await assert.rejects(
+    runLoop({ policyText: AUTONOMY_POLICY }),
+    /autonomy-not-supported-until-#524/,
+  )
 })
 
 test('an `## Autonomy` heading inside a fence is documentation, not a declaration', async () => {
   const fenced = `${POLICY}\n## Notes\n\n\`\`\`\n## Autonomy\nuntil: merged\n\`\`\`\n`
   // batch: not refused by the guard (it then fails later for its own reasons, never with the pointer)
-  await runBatch({ cards: [STORY], policyText: fenced }).catch(e => assert.doesNotMatch(String(e.message), POINTER))
+  await runBatch({ cards: [STORY], policyText: fenced }).catch(e =>
+    assert.doesNotMatch(String(e.message), POINTER),
+  )
 })
 
 test('default off: no `## Autonomy` and no new argument — the pointer never appears', async () => {
-  await runBatch({ cards: [STORY], policyText: POLICY }).catch(e => assert.doesNotMatch(String(e.message), POINTER))
+  await runBatch({ cards: [STORY], policyText: POLICY }).catch(e =>
+    assert.doesNotMatch(String(e.message), POINTER),
+  )
   await runLoop({ policyText: POLICY }).catch(e => assert.doesNotMatch(String(e.message), POINTER))
 })
 
@@ -75,11 +92,17 @@ function instructs(text) {
 }
 
 test('G3-B1: a batch launched with only {cards} (no policyText) is refused before any agent runs, naming policyText, the #524 pointer and the recovery instruction', async () => {
-  await assert.rejects(runBatch({ cards: [STORY] }), e => POINTER.test(e.message) && instructs(e.message) && !NO_AGENT.test(e.message))
+  await assert.rejects(
+    runBatch({ cards: [STORY] }),
+    e => POINTER.test(e.message) && instructs(e.message) && !NO_AGENT.test(e.message),
+  )
 })
 
 test('G3-B2: the `stories` alias without policyText is refused the same way', async () => {
-  await assert.rejects(runBatch({ stories: [STORY] }), e => POINTER.test(e.message) && instructs(e.message) && !NO_AGENT.test(e.message))
+  await assert.rejects(
+    runBatch({ stories: [STORY] }),
+    e => POINTER.test(e.message) && instructs(e.message) && !NO_AGENT.test(e.message),
+  )
 })
 
 // G3-M1 — the launch surface. `meta` must stay a pure literal (the registry parses it statically), so it is
@@ -92,18 +115,35 @@ function metaOf(file) {
   const close = code.indexOf('\n}\n', open)
   return new Function(`return (${code.slice(code.indexOf('{', open), close + 2)})`)()
 }
-for (const file of ['./pair-implement-batch.js', '../../packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js']) {
-  test(`G3-M1: ${file} — the launch surface names policyText as REQUIRED, what it is and why`, { skip: !existsSync(new URL(file, import.meta.url)) && 'dataset copy not present beside this tree' }, () => {
-    const meta = metaOf(file)
-    const surface = meta.whenToUse
-    assert.match(surface, /REQUIRED args shape/)
-    assert.ok(instructs(surface), `whenToUse does not instruct policyText: ${surface.slice(0, 200)}…`)
-  })
+for (const file of [
+  './pair-implement-batch.js',
+  '../../packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js',
+]) {
+  test(
+    `G3-M1: ${file} — the launch surface names policyText as REQUIRED, what it is and why`,
+    {
+      skip:
+        !existsSync(new URL(file, import.meta.url)) && 'dataset copy not present beside this tree',
+    },
+    () => {
+      const meta = metaOf(file)
+      const surface = meta.whenToUse
+      assert.match(surface, /REQUIRED args shape/)
+      assert.ok(
+        instructs(surface),
+        `whenToUse does not instruct policyText: ${surface.slice(0, 200)}…`,
+      )
+    },
+  )
 }
 
 test('G3-B6: a non-string policyText is refused naming policyText, before any agent runs', async () => {
   for (const bad of [42, null, { text: AUTONOMY_POLICY }, ['## Autonomy']])
-    await assert.rejects(runBatch({ cards: [STORY], policyText: bad }), e => /policyText/.test(e.message) && !NO_AGENT.test(e.message), JSON.stringify(bad))
+    await assert.rejects(
+      runBatch({ cards: [STORY], policyText: bad }),
+      e => /policyText/.test(e.message) && !NO_AGENT.test(e.message),
+      JSON.stringify(bad),
+    )
 })
 
 test('G3-B4: legacy-only project (`## Eligibility` + `## Auto-Advance` risk:green) is NOT refused — the batch reaches its first dispatch', async () => {
@@ -115,7 +155,13 @@ test('G3-B5: no automation.md (policyText "") is NOT refused — the batch reach
 })
 
 test('G3-B7: `## Autonomy` declared ALONGSIDE the legacy sections is refused (the legacy sections do not shadow it)', async () => {
-  await assert.rejects(runBatch({ cards: [STORY], policyText: `${LEGACY}\n## Autonomy\n\nmerge: when; has: cost:red\n` }), POINTER)
+  await assert.rejects(
+    runBatch({
+      cards: [STORY],
+      policyText: `${LEGACY}\n## Autonomy\n\nmerge: when; has: cost:red\n`,
+    }),
+    POINTER,
+  )
 })
 
 test('the batch description still says it NEVER merges; pair-loop keeps its `--autoAdvance` merge call unchanged', () => {
@@ -123,3 +169,51 @@ test('the batch description still says it NEVER merges; pair-loop keeps its `--a
   assert.match(LOOP, /--autoAdvance '\$\{JSON\.stringify\(policy\.autoAdvance\.tiers\)\}'/)
   assert.doesNotMatch(LOOP, /--mergeGate/)
 })
+
+// ── PR #525 analysis §7 (AC-9 / BR-7): ONE answer to "is `## Autonomy` declared?" ─────────────────────
+// Ground truth is the shared module's own section reader (`parse(text).declared`, what `pair-cli run` and
+// `/pair-next` apply). The batch refusal and the loop refusal must answer the SAME for every heading
+// variant: a heading the policy applies but the batch/loop do not refuse is a declared gate silently
+// ignored. The module is resolved from whichever tree this file runs in (mirror or dataset twin).
+const POLICY_MODULE = [
+  '../skills/pair-workflow-cycle/scripts/autonomy-policy.mjs',
+  '../.skills/workflow/cycle/scripts/autonomy-policy.mjs',
+]
+  .map(p => new URL(p, import.meta.url))
+  .find(u => existsSync(u))
+const { parse: parsePolicy } = POLICY_MODULE ? await import(POLICY_MODULE.href) : {}
+const BODY = '\n\nmerge: when; has: cost:red\n'
+const HEADING_VARIANTS = [
+  // [row id, heading line(s), kind] — witness = the consumers disagree on the unfixed base; control = they agree
+  ['H-1', '##  Autonomy', 'witness: two spaces'],
+  ['H-2', '##\tAutonomy', 'witness: tab separator'],
+  ['H-3', '## \tAutonomy', 'witness: space + tab separator'],
+  ['H-4', '## Autonomy  ', 'control: trailing spaces'],
+  ['H-5', '## Autonomy\t', 'control: trailing tab'],
+  ['H-6', '## Autonomy', 'control: canonical heading'],
+  ['H-7', '```\n## Autonomy\n```', 'control: inside a fence'],
+  ['H-8', '### Autonomy', 'control: level 3'],
+  ['H-9', '##Autonomy', 'control: no separator'],
+]
+const refusedBy = run =>
+  run.then(
+    () => false,
+    e => POINTER.test(String(e?.message)),
+  )
+for (const [id, heading, kind] of HEADING_VARIANTS) {
+  test(
+    `${id} (${kind}): batch, loop and autonomy-policy agree on whether ${JSON.stringify(heading)} declares \`## Autonomy\``,
+    { skip: !parsePolicy && 'autonomy-policy.mjs not present beside this tree' },
+    async () => {
+      const policyText = `${POLICY}\n${heading}${BODY}`
+      const truth = parsePolicy(policyText).declared
+      const batch = await refusedBy(runBatch({ cards: [STORY], policyText }))
+      const loop = await refusedBy(runLoop({ policyText }))
+      assert.deepEqual(
+        { batch, loop },
+        { batch: truth, loop: truth },
+        `autonomy-policy declared=${truth}`,
+      )
+    },
+  )
+}
