@@ -645,6 +645,7 @@ while (true) {
   log(`Iteration ${iteration}: driving ${batch.length} card(s) via pair-implement-batch: ${batch.map(c => c.id).join(', ')}`)
   const batchResult = await workflow('pair-implement-batch', {
     cards: batch.map(c => ({ id: c.id, title: c.title, branch: c.branch })),
+    policyText: args.policyText,
   })
 
   phase('Advance')
