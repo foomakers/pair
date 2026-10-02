@@ -1508,7 +1508,7 @@ test('US-219: the note is derived from the STATUSES — an all-failed batch says
 test('batch note names the merge gate default as `always`, never reads "(default: never)" as the gate value', async () => {
   const mixed = await runWorkflow({ args: { cards: [{ id: '1', title: 'a', branch: 'b1' }] }, dispatch: stdDispatch() })
   assert.ok(!/default: never/.test(mixed.result.note), mixed.result.note)
-  assert.match(mixed.result.note, /allows it \(default always: parks awaiting-human, nothing merges\)/)
+  assert.match(mixed.result.note, /allows it \(default always: nothing merges; a review-approved card stops at ready-for-merge under the default until pr, parks awaiting-human under until merged\)/)
 })
 test('US-219 AC4: each stage is its own subagent call, and no call carries two stories', async () => {
   const { calls } = await runWorkflow({ args: { cards: manyStories(2) }, dispatch: stdDispatch() })
