@@ -102,25 +102,10 @@ describe('smoke CI platform coverage (#135)', () => {
 
   it('AC6 requires a platform-injected unit test when product path handling changes', () => {
     const changed = changedPathsAgainstBase()
-    // "Path handling" means the CHANGED LINES touch paths: a wording-only edit of a message or comment
-    // in the same file is not a path fix (it used to demand a platform test for a typo).
-    const touchesPaths = (path: string): boolean => {
-      const diff = execFileSync('git', ['diff', '-U0', 'origin/main...HEAD', '--', path], {
-        cwd: REPO_ROOT,
-        encoding: 'utf-8',
-      })
-      return diff
-        .split('\n')
-        .filter(l => /^[+-](?![+-])/.test(l))
-        .some(l =>
-          /\b(path|join|resolve|dirname|basename|sep|win32|posix|homedir|tmpdir)\b/i.test(l),
-        )
-    }
     const productionPathFixes = changed.filter(
       path =>
         (path.startsWith('packages/content-ops/src/') || path.startsWith('apps/pair-cli/src/')) &&
-        !path.endsWith('.test.ts') &&
-        touchesPaths(path),
+        !path.endsWith('.test.ts'),
     )
     if (productionPathFixes.length === 0) return
 
