@@ -137,7 +137,7 @@ The switch above authorizes **which tiers** may merge unattended; it does not me
 
 ## Autonomy — selection, target and gates (US-521, ADR-027)
 
-One declaration for "which cards, how far, when a human takes over". It is resolved by ONE shared function (`autonomy-policy.mjs`, shipped with the cycle scripts) and honoured by `/pair-workflow-cycle`, `pair-cli run` and `/pair-next`; no consumer re-derives it. `pair-implement-batch` and `pair-loop` do not honour it yet (#524): they HALT with `autonomy-not-supported-until-#524` when it is declared or a new argument is passed, never run while ignoring it.
+One declaration for "which cards, how far, when a human takes over". It is resolved by ONE shared function (`autonomy-policy.mjs`, shipped with the cycle scripts) and honoured by `/pair-workflow-cycle`, `pair-cli run`, `/pair-next`, `pair-implement-batch` and `pair-loop`; no consumer re-derives it. `pair-implement-batch` is the cycle on N cards (it decides every stage boundary through the script and, under `until: merged`, merges a review-approved card through `cycle-merge.mjs` only when the merge gate allows it — default: nothing merges); `pair-loop` selects (`/pair-next` with the resolved `filter` / `assignee` / `status` / `root`), hands `until` / `prepare` / `merge` to the batch and repeats — it holds no merge call. A harness with no Workflow tool runs `/pair-workflow-cycle` one card at a time with the same arguments. Whether `## Autonomy` is declared is the script's `parse().declared`: an empty section is off.
 
 ```autonomy
 filter: risk:green, risk:yellow
