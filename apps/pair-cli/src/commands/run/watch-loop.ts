@@ -17,6 +17,8 @@ export type StopReason =
   | 'nothing workable'
   | 'interrupted'
   | 'selection failed'
+  /** A throw outside selection (lock probe, plan, pool): raised by the driver, never returned here. */
+  | 'iteration failed'
 
 export type LockState =
   | { readonly kind: 'free' }

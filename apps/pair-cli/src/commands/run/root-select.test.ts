@@ -194,6 +194,19 @@ describe('US-522 — selection params, escalated and the predicate snapshot', ()
     expect(prompt).toContain('"tag:risk:red"')
   })
 
+  it('the snapshot request names the scope: the root id, or the filter when there is no root', () => {
+    const loop = { predicateSelector: 'root' }
+    const withRoot = buildSelectionPrompt(ENGINES.claude, { root: '66', loop })
+    expect(withRoot).toMatch(/root "66"/)
+    const filterOnly = buildSelectionPrompt(ENGINES.claude, { eligibility: 'ready', loop })
+    expect(filterOnly).toMatch(/scope.*filter "ready"/)
+    expect(filterOnly).not.toMatch(/root "/)
+  })
+
+  it('an unusable selection does not claim --root (the scope may be filter-only)', () => {
+    expect(() => parseSelection('nope')).toThrow(/pair-next selection for --parallel is unusable/)
+  })
+
   it.each([undefined, 'yes', 1, null])(
     'AC4: loop mode refuses escalated=%j (never assumes false)',
     escalated => {

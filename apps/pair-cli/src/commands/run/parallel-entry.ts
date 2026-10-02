@@ -461,7 +461,7 @@ function failLoop(
 ): never {
   if (!isInterrupted()) {
     const detail = error instanceof Error ? error.message : String(error)
-    end(loopEndFields('selection failed', started, 1, detail))
+    end(loopEndFields('iteration failed', started, 1, detail))
   }
   throw error
 }
@@ -516,6 +516,8 @@ async function runLoop(fan: FanOut, values: LoopValues): Promise<number> {
     const result = await runWatchLoop(loopConfig, wired).catch((error: unknown) =>
       failLoop(error, started, end),
     )
+    // A signal owns the ending: `onInterrupt` writes the one `loop-end` with the signal's own exit code.
+    if (isInterrupted()) return result.exitCode
     console.log(describeLoopEnd(result))
     end(loopEndFields(result.reason, result.iterations, result.exitCode, result.selectionError))
     return result.exitCode

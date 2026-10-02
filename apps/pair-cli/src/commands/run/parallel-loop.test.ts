@@ -76,6 +76,8 @@ interface Options {
   script: Array<SelectionAnswer | Error>
   /** `true`: each wait blocks until `releaseWait`. Otherwise it elapses at once. */
   blockWait?: boolean
+  /** `true`: the shipped wait (real timer, hooked to the interrupt module) instead of the fake. */
+  realWait?: boolean
   /** Children block until killed by the test (for the batch-signal case). */
   blockChildren?: boolean
   exits?: Record<string, number>
@@ -140,13 +142,13 @@ async function start(options: Options): Promise<Run> {
         return { exitCode: options.exits?.[c.id] ?? 0, signal: null }
       },
       appendAudit: (_path: string, line: string) => void audit.push(line),
-      wait: ms => {
+      ...(options.realWait !== true && { wait: (ms: number) => {
         waits.push(ms)
         options.onWait?.()
         return options.blockWait
           ? new Promise<WaitOutcome>(r => (pendingWait = r))
           : Promise.resolve<WaitOutcome>('elapsed')
-      },
+      } }),
     },
   )
   return {
@@ -317,6 +319,18 @@ describe('US-522 — the watch loop through the handler', () => {
         expect(run.atExit()!.locks).toEqual([])
       })
 
+      it(`${signal} during the --watch wait with the shipped wait: audit exit == process exit ${EXIT_CODE[signal]}`, async () => {
+        const run = await start({ flags: { watch: true }, realWait: true, script: [answer()] })
+        await until(() => events(run.audit).includes('iteration'))
+        process.emit(signal as never, signal as never)
+        expect(await run.exited).toBe(EXIT_CODE[signal])
+        expect(run.atExit()!.audit.at(-1)).toMatch(
+          new RegExp(
+            `event=loop-end reason=interrupted iterations=1 exit=${EXIT_CODE[signal]} detail=the driver received ${signal}$`,
+          ),
+        )
+      })
+
       it(`${signal} during a batch: the resource locks the driver holds are released, batch + loop-end written`, async () => {
         const run = await start({
           flags: { watch: true },
@@ -348,6 +362,14 @@ describe('US-522 — the watch loop through the handler', () => {
       mkdirSync(lockDir(), { recursive: true })
       writeFileSync(join(lockDir(), name), 'not a directory')
     }
+
+    it('a lock-probe throw is not recorded as a selection failure', async () => {
+      brokenLock('1')
+      const run = await start({ flags: { maxIterations: '2' }, script: [answer(card('1'))] })
+      await settle(run.code)
+      expect(run.audit.at(-1)).toMatch(/reason=iteration failed /)
+      expect(run.audit.at(-1)).not.toMatch(/selection failed/)
+    })
 
     it('card lock path is a regular file on the first iteration', async () => {
       brokenLock('1')
