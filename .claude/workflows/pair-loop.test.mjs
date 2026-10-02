@@ -967,7 +967,8 @@ test('r1g1-L-W1: `## Autonomy` filter (list) with no `## Eligibility` and no arg
   const { selectPrompt } = await r1g1Select({ policyText })
   assert.ok(selectPrompt, 'the Select phase must run')
   const sent = r1g1FilterOf(selectPrompt)
-  if (sent !== undefined) assert.deepEqual(sent, oracle.value)
+  assert.ok(sent !== undefined, '--filter must be present')
+  assert.deepEqual(sent, oracle.value)
 })
 
 test('r1g1-L-W2: `## Autonomy` filter (single label) with no `## Eligibility` selects with the resolved filter — no HALT', async () => {
@@ -976,7 +977,8 @@ test('r1g1-L-W2: `## Autonomy` filter (single label) with no `## Eligibility` se
   const { selectPrompt } = await r1g1Select({ policyText })
   assert.ok(selectPrompt, 'the Select phase must run')
   const sent = r1g1FilterOf(selectPrompt)
-  if (sent !== undefined) assert.deepEqual(sent, oracle.value)
+  assert.ok(sent !== undefined, '--filter must be present')
+  assert.deepEqual(sent, oracle.value)
 })
 
 // The loop's HALT on a policy the authority rejects (resolvePolicy ok:false, an error keyed `filter`): the run
@@ -1014,14 +1016,16 @@ test('r1g1-L-C1: `## Autonomy` filter identical to `## Eligibility` — selects 
   const policyText = '## Eligibility\n\nrisk:green\n\n## Autonomy\n\nfilter: risk:green\n'
   const { selectPrompt } = await r1g1Select({ policyText })
   const sent = r1g1FilterOf(selectPrompt)
-  if (sent !== undefined) assert.deepEqual(sent, r1g1Oracle(policyText).value)
+  assert.ok(sent !== undefined, '--filter must be present')
+  assert.deepEqual(sent, r1g1Oracle(policyText).value)
 })
 
 test('r1g1-L-C2: legacy `## Eligibility` only — selects with its translated filter', async () => {
   const policyText = '## Eligibility\n\nrisk:green\n'
   const { selectPrompt } = await r1g1Select({ policyText })
   const sent = r1g1FilterOf(selectPrompt)
-  if (sent !== undefined) assert.deepEqual(sent, r1g1Oracle(policyText).value)
+  assert.ok(sent !== undefined, '--filter must be present')
+  assert.deepEqual(sent, r1g1Oracle(policyText).value)
 })
 
 test('r1g1-L-C3: a filter argument wins over `## Autonomy` filter (argument > adoption), no `## Eligibility` needed', async () => {
@@ -1072,7 +1076,8 @@ test('r1g1-L-I1: `## Autonomy` filter (no `## Eligibility`) x legacy `## Auto-Ad
   const { selectPrompt } = await r1g1Select({ policyText })
   assert.ok(selectPrompt, 'the Select phase must run')
   const sent = r1g1FilterOf(selectPrompt)
-  if (sent !== undefined) assert.deepEqual(sent, resolved.effective.filter.value)
+  assert.ok(sent !== undefined, '--filter must be present')
+  assert.deepEqual(sent, resolved.effective.filter.value)
 })
 
 test('r1g1-L-W7: a filter ARGUMENT does not bypass the authority — `## Autonomy` `filter:` empty (or conflicting with `## Eligibility`) still HALTs naming the filter, Select never runs', async () => {
@@ -1090,5 +1095,32 @@ test('r1g1-L-W7: a filter ARGUMENT does not bypass the authority — `## Autonom
       policyText,
     )
     assert.equal(selected, false, policyText)
+  }
+})
+
+// r1-1 (security): filter/assignee/status reach a single-quoted shell arg of the resolve dispatch — quote-free.
+test('r1-1: validateArgs HALTs on a quote/backslash in filter, assignee or status (incl. list elements)', () => {
+  const { validateArgs } = getHelpers()
+  const bad = ["a'b", "risk:green' ; touch /tmp/pwned ; echo '", 'a\\b']
+  for (const key of ['filter', 'assignee', 'status'])
+    for (const v of bad) {
+      assert.throws(() => validateArgs({ [key]: v }), /HALT|plain-text/, `${key}=${v}`)
+      assert.throws(() => validateArgs({ [key]: ['ok', v] }), /HALT|plain-text/, `${key}[]=${v}`)
+    }
+  assert.doesNotThrow(() => validateArgs({ filter: 'risk:green', assignee: 'bob', status: 'Ready' }))
+  assert.doesNotThrow(() => validateArgs({ filter: ['risk:green', 'risk:yellow'] }))
+})
+
+test('r1-1: an injecting filter HALTs before any agent is dispatched', async () => {
+  for (const key of ['filter', 'assignee', 'status']) {
+    const prompts = []
+    await assert.rejects(
+      runWorkflow({
+        args: { policyText: '## Eligibility\n\nrisk:green\n', [key]: "risk:green' ; touch /tmp/pwned ; echo '" },
+        dispatch: p => (prompts.push(p), {}),
+      }),
+      /HALT|plain-text/,
+    )
+    assert.equal(prompts.length, 0, `${key}: no agent may run`)
   }
 })
