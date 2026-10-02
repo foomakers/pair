@@ -2186,8 +2186,8 @@ const shortfall = [
 const note = !STORIES.length
   ? 'Empty batch — nothing was requested, nothing was run.'
   : !advanced.length
-    ? `NOTHING COMPLETED: 0/${STORIES.length} cards advanced to a PR — ${shortfall}. No PR is ready to merge and nothing was escalated. Committed work in the per-story worktrees and the handoffs under .pair/working/runs/ are intact — re-run with the same runId to resume from the first incomplete step.`
-    : `${advanced.length}/${STORIES.length} cards advanced to a PR (${tally(advanced)})${shortfall ? `; ${shortfall}` : ''}. Each row names where its card stands: ready-for-merge (PR-ready, nothing merged), merged, awaiting-human (merge gate parks it), escalated (a gate condition fired — a human decides), target-ready, or escalate (the review). Merging happens only when the merge gate allows it (default: never) — merge the rest by hand, then re-run with the next mutex-safe batch.`
+    ? `NOTHING COMPLETED: 0/${STORIES.length} cards advanced — ${shortfall}. No PR is ready to merge and nothing was escalated. Committed work in the per-story worktrees and the handoffs under .pair/working/runs/ are intact — re-run with the same runId to resume from the first incomplete step.`
+    : `${advanced.length}/${STORIES.length} cards advanced (${tally(advanced)})${shortfall ? `; ${shortfall}` : ''}. Each row names where its card stands: ready-for-merge (PR-ready, nothing merged), merged, awaiting-human (merge gate parks it), escalated (a gate condition fired — a human decides), target-ready, or escalate (the review). Merging happens only when the merge gate allows it (default: never) — merge the rest by hand, then re-run with the next mutex-safe batch.`
 return {
   workflowVersion: WORKFLOW_VERSION,
   contracts: [{ name: CONTRACT.spec.name, status: CONTRACT.status }],
