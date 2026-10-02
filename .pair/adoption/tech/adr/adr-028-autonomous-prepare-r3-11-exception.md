@@ -1,4 +1,4 @@
-# ADR-027: Autonomous prepare is a maintainer-chosen exception to R3.11
+# ADR-028: Autonomous prepare is a maintainer-chosen exception to R3.11
 
 ## Status
 

@@ -1,5 +1,5 @@
 /**
- * Conformance guard for story #523 / ADR-027 — autonomous prepare without a silent
+ * Conformance guard for story #523 / ADR-028 — autonomous prepare without a silent
  * bypass of R3.11.
  *
  * `/pair-process-refine-story` and `/pair-process-plan-tasks` honour `$approval`
@@ -54,7 +54,7 @@ const governed = (content: string): ReturnType<typeof findApprovalRounds> =>
 const argRow = (content: string, arg: string): string | undefined =>
   content.split('\n').find(l => l.trimStart().startsWith(`| \`${arg}\``))
 
-describe('refine-story — $approval + $prepare (ADR-027)', () => {
+describe('refine-story — $approval + $prepare (ADR-028)', () => {
   for (const [label, path] of COPIES('refine-story')) {
     const skill = read(path)
 
@@ -108,7 +108,7 @@ describe('refine-story — $approval + $prepare (ADR-027)', () => {
     })
 
     // SAFETY ROW 2 — `$approval: auto` alone still halts.
-    it(`${label} — $approval: auto alone still halts at phase 0 (ADR-021, ADR-027)`, () => {
+    it(`${label} — $approval: auto alone still halts at phase 0 (ADR-021, ADR-028)`, () => {
       const p0 = section(skill, /Phase 0/)
       expect(p0).toMatch(/`\$approval: auto` (?:alone|by itself)[^\n]*(?:still )?HALT/i)
       expect(p0).toMatch(/`\$prepare: never\|when`|`\$prepare`[^\n]*`never`[^\n]*`when`/)
@@ -128,7 +128,7 @@ describe('refine-story — $approval + $prepare (ADR-027)', () => {
     it(`${label} — ## Assumptions entry format, none-line and provenance Notes line`, () => {
       expect(skill).toMatch(/question, answer chosen, evidence, how to overturn/i)
       expect(skill).toMatch(/none: every question settled from repository evidence/)
-      expect(skill).toMatch(/Prepared autonomously under prepare: <value> \(<source>\) — ADR-027/)
+      expect(skill).toMatch(/Prepared autonomously under prepare: <value> \(<source>\) — ADR-028/)
       expect(skill).toMatch(/open-question/)
     })
 
@@ -143,7 +143,7 @@ describe('refine-story — $approval + $prepare (ADR-027)', () => {
   }
 })
 
-describe('plan-tasks — $approval + markers (ADR-027)', () => {
+describe('plan-tasks — $approval + markers (ADR-028)', () => {
   for (const [label, path] of COPIES('plan-tasks')) {
     const skill = read(path)
 
