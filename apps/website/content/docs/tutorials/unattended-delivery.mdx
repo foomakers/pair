@@ -306,14 +306,15 @@ done.
 ## Safety: what this does and does not protect you from
 
 - **The loop itself never merges; the merge gate decides.** Nothing merges unless the gate allows it
-  (`merge: never` and `## Auto-Advance` `(none)` keep it off). Leave it off to get unattended
+  (`merge: always`, the default, parks every card for a human; `merge: never` and `when` enter the
+  merge stage under `until: merged`). Keep it at `always`, or leave `until` at `pr`, to get unattended
   *development* — every card still stops at a review-approved, gate-green PR for a human to merge.
 - **An untagged card is treated as the highest risk tier.** The loop no longer filters by tier
   itself (the selection filter does), so an untagged card can be selected, but it is handed over as
   `risk:red` and never auto-advanced.
-- **The eligibility filter is one label, matched exactly.** There's no way to declare "green and
-  yellow" or "not red" — if you want a different set of cards automated, that's a different tag,
-  declared explicitly, not a broader expression.
+- **The filter is an any-of list of labels, each matched exactly.** `filter: risk:green, risk:yellow`
+  selects a card carrying either label, but there is no boolean grammar — no AND, no "not red". If you
+  want a different set of cards automated, name the labels explicitly or add a classification tag.
 - **This is not a security boundary on its own.** The engine you point at a live repository can push
   and (if you enabled it) merge. Everything in [Step 4](#step-4-turn-it-into-a-daemon)'s warning about
   credential scope is the actual control — the policy file controls *what* runs, not *what the
