@@ -1,0 +1,245 @@
+{
+  "$meta": {
+    "pr": "526",
+    "phase": "r1-g1",
+    "base": "2146c9070cc1c8e37610d83cd1ad3bb244efb458",
+    "trailer": "Pair-RED-Snapshot: pr=526; phase=r1-g1; base=2146c9070cc1c8e37610d83cd1ad3bb244efb458; manifest=.pair/red-snapshots/pr-526-r1-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/run-flags-argv.test.ts",
+      "apps/pair-cli/src/commands/run/run-docs-parity.test.ts"
+    ]
+  },
+  "run": "story-522",
+  "story": "522",
+  "phase": "r1-g1",
+  "groupId": "r1-g1",
+  "mode": "remediation",
+  "remediationBatchId": "r1",
+  "inputHead": "2146c9070cc1c8e37610d83cd1ad3bb244efb458",
+  "base": "origin/main",
+  "sourceOfTruth": "AC14 (US-522): watch flags refused at parse time before anything spawns; producer = commander option registration from runCommandMetadata (cli.ts addCommandOptions) folding --watch/--no-watch into one `watch` key, consumed by parseRunCommand.resolveWatch (parser.ts:409)",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "`pair-cli run` argv grammar: commander options built from runCommandMetadata (metadata.ts --watch/--no-watch) in cli.ts, normalized and handed to parseRunCommand.resolveWatch",
+      "inputs": [
+        "argv tokens --watch, --no-watch (any order, repeated)",
+        "--parallel <n>",
+        "--filter/--root"
+      ],
+      "representations": [
+        "metadata.ts --no-watch description (--help)",
+        "apps/website/content/docs/reference/cli/commands.mdx run options row",
+        "ADL 2026-10-02-fan-out-becomes-re-selecting-watch-loop.md Negative consequence",
+        "parser.ts doc comment l.148"
+      ],
+      "consumers": [
+        "dispatchCommand (run handler)",
+        "loop-report.ts watch value source (--watch/--no-watch)"
+      ],
+      "classes": [
+        "C1 --watch then --no-watch (conflict) -> refused",
+        "C2 --no-watch then --watch (conflict) -> refused",
+        "C3 --watch alone -> watch=true (control)",
+        "C4 --no-watch alone -> watch=false (control)",
+        "C5 neither -> watch absent (control)",
+        "C6 --watch repeated -> watch=true, not a conflict (boundary control)",
+        "C7 operator text: --help / CLI reference / ADL must not promise last-one-wins"
+      ],
+      "interactions": [
+        "conflict pair x --parallel present: refusal must happen at parse, before dispatch (nothing dispatched)"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "run argv grammar (metadata.ts/cli.ts registration + parser.ts resolveWatch)",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/parser.ts",
+      "apps/pair-cli/src/commands/run/metadata.ts",
+      "apps/pair-cli/src/commands/run/index.ts",
+      "apps/pair-cli/src/commands/index.ts",
+      "apps/pair-cli/src/cli.ts",
+      "apps/website/content/docs/reference/cli/commands.mdx",
+      ".pair/adoption/decision-log/2026-10-02-fan-out-becomes-re-selecting-watch-loop.md",
+      ".pair/adoption/decision-log/"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r01-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts",
+      "condition": "argv run --filter X --parallel 1 --watch --no-watch",
+      "oracle": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts > \"US-522 r0-1: --watch --no-watch is refused naming both flags; nothing is dispatched (AC14)\"",
+      "expected": "runCli rejects with an Error whose message names --watch and --no-watch; dispatched.length === 0",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r01-W2",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts",
+      "condition": "argv run --filter X --parallel 1 --no-watch --watch",
+      "oracle": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts > \"US-522 r0-1: --no-watch --watch is refused naming both flags; nothing is dispatched (AC14)\"",
+      "expected": "same as r01-W1 (order-independent)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r01-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts",
+      "condition": "argv --parallel 2 --watch --interval 10m",
+      "oracle": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts > \"US-522: run --filter PIPPO --assignee @me --parallel 2 --watch --interval 10m reaches the parser as the watch loop\"",
+      "expected": "dispatched watch=true",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r01-C2",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts",
+      "condition": "argv --no-watch alone; neither flag",
+      "oracle": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts > \"US-522: --no-watch reaches the parser as watch=false; neither flag leaves watch absent\"",
+      "expected": "watch=false; watch absent",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r01-B1",
+      "kind": "boundary",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts",
+      "condition": "argv --watch --watch",
+      "oracle": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts > \"US-522 r0-1 control: a repeated --watch is not a contradiction and still reaches the parser as watch=true\"",
+      "expected": "one dispatch, watch=true",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "the refusal is for the contradictory pair only, not for any repeated watch flag"
+    },
+    {
+      "id": "r01-D1",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-docs-parity.test.ts",
+      "condition": "runCommandMetadata --no-watch description",
+      "oracle": "apps/pair-cli/src/commands/run/run-docs-parity.test.ts > \"R01-D1: --help for --no-watch does not say the last one wins\"",
+      "expected": "description does not match /last (one )?wins/i",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r01-D2",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-docs-parity.test.ts",
+      "condition": "commands.mdx ## run, row `--no-watch`",
+      "oracle": "apps/pair-cli/src/commands/run/run-docs-parity.test.ts > \"R01-D2: the CLI reference --no-watch row does not say the last one wins\"",
+      "expected": "row exists and does not match /wins/i",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r01-D3",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-docs-parity.test.ts",
+      "condition": "ADL 2026-10-02-fan-out-becomes-re-selecting-watch-loop.md",
+      "oracle": "apps/pair-cli/src/commands/run/run-docs-parity.test.ts > \"R01-D3: the decision log no longer records the conflict as unrefusable from argv\"",
+      "expected": "no /cannot be refused from argv|last wins/i",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r01-C3",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/run-docs-parity.test.ts",
+      "condition": "existing R7-W2: every registered run flag documented in CLI reference",
+      "oracle": "apps/pair-cli/src/commands/run/run-docs-parity.test.ts > \"R7-W2: the CLI reference documents every registered run flag\"",
+      "expected": "pass (keeps --no-watch registered and documented)",
+      "covers": [
+        "r0-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/run-flags-argv.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:a517c4851212c184f751ea7bc1ac667c397ebb0b29490b86dea7a752c3c23de0",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/run-flags-argv.test.ts",
+      "observed": "Tests 2 failed | 6 passed (8): r0-1 --watch --no-watch and --no-watch --watch -> expected [ { command: 'run', …(9) } ] to have a length of +0 but got 1 (run-flags-argv.test.ts:140)"
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/run-docs-parity.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:3f55f773a246b59c4d271838bea532cc961f8663572c2658b73adbad70e37290",
+      "command": "pnpm --filter @pair/pair-cli exec vitest run src/commands/run/run-docs-parity.test.ts",
+      "observed": "Tests 3 failed | 8 passed (11): R01-D1 expected 'US-522: explicitly no watch loop (ove…' not to match /last (one )?wins/i; R01-D2 expected '| `--no-watch` | E…' not to match /wins/i; R01-D3 expected '# Decision: The `run --parallel` fan-…' not to match /cannot be refused from argv|last wins/i"
+    }
+  ],
+  "testExempt": false,
+  "notes": {
+    "hermetic": "dispatchCommand mocked by recorder; InMemoryFileSystemService; no engine, no gh, no network",
+    "gates": "prettier --check, eslint (@pair/eslint-config), tsc --noEmit clean on both files"
+  },
+  "plan": {
+    "round": 1,
+    "remediationBatchId": "r1",
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "owner": "run argv grammar: commander registration of run options (metadata.ts/cli.ts) + parseRunCommand resolveWatch (parser.ts)",
+        "mode": "behavioral",
+        "oracle": "AC14 via registered run command argv (runCli) + operator text (--help, CLI reference, ADL)",
+        "findings": [
+          "r0-1"
+        ],
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/parser.ts",
+          "apps/pair-cli/src/commands/run/metadata.ts",
+          "apps/pair-cli/src/commands/run/index.ts",
+          "apps/pair-cli/src/commands/index.ts",
+          "apps/pair-cli/src/cli.ts",
+          "apps/website/content/docs/reference/cli/commands.mdx",
+          ".pair/adoption/decision-log/2026-10-02-fan-out-becomes-re-selecting-watch-loop.md",
+          ".pair/adoption/decision-log/"
+        ],
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g2",
+        "owner": "parallel-entry.ts runLoop loop-end audit (end()/loopEndFields)",
+        "mode": "behavioral",
+        "oracle": "AC10 EXIT_CODE[signal] / AC11 loop-end framing, through handleRunCommand (parallel-loop.test.ts)",
+        "findings": [
+          "r0-2",
+          "r0-3"
+        ],
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/parallel-entry.ts",
+          "apps/pair-cli/src/commands/run/watch-loop.ts",
+          "apps/pair-cli/src/commands/run/loop-report.ts"
+        ],
+        "dependsOn": []
+      }
+    ],
+    "carried": []
+  }
+}
