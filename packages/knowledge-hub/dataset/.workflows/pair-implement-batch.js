@@ -2045,6 +2045,9 @@ const SAFE_BRANCH = b => /^[A-Za-z0-9][A-Za-z0-9._/#-]*$/.test(String(b ?? ''))
 // `## Autonomy`): stage boundaries are decided. `merging` = the target is `merged` (also the legacy `## Auto-Advance`
 // translation): `ready-for-merge` enters the merge stage. Neither: byte-for-byte the pre-#524 batch.
 const AUTONOMY = { engaged: false, merging: false, policy: null }
+// Ids of the batch cards whose row is `merged` (this run): a stacked card merges only after its base card did.
+const MERGED_IDS = new Set()
+const PR_STATE_SCHEMA = { type: 'object', properties: { state: { type: 'string' }, closed: { type: 'boolean' } } }
 async function resolveAutonomy() {
   const given = PARSED.autonomyArgs
   // `""` is the caller's own Read saying automation.md does not exist: with no argument there is nothing to resolve.
@@ -2106,6 +2109,24 @@ async function mergeStage({ story, runDirPath, pr, tier, ready, result }) {
   ].filter(Boolean)
   if (incomplete.length) return result('halted', { ...ready, reason: `ready-for-merge without ${incomplete.join(', ')}: an incomplete handoff is never a clean review, never handed to the merge stage` })
   const cardTier = TIER_RE.test(String(tier ?? '')) ? tier : 'risk:red'
+  // A stacked card (base = another card's branch in this batch) never merges before that card is merged: parked, never merged early.
+  const baseCard = STORIES.find((s) => s.id !== story.id && s.branch === String(story.base ?? '').replace(/^origin\//, ''))
+  if (baseCard && !MERGED_IDS.has(baseCard.id))
+    return result('awaiting-human', { ...ready, reason: `stacked on base card #${baseCard.id} (${baseCard.branch}), which is not merged yet — merge the base first, then re-run to merge this card`, commentPosted: false })
+  // Already MERGED (a resumed card): record it — never a second merge dispatch, never a false "not merged automatically" park.
+  const prState = await dispatch(
+    `Card ${JSON.stringify(story.id)}: run \`gh pr view ${pr} --json state\` and return { state } — the PR's state (OPEN | MERGED | CLOSED). Run nothing else.`,
+    { phase: 'Verify', label: `pr-state:#${story.id}`, effort: 'low', schema: PR_STATE_SCHEMA },
+  )
+  if (prState?.state === 'MERGED') {
+    const closure = await dispatch(
+      `Card ${JSON.stringify(story.id)}: run \`gh issue view ${story.id} --json state\` and return { closed } — true only when the story issue is CLOSED. Run nothing else.`,
+      { phase: 'Verify', label: `cascade:#${story.id}`, effort: 'low', schema: PR_STATE_SCHEMA },
+    )
+    MERGED_IDS.add(story.id)
+    const cascaded = closure?.closed === true
+    return result('merged', { ...ready, cascaded, reason: `PR ${pr} was already merged`, ...(cascaded ? {} : { parked: true, note: `PR ${pr} MERGED but the story is not closed — the post-merge cascade is left for a human` }) })
+  }
   // Legacy `## Auto-Advance <tier>` keeps its compatible form (`--autoAdvance`): same outcomes as today's loop call.
   const gateFlag = Array.isArray(AUTONOMY.policy.legacyTiers) && !AUTONOMY.engaged ? `--autoAdvance '${JSON.stringify(AUTONOMY.policy.legacyTiers)}'` : `--mergeGate '${JSON.stringify(AUTONOMY.policy.merge)}'`
   const mergeArgs = `--dir ${runDirPath} --story ${story.id} --pr ${pr} --reviewedHead ${ready.reviewedHead} --cardTier ${cardTier} ${gateFlag}`
@@ -2128,6 +2149,7 @@ async function mergeStage({ story, runDirPath, pr, tier, ready, result }) {
     { phase: 'Verify', label: `merge:#${story.id}`, effort: 'medium', schema: MERGE_RUN_SCHEMA },
   )
   if (advance?.merged === true) {
+    MERGED_IDS.add(story.id)
     // `cascaded` is read fail-safe: absent/false/non-boolean is a closure left unfinished — parked for a human.
     return result('merged', { ...ready, cascaded: advance.cascaded === true, reason: advance.reason, ...(advance.cascaded === true ? {} : { parked: true, note: `PR ${pr} MERGED but the post-merge cascade did not confirm complete (story close / parents Done / branch / checkpoint) — the story stays open for a human` }) })
   }
