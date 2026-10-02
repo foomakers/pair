@@ -427,8 +427,13 @@ const GATE_ARG_KEYS = ['until', 'prepare', 'merge']
 const isGateArg = v => isSafePromptText(v) && !/['\\]/.test(v)
 
 export function validateArgs(args) {
-  for (const key of SELECTION_ARG_KEYS)
-    if (args?.[key] !== undefined && args?.[key] !== null && !isSafePromptText(args[key])) HALT(`args.${key} must be a plain-text value (no backtick, \`$(\`, newline or control character, at most 200 characters).`)
+  // filter / assignee / status land inside the single-quoted `--args '<json>'` of the resolve dispatch: quote-free.
+  for (const key of SELECTION_ARG_KEYS) {
+    const v = args?.[key]
+    if (v === undefined || v === null) continue
+    if (!(Array.isArray(v) ? v.length > 0 && v.every(isGateArg) : isGateArg(v)))
+      HALT(`args.${key} must be a plain-text value (no quote, backslash, backtick, \`$(\`, newline or control character, at most 200 characters).`)
+  }
   for (const key of GATE_ARG_KEYS)
     if (args?.[key] !== undefined && args?.[key] !== null && !isGateArg(args[key])) HALT(`args.${key} must be a plain-text value (no quote, backslash, backtick, \`$(\`, newline or control character, at most 200 characters).`)
   if (args?.root !== undefined && args?.root !== null) {
