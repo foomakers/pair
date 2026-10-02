@@ -31,7 +31,7 @@ Executable form of the **`refine-story`** step, and a composer of `define-subdom
 | -------- | -------- | --------------------------------------------------------------------------------------------------------------- |
 | `$story` | No       | Story identifier (e.g., `#42`). If omitted, the skill selects the highest-priority `Draft` story from the backlog. |
 | `$approval` | No    | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (Steps 2–4 rounds ask nothing: the presented criteria, analysis and sizing are accepted and reported; Step 0's selection needs `$story`). Phase 0 is a judgement gate and **HALTs under every value of `$approval`** unless `$prepare` also lifts it. See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
-| `$prepare` | No     | Prepare mode (ADR-027): `always` (default, R3.11 intact — phase 0 composes `/pair-capability-grill` and blocks), `never` or `when` (the maintainer-declared exception — with `$approval: auto`, phase 0 self-answers into `## Assumptions` and the Ready write is held back). `$approval: auto` alone never lifts phase 0 — it still HALTs. |
+| `$prepare` | No     | Prepare mode (ADR-028): `always` (default, R3.11 intact — phase 0 composes `/pair-capability-grill` and blocks), `never` or `when` (the maintainer-declared exception — with `$approval: auto`, phase 0 self-answers into `## Assumptions` and the Ready write is held back). `$approval: auto` alone never lifts phase 0 — it still HALTs. |
 
 ## Algorithm
 
@@ -64,7 +64,7 @@ Under `$approval: auto` there is nobody to confirm a pick: `$story` is required,
    - **No**: Warn (`/pair-capability-grill not installed — skipping the phase 0 sync; alignment falls to the per-step human-judgment gates in Steps 2–4`) and proceed; the explicit approval gates in Steps 2–4 remain the alignment mechanism.
 4. **Verify**: `/pair-capability-grill` returned **explicit shared understanding** (grill never auto-exits on an empty queue — only an explicit human "yes" ends it), or the skip was warned. Without shared understanding → **HALT**: refinement does not proceed on an unaligned story. <!-- approval-round: kind=gate; auto=halt -->
 
-**Exception — autonomous prepare (ADR-027, maintainer-declared).** Phase 0 is lifted only when the caller passes both `$approval: auto` and `$prepare: never|when`. `$approval: auto` alone (or with `$prepare` absent or `always`) still HALTs at phase 0 exactly as above — the generic signal never bypasses R3.11 (ADR-021). Under the exception `/pair-capability-grill` is not composed, and instead:
+**Exception — autonomous prepare (ADR-028, maintainer-declared).** Phase 0 is lifted only when the caller passes both `$approval: auto` and `$prepare: never|when`. `$approval: auto` alone (or with `$prepare` absent or `always`) still HALTs at phase 0 exactly as above — the generic signal never bypasses R3.11 (ADR-021). Under the exception `/pair-capability-grill` is not composed, and instead:
 
 1. **Act**: For each question the sync would have asked (goal, AC, edge cases, dependencies, design, risks), answer it from code, KB and the linked context, and record it in the story's `## Assumptions` section — each entry: question, answer chosen, evidence, how to overturn.
 2. **Act**: A question that needs a product decision (evidence cannot settle it) is **not** self-answered: return it as `open-question` to the caller, write nothing, and leave the story Draft.
@@ -176,7 +176,7 @@ Under `$approval: auto` there is nobody to confirm a pick: `$story` is required,
 1. **Act**: Assemble the complete refined story body using the [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)) Refined template:
    - **Functional sections first**: Story Statement → Epic Context → Classification (the Step 3b matrix) → Acceptance Criteria → Definition of Done → Story Sizing → Dependencies → Validation → Notes.
    - **Technical sections last**: Technical Analysis → (Task Breakdown added later by `/pair-process-plan-tasks`).
-   - **Under `$prepare: never|when`**: the body also carries `## Assumptions` (phase 0 exception) and a Notes line `Prepared autonomously under prepare: <value> (<source>) — ADR-027`.
+   - **Under `$prepare: never|when`**: the body also carries `## Assumptions` (phase 0 exception) and a Notes line `Prepared autonomously under prepare: <value> (<source>) — ADR-028`.
 2. **Act**: Compose `/pair-capability-write-issue` with:
    - `$type: story`
    - `$content`: the assembled refined story body
@@ -244,7 +244,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 - **The single Draft→Ready path** (R3.12, D24): refinement IS the transition to `Ready` — there is no separate "make-ready" skill and none is ever added. Phase 0's grill sync is the R3.11 alignment gate that makes this one skill sufficient.
 - **R3.11 is "not optional" as a gate, not as a specific skill**: the AI↔human alignment gate always runs. When `/pair-capability-grill` is installed it runs the systematic phase 0 sync; when it is not, the explicit per-step human-judgment approval gates in Steps 2–4 are the accepted satisfaction of R3.11 (graceful-degradation convention). What is never skipped is explicit human alignment before the story reaches `Ready`.
-- **Autonomous prepare (ADR-027)** is the only exception to R3.11, is maintainer-declared, and needs both `$approval: auto` and `$prepare: never|when`; every self-answer is recorded in `## Assumptions` for a human to overturn. ADR-024 §8 is unchanged: tag dispatch still refuses this skill.
+- **Autonomous prepare (ADR-028)** is the only exception to R3.11, is maintainer-declared, and needs both `$approval: auto` and `$prepare: never|when`; every self-answer is recorded in `## Assumptions` for a human to overturn. ADR-024 §8 is unchanged: tag dispatch still refuses this skill.
 - This skill **modifies PM tool state** — it updates story issues and transitions the item to `Ready`.
 - **Adoption-informed** (Step 1b) — the read is **read-only**: refinement never writes a decision record. Recording stays with the developer and `/pair-capability-record-decision`; what refinement does with the records is constrain, cite, and flag a revisit, per the shared convention. The context map's inline glossary maintenance (Step 2) is the separate, guideline-authorized write — not part of this read.
 - **Composes, never re-derives**: domain placement comes from `/pair-capability-map-subdomains`, touched-context/coupling from `/pair-capability-map-contexts`, the matrix from `/pair-capability-classify` — refine-story orchestrates them scoped to the story and owns no assessment criteria of its own (D24).
