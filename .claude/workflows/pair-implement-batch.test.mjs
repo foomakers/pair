@@ -1505,6 +1505,11 @@ test('US-219: the note is derived from the STATUSES — an all-failed batch says
   const mixed = await runWorkflow({ args: { cards }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-fix-test-author' && /#2\b/.test(p) ? null : o.agentType === 'pair-reviewer' ? { verdict: 'Approved', findings: [] } : {}) })
   assert.match(mixed.result.note, /1\/2 cards advanced \(1 ready-for-merge\); 1 returned a failure status \(1 failed-preparation\)/)
 })
+test('batch note names the merge gate default as `always`, never reads "(default: never)" as the gate value', async () => {
+  const mixed = await runWorkflow({ args: { cards: [{ id: '1', title: 'a', branch: 'b1' }] }, dispatch: stdDispatch() })
+  assert.ok(!/default: never/.test(mixed.result.note), mixed.result.note)
+  assert.match(mixed.result.note, /allows it \(default always: parks awaiting-human, nothing merges\)/)
+})
 test('US-219 AC4: each stage is its own subagent call, and no call carries two stories', async () => {
   const { calls } = await runWorkflow({ args: { cards: manyStories(2) }, dispatch: stdDispatch() })
   const stage = calls.filter(c => c.opts.agentType !== 'pair-contract-generator')
