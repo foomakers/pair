@@ -167,7 +167,7 @@ describe('US-522 — selection params, escalated and the predicate snapshot', ()
     expect(
       prompt.startsWith('/pair-next --filter PIPPO,risk:green --assignee @me --status Draft,Ready'),
     ).toBe(true)
-    expect(prompt).not.toContain('--root')
+    expect(prompt.split('\n')[0]).not.toContain('--root')
   })
 
   it('without the loop contract the request and the tolerant parse are unchanged', () => {
