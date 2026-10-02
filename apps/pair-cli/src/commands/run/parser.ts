@@ -478,7 +478,7 @@ function resolveScope(options: ParseRunOptions): RunScopeOptions {
 
 /**
  * US-521: `--until`, `--prepare`, `--merge` drive ONE card's delivery cycle, so they need `--card`. The
- * loop flavours (`--root`, `--watch`) honour them in #522/#524 — refused here, never silently ignored.
+ * loop flavours (`--root`, `--watch`) do not carry them through this driver — refused here, never silently ignored.
  * Content is only safety-checked (prompt/shell); the grammar is the shared script's.
  */
 function resolveAutonomyArguments(options: ParseRunOptions): RunAutonomyArguments | undefined {
@@ -490,7 +490,7 @@ function resolveAutonomyArguments(options: ParseRunOptions): RunAutonomyArgument
     const flag = until !== undefined ? '--until' : prepare !== undefined ? '--prepare' : '--merge'
     throw new Error(
       `${flag} sets how far ONE card's delivery cycle goes and is only meaningful with --card ` +
-        '(the loop and batch realizations honour it in #522/#524 — autonomy-not-supported-until-#524)',
+        '(the loop flavours do not carry it through this driver; the skill takes the autonomy arguments)',
     )
   }
   return { ...(until && { until }), ...(prepare && { prepare }), ...(merge && { merge }) }

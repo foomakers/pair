@@ -305,10 +305,12 @@ done.
 
 ## Safety: what this does and does not protect you from
 
-- **It never merges outside `## Auto-Advance`'s declared tier.** Leave it `(none)` to get unattended
+- **The loop itself never merges; the merge gate decides.** Nothing merges unless the gate allows it
+  (`merge: never` and `## Auto-Advance` `(none)` keep it off). Leave it off to get unattended
   *development* — every card still stops at a review-approved, gate-green PR for a human to merge.
-- **An untagged card is never eligible, and never auto-advanced**, regardless of any of this
-  config — the fail-closed default treats "no tag" as the highest risk tier there is.
+- **An untagged card is treated as the highest risk tier.** The loop no longer filters by tier
+  itself (the selection filter does), so an untagged card can be selected, but it is handed over as
+  `risk:red` and never auto-advanced.
 - **The eligibility filter is one label, matched exactly.** There's no way to declare "green and
   yellow" or "not red" — if you want a different set of cards automated, that's a different tag,
   declared explicitly, not a broader expression.
