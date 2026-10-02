@@ -1503,7 +1503,7 @@ test('US-219: the note is derived from the STATUSES — an all-failed batch says
   assert.match(allFailed.result.note, /NOTHING COMPLETED: 0\/2 cards advanced.*2 returned a failure status \(2 failed-implement\)/s)
   assert.deepEqual(allFailed.result.died, [])
   const mixed = await runWorkflow({ args: { cards }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-fix-test-author' && /#2\b/.test(p) ? null : o.agentType === 'pair-reviewer' ? { verdict: 'Approved', findings: [] } : {}) })
-  assert.match(mixed.result.note, /1\/2 cards advanced to a PR \(1 ready-for-merge\); 1 returned a failure status \(1 failed-preparation\)/)
+  assert.match(mixed.result.note, /1\/2 cards advanced \(1 ready-for-merge\); 1 returned a failure status \(1 failed-preparation\)/)
 })
 test('US-219 AC4: each stage is its own subagent call, and no call carries two stories', async () => {
   const { calls } = await runWorkflow({ args: { cards: manyStories(2) }, dispatch: stdDispatch() })

@@ -397,6 +397,30 @@ test('renderContinueToken: re-invocation line carries scope, predicate, iteratio
   assert.match(token, /--iteration 3/)
 })
 
+test('renderContinueToken: the full effective argument set round-trips, quote-free, ahead of the adoption gate', () => {
+  const { renderContinueToken } = getHelpers()
+  const token = renderContinueToken({
+    root: '212', predicateText: 'x', iteration: 0,
+    filter: 'risk:green', assignee: ['a', 'b'], status: 'Ready', until: 'ready', prepare: 'never', merge: 'always',
+  })
+  for (const part of ['--filter risk:green', '--assignee a,b', '--status Ready', '--until ready', '--prepare never', '--merge always', '--iteration 1'])
+    assert.ok(token.includes(part), `${part} in ${token}`)
+  assert.equal(renderContinueToken({ iteration: 0 }), 'pair-loop --iteration 1')
+})
+
+test('continue-token: --merge always (stricter-than-adoption argument) is handed to the resolve call on resume', async () => {
+  // resume = the same args the token renders, so the resolve dispatch must see merge: always
+  const { renderContinueToken } = getHelpers()
+  assert.match(renderContinueToken({ iteration: 3, merge: 'always' }), /--merge always --iteration 4$/)
+})
+
+test('loop: assignee/status arrays render identically in the Select prompt and the resolve call', async () => {
+  const src = readFileSync(new URL('./pair-loop.js', import.meta.url), 'utf8')
+  assert.ok(!/--assignee \$\{JSON\.stringify\(args\.assignee\)\}/.test(src), 'Select must not JSON.stringify the array')
+  assert.ok(src.includes('selectionText(args.assignee)') && src.includes('selectionText(args[k])'), 'one shared renderer')
+  assert.ok(!/return \{ eligibility, autoAdvance/.test(src), 'the validation-only autoAdvance value is not carried')
+})
+
 // ── Args validation (review M4) ───────────────────────────────────────────
 test('validateArgs: a safe root id, overrides and startIteration pass', () => {
   const { validateArgs } = getHelpers()
