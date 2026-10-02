@@ -5,7 +5,7 @@ import { pathToFileURL } from 'url'
 
 // US-521 T-9 — ONE vocabulary across the consumers of the autonomy model: the same argument names and the
 // same precedence sentence in `/pair-next`, `/pair-workflow-cycle`, `pair-cli run` (metadata) and the KB
-// guideline. The consumer list is DATA: #524 adds the batch and the loop by adding two rows.
+// guideline. The consumer list is DATA: US-524 added the batch, the loop workflow and the `/pair-loop` skill as rows.
 
 const REPO_ROOT = join(__dirname, '../../../..')
 const DATASET = join(__dirname, '../../dataset')
@@ -41,6 +41,29 @@ const CONSUMERS: readonly Consumer[] = [
       '--prepare <gate>',
       '--merge <gate>',
       '--root <id>',
+    ],
+  },
+  {
+    name: 'pair-implement-batch (workflow)',
+    file: join(DATASET, '.workflows/pair-implement-batch.js'),
+    names: ['`until`', '`prepare`', '`merge`'],
+  },
+  {
+    name: 'pair-loop (workflow)',
+    file: join(DATASET, '.workflows/pair-loop.js'),
+    names: ['"until"', '"prepare"', '"merge"', '"filter"', '"assignee"', '"status"'],
+  },
+  {
+    name: '/pair-loop',
+    file: join(DATASET, '.skills/loop/SKILL.md'),
+    names: [
+      '`--until`',
+      '`--prepare`',
+      '`--merge`',
+      '`--filter`',
+      '`--assignee`',
+      '`--status`',
+      '`--root`',
     ],
   },
   {
@@ -81,10 +104,43 @@ describe('US-521 T-9: one vocabulary across the autonomy consumers', () => {
     for (const rel of [
       '.claude/skills/pair-next/SKILL.md',
       '.claude/skills/pair-workflow-cycle/SKILL.md',
+      '.claude/skills/pair-loop/SKILL.md',
+      '.claude/workflows/pair-implement-batch.js',
+      '.claude/workflows/pair-loop.js',
     ]) {
       const text = read(join(REPO_ROOT, rel))
       expect(text, rel).toContain('Precedence: argument > adoption')
     }
+  })
+})
+
+describe('US-524: batch and loop honour the model — the A1 refusal is gone', () => {
+  const files = [
+    join(DATASET, '.workflows/pair-implement-batch.js'),
+    join(DATASET, '.workflows/pair-loop.js'),
+    join(DATASET, '.skills/loop/SKILL.md'),
+  ]
+  it('no consumer still refuses with the #524 pointer', () => {
+    for (const file of files) expect(read(file), file).not.toContain('autonomy-not-supported')
+  })
+  it('the batch description no longer says it NEVER merges; it states the merge gate and the sequential fallback', () => {
+    const text = read(files[0]!)
+    expect(text).not.toMatch(/Stops at PR-ready; NEVER merges/)
+    expect(text).toContain('a card merges ONLY when the merge gate allows it')
+    expect(text).toContain('/pair-workflow-cycle one card at a time with the same arguments')
+  })
+  it('/pair-loop states the degraded path as the cycle one card at a time and owns no merge', () => {
+    const text = read(files[2]!)
+    expect(text).toContain('`/pair-workflow-cycle --card <id>`')
+    expect(text).toContain('**Never merges.**')
+  })
+  it('pair-loop.js carries no cycle-merge call (merge authority has one owner: the batch)', () => {
+    expect(
+      read(files[1]!)
+        .split('\n')
+        .filter(l => !/^\s*\/\//.test(l))
+        .join('\n'),
+    ).not.toContain('cycle-merge')
   })
 })
 

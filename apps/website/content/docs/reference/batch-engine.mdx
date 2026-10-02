@@ -18,7 +18,7 @@ Three workflows ship:
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `pair-implement-batch` | a batch of cards, each to a review-approved PR through four judgment stages — preparation, independent contract validation + seal, implementation, independent final verification — resuming a cycle from its first incomplete step |
 | `pair-refine-batch`    | a batch of backlog cards to Ready — classify, refine, or read-only triage. By its dispatched prompts it writes to the PM tool only and touches no file in the repo — that is process, not permission: see the note below the agent table |
-| `pair-loop`            | the unattended delivery loop — selects eligible cards via `/pair-next`, runs a dependency + mutex analysis, composes `pair-implement-batch` for the actual batch, enacts the automation policy (auto-advance) and evaluates the stop predicate. Realization for the `/pair-loop` skill in Claude Code (ADR-017 §4); elsewhere the skill takes a degraded one-card + continue-token path and this workflow never runs |
+| `pair-loop`            | the unattended delivery loop — selects eligible cards via `/pair-next`, runs a dependency + mutex analysis, composes `pair-implement-batch` for the actual batch, hands the autonomy policy (until / prepare / merge) to the batch — which merges a review-approved card only when the merge gate allows it — and evaluates the stop predicate. Realization for the `/pair-loop` skill in Claude Code (ADR-017 §4); elsewhere the skill takes a degraded one-card + continue-token path and this workflow never runs |
 
 `pair-refine-batch` deliberately carries neither of the two knobs `pair-implement-batch` has.
 It has **no parallelism cap** because each card costs one API round trip and holds no worktree,
@@ -61,7 +61,7 @@ in every prompt it dispatches, not a tool grant.
 **Read the third column as process, not as permission.** `Bash` is unrestricted wherever it is
 declared, so writing files, committing, pushing and `gh pr merge` are all technically inside the
 authority you install. What keeps `pair-reviewer` and `pair-red-contract-verifier` read-only,
-`pair-fix-test-author` test-only, and keeps merge out of every run is instruction — the engine's
+`pair-fix-test-author` test-only, and keeps merge out of every run that did not declare one is instruction — the engine's
 dispatched prompts and each agent's own definition — not the tool grant.
 
 So after an `install` or `update`, your project contains definitions that — when you invoke a
@@ -72,10 +72,7 @@ gate does not check.
 
 They do nothing on their own. Nothing runs until you start a batch.
 
-**No prompt this engine dispatches instructs a merge, on any path, and no configuration enables
-one.** Every run stops at PR-review-approved and reports `ready-for-merge`, leaving the merge
-decision to you — asserted by a dry-run test that inspects every dispatched prompt and every
-returned status.
+**No prompt this engine dispatches to a judgment agent instructs a merge, and by default nothing merges.** With nothing declared every run stops at PR-review-approved and reports `ready-for-merge`, leaving the merge decision to you. Only when you declare `until: merged` (an argument, `## Autonomy` in `tech/automation.md`, or a legacy `## Auto-Advance <tier>`) does the batch run the merge stage — `cycle-merge.mjs`, through an agent, pinned to the head the verifier reviewed, after re-reading the tier, `pair-review` and `pair-explicit-approval` — and only when your merge gate (`merge: never | when …`) allows it; `merge: always` (the default) parks the card `awaiting-human`, and a gate condition that fires parks it `escalated`. Both are asserted by dry-run tests that inspect every dispatched prompt and every returned status.
 
 Every shipped name carries a `pair-` prefix — file names, agent names, and the workflows'
 registry names (`meta.name`) alike — so neither an existing `.claude/agents/reviewer.md` nor
@@ -100,10 +97,9 @@ worktree per card, the executable acceptance contract sealed before the implemen
 durable cycle state that survives a context reset, and the convergence rule that decides when a
 card is done.
 
-## Merge is always the human gate
+## Merge is the human gate unless your merge gate says otherwise
 
-No configuration enables an autonomous merge. The engine stops at a review-approved PR and
-reports it; the decision to merge is yours, on every path — convergence, escalation, or failure.
+By default no configuration merges: the engine stops at a review-approved PR and reports it, and the decision to merge is yours, on every path — convergence, escalation, or failure. A batch is the delivery cycle on N cards, so it takes the cycle's own `until` / `prepare` / `merge` arguments; under `until: merged` it merges a card only when the merge gate allows it, and the rule is `autonomy-policy.mjs`'s, never the sandbox's. Where there is no Workflow tool, run `/pair-workflow-cycle` one card at a time with the same arguments.
 
 ## Configuring it
 
@@ -193,7 +189,7 @@ no register, no projector.
   instead of overwriting the previous cycle's. The scope-decision packet stays PR-scoped: its
   `sc-` ids and the maintainer's answer outlive cycles.
 - **Statuses** a caller may see: `ready-for-merge` (only with a 40-hex `reviewedHead` and a
-  `verdict`), `escalate`, `failed-preparation`, `failed-contract`, `failed-seal`,
+  `verdict`), `merged`, `awaiting-human`, `escalated` (an autonomy gate condition fired — distinct from the review's `escalate`), `target-ready`, `escalate`, `failed-preparation`, `failed-contract`, `failed-seal`,
   `failed-implement`, `failed-fix`, `failed-verify`, `failed-custody`, `failed-resume`,
   `incompatible`, and four added in `4.0.0`: `awaiting-scope-decision` (quality converged, one or
   more scope proposals still pending a human decision), `failed-publication` (the final summary
