@@ -1306,7 +1306,8 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
         const exited = new Promise<void>(resolve => child.on('close', () => resolve()))
         // Tight poll: the signal must land as close to mktemp as the observer can get.
         const deadline = Date.now() + 10_000
-        while (readdirSync(tmpEnvDir).length === 0 && Date.now() < deadline) await new Promise(r => setImmediate(r))
+        while (readdirSync(tmpEnvDir).length === 0 && Date.now() < deadline)
+          await new Promise(r => setImmediate(r))
         process.kill(-(child.pid as number), 'SIGTERM')
         await exited
         expect(readdirSync(tmpEnvDir), `run ${i}`).toEqual([])

@@ -112,7 +112,9 @@ describe('smoke CI platform coverage (#135)', () => {
       return diff
         .split('\n')
         .filter(l => /^[+-](?![+-])/.test(l))
-        .some(l => /\b(path|join|resolve|dirname|basename|sep|win32|posix|homedir|tmpdir)\b/i.test(l))
+        .some(l =>
+          /\b(path|join|resolve|dirname|basename|sep|win32|posix|homedir|tmpdir)\b/i.test(l),
+        )
     }
     const productionPathFixes = changed.filter(
       path =>
