@@ -409,17 +409,18 @@ export function reconcileCapAudit(mutexAudit, finalBatchIds) {
 // US-524: the token carries the FULL effective argument set (validated, quote-free values only), so a resumed run
 // keeps the stricter argument instead of falling back to the adoption gate.
 export const selectionText = v => (Array.isArray(v) ? v.join(',') : String(v))
+// Shell-safe word: single-quoted, an embedded quote closed/escaped/reopened (gate values are validated quote-free).
+const shellQuote = v => `'${String(v).replace(/'/g, `'\\''`)}'`
 export function renderContinueToken({ root, predicateText, iteration, filter, assignee, status, until, prepare, merge }) {
-  const rootPart = root ? ` --root ${root}` : ''
+  const rootPart = root ? ` --root ${shellQuote(root)}` : ''
   const given = { filter, assignee, status, until, prepare, merge }
   const argParts = Object.entries(given)
     .filter(([, v]) => v !== undefined && v !== null && v !== '')
-    .map(([k, v]) => ` --${k} ${selectionText(v)}`)
+    .map(([k, v]) => ` --${k} ${shellQuote(selectionText(v))}`)
     .join('')
-  // A predicate containing a double quote would otherwise break the token
-  // when a human pastes it back into a shell (review round 3, informational
-  // finding) — escape it rather than assume the predicate never carries one.
-  const predPart = predicateText ? ` --predicate "${predicateText.replace(/"/g, '\\"')}"` : ''
+  // Every value is single-quoted so a pasted token word-splits back to the same values (no `;`, space, `$` or
+  // quote can drop `--merge` or its `lacks:`).
+  const predPart = predicateText ? ` --predicate ${shellQuote(predicateText)}` : ''
   return `pair-loop${rootPart}${argParts}${predPart} --iteration ${iteration + 1}`
 }
 
@@ -709,7 +710,7 @@ while (true) {
       ].filter(Boolean)
       runLog.push(incomplete.length
         ? { iteration, id: outcome.id, excluded: true, reason: `halted — engine reported ready-for-merge without ${incomplete.join(', ')}: an incomplete handoff is never a clean review` }
-        : { iteration, id: outcome.id, autoAdvance: false, parked: true, reason: 'PR-ready — the merge gate did not merge it (default: never); a human merges' })
+        : { iteration, id: outcome.id, autoAdvance: false, parked: true, reason: 'PR-ready — the merge gate did not merge it (gate default `always` parks it); a human merges' })
     } else if (outcome.status === 'target-ready') {
       runLog.push({ iteration, id: outcome.id, excluded: true, reason: `stopped at the until target (${outcome.target ?? 'ready'}) at ${outcome.stage ?? 'a stage boundary'}` })
     } else {
