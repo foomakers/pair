@@ -34,4 +34,4 @@ US-522 (autonomy model B): `pair-cli run --parallel N` ran ONE batch. Unattended
 ## Consequences
 
 - Positive: same autonomy model runs unattended on any engine; default path unchanged.
-- Negative: `--no-watch` / `--watch` conflict cannot be refused from argv (commander folds both into one key; last wins).
+- `--watch` with `--no-watch` is refused at argv (cli.ts tracks both commander option events).

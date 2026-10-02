@@ -145,7 +145,7 @@ interface ParseRunOptions {
   rounds?: string
   /** US-491: `--parallel N` — the fan-out; with `--root` and/or `--filter` (US-522). */
   parallel?: string | number
-  /** US-522: `--watch` (true) / `--no-watch` (false) — commander folds both into one key; the last one wins. */
+  /** US-522: `--watch` (true) / `--no-watch` (false) — both together are refused at argv (cli.ts). */
   watch?: boolean
   /** US-522: `--interval <n>s|m|h`. */
   interval?: string

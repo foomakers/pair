@@ -93,7 +93,7 @@ export const runCommandMetadata = {
     {
       flags: '--no-watch',
       description:
-        'US-522: explicitly no watch loop (overrides a declared watch; with --watch the last one wins)',
+        'US-522: explicitly no watch loop (overrides a declared watch; refused together with --watch)',
     },
     {
       flags: '--interval <n>s|m|h',
