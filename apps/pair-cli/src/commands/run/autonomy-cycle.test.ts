@@ -58,10 +58,10 @@ describe('parser: autonomy arguments', () => {
   })
 
   it.each(['until', 'prepare', 'merge'] as const)(
-    'P3: --%s without --card is refused with the #524 pointer',
+    'P3: --%s without --card is refused, naming the --card path',
     flag => {
       expect(() => parseRunCommand({ root: '485', [flag]: 'x' })).toThrow(
-        /only meaningful with --card[\s\S]*#524/,
+        /only meaningful with --card[\s\S]*do not carry it through this driver/,
       )
     },
   )
@@ -117,7 +117,7 @@ describe('selection arguments reach pair-next only', () => {
     ])
   })
 
-  it('S3: the perimeter REFUSES them where they cannot be honoured, with the #524 pointer', () => {
+  it('S3: the perimeter REFUSES them where they cannot be honoured, with the driver-declaration reason', () => {
     const base = {
       root: '1',
       cwd,
@@ -129,7 +129,7 @@ describe('selection arguments reach pair-next only', () => {
     expect(() => createPerimeter({ ...base, assignee: '@me', selectionDelivered: false })).toThrow(
       UNHONOURABLE_SELECTION_MESSAGE,
     )
-    expect(UNHONOURABLE_SELECTION_MESSAGE).toMatch(/#524/)
+    expect(UNHONOURABLE_SELECTION_MESSAGE).toMatch(/only root\/predicate\/iteration/)
     const ok = createPerimeter({
       ...base,
       assignee: '@me',

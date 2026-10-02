@@ -192,16 +192,22 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3, entry = 'legacy' } =
   }
 }
 
-// US-521 r1-g3 (r0-4): the batch takes the caller's own Read of tech/automation.md as `policyText` (the
-// Workflow sandbox has no filesystem) and refuses a launch without one. The harness plays a launcher
-// whose project has no automation.md (`''`) unless the test names its own policy text.
+// US-524: `policyText` is OPTIONAL (the resolve script reads automation.md itself). A launch that omits it — or
+// passes a non-empty one, or any autonomy argument — makes ONE resolve dispatch (`autonomy:resolve`); `''` says
+// "no automation.md" and, with no argument, nothing is dispatched. The harness plays a project with no
+// automation.md (`''`) unless the test names its own policy text; a launch that carries none (a bare array, a JSON
+// string) gets the default-off resolve answer, unrecorded, so dispatch-shape tests keep counting stages only.
 const withPolicyText = a => (a && typeof a === 'object' && !Array.isArray(a) && !Object.hasOwn(a, 'policyText') ? { ...a, policyText: '' } : a)
+const OFF_POLICY = { ok: true, active: false, policy: { until: 'pr', merge: { mode: 'always', has: [], lacks: [] }, prepare: { mode: 'always', has: [], lacks: [] } }, lines: [], warnings: [], errors: [] }
 
-async function runWorkflow({ args, dispatch, floor, maxFixRounds, entry }) {
+async function runWorkflow({ args, dispatch, floor, maxFixRounds, entry, autonomy }) {
   const calls = []
   const simulate = makeSimulator({ entry, floor: floor ?? (args && typeof args === 'object' && !Array.isArray(args) ? args.severityFloor ?? 'Minor' : 'Minor'), maxFixRounds: maxFixRounds ?? (args && typeof args === 'object' && !Array.isArray(args) ? args.pipeline?.maxFixRounds ?? 3 : 3) })
   const agent = async (prompt, opts) => {
+    if (!autonomy && opts.label === 'autonomy:resolve') return OFF_POLICY
     calls.push({ prompt, opts })
+    // An `autonomy` handler scripts the policy scripts' answers (resolve / decide / tier / escalate / merge-check / merge).
+    if (autonomy && /^(autonomy:|decide:|tier:|escalate:|pr-state:|cascade:|merge-check:|merge:)/.test(opts.label ?? '')) return autonomy(prompt, opts)
     const raw = await dispatch(prompt, opts)
     return simulate(prompt, opts, raw)
   }
@@ -335,9 +341,13 @@ test('TC-11: every dispatch is a configured skill + typed arguments + the engine
 
 test('TC-11: the workflow source dispatches ONLY skill invocations — no free-form prompt, no shell, no retired rule or role', () => {
   const code = SRC.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
-  const dispatches = [...code.matchAll(/\b(?:agent(?:Retry)?|dispatch)\(\s*\n?\s*([^\n,]+)/g)].map(m => m[1].trim()).filter(d => d !== 'prompt')
+  const all = [...code.matchAll(/\b(?:agent(?:Retry)?|dispatch)\(\s*\n?\s*([^\n,]+)/g)].map(m => m[1].trim()).filter(d => d !== 'prompt')
+  // US-524: the only dispatches that are not a skill invocation are the eight SCRIPT RUNNERS of the autonomy model (an agent
+  // runs one named script and relays its JSON): resolve, tier, decide, escalate, pr-state, cascade, merge check, merge. No rule lives in them.
+  const scriptRunners = all.filter(d => /^`(Run EXACTLY|Card )/.test(d))
+  const dispatches = all.filter(d => !scriptRunners.includes(d))
+  assert.equal(scriptRunners.length, 8, `expected the eight autonomy script runners, found ${scriptRunners.length}`)
   assert.equal(dispatches.length, 5, `expected the five stage dispatches and nothing else (the template contract rides on the first review, t9d-2), found ${dispatches.length}`)
-  for (const d of dispatches) assert.match(d, /^(invoke\(|`Invoke \*\*\$\{SK\.[a-zA-Z]+\}\*\*)/, `a dispatch is not a skill invocation: ${d}`)
   for (const gone of ['PACING', 'TEXT SHAPE', 'CONTRACT INVENTORY', 'FINITE-STATE', 'SEALED RED SNAPSHOT', 'CONVERGENCE SWEEP', 'DO NOT FILE NEW ISSUES', 'ISOLATION (mandatory', 'sha256sum', 'git diff-tree', "'pair-remediation-planner'", "'pair-red-sealer'", "'pair-fix-verifier'", "'/pair-workflow-remediation-plan'", "'/pair-workflow-red-seal'", "'/pair-workflow-p3-verify'", "'/pair-workflow-cycle-comments'", "'/pair-workflow-pr-phase'"])
     assert.equal(code.includes(gone), false, `${gone} is still spelled in the workflow code`)
 })
@@ -1276,13 +1286,11 @@ test('a bare array, a JSON string, `cards` and the `stories` alias all drive the
     assert.equal(result.batch.length, 1, JSON.stringify(args))
   }
   assert.match(await expectThrow({ args: { cards: [STORY], stories: [STORY] } }), /both `cards` and `stories`/)
-  // US-521 r1-g3 (r0-4): a bare array (and a JSON string without it) cannot carry the caller's Read of
-  // tech/automation.md, so it is still PARSED as the card list and then refused naming `policyText` and the
-  // #524 pointer — never a run that would silently ignore a declared `## Autonomy`.
+  // US-524: a bare array (and a JSON string without it) carries no `policyText`: it is parsed as the card list and the
+  // policy script is asked (one `autonomy:resolve` dispatch) — a declared `## Autonomy` is read, never ignored.
   for (const args of [[STORY], JSON.stringify({ stories: [STORY] })]) {
-    const thrown = await expectThrow({ args })
-    assert.match(thrown, /autonomy-not-supported-until-#524/, JSON.stringify(args))
-    assert.match(thrown, /policyText/, JSON.stringify(args))
+    const { result } = await runWorkflow({ args, dispatch: stdDispatch() })
+    assert.equal(result.batch.length, 1, JSON.stringify(args))
   }
 })
 test('a leading # on the id is normalized away — worktree paths and markers never carry it', async () => {
@@ -1467,13 +1475,18 @@ test('US-219 AC6: maxParallelism caps in-flight cards; absent is unbounded; 0/ne
 })
 test('US-219 AC6: under a cap, results keep INPUT order and a dead card is reported in `died`, not silently missing', async () => {
   const order = []
+  // Ordering is made by a GATE, never by timer length (a 15ms-vs-1ms race flipped under a loaded CI machine): card 300
+  // implements only once another card has, so its result must still sit FIRST in `batch` (input order) while finishing last.
+  let release
+  const gate = new Promise(r => (release = r))
   const dispatch = async (prompt, opts) => {
     if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
     if (opts.phase === 'Implement') {
       const id = (prompt.match(/#(\d{3})/) ?? [])[1]
-      await new Promise(r => setTimeout(r, id === '300' ? 15 : 1))
+      if (id === '300') await gate
       if (id === '301') throw new Error('agent died')
       order.push(id)
+      if (id !== '300') release()
     }
     if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
     return {}
@@ -1490,7 +1503,12 @@ test('US-219: the note is derived from the STATUSES — an all-failed batch says
   assert.match(allFailed.result.note, /NOTHING COMPLETED: 0\/2 cards advanced.*2 returned a failure status \(2 failed-implement\)/s)
   assert.deepEqual(allFailed.result.died, [])
   const mixed = await runWorkflow({ args: { cards }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-fix-test-author' && /#2\b/.test(p) ? null : o.agentType === 'pair-reviewer' ? { verdict: 'Approved', findings: [] } : {}) })
-  assert.match(mixed.result.note, /1\/2 cards advanced to a PR \(1 ready-for-merge\); 1 returned a failure status \(1 failed-preparation\)/)
+  assert.match(mixed.result.note, /1\/2 cards advanced \(1 ready-for-merge\); 1 returned a failure status \(1 failed-preparation\)/)
+})
+test('batch note names the merge gate default as `always`, never reads "(default: never)" as the gate value', async () => {
+  const mixed = await runWorkflow({ args: { cards: [{ id: '1', title: 'a', branch: 'b1' }] }, dispatch: stdDispatch() })
+  assert.ok(!/default: never/.test(mixed.result.note), mixed.result.note)
+  assert.match(mixed.result.note, /allows it \(default always: nothing merges; a review-approved card stops at ready-for-merge under the default until pr, parks awaiting-human under until merged\)/)
 })
 test('US-219 AC4: each stage is its own subagent call, and no call carries two stories', async () => {
   const { calls } = await runWorkflow({ args: { cards: manyStories(2) }, dispatch: stdDispatch() })
@@ -1973,4 +1991,231 @@ test('US-514 r1-g1 g1-w6 (r0-5): a converging cycle that needs more than 200 dis
   const { result } = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], pipeline: { maxFixRounds: 60 } }, dispatch: stdDispatch({ review }) })
   assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
   assert.ok(result.metrics.dispatches > 200, `only ${result.metrics.dispatches} dispatches ran`)
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-524 — batch = cycle on N cards: policy, stage-boundary decisions and the merge stage, all by SCRIPTS an agent
+// runs (their JSON relayed). The harness scripts the policy scripts' answers by label; the rule is never here.
+// ═══════════════════════════════════════════════════════════════════════════
+const GATE = (mode, extra = {}) => ({ mode, has: [], lacks: [], ...extra })
+const RESOLVED = (until, merge = GATE('never'), extra = {}) => ({ ok: true, active: true, policy: { until, merge, prepare: GATE('always') }, lines: [`until: ${until} (argument)`], warnings: [], errors: [], ...extra })
+const PROCEED = { decision: 'proceed' }
+// A scripted policy-script runner: `resolve` answers `resolved`; stage boundaries answer `decide(prompt)`; merge `check`/`run`
+// answer `check` / `run`. Every call is recorded by runWorkflow (`calls`), so a test reads the commands the agents were told to run.
+const scripted = ({ resolved, decide = () => PROCEED, tier = { tier: 'risk:green' }, check = { mergeAllowed: true, failed: [], comment: { posted: true } }, run = { merged: true, cascaded: true, reason: 'merged' }, escalate = { comment: { posted: true } }, prState = { state: 'OPEN' }, cascade = { closed: true } }) => (prompt, opts) => {
+  const l = opts.label
+  if (l === 'autonomy:resolve') return typeof resolved === 'function' ? resolved(prompt) : resolved
+  if (l.startsWith('decide:')) return decide(prompt, l)
+  if (l.startsWith('tier:')) return tier
+  if (l.startsWith('pr-state:')) return typeof prState === 'function' ? prState(prompt) : prState
+  if (l.startsWith('cascade:')) return cascade
+  if (l.startsWith('merge-check:')) return typeof check === 'function' ? check(prompt) : check
+  if (l.startsWith('merge:')) return typeof run === 'function' ? run(prompt) : run
+  if (l.startsWith('escalate:')) return escalate
+  throw new Error(`unscripted ${l}`)
+}
+const driveWith = (args, handlers) => runWorkflow({ args: { cards: [STORY], ...args }, dispatch: stdDispatch(), autonomy: scripted(handlers) })
+const labelsOf = calls => calls.map(c => c.opts.label)
+const rowOf = r => r.result.batch[0]
+
+test('US-524 AC-2: until merged + a gate that allows it — the batch runs cycle-merge check then run, pinned to reviewedHead, and the row says merged', async () => {
+  const r = await driveWith({ until: 'merged', merge: 'never' }, { resolved: RESOLVED('merged') })
+  const row = rowOf(r)
+  assert.equal(row.status, 'merged')
+  assert.equal(row.cascaded, true)
+  const check = r.calls.find(c => c.opts.label === 'merge-check:#292')
+  const run = r.calls.find(c => c.opts.label === 'merge:#292')
+  for (const c of [check, run]) {
+    assert.match(c.prompt, new RegExp(`cycle-merge\\.mjs ${c === check ? 'check' : 'run'} --dir \\.pair/working/runs/story-292/292 --story 292 --pr 7 --reviewedHead ${HEAD} --cardTier risk:green --mergeGate '`))
+    assert.match(c.prompt, /--mergeGate '\{"mode":"never","has":\[\],"lacks":\[\]\}'/)
+  }
+  assert.match(run.prompt, /--gate <green\|red>/)
+  assert.ok(labelsOf(r.calls).indexOf('merge-check:#292') < labelsOf(r.calls).indexOf('merge:#292'))
+})
+
+test('US-524 AC-1: the resolve dispatch runs autonomy-policy.mjs with ONLY the arguments passed, and its lines are printed', async () => {
+  const r = await driveWith({ until: 'merged', merge: 'when; lacks: risk:green' }, { resolved: RESOLVED('merged', GATE('when', { lacks: ['risk:green'] })) })
+  const resolve = r.calls.find(c => c.opts.label === 'autonomy:resolve')
+  assert.match(resolve.prompt, /autonomy-policy\.mjs resolve --adoption \.pair\/adoption\/tech\/automation\.md --args '\{"until":"merged","merge":"when; lacks: risk:green"\}'/)
+  assert.ok(r.logs.includes('autonomy until: merged (argument)'))
+})
+
+test('US-524 AC-2: merge: always parks the card awaiting-human — never merged', async () => {
+  const r = await driveWith({ until: 'merged', merge: 'always' }, { resolved: RESOLVED('merged', GATE('always')), check: { mergeAllowed: false, failed: [{ code: 'tier-not-auto-advance', detail: 'merge: always' }], reason: 'merge: always — the merge gate parks the card for a human', parkKind: 'awaiting-human', comment: { posted: true } } })
+  const row = rowOf(r)
+  assert.equal(row.status, 'awaiting-human')
+  assert.equal(row.commentPosted, true)
+  assert.equal(row.reviewedHead, HEAD)
+  assert.ok(!labelsOf(r.calls).includes('merge:#292'), 'never ran the merge')
+})
+
+test('US-524 AC-5: a gate condition at the merge check is `escalated` with its stage and conditions — distinct from the review\'s `escalate`', async () => {
+  const r = await driveWith({ until: 'merged', merge: 'when; has: cost:red' }, { resolved: RESOLVED('merged', GATE('when', { has: ['cost:red'] })), check: { mergeAllowed: false, failed: [{ code: 'escalated', detail: 'x' }], reason: 'merge gate escalates: has:cost:red', parkKind: 'escalated', conditions: ['has:cost:red'] } })
+  const row = rowOf(r)
+  assert.equal(row.status, 'escalated')
+  assert.equal(row.stage, 'merge')
+  assert.deepEqual(row.conditions, ['has:cost:red'])
+  assert.notEqual(row.status, 'escalate')
+})
+
+test('US-524 edge: malformed or missing merge JSON parks the card halted — never merged', async () => {
+  for (const check of [null, {}, { mergeAllowed: 'yes' }, { mergeAllowed: false, failed: [] }, 'merged']) {
+    const r = await driveWith({ until: 'merged' }, { resolved: RESOLVED('merged'), check })
+    assert.equal(rowOf(r).status, 'halted', JSON.stringify(check))
+    assert.ok(!labelsOf(r.calls).includes('merge:#292'), JSON.stringify(check))
+  }
+  const r = await driveWith({ until: 'merged' }, { resolved: RESOLVED('merged'), run: { merged: false, reason: 'gate red', failed: [{ code: 'gate-red', detail: 'x' }] } })
+  assert.equal(rowOf(r).status, 'halted')
+  assert.match(rowOf(r).reason, /gate red/)
+})
+
+test('US-524 edge: a merge that landed with an unfinished cascade is merged but parked for a human', async () => {
+  for (const cascaded of [false, undefined, 'yes']) {
+    const r = await driveWith({ until: 'merged' }, { resolved: RESOLVED('merged'), run: { merged: true, cascaded, reason: 'closure failed' } })
+    assert.equal(rowOf(r).status, 'merged')
+    assert.equal(rowOf(r).cascaded, false)
+    assert.equal(rowOf(r).parked, true)
+    assert.match(rowOf(r).note, /cascade did not confirm complete/)
+  }
+})
+
+test('US-524 AC-1: every stage boundary asks the script (decide, relayed, with the live labels); until: ready stops the card at the target', async () => {
+  const r = await driveWith({ until: 'ready' }, { resolved: RESOLVED('ready'), decide: (prompt, label) => (/ implement$/.test(label) ? { decision: 'stop-at-target', target: 'ready', stage: 'implement', reason: 'until: ready stops at the prepare→implement boundary' } : PROCEED) })
+  const row = rowOf(r)
+  assert.equal(row.status, 'target-ready')
+  assert.equal(row.target, 'ready')
+  assert.equal(row.stage, 'implement')
+  const decide = r.calls.find(c => c.opts.label === 'decide:#292 implement')
+  assert.match(decide.prompt, /autonomy-policy\.mjs decide --policy '\{"until":"ready","merge":\{"mode":"never","has":\[\],"lacks":\[\]\}\}' --boundary stage:implement --labels '<labels>'/)
+  assert.match(decide.prompt, /gh issue view 292 --json labels/)
+  assert.ok(!r.calls.some(c => c.opts.agentType === 'pair-implementer'), 'never dispatched past the target')
+})
+
+test('US-524 AC-5: an escalation at a stage boundary posts the ONE idempotent comment by script and the row is escalated; the rest of the batch continues', async () => {
+  const other = { id: '293', title: 'U', branch: 'feat/#293-y' }
+  const r = await runWorkflow({
+    args: { cards: [STORY, other], until: 'merged', merge: 'when; has: cost:red' },
+    dispatch: stdDispatch(),
+    autonomy: scripted({
+      resolved: RESOLVED('merged', GATE('when', { has: ['cost:red'] })),
+      decide: (prompt, label) => (label.startsWith('decide:#292') ? { decision: 'escalate', stage: 'prepare', conditions: ['has:cost:red'], reason: 'merge gate condition fired at prepare: has:cost:red' } : PROCEED),
+    }),
+  })
+  const rows = Object.fromEntries(r.result.batch.map(b => [b.id, b]))
+  assert.equal(rows['292'].status, 'escalated')
+  assert.equal(rows['292'].stage, 'prepare')
+  assert.deepEqual(rows['292'].conditions, ['has:cost:red'])
+  assert.equal(rows['292'].comment.posted, true)
+  assert.equal(rows['293'].status, 'merged', 'one card escalating never aborts the others')
+  const esc = r.calls.find(c => c.opts.label === 'escalate:#292')
+  assert.match(esc.prompt, /cycle-merge\.mjs escalate --dir \.pair\/working\/runs\/story-292\/292 --story 292 --stage prepare --conditions '\["has:cost:red"\]'/)
+})
+
+test('US-524 edge: an escalation whose stage/conditions are not label-shaped is still escalated, with no comment dispatched', async () => {
+  const r = await driveWith({ until: 'merged', merge: 'when; has: cost:red' }, { resolved: RESOLVED('merged'), decide: () => ({ decision: 'escalate', stage: 'prepare', conditions: ["x'; rm -rf /"], reason: 'r' }) })
+  assert.equal(rowOf(r).status, 'escalated')
+  assert.equal(rowOf(r).comment.posted, false)
+  assert.ok(!labelsOf(r.calls).includes('escalate:#292'))
+})
+
+test('US-524 edge: an unreadable or unknown stage decision parks the card halted — never read as proceed', async () => {
+  for (const d of [null, {}, { decision: 'maybe' }, { error: 'boom' }, { decision: 'proceed', error: 'x' }]) {
+    const r = await driveWith({ until: 'pr' }, { resolved: RESOLVED('pr'), decide: () => d })
+    assert.equal(rowOf(r).status, 'halted', JSON.stringify(d))
+    assert.ok(!r.calls.some(c => c.opts.agentType === 'pair-implementer'), JSON.stringify(d))
+  }
+})
+
+test('US-524 AC-7: until: pr (declared) decides every boundary but never merges — the row stays ready-for-merge', async () => {
+  const r = await driveWith({ until: 'pr' }, { resolved: RESOLVED('pr', GATE('always')) })
+  assert.equal(rowOf(r).status, 'ready-for-merge')
+  assert.ok(labelsOf(r.calls).some(l => l.startsWith('decide:#292')))
+  assert.ok(!labelsOf(r.calls).some(l => l.startsWith('merge')))
+})
+
+test('US-524 AC-7: legacy `## Auto-Advance <tier>` (resolved, not active, until merged) merges through --autoAdvance, with no stage decisions', async () => {
+  const resolved = { ok: true, active: false, policy: { until: 'merged', merge: GATE('when', { lacks: ['risk:green'] }), prepare: GATE('always'), legacyTiers: ['risk:green'] }, lines: [], warnings: [], errors: [] }
+  const r = await runWorkflow({ args: { cards: [STORY], policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n' }, dispatch: stdDispatch(), autonomy: scripted({ resolved }) })
+  assert.equal(rowOf(r).status, 'merged')
+  assert.ok(!labelsOf(r.calls).some(l => l.startsWith('decide:')), 'legacy-only is not active: no stage decision')
+  const check = r.calls.find(c => c.opts.label === 'merge-check:#292')
+  assert.match(check.prompt, /--autoAdvance '\["risk:green"\]'/)
+  assert.doesNotMatch(check.prompt, /--mergeGate/)
+})
+
+test('US-524 AC-7: nothing declared (resolve answers the default) — the batch never merges and decides nothing', async () => {
+  const r = await runWorkflow({ args: { cards: [STORY], policyText: '## Eligibility\n\nrisk:green\n' }, dispatch: stdDispatch(), autonomy: scripted({ resolved: { ...OFF_POLICY, active: false } }) })
+  assert.equal(rowOf(r).status, 'ready-for-merge')
+  assert.deepEqual(labelsOf(r.calls).filter(l => /^(decide|merge|tier|escalate)/.test(l)), [])
+})
+
+test('US-524: `policyText` is optional — "" with no autonomy argument dispatches no resolve; absent, non-empty, or any argument does', async () => {
+  const count = async args => (await runWorkflow({ args, dispatch: stdDispatch(), autonomy: scripted({ resolved: { ...OFF_POLICY } }) })).calls.filter(c => c.opts.label === 'autonomy:resolve').length
+  assert.equal(await count({ cards: [STORY], policyText: '' }), 0)
+  assert.equal(await count({ cards: [STORY], policyText: undefined }), 1)
+  assert.equal(await count({ cards: [STORY], policyText: '## Autonomy\n\nuntil: merged\n' }), 1)
+  assert.equal(await count({ cards: [STORY], policyText: '', until: 'ready' }), 1)
+})
+
+test('US-524: a policy that does not resolve HALTs the run before any card is touched', async () => {
+  const halt = async resolved => {
+    try {
+      await runWorkflow({ args: { cards: [STORY], policyText: 'x' }, dispatch: stdDispatch(), autonomy: scripted({ resolved }) })
+    } catch (e) {
+      return e
+    }
+    throw new Error('expected a HALT')
+  }
+  assert.match((await halt({ ok: false, errors: [{ key: 'merge', reason: 'is invalid' }] })).message, /automation-policy-malformed — merge: is invalid/)
+  for (const bad of [null, {}, { ok: true }, { ok: true, active: true, policy: { until: 'merged' } }, { error: 'boom' }])
+    assert.match((await halt(bad)).message, /automation-policy-unresolved/, JSON.stringify(bad))
+})
+
+test('US-524: the new arguments are validated by content before any agent runs; selection arguments are not the batch\'s', async () => {
+  for (const [key, bad] of [['until', "merged'; x"], ['merge', 'when; has: a`b`'], ['prepare', 'a\nb'], ['until', 5], ['merge', '']])
+    assert.match(await expectThrow({ args: { cards: [STORY], policyText: '', [key]: bad } }), new RegExp(`args\\.${key}`), `${key} ${JSON.stringify(bad)}`)
+  for (const key of ['filter', 'assignee', 'status'])
+    assert.match(await expectThrow({ args: { cards: [STORY], policyText: '', [key]: 'x' } }), new RegExp(key))
+  assert.match(await expectThrow({ args: { cards: [STORY], policyText: 42 } }), /args\.policyText must be a string/)
+})
+
+test('US-524: a card `tier` is the tier the cycle is driven under (no tier read); without it the batch reads it once, fail-safe red', async () => {
+  const withTier = await runWorkflow({ args: { cards: [{ ...STORY, tier: 'risk:yellow' }], until: 'merged' }, dispatch: stdDispatch(), autonomy: scripted({ resolved: RESOLVED('merged') }) })
+  assert.ok(!labelsOf(withTier.calls).some(l => l.startsWith('tier:')))
+  assert.match(withTier.calls.find(c => c.opts.label === 'merge-check:#292').prompt, /--cardTier risk:yellow/)
+  const read = await driveWith({ until: 'merged' }, { resolved: RESOLVED('merged'), tier: { tier: 'not a label' } })
+  assert.equal(labelsOf(read.calls).filter(l => l.startsWith('tier:')).length, 1)
+  assert.match(read.calls.find(c => c.opts.label === 'merge-check:#292').prompt, /--cardTier risk:red/)
+  assert.match(await expectThrow({ args: { cards: [{ ...STORY, tier: 'x y' }], policyText: '' } }), /tier/)
+})
+
+test('US-524 AC-1: the batch holds no autonomy rule — no gate evaluation, no `## Autonomy` reader, no merge decision in the source', () => {
+  // (the `meta` literal quotes the heading in prose; the CODE after it must hold no reader of it)
+  const code = SRC.slice(SRC.indexOf('\n}\n', SRC.indexOf('const meta = {'))).split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
+  assert.doesNotMatch(code, /autonomy-not-supported/)
+  assert.doesNotMatch(code, /sectionBod|## Autonomy|\.mode === ['"](when|always|never)['"]|\.lacks\.|\.has\.|escalationConditions/)
+})
+
+test('US-524 r0-2: resuming a card whose PR is already MERGED records the row merged — no check, no second merge dispatch, no park comment', async () => {
+  const r = await driveWith({ until: 'merged' }, { resolved: RESOLVED('merged'), prState: { state: 'MERGED' } })
+  const row = rowOf(r)
+  assert.equal(row.status, 'merged')
+  assert.equal(row.cascaded, true)
+  assert.ok(!labelsOf(r.calls).includes('merge-check:#292'), 'no check')
+  assert.ok(!labelsOf(r.calls).includes('merge:#292'), 'no second merge')
+  const open = await driveWith({ until: 'merged' }, { resolved: RESOLVED('merged'), prState: { state: 'MERGED' }, cascade: { closed: false } })
+  assert.equal(rowOf(open).status, 'merged')
+  assert.equal(rowOf(open).parked, true, 'cascade not confirmed: left for a human')
+})
+
+test('US-524 r0-3: a stacked card never merges before its base card is merged — it parks with a reason, no merge dispatch (merges in order once the base is merged)', async () => {
+  const A = { id: '292', title: 'A', branch: 'feat/#292-a' }
+  const B = { id: '293', title: 'B', branch: 'feat/#293-b', base: 'feat/#292-a' }
+  const r = await runWorkflow({ args: { cards: [A, B], until: 'merged', maxParallelism: 1 }, dispatch: stdDispatch(), autonomy: scripted({ resolved: RESOLVED('merged') }) })
+  const merged = r.calls.filter(c => c.opts.label.startsWith('merge:')).map(c => c.opts.label)
+  assert.deepEqual(merged, ['merge:#292', 'merge:#293'], 'base A merged first, so B may merge after it')
+  // B converging FIRST (base not yet merged) parks too: order of convergence never merges the child early.
+  const rb = await runWorkflow({ args: { cards: [B, A], until: 'merged', maxParallelism: 1 }, dispatch: stdDispatch(), autonomy: scripted({ resolved: RESOLVED('merged') }) })
+  assert.ok(!rb.calls.some(c => c.opts.label === 'merge-check:#293' || c.opts.label === 'merge:#293'))
+  assert.equal(rb.result.batch.find(x => x.id === '293').status, 'awaiting-human')
 })

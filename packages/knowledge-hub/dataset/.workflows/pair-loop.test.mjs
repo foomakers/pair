@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 // Dry-run harness for pair-loop.js (#250 T12, review round 1 fixes): executes
 // the workflow source with stubbed `agent`/`parallel`/`workflow`/`phase`/`log`
 // (the sandbox primitives) and asserts: predicate grammar (accept/reject,
@@ -14,10 +15,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-// US-490: the loop no longer decides a merge — it invokes the `merge` stage of the delivery cycle.
-// The dry-run harness below answers that stage with the REAL decision rule (`decideMerge`), fed by the
-// very same tier / PR-signal / gate fixtures the scenarios always declared.
-import { decideMerge } from '../skills/pair-workflow-cycle/scripts/cycle-merge.mjs'
+import { resolvePolicy } from '../skills/pair-workflow-cycle/scripts/autonomy-policy.mjs'
+// US-524: the loop holds no merge call — pair-implement-batch (batch = cycle) owns the merge and the loop
+// records the batch's per-card outcome. The scenarios below script that outcome (`workflowDispatch`).
 
 const FULL_SRC = readFileSync(new URL('./pair-loop.js', import.meta.url), 'utf8').replace(
   /^export /gm,
@@ -394,8 +394,40 @@ test('resolveCards: duplicate id de-duplicated, unresolvable branch/title exclud
 test('renderContinueToken: re-invocation line carries scope, predicate, iteration', () => {
   const { renderContinueToken } = getHelpers()
   const token = renderContinueToken({ root: '212', predicateText: 'root ⇒ Done', iteration: 2 })
-  assert.match(token, /--root 212/)
+  assert.match(token, /--root '212'/)
   assert.match(token, /--iteration 3/)
+})
+
+test('renderContinueToken: the full effective argument set round-trips, quote-free, ahead of the adoption gate', () => {
+  const { renderContinueToken } = getHelpers()
+  const token = renderContinueToken({
+    root: '212', predicateText: 'x', iteration: 0,
+    filter: 'risk:green', assignee: ['a', 'b'], status: 'Ready', until: 'ready', prepare: 'never', merge: 'always',
+  })
+  for (const part of ["--filter 'risk:green'", "--assignee 'a,b'", "--status 'Ready'", "--until 'ready'", "--prepare 'never'", "--merge 'always'", '--iteration 1'])
+    assert.ok(token.includes(part), `${part} in ${token}`)
+  assert.equal(renderContinueToken({ iteration: 0 }), 'pair-loop --iteration 1')
+})
+
+test('renderContinueToken: shell-safe — values with spaces/;/quotes survive a real shell word-split (d1-1)', () => {
+  const { renderContinueToken } = getHelpers()
+  const vals = { prepare: 'when; has: risk:red', merge: 'never; lacks: needs-human', assignee: 'a b', predicateText: `it's $HOME \`x\` "q"` }
+  const token = renderContinueToken({ root: '212', iteration: 0, ...vals })
+  const out = execFileSync('sh', ['-c', `printf '%s\\n' ${token}`], { encoding: 'utf8' }).split('\n').slice(0, -1)
+  assert.deepEqual(out, ['pair-loop', '--root', '212', '--assignee', 'a b', '--prepare', 'when; has: risk:red', '--merge', 'never; lacks: needs-human', '--predicate', vals.predicateText, '--iteration', '1'])
+})
+
+test('continue-token: --merge always (stricter-than-adoption argument) is handed to the resolve call on resume', async () => {
+  // resume = the same args the token renders, so the resolve dispatch must see merge: always
+  const { renderContinueToken } = getHelpers()
+  assert.match(renderContinueToken({ iteration: 3, merge: 'always' }), /--merge 'always' --iteration 4$/)
+})
+
+test('loop: assignee/status arrays render identically in the Select prompt and the resolve call', async () => {
+  const src = readFileSync(new URL('./pair-loop.js', import.meta.url), 'utf8')
+  assert.ok(!/--assignee \$\{JSON\.stringify\(args\.assignee\)\}/.test(src), 'Select must not JSON.stringify the array')
+  assert.ok(src.includes('selectionText(args.assignee)') && src.includes('selectionText(args[k])'), 'one shared renderer')
+  assert.ok(!/return \{ eligibility, autoAdvance/.test(src), 'the validation-only autoAdvance value is not carried')
 })
 
 // ── Args validation (review M4) ───────────────────────────────────────────
@@ -432,29 +464,15 @@ test('validateArgs: startIteration must be a non-negative integer', () => {
 function runWorkflow({ args, dispatch, workflowDispatch, auditWritten = true, resumeHaltedIds = [] }) {
   const calls = []
   const flag = (prompt, name) => new RegExp(`--${name} (\\S+)`).exec(prompt)?.[1]
-  // The `merge` stage, as a script would answer it: the scenario's own fixtures (the card's CURRENT
-  // tier, the PR SIGNALS on the remote head) go through the real `decideMerge`.
-  const mergeStage = async (prompt, opts) => {
-    if (prompt.includes('cycle-merge.mjs check')) {
-      const fresh = await dispatch('re-read: what is its CURRENT `risk:*` label', opts)
-      const currentTier = fresh?.tier === 'untagged' || !fresh?.tier ? 'risk:red' : fresh.tier
-      // The real stage reads the signals regardless (read-only, and `failed` lists every failing
-      // condition); the harness skips the fixture read once the tier already differs, because the
-      // scenarios that raise the tier declare no signals fixture at all.
-      const signals = currentTier === flag(prompt, 'cardTier') ? await dispatch('re-read PR SIGNALS', opts) : null
-      const autoAdvanceTiers = JSON.parse(/--autoAdvance '([^']*)'/.exec(prompt)[1])
-      const decision = decideMerge({ cardTier: flag(prompt, 'cardTier'), currentTier, autoAdvanceTiers, reviewedHead: flag(prompt, 'reviewedHead'), signals, requireGate: false })
-      if (decision.mergeAllowed || decision.failed[0].code !== 'tier-not-auto-advance') return decision
-      const posted = await dispatch('Post a comment on the issue recording that it awaits human merge/action', opts)
-      return { ...decision, comment: { posted: posted?.posted === true } }
-    }
-    return dispatch('Card review-approved on PR (merge stage run)', opts)
-  }
   const agent = async (prompt, opts) => {
     calls.push({ prompt, opts })
     if (opts.phase === 'Policy' && prompt.includes('audit file')) return { haltedCardIds: resumeHaltedIds }
     if (opts.phase === 'Audit') return { written: auditWritten, path: 'x' }
-    if (opts.phase === 'Advance' && prompt.includes('cycle-merge.mjs')) return mergeStage(prompt, opts)
+    // The agent-run `autonomy-policy.mjs resolve` is answered by the REAL script function (the authority).
+    if (/autonomy-policy\.mjs resolve/.test(prompt)) {
+      const given = /--args '([^']*)'/.exec(prompt)
+      return resolvePolicy({ args: given ? JSON.parse(given[1]) : {}, adoptionText: args.policyText })
+    }
     return dispatch(prompt, opts)
   }
   const parallel = fns => Promise.all(fns.map(f => Promise.resolve().then(f).catch(() => null)))
@@ -516,66 +534,6 @@ test('orchestration: min(D,P)==1 drives a single story through the SAME implemen
   assert.equal(batchArgsSeen.name, 'pair-implement-batch')
   assert.equal(batchArgsSeen.wfArgs.cards.length, 1)
   assert.equal(result.iterations, 1)
-})
-
-test('orchestration: an untagged card is treated as risk:red and never eligible for risk:green policy', async () => {
-  let workflowCalled = false
-  await runWorkflow({
-    args: { policyText: '## Eligibility\n\nrisk:green\n' },
-    dispatch: (_prompt, opts) => {
-      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'untagged', mutexResources: [], prerequisites: [] }] }
-      return {}
-    },
-    workflowDispatch: () => {
-      workflowCalled = true
-      return { batch: [] }
-    },
-  })
-  assert.equal(workflowCalled, false)
-})
-
-test('orchestration: review-approved risk:green with Auto-Advance re-reads the tier and pushes/merges', async () => {
-  let advancePrompted = false
-  await runWorkflow({
-    args: {
-      policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n',
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
-      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
-      if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
-      if (opts.phase === 'Advance') {
-        advancePrompted = true
-        return { merged: true }
-      }
-      return {}
-    },
-    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
-  })
-  assert.equal(advancePrompted, true)
-})
-
-test('orchestration: a mid-run tier raise (green -> red) halts auto-advance even with an approved PR (review M3)', async () => {
-  let mergeAttempted = false
-  const { result } = await runWorkflow({
-    args: {
-      policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n',
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
-      // The re-read (M3's own agent call) reports the tier RAISED since selection.
-      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:red' }
-      if (opts.phase === 'Advance') {
-        mergeAttempted = true
-        return { merged: true }
-      }
-      return {}
-    },
-    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
-  })
-  assert.equal(mergeAttempted, false)
-  const haltEntry = result.log.find(l => l.id === '1' && l.reason?.includes('tier changed'))
-  assert.ok(haltEntry, 'expected a halt entry recording the mid-run tier change')
 })
 
 test('orchestration: an escalated card is excluded from every subsequent iteration, never re-driven (review M1)', async () => {
@@ -701,71 +659,6 @@ test('orchestration: a --predicate override (Argument tier) is actually EVALUATE
   const { parseStopPredicate } = getHelpers()
   const overridden = parseStopPredicate(`## Stop Predicate\n\nroot ⇒ Done\nmax-iterations: 50\n`)
   assert.equal(overridden.maxIterations, 50)
-})
-
-test('orchestration: a gate-red merge refusal is parked, never re-driven through the full pipeline again (review round 3 Major-2)', async () => {
-  let batchCalls = 0
-  const { result } = await runWorkflow({
-    args: {
-      policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 3\n',
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
-      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
-      if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
-      if (opts.phase === 'Advance') return { merged: false, reason: 'lint failed' } // gate came back red
-      return {}
-    },
-    workflowDispatch: () => {
-      batchCalls++
-      return { batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }
-    },
-  })
-  assert.equal(batchCalls, 1) // never re-driven on iteration 1/2 despite max-iterations: 3
-  assert.ok(result.log.some(l => l.id === '1' && l.parked === true && l.reason?.includes('gate re-verification came back red')))
-})
-
-test('orchestration: an unconfirmed AC8 issue comment is recorded in the audit, never silently swallowed (review round 3 Minor)', async () => {
-  const { result } = await runWorkflow({
-    args: {
-      policyText: '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n1\n',
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
-      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
-      if (opts.phase === 'Advance' && prompt.includes('Post a comment')) return { posted: false }
-      return {}
-    },
-    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
-  })
-  assert.ok(result.log.some(l => l.id === '1' && l.note?.includes('could not be confirmed posted')))
-})
-
-test('orchestration: a review-approved card not covered by Auto-Advance is parked, never re-driven from scratch (review round 2 Major-1)', async () => {
-  let batchCalls = 0
-  let issueCommentPosted = false
-  const { result } = await runWorkflow({
-    args: {
-      // This repo's own shipped default: Auto-Advance absent -> (none).
-      policyText: '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 3\n',
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
-      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
-      if (opts.phase === 'Advance' && prompt.includes('Post a comment')) {
-        issueCommentPosted = true
-        return {}
-      }
-      return {}
-    },
-    workflowDispatch: () => {
-      batchCalls++
-      return { batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }
-    },
-  })
-  assert.equal(batchCalls, 1) // never re-driven on iteration 1/2 despite max-iterations: 3
-  assert.equal(issueCommentPosted, true) // AC8: the awaited human action is recorded ON THE ISSUE
-  assert.ok(result.log.some(l => l.id === '1' && l.parked === true))
 })
 
 test('orchestration: a killed-and-resumed run excludes cards the prior audit already halted (review M8)', async () => {
@@ -898,11 +791,11 @@ test('source: every composed skill is followed by the approvalArgsFor call', () 
   }
 })
 
-test('source: the composed set is exactly the two skills tier 1 names, none declaring', () => {
+test('source: the composed set is exactly the one skill the loop names (pair-next), not declaring', () => {
   const { APPROVAL_DECLARING_SKILLS } = getHelpers()
   const names = composedSkills().map(s => s.name)
 
-  assert.deepEqual(names, ['pair-next', 'pair-capability-verify-quality'])
+  assert.deepEqual(names, ['pair-next'])
   // The T-4 scope finding, pinned: tier 1's exposure to the family is TRANSITIVE
   // (pair-implement-batch -> /pair-process-implement -> /pair-capability-assess-stack),
   // and neither intermediary declares $approval, so threading it there would be
@@ -915,206 +808,6 @@ test('source: the --approval literal exists only inside approvalArgsFor, never h
   // bypasses the family lookup and could hand it to a NON-declaring skill.
   assert.equal(FULL_SRC.split(' --approval auto').length - 1, 1)
   assert.ok(FULL_SRC.includes(`? ' --approval auto' : ''`))
-})
-
-test('orchestration: the /pair-capability-verify-quality merge prompt carries no --approval either', async () => {
-  const { calls } = await runWorkflow({
-    args: { policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n' },
-    dispatch: (prompt, opts) => {
-      if (opts.phase === 'Select')
-        return {
-          candidates: [
-            {
-              id: '1',
-              title: 'c1',
-              branch: 'feature/#1-c1',
-              tier: 'risk:green',
-              macrostate: 'Ready',
-              mutexResources: [],
-              prerequisites: [],
-            },
-          ],
-        }
-      if (prompt.includes('CURRENT `risk:*` label')) return { tier: 'risk:green' }
-      if (prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
-      if (prompt.includes('review-approved on PR')) return { merged: true }
-      return {}
-    },
-    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 9, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
-  })
-  const merge = calls.find(c => c.prompt.includes('/pair-capability-verify-quality'))
-  assert.ok(merge, 'the auto-advance merge prompt must have run')
-  assert.equal(merge.prompt.includes('--approval'), false)
-})
-
-test('orchestration: a moved head since the review parks the card — never merged unreviewed code', async () => {
-  let mergePrompted = false
-  const { result } = await runWorkflow({
-    args: {
-      policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n',
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
-      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
-      if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'b'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
-      if (opts.phase === 'Advance') {
-        mergePrompted = true
-        return { merged: true }
-      }
-      return {}
-    },
-    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
-  })
-  assert.equal(mergePrompted, false, 'merged a head the review never saw')
-  const haltEntry = result.log.find(l => l.id === '1' && /head moved|unreviewed/i.test(l.reason ?? ''))
-  assert.ok(haltEntry, 'expected a parked entry naming the moved head')
-})
-
-test('orchestration: pair-review conclusion other than success on the head parks the card', async () => {
-  for (const pairReview of ['failure', 'pending', '']) {
-    let mergePrompted = false
-    const { result } = await runWorkflow({
-      args: {
-        policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n',
-      },
-      dispatch: (prompt, opts) => {
-        if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
-        if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
-        if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview, explicitApproval: 'success' }
-        if (opts.phase === 'Advance') {
-          mergePrompted = true
-          return { merged: true }
-        }
-        return {}
-      },
-      workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
-    })
-    assert.equal(mergePrompted, false, `merged with pair-review=${JSON.stringify(pairReview)}`)
-    const haltEntry = result.log.find(l => l.id === '1' && /pair-review/i.test(l.reason ?? ''))
-    assert.ok(haltEntry, `expected a parked entry naming pair-review for ${JSON.stringify(pairReview)}`)
-  }
-})
-
-test('orchestration: explicit-approval conclusion other than success parks the card (D10, red without human approval never merges)', async () => {
-  let mergePrompted = false
-  const { result } = await runWorkflow({
-    args: {
-      policyText: '## Eligibility\n\nrisk:red\n\n## Auto-Advance\n\nrisk:red\n\n## Max Parallelism\n\n1\n',
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:red', mutexResources: [], prerequisites: [] }] }
-      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:red' }
-      if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'failure' }
-      if (opts.phase === 'Advance') {
-        mergePrompted = true
-        return { merged: true }
-      }
-      return {}
-    },
-    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
-  })
-  assert.equal(mergePrompted, false, 'merged a red PR with no human approval')
-  const haltEntry = result.log.find(l => l.id === '1' && /explicit-approval|D10/i.test(l.reason ?? ''))
-  assert.ok(haltEntry, 'expected a parked entry naming explicit-approval/D10')
-})
-
-test('orchestration: malformed PR signals park the card — never merged on unread evidence', async () => {
-  let mergePrompted = false
-  const { result } = await runWorkflow({
-    args: {
-      policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n',
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
-      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
-      if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return {}
-      if (opts.phase === 'Advance') {
-        mergePrompted = true
-        return { merged: true }
-      }
-      return {}
-    },
-    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
-  })
-  assert.equal(mergePrompted, false, 'merged on unread signals')
-  const haltEntry = result.log.find(l => l.id === '1' && /signals/i.test(l.reason ?? ''))
-  assert.ok(haltEntry, 'expected a parked entry naming the signals')
-})
-
-test('orchestration: the merge prompt carries the merge contract (head, conclusions, cascade)', async () => {
-  const { calls } = await runWorkflow({
-    args: {
-      policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n',
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
-      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
-      if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
-      if (opts.phase === 'Advance' && prompt.includes('review-approved on PR')) return { merged: true }
-      return {}
-    },
-    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
-  })
-  const merge = calls.find(c => c.prompt.includes('review-approved on PR'))
-  assert.ok(merge, 'the auto-advance merge prompt must have run on verified signals')
-  assert.match(merge.prompt, /reviewedHead|remote head/i)
-  assert.match(merge.prompt, /pair-explicit-approval/)
-  assert.match(merge.prompt, /squash/)
-  assert.match(merge.prompt, /close the story|cascade/i)
-})
-
-test('orchestration: a merge that succeeds with a failed cascade is parked naming the cascade, never silently halted', async () => {
-  // Round 4 Minor-2: merge and cascade share one `{ merged, reason }` shape, so a merged PR whose
-  // post-merge cascade (close the story, parents Done, branch, checkpoint) failed came back
-  // `merged: true` — halted, never parked. The merge landed and the story stayed open with nobody
-  // told. `cascaded` is a SEPARATE signal, and its absence reads as a failure like every other
-  // unreadable signal on this path.
-  for (const advance of [
-    { merged: true, cascaded: false, reason: 'could not confirm parent #9 Done' },
-    { merged: true, reason: 'ok' }, // no `cascaded` at all — fail-safe, never assumed done
-  ]) {
-    const { result } = await runWorkflow({
-      args: {
-        policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 3\n',
-      },
-      dispatch: (prompt, opts) => {
-        if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
-        if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
-        if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
-        if (opts.phase === 'Advance' && prompt.includes('review-approved on PR')) return advance
-        return {}
-      },
-      workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
-    })
-    const parked = result.log.find(l => l.id === '1' && l.parked === true && /cascade/i.test(l.reason ?? ''))
-    assert.ok(parked, `expected a park naming the failed cascade for ${JSON.stringify(advance)}`)
-    assert.match(parked.reason, /merged/i) // the park must say the merge DID land — not read as a refusal
-  }
-})
-
-test('orchestration: a merge with a confirmed cascade is not parked', async () => {
-  const { result } = await runWorkflow({
-    args: {
-      policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 3\n',
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
-      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
-      if (opts.phase === 'Advance' && prompt.includes('PR SIGNALS')) return { headSha: 'a'.repeat(40), pairReview: 'success', explicitApproval: 'success' }
-      if (opts.phase === 'Advance' && prompt.includes('review-approved on PR')) return { merged: true, cascaded: true, reason: 'merged and cascaded' }
-      return {}
-    },
-    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: 'a'.repeat(40), verdict: 'APPROVED' }] }),
-  })
-  assert.equal(result.log.some(l => l.id === '1' && l.parked === true), false)
-  assert.ok(result.log.some(l => l.id === '1' && l.autoAdvance === true))
-})
-
-test('orchestration: the merge prompt asks for the cascade signal separately from the merge', () => {
-  // The park above is only reachable if the prompt actually REQUESTS `cascaded` — a schema field
-  // no prompt mentions comes back undefined forever and parks every merge.
-  assert.match(FULL_SRC, /cascaded/)
-  assert.match(FULL_SRC, /properties: \{ merged: \{ type: 'boolean' \}, cascaded: \{ type: 'boolean' \}/)
 })
 
 // ── US-521 r1-g3 (r0-4): tier 1 hands the batch the SAME policy text it validated ───────────────
@@ -1156,4 +849,311 @@ test('G3-L5: interaction — the REAL batch, launched by pair-loop on a legacy-o
   })
   assert.match(String(batchError), /no agent may run/)
   assert.doesNotMatch(String(batchError), /autonomy-not-supported-until-#524|policyText/)
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-524 — `pair-loop` without its own merge: select (pair-next) → batch → repeat. The merge scenarios of the
+// loop (merged, parked awaiting-human, halted, tier raised, head moved, gate red, unfinished cascade) are the
+// BATCH's outcome rows now; the loop records them with the same audit expectations as before.
+// ═══════════════════════════════════════════════════════════════════════════
+const HEAD40 = 'a'.repeat(40)
+const READY_ROW = { id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: HEAD40, verdict: 'APPROVED' }
+const driveRows = (row, args = {}) => runWorkflow({ args: { policyText: LEGACY_LOOP_POLICY, ...args }, dispatch: oneEligible, workflowDispatch: () => ({ batch: [row] }) })
+
+test('US-524 AC-4: pair-loop.js contains no cycle-merge call, merge script or merge schema (grep-pinned)', () => {
+  const code = FULL_SRC.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
+  assert.doesNotMatch(code, /cycle-merge/)
+  assert.doesNotMatch(code, /MERGE_SCRIPT|MERGE_CHECK_SCHEMA|MERGE_RUN_SCHEMA|--autoAdvance|--mergeGate/)
+  assert.doesNotMatch(FULL_SRC, /autonomy-not-supported/)
+})
+
+test('US-524 AC-4: until / prepare / merge are handed to the batch as passed — and only those passed', async () => {
+  let seen
+  await runWorkflow({ args: { policyText: LEGACY_LOOP_POLICY, until: 'merged', merge: 'when; lacks: risk:red' }, dispatch: oneEligible, workflowDispatch: (_n, a) => ((seen = a), { batch: [{ id: '1', status: 'failed-implement' }] }) })
+  assert.equal(seen.until, 'merged')
+  assert.equal(seen.merge, 'when; lacks: risk:red')
+  assert.equal(Object.hasOwn(seen, 'prepare'), false)
+  assert.deepEqual(seen.cards, [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green' }])
+  let none
+  await runWorkflow({ args: { policyText: LEGACY_LOOP_POLICY }, dispatch: oneEligible, workflowDispatch: (_n, a) => ((none = a), { batch: [{ id: '1', status: 'failed-implement' }] }) })
+  for (const k of ['until', 'prepare', 'merge']) assert.equal(Object.hasOwn(none, k), false, k)
+})
+
+test('US-524 AC-4: selection runs through pair-next with the resolved filter / assignee / status / root, and is never re-filtered by tier', async () => {
+  let selectPrompt
+  let batchCalled = false
+  await runWorkflow({
+    args: { policyText: LEGACY_LOOP_POLICY, filter: 'cost:green', assignee: 'rucka', status: 'Refined', root: '485' },
+    dispatch: (prompt, opts) => {
+      if (opts.phase === 'Select') return (selectPrompt ??= prompt), { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:yellow', mutexResources: [], prerequisites: [] }] }
+      return {}
+    },
+    workflowDispatch: () => ((batchCalled = true), { batch: [{ id: '1', status: 'failed-implement' }] }),
+  })
+  assert.match(selectPrompt, /\/pair-next --filter "cost:green"/)
+  assert.match(selectPrompt, /--assignee "rucka"/)
+  assert.match(selectPrompt, /--status "Refined"/)
+  assert.match(selectPrompt, /--root "485"/)
+  assert.equal(batchCalled, true, 'a candidate pair-next returned is the selection — its tier is not compared here')
+})
+
+test('US-524 AC-4: an untagged candidate is handed over as risk:red (fail-safe), never dropped by the loop', async () => {
+  let seen
+  await runWorkflow({
+    args: { policyText: LEGACY_LOOP_POLICY },
+    dispatch: (_p, opts) => (opts.phase === 'Select' ? { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'untagged', mutexResources: [], prerequisites: [] }] } : {}),
+    workflowDispatch: (_n, a) => ((seen = a), { batch: [{ id: '1', status: 'failed-implement' }] }),
+  })
+  assert.equal(seen.cards[0].tier, 'risk:red')
+})
+
+test('US-524: the A1 refusal is gone — new arguments and a declared `## Autonomy` start the loop', async () => {
+  for (const args of [{ until: 'merged' }, { prepare: 'always' }, { merge: 'never' }, { assignee: 'x' }, { status: 'Refined' }, { filter: 'risk:green' }, { policyText: `${LEGACY_LOOP_POLICY}\n## Autonomy\n\nuntil: merged\n` }]) {
+    let started = false
+    await runWorkflow({ args: { policyText: LEGACY_LOOP_POLICY, ...args }, dispatch: oneEligible, workflowDispatch: () => ((started = true), { batch: [{ id: '1', status: 'failed-implement' }] }) })
+    assert.equal(started, true, JSON.stringify(args))
+  }
+})
+
+test('US-524 edge: an EMPTY `## Autonomy` section behaves like an absent one (parse().declared = off) — never refused, never read as a declaration', async () => {
+  for (const policyText of [`## Autonomy\n\n${LEGACY_LOOP_POLICY}`, `##  Autonomy\n\n${LEGACY_LOOP_POLICY}`, `##Autonomy\nuntil: merged\n\n${LEGACY_LOOP_POLICY}`]) {
+    let seen
+    await runWorkflow({ args: { policyText }, dispatch: oneEligible, workflowDispatch: (_n, a) => ((seen = a), { batch: [{ id: '1', status: 'failed-implement' }] }) })
+    assert.equal(seen.policyText, policyText, 'forwarded verbatim: the batch\'s policy script (parse().declared) decides, the loop holds no reader')
+    for (const k of ['until', 'prepare', 'merge']) assert.equal(Object.hasOwn(seen, k), false)
+  }
+})
+
+test('US-524: the new arguments are validated by content before any agent runs', async () => {
+  for (const [key, bad] of [['until', "merged'; x"], ['merge', 'a`b`'], ['prepare', 'a\nb'], ['assignee', 'a$(b)'], ['status', 'a`b`'], ['filter', 'x\ny']])
+    await assert.rejects(runWorkflow({ args: { policyText: LEGACY_LOOP_POLICY, [key]: bad }, dispatch: () => assert.fail('no agent may run'), workflowDispatch: () => assert.fail('no batch') }), new RegExp(`args\\.${key}`), key)
+})
+
+test('US-524 AC-2/5: the batch outcome is recorded — merged (autoAdvance), cascade unfinished (parked), awaiting-human, escalated, target-ready, PR-ready', async () => {
+  const merged = await driveRows({ ...READY_ROW, status: 'merged', cascaded: true, reason: 'merged' })
+  assert.ok(merged.result.log.some(l => l.id === '1' && l.autoAdvance === true && !l.parked))
+  const open = await driveRows({ ...READY_ROW, status: 'merged', cascaded: false, reason: 'closure failed' })
+  assert.ok(open.result.log.some(l => l.id === '1' && l.autoAdvance === true && l.parked === true && /MERGED but the post-merge cascade did not confirm complete/.test(l.reason)))
+  const parked = await driveRows({ ...READY_ROW, status: 'awaiting-human', reason: 'merge: always', commentPosted: false })
+  assert.ok(parked.result.log.some(l => l.id === '1' && l.parked === true && /awaiting human — merge: always/.test(l.reason)))
+  assert.ok(parked.result.log.some(l => l.id === '1' && /could not be confirmed posted/.test(l.note ?? '')), 'an unconfirmed comment is recorded, never swallowed')
+  const esc = await driveRows({ id: '1', status: 'escalated', stage: 'prepare', conditions: ['has:cost:red'] })
+  assert.ok(esc.result.log.some(l => l.id === '1' && l.escalated === true && l.excluded === true && l.stage === 'prepare' && l.conditions[0] === 'has:cost:red' && /not re-drivable/.test(l.reason)))
+  const target = await driveRows({ id: '1', status: 'target-ready', target: 'ready', stage: 'implement' })
+  assert.ok(target.result.log.some(l => l.id === '1' && l.excluded === true && /until target \(ready\)/.test(l.reason)))
+  const ready = await driveRows(READY_ROW)
+  assert.ok(ready.result.log.some(l => l.id === '1' && l.parked === true && /PR-ready/.test(l.reason)))
+})
+
+test('US-524 AC-5/BR-4: every outcome ends the card\'s drive — merged, parked, escalated, halted are never re-selected', async () => {
+  for (const row of [{ ...READY_ROW, status: 'merged', cascaded: true }, { ...READY_ROW, status: 'awaiting-human' }, { id: '1', status: 'escalated', conditions: ['lacks:x'] }, { ...READY_ROW, status: 'halted', reason: 'tier changed risk:green -> risk:red' }, READY_ROW]) {
+    let batchCalls = 0
+    await runWorkflow({ args: { policyText: `${LEGACY_LOOP_POLICY}\n## Stop Predicate\n\nmax-iterations: 3\n` }, dispatch: oneEligible, workflowDispatch: () => (batchCalls++, { batch: [row] }) })
+    assert.equal(batchCalls, 1, JSON.stringify(row))
+  }
+})
+
+test('US-524: a halted batch row (a refused merge, a moved head, a red gate, malformed signals) is excluded with its reason — never retried silently', async () => {
+  for (const reason of ['PR head moved since the review', 'pair-review conclusion is failure', 'the merge stage returned no readable decision', 'the tier\'s gate set came back red at merge time']) {
+    const r = await driveRows({ ...READY_ROW, status: 'halted', reason })
+    assert.ok(r.result.log.some(l => l.id === '1' && l.excluded === true && /halted — engine reported halted/.test(l.reason)), reason)
+  }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-524 r1-g1 (r0-1) — the loop selects with the RESOLVED filter (argument > `## Autonomy` > translated
+// `## Eligibility`), the one autonomy-policy.mjs computes. Oracle: the REAL resolvePolicy over the same policy
+// text; a resolve dispatch the loop makes is answered by that real function. The pair-next `--filter` must equal
+// effective.filter, or be omitted (pair-next resolves it); an absent resolved filter still HALTs.
+// ═══════════════════════════════════════════════════════════════════════════
+const R1G1_CANDIDATE = { id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }
+function r1g1FilterOf(prompt) {
+  if (!/--filter\b/.test(prompt)) return undefined
+  const m = /--filter ("(?:[^"\\]|\\.)*"|\[[^\]]*\])/.exec(prompt)
+  const raw = m ? JSON.parse(m[1]) : /--filter (\S+)/.exec(prompt)?.[1]
+  assert.ok(raw !== undefined, `unparseable --filter in ${prompt.slice(0, 120)}`)
+  return (Array.isArray(raw) ? raw : String(raw).split(',')).map(v => String(v).trim())
+}
+function r1g1ArgsOf(prompt) {
+  const m = /--args '([^']*)'/.exec(prompt)
+  return m ? JSON.parse(m[1]) : {}
+}
+async function r1g1Select(args) {
+  let selectPrompt
+  const out = await runWorkflow({
+    args,
+    dispatch: (prompt, opts) => {
+      if (/autonomy-policy\.mjs resolve/.test(prompt)) return resolvePolicy({ args: r1g1ArgsOf(prompt), adoptionText: args.policyText })
+      if (opts.phase === 'Select') return (selectPrompt ??= prompt), { candidates: [R1G1_CANDIDATE] }
+      return {}
+    },
+    workflowDispatch: () => ({ batch: [{ id: '1', status: 'failed-implement' }] }),
+  })
+  return { ...out, selectPrompt }
+}
+const r1g1Oracle = (policyText, args = {}) => resolvePolicy({ args, adoptionText: policyText }).effective.filter
+
+test('r1g1-L-W1: `## Autonomy` filter (list) with no `## Eligibility` and no argument selects with the resolved filter — no HALT', async () => {
+  const policyText = '## Autonomy\n\nfilter: risk:green, risk:yellow\n'
+  const oracle = r1g1Oracle(policyText)
+  assert.equal(oracle.source, 'adoption')
+  const { selectPrompt } = await r1g1Select({ policyText })
+  assert.ok(selectPrompt, 'the Select phase must run')
+  const sent = r1g1FilterOf(selectPrompt)
+  assert.ok(sent !== undefined, '--filter must be present')
+  assert.deepEqual(sent, oracle.value)
+})
+
+test('r1g1-L-W2: `## Autonomy` filter (single label) with no `## Eligibility` selects with the resolved filter — no HALT', async () => {
+  const policyText = '## Autonomy\n\nfilter: cost:green\nuntil: pr\n'
+  const oracle = r1g1Oracle(policyText)
+  const { selectPrompt } = await r1g1Select({ policyText })
+  assert.ok(selectPrompt, 'the Select phase must run')
+  const sent = r1g1FilterOf(selectPrompt)
+  assert.ok(sent !== undefined, '--filter must be present')
+  assert.deepEqual(sent, oracle.value)
+})
+
+// The loop's HALT on a policy the authority rejects (resolvePolicy ok:false, an error keyed `filter`): the run
+// rejects with a HALT naming the filter, Select never runs, and no dispatched prompt carries `forbidden`.
+async function r1g1HaltsOnFilterError(policyText, forbidden) {
+  const resolved = resolvePolicy({ args: {}, adoptionText: policyText })
+  assert.equal(resolved.ok, false, policyText)
+  assert.equal(resolved.errors[0].key, 'filter', policyText)
+  const prompts = []
+  let selected = false
+  await assert.rejects(
+    runWorkflow({
+      args: { policyText },
+      dispatch: (prompt, opts) => {
+        prompts.push(prompt)
+        if (/autonomy-policy\.mjs resolve/.test(prompt)) return resolvePolicy({ args: r1g1ArgsOf(prompt), adoptionText: policyText })
+        if (opts.phase === 'Select') selected = true
+        return { candidates: [R1G1_CANDIDATE] }
+      },
+      workflowDispatch: () => ({ batch: [{ id: '1', status: 'failed-implement' }] }),
+    }),
+    e => e.halt === true && /HALT/.test(e.message) && /filter/i.test(e.message),
+    policyText,
+  )
+  assert.equal(selected, false, `Select must never run: ${policyText}`)
+  if (forbidden !== undefined)
+    assert.ok(!prompts.some(p => p.includes(forbidden)), `no dispatched prompt may carry ${forbidden}`)
+}
+
+test('r1g1-L-W3: `## Autonomy` filter conflicting with `## Eligibility` — the authority rejects the policy (ok:false, filter conflict), so the loop HALTs naming the filter before Select', async () => {
+  await r1g1HaltsOnFilterError('## Eligibility\n\nrisk:green\n\n## Autonomy\n\nfilter: risk:yellow\n')
+})
+
+test('r1g1-L-C1: `## Autonomy` filter identical to `## Eligibility` — selects with the resolved filter', async () => {
+  const policyText = '## Eligibility\n\nrisk:green\n\n## Autonomy\n\nfilter: risk:green\n'
+  const { selectPrompt } = await r1g1Select({ policyText })
+  const sent = r1g1FilterOf(selectPrompt)
+  assert.ok(sent !== undefined, '--filter must be present')
+  assert.deepEqual(sent, r1g1Oracle(policyText).value)
+})
+
+test('r1g1-L-C2: legacy `## Eligibility` only — selects with its translated filter', async () => {
+  const policyText = '## Eligibility\n\nrisk:green\n'
+  const { selectPrompt } = await r1g1Select({ policyText })
+  const sent = r1g1FilterOf(selectPrompt)
+  assert.ok(sent !== undefined, '--filter must be present')
+  assert.deepEqual(sent, r1g1Oracle(policyText).value)
+})
+
+test('r1g1-L-C3: a filter argument wins over `## Autonomy` filter (argument > adoption), no `## Eligibility` needed', async () => {
+  const policyText = '## Autonomy\n\nfilter: risk:green\n'
+  const oracle = r1g1Oracle(policyText, { filter: 'cost:green' })
+  assert.equal(oracle.source, 'argument')
+  const { selectPrompt } = await r1g1Select({ policyText, filter: 'cost:green' })
+  assert.deepEqual(r1g1FilterOf(selectPrompt), oracle.value)
+})
+
+test('r1g1-L-C4: no resolved filter anywhere (no argument, no `## Autonomy` filter, no `## Eligibility`) still HALTs before selection', async () => {
+  for (const policyText of ['## Max Parallelism\n\n1\n', '## Autonomy\n\nuntil: merged\n']) {
+    assert.equal(r1g1Oracle(policyText).value, undefined)
+    let selected = false
+    await assert.rejects(
+      runWorkflow({
+        args: { policyText },
+        dispatch: (prompt, opts) => {
+          if (/autonomy-policy\.mjs resolve/.test(prompt)) return resolvePolicy({ args: r1g1ArgsOf(prompt), adoptionText: policyText })
+          if (opts.phase === 'Select') selected = true
+          return { candidates: [] }
+        },
+      }),
+      /HALT/,
+      policyText,
+    )
+    assert.equal(selected, false, policyText)
+  }
+})
+
+test('r1g1-L-W4: malformed `## Autonomy` filter (empty list) next to a valid `## Eligibility` — the authority rejects it (ok:false), so the loop HALTs before Select, never selecting with the translated Eligibility', async () => {
+  await r1g1HaltsOnFilterError('## Eligibility\n\nrisk:green\n\n## Autonomy\n\nfilter: \n')
+})
+
+test('r1g1-L-W5: `## Autonomy` filter listing a label twice (no `## Eligibility`) — the authority rejects it, so the loop HALTs naming the filter before Select', async () => {
+  await r1g1HaltsOnFilterError('## Autonomy\n\nfilter: risk:green, risk:green\n')
+})
+
+test('r1g1-L-W6: unsafe `## Autonomy` filter (`$(` / backtick), no `## Eligibility` — HALT naming the filter before Select, and the raw value reaches no agent prompt', async () => {
+  await r1g1HaltsOnFilterError('## Autonomy\n\nfilter: $(id)\n', '$(id)')
+  await r1g1HaltsOnFilterError('## Autonomy\n\nfilter: `id`\n', '`id`')
+})
+
+test('r1g1-L-I1: `## Autonomy` filter (no `## Eligibility`) x legacy `## Auto-Advance` — the authority accepts it (ok:true), so the loop proceeds to Select with the resolved filter', async () => {
+  const policyText = '## Autonomy\n\nfilter: risk:green\n\n## Auto-Advance\n\nrisk:yellow\n'
+  const resolved = resolvePolicy({ args: {}, adoptionText: policyText })
+  assert.equal(resolved.ok, true)
+  const { selectPrompt } = await r1g1Select({ policyText })
+  assert.ok(selectPrompt, 'the Select phase must run')
+  const sent = r1g1FilterOf(selectPrompt)
+  assert.ok(sent !== undefined, '--filter must be present')
+  assert.deepEqual(sent, resolved.effective.filter.value)
+})
+
+test('r1g1-L-W7: a filter ARGUMENT does not bypass the authority — `## Autonomy` `filter:` empty (or conflicting with `## Eligibility`) still HALTs naming the filter, Select never runs', async () => {
+  for (const policyText of ['## Autonomy\n\nfilter: \n', '## Eligibility\n\nrisk:green\n\n## Autonomy\n\nfilter: risk:yellow\n']) {
+    let selected = false
+    await assert.rejects(
+      runWorkflow({
+        args: { policyText, filter: 'cost:green' },
+        dispatch: (prompt, opts) => {
+          if (opts.phase === 'Select') selected = true
+          return { candidates: [R1G1_CANDIDATE] }
+        },
+      }),
+      e => e.halt === true && /filter/i.test(e.message),
+      policyText,
+    )
+    assert.equal(selected, false, policyText)
+  }
+})
+
+// r1-1 (security): filter/assignee/status reach a single-quoted shell arg of the resolve dispatch — quote-free.
+test('r1-1: validateArgs HALTs on a quote/backslash in filter, assignee or status (incl. list elements)', () => {
+  const { validateArgs } = getHelpers()
+  const bad = ["a'b", "risk:green' ; touch /tmp/pwned ; echo '", 'a\\b']
+  for (const key of ['filter', 'assignee', 'status'])
+    for (const v of bad) {
+      assert.throws(() => validateArgs({ [key]: v }), /HALT|plain-text/, `${key}=${v}`)
+      assert.throws(() => validateArgs({ [key]: ['ok', v] }), /HALT|plain-text/, `${key}[]=${v}`)
+    }
+  assert.doesNotThrow(() => validateArgs({ filter: 'risk:green', assignee: 'bob', status: 'Ready' }))
+  assert.doesNotThrow(() => validateArgs({ filter: ['risk:green', 'risk:yellow'] }))
+})
+
+test('r1-1: an injecting filter HALTs before any agent is dispatched', async () => {
+  for (const key of ['filter', 'assignee', 'status']) {
+    const prompts = []
+    await assert.rejects(
+      runWorkflow({
+        args: { policyText: '## Eligibility\n\nrisk:green\n', [key]: "risk:green' ; touch /tmp/pwned ; echo '" },
+        dispatch: p => (prompts.push(p), {}),
+      }),
+      /HALT|plain-text/,
+    )
+    assert.equal(prompts.length, 0, `${key}: no agent may run`)
+  }
 })

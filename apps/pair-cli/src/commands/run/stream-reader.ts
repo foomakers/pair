@@ -86,7 +86,10 @@ function isConcreteToken(candidate: string): boolean {
   // it. Placeholders live in the token's flag STRUCTURE, so the check runs on the token with its
   // quoted values removed; judging the value too discarded a real token and stopped the loop after
   // one card, the signature of the rounds-2 and -3 Majors.
-  const structure = candidate.replace(/"(?:[^"\\]|\\.)*"/g, '""')
+  // One left-to-right pass, so a quote of one kind inside the other is just content. The skill
+  // single-quotes every value and spells an embedded quote `'\\''` — close, escape, reopen — which
+  // this alternation consumes as a quoted run, the bare `\\'` unit, then the next quoted run.
+  const structure = candidate.replace(/\\'|'[^']*'|"(?:[^"\\]|\\.)*"/g, '""')
   return !/<[^>]*>/.test(structure) && !structure.includes('[--')
 }
 

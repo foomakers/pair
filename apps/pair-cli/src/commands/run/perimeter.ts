@@ -111,8 +111,8 @@ const UNHONOURABLE_FILTER_MESSAGE =
  */
 export const UNHONOURABLE_SELECTION_MESSAGE =
   '--assignee/--status cannot be honoured by this invocation: only `pair-next` declares them. ' +
-  '`pair-loop` and the batch do not honour the autonomy model yet (autonomy-not-supported-until-#524; ' +
-  'the portable loop is #522) — drop them, or pass `--skill pair-next`.'
+  '`pair-loop` accepts only root/predicate/iteration through this driver (the autonomy arguments go through ' +
+  '`pair-cli run --card` or the skill) — drop them, or pass `--skill pair-next`.'
 
 export function createPerimeter(input: PerimeterInput): Perimeter {
   if (
