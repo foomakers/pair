@@ -207,7 +207,7 @@ async function runWorkflow({ args, dispatch, floor, maxFixRounds, entry, autonom
     if (!autonomy && opts.label === 'autonomy:resolve') return OFF_POLICY
     calls.push({ prompt, opts })
     // An `autonomy` handler scripts the policy scripts' answers (resolve / decide / tier / escalate / merge-check / merge).
-    if (autonomy && /^(autonomy:|decide:|tier:|escalate:|merge-check:|merge:)/.test(opts.label ?? '')) return autonomy(prompt, opts)
+    if (autonomy && /^(autonomy:|decide:|tier:|escalate:|pr-state:|cascade:|merge-check:|merge:)/.test(opts.label ?? '')) return autonomy(prompt, opts)
     const raw = await dispatch(prompt, opts)
     return simulate(prompt, opts, raw)
   }
@@ -342,11 +342,11 @@ test('TC-11: every dispatch is a configured skill + typed arguments + the engine
 test('TC-11: the workflow source dispatches ONLY skill invocations — no free-form prompt, no shell, no retired rule or role', () => {
   const code = SRC.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
   const all = [...code.matchAll(/\b(?:agent(?:Retry)?|dispatch)\(\s*\n?\s*([^\n,]+)/g)].map(m => m[1].trim()).filter(d => d !== 'prompt')
-  // US-524: the only dispatches that are not a skill invocation are the six SCRIPT RUNNERS of the autonomy model (an agent
-  // runs one named script and relays its JSON): resolve, tier, decide, escalate, merge check, merge. No rule lives in them.
+  // US-524: the only dispatches that are not a skill invocation are the eight SCRIPT RUNNERS of the autonomy model (an agent
+  // runs one named script and relays its JSON): resolve, tier, decide, escalate, pr-state, cascade, merge check, merge. No rule lives in them.
   const scriptRunners = all.filter(d => /^`(Run EXACTLY|Card )/.test(d))
   const dispatches = all.filter(d => !scriptRunners.includes(d))
-  assert.equal(scriptRunners.length, 6, `expected the six autonomy script runners, found ${scriptRunners.length}`)
+  assert.equal(scriptRunners.length, 8, `expected the eight autonomy script runners, found ${scriptRunners.length}`)
   assert.equal(dispatches.length, 5, `expected the five stage dispatches and nothing else (the template contract rides on the first review, t9d-2), found ${dispatches.length}`)
   for (const gone of ['PACING', 'TEXT SHAPE', 'CONTRACT INVENTORY', 'FINITE-STATE', 'SEALED RED SNAPSHOT', 'CONVERGENCE SWEEP', 'DO NOT FILE NEW ISSUES', 'ISOLATION (mandatory', 'sha256sum', 'git diff-tree', "'pair-remediation-planner'", "'pair-red-sealer'", "'pair-fix-verifier'", "'/pair-workflow-remediation-plan'", "'/pair-workflow-red-seal'", "'/pair-workflow-p3-verify'", "'/pair-workflow-cycle-comments'", "'/pair-workflow-pr-phase'"])
     assert.equal(code.includes(gone), false, `${gone} is still spelled in the workflow code`)
@@ -1997,11 +1997,13 @@ const RESOLVED = (until, merge = GATE('never'), extra = {}) => ({ ok: true, acti
 const PROCEED = { decision: 'proceed' }
 // A scripted policy-script runner: `resolve` answers `resolved`; stage boundaries answer `decide(prompt)`; merge `check`/`run`
 // answer `check` / `run`. Every call is recorded by runWorkflow (`calls`), so a test reads the commands the agents were told to run.
-const scripted = ({ resolved, decide = () => PROCEED, tier = { tier: 'risk:green' }, check = { mergeAllowed: true, failed: [], comment: { posted: true } }, run = { merged: true, cascaded: true, reason: 'merged' }, escalate = { comment: { posted: true } } }) => (prompt, opts) => {
+const scripted = ({ resolved, decide = () => PROCEED, tier = { tier: 'risk:green' }, check = { mergeAllowed: true, failed: [], comment: { posted: true } }, run = { merged: true, cascaded: true, reason: 'merged' }, escalate = { comment: { posted: true } }, prState = { state: 'OPEN' }, cascade = { closed: true } }) => (prompt, opts) => {
   const l = opts.label
   if (l === 'autonomy:resolve') return typeof resolved === 'function' ? resolved(prompt) : resolved
   if (l.startsWith('decide:')) return decide(prompt, l)
   if (l.startsWith('tier:')) return tier
+  if (l.startsWith('pr-state:')) return typeof prState === 'function' ? prState(prompt) : prState
+  if (l.startsWith('cascade:')) return cascade
   if (l.startsWith('merge-check:')) return typeof check === 'function' ? check(prompt) : check
   if (l.startsWith('merge:')) return typeof run === 'function' ? run(prompt) : run
   if (l.startsWith('escalate:')) return escalate
@@ -2187,4 +2189,28 @@ test('US-524 AC-1: the batch holds no autonomy rule — no gate evaluation, no `
   const code = SRC.slice(SRC.indexOf('\n}\n', SRC.indexOf('const meta = {'))).split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
   assert.doesNotMatch(code, /autonomy-not-supported/)
   assert.doesNotMatch(code, /sectionBod|## Autonomy|\.mode === ['"](when|always|never)['"]|\.lacks\.|\.has\.|escalationConditions/)
+})
+
+test('US-524 r0-2: resuming a card whose PR is already MERGED records the row merged — no check, no second merge dispatch, no park comment', async () => {
+  const r = await driveWith({ until: 'merged' }, { resolved: RESOLVED('merged'), prState: { state: 'MERGED' } })
+  const row = rowOf(r)
+  assert.equal(row.status, 'merged')
+  assert.equal(row.cascaded, true)
+  assert.ok(!labelsOf(r.calls).includes('merge-check:#292'), 'no check')
+  assert.ok(!labelsOf(r.calls).includes('merge:#292'), 'no second merge')
+  const open = await driveWith({ until: 'merged' }, { resolved: RESOLVED('merged'), prState: { state: 'MERGED' }, cascade: { closed: false } })
+  assert.equal(rowOf(open).status, 'merged')
+  assert.equal(rowOf(open).parked, true, 'cascade not confirmed: left for a human')
+})
+
+test('US-524 r0-3: a stacked card never merges before its base card is merged — it parks with a reason, no merge dispatch (merges in order once the base is merged)', async () => {
+  const A = { id: '292', title: 'A', branch: 'feat/#292-a' }
+  const B = { id: '293', title: 'B', branch: 'feat/#293-b', base: 'feat/#292-a' }
+  const r = await runWorkflow({ args: { cards: [A, B], until: 'merged', maxParallelism: 1 }, dispatch: stdDispatch(), autonomy: scripted({ resolved: RESOLVED('merged') }) })
+  const merged = r.calls.filter(c => c.opts.label.startsWith('merge:')).map(c => c.opts.label)
+  assert.deepEqual(merged, ['merge:#292', 'merge:#293'], 'base A merged first, so B may merge after it')
+  // B converging FIRST (base not yet merged) parks too: order of convergence never merges the child early.
+  const rb = await runWorkflow({ args: { cards: [B, A], until: 'merged', maxParallelism: 1 }, dispatch: stdDispatch(), autonomy: scripted({ resolved: RESOLVED('merged') }) })
+  assert.ok(!rb.calls.some(c => c.opts.label === 'merge-check:#293' || c.opts.label === 'merge:#293'))
+  assert.equal(rb.result.batch.find(x => x.id === '293').status, 'awaiting-human')
 })

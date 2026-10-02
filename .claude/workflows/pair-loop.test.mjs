@@ -14,6 +14,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { resolvePolicy } from '../skills/pair-workflow-cycle/scripts/autonomy-policy.mjs'
 // US-524: the loop holds no merge call — pair-implement-batch (batch = cycle) owns the merge and the loop
 // records the batch's per-card outcome. The scenarios below script that outcome (`workflowDispatch`).
 
@@ -434,6 +435,11 @@ function runWorkflow({ args, dispatch, workflowDispatch, auditWritten = true, re
     calls.push({ prompt, opts })
     if (opts.phase === 'Policy' && prompt.includes('audit file')) return { haltedCardIds: resumeHaltedIds }
     if (opts.phase === 'Audit') return { written: auditWritten, path: 'x' }
+    // The agent-run `autonomy-policy.mjs resolve` is answered by the REAL script function (the authority).
+    if (/autonomy-policy\.mjs resolve/.test(prompt)) {
+      const given = /--args '([^']*)'/.exec(prompt)
+      return resolvePolicy({ args: given ? JSON.parse(given[1]) : {}, adoptionText: args.policyText })
+    }
     return dispatch(prompt, opts)
   }
   const parallel = fns => Promise.all(fns.map(f => Promise.resolve().then(f).catch(() => null)))
@@ -869,7 +875,7 @@ test('US-524 AC-4: an untagged candidate is handed over as risk:red (fail-safe),
 })
 
 test('US-524: the A1 refusal is gone — new arguments and a declared `## Autonomy` start the loop', async () => {
-  for (const args of [{ until: 'merged' }, { prepare: 'always' }, { merge: 'never' }, { assignee: 'x' }, { status: 'Refined' }, { filter: 'risk:green' }, { policyText: `${LEGACY_LOOP_POLICY}\n## Autonomy\n\nuntil: merged\nmerge: never\n` }]) {
+  for (const args of [{ until: 'merged' }, { prepare: 'always' }, { merge: 'never' }, { assignee: 'x' }, { status: 'Refined' }, { filter: 'risk:green' }, { policyText: `${LEGACY_LOOP_POLICY}\n## Autonomy\n\nuntil: merged\n` }]) {
     let started = false
     await runWorkflow({ args: { policyText: LEGACY_LOOP_POLICY, ...args }, dispatch: oneEligible, workflowDispatch: () => ((started = true), { batch: [{ id: '1', status: 'failed-implement' }] }) })
     assert.equal(started, true, JSON.stringify(args))
@@ -918,5 +924,171 @@ test('US-524: a halted batch row (a refused merge, a moved head, a red gate, mal
   for (const reason of ['PR head moved since the review', 'pair-review conclusion is failure', 'the merge stage returned no readable decision', 'the tier\'s gate set came back red at merge time']) {
     const r = await driveRows({ ...READY_ROW, status: 'halted', reason })
     assert.ok(r.result.log.some(l => l.id === '1' && l.excluded === true && /halted — engine reported halted/.test(l.reason)), reason)
+  }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-524 r1-g1 (r0-1) — the loop selects with the RESOLVED filter (argument > `## Autonomy` > translated
+// `## Eligibility`), the one autonomy-policy.mjs computes. Oracle: the REAL resolvePolicy over the same policy
+// text; a resolve dispatch the loop makes is answered by that real function. The pair-next `--filter` must equal
+// effective.filter, or be omitted (pair-next resolves it); an absent resolved filter still HALTs.
+// ═══════════════════════════════════════════════════════════════════════════
+const R1G1_CANDIDATE = { id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }
+function r1g1FilterOf(prompt) {
+  if (!/--filter\b/.test(prompt)) return undefined
+  const m = /--filter ("(?:[^"\\]|\\.)*"|\[[^\]]*\])/.exec(prompt)
+  const raw = m ? JSON.parse(m[1]) : /--filter (\S+)/.exec(prompt)?.[1]
+  assert.ok(raw !== undefined, `unparseable --filter in ${prompt.slice(0, 120)}`)
+  return (Array.isArray(raw) ? raw : String(raw).split(',')).map(v => String(v).trim())
+}
+function r1g1ArgsOf(prompt) {
+  const m = /--args '([^']*)'/.exec(prompt)
+  return m ? JSON.parse(m[1]) : {}
+}
+async function r1g1Select(args) {
+  let selectPrompt
+  const out = await runWorkflow({
+    args,
+    dispatch: (prompt, opts) => {
+      if (/autonomy-policy\.mjs resolve/.test(prompt)) return resolvePolicy({ args: r1g1ArgsOf(prompt), adoptionText: args.policyText })
+      if (opts.phase === 'Select') return (selectPrompt ??= prompt), { candidates: [R1G1_CANDIDATE] }
+      return {}
+    },
+    workflowDispatch: () => ({ batch: [{ id: '1', status: 'failed-implement' }] }),
+  })
+  return { ...out, selectPrompt }
+}
+const r1g1Oracle = (policyText, args = {}) => resolvePolicy({ args, adoptionText: policyText }).effective.filter
+
+test('r1g1-L-W1: `## Autonomy` filter (list) with no `## Eligibility` and no argument selects with the resolved filter — no HALT', async () => {
+  const policyText = '## Autonomy\n\nfilter: risk:green, risk:yellow\n'
+  const oracle = r1g1Oracle(policyText)
+  assert.equal(oracle.source, 'adoption')
+  const { selectPrompt } = await r1g1Select({ policyText })
+  assert.ok(selectPrompt, 'the Select phase must run')
+  const sent = r1g1FilterOf(selectPrompt)
+  if (sent !== undefined) assert.deepEqual(sent, oracle.value)
+})
+
+test('r1g1-L-W2: `## Autonomy` filter (single label) with no `## Eligibility` selects with the resolved filter — no HALT', async () => {
+  const policyText = '## Autonomy\n\nfilter: cost:green\nuntil: pr\n'
+  const oracle = r1g1Oracle(policyText)
+  const { selectPrompt } = await r1g1Select({ policyText })
+  assert.ok(selectPrompt, 'the Select phase must run')
+  const sent = r1g1FilterOf(selectPrompt)
+  if (sent !== undefined) assert.deepEqual(sent, oracle.value)
+})
+
+// The loop's HALT on a policy the authority rejects (resolvePolicy ok:false, an error keyed `filter`): the run
+// rejects with a HALT naming the filter, Select never runs, and no dispatched prompt carries `forbidden`.
+async function r1g1HaltsOnFilterError(policyText, forbidden) {
+  const resolved = resolvePolicy({ args: {}, adoptionText: policyText })
+  assert.equal(resolved.ok, false, policyText)
+  assert.equal(resolved.errors[0].key, 'filter', policyText)
+  const prompts = []
+  let selected = false
+  await assert.rejects(
+    runWorkflow({
+      args: { policyText },
+      dispatch: (prompt, opts) => {
+        prompts.push(prompt)
+        if (/autonomy-policy\.mjs resolve/.test(prompt)) return resolvePolicy({ args: r1g1ArgsOf(prompt), adoptionText: policyText })
+        if (opts.phase === 'Select') selected = true
+        return { candidates: [R1G1_CANDIDATE] }
+      },
+      workflowDispatch: () => ({ batch: [{ id: '1', status: 'failed-implement' }] }),
+    }),
+    e => e.halt === true && /HALT/.test(e.message) && /filter/i.test(e.message),
+    policyText,
+  )
+  assert.equal(selected, false, `Select must never run: ${policyText}`)
+  if (forbidden !== undefined)
+    assert.ok(!prompts.some(p => p.includes(forbidden)), `no dispatched prompt may carry ${forbidden}`)
+}
+
+test('r1g1-L-W3: `## Autonomy` filter conflicting with `## Eligibility` — the authority rejects the policy (ok:false, filter conflict), so the loop HALTs naming the filter before Select', async () => {
+  await r1g1HaltsOnFilterError('## Eligibility\n\nrisk:green\n\n## Autonomy\n\nfilter: risk:yellow\n')
+})
+
+test('r1g1-L-C1: `## Autonomy` filter identical to `## Eligibility` — selects with the resolved filter', async () => {
+  const policyText = '## Eligibility\n\nrisk:green\n\n## Autonomy\n\nfilter: risk:green\n'
+  const { selectPrompt } = await r1g1Select({ policyText })
+  const sent = r1g1FilterOf(selectPrompt)
+  if (sent !== undefined) assert.deepEqual(sent, r1g1Oracle(policyText).value)
+})
+
+test('r1g1-L-C2: legacy `## Eligibility` only — selects with its translated filter', async () => {
+  const policyText = '## Eligibility\n\nrisk:green\n'
+  const { selectPrompt } = await r1g1Select({ policyText })
+  const sent = r1g1FilterOf(selectPrompt)
+  if (sent !== undefined) assert.deepEqual(sent, r1g1Oracle(policyText).value)
+})
+
+test('r1g1-L-C3: a filter argument wins over `## Autonomy` filter (argument > adoption), no `## Eligibility` needed', async () => {
+  const policyText = '## Autonomy\n\nfilter: risk:green\n'
+  const oracle = r1g1Oracle(policyText, { filter: 'cost:green' })
+  assert.equal(oracle.source, 'argument')
+  const { selectPrompt } = await r1g1Select({ policyText, filter: 'cost:green' })
+  assert.deepEqual(r1g1FilterOf(selectPrompt), oracle.value)
+})
+
+test('r1g1-L-C4: no resolved filter anywhere (no argument, no `## Autonomy` filter, no `## Eligibility`) still HALTs before selection', async () => {
+  for (const policyText of ['## Max Parallelism\n\n1\n', '## Autonomy\n\nuntil: merged\n']) {
+    assert.equal(r1g1Oracle(policyText).value, undefined)
+    let selected = false
+    await assert.rejects(
+      runWorkflow({
+        args: { policyText },
+        dispatch: (prompt, opts) => {
+          if (/autonomy-policy\.mjs resolve/.test(prompt)) return resolvePolicy({ args: r1g1ArgsOf(prompt), adoptionText: policyText })
+          if (opts.phase === 'Select') selected = true
+          return { candidates: [] }
+        },
+      }),
+      /HALT/,
+      policyText,
+    )
+    assert.equal(selected, false, policyText)
+  }
+})
+
+test('r1g1-L-W4: malformed `## Autonomy` filter (empty list) next to a valid `## Eligibility` — the authority rejects it (ok:false), so the loop HALTs before Select, never selecting with the translated Eligibility', async () => {
+  await r1g1HaltsOnFilterError('## Eligibility\n\nrisk:green\n\n## Autonomy\n\nfilter: \n')
+})
+
+test('r1g1-L-W5: `## Autonomy` filter listing a label twice (no `## Eligibility`) — the authority rejects it, so the loop HALTs naming the filter before Select', async () => {
+  await r1g1HaltsOnFilterError('## Autonomy\n\nfilter: risk:green, risk:green\n')
+})
+
+test('r1g1-L-W6: unsafe `## Autonomy` filter (`$(` / backtick), no `## Eligibility` — HALT naming the filter before Select, and the raw value reaches no agent prompt', async () => {
+  await r1g1HaltsOnFilterError('## Autonomy\n\nfilter: $(id)\n', '$(id)')
+  await r1g1HaltsOnFilterError('## Autonomy\n\nfilter: `id`\n', '`id`')
+})
+
+test('r1g1-L-I1: `## Autonomy` filter (no `## Eligibility`) x legacy `## Auto-Advance` — the authority accepts it (ok:true), so the loop proceeds to Select with the resolved filter', async () => {
+  const policyText = '## Autonomy\n\nfilter: risk:green\n\n## Auto-Advance\n\nrisk:yellow\n'
+  const resolved = resolvePolicy({ args: {}, adoptionText: policyText })
+  assert.equal(resolved.ok, true)
+  const { selectPrompt } = await r1g1Select({ policyText })
+  assert.ok(selectPrompt, 'the Select phase must run')
+  const sent = r1g1FilterOf(selectPrompt)
+  if (sent !== undefined) assert.deepEqual(sent, resolved.effective.filter.value)
+})
+
+test('r1g1-L-W7: a filter ARGUMENT does not bypass the authority — `## Autonomy` `filter:` empty (or conflicting with `## Eligibility`) still HALTs naming the filter, Select never runs', async () => {
+  for (const policyText of ['## Autonomy\n\nfilter: \n', '## Eligibility\n\nrisk:green\n\n## Autonomy\n\nfilter: risk:yellow\n']) {
+    let selected = false
+    await assert.rejects(
+      runWorkflow({
+        args: { policyText, filter: 'cost:green' },
+        dispatch: (prompt, opts) => {
+          if (opts.phase === 'Select') selected = true
+          return { candidates: [R1G1_CANDIDATE] }
+        },
+      }),
+      e => e.halt === true && /filter/i.test(e.message),
+      policyText,
+    )
+    assert.equal(selected, false, policyText)
   }
 })
