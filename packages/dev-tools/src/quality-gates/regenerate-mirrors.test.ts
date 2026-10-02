@@ -1287,6 +1287,34 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
     SCRIPT_RUN_TIMEOUT_MS,
   )
 
+  it(
+    'leaks no temporary build log however early the interrupt lands (trap armed before mktemp, #527 CI flake)',
+    async () => {
+      // The single-shot case above kills as soon as the file is VISIBLE, which races the line that
+      // arms the trap (mktemp returns -> trap installed): a SIGTERM in that gap leaked the file.
+      // Interrupting repeatedly at the earliest observable moment makes the gap a certainty, not luck.
+      tmp = makeToolchainFixture()
+      writeTurboStub(tmp, 'sleep 30\n')
+      const tmpEnvDir = join(tmp, '.tmpdir')
+      mkdirSync(tmpEnvDir, { recursive: true })
+      for (let i = 0; i < 12; i++) {
+        const child = spawn(join(tmp, 'scripts/regenerate-mirrors.sh'), [], {
+          cwd: tmp,
+          detached: true,
+          env: { ...process.env, ...isolatedHome(tmp), TMPDIR: tmpEnvDir },
+        })
+        const exited = new Promise<void>(resolve => child.on('close', () => resolve()))
+        // Tight poll: the signal must land as close to mktemp as the observer can get.
+        const deadline = Date.now() + 10_000
+        while (readdirSync(tmpEnvDir).length === 0 && Date.now() < deadline) await new Promise(r => setImmediate(r))
+        process.kill(-(child.pid as number), 'SIGTERM')
+        await exited
+        expect(readdirSync(tmpEnvDir), `run ${i}`).toEqual([])
+      }
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
+
   // #518: turbo replays a cache hit by rewriting `dist/**` IN PLACE (same inode, new mtime).
   // Run against THIS repo's toolchain, every success-path case here rewrote
   // `apps/pair-cli/dist` while `@pair/pair-cli#test` — scheduled in parallel by the same
