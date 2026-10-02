@@ -710,7 +710,7 @@ while (true) {
       ].filter(Boolean)
       runLog.push(incomplete.length
         ? { iteration, id: outcome.id, excluded: true, reason: `halted — engine reported ready-for-merge without ${incomplete.join(', ')}: an incomplete handoff is never a clean review` }
-        : { iteration, id: outcome.id, autoAdvance: false, parked: true, reason: 'PR-ready — the merge gate did not merge it (gate default `always` parks it); a human merges' })
+        : { iteration, id: outcome.id, autoAdvance: false, parked: true, reason: 'PR-ready — the merge gate did not merge it (gate default `always`: nothing merges); a human merges' })
     } else if (outcome.status === 'target-ready') {
       runLog.push({ iteration, id: outcome.id, excluded: true, reason: `stopped at the until target (${outcome.target ?? 'ready'}) at ${outcome.stage ?? 'a stage boundary'}` })
     } else {
