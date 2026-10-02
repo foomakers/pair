@@ -1116,3 +1116,44 @@ test('orchestration: the merge prompt asks for the cascade signal separately fro
   assert.match(FULL_SRC, /cascaded/)
   assert.match(FULL_SRC, /properties: \{ merged: \{ type: 'boolean' \}, cascaded: \{ type: 'boolean' \}/)
 })
+
+// ── US-521 r1-g3 (r0-4): tier 1 hands the batch the SAME policy text it validated ───────────────
+// The batch refuses a launch without the caller's Read of tech/automation.md (`policyText`), because
+// the Workflow sandbox cannot read it; pair-loop holds that Read and must forward it verbatim.
+const LEGACY_LOOP_POLICY = '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n'
+const oneEligible = (_prompt, opts) =>
+  opts.phase === 'Select' ? { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] } : {}
+
+test('G3-L1: pair-loop forwards its policyText verbatim to pair-implement-batch', async () => {
+  let seen = null
+  await runWorkflow({
+    args: { policyText: LEGACY_LOOP_POLICY },
+    dispatch: oneEligible,
+    workflowDispatch: (name, wfArgs) => {
+      seen = { name, wfArgs }
+      return { batch: [{ id: '1', status: 'failed-implement' }] }
+    },
+  })
+  assert.equal(seen?.name, 'pair-implement-batch')
+  assert.equal(seen.wfArgs.policyText, LEGACY_LOOP_POLICY)
+})
+
+test('G3-L5: interaction — the REAL batch, launched by pair-loop on a legacy-only policy, passes its guard (reaches its first dispatch)', async () => {
+  const BATCH_SRC = readFileSync(new URL('./pair-implement-batch.js', import.meta.url), 'utf8').replace(/^export /gm, '')
+  let batchError = null
+  await runWorkflow({
+    args: { policyText: LEGACY_LOOP_POLICY },
+    dispatch: oneEligible,
+    workflowDispatch: async (_name, wfArgs) => {
+      const never = async () => {
+        throw new Error('no agent may run')
+      }
+      await new AsyncFunction('args', 'agent', 'parallel', 'log', BATCH_SRC)(wfArgs, never, never, () => {}).catch(e => {
+        batchError = e.message
+      })
+      return { batch: [{ id: '1', status: 'failed-implement' }] }
+    },
+  })
+  assert.match(String(batchError), /no agent may run/)
+  assert.doesNotMatch(String(batchError), /autonomy-not-supported-until-#524|policyText/)
+})

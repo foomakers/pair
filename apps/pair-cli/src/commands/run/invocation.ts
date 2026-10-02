@@ -20,6 +20,10 @@ export interface SkillArguments {
    */
   root?: string
   filter?: string
+  /** US-521: `pair-next --assignee` (`@me` or a login). */
+  assignee?: string
+  /** US-521: `pair-next --status` (comma-separated macrostates). */
+  status?: string
   predicate?: string
   iteration?: number
   /**
@@ -53,7 +57,7 @@ type SkillParameterMap = Readonly<Partial<Record<keyof SkillArguments, string>>>
  */
 export const SKILL_PARAMETERS: Readonly<Record<string, SkillParameterMap>> = Object.freeze({
   'pair-loop': { root: '--root', predicate: '--predicate', iteration: '--iteration' },
-  'pair-next': { root: '--root', filter: '--filter' },
+  'pair-next': { root: '--root', filter: '--filter', assignee: '--assignee', status: '--status' },
   'pair-process-refine-story': { root: '--story' },
   'pair-process-plan-tasks': { root: '--story' },
 })
@@ -210,6 +214,15 @@ export function filterDeliveryFor(invocation: ResolvedInvocation): FilterDeliver
 }
 
 /**
+ * US-521: whether this invocation can carry `--assignee` / `--status`. Only `pair-next` declares them;
+ * `pair-loop` reads the policy itself and honours the autonomy model in #524, so the driver REFUSES them
+ * there rather than print a perimeter nothing applies.
+ */
+export function selectionDeliveredBy(invocation: ResolvedInvocation): boolean {
+  return invocation.kind === 'skill' && parametersFor(invocation.name).assignee !== undefined
+}
+
+/**
  * Renders one borrowed VALUE for a prompt line.
  *
  * The prompt is a single argv element, so there is no shell to quote for — but the line is read by
@@ -236,6 +249,8 @@ function renderValue(value: string): string {
 const PARAMETER_ORDER: readonly (keyof SkillArguments)[] = [
   'root',
   'filter',
+  'assignee',
+  'status',
   'predicate',
   'iteration',
   'approval',

@@ -36,6 +36,11 @@ const DISPATCH_CLI = join(SKILLS, 'pair-workflow-cycle/scripts/cycle-dispatch.mj
 const CYCLE_SKILL = join(SKILLS, 'pair-workflow-cycle/SKILL.md')
 const BATCH_JS = fileURLToPath(new URL('../pair-implement-batch.js', import.meta.url))
 
+// US-521 r1-g3 (r0-4): the batch takes the caller's own Read of tech/automation.md as `policyText` (the
+// Workflow sandbox has no filesystem) and refuses a launch without one. The harness plays a launcher
+// whose project has no automation.md (`''`) unless the test names its own policy text.
+const withPolicyText = a => (a && typeof a === 'object' && !Array.isArray(a) && !Object.hasOwn(a, 'policyText') ? { ...a, policyText: '' } : a)
+
 const WORKFLOW_VERSION = '4.0.1'
 const POLICY = { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 }
 const CARD = { id: '42', title: 'T', branch: 'feature/US-42-x' }
@@ -112,7 +117,7 @@ async function batchPrompts(args) {
       ),
     )
   await new AsyncFunction('args', 'agent', 'parallel', 'log', BATCH_SRC)(
-    args,
+    withPolicyText(args),
     agent,
     parallel,
     () => {},

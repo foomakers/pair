@@ -617,13 +617,33 @@ describe('no example filter anywhere carries a boolean operator (AC6)', () => {
     expect(docsPages.length).toBeGreaterThan(20)
   })
 
+  // US-521 (ADR-027): `## Autonomy`'s `filter:` and the `--filter` argument DO take a comma-separated any-of
+  // list — the one place a label list is legitimate. The single-label rule still holds for `## Eligibility`
+  // (asserted above and in autonomy-arguments.test.ts). Only lines that are THEMSELVES a `filter:` declaration
+  // or the `--filter` argument row are exempt from the list guard; the boolean-operator guard stays strict.
+  const isAnyOfFilterLine = (line: string): boolean =>
+    /^\s*filter:\s/.test(line) || /^\|\s*`--filter\b/.test(line)
+  const withoutAnyOfFilterLines = (content: string): string =>
+    content
+      .split('\n')
+      .filter(line => !isAnyOfFilterLine(line))
+      .join('\n')
+
   it.each(strictSurfaces)(
     '%s — no operator in ANY case, and no comma-separated label list',
     (_, content) => {
       expect(content).not.toMatch(LABEL_BOOLEAN_OPERATOR_ANY_CASE)
-      expect(content).not.toMatch(LABEL_LIST_COMMA)
+      expect(withoutAnyOfFilterLines(content)).not.toMatch(LABEL_LIST_COMMA)
     },
   )
+
+  it('the any-of exemption is narrow: a list on any other line still fails the guard', () => {
+    expect(withoutAnyOfFilterLines('`risk:green, team:ui` is eligible')).toMatch(LABEL_LIST_COMMA)
+    expect(withoutAnyOfFilterLines('## Eligibility\n\nrisk:green, team:ui\n')).toMatch(
+      LABEL_LIST_COMMA,
+    )
+    expect(withoutAnyOfFilterLines('filter: risk:green, risk:yellow')).not.toMatch(LABEL_LIST_COMMA)
+  })
 })
 
 // One adoption layout, stated once. `.pair/adoption/{product,tech}/` is the real

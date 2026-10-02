@@ -46,6 +46,7 @@
 - [ADR-024: Tag-driven dispatch — the mapping is adoption, the routing core is host-agnostic, the on-issue record belongs to the host adapter](.pair/adoption/tech/adr/adr-024-tag-driven-dispatch-agnostic-core-host-adapter.md)
 - [ADR-025: The unit a process profile configures is the STEP, never one of its representations](.pair/adoption/tech/adr/adr-025-process-profile-unit-is-the-step.md)
 - [ADR-026: PM/code-host adapter interface for the delivery-cycle scripts](.pair/adoption/tech/adr/adr-026-pm-code-host-adapter-interface.md)
+- [ADR-027: Autonomy model — selection, target and two gates, resolved by one function](.pair/adoption/tech/adr/adr-027-autonomy-model-selection-gates.md)
 - [Architecture](.pair/adoption/tech/architecture.md)
 - [Automation Policy — this project's delta](.pair/adoption/tech/automation.md)
 - [Bounded Context Catalog (Grouped)](.pair/adoption/tech/boundedcontext/README.md)

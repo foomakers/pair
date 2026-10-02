@@ -93,7 +93,7 @@ async function runWF({ cards, entryCapsules, dispatch }) {
     return dispatch ? dispatch(prompt, opts) : {}
   }
   const parallel = fns => Promise.all(fns.map(f => Promise.resolve().then(f).catch(() => null)))
-  const result = await new WF_AsyncFunction('args', 'agent', 'parallel', 'log', WF_SRC)({ cards, entryCapsules }, agent, parallel, () => {})
+  const result = await new WF_AsyncFunction('args', 'agent', 'parallel', 'log', WF_SRC)({ cards, entryCapsules, policyText: '' }, agent, parallel, () => {})
   return { result, calls }
 }
 
@@ -417,7 +417,7 @@ test('B1 (DT-04): a contradiction with sealed rows routes a successor revision t
     return {}
   }
   const result = await new AsyncFunction('args', 'agent', 'parallel', 'log', SRC)(
-    { cards: [{ id: '482', title: 'Conformance', branch: 'feature/US-482' }], runId: 'b1' },
+    { cards: [{ id: '482', title: 'Conformance', branch: 'feature/US-482' }], runId: 'b1', policyText: '' },
     agent,
     fns => Promise.all(fns.map(f => Promise.resolve().then(f).catch(e => { throw e }))),
     m => logs.push(m),
@@ -563,7 +563,7 @@ test('F1 (DT-04 x DT-33): a contradiction naming a contract sealed in a PREDECES
     return {}
   }
   const result = await new AsyncFunction('args', 'agent', 'parallel', 'log', SRC)(
-    { cards: [{ id: '482', title: 'Conformance', branch: 'feature/US-482', prNumber: 483 }], runId: 'v5' },
+    { cards: [{ id: '482', title: 'Conformance', branch: 'feature/US-482', prNumber: 483 }], runId: 'v5', policyText: '' },
     agent,
     fns => Promise.all(fns.map(f => Promise.resolve().then(f).catch(e => { throw e }))),
     () => {},
@@ -754,7 +754,7 @@ test('T-29 (DT-37/38): a proven regression rewinds to its own batch, is repaired
     return {}
   }
   const result = await new AsyncFunction('args', 'agent', 'parallel', 'log', SRC)(
-    { cards: [{ id: '482', title: 'Conformance', branch: 'feature/US-482' }], runId: 't29' },
+    { cards: [{ id: '482', title: 'Conformance', branch: 'feature/US-482' }], runId: 't29', policyText: '' },
     agent,
     fns => Promise.all(fns.map(f => Promise.resolve().then(f).catch(e => { throw e }))),
     () => {},
@@ -848,7 +848,7 @@ test('US-506 F-2 (AC5): the batch engine resumes an old-path run sealed at a0 â€
     if (step === 'verify') return through('r0', 'review-phase', { pr: 483, reviewedHead: H('d'), verdict: 'APPROVED', findings: [], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: H('d') }, mode: 'first', partial: false, tier: 'risk:green', passes: ['general'], published: { firstReview: true } })
     return null
   }
-  const result = await new AsyncFunction('args', 'agent', 'parallel', 'log', SRC)({ cards: [{ id: '482', title: 'Conformance', branch: 'feature/US-482' }], runId: 'f2' }, agent, fns => Promise.all(fns.map(f => f())), () => {})
+  const result = await new AsyncFunction('args', 'agent', 'parallel', 'log', SRC)({ cards: [{ id: '482', title: 'Conformance', branch: 'feature/US-482' }], runId: 'f2', policyText: '' }, agent, fns => Promise.all(fns.map(f => f())), () => {})
   assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
   const stages = dispatched.filter(d => !/^contract:/.test(d.label))
   assert.deepEqual(stages.map(d => d.label), ['implement:#482', 'implement:#482', 'verify:#482 r0'])

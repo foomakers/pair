@@ -1,3 +1,4 @@
+import type { AutonomyResolver } from './autonomy-policy'
 import { resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
@@ -9,6 +10,7 @@ import { ENGINE_IDS, isEngineId, type EngineDefinition, type EngineId } from './
 import type { ResolvedInvocation, SkillProbe } from './resolve-skill'
 import { createSkillProbe } from './skill-probe'
 import type { Perimeter } from './perimeter'
+import type { AutonomyResolution } from './cycle-scripts'
 import { resolveAutonomy, type AutonomyDecision } from './autonomy'
 import { createProjectTrustProbe } from './trust-probe'
 import { readAutomationPolicy, type AutomationPolicy } from './automation-policy'
@@ -55,6 +57,8 @@ export interface DriveCycleInput {
   readonly card: string
   readonly pr?: number
   readonly rounds?: number | 'max'
+  /** US-521: the ACTIVE autonomy policy as the shared script resolved it (absent ⇒ today's legacy path). */
+  readonly autonomy?: { readonly policy: AutonomyResolution['policy'] }
 }
 
 export interface DriveCycleResult {
@@ -79,6 +83,8 @@ export interface RunHandlerDependencies {
   driveCycle?: CycleDriver
   /** US-488: resolves the run's workflow profile (default: the installed `workflow-profile.mjs`). */
   resolveWorkflowProfile?: (scriptsDir: string, request: ProfileRequest) => ResolvedWorkflowProfile
+  /** US-521: resolves the run's autonomy policy (default: the installed `autonomy-policy.mjs`). */
+  resolveAutonomy?: AutonomyResolver
   /** US-491: the `pair-next --root` selection (one engine process, shipped `selectRootCandidates`). */
   selectCandidates?: (input: SelectRootInput) => Promise<RootCandidate[]>
   /** US-491: one `pair-cli run --card` child process (shipped `spawnCardProcess`). */
@@ -107,6 +113,8 @@ export interface RunContext {
   probe: SkillProbe
   policy: AutomationPolicy
   dispatch?: DispatchDecision
+  /** US-521: the run's ONE autonomy resolution (entry), or undefined when nothing applies. */
+  autonomySelection?: AutonomyResolution
   /** `<cwd>/<working_path>` — where the lock lives. */
   workingArea: string
   /** `<cwd>/<working_path>/<Audit Location>` — where every dispatch record is appended. */

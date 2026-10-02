@@ -12,7 +12,13 @@ import {
   type CycleDefaults,
   type CycleScriptsLocation,
 } from './cycle-scripts'
-import { createDefaultCycleDriver, mainCheckout } from './cycle-wiring'
+import { createDefaultCycleDriver, mainCheckout, mainCheckoutOrCwd } from './cycle-wiring'
+import {
+  autonomyArgumentsOf,
+  resolveAutonomyPolicy,
+  spawnAutonomyResolver,
+} from './autonomy-policy'
+import type { AutonomyResolution } from './cycle-scripts'
 import { resolveBlockingSeverities, describeMaxDispatches } from './blocking-severities'
 import { ENGINE_IDS, type EngineId } from './engines'
 import {
@@ -122,6 +128,7 @@ function reportCycleEntry(input: {
   runDir: string
   shown: ShownDefaults
   profile: ResolvedWorkflowProfile | undefined
+  autonomy: AutonomyResolution | undefined
 }): void {
   console.log(chalk.bold('pair-cli run'))
   console.log(`  ${describeEngineResolution(input.engine)}`)
@@ -350,6 +357,7 @@ export function prepareCycleCoordinator(
     agentsDir: locateAgentDefinitions(context.config, cwd),
   }
   const setup = resolveProfileSetup(input, deps, location, engineDef)
+  const autonomy = resolveEntryAutonomy(input, deps, location)
   const { driveCycle, shown } = driverFor(input, deps, { engine, engineDef, location, ...setup })
 
   const dispatch = config.dispatch!
@@ -361,6 +369,7 @@ export function prepareCycleCoordinator(
     runDir: `.pair/working/runs/${dispatch.runId}/${card}`,
     shown,
     profile: setup.profile,
+    autonomy,
   })
 
   return async () => {
@@ -369,14 +378,38 @@ export function prepareCycleCoordinator(
       card,
       ...(dispatch.pr !== undefined && { pr: dispatch.pr }),
       ...(dispatch.rounds !== undefined && { rounds: dispatch.rounds }),
+      // Only an ACTIVE policy (an argument or `## Autonomy` declared a target/merge gate) changes behavior.
+      ...(autonomy?.active === true && { autonomy: { policy: autonomy.policy } }),
     })
 
     console.log(`  Cycle status: ${outcome.status} (${outcome.stagesRun} stage(s) dispatched)`)
     reportCycleReason(outcome.next)
-    const parkKind = (outcome.merge as { parkKind?: unknown } | undefined)?.parkKind
-    const awaitingHuman = outcome.status === 'merge-parked' && parkKind === 'awaiting-human'
-    return outcome.status === 'ready-for-merge' || outcome.status === 'merged' || awaitingHuman
-      ? 0
-      : 1
+    return exitCodeFor(outcome)
   }
+}
+
+/**
+ * US-521: the ONE effective-policy resolution, by the shared script — a malformed policy HALTs here,
+ * before anything is printed as running or spawned.
+ */
+function resolveEntryAutonomy(
+  input: CycleCoordinatorInput,
+  deps: RunHandlerDependencies,
+  location: CycleScriptsLocation,
+): AutonomyResolution | undefined {
+  return resolveAutonomyPolicy(deps.resolveAutonomy ?? spawnAutonomyResolver, {
+    location,
+    main: mainCheckoutOrCwd(input.cwd),
+    cwd: input.cwd,
+    args: autonomyArgumentsOf(input.config),
+  })
+}
+
+/** Success = the card ended where its target says (PR, ready, merged) or awaits a human; `escalated` is a failure (exit 1). */
+const SUCCESS_STATUSES: ReadonlySet<string> = new Set(['ready-for-merge', 'target-ready', 'merged'])
+
+function exitCodeFor(outcome: DriveCycleResult): number {
+  const parkKind = (outcome.merge as { parkKind?: unknown } | undefined)?.parkKind
+  const awaitingHuman = outcome.status === 'merge-parked' && parkKind === 'awaiting-human'
+  return SUCCESS_STATUSES.has(outcome.status) || awaitingHuman ? 0 : 1
 }

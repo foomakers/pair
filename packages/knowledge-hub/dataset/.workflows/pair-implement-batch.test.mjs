@@ -192,6 +192,11 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3, entry = 'legacy' } =
   }
 }
 
+// US-521 r1-g3 (r0-4): the batch takes the caller's own Read of tech/automation.md as `policyText` (the
+// Workflow sandbox has no filesystem) and refuses a launch without one. The harness plays a launcher
+// whose project has no automation.md (`''`) unless the test names its own policy text.
+const withPolicyText = a => (a && typeof a === 'object' && !Array.isArray(a) && !Object.hasOwn(a, 'policyText') ? { ...a, policyText: '' } : a)
+
 async function runWorkflow({ args, dispatch, floor, maxFixRounds, entry }) {
   const calls = []
   const simulate = makeSimulator({ entry, floor: floor ?? (args && typeof args === 'object' && !Array.isArray(args) ? args.severityFloor ?? 'Minor' : 'Minor'), maxFixRounds: maxFixRounds ?? (args && typeof args === 'object' && !Array.isArray(args) ? args.pipeline?.maxFixRounds ?? 3 : 3) })
@@ -203,7 +208,7 @@ async function runWorkflow({ args, dispatch, floor, maxFixRounds, entry }) {
   const parallel = fns => Promise.all(fns.map(f => Promise.resolve().then(f).catch(() => null)))
   const logs = []
   const log = m => logs.push(m)
-  const result = await new AsyncFunction('args', 'agent', 'parallel', 'log', SRC)(args, agent, parallel, log)
+  const result = await new AsyncFunction('args', 'agent', 'parallel', 'log', SRC)(withPolicyText(args), agent, parallel, log)
   return { result, calls, logs }
 }
 
@@ -489,7 +494,7 @@ test('TC-14: the effective-inputs digest is keyed by the engine MAJOR — a patc
   const digestOf = async code => {
     const calls = []
     const agent = async (prompt, opts) => { calls.push(prompt); return opts.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : { status: 'stale', reason: 'x' } }
-    await new AsyncFunction('args', 'agent', 'parallel', 'log', code)({ cards: [STORY] }, agent, fns => Promise.all(fns.map(f => f())), () => {})
+    await new AsyncFunction('args', 'agent', 'parallel', 'log', code)({ cards: [STORY], policyText: '' }, agent, fns => Promise.all(fns.map(f => f())), () => {})
     return /\$inputs=([0-9a-f]{16})/.exec(calls[0])[1]
   }
   assert.equal(await digestOf(SRC), await digestOf(src), 'same major, same digest')
@@ -1266,11 +1271,19 @@ test('an EXPLICIT empty list stays a legal no-op — no agent, no contract', asy
   assert.equal(result.workflowVersion, '4.0.1')
 })
 test('a bare array, a JSON string, `cards` and the `stories` alias all drive the batch; both lists together throw', async () => {
-  for (const args of [[STORY], JSON.stringify({ stories: [STORY] }), { cards: [STORY] }, { stories: [STORY] }, { cards: [STORY], stories: undefined }, { stories: [STORY], cards: null }]) {
+  for (const args of [JSON.stringify({ stories: [STORY], policyText: '' }), { cards: [STORY] }, { stories: [STORY] }, { cards: [STORY], stories: undefined }, { stories: [STORY], cards: null }]) {
     const { result } = await runWorkflow({ args, dispatch: stdDispatch() })
     assert.equal(result.batch.length, 1, JSON.stringify(args))
   }
   assert.match(await expectThrow({ args: { cards: [STORY], stories: [STORY] } }), /both `cards` and `stories`/)
+  // US-521 r1-g3 (r0-4): a bare array (and a JSON string without it) cannot carry the caller's Read of
+  // tech/automation.md, so it is still PARSED as the card list and then refused naming `policyText` and the
+  // #524 pointer — never a run that would silently ignore a declared `## Autonomy`.
+  for (const args of [[STORY], JSON.stringify({ stories: [STORY] })]) {
+    const thrown = await expectThrow({ args })
+    assert.match(thrown, /autonomy-not-supported-until-#524/, JSON.stringify(args))
+    assert.match(thrown, /policyText/, JSON.stringify(args))
+  }
 })
 test('a leading # on the id is normalized away — worktree paths and markers never carry it', async () => {
   const { calls } = await runWorkflow({ args: { stories: [{ id: '#234', title: 't', branch: 'b' }] }, dispatch: stdDispatch() })

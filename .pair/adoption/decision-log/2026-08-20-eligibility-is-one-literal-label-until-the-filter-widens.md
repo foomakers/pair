@@ -6,7 +6,7 @@
 
 ## Status
 
-Active
+Superseded by [ADR-027](../tech/adr/adr-027-autonomy-model-selection-gates.md) (2026-09-30) — the filter widened (`--filter` any-of) as this log demanded; `## Eligibility` itself keeps its one-literal-label rule.
 
 ## Category
 

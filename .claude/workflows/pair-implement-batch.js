@@ -11,7 +11,7 @@ export const meta = {
   // reports why. Keep every value here a single literal, however long the line gets
   // (.claude/workflows/ is outside the prettier gate, so no formatter will re-wrap it).
   whenToUse:
-    'REQUIRED args shape: {"cards":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} (`stories` is the accepted alias; never pass both) — a bare space-separated list of issue refs is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. Optional per card: base (the branch it stacks on), notes (scope directive), prNumber (re-enter the review loop on an existing PR). Optional per run: maxParallelism, severityFloor, model, models (roles implementation | reviewer | red | redVerifier | green), effort, efforts (same roles as models; one of low | medium | high | xhigh | max, mirroring the Workflow sandbox own per-dispatch effort dial — the stage hardcoded default otherwise), runId (resume a cycle by naming its run directory), entryCapsules (map of admitted story id -> a cache hint for the host entry wiring; US-479 T-23, remediated by Finding 1 — accepted and validated, never trusted as approval, never changes dispatch behavior), pipeline (skill names, worktree root, audit-log dir, base branch, review-template path, maxFixRounds, reviewers). Engine 3.0.0 retired the planner, sealer, P3, cycle-comments and pr-phase dispatches: the keys `pipeline.skills.remediationPlan|redSeal|p3Verify|cycleComments|prPhase` and `models.planner|seal|preflight|pr`/`efforts.planner|seal|preflight|pr` are REJECTED with a migration message, never silently mapped. Every value is validated by TYPE at parse time and a wrong one throws before any agent runs; card fields AND pipeline values are also validated by CONTENT (git refs, safe path segments, skill names) because they reach the shell commands the agents run — a value carrying shell syntax or `..` is rejected, never quoted. An unset optional key may be omitted or spelled `undefined`/`null` — all three mean absent; an EMPTY string is not one of them and throws. Pre-filter for mutex safety — no two cards may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a cold full-repo quality gate qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
+    'REQUIRED args shape: {"cards":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} (`stories` is the accepted alias; never pass both) — a bare space-separated list of issue refs is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. `policyText` is REQUIRED: the verbatim Read of .pair/adoption/tech/automation.md (`""` only when that file does not exist), because the sandbox cannot read files; a launch without it is refused (autonomy-not-supported-until-#524), and a declared `## Autonomy` is refused too. Optional per card: base (the branch it stacks on), notes (scope directive), prNumber (re-enter the review loop on an existing PR). Optional per run: maxParallelism, severityFloor, model, models (roles implementation | reviewer | red | redVerifier | green), effort, efforts (same roles as models; one of low | medium | high | xhigh | max, mirroring the Workflow sandbox own per-dispatch effort dial — the stage hardcoded default otherwise), runId (resume a cycle by naming its run directory), entryCapsules (map of admitted story id -> a cache hint for the host entry wiring; US-479 T-23, remediated by Finding 1 — accepted and validated, never trusted as approval, never changes dispatch behavior), pipeline (skill names, worktree root, audit-log dir, base branch, review-template path, maxFixRounds, reviewers). Engine 3.0.0 retired the planner, sealer, P3, cycle-comments and pr-phase dispatches: the keys `pipeline.skills.remediationPlan|redSeal|p3Verify|cycleComments|prPhase` and `models.planner|seal|preflight|pr`/`efforts.planner|seal|preflight|pr` are REJECTED with a migration message, never silently mapped. Every value is validated by TYPE at parse time and a wrong one throws before any agent runs; card fields AND pipeline values are also validated by CONTENT (git refs, safe path segments, skill names) because they reach the shell commands the agents run — a value carrying shell syntax or `..` is rejected, never quoted. An unset optional key may be omitted or spelled `undefined`/`null` — all three mean absent; an EMPTY string is not one of them and throws. Pre-filter for mutex safety — no two cards may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a cold full-repo quality gate qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
   phases: [
     { title: 'Contracts', model: 'haiku' },
     { title: 'Prepare', model: 'sonnet' },
@@ -163,6 +163,28 @@ export const meta = {
 // findings in ONE PR, do not split". An orchestrator asked to drive stories and driving none
 // must fail, not report success. An EXPLICIT empty list stays a legal no-op: a caller that
 // computed "nothing to do" is not making a mistake.
+
+// US-521 — the autonomy model (`## Autonomy`, `until`/`prepare`/`merge`, `assignee`/`status`, a list `filter`) is NOT
+// honoured here until #524 (batch = cycle). A declared gate is never silently ignored: it is REFUSED, with the pointer.
+const AUTONOMY_ARG_KEYS = ['until', 'prepare', 'merge', 'assignee', 'status', 'filter']
+const AUTONOMY_REFUSAL = 'autonomy-not-supported-until-#524'
+export function autonomyRefusal(a) {
+  const passed = AUTONOMY_ARG_KEYS.filter(k => a && typeof a === 'object' && Object.hasOwn(a, k) && a[k] !== undefined && a[k] !== null)
+  if (passed.length)
+    return `${AUTONOMY_REFUSAL}: implement-batch does not honour the autonomy model yet (args ${passed.map(k => `\`${k}\``).join(', ')}) — it never merges, and a declared gate is never silently ignored. Batch = cycle is a later story.`
+  const text = a && typeof a === 'object' ? a.policyText : undefined
+  if (typeof text !== 'string')
+    return `${AUTONOMY_REFUSAL}: implement-batch requires \`policyText\` (got ${text === null ? 'null' : typeof text}) — it is REQUIRED: the verbatim Read of .pair/adoption/tech/automation.md (\`""\` only when that file does not exist), because the sandbox cannot read files; a declared \`## Autonomy\` is never silently ignored.`
+  {
+    let fenced = false
+    for (const line of text.split('\n')) {
+      if (line.trim().startsWith('```')) fenced = !fenced
+      else if (!fenced && /^##\s+/.test(line.trim()) && line.trim().replace(/^##\s+/, '') === 'Autonomy') // the policy's own heading rule (autonomy-policy.mjs sectionBodies)
+        return `${AUTONOMY_REFUSAL}: \`## Autonomy\` is declared in tech/automation.md, but implement-batch does not honour it yet — it never merges, and a declared gate is never silently ignored. Batch = cycle is a later story.`
+    }
+  }
+  return null
+}
 
 // Every caller-facing object validates its key SET, not just the keys it recognises.
 function rejectUnknownKeys(obj, allowed, where) {
@@ -411,7 +433,9 @@ function parseBatchArgs(raw) {
   })
   // Return the NORMALIZED container, not just the list. Every option must be read from the
   // parsed object, once.
-  rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'models', 'effort', 'efforts', 'pipeline', 'maxParallelism', 'runId', 'entryCapsules'], 'args')
+  const refusal = autonomyRefusal(a)
+  if (refusal) throw new Error(`implement-batch: ${refusal}`)
+  rejectUnknownKeys(a, ['cards', 'stories', 'policyText', 'severityFloor', 'model', 'models', 'effort', 'efforts', 'pipeline', 'maxParallelism', 'runId', 'entryCapsules'], 'args')
   // Reject the TYPE before anything coerces it, the same rule `constrain` applies to card
   // fields. Checked HERE, at parse time, not where each is consumed: `severityFloor` is only
   // rankable after the contract dispatch, and a wrong TYPE should not wait on an agent to be

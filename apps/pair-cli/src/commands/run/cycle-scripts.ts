@@ -114,6 +114,8 @@ export interface CycleResolveOptions {
   readonly acHash?: string
   /** US-490: the card's current `risk:*` label — with `policy.autoAdvance.tiers`, what lets `resolve` offer `merge`. */
   readonly tier?: string
+  /** US-521: the card's CURRENT labels (live) — what `decide` reads for a `when` merge gate. */
+  readonly labels?: readonly string[]
   /** US-488: the workflow profile's `reuse` stages as `cycle-state`'s own transition-keyed policy. */
   readonly contextPolicy?: Readonly<Record<string, string>>
 }
@@ -125,7 +127,14 @@ export interface CycleMergeOptions {
   readonly pr: number
   readonly reviewedHead: string
   readonly cardTier: string
-  readonly autoAdvance: readonly string[]
+  /** The legacy `--autoAdvance '<tiers>'` call (pair-loop's, and every run without an active autonomy policy). */
+  readonly autoAdvance?: readonly string[]
+  /** US-521: the merge gate of an active autonomy policy (`--mergeGate`) — replaces the tier check only. */
+  readonly mergeGate?: {
+    readonly mode: string
+    readonly has: readonly string[]
+    readonly lacks: readonly string[]
+  }
 }
 
 export interface CycleMergeRunOptions extends CycleMergeOptions {
@@ -188,6 +197,15 @@ export interface CycleScriptsBridge {
   /** `cycle-merge.mjs run`: conditions 1-6 (`gate`), then merge + Story Closure. */
   mergeRun(options: CycleMergeRunOptions): CycleMergeResult
   packet(options: CyclePacketOptions): CyclePacketResult
+  /** US-521 `autonomy-policy.mjs resolve`: the ONE effective-policy resolution (grammar, translation, precedence). */
+  autonomyResolve(options: { adoption: string; args: Record<string, string> }): AutonomyResolution
+  /** US-521 `cycle-merge.mjs escalate`: the ONE idempotent escalation comment on the card. */
+  escalate(options: {
+    dir: string
+    story: string
+    stage: string
+    conditions: readonly string[]
+  }): unknown
   /** `inputs --story <card JSON>`: the effective-inputs digest both realizations must agree on. */
   inputs(story: Record<string, unknown>, workflowVersion: string): string
   /**
@@ -207,6 +225,32 @@ export interface CycleScriptsBridge {
    * never an effective input.
    */
   bindProfile(dir: string, identity: CycleProfileIdentity): { readonly action: string }
+}
+
+/** `autonomy-policy.mjs resolve`'s answer, relayed — `policy`, `lines` and `errors` are never re-derived here. */
+export interface AutonomyResolution {
+  readonly ok: boolean
+  readonly active: boolean
+  readonly policy: {
+    readonly until: string
+    readonly prepare: unknown
+    readonly merge: {
+      readonly mode: string
+      readonly has: readonly string[]
+      readonly lacks: readonly string[]
+    }
+    readonly legacyTiers?: readonly string[]
+  }
+  /** Per-key effective value and the source that won (argument | adoption | default | translated). */
+  readonly effective?: Readonly<
+    Record<string, { readonly value?: unknown; readonly source: string }>
+  >
+  readonly lines: readonly string[]
+  readonly warnings: readonly string[]
+  readonly errors: readonly { readonly key: string; readonly reason: string }[]
+  readonly translated: Readonly<
+    Record<string, { readonly from: string; readonly equivalent: string }>
+  >
 }
 
 export interface CycleProfileIdentity {
@@ -299,6 +343,7 @@ function resolveArgs(options: CycleResolveOptions): ScriptArgs {
       ['inputs', options.inputs],
       ['acHash', options.acHash],
       ['tier', options.tier],
+      ['labels', options.labels === undefined ? undefined : JSON.stringify(options.labels)],
       [
         'contextPolicy',
         options.contextPolicy === undefined || Object.keys(options.contextPolicy).length === 0
@@ -316,7 +361,9 @@ function mergeArgs(options: CycleMergeOptions): ScriptArgs {
     ['pr', String(options.pr)],
     ['reviewedHead', options.reviewedHead],
     ['cardTier', options.cardTier],
-    ['autoAdvance', JSON.stringify(options.autoAdvance)],
+    options.mergeGate !== undefined
+      ? ['mergeGate', JSON.stringify(options.mergeGate)]
+      : ['autoAdvance', JSON.stringify(options.autoAdvance ?? [])],
   ]
 }
 
@@ -365,6 +412,27 @@ function mergeMethods(
   }
 }
 
+/** US-521: `autonomy-policy.mjs resolve` and `cycle-merge.mjs escalate` as typed calls — the rule stays in the scripts. */
+function autonomyMethods(
+  runScript: (script: string, cmd: string, args: ScriptArgs) => unknown,
+  scriptsDir: string,
+): Pick<CycleScriptsBridge, 'autonomyResolve' | 'escalate'> {
+  return {
+    autonomyResolve: options =>
+      runScript(join(scriptsDir, 'autonomy-policy.mjs'), 'resolve', [
+        ['adoption', options.adoption],
+        ['args', JSON.stringify(options.args)],
+      ]) as AutonomyResolution,
+    escalate: options =>
+      runScript(join(scriptsDir, 'cycle-merge.mjs'), 'escalate', [
+        ['dir', options.dir],
+        ['story', options.story],
+        ['stage', options.stage],
+        ['conditions', JSON.stringify(options.conditions)],
+      ]),
+  }
+}
+
 /**
  * `cwd` is the PROJECT directory the scripts run in (r1-3): `ac-hash` shells out to `gh`, which
  * resolves the repository from its cwd, so a script run from anywhere else hashes another
@@ -391,6 +459,7 @@ export function createCycleScriptsBridge(
         ...optional([['worktree-root', options.worktreeRoot]]),
       ]) as CycleWorktreeResult,
     ...mergeMethods(runScript, join(location.scriptsDir, 'cycle-merge.mjs')),
+    ...autonomyMethods(runScript, location.scriptsDir),
     packet: options =>
       runScript(cycleDispatchPath, 'packet', packetArgs(options, location)) as CyclePacketResult,
     inputs(story, workflowVersion) {
