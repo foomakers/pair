@@ -311,7 +311,7 @@ describe('US-522 — the watch loop through the handler', () => {
         expect(run.selections()).toBe(1)
         expect(run.atExit()!.audit.at(-1)).toMatch(
           new RegExp(
-            `event=loop-end reason=interrupted iterations=1 exit=0 detail=the driver received ${signal}`,
+            `event=loop-end reason=interrupted iterations=1 exit=${EXIT_CODE[signal]} detail=the driver received ${signal}$`,
           ),
         )
         expect(run.atExit()!.locks).toEqual([])
@@ -330,7 +330,63 @@ describe('US-522 — the watch loop through the handler', () => {
         expect(at.locks).toEqual([])
         expect(events(at.audit)).toEqual(['loop-start', 'batch', 'loop-end'])
         expect(at.audit[1]).toMatch(/1:interrupted/)
+        expect(at.audit.at(-1)).toMatch(
+          new RegExp(`event=loop-end reason=interrupted iterations=1 exit=${EXIT_CODE[signal]} `),
+        )
       })
     }
+  })
+
+  describe('AC11 (r0-3): a throw inside an iteration still frames the trail with loop-end exit=1', () => {
+    const settle = async (code: Promise<number>): Promise<void> => {
+      await code.then(
+        () => undefined,
+        () => undefined,
+      )
+    }
+    const brokenLock = (name: string): void => {
+      mkdirSync(lockDir(), { recursive: true })
+      writeFileSync(join(lockDir(), name), 'not a directory')
+    }
+
+    it('card lock path is a regular file on the first iteration', async () => {
+      brokenLock('1')
+      const run = await start({ flags: { maxIterations: '2' }, script: [answer(card('1'))] })
+      await settle(run.code)
+      expect(run.started).toEqual([])
+      expect(events(run.audit)).toEqual(['loop-start', 'loop-end'])
+      expect(run.audit.at(-1)).toMatch(/event=loop-end .* exit=1 detail=.*not a directory/)
+    })
+
+    it('mutex-resource lock path is a regular file on the first iteration', async () => {
+      const { resourceLockId } = await import('./parallel.js')
+      brokenLock(resourceLockId('skill:a'))
+      const run = await start({
+        flags: { maxIterations: '2' },
+        script: [answer(card('1', { mutexResources: ['skill:a'] }))],
+      })
+      await settle(run.code)
+      expect(run.started).toEqual([])
+      expect(events(run.audit)).toEqual(['loop-start', 'loop-end'])
+      expect(run.audit.at(-1)).toMatch(/event=loop-end .* exit=1 detail=.*not a directory/)
+    })
+
+    it('throw on a later iteration after a clean batch and an idle wait: one loop-end, last, exit=1', async () => {
+      const run = await start({
+        flags: { watch: true },
+        onWait: () => brokenLock('2'),
+        script: [answer(card('1')), answer(), answer(card('2'))],
+      })
+      await settle(run.code)
+      expect(run.started).toEqual(['1'])
+      expect(events(run.audit)).toEqual([
+        'loop-start',
+        'batch',
+        'iteration',
+        'iteration',
+        'loop-end',
+      ])
+      expect(run.audit.at(-1)).toMatch(/event=loop-end .* exit=1 detail=.*not a directory/)
+    })
   })
 })
