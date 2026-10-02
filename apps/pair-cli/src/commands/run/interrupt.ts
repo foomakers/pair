@@ -24,6 +24,17 @@ const ENGINE_GRACE_MS = 5_000
 
 const running = new Set<ChildProcess>()
 let interrupted = false
+const subscribers = new Set<() => void>()
+
+/**
+ * Subscribes to the interruption (US-522): `callback` runs synchronously, once, when the first
+ * signal arrives — so a waiting loop wakes at once instead of at its next poll. Returns the
+ * unsubscribe. Additive: nothing here changes what the handler does.
+ */
+export function onInterrupt(callback: () => void): () => void {
+  subscribers.add(callback)
+  return () => void subscribers.delete(callback)
+}
 
 /** Registers a spawned engine child; it leaves the set on its own exit. */
 export function trackEngine(child: ChildProcess): void {
@@ -80,6 +91,7 @@ export async function whileInterruptible<T>(
     if (handling) return
     handling = true
     interrupted = true
+    for (const notify of [...subscribers]) notify()
     void stopEngines()
       .then(() => onInterrupt(signal))
       .catch((error: unknown) => {
