@@ -390,8 +390,8 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
     })
 
     it('threads the signal to NO skill tier 1 composes today — the mechanism, not a live thread', () => {
-      // Stated as a test so it cannot rot silently. Tier 1 names exactly two skills, and neither
-      // declares an approval round; its declaring-skill exposure is TRANSITIVE, through
+      // Stated as a test so it cannot rot silently. Tier 1 names exactly one skill (US-524 moved the merge
+      // gate's `/pair-capability-verify-quality` into the batch), and it declares no approval round; its declaring-skill exposure is TRANSITIVE, through
       // `pair-implement-batch` -> `/pair-process-implement` -> `/pair-capability-assess-stack`,
       // and neither intermediary declares `$approval` — so threading it there would be the
       // invented argument AC3 forbids. When that changes, this test is what tells the next reader
@@ -401,7 +401,7 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
         match => match[1] ?? match[2],
       )
 
-      expect([...new Set(composed)].sort()).toEqual(['pair-capability-verify-quality', 'pair-next'])
+      expect([...new Set(composed)].sort()).toEqual(['pair-next'])
       for (const skill of composed) expect(tier1().approvalArgsFor(skill)).toBe('')
     })
 
@@ -441,10 +441,7 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
       it('extracts the real invocations and excludes path/prose mentions of the same shape', () => {
         // Asserted, not assumed: an extraction that silently matched nothing would make every
         // assertion below pass vacuously — the exact failure mode that produced this finding.
-        expect(composedSkills().map(skill => skill.name)).toEqual([
-          'pair-next',
-          'pair-capability-verify-quality',
-        ])
+        expect(composedSkills().map(skill => skill.name)).toEqual(['pair-next'])
       })
 
       it('follows EVERY composed skill with the approvalArgsFor call (catches a deleted interpolation)', () => {
