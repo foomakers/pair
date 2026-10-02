@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
+import { readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 
@@ -122,6 +122,30 @@ describe('US-524: batch and loop honour the model — the A1 refusal is gone', (
   ]
   it('no consumer still refuses with the #524 pointer', () => {
     for (const file of files) expect(read(file), file).not.toContain('autonomy-not-supported')
+  })
+  it('no pair-cli source cites the dead #524 code or an "until #524" reason', () => {
+    const root = join(REPO_ROOT, 'apps/pair-cli/src')
+    const walk = (d: string): string[] =>
+      readdirSync(d, { withFileTypes: true }).flatMap(e =>
+        e.isDirectory() ? walk(join(d, e.name)) : /\.ts$/.test(e.name) && !/\.test\.ts$/.test(e.name) ? [join(d, e.name)] : [],
+      )
+    for (const file of walk(root)) {
+      const text = read(file)
+      expect(text, file).not.toContain('autonomy-not-supported')
+      expect(text, file).not.toMatch(/until #524|#522\/#524|in #524/)
+    }
+    expect(read(join(REPO_ROOT, 'apps/website/content/docs/reference/cli/commands.mdx'))).not.toMatch(/until #524/)
+  })
+  it('/pair-loop Step 0 does not exit on a missing ## Eligibility: the filter resolves argument > ## Autonomy > ## Eligibility', () => {
+    const text = read(files[2]!)
+    expect(text).not.toMatch(/no `## Eligibility` section\?/)
+    expect(text).not.toContain('automation is off — `tech/automation.md` declares no `## Eligibility`')
+    expect(text).toMatch(/argument > `## Autonomy` > `## Eligibility`/)
+  })
+  it('/pair-loop continue-token carries the effective argument set', () => {
+    const text = read(files[2]!)
+    for (const flag of ['--filter', '--assignee', '--status', '--until', '--prepare', '--merge'])
+      expect(text.split('continue-token**:')[1]!.split('\n')[0], flag).toContain(flag)
   })
   it('the batch description no longer says it NEVER merges; it states the merge gate and the sequential fallback', () => {
     const text = read(files[0]!)

@@ -35,9 +35,9 @@ This skill classifies nothing and judges nothing. It reads tags, board state and
 
 1. **Act**: Read `.pair/adoption/tech/automation.md` (project-relative, resolved the normal adoption-file way).
 2. **Note**: `## Autonomy` is honoured, not refused: whether it is declared is `autonomy-policy.mjs`'s `parse().declared` (an empty section is off, exactly as in the cycle, `pair-cli run` and `/pair-next`). This skill reads no key of it — selection keys reach `/pair-next`, `until` / `prepare` / `merge` reach the batch, and the batch's policy script resolves them (argument > adoption > default).
-3. **Check**: Is the file absent, or present with no `## Eligibility` section?
-4. **Act**: If so, report "automation is off — `tech/automation.md` declares no `## Eligibility`" and **exit cleanly**. This is not an error (D21) — never fall back to the KB's recommended `risk:green` default on the project's behalf.
-5. **Act**: Extract and validate `## Eligibility` (the seven HALT triggers), `## Auto-Advance`, `## Stop Predicate`, `## Max Parallelism`, `## Audit Location` — the full algorithm lives in [automation-policy.md](../../.pair/knowledge/guidelines/collaboration/automation/automation-policy.md) and is **not restated here** (D18: the matching/parsing rule has one owner). A malformed value at any of the five knobs **HALTs before any card is touched**, naming the file and the offending value. `## Auto-Advance` may only ever name the SAME tier `## Eligibility` declares — a card outside eligibility is never selected in the first place, so no other tier could legally advance.
+3. **Check**: Does a filter resolve? The selection filter resolves argument > `## Autonomy` `filter:` > translated `## Eligibility` (`autonomy-policy.mjs resolve`, the same cascade the workflow runs) — a file without `## Eligibility` is NOT off while an argument or `## Autonomy` supplies the filter.
+4. **Act**: If NO source supplies a filter (or the file is absent), report "automation is off — no filter resolved (no argument, no `## Autonomy` `filter:`, no `## Eligibility`)" and **exit cleanly**. This is not an error (D21) — never fall back to the KB's recommended `risk:green` default on the project's behalf.
+5. **Act**: When `## Eligibility` is declared, extract and validate it (the seven HALT triggers), `## Auto-Advance`, `## Stop Predicate`, `## Max Parallelism`, `## Audit Location` — the full algorithm lives in [automation-policy.md](../../.pair/knowledge/guidelines/collaboration/automation/automation-policy.md) and is **not restated here** (D18: the matching/parsing rule has one owner). A malformed value at any of the five knobs **HALTs before any card is touched**, naming the file and the offending value. `## Auto-Advance` may only ever name the SAME tier `## Eligibility` declares — a card outside eligibility is never selected in the first place, so no other tier could legally advance.
 6. **Act**: Resolve `tech/risk-matrix.md`'s `## Tag Projection` declaration — every label this project actually emits (e.g. `risk:green`, `risk:yellow`, `risk:red`) — and hold it ready to pass as `tagProjectionFamily`. This is what lets `## Max Parallelism`'s per-tier override keys be checked against real, emitted tiers rather than shape alone (a tier that is emitted but never eligible, like a maintained-but-idle `risk:red` override, is still a legal narrowing target).
 7. **Verify**: All five knobs resolved (or their fail-closed default applied), and the Tag Projection family resolved. Proceed to Step 1.
 
@@ -54,7 +54,7 @@ Fan-out is ONE capability with THREE realizations, in preference order: **(1) in
    - Record the outcome the cycle printed (merged | awaiting-human | escalated | target-ready | PR-ready | failed): an `escalated` card is not re-drivable; an unconfirmed awaited-human comment is recorded, never swallowed.
    - Append the iteration to the audit file at the resolved `## Audit Location`.
    - Write/update the checkpoint via `/checkpoint` for the driven card's story.
-   - Stop, and print a **continue-token**: `pair-loop [--root <id>] [--predicate "<text>"] --iteration <n+1>` — the caller (human/CI/cron) pastes it back to resume. No new persistence format (Assumption 7): the token is the loop's scope + predicate + iteration counter rendered as a re-invocation line.
+   - Stop, and print a **continue-token**: `pair-loop [--root <id>] [--filter <v>] [--assignee <v>] [--status <v>] [--until <v>] [--prepare <v>] [--merge <v>] [--predicate "<text>"] --iteration <n+1>` — only the arguments given or effective, validated quote-free values; a resumed run accepts them all, so a stricter argument (e.g. `--merge always` over an adoption `merge: never`) is never lost. The caller (human/CI/cron) pastes it back to resume. No new persistence format (Assumption 7): the token is the loop's scope + arguments + predicate + iteration counter rendered as a re-invocation line.
 4. **Verify**: Exactly one card advanced this invocation (degraded path) or the workflow ran to its own stop condition (fan-out path). Never both cards and context growth in the same session.
 
 ## Boundaries — What This Skill Does Not Do
@@ -69,7 +69,7 @@ Fan-out is ONE capability with THREE realizations, in preference order: **(1) in
 
 ```text
 LOOP RUN:
-├── Policy:        [tech/automation.md — Eligibility: <label> | absent, automation off]
+├── Policy:        [tech/automation.md — filter: <resolved list> (source) | none resolved, automation off]
 ├── Mode:          [in-harness fan-out (workflow) | one card + continue-token (driver-re-invoked or manual)]
 ├── Iterations:    [N]
 ├── Cards driven:  [id, id, ...]
@@ -82,14 +82,14 @@ LOOP RUN:
 One-card path only (tiers 2 and 3), appended — this line is what an external driver reads to re-invoke:
 
 ```text
-CONTINUE-TOKEN: pair-loop [--root <id>] [--predicate "<text>"] --iteration <n+1>
+CONTINUE-TOKEN: pair-loop [--root <id>] [--filter <v>] [--assignee <v>] [--status <v>] [--until <v>] [--prepare <v>] [--merge <v>] [--predicate "<text>"] --iteration <n+1>
 ```
 
 ## Graceful Degradation
 
 See [graceful degradation](../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) for the standard scenarios. Additional cases:
 
-- **`tech/automation.md` absent or has no `## Eligibility`**: not a degradation — automation is off by design (D21), report and exit cleanly.
+- **`tech/automation.md` absent, or no filter resolves (no argument, no `## Autonomy` `filter:`, no `## Eligibility`)**: not a degradation — automation is off by design (D21), report and exit cleanly.
 - **`/checkpoint` not installed** (degraded path): skip the checkpoint write; the continue-token and the audit file remain the resume mechanism.
 - **`/verify-quality` not installed**: the merge stage never merges without a locally-verified gate set — that card halts for the human instead of guessing green.
 

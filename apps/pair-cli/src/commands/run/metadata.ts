@@ -32,12 +32,12 @@ export const runCommandMetadata = {
     {
       flags: '--assignee <login|@me>',
       description:
-        'US-521: keep issues assigned to this user (@me = the authenticated code-host user), for a skill that declares it (pair-next); refused for pair-loop until #524',
+        'US-521: keep issues assigned to this user (@me = the authenticated code-host user), for a skill that declares it (pair-next); refused for pair-loop (the driver declares only root/predicate/iteration for it)',
     },
     {
       flags: '--status <macrostates>',
       description:
-        'US-521: comma-separated canonical macrostates (e.g. Draft,Ready), for a skill that declares it (pair-next); refused for pair-loop until #524',
+        'US-521: comma-separated canonical macrostates (e.g. Draft,Ready), for a skill that declares it (pair-next); refused for pair-loop (the driver declares only root/predicate/iteration for it)',
     },
     {
       flags: '--until <ready|pr|merged>',
