@@ -447,7 +447,9 @@ function onceWriter(
   }
 }
 
-function parsePredicate(text: string | undefined): ReturnType<typeof parseStopCondition> | undefined {
+function parsePredicate(
+  text: string | undefined,
+): ReturnType<typeof parseStopCondition> | undefined {
   return text === undefined ? undefined : parseStopCondition(text)
 }
 
