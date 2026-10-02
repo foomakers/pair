@@ -89,4 +89,36 @@ describe('pair-cli run — the cycle-coordinator flags through the registered co
       autonomous: true,
     })
   })
+
+  it('US-522: run --filter PIPPO --assignee @me --parallel 2 --watch --interval 10m reaches the parser as the watch loop', async () => {
+    await runArgv([
+      '--filter',
+      'PIPPO',
+      '--assignee',
+      '@me',
+      '--parallel',
+      '2',
+      '--watch',
+      '--interval',
+      '10m',
+      '--autonomous',
+    ])
+
+    expect(dispatched).toHaveLength(1)
+    expect(dispatched[0]).toMatchObject({
+      command: 'run',
+      parallel: 2,
+      watch: true,
+      interval: { text: '10m', seconds: 600 },
+      scope: { filter: 'PIPPO', assignee: '@me' },
+    })
+  })
+
+  it('US-522: --no-watch reaches the parser as watch=false; neither flag leaves watch absent', async () => {
+    await runArgv(['--root', '66', '--parallel', '2', '--no-watch'])
+    await runArgv(['--root', '66', '--parallel', '2'])
+
+    expect(dispatched[0]).toMatchObject({ watch: false })
+    expect(dispatched[1]).not.toHaveProperty('watch')
+  })
 })

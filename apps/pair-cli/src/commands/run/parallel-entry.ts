@@ -4,7 +4,25 @@ import { describeMergePosture } from './automation-policy'
 import { acquireCardLock } from './card-lock'
 import { resolveEngineFor } from './cycle-entry'
 import { appendAuditLine } from './dispatch-audit'
-import { isInterrupted, whileInterruptible } from './interrupt'
+import { isInterrupted, whileInterruptible, type InterruptSignal } from './interrupt'
+import { probeCardLock, probeResourceLocks } from './lock-probe'
+import {
+  describeLoopEnd,
+  describeLoopValues,
+  describeScope,
+  iterationFields,
+  loopEndFields,
+  loopStartFields,
+  renderIterationLine,
+  renderLoopAuditLine,
+  resolveLoopValues,
+  resolveSelection,
+  type FanOutSelection,
+  type LoopValues,
+} from './loop-report'
+import { parseStopCondition } from './stop-predicate'
+import { wait as shippedWait } from './wait'
+import { runWatchLoop, type LoopSelection, type WatchLoopDeps } from './watch-loop'
 import {
   batchExitCode,
   renderBatchAuditLine,
@@ -16,7 +34,7 @@ import {
 import type { RunCommandConfig } from './parser'
 import { describeEngineResolution, resolveEngine } from './resolve-engine'
 import { computeRootPlan, describeRootPlan, type RootCandidate, type RootPlan } from './root-plan'
-import { selectRootCandidates } from './root-select'
+import { selectRootAnswer, selectRootCandidates, type SelectRootInput } from './root-select'
 import {
   declaredEngine,
   declaredEngineModel,
@@ -41,16 +59,17 @@ export interface ParallelRunInput {
   readonly cwd: string
 }
 
-function reportHeader(input: ParallelRunInput, engineLine: string, root: string): void {
+function reportHeader(
+  input: ParallelRunInput,
+  engineLine: string,
+  selection: FanOutSelection,
+): void {
   const { config, context } = input
   const { policy } = context
   const overrides = policy.maxParallelismOverrides
   console.log(chalk.bold('pair-cli run --parallel'))
   console.log(`  ${engineLine}`)
-  console.log(
-    `  Scope: pair-next --root ${root}` +
-      (policy.eligibility !== undefined ? ` --filter ${policy.eligibility} (## Eligibility)` : ''),
-  )
+  console.log(`  Scope: ${describeScope(selection)}`)
   console.log(`  Policy: ${policy.source} · audit ${policy.auditLocation}`)
   console.log(
     `  Requested: --parallel ${String(config.parallel)} · ## Max Parallelism ${policy.maxParallelism}` +
@@ -78,15 +97,16 @@ interface BatchRecordInput {
   readonly input: ParallelRunInput
   readonly deps: RunHandlerDependencies
   readonly plan: RootPlan
+  readonly root: string
   readonly startedAt: string
   readonly outcomes: readonly CardOutcome[]
 }
 
-function recordBatch({ input, deps, plan, startedAt, outcomes }: BatchRecordInput): void {
+function recordBatch({ input, deps, plan, root, startedAt, outcomes }: BatchRecordInput): void {
   const line = renderBatchAuditLine({
     at: new Date().toISOString(),
     startedAt,
-    root: input.config.scope.root!,
+    root,
     requested: input.config.parallel!,
     effective: plan.limit.effective,
     outcomes,
@@ -111,17 +131,116 @@ function reportAutomationOff(context: RunContext): boolean {
   return true
 }
 
+/** US-522 AC2: a scope must resolve from SOMEWHERE — refused before anything spawns, naming both. */
+function assertScope(selection: FanOutSelection): void {
+  if (selection.root === undefined && selection.filter === undefined) {
+    throw new Error(
+      '--parallel needs a scope: pass --root <id> or --filter <label>, or declare `root` / `filter` in ' +
+        '`## Autonomy` (or a `## Eligibility` label) in .pair/adoption/tech/automation.md',
+    )
+  }
+}
+
+interface FanOut {
+  readonly input: ParallelRunInput
+  readonly deps: RunHandlerDependencies
+  readonly selection: FanOutSelection
+  readonly engineDef: ReturnType<typeof resolveEngineFor>
+  readonly autonomyArgs: readonly string[]
+}
+
+/** One fresh selection process, scoped by the resolved selection (and the loop contract, in loop mode). */
+function selectionInput(fan: FanOut, loop?: SelectRootInput['loop']): SelectRootInput {
+  const { input, deps, selection, engineDef } = fan
+  return {
+    engine: engineDef,
+    root: selection.root?.value,
+    eligibility: selection.filter?.value,
+    assignee: selection.assignee?.value,
+    status: selection.status?.value,
+    cwd: input.cwd,
+    autonomyArgs: fan.autonomyArgs,
+    model: declaredEngineModel(input.context.config, engineDef.id),
+    timeoutSeconds: input.config.iterationTimeoutSeconds,
+    ...(loop !== undefined && { loop }),
+    ...(deps.runIteration !== undefined && { runIteration: deps.runIteration }),
+  }
+}
+
+function planFor(fan: FanOut, candidates: RootCandidate[]): RootPlan {
+  const { input } = fan
+  const { policy } = input.context
+  const plan = computeRootPlan({
+    candidates,
+    eligibility: policy.eligibility,
+    maxParallelism: {
+      global: policy.maxParallelism,
+      perTier: policy.maxParallelismOverrides ?? {},
+    },
+    requested: input.config.parallel!,
+  })
+  for (const line of describeRootPlan(plan)) console.log(`  ${line}`)
+  return plan
+}
+
+function reportPreamble(
+  input: ParallelRunInput,
+  engineLine: string,
+  resolved: { selection: FanOutSelection; values: LoopValues; notes: readonly string[] },
+): void {
+  const { config, context } = input
+  const { selection, values, notes } = resolved
+  reportHeader(input, engineLine, selection)
+  for (const note of notes) console.log(`  ${note}`)
+  if (!values.loopMode) return
+  const lines = describeLoopValues(
+    values,
+    selection,
+    config.parallel!,
+    context.policy.maxParallelism,
+  )
+  for (const line of lines) console.log(`  ${line}`)
+}
+
+/** Today's single batch (US-491): one selection, the plan, the pool. Unchanged output. */
+async function runSingleBatch(fan: FanOut): Promise<number> {
+  const { input, deps, selection } = fan
+  const select =
+    deps.selectCandidates ??
+    (deps.selectAnswer !== undefined
+      ? async (i: SelectRootInput) => (await deps.selectAnswer!(i)).candidates
+      : selectRootCandidates)
+  const candidates: RootCandidate[] = await select(selectionInput(fan))
+
+  if (candidates.length === 0) {
+    console.log(
+      selection.root !== undefined
+        ? `  Nothing to do: pair-next --root ${selection.root.value} selected no card.`
+        : `  Nothing to do: ${describeScope(selection)} selected no card.`,
+    )
+    return 0
+  }
+
+  const plan = planFor(fan, candidates)
+  return await runBatch({ input, deps, plan, root: rootLabel(selection) })
+}
+
 export async function handleParallelRun(
   input: ParallelRunInput,
   deps: RunHandlerDependencies,
 ): Promise<number> {
   const { config, context, fs, cwd } = input
-  const root = config.scope.root!
+  const selection = resolveSelection(config, context.policy, context.autonomySelection)
+  assertScope(selection)
+  const values = resolveLoopValues(config, context.policy)
   const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
   // Refused here, before anything spawns: the selection process runs under the same posture.
   const autonomy = resolveAutonomyFor(engine.engine, config, cwd, fs)
-  reportHeader(input, describeEngineResolution(engine), root)
-  for (const note of autonomy.notes) console.log(`  ${note}`)
+  reportPreamble(input, describeEngineResolution(engine), {
+    selection,
+    values,
+    notes: autonomy.notes,
+  })
 
   if (reportAutomationOff(context)) return 0
 
@@ -131,36 +250,12 @@ export async function handleParallelRun(
   }
 
   const engineDef = resolveEngineFor(engine, context, cwd, fs)
-  const select = deps.selectCandidates ?? selectRootCandidates
-  const candidates: RootCandidate[] = await select({
-    engine: engineDef,
-    root,
-    eligibility: context.policy.eligibility,
-    cwd,
-    autonomyArgs: autonomy.args,
-    model: declaredEngineModel(context.config, engineDef.id),
-    timeoutSeconds: config.iterationTimeoutSeconds,
-    ...(deps.runIteration !== undefined && { runIteration: deps.runIteration }),
-  })
-
-  if (candidates.length === 0) {
-    console.log(`  Nothing to do: pair-next --root ${root} selected no card.`)
-    return 0
-  }
-
-  const plan = computeRootPlan({
-    candidates,
-    eligibility: context.policy.eligibility,
-    maxParallelism: {
-      global: context.policy.maxParallelism,
-      perTier: context.policy.maxParallelismOverrides ?? {},
-    },
-    requested: config.parallel!,
-  })
-  for (const line of describeRootPlan(plan)) console.log(`  ${line}`)
-
-  return await runBatch({ input, deps, plan })
+  const fan: FanOut = { input, deps, selection, engineDef, autonomyArgs: autonomy.args }
+  return values.loopMode ? await runLoop(fan, values) : await runSingleBatch(fan)
 }
+
+/** The batch audit line's `root=` field: the root, or `(none)` for a filter-only scope. */
+const rootLabel = (selection: FanOutSelection): string => selection.root?.value ?? '(none)'
 
 async function runCardInBatch({
   input,
@@ -189,50 +284,203 @@ async function runCardInBatch({
   return outcome
 }
 
-async function runBatch({
-  input,
-  deps,
-  plan,
-}: {
-  input: ParallelRunInput
-  deps: RunHandlerDependencies
-  plan: RootPlan
-}): Promise<number> {
+/**
+ * One batch of `run --card` processes over a plan: what to do when a signal arrives mid-batch
+ * (`onInterrupt`) and how to run it (`run`). Split so the single-batch path and the loop share ONE
+ * body and differ only in who owns the signal handler.
+ */
+interface BatchContext {
+  readonly input: ParallelRunInput
+  readonly deps: RunHandlerDependencies
+  readonly plan: RootPlan
+  readonly root: string
+}
+
+function createBatch(ctx: BatchContext): {
+  onInterrupt(signal: string): void
+  run(): Promise<readonly CardOutcome[]>
+} {
+  const { input, deps, plan } = ctx
   const startedAt = new Date().toISOString()
   const finished = new Map<string, CardOutcome>()
   // Resource locks of the cards still running. `host.exit` follows `onInterrupt` at once, before a
   // card's `finally` (it waits on the child's stream 'close'), so the interrupt path releases them.
   const heldLocks = new Set<() => void>()
-  const onInterrupt = (signal: string): void => {
-    for (const release of [...heldLocks]) release()
-    heldLocks.clear()
-    const outcomes = plan.run.map(
-      c =>
-        finished.get(c.id) ?? {
-          id: c.id,
-          outcome: 'interrupted' as const,
-          detail: `the driver received ${signal}`,
-        },
+  const record = (outcomes: readonly CardOutcome[]): void =>
+    recordBatch({ ...ctx, startedAt, outcomes })
+  return {
+    onInterrupt: signal => {
+      for (const release of [...heldLocks]) release()
+      heldLocks.clear()
+      record(
+        plan.run.map(
+          c =>
+            finished.get(c.id) ?? {
+              id: c.id,
+              outcome: 'interrupted' as const,
+              detail: `the driver received ${signal}`,
+            },
+        ),
+      )
+      console.log(`  Interrupted by ${signal}: running card processes were stopped.`)
+    },
+    run: async () => {
+      const outcomes = await runPool({
+        items: plan.run,
+        limit: plan.limit.effective,
+        mayStart: () => !isInterrupted(),
+        worker: card => runCardInBatch({ input, deps, card, finished, heldLocks }),
+        notStarted: card => ({ id: card.id, outcome: 'interrupted', detail: 'never started' }),
+        onWorkerError: (card, error) => ({
+          id: card.id,
+          outcome: 'crashed',
+          detail: error instanceof Error ? error.message : String(error),
+        }),
+      })
+      reportOutcomes(outcomes)
+      record(outcomes)
+      return outcomes
+    },
+  }
+}
+
+async function runBatch({
+  input,
+  deps,
+  plan,
+  root,
+}: {
+  input: ParallelRunInput
+  deps: RunHandlerDependencies
+  plan: RootPlan
+  root: string
+}): Promise<number> {
+  const batch = createBatch({ input, deps, plan, root })
+  return await whileInterruptible(batch.onInterrupt, async () => batchExitCode(await batch.run()))
+}
+
+// ── the watch loop (US-522) ───────────────────────────────────────────────────────────────────────
+
+/** A card's lock state for the loop: the card lock, then every mutex-resource lock (read-only). */
+function probeLockFor(workingArea: string) {
+  return (card: RootCandidate): ReturnType<typeof probeCardLock> => {
+    const own = probeCardLock({ workingArea, card: card.id })
+    if (own.kind === 'held') return own
+    const resource = probeResourceLocks({ card, workingArea })
+    return resource.kind === 'held'
+      ? {
+          kind: 'held',
+          path: resource.path,
+          ...(resource.since !== undefined && { since: resource.since }),
+        }
+      : { kind: 'free' }
+  }
+}
+
+/** The loop's audit writer: one `<at> key=value …` line per call, in the trail's own shape. */
+function auditWriter(
+  input: ParallelRunInput,
+  deps: RunHandlerDependencies,
+): (fields: ReadonlyArray<readonly [string, string]>) => void {
+  return fields =>
+    (deps.appendAudit ?? appendAuditLine)(
+      input.context.auditPath,
+      renderLoopAuditLine(new Date().toISOString(), fields),
     )
-    recordBatch({ input, deps, plan, startedAt, outcomes })
-    console.log(`  Interrupted by ${signal}: running card processes were stopped.`)
+}
+
+/** The loop's collaborators, wired to the real selection, probes, batch and console/audit. */
+function loopDeps(
+  fan: FanOut,
+  values: LoopValues,
+  hooks: {
+    audit(fields: ReadonlyArray<readonly [string, string]>): void
+    onSelect(): void
+    setBatch(onInterrupt: ((signal: string) => void) | undefined): void
+  },
+  predicateSelector: string | undefined,
+): WatchLoopDeps {
+  const { input, deps, selection } = fan
+  const answer =
+    deps.selectAnswer ??
+    (deps.selectCandidates !== undefined
+      ? async (i: SelectRootInput) => ({ candidates: await deps.selectCandidates!(i) })
+      : selectRootAnswer)
+  return {
+    select: async (): Promise<LoopSelection> => {
+      hooks.onSelect()
+      return await answer(selectionInput(fan, { predicateSelector }))
+    },
+    probeLock: probeLockFor(input.context.workingArea),
+    runBatch: async cards => {
+      const plan = planFor(fan, [...cards])
+      const batch = createBatch({ input, deps, plan, root: rootLabel(selection) })
+      hooks.setBatch(batch.onInterrupt)
+      try {
+        return { outcomes: await batch.run() }
+      } finally {
+        hooks.setBatch(undefined)
+      }
+    },
+    wait: deps.wait ?? shippedWait,
+    isInterrupted,
+    onIteration: record => {
+      console.log(renderIterationLine(record, values.interval.value))
+      hooks.audit(iterationFields(record))
+    },
+  }
+}
+
+/**
+ * The fan-out as a loop: ONE `whileInterruptible` owns the whole run, so a signal anywhere (a batch or
+ * the idle wait) writes the batch line (if one is running), releases the locks, writes `loop-end` and
+ * exits 128 + signal — never two handlers, never a second `end`.
+ */
+async function runLoop(fan: FanOut, values: LoopValues): Promise<number> {
+  const { input, deps, selection } = fan
+  const { config, context } = input
+  const audit = auditWriter(input, deps)
+  const predicate =
+    context.policy.stopPredicate === undefined
+      ? undefined
+      : parseStopCondition(context.policy.stopPredicate)
+
+  let started = 0
+  let ended = false
+  let currentBatch: ((signal: string) => void) | undefined
+  const end = (fields: ReturnType<typeof loopEndFields>): void => {
+    if (!ended) audit(fields)
+    ended = true
   }
 
+  audit(loopStartFields(values, selection, config.parallel!, context.policy.maxParallelism))
+
+  const onInterrupt = (signal: InterruptSignal): void => {
+    currentBatch?.(signal)
+    end(loopEndFields('interrupted', started, 0, `the driver received ${signal}`))
+    console.log(`  Loop interrupted by ${signal} at iteration ${started}.`)
+  }
+  const wired = loopDeps(
+    fan,
+    values,
+    {
+      audit,
+      onSelect: () => void started++,
+      setBatch: batch => void (currentBatch = batch),
+    },
+    predicate?.selector,
+  )
+
   return await whileInterruptible(onInterrupt, async () => {
-    const outcomes = await runPool({
-      items: plan.run,
-      limit: plan.limit.effective,
-      mayStart: () => !isInterrupted(),
-      worker: card => runCardInBatch({ input, deps, card, finished, heldLocks }),
-      notStarted: card => ({ id: card.id, outcome: 'interrupted', detail: 'never started' }),
-      onWorkerError: (card, error) => ({
-        id: card.id,
-        outcome: 'crashed',
-        detail: error instanceof Error ? error.message : String(error),
-      }),
-    })
-    reportOutcomes(outcomes)
-    recordBatch({ input, deps, plan, startedAt, outcomes })
-    return batchExitCode(outcomes)
+    const loopConfig = {
+      watch: config.watch === true,
+      intervalMs: values.interval.ms,
+      cap: values.cap.value,
+      predicate,
+    }
+    const result = await runWatchLoop(loopConfig, wired)
+    console.log(describeLoopEnd(result))
+    end(loopEndFields(result.reason, result.iterations, result.exitCode, result.selectionError))
+    return result.exitCode
   })
 }

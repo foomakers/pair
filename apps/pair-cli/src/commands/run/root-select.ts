@@ -84,8 +84,8 @@ function loopRequest(predicateSelector: string | undefined): string[] {
         ]
   return [
     'This selection feeds a watch loop, so EVERY candidate MUST also carry a boolean `"escalated"` ' +
-      "(add it to each candidate object): true when the card carries the autonomy escalation marker and " +
-      'no human has acted since (the autonomy model\'s own clearing rule), false otherwise. Never omit it and ' +
+      '(add it to each candidate object): true when the card carries the autonomy escalation marker and ' +
+      "no human has acted since (the autonomy model's own clearing rule), false otherwise. Never omit it and " +
       'never guess — if you cannot tell, the selection is unusable.',
     ...snapshot,
   ]
@@ -158,7 +158,9 @@ function parseCandidate(entry: unknown, loop: boolean): RootCandidate {
   checkTierAgainstLabels(id, tier, labels)
   const escalated = c['escalated']
   if (loop && typeof escalated !== 'boolean') {
-    fail(`candidate ${id}: \`escalated\` must be a boolean in loop mode (received ${JSON.stringify(escalated)})`)
+    fail(
+      `candidate ${id}: \`escalated\` must be a boolean in loop mode (received ${JSON.stringify(escalated)})`,
+    )
   }
   return {
     id,
@@ -185,7 +187,9 @@ function parseSnapshot(value: unknown): PredicateCard[] {
       !Array.isArray(tags) ||
       !tags.every(t => typeof t === 'string' && isSafePromptText(t))
     ) {
-      fail(`snapshot entry ${index} needs a safe string id, a string macrostate and a string-array tags`)
+      fail(
+        `snapshot entry ${index} needs a safe string id, a string macrostate and a string-array tags`,
+      )
     }
     return { id, tags: tags as string[], macrostate }
   })

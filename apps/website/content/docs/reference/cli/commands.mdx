@@ -759,9 +759,12 @@ pair-cli run [options]
 | `--pr <n>`                      | Enter the cycle straight at fix-and-review on an existing PR: the first stage is `verify`, no `prepare` before it. Requires `--card` |
 | `--rounds <n\|max>`             | Bound the remediation rounds of a cycle run. Omitted ⇒ the policy's `maxFixRounds`; it can never widen it |
 | `--run-id <segment>`            | Run directory to continue. Defaults to `story-<card>` — the same convention the batch engine uses       |
-| `--parallel <n>`                | Fan-out over `--root`: up to `min(dependency-allowed, ## Max Parallelism, n)` cards at once, each its own `pair-cli run --card` process — see below. Requires `--root`; not combinable with `--card`/`--skill`/`--prompt`/`--filter`/`--max-iterations` |
+| `--parallel <n>`                | Fan-out: up to `min(dependency-allowed, ## Max Parallelism, n)` cards at once, each its own `pair-cli run --card` process — see below. Needs `--root` or `--filter` (or the policy's); not combinable with `--card`/`--skill`/`--prompt` |
+| `--watch`                       | With `--parallel`: the watch loop — every iteration re-selects (skipping escalated, locked and already-driven cards) and an idle one waits `--interval`. Stops at the Stop Predicate, the iteration cap (idle polls count) or Ctrl-C. `--parallel 1` for a sequential agent |
+| `--no-watch`                    | Explicitly no watch loop (the last of `--watch` / `--no-watch` wins)                                    |
+| `--interval <n>s\|m\|h`         | The idle wait under `--watch`: default `10m`, at least `60s`. Requires `--watch`                         |
 | `--cwd <dir>`                   | Working directory every iteration runs in                                                            |
-| `--max-iterations <n>`          | Iteration cap. **Narrows** the policy's `max-iterations`; it can never widen it                       |
+| `--max-iterations <n>`          | Iteration cap. **Narrows** the policy's `max-iterations`; it can never widen it. With `--parallel` it enables the re-selecting loop, idle polls included |
 | `--autonomous`                  | Explicit opt-in: run without confirmations, **and** without the skill's approval rounds — see below   |
 | `--approve-project-trust`       | Explicit authorization to run where the engine does not trust the project                            |
 | `--approve-ineligible`          | Let THIS `--autonomous` run through `## Eligibility` on a card that does not carry the label. Announced, never persisted |
@@ -859,7 +862,7 @@ and the order is fixed — **the tag mapping is asked first, always**:
    due — before any spawn for the first stage's role, later for a role only a later stage uses (e.g.
    the preparation role, first needed by a finding round).
 
-### Fan-out: `--root <id> --parallel <n>`
+### Fan-out: `--parallel <n>` (`--root <id>` and/or `--filter <label>`)
 
 Parallel delivery on a harness with no subagent primitive (`pi`, `opencode`, `claude -p`): one
 command drives a dependency- and mutex-safe batch of cards, each through its **own**
@@ -873,7 +876,9 @@ pair-cli run --root 66 --parallel 3 --autonomous
    `## Eligibility` when the policy declares one, exactly as `pair-loop` does) and reports the
    candidate set on a `PAIR-ROOT-CANDIDATES:` line: prerequisites with their merged status, the
    touched surface as mutex resources, labels, tier, title, branch. Nothing is invented here: the
-   scope is `pair-next --root`'s, so `--filter` is refused with `--parallel`.
+   scope is `pair-next`'s: `--root`, `--filter`, `--assignee` and `--status` are forwarded verbatim
+   (`--root` is optional when a filter resolves; with neither, the run is refused before anything
+   spawns).
 2. **Plan** — `pair-loop`'s own dependency + mutex analysis (a card whose prerequisite is not merged
    is excluded; of two cards sharing a resource, the first wins). The plan is printed **before any
    process starts**: the cards that run, every excluded card with its reason, and the effective
@@ -895,8 +900,34 @@ pair-cli run --root 66 --parallel 3 --autonomous
   `run --card` alone would.
 - **Nothing to do is not an error**: a root selecting zero cards, or a plan where every card is
   excluded, exits `0`. `--dry-run` resolves and prints, but runs no selection and spawns nothing.
-- `--parallel` requires `--root`, and is refused with `--card`, `--skill`, `--prompt`, `--filter` or
-  `--max-iterations`. `run --root` without `--parallel` (loop mode) is unchanged.
+- `--parallel` needs a scope (`--root` or `--filter`, or the policy's) and is refused with `--card`,
+  `--skill` or `--prompt`. `run --root` without `--parallel` (loop mode) is unchanged.
+
+#### The watch loop: `--parallel <n> --watch`
+
+```bash
+pair-cli run --filter PIPPO --assignee @me --parallel 2 --watch --interval 10m
+```
+
+Add `--watch` (or `--max-iterations K`) and the fan-out loops: each iteration runs one fresh
+selection, skips **escalated** cards (judged by the selection process, with the autonomy model's own
+marker), **locked** cards (card lock or a held mutex resource — eligible again later) and cards this
+run **already drove** (whatever the outcome), plans and runs the rest, then re-selects. An iteration
+with nothing workable waits `--interval` (default `10m`, at least `60s`) under `--watch`, or exits
+`0` (`nothing workable`) without it. Work that ran starts the next iteration at once.
+
+- **Stops** at the `## Stop Predicate` (same rule as `pair-loop`, checked at every iteration
+  boundary), at the iteration cap `min(--max-iterations, ## Stop Predicate max-iterations)` — idle
+  polls count, since each spawns an engine process — or on Ctrl-C / SIGTERM (the wait aborts at
+  once, locks are released, `loop-end` is written, exit `130` / `143`).
+- **Fail closed**: a selection that fails or is malformed stops the loop with exit `1`; restarting a
+  dead watcher (tmux, launchd, cron, CI) is outside pair.
+- **Printed**: every effective loop value with its source before any selection (also under
+  `--dry-run`), then one line per iteration; `## Audit Location` gets `event=loop-start`,
+  `event=iteration` and `event=loop-end` lines next to each batch's own.
+- `--watch` / `--interval` need `--parallel`; `--interval` needs `--watch`; a malformed or sub-`60s`
+  interval is refused before anything spawns. Without `--watch` and `--max-iterations` the fan-out
+  runs exactly one iteration, as before.
 
 ### Tag-driven dispatch
 

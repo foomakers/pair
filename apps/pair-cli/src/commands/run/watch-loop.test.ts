@@ -98,7 +98,12 @@ describe('runWatchLoop (US-522 T-6)', () => {
     const r = await runWatchLoop(config(), h.deps)
     expect(h.selections).toBe(3)
     expect(h.batches).toEqual([['1'], ['2']])
-    expect(r).toMatchObject({ reason: 'nothing workable', iterations: 3, exitCode: 0, driven: ['1', '2'] })
+    expect(r).toMatchObject({
+      reason: 'nothing workable',
+      iterations: 3,
+      exitCode: 0,
+      driven: ['1', '2'],
+    })
   })
 
   it('AC6: a card driven once is excluded afterwards whatever its outcome, and reported', async () => {
@@ -114,7 +119,10 @@ describe('runWatchLoop (US-522 T-6)', () => {
   })
 
   it('AC4: an escalated card is not started, is reported, and stays skipped while the selection says so', async () => {
-    const h = harness([sel(card('1', { escalated: true }), card('2')), sel(card('1', { escalated: true }))])
+    const h = harness([
+      sel(card('1', { escalated: true }), card('2')),
+      sel(card('1', { escalated: true })),
+    ])
     const r = await runWatchLoop(config(), h.deps)
     expect(h.batches).toEqual([['2']])
     expect(h.records[0]!.skipped).toEqual([{ id: '1', reason: 'escalated', detail: 'escalated' }])
@@ -123,7 +131,9 @@ describe('runWatchLoop (US-522 T-6)', () => {
   })
 
   it('AC5: a locked card is skipped with its path and age, and picked up once the lock is free', async () => {
-    const locks: Record<string, LockState> = { '1': { kind: 'held', path: '/w/locks/1', since: 'T0' } }
+    const locks: Record<string, LockState> = {
+      '1': { kind: 'held', path: '/w/locks/1', since: 'T0' },
+    }
     const h = harness([sel(card('1')), sel(card('1')), sel()])
     const base = h.deps.probeLock
     let calls = 0
@@ -195,7 +205,9 @@ describe('runWatchLoop (US-522 T-6)', () => {
 
     it('an empty snapshot counts as satisfied', async () => {
       const h = harness([{ candidates: [card('1')], snapshot: [] }])
-      expect((await runWatchLoop(config({ predicate }), h.deps)).reason).toBe('stop predicate satisfied')
+      expect((await runWatchLoop(config({ predicate }), h.deps)).reason).toBe(
+        'stop predicate satisfied',
+      )
     })
 
     it('satisfied at iteration k: the earlier iterations worked', async () => {
@@ -209,9 +221,11 @@ describe('runWatchLoop (US-522 T-6)', () => {
       expect(r).toMatchObject({ reason: 'stop predicate satisfied', iterations: 3 })
     })
 
-    it('a missing snapshot with a predicate is an empty one (the selection layer fails closed first)', async () => {
+    it('a missing snapshot with a predicate fails the selection (never read as empty = satisfied)', async () => {
       const h = harness([sel(card('1'))])
-      expect((await runWatchLoop(config({ predicate }), h.deps)).reason).toBe('stop predicate satisfied')
+      const r = await runWatchLoop(config({ predicate }), h.deps)
+      expect(r).toMatchObject({ reason: 'selection failed', exitCode: 1 })
+      expect(h.batches).toEqual([])
     })
   })
 
@@ -219,7 +233,12 @@ describe('runWatchLoop (US-522 T-6)', () => {
     const h = harness([sel(card('1')), new Error('boom')])
     const r = await runWatchLoop(config({ watch: true, cap: 9 }), h.deps)
     expect(h.selections).toBe(2)
-    expect(r).toMatchObject({ reason: 'selection failed', iterations: 2, exitCode: 1, selectionError: 'boom' })
+    expect(r).toMatchObject({
+      reason: 'selection failed',
+      iterations: 2,
+      exitCode: 1,
+      selectionError: 'boom',
+    })
   })
 
   describe('AC10: signals', () => {
@@ -255,9 +274,13 @@ describe('runWatchLoop (US-522 T-6)', () => {
   })
 
   it('exit-code matrix: a failed card anywhere makes it 1 for every stop reason; clean runs are 0', async () => {
-    const failing = harness([sel(card('1')), sel()], { outcomes: ids => ids.map(id => outcome(id, 'crashed')) })
+    const failing = harness([sel(card('1')), sel()], {
+      outcomes: ids => ids.map(id => outcome(id, 'crashed')),
+    })
     expect((await runWatchLoop(config(), failing.deps)).exitCode).toBe(1)
-    const skipped = harness([sel(card('1')), sel()], { outcomes: ids => ids.map(id => outcome(id, 'skipped')) })
+    const skipped = harness([sel(card('1')), sel()], {
+      outcomes: ids => ids.map(id => outcome(id, 'skipped')),
+    })
     expect((await runWatchLoop(config(), skipped.deps)).exitCode).toBe(0)
   })
 

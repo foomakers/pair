@@ -492,9 +492,9 @@ describe('parseRunCommand — --watch / --interval (US-522 AC14)', () => {
     ['10m', 600],
     ['2h', 7200],
   ])('accepts --interval %s', (text, seconds) => {
-    expect(
-      parseRunCommand({ parallel: '1', watch: true, interval: text }).interval?.seconds,
-    ).toBe(seconds)
+    expect(parseRunCommand({ parallel: '1', watch: true, interval: text }).interval?.seconds).toBe(
+      seconds,
+    )
   })
 
   it('--no-watch is carried as watch=false', () => {
@@ -508,9 +508,15 @@ describe('parseRunCommand — --watch / --interval (US-522 AC14)', () => {
   })
 
   it('refuses --watch without --parallel, suggesting --parallel 1', () => {
-    expect(() => parseRunCommand({ root: '1', watch: true })).toThrow(/--watch requires --parallel.*--parallel 1/)
-    expect(() => parseRunCommand({ root: '1', watch: false })).toThrow(/--no-watch requires --parallel/)
-    expect(() => parseRunCommand({ root: '1', interval: '5m' })).toThrow(/--interval requires --parallel/)
+    expect(() => parseRunCommand({ root: '1', watch: true })).toThrow(
+      /--watch requires --parallel.*--parallel 1/,
+    )
+    expect(() => parseRunCommand({ root: '1', watch: false })).toThrow(
+      /--no-watch requires --parallel/,
+    )
+    expect(() => parseRunCommand({ root: '1', interval: '5m' })).toThrow(
+      /--interval requires --parallel/,
+    )
   })
 
   it('refuses --interval without --watch', () => {
@@ -522,11 +528,14 @@ describe('parseRunCommand — --watch / --interval (US-522 AC14)', () => {
     ).toThrow(/--interval requires --watch/)
   })
 
-  it.each(['10', '5x', 'm', '-5m', '1.5m', '1d', ' ', '10 m'])('refuses malformed --interval %j', raw => {
-    expect(() => parseRunCommand({ root: '1', parallel: '1', watch: true, interval: raw })).toThrow(
-      /--interval must be <n>s, <n>m or <n>h/,
-    )
-  })
+  it.each(['10', '5x', 'm', '-5m', '1.5m', '1d', ' ', '10 m'])(
+    'refuses malformed --interval %j',
+    raw => {
+      expect(() =>
+        parseRunCommand({ root: '1', parallel: '1', watch: true, interval: raw }),
+      ).toThrow(/--interval must be <n>s, <n>m or <n>h/)
+    },
+  )
 
   it.each(['59s', '1s', '0m'])('refuses --interval %s below the 60s floor', raw => {
     expect(() => parseRunCommand({ root: '1', parallel: '1', watch: true, interval: raw })).toThrow(

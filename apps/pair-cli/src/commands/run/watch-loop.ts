@@ -93,7 +93,11 @@ function classify(
   const skipped: SkippedCard[] = []
   for (const card of candidates) {
     if (driven.has(card.id)) {
-      skipped.push({ id: card.id, reason: 'already driven this run', detail: 'already driven this run' })
+      skipped.push({
+        id: card.id,
+        reason: 'already driven this run',
+        detail: 'already driven this run',
+      })
     } else if (card.escalated === true) {
       skipped.push({ id: card.id, reason: 'escalated', detail: 'escalated' })
     } else {
@@ -110,70 +114,122 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+interface LoopState {
+  readonly driven: string[]
+  readonly drivenSet: Set<string>
+  anyFailed: boolean
+  iteration: number
+}
+
+function absorb(state: LoopState, outcomes: readonly CardOutcome[]): void {
+  for (const outcome of outcomes) {
+    if (!state.drivenSet.has(outcome.id)) {
+      state.drivenSet.add(outcome.id)
+      state.driven.push(outcome.id)
+    }
+    if (FAILED.has(outcome.outcome)) state.anyFailed = true
+  }
+}
+
+function stopReason(
+  config: WatchLoopConfig,
+  facts: { iteration: number; interrupted: boolean; satisfied: boolean; idle: boolean },
+): StopReason | undefined {
+  if (facts.interrupted) return 'interrupted'
+  if (facts.satisfied) return 'stop predicate satisfied'
+  if (facts.iteration >= config.cap) return 'iteration cap'
+  return facts.idle && !config.watch ? 'nothing workable' : undefined
+}
+
+/** `satisfied`, or a selection that cannot be trusted: a predicate without its snapshot is never "empty". */
+function predicateVerdict(
+  config: WatchLoopConfig,
+  selection: LoopSelection,
+): { satisfied: boolean } | { unusable: string } {
+  if (config.predicate === undefined) return { satisfied: false }
+  if (selection.snapshot === undefined) {
+    return { unusable: 'the selection carried no board snapshot for the Stop Predicate' }
+  }
+  return { satisfied: evaluateStopPredicate(config.predicate, selection.snapshot).satisfied }
+}
+
+type Step = { readonly done: LoopResult } | { readonly idle: boolean }
+
+/** One iteration: select, check the predicate, classify, run, decide. */
+async function iterate(
+  config: WatchLoopConfig,
+  deps: WatchLoopDeps,
+  state: LoopState,
+  finish: (reason: StopReason, extra?: Partial<LoopResult>) => LoopResult,
+): Promise<Step> {
+  let selection: LoopSelection
+  try {
+    selection = await deps.select()
+  } catch (error) {
+    return { done: finish('selection failed', { selectionError: errorText(error) }) }
+  }
+  // The predicate is checked at every iteration boundary, the first included.
+  const verdict = predicateVerdict(config, selection)
+  if ('unusable' in verdict) {
+    return { done: finish('selection failed', { selectionError: verdict.unusable }) }
+  }
+  const { workable, skipped } = classify(selection.candidates, state.drivenSet, deps.probeLock)
+  const outcomes =
+    verdict.satisfied || workable.length === 0 ? [] : (await deps.runBatch(workable)).outcomes
+  absorb(state, outcomes)
+
+  const record = {
+    iteration: state.iteration,
+    cap: config.cap,
+    selected: selection.candidates.length,
+    skipped,
+    outcomes,
+  }
+  const idle = outcomes.length === 0
+  const reason = stopReason(config, {
+    iteration: state.iteration,
+    interrupted: deps.isInterrupted() || outcomes.some(o => o.outcome === 'interrupted'),
+    satisfied: verdict.satisfied,
+    idle,
+  })
+  if (reason !== undefined) {
+    deps.onIteration({ ...record, next: { kind: 'stop', reason } })
+    return { done: finish(reason) }
+  }
+  // Work ran => the next iteration starts at once; idle (and --watch) => wait the interval.
+  deps.onIteration({
+    ...record,
+    next: idle ? { kind: 'waiting', ms: config.intervalMs } : { kind: 'continue' },
+  })
+  return { idle }
+}
+
 export async function runWatchLoop(
   config: WatchLoopConfig,
   deps: WatchLoopDeps,
 ): Promise<LoopResult> {
-  const driven: string[] = []
-  const drivenSet = new Set<string>()
-  let anyFailed = false
-  let iteration = 0
-
-  const result = (reason: StopReason, extra: Partial<LoopResult> = {}): LoopResult => ({
+  const state: LoopState = { driven: [], drivenSet: new Set(), anyFailed: false, iteration: 0 }
+  const finish = (reason: StopReason, extra: Partial<LoopResult> = {}): LoopResult => ({
     reason,
-    iterations: iteration,
-    exitCode: reason === 'interrupted' ? INTERRUPTED_EXIT : anyFailed || reason === 'selection failed' ? 1 : 0,
-    driven,
+    iterations: state.iteration,
+    exitCode:
+      reason === 'interrupted'
+        ? INTERRUPTED_EXIT
+        : state.anyFailed || reason === 'selection failed'
+          ? 1
+          : 0,
+    driven: state.driven,
     ...extra,
   })
 
   for (;;) {
     // No selection (and so no spawn) starts after a signal.
-    if (deps.isInterrupted()) return result('interrupted')
-    iteration++
-
-    let selection: LoopSelection
-    try {
-      selection = await deps.select()
-    } catch (error) {
-      return result('selection failed', { selectionError: errorText(error) })
+    if (deps.isInterrupted()) return finish('interrupted')
+    state.iteration++
+    const step = await iterate(config, deps, state, finish)
+    if ('done' in step) return step.done
+    if (step.idle && (await deps.wait(config.intervalMs)) === 'interrupted') {
+      return finish('interrupted')
     }
-
-    // The predicate is checked at every iteration boundary, the first included.
-    const stop = config.predicate && evaluateStopPredicate(config.predicate, selection.snapshot ?? [])
-    const { workable, skipped } = classify(selection.candidates, drivenSet, deps.probeLock)
-    const satisfied = stop?.satisfied === true
-    const outcomes = satisfied || workable.length === 0 ? [] : (await deps.runBatch(workable)).outcomes
-    for (const outcome of outcomes) {
-      if (!drivenSet.has(outcome.id)) {
-        drivenSet.add(outcome.id)
-        driven.push(outcome.id)
-      }
-      if (FAILED.has(outcome.outcome)) anyFailed = true
-    }
-
-    const record = { iteration, cap: config.cap, selected: selection.candidates.length, skipped, outcomes }
-    const interrupted = deps.isInterrupted() || outcomes.some(o => o.outcome === 'interrupted')
-    const idle = outcomes.length === 0
-    const reason: StopReason | undefined = interrupted
-      ? 'interrupted'
-      : satisfied
-        ? 'stop predicate satisfied'
-        : iteration >= config.cap
-          ? 'iteration cap'
-          : idle && !config.watch
-            ? 'nothing workable'
-            : undefined
-    if (reason !== undefined) {
-      deps.onIteration({ ...record, next: { kind: 'stop', reason } })
-      return result(reason)
-    }
-    // Work ran ⇒ the next iteration starts at once; idle (and --watch) ⇒ wait the interval.
-    if (!idle) {
-      deps.onIteration({ ...record, next: { kind: 'continue' } })
-      continue
-    }
-    deps.onIteration({ ...record, next: { kind: 'waiting', ms: config.intervalMs } })
-    if ((await deps.wait(config.intervalMs)) === 'interrupted') return result('interrupted')
   }
 }
