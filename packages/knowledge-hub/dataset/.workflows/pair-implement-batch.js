@@ -4,7 +4,7 @@ export const meta = {
   // collide with this one under an undefined winner. File name and registry name match.
   name: 'pair-implement-batch',
   description:
-    'Drive a mutex-safe batch of ready story cards, each to a review-approved PR through four judgment stages (preparation -> independent contract validation + seal -> implementation -> independent final verification), resuming a cycle from its first incomplete step. Batch = pair-workflow-cycle on N cards: same rules, same autonomy arguments (until / prepare / merge), a card merges ONLY when the merge gate allows it (default: never — it stops at PR-ready), an escalation parks that card as escalated and the rest continue. Harness with no Workflow tool: run /pair-workflow-cycle one card at a time with the same arguments.',
+    'Drive a mutex-safe batch of ready story cards, each to a review-approved PR through four judgment stages (preparation -> independent contract validation + seal -> implementation -> independent final verification), resuming a cycle from its first incomplete step. Batch = pair-workflow-cycle on N cards: same rules, same autonomy arguments (until / prepare / merge), a card merges ONLY when the merge gate allows it (gate default `always`: a review-approved card parks awaiting-human at PR-ready, nothing merges), an escalation parks that card as escalated and the rest continue. Harness with no Workflow tool: run /pair-workflow-cycle one card at a time with the same arguments.',
   // NOTE: `meta` must be a PURE LITERAL — the loader parses it statically and rejects any
   // expression node. A `+`-concatenated string is a BinaryExpression and makes the whole
   // workflow UNLOADABLE: it silently disappears from the registry and only `scriptPath`
@@ -2187,7 +2187,7 @@ const note = !STORIES.length
   ? 'Empty batch — nothing was requested, nothing was run.'
   : !advanced.length
     ? `NOTHING COMPLETED: 0/${STORIES.length} cards advanced — ${shortfall}. No PR is ready to merge and nothing was escalated. Committed work in the per-story worktrees and the handoffs under .pair/working/runs/ are intact — re-run with the same runId to resume from the first incomplete step.`
-    : `${advanced.length}/${STORIES.length} cards advanced (${tally(advanced)})${shortfall ? `; ${shortfall}` : ''}. Each row names where its card stands: ready-for-merge (PR-ready, nothing merged), merged, awaiting-human (merge gate parks it), escalated (a gate condition fired — a human decides), target-ready, or escalate (the review). Merging happens only when the merge gate allows it (default: never) — merge the rest by hand, then re-run with the next mutex-safe batch.`
+    : `${advanced.length}/${STORIES.length} cards advanced (${tally(advanced)})${shortfall ? `; ${shortfall}` : ''}. Each row names where its card stands: ready-for-merge (PR-ready, nothing merged), merged, awaiting-human (merge gate parks it), escalated (a gate condition fired — a human decides), target-ready, or escalate (the review). Merging happens only when the merge gate allows it (default always: parks awaiting-human, nothing merges) — merge the rest by hand, then re-run with the next mutex-safe batch.`
 return {
   workflowVersion: WORKFLOW_VERSION,
   contracts: [{ name: CONTRACT.spec.name, status: CONTRACT.status }],
