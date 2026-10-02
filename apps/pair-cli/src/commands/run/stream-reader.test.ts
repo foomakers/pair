@@ -293,6 +293,39 @@ describe('round-trip: what the driver renders is what the driver can read back',
   })
 })
 
+/**
+ * The skill (pair-loop.js `renderContinueToken`) single-quotes EVERY value, an embedded quote as
+ * `'\\''`. Reproduced verbatim here: the workflow file is a sandboxed script, not importable.
+ */
+const shellQuote = (v: string) => `'${v.replace(/'/g, `'\\''`)}'`
+const skillToken = (parts: { predicate: string; filter?: string }) =>
+  `pair-loop${parts.filter ? ` --filter ${shellQuote(parts.filter)}` : ''} --predicate ${shellQuote(parts.predicate)} --iteration 3`
+
+async function readToken(token: string) {
+  const stream = (async function* () {
+    yield `${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: `LOOP RUN: done\n\nCONTINUE-TOKEN: ${token}` }] } })}\n`
+    yield `${JSON.stringify({ type: 'result', subtype: 'success' })}\n`
+  })()
+  return readIterationOutcome(toLines(stream), ENGINES.claude)
+}
+
+describe('readIterationOutcome — single-quoted continue-token (skill form)', () => {
+  it.each([
+    ['angle brackets in a single-quoted predicate', { predicate: 'tag:a<b> ⇒ Done' }],
+    [
+      'tricky filter plus angle predicate',
+      { filter: `it's $HOME \`x\` "q"; a b`, predicate: 'tag:a<b> ⇒ Done' },
+    ],
+  ])('accepts %s', async (_c, parts) => {
+    const token = skillToken(parts)
+    expect((await readToken(token)).continueToken).toBe(token)
+  })
+
+  it('still refuses an unquoted placeholder', async () => {
+    expect((await readToken('pair-loop --root <card> --iteration 2')).continueToken).toBeUndefined()
+  })
+})
+
 describe('readIterationOutcome — onEvent (US-491)', () => {
   it('hands every decoded event to the observer, terminal event included, skipping malformed lines', async () => {
     const content = readFileSync(join(__dirname, '__fixtures__', 'claude-success.jsonl'), 'utf-8')
