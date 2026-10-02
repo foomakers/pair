@@ -92,8 +92,7 @@ export const runCommandMetadata = {
     },
     {
       flags: '--no-watch',
-      description:
-        'US-522: explicitly no watch loop (the default; refused together with --watch)',
+      description: 'US-522: explicitly no watch loop (the default; refused together with --watch)',
     },
     {
       flags: '--interval <n>s|m|h',

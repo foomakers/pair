@@ -142,13 +142,15 @@ async function start(options: Options): Promise<Run> {
         return { exitCode: options.exits?.[c.id] ?? 0, signal: null }
       },
       appendAudit: (_path: string, line: string) => void audit.push(line),
-      ...(options.realWait !== true && { wait: (ms: number) => {
-        waits.push(ms)
-        options.onWait?.()
-        return options.blockWait
-          ? new Promise<WaitOutcome>(r => (pendingWait = r))
-          : Promise.resolve<WaitOutcome>('elapsed')
-      } }),
+      ...(options.realWait !== true && {
+        wait: (ms: number) => {
+          waits.push(ms)
+          options.onWait?.()
+          return options.blockWait
+            ? new Promise<WaitOutcome>(r => (pendingWait = r))
+            : Promise.resolve<WaitOutcome>('elapsed')
+        },
+      }),
     },
   )
   return {

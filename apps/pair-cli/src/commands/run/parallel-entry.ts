@@ -466,6 +466,17 @@ function failLoop(
   throw error
 }
 
+/** A signal owns the ending (`onInterrupt` writes the one `loop-end`, with the signal's own exit code). */
+function finishLoop(
+  result: Awaited<ReturnType<typeof runWatchLoop>>,
+  end: (fields: ReturnType<typeof loopEndFields>) => void,
+): number {
+  if (isInterrupted()) return result.exitCode
+  console.log(describeLoopEnd(result))
+  end(loopEndFields(result.reason, result.iterations, result.exitCode, result.selectionError))
+  return result.exitCode
+}
+
 /**
  * The fan-out as a loop: ONE `whileInterruptible` owns the whole run, so a signal anywhere (a batch or
  * the idle wait) writes the batch line (if one is running), releases the locks, writes `loop-end` and
@@ -516,10 +527,6 @@ async function runLoop(fan: FanOut, values: LoopValues): Promise<number> {
     const result = await runWatchLoop(loopConfig, wired).catch((error: unknown) =>
       failLoop(error, started, end),
     )
-    // A signal owns the ending: `onInterrupt` writes the one `loop-end` with the signal's own exit code.
-    if (isInterrupted()) return result.exitCode
-    console.log(describeLoopEnd(result))
-    end(loopEndFields(result.reason, result.iterations, result.exitCode, result.selectionError))
-    return result.exitCode
+    return finishLoop(result, end)
   })
 }
