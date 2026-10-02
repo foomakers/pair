@@ -1475,13 +1475,18 @@ test('US-219 AC6: maxParallelism caps in-flight cards; absent is unbounded; 0/ne
 })
 test('US-219 AC6: under a cap, results keep INPUT order and a dead card is reported in `died`, not silently missing', async () => {
   const order = []
+  // Ordering is made by a GATE, never by timer length (a 15ms-vs-1ms race flipped under a loaded CI machine): card 300
+  // implements only once another card has, so its result must still sit FIRST in `batch` (input order) while finishing last.
+  let release
+  const gate = new Promise(r => (release = r))
   const dispatch = async (prompt, opts) => {
     if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
     if (opts.phase === 'Implement') {
       const id = (prompt.match(/#(\d{3})/) ?? [])[1]
-      await new Promise(r => setTimeout(r, id === '300' ? 15 : 1))
+      if (id === '300') await gate
       if (id === '301') throw new Error('agent died')
       order.push(id)
+      if (id !== '300') release()
     }
     if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
     return {}
