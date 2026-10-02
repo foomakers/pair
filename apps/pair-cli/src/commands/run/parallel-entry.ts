@@ -4,7 +4,12 @@ import { describeMergePosture } from './automation-policy'
 import { acquireCardLock } from './card-lock'
 import { resolveEngineFor } from './cycle-entry'
 import { appendAuditLine } from './dispatch-audit'
-import { isInterrupted, whileInterruptible, type InterruptSignal } from './interrupt'
+import {
+  isInterrupted,
+  signalExitCode,
+  whileInterruptible,
+  type InterruptSignal,
+} from './interrupt'
 import { probeCardLock, probeResourceLocks } from './lock-probe'
 import {
   describeLoopEnd,
@@ -431,6 +436,34 @@ function loopDeps(
   }
 }
 
+/** The loop's single `loop-end`: the first call writes, later calls are no-ops. */
+function onceWriter(
+  audit: (fields: ReturnType<typeof loopEndFields>) => void,
+): (fields: ReturnType<typeof loopEndFields>) => void {
+  let ended = false
+  return fields => {
+    if (!ended) audit(fields)
+    ended = true
+  }
+}
+
+function parsePredicate(text: string | undefined): ReturnType<typeof parseStopCondition> | undefined {
+  return text === undefined ? undefined : parseStopCondition(text)
+}
+
+/** A throw inside an iteration still frames the trail: loop-end exit 1, then the error propagates (AC11). */
+function failLoop(
+  error: unknown,
+  started: number,
+  end: (fields: ReturnType<typeof loopEndFields>) => void,
+): never {
+  if (!isInterrupted()) {
+    const detail = error instanceof Error ? error.message : String(error)
+    end(loopEndFields('selection failed', started, 1, detail))
+  }
+  throw error
+}
+
 /**
  * The fan-out as a loop: ONE `whileInterruptible` owns the whole run, so a signal anywhere (a batch or
  * the idle wait) writes the batch line (if one is running), releases the locks, writes `loop-end` and
@@ -440,24 +473,24 @@ async function runLoop(fan: FanOut, values: LoopValues): Promise<number> {
   const { input, deps, selection } = fan
   const { config, context } = input
   const audit = auditWriter(input, deps)
-  const predicate =
-    context.policy.stopPredicate === undefined
-      ? undefined
-      : parseStopCondition(context.policy.stopPredicate)
+  const predicate = parsePredicate(context.policy.stopPredicate)
 
   let started = 0
-  let ended = false
   let currentBatch: ((signal: string) => void) | undefined
-  const end = (fields: ReturnType<typeof loopEndFields>): void => {
-    if (!ended) audit(fields)
-    ended = true
-  }
+  const end = onceWriter(audit)
 
   audit(loopStartFields(values, selection, config.parallel!, context.policy.maxParallelism))
 
   const onInterrupt = (signal: InterruptSignal): void => {
     currentBatch?.(signal)
-    end(loopEndFields('interrupted', started, 0, `the driver received ${signal}`))
+    end(
+      loopEndFields(
+        'interrupted',
+        started,
+        signalExitCode(signal),
+        `the driver received ${signal}`,
+      ),
+    )
     console.log(`  Loop interrupted by ${signal} at iteration ${started}.`)
   }
   const wired = loopDeps(
@@ -478,7 +511,9 @@ async function runLoop(fan: FanOut, values: LoopValues): Promise<number> {
       cap: values.cap.value,
       predicate,
     }
-    const result = await runWatchLoop(loopConfig, wired)
+    const result = await runWatchLoop(loopConfig, wired).catch((error: unknown) =>
+      failLoop(error, started, end),
+    )
     console.log(describeLoopEnd(result))
     end(loopEndFields(result.reason, result.iterations, result.exitCode, result.selectionError))
     return result.exitCode
