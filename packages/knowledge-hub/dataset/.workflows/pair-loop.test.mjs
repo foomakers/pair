@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 // Dry-run harness for pair-loop.js (#250 T12, review round 1 fixes): executes
 // the workflow source with stubbed `agent`/`parallel`/`workflow`/`phase`/`log`
 // (the sandbox primitives) and asserts: predicate grammar (accept/reject,
@@ -393,7 +394,7 @@ test('resolveCards: duplicate id de-duplicated, unresolvable branch/title exclud
 test('renderContinueToken: re-invocation line carries scope, predicate, iteration', () => {
   const { renderContinueToken } = getHelpers()
   const token = renderContinueToken({ root: '212', predicateText: 'root ⇒ Done', iteration: 2 })
-  assert.match(token, /--root 212/)
+  assert.match(token, /--root '212'/)
   assert.match(token, /--iteration 3/)
 })
 
@@ -403,15 +404,23 @@ test('renderContinueToken: the full effective argument set round-trips, quote-fr
     root: '212', predicateText: 'x', iteration: 0,
     filter: 'risk:green', assignee: ['a', 'b'], status: 'Ready', until: 'ready', prepare: 'never', merge: 'always',
   })
-  for (const part of ['--filter risk:green', '--assignee a,b', '--status Ready', '--until ready', '--prepare never', '--merge always', '--iteration 1'])
+  for (const part of ["--filter 'risk:green'", "--assignee 'a,b'", "--status 'Ready'", "--until 'ready'", "--prepare 'never'", "--merge 'always'", '--iteration 1'])
     assert.ok(token.includes(part), `${part} in ${token}`)
   assert.equal(renderContinueToken({ iteration: 0 }), 'pair-loop --iteration 1')
+})
+
+test('renderContinueToken: shell-safe — values with spaces/;/quotes survive a real shell word-split (d1-1)', () => {
+  const { renderContinueToken } = getHelpers()
+  const vals = { prepare: 'when; has: risk:red', merge: 'never; lacks: needs-human', assignee: 'a b', predicateText: `it's $HOME \`x\` "q"` }
+  const token = renderContinueToken({ root: '212', iteration: 0, ...vals })
+  const out = execFileSync('sh', ['-c', `printf '%s\\n' ${token}`], { encoding: 'utf8' }).split('\n').slice(0, -1)
+  assert.deepEqual(out, ['pair-loop', '--root', '212', '--assignee', 'a b', '--prepare', 'when; has: risk:red', '--merge', 'never; lacks: needs-human', '--predicate', vals.predicateText, '--iteration', '1'])
 })
 
 test('continue-token: --merge always (stricter-than-adoption argument) is handed to the resolve call on resume', async () => {
   // resume = the same args the token renders, so the resolve dispatch must see merge: always
   const { renderContinueToken } = getHelpers()
-  assert.match(renderContinueToken({ iteration: 3, merge: 'always' }), /--merge always --iteration 4$/)
+  assert.match(renderContinueToken({ iteration: 3, merge: 'always' }), /--merge 'always' --iteration 4$/)
 })
 
 test('loop: assignee/status arrays render identically in the Select prompt and the resolve call', async () => {
