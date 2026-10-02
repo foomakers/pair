@@ -312,8 +312,8 @@ done.
 - **An untagged card is treated as the highest risk tier.** The loop no longer filters by tier
   itself (the selection filter does), so an untagged card can be selected, but it is handed over as
   `risk:red` and never auto-advanced.
-- **The filter is an any-of list of labels, each matched exactly.** `filter: risk:green, risk:yellow`
-  selects a card carrying either label, but there is no boolean grammar — no AND, no "not red". If you
+- **The filter is an any-of list of labels, each matched exactly.** A card
+  carrying any one of the listed labels is selected, but there is no boolean grammar — no AND, no "not red". If you
   want a different set of cards automated, name the labels explicitly or add a classification tag.
 - **This is not a security boundary on its own.** The engine you point at a live repository can push
   and (if you enabled it) merge. Everything in [Step 4](#step-4-turn-it-into-a-daemon)'s warning about
