@@ -29,6 +29,8 @@ export interface RootCandidate {
   readonly labels?: readonly string[]
   readonly mutexResources: readonly string[]
   readonly prerequisites: readonly RootPrerequisite[]
+  /** US-522: set by the watch loop's selection (required there); absent on the single-batch path. */
+  readonly escalated?: boolean
 }
 
 export interface AuditEntry {

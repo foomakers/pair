@@ -5,6 +5,8 @@ import {
   buildSelectionPrompt,
   candidatesInEvent,
   parseCandidates,
+  parseSelection,
+  selectRootAnswer,
   selectRootCandidates,
 } from './root-select'
 import type { SpawnIterationInput } from './spawn'
@@ -152,5 +154,119 @@ describe('selectRootCandidates — one engine process, its marker read back', ()
       return { outcome: 'success' as const, detail: 'ok' }
     })
     await expect(selectRootCandidates({ ...input, runIteration })).resolves.toEqual([])
+  })
+})
+
+describe('US-522 — selection params, escalated and the predicate snapshot', () => {
+  it('AC2/AC3: root is optional; filter, assignee and status are forwarded verbatim', () => {
+    const prompt = buildSelectionPrompt(ENGINES.claude, {
+      eligibility: 'PIPPO,risk:green',
+      assignee: '@me',
+      status: 'Draft,Ready',
+    })
+    expect(
+      prompt.startsWith('/pair-next --filter PIPPO,risk:green --assignee @me --status Draft,Ready'),
+    ).toBe(true)
+    expect(prompt.split('\n')[0]).not.toContain('--root')
+  })
+
+  it('without the loop contract the request and the tolerant parse are unchanged', () => {
+    const prompt = buildSelectionPrompt(ENGINES.claude, { root: '66' })
+    expect(prompt).not.toContain('escalated')
+    expect(prompt).not.toContain('snapshot')
+    expect(parseCandidates(JSON.stringify({ candidates: [candidate] }))[0]).not.toHaveProperty(
+      'escalated',
+    )
+  })
+
+  it('AC4: the loop request demands a boolean escalated per candidate', () => {
+    const prompt = buildSelectionPrompt(ENGINES.claude, { root: '66', loop: {} })
+    expect(prompt).toContain('"escalated"')
+    expect(prompt).not.toContain('"snapshot"')
+  })
+
+  it('AC8: with a predicate selector the same request asks for the board snapshot (selector as data)', () => {
+    const prompt = buildSelectionPrompt(ENGINES.claude, {
+      root: '66',
+      loop: { predicateSelector: 'tag:risk:red' },
+    })
+    expect(prompt).toContain('"snapshot"')
+    expect(prompt).toContain('"tag:risk:red"')
+  })
+
+  it('the snapshot request names the scope: the root id, or the filter when there is no root', () => {
+    const loop = { predicateSelector: 'root' }
+    const withRoot = buildSelectionPrompt(ENGINES.claude, { root: '66', loop })
+    expect(withRoot).toMatch(/root "66"/)
+    const filterOnly = buildSelectionPrompt(ENGINES.claude, { eligibility: 'ready', loop })
+    expect(filterOnly).toMatch(/scope.*filter "ready"/)
+    expect(filterOnly).not.toMatch(/root "/)
+  })
+
+  it('an unusable selection does not claim --root (the scope may be filter-only)', () => {
+    expect(() => parseSelection('nope')).toThrow(/pair-next selection for --parallel is unusable/)
+  })
+
+  it.each([undefined, 'yes', 1, null])(
+    'AC4: loop mode refuses escalated=%j (never assumes false)',
+    escalated => {
+      const json = JSON.stringify({ candidates: [{ ...candidate, escalated }] })
+      expect(() => parseSelection(json, { loop: true })).toThrow(/`escalated` must be a boolean/)
+    },
+  )
+
+  it('AC4: loop mode carries escalated through', () => {
+    const json = JSON.stringify({ candidates: [{ ...candidate, escalated: true }] })
+    expect(parseSelection(json, { loop: true }).candidates[0]!.escalated).toBe(true)
+  })
+
+  it('validates the snapshot: required when asked for, every field typed and safe', () => {
+    const ok = { candidates: [], snapshot: [{ id: '1', tags: ['risk:red'], macrostate: 'Done' }] }
+    expect(parseSelection(JSON.stringify(ok), { snapshot: true }).snapshot).toEqual(ok.snapshot)
+    expect(
+      parseSelection(JSON.stringify({ candidates: [], snapshot: [] }), { snapshot: true }).snapshot,
+    ).toEqual([])
+    for (const bad of [
+      { candidates: [] },
+      { candidates: [], snapshot: 'x' },
+      { candidates: [], snapshot: [{ id: '1', tags: 'risk:red', macrostate: 'Done' }] },
+      { candidates: [], snapshot: [{ id: '1', tags: [], macrostate: 3 }] },
+      { candidates: [], snapshot: [{ id: '../1', tags: [], macrostate: 'Done' }] },
+      { candidates: [], snapshot: [{ id: '1', tags: ['a`b'], macrostate: 'Done' }] },
+    ]) {
+      expect(() => parseSelection(JSON.stringify(bad), { snapshot: true })).toThrow(/selection/)
+    }
+  })
+
+  it('selectRootAnswer: one process, candidates + snapshot in loop mode; a missing escalated fails closed', async () => {
+    const base = {
+      engine: ENGINES.claude,
+      cwd: '/p',
+      autonomyArgs: [],
+      timeoutSeconds: 5,
+      root: '66',
+    }
+    const answer = (payload: unknown) =>
+      vi.fn(async (spawn: SpawnIterationInput) => {
+        spawn.onEvent?.({ type: 'assistant', text: marker(payload) })
+        return { outcome: 'success' as const, detail: 'ok' }
+      })
+    const good = answer({
+      candidates: [{ ...candidate, escalated: false }],
+      snapshot: [{ id: '1', tags: [], macrostate: 'Done' }],
+    })
+    const loop = { predicateSelector: 'tag:x' }
+    const result = await selectRootAnswer({ ...base, loop, runIteration: good })
+    expect(good).toHaveBeenCalledTimes(1)
+    expect(result.candidates[0]!.escalated).toBe(false)
+    expect(result.snapshot).toHaveLength(1)
+
+    await expect(
+      selectRootAnswer({
+        ...base,
+        loop,
+        runIteration: answer({ candidates: [candidate], snapshot: [] }),
+      }),
+    ).rejects.toThrow(/escalated/)
   })
 })

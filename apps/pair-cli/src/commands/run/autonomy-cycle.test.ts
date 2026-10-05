@@ -85,11 +85,13 @@ describe('parser: autonomy arguments', () => {
     })
   })
 
-  it('P6: --assignee/--status do not combine with --parallel', () => {
-    expect(() => parseRunCommand({ root: '1', parallel: '2', assignee: '@me' })).toThrow(
-      /--assignee/,
+  it('P6 (US-522 lifts it): --assignee/--status are the fan-out selection params and combine with --parallel', () => {
+    expect(parseRunCommand({ root: '1', parallel: '2', assignee: '@me' }).scope.assignee).toBe(
+      '@me',
     )
-    expect(() => parseRunCommand({ root: '1', parallel: '2', status: 'Ready' })).toThrow(/--status/)
+    expect(parseRunCommand({ root: '1', parallel: '2', status: 'Ready' }).scope.status).toBe(
+      'Ready',
+    )
   })
 })
 

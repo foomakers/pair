@@ -76,3 +76,29 @@ describe('r0-6: the KB automation slice describes the readiness fallback', () =>
     })
   }
 })
+
+/**
+ * US-522 r1 (finding r0-1, AC14) — once `--watch --no-watch` is refused, no operator-facing text may
+ * still promise that "the last one wins": not `--help` (metadata), not the CLI reference row, not the
+ * decision log entry that recorded the conflict as unrefusable.
+ */
+describe('US-522 r0-1: no text claims the last of --watch / --no-watch wins', () => {
+  const ADL = '.pair/adoption/decision-log/2026-10-02-fan-out-becomes-re-selecting-watch-loop.md'
+
+  it('R01-D1: --help for --no-watch does not say the last one wins', () => {
+    const noWatch = runCommandMetadata.options.find(o => o.flags === '--no-watch')!
+    expect(noWatch.description).not.toMatch(/last (one )?wins/i)
+  })
+
+  it('R01-D2: the CLI reference --no-watch row does not say the last one wins', () => {
+    const row = runSection()
+      .split('\n')
+      .find(line => line.startsWith('| `--no-watch`'))!
+    expect(row).toBeDefined()
+    expect(row).not.toMatch(/wins/i)
+  })
+
+  it('R01-D3: the decision log no longer records the conflict as unrefusable from argv', () => {
+    expect(read(ADL)).not.toMatch(/cannot be refused from argv|last wins/i)
+  })
+})

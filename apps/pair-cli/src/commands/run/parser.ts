@@ -101,7 +101,21 @@ export interface RunCommandConfig {
    * borrowed dependency + mutex analysis plans, and up to N `run --card` processes run at once.
    */
   parallel?: number
+  /** US-522: `--watch` (true) / `--no-watch` (false) — present only when passed; needs `--parallel`. */
+  watch?: boolean
+  /** US-522: `--interval <n>s|m|h` — the idle wait under `--watch`; present only when passed. */
+  interval?: RunInterval
 }
+
+/** US-522: a parsed `--interval`: the operator's own text (printed) and its length in seconds. */
+export interface RunInterval {
+  readonly text: string
+  readonly seconds: number
+}
+
+/** US-522: the `--watch` idle poll default and its floor — every poll spawns an engine process. */
+export const DEFAULT_WATCH_INTERVAL: RunInterval = { text: '10m', seconds: 600 }
+export const MIN_WATCH_INTERVAL_SECONDS = 60
 
 interface ParseRunOptions {
   engine?: string
@@ -129,8 +143,12 @@ interface ParseRunOptions {
   runId?: string
   /** US-487: `--rounds` — meaningful only with `--card`. */
   rounds?: string
-  /** US-491: `--parallel N` — meaningful only with `--root`. */
+  /** US-491: `--parallel N` — the fan-out; with `--root` and/or `--filter` (US-522). */
   parallel?: string | number
+  /** US-522: `--watch` (true) / `--no-watch` (false) — both together are refused at argv (cli.ts). */
+  watch?: boolean
+  /** US-522: `--interval <n>s|m|h`. */
+  interval?: string
   /** US-488: `--profile <name>` — the workflow profile (per-stage engine/model/effort/context); needs `--card`. */
   profile?: string
   /** US-488: `--workflow-config <path>` — an external profile file, wins over every other source; needs `--card`. */
@@ -356,21 +374,58 @@ function validateTags(tags: string[], rawTrimmed: string): void {
 
 /**
  * `--parallel` flags that would give the fan-out a second answer to a question it already has:
- * `--card` names ONE card (the batch is `pair-next --root`'s), `--skill`/`--prompt` name what runs
- * (each card runs its own `run --card`), `--filter` would narrow a selection this mode borrows
- * verbatim (AC7), `--max-iterations` bounds a loop this mode does not run.
+ * `--card` names ONE card (the batch is `pair-next`'s), `--skill`/`--prompt` name what runs (each
+ * card runs its own `run --card`). `--filter` / `--assignee` / `--status` are the selection's own
+ * parameters and `--max-iterations` its loop cap (US-522): all four are accepted.
  */
 const FLAGS_CONFLICTING_WITH_PARALLEL = [
   ['card', '--card'],
   ['skill', '--skill'],
   ['prompt', '--prompt'],
-  ['filter', '--filter'],
-  ['assignee', '--assignee'],
-  ['status', '--status'],
-  ['maxIterations', '--max-iterations'],
 ] as const
 
-/** US-491 T-3: `--parallel N` — a positive integer, with `--root` and nothing that competes with it. */
+const INTERVAL_PATTERN = /^(\d+)([smh])$/
+const UNIT_SECONDS = { s: 1, m: 60, h: 3600 } as const
+
+/** US-522 AC14: `<n>s|m|h`, at least 60s — refused otherwise, naming the received text. */
+export function parseInterval(raw: string): RunInterval {
+  const text = raw.trim()
+  const match = INTERVAL_PATTERN.exec(text)
+  if (match === null) {
+    throw new Error(`--interval must be <n>s, <n>m or <n>h, e.g. 10m (received: ${raw})`)
+  }
+  const seconds = Number(match[1]) * UNIT_SECONDS[match[2] as 's' | 'm' | 'h']
+  if (seconds < MIN_WATCH_INTERVAL_SECONDS) {
+    throw new Error(
+      `--interval must be at least ${MIN_WATCH_INTERVAL_SECONDS}s: every idle poll spawns an engine process (received: ${raw})`,
+    )
+  }
+  return { text, seconds }
+}
+
+/** US-522 AC14: the watch flags — every refusal at parse time, before anything spawns. */
+function resolveWatch(options: ParseRunOptions): { watch?: boolean; interval?: RunInterval } {
+  const { watch, interval } = options
+  if (watch === undefined && interval === undefined) return {}
+  if (options.parallel === undefined) {
+    const flag = watch === true ? '--watch' : watch === false ? '--no-watch' : '--interval'
+    throw new Error(
+      `${flag} requires --parallel <n>: the loop is the fan-out's (use --parallel 1 for a sequential always-on agent)`,
+    )
+  }
+  if (interval !== undefined && watch !== true) {
+    throw new Error('--interval requires --watch: it is the wait between idle polls')
+  }
+  return {
+    ...(watch !== undefined && { watch }),
+    ...(interval !== undefined && { interval: parseInterval(interval) }),
+  }
+}
+
+/**
+ * US-491 T-3 / US-522: `--parallel N` — a positive integer, with nothing that competes with it. That a
+ * scope exists (`--root`, `--filter` or the policy's) is checked at RESOLVE time, where the policy is read.
+ */
 function resolveParallel(options: ParseRunOptions): { parallel?: number } {
   if (options.parallel === undefined) return {}
   const parallel = parsePositiveInteger('--parallel', options.parallel)
@@ -380,12 +435,9 @@ function resolveParallel(options: ParseRunOptions): { parallel?: number } {
   if (conflicting.length > 0) {
     throw new Error(
       `--parallel cannot be combined with ${conflicting.join(' or ')}: the fan-out runs every card ` +
-        '`pair-next --root` selects as its own `pair-cli run --card` process, planned by the ' +
-        'borrowed dependency + mutex analysis — there is no second skill, scope or cap to take',
+        '`pair-next` selects as its own `pair-cli run --card` process, planned by the ' +
+        'borrowed dependency + mutex analysis — there is no second skill or card to take',
     )
-  }
-  if (options.root === undefined) {
-    throw new Error('--parallel requires --root: the root is the scope pair-next selects from')
   }
   return { parallel }
 }
@@ -460,6 +512,7 @@ export function parseRunCommand(options: ParseRunOptions, args: string[] = []): 
   const engine = resolveEngineFlag(options.engine)
   const cwd = optionalText(options.cwd, '--cwd')
   const parallel = resolveParallel(options)
+  const watch = resolveWatch(options)
   const dispatch = resolveDispatch(options)
   const profileSelection = resolveProfileSelection(options)
   const autonomy = resolveAutonomyArguments(options)
@@ -485,5 +538,6 @@ export function parseRunCommand(options: ParseRunOptions, args: string[] = []): 
         : parsePositiveInteger('--iteration-timeout', options.iterationTimeout),
     dryRun: options.dryRun === true,
     ...parallel,
+    ...watch,
   }
 }

@@ -13,6 +13,7 @@ export const runCommandMetadata = {
     'pair-cli run --card 487 --pr 42                        # enters the cycle at {verify, first, r0} — never prepare',
     'pair-cli run --card 487 --rounds 1                     # bounds remediation to one round, never widened',
     'pair-cli run --root 66 --parallel 3 --autonomous       # fan-out: up to 3 `run --card` processes at once',
+    'pair-cli run --filter PIPPO --assignee @me --parallel 2 --watch --interval 10m   # portable loop: re-selects each iteration',
     "pair-cli run --card 521 --until merged --merge 'when; has: cost:red'   # merge unless escalated; prints every effective value and its source",
     'pair-cli run --skill pair-next --filter risk:green,risk:yellow --assignee @me --status Draft,Ready --max-iterations 1',
   ],
@@ -82,12 +83,27 @@ export const runCommandMetadata = {
     {
       flags: '--parallel <n>',
       description:
-        "US-491: fan-out over --root — pair-next selects, pair-loop's dependency + mutex analysis plans, and up to min(dependency-allowed, ## Max Parallelism, n) `pair-cli run --card` processes run at once (requires --root; not with --card/--skill/--prompt/--filter/--max-iterations)",
+        "US-491: fan-out — pair-next selects (--root and/or --filter, --assignee, --status), pair-loop's dependency + mutex analysis plans, and up to min(dependency-allowed, ## Max Parallelism, n) `pair-cli run --card` processes run at once; one iteration, or a re-selecting loop with --watch / --max-iterations (US-522). Needs --root or --filter (or the policy's); not with --card/--skill/--prompt",
+    },
+    {
+      flags: '--watch',
+      description:
+        'US-522: with --parallel, loop: each iteration re-selects (skipping escalated, locked and already-driven cards), and an idle one waits --interval and re-selects. Stops at the Stop Predicate, the iteration cap (idle polls count) or Ctrl-C. Needs --parallel (--parallel 1 for sequential)',
+    },
+    {
+      flags: '--no-watch',
+      description: 'US-522: explicitly no watch loop (the default; refused together with --watch)',
+    },
+    {
+      flags: '--interval <n>s|m|h',
+      description:
+        'US-522: the idle wait under --watch (default 10m, at least 60s); requires --watch',
     },
     { flags: '--cwd <dir>', description: 'Working directory every iteration runs in' },
     {
       flags: '--max-iterations <n>',
-      description: 'Hard cap on iterations (narrows the policy cap, never widens it)',
+      description:
+        'Hard cap on iterations (narrows the policy cap, never widens it); with --parallel it enables the re-selecting loop, idle polls included',
     },
     {
       flags: '--autonomous',
@@ -134,6 +150,7 @@ export const runCommandMetadata = {
     'Under --autonomous, `## Eligibility` bounds the fallback too (--approve-ineligible overrides one run); --pr enters the cycle at review',
     'Every route that spawns on a card takes an exclusive per-card lock: a trigger burst never starts a second run on the same card',
     '--root --parallel prints the plan (run / excluded and why / effective limit and what bound it) before any process starts; one card failing never aborts the others, and one batch summary line is appended to the audit file',
+    '--parallel --watch prints each effective loop value with its source, then ONE line per iteration, and appends event=loop-start / iteration / loop-end lines to the audit file; escalated and locked cards are skipped, a card driven once is never re-driven in the same run; a failed selection stops the loop (exit 1), never retried',
     'engine.bin / engine.model in pair.config.json: per-machine executable path and run-wide model, keyed by engine id',
   ],
 } as const

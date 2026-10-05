@@ -440,8 +440,12 @@ describe('parseRunCommand — --root --parallel N (US-491 T-3)', () => {
     )
   })
 
-  it('refuses --parallel without --root: the root is the scope pair-next selects from', () => {
-    expect(() => parseRunCommand({ parallel: '2' })).toThrow(/--parallel requires --root/)
+  it('US-522: --parallel without --root parses: the scope (root or filter) is checked at resolve time', () => {
+    expect(parseRunCommand({ parallel: '2', filter: 'PIPPO' })).toMatchObject({
+      parallel: 2,
+      scope: { filter: 'PIPPO' },
+    })
+    expect(parseRunCommand({ parallel: '2' }).parallel).toBe(2)
   })
 
   it('refuses --parallel with --card: a dispatched card is one card, not a batch', () => {
@@ -455,9 +459,87 @@ describe('parseRunCommand — --root --parallel N (US-491 T-3)', () => {
         parallel: '2',
         skill: 'pair-next',
         prompt: 'x',
+      }),
+    ).toThrow(/--skill or --prompt/)
+  })
+
+  it('US-522 AC2/AC9: --filter, --assignee, --status and --max-iterations ride along with --parallel', () => {
+    expect(
+      parseRunCommand({
+        parallel: '2',
         filter: 'risk:green',
+        assignee: '@me',
+        status: 'Ready',
         maxIterations: '3',
       }),
-    ).toThrow(/--skill or --prompt or --filter or --max-iterations/)
+    ).toMatchObject({
+      parallel: 2,
+      maxIterations: 3,
+      scope: { filter: 'risk:green', assignee: '@me', status: 'Ready' },
+    })
+  })
+})
+
+describe('parseRunCommand — --watch / --interval (US-522 AC14)', () => {
+  it('carries --watch and --interval as seconds, keeping the operator text', () => {
+    const config = parseRunCommand({ parallel: '1', filter: 'x', watch: true, interval: '90s' })
+    expect(config.watch).toBe(true)
+    expect(config.interval).toEqual({ text: '90s', seconds: 90 })
+  })
+
+  it.each([
+    ['1m', 60],
+    ['10m', 600],
+    ['2h', 7200],
+  ])('accepts --interval %s', (text, seconds) => {
+    expect(parseRunCommand({ parallel: '1', watch: true, interval: text }).interval?.seconds).toBe(
+      seconds,
+    )
+  })
+
+  it('--no-watch is carried as watch=false', () => {
+    expect(parseRunCommand({ parallel: '1', watch: false }).watch).toBe(false)
+  })
+
+  it('leaves watch and interval absent without the flags', () => {
+    const config = parseRunCommand({ root: '1', parallel: '2' })
+    expect(config).not.toHaveProperty('watch')
+    expect(config).not.toHaveProperty('interval')
+  })
+
+  it('refuses --watch without --parallel, suggesting --parallel 1', () => {
+    expect(() => parseRunCommand({ root: '1', watch: true })).toThrow(
+      /--watch requires --parallel.*--parallel 1/,
+    )
+    expect(() => parseRunCommand({ root: '1', watch: false })).toThrow(
+      /--no-watch requires --parallel/,
+    )
+    expect(() => parseRunCommand({ root: '1', interval: '5m' })).toThrow(
+      /--interval requires --parallel/,
+    )
+  })
+
+  it('refuses --interval without --watch', () => {
+    expect(() => parseRunCommand({ root: '1', parallel: '1', interval: '5m' })).toThrow(
+      /--interval requires --watch/,
+    )
+    expect(() =>
+      parseRunCommand({ root: '1', parallel: '1', watch: false, interval: '5m' }),
+    ).toThrow(/--interval requires --watch/)
+  })
+
+  it.each(['10', '5x', 'm', '-5m', '1.5m', '1d', ' ', '10 m'])(
+    'refuses malformed --interval %j',
+    raw => {
+      expect(() =>
+        parseRunCommand({ root: '1', parallel: '1', watch: true, interval: raw }),
+      ).toThrow(/--interval must be <n>s, <n>m or <n>h/)
+    },
+  )
+
+  it.each(['59s', '1s', '0m'])('refuses --interval %s below the 60s floor', raw => {
+    expect(() => parseRunCommand({ root: '1', parallel: '1', watch: true, interval: raw })).toThrow(
+      /at least 60s/,
+    )
   })
 })
