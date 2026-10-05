@@ -54,12 +54,7 @@ function driveIteration(
       predicate: resolved.policy.stopPredicate,
     }),
     iteration: context.iteration,
-    // ONE operator intent, two axes (US-464): `--autonomous` already governs the ENGINE's
-    // permission posture; it governs the composed SKILL's approval round too, because "nobody is
-    // watching this run" is the same fact in both places. Passed only when the posture is
-    // autonomous — an absent `$approval` IS the `interactive` default (ADR-021), so the
-    // non-autonomous path renders exactly the bytes it rendered before this story (AC2).
-    ...(resolved.autonomy.autonomous && { approval: 'auto' as const }),
+    ...approvalArguments(resolved),
   })
 
   const run = deps.runIteration ?? spawnIteration
@@ -82,4 +77,24 @@ function reportOutcome(outcome: LoopOutcome): void {
 
   const line = `  Stopped after ${outcome.iterations} iteration(s): ${reason}`
   console.log(outcome.stopReason === 'iteration-failed' ? chalk.red(line) : chalk.green(line))
+}
+
+/**
+ * ONE operator intent, two axes (US-464): `--autonomous` already governs the ENGINE's permission posture;
+ * it governs the composed SKILL's approval round too, because "nobody is watching this run" is the same
+ * fact in both places. Passed only when the posture is autonomous — an absent `$approval` IS the
+ * `interactive` default (ADR-021), so the non-autonomous path renders exactly the bytes it rendered
+ * before. US-523: an autonomous prepare drive passes `$approval: auto` too, and `$prepare` with it.
+ */
+function approvalArguments(resolved: ResolvedRun): {
+  approval?: 'auto'
+  prepare?: 'never' | 'when'
+} {
+  const extras = resolved.promptExtras
+  return {
+    ...((resolved.autonomy.autonomous || extras?.approval === 'auto') && {
+      approval: 'auto' as const,
+    }),
+    ...(extras?.prepare !== undefined && { prepare: extras.prepare }),
+  }
 }

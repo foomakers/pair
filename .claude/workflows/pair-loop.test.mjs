@@ -717,7 +717,6 @@ test('approvalArgsFor: a skill declaring no approval round gets NOTHING (AC3)', 
   // Callers that FORWARD the signal without declaring it, and the two assess-*
   // members ADR-021 deliberately left out (no approval round at all).
   assert.equal(approvalArgsFor('pair-process-bootstrap'), '')
-  assert.equal(approvalArgsFor('pair-process-refine-story'), '')
   assert.equal(approvalArgsFor('pair-capability-assess-cost'), '')
   assert.equal(approvalArgsFor('pair-capability-assess-coupling'), '')
 })
@@ -727,7 +726,7 @@ test('approvalArgsFor: fails closed on a malformed skill name rather than invent
   for (const bogus of [undefined, null, '', 42, {}]) assert.equal(approvalArgsFor(bogus), '')
 })
 
-test('APPROVAL_DECLARING_SKILLS: exactly the eleven members ADR-021 converted', () => {
+test('APPROVAL_DECLARING_SKILLS: exactly the thirteen members ADR-021 converted', () => {
   const { APPROVAL_DECLARING_SKILLS } = getHelpers()
   assert.deepEqual([...APPROVAL_DECLARING_SKILLS].sort(), [
     'pair-capability-assess-ai',
@@ -741,6 +740,8 @@ test('APPROVAL_DECLARING_SKILLS: exactly the eleven members ADR-021 converted', 
     'pair-capability-assess-testing',
     'pair-capability-map-contexts',
     'pair-capability-map-subdomains',
+    'pair-process-plan-tasks',
+    'pair-process-refine-story',
   ])
 })
 

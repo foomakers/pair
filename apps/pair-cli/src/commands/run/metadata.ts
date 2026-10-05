@@ -48,7 +48,7 @@ export const runCommandMetadata = {
     {
       flags: '--prepare <gate>',
       description:
-        'US-521: the prepare gate `<always|never|when>[; has: <labels>][; lacks: <labels>]` — parsed and validated, execution lands in #523 (treated as always). Requires --card',
+        'US-523: the prepare gate `<always|never|when>[; has: <labels>][; lacks: <labels>]` — who prepares a Draft card: `always` (default) needs a human (R3.11), `never` proceeds alone recording assumptions, `when` proceeds alone unless a boundary escalates (`needs-review`, card stays Draft). Requires --card',
     },
     {
       flags: '--merge <gate>',

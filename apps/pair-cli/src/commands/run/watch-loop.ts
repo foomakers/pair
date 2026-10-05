@@ -79,6 +79,7 @@ export interface WatchLoopDeps {
   onIteration(record: IterationRecord): void
 }
 
+const NEEDS_REVIEW = 'needs-review'
 const INTERRUPTED_EXIT = 130
 const FAILED = new Set(['failed', 'crashed'])
 
@@ -100,7 +101,9 @@ function classify(
         reason: 'already driven this run',
         detail: 'already driven this run',
       })
-    } else if (card.escalated === true) {
+    } else if (card.escalated === true || (card.labels ?? []).includes(NEEDS_REVIEW)) {
+      // US-523 AC7: a prepare escalation's `needs-review` label is read from the card's own labels — never
+      // left to the selection process's judgement — so an escalated Draft card is not re-picked until a human acts.
       skipped.push({ id: card.id, reason: 'escalated', detail: 'escalated' })
     } else {
       const lock = probeLock(card)

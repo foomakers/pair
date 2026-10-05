@@ -29,7 +29,7 @@ const resolution = (over: Partial<AutonomyResolution> = {}): AutonomyResolution 
     'filter: (all) (default)',
     'until: merged (argument)',
     'merge: when; has: cost:red (argument)',
-    'prepare: always (default) — parsed; execution lands in #523 — treated as always',
+    'prepare: always (default)',
   ],
   warnings: [],
   errors: [],
@@ -206,9 +206,7 @@ describe('resolveAutonomyPolicy: relay, never re-derive', () => {
     )
     expect(lines[0]).toMatch(/argument > adoption > KB default/)
     expect(lines).toContain('  until: merged (argument)')
-    expect(lines).toContain(
-      '  prepare: always (default) — parsed; execution lands in #523 — treated as always',
-    )
+    expect(lines).toContain('  prepare: always (default)')
     expect(lines.join('\n')).toMatch(
       /translated from ## Auto-Advance.*merge: when; lacks: risk:green/,
     )
@@ -382,7 +380,7 @@ describe('run --card: exit codes and the printed policy', () => {
     )
     expect(out.stdout.join('\n')).toMatch(/until: merged \(argument\)/)
     expect(out.stdout.join('\n')).toMatch(/merge: when; has: cost:red \(argument\)/)
-    expect(out.stdout.join('\n')).toMatch(/parsed; execution lands in #523 — treated as always/)
+    expect(out.stdout.join('\n')).toMatch(/prepare: always \(default\)/)
     expect(out.driven[0]?.autonomy).toEqual({ policy: resolution().policy })
   })
 

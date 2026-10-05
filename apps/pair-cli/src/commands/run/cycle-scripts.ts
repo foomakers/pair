@@ -206,6 +206,12 @@ export interface CycleScriptsBridge {
     stage: string
     conditions: readonly string[]
   }): unknown
+  /** US-523 `cycle-prepare.mjs decide`: the ONE prepare-phase route for a gate, labels, readiness, attendance and boundary. */
+  prepareDecide(options: PrepareDecideOptions): PrepareDecision
+  /** US-523 `cycle-prepare.mjs escalate`: `needs-review` + the ONE marker comment; never a board write. */
+  prepareEscalate(options: PrepareEscalateOptions): PrepareEscalation
+  /** US-523 `cycle-prepare.mjs complete`: re-checks B2, the provenance evidence, then writes Ready once. */
+  prepareComplete(options: PrepareCompleteOptions): PrepareCompletion
   /** `inputs --story <card JSON>`: the effective-inputs digest both realizations must agree on. */
   inputs(story: Record<string, unknown>, workflowVersion: string): string
   /**
@@ -251,6 +257,80 @@ export interface AutonomyResolution {
   readonly translated: Readonly<
     Record<string, { readonly from: string; readonly equivalent: string }>
   >
+}
+
+export type PrepareRoute =
+  | 'run-interactive'
+  | 'run-autonomous'
+  | 'skip-needs-human'
+  | 'skip-escalated'
+  | 'escalate'
+  | 'nothing-to-prepare'
+export type PrepareBoundary = 'B0' | 'B1' | 'B2'
+export type PrepareReadiness = 'draft' | 'refined-no-breakdown' | 'ready'
+export interface PrepareGateValue {
+  readonly mode: string
+  readonly has: readonly string[]
+  readonly lacks: readonly string[]
+}
+
+export interface PrepareDecideOptions {
+  readonly gate: PrepareGateValue
+  readonly readiness: PrepareReadiness
+  readonly attended: boolean
+  readonly boundary: PrepareBoundary
+  /** Absent ⇒ unreadable: a `when` gate then escalates (fail-safe). */
+  readonly labels?: readonly string[] | undefined
+  readonly source?: string | undefined
+}
+
+/** `cycle-prepare.mjs decide`'s own JSON answer, relayed — the route is never re-derived here. */
+export interface PrepareDecision {
+  readonly route: PrepareRoute
+  readonly boundary: PrepareBoundary
+  readonly gate: string
+  readonly source?: string
+  readonly condition?: string
+  readonly conditions?: readonly string[]
+}
+
+export interface PrepareWriterOptions {
+  readonly dir: string
+  readonly story: string
+  readonly gate: PrepareGateValue
+  readonly source: string
+}
+export interface PrepareEscalateOptions extends PrepareWriterOptions {
+  readonly boundary: PrepareBoundary
+  readonly conditions?: readonly string[]
+  readonly openQuestion?: string
+  readonly assumptionsFile?: string
+}
+export interface PrepareCompleteOptions extends PrepareWriterOptions {
+  /** The board's own name for the Ready macrostate (default `Ready`). */
+  readonly state?: string
+  /** The entry's real attendance (default false): lifts only the `needs-review` skip at the B2 re-check. */
+  readonly attended?: boolean
+  /**
+   * Whether the agent ran the refinement in THIS prepare (default true — fail closed): only then does `complete`
+   * owe the `## Assumptions` + provenance evidence. A card a human refined (B1 entry) has none to show.
+   */
+  readonly refinedAutonomously?: boolean
+}
+export interface PrepareEscalation {
+  readonly outcome: 'escalated'
+  readonly boundary: PrepareBoundary
+  readonly label: { readonly applied: boolean; readonly error?: string }
+  readonly comment: { readonly posted: boolean; readonly error?: string }
+}
+export interface PrepareCompletion {
+  readonly completed: boolean
+  readonly reason?: string
+  readonly conditions?: readonly string[]
+  readonly escalation?: PrepareEscalation
+  readonly state?: string
+  /** An attended completion clears `needs-review`: whether the removal was confirmed. */
+  readonly needsReview?: { readonly cleared: boolean; readonly error?: string }
 }
 
 export interface CycleProfileIdentity {
@@ -433,6 +513,69 @@ function autonomyMethods(
   }
 }
 
+const completeArgs = (o: PrepareCompleteOptions): ScriptArgs => [
+  ['dir', o.dir],
+  ['story', o.story],
+  ['gate', JSON.stringify(o.gate)],
+  ['source', o.source],
+  ...optional([
+    ['state', o.state],
+    ['attended', o.attended === undefined ? undefined : String(o.attended)],
+    [
+      'refinedAutonomously',
+      o.refinedAutonomously === undefined ? undefined : String(o.refinedAutonomously),
+    ],
+  ]),
+]
+
+/** US-523: `cycle-prepare.mjs decide|escalate|complete` as typed calls — the rule stays in the script. */
+function prepareMethods(
+  runScript: (script: string, cmd: string, args: ScriptArgs) => unknown,
+  scriptsDir: string,
+): Pick<CycleScriptsBridge, 'prepareDecide' | 'prepareEscalate' | 'prepareComplete'> {
+  const script = join(scriptsDir, 'cycle-prepare.mjs')
+  // An installed skill older than US-523 has no prepare script: said plainly, never a "module not found".
+  const run = (cmd: string, args: ScriptArgs): unknown => {
+    if (!existsSync(script)) {
+      throw new Error(
+        `skill-outdated: ${script} is not installed, so the prepare gate cannot be evaluated — ` +
+          `run \`pair update\` and re-run.`,
+      )
+    }
+    return runScript(script, cmd, args)
+  }
+  const writer = (o: PrepareWriterOptions): ScriptArgs => [
+    ['dir', o.dir],
+    ['story', o.story],
+    ['gate', JSON.stringify(o.gate)],
+    ['source', o.source],
+  ]
+  return {
+    prepareDecide: o =>
+      run('decide', [
+        ['gate', JSON.stringify(o.gate)],
+        ['readiness', o.readiness],
+        ['attended', String(o.attended)],
+        ['boundary', o.boundary],
+        ...optional([
+          ['labels', o.labels === undefined ? undefined : JSON.stringify(o.labels)],
+          ['source', o.source],
+        ]),
+      ]) as PrepareDecision,
+    prepareEscalate: o =>
+      run('escalate', [
+        ...writer(o),
+        ['boundary', o.boundary],
+        ...optional([
+          ['conditions', o.conditions === undefined ? undefined : JSON.stringify(o.conditions)],
+          ['openQuestion', o.openQuestion],
+          ['assumptionsFile', o.assumptionsFile],
+        ]),
+      ]) as PrepareEscalation,
+    prepareComplete: o => run('complete', completeArgs(o)) as PrepareCompletion,
+  }
+}
+
 /**
  * `cwd` is the PROJECT directory the scripts run in (r1-3): `ac-hash` shells out to `gh`, which
  * resolves the repository from its cwd, so a script run from anywhere else hashes another
@@ -460,6 +603,7 @@ export function createCycleScriptsBridge(
       ]) as CycleWorktreeResult,
     ...mergeMethods(runScript, join(location.scriptsDir, 'cycle-merge.mjs')),
     ...autonomyMethods(runScript, location.scriptsDir),
+    ...prepareMethods(runScript, location.scriptsDir),
     packet: options =>
       runScript(cycleDispatchPath, 'packet', packetArgs(options, location)) as CyclePacketResult,
     inputs(story, workflowVersion) {

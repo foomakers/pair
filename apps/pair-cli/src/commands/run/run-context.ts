@@ -1,4 +1,5 @@
 import type { AutonomyResolver } from './autonomy-policy'
+import type { PrepareDependencies, PromptExtras } from './card-prepare'
 import { resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
@@ -94,6 +95,8 @@ export interface RunHandlerDependencies {
   wait?: Wait
   /** US-491: one `pair-cli run --card` child process (shipped `spawnCardProcess`). */
   runCardProcess?: CardProcessRunner
+  /** US-523: the prepare phase's collaborators (default: the installed `cycle-prepare.mjs` and `gh`). */
+  prepare?: PrepareDependencies
 }
 
 export interface ResolvedRun {
@@ -102,6 +105,8 @@ export interface ResolvedRun {
   perimeter: Perimeter
   policy: AutomationPolicy
   autonomy: AutonomyDecision
+  /** US-523: the prompt extras of an autonomous prepare drive (`$approval: auto`, `$prepare`) — absent on every other run. */
+  promptExtras?: PromptExtras
   /** Present only on a tag-driven run (US-217), and then always a `route` — a skip returns earlier. */
   dispatch?: DispatchDecision
 }

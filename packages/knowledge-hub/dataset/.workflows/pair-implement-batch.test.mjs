@@ -205,9 +205,11 @@ async function runWorkflow({ args, dispatch, floor, maxFixRounds, entry, autonom
   const simulate = makeSimulator({ entry, floor: floor ?? (args && typeof args === 'object' && !Array.isArray(args) ? args.severityFloor ?? 'Minor' : 'Minor'), maxFixRounds: maxFixRounds ?? (args && typeof args === 'object' && !Array.isArray(args) ? args.pipeline?.maxFixRounds ?? 3 : 3) })
   const agent = async (prompt, opts) => {
     if (!autonomy && opts.label === 'autonomy:resolve') return OFF_POLICY
+    // US-523 r1-g1: the harness card (STORY) is Ready — a launch with no scripted policy answers its prepare phase so, unrecorded.
+    if (!autonomy && String(opts.label ?? '').startsWith('prepare:phase')) return { outcome: 'nothing-to-prepare' }
     calls.push({ prompt, opts })
     // An `autonomy` handler scripts the policy scripts' answers (resolve / decide / tier / escalate / merge-check / merge).
-    if (autonomy && /^(autonomy:|decide:|tier:|escalate:|pr-state:|cascade:|merge-check:|merge:)/.test(opts.label ?? '')) return autonomy(prompt, opts)
+    if (autonomy && /^(autonomy:|decide:|tier:|escalate:|pr-state:|cascade:|merge-check:|merge:|prepare:phase)/.test(opts.label ?? '')) return autonomy(prompt, opts)
     const raw = await dispatch(prompt, opts)
     return simulate(prompt, opts, raw)
   }
@@ -343,10 +345,11 @@ test('TC-11: the workflow source dispatches ONLY skill invocations — no free-f
   const code = SRC.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
   const all = [...code.matchAll(/\b(?:agent(?:Retry)?|dispatch)\(\s*\n?\s*([^\n,]+)/g)].map(m => m[1].trim()).filter(d => d !== 'prompt')
   // US-524: the only dispatches that are not a skill invocation are the eight SCRIPT RUNNERS of the autonomy model (an agent
-  // runs one named script and relays its JSON): resolve, tier, decide, escalate, pr-state, cascade, merge check, merge. No rule lives in them.
+  // runs one named script and relays its JSON): resolve, tier, decide, escalate, pr-state, cascade, merge check, merge — and, US-523,
+  // the prepare phase (cycle-prepare.mjs). No rule lives in them.
   const scriptRunners = all.filter(d => /^`(Run EXACTLY|Card )/.test(d))
   const dispatches = all.filter(d => !scriptRunners.includes(d))
-  assert.equal(scriptRunners.length, 8, `expected the eight autonomy script runners, found ${scriptRunners.length}`)
+  assert.equal(scriptRunners.length, 9, `expected the nine autonomy script runners, found ${scriptRunners.length}`)
   assert.equal(dispatches.length, 5, `expected the five stage dispatches and nothing else (the template contract rides on the first review, t9d-2), found ${dispatches.length}`)
   for (const gone of ['PACING', 'TEXT SHAPE', 'CONTRACT INVENTORY', 'FINITE-STATE', 'SEALED RED SNAPSHOT', 'CONVERGENCE SWEEP', 'DO NOT FILE NEW ISSUES', 'ISOLATION (mandatory', 'sha256sum', 'git diff-tree', "'pair-remediation-planner'", "'pair-red-sealer'", "'pair-fix-verifier'", "'/pair-workflow-remediation-plan'", "'/pair-workflow-red-seal'", "'/pair-workflow-p3-verify'", "'/pair-workflow-cycle-comments'", "'/pair-workflow-pr-phase'"])
     assert.equal(code.includes(gone), false, `${gone} is still spelled in the workflow code`)
@@ -2002,7 +2005,7 @@ const RESOLVED = (until, merge = GATE('never'), extra = {}) => ({ ok: true, acti
 const PROCEED = { decision: 'proceed' }
 // A scripted policy-script runner: `resolve` answers `resolved`; stage boundaries answer `decide(prompt)`; merge `check`/`run`
 // answer `check` / `run`. Every call is recorded by runWorkflow (`calls`), so a test reads the commands the agents were told to run.
-const scripted = ({ resolved, decide = () => PROCEED, tier = { tier: 'risk:green' }, check = { mergeAllowed: true, failed: [], comment: { posted: true } }, run = { merged: true, cascaded: true, reason: 'merged' }, escalate = { comment: { posted: true } }, prState = { state: 'OPEN' }, cascade = { closed: true } }) => (prompt, opts) => {
+const scripted = ({ resolved, decide = () => PROCEED, tier = { tier: 'risk:green' }, check = { mergeAllowed: true, failed: [], comment: { posted: true } }, run = { merged: true, cascaded: true, reason: 'merged' }, escalate = { comment: { posted: true } }, prState = { state: 'OPEN' }, cascade = { closed: true }, prepare = { outcome: 'prepared' } }) => (prompt, opts) => {
   const l = opts.label
   if (l === 'autonomy:resolve') return typeof resolved === 'function' ? resolved(prompt) : resolved
   if (l.startsWith('decide:')) return decide(prompt, l)
@@ -2012,6 +2015,7 @@ const scripted = ({ resolved, decide = () => PROCEED, tier = { tier: 'risk:green
   if (l.startsWith('merge-check:')) return typeof check === 'function' ? check(prompt) : check
   if (l.startsWith('merge:')) return typeof run === 'function' ? run(prompt) : run
   if (l.startsWith('escalate:')) return escalate
+  if (l.startsWith('prepare:phase')) return typeof prepare === 'function' ? prepare(prompt) : prepare
   throw new Error(`unscripted ${l}`)
 }
 const driveWith = (args, handlers) => runWorkflow({ args: { cards: [STORY], ...args }, dispatch: stdDispatch(), autonomy: scripted(handlers) })
@@ -2118,6 +2122,14 @@ test('US-524 edge: an escalation whose stage/conditions are not label-shaped is 
   assert.ok(!labelsOf(r.calls).includes('escalate:#292'))
 })
 
+test('US-524 edge: an escalation with a spaced label condition (`has:good first issue`) still posts the comment, as structured JSON', async () => {
+  const r = await driveWith({ until: 'merged', merge: 'when; has: good first issue' }, { resolved: RESOLVED('merged'), decide: () => ({ decision: 'escalate', stage: 'prepare', conditions: ['has:good first issue'], reason: 'r' }) })
+  assert.equal(rowOf(r).status, 'escalated')
+  assert.equal(rowOf(r).comment.posted, true)
+  const esc = r.calls.find(c => c.opts.label === 'escalate:#292')
+  assert.match(esc.prompt, /--conditions '\["has:good first issue"\]'/)
+})
+
 test('US-524 edge: an unreadable or unknown stage decision parks the card halted — never read as proceed', async () => {
   for (const d of [null, {}, { decision: 'maybe' }, { error: 'boom' }, { decision: 'proceed', error: 'x' }]) {
     const r = await driveWith({ until: 'pr' }, { resolved: RESOLVED('pr'), decide: () => d })
@@ -2218,4 +2230,165 @@ test('US-524 r0-3: a stacked card never merges before its base card is merged �
   const rb = await runWorkflow({ args: { cards: [B, A], until: 'merged', maxParallelism: 1 }, dispatch: stdDispatch(), autonomy: scripted({ resolved: RESOLVED('merged') }) })
   assert.ok(!rb.calls.some(c => c.opts.label === 'merge-check:#293' || c.opts.label === 'merge:#293'))
   assert.equal(rb.result.batch.find(x => x.id === '293').status, 'awaiting-human')
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-523 — the prepare phase in the batch: a stage agent (it has tools) runs cycle-prepare.mjs; the sandbox relays the
+// outcome and decides no rule. Default off: no declared gate ⇒ no prepare dispatch, the pre-#523 batch byte for byte.
+// ═══════════════════════════════════════════════════════════════════════════
+const PREPARING = (prepare, until = 'pr', active = true, source = 'argument') => ({ ok: true, active, policy: { until, merge: GATE('always'), prepare }, effective: { prepare: { value: prepare, source } }, lines: [`prepare: ${prepare.mode} (argument)`], warnings: [], errors: [] })
+const prepareCalls = r => r.calls.filter(c => c.opts.label.startsWith('prepare:phase'))
+const implemented = r => r.calls.some(c => c.opts.agentType === 'pair-implementer' || /implement-phase/.test(c.prompt))
+
+test('US-523 [r1g1-c0]: nothing resolved (no automation.md, no argument) ⇒ no prepare dispatch at all (the golden traces stand)', async () => {
+  const r = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch() })
+  assert.equal(prepareCalls(r).length, 0)
+})
+
+// r1-g1 / r0-1 — AC2 "declared, passed, or defaulted": once autonomy RESOLVES, the KB-default `always` runs the prepare phase
+// too (it parks an unattended Draft card awaiting-human). Batch = cycle on N cards (AC11): same decision as the cycle skill
+// dispatched by a batch (skip-needs-human) and `pair-cli run --card --autonomous` (prepare-needs-human).
+const NEEDS_HUMAN = { outcome: 'needs-human', reason: 'prepare-needs-human' }
+test('US-523 r0-1 [r1g1-w1]: engaged policy, prepare only KB-defaulted ⇒ a Draft card is parked awaiting-human by the prepare phase, never implemented', async () => {
+  const r = await driveWith({ until: 'pr' }, { resolved: PREPARING(GATE('always'), 'pr', true, 'default'), prepare: NEEDS_HUMAN })
+  assert.equal(prepareCalls(r).length, 1)
+  assert.match(prepareCalls(r)[0].prompt, /source: default/)
+  assert.match(prepareCalls(r)[0].prompt, /--attended false/)
+  const row = rowOf(r)
+  assert.deepEqual({ status: row.status, stage: row.stage, reason: row.reason }, { status: 'awaiting-human', stage: 'prepare', reason: 'prepare-needs-human' })
+  assert.equal(implemented(r), false)
+})
+
+test('US-523 r0-1 [r1g1-w2]: resolved but inactive (automation.md declares nothing, no argument; no `effective`) ⇒ the default gate still runs the prepare phase', async () => {
+  const resolved = { ok: true, active: false, policy: { until: 'pr', merge: GATE('always'), prepare: GATE('always') }, lines: [], warnings: [], errors: [] }
+  const r = await runWorkflow({ args: { cards: [STORY], policyText: '## Eligibility\n\nrisk:green\n' }, dispatch: stdDispatch(), autonomy: scripted({ resolved, prepare: NEEDS_HUMAN }) })
+  assert.equal(prepareCalls(r).length, 1)
+  assert.equal(rowOf(r).status, 'awaiting-human')
+  assert.equal(rowOf(r).reason, 'prepare-needs-human')
+  assert.equal(implemented(r), false)
+})
+
+test('US-523 r0-1 [r1g1-w3]: defaulted gate + an already-Ready card ⇒ one prepare dispatch answers nothing-to-prepare and the cycle runs as before', async () => {
+  const r = await driveWith({ until: 'pr' }, { resolved: PREPARING(GATE('always'), 'pr', true, 'default'), prepare: { outcome: 'nothing-to-prepare' } })
+  assert.equal(prepareCalls(r).length, 1)
+  assert.ok(labelsOf(r.calls).indexOf(prepareCalls(r)[0].opts.label) < labelsOf(r.calls).findIndex(l => l.startsWith('implement')), 'prepare precedes the first stage')
+  assert.equal(rowOf(r).status, 'ready-for-merge')
+})
+
+test('US-523 r0-1 [r1g1-w4]: parallel batch, defaulted gate ⇒ every Draft card runs its own prepare phase and parks awaiting-human (AC11 sequential = parallel)', async () => {
+  const cards = [STORY, { id: '293', title: 'U', branch: 'feat/#293-y' }]
+  const r = await runWorkflow({ args: { cards, maxParallelism: 2, until: 'pr' }, dispatch: stdDispatch(), autonomy: scripted({ resolved: PREPARING(GATE('always'), 'pr', true, 'default'), prepare: NEEDS_HUMAN }) })
+  assert.equal(prepareCalls(r).length, 2)
+  assert.deepEqual(r.result.batch.map(x => [x.id, x.status, x.reason]), [['292', 'awaiting-human', 'prepare-needs-human'], ['293', 'awaiting-human', 'prepare-needs-human']])
+  assert.equal(implemented(r), false)
+})
+
+test('US-523 r0-1 [r1g1-c1]: a gate DECLARED in `## Autonomy` (source adoption) runs the prepare phase, as before', async () => {
+  const r = await runWorkflow({ args: { cards: [STORY], policyText: '## Autonomy\n\nprepare: always\n' }, dispatch: stdDispatch(), autonomy: scripted({ resolved: PREPARING(GATE('always'), 'pr', true, 'adoption'), prepare: NEEDS_HUMAN }) })
+  assert.equal(prepareCalls(r).length, 1)
+  assert.match(prepareCalls(r)[0].prompt, /source: adoption/)
+  assert.equal(rowOf(r).status, 'awaiting-human')
+})
+
+test('US-523 r0-1 [r1g1-c2]: a PR entry never prepares, whatever the gate source (default included)', async () => {
+  const r = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], until: 'pr' }, dispatch: stdDispatch(), autonomy: scripted({ resolved: PREPARING(GATE('always'), 'pr', true, 'default') }) })
+  assert.equal(prepareCalls(r).length, 0)
+})
+
+// r1-g1 / r0-2 — the batch's prepare agent writes Ready through `complete --state <the first board state mapped to Ready>`
+// (canonical-states.md, Writing state rule 2-4), never the literal `Ready` the script defaults to.
+test('US-523 r0-2 [r1g1-w5]: the prepare prompt passes `complete` a --state resolved through the project State Mapping', async () => {
+  const r = await driveWith({ prepare: 'never' }, { resolved: PREPARING(GATE('never'), 'pr', false) })
+  const [p] = prepareCalls(r)
+  assert.match(p.prompt, /cycle-prepare\.mjs complete [^`]*--state /)
+  assert.match(p.prompt, /State Mapping/)
+})
+
+test('US-523 AC4/AC5: `prepare: never` ⇒ ONE prepare dispatch before the first stage, naming the script, the gate and its source; a prepared card then runs the cycle', async () => {
+  const r = await driveWith({ prepare: 'never' }, { resolved: PREPARING(GATE('never'), 'pr', false) })
+  const [p] = prepareCalls(r)
+  assert.equal(prepareCalls(r).length, 1)
+  assert.match(p.prompt, /cycle-prepare\.mjs decide --gate '\{"mode":"never","has":\[\],"lacks":\[\]\}'/)
+  assert.match(p.prompt, /--attended false/)
+  assert.match(p.prompt, /source: argument/)
+  assert.match(p.prompt, /Never write the card's Ready state yourself/)
+  assert.ok(labelsOf(r.calls).indexOf(p.opts.label) < labelsOf(r.calls).findIndex(l => l.startsWith('implement')), 'prepare precedes the first stage')
+  assert.equal(rowOf(r).status, 'ready-for-merge')
+})
+
+test('US-523 AC2: a declared `always` parks an unattended Draft card awaiting-human — no stage runs, nothing is written by the sandbox', async () => {
+  const r = await driveWith({ until: 'pr' }, { resolved: PREPARING(GATE('always')), prepare: { outcome: 'needs-human', reason: 'prepare-needs-human' } })
+  const row = rowOf(r)
+  assert.equal(row.status, 'awaiting-human')
+  assert.equal(row.stage, 'prepare')
+  assert.equal(row.reason, 'prepare-needs-human')
+  assert.deepEqual(stageLabels(r.calls).filter(l => !l.startsWith('autonomy:') && !l.startsWith('prepare:phase')), [])
+})
+
+test('US-523 AC6: a boundary escalation parks the card `escalated` (stage prepare, conditions kept) — the cycle never starts', async () => {
+  const r = await driveWith({ prepare: 'when; lacks: triaged' }, { resolved: PREPARING(GATE('when', { lacks: ['triaged'] }), 'pr', false), prepare: { outcome: 'escalated', boundary: 'B0', conditions: ['lacks:triaged'] } })
+  const row = rowOf(r)
+  assert.equal(row.status, 'escalated')
+  assert.deepEqual({ stage: row.stage, boundary: row.boundary, conditions: row.conditions }, { stage: 'prepare', boundary: 'B0', conditions: ['lacks:triaged'] })
+  assert.equal(r.calls.filter(c => !c.opts.label.startsWith('autonomy:') && !c.opts.label.startsWith('prepare:phase')).length, 0)
+})
+
+test('US-523: an unreadable or failed prepare answer is failed-preparation, never a pass', async () => {
+  for (const prepare of [null, { outcome: 'bogus' }, { outcome: 'failed', reason: 'refine exited 1' }, { error: 'boom' }]) {
+    const r = await driveWith({ prepare: 'never' }, { resolved: PREPARING(GATE('never'), 'pr', false), prepare })
+    assert.equal(rowOf(r).status, 'failed-preparation', JSON.stringify(prepare))
+  }
+})
+
+test('US-523 AC8: until ready after a prepared card stops at the boundary — target-ready, no stage dispatched', async () => {
+  const r = await driveWith({ prepare: 'never', until: 'ready' }, {
+    resolved: PREPARING(GATE('never'), 'ready'),
+    decide: () => ({ decision: 'stop-at-target', target: 'ready', stage: 'implement' }),
+  })
+  assert.equal(rowOf(r).status, 'target-ready')
+  assert.equal(prepareCalls(r).length, 1)
+})
+
+test('US-523: a PR entry (prNumber) never runs the prepare phase — a card with a PR has started', async () => {
+  const r = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], prepare: 'never' }, dispatch: stdDispatch(), autonomy: scripted({ resolved: PREPARING(GATE('never'), 'pr', false) }) })
+  assert.equal(prepareCalls(r).length, 0)
+})
+
+test('US-523: the batch holds no prepare rule — the prepare gate is evaluated by cycle-prepare.mjs only', () => {
+  const code = SRC.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
+  assert.equal(/escalationConditions|has\.some|lacks\.some|\.lacks\.filter|\.has\.filter/.test(code), false)
+})
+
+// ── review r2 (US-523): the resolve prompt asks for `effective`; the prepare prompt never interpolates card text; the default parks a Draft ──
+test('US-523 r2-5: the resolve prompt asks the script\'s `effective` back, so a declared gate keeps its true source in the provenance', async () => {
+  const r = await driveWith({ prepare: 'never' }, { resolved: PREPARING(GATE('never'), 'pr', false, 'adoption') })
+  const resolve = r.calls.find(c => c.opts.label === 'autonomy:resolve')
+  assert.match(resolve.prompt, /Return \{[^}]*\beffective\b[^}]*\}/)
+  assert.match(prepareCalls(r)[0].prompt, /source: adoption/)
+})
+
+test('US-523 r2-7: the prepare prompt hands card text to scripts only by reference (--story / --openQuestionFromCard), never as a quoted argument', async () => {
+  const r = await driveWith({ prepare: 'never' }, { resolved: PREPARING(GATE('never'), 'pr', false) })
+  const [{ prompt }] = prepareCalls(r)
+  assert.match(prompt, /cycle-prepare\.mjs decide [^`]*--dir [^ ]+ --story 292/)
+  assert.doesNotMatch(prompt, /--labels '/)
+  assert.doesNotMatch(prompt, /--openQuestion '/)
+  assert.match(prompt, /escalate --dir/)
+  assert.match(prompt, /`--openQuestionFromCard true`/)
+  assert.match(prompt, /never[^.]*(build|compose|interpolate)[^.]*(card text|label)/i)
+})
+
+test('US-523 r2-1: the prepare prompt tells `complete` whether the agent refined in this prepare (--refinedAutonomously)', async () => {
+  const r = await driveWith({ prepare: 'never' }, { resolved: PREPARING(GATE('never'), 'pr', false) })
+  assert.match(prepareCalls(r)[0].prompt, /complete [^`]*--refinedAutonomously <true\|false>/)
+  assert.match(prepareCalls(r)[0].prompt, /true only when YOU ran \/pair-process-refine-story/)
+})
+
+test('US-523 r2-8: nothing declared and nothing passed ⇒ the pre-#523 batch (input contract: Ready cards) — no resolve, no prepare dispatch; an argument or an automation.md makes the default `always` apply', async () => {
+  const none = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch(), autonomy: scripted({ prepare: NEEDS_HUMAN }) })
+  assert.equal(none.calls.some(c => c.opts.label === 'autonomy:resolve'), false)
+  assert.equal(prepareCalls(none).length, 0)
+  assert.equal(rowOf(none).status, 'ready-for-merge')
+  const withText = await runWorkflow({ args: { cards: [STORY], policyText: '## Eligibility\n\nrisk:green\n' }, dispatch: stdDispatch(), autonomy: scripted({ resolved: { ok: true, active: false, policy: { until: 'pr', merge: GATE('always'), prepare: GATE('always') }, lines: [], warnings: [], errors: [] }, prepare: NEEDS_HUMAN }) })
+  assert.equal(rowOf(withText).status, 'awaiting-human')
 })

@@ -62,6 +62,8 @@
         "pair-contracts/workflow-profile.test.mjs",
         "pair-contracts/cycle-metrics.test.mjs",
         "pair-contracts/cycle-merge.test.mjs",
+        "pair-contracts/cycle-prepare.test.mjs",
+        "pair-contracts/cycle-prepare-parity.test.mjs",
         "pair-contracts/cycle-runtime.test.mjs",
         "pair-contracts/engine-integration.test.mjs",
         "pair-contracts/recipe.test.mjs",

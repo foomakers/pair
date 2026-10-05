@@ -494,6 +494,8 @@ export const APPROVAL_DECLARING_SKILLS = new Set([
   'pair-capability-assess-testing',
   'pair-capability-map-contexts',
   'pair-capability-map-subdomains',
+  'pair-process-plan-tasks',
+  'pair-process-refine-story',
 ])
 
 /**

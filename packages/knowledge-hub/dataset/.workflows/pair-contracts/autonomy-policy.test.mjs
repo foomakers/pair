@@ -127,9 +127,10 @@ test('nothing declared, nothing passed: defaults only (until pr, gates always) â
   assert.ok(KEYS.every(k => r.effective[k].source === 'default'))
 })
 
-test('prepare is parsed and validated, printed as treated-as-always (#523)', () => {
+test('prepare is parsed and validated and printed with its value and source, no "treated as always" note (#523 executes it)', () => {
   const r = resolvePolicy({ args: { prepare: 'when; has: needs:refine' } })
-  assert.ok(r.lines.find(l => l.startsWith('prepare:')).includes('parsed; execution lands in #523 â€” treated as always'))
+  assert.equal(r.lines.find(l => l.startsWith('prepare:')), 'prepare: when; has: needs:refine (argument)')
+  assert.equal(resolvePolicy().lines.find(l => l.startsWith('prepare:')), 'prepare: always (default)')
   assert.equal(resolvePolicy({ args: { prepare: 'always; has: a:b' } }).ok, false)
 })
 

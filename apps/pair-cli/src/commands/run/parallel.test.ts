@@ -5,6 +5,7 @@ import { join, posix, win32 } from 'path'
 import { acquireCardLock, LOCK_DIRECTORY, type LockAcquirer } from './card-lock'
 import { parseRunCommand } from './parser'
 import type { RootCandidate } from './root-plan'
+import { parsePrepareResult } from './card-prepare'
 import {
   acquireResourceLocks,
   batchExitCode,
@@ -143,6 +144,28 @@ describe('outcomeOfExit / batchExitCode', () => {
     [{ exitCode: null, signal: null, error: 'ENOENT' }, 'crashed', 'spawn failed: ENOENT'],
   ])('%j ⇒ %s', (exit, outcome, detail) => {
     expect(outcomeOfExit('7', exit)).toEqual({ id: '7', outcome, detail })
+  })
+
+  it('US-523: the prepare outcome the card process printed rides on the card outcome (and on nothing else)', () => {
+    expect(outcomeOfExit('7', { exitCode: 1, signal: null, prepare: 'escalated' })).toEqual({
+      id: '7',
+      outcome: 'failed',
+      detail: 'exit 1',
+      prepare: 'escalated',
+    })
+    expect(outcomeOfExit('7', { exitCode: 0, signal: null, prepare: 'needs-human' })).toMatchObject(
+      {
+        outcome: 'completed',
+        prepare: 'needs-human',
+      },
+    )
+  })
+
+  it('US-523: only an exact PREPARE-RESULT line parses', () => {
+    expect(parsePrepareResult('PREPARE-RESULT: prepared')).toBe('prepared')
+    expect(parsePrepareResult('PREPARE-RESULT: needs-human')).toBe('needs-human')
+    for (const line of ['PREPARE-RESULT: bogus', 'prepared', '  PREPARE-RESULT: prepared', ''])
+      expect(parsePrepareResult(line)).toBeUndefined()
   })
 
   it('a partial batch exits 1 when any card failed or crashed, 0 otherwise', () => {
@@ -387,6 +410,20 @@ describe('spawnCardProcess — a genuinely separate OS process (a stub CLI, neve
     expect(lines).toContain('  [#9] args=["run","--card","9"]')
     expect(lines).toContain('DISPATCH-RECORD: t event=start card=9')
     expect(lines).toContain('  [#9] warn line')
+  })
+
+  it('US-523: the PREPARE-RESULT line the card process prints is carried on its exit, and still relayed', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'pair-523-cli-'))
+    const stub = join(dir, 'stub-cli.cjs')
+    writeFileSync(stub, "console.log('PREPARE-RESULT: escalated')\nprocess.exit(1)")
+    process.argv[1] = stub
+    const lines: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((line: string) => void lines.push(line))
+
+    const exit = await spawnCardProcess({ card: card('9'), args: [], cwd: dir })
+
+    expect(exit).toEqual({ exitCode: 1, signal: null, prepare: 'escalated' })
+    expect(lines).toContain('  [#9] PREPARE-RESULT: escalated')
   })
 
   it('a crashed card process (killed) is reported by its signal', async () => {

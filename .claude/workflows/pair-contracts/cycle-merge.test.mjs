@@ -325,7 +325,7 @@ test('AC3 edge: an unsafe or absent branch is reported, never handed to git', ()
 // ── CLI contract ────────────────────────────────────────────────────────────────────────────────
 const argv = (cmd, extra = {}) => {
   const o = { dir: '/x', story: '42', pr: '7', reviewedHead: SHA('a'), cardTier: GREEN, autoAdvance: '["risk:green"]', ...extra }
-  return [cmd, ...Object.entries(o).flatMap(([k, v]) => [`--${k}`, v])]
+  return [cmd, ...Object.entries(o).filter(([, v]) => v !== undefined).flatMap(([k, v]) => [`--${k}`, v])]
 }
 
 test('parseArgs: every value that reaches gh/git is validated as a safe segment', () => {
@@ -592,4 +592,27 @@ test('r1-g1-w6-race: azure-devops merge — head reads as the reviewed head, a p
   const a = azure.instantiate({ azBin: az.bin })
   assert.throws(() => a.merge({ pr: 3, repo: 'Proj/app', strategy: 'squash', message: 'm', headSha: SHA('a') }), e => e?.name === 'HostError')
   assert.deepEqual({ status: az.state().status, completedHead: az.state().completedHead }, { status: 'active', completedHead: null })
+})
+
+// ── spaced label conditions + run-dir guard on `escalate` ───────────────────────────────────────────────────────
+const SPACED_COND = 'has:good first issue'
+test('parseArgs escalate: accepts every label the gate grammar accepts (spaces), still refuses quote / $( / backtick', () => {
+  assert.deepEqual(parseArgs(['escalate', '--dir', '/x/42', '--story', '42', '--stage', 'merge', '--conditions', JSON.stringify([SPACED_COND])]).opts.conditions, [SPACED_COND])
+  for (const bad of ["has:x'; rm -rf /", 'has:$(id)', 'has:`id`', 'has:a"b', 'has:a\\b', 'has:a;b']) assert.throws(() => parseArgs(['escalate', '--dir', '/x/42', '--story', '42', '--stage', 'merge', '--conditions', JSON.stringify([bad])]), /conditions/, bad)
+})
+test('CLI escalate: a spaced label condition posts the ONE comment through a stubbed gh', () => {
+  const gh = fakeGh()
+  const { out, status } = runCli('escalate', gh, { stage: 'merge', conditions: JSON.stringify([SPACED_COND]), pr: undefined, reviewedHead: undefined, cardTier: undefined, autoAdvance: undefined })
+  assert.equal(status, 0, JSON.stringify(out))
+  assert.equal(out.comment.posted, true)
+  assert.ok(gh.calls().some(c => c.includes('POST') && c.some(x => String(x).endsWith('/issues/42/comments'))))
+})
+test('CLI escalate: a run dir that does not belong to --story is refused — exit non-zero, no gh call', () => {
+  for (const dir of ['/x/43', '/x/anything']) {
+    const gh = fakeGh()
+    const { out, status } = runCli('escalate', gh, { dir, stage: 'merge', conditions: JSON.stringify(['has:cost:red']), pr: undefined, reviewedHead: undefined, cardTier: undefined, autoAdvance: undefined })
+    assert.notEqual(status, 0)
+    assert.match(out.error, /run dir/)
+    assert.equal(gh.calls().length, 0)
+  }
 })

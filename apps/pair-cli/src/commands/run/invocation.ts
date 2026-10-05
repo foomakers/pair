@@ -35,6 +35,12 @@ export interface SkillArguments {
    * at all rather than passing `interactive` explicitly (US-464 AC2).
    */
   approval?: 'interactive' | 'auto'
+  /**
+   * US-523 / ADR-028: the prepare mode that — together with `approval: auto` and ONLY together —
+   * lifts phase 0 of `pair-process-refine-story`. A closed enum from the resolved prepare gate
+   * (`never` | `when`), never operator text; `always` is never passed (absent IS `always`).
+   */
+  prepare?: 'never' | 'when'
 }
 
 type SkillParameterMap = Readonly<Partial<Record<keyof SkillArguments, string>>>
@@ -147,6 +153,12 @@ const POLICY_READING_SKILLS: ReadonlySet<string> = Object.freeze(new Set(['pair-
  */
 export const APPROVAL_PARAMETER: SkillParameterMap = Object.freeze({ approval: '--approval' })
 
+/** How `prepare` is spelled on the wire (US-523) — declared by `pair-process-refine-story` alone. */
+export const PREPARE_PARAMETER: SkillParameterMap = Object.freeze({ prepare: '--prepare' })
+const PREPARE_DECLARING_SKILLS: ReadonlySet<string> = Object.freeze(
+  new Set(['pair-process-refine-story']),
+)
+
 /**
  * Which skills DECLARE `$approval` — the family ADR-021 converted, as DATA (AC5).
  *
@@ -174,6 +186,8 @@ export const APPROVAL_DECLARING_SKILLS: ReadonlySet<string> = Object.freeze(
     'pair-capability-assess-testing',
     'pair-capability-map-contexts',
     'pair-capability-map-subdomains',
+    'pair-process-plan-tasks',
+    'pair-process-refine-story',
   ]),
 )
 
@@ -181,14 +195,19 @@ export const APPROVAL_DECLARING_SKILLS: ReadonlySet<string> = Object.freeze(
  * The parameters one skill may receive.
  *
  * `approval` is MERGED onto whatever the skill already had rather than replacing it, and that is
- * the whole reason the family is a separate list instead of eleven `SKILL_PARAMETERS` rows: an
+ * the whole reason the family is a separate list instead of thirteen `SKILL_PARAMETERS` rows: an
  * explicit row per member would have overridden `UNKNOWN_SKILL_PARAMETERS` and silently cost every
  * one of them the `--root`/`--filter` scoping it receives today — a drift on the NON-autonomous
  * path, which is exactly what AC2 forbids.
  */
 function parametersFor(skill: string): SkillParameterMap {
   const declared = SKILL_PARAMETERS[skill] ?? UNKNOWN_SKILL_PARAMETERS
-  return APPROVAL_DECLARING_SKILLS.has(skill) ? { ...declared, ...APPROVAL_PARAMETER } : declared
+  const withApproval = APPROVAL_DECLARING_SKILLS.has(skill)
+    ? { ...declared, ...APPROVAL_PARAMETER }
+    : declared
+  return PREPARE_DECLARING_SKILLS.has(skill)
+    ? { ...withApproval, ...PREPARE_PARAMETER }
+    : withApproval
 }
 
 /** HOW the eligibility label reaches the selection on this invocation — see `Perimeter`. */
@@ -254,6 +273,7 @@ const PARAMETER_ORDER: readonly (keyof SkillArguments)[] = [
   'predicate',
   'iteration',
   'approval',
+  'prepare',
 ]
 
 /** The skill's own arguments, in a stable order, dropping anything it does not declare. */

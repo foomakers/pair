@@ -167,7 +167,17 @@ export function renderIterationLine(record: IterationRecord, intervalText: strin
       : record.next.kind === 'waiting'
         ? `waiting ${intervalText || humanInterval(record.next.ms)}`
         : 'next iteration'
-  return `  Iteration ${record.iteration}/${record.cap}: selected ${record.selected} · skipped ${skipped} · ran ${ran} · ${next}`
+  return `  Iteration ${record.iteration}/${record.cap}: selected ${record.selected} · skipped ${skipped} · ran ${ran}${describePrepare(record.outcomes)} · ${next}`
+}
+
+/** US-523: ` · prepare: N prepared, N escalated, N needs-human` — only when a card's prepare phase reported. */
+function describePrepare(outcomes: IterationRecord['outcomes']): string {
+  const count = (result: string) => outcomes.filter(o => o.prepare === result).length
+  const parts = (['prepared', 'escalated', 'needs-human', 'failed'] as const)
+    .map(result => [result, count(result)] as const)
+    .filter(([, n]) => n > 0)
+    .map(([result, n]) => `${n} ${result}`)
+  return parts.length === 0 ? '' : ` · prepare: ${parts.join(', ')}`
 }
 
 const oneLine = (value: string): string => value.replace(/[\r\n]+/g, ' ').trim()

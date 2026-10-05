@@ -5,6 +5,7 @@ import type { CardLock, LockAcquirer } from './card-lock'
 import { isInterrupted, trackEngine } from './interrupt'
 import type { RunCommandConfig } from './parser'
 import type { RootCandidate } from './root-plan'
+import { parsePrepareResult, type PrepareResult } from './card-prepare'
 
 /**
  * The `--root --parallel` process pool (US-491 T-4/T-5).
@@ -25,6 +26,8 @@ export interface CardOutcome {
   readonly detail: string
   readonly startedAt?: string
   readonly endedAt?: string
+  /** US-523: how the card's prepare phase ended, when it ran or was parked (`PREPARE-RESULT:` line of the child). */
+  readonly prepare?: PrepareResult
 }
 
 /** How one card process ended — the child's exit, as the OS reports it. */
@@ -33,6 +36,8 @@ export interface CardProcessExit {
   readonly signal: string | null
   /** Set when the process could not be spawned at all. */
   readonly error?: string
+  /** US-523: the prepare outcome the child printed (`PREPARE-RESULT: <result>`), when it printed one. */
+  readonly prepare?: PrepareResult
 }
 
 export type CardProcessRunner = (input: {
@@ -46,8 +51,9 @@ export function outcomeOfExit(id: string, exit: CardProcessExit): Omit<CardOutco
   if (exit.error !== undefined)
     return { id, outcome: 'crashed', detail: `spawn failed: ${exit.error}` }
   if (exit.signal !== null) return { id, outcome: 'crashed', detail: `killed by ${exit.signal}` }
-  if (exit.exitCode === 0) return { id, outcome: 'completed', detail: 'exit 0' }
-  return { id, outcome: 'failed', detail: `exit ${String(exit.exitCode)}` }
+  const prepare = exit.prepare !== undefined ? { prepare: exit.prepare } : {}
+  if (exit.exitCode === 0) return { id, outcome: 'completed', detail: 'exit 0', ...prepare }
+  return { id, outcome: 'failed', detail: `exit ${String(exit.exitCode)}`, ...prepare }
 }
 
 // ── the pool ───────────────────────────────────────────────────────────────────────────────────
@@ -184,10 +190,14 @@ export function prefixLine(id: string, line: string): string {
   return line.startsWith('DISPATCH-RECORD:') ? line : `  [#${id}] ${line}`
 }
 
-function relay(child: ChildProcess, id: string): void {
+function relay(child: ChildProcess, id: string, onPrepare: (result: PrepareResult) => void): void {
   for (const stream of [child.stdout, child.stderr]) {
     if (stream === null) continue
-    createInterface({ input: stream }).on('line', line => console.log(prefixLine(id, line)))
+    createInterface({ input: stream }).on('line', line => {
+      const prepare = parsePrepareResult(line)
+      if (prepare !== undefined) onPrepare(prepare)
+      console.log(prefixLine(id, line))
+    })
   }
 }
 
@@ -221,9 +231,12 @@ export const spawnCardProcess: CardProcessRunner = ({ card, args, cwd }) =>
       return
     }
     trackEngine(child)
-    relay(child, card.id)
+    let prepare: PrepareResult | undefined
+    relay(child, card.id, result => (prepare = result))
     child.once('error', error => resolve({ exitCode: null, signal: null, error: error.message }))
-    child.once('close', (exitCode, signal) => resolve({ exitCode, signal }))
+    child.once('close', (exitCode, signal) =>
+      resolve({ exitCode, signal, ...(prepare !== undefined && { prepare }) }),
+    )
   })
 
 // ── one planned card, locked and run ───────────────────────────────────────────────────────────

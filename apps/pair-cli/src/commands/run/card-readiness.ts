@@ -123,6 +123,21 @@ export function readStateMapping(fs: FileSystemService, projectRoot: string): St
   return parseStateMapping(fs.readFileSync(path))
 }
 
+/**
+ * canonical-states.md Writing state: the FIRST board state mapped to Ready (map order is the override);
+ * no mapping ⇒ the canonical name `Ready`; a mapping with no Ready row HALTs (rule 5) — never a guessed write.
+ */
+export function readyBoardState(mapping: StateMapping): string {
+  if (mapping === undefined) return 'Ready'
+  const row = mapping.find(r => r.macrostate === 'Ready')
+  if (row === undefined) {
+    throw new Error(
+      `no-ready-state: ${WAY_OF_WORKING_PATH} \`## State Mapping\` maps no board state to Ready, so Ready cannot be written. See ${SCHEMA_POINTER}.`,
+    )
+  }
+  return row.boardState
+}
+
 /** Reading rules 1–4: the map (case-insensitive), then the canonical names, else unmapped. */
 export function resolveMacrostate(literal: string, mapping: StateMapping): Macrostate | undefined {
   const mapped = mapping?.find(row => sameLiteral(row.boardState, literal))

@@ -92,7 +92,8 @@ function loopRequest(predicateSelector: string | undefined, scope: SelectionScop
         ]
   return [
     'This selection feeds a watch loop, so EVERY candidate MUST also carry a boolean `"escalated"` ' +
-      '(add it to each candidate object): true when the card carries the autonomy escalation marker and ' +
+      '(add it to each candidate object): true when the card carries the autonomy escalation marker or the ' +
+      '`needs-review` label (an autonomous preparation escalated) and ' +
       "no human has acted since (the autonomy model's own clearing rule), false otherwise. Never omit it and " +
       'never guess — if you cannot tell, the selection is unusable.',
     ...snapshot,

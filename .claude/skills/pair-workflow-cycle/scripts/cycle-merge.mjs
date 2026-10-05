@@ -35,7 +35,8 @@ import { existsSync, rmSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { decide as decideAutonomy, gateFromLegacyTiers, escalationComment, ESCALATION_MARKER, parseGate } from './autonomy-policy.mjs'
+import { decide as decideAutonomy, gateFromLegacyTiers, escalationComment, ESCALATION_MARKER, parseGate, conditionError } from './autonomy-policy.mjs'
+import { assertRunOwnsStory } from './run-guard.mjs'
 
 const SHA_RE = /^[0-9a-f]{40}$/
 const TIER_RE = /^[A-Za-z0-9][A-Za-z0-9:_./-]*$/
@@ -306,7 +307,7 @@ export function parseArgs(argv) {
     } catch {
       throw new Error('--conditions must be a JSON array of conditions')
     }
-    if (!Array.isArray(conditions) || !conditions.length || conditions.some(c => typeof c !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9:_./-]*$/.test(c))) throw new Error('--conditions must be a non-empty JSON array of label-shaped conditions')
+    if (!Array.isArray(conditions) || !conditions.length || conditions.some(c => conditionError(c) !== null)) throw new Error('--conditions must be a non-empty JSON array of label-shaped conditions')
     if (opts.repo !== undefined && !/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(opts.repo)) throw new Error('--repo must be owner/name')
     return { cmd, opts: { ...opts, story: Number(opts.story), conditions } }
   }
@@ -353,6 +354,7 @@ const isMain = () => {
 if (isMain()) {
   try {
     const { cmd, opts } = parseArgs(process.argv.slice(2))
+    if (cmd === 'escalate') assertRunOwnsStory({ dir: opts.dir, story: opts.story, repo: opts.repo })
     const HOSTS = await import('./host/index.mjs')
     const hosts = HOSTS.bindHosts({ dir: opts.dir })
     if (cmd === 'escalate') {

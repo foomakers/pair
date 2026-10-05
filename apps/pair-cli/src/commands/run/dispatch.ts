@@ -42,6 +42,10 @@ export type DispatchSkipReason =
   | 'ineligible'
   | 'unmapped'
   | 'run-in-progress'
+  /** US-523: a Draft card under a prepare gate that needs a human (`always`), skipped unattended. */
+  | 'prepare-needs-human'
+  /** US-523: a card a prepare escalation labelled `needs-review`, not re-picked until a human acts. */
+  | 'escalated'
 
 export type DispatchDecision =
   | {

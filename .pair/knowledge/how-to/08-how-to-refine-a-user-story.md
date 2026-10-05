@@ -42,6 +42,7 @@ This how-to orchestrates the `/pair-process-refine-story` skill.
 
 - Before authoring any DoR section, establish explicit AI↔human shared understanding on goal, acceptance criteria, edge cases, dependencies, design, and risks (R3.11 alignment gate)
 - Without `/pair-capability-grill`, the per-phase developer approval gates below are the accepted fallback — but alignment before the story reaches Ready is never skipped
+- The only exception is the maintainer-declared **prepare gate** (`prepare: never` or `when` in `## Autonomy`, or `--prepare`): refinement then runs with `$approval: auto` and `$prepare: never|when`, self-answers into the story's `## Assumptions` for a human to overturn, and escalates (`needs-review`, the card stays Draft) when a boundary condition fires or a product question cannot be settled from the repository. The default `prepare: always` keeps this guide exactly as written — see the [automation policy](../guidelines/collaboration/automation/automation-policy.md) and ADR-028
 
 ### Phase 1: Story Selection
 

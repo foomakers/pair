@@ -11,6 +11,7 @@ import {
   SKILL_PARAMETERS,
   APPROVAL_DECLARING_SKILLS,
   APPROVAL_PARAMETER,
+  PREPARE_PARAMETER,
   describeApprovalPosture,
 } from './invocation'
 import { ENGINES } from './engines'
@@ -49,6 +50,7 @@ describe('buildSkillArgs', () => {
     const declared = [
       ...Object.values(SKILL_PARAMETERS).flatMap(map => Object.values(map)),
       ...Object.values(APPROVAL_PARAMETER),
+      ...Object.values(PREPARE_PARAMETER),
     ]
 
     expect([...new Set(declared)].sort()).toEqual([
@@ -57,10 +59,25 @@ describe('buildSkillArgs', () => {
       '--filter',
       '--iteration',
       '--predicate',
+      '--prepare',
       '--root',
       '--status',
       '--story',
     ])
+  })
+
+  it('US-523: --prepare is rendered for refine-story alone, after --approval', () => {
+    expect(
+      buildSkillArgs('pair-process-refine-story', {
+        root: '9',
+        approval: 'auto',
+        prepare: 'never',
+      }),
+    ).toEqual(['--story', '9', '--approval', 'auto', '--prepare', 'never'])
+    expect(
+      buildSkillArgs('pair-process-plan-tasks', { root: '9', approval: 'auto', prepare: 'when' }),
+    ).toEqual(['--story', '9', '--approval', 'auto'])
+    expect(buildSkillArgs('pair-process-refine-story', { root: '9' })).toEqual(['--story', '9'])
   })
 
   it('scopes a catalogued workflow with the argument that workflow declares, not with --root', () => {
@@ -245,7 +262,7 @@ describe('APPROVAL_DECLARING_SKILLS matches the corpus that defines it', () => {
     expect([...APPROVAL_DECLARING_SKILLS].sort()).toEqual(corpusFamily())
   })
 
-  it('holds the eleven members ADR-021 converted, and excludes its callers', () => {
+  it('holds the thirteen members ADR-021 converted, and excludes its callers', () => {
     // Spelled out because the derived assertion above would also pass if BOTH sides drifted the
     // same way (a member deleted from the corpus and from the set in one edit).
     expect([...APPROVAL_DECLARING_SKILLS].sort()).toEqual([
@@ -260,6 +277,8 @@ describe('APPROVAL_DECLARING_SKILLS matches the corpus that defines it', () => {
       'pair-capability-assess-testing',
       'pair-capability-map-contexts',
       'pair-capability-map-subdomains',
+      'pair-process-plan-tasks',
+      'pair-process-refine-story',
     ])
     // `assess-cost`/`assess-coupling` have no approval round; `bootstrap` PASSES the signal to the
     // family rather than declaring it. All three would be invented arguments (ADR-021 Trade-offs).
@@ -267,7 +286,6 @@ describe('APPROVAL_DECLARING_SKILLS matches the corpus that defines it', () => {
       'pair-capability-assess-cost',
       'pair-capability-assess-coupling',
       'pair-process-bootstrap',
-      'pair-process-refine-story',
     ])
       expect(APPROVAL_DECLARING_SKILLS.has(caller)).toBe(false)
   })
