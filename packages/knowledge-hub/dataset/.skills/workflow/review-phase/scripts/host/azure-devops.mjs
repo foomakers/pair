@@ -166,6 +166,19 @@ export default defineAdapter({
         azJson(['boards', 'work-item', 'update', '--id', cardId(id), '--description', body], 'boards work-item update')
         return { id }
       },
+      // US-523: Azure Boards labels are work-item tags (`System.Tags`, `;`-separated) — added once, READ BACK.
+      // Reported, never thrown, like the board write.
+      labelCard({ id, label }) {
+        try {
+          const tags = String(showCard(id)?.fields?.['System.Tags'] ?? '').split(';').map(t => t.trim()).filter(Boolean)
+          if (!tags.includes(label)) azJson(['boards', 'work-item', 'update', '--id', cardId(id), '--fields', `System.Tags=${[...tags, label].join('; ')}`], 'boards work-item update')
+          const now = String(showCard(id)?.fields?.['System.Tags'] ?? '').split(';').map(t => t.trim())
+          const has = now.includes(label)
+          return { applied: label, confirmed: has, error: has ? null : `read-back: tag ${JSON.stringify(label)} is not on work item ${cardId(id)}` }
+        } catch (e) {
+          return { applied: label, confirmed: false, error: e.message }
+        }
+      },
       parseCardRef(ref, { repo } = {}) {
         const m = CARD_URL_RE.exec(String(ref ?? ''))
         return m ? { number: Number(m[3]), inScope: m[2] === splitRepo(repo).project } : null
