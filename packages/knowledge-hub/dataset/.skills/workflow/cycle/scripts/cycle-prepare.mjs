@@ -21,6 +21,7 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { parseGate, escalationConditions, gateToString, GATE_MODES } from './autonomy-policy.mjs'
+import { assertRunOwnsStory } from './run-guard.mjs'
 
 export const ROUTES = ['run-interactive', 'run-autonomous', 'skip-needs-human', 'skip-escalated', 'escalate', 'nothing-to-prepare']
 export const BOUNDARIES = ['B0', 'B1', 'B2']
@@ -299,6 +300,7 @@ if (isMain()) {
       process.stdout.write(JSON.stringify(decide({ gate: opts.gate, labels: opts.labels, readiness: opts.readiness, attended: opts.attended, boundary: opts.boundary, source: opts.source })) + '\n')
       process.exit(0)
     }
+    assertRunOwnsStory({ dir: opts.dir, story: opts.story, repo: opts.repo })
     const HOSTS = await import('./host/index.mjs')
     const hosts = HOSTS.bindHosts({ dir: opts.dir })
     const out =

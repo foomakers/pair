@@ -395,7 +395,7 @@ test('azure labelCard: adds the tag to System.Tags once, reads it back', () => {
   assert.equal(updates().length, 1)
 })
 
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 // A recorder CLI: a node script that logs every call into a state file, runs the handler (args, state) and prints its
@@ -455,7 +455,8 @@ const GH = (args, st, input) => {
 }
 function tracker({ labels = [], body = '' } = {}) {
   const bin = fakeBin(GH)
-  const dir = mkdtempSync(join(tmpdir(), 'prep-run-'))
+  const dir = join(mkdtempSync(join(tmpdir(), 'prep-run-')), '7')
+  mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, '.host-binding.json'), JSON.stringify({ schemaVersion: 1, pmTool: 'github', codeHost: 'github' }))
   const sf = fakeBins.get(bin)
   writeFileSync(sf, JSON.stringify({ calls: [], labels, body, inputs: [] }))
@@ -619,4 +620,42 @@ test('r2-7: `decide --story` reads the card\'s CURRENT labels itself (a label li
   const ok = tracker({ labels: ["won't fix", 'triaged'] })
   assert.equal(ok.run(['decide', ...gateArg(when([], ['triaged'])), '--readiness', 'draft', '--attended', 'false', '--boundary', 'B0', '--dir', ok.dir, '--story', '7', '--repo', 'o/r']).out.route, 'run-autonomous')
   assert.throws(() => parseArgs(['decide', ...gateArg(NEVER), '--readiness', 'draft', '--attended', 'false', '--boundary', 'B0', '--story', '7', '--labels', '[]']), /mutually exclusive/)
+})
+
+// ── run-dir / story / repo guard: a write for --story never lands in a repo the run does not belong to ─────────
+const ESC_ARGS = (dir, extra = []) => ['escalate', '--dir', dir, '--story', '7', '--boundary', 'B1', ...gateArg(NEVER), '--source', 'argument', '--conditions', '["x"]', ...extra]
+const COMPLETE_ARGS = (dir, extra = []) => ['complete', '--dir', dir, '--story', '7', ...gateArg(NEVER), '--source', 'argument', '--refinedAutonomously', 'false', ...extra]
+function runDirAt(name, handoffs = []) {
+  const root = mkdtempSync(join(tmpdir(), 'prep-guard-'))
+  const dir = join(root, name)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, '.host-binding.json'), JSON.stringify({ schemaVersion: 1, pmTool: 'github', codeHost: 'github' }))
+  handoffs.forEach((h, i) => writeFileSync(join(dir, `a${i}-r0.json`), JSON.stringify(h)))
+  return dir
+}
+test('guard: escalate/complete refuse a run dir that does not belong to --story — exit non-zero, no host call', () => {
+  for (const mk of [() => runDirAt('8'), () => runDirAt('story-x', [{ story: '8' }]), () => runDirAt('anything')]) {
+    for (const args of [ESC_ARGS, COMPLETE_ARGS]) {
+      const t = tracker({ body: HUMAN_REFINED })
+      const r = t.run(args(mk()))
+      assert.notEqual(r.code, 0)
+      assert.match(r.out.error, /run dir/)
+      assert.equal(t.state().calls.length, 0)
+    }
+  }
+})
+test('guard: a dir named for the story, or whose handoffs carry the story, is accepted', () => {
+  for (const dir of [runDirAt('7'), runDirAt('weird', [{ story: '7' }, { story: 7 }])]) {
+    const t = tracker({ body: HUMAN_REFINED })
+    const r = t.run(ESC_ARGS(dir))
+    assert.equal(r.code, 0, JSON.stringify(r.out))
+  }
+})
+test('guard: a recorded run repo that differs from --repo is refused with no write; a matching one proceeds', () => {
+  const t = tracker({ body: HUMAN_REFINED })
+  const bad = t.run(ESC_ARGS(runDirAt('7', [{ story: '7', repo: 'other/repo' }]), ['--repo', 'o/r']))
+  assert.notEqual(bad.code, 0)
+  assert.match(bad.out.error, /repo/)
+  assert.equal(t.state().calls.length, 0)
+  assert.equal(t.run(ESC_ARGS(runDirAt('7', [{ story: '7', repo: 'o/r' }]), ['--repo', 'o/r'])).code, 0)
 })
