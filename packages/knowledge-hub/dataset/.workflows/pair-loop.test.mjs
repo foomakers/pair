@@ -726,7 +726,7 @@ test('approvalArgsFor: fails closed on a malformed skill name rather than invent
   for (const bogus of [undefined, null, '', 42, {}]) assert.equal(approvalArgsFor(bogus), '')
 })
 
-test('APPROVAL_DECLARING_SKILLS: exactly the eleven members ADR-021 converted', () => {
+test('APPROVAL_DECLARING_SKILLS: exactly the thirteen members ADR-021 converted', () => {
   const { APPROVAL_DECLARING_SKILLS } = getHelpers()
   assert.deepEqual([...APPROVAL_DECLARING_SKILLS].sort(), [
     'pair-capability-assess-ai',

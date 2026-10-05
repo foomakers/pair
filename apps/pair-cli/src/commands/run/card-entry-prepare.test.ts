@@ -15,8 +15,12 @@ import type {
 } from './cycle-scripts'
 import type { DriveCycleInput, DriveCycleResult } from './run-context'
 // The REAL decision function — the bridge fake delegates to it, so no rule is re-derived in this test.
-// @ts-expect-error — an untyped .mjs shipped as a skill script
-import { decide as realDecide } from '../../../../../packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-prepare.mjs'
+import {
+  decide as realDecide,
+  openQuestionOf as scriptOpenQuestionOf,
+  // @ts-expect-error — an untyped .mjs shipped as a skill script
+} from '../../../../../packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-prepare.mjs'
+import { openQuestionOf } from './card-prepare'
 
 /**
  * US-523 T-6 — the prepare gate at `pair-cli run --card`: the DoR fallback's unattended skip is replaced
@@ -578,5 +582,84 @@ describe('r0-5: the open-question escalation and its re-run', () => {
       expect(r.escalations).toEqual([])
       expect(r.calls).toContain('complete')
     }
+  })
+})
+
+describe('review r2: completion carries who refined; needs-review is one rule at every entry; "answered" is defined', () => {
+  it('[r2-1] a Draft card (the agent refined it) ⇒ complete owes the autonomous evidence; a refined-no-breakdown card (a human did) ⇒ it does not', async () => {
+    const draft = await run({ prepare: selection(gate('never')), autonomous: true })
+    expect((draft.completions[0] as { refinedAutonomously?: boolean }).refinedAutonomously).toBe(
+      true,
+    )
+    const human = await run({
+      readiness: 'refined-no-breakdown',
+      prepare: selection(gate('never')),
+      autonomous: true,
+    })
+    expect((human.completions[0] as { refinedAutonomously?: boolean }).refinedAutonomously).toBe(
+      false,
+    )
+  })
+
+  it('[r2-3] unattended, a READY card carrying needs-review is skipped as escalated at run --card — the loop and `decide` skip it too', async () => {
+    const r = await run({
+      readiness: 'ready',
+      prepare: selection(gate('never')),
+      autonomous: true,
+      labels: [['needs-review']],
+    })
+    expect(r.calls).not.toContain('cycle')
+    expect(r.code).toBe(0)
+    expect(skipAudits(r)[0]).toContain('reason=escalated')
+  })
+
+  it('[r2-3] a Ready card without the label, or attended, enters the cycle as before', async () => {
+    for (const [autonomous, labels] of [
+      [true, []],
+      [false, ['needs-review']],
+    ] as const) {
+      const r = await run({
+        readiness: 'ready',
+        prepare: selection(gate('never')),
+        autonomous,
+        labels: [[...labels]],
+      })
+      expect(r.calls).toContain('cycle')
+    }
+  })
+
+  it('[r2-3] no autonomy resolved ⇒ a Ready card never even has its labels read (byte-for-byte the pre-#523 entry)', async () => {
+    const r = await run({ readiness: 'ready', autonomous: true, labels: [['needs-review']] })
+    expect(r.calls).toContain('cycle')
+  })
+
+  it('[r2-6] a ticked (`- [x]`) or `none` entry is answered: the re-run completes; an unticked one escalates again', async () => {
+    const done = await run({
+      prepare: selection(gate('never')),
+      autonomous: true,
+      body: '## Assumptions\n\n- x\n\n## Open Questions\n\n- [x] pricing tier?\n  Answer: free (see Assumptions)\n',
+    })
+    expect(done.escalations).toEqual([])
+    expect(done.calls).toContain('complete')
+    const open = await run({
+      prepare: selection(gate('never')),
+      autonomous: true,
+      body: '## Assumptions\n\n- x\n\n## Open Questions\n\n- [x] settled\n- [ ] pricing tier?\n',
+    })
+    expect(open.escalations[0]?.openQuestion).toBe('- [ ] pricing tier?')
+  })
+
+  it('[r2-6] pair-cli and the shared script read open questions identically', () => {
+    const bodies = [
+      '## S\n\nx\n',
+      '## Open Questions\n\n',
+      '## Open Questions\n\nnone\n',
+      '## Open Questions\n\n- none\n\n## N\n',
+      '## Open Questions\n\n- [x] a\n  b\n- c\n  d\n- [X] e\n',
+      '## Open Questions\n\n- a\n- b\n',
+      '## Open Questions\n\nfree text question?\n',
+      `## Open Questions\n\n- ${'q'.repeat(600)}\n`,
+    ]
+    for (const body of bodies) expect(openQuestionOf(body)).toBe(scriptOpenQuestionOf(body))
   })
 })

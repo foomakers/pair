@@ -195,7 +195,7 @@ export const APPROVAL_DECLARING_SKILLS: ReadonlySet<string> = Object.freeze(
  * The parameters one skill may receive.
  *
  * `approval` is MERGED onto whatever the skill already had rather than replacing it, and that is
- * the whole reason the family is a separate list instead of eleven `SKILL_PARAMETERS` rows: an
+ * the whole reason the family is a separate list instead of thirteen `SKILL_PARAMETERS` rows: an
  * explicit row per member would have overridden `UNKNOWN_SKILL_PARAMETERS` and silently cost every
  * one of them the `--root`/`--filter` scoping it receives today — a drift on the NON-autonomous
  * path, which is exactly what AC2 forbids.

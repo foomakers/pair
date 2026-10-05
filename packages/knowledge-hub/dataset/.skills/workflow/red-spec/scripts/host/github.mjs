@@ -183,6 +183,17 @@ export default defineAdapter({
           return { applied: label, confirmed: false, error: e.message }
         }
       },
+      // US-523: remove one label from the CARD (an attended completion clears `needs-review`), READ BACK. Reported, never thrown.
+      unlabelCard({ id, label, repo }) {
+        try {
+          gh(withRepo(['issue', 'edit', String(id), '--remove-label', label], repo))
+          const now = parseJson(gh(withRepo(['issue', 'view', String(id)], repo).concat(['--json', 'labels'])), { command: 'gh issue view labels' })
+          const has = (now?.labels ?? []).some(l => l?.name === label)
+          return { removed: label, confirmed: !has, error: has ? `read-back: label ${JSON.stringify(label)} is still on issue #${id}` : null }
+        } catch (e) {
+          return { removed: label, confirmed: false, error: e.message }
+        }
+      },
       // One marker-keyed comment on the CARD (never the PR thread): the park path's "awaits action".
       commentOnCard({ id, marker, body, repo }) {
         return upsertOnIssue({ number: id, marker, body, repo })

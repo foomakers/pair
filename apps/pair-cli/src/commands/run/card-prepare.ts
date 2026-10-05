@@ -125,11 +125,25 @@ export function sectionOf(body: string | undefined, heading: string): string | n
   return (next === null ? rest : rest.slice(0, next.index)).trim()
 }
 
-/** The open questions the refinement left (AC10) — one line, or `undefined` when there are none. */
+/** An entry is ANSWERED when ticked (`- [x]`, the answer recorded under `## Assumptions`) or `none`. */
+const ANSWERED_ENTRY = /^\s*(?:[-*]\s+\[[xX]\]|[-*]?\s*none\b)/i
+
+/**
+ * The open questions the refinement left (AC10) — one line, or `undefined` when there are none. Mirrors
+ * `cycle-prepare.mjs`'s `openQuestionOf` (a parity test holds them equal): an indented line continues the
+ * entry above it; only entries not answered count.
+ */
 export function openQuestionOf(body: string | undefined): string | undefined {
   const section = sectionOf(body, 'Open Questions')
-  if (section === null || section.length === 0 || /^none\b/i.test(section)) return undefined
-  return section.replace(/\s*\n\s*/g, ' ').slice(0, 500)
+  if (section === null) return undefined
+  const entries: string[] = []
+  for (const line of section.split('\n')) {
+    if (line.trim().length === 0) continue
+    if (/^\s+\S/.test(line) && entries.length > 0) entries[entries.length - 1] += ` ${line.trim()}`
+    else entries.push(line.trim())
+  }
+  const open = entries.filter(entry => !ANSWERED_ENTRY.test(entry))
+  return open.length > 0 ? open.join(' ').slice(0, 500) : undefined
 }
 
 /** The prepare outcome a card process printed on a line, when that line is the `PREPARE-RESULT:` one. */
@@ -387,7 +401,11 @@ async function refineStep(drive: Drive, mode: 'never' | 'when'): Promise<number 
 }
 
 /** Planning, B2, then the ONE Ready write. 0 = the card is Ready with its breakdown. */
-async function planStep(drive: Drive, readyState: string): Promise<number> {
+async function planStep(
+  drive: Drive,
+  readyState: string,
+  refinedAutonomously: boolean,
+): Promise<number> {
   const { entry, phase, routes } = drive
   const planned = await routes.driveSkill(PLAN_SKILL, 'Refined, task breakdown next', {
     approval: 'auto',
@@ -402,6 +420,7 @@ async function planStep(drive: Drive, readyState: string): Promise<number> {
     source: phase.source,
     state: readyState,
     attended: phase.attended,
+    refinedAutonomously,
   })
   if (done.completed) {
     console.log(
@@ -436,7 +455,7 @@ async function runAutonomous(
   }
   const code = await routes.underLock(PREPARE_WORKFLOW, async () => {
     const stopped = readiness === 'draft' ? await refineStep(drive, mode) : undefined
-    return stopped ?? (await planStep(drive, readyState))
+    return stopped ?? (await planStep(drive, readyState, readiness === 'draft'))
   })
   if (code !== 0) return code
   // AC8: `until: ready` stops right after the phase; otherwise the card continues into the cycle.

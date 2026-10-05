@@ -311,6 +311,11 @@ export interface PrepareCompleteOptions extends PrepareWriterOptions {
   readonly state?: string
   /** The entry's real attendance (default false): lifts only the `needs-review` skip at the B2 re-check. */
   readonly attended?: boolean
+  /**
+   * Whether the agent ran the refinement in THIS prepare (default true — fail closed): only then does `complete`
+   * owe the `## Assumptions` + provenance evidence. A card a human refined (B1 entry) has none to show.
+   */
+  readonly refinedAutonomously?: boolean
 }
 export interface PrepareEscalation {
   readonly outcome: 'escalated'
@@ -324,6 +329,8 @@ export interface PrepareCompletion {
   readonly conditions?: readonly string[]
   readonly escalation?: PrepareEscalation
   readonly state?: string
+  /** An attended completion clears `needs-review`: whether the removal was confirmed. */
+  readonly needsReview?: { readonly cleared: boolean; readonly error?: string }
 }
 
 export interface CycleProfileIdentity {
@@ -514,6 +521,10 @@ const completeArgs = (o: PrepareCompleteOptions): ScriptArgs => [
   ...optional([
     ['state', o.state],
     ['attended', o.attended === undefined ? undefined : String(o.attended)],
+    [
+      'refinedAutonomously',
+      o.refinedAutonomously === undefined ? undefined : String(o.refinedAutonomously),
+    ],
   ]),
 ]
 

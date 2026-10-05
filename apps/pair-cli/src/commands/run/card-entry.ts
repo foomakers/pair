@@ -6,12 +6,17 @@ import type { ResolvedInvocation } from './resolve-skill'
 import { createPerimeter } from './perimeter'
 import { isEligibilityOffWarning, POLICY_PATH, type AutomationPolicy } from './automation-policy'
 import type { CardReadiness } from './cycle-scripts'
-import { CardUnreadableError, createCardReadinessProbe } from './cycle-wiring'
+import { CardUnreadableError, createCardReadinessProbe, readCardLabels } from './cycle-wiring'
 import { CardOutOfScopeError } from './card-readiness'
 import { filterDeliveryFor } from './invocation'
 import type { DispatchSkipReason } from './dispatch'
 import { driveRun } from './loop-driver'
-import { handlePreparation, type PrepareRoutes, type PromptExtras } from './card-prepare'
+import {
+  handlePreparation,
+  NEEDS_REVIEW,
+  type PrepareRoutes,
+  type PromptExtras,
+} from './card-prepare'
 import { prepareCycleCoordinator, resolveEngineFor } from './cycle-entry'
 import { refuseProfileOffCycle } from './workflow-profile'
 import {
@@ -205,6 +210,7 @@ async function handleDorFallback(
   }
   const prep = PREP_ROUTES[readiness]
   if (prep === undefined) {
+    if (isEscalatedReady(input, deps)) return skipEscalatedCard(input, deps)
     console.log(
       `  Fallback: card ${decision.card} is Ready (Definition of Ready met) — entering the delivery cycle`,
     )
@@ -218,6 +224,18 @@ async function handleDorFallback(
     prepareRoutes(input, deps, entry, prep),
     deps.prepare,
   )
+}
+
+/**
+ * US-523 AC7 for a READY card: `needs-review` blocks an unattended pick whatever the readiness, exactly as the
+ * loop and `cycle-prepare.mjs decide` do. Consulted only when autonomy resolved (otherwise the entry is the
+ * pre-#523 one, labels never read).
+ */
+function isEscalatedReady(input: DorFallbackInput, deps: RunHandlerDependencies): boolean {
+  const { config, context, cwd, decision } = input
+  if (config.autonomous !== true || context.autonomySelection === undefined) return false
+  const labels = (deps.prepare?.readLabels ?? readCardLabels)(decision.card, cwd)
+  return labels?.includes(NEEDS_REVIEW) === true
 }
 
 /** Today's behaviours, handed to the prepare phase as callbacks — it owns the decision, never the spawn. */
@@ -247,7 +265,7 @@ function prepareRoutes(
 function skipEscalatedCard(input: DorFallbackInput, deps: RunHandlerDependencies): number {
   console.log(
     `  Skipped: card ${input.decision.card} carries \`needs-review\` (an autonomous preparation escalated) — ` +
-      `a human decides: remove the label, or refine the card attended.`,
+      `a human decides: remove the label, or run the card attended (an attended completion clears it).`,
   )
   console.log(chalk.dim('  Nothing was spawned.'))
   recordSkip(input.context, deps, { ...input.decision, reason: 'escalated' })

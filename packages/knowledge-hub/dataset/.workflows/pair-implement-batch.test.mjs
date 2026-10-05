@@ -2350,3 +2350,37 @@ test('US-523: the batch holds no prepare rule — the prepare gate is evaluated 
   const code = SRC.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
   assert.equal(/escalationConditions|has\.some|lacks\.some|\.lacks\.filter|\.has\.filter/.test(code), false)
 })
+
+// ── review r2 (US-523): the resolve prompt asks for `effective`; the prepare prompt never interpolates card text; the default parks a Draft ──
+test('US-523 r2-5: the resolve prompt asks the script\'s `effective` back, so a declared gate keeps its true source in the provenance', async () => {
+  const r = await driveWith({ prepare: 'never' }, { resolved: PREPARING(GATE('never'), 'pr', false, 'adoption') })
+  const resolve = r.calls.find(c => c.opts.label === 'autonomy:resolve')
+  assert.match(resolve.prompt, /Return \{[^}]*\beffective\b[^}]*\}/)
+  assert.match(prepareCalls(r)[0].prompt, /source: adoption/)
+})
+
+test('US-523 r2-7: the prepare prompt hands card text to scripts only by reference (--story / --openQuestionFromCard), never as a quoted argument', async () => {
+  const r = await driveWith({ prepare: 'never' }, { resolved: PREPARING(GATE('never'), 'pr', false) })
+  const [{ prompt }] = prepareCalls(r)
+  assert.match(prompt, /cycle-prepare\.mjs decide [^`]*--dir [^ ]+ --story 292/)
+  assert.doesNotMatch(prompt, /--labels '/)
+  assert.doesNotMatch(prompt, /--openQuestion '/)
+  assert.match(prompt, /escalate --dir/)
+  assert.match(prompt, /`--openQuestionFromCard true`/)
+  assert.match(prompt, /never[^.]*(build|compose|interpolate)[^.]*(card text|label)/i)
+})
+
+test('US-523 r2-1: the prepare prompt tells `complete` whether the agent refined in this prepare (--refinedAutonomously)', async () => {
+  const r = await driveWith({ prepare: 'never' }, { resolved: PREPARING(GATE('never'), 'pr', false) })
+  assert.match(prepareCalls(r)[0].prompt, /complete [^`]*--refinedAutonomously <true\|false>/)
+  assert.match(prepareCalls(r)[0].prompt, /true only when YOU ran \/pair-process-refine-story/)
+})
+
+test('US-523 r2-8: nothing declared and nothing passed ⇒ the pre-#523 batch (input contract: Ready cards) — no resolve, no prepare dispatch; an argument or an automation.md makes the default `always` apply', async () => {
+  const none = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch(), autonomy: scripted({ prepare: NEEDS_HUMAN }) })
+  assert.equal(none.calls.some(c => c.opts.label === 'autonomy:resolve'), false)
+  assert.equal(prepareCalls(none).length, 0)
+  assert.equal(rowOf(none).status, 'ready-for-merge')
+  const withText = await runWorkflow({ args: { cards: [STORY], policyText: '## Eligibility\n\nrisk:green\n' }, dispatch: stdDispatch(), autonomy: scripted({ resolved: { ok: true, active: false, policy: { until: 'pr', merge: GATE('always'), prepare: GATE('always') }, lines: [], warnings: [], errors: [] }, prepare: NEEDS_HUMAN }) })
+  assert.equal(rowOf(withText).status, 'awaiting-human')
+})
