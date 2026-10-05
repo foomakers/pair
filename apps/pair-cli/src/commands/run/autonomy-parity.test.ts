@@ -26,6 +26,7 @@ interface Row {
   readonly adoption?: string
   readonly labels: readonly string[]
   readonly labelsAtMerge?: readonly string[]
+  readonly prLabelsAtMerge?: readonly string[]
   readonly implement: Decision
   readonly merge: Decision | null
 }
@@ -66,6 +67,7 @@ beforeAll(() => {
     `#!/bin/sh
 case "$*" in
   *"issue view"*"--json labels"*) echo "{\\"labels\\":$PARITY_LABELS}" ;;
+  *"/issues/"*"/labels"*) echo "$PARITY_PR_LABELS" ;;
   *"headRefOid"*) echo ${HEAD} ;;
   *"/status"*) echo '{"statuses":[{"context":"pair-review","state":"success"},{"context":"pair-explicit-approval","state":"success"}]}' ;;
   *"--paginate"*) echo '[]' ;;
@@ -118,6 +120,9 @@ function mergeBoundary(
 ) {
   process.env['PAIR_GH_BIN'] = ghBin
   process.env['PARITY_LABELS'] = labelsJson(row.labelsAtMerge ?? row.labels)
+  process.env['PARITY_PR_LABELS'] = labelsJson(
+    row.prLabelsAtMerge ?? row.labelsAtMerge ?? row.labels,
+  )
   try {
     return mergeDecision(
       bridge().mergeCheck({
@@ -132,6 +137,7 @@ function mergeBoundary(
   } finally {
     delete process.env['PAIR_GH_BIN']
     delete process.env['PARITY_LABELS']
+    delete process.env['PARITY_PR_LABELS']
   }
 }
 

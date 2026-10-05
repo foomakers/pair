@@ -402,9 +402,30 @@ function remoteHead(main: string, branch: string): string | undefined {
   }
 }
 
-const liveLabels = (ctx: CycleDriverContext, input: CycleDriverRequest) => {
+/**
+ * D5: the labels of the card's PR RIGHT NOW (`--pr`, else the story branch's PR) — `undefined` when there is no PR yet or the
+ * host cannot say. The review writes the PR's `risk:*`; the SCRIPT (`autonomy-policy.mjs decide`) replaces the card's tier with
+ * it, so this only READS: no rule is derived here.
+ */
+export function readPrLabels(ref: string, cwd: string): readonly string[] | undefined {
+  try {
+    const out = execFileSync('gh', ['pr', 'view', ref, '--json', 'labels'], {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    const parsed = JSON.parse(out) as { labels?: ReadonlyArray<{ name?: string }> }
+    return (parsed.labels ?? []).map(label => label.name ?? '')
+  } catch {
+    return undefined
+  }
+}
+
+const liveLabels = (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) => {
   const labels = readCardLabels(input.card, ctx.cwd)
-  return labels === undefined ? {} : { labels }
+  if (labels === undefined) return {}
+  const prLabels = readPrLabels(input.pr === undefined ? co.branch : String(input.pr), ctx.cwd)
+  return prLabels === undefined ? { labels } : { labels, prLabels }
 }
 
 /** The `policy` object `resolve` takes: blocking floor, ceiling, and exactly ONE merge-offer source. */
@@ -425,7 +446,7 @@ function resolvePolicyFor(
 /** Labels are re-read live at EVERY boundary, and only when a `when` gate can read them. */
 function labelsFor(ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) {
   return co.autonomy?.until === 'merged' && co.autonomy.merge.mode === 'when'
-    ? liveLabels(ctx, input)
+    ? liveLabels(ctx, input, co)
     : {}
 }
 

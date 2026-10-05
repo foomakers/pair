@@ -70,6 +70,7 @@ import { appendFileSync, existsSync, readFileSync, realpathSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { autoAdvancePolicyError, mergeOffered } from './cycle-state.real.mjs'
+import { decide } from './autonomy-policy.mjs'
 export * from './cycle-state.real.mjs'
 
 const self = fileURLToPath(import.meta.url)
@@ -100,6 +101,16 @@ if (isMain) {
   const merged = existsSync(log) && readFileSync(log, 'utf8').split('\\n').filter(Boolean).some(l => JSON.parse(l).cmd === 'run')
   let next = { step: 'done', reviewedHead: '${REVIEWED_HEAD}', round: 1, verdict: 'approved' }
   if (!merged && mergeOffered(policy.autoAdvance, opts.tier)) next = { ...next, step: 'merge', tier: opts.tier }
+  if (policy.autonomy) {
+    // the REAL gate rule (the copied autonomy-policy.mjs), fed exactly what the driver passed
+    const d = decide({ boundary: { kind: 'merge' }, labels: opts.labels ? JSON.parse(opts.labels) : undefined, prLabels: opts.prLabels ? JSON.parse(opts.prLabels) : undefined, policy: policy.autonomy })
+    if (d.decision === 'escalate') {
+      const blocked = { step: 'blocked', reason: 'escalated', stage: d.stage, conditions: d.conditions }
+      process.stdout.write(JSON.stringify({ status: 'escalated', next: blocked, pr: ${PR}, policy: effective }) + '\\n')
+      process.exit(0)
+    }
+    if (d.decision === 'proceed' && !merged) next = { ...next, step: 'merge', tier: opts.tier }
+  }
   process.stdout.write(JSON.stringify({ status: next.step === 'done' ? 'completed' : 'in-progress', next, pr: ${PR}, policy: effective }) + '\\n')
 }
 `
@@ -133,6 +144,8 @@ if (cmd === 'check') {
   process.stdout.write(JSON.stringify(green
     ? { stage: 'merge', mode: 'run', mergeAllowed: true, failed: [], ...landed }
     : { stage: 'merge', mode: 'run', mergeAllowed: false, failed: [{ code: 'gate-red', detail: "the tier's gate set came back red at merge time" }], reason: "the tier's gate set came back red at merge time", parkKind: 'halted', merged: false, cascaded: false }) + '\\n')
+} else if (cmd === 'escalate') {
+  process.stdout.write(JSON.stringify({ stage: opts.stage, conditions: JSON.parse(opts.conditions), comment: { posted: true } }) + '\\n')
 } else { process.stdout.write(JSON.stringify({ error: 'unknown command' }) + '\\n'); process.exit(2) }
 `
 
@@ -189,6 +202,7 @@ describe('pair-cli run --card reaches the merge stage (US-490 r1-g2, finding r0-
     cpSync(join(INSTALLED_SCRIPTS, 'cycle-dispatch.mjs'), join(scripts, 'cycle-dispatch.mjs'))
     cpSync(join(INSTALLED_SCRIPTS, 'host'), join(scripts, 'host'), { recursive: true })
     cpSync(join(INSTALLED_SCRIPTS, 'cycle-state.mjs'), join(scripts, 'cycle-state.real.mjs'))
+    cpSync(join(INSTALLED_SCRIPTS, 'autonomy-policy.mjs'), join(scripts, 'autonomy-policy.mjs'))
     writeFileSync(join(scripts, 'cycle-state.mjs'), RESOLVE_STUB)
     writeFileSync(join(scripts, 'cycle-merge.mjs'), MERGE_STUB)
     writeFileSync(join(main, '.claude/skills/pair-workflow-cycle/SKILL.md'), '')
@@ -222,7 +236,8 @@ describe('pair-cli run --card reaches the merge stage (US-490 r1-g2, finding r0-
       `#!/usr/bin/env node
 const a = process.argv.slice(2)
 const labels = (process.env.FAKE_CARD_LABELS || '').split(',').filter(Boolean).map(name => ({ name }))
-const card = { number: 7, title: 'A story', state: 'OPEN', body: '**Status**: Refined\\n\\n## Task Breakdown\\n\\n- [ ] T-1\\n', labels, headRefName: '${BRANCH}' }
+const prLabels = process.env.FAKE_PR_LABELS === undefined ? labels : process.env.FAKE_PR_LABELS.split(',').filter(Boolean).map(name => ({ name }))
+const card = { number: 7, title: 'A story', state: 'OPEN', body: '**Status**: Refined\\n\\n## Task Breakdown\\n\\n- [ ] T-1\\n', labels: a[0] === 'pr' ? prLabels : labels, headRefName: '${BRANCH}' }
 if ((a[0] === 'issue' || a[0] === 'pr') && a[1] === 'view') {
   const q = a.indexOf('-q') >= 0 ? a[a.indexOf('-q') + 1] : a.indexOf('--jq') >= 0 ? a[a.indexOf('--jq') + 1] : undefined
   if (q === undefined) process.stdout.write(JSON.stringify(card))
@@ -687,5 +702,48 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
     expect(mergeCalls()).toHaveLength(0)
     expect(gatePrompts()).toHaveLength(0)
     expect(hookRuns('post-merge')).toEqual([])
+  }, 60_000)
+
+  // ── D5 (autonomous run 493): the merge gate is decided on the PR's tier, at the merge boundary, BEFORE cycle-merge check ──
+  const LACKS_GREEN = {
+    until: 'merged',
+    prepare: { mode: 'always', has: [], lacks: [] },
+    merge: { mode: 'when', has: ['needs-review'], lacks: ['risk:green'] },
+  }
+  const driveAutonomous = (fs: InMemoryFileSystemService) =>
+    createDefaultCycleDriver({
+      engine: { ...ENGINES.claude, command: join(root, 'bin', 'fake-engine') },
+      cwd: main,
+      fs,
+      location: { scriptsDir: join(main, '.claude/skills/pair-workflow-cycle/scripts') },
+      autonomyArgs: [],
+      timeoutSeconds: 30,
+      workflowVersion: CYCLE_WORKFLOW_VERSION,
+      baseBranch: CYCLE_BASE_BRANCH_DEFAULT,
+    })({ runId: 'story-7', card: '7', pr: PR, autonomy: { policy: LACKS_GREEN } } as never)
+
+  it('d5-w1: card risk:green, PR raised to risk:yellow -> escalated at the merge boundary, no cycle-merge check/run, comment posted', async () => {
+    vi.stubEnv('FAKE_CARD_LABELS', 'risk:green')
+    vi.stubEnv('FAKE_PR_LABELS', 'risk:yellow')
+
+    const outcome = await settle(driveAutonomous(adopt(undefined)))
+
+    expect(outcome).toContain('"status":"escalated"')
+    expect(
+      resolveCalls().every(c => JSON.parse(c['prLabels'] ?? 'null')?.[0] === 'risk:yellow'),
+    ).toBe(true)
+    expect(mergeCalls().map(c => c.cmd)).toEqual(['escalate'])
+    expect(mergeCalls()[0]?.opts['conditions']).toBe('["lacks:risk:green"]')
+  }, 60_000)
+
+  it('d5-c1: card and PR both risk:green -> the gate allows, the merge stage runs', async () => {
+    vi.stubEnv('FAKE_CARD_LABELS', 'risk:green')
+    vi.stubEnv('FAKE_PR_LABELS', 'risk:green')
+    vi.stubEnv('FAKE_GATE_RESULT', GATE_PASS)
+
+    const outcome = await settle(driveAutonomous(adopt(undefined)))
+
+    expect(outcome).toContain('"status":"merged"')
+    expect(mergeCalls().map(c => c.cmd)).toContain('check')
   }, 60_000)
 })

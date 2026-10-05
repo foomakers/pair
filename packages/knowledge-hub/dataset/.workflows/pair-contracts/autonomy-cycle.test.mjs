@@ -9,8 +9,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { publish, resolve, autonomyPolicyError, CYCLE_STATUSES, STEPS } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
-import { decideMerge, checkMerge, runMerge, escalate, parseArgs, readCurrentLabels } from '../../skills/pair-workflow-cycle/scripts/cycle-merge.mjs'
-import { ESCALATION_MARKER } from '../../skills/pair-workflow-cycle/scripts/autonomy-policy.mjs'
+import { decideMerge, checkMerge, runMerge, escalate, parseArgs, readCurrentLabels, readEffectiveLabels } from '../../skills/pair-workflow-cycle/scripts/cycle-merge.mjs'
+import { ESCALATION_MARKER, decide, effectiveLabels } from '../../skills/pair-workflow-cycle/scripts/autonomy-policy.mjs'
 
 const V = '3.0.0'
 const SHA = c => c.repeat(40)
@@ -136,7 +136,7 @@ test('merge: never does NOT bypass #490 signals: head moved, pair-review, approv
   const g = { mergeGate: gate('never'), labels: [GREEN] }
   assert.deepEqual(decideMerge({ ...base, ...g, signals: { ...OK, headSha: SHA('b') } }).failed.map(f => f.code), ['head-moved'])
   assert.deepEqual(decideMerge({ ...base, ...g, signals: { ...OK, pairReview: 'failure' } }).failed.map(f => f.code), ['pair-review'])
-  assert.deepEqual(decideMerge({ ...base, ...g, signals: { ...OK, explicitApproval: 'missing' } }).failed.map(f => f.code), ['explicit-approval'])
+  assert.deepEqual(decideMerge({ ...base, ...g, signals: { ...OK, explicitApproval: 'missing' }, effectiveTier: 'risk:red' }).failed.map(f => f.code), ['explicit-approval'])
   assert.deepEqual(decideMerge({ ...base, ...g, gate: undefined }).failed.map(f => f.code), ['gate-unverified'])
   assert.deepEqual(decideMerge({ ...base, ...g, currentTier: 'risk:red' }).failed.map(f => f.code), ['tier-changed'])
   assert.equal(decideMerge({ ...base, ...g, signals: null }).failed[0].code, 'signals-unreadable')
@@ -165,7 +165,7 @@ const fakeHosts = (o = {}) => {
     closeAndCascade: () => ({ closed: [42] }),
     setBoardState: () => ({ confirmed: true }),
   }
-  const code = { prHead: () => SHA('a'), readCheck: ({ context }) => 'success' && (context ? 'success' : null), readCheckRun: () => null, merge: () => ({ merged: true }) }
+  const code = { readLabels: () => { if (o.prUnreadable) throw new Error('offline'); return o.prLabels ?? [GREEN] }, prHead: () => SHA('a'), readCheck: ({ context }) => 'success' && (context ? 'success' : null), readCheckRun: () => null, merge: () => ({ merged: true }) }
   return { calls, hosts: { pm, code } }
 }
 const input = (h, extra) => ({ hosts: h.hosts, story: 42, pr: 7, repo: 'o/r', reviewedHead: SHA('a'), cardTier: GREEN, ...extra })
@@ -226,4 +226,73 @@ test('parseArgs: --autoAdvance (legacy, pair-loop) or --mergeGate, exactly one; 
   assert.deepEqual(e.opts.conditions, ['has:cost:red'])
   assert.throws(() => parseArgs(['escalate', '--dir', '/x', '--story', '42', '--stage', 'green', '--conditions', '[]']), /non-empty/)
   assert.throws(() => parseArgs(['escalate', '--dir', '/x', '--story', '42', '--stage', 'Green;', '--conditions', '["a:b"]']), /step name/)
+})
+
+// ── D5 (autonomous run 493): the merge gate reads the EFFECTIVE labels — card labels with the PR's risk:* tier (written by
+// the review, authoritative — ADL 2026-09-25, pr-states.md) replacing the card's. A card still tagged risk:green whose PR
+// the review raised to risk:yellow must escalate under `lacks: risk:green` BEFORE cycle-merge parks on anything else.
+const YELLOW = 'risk:yellow'
+const LACKS_GREEN = gate('when', ['needs-review'], [GREEN])
+
+test('D5: effectiveLabels — the PR risk tier replaces the card tier; no PR / no PR tier keeps the card; several or none-at-merge is red', () => {
+  assert.deepEqual(effectiveLabels({ labels: [GREEN, 'bug'], prLabels: [YELLOW, 'x'] }), ['bug', YELLOW])
+  assert.deepEqual(effectiveLabels({ labels: [GREEN, 'bug'], prLabels: undefined }), [GREEN, 'bug'])
+  assert.deepEqual(effectiveLabels({ labels: [GREEN, 'bug'], prLabels: ['x'] }), [GREEN, 'bug'])
+  assert.deepEqual(effectiveLabels({ labels: [GREEN, 'bug'], prLabels: [GREEN, YELLOW] }), ['bug', 'risk:red'])
+  assert.deepEqual(effectiveLabels({ labels: [GREEN], prLabels: ['x'], atMerge: true }), ['risk:red'])
+  assert.equal(effectiveLabels({ labels: undefined, prLabels: [YELLOW] }), undefined)
+})
+
+test('D5: decide reads prLabels — card risk:green + PR risk:yellow escalates at every stage boundary and at merge', () => {
+  const policy = { until: 'merged', merge: LACKS_GREEN }
+  for (const boundary of [{ kind: 'merge' }, { kind: 'stage', stage: 'verify' }, { kind: 'stage', stage: 'green' }]) {
+    const d = decide({ boundary, labels: [GREEN], prLabels: [YELLOW], policy })
+    assert.deepEqual([d.decision, d.conditions], ['escalate', ['lacks:risk:green']], JSON.stringify(boundary))
+    assert.equal(decide({ boundary, labels: [GREEN], prLabels: [GREEN], policy }).decision, boundary.kind === 'merge' ? 'proceed' : 'proceed')
+  }
+})
+
+test('D5: resolve at ready-for-merge escalates on the PR tier (not offered merge) and carries the stage', () => {
+  const dir = approvedRun()
+  const r = at(dir, auto('merged', LACKS_GREEN, { labels: [GREEN], prLabels: [YELLOW], tier: GREEN }))
+  assert.deepEqual([r.status, r.next.step, r.next.reason, r.next.conditions], ['escalated', 'blocked', 'escalated', ['lacks:risk:green']])
+  assert.equal(at(dir, auto('merged', LACKS_GREEN, { labels: [GREEN], prLabels: [GREEN], tier: GREEN })).next.step, 'merge')
+})
+
+test('D5: checkMerge escalates (escalation comment, no park comment) on the PR tier before any signal is judged', () => {
+  const h = fakeHosts({ labels: [GREEN], prLabels: [YELLOW] })
+  const out = checkMerge(input(h, { mergeGate: LACKS_GREEN }))
+  assert.deepEqual([out.mergeAllowed, out.parkKind, out.conditions], [false, 'escalated', ['lacks:risk:green']])
+  assert.equal(out.failed[0].code, 'escalated')
+  const posted = h.calls.filter(c => c[0] === 'commentOnCard')
+  assert.deepEqual(posted.map(c => c[1].marker), [ESCALATION_MARKER(42)])
+})
+
+test('D5: PR tier unreadable under a `when` gate escalates fail-safe; readEffectiveLabels reports null', () => {
+  const h = fakeHosts({ prUnreadable: true })
+  assert.equal(readEffectiveLabels({ pm: h.hosts.pm, code: h.hosts.code, story: 42, pr: 7 }), null)
+  const out = checkMerge(input(h, { mergeGate: LACKS_GREEN }))
+  assert.deepEqual([out.parkKind, out.conditions], ['escalated', ['labels-unreadable']])
+})
+
+test('D5: a PR with no risk tier at merge is red (pr-states.md fail-safe) — escalates under lacks: risk:green', () => {
+  const h = fakeHosts({ labels: [GREEN], prLabels: ['pr-state:ready-to-merge'] })
+  const out = checkMerge(input(h, { mergeGate: LACKS_GREEN }))
+  assert.deepEqual([out.parkKind, out.conditions], ['escalated', ['lacks:risk:green']])
+})
+
+test('D5 control: card and PR both risk:green and gate lacks risk:green -> merge allowed', () => {
+  const h = fakeHosts({ labels: [GREEN], prLabels: [GREEN] })
+  assert.equal(checkMerge(input(h, { mergeGate: gate('when', [], [GREEN]) })).mergeAllowed, true)
+})
+
+test('D4 through checkMerge: yellow PR, approval check absent, review success -> merge allowed under never', () => {
+  const h = fakeHosts({ labels: [YELLOW], prLabels: [YELLOW] })
+  h.hosts.code.readCheck = ({ context }) => (context === 'pair-review' ? 'success' : null)
+  const out = checkMerge({ ...input(h, { mergeGate: gate('never') }), cardTier: YELLOW })
+  assert.deepEqual([out.mergeAllowed, out.failed], [true, []])
+  const red = fakeHosts({ labels: [YELLOW], prLabels: ['risk:red'] })
+  red.hosts.code.readCheck = h.hosts.code.readCheck
+  const parked = checkMerge({ ...input(red, { mergeGate: gate('never') }), cardTier: YELLOW })
+  assert.deepEqual([parked.mergeAllowed, parked.parkKind, parked.failed.map(f => f.code)], [false, 'awaiting-human', ['explicit-approval']])
 })
