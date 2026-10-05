@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 506" width="1180" height="506" role="img" aria-labelledby="t d" font-family="Helvetica, Arial, sans-serif" font-size="12">
+<title id="t">The delivery cycle — one state machine, two entries</title>
+<desc id="d">Fresh card: implement, verify, merge. Existing PR: verify first. Findings loop through prepare, validate, green and back to verify. Terminal states and human decisions are marked.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#444"/></marker></defs>
+<rect width="1180" height="506" fill="#ffffff"/>
+<text x="30" y="22" font-size="14" font-weight="bold" fill="#222">The delivery cycle — one state machine, two entries</text>
+<polyline points="206,83 266,83" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<polyline points="442,83 502,83" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<polyline points="678,83 738,83" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="679.2" y="66" width="57.6" height="16" fill="#ffffff" opacity="0.92"/><text x="708" y="78" text-anchor="middle" fill="#333" font-size="11">approved</text>
+<polyline points="914,83 974,83" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<polyline points="826,112 826,193 974,193" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="786.8" y="170" width="82.4" height="16" fill="#ffffff" opacity="0.92"/><text x="828" y="182" text-anchor="middle" fill="#333" font-size="11">not opted in</text>
+<polyline points="206,193 590,193 590,112" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="364.79999999999995" y="195" width="107.2" height="16" fill="#ffffff" opacity="0.92"/><text x="418.4" y="207" text-anchor="middle" fill="#333" font-size="11">enters at verify</text>
+<polyline points="550,112 550,179 354,179 354,274" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="443.2" y="162" width="57.6" height="16" fill="#ffffff" opacity="0.92"/><text x="472" y="174" text-anchor="middle" fill="#333" font-size="11">findings</text>
+<polyline points="442,303 502,303" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<polyline points="678,303 738,303" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="685.4" y="286" width="45.2" height="16" fill="#ffffff" opacity="0.92"/><text x="708" y="298" text-anchor="middle" fill="#333" font-size="11">sealed</text>
+<polyline points="826,274 826,207 630,207 630,112" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="693" y="209" width="70" height="16" fill="#ffffff" opacity="0.92"/><text x="728" y="221" text-anchor="middle" fill="#333" font-size="11">next round</text>
+<polyline points="590,332 590,384" fill="none" stroke="#b53030" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<rect x="524" y="341" width="132" height="16" fill="#ffffff" opacity="0.92"/><text x="590" y="353" text-anchor="middle" fill="#333" font-size="11">cannot be contracted</text>
+<polyline points="826,332 826,384" fill="none" stroke="#b53030" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<polyline points="502,413 442,413" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="443.2" y="396" width="57.6" height="16" fill="#ffffff" opacity="0.92"/><text x="472" y="408" text-anchor="middle" fill="#333" font-size="11">answered</text>
+<rect x="30" y="54" width="176" height="58" rx="29" fill="#ffffff" stroke="#222222" stroke-width="1.5"/>
+<text x="118" y="79" text-anchor="middle" fill="#222" font-weight="bold">Fresh card</text>
+<text x="118" y="95" text-anchor="middle" fill="#555" font-size="10.5">refined, no PR yet</text>
+<rect x="266" y="54" width="176" height="58" rx="6" fill="#e8f1fb" stroke="#2f6db5" stroke-width="1.5"/>
+<text x="354" y="79" text-anchor="middle" fill="#222" font-weight="bold">implement</text>
+<text x="354" y="95" text-anchor="middle" fill="#555" font-size="10.5">tests + code, opens the PR</text>
+<rect x="502" y="54" width="176" height="58" rx="6" fill="#e8f1fb" stroke="#2f6db5" stroke-width="1.5"/>
+<text x="590" y="79" text-anchor="middle" fill="#222" font-weight="bold">verify</text>
+<text x="590" y="95" text-anchor="middle" fill="#555" font-size="10.5">independent review</text>
+<rect x="738" y="54" width="176" height="58" rx="6" fill="#f0f0f0" stroke="#555555" stroke-width="1.5"/>
+<text x="826" y="79" text-anchor="middle" fill="#222" font-weight="bold">merge</text>
+<text x="826" y="95" text-anchor="middle" fill="#555" font-size="10.5">script, opt-in</text>
+<rect x="974" y="54" width="176" height="58" rx="29" fill="#e5f5e8" stroke="#2e8540" stroke-width="1.5"/>
+<text x="1062" y="79" text-anchor="middle" fill="#222" font-weight="bold">merged</text>
+<text x="1062" y="95" text-anchor="middle" fill="#555" font-size="10.5">story closed</text>
+<rect x="974" y="164" width="176" height="58" rx="29" fill="#e5f5e8" stroke="#2e8540" stroke-width="1.5"/>
+<text x="1062" y="189" text-anchor="middle" fill="#222" font-weight="bold">ready-for-merge</text>
+<text x="1062" y="205" text-anchor="middle" fill="#555" font-size="10.5">a human merges</text>
+<rect x="30" y="164" width="176" height="58" rx="29" fill="#ffffff" stroke="#222222" stroke-width="1.5"/>
+<text x="118" y="189" text-anchor="middle" fill="#222" font-weight="bold">Existing PR</text>
+<text x="118" y="205" text-anchor="middle" fill="#555" font-size="10.5">fix &amp; review</text>
+<rect x="266" y="274" width="176" height="58" rx="6" fill="#e8f1fb" stroke="#2f6db5" stroke-width="1.5"/>
+<text x="354" y="299" text-anchor="middle" fill="#222" font-weight="bold">prepare r&lt;n&gt;</text>
+<text x="354" y="315" text-anchor="middle" fill="#555" font-size="10.5">failing test per finding</text>
+<rect x="502" y="274" width="176" height="58" rx="6" fill="#e8f1fb" stroke="#2f6db5" stroke-width="1.5"/>
+<text x="590" y="299" text-anchor="middle" fill="#222" font-weight="bold">validate</text>
+<text x="590" y="315" text-anchor="middle" fill="#555" font-size="10.5">independent check + seal</text>
+<rect x="738" y="274" width="176" height="58" rx="6" fill="#e8f1fb" stroke="#2f6db5" stroke-width="1.5"/>
+<text x="826" y="299" text-anchor="middle" fill="#222" font-weight="bold">green</text>
+<text x="826" y="315" text-anchor="middle" fill="#555" font-size="10.5">fix inside the seal</text>
+<rect x="502" y="384" width="176" height="58" rx="29" fill="#fbe7e7" stroke="#b53030" stroke-width="1.5"/>
+<text x="590" y="409" text-anchor="middle" fill="#222" font-weight="bold">escalate</text>
+<text x="590" y="425" text-anchor="middle" fill="#555" font-size="10.5">needs a human</text>
+<rect x="738" y="384" width="176" height="58" rx="29" fill="#fbe7e7" stroke="#b53030" stroke-width="1.5"/>
+<text x="826" y="409" text-anchor="middle" fill="#222" font-weight="bold">failed-&lt;stage&gt;</text>
+<text x="826" y="425" text-anchor="middle" fill="#555" font-size="10.5">budget or gate spent</text>
+<rect x="266" y="384" width="176" height="58" rx="6" fill="#fdf0dc" stroke="#c27a12" stroke-width="1.5"/>
+<text x="354" y="409" text-anchor="middle" fill="#222" font-weight="bold">Human decides</text>
+<text x="354" y="425" text-anchor="middle" fill="#555" font-size="10.5">decide · supersede · /approve</text>
+<rect x="30" y="476" width="14" height="12" rx="3" fill="#e8f1fb" stroke="#2f6db5"/><text x="49" y="486" fill="#444" font-size="11">agent stage</text>
+<rect x="139.2" y="476" width="14" height="12" rx="3" fill="#f0f0f0" stroke="#555555"/><text x="158.2" y="486" fill="#444" font-size="11">script (no agent)</text>
+<rect x="285.6" y="476" width="14" height="12" rx="3" fill="#fdf0dc" stroke="#c27a12"/><text x="304.6" y="486" fill="#444" font-size="11">human decision</text>
+<rect x="413.40000000000003" y="476" width="14" height="12" rx="3" fill="#e5f5e8" stroke="#2e8540"/><text x="432.40000000000003" y="486" fill="#444" font-size="11">terminal: ok</text>
+<rect x="528.8000000000001" y="476" width="14" height="12" rx="3" fill="#fbe7e7" stroke="#b53030"/><text x="547.8000000000001" y="486" fill="#444" font-size="11">terminal: stop</text>
+</svg>

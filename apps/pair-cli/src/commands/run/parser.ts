@@ -65,6 +65,8 @@ export interface RunDispatchRequest {
    * it, exactly as `handler.ts` and every new US-487 test do.
    */
   readonly runId: string
+  /** D1: false when `--card-tags` was ABSENT (non-enumerable): the live labels are then read. */
+  readonly tagsObserved?: boolean
   /** US-487: `--rounds` — a positive integer bound, or the literal `'max'` (never widened). */
   readonly rounds?: number | 'max'
 }
@@ -324,6 +326,12 @@ function resolveDispatch(options: ParseRunOptions): RunDispatchRequest | undefin
     ...(pr !== undefined && { pr }),
     ...(rounds !== undefined && { rounds }),
   }
+  // Absent flag ≠ empty flag: an EMPTY `--card-tags` is the observation "no labels"; an ABSENT one is
+  // "nobody told us" (the live labels are read). Non-enumerable for the same toEqual reason as runId.
+  Object.defineProperty(dispatch, 'tagsObserved', {
+    value: options.cardTags !== undefined,
+    enumerable: false,
+  })
   return withRunId(dispatch, runId)
 }
 

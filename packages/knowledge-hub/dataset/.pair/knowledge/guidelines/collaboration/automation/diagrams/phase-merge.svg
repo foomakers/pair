@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 944 252" width="944" height="252" role="img" aria-labelledby="t d" font-family="Helvetica, Arial, sans-serif" font-size="12">
+<title id="t">merge — a script re-reads every signal, then merges or parks</title>
+<desc id="d">The merge stage is a script, not an agent. It runs only when the project opted in, re-reads the tier, head and checks, and either merges and closes the story or parks the card with a comment.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#444"/></marker></defs>
+<rect width="944" height="252" fill="#ffffff"/>
+<text x="30" y="22" font-size="14" font-weight="bold" fill="#222">merge — a script re-reads every signal, then merges or parks</text>
+<polyline points="206,83 266,83" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="222.7" y="66" width="26.6" height="16" fill="#ffffff" opacity="0.92"/><text x="236" y="78" text-anchor="middle" fill="#333" font-size="11">yes</text>
+<polyline points="442,83 502,83" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<polyline points="678,83 738,83" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<polyline points="354,112 354,164" fill="none" stroke="#b53030" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<polyline points="118,112 118,164" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="107.8" y="121" width="20.4" height="16" fill="#ffffff" opacity="0.92"/><text x="118" y="133" text-anchor="middle" fill="#333" font-size="11">no</text>
+<rect x="30" y="54" width="176" height="58" rx="6" fill="#f0f0f0" stroke="#555555" stroke-width="1.5"/>
+<text x="118" y="79" text-anchor="middle" fill="#222" font-weight="bold">Opted in?</text>
+<text x="118" y="95" text-anchor="middle" fill="#555" font-size="10.5">## Autonomy / Auto-Advance</text>
+<rect x="266" y="54" width="176" height="58" rx="6" fill="#f0f0f0" stroke="#555555" stroke-width="1.5"/>
+<text x="354" y="79" text-anchor="middle" fill="#222" font-weight="bold">Re-read signals</text>
+<text x="354" y="95" text-anchor="middle" fill="#555" font-size="10.5">tier, head, checks</text>
+<rect x="502" y="54" width="176" height="58" rx="6" fill="#f0f0f0" stroke="#555555" stroke-width="1.5"/>
+<text x="590" y="79" text-anchor="middle" fill="#222" font-weight="bold">Merge + close</text>
+<text x="590" y="95" text-anchor="middle" fill="#555" font-size="10.5">pinned to reviewed head</text>
+<rect x="738" y="54" width="176" height="58" rx="29" fill="#e5f5e8" stroke="#2e8540" stroke-width="1.5"/>
+<text x="826" y="79" text-anchor="middle" fill="#222" font-weight="bold">merged</text>
+<text x="826" y="95" text-anchor="middle" fill="#555" font-size="10.5">story closed</text>
+<rect x="266" y="164" width="176" height="58" rx="29" fill="#fbe7e7" stroke="#b53030" stroke-width="1.5"/>
+<text x="354" y="189" text-anchor="middle" fill="#222" font-weight="bold">parked</text>
+<text x="354" y="205" text-anchor="middle" fill="#555" font-size="10.5">comment names the failure</text>
+<rect x="30" y="164" width="176" height="58" rx="6" fill="#fdf0dc" stroke="#c27a12" stroke-width="1.5"/>
+<text x="118" y="189" text-anchor="middle" fill="#222" font-weight="bold">not opted in</text>
+<text x="118" y="205" text-anchor="middle" fill="#555" font-size="10.5">ready-for-merge</text>
+</svg>

@@ -90,7 +90,7 @@ export function decideDispatch(request: DispatchRequest): DispatchDecision {
     return skip(
       card,
       'ineligible',
-      `card carries no \`${eligibility}\` label (\`## Eligibility\`), so it is skipped before routing`,
+      `card does not carry \`${eligibility}\` (\`## Eligibility\`); labels observed: ${observed(request.tags)} — skipped before routing`,
     )
   }
 
@@ -105,6 +105,11 @@ export function decideDispatch(request: DispatchRequest): DispatchDecision {
 
   const route = matched.length === 1 ? matched[0]! : resolveByPrecedence(card, matched, mapping)
   return { kind: 'route', card, tag: route.tag, workflow: route.workflow }
+}
+
+/** The labels a decision was taken on — an empty list is said, never implied. */
+function observed(tags: readonly string[]): string {
+  return tags.length === 0 ? '(none)' : tags.join(', ')
 }
 
 /** The one line an operator (or an audit reader) gets for every decision. */

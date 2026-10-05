@@ -186,6 +186,7 @@
 - [Decision: Mirrored files are counted once](.pair/adoption/decision-log/2026-09-29-mirrors-counted-once.md)
 - [Decision: the batch merges per the merge gate; `pair-loop` no longer merges](.pair/adoption/decision-log/2026-09-30-the-batch-merges-per-the-merge-gate.md)
 - [Decision: The `run --parallel` fan-out becomes a re-selecting watch loop](.pair/adoption/decision-log/2026-10-02-fan-out-becomes-re-selecting-watch-loop.md)
+- [Decision: delivery-cycle diagrams ship as committed SVGs, not Mermaid](.pair/adoption/decision-log/2026-10-05-delivery-cycle-diagrams-as-committed-svgs.md)
 
 ## How-To Guides
 
@@ -289,6 +290,7 @@
 - [Collaboration Automation Framework](.pair/knowledge/guidelines/collaboration/automation/README.md)
 - [Automation Policy — `tech/automation.md`](.pair/knowledge/guidelines/collaboration/automation/automation-policy.md)
 - [Azure DevOps Automation](.pair/knowledge/guidelines/collaboration/automation/azure-devops-automation.md)
+- [The Delivery Cycle — one state machine, N realizations](.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md)
 - [Filesystem Automation](.pair/knowledge/guidelines/collaboration/automation/filesystem-automation.md)
 - [GitHub Automation](.pair/knowledge/guidelines/collaboration/automation/github-automation.md)
 - [Workflow Profiles — engine, model, effort and context per delivery-cycle stage](.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md)

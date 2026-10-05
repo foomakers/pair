@@ -1000,6 +1000,7 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/pm-tools/azure-devops',
     '/docs/reference',
     '/docs/reference/batch-engine',
+    '/docs/reference/delivery-cycle',
     '/docs/reference/coupling-model',
     '/docs/reference/pair-next',
     '/docs/reference/quality-gates-configuration',

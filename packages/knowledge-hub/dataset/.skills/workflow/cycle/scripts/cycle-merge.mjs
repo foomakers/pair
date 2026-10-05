@@ -13,7 +13,9 @@
 //   3. the PR's remote head, `pair-review` and `pair-explicit-approval` conclusions are re-read NOW,
 //      and any of them unreadable parks the card;
 //   4. the remote head is the head the verifier reviewed (`reviewedHead`);
-//   5. both conclusions are `success`;
+//   5. both conclusions are `success` — except that below 🔴 an ABSENT `pair-explicit-approval` is satisfied (D4: the tier does
+//      not require it, so a repo with no job publishing it is not parked), and the tier that decides this and the merge gate
+//      is the PR's CURRENT `risk:*` (D5: the review writes it; an untagged PR is `risk:red`), never the card's stale one;
 //   6. the tier's gate set is green — `--gate green`, produced by the caller running
 //      `/pair-capability-verify-quality` (a skill, so an agent's job; the script only refuses to
 //      merge on any other value, an absent one included).
@@ -35,7 +37,7 @@ import { existsSync, rmSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { decide as decideAutonomy, gateFromLegacyTiers, escalationComment, ESCALATION_MARKER, parseGate, conditionError } from './autonomy-policy.mjs'
+import { decide as decideAutonomy, effectiveLabels, gateFromLegacyTiers, escalationComment, ESCALATION_MARKER, parseGate, conditionError } from './autonomy-policy.mjs'
 import { assertRunOwnsStory } from './run-guard.mjs'
 
 const SHA_RE = /^[0-9a-f]{40}$/
@@ -44,13 +46,14 @@ const LABEL_SHAPE_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/i
 const SAFE_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/#-]*$/
 export const PR_CHECK = 'pair-review'
 export const APPROVAL_CHECK = 'pair-explicit-approval'
+const BELOW_RED = ['risk:green', 'risk:yellow']
 export const PARK_MARKER = pr => `<!-- pair-merge-park:PR#${pr} -->`
 
 // ── the decision — pure ────────────────────────────────────────────────────────────────────
 // Order = the precedence `pair-loop.js` applied (first failure is the `reason`); every failing
 // condition is listed, because each is independent evidence a human will want.
 // US-521: `mergeGate` (`{ mode, has, lacks }`) replaces ONLY the tier-membership check; every signal below stays mandatory.
-export function decideMerge({ cardTier, currentTier, autoAdvanceTiers, mergeGate, labels, reviewedHead, signals, gate, requireGate }) {
+export function decideMerge({ cardTier, currentTier, effectiveTier = currentTier, autoAdvanceTiers, mergeGate, labels, reviewedHead, signals, gate, requireGate }) {
   const failed = []
   const add = (code, detail) => failed.push({ code, detail })
   if (currentTier !== cardTier) add('tier-changed', `tier changed ${cardTier} -> ${currentTier} mid-run, never auto-advanced on a stale read`)
@@ -61,20 +64,25 @@ export function decideMerge({ cardTier, currentTier, autoAdvanceTiers, mergeGate
       conditions = d.conditions
       add('escalated', `merge gate escalates: ${d.conditions.join(', ')} — a human decides`)
     } else if (d.decision === 'await-human') add('tier-not-auto-advance', 'merge: always — the merge gate parks the card for a human')
-  } else if (!Array.isArray(autoAdvanceTiers) || !autoAdvanceTiers.includes(currentTier)) add('tier-not-auto-advance', `tier ${currentTier} not in Auto-Advance`)
+  } else if (!Array.isArray(autoAdvanceTiers) || !autoAdvanceTiers.includes(effectiveTier)) add('tier-not-auto-advance', `tier ${effectiveTier} not in Auto-Advance`)
   const readable = signals && SHA_RE.test(String(signals.headSha ?? '')) && typeof signals.pairReview === 'string' && typeof signals.explicitApproval === 'string'
   if (!readable) add('signals-unreadable', 'PR SIGNALS unreadable at merge time, never merged on unread evidence')
   else {
     if (signals.headSha !== reviewedHead) add('head-moved', `PR head moved since the review (reviewed ${reviewedHead}, remote ${signals.headSha}), never merged unreviewed code`)
     if (signals.pairReview !== 'success') add('pair-review', `pair-review conclusion on head ${signals.headSha} is ${signals.pairReview}, never merged without a published approval`)
-    if (signals.explicitApproval !== 'success') add('explicit-approval', `pair-explicit-approval conclusion on head ${signals.headSha} is ${signals.explicitApproval} (D10: no recorded human approval), never merged`)
+    // D4: below 🔴 the check auto-passes (the tier does not require explicit approval), so a repo that publishes no such job
+    // reads `missing` and that is satisfied; at 🔴 (or any tier not named below it) missing/pending awaits a human, failure halts.
+    const approvalRequired = !BELOW_RED.includes(effectiveTier)
+    if (signals.explicitApproval !== 'success' && (approvalRequired || signals.explicitApproval !== 'missing')) add('explicit-approval', `pair-explicit-approval conclusion on head ${signals.headSha} is ${signals.explicitApproval} (D10: no recorded human approval), never merged`)
   }
   if (requireGate) {
     if (gate === 'red') add('gate-red', "the tier's gate set came back red at merge time")
     else if (gate !== 'green') add('gate-unverified', `no green gate evidence (got ${JSON.stringify(gate ?? null)}) — /pair-capability-verify-quality must run first`)
   }
   const first = failed[0]?.code
-  return { mergeAllowed: failed.length === 0, failed, reason: failed[0]?.detail ?? null, parkKind: failed.length === 0 ? null : first === 'tier-not-auto-advance' ? 'awaiting-human' : first === 'escalated' ? 'escalated' : 'halted', ...(conditions ? { conditions } : {}) }
+  // A human approval not yet recorded (missing / pending) as the ONLY failure is a park that awaits a person, not a problem; a rejected one (`failure`) or any other failing condition beside it stays `halted`.
+  const awaitsApproval = failed.length === 1 && first === 'explicit-approval' && ['missing', 'pending'].includes(signals?.explicitApproval)
+  return { mergeAllowed: failed.length === 0, failed, reason: failed[0]?.detail ?? null, parkKind: failed.length === 0 ? null : first === 'tier-not-auto-advance' ? 'awaiting-human' : first === 'escalated' ? 'escalated' : awaitsApproval ? 'awaiting-human' : 'halted', ...(conditions ? { conditions } : {}) }
 }
 
 // ── live reads — through the bound adapters, never a host CLI of our own ─────────────────────
@@ -96,6 +104,24 @@ export function readCurrentLabels({ pm, story, repo }) {
   } catch {
     return null
   }
+}
+
+// D5: the labels the merge gate is decided on — the card's, with its `risk:*` replaced by the PR's CURRENT tier (an untagged
+// PR is `risk:red` at merge). `null` when either side is unreadable (a `when` gate then escalates, fail-safe).
+export function readEffectiveLabels({ pm, code, story, pr, repo }) {
+  const card = readCurrentLabels({ pm, story, repo })
+  if (card === null) return null
+  try {
+    return effectiveLabels({ labels: card, prLabels: code.readLabels({ pr, repo }), atMerge: true }) ?? null
+  } catch {
+    return null
+  }
+}
+
+// The PR's current tier out of the effective labels: exactly one `risk:*` or red.
+export const tierOfLabels = labels => {
+  const risk = (labels ?? []).filter(l => l.startsWith('risk:'))
+  return risk.length === 1 ? risk[0] : 'risk:red'
 }
 
 export function readSignals({ code, pr, repo }) {
@@ -120,9 +146,12 @@ export function readSignals({ code, pr, repo }) {
 
 function evaluate({ hosts, story, pr, repo, reviewedHead, cardTier, autoAdvanceTiers, mergeGate, gate, requireGate }) {
   const currentTier = readCurrentTier({ pm: hosts.pm, story, repo })
-  const labels = mergeGate ? readCurrentLabels({ pm: hosts.pm, story, repo }) : undefined
+  // D4/D5: the tier the approval rule and the gate read is the PR's CURRENT one (the review's classification), live.
+  const effective = readEffectiveLabels({ pm: hosts.pm, code: hosts.code, story, pr, repo })
+  const effectiveTier = effective === null ? 'risk:red' : tierOfLabels(effective)
+  const labels = mergeGate ? effective : undefined
   const signals = readSignals({ code: hosts.code, pr, repo })
-  return { currentTier, signals, ...decideMerge({ cardTier, currentTier, autoAdvanceTiers, mergeGate, ...(mergeGate ? { labels: labels ?? undefined } : {}), reviewedHead, signals, gate, requireGate }) }
+  return { currentTier, effectiveTier, signals, ...decideMerge({ cardTier, currentTier, effectiveTier, autoAdvanceTiers, mergeGate, ...(mergeGate ? { labels: labels ?? undefined } : {}), reviewedHead, signals, gate, requireGate }) }
 }
 
 // ── park ───────────────────────────────────────────────────────────────────────────────────

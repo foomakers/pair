@@ -306,7 +306,23 @@ export function escalationConditions(gate, labels) {
   return [...gate.has.filter(l => have.has(l)).map(l => `has:${l}`), ...gate.lacks.filter(l => !have.has(l)).map(l => `lacks:${l}`)]
 }
 
-export function decide({ boundary, labels, policy } = {}) {
+// The labels a gate is decided on: the card's, with its `risk:*` replaced by the PR's CURRENT tier — the review classifies
+// the diff and writes the PR's `risk:*` (confirm or raise), so after the review the PR is authoritative and a card still tagged
+// `risk:green` does not hide a raise. `prLabels` absent (no PR yet) ⇒ the card's labels. A PR carrying NO tier keeps the card's
+// until the merge boundary (publish-pr copies none), where an untagged PR is `risk:red` (pr-states.md fail-safe); several tiers
+// are `risk:red` everywhere. Unreadable card labels stay unreadable (`undefined`).
+const RISK_SHAPE = /^risk:[a-z][a-z0-9-]*$/i
+export function effectiveLabels({ labels, prLabels, atMerge = false } = {}) {
+  if (!Array.isArray(labels)) return undefined
+  if (!Array.isArray(prLabels)) return labels
+  const risk = [...new Set(prLabels.map(String).filter(l => l.startsWith('risk:')))]
+  if (!risk.length && !atMerge) return labels
+  const tier = risk.length === 1 && RISK_SHAPE.test(risk[0]) ? risk[0] : 'risk:red'
+  return [...labels.map(String).filter(l => !l.startsWith('risk:')), tier]
+}
+
+export function decide({ boundary, labels: cardLabels, prLabels, policy } = {}) {
+  const labels = effectiveLabels({ labels: cardLabels, prLabels, atMerge: boundary?.kind === 'merge' })
   const until = policy?.until ?? 'pr'
   const gate = policy?.merge ?? DEFAULTS.merge
   const kind = boundary?.kind === 'merge' ? 'merge' : 'stage'
@@ -360,7 +376,7 @@ function cli(argv) {
   if (cmd === 'decide') {
     if (!opts.policy || !opts.boundary) throw new Error('--policy and --boundary are required')
     const boundary = opts.boundary === 'merge' ? { kind: 'merge' } : { kind: 'stage', stage: opts.boundary.replace(/^stage:/, '') }
-    return decide({ boundary, labels: opts.labels ? JSON.parse(opts.labels) : undefined, policy: JSON.parse(opts.policy) })
+    return decide({ boundary, labels: opts.labels ? JSON.parse(opts.labels) : undefined, prLabels: opts.prLabels ? JSON.parse(opts.prLabels) : undefined, policy: JSON.parse(opts.policy) })
   }
   throw new Error(`unknown command: ${cmd} (expected resolve | decide)`)
 }

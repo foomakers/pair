@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 944 252" width="944" height="252" role="img" aria-labelledby="t d" font-family="Helvetica, Arial, sans-serif" font-size="12">
+<title id="t">implement — build the card test-first and open the PR</title>
+<desc id="d">The implementer works above the base: tests and code together per acceptance criterion, an informal unrecorded self-review, the quality gates, then one PR. The implementer never reviews.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#444"/></marker></defs>
+<rect width="944" height="252" fill="#ffffff"/>
+<text x="30" y="22" font-size="14" font-weight="bold" fill="#222">implement — build the card test-first and open the PR</text>
+<polyline points="206,83 266,83" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<polyline points="442,83 502,83" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<polyline points="678,83 738,83" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<polyline points="826,112 826,164" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="30" y="54" width="176" height="58" rx="6" fill="#f0f0f0" stroke="#555555" stroke-width="1.5"/>
+<text x="118" y="79" text-anchor="middle" fill="#222" font-weight="bold">Resolve state</text>
+<text x="118" y="95" text-anchor="middle" fill="#555" font-size="10.5">cycle-state.mjs</text>
+<rect x="266" y="54" width="176" height="58" rx="6" fill="#e8f1fb" stroke="#2f6db5" stroke-width="1.5"/>
+<text x="354" y="79" text-anchor="middle" fill="#222" font-weight="bold">Test + code</text>
+<text x="354" y="95" text-anchor="middle" fill="#555" font-size="10.5">one AC at a time</text>
+<rect x="502" y="54" width="176" height="58" rx="6" fill="#e8f1fb" stroke="#2f6db5" stroke-width="1.5"/>
+<text x="590" y="79" text-anchor="middle" fill="#222" font-weight="bold">Self-review</text>
+<text x="590" y="95" text-anchor="middle" fill="#555" font-size="10.5">fixed, never recorded</text>
+<rect x="738" y="54" width="176" height="58" rx="6" fill="#e8f1fb" stroke="#2f6db5" stroke-width="1.5"/>
+<text x="826" y="79" text-anchor="middle" fill="#222" font-weight="bold">Gates + PR</text>
+<text x="826" y="95" text-anchor="middle" fill="#555" font-size="10.5">publish-pr, one PR</text>
+<rect x="738" y="164" width="176" height="58" rx="29" fill="#e5f5e8" stroke="#2e8540" stroke-width="1.5"/>
+<text x="826" y="189" text-anchor="middle" fill="#222" font-weight="bold">Handoff</text>
+<text x="826" y="205" text-anchor="middle" fill="#555" font-size="10.5">next: verify</text>
+<rect x="266" y="164" width="176" height="58" rx="6" fill="#ffffff" stroke="#888888" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="354" y="189" text-anchor="middle" fill="#222" font-weight="bold">May not: review its own PR</text>
+<text x="354" y="205" text-anchor="middle" fill="#555" font-size="10.5">verify is another agent</text>
+</svg>

@@ -107,7 +107,8 @@ function ineligibleSkip(gate: DorFallbackGate, context: RunContext): SkipDecisio
     card,
     reason: 'ineligible',
     detail:
-      `card carries no \`${gate.policy.eligibility}\` label (\`## Eligibility\`), so this ` +
+      `card does not carry \`${gate.policy.eligibility}\` (\`## Eligibility\`); labels observed: ` +
+      `${(gate.tags ?? []).length === 0 ? '(none)' : (gate.tags ?? []).join(', ')} — this ` +
       `unattended (--autonomous) run skips it before reading it — pass --approve-ineligible to ` +
       `override for this run only`,
   }

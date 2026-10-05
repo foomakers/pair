@@ -137,6 +137,12 @@ function fakeHosts(s) {
   }
   const conclusion = context => (context === 'pair-review' ? s.signals.pairReview : s.signals.explicitApproval)
   const code = {
+    // D5: the tier is the PR's CURRENT one; the oracle's tier is the card's re-read, so the fake PR carries exactly those labels
+    // (the two sources agree here, the canary pins the RULE, not the source).
+    readLabels: () => {
+      if (s.fresh.throws) throw new Error('board unreadable')
+      return s.fresh.labels
+    },
     prHead: () => {
       if (s.signals.unreadable === 'throws') throw new Error('host unreachable')
       return headOf(s)
@@ -220,7 +226,17 @@ test('canary: old pair-loop.js merge rule vs decideMerge — zero decision diffs
   for (const s of scenarios()) {
     const old = await oldDecision(s)
     const neu = newDecision(s)
-    rows.push({ id: s.id, old, new: neu, diff: JSON.stringify(old) !== JSON.stringify(neu) })
+    // Deliberate, maintainer-recorded divergence (autonomous run 493, D3): a human approval still missing/pending as the ONLY
+    // failing condition is a park that AWAITS A PERSON (the frozen oracle said `halted`). `decideMerge` only answers it when
+    // that is the sole failure, so the old `halted` + new `awaiting-human` on `explicit-approval` is the whole allowed delta.
+    // Deliberate, maintainer-recorded divergence (autonomous run 493, D4): below 🔴 an ABSENT `pair-explicit-approval` is satisfied
+    // (the tier does not require it). The whole allowed delta: the signal is `missing`, the tier (the PR's, equal to the card's
+    // re-read here) is green or yellow, and the new decision is exactly the OLD rule's decision with that approval `success`.
+    const risk = s.fresh.throws ? [] : s.fresh.labels.filter(l => l.startsWith('risk:'))
+    const belowRed = risk.length === 1 && ['risk:green', 'risk:yellow'].includes(risk[0])
+    const absentApprovalBelowRed = belowRed && s.signals.explicitApproval === 'missing' && !s.signals.unreadable && JSON.stringify(neu) === JSON.stringify(await oldDecision({ ...s, signals: { ...s.signals, explicitApproval: 'success' } }))
+    const awaitsApproval = old.parkKind === 'halted' && neu.parkKind === 'awaiting-human' && old.code === 'explicit-approval' && neu.code === 'explicit-approval'
+    rows.push({ id: s.id, old, new: neu, diff: !awaitsApproval && !absentApprovalBelowRed && JSON.stringify(old) !== JSON.stringify(neu) })
   }
   const report = renderReport(rows)
   if (process.env.PAIR_MERGE_CANARY_REPORT) writeFileSync(process.env.PAIR_MERGE_CANARY_REPORT, report)

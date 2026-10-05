@@ -2618,11 +2618,11 @@ export function autonomyPolicyError(autonomy) {
 // `autonomy-policy.mjs decide`; this only maps the answer onto the cycle's vocabulary. Without `policy.autonomy`
 // the US-490 tier rule applies UNCHANGED (default off: nothing new can merge or escalate).
 const GATED_STAGES = new Set(['prepare', 'validate', 'implement', 'green', 'verify'])
-function applyAutonomy(next, { policy, tier, labels }) {
+function applyAutonomy(next, { policy, tier, labels, prLabels }) {
   if (!policy.autonomy) return next.step === 'done' && mergeOffered(policy.autoAdvance, tier) ? { ...next, step: 'merge', tier } : next
   const boundary = next.step === 'done' ? { kind: 'merge' } : GATED_STAGES.has(next.step) ? { kind: 'stage', stage: next.step } : null
   if (!boundary) return next
-  const d = AUTONOMY.decide({ boundary, labels, policy: policy.autonomy })
+  const d = AUTONOMY.decide({ boundary, labels, prLabels, policy: policy.autonomy })
   if (d.decision === 'escalate') return { step: 'blocked', reason: 'escalated', stage: d.stage, conditions: d.conditions, detail: d.reason, resumeStep: next.step }
   if (d.decision === 'stop-at-target') return next.step === 'done' && d.target === 'pr' ? next : { step: 'done', target: d.target, stage: d.stage, detail: d.reason }
   if (d.decision === 'proceed' && next.step === 'done') return { ...next, step: 'merge', ...(tier !== undefined ? { tier } : {}) }
@@ -2647,7 +2647,7 @@ const priorStepOfRole = (handoffs, toStep) => {
 const withContext = (next, handoffs, contextPolicy) =>
   next && typeof next === 'object' && next.context === undefined ? { ...next, context: contextOf(priorStepOfRole(handoffs, next.step), next.step, contextPolicy) } : next
 
-export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels }) {
+export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels }) {
   // Fail closed before ANY state is read: an unusable freshness policy is never resolved around.
   const policyError = contextPolicyError(contextPolicy)
   if (policyError) throw new Error(policyError)
@@ -2662,12 +2662,12 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   if (autoAdvanceError) return { status: 'invalid', reason: autoAdvanceError, workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
   const autonomyError = autonomyPolicyError(policy.autonomy)
   if (autonomyError) return { status: 'invalid', reason: autonomyError, workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
-  const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels })
+  const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels })
   // The budgets a coordinator spends are the cycle's data, never the coordinator's own constants.
   return { ...out, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
 }
 
-function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels }) {
+function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels }) {
   const where = safeRunDir(dir)
   if (where.error) return { status: 'invalid', reason: where.error, path: where.path, workflowVersion }
   const handoffs = readHandoffs(dir)
@@ -2700,7 +2700,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
     }
     // US-521: the autonomy decision applies to a card with no handoff yet too (`until: ready` stops it before
     // `implement`; an escalation fires before its first dispatch).
-    const first = withContext(applyAutonomy(deriveNext([], policy, { entry }), { policy, tier, labels }), [], contextPolicy)
+    const first = withContext(applyAutonomy(deriveNext([], policy, { entry }), { policy, tier, labels, prLabels }), [], contextPolicy)
     return { status: first.step === 'blocked' && first.reason === 'escalated' ? 'escalated' : first.step === 'done' ? 'completed' : 'empty', next: first, handoffs: [], legacyRuns, workflowVersion }
   }
   for (const h of handoffs) {
@@ -2767,7 +2767,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // that permits the merge is re-read live by `cycle-merge.mjs`, never taken from this answer.
   // US-521: with `policy.autonomy` the decision is the shared `decide` — a stage boundary may escalate or stop at
   // the `until` target, `ready-for-merge` is offered to `merge` only under `until: merged`.
-  next = applyAutonomy(next, { policy, tier, labels })
+  next = applyAutonomy(next, { policy, tier, labels, prLabels })
   const warnings = []
   if (next.step !== 'done' && next.step !== 'blocked' && next.step !== 'merge') {
     const md = policy.maxDispatches
@@ -3073,7 +3073,7 @@ if (isMain()) {
     const { cmd, opts } = parseCli(process.argv.slice(2))
     // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
     const FLAGS = {
-      resolve: ['acHash', 'contextPolicy', 'dir', 'entry', 'head', 'inputs', 'labels', 'policy', 'pr', 'redirects', 'runsRoot', 'story', 'tier', 'workflowVersion'],
+      resolve: ['acHash', 'contextPolicy', 'dir', 'entry', 'head', 'inputs', 'labels', 'policy', 'pr', 'prLabels', 'redirects', 'runsRoot', 'story', 'tier', 'workflowVersion'],
       publish: ['attempt', 'dir', 'file', 'phase', 'policy', 'pr', 'predecessor', 'skill', 'workflowVersion'],
       hash: ['file'],
       'ac-hash': ['dir', 'story'],
@@ -3117,7 +3117,7 @@ if (isMain()) {
     let out
     if (cmd === 'resolve') {
       need('dir', 'workflowVersion', 'entry')
-      out = resolve({ dir: opts.dir, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr, head: opts.head, inputs: opts.inputs, acHash: opts.acHash, runsRoot: opts.runsRoot, story: opts.story, contextPolicy: opts.contextPolicy ? JSON.parse(opts.contextPolicy) : undefined, redirects: opts.redirects, tier: opts.tier, labels: opts.labels ? JSON.parse(opts.labels) : undefined })
+      out = resolve({ dir: opts.dir, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr, head: opts.head, inputs: opts.inputs, acHash: opts.acHash, runsRoot: opts.runsRoot, story: opts.story, contextPolicy: opts.contextPolicy ? JSON.parse(opts.contextPolicy) : undefined, redirects: opts.redirects, tier: opts.tier, labels: opts.labels ? JSON.parse(opts.labels) : undefined, prLabels: opts.prLabels ? JSON.parse(opts.prLabels) : undefined })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
     } else if (cmd === 'publish') {

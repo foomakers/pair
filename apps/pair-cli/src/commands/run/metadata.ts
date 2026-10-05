@@ -63,7 +63,7 @@ export const runCommandMetadata = {
     {
       flags: '--card-tags <list>',
       description:
-        'Comma-separated labels the trigger observed on --card. Absent, empty (an unlabelled card) or unmapped ⇒ the readiness fallback decides (US-487 AC14): the board state through `## State Mapping`; Draft/Ready-without-breakdown routes to the matching prep skill (skipped under --autonomous), Ready starts the delivery-cycle coordinator',
+        "Comma-separated labels the trigger observed on --card — an explicit override. Absent with --autonomous ⇒ the card's live labels are read from the tracker (unreadable ⇒ fails closed, nothing runs); empty (an unlabelled card) or unmapped ⇒ the readiness fallback decides (US-487 AC14): the board state through `## State Mapping`; Draft/Ready-without-breakdown routes to the matching prep skill (skipped under --autonomous), Ready starts the delivery-cycle coordinator",
     },
     {
       flags: '--pr <n>',

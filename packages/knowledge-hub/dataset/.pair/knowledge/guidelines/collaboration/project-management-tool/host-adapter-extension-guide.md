@@ -254,3 +254,5 @@ The coordinator binds it on its next start.
 3. An implementation guide next to this one (`<id>-implementation.md`), carrying the CLI setup and the auth pointer the adapter assumes.
 4. The alias row in [way-of-working / PM-tool + code-host resolution](../../technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md) if the product has more than one spelling.
 5. The file copied into every workflow skill's `scripts/host/`, and `pnpm mirrors:regenerate`.
+
+See also: [The Delivery Cycle](../automation/delivery-cycle.md#7-host-adapters--pm-tool-and-code-host) — where adapters sit in the overall mechanism.

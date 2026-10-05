@@ -116,6 +116,8 @@ export interface CycleResolveOptions {
   readonly tier?: string
   /** US-521: the card's CURRENT labels (live) — what `decide` reads for a `when` merge gate. */
   readonly labels?: readonly string[]
+  /** D5: the card's PR labels (live) — the script replaces the card's `risk:*` with the PR's tier when deciding. */
+  readonly prLabels?: readonly string[]
   /** US-488: the workflow profile's `reuse` stages as `cycle-state`'s own transition-keyed policy. */
   readonly contextPolicy?: Readonly<Record<string, string>>
 }
@@ -424,6 +426,7 @@ function resolveArgs(options: CycleResolveOptions): ScriptArgs {
       ['acHash', options.acHash],
       ['tier', options.tier],
       ['labels', options.labels === undefined ? undefined : JSON.stringify(options.labels)],
+      ['prLabels', options.prLabels === undefined ? undefined : JSON.stringify(options.prLabels)],
       [
         'contextPolicy',
         options.contextPolicy === undefined || Object.keys(options.contextPolicy).length === 0
