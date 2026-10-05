@@ -207,7 +207,7 @@ async function runWorkflow({ args, dispatch, floor, maxFixRounds, entry, autonom
     if (!autonomy && opts.label === 'autonomy:resolve') return OFF_POLICY
     calls.push({ prompt, opts })
     // An `autonomy` handler scripts the policy scripts' answers (resolve / decide / tier / escalate / merge-check / merge).
-    if (autonomy && /^(autonomy:|decide:|tier:|escalate:|pr-state:|cascade:|merge-check:|merge:)/.test(opts.label ?? '')) return autonomy(prompt, opts)
+    if (autonomy && /^(autonomy:|decide:|tier:|escalate:|pr-state:|cascade:|merge-check:|merge:|prepare:phase)/.test(opts.label ?? '')) return autonomy(prompt, opts)
     const raw = await dispatch(prompt, opts)
     return simulate(prompt, opts, raw)
   }
@@ -343,10 +343,11 @@ test('TC-11: the workflow source dispatches ONLY skill invocations — no free-f
   const code = SRC.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
   const all = [...code.matchAll(/\b(?:agent(?:Retry)?|dispatch)\(\s*\n?\s*([^\n,]+)/g)].map(m => m[1].trim()).filter(d => d !== 'prompt')
   // US-524: the only dispatches that are not a skill invocation are the eight SCRIPT RUNNERS of the autonomy model (an agent
-  // runs one named script and relays its JSON): resolve, tier, decide, escalate, pr-state, cascade, merge check, merge. No rule lives in them.
+  // runs one named script and relays its JSON): resolve, tier, decide, escalate, pr-state, cascade, merge check, merge — and, US-523,
+  // the prepare phase (cycle-prepare.mjs). No rule lives in them.
   const scriptRunners = all.filter(d => /^`(Run EXACTLY|Card )/.test(d))
   const dispatches = all.filter(d => !scriptRunners.includes(d))
-  assert.equal(scriptRunners.length, 8, `expected the eight autonomy script runners, found ${scriptRunners.length}`)
+  assert.equal(scriptRunners.length, 9, `expected the nine autonomy script runners, found ${scriptRunners.length}`)
   assert.equal(dispatches.length, 5, `expected the five stage dispatches and nothing else (the template contract rides on the first review, t9d-2), found ${dispatches.length}`)
   for (const gone of ['PACING', 'TEXT SHAPE', 'CONTRACT INVENTORY', 'FINITE-STATE', 'SEALED RED SNAPSHOT', 'CONVERGENCE SWEEP', 'DO NOT FILE NEW ISSUES', 'ISOLATION (mandatory', 'sha256sum', 'git diff-tree', "'pair-remediation-planner'", "'pair-red-sealer'", "'pair-fix-verifier'", "'/pair-workflow-remediation-plan'", "'/pair-workflow-red-seal'", "'/pair-workflow-p3-verify'", "'/pair-workflow-cycle-comments'", "'/pair-workflow-pr-phase'"])
     assert.equal(code.includes(gone), false, `${gone} is still spelled in the workflow code`)
@@ -2002,7 +2003,7 @@ const RESOLVED = (until, merge = GATE('never'), extra = {}) => ({ ok: true, acti
 const PROCEED = { decision: 'proceed' }
 // A scripted policy-script runner: `resolve` answers `resolved`; stage boundaries answer `decide(prompt)`; merge `check`/`run`
 // answer `check` / `run`. Every call is recorded by runWorkflow (`calls`), so a test reads the commands the agents were told to run.
-const scripted = ({ resolved, decide = () => PROCEED, tier = { tier: 'risk:green' }, check = { mergeAllowed: true, failed: [], comment: { posted: true } }, run = { merged: true, cascaded: true, reason: 'merged' }, escalate = { comment: { posted: true } }, prState = { state: 'OPEN' }, cascade = { closed: true } }) => (prompt, opts) => {
+const scripted = ({ resolved, decide = () => PROCEED, tier = { tier: 'risk:green' }, check = { mergeAllowed: true, failed: [], comment: { posted: true } }, run = { merged: true, cascaded: true, reason: 'merged' }, escalate = { comment: { posted: true } }, prState = { state: 'OPEN' }, cascade = { closed: true }, prepare = { outcome: 'prepared' } }) => (prompt, opts) => {
   const l = opts.label
   if (l === 'autonomy:resolve') return typeof resolved === 'function' ? resolved(prompt) : resolved
   if (l.startsWith('decide:')) return decide(prompt, l)
@@ -2012,6 +2013,7 @@ const scripted = ({ resolved, decide = () => PROCEED, tier = { tier: 'risk:green
   if (l.startsWith('merge-check:')) return typeof check === 'function' ? check(prompt) : check
   if (l.startsWith('merge:')) return typeof run === 'function' ? run(prompt) : run
   if (l.startsWith('escalate:')) return escalate
+  if (l.startsWith('prepare:phase')) return typeof prepare === 'function' ? prepare(prompt) : prepare
   throw new Error(`unscripted ${l}`)
 }
 const driveWith = (args, handlers) => runWorkflow({ args: { cards: [STORY], ...args }, dispatch: stdDispatch(), autonomy: scripted(handlers) })
@@ -2218,4 +2220,76 @@ test('US-524 r0-3: a stacked card never merges before its base card is merged �
   const rb = await runWorkflow({ args: { cards: [B, A], until: 'merged', maxParallelism: 1 }, dispatch: stdDispatch(), autonomy: scripted({ resolved: RESOLVED('merged') }) })
   assert.ok(!rb.calls.some(c => c.opts.label === 'merge-check:#293' || c.opts.label === 'merge:#293'))
   assert.equal(rb.result.batch.find(x => x.id === '293').status, 'awaiting-human')
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-523 — the prepare phase in the batch: a stage agent (it has tools) runs cycle-prepare.mjs; the sandbox relays the
+// outcome and decides no rule. Default off: no declared gate ⇒ no prepare dispatch, the pre-#523 batch byte for byte.
+// ═══════════════════════════════════════════════════════════════════════════
+const PREPARING = (prepare, until = 'pr', active = true, source = 'argument') => ({ ok: true, active, policy: { until, merge: GATE('always'), prepare }, effective: { prepare: { value: prepare, source } }, lines: [`prepare: ${prepare.mode} (argument)`], warnings: [], errors: [] })
+const prepareCalls = r => r.calls.filter(c => c.opts.label.startsWith('prepare:phase'))
+const implemented = r => r.calls.some(c => c.opts.agentType === 'pair-implementer' || /implement-phase/.test(c.prompt))
+
+test('US-523: nothing declared ⇒ no prepare dispatch at all (default off, the golden traces stand)', async () => {
+  const r = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch() })
+  assert.equal(prepareCalls(r).length, 0)
+  // an engaged policy whose prepare gate is only the KB default: cards are taken as Ready, as before
+  const defaulted = await driveWith({ until: 'pr' }, { resolved: PREPARING(GATE('always'), 'pr', true, 'default') })
+  assert.equal(prepareCalls(defaulted).length, 0)
+  assert.equal(rowOf(defaulted).status, 'ready-for-merge')
+})
+
+test('US-523 AC4/AC5: `prepare: never` ⇒ ONE prepare dispatch before the first stage, naming the script, the gate and its source; a prepared card then runs the cycle', async () => {
+  const r = await driveWith({ prepare: 'never' }, { resolved: PREPARING(GATE('never'), 'pr', false) })
+  const [p] = prepareCalls(r)
+  assert.equal(prepareCalls(r).length, 1)
+  assert.match(p.prompt, /cycle-prepare\.mjs decide --gate '\{"mode":"never","has":\[\],"lacks":\[\]\}'/)
+  assert.match(p.prompt, /--attended false/)
+  assert.match(p.prompt, /source: argument/)
+  assert.match(p.prompt, /Never write the card's Ready state yourself/)
+  assert.ok(labelsOf(r.calls).indexOf(p.opts.label) < labelsOf(r.calls).findIndex(l => l.startsWith('implement')), 'prepare precedes the first stage')
+  assert.equal(rowOf(r).status, 'ready-for-merge')
+})
+
+test('US-523 AC2: a declared `always` parks an unattended Draft card awaiting-human — no stage runs, nothing is written by the sandbox', async () => {
+  const r = await driveWith({ until: 'pr' }, { resolved: PREPARING(GATE('always')), prepare: { outcome: 'needs-human', reason: 'prepare-needs-human' } })
+  const row = rowOf(r)
+  assert.equal(row.status, 'awaiting-human')
+  assert.equal(row.stage, 'prepare')
+  assert.equal(row.reason, 'prepare-needs-human')
+  assert.deepEqual(stageLabels(r.calls).filter(l => !l.startsWith('autonomy:') && !l.startsWith('prepare:phase')), [])
+})
+
+test('US-523 AC6: a boundary escalation parks the card `escalated` (stage prepare, conditions kept) — the cycle never starts', async () => {
+  const r = await driveWith({ prepare: 'when; lacks: triaged' }, { resolved: PREPARING(GATE('when', { lacks: ['triaged'] }), 'pr', false), prepare: { outcome: 'escalated', boundary: 'B0', conditions: ['lacks:triaged'] } })
+  const row = rowOf(r)
+  assert.equal(row.status, 'escalated')
+  assert.deepEqual({ stage: row.stage, boundary: row.boundary, conditions: row.conditions }, { stage: 'prepare', boundary: 'B0', conditions: ['lacks:triaged'] })
+  assert.equal(r.calls.filter(c => !c.opts.label.startsWith('autonomy:') && !c.opts.label.startsWith('prepare:phase')).length, 0)
+})
+
+test('US-523: an unreadable or failed prepare answer is failed-preparation, never a pass', async () => {
+  for (const prepare of [null, { outcome: 'bogus' }, { outcome: 'failed', reason: 'refine exited 1' }, { error: 'boom' }]) {
+    const r = await driveWith({ prepare: 'never' }, { resolved: PREPARING(GATE('never'), 'pr', false), prepare })
+    assert.equal(rowOf(r).status, 'failed-preparation', JSON.stringify(prepare))
+  }
+})
+
+test('US-523 AC8: until ready after a prepared card stops at the boundary — target-ready, no stage dispatched', async () => {
+  const r = await driveWith({ prepare: 'never', until: 'ready' }, {
+    resolved: PREPARING(GATE('never'), 'ready'),
+    decide: () => ({ decision: 'stop-at-target', target: 'ready', stage: 'implement' }),
+  })
+  assert.equal(rowOf(r).status, 'target-ready')
+  assert.equal(prepareCalls(r).length, 1)
+})
+
+test('US-523: a PR entry (prNumber) never runs the prepare phase — a card with a PR has started', async () => {
+  const r = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }], prepare: 'never' }, dispatch: stdDispatch(), autonomy: scripted({ resolved: PREPARING(GATE('never'), 'pr', false) }) })
+  assert.equal(prepareCalls(r).length, 0)
+})
+
+test('US-523: the batch holds no prepare rule — the prepare gate is evaluated by cycle-prepare.mjs only', () => {
+  const code = SRC.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
+  assert.equal(/escalationConditions|has\.some|lacks\.some|\.lacks\.filter|\.has\.filter/.test(code), false)
 })

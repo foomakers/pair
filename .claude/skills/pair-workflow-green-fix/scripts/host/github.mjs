@@ -166,6 +166,23 @@ export default defineAdapter({
           return { applied: state, confirmed: false, error: e.message }
         }
       },
+      // US-523: add one label to the CARD, created on first use (A8), READ BACK. Reported, never thrown:
+      // a refused write is `confirmed: false` with the reason, so the caller still posts its comment.
+      labelCard({ id, label, repo }) {
+        try {
+          try {
+            gh(withRepo(['label', 'create', label, '--description', 'Needs a human review before it proceeds'], repo))
+          } catch (e) {
+            if (!/already exists/i.test(String(e?.detail ?? e?.message ?? ''))) throw e
+          }
+          gh(withRepo(['issue', 'edit', String(id), '--add-label', label], repo))
+          const now = parseJson(gh(withRepo(['issue', 'view', String(id)], repo).concat(['--json', 'labels'])), { command: 'gh issue view labels' })
+          const has = (now?.labels ?? []).some(l => l?.name === label)
+          return { applied: label, confirmed: has, error: has ? null : `read-back: label ${JSON.stringify(label)} is not on issue #${id}` }
+        } catch (e) {
+          return { applied: label, confirmed: false, error: e.message }
+        }
+      },
       // One marker-keyed comment on the CARD (never the PR thread): the park path's "awaits action".
       commentOnCard({ id, marker, body, repo }) {
         return upsertOnIssue({ number: id, marker, body, repo })
