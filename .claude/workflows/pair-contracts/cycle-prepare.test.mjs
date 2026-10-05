@@ -520,6 +520,9 @@ test('r2-2: complete at B2 under a spaced-label gate escalates (label + comment)
 
 test('r2-2: conditions stay inert text: control characters and backticks are still refused', () => {
   const g = JSON.stringify(NEVER)
+  // the shared `conditionError` grammar: no shell fragment, 50-char host cap — not the looser own check
+  for (const bad of ["has:x'y", 'a;b', 'lacks:a$(id)', 'a|b', 'x'.repeat(60)]) assert.throws(() => parseArgs(['escalate', '--dir', '.', '--story', '5', '--boundary', 'B1', '--gate', g, '--source', 's', '--conditions', JSON.stringify([bad])]), /--conditions/, bad)
+  for (const ok of ['has:risk:red', 'lacks: needs triage', 'labels-unreadable']) assert.doesNotThrow(() => parseArgs(['escalate', '--dir', '.', '--story', '5', '--boundary', 'B1', '--gate', g, '--source', 's', '--conditions', JSON.stringify([ok])]), ok)
   for (const bad of ['a`b', 'a\nb', '']) assert.throws(() => parseArgs(['escalate', '--dir', '.', '--story', '5', '--boundary', 'B1', '--gate', g, '--source', 's', '--conditions', JSON.stringify([bad])]), /--conditions/)
 })
 
@@ -587,6 +590,12 @@ test('r2-6: an open question is an entry not ticked `- [x]` and not `none`; a wr
   assert.equal(openQuestionOf(sec('')), undefined)
   assert.equal(openQuestionOf(sec('- none')), undefined)
   assert.equal(openQuestionOf(sec('None')), undefined)
+  // `none` is an answer only as the WHOLE entry (case-insensitive, optional trailing period).
+  assert.equal(openQuestionOf(sec('- NONE.')), undefined)
+  assert.equal(openQuestionOf(sec('none.')), undefined)
+  const q = '- None of the current tiers fit enterprise users: which tier do they get? — product call'
+  assert.equal(openQuestionOf(sec(q)), q)
+  assert.equal(openQuestionOf(sec('None of the above?')), 'None of the above?')
   assert.equal(openQuestionOf(sec('- [x] Who pays?\n  Answer: the team (see ## Assumptions)')), undefined)
   assert.equal(openQuestionOf(sec('- [ ] Who pays?')), '- [ ] Who pays?')
   assert.equal(openQuestionOf(sec('- Who pays?')), '- Who pays?')

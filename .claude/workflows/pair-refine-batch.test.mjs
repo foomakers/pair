@@ -46,8 +46,12 @@ async function runWorkflow({ args, dispatch }) {
   return { result, calls, logs }
 }
 
+// The resolve dispatch answers as autonomy-policy.mjs would with nothing declared: the KB default gate `always`.
+const resolved = (gate = { mode: 'always', has: [], lacks: [] }, source = 'default') => ({ ok: true, active: false, policy: { until: 'pr', merge: { mode: 'always', has: [], lacks: [] }, prepare: gate }, effective: { prepare: { value: gate.mode, source } } })
 const okDispatch = (prompt, opts) =>
-  opts.phase === 'Verify'
+  opts.label === 'autonomy:resolve'
+    ? resolved()
+    : opts.phase === 'Verify'
     ? { number: 1, verified: true, riskTag: 'risk:yellow', boardStatus: 'Refined' }
     : { number: 1, recommendation: 'ready', note: 'n' }
 
@@ -91,7 +95,7 @@ test('every prompt carries the repo read-only clause, and triage additionally wr
     args: { items: [{ id: '216', mode: 'classify' }, { id: '321', mode: 'refine' }, { id: '134', mode: 'triage' }] },
     dispatch: okDispatch,
   })
-  for (const c of calls) {
+  for (const c of calls.filter(c => c.opts.label !== 'autonomy:resolve')) {
     assert.ok(/do NOT create, edit or delete ANY file/.test(c.prompt), `${c.opts.label} forbids file writes`)
     assert.ok(/no add\/commit\/checkout\/branch\/worktree\/stash/.test(c.prompt), `${c.opts.label} forbids mutating git`)
     assert.ok(/running CONCURRENTLY in sibling worktrees/.test(c.prompt), `${c.opts.label} states why`)
@@ -803,3 +807,82 @@ for (const [helper, what, drive] of CASES) {
       )
   })
 }
+
+// ── US-523 T-9 / ADR-028 — refine-batch under the RESOLVED prepare gate ───────────────────────────
+import { createHash } from 'node:crypto'
+const sha = t => createHash('sha256').update(t).digest('hex')
+const gateDispatch = (gate, source) => (prompt, opts) => (opts.label === 'autonomy:resolve' ? resolved(gate, source) : okDispatch(prompt, opts))
+const refinePrompt = async (args, dispatch) => (await runWorkflow({ args, dispatch })).calls.find(c => c.opts.label === `refine:#216`)?.prompt
+
+test('default gate `always` (KB default): the refine prompt is byte-identical to the pre-#523 prompt (R3.11 unchanged)', async () => {
+  // golden: sha256 of the refine prompt on origin/main for { id: '216', mode: 'refine' } and with breakdown
+  assert.equal(sha(await refinePrompt({ items: [{ id: '216', mode: 'refine' }] }, okDispatch)), '72ca49716fa528462e61784b299ac776faa80a8ecd82c7e12a80e4bb952c9bf2')
+  assert.equal(sha(await refinePrompt({ items: [{ id: '216', mode: 'refine', breakdown: true }] }, okDispatch)), '991b205279e50ed1cfcc48f19989c72560a55cbb8323dec3bb0a67fb7e0af4c7')
+  const p = await refinePrompt({ items: [{ id: '216', mode: 'refine' }] }, okDispatch)
+  assert.doesNotMatch(p, /\$approval|\$prepare|cycle-prepare/, 'no autonomous signal under the default gate')
+})
+
+test('the resolve dispatch runs the policy script with the prepare argument, only when a refine item exists', async () => {
+  const { calls } = await runWorkflow({ args: { items: [{ id: '216', mode: 'refine' }], prepare: 'never' }, dispatch: gateDispatch({ mode: 'never', has: [], lacks: [] }, 'argument') })
+  const r = calls.find(c => c.opts.label === 'autonomy:resolve').prompt
+  assert.match(r, /autonomy-policy\.mjs resolve --adoption \.pair\/adoption\/tech\/automation\.md --args '\{"prepare":"never"\}'/)
+  const none = await runWorkflow({ args: { items: [{ id: '216', mode: 'classify' }] }, dispatch: okDispatch })
+  assert.equal(none.calls.some(c => c.opts.label === 'autonomy:resolve'), false, 'classify/triage never resolve a gate')
+})
+
+test('declared `never`: $approval auto + $prepare never, truthful provenance, Ready only through cycle-prepare complete after a breakdown', async () => {
+  const p = await refinePrompt({ items: [{ id: '216', mode: 'refine', breakdown: true }], prepare: 'never' }, gateDispatch({ mode: 'never', has: [], lacks: [] }, 'argument'))
+  assert.match(p, /\$approval: auto/)
+  assert.match(p, /\$prepare: never/)
+  assert.match(p, /Prepared autonomously under prepare: never \(argument\) — ADR-028/)
+  assert.match(p, /cycle-prepare\.mjs complete/)
+  assert.match(p, /plan-tasks/)
+  assert.match(p, /--refinedAutonomously true/)
+  assert.match(p, /State Mapping/)
+  assert.doesNotMatch(p, /move the board state to Refined|never \(argument\).*adoption/s)
+})
+
+test('provenance names the REAL source — adoption and default are never rendered as `(argument)`', async () => {
+  const adoption = await refinePrompt({ items: [{ id: '216', mode: 'refine' }] }, gateDispatch({ mode: 'never', has: [], lacks: [] }, 'adoption'))
+  assert.match(adoption, /prepare: never \(adoption\)/)
+  assert.doesNotMatch(adoption, /prepare: never \(argument\)/)
+  const when = await refinePrompt({ items: [{ id: '216', mode: 'refine' }] }, gateDispatch({ mode: 'when', has: [], lacks: ['triaged'] }, 'adoption'))
+  assert.match(when, /\$prepare: when/)
+  assert.match(when, /prepare: when; lacks: triaged \(adoption\)/)
+})
+
+test('refine-only (no breakdown) under a declared gate never writes Ready: the card is left for plan-tasks / complete, and verify does not demand Refined', async () => {
+  const { calls } = await runWorkflow({ args: { items: [{ id: '216', mode: 'refine' }] }, dispatch: gateDispatch({ mode: 'never', has: [], lacks: [] }, 'adoption') })
+  const p = calls.find(c => c.opts.label === 'refine:#216').prompt
+  assert.doesNotMatch(p, /cycle-prepare\.mjs complete --dir/, 'complete needs a breakdown; refine-only must not call it')
+  assert.match(p, /do NOT write the Ready state/)
+  assert.match(p, /left for \/pair-process-plan-tasks and cycle-prepare\.mjs complete/)
+  const v = calls.find(c => c.opts.label === 'verify:#216').prompt
+  assert.doesNotMatch(v, /EXACTLY `Refined`/)
+  assert.match(v, /NOT be moved to Ready/)
+})
+
+test('escalation on a has/lacks condition goes through cycle-prepare decide + escalate (guarded run dir, needs-review), never a hand-built comment', async () => {
+  const p = await refinePrompt({ items: [{ id: '216', mode: 'refine', breakdown: true }] }, gateDispatch({ mode: 'when', has: ['risk:red'], lacks: ['triaged'] }, 'adoption'))
+  assert.match(p, /cycle-prepare\.mjs decide --gate '\{"mode":"when","has":\["risk:red"\],"lacks":\["triaged"\]\}'/)
+  assert.match(p, /--readiness refined-no-breakdown --attended false --boundary B1/)
+  assert.match(p, /--readiness refined-no-breakdown --attended false --boundary B2/)
+  assert.match(p, /cycle-prepare\.mjs escalate/)
+  assert.match(p, /--openQuestionFromCard true/)
+  assert.match(p, /--dir \.pair\/working\/runs\/refine-batch\/216 --story 216/)
+  assert.match(p, /needs-review/)
+  assert.match(p, /never paste card text into a command/)
+})
+
+test('a gate value that could become a shell fragment is rejected before any refine agent runs', async () => {
+  for (const bad of ["x'; rm -rf /", 'a`id`', 'a$(id)', 'a;b', 'a|b', 'a\\b', 'a"b']) {
+    await assert.rejects(
+      () => runWorkflow({ args: { items: [{ id: '216', mode: 'refine' }] }, dispatch: gateDispatch({ mode: 'when', has: [bad], lacks: [] }, 'adoption') }),
+      /HALT automation-policy/,
+      `${bad} must halt`,
+    )
+  }
+  await assert.rejects(() => runWorkflow({ args: { items: [{ id: '216', mode: 'refine' }] }, dispatch: gateDispatch({ mode: 'never', has: [], lacks: [] }, "adoption'; id") }), /HALT automation-policy/)
+  await assert.rejects(() => runWorkflow({ args: { items: [{ id: '216', mode: 'refine' }], prepare: "never'; id" }, dispatch: okDispatch }), /args\.prepare/)
+  await assert.rejects(() => runWorkflow({ args: { items: [{ id: '216', mode: 'refine' }] }, dispatch: () => null }), /HALT automation-policy-unresolved/)
+})
