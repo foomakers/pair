@@ -68,7 +68,11 @@ describe('buildSkillArgs', () => {
 
   it('US-523: --prepare is rendered for refine-story alone, after --approval', () => {
     expect(
-      buildSkillArgs('pair-process-refine-story', { root: '9', approval: 'auto', prepare: 'never' }),
+      buildSkillArgs('pair-process-refine-story', {
+        root: '9',
+        approval: 'auto',
+        prepare: 'never',
+      }),
     ).toEqual(['--story', '9', '--approval', 'auto', '--prepare', 'never'])
     expect(
       buildSkillArgs('pair-process-plan-tasks', { root: '9', approval: 'auto', prepare: 'when' }),

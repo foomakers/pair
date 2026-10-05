@@ -172,7 +172,18 @@ async function run(s: Scenario = {}) {
     project(),
     deps,
   )
-  return { code, stdout, calls, prompts, audits, escalations, completions, decisions, driven, hooks }
+  return {
+    code,
+    stdout,
+    calls,
+    prompts,
+    audits,
+    escalations,
+    completions,
+    decisions,
+    driven,
+    hooks,
+  }
 }
 
 const skipAudits = (r: { audits: string[] }) => r.audits.filter(a => a.includes('event=skip'))
@@ -182,15 +193,20 @@ describe('AC1/AC2: the default and `always` never reach Ready autonomously', () 
     ['no selection (default, nothing resolved)', undefined],
     ['declared always', selection(gate('always'))],
     ['defaulted always', selection(gate('always'), 'pr', 'default')],
-  ])('unattended Draft, %s ⇒ skipped needs-human, nothing spawned, nothing written', async (_n, prepare) => {
-    const r = await run({ prepare, autonomous: true })
-    expect(r.code).toBe(0)
-    expect(r.calls.filter(c => c === 'iteration' || c === 'cycle' || c === 'complete')).toEqual([])
-    expect(r.calls.some(c => c.startsWith('escalate'))).toBe(false)
-    expect(r.stdout.join('\n')).toMatch(/needs a human/)
-    expect(skipAudits(r)).toHaveLength(1)
-    expect(skipAudits(r)[0]).toContain('reason=prepare-needs-human')
-  })
+  ])(
+    'unattended Draft, %s ⇒ skipped needs-human, nothing spawned, nothing written',
+    async (_n, prepare) => {
+      const r = await run({ prepare, autonomous: true })
+      expect(r.code).toBe(0)
+      expect(r.calls.filter(c => c === 'iteration' || c === 'cycle' || c === 'complete')).toEqual(
+        [],
+      )
+      expect(r.calls.some(c => c.startsWith('escalate'))).toBe(false)
+      expect(r.stdout.join('\n')).toMatch(/needs a human/)
+      expect(skipAudits(r)).toHaveLength(1)
+      expect(skipAudits(r)[0]).toContain('reason=prepare-needs-human')
+    },
+  )
 
   it('AC1/AC3: attended Draft under the default ⇒ the interactive refine-story prompt, byte-identical (no --approval, no --prepare)', async () => {
     for (const prepare of [undefined, selection(gate('always'))]) {
@@ -208,8 +224,15 @@ describe('AC1/AC2: the default and `always` never reach Ready autonomously', () 
   it('AC2 property: `always` + unattended, every readiness and label set ⇒ no skill, no Ready, no escalation', async () => {
     for (const readiness of ['draft', 'refined-no-breakdown'] as const)
       for (const labels of [[], ['triaged'], ['risk:red'], ['needs-review']]) {
-        const r = await run({ readiness, prepare: selection(gate('always')), autonomous: true, labels: [labels] })
-        expect(r.calls.filter(c => c === 'iteration' || c === 'complete' || c.startsWith('escalate'))).toEqual([])
+        const r = await run({
+          readiness,
+          prepare: selection(gate('always')),
+          autonomous: true,
+          labels: [labels],
+        })
+        expect(
+          r.calls.filter(c => c === 'iteration' || c === 'complete' || c.startsWith('escalate')),
+        ).toEqual([])
       }
   })
 })
@@ -222,13 +245,25 @@ describe('AC4/AC5/AC8: never and when proceed alone, Ready once, until decides w
       '/pair-process-refine-story --story 523 --approval auto --prepare never',
       '/pair-process-plan-tasks --story 523 --approval auto',
     ])
-    expect(r.calls).toEqual(['decide:B0', 'iteration', 'decide:B1', 'iteration', 'decide:B2', 'complete', 'cycle'])
+    expect(r.calls).toEqual([
+      'decide:B0',
+      'iteration',
+      'decide:B1',
+      'iteration',
+      'decide:B2',
+      'complete',
+      'cycle',
+    ])
     expect(r.completions[0]).toMatchObject({ story: '523', source: 'argument' })
     expect(r.stdout.join('\n')).toContain('PREPARE-RESULT: prepared')
   })
 
   it('when with no escalation behaves as never and passes `--prepare when`', async () => {
-    const r = await run({ prepare: selection(gate('when', [], ['triaged'])), autonomous: true, labels: [['triaged']] })
+    const r = await run({
+      prepare: selection(gate('when', [], ['triaged'])),
+      autonomous: true,
+      labels: [['triaged']],
+    })
     expect(r.prompts[0]).toContain('--approval auto --prepare when')
     expect(r.calls).toContain('complete')
     expect(r.code).toBe(0)
@@ -243,7 +278,11 @@ describe('AC4/AC5/AC8: never and when proceed alone, Ready once, until decides w
   })
 
   it('a refined-no-breakdown card enters at B1 and only plans', async () => {
-    const r = await run({ readiness: 'refined-no-breakdown', prepare: selection(gate('never')), autonomous: true })
+    const r = await run({
+      readiness: 'refined-no-breakdown',
+      prepare: selection(gate('never')),
+      autonomous: true,
+    })
     expect(r.prompts).toEqual(['/pair-process-plan-tasks --story 523 --approval auto'])
     expect(r.calls[0]).toBe('decide:B1')
   })
@@ -256,7 +295,11 @@ describe('AC4/AC5/AC8: never and when proceed alone, Ready once, until decides w
 
 describe('AC6/AC10: escalation stops the phase, the card stays Draft', () => {
   it('B0: a firing gate escalates before any skill runs — exit 1, on-halt, one escalation, no Ready', async () => {
-    const r = await run({ prepare: selection(gate('when', [], ['triaged'])), autonomous: true, labels: [[]] })
+    const r = await run({
+      prepare: selection(gate('when', [], ['triaged'])),
+      autonomous: true,
+      labels: [[]],
+    })
     expect(r.code).toBe(1)
     expect(r.calls).toEqual(['decide:B0', 'escalate:B0'])
     expect(r.escalations[0]).toMatchObject({ conditions: ['lacks:triaged'], source: 'argument' })
@@ -299,7 +342,11 @@ describe('AC6/AC10: escalation stops the phase, the card stays Draft', () => {
   })
 
   it('AC7: an unattended card carrying needs-review is skipped as escalated, audited `escalated`', async () => {
-    const r = await run({ prepare: selection(gate('never')), autonomous: true, labels: [['needs-review']] })
+    const r = await run({
+      prepare: selection(gate('never')),
+      autonomous: true,
+      labels: [['needs-review']],
+    })
     expect(r.code).toBe(0)
     expect(r.calls.filter(c => c === 'iteration')).toEqual([])
     expect(skipAudits(r)[0]).toContain('reason=escalated')
@@ -314,7 +361,11 @@ describe('AC6/AC10: escalation stops the phase, the card stays Draft', () => {
 
 describe('fail closed', () => {
   it('a failed skill iteration ⇒ exit 1, no complete, on-halt', async () => {
-    const r = await run({ prepare: selection(gate('never')), autonomous: true, iterationOutcome: 'failed' })
+    const r = await run({
+      prepare: selection(gate('never')),
+      autonomous: true,
+      iterationOutcome: 'failed',
+    })
     expect(r.code).toBe(1)
     expect(r.calls).not.toContain('complete')
     expect(r.hooks).toEqual(['on-halt'])
@@ -332,7 +383,11 @@ describe('fail closed', () => {
   })
 
   it('an unreadable label set under `when` escalates (labels-unreadable), never proceeds', async () => {
-    const r = await run({ prepare: selection(gate('when', [], ['triaged'])), autonomous: true, labels: [undefined] })
+    const r = await run({
+      prepare: selection(gate('when', [], ['triaged'])),
+      autonomous: true,
+      labels: [undefined],
+    })
     expect(r.code).toBe(1)
     expect(r.escalations[0]?.conditions).toEqual(['labels-unreadable'])
   })
@@ -341,6 +396,8 @@ describe('fail closed', () => {
 describe('AC11: the effective gate is printed with its source', () => {
   it('names value, source and route', async () => {
     const r = await run({ prepare: selection(gate('never'), 'pr', 'adoption'), autonomous: true })
-    expect(r.stdout.join('\n')).toMatch(/Prepare: never \(source: adoption\) — run-autonomous at B0/)
+    expect(r.stdout.join('\n')).toMatch(
+      /Prepare: never \(source: adoption\) — run-autonomous at B0/,
+    )
   })
 })

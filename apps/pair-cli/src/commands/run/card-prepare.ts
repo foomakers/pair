@@ -224,7 +224,11 @@ export async function handlePreparation(
 ): Promise<number> {
   const effective = effectiveGateOf(entry)
   if (effective === undefined) return await legacyRoute(entry, routes)
-  if (effective.gate.mode === 'always' && deps.bridge === undefined && !prepareScriptInstalled(entry)) {
+  if (
+    effective.gate.mode === 'always' &&
+    deps.bridge === undefined &&
+    !prepareScriptInstalled(entry)
+  ) {
     return await legacyRoute(entry, routes)
   }
   const drive: Drive = { entry, phase: phaseFor(entry, effective, deps), routes }
@@ -295,7 +299,9 @@ const describeReason = (reason: Reason): string =>
   reason.openQuestion ?? (reason.conditions ?? []).join(', ')
 
 /** The reason as the script's own flags: conditions XOR one open question (never both, never neither). */
-function reasonArguments(reason: Reason): Pick<PrepareEscalateOptions, 'conditions' | 'openQuestion'> {
+function reasonArguments(
+  reason: Reason,
+): Pick<PrepareEscalateOptions, 'conditions' | 'openQuestion'> {
   return reason.openQuestion === undefined
     ? { conditions: reason.conditions ?? [] }
     : { openQuestion: reason.openQuestion }
@@ -325,7 +331,11 @@ async function writeEscalation(
     ...reasonArguments(reason),
     ...(assumptionsFile !== undefined && { assumptionsFile }),
   })
-  console.log(chalk.yellow(`  Escalated at ${boundary}: ${describeReason(reason)} — card ${entry.card} stays Draft`))
+  console.log(
+    chalk.yellow(
+      `  Escalated at ${boundary}: ${describeReason(reason)} — card ${entry.card} stays Draft`,
+    ),
+  )
   console.log(`  ${describeWrites(out)}`)
   say('escalated')
   await phase.halt('escalated')
@@ -354,15 +364,21 @@ async function boundaryStop(drive: Drive, boundary: 'B1' | 'B2'): Promise<number
     source: phase.source,
   })
   if (d.route === 'run-autonomous') return undefined
-  return await writeEscalation(drive, boundary, { conditions: d.conditions ?? [d.condition ?? d.route] })
+  return await writeEscalation(drive, boundary, {
+    conditions: d.conditions ?? [d.condition ?? d.route],
+  })
 }
 
 /** Refinement then B1 (AC10: an open question escalates even under `never`). `undefined` = proceed to planning. */
 async function refineStep(drive: Drive, mode: 'never' | 'when'): Promise<number | undefined> {
-  const refined = await drive.routes.driveSkill(REFINE_SKILL, 'Draft (Definition of Ready not met)', {
-    approval: 'auto',
-    prepare: mode,
-  })
+  const refined = await drive.routes.driveSkill(
+    REFINE_SKILL,
+    'Draft (Definition of Ready not met)',
+    {
+      approval: 'auto',
+      prepare: mode,
+    },
+  )
   if (refined !== 0) return await fail(drive.phase, `prepare:refine exited ${refined}`)
   const open = openQuestionOf(drive.phase.body())
   if (open !== undefined) return await writeEscalation(drive, 'B1', { openQuestion: open })
@@ -372,7 +388,9 @@ async function refineStep(drive: Drive, mode: 'never' | 'when'): Promise<number 
 /** Planning, B2, then the ONE Ready write. 0 = the card is Ready with its breakdown. */
 async function planStep(drive: Drive): Promise<number> {
   const { entry, phase, routes } = drive
-  const planned = await routes.driveSkill(PLAN_SKILL, 'Refined, task breakdown next', { approval: 'auto' })
+  const planned = await routes.driveSkill(PLAN_SKILL, 'Refined, task breakdown next', {
+    approval: 'auto',
+  })
   if (planned !== 0) return await fail(phase, `prepare:plan exited ${planned}`)
   const stopped = await boundaryStop(drive, 'B2')
   if (stopped !== undefined) return stopped
@@ -390,7 +408,11 @@ async function planStep(drive: Drive): Promise<number> {
     return 0
   }
   if (done.escalation === undefined) return await fail(phase, done.reason ?? 'complete refused')
-  console.log(chalk.yellow(`  Escalated at B2: ${(done.conditions ?? []).join(', ')} — card ${entry.card} stays Draft`))
+  console.log(
+    chalk.yellow(
+      `  Escalated at B2: ${(done.conditions ?? []).join(', ')} — card ${entry.card} stays Draft`,
+    ),
+  )
   say('escalated')
   await phase.halt('escalated')
   return 1

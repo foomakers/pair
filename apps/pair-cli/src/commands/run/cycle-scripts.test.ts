@@ -143,7 +143,10 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
     copyFileSync(join(realScriptsDir, 'cycle-dispatch.mjs'), join(scriptsDir, 'cycle-dispatch.mjs'))
     // US-523: the prepare phase's decision/writers, and the gate evaluator they import.
     copyFileSync(join(realScriptsDir, 'cycle-prepare.mjs'), join(scriptsDir, 'cycle-prepare.mjs'))
-    copyFileSync(join(realScriptsDir, 'autonomy-policy.mjs'), join(scriptsDir, 'autonomy-policy.mjs'))
+    copyFileSync(
+      join(realScriptsDir, 'autonomy-policy.mjs'),
+      join(scriptsDir, 'autonomy-policy.mjs'),
+    )
     // US-492: the PM/code-host adapters ship beside the scripts, in `host/`.
     cpSync(join(realScriptsDir, 'host'), join(scriptsDir, 'host'), { recursive: true })
     runsRoot = join(projectRoot, '.pair/working/runs')
@@ -193,7 +196,13 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
 
   it('prepareDecide() relays the real script route verbatim (US-523: one decision, every entry)', () => {
     const gate = { mode: 'when', has: ['risk:red'], lacks: ['triaged'] }
-    const base = { gate, readiness: 'draft', attended: false, boundary: 'B1', source: 'adoption' } as const
+    const base = {
+      gate,
+      readiness: 'draft',
+      attended: false,
+      boundary: 'B1',
+      source: 'adoption',
+    } as const
     const fires = bridge().prepareDecide({ ...base, labels: ['risk:red', 'triaged'] })
     expect(fires).toMatchObject({
       route: 'escalate',

@@ -11,11 +11,7 @@ import { CardOutOfScopeError } from './card-readiness'
 import { filterDeliveryFor } from './invocation'
 import type { DispatchSkipReason } from './dispatch'
 import { driveRun } from './loop-driver'
-import {
-  handlePreparation,
-  type PrepareRoutes,
-  type PromptExtras,
-} from './card-prepare'
+import { handlePreparation, type PrepareRoutes, type PromptExtras } from './card-prepare'
 import { prepareCycleCoordinator, resolveEngineFor } from './cycle-entry'
 import { refuseProfileOffCycle } from './workflow-profile'
 import {

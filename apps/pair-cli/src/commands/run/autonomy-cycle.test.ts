@@ -206,9 +206,7 @@ describe('resolveAutonomyPolicy: relay, never re-derive', () => {
     )
     expect(lines[0]).toMatch(/argument > adoption > KB default/)
     expect(lines).toContain('  until: merged (argument)')
-    expect(lines).toContain(
-      '  prepare: always (default)',
-    )
+    expect(lines).toContain('  prepare: always (default)')
     expect(lines.join('\n')).toMatch(
       /translated from ## Auto-Advance.*merge: when; lacks: risk:green/,
     )

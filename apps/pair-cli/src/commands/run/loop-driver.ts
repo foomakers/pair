@@ -86,10 +86,15 @@ function reportOutcome(outcome: LoopOutcome): void {
  * `interactive` default (ADR-021), so the non-autonomous path renders exactly the bytes it rendered
  * before. US-523: an autonomous prepare drive passes `$approval: auto` too, and `$prepare` with it.
  */
-function approvalArguments(resolved: ResolvedRun): { approval?: 'auto'; prepare?: 'never' | 'when' } {
+function approvalArguments(resolved: ResolvedRun): {
+  approval?: 'auto'
+  prepare?: 'never' | 'when'
+} {
   const extras = resolved.promptExtras
   return {
-    ...((resolved.autonomy.autonomous || extras?.approval === 'auto') && { approval: 'auto' as const }),
+    ...((resolved.autonomy.autonomous || extras?.approval === 'auto') && {
+      approval: 'auto' as const,
+    }),
     ...(extras?.prepare !== undefined && { prepare: extras.prepare }),
   }
 }

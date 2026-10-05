@@ -205,7 +205,9 @@ function parametersFor(skill: string): SkillParameterMap {
   const withApproval = APPROVAL_DECLARING_SKILLS.has(skill)
     ? { ...declared, ...APPROVAL_PARAMETER }
     : declared
-  return PREPARE_DECLARING_SKILLS.has(skill) ? { ...withApproval, ...PREPARE_PARAMETER } : withApproval
+  return PREPARE_DECLARING_SKILLS.has(skill)
+    ? { ...withApproval, ...PREPARE_PARAMETER }
+    : withApproval
 }
 
 /** HOW the eligibility label reaches the selection on this invocation — see `Perimeter`. */

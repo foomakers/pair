@@ -21,7 +21,12 @@ describe('US-523 T-8: the per-iteration line reports prepared / escalated / need
   it('adds the counts only when a card reported a prepare outcome', () => {
     expect(
       renderIterationLine(
-        record([o('1', 'prepared'), o('2', 'prepared'), o('3', 'escalated'), o('4', 'needs-human')]),
+        record([
+          o('1', 'prepared'),
+          o('2', 'prepared'),
+          o('3', 'escalated'),
+          o('4', 'needs-human'),
+        ]),
         '',
       ),
     ).toBe(

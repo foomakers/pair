@@ -39,7 +39,7 @@ export function decide({ gate, labels, readiness, attended, boundary, source } =
   if (typeof attended !== 'boolean') throw new Error(`attended must be a boolean, got ${JSON.stringify(attended ?? null)}`)
   const base = { boundary, gate: gateToString(gate), ...(source !== undefined ? { source } : {}) }
   if (readiness === 'ready') return { route: 'nothing-to-prepare', ...base }
-  // AC7: a card a human has not looked at since an escalation is never re-picked unattended.
+  // a card a human has not looked at since an escalation is never re-picked unattended.
   if (!attended && Array.isArray(labels) && labels.includes(NEEDS_REVIEW)) return { route: 'skip-escalated', condition: `has:${NEEDS_REVIEW}`, ...base }
   if (gate.mode === 'always') return { route: attended ? 'run-interactive' : 'skip-needs-human', ...base }
   if (gate.mode === 'never') return { route: 'run-autonomous', ...base }
@@ -98,9 +98,9 @@ export function escalate({ hosts, story, repo, boundary, gate, source, condition
 }
 
 // ── the completion writer ───────────────────────────────────────────────────────────────────
-// Ready is written ONCE, here, after B2 (A4). Immediately before writing it re-reads the labels and
+// Ready is written ONCE, here, after B2. Immediately before writing it re-reads the labels and
 // re-runs `decide(B2)` (a race with a human or a tag change escalates instead), and verifies the body
-// carries the autonomous-provenance evidence (AC12): a non-empty `## Assumptions` section and the Notes
+// carries the autonomous-provenance evidence: a non-empty `## Assumptions` section and the Notes
 // provenance line. Anything missing ⇒ no Ready (fail closed).
 export function assumptionsSection(body) {
   const m = ASSUMPTIONS_HEADING_RE.exec(String(body ?? ''))

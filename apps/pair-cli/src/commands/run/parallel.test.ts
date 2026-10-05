@@ -153,10 +153,12 @@ describe('outcomeOfExit / batchExitCode', () => {
       detail: 'exit 1',
       prepare: 'escalated',
     })
-    expect(outcomeOfExit('7', { exitCode: 0, signal: null, prepare: 'needs-human' })).toMatchObject({
-      outcome: 'completed',
-      prepare: 'needs-human',
-    })
+    expect(outcomeOfExit('7', { exitCode: 0, signal: null, prepare: 'needs-human' })).toMatchObject(
+      {
+        outcome: 'completed',
+        prepare: 'needs-human',
+      },
+    )
   })
 
   it('US-523: only an exact PREPARE-RESULT line parses', () => {
@@ -413,10 +415,7 @@ describe('spawnCardProcess — a genuinely separate OS process (a stub CLI, neve
   it('US-523: the PREPARE-RESULT line the card process prints is carried on its exit, and still relayed', async () => {
     dir = mkdtempSync(join(tmpdir(), 'pair-523-cli-'))
     const stub = join(dir, 'stub-cli.cjs')
-    writeFileSync(
-      stub,
-      "console.log('PREPARE-RESULT: escalated')\nprocess.exit(1)",
-    )
+    writeFileSync(stub, "console.log('PREPARE-RESULT: escalated')\nprocess.exit(1)")
     process.argv[1] = stub
     const lines: string[] = []
     vi.spyOn(console, 'log').mockImplementation((line: string) => void lines.push(line))
