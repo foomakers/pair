@@ -545,4 +545,5 @@ A `pre-*` hook that writes files (mirror realignment) must be local and idempote
 
 - [Quality Model](../../quality-assurance/quality-model.md) — the classification matrix, tier resolution, per-tier requirements (§4), tag projection (§5) and the `tech/risk-matrix.md` adoption delta (§6)
 - [Agent Harness Framework](../../technical-standards/ai-development/agent-harness/README.md) — what each declared harness name means, and the per-harness guides `/pair-capability-setup-harness` applies
+- [The Delivery Cycle](delivery-cycle.md) — the overview map of the cycle these declarations configure
 - [Collaboration Automation Framework](README.md) — the surrounding automation guidelines

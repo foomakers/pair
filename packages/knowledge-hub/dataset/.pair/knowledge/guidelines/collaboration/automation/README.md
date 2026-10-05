@@ -17,6 +17,7 @@ This framework covers:
 - Notification and communication automation
 - Unattended-development policy: which cards may run without a human (`tech/automation.md` — [automation-policy.md](automation-policy.md))
 - Workflow profiles: which engine, model, effort and context each delivery-cycle stage uses ([workflow-profiles.md](workflow-profiles.md))
+- The delivery cycle end to end: stages, realizations, hooks, merge, adapters ([delivery-cycle.md](delivery-cycle.md))
 
 ## Out of Scope
 
@@ -28,6 +29,8 @@ This framework does not cover:
 - Security automation and compliance checks (covered in technical standards)
 
 ## Directory Contents
+
+**[delivery-cycle.md](delivery-cycle.md)** - the consolidated map of the delivery cycle: stages, realizations, profiles, Cycle Hooks, the `merge` stage, host adapters and the unattended flow, with links out to each owner
 
 **[automation-policy.md](automation-policy.md)** - `tech/automation.md` schema: the `## Eligibility` declaration that selects which cards may run unattended, and the `## Workflows` mapping that routes a tagged card to the workflow that runs on it
 

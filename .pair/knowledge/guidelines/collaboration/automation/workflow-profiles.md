@@ -103,3 +103,7 @@ The `cheap-green` profile above is the shipped example: `prepare`/`green` on a c
 | `profile-name-collision` | two files declare the same `name` |
 
 `--profile` / `--workflow-config` apply only to a card that enters the delivery cycle; on a card routed to a mapped workflow or a preparation skill they are refused, never silently ignored.
+
+## Related
+
+- [The Delivery Cycle](delivery-cycle.md) — the overview: where profiles sit among the stages, realizations and hooks
