@@ -179,6 +179,18 @@ export default defineAdapter({
           return { applied: label, confirmed: false, error: e.message }
         }
       },
+      // US-523: remove one tag from `System.Tags` (an attended completion clears `needs-review`), READ BACK. Reported, never thrown.
+      unlabelCard({ id, label }) {
+        try {
+          const tags = String(showCard(id)?.fields?.['System.Tags'] ?? '').split(';').map(t => t.trim()).filter(Boolean)
+          if (tags.includes(label)) azJson(['boards', 'work-item', 'update', '--id', cardId(id), '--fields', `System.Tags=${tags.filter(t => t !== label).join('; ')}`], 'boards work-item update')
+          const now = String(showCard(id)?.fields?.['System.Tags'] ?? '').split(';').map(t => t.trim())
+          const has = now.includes(label)
+          return { removed: label, confirmed: !has, error: has ? `read-back: tag ${JSON.stringify(label)} is still on work item ${cardId(id)}` : null }
+        } catch (e) {
+          return { removed: label, confirmed: false, error: e.message }
+        }
+      },
       parseCardRef(ref, { repo } = {}) {
         const m = CARD_URL_RE.exec(String(ref ?? ''))
         return m ? { number: Number(m[3]), inScope: m[2] === splitRepo(repo).project } : null

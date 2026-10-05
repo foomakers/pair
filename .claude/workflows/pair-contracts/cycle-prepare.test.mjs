@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { decide, escalate, complete, parseArgs, assumptionsSection, escalationBody, ESCALATION_MARKER, ROUTES, BOUNDARIES, READINESS } from '../../skills/pair-workflow-cycle/scripts/cycle-prepare.mjs'
+import { decide, escalate, complete, parseArgs, assumptionsSection, escalationBody, openQuestionOf, ESCALATION_MARKER, ROUTES, BOUNDARIES, READINESS } from '../../skills/pair-workflow-cycle/scripts/cycle-prepare.mjs'
 import github from '../../skills/pair-workflow-cycle/scripts/host/github.mjs'
 import azure from '../../skills/pair-workflow-cycle/scripts/host/azure-devops.mjs'
 import { PM_METHODS } from '../../skills/pair-workflow-cycle/scripts/host/adapter-kit.mjs'
@@ -33,8 +33,8 @@ const LABELS = [
   ['needs-review+triaged', ['needs-review', 'triaged']],
 ]
 function expected(gate, labels, attended, readiness) {
-  if (readiness === 'ready') return 'nothing-to-prepare'
   if (!attended && labels.includes('needs-review')) return 'skip-escalated'
+  if (readiness === 'ready') return 'nothing-to-prepare'
   if (gate.mode === 'always') return attended ? 'run-interactive' : 'skip-needs-human'
   if (gate.mode === 'never') return 'run-autonomous'
   const fires = gate.has.some(l => labels.includes(l)) || gate.lacks.some(l => !labels.includes(l))
@@ -411,10 +411,13 @@ const f = ${JSON.stringify(stateFile)}
 const st = JSON.parse(readFileSync(f, 'utf8'))
 const args = process.argv.slice(2)
 st.calls.push(args)
+let input = ''
+try { input = readFileSync(0, 'utf8') } catch {}
+;(st.inputs ??= []).push(input)
 const h = ${handler.toString()}
 let out = ''
 let err = null
-try { out = h(args, st) ?? '' } catch (e) { err = e }
+try { out = h(args, st, input) ?? '' } catch (e) { err = e }
 writeFileSync(f, JSON.stringify(st))
 if (err) { process.stderr.write(String(err.message)); process.exit(1) }
 process.stdout.write(out)
@@ -427,3 +430,193 @@ process.stdout.write(out)
 }
 const fakeBins = new Map()
 const stateOf = bin => JSON.parse(readFileSync(fakeBins.get(bin), 'utf8'))
+
+// ── review r2: the full CLI over a stubbed `gh` (PAIR_GH_BIN) — nothing here can reach a real tracker ─────────────
+// A tracker in a file: the card's labels/body, its board and its comment thread. Self-contained (it is stringified).
+const GH = (args, st, input) => {
+  const a = args.join(' ')
+  if (args[0] === 'issue' && args[1] === 'view') return a.includes('--json body') ? st.body : JSON.stringify({ labels: st.labels.map(name => ({ name })) })
+  if (args[0] === 'label') return ''
+  if (args[0] === 'issue' && args[1] === 'edit') {
+    const add = args.indexOf('--add-label')
+    if (add > 0) st.labels.push(args[add + 1])
+    const rm = args.indexOf('--remove-label')
+    if (rm > 0) st.labels = st.labels.filter(l => l !== args[rm + 1])
+    return ''
+  }
+  if (args[0] === 'api' && args.includes('graphql')) {
+    const q = args.find(x => x.startsWith('query='))
+    if (q.includes('mutation')) return JSON.stringify({ data: { updateProjectV2ItemFieldValue: { projectV2Item: { fieldValueByName: { name: 'Ready' } } } } })
+    return JSON.stringify({ data: { repository: { issue: { projectItems: { nodes: [{ id: 'I', project: { id: 'P', title: 'B', fields: { nodes: [{ id: 'F', name: 'Status', options: [{ id: 'O', name: 'Ready' }] }] } } }] } } } } })
+  }
+  if (args[0] === 'api' && args.includes('POST')) return JSON.stringify({ id: 1, html_url: 'u' })
+  if (args[0] === 'api') return '[]'
+  return ''
+}
+function tracker({ labels = [], body = '' } = {}) {
+  const bin = fakeBin(GH)
+  const dir = mkdtempSync(join(tmpdir(), 'prep-run-'))
+  writeFileSync(join(dir, '.host-binding.json'), JSON.stringify({ schemaVersion: 1, pmTool: 'github', codeHost: 'github' }))
+  const sf = fakeBins.get(bin)
+  writeFileSync(sf, JSON.stringify({ calls: [], labels, body, inputs: [] }))
+  const run = args => {
+    const r = spawnSync('node', [SCRIPT, ...args], { encoding: 'utf8', env: { ...process.env, PAIR_GH_BIN: bin } })
+    return { code: r.status, out: JSON.parse(r.stdout) }
+  }
+  return { run, dir, state: () => stateOf(bin), bin }
+}
+const gateArg = g => ['--gate', JSON.stringify(g)]
+const HUMAN_REFINED = '## Story\n\nx\n\n' + BREAKDOWN
+
+test('r2-1: a human-refined card (no ## Assumptions, no provenance line) completes through the real CLI path, Ready written once', () => {
+  const t = tracker({ body: HUMAN_REFINED })
+  const r = t.run(['complete', '--dir', t.dir, '--story', '7', ...gateArg(NEVER), '--source', 'argument', '--repo', 'o/r', '--refinedAutonomously', 'false'])
+  assert.equal(r.code, 0)
+  assert.equal(r.out.completed, true, JSON.stringify(r.out))
+  assert.equal(t.state().calls.filter(c => c.includes('graphql') && c.some(x => String(x).includes('mutation'))).length, 1)
+})
+
+test('r2-1: the same card is refused when the refinement WAS autonomous (default fail-closed: assumptions + provenance owed)', () => {
+  const t = tracker({ body: HUMAN_REFINED })
+  for (const extra of [[], ['--refinedAutonomously', 'true']]) {
+    const r = t.run(['complete', '--dir', t.dir, '--story', '7', ...gateArg(NEVER), '--source', 'argument', '--repo', 'o/r', ...extra])
+    assert.equal(r.out.completed, false)
+    assert.match(r.out.reason, /^assumptions-missing/)
+  }
+  assert.equal(parseArgs(['complete', '--dir', '.', '--story', '5', ...gateArg(NEVER), '--source', 'a', '--refinedAutonomously', 'false']).opts.refinedAutonomously, false)
+  assert.throws(() => parseArgs(['complete', '--dir', '.', '--story', '5', ...gateArg(NEVER), '--source', 'a', '--refinedAutonomously', 'maybe']), /true \| false/)
+})
+
+test('r2-1: a human-refined card still needs its task breakdown (the breakdown check is not relaxed)', () => {
+  const f = fakeHosts({ body: '## Story\n\nx\n' })
+  assert.match(complete({ hosts: f.hosts, story: 7, gate: NEVER, source: 'argument', refinedAutonomously: false }).reason, /^breakdown-missing/)
+})
+
+const SPACED = ['when', 'has: good first issue', 'lacks: needs triage']
+test('r2-2: a gate label with spaces (`when; has: good first issue`) escalates through the real CLI at B0, B1 and B2 — label + comment, never a throw', () => {
+  const gate = { mode: 'when', has: ['good first issue'], lacks: [] }
+  for (const boundary of ['B0', 'B1', 'B2']) {
+    const t = tracker({ labels: ['good first issue'] })
+    const d = t.run(['decide', ...gateArg(gate), '--readiness', boundary === 'B0' ? 'draft' : 'refined-no-breakdown', '--attended', 'false', '--boundary', boundary, '--labels', JSON.stringify(['good first issue']), '--source', 'adoption'])
+    assert.equal(d.out.route, 'escalate')
+    assert.deepEqual(d.out.conditions, ['has:good first issue'])
+    const r = t.run(['escalate', '--dir', t.dir, '--story', '7', '--boundary', boundary, ...gateArg(gate), '--source', 'adoption', '--conditions', JSON.stringify(d.out.conditions), '--repo', 'o/r'])
+    assert.equal(r.code, 0, `${boundary}: ${JSON.stringify(r.out)}`)
+    assert.equal(r.out.outcome, 'escalated')
+    assert.equal(r.out.label.applied, true)
+    assert.equal(r.out.comment.posted, true)
+    assert.ok(t.state().inputs.some(i => i.includes('has:good first issue')), boundary)
+  }
+})
+
+test('r2-2: complete at B2 under a spaced-label gate escalates (label + comment) instead of throwing', () => {
+  const t = tracker({ labels: ['good first issue'], body: PREPARED })
+  const r = t.run(['complete', '--dir', t.dir, '--story', '7', ...gateArg({ mode: 'when', has: ['good first issue'], lacks: [] }), '--source', 'adoption', '--repo', 'o/r'])
+  assert.equal(r.out.reason, 'escalated-at-B2')
+  assert.equal(r.out.escalation.label.applied, true)
+  assert.equal(r.out.escalation.comment.posted, true)
+})
+
+test('r2-2: conditions stay inert text: control characters and backticks are still refused', () => {
+  const g = JSON.stringify(NEVER)
+  for (const bad of ['a`b', 'a\nb', '']) assert.throws(() => parseArgs(['escalate', '--dir', '.', '--story', '5', '--boundary', 'B1', '--gate', g, '--source', 's', '--conditions', JSON.stringify([bad])]), /--conditions/)
+})
+
+// ── needs-review lifecycle ────────────────────────────────────────────────────────────────────────────────────────
+test('r2-3: needs-review blocks an unattended pick whatever the readiness (Ready included); attended is never blocked', () => {
+  for (const readiness of READINESS) {
+    assert.equal(decide({ gate: NEVER, labels: ['needs-review'], readiness, attended: false, boundary: 'B0' }).route, 'skip-escalated', readiness)
+    assert.notEqual(decide({ gate: NEVER, labels: ['needs-review'], readiness, attended: true, boundary: 'B0' }).route, 'skip-escalated', readiness)
+  }
+  assert.equal(decide({ gate: NEVER, labels: [], readiness: 'ready', attended: false, boundary: 'B0' }).route, 'nothing-to-prepare')
+})
+
+test('r2-3: an attended `complete` removes needs-review (read back); an unattended one never reaches Ready', () => {
+  const f = fakeHosts({ body: PREPARED, labels: ['needs-review'] })
+  f.hosts.pm.unlabelCard = a => {
+    f.calls.push(['unlabelCard', a.label])
+    f.state.labels = f.state.labels.filter(l => l !== a.label)
+    return { removed: a.label, confirmed: true, error: null }
+  }
+  const out = complete({ hosts: f.hosts, story: 7, gate: NEVER, source: 'argument', attended: true })
+  assert.equal(out.completed, true)
+  assert.deepEqual(out.needsReview, { cleared: true })
+  assert.deepEqual(f.state.labels, [])
+  const g = fakeHosts({ body: PREPARED, labels: ['triaged'] })
+  assert.equal(complete({ hosts: g.hosts, story: 7, gate: NEVER, source: 'argument', attended: true }).needsReview, undefined)
+})
+
+test('r2-3: the clearing through the real CLI path removes the label on the tracker; a refused removal never undoes Ready', () => {
+  const t = tracker({ labels: ['needs-review', 'risk:green'], body: PREPARED })
+  const r = t.run(['complete', '--dir', t.dir, '--story', '7', ...gateArg(NEVER), '--source', 'argument', '--repo', 'o/r', '--attended', 'true'])
+  assert.equal(r.out.completed, true, JSON.stringify(r.out))
+  assert.deepEqual(t.state().labels, ['risk:green'])
+  const f = fakeHosts({ body: PREPARED, labels: ['needs-review'] })
+  f.hosts.pm.unlabelCard = () => { throw new Error('forbidden') }
+  const out = complete({ hosts: f.hosts, story: 7, gate: NEVER, source: 'argument', attended: true })
+  assert.equal(out.completed, true)
+  assert.equal(out.needsReview.cleared, false)
+})
+
+test('r2-3: both host adapters implement unlabelCard (PM side), with a read-back', () => {
+  assert.ok(PM_METHODS.includes('unlabelCard'))
+  const bin = fakeBin((args, st) => {
+    if (args[1] === 'view') return JSON.stringify({ labels: st.removed ? [] : [{ name: 'needs-review' }] })
+    if (args[1] === 'edit') st.removed = true
+    return ''
+  })
+  const r = github.instantiate({ ghBin: bin }).unlabelCard({ id: 9, label: 'needs-review', repo: 'o/r' })
+  assert.equal(r.confirmed, true)
+  assert.ok(stateOf(bin).calls.some(c => c.join(' ').startsWith('issue edit 9 --remove-label needs-review')))
+  const az = fakeBin((args, st) => {
+    if (args.includes('update')) {
+      st.tags = args[args.indexOf('--fields') + 1].replace('System.Tags=', '')
+      return JSON.stringify({})
+    }
+    return JSON.stringify({ id: 9, fields: { 'System.Tags': st.tags ?? 'a; needs-review' } })
+  })
+  assert.equal(azure.instantiate({ azBin: az }).unlabelCard({ id: 9, label: 'needs-review' }).confirmed, true)
+  assert.ok(stateOf(az).calls.some(c => c.includes('System.Tags=a')))
+})
+
+// ── open questions: what "answered" means ────────────────────────────────────────────────────────────────────────────
+test('r2-6: an open question is an entry not ticked `- [x]` and not `none`; a written answer under a ticked entry no longer re-escalates', () => {
+  const sec = t => `## Story\n\nx\n\n## Open Questions\n\n${t}\n\n## Notes\n\nn\n`
+  assert.equal(openQuestionOf('## Story\n\nx\n'), undefined)
+  assert.equal(openQuestionOf(sec('')), undefined)
+  assert.equal(openQuestionOf(sec('- none')), undefined)
+  assert.equal(openQuestionOf(sec('None')), undefined)
+  assert.equal(openQuestionOf(sec('- [x] Who pays?\n  Answer: the team (see ## Assumptions)')), undefined)
+  assert.equal(openQuestionOf(sec('- [ ] Who pays?')), '- [ ] Who pays?')
+  assert.equal(openQuestionOf(sec('- Who pays?')), '- Who pays?')
+  assert.equal(openQuestionOf(sec('- [x] Done one\n- Still open\n  more detail')), '- Still open more detail')
+})
+
+// ── untrusted card text never travels through a shell line ───────────────────────────────────────────────────────────
+const HOSTILE = `Is it $(touch /tmp/pwned-prepare) \`id\` won't it "quote"?`
+test('r2-7: `escalate --openQuestionFromCard true` reads the question from the card itself — quotes, $(…) and backticks arrive verbatim', () => {
+  const t = tracker({ body: `## Story\n\nx\n\n## Open Questions\n\n- ${HOSTILE}\n` })
+  const r = t.run(['escalate', '--dir', t.dir, '--story', '7', '--boundary', 'B1', ...gateArg(NEVER), '--source', 'argument', '--openQuestionFromCard', 'true', '--repo', 'o/r'])
+  assert.equal(r.code, 0, JSON.stringify(r.out))
+  assert.equal(r.out.comment.posted, true)
+  assert.ok(t.state().inputs.some(i => i && JSON.parse(i).body?.includes(HOSTILE)))
+})
+
+test('r2-7: --openQuestionFromCard on a card with no open question fails closed (exit 2), writing nothing', () => {
+  const t = tracker({ body: '## Story\n\nx\n\n## Open Questions\n\n- [x] settled\n' })
+  const r = t.run(['escalate', '--dir', t.dir, '--story', '7', '--boundary', 'B1', ...gateArg(NEVER), '--source', 'argument', '--openQuestionFromCard', 'true', '--repo', 'o/r'])
+  assert.equal(r.code, 2)
+  assert.match(r.out.error, /no open question/)
+  assert.equal(t.state().calls.filter(c => c[0] === 'issue' && c[1] === 'edit').length, 0)
+})
+
+test('r2-7: `decide --story` reads the card\'s CURRENT labels itself (a label like `won\'t fix` needs no shell quoting)', () => {
+  const t = tracker({ labels: ["won't fix", 'good first issue'] })
+  const r = t.run(['decide', ...gateArg(when([], ['triaged'])), '--readiness', 'draft', '--attended', 'false', '--boundary', 'B0', '--dir', t.dir, '--story', '7', '--repo', 'o/r', '--source', 'adoption'])
+  assert.equal(r.code, 0, JSON.stringify(r.out))
+  assert.equal(r.out.route, 'escalate')
+  assert.deepEqual(r.out.conditions, ['lacks:triaged'])
+  const ok = tracker({ labels: ["won't fix", 'triaged'] })
+  assert.equal(ok.run(['decide', ...gateArg(when([], ['triaged'])), '--readiness', 'draft', '--attended', 'false', '--boundary', 'B0', '--dir', ok.dir, '--story', '7', '--repo', 'o/r']).out.route, 'run-autonomous')
+  assert.throws(() => parseArgs(['decide', ...gateArg(NEVER), '--readiness', 'draft', '--attended', 'false', '--boundary', 'B0', '--story', '7', '--labels', '[]']), /mutually exclusive/)
+})

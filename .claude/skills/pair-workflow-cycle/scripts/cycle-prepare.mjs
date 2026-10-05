@@ -12,10 +12,12 @@
 //
 // CLI (one JSON object on stdout; exit 0 = a result, 2 = usage error / fail-closed input):
 //   decide   --gate '<JSON {mode,has,lacks}>' --readiness <draft|refined-no-breakdown|ready>
-//            --attended <true|false> --boundary <B0|B1|B2> [--labels '<JSON array>'] [--source <s>]
+//            --attended <true|false> --boundary <B0|B1|B2> [--labels '<JSON array>' | --dir <run dir> --story <n> [--repo <o/n>]] [--source <s>]
+//            (--story reads the card's CURRENT labels itself: an agent never interpolates host data into a shell line)
 //   escalate --dir <run dir> --story <n> --boundary <B0|B1|B2> --gate '<JSON>' --source <s>
-//            (--conditions '<JSON array>' | --openQuestion <text>) [--assumptionsFile <path>] [--repo <o/n>]
-//   complete --dir <run dir> --story <n> --gate '<JSON>' --source <s> [--state <board Ready state>] [--attended <true|false>] [--repo <o/n>]
+//            (--conditions '<JSON array>' | --openQuestion <text> | --openQuestionFromCard true) [--assumptionsFile <path>] [--repo <o/n>]
+//   complete --dir <run dir> --story <n> --gate '<JSON>' --source <s> [--state <board Ready state>] [--attended <true|false>]
+//            [--refinedAutonomously <true|false>] [--repo <o/n>]
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { parseGate, escalationConditions, gateToString, GATE_MODES } from './autonomy-policy.mjs'
@@ -28,6 +30,10 @@ export const ESCALATION_MARKER = story => `<!-- pair:prepare-escalation #${story
 export const PROVENANCE_RE = /Prepared autonomously under prepare: .+ \(.+\)/
 const BREAKDOWN_HEADING_RE = /^##\s+Task Breakdown\s*$/m
 const CHECKLIST_ITEM_RE = /^\s*[-*]\s+\[[ xX]\]\s+\S/m
+// A condition is a gate's own output (`has:<label>`, `lacks:<label>`, `labels-unreadable`): every label the gate grammar
+// accepts is accepted, spaces included — it travels as JSON argv, never through a shell. No control characters, no backtick
+// (the comment renders it in a code span), bounded.
+export const CONDITION_RE = /^[^\u0000-\u001f`]{1,200}$/
 const ASSUMPTIONS_HEADING_RE = /^##\s+Assumptions\s*$/m
 
 // ── the decision — pure, no I/O ─────────────────────────────────────────────────────────────
@@ -40,14 +46,35 @@ export function decide({ gate, labels, readiness, attended, boundary, source } =
   if (!BOUNDARIES.includes(boundary)) throw new Error(`boundary must be ${BOUNDARIES.join(' | ')}, got ${JSON.stringify(boundary ?? null)}`)
   if (typeof attended !== 'boolean') throw new Error(`attended must be a boolean, got ${JSON.stringify(attended ?? null)}`)
   const base = { boundary, gate: gateToString(gate), ...(source !== undefined ? { source } : {}) }
-  if (readiness === 'ready') return { route: 'nothing-to-prepare', ...base }
-  // a card a human has not looked at since an escalation is never re-picked unattended.
+  // `needs-review` = a human has not looked at this card since an escalation: never re-picked unattended, whatever its
+  // readiness (the loop skips it the same way). An attended run, or `complete` with `attended: true`, clears it.
   if (!attended && Array.isArray(labels) && labels.includes(NEEDS_REVIEW)) return { route: 'skip-escalated', condition: `has:${NEEDS_REVIEW}`, ...base }
+  if (readiness === 'ready') return { route: 'nothing-to-prepare', ...base }
   if (gate.mode === 'always') return { route: attended ? 'run-interactive' : 'skip-needs-human', ...base }
   if (gate.mode === 'never') return { route: 'run-autonomous', ...base }
   if (!Array.isArray(labels)) return { route: 'escalate', conditions: ['labels-unreadable'], condition: 'labels-unreadable', ...base }
   const conditions = escalationConditions(gate, labels)
   return conditions.length ? { route: 'escalate', conditions, condition: conditions.join(', '), ...base } : { route: 'run-autonomous', ...base }
+}
+
+// ── open questions ──────────────────────────────────────────────────────────────────────────
+// `## Open Questions` lists what only a human can decide; an entry is ANSWERED when its list marker is a ticked
+// checkbox (`- [x]`, the answer going under `## Assumptions`) or when it is `none`. Anything else is open and
+// escalates; a continuation line (indented) belongs to the entry above it. (Mirrored by pair-cli's card-prepare.ts.)
+const ANSWERED_ENTRY_RE = /^\s*(?:[-*]\s+\[[xX]\]|[-*]?\s*none\b)/i
+export function openQuestionOf(body) {
+  const m = /^##\s+Open Questions\s*$/m.exec(String(body ?? ''))
+  if (!m) return undefined
+  const rest = String(body).slice(m.index + m[0].length)
+  const next = /^##\s/m.exec(rest)
+  const entries = []
+  for (const line of (next ? rest.slice(0, next.index) : rest).split('\n')) {
+    if (!line.trim()) continue
+    if (/^\s+\S/.test(line) && entries.length) entries[entries.length - 1] += ` ${line.trim()}`
+    else entries.push(line.trim())
+  }
+  const open = entries.filter(e => !ANSWERED_ENTRY_RE.test(e))
+  return open.length ? open.join(' ').slice(0, 500) : undefined
 }
 
 // ── live reads, through the bound adapters ──────────────────────────────────────────────────
@@ -76,11 +103,16 @@ export function escalationBody({ story, boundary, gate, source, conditions, open
     'Assumptions recorded so far:',
     assumptions?.trim() ? assumptions.trim() : '(none recorded)',
     '',
-    `Whatever refinement already wrote stays in the card body for review. ${openQuestion ? `Answer or remove the entries under \`## Open Questions\` in the card body (an unanswered question escalates again), then remove the \`${NEEDS_REVIEW}\` label` : `Remove the \`${NEEDS_REVIEW}\` label`} (or refine the card attended) to make it workable again.`,
+    `Whatever refinement already wrote stays in the card body for review. ${openQuestion ? `Answer the entries under \`## Open Questions\` in the card body (tick an answered one \`- [x]\` and record the answer under \`## Assumptions\`; an unanswered question escalates again), then remove the \`${NEEDS_REVIEW}\` label` : `Remove the \`${NEEDS_REVIEW}\` label`} (or run the card attended through the prepare gate: an attended completion clears it) to make it workable again.`,
   ].join('\n')
 }
 
-export function escalate({ hosts, story, repo, boundary, gate, source, conditions, openQuestion, assumptions }) {
+export function escalate({ hosts, story, repo, boundary, gate, source, conditions, openQuestion, openQuestionFromCard, assumptions }) {
+  if (openQuestionFromCard === true) {
+    const found = openQuestionOf(String(hosts.pm.readCard(story, { repo }).body ?? ''))
+    if (found === undefined) throw new Error('no open question on the card: `## Open Questions` is absent, empty or fully answered')
+    openQuestion = found
+  }
   const guard = fn => {
     try {
       return fn()
@@ -120,7 +152,16 @@ export function hasTaskBreakdown(body) {
   return CHECKLIST_ITEM_RE.test(next ? rest.slice(0, next.index) : rest)
 }
 
-export function complete({ hosts, story, repo, gate, source, state = 'Ready', attended = false }) {
+function clearNeedsReview(hosts, story, repo) {
+  try {
+    const r = hosts.pm.unlabelCard({ id: story, label: NEEDS_REVIEW, repo })
+    return { cleared: r?.confirmed === true, ...(r?.confirmed === true ? {} : { error: r?.error ?? 'label removal not confirmed' }) }
+  } catch (e) {
+    return { cleared: false, error: e?.message ?? String(e) }
+  }
+}
+
+export function complete({ hosts, story, repo, gate, source, state = 'Ready', attended = false, refinedAutonomously = true }) {
   const labels = readLabels({ pm: hosts.pm, story, repo })
   let d
   try {
@@ -140,19 +181,25 @@ export function complete({ hosts, story, repo, gate, source, state = 'Ready', at
     return { completed: false, reason: `card-unreadable: ${e.message}` }
   }
   if (!hasTaskBreakdown(body)) return { completed: false, reason: 'breakdown-missing: the body has no `## Task Breakdown` section with at least one checklist item' }
-  const section = assumptionsSection(body)
-  if (!section) return { completed: false, reason: 'assumptions-missing: the body has no non-empty `## Assumptions` section' }
-  if (!PROVENANCE_RE.test(body)) return { completed: false, reason: 'provenance-missing: the body has no `Prepared autonomously under prepare: <value> (<source>)` Notes line' }
+  // The autonomous-provenance evidence is owed only by a refinement the agent ran in THIS prepare: a card a human refined
+  // (it enters at B1) has no `## Assumptions` to show — and nothing autonomous to disclose.
+  if (refinedAutonomously !== false) {
+    const section = assumptionsSection(body)
+    if (!section) return { completed: false, reason: 'assumptions-missing: the body has no non-empty `## Assumptions` section' }
+    if (!PROVENANCE_RE.test(body)) return { completed: false, reason: 'provenance-missing: the body has no `Prepared autonomously under prepare: <value> (<source>)` Notes line' }
+  }
   const board = hosts.pm.setBoardState({ id: story, state, repo })
   if (board?.confirmed !== true) return { completed: false, reason: `board-not-confirmed: ${board?.error ?? 'state write not confirmed'}`, board }
-  return { completed: true, state, board }
+  // An attended completion IS the human look the label waits for: it clears `needs-review` (reported, never fatal).
+  const cleared = attended === true && labels?.includes(NEEDS_REVIEW) ? clearNeedsReview(hosts, story, repo) : undefined
+  return { completed: true, state, board, ...(cleared ? { needsReview: cleared } : {}) }
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────────────────────────────
 const FLAGS = {
-  decide: ['gate', 'labels', 'readiness', 'attended', 'boundary', 'source'],
-  escalate: ['dir', 'story', 'boundary', 'gate', 'source', 'conditions', 'openQuestion', 'assumptionsFile', 'repo'],
-  complete: ['dir', 'story', 'gate', 'source', 'state', 'attended', 'repo'],
+  decide: ['gate', 'labels', 'readiness', 'attended', 'boundary', 'source', 'dir', 'story', 'repo'],
+  escalate: ['dir', 'story', 'boundary', 'gate', 'source', 'conditions', 'openQuestion', 'openQuestionFromCard', 'assumptionsFile', 'repo'],
+  complete: ['dir', 'story', 'gate', 'source', 'state', 'attended', 'refinedAutonomously', 'repo'],
 }
 const gateOf = raw => {
   let g
@@ -197,11 +244,21 @@ export function parseArgs(argv) {
       if (!Array.isArray(labels) || labels.some(l => typeof l !== 'string')) throw new Error('--labels must be a JSON array of labels')
       out.opts.labels = labels
     }
+    if (opts.story !== undefined) {
+      if (opts.labels !== undefined) throw new Error('--labels and --story are mutually exclusive')
+      if (!/^\d+$/.test(opts.story)) throw new Error(`--story must be a number, got ${JSON.stringify(opts.story)}`)
+      if (opts.dir === undefined) throw new Error('--dir is required with --story')
+      out.opts.story = Number(opts.story)
+    }
     return out
   }
   if (cmd === 'complete' && opts.attended !== undefined) {
     if (!['true', 'false'].includes(opts.attended)) throw new Error('--attended must be true | false')
     out.opts.attended = opts.attended === 'true'
+  }
+  if (cmd === 'complete' && opts.refinedAutonomously !== undefined) {
+    if (!['true', 'false'].includes(opts.refinedAutonomously)) throw new Error('--refinedAutonomously must be true | false')
+    out.opts.refinedAutonomously = opts.refinedAutonomously === 'true'
   }
   need('dir', 'story')
   if (!/^\d+$/.test(opts.story)) throw new Error(`--story must be a number, got ${JSON.stringify(opts.story)}`)
@@ -210,7 +267,9 @@ export function parseArgs(argv) {
   if (cmd === 'escalate') {
     need('boundary')
     if (!BOUNDARIES.includes(opts.boundary)) throw new Error(`--boundary must be ${BOUNDARIES.join(' | ')}`)
-    if ((opts.conditions === undefined) === (opts.openQuestion === undefined)) throw new Error('exactly one of --conditions or --openQuestion is required')
+    if (opts.openQuestionFromCard !== undefined && opts.openQuestionFromCard !== 'true') throw new Error('--openQuestionFromCard must be true')
+    if ([opts.conditions, opts.openQuestion, opts.openQuestionFromCard].filter(v => v !== undefined).length !== 1) throw new Error('exactly one of --conditions, --openQuestion or --openQuestionFromCard is required')
+    if (opts.openQuestionFromCard !== undefined) out.opts.openQuestionFromCard = true
     if (opts.conditions !== undefined) {
       let c
       try {
@@ -218,7 +277,7 @@ export function parseArgs(argv) {
       } catch {
         throw new Error('--conditions must be a JSON array of conditions')
       }
-      if (!Array.isArray(c) || !c.length || c.some(x => typeof x !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9:_./-]*$/.test(x))) throw new Error('--conditions must be a non-empty JSON array of label-shaped conditions')
+      if (!Array.isArray(c) || !c.length || c.some(x => typeof x !== 'string' || !CONDITION_RE.test(x))) throw new Error('--conditions must be a non-empty JSON array of `has:`/`lacks:` conditions (any label the gate grammar accepts, spaces included)')
       out.opts.conditions = c
     }
   }
@@ -236,6 +295,7 @@ if (isMain()) {
   try {
     const { cmd, opts } = parseArgs(process.argv.slice(2))
     if (cmd === 'decide') {
+      if (opts.story !== undefined) opts.labels = readLabels({ pm: (await import('./host/index.mjs')).bindHosts({ dir: opts.dir }).pm, story: opts.story, repo: opts.repo }) ?? undefined
       process.stdout.write(JSON.stringify(decide({ gate: opts.gate, labels: opts.labels, readiness: opts.readiness, attended: opts.attended, boundary: opts.boundary, source: opts.source })) + '\n')
       process.exit(0)
     }
@@ -243,8 +303,8 @@ if (isMain()) {
     const hosts = HOSTS.bindHosts({ dir: opts.dir })
     const out =
       cmd === 'escalate'
-        ? escalate({ hosts, story: opts.story, repo: opts.repo, boundary: opts.boundary, gate: gateToString(opts.gate), source: opts.source, conditions: opts.conditions, openQuestion: opts.openQuestion, assumptions: opts.assumptionsFile && existsSync(opts.assumptionsFile) ? readFileSync(opts.assumptionsFile, 'utf8') : '' })
-        : complete({ hosts, story: opts.story, repo: opts.repo, gate: opts.gate, source: opts.source, ...(opts.state ? { state: opts.state } : {}), ...(opts.attended !== undefined ? { attended: opts.attended } : {}) })
+        ? escalate({ hosts, story: opts.story, repo: opts.repo, boundary: opts.boundary, gate: gateToString(opts.gate), source: opts.source, conditions: opts.conditions, openQuestion: opts.openQuestion, openQuestionFromCard: opts.openQuestionFromCard, assumptions: opts.assumptionsFile && existsSync(opts.assumptionsFile) ? readFileSync(opts.assumptionsFile, 'utf8') : '' })
+        : complete({ hosts, story: opts.story, repo: opts.repo, gate: opts.gate, source: opts.source, ...(opts.state ? { state: opts.state } : {}), ...(opts.attended !== undefined ? { attended: opts.attended } : {}), ...(opts.refinedAutonomously !== undefined ? { refinedAutonomously: opts.refinedAutonomously } : {}) })
     process.stdout.write(JSON.stringify(out) + '\n')
     process.exit(0)
   } catch (e) {
