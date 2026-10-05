@@ -59,6 +59,25 @@ const reap = pid => {
     // already gone
   }
 }
+// A killed hook must never reach its last step: `slow(name)` records its pid (= its process-group
+// id, the hook runs detached) then sleeps 10 s before touching `<name>.done`. `settled` waits (no
+// wall-clock assertion) until that group is gone, then reports whether the step was reached.
+const slow = (name, pre = '') => `${pre}echo $$ > ${name}.pid; sleep 10; touch ${name}.done`
+const groupAlive = pid => {
+  try {
+    process.kill(-pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+const settled = (dir, name) => {
+  const pid = Number(readFileSync(join(dir, `${name}.pid`), 'utf8').trim())
+  const deadline = Date.now() + 30000
+  while (groupAlive(pid) && Date.now() < deadline) spawnSync('sleep', ['0.1'])
+  if (groupAlive(pid)) reap(-pid)
+  return existsSync(join(dir, `${name}.done`))
+}
 const sectionOf = (markdown, heading) => {
   const start = markdown.indexOf(`\n## ${heading}`)
   const end = markdown.indexOf('\n## ', start + 1)
@@ -116,17 +135,18 @@ test('TO-C2 section-scoped: a `timeout` bullet outside `## Cycle Hooks` or insid
 
 // ── kill on expiry, by hook type ───────────────────────────────────────────────────────────────
 test('TO-W4 pre-*: expiry HALTs, non-zero, the timeout named, later pre-* commands not run', () => {
-  const { dir, file } = doc(['- `timeout`: `1`', '- `pre-verify`: `sleep 4`', '- `pre-verify`: `touch second.txt`'])
+  const { dir, file } = doc(['- `timeout`: `1`', `- \`pre-verify\`: \`${slow('h')}\``, '- `pre-verify`: `touch second.txt`'])
   const value = cli(['run', file, '--point', 'pre-verify', '--cwd', dir]).out
   assert.equal(value.mode, 'blocking')
   assert.ok(value.halted, JSON.stringify(value))
   assert.notEqual(value.halted.exitCode, 0)
   assert.match(value.halted.output, TIMED_OUT)
   assert.equal(existsSync(join(dir, 'second.txt')), false)
+  assert.equal(settled(dir, 'h'), false, 'the hook was killed, never ran to completion')
 })
 
 test('TO-W5 post-*: expiry is logged naming the timeout, never a HALT, and the next command still runs', () => {
-  const { dir, file } = doc(['- `timeout`: `1`', '- `post-implement`: `sleep 4`', '- `post-implement`: `touch second.txt`'])
+  const { dir, file } = doc(['- `timeout`: `1`', `- \`post-implement\`: \`${slow('h')}\``, '- `post-implement`: `touch second.txt`'])
   const value = cli(['run', file, '--point', 'post-implement', '--cwd', dir]).out
   assert.equal(value.halted, undefined)
   assert.equal(value.ran.length, 2)
@@ -135,14 +155,16 @@ test('TO-W5 post-*: expiry is logged naming the timeout, never a HALT, and the n
   assert.match(value.logged[0], /post-implement/)
   assert.match(value.logged[0], TIMED_OUT)
   assert.ok(existsSync(join(dir, 'second.txt')))
+  assert.equal(settled(dir, 'h'), false, 'the hook was killed, never ran to completion')
 })
 
 test('TO-W6 on-halt: expiry is logged naming the timeout, never a HALT', () => {
-  const { dir, file } = doc(['- `timeout`: `1`', '- `on-halt`: `sleep 4`'])
+  const { dir, file } = doc(['- `timeout`: `1`', `- \`on-halt\`: \`${slow('h')}\``])
   const value = cli(['run', file, '--point', 'on-halt', '--status', 'failed-verify', '--cwd', dir]).out
   assert.equal(value.halted, undefined)
   assert.equal(value.logged.length, 1)
   assert.match(value.logged[0], TIMED_OUT)
+  assert.equal(settled(dir, 'h'), false, 'the hook was killed, never ran to completion')
 })
 
 test('TO-W7 process group: the grandchild a hook spawned is dead when the timed-out hook returns', () => {
@@ -237,9 +259,10 @@ test('TO-E1 effective timeout: exec receives D when absent, 0 for `0`, 1 for `1`
 
 test('TO-E2 effective timeout at shellExec: seconds=1 kills a `sleep 4` (non-zero, timeout named); seconds=0 lets `sleep 2` exit 0', () => {
   const dir = mkdtempSync(join(tmpdir(), 'us489-to-'))
-  const killed = shellExec('sleep 4', dir, 1)
+  const killed = shellExec(slow('h'), dir, 1)
   assert.notEqual(killed.exitCode, 0, JSON.stringify(killed))
   assert.match(killed.output, TIMED_OUT)
+  assert.equal(settled(dir, 'h'), false, 'the hook was killed, never ran to completion')
   const free = shellExec('sleep 2; echo finished', dir, 0)
   assert.equal(free.exitCode, 0, JSON.stringify(free))
 })
@@ -255,9 +278,10 @@ test('TO-C5 per-command: `timeout: 3` + two `pre-verify` `sleep 2` (sum 4 s > 3)
 
 // ── the group kill ends a hook that ignores SIGTERM ────────────────────────────────────────────
 test('TO-W12 a hook ignoring SIGTERM (`trap "" TERM`) is still ended on expiry: halted, timeout named', () => {
-  const { dir, file } = doc(['- `timeout`: `1`', "- `pre-verify`: `trap '' TERM; sleep 4`"])
+  const { dir, file } = doc(['- `timeout`: `1`', `- \`pre-verify\`: \`${slow('h', "trap '' TERM; ")}\``])
   const value = cli(['run', file, '--point', 'pre-verify', '--cwd', dir]).out
   assert.ok(value.halted, JSON.stringify(value))
   assert.notEqual(value.halted.exitCode, 0)
   assert.match(value.halted.output, TIMED_OUT)
+  assert.equal(settled(dir, 'h'), false, 'the hook was killed, never ran to completion')
 })
