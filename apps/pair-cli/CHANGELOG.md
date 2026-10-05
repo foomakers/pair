@@ -1,5 +1,16 @@
 # @pair/pair-cli
 
+## 0.5.0
+
+### Minor Changes
+
+- 202b475: `pair-cli run --parallel` becomes a portable loop: `--watch` / `--no-watch` / `--interval`, re-selection per iteration, `--root` optional with `--filter`, `--assignee` / `--status`, `--max-iterations`; skips escalated, locked and already-driven cards; stops at the Stop Predicate, the iteration cap or Ctrl-C. No change without the new flags.
+
+### Patch Changes
+
+- @pair/content-ops@0.5.0
+- @pair/knowledge-hub@0.5.0
+
 ## 0.4.3
 
 ### Minor Changes
