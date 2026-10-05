@@ -9,9 +9,7 @@ import { join } from 'path'
 // concluding; fail-safe red only when classification itself fails, said explicitly.
 
 const DATASET = join(__dirname, '../../dataset/.skills/workflow/review-phase/SKILL.md')
-const MIRRORS = [
-  join(__dirname, '../../../../.claude/skills/pair-workflow-review-phase/SKILL.md'),
-]
+const MIRRORS = [join(__dirname, '../../../../.claude/skills/pair-workflow-review-phase/SKILL.md')]
 
 function step4(text: string): string {
   const start = text.indexOf('### Step 4')
@@ -19,7 +17,10 @@ function step4(text: string): string {
   return text.slice(start, end)
 }
 
-for (const [label, path] of [['dataset', DATASET], ['mirror', MIRRORS[0]!]] as const) {
+for (const [label, path] of [
+  ['dataset', DATASET],
+  ['mirror', MIRRORS[0]!],
+] as const) {
   const text = readFileSync(path, 'utf-8')
   describe(`review-phase classifies before it declares passes (${label})`, () => {
     const s4 = step4(text)
@@ -27,7 +28,9 @@ for (const [label, path] of [['dataset', DATASET], ['mirror', MIRRORS[0]!]] as c
     it('Step 4 composes /classify in review context before declaring the passes', () => {
       expect(s4).toMatch(/\/(pair-capability-)?classify/)
       expect(s4).toMatch(/\$context: review/)
-      expect(s4.search(/\/(pair-capability-)?classify/)).toBeLessThan(s4.indexOf('| Tier | Passes |'))
+      expect(s4.search(/\/(pair-capability-)?classify/)).toBeLessThan(
+        s4.indexOf('| Tier | Passes |'),
+      )
     })
 
     it('the story tier is the floor: raise from the diff, never lower', () => {

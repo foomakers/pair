@@ -63,7 +63,11 @@ describe('D1: live card labels when --card-tags is absent', () => {
     const readCardLabels = vi.fn(() => ['risk:green', 'needs-review'])
     const deps = base({ readCardLabels })
 
-    const code = await handleRunCommand(parseRunCommand({ card: '493', autonomous: true }), fs(), deps)
+    const code = await handleRunCommand(
+      parseRunCommand({ card: '493', autonomous: true }),
+      fs(),
+      deps,
+    )
 
     expect(code).toBe(0)
     expect(readCardLabels).toHaveBeenCalledWith('493', cwd)
@@ -107,4 +111,19 @@ describe('D1: live card labels when --card-tags is absent', () => {
     expect(deps.driveCycle).not.toHaveBeenCalled()
     expect(out()).not.toMatch(/carries no/)
   })
+
+  for (const platform of ['darwin', 'linux'] as const) {
+    it(`the live read decides identically on platform ${platform}`, async () => {
+      const original = process.platform
+      Object.defineProperty(process, 'platform', { value: platform })
+      try {
+        capture()
+        const deps = base({ readCardLabels: () => ['risk:green'] })
+        await handleRunCommand(parseRunCommand({ card: '493', autonomous: true }), fs(), deps)
+        expect(deps.driveCycle).toHaveBeenCalled()
+      } finally {
+        Object.defineProperty(process, 'platform', { value: original })
+      }
+    })
+  }
 })
