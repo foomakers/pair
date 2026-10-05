@@ -2122,6 +2122,14 @@ test('US-524 edge: an escalation whose stage/conditions are not label-shaped is 
   assert.ok(!labelsOf(r.calls).includes('escalate:#292'))
 })
 
+test('US-524 edge: an escalation with a spaced label condition (`has:good first issue`) still posts the comment, as structured JSON', async () => {
+  const r = await driveWith({ until: 'merged', merge: 'when; has: good first issue' }, { resolved: RESOLVED('merged'), decide: () => ({ decision: 'escalate', stage: 'prepare', conditions: ['has:good first issue'], reason: 'r' }) })
+  assert.equal(rowOf(r).status, 'escalated')
+  assert.equal(rowOf(r).comment.posted, true)
+  const esc = r.calls.find(c => c.opts.label === 'escalate:#292')
+  assert.match(esc.prompt, /--conditions '\["has:good first issue"\]'/)
+})
+
 test('US-524 edge: an unreadable or unknown stage decision parks the card halted — never read as proceed', async () => {
   for (const d of [null, {}, { decision: 'maybe' }, { error: 'boom' }, { decision: 'proceed', error: 'x' }]) {
     const r = await driveWith({ until: 'pr' }, { resolved: RESOLVED('pr'), decide: () => d })

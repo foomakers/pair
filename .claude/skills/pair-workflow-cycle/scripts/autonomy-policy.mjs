@@ -49,6 +49,14 @@ export function labelError(value) {
   return null
 }
 
+// An escalation condition as the gate grammar yields it (`has:<label>`, `lacks:<label>`, or a bare marker like
+// `labels-unreadable`): the label part obeys `labelError`, so any label the grammar accepts — spaces included — is accepted
+// and nothing that could become a shell fragment (quote, `$(`, backtick, control, `;|&<>\\`) ever is.
+export function conditionError(value) {
+  if (typeof value !== 'string') return 'is not a string'
+  return labelError(value.replace(/^(has|lacks):\s*/, ''))
+}
+
 function parseList(key, raw, { validate = labelError } = {}) {
   const text = String(raw ?? '').trim()
   if (text.length === 0) return { errors: [err(key, 'is an empty list')] }
