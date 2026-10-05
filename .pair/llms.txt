@@ -186,6 +186,7 @@
 - [Decision: Mirrored files are counted once](.pair/adoption/decision-log/2026-09-29-mirrors-counted-once.md)
 - [Decision: the batch merges per the merge gate; `pair-loop` no longer merges](.pair/adoption/decision-log/2026-09-30-the-batch-merges-per-the-merge-gate.md)
 - [Decision: The `run --parallel` fan-out becomes a re-selecting watch loop](.pair/adoption/decision-log/2026-10-02-fan-out-becomes-re-selecting-watch-loop.md)
+- [Decision: delivery-cycle diagrams ship as committed SVGs, not Mermaid](.pair/adoption/decision-log/2026-10-05-delivery-cycle-diagrams-as-committed-svgs.md)
 
 ## How-To Guides
 
