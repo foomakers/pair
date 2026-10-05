@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import { createPerimeter, describePerimeter, type PerimeterInput } from './perimeter'
 
 const base: PerimeterInput = {
@@ -192,4 +192,25 @@ describe('describePerimeter', () => {
 
     expect(describePerimeter(perimeter)).toContain('cwd only (--prompt run)')
   })
+})
+
+describe('createPerimeter, per platform', () => {
+  const realPlatform = process.platform
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: realPlatform })
+  })
+
+  for (const platform of ['darwin', 'linux'] as const) {
+    it(`builds the same cwd-only perimeter under platform ${platform}`, () => {
+      Object.defineProperty(process, 'platform', { value: platform })
+      const perimeter = createPerimeter({
+        ...base,
+        invocationKind: 'prompt',
+        cwdDeclared: true,
+        requestedCap: 1,
+      })
+      expect(perimeter.cwd).toBe('/project')
+      expect(describePerimeter(perimeter)).toContain('cwd only (--prompt run)')
+    })
+  }
 })

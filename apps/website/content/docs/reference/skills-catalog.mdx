@@ -12,7 +12,7 @@ pair ships with 51 skills organized into four types: **process** (lifecycle orch
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
 | **next** | `/pair-next` | Determines the most relevant next action for your project by reading adoption files and PM tool state. |
-| **loop** | `/pair-loop` | Unattended delivery loop: per iteration, selects eligible cards via pair-next, runs a dependency + mutex analysis, composes implement-batch for a mutex-safe parallel batch (or drives one card sequentially), enacts the automation policy (auto-advance) and evaluates the stop predicate. |
+| **loop** | `/pair-loop` | Unattended delivery loop: per iteration, selects eligible cards via pair-next, runs a dependency + mutex analysis, composes implement-batch for a mutex-safe parallel batch (or drives one card sequentially), hands the autonomy policy (until / prepare / merge) to the batch — which merges a review-approved card only when the merge gate allows it — and evaluates the stop predicate. |
 
 ## Process Skills
 

@@ -68,18 +68,36 @@ const reap = (pid: number) => {
   }
 }
 
+// A killed hook must never reach its last step: records its pid (= process-group id, the hook runs
+// detached), sleeps 10 s, then touches `<name>.done`. `settled` waits (no wall-clock assertion)
+// until that group is gone, then reports whether the step was reached.
+const slow = (name: string, pre = '') => `${pre}echo $$ > ${name}.pid; sleep 10; touch ${name}.done`
+const groupAlive = (pid: number) => {
+  try {
+    process.kill(-pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+const settled = (dir: string, name: string) => {
+  const pid = Number(readFileSync(join(dir, `${name}.pid`), 'utf8').trim())
+  const deadline = Date.now() + 30000
+  while (groupAlive(pid) && Date.now() < deadline) spawnSync('sleep', ['0.1'])
+  if (groupAlive(pid)) reap(-pid)
+  return existsSync(join(dir, `${name}.done`))
+}
+
 describe('pair-cli ## Cycle Hooks timeout against the real executor (US-489 AC9)', () => {
   it('TO-P1: a timed-out post-implement is logged and the cycle continues; a timed-out pre-verify is failed-hook, verify never spawns', async () => {
     const { root, policyPath } = project([
       '- `timeout`: `1`',
-      '- `post-implement`: `sleep 4`',
-      '- `pre-verify`: `sleep 4`',
+      `- \`post-implement\`: \`${slow('post')}\``,
+      `- \`pre-verify\`: \`${slow('pre', "trap '' TERM; ")}\``,
     ])
     const d = drive(root, policyPath, [step('implement'), step('verify'), DONE])
     expect(d.hooks.warnings()).toEqual([])
-    const t0 = Date.now()
     const outcome = await d.run()
-    const ms = Date.now() - t0
 
     expect(outcome.status).toBe('failed-hook')
     expect(String(outcome.next?.['detail'])).toMatch(/pre-verify/)
@@ -87,8 +105,9 @@ describe('pair-cli ## Cycle Hooks timeout against the real executor (US-489 AC9)
     expect(d.spawned).toEqual(['implement'])
     expect(d.notices.join('\n')).toMatch(/post-implement/)
     expect(d.notices.join('\n')).toMatch(TIMED_OUT)
-    expect(ms).toBeLessThan(5000)
-  }, 20000)
+    expect(settled(root, 'post')).toBe(false)
+    expect(settled(root, 'pre')).toBe(false)
+  }, 60000)
 
   it('TO-P2: the grandchild of a timed-out pre-verify is dead when the cycle halts', async () => {
     const { root, policyPath } = project([

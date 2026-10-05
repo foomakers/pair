@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process'
-import { readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
@@ -110,7 +110,7 @@ describe('smoke CI platform coverage (#135)', () => {
     if (productionPathFixes.length === 0) return
 
     const tests = changed
-      .filter(path => path.endsWith('.test.ts'))
+      .filter(path => path.endsWith('.test.ts') && existsSync(join(REPO_ROOT, path)))
       .map(path => readFileSync(join(REPO_ROOT, path), 'utf-8'))
       .join('\n')
     expect(

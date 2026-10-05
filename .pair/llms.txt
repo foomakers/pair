@@ -183,6 +183,7 @@
 - [Decision: cycle hooks run through one shared script the two portable coordinators call; the batch engine reports its own skip once per run](.pair/adoption/decision-log/2026-09-29-cycle-hooks-one-executor-two-coordinators.md)
 - [Decision: workflow profiles are the first JSON under `.pair/adoption/`](.pair/adoption/decision-log/2026-09-29-first-json-adoption-file-workflow-profiles.md)
 - [Decision: Mirrored files are counted once](.pair/adoption/decision-log/2026-09-29-mirrors-counted-once.md)
+- [Decision: the batch merges per the merge gate; `pair-loop` no longer merges](.pair/adoption/decision-log/2026-09-30-the-batch-merges-per-the-merge-gate.md)
 - [Decision: The `run --parallel` fan-out becomes a re-selecting watch loop](.pair/adoption/decision-log/2026-10-02-fan-out-becomes-re-selecting-watch-loop.md)
 
 ## How-To Guides

@@ -85,16 +85,30 @@ fi
 # built output, so a compile is not optional — running a stale `dist/` would regenerate
 # with yesterday's transform and produce a mirror the guards still reject. turbo caches
 # it, so the cost is a cache hit on every run after the first.
-BUILD_LOG="$(mktemp "${TMPDIR:-/tmp}/regenerate-mirrors.XXXXXX")" || {
-  echo "regenerate-mirrors: cannot create a temporary file (checked TMPDIR=${TMPDIR:-/tmp})." >&2
-  exit 1
-}
-# The explicit `rm`s below cover the paths this script controls; the trap covers the one
-# it does not — Ctrl-C or a SIGTERM between `mktemp` and the `rm`, which would otherwise
-# leak a file into TMPDIR on every interrupted run. It cannot cover the final `exec`
-# (which replaces this process), which is why the success path still removes the log
-# itself before reaching it.
-trap 'rm -f "$BUILD_LOG"' EXIT HUP INT TERM
+# The name is chosen HERE, before the file exists, and the trap is armed before it is created:
+# with `BUILD_LOG="$(mktemp ...)"` a signal while mktemp runs (file created, assignment not yet
+# done) leaves a file no trap can name — the #527 CI flake. `set -C` makes the creation
+# exclusive (O_EXCL), so a leftover or hostile path is never followed or reused. The signals
+# `exit`, so a TERM that lands early stops the script instead of letting it carry on past a
+# removed log; EXIT then does the removal. The explicit `rm`s below cover the paths this script
+# controls; the trap cannot cover the final `exec` (which replaces this process), which is why
+# the success path removes the log itself.
+BUILD_LOG=""
+trap 'rm -f "$BUILD_LOG"' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+_attempt=0
+while :; do
+  BUILD_LOG="${TMPDIR:-/tmp}/regenerate-mirrors.$$.$_attempt"
+  if (set -C; : >"$BUILD_LOG") 2>/dev/null; then break; fi
+  _attempt=$((_attempt + 1))
+  if [ "$_attempt" -gt 20 ]; then
+    BUILD_LOG=""
+    echo "regenerate-mirrors: cannot create a temporary file (checked TMPDIR=${TMPDIR:-/tmp})." >&2
+    exit 1
+  fi
+done
 if ! (cd "$TOOLCHAIN_ROOT" && "$TURBO" run build --filter=@pair/pair-cli...) >"$BUILD_LOG" 2>&1; then
   cat "$BUILD_LOG" >&2
   rm -f "$BUILD_LOG"

@@ -215,7 +215,7 @@ export function filterDeliveryFor(invocation: ResolvedInvocation): FilterDeliver
 
 /**
  * US-521: whether this invocation can carry `--assignee` / `--status`. Only `pair-next` declares them;
- * `pair-loop` reads the policy itself and honours the autonomy model in #524, so the driver REFUSES them
+ * `pair-loop` is declared here with root/predicate/iteration only, so the driver REFUSES them
  * there rather than print a perimeter nothing applies.
  */
 export function selectionDeliveredBy(invocation: ResolvedInvocation): boolean {
