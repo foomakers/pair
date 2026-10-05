@@ -147,6 +147,7 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
       join(realScriptsDir, 'autonomy-policy.mjs'),
       join(scriptsDir, 'autonomy-policy.mjs'),
     )
+    copyFileSync(join(realScriptsDir, 'run-guard.mjs'), join(scriptsDir, 'run-guard.mjs'))
     // US-492: the PM/code-host adapters ship beside the scripts, in `host/`.
     cpSync(join(realScriptsDir, 'host'), join(scriptsDir, 'host'), { recursive: true })
     runsRoot = join(projectRoot, '.pair/working/runs')
