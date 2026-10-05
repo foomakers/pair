@@ -1,0 +1,166 @@
+{
+  "$meta": {
+    "pr": "530",
+    "phase": "r1-g1",
+    "base": "e0ee567f034c50a86b43bfb3f78facd8fabd641b",
+    "trailer": "Pair-RED-Snapshot: pr=530; phase=r1-g1; base=e0ee567f034c50a86b43bfb3f78facd8fabd641b; manifest=.pair/red-snapshots/pr-530-r1-g1.json",
+    "artifacts": [
+      "packages/knowledge-hub/src/conformance/cycle-overview-backlink.test.ts"
+    ]
+  },
+  "mode": "remediation",
+  "phase": "r1-g1",
+  "inputHead": "e0ee567f034c50a86b43bfb3f78facd8fabd641b",
+  "sourceOfTruth": "story #493 DoD line 141",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "pair-workflow-cycle and pair-loop SKILL.md (dataset source) → installed mirrors",
+      "inputs": [
+        "dataset/.skills/workflow/cycle/SKILL.md",
+        "dataset/.skills/loop/SKILL.md"
+      ],
+      "representations": [
+        "dataset source",
+        "installed .claude/skills mirror"
+      ],
+      "consumers": [
+        "skills:conformance",
+        "readers of the skills"
+      ],
+      "classes": [
+        "owner cycle: dataset",
+        "owner cycle: mirror",
+        "owner loop: dataset",
+        "owner loop: mirror",
+        "link target resolves",
+        "link reads as overview",
+        "owners without SKILL.md (#487, #491 pair-cli run): not-applicable"
+      ],
+      "interactions": [
+        "dataset link feeds mirror regeneration"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "skills-docs",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md",
+      "packages/knowledge-hub/dataset/.skills/loop/SKILL.md",
+      ".claude/skills/pair-workflow-cycle/SKILL.md",
+      ".claude/skills/pair-loop/SKILL.md"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "g1-w1-cycle",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "pair-workflow-cycle dataset SKILL.md",
+      "oracle": "packages/knowledge-hub/src/conformance/cycle-overview-backlink.test.ts g1-w1",
+      "expected": "markdown link to automation/delivery-cycle.md resolving to an existing file",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-w2-cycle",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "pair-workflow-cycle installed mirror",
+      "oracle": "packages/knowledge-hub/src/conformance/cycle-overview-backlink.test.ts g1-w2",
+      "expected": "same link present and resolving",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-c1-cycle",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "pair-workflow-cycle backlink line",
+      "oracle": "packages/knowledge-hub/src/conformance/cycle-overview-backlink.test.ts g1-c1",
+      "expected": "link line mentions overview",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-w1-loop",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "pair-loop dataset SKILL.md",
+      "oracle": "packages/knowledge-hub/src/conformance/cycle-overview-backlink.test.ts g1-w1",
+      "expected": "markdown link to automation/delivery-cycle.md resolving to an existing file",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-w2-loop",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "pair-loop installed mirror",
+      "oracle": "packages/knowledge-hub/src/conformance/cycle-overview-backlink.test.ts g1-w2",
+      "expected": "same link present and resolving",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-c1-loop",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "pair-loop backlink line",
+      "oracle": "packages/knowledge-hub/src/conformance/cycle-overview-backlink.test.ts g1-c1",
+      "expected": "link line mentions overview",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "g1-na-cli",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "condition": "#487 and #491 pair-cli run",
+      "oracle": "n/a",
+      "expected": "n/a",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "console realizations have no SKILL.md; DoD backlink is per SKILL.md file"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/knowledge-hub/src/conformance/cycle-overview-backlink.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:8b0379d1416b3d0f47fc073e185467baba213ba1b05093c913ca899321acea78",
+      "command": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/cycle-overview-backlink.test.ts",
+      "observed": "Tests 6 failed (6): no link to automation/delivery-cycle.md in either SKILL.md"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "owner": "skills-docs",
+        "mode": "behavioral",
+        "findings": [
+          "r0-1"
+        ],
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md",
+          "packages/knowledge-hub/dataset/.skills/loop/SKILL.md",
+          ".claude/skills/pair-workflow-cycle/SKILL.md",
+          ".claude/skills/pair-loop/SKILL.md"
+        ],
+        "dependsOn": []
+      }
+    ],
+    "carried": []
+  }
+}
