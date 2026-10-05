@@ -39,6 +39,7 @@ function project(row, ids) {
   writeFileSync(gh, `#!/bin/sh
 case "$*" in
   *"issue view"*"--json labels"*) echo "{\\"labels\\":$PARITY_LABELS}" ;;
+  *"/issues/"*"/labels"*) echo "$PARITY_PR_LABELS" ;;
   *"headRefOid"*) echo ${HEAD} ;;
   *"/status"*) echo '{"statuses":[{"context":"pair-review","state":"success"},{"context":"pair-explicit-approval","state":"success"}]}' ;;
   *"--paginate"*) echo '[]' ;;
@@ -49,10 +50,10 @@ esac
   return { root, gh }
 }
 const labelsJson = names => JSON.stringify(names.map(name => ({ name })))
-const runCommand = (prompt, { root, gh }, labelNames) => {
+const runCommand = (prompt, { root, gh }, labelNames, prLabelNames = labelNames) => {
   const cmd = /`(node \S+\.mjs [^`]*)`/.exec(prompt)?.[1]
   assert.ok(cmd, `no script command in the prompt: ${prompt.slice(0, 120)}`)
-  const r = spawnSync('sh', ['-c', cmd.replaceAll('.claude/skills/pair-workflow-cycle/scripts', SCRIPTS).replace("'<labels>'", `'${JSON.stringify(labelNames)}'`)], { cwd: root, encoding: 'utf8', env: { ...process.env, PAIR_GH_BIN: gh, PARITY_LABELS: labelsJson(labelNames) } })
+  const r = spawnSync('sh', ['-c', cmd.replaceAll('.claude/skills/pair-workflow-cycle/scripts', SCRIPTS).replace("'<labels>'", `'${JSON.stringify(labelNames)}'`).replace("'<prLabels>'", `'${JSON.stringify(prLabelNames)}'`)], { cwd: root, encoding: 'utf8', env: { ...process.env, PAIR_GH_BIN: gh, PARITY_LABELS: labelsJson(labelNames), PARITY_PR_LABELS: labelsJson(prLabelNames) } })
   assert.equal(r.status, 0, `${cmd}\n${r.stderr}`)
   return JSON.parse(r.stdout.trim().split('\n').pop())
 }
@@ -69,7 +70,7 @@ function cycleDecisions(row) {
   let merge = null
   if (resolved.policy.until === 'merged' && resolved.active) {
     const mergeCmd = `\`node .claude/skills/pair-workflow-cycle/scripts/cycle-merge.mjs check --dir .pair/working/runs/story-1/1 --story 1 --pr 7 --reviewedHead ${HEAD} --cardTier ${tierOf(row.labels)} --mergeGate '${JSON.stringify(resolved.policy.merge)}'\``
-    merge = mergeDecision(runCommand(mergeCmd, p, row.labelsAtMerge ?? row.labels))
+    merge = mergeDecision(runCommand(mergeCmd, p, row.labelsAtMerge ?? row.labels, row.prLabelsAtMerge ?? row.labelsAtMerge ?? row.labels))
   }
   return { implement, merge }
 }
@@ -91,7 +92,7 @@ function batchRun(row, ids, maxParallelism) {
   const agent = async (prompt, opts) => {
     calls.push(opts.label)
     const l = opts.label ?? ''
-    if (l === 'autonomy:resolve' || l.startsWith('decide:') || l.startsWith('merge-check:') || l.startsWith('escalate:')) return runCommand(prompt, p, l.startsWith('merge-check:') && row.labelsAtMerge ? row.labelsAtMerge : row.labels)
+    if (l === 'autonomy:resolve' || l.startsWith('decide:') || l.startsWith('merge-check:') || l.startsWith('escalate:')) return runCommand(prompt, p, l.startsWith('merge-check:') && row.labelsAtMerge ? row.labelsAtMerge : row.labels, l.startsWith('merge-check:') ? (row.prLabelsAtMerge ?? row.labelsAtMerge ?? row.labels) : row.labels)
     if (l.startsWith('prepare:phase')) return { outcome: 'nothing-to-prepare' } // US-523 r1-g1: the harness card is Ready
     if (l.startsWith('tier:')) return { tier: tierOf(row.labels) }
     if (l.startsWith('merge:')) return { merged: true, cascaded: true, reason: 'merged' }

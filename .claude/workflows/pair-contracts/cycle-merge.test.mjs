@@ -120,24 +120,51 @@ for (const [name, patch, code, parkKind] of single)
     assert.ok(d.reason && d.reason === d.failed[0].detail)
   })
 
-// D3 (autonomous run 493): a MISSING/pending human approval is a park that AWAITS A PERSON (exit 0, no on-halt),
-// not a problem; a rejected one (`failure`) or any other failing condition beside it stays `halted`.
+// D3 (autonomous run 493): at the tier that REQUIRES it (risk:red), a MISSING/pending human approval is a park that
+// AWAITS A PERSON (exit 0, no on-halt), not a problem; a rejected one (`failure`) or any other failing condition beside it stays `halted`.
+const RED_BASE = { ...base, cardTier: RED, currentTier: RED, autoAdvanceTiers: [RED] }
 for (const conclusion of ['missing', 'pending'])
-  test(`D3: explicit approval ${conclusion} (only failure) -> awaiting-human`, () => {
-    const d = decideMerge({ ...base, signals: { ...OK, explicitApproval: conclusion } })
+  test(`D3: explicit approval ${conclusion} (only failure, risk:red) -> awaiting-human`, () => {
+    const d = decideMerge({ ...RED_BASE, signals: { ...OK, explicitApproval: conclusion } })
     assert.equal(d.mergeAllowed, false)
     assert.deepEqual(d.failed.map(f => f.code), ['explicit-approval'])
     assert.equal(d.parkKind, 'awaiting-human')
   })
 
 test('D3: explicit approval missing BESIDE another failure (head moved) -> halted', () => {
-  const d = decideMerge({ ...base, signals: { ...OK, headSha: SHA('b'), explicitApproval: 'missing' } })
+  const d = decideMerge({ ...RED_BASE, signals: { ...OK, headSha: SHA('b'), explicitApproval: 'missing' } })
   assert.equal(d.parkKind, 'halted')
 })
 
+// D4 (autonomous run 493): below red `pair-explicit-approval` AUTO-PASSES (automation-policy.md "Merge execution",
+// github-implementation.md "The two pair checks"); a repo with no job publishing it reads `missing`, which is satisfied
+// there. The tier is the PR's CURRENT risk tier (`effectiveTier`), never a stale one.
+const YELLOW = 'risk:yellow'
+const D4 = {
+  [GREEN]: { missing: ['allowed'], success: ['allowed'], failure: ['halted', 'explicit-approval'], pending: ['awaiting-human', 'explicit-approval'] },
+  [YELLOW]: { missing: ['allowed'], success: ['allowed'], failure: ['halted', 'explicit-approval'], pending: ['awaiting-human', 'explicit-approval'] },
+  [RED]: { missing: ['awaiting-human', 'explicit-approval'], success: ['allowed'], failure: ['halted', 'explicit-approval'], pending: ['awaiting-human', 'explicit-approval'] },
+}
+for (const [tier, row] of Object.entries(D4))
+  for (const [conclusion, [want, code]] of Object.entries(row))
+    test(`D4: ${tier} x pair-explicit-approval ${conclusion} -> ${want}`, () => {
+      const d = decideMerge({ ...base, cardTier: tier, currentTier: tier, effectiveTier: tier, autoAdvanceTiers: [tier], signals: { ...OK, explicitApproval: conclusion } })
+      if (want === 'allowed') return assert.deepEqual({ ok: d.mergeAllowed, failed: d.failed, parkKind: d.parkKind }, { ok: true, failed: [], parkKind: null })
+      assert.equal(d.mergeAllowed, false)
+      assert.deepEqual(d.failed.map(f => f.code), [code])
+      assert.equal(d.parkKind, want)
+    })
+
+test('D4: the approval rule follows the PR tier, not the card tier (card green, PR raised to red: missing parks)', () => {
+  const d = decideMerge({ ...base, effectiveTier: RED, autoAdvanceTiers: [GREEN, RED], signals: { ...OK, explicitApproval: 'missing' } })
+  assert.deepEqual(d.failed.map(f => f.code), ['explicit-approval'])
+  assert.equal(d.parkKind, 'awaiting-human')
+  assert.equal(decideMerge({ ...base, effectiveTier: YELLOW, autoAdvanceTiers: [GREEN, YELLOW], signals: { ...OK, explicitApproval: 'missing' } }).mergeAllowed, true)
+})
+
 test('AC2: an explicit approval on a different head than the remote head is not a success for THIS head', () => {
-  // the adapter reads the conclusion ON the remote head: a stale approval reads as `missing`.
-  const d = decideMerge({ ...base, signals: { ...OK, explicitApproval: 'missing' } })
+  // the adapter reads the conclusion ON the remote head: a stale approval reads as `missing` (at the tier that requires it).
+  const d = decideMerge({ ...RED_BASE, signals: { ...OK, explicitApproval: 'missing' } })
   assert.deepEqual(d.failed.map(f => f.code), ['explicit-approval'])
 })
 
@@ -167,6 +194,7 @@ const fakeHosts = (o = {}) => {
     commentOnCard: rec('commentOnCard', () => o.comment ?? { action: 'created', id: 1 }),
   }
   const code = {
+    readLabels: rec('readLabels', () => o.prLabels ?? [GREEN]),
     prHead: rec('prHead', () => o.head ?? SHA('a')),
     readCheck: rec('readCheck', ({ context }) => (o.checks ?? { 'pair-review': 'success', 'pair-explicit-approval': 'success' })[context] ?? null),
     readCheckRun: rec('readCheckRun', ({ context }) => (o.runs ?? {})[context] ?? null),
@@ -235,11 +263,11 @@ test('AC4: every single failing condition parks with a comment naming it (run mo
     [{ labels: [{ name: RED }] }, 'tier-changed'],
     [{ head: SHA('b') }, 'head-moved'],
     [{ checks: { 'pair-review': 'pending', 'pair-explicit-approval': 'success' } }, 'pair-review'],
-    [{ checks: { 'pair-review': 'success' } }, 'explicit-approval'],
+    [{ checks: { 'pair-review': 'success' }, prLabels: [RED] }, 'explicit-approval'],
   ]
   for (const [o, code] of cases) {
     const h = fakeHosts(o)
-    const out = runMerge({ ...input(h), gate: 'green', message: 'm' })
+    const out = runMerge({ ...input(h), autoAdvanceTiers: [GREEN, RED], gate: 'green', message: 'm' })
     assert.equal(out.merged, false, code)
     assert.equal(out.failed[0].code, code)
     assert.equal(h.calls.some(c => c[0] === 'merge'), false, `${code}: merged`)
@@ -288,7 +316,7 @@ test('AC3: all green -> squash merge with the message, DoD boxes, close+cascade,
   const h = fakeHosts({ close: { closed: [42, 9], stoppedAt: 3 } })
   const out = runMerge({ ...input(h), gate: 'green', message: '[#42] feat: thing\n\nbody', branch: 'feature/US-42-x', root: g.main })
   assert.deepEqual({ merged: out.merged, cascaded: out.cascaded, mergeAllowed: out.mergeAllowed }, { merged: true, cascaded: true, mergeAllowed: true }, JSON.stringify(out))
-  assert.deepEqual(h.calls.map(c => c[0]).filter(n => n !== 'readCard' && n !== 'prHead' && n !== 'readCheck' && n !== 'readCheckRun'), ['merge', 'updateCard', 'closeAndCascade', 'setBoardState', 'setBoardState'])
+  assert.deepEqual(h.calls.map(c => c[0]).filter(n => n !== 'readCard' && n !== 'readLabels' && n !== 'prHead' && n !== 'readCheck' && n !== 'readCheckRun'), ['merge', 'updateCard', 'closeAndCascade', 'setBoardState', 'setBoardState'])
   assert.deepEqual(h.calls.find(c => c[0] === 'merge')[1], { pr: 7, repo: 'o/r', strategy: 'squash', message: '[#42] feat: thing\n\nbody', headSha: SHA('a') })
   assert.deepEqual(h.calls.filter(c => c[0] === 'setBoardState').map(c => c[1].id), [42, 9]) // the story AND every closed parent
   assert.equal(h.calls.some(c => c[0] === 'commentOnCard'), false)
@@ -383,6 +411,7 @@ if (a[0] === 'issue' && a[1] === 'view' && j.includes('--json labels')) out({ la
 if (a[0] === 'issue' && a[1] === 'view') out('## Definition of Done Checklist\\n\\n- [ ] x\\n')
 if (a[0] === 'pr' && a[1] === 'view') out(cfg.head + '\\n')
 if (a[0] === 'api' && /commits\\/[0-9a-f]{40}\\/status$/.test(a[1])) out({ statuses: cfg.statuses })
+if (a[0] === 'api' && /issues\\/[0-9]+\\/labels$/.test(a[1]) && !a.includes('-X')) out((cfg.prLabels ?? cfg.labels).map(name => ({ name })))
 if (a[0] === 'api' && a[1].includes('check-runs')) out({ check_runs: [] })
 if (a[0] === 'api' && a.includes('--paginate')) out('[]')
 if (a[0] === 'api' && a.includes('POST') && a[a.indexOf('POST') - 1] === '-X' && /comments$/.test(a[a.indexOf('POST') + 1])) out({ id: 900, html_url: 'https://github.com/o/r/issues/42#issuecomment-900' })
