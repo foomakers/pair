@@ -17,7 +17,8 @@ import { readAutomationPolicy, type AutomationPolicy } from './automation-policy
 import type { CardReadiness } from './cycle-scripts'
 import type { ProfileRequest, ResolvedWorkflowProfile } from './workflow-profile'
 import type { IterationResult } from './stream-reader'
-import type { SelectRootInput } from './root-select'
+import type { SelectRootInput, SelectionAnswer } from './root-select'
+import type { Wait } from './wait'
 import type { RootCandidate } from './root-plan'
 import type { CardProcessRunner } from './parallel'
 import { decideDispatch, describeDispatch, lockedSkip, type DispatchDecision } from './dispatch'
@@ -87,6 +88,10 @@ export interface RunHandlerDependencies {
   resolveAutonomy?: AutonomyResolver
   /** US-491: the `pair-next --root` selection (one engine process, shipped `selectRootCandidates`). */
   selectCandidates?: (input: SelectRootInput) => Promise<RootCandidate[]>
+  /** US-522: the loop's selection (candidates + predicate snapshot); defaults to `selectCandidates` or the shipped one. */
+  selectAnswer?: (input: SelectRootInput) => Promise<SelectionAnswer>
+  /** US-522: the `--watch` idle wait (shipped: a real, interruptible timer). Injected so tests run on a fake clock. */
+  wait?: Wait
   /** US-491: one `pair-cli run --card` child process (shipped `spawnCardProcess`). */
   runCardProcess?: CardProcessRunner
 }

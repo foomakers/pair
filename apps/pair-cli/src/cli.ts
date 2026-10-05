@@ -179,7 +179,7 @@ export async function main() {
 function addCommandOptions(
   cmd: Command,
   options: readonly { flags: string; description: string; defaultValue?: unknown }[],
-): void {
+): [Seen, Seen][] {
   for (const opt of options) {
     if (opt.flags.startsWith('[') || opt.flags.startsWith('<')) {
       cmd.argument(opt.flags, opt.description)
@@ -189,6 +189,43 @@ function addCommandOptions(
       } else {
         cmd.option(opt.flags, opt.description)
       }
+    }
+  }
+  return trackContradictoryPairs(cmd, options)
+}
+
+type Seen = { flag: string; seen: boolean }
+
+/**
+ * Commander folds `--x` / `--no-x` into one key (the last wins), hiding the contradiction from the
+ * parser. Both options emit their own event, so a command declaring the pair can refuse it.
+ */
+function trackContradictoryPairs(
+  cmd: Command,
+  options: readonly { flags: string }[],
+): [Seen, Seen][] {
+  const names = new Set(options.map(o => /^--[a-z][\w-]*/.exec(o.flags)?.[0]).filter(Boolean))
+  const pairs: [Seen, Seen][] = []
+  for (const name of names) {
+    const negated = `--no-${name!.slice(2)}`
+    if (!names.has(negated)) continue
+    const pair: [Seen, Seen] = [
+      { flag: name!, seen: false },
+      { flag: negated, seen: false },
+    ]
+    cmd.on(`option:${name!.slice(2)}`, () => void (pair[0].seen = true))
+    cmd.on(`option:${negated.slice(2)}`, () => void (pair[1].seen = true))
+    pairs.push(pair)
+  }
+  return pairs
+}
+
+function refuseContradictions(pairs: [Seen, Seen][]): void {
+  for (const [positive, negative] of pairs) {
+    if (positive.seen && negative.seen) {
+      throw new Error(
+        `${positive.flag} and ${negative.flag} contradict each other: pass only one of them`,
+      )
     }
   }
 }
@@ -247,7 +284,7 @@ function registerCommandFromMetadata(
   const usage = usageArguments(cmdConfig.metadata.usage, PUBLISHED_BIN, cmdConfig.metadata.name)
   if (usage !== undefined) cmd.usage(usage)
 
-  addCommandOptions(cmd, cmdConfig.metadata.options)
+  const contradictions = addCommandOptions(cmd, cmdConfig.metadata.options)
   cmd.addHelpText(
     'after',
     buildCommandHelpText(cmdConfig.metadata.examples, cmdConfig.metadata.notes),
@@ -256,6 +293,7 @@ function registerCommandFromMetadata(
   cmd.action(async (...args: unknown[]) => {
     const cmdInstance = args[args.length - 1] as Command
     const cmdOptions = cmdInstance.opts<Record<string, unknown>>()
+    refuseContradictions(contradictions)
     const globalOptions = prog.opts<Record<string, unknown>>()
     // Commander stores options with dashes in the name (e.g., 'source-dir' instead of 'sourceDir')
     // We need to convert kebab-case keys to camelCase for the parser
