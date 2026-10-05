@@ -283,3 +283,5 @@ An unrecognized `resolve` output is a HALT too, never a silent degradation: this
 - It owns no cycle rule: caps, budgets, the effective-inputs composition and the freshness table are `cycle-state.mjs`'s data, and the argument packets are `cycle-dispatch.mjs`'s rendering. If you find yourself about to write a number here, it belongs in one of those two files.
 - No new agent type: the four existing roles are reused as `agentType` (Claude) or role packet (Codex).
 - It never merges, never closes a card, never deletes a branch, never files an issue and never posts a review comment.
+
+- **Automation overview**: see the [automation overview](../../../.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md) for the whole delivery cycle — stages, autonomy gates, realizations.
