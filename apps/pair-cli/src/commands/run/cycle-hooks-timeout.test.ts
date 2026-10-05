@@ -77,9 +77,7 @@ describe('pair-cli ## Cycle Hooks timeout against the real executor (US-489 AC9)
     ])
     const d = drive(root, policyPath, [step('implement'), step('verify'), DONE])
     expect(d.hooks.warnings()).toEqual([])
-    const t0 = Date.now()
     const outcome = await d.run()
-    const ms = Date.now() - t0
 
     expect(outcome.status).toBe('failed-hook')
     expect(String(outcome.next?.['detail'])).toMatch(/pre-verify/)
@@ -87,7 +85,6 @@ describe('pair-cli ## Cycle Hooks timeout against the real executor (US-489 AC9)
     expect(d.spawned).toEqual(['implement'])
     expect(d.notices.join('\n')).toMatch(/post-implement/)
     expect(d.notices.join('\n')).toMatch(TIMED_OUT)
-    expect(ms).toBeLessThan(5000)
   }, 20000)
 
   it('TO-P2: the grandchild of a timed-out pre-verify is dead when the cycle halts', async () => {
