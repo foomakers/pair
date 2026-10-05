@@ -220,7 +220,11 @@ test('canary: old pair-loop.js merge rule vs decideMerge — zero decision diffs
   for (const s of scenarios()) {
     const old = await oldDecision(s)
     const neu = newDecision(s)
-    rows.push({ id: s.id, old, new: neu, diff: JSON.stringify(old) !== JSON.stringify(neu) })
+    // Deliberate, maintainer-recorded divergence (autonomous run 493, D3): a human approval still missing/pending as the ONLY
+    // failing condition is a park that AWAITS A PERSON (the frozen oracle said `halted`). `decideMerge` only answers it when
+    // that is the sole failure, so the old `halted` + new `awaiting-human` on `explicit-approval` is the whole allowed delta.
+    const awaitsApproval = old.parkKind === 'halted' && neu.parkKind === 'awaiting-human' && old.code === 'explicit-approval' && neu.code === 'explicit-approval'
+    rows.push({ id: s.id, old, new: neu, diff: !awaitsApproval && JSON.stringify(old) !== JSON.stringify(neu) })
   }
   const report = renderReport(rows)
   if (process.env.PAIR_MERGE_CANARY_REPORT) writeFileSync(process.env.PAIR_MERGE_CANARY_REPORT, report)
