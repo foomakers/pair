@@ -752,7 +752,7 @@ pair-cli run [options]
 | `--assignee <login\|@me>`       | Keep issues assigned to this user (`@me` = the authenticated code-host user), for a skill that declares it (`pair-next`). **Refused** for `pair-loop` (the driver declares only root/predicate/iteration for it) |
 | `--status <macrostates>`        | Comma-separated canonical macrostates (e.g. `Draft,Ready`), for a skill that declares it (`pair-next`). **Refused** for `pair-loop` (the driver declares only root/predicate/iteration for it) |
 | `--until <ready\|pr\|merged>`   | With `--card`: how far the delivery cycle goes — `ready` (stop before implement), `pr` (default), `merged` (enter the merge stage; the only value that evaluates the merge gate). Argument > `## Autonomy` > default, every effective value printed with its source |
-| `--prepare <gate>`              | With `--card`: the prepare gate `<always\|never\|when>[; has: …][; lacks: …]`. Parsed and validated; execution lands in #523 (treated as `always`) |
+| `--prepare <gate>`              | With `--card`: the prepare gate `<always\|never\|when>[; has: …][; lacks: …]` — who prepares a Draft card. `always` (default) needs a human (R3.11); `never` proceeds alone recording assumptions; `when` proceeds alone unless a stage boundary escalates (`needs-review`, the card stays Draft, exit 1). `--until ready` stops right after the phase |
 | `--merge <gate>`                | With `--card`: the merge gate, same grammar. `always` (default) parks `awaiting-human`; `never`/`when` merge under `--until merged` unless a `has`/`lacks` condition escalates (`escalated`, exit 1, `on-halt`, one comment on the card). #490's signal checks stay mandatory |
 | `--card <id>`                   | Work this card. With a mapped tag it dispatches that workflow; with no mapping it drives the **whole delivery cycle** — see below. Not combinable with `--skill`/`--prompt`/`--root` |
 | `--card-tags <list>`            | Comma-separated labels the trigger observed on `--card`. Empty, absent or unmapped ⇒ the card's own readiness decides |
@@ -821,8 +821,12 @@ and the order is fixed — **the tag mapping is asked first, always**:
      (exit `0`). A malformed mapping (one board state under two macrostates) **HALTs**.
 
    Bounds on that fallback, all towards *not running*:
-   - **Unattended runs never start a preparation skill.** With `--autonomous`, a card routed to
-     refinement or planning is skipped (exit `0`, "needs a human", nothing spawned).
+   - **Unattended runs never start a preparation skill unless the prepare gate says so.** With
+     `--autonomous` and the default `prepare: always`, a card routed to refinement or planning is skipped
+     (exit `0`, "needs a human", nothing spawned, audited `prepare-needs-human`). A declared
+     `--prepare never|when` is the maintainer-chosen exception (ADR-028): the card is refined and planned
+     alone, every self-answer recorded under `## Assumptions`; a firing `when` condition at a stage
+     boundary leaves it Draft with `needs-review` (exit `1`).
    - **`## Eligibility` bounds `--autonomous` runs** here too, even with no `## Workflows` declared: a
      card without the label is skipped `ineligible` before it is read. `--approve-ineligible` lets
      that one run through, says so, and writes nothing. A supervised run is not held back by it.
