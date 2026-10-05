@@ -166,7 +166,9 @@ function fakeHosts({ labels = [], body = '', labelResult, board, readFails = fal
   }
   return { hosts: { pm }, calls, comments, state }
 }
-const PREPARED = '## Story\n\nx\n\n## Assumptions\n\n- **Q**: scope? **A**: yes. Evidence: code. Overturn: edit.\n\n## Notes\n\nPrepared autonomously under prepare: never (argument) — ADR-028\n'
+// r1-g1 / r0-3: a prepared body carries its `## Task Breakdown` (AC8: Ready only after B2) — the DoR inline signal, one checklist item.
+const BREAKDOWN = '## Task Breakdown\n\n- [ ] **T-1**: do it\n\n'
+const PREPARED = '## Story\n\nx\n\n' + BREAKDOWN + '## Assumptions\n\n- **Q**: scope? **A**: yes. Evidence: code. Overturn: edit.\n\n## Notes\n\nPrepared autonomously under prepare: never (argument) — ADR-028\n'
 
 test('AC6/T-5: escalate adds needs-review, upserts ONE marker comment, writes NO board state', () => {
   const f = fakeHosts()
@@ -229,9 +231,9 @@ test('T-5: a B2 race (label appeared mid-phase) escalates instead of writing Rea
 
 test('T-5: missing/empty Assumptions or provenance ⇒ no Ready (fail closed)', () => {
   for (const [body, re] of [
-    ['## Story\n\nx\n', /assumptions-missing/],
-    ['## Assumptions\n\n## Notes\n\nPrepared autonomously under prepare: never (argument)\n', /assumptions-missing/],
-    ['## Assumptions\n\n- A: b\n', /provenance-missing/],
+    ['## Story\n\nx\n\n' + BREAKDOWN, /assumptions-missing/],
+    [BREAKDOWN + '## Assumptions\n\n## Notes\n\nPrepared autonomously under prepare: never (argument)\n', /assumptions-missing/],
+    [BREAKDOWN + '## Assumptions\n\n- A: b\n', /provenance-missing/],
   ]) {
     const f = fakeHosts({ body })
     const out = complete({ hosts: f.hosts, story: 7, gate: NEVER, source: 'argument' })
@@ -255,6 +257,86 @@ test('AC2/T-5: complete under `always` never writes Ready (the gate refuses, wha
   const out = complete({ hosts: f.hosts, story: 7, gate: ALWAYS, source: 'default' })
   assert.equal(out.completed, false)
   assert.equal(f.calls.some(c => c[0] === 'setBoardState'), false)
+})
+
+// ── r1-g1 (US-523 round 1) ──────────────────────────────────────────────────────────────────
+// r0-3 — AC8 + business rule "Ready after B2": `complete` fails closed without a non-empty `## Task Breakdown`. Oracle:
+// definition-of-ready-and-done.md "Inline task-breakdown signal" — a `## Task Breakdown` section with at least one checklist item.
+const PROVENANCE_ONLY = '## Story\n\nx\n\n## Assumptions\n\n- **Q**: scope? **A**: yes. Evidence: code. Overturn: edit.\n\n## Notes\n\nPrepared autonomously under prepare: never (argument) — ADR-028\n'
+test('r0-3 [r1g1-w6] [r1g1-w7] [r1g1-w8]: complete without a task breakdown (absent / empty heading / prose, no checklist item) ⇒ completed false, breakdown-missing, no board write', () => {
+  for (const [name, body] of [
+    ['absent', PROVENANCE_ONLY],
+    ['empty heading', '## Task Breakdown\n\n' + PROVENANCE_ONLY],
+    ['prose only', '## Task Breakdown\n\nTasks to be defined.\n\n' + PROVENANCE_ONLY],
+  ]) {
+    const f = fakeHosts({ body })
+    const out = complete({ hosts: f.hosts, story: 7, gate: NEVER, source: 'argument' })
+    assert.equal(out.completed, false, name)
+    assert.match(String(out.reason), /breakdown-missing/, name)
+    assert.equal(f.calls.some(c => c[0] === 'setBoardState'), false, name)
+  }
+})
+
+test('r0-3 [r1g1-c3]: a breakdown with a checklist item (`- [ ]`, `- [x]`, `* [ ]`) completes', () => {
+  for (const item of ['- [ ] **T-1**: a', '- [x] **T-1**: a', '* [ ] T-1 a']) {
+    const f = fakeHosts({ body: `## Task Breakdown\n\n${item}\n\n` + PROVENANCE_ONLY })
+    assert.equal(complete({ hosts: f.hosts, story: 7, gate: NEVER, source: 'argument' }).completed, true, item)
+  }
+})
+
+test('r0-3 [r1g1-i1]: breakdown present but Assumptions missing still fails closed (the checks compose, none displaces another)', () => {
+  const f = fakeHosts({ body: BREAKDOWN + '## Notes\n\nPrepared autonomously under prepare: never (argument)\n' })
+  const out = complete({ hosts: f.hosts, story: 7, gate: NEVER, source: 'argument' })
+  assert.equal(out.completed, false)
+  assert.match(out.reason, /assumptions-missing/)
+})
+
+// r0-4 — the B2 re-check inside `complete` uses the entry's REAL attendance (as B0 did), carried as `attended`.
+test('r0-4 [r1g1-w9]: complete({ attended: true }) on a `needs-review` card under `never` writes Ready — no re-escalation, no label/comment write', () => {
+  const f = fakeHosts({ body: PREPARED, labels: ['needs-review'] })
+  const out = complete({ hosts: f.hosts, story: 7, gate: NEVER, source: 'argument', attended: true })
+  assert.equal(out.completed, true)
+  assert.deepEqual(f.calls.filter(c => c[0] !== 'readCard').map(c => c[0]), ['setBoardState'])
+})
+
+test('r0-4 [r1g1-w10]: the CLI `complete` accepts --attended true|false (as `decide` does)', () => {
+  const g = JSON.stringify(NEVER)
+  assert.equal(parseArgs(['complete', '--dir', '.', '--story', '5', '--gate', g, '--source', 'argument', '--attended', 'true']).opts.attended, true)
+  assert.equal(parseArgs(['complete', '--dir', '.', '--story', '5', '--gate', g, '--source', 'argument', '--attended', 'false']).opts.attended, false)
+})
+
+test('r0-4 [r1g1-c4]: unattended (attended omitted or false) a `needs-review` card never reaches Ready through complete', () => {
+  for (const extra of [{}, { attended: false }]) {
+    const f = fakeHosts({ body: PREPARED, labels: ['needs-review'] })
+    const out = complete({ hosts: f.hosts, story: 7, gate: NEVER, source: 'argument', ...extra })
+    assert.equal(out.completed, false, JSON.stringify(extra))
+    assert.equal(f.calls.some(c => c[0] === 'setBoardState'), false)
+  }
+})
+
+test('r0-4 [r1g1-c5]: attended, a `when` gate that FIRES at B2 still escalates — attendance lifts only the needs-review skip', () => {
+  const f = fakeHosts({ body: PREPARED, labels: ['risk:red'] })
+  const out = complete({ hosts: f.hosts, story: 7, gate: when(['risk:red']), source: 'argument', attended: true })
+  assert.equal(out.completed, false)
+  assert.equal(out.reason, 'escalated-at-B2')
+  assert.equal(f.calls.some(c => c[0] === 'setBoardState'), false)
+})
+
+test('r0-4 [r1g1-b1]: the CLI `complete` rejects a non-boolean --attended (fail closed)', () => {
+  assert.throws(() => parseArgs(['complete', '--dir', '.', '--story', '5', '--gate', JSON.stringify(NEVER), '--source', 'argument', '--attended', 'maybe']))
+})
+
+// r0-5 — AC10 re-run: the escalation comment for an open question tells the human WHERE it lives (`## Open Questions`),
+// so removing the label alone (and re-running) is not presented as the remedy.
+test('r0-5 [r1g1-w11]: an open-question escalation body names the `## Open Questions` section', () => {
+  const body = escalationBody({ story: 7, boundary: 'B1', gate: 'never', source: 'argument', openQuestion: 'which tenant model?' })
+  assert.ok(body.includes('## Open Questions'), body)
+})
+
+test('r0-5 [r1g1-w12]: the comment escalate() posts for an open question names `## Open Questions`', () => {
+  const f = fakeHosts()
+  escalate({ hosts: f.hosts, story: 7, boundary: 'B1', gate: 'never', source: 'argument', openQuestion: 'who pays?' })
+  assert.ok(f.comments.get(ESCALATION_MARKER(7)).includes('## Open Questions'))
 })
 
 test('assumptionsSection: reads up to the next heading; absent ⇒ null', () => {

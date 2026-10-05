@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
@@ -39,9 +39,11 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-const project = () =>
+const WAY_OF_WORKING = '.pair/adoption/tech/way-of-working.md'
+const project = (extra: Record<string, string> = {}) =>
   new InMemoryFileSystemService(
     {
+      ...Object.fromEntries(Object.entries(extra).map(([rel, text]) => [`${root}/${rel}`, text])),
       [`${root}/config.json`]: JSON.stringify({
         asset_registries: {
           skills: {
@@ -97,9 +99,15 @@ interface Scenario {
   readonly body?: string
   readonly iterationOutcome?: 'success' | 'failed'
   readonly completion?: { completed: boolean; reason?: string }
+  /** r1-g1: the project's `way-of-working.md`, written both to the injected fs and to disk at the project root. */
+  readonly wayOfWorking?: string | undefined
 }
 
 async function run(s: Scenario = {}) {
+  if (s.wayOfWorking !== undefined) {
+    mkdirSync(join(root, '.pair/adoption/tech'), { recursive: true })
+    writeFileSync(join(root, WAY_OF_WORKING), s.wayOfWorking)
+  }
   const stdout: string[] = []
   vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
     stdout.push(args.map(String).join(' '))
@@ -169,7 +177,7 @@ async function run(s: Scenario = {}) {
   }
   const code = await handleRunCommand(
     parseRunCommand({ card: '523', cardTags: '', autonomous: s.autonomous === true }),
-    project(),
+    project(s.wayOfWorking === undefined ? {} : { [WAY_OF_WORKING]: s.wayOfWorking }),
     deps,
   )
   return {
@@ -399,5 +407,176 @@ describe('AC11: the effective gate is printed with its source', () => {
     expect(r.stdout.join('\n')).toMatch(
       /Prepare: never \(source: adoption\) — run-autonomous at B0/,
     )
+  })
+})
+
+// ── r1-g1 (US-523 round 1) ───────────────────────────────────────────────────────────────────
+
+const mappingDoc = (rows: ReadonlyArray<readonly [string, string]>): string =>
+  [
+    '# Way of Working',
+    '',
+    '## State Mapping',
+    '',
+    '| Board State | Macrostate |',
+    '| ----------- | ---------- |',
+    ...rows.map(([b, m]) => `| ${b} | ${m} |`),
+    '',
+  ].join('\n')
+const PAIR_BOARD = mappingDoc([
+  ['Todo', 'Draft'],
+  ['Refined', 'Ready'],
+  ['In Progress', 'In Progress'],
+  ['Done', 'Done'],
+])
+
+describe('r0-2: complete writes the FIRST board state mapped to Ready (canonical-states.md, Writing state)', () => {
+  it('[r1g1-w13] State Mapping `Refined | Ready` ⇒ prepareComplete is called with state Refined', async () => {
+    const r = await run({
+      prepare: selection(gate('never')),
+      autonomous: true,
+      wayOfWorking: PAIR_BOARD,
+    })
+    expect(r.code).toBe(0)
+    expect(r.completions).toHaveLength(1)
+    expect(r.completions[0]?.state).toBe('Refined')
+  })
+
+  it('[r1g1-w14] two board states mapped to Ready ⇒ the first listed wins (map order is the override)', async () => {
+    const r = await run({
+      prepare: selection(gate('never')),
+      autonomous: true,
+      wayOfWorking: mappingDoc([
+        ['Todo', 'Draft'],
+        ['Groomed', 'Ready'],
+        ['Refined', 'Ready'],
+        ['Done', 'Done'],
+      ]),
+    })
+    expect(r.completions[0]?.state).toBe('Groomed')
+  })
+
+  it('[r1g1-w15] a refined-no-breakdown card (B1 entry, plan only) under `when` gets the mapped state too', async () => {
+    const r = await run({
+      readiness: 'refined-no-breakdown',
+      prepare: selection(gate('when', [], ['triaged'])),
+      autonomous: true,
+      labels: [['triaged']],
+      wayOfWorking: PAIR_BOARD,
+    })
+    expect(r.completions[0]?.state).toBe('Refined')
+  })
+
+  it('[r1g1-c6] no `## State Mapping` (no way-of-working.md, or a file without the section) ⇒ the canonical name Ready', async () => {
+    for (const wayOfWorking of [undefined, '# Way of Working\n\n## Assignment\n\nx\n']) {
+      const r = await run({ prepare: selection(gate('never')), autonomous: true, wayOfWorking })
+      expect(r.code).toBe(0)
+      expect(r.completions[0]?.state ?? 'Ready').toBe('Ready')
+    }
+  })
+
+  it('[r1g1-b2] a mapping where NO board state maps to Ready ⇒ fail closed (HALT, rule 5): exit 1, never a guessed Ready write', async () => {
+    const r = await run({
+      prepare: selection(gate('never')),
+      autonomous: true,
+      wayOfWorking: mappingDoc([
+        ['Backlog', 'Draft'],
+        ['Doing', 'In Progress'],
+        ['Done', 'Done'],
+      ]),
+    })
+    expect(r.code).toBe(1)
+    expect(r.completions.filter(c => c.state === undefined || c.state === 'Ready')).toEqual([])
+    expect(r.calls).not.toContain('cycle')
+  })
+})
+
+describe('r0-4: one attendance for the whole phase — B0, B1, B2 and complete', () => {
+  it('[r1g1-w16] attended `never`, a Draft card still labelled needs-review ⇒ no escalation, complete called with attended true', async () => {
+    const r = await run({
+      prepare: selection(gate('never')),
+      autonomous: false,
+      labels: [['needs-review']],
+    })
+    expect(r.calls.some(c => c.startsWith('escalate'))).toBe(false)
+    expect(r.calls).toContain('complete')
+    expect(r.code).toBe(0)
+    expect(r.decisions.map(d => d.attended)).toEqual([true, true, true])
+    expect((r.completions[0] as { readonly attended?: unknown } | undefined)?.attended).toBe(true)
+  })
+
+  it('[r1g1-w17] attended `when; lacks: triaged`, labels needs-review + triaged ⇒ proceeds to complete, no escalation', async () => {
+    const r = await run({
+      prepare: selection(gate('when', [], ['triaged'])),
+      autonomous: false,
+      labels: [['needs-review', 'triaged']],
+    })
+    expect(r.calls.some(c => c.startsWith('escalate'))).toBe(false)
+    expect(r.calls).toContain('complete')
+    expect(r.code).toBe(0)
+  })
+
+  it('[r1g1-w18] attended `never`, refined-no-breakdown + needs-review (B1 entry) ⇒ plan then complete, no B2 re-escalation', async () => {
+    const r = await run({
+      readiness: 'refined-no-breakdown',
+      prepare: selection(gate('never')),
+      autonomous: false,
+      labels: [['needs-review']],
+    })
+    expect(r.calls.some(c => c.startsWith('escalate'))).toBe(false)
+    expect(r.calls).toContain('complete')
+    expect(r.code).toBe(0)
+  })
+
+  it('[r1g1-c7] unattended, needs-review appearing after refinement ⇒ the phase stops before planning, no complete', async () => {
+    const r = await run({
+      prepare: selection(gate('never')),
+      autonomous: true,
+      labels: [[], ['needs-review']],
+    })
+    expect(r.calls).not.toContain('complete')
+    expect(r.prompts).toHaveLength(1)
+    expect(r.code).not.toBe(0)
+  })
+
+  it('[r1g1-c8] attended, a `when` gate that FIRES at B2 still escalates — attendance never lifts a real condition', async () => {
+    const r = await run({
+      prepare: selection(gate('when', ['risk:red'])),
+      autonomous: false,
+      labels: [[], [], ['risk:red']],
+    })
+    expect(r.code).toBe(1)
+    expect(r.calls).toContain('escalate:B2')
+    expect(r.calls).not.toContain('complete')
+  })
+})
+
+describe('r0-5: the open-question escalation and its re-run', () => {
+  it('[r1g1-c9] label removed but `## Open Questions` still on the body ⇒ re-run escalates again at B1, naming the question (AC10)', async () => {
+    const r = await run({
+      prepare: selection(gate('never')),
+      autonomous: true,
+      labels: [[]],
+      body: '## Assumptions\n\n- x\n\n## Open Questions\n\n- pricing tier?\n',
+    })
+    expect(r.code).toBe(1)
+    expect(r.escalations[0]).toMatchObject({ boundary: 'B1' })
+    expect(r.escalations[0]?.openQuestion).toContain('pricing tier?')
+  })
+
+  it('[r1g1-c10] the human cleared `## Open Questions` (removed, or `none`) ⇒ the re-run completes, no escalation', async () => {
+    for (const body of [
+      '## Assumptions\n\n- x\n',
+      '## Assumptions\n\n- x\n\n## Open Questions\n\nnone\n',
+    ]) {
+      const r = await run({
+        prepare: selection(gate('never')),
+        autonomous: true,
+        labels: [[]],
+        body,
+      })
+      expect(r.escalations).toEqual([])
+      expect(r.calls).toContain('complete')
+    }
   })
 })

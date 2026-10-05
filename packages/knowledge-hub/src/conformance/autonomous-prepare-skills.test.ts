@@ -180,3 +180,38 @@ describe('plan-tasks — $approval + markers (ADR-028)', () => {
     })
   }
 })
+
+// ── r1-g1 (US-523 round 1) ───────────────────────────────────────────────────────────────────
+
+describe('r0-3 — plan-tasks runs on the Draft card the autonomous prepare phase hands it', () => {
+  for (const [label, path] of COPIES('plan-tasks')) {
+    const skill = read(path)
+    it(`${label} — [r1g1-s1] HALT Conditions carry an explicit exception: a Draft card under \`$approval: auto\` from the prepare phase`, () => {
+      const halts = section(skill, /HALT Conditions/).split('\n')
+      const exception = halts.filter(
+        l => /Draft/.test(l) && /prepare/i.test(l) && /`\$approval: auto`/.test(l),
+      )
+      expect(exception, 'no HALT-Conditions line names the prepare-phase exception').not.toEqual([])
+    })
+  }
+})
+
+describe('r0-2 / r0-4 — the in-session cycle passes the mapped Ready state and its attendance to `complete`', () => {
+  const CYCLE: Array<readonly [string, string]> = [
+    ['dataset', join(__dirname, '../../dataset/.skills/workflow/cycle/SKILL.md')],
+    ['installed', join(INSTALLED, 'pair-workflow-cycle', 'SKILL.md')],
+  ]
+  for (const [label, path] of CYCLE) {
+    const completeLines = read(path)
+      .split('\n')
+      .filter(l => /cycle-prepare\.mjs"? complete\b/.test(l))
+    it(`${label} — [r1g1-s2] every \`cycle-prepare.mjs complete\` invocation passes --state`, () => {
+      expect(completeLines.length).toBeGreaterThan(0)
+      for (const l of completeLines) expect(l).toMatch(/--state\s/)
+    })
+    it(`${label} — [r1g1-s3] every \`cycle-prepare.mjs complete\` invocation passes --attended`, () => {
+      expect(completeLines.length).toBeGreaterThan(0)
+      for (const l of completeLines) expect(l).toMatch(/--attended\s/)
+    })
+  }
+})
