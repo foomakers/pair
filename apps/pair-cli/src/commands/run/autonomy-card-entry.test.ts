@@ -93,7 +93,7 @@ const valid = (over: Partial<AutonomyResolution> = {}): AutonomyResolution => ({
     'filter: (all) (default)',
     'until: merged (argument)',
     'merge: when; has: cost:red (argument)',
-    'prepare: always (default) — parsed; execution lands in #523 — treated as always',
+    'prepare: always (default)',
   ],
   warnings: [],
   errors: [],
@@ -112,7 +112,7 @@ const inactive = (): AutonomyResolution =>
     lines: [
       'filter: PIPPO (adoption)',
       'until: pr (default)',
-      'prepare: always (default) — parsed; execution lands in #523 — treated as always',
+      'prepare: always (default)',
       'merge: always (default)',
     ],
   })

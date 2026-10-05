@@ -11,6 +11,7 @@ import {
   SKILL_PARAMETERS,
   APPROVAL_DECLARING_SKILLS,
   APPROVAL_PARAMETER,
+  PREPARE_PARAMETER,
   describeApprovalPosture,
 } from './invocation'
 import { ENGINES } from './engines'
@@ -49,6 +50,7 @@ describe('buildSkillArgs', () => {
     const declared = [
       ...Object.values(SKILL_PARAMETERS).flatMap(map => Object.values(map)),
       ...Object.values(APPROVAL_PARAMETER),
+      ...Object.values(PREPARE_PARAMETER),
     ]
 
     expect([...new Set(declared)].sort()).toEqual([
@@ -57,10 +59,21 @@ describe('buildSkillArgs', () => {
       '--filter',
       '--iteration',
       '--predicate',
+      '--prepare',
       '--root',
       '--status',
       '--story',
     ])
+  })
+
+  it('US-523: --prepare is rendered for refine-story alone, after --approval', () => {
+    expect(
+      buildSkillArgs('pair-process-refine-story', { root: '9', approval: 'auto', prepare: 'never' }),
+    ).toEqual(['--story', '9', '--approval', 'auto', '--prepare', 'never'])
+    expect(
+      buildSkillArgs('pair-process-plan-tasks', { root: '9', approval: 'auto', prepare: 'when' }),
+    ).toEqual(['--story', '9', '--approval', 'auto'])
+    expect(buildSkillArgs('pair-process-refine-story', { root: '9' })).toEqual(['--story', '9'])
   })
 
   it('scopes a catalogued workflow with the argument that workflow declares, not with --root', () => {

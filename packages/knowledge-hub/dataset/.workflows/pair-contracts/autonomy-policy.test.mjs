@@ -129,7 +129,7 @@ test('nothing declared, nothing passed: defaults only (until pr, gates always) â
 
 test('prepare is parsed and validated, printed as treated-as-always (#523)', () => {
   const r = resolvePolicy({ args: { prepare: 'when; has: needs:refine' } })
-  assert.ok(r.lines.find(l => l.startsWith('prepare:')).includes('parsed; execution lands in #523 â€” treated as always'))
+  assert.ok(r.lines.find(l => l.startsWith('prepare:')) === 'prepare: always (default)')
   assert.equal(resolvePolicy({ args: { prepare: 'always; has: a:b' } }).ok, false)
 })
 

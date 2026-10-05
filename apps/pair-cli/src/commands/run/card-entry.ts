@@ -11,6 +11,11 @@ import { CardOutOfScopeError } from './card-readiness'
 import { filterDeliveryFor } from './invocation'
 import type { DispatchSkipReason } from './dispatch'
 import { driveRun } from './loop-driver'
+import {
+  handlePreparation,
+  type PrepareRoutes,
+  type PromptExtras,
+} from './card-prepare'
 import { prepareCycleCoordinator, resolveEngineFor } from './cycle-entry'
 import { refuseProfileOffCycle } from './workflow-profile'
 import {
@@ -209,12 +214,48 @@ async function handleDorFallback(
     )
     return await enterCycle(entry, deps)
   }
-  if (config.autonomous === true) return skipUnattendedPreparation(input, deps, prep)
-  const drive = preparePrepSkill(
-    { config, context, fs: input.fs, cwd: input.cwd, card: decision.card, ...prep },
-    deps,
+  // US-523: the prepare gate decides who prepares the card. Under the default `always` this is
+  // today's behaviour exactly — unattended skips, a supervised run drives the interactive skill.
+  return await handlePreparation(
+    entry,
+    readiness as Exclude<CardReadiness, 'ready'>,
+    prepareRoutes(input, deps, entry, prep),
+    deps.prepare,
   )
-  return await underCardLock(entry, deps, prep.skill, drive)
+}
+
+/** Today's behaviours, handed to the prepare phase as callbacks — it owns the decision, never the spawn. */
+function prepareRoutes(
+  input: DorFallbackInput,
+  deps: RunHandlerDependencies,
+  entry: CardEntryInput,
+  prep: { skill: string; label: string },
+): PrepareRoutes {
+  const { config, context, decision } = input
+  const spawnOn = (skill: string, label: string, extras?: PromptExtras) =>
+    preparePrepSkill(
+      { config, context, fs: input.fs, cwd: input.cwd, card: decision.card, skill, label, extras },
+      deps,
+    )
+  return {
+    skipNeedsHuman: () => skipUnattendedPreparation(input, deps, prep),
+    skipEscalated: () => skipEscalatedCard(input, deps),
+    interactive: () => underCardLock(entry, deps, prep.skill, spawnOn(prep.skill, prep.label)),
+    driveSkill: (skill, label, extras) => spawnOn(skill, label, extras)(),
+    enterCycle: () => enterCycle(entry, deps),
+    underLock: (workflow, run) => underCardLock(entry, deps, workflow, run),
+  }
+}
+
+/** AC7: a `needs-review` card is not re-picked unattended — said, audited `escalated`, nothing spawned. */
+function skipEscalatedCard(input: DorFallbackInput, deps: RunHandlerDependencies): number {
+  console.log(
+    `  Skipped: card ${input.decision.card} carries \`needs-review\` (an autonomous preparation escalated) — ` +
+      `a human decides: remove the label, or refine the card attended.`,
+  )
+  console.log(chalk.dim('  Nothing was spawned.'))
+  recordSkip(input.context, deps, { ...input.decision, reason: 'escalated' })
+  return 0
 }
 
 /** The card a `--card` entry spawns on, with everything resolved for it — one subject. */
@@ -293,7 +334,7 @@ function skipUnattendedPreparation(
       `(--autonomous) run never starts it. Run it without --autonomous, or refine the card first.`,
   )
   console.log(chalk.dim('  Nothing was spawned.'))
-  recordSkip(input.context, deps, input.decision)
+  recordSkip(input.context, deps, { ...input.decision, reason: 'prepare-needs-human' })
   return 0
 }
 
@@ -381,6 +422,8 @@ interface PrepSkillInput {
   readonly card: string
   readonly skill: string
   readonly label: string
+  /** US-523: `$approval: auto` (+ `$prepare`) — present only on an autonomous prepare drive. */
+  readonly extras?: PromptExtras | undefined
 }
 
 /**
@@ -392,7 +435,7 @@ function preparePrepSkill(
   input: PrepSkillInput,
   deps: RunHandlerDependencies,
 ): () => Promise<number> {
-  const { config, context, fs, cwd, card, skill, label } = input
+  const { config, context, fs, cwd, card, skill, label, extras } = input
   refuseProfileOffCycle(config, `the preparation skill \`${skill}\` (card is ${label})`)
   const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
   const engineDef = resolveEngineFor(engine, context, cwd, fs)
@@ -420,6 +463,7 @@ function preparePrepSkill(
     perimeter,
     policy: context.policy,
     autonomy,
+    ...(extras !== undefined && { promptExtras: extras }),
   }
 
   console.log(chalk.bold('pair-cli run'))

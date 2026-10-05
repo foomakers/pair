@@ -280,8 +280,7 @@ export function resolvePolicy({ args = {}, adoptionText = '' } = {}) {
   const lines = KEYS.map(key => {
     const e = effective[key]
     const v = e.value === undefined ? (key === 'filter' || key === 'status' ? '(all)' : '(none)') : display(key, e.value)
-    const note = key === 'prepare' ? ` — parsed; execution lands in #523 — treated as always` : ''
-    return `${key}: ${v} (${e.source})${note}`
+    return `${key}: ${v} (${e.source})`
   })
   const policy = { until: effective.until.value, merge: effective.merge.value, prepare: effective.prepare.value, ...(legacyActive ? { legacyTiers: legacyMerge.legacyTiers } : {}) }
   // `active`: the run declared its own target or merge gate (argument or `## Autonomy`). Legacy-only and

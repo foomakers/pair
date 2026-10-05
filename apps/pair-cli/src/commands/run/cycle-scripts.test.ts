@@ -141,6 +141,9 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
     )
     copyFileSync(join(realScriptsDir, 'cycle-state.mjs'), join(scriptsDir, 'cycle-state.mjs'))
     copyFileSync(join(realScriptsDir, 'cycle-dispatch.mjs'), join(scriptsDir, 'cycle-dispatch.mjs'))
+    // US-523: the prepare phase's decision/writers, and the gate evaluator they import.
+    copyFileSync(join(realScriptsDir, 'cycle-prepare.mjs'), join(scriptsDir, 'cycle-prepare.mjs'))
+    copyFileSync(join(realScriptsDir, 'autonomy-policy.mjs'), join(scriptsDir, 'autonomy-policy.mjs'))
     // US-492: the PM/code-host adapters ship beside the scripts, in `host/`.
     cpSync(join(realScriptsDir, 'host'), join(scriptsDir, 'host'), { recursive: true })
     runsRoot = join(projectRoot, '.pair/working/runs')
@@ -186,6 +189,39 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
       runsRoot,
     })
     expect(prResult.next).toMatchObject({ step: 'verify', mode: 'first', phase: 'r0' })
+  })
+
+  it('prepareDecide() relays the real script route verbatim (US-523: one decision, every entry)', () => {
+    const gate = { mode: 'when', has: ['risk:red'], lacks: ['triaged'] }
+    const base = { gate, readiness: 'draft', attended: false, boundary: 'B1', source: 'adoption' } as const
+    const fires = bridge().prepareDecide({ ...base, labels: ['risk:red', 'triaged'] })
+    expect(fires).toMatchObject({
+      route: 'escalate',
+      boundary: 'B1',
+      conditions: ['has:risk:red'],
+      source: 'adoption',
+    })
+    expect(bridge().prepareDecide({ ...base, labels: ['triaged'] }).route).toBe('run-autonomous')
+    // unreadable labels (absent) under a `when` gate escalate, fail-safe
+    expect(bridge().prepareDecide({ ...base }).conditions).toEqual(['labels-unreadable'])
+    expect(
+      bridge().prepareDecide({
+        ...base,
+        gate: { mode: 'always', has: [], lacks: [] },
+        labels: [],
+      }).route,
+    ).toBe('skip-needs-human')
+  })
+
+  it('prepareDecide() relays a fail-closed script error as a thrown Error, never a route', () => {
+    expect(() =>
+      bridge().prepareDecide({
+        gate: { mode: 'sometimes', has: [], lacks: [] },
+        readiness: 'draft',
+        attended: false,
+        boundary: 'B0',
+      }),
+    ).toThrow(/--gate is invalid/)
   })
 
   it('bindHosts() binds the run ONCE (bound, then reused) and relays host-unsupported verbatim (US-492 AC2/AC4)', () => {

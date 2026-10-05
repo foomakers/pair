@@ -67,7 +67,7 @@ Under `$approval: auto` there is nobody to confirm a pick: `$story` is required,
 **Exception — autonomous prepare (ADR-028, maintainer-declared).** Phase 0 is lifted only when the caller passes both `$approval: auto` and `$prepare: never|when`. `$approval: auto` alone (or with `$prepare` absent or `always`) still HALTs at phase 0 exactly as above — the generic signal never bypasses R3.11 (ADR-021). Under the exception `/grill` is not composed, and instead:
 
 1. **Act**: For each question the sync would have asked (goal, AC, edge cases, dependencies, design, risks), answer it from code, KB and the linked context, and record it in the story's `## Assumptions` section — each entry: question, answer chosen, evidence, how to overturn.
-2. **Act**: A question that needs a product decision (evidence cannot settle it) is **not** self-answered: return it as `open-question` to the caller, write nothing, and leave the story Draft.
+2. **Act**: A question that needs a product decision (evidence cannot settle it) is **not** self-answered: return it as `open-question` to the caller — record it as one line (`- <question> — <why evidence cannot settle it>`) under a `## Open Questions` section of the story body (the caller reads that section; it is the only write), stop there, and leave the story Draft.
 3. **Verify**: `## Assumptions` is non-empty, or carries the explicit line `none: every question settled from repository evidence` with the evidence list. Then continue at Step 1.
 
 ### Step 1: Detect Refinement State
@@ -225,7 +225,7 @@ The `Next:` line names only steps enabled by the project's [process profile](../
 - **No shared understanding** (Phase 0) — `/grill` sync ended without an explicit human "yes"; refinement never proceeds on an unaligned story.
 - **PM tool not accessible** — cannot read or update stories.
 - **`$approval: auto` without `$prepare: never|when`** (Phase 0) — the judgement gate is not lifted by the generic signal; the run HALTs.
-- **Open question** (Phase 0 exception) — a product decision evidence cannot settle is returned as `open-question`; the story stays Draft.
+- **Open question** (Phase 0 exception) — a product decision evidence cannot settle is returned as `open-question` (recorded under `## Open Questions`); the story stays Draft.
 - **Developer rejects criteria** (Steps 2–4) — must resolve before proceeding.
 
 ## Graceful Degradation
