@@ -19,7 +19,7 @@ Advance the backlog unattended, within a policy the team controls, context-safe,
 | `--assignee` | a login or `@me` | Selection: keep issues assigned to that user (`/pair-next --assignee`). |
 | `--status` | comma-separated canonical macrostates | Selection: keep issues in those macrostates (`/pair-next --status`). |
 | `--until` | `ready` \| `pr` \| `merged` | How far each card is driven; handed to the batch (the delivery cycle on N cards). Default `pr`: nothing merges. |
-| `--prepare` | a gate: `always` \| `never` \| `when[; has: <labels>][; lacks: <labels>]` | The prepare gate, handed to the batch (parsed; execution lands in #523). |
+| `--prepare` | a gate: `always` \| `never` \| `when[; has: <labels>][; lacks: <labels>]` | The prepare gate, handed to the batch (US-523): who prepares a Draft / Ready-without-breakdown card — `always` (default) parks it for a human, `never` proceeds alone recording assumptions, `when` proceeds alone unless a boundary escalates (`needs-review`; an escalated card is not re-picked until a human acts). |
 | `--merge` | a gate, same grammar | The merge gate, handed to the batch: the batch merges a review-approved card only when it allows it (default `always`: parks `awaiting-human`). |
 | `--iteration` | a positive integer | The starting iteration count — used when re-invoking from a printed continue-token; never required on a fresh run. |
 

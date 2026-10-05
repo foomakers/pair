@@ -475,6 +475,10 @@ test('refine runs unattended: no questions, assumptions recorded, unanswerable o
   const p = calls.find(c => c.opts.label === 'refine:#216').prompt
   assert.ok(/NON-INTERACTIVE \(mandatory\)/.test(p), 'the unattended contract is stated')
   assert.ok(/do NOT ask questions and do NOT stall waiting for input/.test(p), 'the grill cannot block the batch')
+  // US-523 T-9: the declared `prepare: never` path — the explicit signals, the same `## Assumptions` format, AC10's open-question rule.
+  assert.ok(/\$approval: auto/.test(p) && /\$prepare: never/.test(p), 'the explicit signals are named, never $approval: auto alone')
+  assert.ok(/the question, the answer chosen, the evidence, how to overturn it/.test(p), 'the assumptions use the story\'s format')
+  assert.ok(/under a `## Open Questions` section/.test(p) && /leave the card Draft/.test(p), 'an unsettled product question leaves the card Draft')
   assert.ok(/RECORD the assumption in the card body/.test(p), 'assumptions are written down, not hidden')
   // The escape hatch matters: an agent with no human and no evidence must not invent a
   // product decision — it marks it open and finishes the rest.

@@ -22,7 +22,7 @@ Two entries, one cycle: a refined card with no PR runs the whole thing; a PR tha
 | `$notes`    | No       | Scope directive from the card; threaded into every stage packet, overriding the issue body where they conflict.                                                                              |
 | `$profile`  | No       | The workflow profile to use (US-488): a NAME, looked up in `pair.config.json`'s `workflowProfiles.files` / `.inline`. Cascade, resolved once per run: `$workflowConfig` > `$profile` > `workflowProfiles.default` > the KB default (schema-default engine and model, default effort, `fresh` context). Unresolvable ⇒ HALT `profile-unresolved`, never a silent fallback. A value starting with `{` is the **legacy** inline object `{ "effort": … }` (one of `low \| medium \| high \| xhigh \| max`, applied to every stage's dispatch instruction exactly as before — enforced for Codex, a best-effort prompt request only for Claude); absent ⇒ today's behavior, unchanged. |
 | `$until`    | No       | The target (US-521, ADR-027): `ready` (stop at the prepare→implement boundary), `pr` (default: the review-approved PR) or `merged` (enter the merge stage — the only value under which the merge gate is evaluated). Precedence: argument > adoption (`## Autonomy`, then translated legacy sections) > KB default — every effective value is printed with its source. |
-| `$prepare`  | No       | The prepare gate, `<always\|never\|when>[; has: <labels>][; lacks: <labels>]`: parsed and validated, printed as `parsed; execution lands in #523 — treated as always`. |
+| `$prepare`  | No       | The prepare gate (US-523, ADR-028), `<always\|never\|when>[; has: <labels>][; lacks: <labels>]`: who prepares a Draft / Ready-without-breakdown `$card` before the cycle starts. `always` (default) keeps R3.11 — a human prepares; `never` proceeds alone recording assumptions; `when` proceeds alone unless a boundary escalates (`needs-review`, the card stays Draft). Same grammar and precedence as `$merge`; see the Prepare phase in Step 1. |
 | `$merge`    | No       | The merge gate, same grammar. `always` (default) parks `awaiting-human`; `never`/`when` enter the merge stage under `until: merged` unless an escalation fires. #490's signal checks stay mandatory under every mode. |
 | `$workflowConfig` | No | Path of an external profile file, used verbatim; wins over `$profile` and `pair.config.json`. Malformed ⇒ HALT `profile-invalid`. |
 
@@ -109,6 +109,26 @@ node "$SKILL_DIR/scripts/autonomy-policy.mjs" resolve --adoption "$MAIN/.pair/ad
 ```
 
 Print its `lines` verbatim (every key, its effective value and its source: `argument` | `adoption` | `adoption (translated from ## Auto-Advance)` | `default`), then its `warnings`. `ok: false` ⇒ HALT `automation-policy-malformed` naming each `errors[].key` and reason, before any card is touched. A project that declares nothing and passes nothing resolves to `until: pr`, gates `always`: nothing below changes. Hand `resolve` the result as `--policy '{…,"autonomy":<policy>}'` (the script's `policy` object) only when `active` is `true`, and — only when `policy.until` is `merged` and the merge gate is `when` — the card's CURRENT labels as `--labels '<JSON array>'`, re-read from the PM tool before EVERY `resolve` (labels are live at each boundary). The legacy `--policy '{…,"autoAdvance":{"tiers":[…]}}'` with `--tier`, exactly as before, is passed only when `active` is `false`.
+
+**Prepare phase (US-523, `$card` entry only).** A `$pr` entry never prepares — a card with a PR has started. For a `$card`, BEFORE the first `resolve`, read the card's readiness (through the project's State Mapping: `Draft`, `Refined` without a task breakdown, or `Ready`) and its CURRENT labels, then ask the ONE shared script — the same one `pair-cli run --card` and the batch run; this skill holds no prepare rule:
+
+```bash
+node "$SKILL_DIR/scripts/cycle-prepare.mjs" decide --gate '<policy.prepare JSON>' --readiness <draft|refined-no-breakdown|ready> \
+  --attended <true|false> --boundary <B0|B1> --labels '<JSON array, live>' --source <effective.prepare.source>
+```
+
+`attended` is `true` for an in-session run (a human is here) and `false` when this cycle was dispatched by a batch or a loop. Boundaries: `B0` before refinement, `B1` after it (classification tags now written; a `refined-no-breakdown` card enters here), `B2` after the task breakdown. Print its `route` and follow it — nothing else decides:
+
+| `route` | You |
+| --- | --- |
+| `nothing-to-prepare` | Continue to the first `resolve` (the card is Ready). |
+| `run-interactive` | Compose `/pair-process-refine-story` (Draft) or `/pair-process-plan-tasks` (breakdown missing) with their interactive defaults — phase 0 `/pair-capability-grill` and every human-judgment gate ask, exactly as today (R3.11). Then continue. |
+| `skip-needs-human` | `prepare: always` unattended: print that the card needs a human, spawn nothing, write nothing, end the invocation (never re-attempt it this run). |
+| `skip-escalated` | The card carries `needs-review`: end the invocation, a human removes the label (or prepares it attended). |
+| `escalate` | `node "$SKILL_DIR/scripts/cycle-prepare.mjs" escalate --dir "$RUN_DIR" --story <card> --boundary <B0\|B1\|B2> --gate '<JSON>' --source <source> --conditions '<JSON>'` — adds `needs-review`, posts ONE marker comment, writes no board state; the status is `escalated`, then Step 5's `on-halt`. |
+| `run-autonomous` | Refine (Draft only) with `$approval: auto $prepare: <the gate's mode>` — the ONLY combination that lifts phase 0, `$approval: auto` alone still HALTs it (ADR-021) — then `decide` at `B1`; plan with `/pair-process-plan-tasks $approval: auto`, then `decide` at `B2`; then `cycle-prepare.mjs complete --dir "$RUN_DIR" --story <card> --gate '<JSON>' --source <source>`, the one place Ready is written. Any boundary that answers `escalate` stops there. |
+
+An open question the refinement could not settle from the repository (`## Open Questions` on the card) escalates at `B1`, even under `never`: an answer is never invented. A `complete` that answers `completed: false` is a failed prepare — no Ready, `on-halt`. After a successful prepare, `until: ready` ends the invocation (`target-ready`, no worktree, no branch); otherwise continue to the first `resolve`. Every self-answer is on the card under `## Assumptions` with a Notes provenance line, for a human to overturn.
 
 The workflow profile is resolved ONCE, here, right after the binding and before the first `resolve` — by the ONE shared resolver `pair-cli run --card` calls too, never by hand-reading `pair.config.json`:
 

@@ -118,6 +118,36 @@ describe('runWatchLoop (US-522 T-6)', () => {
     expect(r.exitCode).toBe(1)
   })
 
+  it('US-523 AC7: a card labelled needs-review (a prepare escalation) is skipped as escalated even when the selection says escalated:false', async () => {
+    const h = harness([
+      sel(card('1', { labels: ['needs-review'], escalated: false }), card('2')),
+      sel(card('1', { labels: ['needs-review'], escalated: false })),
+    ])
+    await runWatchLoop(config(), h.deps)
+    expect(h.batches).toEqual([['2']])
+    expect(h.records[0]!.skipped).toEqual([{ id: '1', reason: 'escalated', detail: 'escalated' }])
+    expect(h.records[1]!.skipped).toEqual([{ id: '1', reason: 'escalated', detail: 'escalated' }])
+  })
+
+  it('US-523 AC7: once a human removes needs-review the card is workable again', async () => {
+    const h = harness([
+      sel(card('1', { labels: ['needs-review'] }), card('2')),
+      sel(card('1', { labels: [] })),
+    ])
+    await runWatchLoop(config(), h.deps)
+    expect(h.batches).toEqual([['2'], ['1']])
+  })
+
+  it('US-523 A7: a card whose prepare needs a human (`always`) is driven once and never re-attempted this run — no spin', async () => {
+    const h = harness([sel(card('1')), sel(card('1')), sel(card('1'))], {
+      outcomes: ids => ids.map(id => ({ ...outcome(id), prepare: 'needs-human' as const })),
+    })
+    const r = await runWatchLoop(config({ cap: 10 }), h.deps)
+    expect(h.batches).toEqual([['1']])
+    expect(r.reason).toBe('nothing workable')
+    expect(r.exitCode).toBe(0)
+  })
+
   it('AC4: an escalated card is not started, is reported, and stays skipped while the selection says so', async () => {
     const h = harness([
       sel(card('1', { escalated: true }), card('2')),

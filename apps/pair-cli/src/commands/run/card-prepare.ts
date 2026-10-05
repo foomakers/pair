@@ -131,6 +131,19 @@ export function openQuestionOf(body: string | undefined): string | undefined {
   return section.replace(/\s*\n\s*/g, ' ').slice(0, 500)
 }
 
+/** The prepare outcome a card process printed on a line, when that line is the `PREPARE-RESULT:` one. */
+export function parsePrepareResult(line: string): PrepareResult | undefined {
+  const value = line.startsWith(PREPARE_RESULT_PREFIX)
+    ? line.slice(PREPARE_RESULT_PREFIX.length).trim()
+    : undefined
+  return value === 'prepared' ||
+    value === 'escalated' ||
+    value === 'needs-human' ||
+    value === 'failed'
+    ? value
+    : undefined
+}
+
 function say(result: PrepareResult): void {
   console.log(`${PREPARE_RESULT_PREFIX} ${result}`)
 }
