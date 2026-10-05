@@ -125,8 +125,8 @@ export function sectionOf(body: string | undefined, heading: string): string | n
   return (next === null ? rest : rest.slice(0, next.index)).trim()
 }
 
-/** An entry is ANSWERED when ticked (`- [x]`, the answer recorded under `## Assumptions`) or `none`. */
-const ANSWERED_ENTRY = /^\s*(?:[-*]\s+\[[xX]\]|[-*]?\s*none\b)/i
+/** An entry is ANSWERED when ticked (`- [x]`, the answer recorded under `## Assumptions`) or the WHOLE entry is `none` (case-insensitive, optional trailing period). */
+const ANSWERED_ENTRY = /^\s*(?:[-*]\s+\[[xX]\]|(?:[-*]\s*)?none\s*\.?\s*$)/i
 
 /**
  * The open questions the refinement left (AC10) — one line, or `undefined` when there are none. Mirrors

@@ -262,7 +262,7 @@ describe('APPROVAL_DECLARING_SKILLS matches the corpus that defines it', () => {
     expect([...APPROVAL_DECLARING_SKILLS].sort()).toEqual(corpusFamily())
   })
 
-  it('holds the eleven members ADR-021 converted, and excludes its callers', () => {
+  it('holds the thirteen members ADR-021 converted, and excludes its callers', () => {
     // Spelled out because the derived assertion above would also pass if BOTH sides drifted the
     // same way (a member deleted from the corpus and from the set in one edit).
     expect([...APPROVAL_DECLARING_SKILLS].sort()).toEqual([

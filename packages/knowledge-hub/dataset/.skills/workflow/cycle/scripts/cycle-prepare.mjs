@@ -20,7 +20,7 @@
 //            [--refinedAutonomously <true|false>] [--repo <o/n>]
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { parseGate, escalationConditions, gateToString, GATE_MODES } from './autonomy-policy.mjs'
+import { parseGate, escalationConditions, gateToString, conditionError, GATE_MODES } from './autonomy-policy.mjs'
 import { assertRunOwnsStory } from './run-guard.mjs'
 
 export const ROUTES = ['run-interactive', 'run-autonomous', 'skip-needs-human', 'skip-escalated', 'escalate', 'nothing-to-prepare']
@@ -31,10 +31,9 @@ export const ESCALATION_MARKER = story => `<!-- pair:prepare-escalation #${story
 export const PROVENANCE_RE = /Prepared autonomously under prepare: .+ \(.+\)/
 const BREAKDOWN_HEADING_RE = /^##\s+Task Breakdown\s*$/m
 const CHECKLIST_ITEM_RE = /^\s*[-*]\s+\[[ xX]\]\s+\S/m
-// A condition is a gate's own output (`has:<label>`, `lacks:<label>`, `labels-unreadable`): every label the gate grammar
-// accepts is accepted, spaces included — it travels as JSON argv, never through a shell. No control characters, no backtick
-// (the comment renders it in a code span), bounded.
-export const CONDITION_RE = /^[^\u0000-\u001f`]{1,200}$/
+// A condition is a gate's own output (`has:<label>`, `lacks:<label>`, `labels-unreadable`): it is checked with the shared
+// `conditionError` grammar (autonomy-policy.mjs) — every label the gate accepts, spaces included, nothing that could become a
+// shell fragment. It travels as JSON argv, never through a shell.
 const ASSUMPTIONS_HEADING_RE = /^##\s+Assumptions\s*$/m
 
 // ── the decision — pure, no I/O ─────────────────────────────────────────────────────────────
@@ -60,9 +59,9 @@ export function decide({ gate, labels, readiness, attended, boundary, source } =
 
 // ── open questions ──────────────────────────────────────────────────────────────────────────
 // `## Open Questions` lists what only a human can decide; an entry is ANSWERED when its list marker is a ticked
-// checkbox (`- [x]`, the answer going under `## Assumptions`) or when it is `none`. Anything else is open and
+// checkbox (`- [x]`, the answer going under `## Assumptions`) or when the WHOLE entry is `none` (case-insensitive, optional trailing period — `- None of the tiers fit…?` is a question). Anything else is open and
 // escalates; a continuation line (indented) belongs to the entry above it. (Mirrored by pair-cli's card-prepare.ts.)
-const ANSWERED_ENTRY_RE = /^\s*(?:[-*]\s+\[[xX]\]|[-*]?\s*none\b)/i
+const ANSWERED_ENTRY_RE = /^\s*(?:[-*]\s+\[[xX]\]|(?:[-*]\s*)?none\s*\.?\s*$)/i
 export function openQuestionOf(body) {
   const m = /^##\s+Open Questions\s*$/m.exec(String(body ?? ''))
   if (!m) return undefined
@@ -278,7 +277,7 @@ export function parseArgs(argv) {
       } catch {
         throw new Error('--conditions must be a JSON array of conditions')
       }
-      if (!Array.isArray(c) || !c.length || c.some(x => typeof x !== 'string' || !CONDITION_RE.test(x))) throw new Error('--conditions must be a non-empty JSON array of `has:`/`lacks:` conditions (any label the gate grammar accepts, spaces included)')
+      if (!Array.isArray(c) || !c.length || c.some(x => conditionError(x) !== null)) throw new Error('--conditions must be a non-empty JSON array of `has:`/`lacks:` conditions (any label the gate grammar accepts, spaces included)')
       out.opts.conditions = c
     }
   }

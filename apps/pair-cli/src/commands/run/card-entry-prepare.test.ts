@@ -659,7 +659,14 @@ describe('review r2: completion carries who refined; needs-review is one rule at
       '## Open Questions\n\n- a\n- b\n',
       '## Open Questions\n\nfree text question?\n',
       `## Open Questions\n\n- ${'q'.repeat(600)}\n`,
+      '## Open Questions\n\n- None of the current tiers fit enterprise users: which tier do they get? — product call\n',
+      '## Open Questions\n\n- NONE.\n',
+      '## Open Questions\n\nNone of the above?\n',
     ]
     for (const body of bodies) expect(openQuestionOf(body)).toBe(scriptOpenQuestionOf(body))
+    // `none` is an answer only as the WHOLE entry: a question that merely starts with it escalates.
+    const q = '- None of the current tiers fit enterprise users: which tier do they get? — product call'
+    expect(openQuestionOf(`## Open Questions\n\n${q}\n`)).toBe(q)
+    expect(openQuestionOf('## Open Questions\n\n- NONE.\n')).toBeUndefined()
   })
 })
