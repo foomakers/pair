@@ -74,7 +74,9 @@ export function decideMerge({ cardTier, currentTier, autoAdvanceTiers, mergeGate
     else if (gate !== 'green') add('gate-unverified', `no green gate evidence (got ${JSON.stringify(gate ?? null)}) — /pair-capability-verify-quality must run first`)
   }
   const first = failed[0]?.code
-  return { mergeAllowed: failed.length === 0, failed, reason: failed[0]?.detail ?? null, parkKind: failed.length === 0 ? null : first === 'tier-not-auto-advance' ? 'awaiting-human' : first === 'escalated' ? 'escalated' : 'halted', ...(conditions ? { conditions } : {}) }
+  // A human approval not yet recorded (missing / pending) as the ONLY failure is a park that awaits a person, not a problem; a rejected one (`failure`) or any other failing condition beside it stays `halted`.
+  const awaitsApproval = failed.length === 1 && first === 'explicit-approval' && ['missing', 'pending'].includes(signals?.explicitApproval)
+  return { mergeAllowed: failed.length === 0, failed, reason: failed[0]?.detail ?? null, parkKind: failed.length === 0 ? null : first === 'tier-not-auto-advance' ? 'awaiting-human' : first === 'escalated' ? 'escalated' : awaitsApproval ? 'awaiting-human' : 'halted', ...(conditions ? { conditions } : {}) }
 }
 
 // ── live reads — through the bound adapters, never a host CLI of our own ─────────────────────

@@ -12,6 +12,7 @@ import {
 import { createPerimeter, describePerimeter, type Perimeter } from './perimeter'
 import { describeMergePosture, describeParallelism } from './automation-policy'
 import { describeApprovalPosture, filterDeliveryFor, selectionDeliveredBy } from './invocation'
+import { readCardLabels } from './cycle-wiring'
 import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
 import { adoptionSelection, resolveRunAutonomy, spawnAutonomyResolver } from './autonomy-policy'
@@ -153,6 +154,36 @@ function report(resolved: ResolvedRun, policyWarnings: readonly string[]): void 
 }
 
 /**
+ * D1: an `--autonomous` `--card` run with NO `--card-tags` reads the card's live labels (an absent flag
+ * is "nobody told us", not "no labels"). An unreadable tracker fails closed with its own message.
+ * `--card-tags` (even empty) stays the explicit override.
+ */
+function withLiveCardTags(
+  config: RunCommandConfig,
+  cwd: string,
+  deps: RunHandlerDependencies,
+): RunCommandConfig {
+  const request = config.dispatch
+  if (!request || config.autonomous !== true || request.tagsObserved !== false) return config
+  const labels = (deps.readCardLabels ?? readCardLabels)(request.card, cwd)
+  if (labels === undefined) {
+    throw new Error(
+      `could not read the labels of card ${request.card} from the tracker (\`gh issue view\` failed), ` +
+        `so its eligibility cannot be decided — failing closed. Check \`gh auth status\`, or pass ` +
+        `--card-tags to state the labels explicitly.`,
+    )
+  }
+  const dispatch = Object.defineProperties(
+    { ...request, tags: labels },
+    {
+      runId: { value: request.runId, enumerable: false },
+      tagsObserved: { value: true, enumerable: false },
+    },
+  )
+  return { ...config, dispatch }
+}
+
+/**
  * US-521 (r0-2): the autonomy policy is resolved and printed ONCE here, before the route is chosen: a
  * malformed one HALTs on every route before any card is touched. Downstream consumers receive this very
  * resolution (through the context and the injected resolver) instead of re-resolving it.
@@ -162,7 +193,8 @@ function resolveEntry(
   fs: FileSystemService,
   cwd: string,
   callerDeps: RunHandlerDependencies,
-): { context: RunContext; deps: RunHandlerDependencies } {
+): { config: RunCommandConfig; context: RunContext; deps: RunHandlerDependencies } {
+  config = withLiveCardTags(config, cwd, callerDeps)
   const base = resolveContext(config, fs, cwd)
   const selection = resolveRunAutonomy({
     resolver: callerDeps.resolveAutonomy ?? spawnAutonomyResolver,
@@ -172,6 +204,7 @@ function resolveEntry(
     cwd,
   })
   return {
+    config,
     context: { ...base, ...(selection && { autonomySelection: selection }) },
     deps: { ...callerDeps, resolveAutonomy: () => selection },
   }
@@ -184,15 +217,15 @@ function resolveEntry(
  * this handler decides HOW to invoke, never WHAT to work on (BR1), and never merges (AC10).
  */
 export async function handleRunCommand(
-  config: RunCommandConfig,
+  rawConfig: RunCommandConfig,
   fs: FileSystemService,
   callerDeps: RunHandlerDependencies = {},
 ): Promise<number> {
   // ABSOLUTE, always: the perimeter's directory is printed as the run's containment boundary and
   // probed against the engine's trust store, and `--cwd .` is neither legible as a boundary nor
   // comparable against an absolute trust-store key.
-  const cwd = resolve(config.cwd ?? fs.currentWorkingDirectory())
-  const { context, deps } = resolveEntry(config, fs, cwd, callerDeps)
+  const cwd = resolve(rawConfig.cwd ?? fs.currentWorkingDirectory())
+  const { config, context, deps } = resolveEntry(rawConfig, fs, cwd, callerDeps)
 
   // US-491: `--root --parallel N` — the fan-out mode, its own entry (the parser guarantees no card).
   if (config.parallel !== undefined) {

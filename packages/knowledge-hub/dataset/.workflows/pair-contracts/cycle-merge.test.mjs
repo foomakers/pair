@@ -120,6 +120,21 @@ for (const [name, patch, code, parkKind] of single)
     assert.ok(d.reason && d.reason === d.failed[0].detail)
   })
 
+// D3 (autonomous run 493): a MISSING/pending human approval is a park that AWAITS A PERSON (exit 0, no on-halt),
+// not a problem; a rejected one (`failure`) or any other failing condition beside it stays `halted`.
+for (const conclusion of ['missing', 'pending'])
+  test(`D3: explicit approval ${conclusion} (only failure) -> awaiting-human`, () => {
+    const d = decideMerge({ ...base, signals: { ...OK, explicitApproval: conclusion } })
+    assert.equal(d.mergeAllowed, false)
+    assert.deepEqual(d.failed.map(f => f.code), ['explicit-approval'])
+    assert.equal(d.parkKind, 'awaiting-human')
+  })
+
+test('D3: explicit approval missing BESIDE another failure (head moved) -> halted', () => {
+  const d = decideMerge({ ...base, signals: { ...OK, headSha: SHA('b'), explicitApproval: 'missing' } })
+  assert.equal(d.parkKind, 'halted')
+})
+
 test('AC2: an explicit approval on a different head than the remote head is not a success for THIS head', () => {
   // the adapter reads the conclusion ON the remote head: a stale approval reads as `missing`.
   const d = decideMerge({ ...base, signals: { ...OK, explicitApproval: 'missing' } })

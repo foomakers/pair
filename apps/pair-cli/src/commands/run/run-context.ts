@@ -97,6 +97,8 @@ export interface RunHandlerDependencies {
   runCardProcess?: CardProcessRunner
   /** US-523: the prepare phase's collaborators (default: the installed `cycle-prepare.mjs` and `gh`). */
   prepare?: PrepareDependencies
+  /** D1: the card's live labels (default: `gh issue view`), read when `--autonomous` has no `--card-tags`. */
+  readCardLabels?: (card: string, cwd: string) => readonly string[] | undefined
 }
 
 export interface ResolvedRun {
