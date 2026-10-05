@@ -167,7 +167,7 @@ The `Next:` line names only steps enabled by the project's [process profile](../
 ## HALT Conditions
 
 - **No Refined stories in backlog** (Step 0) — nothing to break down.
-- **Story not found or not Refined** (Step 0) — must be refined first (suggest `/pair-process-refine-story`).
+- **Story not found or not Refined** (Step 0) — must be refined first (suggest `/pair-process-refine-story`). Exception: a Draft card driven by the autonomous prepare phase under `$approval: auto` (US-523; refinement holds Ready back under `prepare: never|when`) is planned as-is, never a HALT.
 - **PM tool not accessible** — cannot read or update stories.
 - **Developer rejects task list** (Step 3) — must resolve before proceeding.
 - **AC coverage gap** (Step 5) — every AC must be covered by at least one task.

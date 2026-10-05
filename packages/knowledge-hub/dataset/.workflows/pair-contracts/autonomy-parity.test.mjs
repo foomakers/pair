@@ -92,6 +92,7 @@ function batchRun(row, ids, maxParallelism) {
     calls.push(opts.label)
     const l = opts.label ?? ''
     if (l === 'autonomy:resolve' || l.startsWith('decide:') || l.startsWith('merge-check:') || l.startsWith('escalate:')) return runCommand(prompt, p, l.startsWith('merge-check:') && row.labelsAtMerge ? row.labelsAtMerge : row.labels)
+    if (l.startsWith('prepare:phase')) return { outcome: 'nothing-to-prepare' } // US-523 r1-g1: the harness card is Ready
     if (l.startsWith('tier:')) return { tier: tierOf(row.labels) }
     if (l.startsWith('merge:')) return { merged: true, cascaded: true, reason: 'merged' }
     return stageAnswer(prompt, opts)

@@ -18,6 +18,7 @@ import {
   type PrepareGateValue,
   type PrepareReadiness,
 } from './cycle-scripts'
+import { readStateMapping, readyBoardState } from './card-readiness'
 import { mainCheckoutOrCwd, readCardDocumentViaGh, readCardLabels } from './cycle-wiring'
 import type { RunContext } from './run-context'
 
@@ -358,7 +359,7 @@ async function boundaryStop(drive: Drive, boundary: 'B1' | 'B2'): Promise<number
   const d = phase.bridge.prepareDecide({
     gate: phase.gate,
     readiness: 'refined-no-breakdown',
-    attended: false,
+    attended: phase.attended,
     boundary,
     labels: phase.labels(),
     source: phase.source,
@@ -386,7 +387,7 @@ async function refineStep(drive: Drive, mode: 'never' | 'when'): Promise<number 
 }
 
 /** Planning, B2, then the ONE Ready write. 0 = the card is Ready with its breakdown. */
-async function planStep(drive: Drive): Promise<number> {
+async function planStep(drive: Drive, readyState: string): Promise<number> {
   const { entry, phase, routes } = drive
   const planned = await routes.driveSkill(PLAN_SKILL, 'Refined, task breakdown next', {
     approval: 'auto',
@@ -399,6 +400,8 @@ async function planStep(drive: Drive): Promise<number> {
     story: entry.card,
     gate: phase.gate,
     source: phase.source,
+    state: readyState,
+    attended: phase.attended,
   })
   if (done.completed) {
     console.log(
@@ -425,9 +428,15 @@ async function runAutonomous(
 ): Promise<number> {
   const { entry, phase, routes } = drive
   const mode = phase.gate.mode as 'never' | 'when'
+  let readyState: string
+  try {
+    readyState = readyBoardState(readStateMapping(entry.fs, entry.cwd))
+  } catch (error) {
+    return await fail(phase, (error as Error).message)
+  }
   const code = await routes.underLock(PREPARE_WORKFLOW, async () => {
     const stopped = readiness === 'draft' ? await refineStep(drive, mode) : undefined
-    return stopped ?? (await planStep(drive))
+    return stopped ?? (await planStep(drive, readyState))
   })
   if (code !== 0) return code
   // AC8: `until: ready` stops right after the phase; otherwise the card continues into the cycle.

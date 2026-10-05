@@ -309,6 +309,8 @@ export interface PrepareEscalateOptions extends PrepareWriterOptions {
 export interface PrepareCompleteOptions extends PrepareWriterOptions {
   /** The board's own name for the Ready macrostate (default `Ready`). */
   readonly state?: string
+  /** The entry's real attendance (default false): lifts only the `needs-review` skip at the B2 re-check. */
+  readonly attended?: boolean
 }
 export interface PrepareEscalation {
   readonly outcome: 'escalated'
@@ -504,6 +506,17 @@ function autonomyMethods(
   }
 }
 
+const completeArgs = (o: PrepareCompleteOptions): ScriptArgs => [
+  ['dir', o.dir],
+  ['story', o.story],
+  ['gate', JSON.stringify(o.gate)],
+  ['source', o.source],
+  ...optional([
+    ['state', o.state],
+    ['attended', o.attended === undefined ? undefined : String(o.attended)],
+  ]),
+]
+
 /** US-523: `cycle-prepare.mjs decide|escalate|complete` as typed calls — the rule stays in the script. */
 function prepareMethods(
   runScript: (script: string, cmd: string, args: ScriptArgs) => unknown,
@@ -548,8 +561,7 @@ function prepareMethods(
           ['assumptionsFile', o.assumptionsFile],
         ]),
       ]) as PrepareEscalation,
-    prepareComplete: o =>
-      run('complete', [...writer(o), ...optional([['state', o.state]])]) as PrepareCompletion,
+    prepareComplete: o => run('complete', completeArgs(o)) as PrepareCompletion,
   }
 }
 

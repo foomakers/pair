@@ -15,7 +15,7 @@
 //            --attended <true|false> --boundary <B0|B1|B2> [--labels '<JSON array>'] [--source <s>]
 //   escalate --dir <run dir> --story <n> --boundary <B0|B1|B2> --gate '<JSON>' --source <s>
 //            (--conditions '<JSON array>' | --openQuestion <text>) [--assumptionsFile <path>] [--repo <o/n>]
-//   complete --dir <run dir> --story <n> --gate '<JSON>' --source <s> [--state <board Ready state>] [--repo <o/n>]
+//   complete --dir <run dir> --story <n> --gate '<JSON>' --source <s> [--state <board Ready state>] [--attended <true|false>] [--repo <o/n>]
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { parseGate, escalationConditions, gateToString, GATE_MODES } from './autonomy-policy.mjs'
@@ -26,6 +26,8 @@ export const READINESS = ['draft', 'refined-no-breakdown', 'ready']
 export const NEEDS_REVIEW = 'needs-review'
 export const ESCALATION_MARKER = story => `<!-- pair:prepare-escalation #${story} -->`
 export const PROVENANCE_RE = /Prepared autonomously under prepare: .+ \(.+\)/
+const BREAKDOWN_HEADING_RE = /^##\s+Task Breakdown\s*$/m
+const CHECKLIST_ITEM_RE = /^\s*[-*]\s+\[[ xX]\]\s+\S/m
 const ASSUMPTIONS_HEADING_RE = /^##\s+Assumptions\s*$/m
 
 // ── the decision — pure, no I/O ─────────────────────────────────────────────────────────────
@@ -74,7 +76,7 @@ export function escalationBody({ story, boundary, gate, source, conditions, open
     'Assumptions recorded so far:',
     assumptions?.trim() ? assumptions.trim() : '(none recorded)',
     '',
-    `Whatever refinement already wrote stays in the card body for review. Remove the \`${NEEDS_REVIEW}\` label (or refine the card attended) to make it workable again.`,
+    `Whatever refinement already wrote stays in the card body for review. ${openQuestion ? `Answer or remove the entries under \`## Open Questions\` in the card body (an unanswered question escalates again), then remove the \`${NEEDS_REVIEW}\` label` : `Remove the \`${NEEDS_REVIEW}\` label`} (or refine the card attended) to make it workable again.`,
   ].join('\n')
 }
 
@@ -110,11 +112,19 @@ export function assumptionsSection(body) {
   return (next ? rest.slice(0, next.index) : rest).trim()
 }
 
-export function complete({ hosts, story, repo, gate, source, state = 'Ready' }) {
+export function hasTaskBreakdown(body) {
+  const m = BREAKDOWN_HEADING_RE.exec(String(body ?? ''))
+  if (!m) return false
+  const rest = String(body).slice(m.index + m[0].length)
+  const next = /^##\s/m.exec(rest)
+  return CHECKLIST_ITEM_RE.test(next ? rest.slice(0, next.index) : rest)
+}
+
+export function complete({ hosts, story, repo, gate, source, state = 'Ready', attended = false }) {
   const labels = readLabels({ pm: hosts.pm, story, repo })
   let d
   try {
-    d = decide({ gate, labels: labels ?? undefined, readiness: 'refined-no-breakdown', attended: false, boundary: 'B2', source })
+    d = decide({ gate, labels: labels ?? undefined, readiness: 'refined-no-breakdown', attended: attended === true, boundary: 'B2', source })
   } catch (e) {
     return { completed: false, reason: `invalid-input: ${e.message}` }
   }
@@ -129,6 +139,7 @@ export function complete({ hosts, story, repo, gate, source, state = 'Ready' }) 
   } catch (e) {
     return { completed: false, reason: `card-unreadable: ${e.message}` }
   }
+  if (!hasTaskBreakdown(body)) return { completed: false, reason: 'breakdown-missing: the body has no `## Task Breakdown` section with at least one checklist item' }
   const section = assumptionsSection(body)
   if (!section) return { completed: false, reason: 'assumptions-missing: the body has no non-empty `## Assumptions` section' }
   if (!PROVENANCE_RE.test(body)) return { completed: false, reason: 'provenance-missing: the body has no `Prepared autonomously under prepare: <value> (<source>)` Notes line' }
@@ -141,7 +152,7 @@ export function complete({ hosts, story, repo, gate, source, state = 'Ready' }) 
 const FLAGS = {
   decide: ['gate', 'labels', 'readiness', 'attended', 'boundary', 'source'],
   escalate: ['dir', 'story', 'boundary', 'gate', 'source', 'conditions', 'openQuestion', 'assumptionsFile', 'repo'],
-  complete: ['dir', 'story', 'gate', 'source', 'state', 'repo'],
+  complete: ['dir', 'story', 'gate', 'source', 'state', 'attended', 'repo'],
 }
 const gateOf = raw => {
   let g
@@ -188,6 +199,10 @@ export function parseArgs(argv) {
     }
     return out
   }
+  if (cmd === 'complete' && opts.attended !== undefined) {
+    if (!['true', 'false'].includes(opts.attended)) throw new Error('--attended must be true | false')
+    out.opts.attended = opts.attended === 'true'
+  }
   need('dir', 'story')
   if (!/^\d+$/.test(opts.story)) throw new Error(`--story must be a number, got ${JSON.stringify(opts.story)}`)
   out.opts.story = Number(opts.story)
@@ -229,7 +244,7 @@ if (isMain()) {
     const out =
       cmd === 'escalate'
         ? escalate({ hosts, story: opts.story, repo: opts.repo, boundary: opts.boundary, gate: gateToString(opts.gate), source: opts.source, conditions: opts.conditions, openQuestion: opts.openQuestion, assumptions: opts.assumptionsFile && existsSync(opts.assumptionsFile) ? readFileSync(opts.assumptionsFile, 'utf8') : '' })
-        : complete({ hosts, story: opts.story, repo: opts.repo, gate: opts.gate, source: opts.source, ...(opts.state ? { state: opts.state } : {}) })
+        : complete({ hosts, story: opts.story, repo: opts.repo, gate: opts.gate, source: opts.source, ...(opts.state ? { state: opts.state } : {}), ...(opts.attended !== undefined ? { attended: opts.attended } : {}) })
     process.stdout.write(JSON.stringify(out) + '\n')
     process.exit(0)
   } catch (e) {
