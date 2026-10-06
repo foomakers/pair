@@ -74,6 +74,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
 1. **Act**: Render the infrastructure.md content — the ready-to-write body for the target file:
    - Concise, prescriptive statements
    - Scope to the core infrastructure sections so the caller's write preserves the observability section (owned by /pair-capability-assess-observability)
+   - **Optional**: when the project has both a deploy source and a billing account, propose a `## Cost & Billing Telemetry` declaration — shape and keys in the [cost & billing telemetry guideline](../../../.pair/knowledge/guidelines/quality-assurance/quality-monitoring/cost-billing-telemetry.md). Pointers only, never a credential. Never required: absent or incomplete is the supported default (`not available`)
 2. **Verify**: The rendered `content` and its `target` are ready to emit.
 
 ### Step 5: Emit Proposal
@@ -117,6 +118,7 @@ When invoked **independently**: the human (or agent) persists the proposal by co
 - **Project doesn't need infrastructure** (e.g. pure library, CLI tool): Render a minimal infrastructure.md noting CI/CD only, no cloud deployment, for the caller to persist.
 - **Adoption file partially exists**: Render content that fills gaps; the caller's write preserves existing content.
 - **Observability section exists**: Leave it untouched — owned by /pair-capability-assess-observability. Scope the rendered content to core sections.
+- **Cost & Billing Telemetry section exists**: Leave it untouched — project-owned declaration read by `/pair-capability-assess-cost` report mode; propose changes only when asked. Absent: do not add it unprompted.
 
 ## Graceful Degradation
 

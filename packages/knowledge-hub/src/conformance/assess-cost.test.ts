@@ -131,6 +131,10 @@ function section(content: string, start: string, end: string): string {
 const REPORT_MODE_HEADING = '## Report Mode (period cost monitoring)'
 const OUTPUT_FORMAT_HEADING = '## Output Format'
 const COMPOSITION_HEADING = '## Composition Interface'
+const COST_BILLING_TELEMETRY_GUIDELINE =
+  'guidelines/quality-assurance/quality-monitoring/cost-billing-telemetry.md'
+// Provider names the skill must never carry in the deploy-match path (R2.13): they live in the guideline.
+const PROVIDER_NAMES = /github|aws|cost explorer|deployments api|azure|gcp|stripe/i
 const STEP_1_HEADING = '### Step 1: Detect Mode'
 const STEP_2_HEADING = '### Step 2: Resolve the Rule Set'
 
@@ -326,12 +330,52 @@ describe('assess-cost.md — report mode (#281)', () => {
       expect(lower).toMatch(/deploy-match[\s\S]{0,240}not available/)
     })
 
-    it(`${label} makes the telemetry-present deploy-match branch executable or explicitly deferred`, () => {
-      // Named declaration + a definition of "observed cost movement", plus the status
-      // of the positive path — otherwise it reads as a promise the spec cannot keep.
+    it(`${label} makes the telemetry-present deploy-match branch executable, not deferred (#399)`, () => {
       expect(steps).toContain('## Cost & Billing Telemetry')
       expect(steps).toContain('observed cost movement')
-      expect(steps.toLowerCase()).toMatch(/deferred/)
+      const deploy = section(steps, '**Deploy match**', '### Step 10')
+      expect(deploy).not.toBe('')
+      expect(deploy.toLowerCase()).not.toMatch(/deferred|#399|no in-tree telemetry integration/)
+      expect(steps.toLowerCase()).not.toMatch(/matched path (is )?deferred/)
+      expect(output).not.toMatch(/matched path deferred/)
+    })
+
+    it(`${label} resolves deploy-match through the KB telemetry guideline, never inline provider APIs (R2.13)`, () => {
+      const deploy = section(steps, '**Deploy match**', '### Step 10')
+      expect(deploy).toContain(COST_BILLING_TELEMETRY_GUIDELINE)
+      expect(deploy).not.toMatch(PROVIDER_NAMES)
+      expect(output).not.toMatch(PROVIDER_NAMES)
+    })
+
+    it(`${label} asserts both deploy-match branches: matched and degraded (AC11)`, () => {
+      const deploy = section(steps, '**Deploy match**', '### Step 10').toLowerCase()
+      // matched
+      expect(deploy).toMatch(/matched[\s\S]{0,400}observed cost movement/)
+      expect(deploy).toMatch(/equal-length/)
+      // degraded, permanent
+      expect(deploy).toMatch(/absent[^.]*incomplete[\s\S]{0,200}not available/)
+      expect(deploy).toMatch(/permanent|supported default/)
+    })
+
+    it(`${label} gives each unresolved deploy-match its own distinct not-available reason (AC7, AC8)`, () => {
+      const deploy = section(steps, '**Deploy match**', '### Step 10')
+      expect(deploy).toContain('not available — no deploy telemetry declared')
+      expect(deploy).toContain('not available — no deployment found')
+      expect(deploy).toContain('not available — billing window not yet consolidated')
+      expect(deploy).toMatch(/not available — [^`]*not attributable/)
+      expect(deploy.toLowerCase()).toMatch(/never a partial delta|no partial delta/)
+    })
+
+    it(`${label} resolves several deployments of a commit by the guideline's first-shipped rule (AC9)`, () => {
+      const deploy = section(steps, '**Deploy match**', '### Step 10').toLowerCase()
+      expect(deploy).toMatch(/first deployment[\s\S]{0,160}declared environment/)
+    })
+
+    it(`${label} keeps deploy-match advisory and credential-free (AC6, AC10)`, () => {
+      const deploy = section(steps, '**Deploy match**', '### Step 10').toLowerCase()
+      expect(deploy).toMatch(/never blocks/)
+      expect(deploy).toMatch(/minimum read-only/)
+      expect(deploy).toMatch(/half-resolved|one half/)
     })
 
     it(`${label} presents the panel inline when the reports area is not writable`, () => {

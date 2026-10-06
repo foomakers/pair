@@ -64,6 +64,8 @@ Generate five adoption documents, one at a time with review cycles.
 
 **Document order**: architecture → tech-stack → infrastructure → ux-ui → way-of-working
 
+**Optional infrastructure declaration**: `## Cost & Billing Telemetry` (deploy source + billing metric pointers, never credentials) enables deploy-match in `/assess-cost` report mode. Not required — without it the row reads `not available`, the supported default. See [cost-billing-telemetry.md](../guidelines/quality-assurance/quality-monitoring/cost-billing-telemetry.md).
+
 For each document:
 
 1. Present key decisions with rationale
