@@ -927,6 +927,7 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/developer-journey/strategic-planning',
     '/docs/developer-journey/iteration',
     '/docs/developer-journey/execution',
+    '/docs/developer-journey/tag-driven-automation',
     '/docs/concepts/ai-assisted-sdlc',
     '/docs/concepts/knowledge-base',
     '/docs/concepts/skills',

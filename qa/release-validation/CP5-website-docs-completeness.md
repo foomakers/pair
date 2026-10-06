@@ -53,6 +53,7 @@
 - `$BASE_URL/docs/developer-journey/strategic-planning`
 - `$BASE_URL/docs/developer-journey/iteration`
 - `$BASE_URL/docs/developer-journey/execution`
+- `$BASE_URL/docs/developer-journey/tag-driven-automation`
 
 **Customization** (7 pages):
 
