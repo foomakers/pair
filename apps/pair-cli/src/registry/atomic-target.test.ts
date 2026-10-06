@@ -421,3 +421,19 @@ describe('real filesystem (AC7)', () => {
     }
   })
 })
+
+describe.each(['darwin', 'linux'] as const)('platform %s', platform => {
+  it('swaps a target in place and leaves no residue (platform-injected, POSIX rename semantics)', async () => {
+    const original = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: platform })
+    try {
+      const fs = createTestFs({}, { '/p/t/a.md': 'old' }, cwd)
+      await writeDirAtomically('/p/t', fs, async stage => fs.writeFile(`${stage}/a.md`, 'new'))
+      expect(fs.getContent('/p/t/a.md')).toBe('new')
+      const names = (await fs.readdir('/p')).map(e => e.name)
+      expect(names.filter(n => n.includes('.tmp-') || n.includes('.bak'))).toEqual([])
+    } finally {
+      Object.defineProperty(process, 'platform', original)
+    }
+  })
+})
