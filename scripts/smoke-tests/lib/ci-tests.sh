@@ -48,6 +48,7 @@ CI_TESTS=(
   "format-ignore-delegation.sh"
   "batch-engine-install.sh"
   "registry-exclude.sh"
+  "concurrent-install.sh"
   "no-dataset-in-artifacts.sh"
   "github-dispatch-adapter.sh"
   "run-card.sh"

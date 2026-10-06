@@ -121,6 +121,12 @@ export class InMemoryFileSystemService implements FileSystemService {
     return write.symlink(this.state, target, path)
   }
 
+  async readlink(path: string): Promise<string> {
+    const target = this.state.symlinks.get(this.state.resolvePath(path))
+    if (target === undefined) throw new Error(`Not a symlink: ${path}`)
+    return target
+  }
+
   getSymlinks(): Map<string, string> {
     return new Map(this.state.symlinks)
   }
