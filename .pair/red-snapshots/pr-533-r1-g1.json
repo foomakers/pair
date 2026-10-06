@@ -1,0 +1,76 @@
+{
+  "$meta": {
+    "pr": "533",
+    "phase": "r1-g1",
+    "base": "56e5651fe4ed49935a69e4aee7828bdb92097605",
+    "trailer": "Pair-RED-Snapshot: pr=533; phase=r1-g1; base=56e5651fe4ed49935a69e4aee7828bdb92097605; manifest=.pair/red-snapshots/pr-533-r1-g1.json",
+    "artifacts": [
+      "apps/website/lib/ci-docs-staleness-env.test.ts"
+    ]
+  },
+  "mode": "remediation",
+  "inputHead": "56e5651fe4ed49935a69e4aee7828bdb92097605",
+  "sourceOfTruth": ".github/workflows/ci.yml",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": ".github/workflows/ci.yml step 'Run docs-staleness check' env",
+      "inputs": [
+        "step env"
+      ],
+      "representations": [
+        "ci.yml"
+      ],
+      "consumers": [
+        "queryIssueState gh adapter"
+      ],
+      "classes": [
+        "GH_TOKEN set from github.token",
+        "GH_TOKEN absent"
+      ],
+      "interactions": []
+    }
+  ],
+  "fixScope": {
+    "owner": "ci-workflow",
+    "mode": "behavioral",
+    "allowedPaths": [
+      ".github/workflows/ci.yml"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "step env lacks GH_TOKEN",
+      "oracle": "apps/website/lib/ci-docs-staleness-env.test.ts > passes GH_TOKEN from github.token",
+      "expected": "step env has GH_TOKEN: ${{ github.token }}",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "step still runs pnpm docs:staleness",
+      "oracle": "apps/website/lib/ci-docs-staleness-env.test.ts > control: the step still runs pnpm docs:staleness",
+      "expected": "run: pnpm docs:staleness present",
+      "covers": [
+        "r0-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/website/lib/ci-docs-staleness-env.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:971f00c982c16afb52d120a15eb756d449e15c9029b6b30382942f1ba323e393",
+      "command": "pnpm --filter @pair/website exec vitest run lib/ci-docs-staleness-env.test.ts",
+      "observed": "1 failed | 1 passed; AssertionError: step block has no env GH_TOKEN"
+    }
+  ],
+  "testExempt": false
+}
