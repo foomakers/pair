@@ -1002,6 +1002,90 @@ export function checkEntrypointDepth(skillsDir: string, markdownFiles: string[])
   return errors
 }
 
+// --- Skill-local scripts ---
+
+const SCRIPT_LINK = /^(?:\.\/)?scripts\/[^#?]+/
+
+/** Every file under `dir`, recursive, as posix paths relative to `dir`. */
+function walkFiles(dir: string, prefix = ''): string[] {
+  const out: string[] = []
+  for (const e of readdirSync(join(dir, prefix), { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${e.name}` : e.name
+    if (e.isDirectory()) out.push(...walkFiles(dir, rel))
+    else out.push(rel)
+  }
+  return out
+}
+
+function checkLinkedScripts(skillFile: string, skillRel: string): string[] {
+  const errors: string[] = []
+  const body = parseFrontmatter(readFileSync(skillFile, 'utf-8'))?.body ?? ''
+  for (const target of extractLinkTargets(body)) {
+    if (!SCRIPT_LINK.test(target)) continue
+    const scriptRel = target.replace(/^\.\//, '').split(/[#?]/)[0]!
+    if (!existsSync(join(dirname(skillFile), scriptRel))) {
+      errors.push(
+        `${skillRel}: linked script "${scriptRel}" is missing from the skill's scripts/ directory`,
+      )
+    }
+  }
+  return errors
+}
+
+/** One dataset script against its installed twin: `undefined` when byte-identical. */
+function compareScriptTwin(datasetFile: string, twin: string, labels: string): string | undefined {
+  const [datasetPath, twinPath] = labels.split('\n') as [string, string]
+  if (!existsSync(twin)) {
+    return `${datasetPath}: installed twin missing — ${twinPath} (run \`pair update\`)`
+  }
+  try {
+    if (readFileSync(datasetFile).equals(readFileSync(twin))) return undefined
+    return `${datasetPath}: installed twin drifted — ${twinPath} differs from the dataset copy`
+  } catch (err) {
+    return `${datasetPath}: unreadable, cannot compare with ${twinPath} (${(err as Error).message})`
+  }
+}
+
+function checkScriptTwins(
+  skillDir: string,
+  skillRel: string,
+  installedSkillsDir: string,
+): string[] {
+  const scriptsDir = join(skillDir, 'scripts')
+  if (!existsSync(scriptsDir)) return []
+  const datasetBase = dirname(skillRel)
+  const installed = installedSkillDir(datasetBase)
+  const errors: string[] = []
+  for (const file of walkFiles(scriptsDir)) {
+    const twinPath = `${installed}/scripts/${file}`
+    const error = compareScriptTwin(
+      join(scriptsDir, ...file.split('/')),
+      join(installedSkillsDir, ...twinPath.split('/')),
+      `${datasetBase}/scripts/${file}\n${twinPath}`,
+    )
+    if (error) errors.push(error)
+  }
+  return errors
+}
+
+/**
+ * A skill is portable as one folder: every `scripts/` file its `SKILL.md` links
+ * exists beside it, and every dataset skill-local script has a byte-identical
+ * installed twin. The dataset is canonical; drift is reported, never repaired.
+ * `installedSkillsDir` undefined skips the twin half (no mirror to bind).
+ */
+export function checkSkillLocalScripts(skillsDir: string, installedSkillsDir?: string): string[] {
+  const errors: string[] = []
+  for (const skillFile of collectSkillFiles(skillsDir)) {
+    const skillRel = relative(skillsDir, skillFile).split(sep).join('/')
+    errors.push(...checkLinkedScripts(skillFile, skillRel))
+    if (installedSkillsDir !== undefined) {
+      errors.push(...checkScriptTwins(dirname(skillFile), skillRel, installedSkillsDir))
+    }
+  }
+  return errors
+}
+
 // --- Process-step catalogue and profiles (#251) ---
 
 /**
@@ -2856,6 +2940,11 @@ export function runChecks(skillsDir: string): RunResult {
   errors.push(...checkEntrypointDepth(skillsDir, collectSkillMarkdownFiles(skillsDir)))
   errors.push(...checkApprovalSignalInSubDocs(skillsDir, collectSkillMarkdownFiles(skillsDir)))
 
+  const mirrorSkillsDir = join(resolve(skillsDir, '..', '..'), MIRROR_SKILLS_DIR)
+  errors.push(
+    ...checkSkillLocalScripts(skillsDir, existsSync(mirrorSkillsDir) ? mirrorSkillsDir : undefined),
+  )
+
   const nextFile = files.find(f => basename(dirname(f)) === 'next')
   if (nextFile) {
     errors.push(...checkCatalogCounts(readFileSync(nextFile, 'utf-8'), files.length))
@@ -2886,7 +2975,7 @@ if (require.main === module) {
 
   if (errors.length === 0) {
     console.log(
-      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal, process-step catalogue + markers (dataset and mirror), profile schema, both way-of-working files resolved as DECLARATIONS (shipped adoption template, this repo's own) + every shipped worked example (KB schema, adoption template, docs site, both way-of-working files), manual-path entrypoint (dataset AGENTS.md + the generated root AGENTS.md/CLAUDE.md), installed KB copies of the catalogue and the profiles incl. their worked examples, installed gate convention)`,
+      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, skill-local scripts shipped and mirrored, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal, process-step catalogue + markers (dataset and mirror), profile schema, both way-of-working files resolved as DECLARATIONS (shipped adoption template, this repo's own) + every shipped worked example (KB schema, adoption template, docs site, both way-of-working files), manual-path entrypoint (dataset AGENTS.md + the generated root AGENTS.md/CLAUDE.md), installed KB copies of the catalogue and the profiles incl. their worked examples, installed gate convention)`,
     )
     process.exit(0)
   } else {
