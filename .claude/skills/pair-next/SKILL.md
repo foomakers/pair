@@ -1,7 +1,7 @@
 ---
 name: pair-next
-description: "Determines the most relevant next action for your project by reading adoption files and PM tool state. Suggests which skill to invoke next. Use at the start of a session, when switching tasks, or whenever you need guidance on what to work on."
-version: 0.6.0
+description: "Determines the most relevant next action for your project by reading adoption files and PM tool state. Suggests which skill to invoke next. Use at the start of a session, when switching tasks, or whenever you need guidance on what to work on. With --mode analysis|implementation|review it runs that macro-phase end to end."
+version: 0.7.0
 author: Foomakers
 ---
 
@@ -11,7 +11,7 @@ Analyze project state and recommend the single most relevant next skill to invok
 
 ## Arguments (optional)
 
-`/pair-next` accepts **optional** arguments (`--root`, `--filter`, `--assignee`, `--status`) that SCOPE which backlog items it may select. With neither, it behaves exactly as before — the whole backlog is in scope. This scoping is what makes `/pair-next` the parametrizable atom of automation.
+`/pair-next` accepts **optional** arguments (`--root`, `--filter`, `--assignee`, `--status`) that SCOPE which backlog items it may select, and an optional `--mode` that runs one macro-phase end to end. With none, it behaves exactly as before — the whole backlog is in scope and it only recommends. This scoping is what makes `/pair-next` the parametrizable atom of automation.
 
 | Argument   | Value                                          | Effect                                                          |
 | ---------- | ---------------------------------------------- | -------------------------------------------------------------- |
@@ -19,8 +19,9 @@ Analyze project state and recommend the single most relevant next skill to invok
 | `--filter` | one label, or a comma-separated any-of list (e.g. `ui`, `risk:red`, `risk:green,risk:yellow`) | Restrict selection to issues carrying ANY listed label (exact string equality). |
 | `--assignee` | `@me` or a login                             | Restrict selection to issues assigned to that user (`@me` = the authenticated code-host user, resolved through the host adapter; any other value is an opaque login). |
 | `--status` | a comma-separated list of canonical macrostates (e.g. `Draft,Ready`) | Restrict selection to issues in ANY listed macrostate, resolved through the state mapping. Default: all open. |
+| `--mode` | `analysis`, `implementation` or `review` | Run that macro-phase: restrict the cascade to the mode's rows and execute the selected steps until the phase exit (see below). Default: none — plain `/pair-next` only recommends. |
 
-All may be combined — the effective scope is the **intersection**: `subtree ∩ matching tags ∩ assignee ∩ macrostates` (see Step 0). These are the same names the Autonomy policy uses (`filter`, `assignee`, `status`, `root`). Precedence: argument > adoption (`## Autonomy`, then translated legacy sections) > KB default — every effective value is printed with its source. Selection stays here: `/pair-next` has no loop state and no `--until` (ADR-017 §1 as amended by ADR-027).
+All may be combined — the effective scope is the **intersection**: `subtree ∩ matching tags ∩ assignee ∩ macrostates` (see Step 0); `--mode` narrows which cascade rows may fire inside that scope. These are the same names the Autonomy policy uses (`filter`, `assignee`, `status`, `root`). Precedence: argument > adoption (`## Autonomy`, then translated legacy sections) > KB default — every effective value is printed with its source. Selection stays here: `/pair-next` has no loop state and no `--until` (ADR-017 §1 as amended by ADR-027).
 
 ### `--root <issue-id>` — subtree scope
 
@@ -35,9 +36,22 @@ The root issue is itself a **first-class member** of the candidate set, alongsid
 
 Keep only candidate issues that carry ANY of the given labels. `--filter` takes **one label or a comma-separated any-of list** (`a,b` = carries `a` OR `b`) — there is no AND/OR/NOT grammar, and the comma is only a list separator (an AND is a classification tag that synthesises it, upstream); each element is matched literally against each issue's labels. **A single-label `--filter` behaves exactly as before.** An empty element, a duplicate, or an element that could become a command fragment (backtick, `$(`, control character, over 50 characters) **HALTs** naming the element. The tag is interpreted **GENERICALLY: `/pair-next` assigns NO meaning to any tag value.** `risk:red` is matched by exactly the same string-equality predicate as `team:ui` — there is no classification, tiering, or severity logic anywhere in this skill (D18). A namespaced-looking label such as `tag:ui` carries **no** namespace semantics either: the whole string (colon included) is one opaque label, matched entire — so `--filter tag:ui` selects issues labelled literally `tag:ui`, exactly as `--filter ui` selects issues labelled `ui`. A filter is a plain PM-tool label query, nothing more.
 
+### `--mode <analysis|implementation|review>` — macro-phase facade
+
+A **macro-phase mode** runs one branch of the process end to end behind a single name, for a user who does not want to know the granular steps. It is a **facade over this cascade** — no new skill, no new process step (D24), no duplicated logic: the granular skills behave exactly as when invoked directly, and the mode ↔ step mapping (rows, steps, exit conditions) lives in one place, the [macro-phase modes guideline](../../../.pair/knowledge/guidelines/technical-standards/ai-development/macro-phase-modes.md), never restated here. Everything below is the **mechanism**; the guideline is the **data**.
+
+- **A row filter, not loop state**: `--mode` restricts the Step 2–3 rows the cascade may select to the mode's rows. It composes with every other argument by the same intersection and with the process profile (Step 0.5 — a disabled step's row is **skipped** and the enabled steps still chain across the gap). It is read here, not by `autonomy-policy.mjs`, and adds no loop state to the selector (ADR-017 §1 stands).
+- **It runs, then re-selects**: where plain `/pair-next` recommends and asks, a mode **runs** the selected step by invoking the granular skill for the work unit, then re-runs Step 0 against the current board state (never a cached selection) — until the guideline's phase exit holds, a step HALTs, or the same step would run again on an unchanged unit. The invoked skill keeps its own approval gates; invoking the mode is not an approval for them.
+- **One work unit per invocation**: the first item (or planning gap) the mode's rows select. When more units remain in scope, say so and point to `/pair-loop` (many cards) — a mode never iterates several cards in one context (ADR-017 §3).
+- **Macrostates and DoR stay in force**: a mode selects through the same row predicates — macrostate, checkpoint, task breakdown, Definition of Ready / Readiness Fallback — and never moves an item past a gate.
+- **Wrong context**: when the mode's rows select nothing, report what is missing, run the unmoded cascade once and **suggest the mode** whose rows match the action it would have proposed (clean exit, not an error). Rows 12–16 are never surfaced in a mode.
+- **A step HALT surfaces as-is**: named step, original message; the mode ends and never retries, reinterprets or continues. Profile and scope HALTs surface the same way.
+- **Unknown mode** → **HALT** listing `analysis`, `implementation`, `review`; never a quiet fallback to plain `/pair-next`.
+- **Narration at phase level**: describe what the phase does to the unit; name granular steps only when the user asks (and always when one HALTs).
+
 ### Re-evaluation — selection is never cached
 
-The scope is **stateless across steps**. Every run — and every step of a multi-step run — re-queries the PM tool and **re-evaluates** `--root` and `--filter` against the **current** board state. If an issue's tags change between steps (e.g. a review raises `risk:yellow` → `risk:red`), the next step's selection reflects the change immediately. `/pair-next` never reuses a selection computed in a previous step.
+The scope is **stateless across steps**. Every run — and every step of a mode session — re-queries the PM tool and **re-evaluates** `--root` and `--filter` against the **current** board state. If an issue's tags change between steps (e.g. a review raises `risk:yellow` → `risk:red`), the next step's selection reflects the change immediately. `/pair-next` never reuses a selection computed in a previous step.
 
 ## Skill Catalog (51 skills)
 
@@ -184,6 +198,14 @@ Row 7 and rows 12–16 propose **capabilities that are not steps** ([why](../../
 
 Under `poc` this is what makes the guarantee hold end to end: rows 3 and 4 are dropped, and no DDD-mapping step is reachable from `/pair-next` at all.
 
+### Step 0.6: Resolve the Mode (`--mode`)
+
+Skip when no `--mode` is given — the cascade runs unchanged and recommends. Otherwise, on **every** invocation, never cached:
+
+1. **Validate**: a value other than `analysis`, `implementation`, `review` → **HALT** (unknown mode), listing the three.
+2. **Read the row set** for the mode from the [macro-phase modes guideline](../../../.pair/knowledge/guidelines/technical-standards/ai-development/macro-phase-modes.md) → `## The Mode Table`. A missing or unreadable table → **HALT** naming the file; never fall back to plain `/pair-next`.
+3. **Carry the row set into Steps 2–5**: a row outside it is skipped, exactly like a disabled step. Evaluation stays top-to-bottom, first match wins; the scope (Step 0) and the profile (Step 0.5) apply first.
+
 ### Step 1: Read Adoption Files
 
 Read the following files and classify each as **populated** or **template**:
@@ -269,6 +291,7 @@ If no condition matched in Steps 2-4:
 1. **Never name a disabled step.** Drop it from the sentence. If both named steps are disabled, the sentence is empty — go to rule 2.
 2. **Never name a step whose input cannot exist.** `/pair-process-plan-stories` needs epics. On a backlog with no epics, rows 3–4 normally fire first; a profile may disable them, and then nothing upstream covers the empty backlog. In that case name the enabled step that **produces** a backlog — `/pair-process-brainstorm`, which has no cascade row and is otherwise never proposed anywhere.
 3. If neither rule leaves a candidate, **report the state and propose no skill**. An empty backlog under a profile with no reachable entry point is a configuration to fix, not a step to run.
+4. **Under `--mode`** the sentence names only steps of the mode (its Steps and Fallback-only lists in the guideline) — a mode with nothing to run is a wrong-context report (Step 6), not a fallback to another mode's steps.
 
 | Profile   | Backlog                | Fallback names                                                                       |
 | --------- | ---------------------- | -------------------------------------------------------------------------------------- |
@@ -276,6 +299,16 @@ If no condition matched in Steps 2-4:
 | `poc`     | epics exist            | `/pair-process-plan-stories` + `/pair-process-review`                                                            |
 | `poc`     | no epics               | `/pair-process-brainstorm` — rows 3–4 are disabled and row 5 needs epics, so it is the only enabled producer of the input `/pair-process-plan-stories` requires |
 | `custom`  | any                    | rules 1–3 above, in order                                                              |
+
+### Step 6: Run the Phase (only with `--mode`)
+
+Plain `/pair-next` stops after Step 5 with a recommendation. With `--mode`:
+
+1. **Pick the work unit** from the first match (Steps 2–4, restricted to the mode's rows). No match → **wrong context**: report what is missing and suggest the mode whose rows match the answer of the cascade run once without the mode filter; when that proposes nothing either, report as the plain run would.
+2. **Invoke the granular skill** the row names for the unit, with the arguments a user would give it. Its output, gates and HALTs belong to it.
+3. **Re-evaluate** — Step 0 onward, same scope, same mode, current board state — and continue from item 2 with the next match for the same unit.
+4. **Stop** when the guideline's exit holds for the unit, when a step HALTs (surface it as-is), or when the selected step would repeat on an unchanged unit.
+5. **Report at phase level**: the unit, what the phase did to it, why it stopped, and the mode that continues the process; list remaining units in scope without running them.
 
 ## Output Format
 
@@ -290,6 +323,7 @@ PROJECT STATE:
 ├── PM Tool: [tool name | not configured]
 ├── Scope: [full backlog | root #ID (subtree) | filter <tag[,tag…]> | assignee <login> | status <macrostates> | any intersection of them], each value with its source (argument | adoption | default)
 ├── Profile: [default (no section) | poc | custom — N/M steps enabled]
+├── Mode: [none (recommend only) | analysis | implementation | review — from `--mode`]
 └── Backlog: [summary of current items — within scope]
 
 RECOMMENDATION: /skill-name
@@ -299,6 +333,16 @@ REASON: [one-line explanation]
 When `--root`/`--filter` yield no work, replace the recommendation with the corresponding Step 0 outcome (`root <id> not found` → HALT; `root <id> is Done` → exit; `no matching issues` → clean exit).
 
 Then ask: "Shall I run `/skill-name`?"
+
+With `--mode` there is no question: the phase runs (Step 6) and ends with a phase-level report instead of a recommendation:
+
+```text
+PHASE: [analysis | implementation | review] on [#ID | planning gap]
+DONE: [what the phase did to the unit, at phase level]
+STOPPED: [phase exit | HALT — <step, message as-is> | wrong context — <what is missing>; try --mode <mode> | all steps disabled by profile — <steps>]
+REMAINING: [other units in scope, not run — /pair-loop for many cards | none]
+NEXT MODE: [the mode that continues the process | none]
+```
 
 ## Graceful Degradation
 
@@ -313,7 +357,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 ## Notes
 
-- This skill is read-only: it inspects state but never modifies files, PM tool data, or code-host data.
+- Plain `/pair-next` (without `--mode`) is read-only: it inspects state but never modifies files, PM tool data, or code-host data. With `--mode` it still writes nothing itself — the granular skills it invokes do, exactly as when invoked directly.
 - Row order encodes the tie-break (delivery proximity) — see the **Tie-break** note under the Step 3 table.
 - Re-run `/pair-next` after completing any skill to get an updated recommendation.
 - **Full catalog coverage**: nearly all of the 51 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/pair-capability-checkpoint`, rows 12-16 including `/pair-capability-grill`) or process-skill composition. `/pair-capability-publish-pr` will be reachable via `/pair-process-implement` once wired (not yet composed), so `/pair-next` cannot surface it today. `/pair-process-brainstorm` is a human-initiated discovery entry point — it opens a theme the backlog does not yet contain, which no board-state condition can detect — so it is catalogued here but never suggested by the cascade. `/pair-capability-analyze-delivery-metrics` is the same shape for the same reason: a retro/period report is wanted on a cadence the board does not express, so it is catalogued and reachable on demand, never cascade-suggested.
