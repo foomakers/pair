@@ -395,6 +395,7 @@ test('smoke: all developer journey pages return 200', async ({ page }) => {
     { url: '/docs/developer-journey/strategic-planning', title: 'Strategic Planning' },
     { url: '/docs/developer-journey/iteration', title: 'Iteration' },
     { url: '/docs/developer-journey/execution', title: 'Execution' },
+    { url: '/docs/developer-journey/tag-driven-automation', title: 'Tag-Driven Automation' },
   ]
   for (const { url, title } of pages) {
     const response = await page.goto(url)

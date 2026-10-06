@@ -3,6 +3,8 @@ title: Process Lifecycle
 description: The four-level, nine-step development lifecycle that pair defines — from product requirements to code review.
 ---
 
+import { Callout } from 'fumadocs-ui/components/callout'
+
 pair defines a structured development lifecycle with **four levels** and **nine steps**. Each level builds on the previous, taking a project from initial idea to production-ready code.
 
 The lifecycle is not rigid — you enter at whatever level matches your project's current state. But every one of the nine steps has a specific how-to guide and a matching skill that the AI follows, ensuring consistency and completeness.
@@ -50,6 +52,31 @@ You can follow this flow in two ways:
 Skills compose capability skills internally, enforce adoption compliance, and update your PM tool automatically. The how-to guides give you the same process with full manual control.
 
 The detailed walkthrough for each level is in the pages that follow.
+
+## The Risk-Driven Flow
+
+Behind the nine steps runs one thread: every story carries a **risk tier**, and the tier decides how much gate, review and merge ceremony its pull request gets. The model itself — dimensions, tiers, the gate matrix — lives in [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates), [PR State Flow](/docs/concepts/pr-state-flow) and the [Quality Model](/docs/reference/quality-model); this page only shows where it enters the work.
+
+```text
+refine ──► classify ──► publish-pr ──► tiered gates ──► tiered review ──► tag-driven automation
+ Step 6    Step 6        Step 8         Step 8           Step 9             opt-in loop
+```
+
+1. **Refine** — you align on the story with `/pair-process-refine-story` ([Iteration](/docs/developer-journey/iteration#step-6-refine-a-user-story)).
+2. **Classify** — in the same refinement, `/pair-capability-classify` writes the classification matrix into the story card and, when the project projects tags, the `risk:*` tag ([Iteration](/docs/developer-journey/iteration#classification-matrix)).
+3. **Publish PR** — `/pair-capability-publish-pr` copies the story's tags onto the one PR it opens ([Execution](/docs/developer-journey/execution#closing-phase-checkpoint--pr)).
+4. **Tiered gates** — the pre-merge gate reads the PR's `risk:*` tag and runs the checks for that tier; no tag runs everything ([Execution](/docs/developer-journey/execution#what-your-prs-tier-changes)).
+5. **Tiered review** — review re-classifies from the actual diff, may raise the tier but never lower it, and reviewer effort scales with the tier ([Execution](/docs/developer-journey/execution#what-your-prs-tier-changes)).
+6. **Tag-driven automation** — tags decide which cards the automation loop may pick up and when it stops ([Tag-Driven Automation](/docs/developer-journey/tag-driven-automation)).
+
+<Callout type="info">
+  **Planned** — tracked in #212, not yet wired. The supervised, unattended end of step 6 (the loop advancing
+  a card past ready-for-review on its own) is the part of supervised automation still open.
+</Callout>
+
+Classification is switched on per project, not per developer — see [where it is switched on](/docs/developer-journey/induction#where-classification-is-switched-on) in Induction and [how to enable it](/docs/customization/team#enable-classification-tiers) in Customization.
+
+*Source: requirement-triage decisions D17 (review confirms or raises, never lowers), D21 (adoption holds only the delta over KB defaults), D22 (verdict first, detail collapsed).*
 
 ## Product Lifecycle
 
@@ -114,6 +141,7 @@ Follow the journey step by step:
 - [Strategic Planning](/docs/developer-journey/strategic-planning) — break initiatives into epics (Step 4)
 - [Iteration](/docs/developer-journey/iteration) — prepare stories and tasks for development (Steps 5-7)
 - [Execution](/docs/developer-journey/execution) — implement and review (Steps 8-9)
+- [Tag-Driven Automation](/docs/developer-journey/tag-driven-automation) — what gets tagged, and what tags let automation do
 
 Want a guided walkthrough? The [tutorials](/docs/tutorials) walk you through the full process end-to-end with working examples for solo, team, and enterprise contexts.
 
