@@ -1,5 +1,13 @@
 import { describe, it, expect, afterAll } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+  chmodSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
@@ -13,6 +21,7 @@ import {
   checkProseCounts,
   checkCategoryLabelCounts,
   checkEntrypointDepth,
+  checkSkillLocalScripts,
   ENTRY_DEPTH,
   runChecks,
   APPROVAL_SIGNAL_FAMILIES,
@@ -2830,5 +2839,85 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     const r = resolve('## Process Profile\n\n### The keys\n\n- `profile`: `poc`\n')
     expect(r.halts).toEqual([])
     expect(r.profile).toBe('poc')
+  })
+})
+
+describe('checkSkillLocalScripts — scripts ship with their skill and mirror byte-identically', () => {
+  const root = mkdtempSync(join(tmpdir(), 'skills-local-scripts-'))
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  const write = (base: string, rel: string, content: string) => {
+    mkdirSync(dirname(join(base, rel)), { recursive: true })
+    writeFileSync(join(base, rel), content)
+  }
+  const fixture = (name: string, body: string) => {
+    const skills = join(root, name, 'skills')
+    const installed = join(root, name, 'installed')
+    write(skills, 'workflow/demo/SKILL.md', `---\nname: demo\ndescription: "d"\n---\n${body}`)
+    return { skills, installed }
+  }
+
+  it('AC1: a linked script absent from scripts/ is an error naming skill and script', () => {
+    const { skills } = fixture('missing', 'Run [x](./scripts/a.mjs) and [y](scripts/b.mjs).')
+    write(skills, 'workflow/demo/scripts/a.mjs', 'a')
+    const errors = checkSkillLocalScripts(skills)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('workflow/demo/SKILL.md')
+    expect(errors[0]).toContain('scripts/b.mjs')
+  })
+
+  it('AC1: a target outside scripts/ is out of scope', () => {
+    const { skills } = fixture('outside', 'See [x](../other/x.mjs).')
+    expect(checkSkillLocalScripts(skills)).toEqual([])
+  })
+
+  it('AC2: missing and drifted installed twins are reported with both paths', () => {
+    const { skills, installed } = fixture('twin', 'No links.')
+    write(skills, 'workflow/demo/scripts/a.mjs', 'same')
+    write(skills, 'workflow/demo/scripts/host/b.mjs', 'dataset')
+    write(installed, 'pair-workflow-demo/scripts/a.mjs', 'same')
+    expect(checkSkillLocalScripts(skills, installed)).toEqual([
+      expect.stringContaining('installed twin missing'),
+    ])
+    write(installed, 'pair-workflow-demo/scripts/host/b.mjs', 'datasex')
+    const errors = checkSkillLocalScripts(skills, installed)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('drifted')
+    expect(errors[0]).toContain('workflow/demo/scripts/host/b.mjs')
+    expect(errors[0]).toContain('pair-workflow-demo/scripts/host/b.mjs')
+  })
+
+  it('an identical twin, an orphan twin and an empty scripts/ are clean', () => {
+    const { skills, installed } = fixture('clean', 'No links.')
+    write(skills, 'workflow/demo/scripts/a.mjs', 'same')
+    write(installed, 'pair-workflow-demo/scripts/a.mjs', 'same')
+    write(installed, 'pair-workflow-demo/scripts/orphan.mjs', 'x')
+    mkdirSync(join(skills, 'workflow/demo/scripts/empty'), { recursive: true })
+    expect(checkSkillLocalScripts(skills, installed)).toEqual([])
+  })
+
+  it('AC2: an unreadable dataset script is an error naming both paths, never identical', () => {
+    const { skills, installed } = fixture('unreadable', 'No links.')
+    write(skills, 'workflow/demo/scripts/a.mjs', 'same')
+    write(installed, 'pair-workflow-demo/scripts/a.mjs', 'same')
+    const locked = join(skills, 'workflow/demo/scripts/a.mjs')
+    chmodSync(locked, 0o000)
+    try {
+      const errors = checkSkillLocalScripts(skills, installed)
+      expect(errors).toHaveLength(1)
+      expect(errors[0]).toContain('unreadable')
+      expect(errors[0]).toContain('workflow/demo/scripts/a.mjs')
+      expect(errors[0]).toContain('pair-workflow-demo/scripts/a.mjs')
+    } finally {
+      chmodSync(locked, 0o644)
+    }
+  })
+
+  it('AC3: the real corpus passes and the summary names the check', () => {
+    const { errors } = runChecks(join(__dirname, '..', '..', 'dataset', '.skills'))
+    expect(errors.filter(e => e.includes('scripts'))).toEqual([])
+    expect(readFileSync(join(__dirname, 'skills-conformance-check.ts'), 'utf-8')).toContain(
+      'skill-local scripts shipped and mirrored',
+    )
   })
 })
