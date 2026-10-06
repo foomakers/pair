@@ -71,7 +71,7 @@ The state write goes **directly to the board field** — never through the item 
 ### Step 6.5: Branch Cleanup
 
 1. **Act**: Delete the feature branch on the code host (remote):
-   - CLI: `git push origin --delete <branch>`.
+   - Host API, never `git push` (it runs the local pre-push gate): `gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>` (branch validated, path-encoded) or the adopted host's ref delete — the same `deleteBranch` that `cycle-merge.mjs` `closeStory` calls.
 2. **Act**: Remove the story's checkpoint if one exists — `.pair/working/checkpoints/<story-id>.md` — so completed-story state does not linger as stale context (per the task-scoped cleanup rule; see `/checkpoint`).
 3. **Verify**: Feature branch deleted and story checkpoint removed (if any existed).
 

@@ -29,7 +29,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { defineAdapter, runCli, parseJson, HostError, upsertByMarker, CLASSIFICATION_FAMILIES } from './adapter-kit.mjs'
+import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, CLASSIFICATION_FAMILIES } from './adapter-kit.mjs'
 
 export const CHECK_CONTEXT = 'pair-review'
 export const CHECK_GENRE = 'pair'
@@ -300,6 +300,20 @@ export default defineAdapter({
         } catch (e) {
           return { applied: label, removed: [], confirmed: false, error: e.message }
         }
+      },
+      // Remote branch deletion through the service (not `git push --delete`, which runs the local pre-push gate).
+      deleteBranch({ branch, repo }) {
+        assertBranchName(branch)
+        const { project, repository } = splitRepo(repo)
+        if (!project || !repository) throw new HostError('unsupported', { message: `azure-devops: repo must be <project>/<repository>, got ${JSON.stringify(repo)}`, method: 'deleteBranch' })
+        const scope = ['--project', project, '--repository', repository]
+        const refs = azJson(['repos', 'ref', 'list', ...scope, '--filter', `heads/${branch}`], 'repos ref list')
+        const ref = (Array.isArray(refs) ? refs : []).find(r => r?.name === `refs/heads/${branch}`)
+        if (!ref?.objectId) return { deleted: false, gone: true }
+        const res = azJson(['repos', 'ref', 'delete', ...scope, '--name', `heads/${branch}`, '--object-id', ref.objectId], 'repos ref delete')
+        const failed = (Array.isArray(res) ? res : [res]).find(r => r && r.success === false)
+        if (failed) throw new HostError('failed', { message: `azure-devops: branch ${branch} not deleted: ${failed.updateStatus ?? 'success:false'}`, method: 'deleteBranch' })
+        return { deleted: true }
       },
       merge({ pr, repo, strategy = 'squash', message = '', headSha }) {
         if (!['squash', 'merge'].includes(strategy)) throw new HostError('unsupported', { message: `azure-devops: merge strategy ${JSON.stringify(strategy)} is not supported (squash | merge)`, method: 'merge' })

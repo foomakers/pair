@@ -428,6 +428,7 @@ if (a[0] === 'pr' && a[1] === 'merge') {
   out('')
 }
 if (a[0] === 'issue' && (a[1] === 'close' || a[1] === 'edit')) out('')
+if (a[0] === 'api' && a[1] === '-X' && a[2] === 'DELETE' && String(a[3]).includes('/git/refs/heads/')) out('')
 process.stderr.write('fake gh: unhandled ' + j); process.exit(1)
 `,
   )
@@ -469,6 +470,7 @@ test('CLI run: all green -> gh pr merge --squash with the subject, the card clos
   assert.ok(calls.some(c => c[0] === 'pr' && c[1] === 'merge' && c.includes('--squash') && c.includes('[#42] feat: thing')))
   assert.ok(calls.some(c => c[0] === 'issue' && c[1] === 'close'))
   assert.ok(calls.some(c => c[0] === 'api' && c[1] === 'graphql' && c.some(x => x === 'option=opt-done')))
+  assert.ok(calls.some(c => c[0] === 'api' && c[2] === 'DELETE' && c[3] === 'repos/o/r/git/refs/heads/feature/US-42-x'), 'remote branch deleted via the API')
   assert.equal(out.cascade.board.per[0].confirmed, true)
   assert.equal(out.cascaded, true, JSON.stringify(out.cascade)) // root defaults to the cwd: the main checkout
   assert.equal(existsSync(g.wt), false)
@@ -659,4 +661,171 @@ test('CLI escalate: a run dir that does not belong to --story is refused — exi
     assert.match(out.error, /run dir/)
     assert.equal(gh.calls().length, 0)
   }
+})
+
+// D6/D7 post-merge closure defects: the repo slug must always resolve; the remote branch goes through the host API.
+function recGh({ repoView = 'o/r', viewFails = false } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'gh-rec-'))
+  const log = join(dir, 'calls.log')
+  writeFileSync(log, '')
+  writeFileSync(
+    join(dir, 'gh'),
+    `#!/usr/bin/env node
+const fs = require('fs'); const a = process.argv.slice(2)
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(a) + '\\n')
+if (a[0] === 'repo' && a[1] === 'view') { ${viewFails ? "process.stderr.write('no repo'); process.exit(1)" : `process.stdout.write(${JSON.stringify(repoView + '\n')}); process.exit(0)`} }
+process.stdout.write(''); process.exit(0)
+`,
+  )
+  chmodSync(join(dir, 'gh'), 0o755)
+  return { bin: join(dir, 'gh'), calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) }
+}
+
+test('D6: updateCard without --repo resolves the slug (gh repo view) and never passes an empty/undefined --repo', () => {
+  const gh = recGh()
+  const h = github.instantiate({ ghBin: gh.bin })
+  h.updateCard({ repo: undefined, id: 493, body: 'b' })
+  const edit = gh.calls().find(c => c[0] === 'issue' && c[1] === 'edit')
+  assert.equal(edit[edit.indexOf('--repo') + 1], 'o/r', JSON.stringify(gh.calls()))
+})
+
+test('D6: updateCard with an explicit repo uses it and does not look it up', () => {
+  const gh = recGh()
+  github.instantiate({ ghBin: gh.bin }).updateCard({ repo: 'x/y', id: 1, body: 'b' })
+  assert.deepEqual(gh.calls().map(c => c.slice(0, 2).join(' ')), ['issue edit'])
+  assert.equal(gh.calls()[0][gh.calls()[0].indexOf('--repo') + 1], 'x/y')
+})
+
+test('D6: an unresolvable repo fails closed with a clear message BEFORE any write', () => {
+  const gh = recGh({ viewFails: true })
+  const h = github.instantiate({ ghBin: gh.bin })
+  assert.throws(() => h.updateCard({ repo: undefined, id: 1, body: 'b' }), /repo.*(resolve|--repo)/i)
+  assert.equal(gh.calls().some(c => c[0] === 'issue' && c[1] === 'edit'), false)
+})
+
+test('D7: github deleteBranch deletes the ref through the API (no git push), a missing ref is "gone"', () => {
+  const gh = recGh()
+  const h = github.instantiate({ ghBin: gh.bin })
+  assert.deepEqual(h.deleteBranch({ branch: 'feature/US-42-x', repo: 'o/r' }), { deleted: true })
+  assert.deepEqual(gh.calls()[0], ['api', '-X', 'DELETE', 'repos/o/r/git/refs/heads/feature/US-42-x'])
+})
+
+test('D7: closeStory deletes the remote branch via the code host, never `git push --delete` (pre-push gate)', () => {
+  const g = gitFixture()
+  const f = fakeHosts()
+  const seen = []
+  f.hosts.code.deleteBranch = a => (seen.push(a), { deleted: true })
+  const out = closeStory({ hosts: f.hosts, story: 42, repo: 'o/r', branch: 'feature/US-42-x', root: g.main })
+  assert.deepEqual(seen, [{ branch: 'feature/US-42-x', repo: 'o/r' }])
+  assert.equal(out.steps.branch.ok, true, JSON.stringify(out))
+  assert.ok(out.steps.branch.notes.includes('remote branch deleted'))
+  assert.equal(spawnSync('git', ['ls-remote', '--exit-code', '--heads', g.remote, 'feature/US-42-x']).status, 0, 'git was not used to delete the remote ref')
+})
+
+// F1-F3: branch deletion hardening. Stubs only — no real GitHub/Azure.
+function stubCli({ stderr = '', status = 0, stdout = '' } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'cli-stub-'))
+  const log = join(dir, 'calls.log')
+  writeFileSync(log, '')
+  writeFileSync(
+    join(dir, 'cli'),
+    `#!/usr/bin/env node
+const fs = require('fs'); const a = process.argv.slice(2)
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(a) + '\\n')
+const cfg = JSON.parse(process.env.STUB_CFG || '{}')
+const hit = (cfg.rules || []).find(r => a.join(' ').includes(r.match))
+const r = hit || ${JSON.stringify({ stdout, stderr, status })}
+process.stdout.write(r.stdout || ''); process.stderr.write(r.stderr || ''); process.exit(r.status || 0)
+`,
+  )
+  chmodSync(join(dir, 'cli'), 0o755)
+  return { bin: join(dir, 'cli'), calls: () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) }
+}
+
+test('F1: github deleteBranch rejects unsafe branch names before any call', () => {
+  for (const branch of ['feature/US-1#x', '%2e%2e', 'a?b', 'a b', 'a\tb', 'a..b', '-x', 'a/', 'a@{b', 'a\\b']) {
+    const s = stubCli()
+    assert.throws(() => github.instantiate({ ghBin: s.bin }).deleteBranch({ branch, repo: 'o/r' }), /branch/i, branch)
+    assert.equal(s.calls().length, 0, branch)
+  }
+})
+
+test('r1-1: deleteBranch rejects @{…} reflog expansion even from a repo with checkout history', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'reflog-'))
+  const g = (...a) => spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { cwd: repo, encoding: 'utf8' })
+  g('init', '-q', '-b', 'main')
+  g('commit', '-q', '--allow-empty', '-m', 'x')
+  g('checkout', '-q', '-b', 'one')
+  g('checkout', '-q', 'main')
+  assert.equal(g('check-ref-format', '--branch', '@{-1}').status, 0) // premise: expands here
+  const prev = process.cwd()
+  process.chdir(repo)
+  try {
+    for (const branch of ['@{-1}', '@{u}', 'a@{-1}', 'HEAD']) {
+      const s = stubCli()
+      assert.throws(() => github.instantiate({ ghBin: s.bin }).deleteBranch({ branch, repo: 'o/r' }), /branch/i, branch)
+      assert.equal(s.calls().length, 0, branch)
+    }
+  } finally {
+    process.chdir(prev)
+  }
+})
+
+test('F1: github deleteBranch encodes each segment, keeps "/" separators', () => {
+  const s = stubCli()
+  const h = github.instantiate({ ghBin: s.bin })
+  assert.deepEqual(h.deleteBranch({ branch: 'feature/US-1-x', repo: 'o/r' }), { deleted: true })
+  assert.deepEqual(s.calls()[0], ['api', '-X', 'DELETE', 'repos/o/r/git/refs/heads/feature/US-1-x'])
+  h.deleteBranch({ branch: 'feature/a+b', repo: 'o/r' })
+  assert.equal(s.calls()[1][3], 'repos/o/r/git/refs/heads/feature/a%2Bb')
+})
+
+test('F1: parseArgs rejects an unsafe --branch (fail closed)', () => {
+  for (const branch of ['feature/US-1#x', '%2e%2e', 'a?b', 'a b', 'a..b']) assert.throws(() => parseArgs(argv('run', { gate: 'green', message: 'm', branch })), /--branch/, branch)
+  assert.equal(parseArgs(argv('run', { gate: 'green', message: 'm', branch: 'feature/US-1-x' })).opts.branch, 'feature/US-1-x')
+})
+
+test('F1: closeStory refuses a `#` branch (no host call)', () => {
+  const g = gitFixture()
+  const f = fakeHosts()
+  let called = false
+  f.hosts.code.deleteBranch = () => ((called = true), { deleted: true })
+  const out = closeStory({ hosts: f.hosts, story: 42, repo: 'o/r', branch: 'feature/US-1#x', root: g.main })
+  assert.equal(out.steps.branch.ok, false)
+  assert.equal(called, false)
+})
+
+test('F2: github deleteBranch: only "Reference does not exist" means already gone', () => {
+  const run = stderr => {
+    const s = stubCli({ stderr, status: 1 })
+    return () => github.instantiate({ ghBin: s.bin }).deleteBranch({ branch: 'feature/x', repo: 'o/r' })
+  }
+  assert.throws(run('gh: Not Found (HTTP 404)'), /404|Not Found/)
+  assert.throws(run('gh: Required status check / protected branch (HTTP 422)'), /422/)
+  assert.deepEqual(run('gh: Reference does not exist (HTTP 422)')(), { deleted: false, gone: true })
+})
+
+test('F3: azure deleteBranch: repo required, success, not-found, success:false', () => {
+  const refs = [{ name: 'refs/heads/feature/x', objectId: 'abc' }]
+  const mk = rules => {
+    const s = stubCli({ stdout: '[]' })
+    return { s, h: azure.instantiate({ azBin: s.bin }), env: JSON.stringify({ rules }) }
+  }
+  const withEnv = (env, fn) => {
+    process.env.STUB_CFG = env
+    try {
+      return fn()
+    } finally {
+      delete process.env.STUB_CFG
+    }
+  }
+  let t = mk([])
+  assert.throws(() => t.h.deleteBranch({ branch: 'feature/x' }), e => e.code === 'unsupported' || /repo/i.test(e.message))
+  assert.equal(t.s.calls().length, 0)
+  t = mk([{ match: 'ref list', stdout: JSON.stringify(refs) }, { match: 'ref delete', stdout: JSON.stringify({ success: true }) }])
+  assert.deepEqual(withEnv(t.env, () => t.h.deleteBranch({ branch: 'feature/x', repo: 'P/R' })), { deleted: true })
+  t = mk([{ match: 'ref list', stdout: '[]' }])
+  assert.deepEqual(withEnv(t.env, () => t.h.deleteBranch({ branch: 'feature/x', repo: 'P/R' })), { deleted: false, gone: true })
+  t = mk([{ match: 'ref list', stdout: JSON.stringify(refs) }, { match: 'ref delete', stdout: JSON.stringify({ success: false, updateStatus: 'rejected' }) }])
+  assert.throws(() => withEnv(t.env, () => t.h.deleteBranch({ branch: 'feature/x', repo: 'P/R' })), /delete|success|rejected/i)
 })

@@ -26,7 +26,7 @@ export const REQUIRED_METHODS = INTERFACE_METHODS.filter(m => m !== 'cardHash')
 export const SUPPORT_METHODS = ['createCard', 'findCards', 'updateCard', 'parseCardRef', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readLabels', 'setClassification', 'commentOnCard', 'setBoardState']
 // ADR-018's split: card operations resolve `pm-tool`, pull-request operations resolve `code-host`.
 export const PM_METHODS = ['readCard', 'cardHash', 'closeAndCascade', 'createCard', 'findCards', 'updateCard', 'parseCardRef', 'commentOnCard', 'setBoardState', 'labelCard', 'unlabelCard']
-export const CODE_METHODS = ['prHead', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readLabels', 'setClassification']
+export const CODE_METHODS = ['prHead', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readLabels', 'setClassification', 'deleteBranch']
 // setClassification's family/value vocabulary (the review's classification tags, pr-states.md /
 // quality-model.md §5): each family carries its own chromatic enum — never shared across families.
 export const CLASSIFICATION_FAMILIES = { risk: ['green', 'yellow', 'red'], cost: ['green', 'yellow', 'orange', 'red'] }
@@ -60,6 +60,15 @@ export const cleanGitEnv = (env = process.env) => Object.fromEntries(Object.entr
 
 // The ONE spawn every adapter uses. `label` names the command in a failure (never the resolved
 // binary path — a stubbed binary in a test must not change a reason string).
+// A branch name that is safe as a ref path: `git check-ref-format refs/heads/<b>` (never `--branch`: it expands `@{-N}` from the cwd reflog) AND no `@{`, `#`, `%`, `?`,
+// whitespace or control character (they change meaning in a URL path). Throws a typed refusal.
+export function assertBranchName(branch) {
+  const b = typeof branch === 'string' ? branch : ''
+  const bad = !b || /[#%?\s\x00-\x1f\x7f\\]/.test(b) || b.startsWith('-') || b.includes('@{') || b === 'HEAD' || spawnSync('git', ['check-ref-format', `refs/heads/${b}`], { encoding: 'utf8', env: cleanGitEnv(process.env) }).status !== 0
+  if (bad) throw new HostError('invalid-input', { message: `invalid branch name ${JSON.stringify(branch)}` })
+  return b
+}
+
 export function runCli({ bin, args, input, label }) {
   const r = spawnSync(bin, args, { encoding: 'utf8', input, env: cleanGitEnv(process.env) })
   if (r.error || r.status !== 0) {

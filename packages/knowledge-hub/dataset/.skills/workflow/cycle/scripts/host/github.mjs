@@ -7,7 +7,7 @@
 //
 // Transport: `gh` from PATH, or `transport.ghBin` / PAIR_GH_BIN (a test's recorder). `gh`
 // authenticates itself; this file never reads a token.
-import { defineAdapter, runCli, parseJson, HostError, upsertByMarker, splitPages, CLASSIFICATION_FAMILIES } from './adapter-kit.mjs'
+import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, splitPages, CLASSIFICATION_FAMILIES } from './adapter-kit.mjs'
 
 export const CHECK_CONTEXT = 'pair-review'
 export const STATE_LABELS = ['pr-state:to-be-reviewed', 'pr-state:ready-to-merge', 'pr-state:not-approved']
@@ -29,6 +29,23 @@ export default defineAdapter({
     const bin = transport.ghBin || process.env.PAIR_GH_BIN || 'gh'
     const gh = (args, { input } = {}) => runCli({ bin, args, input, label: 'gh' })
     const withRepo = (args, repo) => (repo ? [...args, '--repo', repo] : args)
+    // A write that needs an explicit `--repo` never sends an empty one: the given slug, else the
+    // current checkout's (`gh repo view`), else a typed refusal BEFORE the write.
+    const SLUG_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/
+    const resolveRepo = repo => {
+      if (repo !== undefined && repo !== null && repo !== '') {
+        if (!SLUG_RE.test(String(repo))) throw new HostError('invalid-input', { message: `github: --repo must be owner/name, got ${JSON.stringify(repo)}` })
+        return String(repo)
+      }
+      let out = ''
+      try {
+        out = gh(['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner']).trim()
+      } catch {
+        out = ''
+      }
+      if (!SLUG_RE.test(out)) throw new HostError('invalid-input', { message: 'github: repo unresolved — no --repo given and `gh repo view` could not resolve one; nothing was written (pass --repo owner/name)' })
+      return out
+    }
 
     const listComments = ({ pr, repo }) => {
       const out = gh(['api', '--paginate', `${apiRepo(repo)}/issues/${pr}/comments`])
@@ -111,15 +128,15 @@ export default defineAdapter({
         return parseJson(gh([...base, '--json', fields.join(',')]), { command: 'gh issue view' })
       },
       findCards({ repo, search }) {
-        const rows = parseJson(gh(['issue', 'list', '--repo', repo, '--search', search, '--json', 'number,url,title,body']), { command: 'gh issue list' })
+        const rows = parseJson(gh(['issue', 'list', '--repo', resolveRepo(repo), '--search', search, '--json', 'number,url,title,body']), { command: 'gh issue list' })
         return Array.isArray(rows) ? rows : []
       },
       createCard({ repo, title, body }) {
-        const out = gh(['issue', 'create', '--repo', repo, '--title', title, '--body', body])
+        const out = gh(['issue', 'create', '--repo', resolveRepo(repo), '--title', title, '--body', body])
         return { url: out.trim().split('\n').pop() }
       },
       updateCard({ repo, id, body }) {
-        gh(['issue', 'edit', String(id), '--repo', repo, '--body', body])
+        gh(['issue', 'edit', String(id), '--repo', resolveRepo(repo), '--body', body])
         return { id }
       },
       parseCardRef(ref, { repo } = {}) {
@@ -200,6 +217,19 @@ export default defineAdapter({
       },
 
       // ── pull-request side (code-host) ──
+      // Remote branch deletion through the API: `git push --delete` would run the local pre-push gate.
+      deleteBranch({ branch, repo }) {
+        const path = assertBranchName(branch).split('/').map(encodeURIComponent).join('/')
+        const slug = apiRepo(resolveRepo(repo))
+        try {
+          gh(['api', '-X', 'DELETE', `${slug}/git/refs/heads/${path}`])
+          return { deleted: true }
+        } catch (e) {
+          // Only GitHub's own "ref is absent" answer means gone; a wrong repo (404) or a protected ref (422) is a failure.
+          if (/Reference does not exist/i.test(String(e?.message ?? e))) return { deleted: false, gone: true }
+          throw e
+        }
+      },
       prHead({ pr, repo }) {
         const out = gh(withRepo(['pr', 'view', String(pr)], repo).concat(['--json', 'headRefOid', '-q', '.headRefOid'])).trim()
         if (!SHA_RE.test(out)) throw new HostError('invalid-output', { message: `gh pr view ${pr}: head is not a 40-hex sha: ${JSON.stringify(out)}` })

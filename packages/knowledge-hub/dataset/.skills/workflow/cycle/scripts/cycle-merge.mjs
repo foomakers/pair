@@ -38,12 +38,13 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { decide as decideAutonomy, effectiveLabels, gateFromLegacyTiers, escalationComment, ESCALATION_MARKER, parseGate, conditionError } from './autonomy-policy.mjs'
+import { assertBranchName } from './host/adapter-kit.mjs'
 import { assertRunOwnsStory } from './run-guard.mjs'
 
 const SHA_RE = /^[0-9a-f]{40}$/
 const TIER_RE = /^[A-Za-z0-9][A-Za-z0-9:_./-]*$/
 const LABEL_SHAPE_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/i
-const SAFE_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/#-]*$/
+const SAFE_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/
 export const PR_CHECK = 'pair-review'
 export const APPROVAL_CHECK = 'pair-explicit-approval'
 const BELOW_RED = ['risk:green', 'risk:yellow']
@@ -252,9 +253,20 @@ export function closeStory({ hosts, story, repo, branch, root = process.cwd(), g
       if (rm.status !== 0) return { ok: false, error: `worktree ${held.path} not removed: ${rm.stderr}`, notes }
       notes.push(`worktree ${held.path} removed`)
     }
-    const remote = git(['push', 'origin', '--delete', branch], root)
-    if (remote.status !== 0 && !/remote ref does not exist|unable to delete .*: remote ref/i.test(remote.stderr)) return { ok: false, error: `remote branch not deleted: ${remote.stderr}`, notes }
-    notes.push(remote.status === 0 ? 'remote branch deleted' : 'remote branch already gone')
+    if (typeof hosts.code?.deleteBranch === 'function') {
+      // The host API, never `git push --delete`: that runs the local pre-push quality gate.
+      try {
+        const r = hosts.code.deleteBranch({ branch, repo })
+        notes.push(r?.deleted ? 'remote branch deleted' : 'remote branch already gone')
+      } catch (e) {
+        return { ok: false, error: `remote branch not deleted: ${e?.message ?? e}`, notes }
+      }
+    } else {
+      // No host route: a pure ref deletion pushes no commit, so the commit-quality gate has nothing to judge.
+      const remote = git(['push', '--no-verify', 'origin', '--delete', branch], root)
+      if (remote.status !== 0 && !/remote ref does not exist|unable to delete .*: remote ref/i.test(remote.stderr)) return { ok: false, error: `remote branch not deleted: ${remote.stderr}`, notes }
+      notes.push(remote.status === 0 ? 'remote branch deleted' : 'remote branch already gone')
+    }
     const exists = git(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], root).status === 0
     if (exists) {
       // The PR is verified merged: a squash merge leaves the branch "unmerged" to git, hence -D.
@@ -368,6 +380,13 @@ export function parseArgs(argv) {
     mergeGate = g.value
   }
   if (opts.repo !== undefined && !/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(opts.repo)) throw new Error('--repo must be owner/name')
+  if (opts.branch !== undefined) {
+    try {
+      assertBranchName(opts.branch)
+    } catch {
+      throw new Error(`--branch is not a safe branch name: ${JSON.stringify(opts.branch)}`)
+    }
+  }
   if (cmd === 'run') need('gate', 'message')
   if (cmd === 'run' && !['green', 'red'].includes(opts.gate)) throw new Error('--gate must be green | red')
   return { cmd, opts: { ...opts, story: Number(opts.story), pr: Number(opts.pr), ...(tiers ? { autoAdvanceTiers: tiers } : {}), ...(mergeGate ? { mergeGate } : {}) } }
