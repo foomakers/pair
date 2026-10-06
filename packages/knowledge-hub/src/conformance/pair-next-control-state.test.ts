@@ -83,7 +83,9 @@ describe.each(sources)('pair-next control state — %s SKILL.md', (_, content) =
   })
 
   it('AC2: a failed DoR lists every failing criterion by name — never a blanket "not ready"', () => {
-    expect(procedure(content)).toMatch(/failing criteri(a|on)[^.\n]*(list|name)|list[^.\n]*failing criteri/i)
+    expect(procedure(content)).toMatch(
+      /failing criteri(a|on)[^.\n]*(list|name)|list[^.\n]*failing criteri/i,
+    )
   })
 
   it('AC3: titles are never a control signal; the only title read is the DoR presence check', () => {
@@ -129,7 +131,10 @@ describe.each(sources)('pair-next control state — %s SKILL.md', (_, content) =
   })
 
   it('the reporting formats (out-of-process, conflict) are declared in the Output Format', () => {
-    const output = content.slice(content.indexOf('## Output Format'), content.indexOf('## Graceful Degradation'))
+    const output = content.slice(
+      content.indexOf('## Output Format'),
+      content.indexOf('## Graceful Degradation'),
+    )
     expect(output).toMatch(/out-of-process/i)
     expect(output).toMatch(/conflict/i)
   })
@@ -151,5 +156,29 @@ describe.each([
 
   it('the cycle coordinator names no board state — it reads macrostates', () => {
     expect(read(cycle)).not.toMatch(/`Refined`/)
+  })
+})
+
+describe('docs site — control-state resolution is documented', () => {
+  const page = read(
+    join(__dirname, '../../../../apps/website/content/docs/reference/pair-next.mdx'),
+  )
+
+  it('documents macrostate-first resolution, the DoR fallback, out-of-process, conflict and no title signals', () => {
+    expect(page).toContain('Control-State Resolution')
+    expect(page).toMatch(/Definition of Ready/)
+    expect(page).toMatch(/out-of-process/i)
+    expect(page).toMatch(/Conflicting signals/)
+    expect(page).toMatch(/Titles are never a control signal/)
+  })
+
+  it('the canonical-states guide points its /pair-next row at the one procedure', () => {
+    const states = read(
+      join(
+        __dirname,
+        '../../dataset/.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md',
+      ),
+    )
+    expect(states).toContain('Control-State Resolution')
   })
 })

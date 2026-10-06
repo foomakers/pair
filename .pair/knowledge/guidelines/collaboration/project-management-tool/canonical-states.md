@@ -207,7 +207,7 @@ A skill encountering such an item resolves it as "not in the tracked view" and i
 | Skill           | Interaction                                                                                          |
 | ---------------- | ----------------------------------------------------------------------------------------------------- |
 | `/pair-capability-write-issue`   | Resolves a target macrostate (`$status`) to a board state before writing the board field (Writing rule above) |
-| `/pair-next`          | Resolves each item's board state to a macrostate before evaluating its cascade conditions (Reading rule above); applies the Readiness Fallback for Draft vs. Ready |
+| `/pair-next`          | Resolves each item's board state to a macrostate before evaluating its cascade conditions (Reading rule above); applies the Readiness Fallback for Draft vs. Ready — both through its single **Control-State Resolution** procedure, which orchestration modes reference rather than re-derive; an unmapped state is reported out-of-process, never an error |
 | `/pair-process-refine-story`  | Produces `Ready` — writes it through `/pair-capability-write-issue` (it passes `$status` **and** renders a full body in the same call, so write mode is the right route) |
 | `/pair-process-implement`     | Produces `In Progress` / `Review` — **writes the board field directly**, applying `/pair-capability-write-issue` Step 7b (membership → a read that confirms it → the state field) **by reference** |
 | `/pair-process-review`        | Produces `Done` on merge — **writes the board field directly**, same application of Step 7b **by reference** (its terminal writes cover the story and its parent hierarchy) |

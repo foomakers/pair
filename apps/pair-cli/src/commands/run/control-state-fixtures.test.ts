@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   CardOutOfScopeError,
-  conflictingSignals,
   parseStateMapping,
   resolveCardReadiness,
+  resolveMacrostate,
+  unmetReadinessCriteria,
   type CardDocument,
   type StateMapping,
 } from './card-readiness'
@@ -106,7 +107,11 @@ Design: not required
 - [ ] T1 — resolve the control state
 `
 
-const card = (boardState: string | undefined, body: string, title = 'A clear title'): CardDocument => ({
+const card = (
+  boardState: string | undefined,
+  body: string,
+  title = 'A clear title',
+): CardDocument => ({
   title,
   body,
   boardState,
@@ -188,9 +193,9 @@ describe('AC3 — titles are never a control signal', () => {
   })
 
   it('a title says "Draft" but state + body say Ready ⇒ Ready wins', () => {
-    expect(resolveCardReadiness(card('Refined', BREAKDOWN_BODY, 'Draft: idea'), MAPPED).readiness).toBe(
-      'ready',
-    )
+    expect(
+      resolveCardReadiness(card('Refined', BREAKDOWN_BODY, 'Draft: idea'), MAPPED).readiness,
+    ).toBe('ready')
   })
 
   it('the title is read for ONE thing — a template placeholder fails DoR criterion 1', () => {
@@ -226,19 +231,19 @@ describe('missing WoW — canonical names assumed', () => {
 })
 
 describe('conflicting signals — state says Ready, DoR fails', () => {
-  it('lists the failing criteria; the mapped state still wins (a warning, never a block)', () => {
+  it('the mapped state wins (a warning, never a block); the unmet criteria are what gets flagged', () => {
     const c = card('Refined', NO_DESIGN_FLAG)
-    expect(conflictingSignals(c, MAPPED)).toEqual(['Design flag'])
+    expect(resolveMacrostate('Refined', MAPPED)).toBe('Ready')
+    expect(unmetReadinessCriteria(c)).toEqual(['Design flag'])
     expect(resolveCardReadiness(c, MAPPED).readiness).toBe('refined-no-breakdown')
   })
 
-  it('no conflict when the DoR holds, when the state is not Ready, or when the DoR is the only signal', () => {
-    expect(conflictingSignals(card('Refined', FULL_BODY), MAPPED)).toBeUndefined()
-    expect(conflictingSignals(card('Todo', NO_DESIGN_FLAG), MAPPED)).toBeUndefined()
-    expect(conflictingSignals(card('Todo', NO_DESIGN_FLAG), MINIMAL)).toBeUndefined()
+  it('no conflict when the DoR holds, or when the state is not Ready', () => {
+    expect(unmetReadinessCriteria(card('Refined', FULL_BODY))).toEqual([])
+    expect(resolveMacrostate('Todo', MAPPED)).toBe('Draft')
   })
 
-  it('an out-of-process card has no signals to conflict', () => {
-    expect(conflictingSignals(card('Icebox', ''), MAPPED)).toBeUndefined()
+  it('an out-of-process card has no signals to conflict: it never reaches the DoR', () => {
+    expect(resolveMacrostate('Icebox', MAPPED)).toBeUndefined()
   })
 })
