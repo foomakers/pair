@@ -46,7 +46,7 @@
 - `$BASE_URL/docs/concepts/review-identity`
 - `$BASE_URL/docs/concepts/tag-driven-gates`
 
-**Process Lifecycle** (5 pages):
+**Process Lifecycle** (6 pages):
 
 - `$BASE_URL/docs/developer-journey`
 - `$BASE_URL/docs/developer-journey/induction`
@@ -141,13 +141,13 @@
 
 ### Expected Result
 
-- All 86 URLs return HTTP 200
+- All 87 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 86 pages
+- Total: 87 pages
 
 ---
 
@@ -196,3 +196,4 @@
 - #451 (pair-cli execution adapter): MT-CP501 page count 80 → 83, Integrations 7 → 10 — added `/docs/integrations/pi`, `/docs/integrations/opencode` and `/docs/integrations/adding-a-harness` (the harness-execution layer the #450 coordination note left for this story).
 - #464 (approval signal threaded into composed skills): MT-CP501 page count 83 → 84, Tutorials 7 → 8 — added `/docs/tutorials/unattended-delivery` (configuring `tech/automation.md` and daemonizing `pair-cli run` on a dedicated box).
 - #493 (consolidated delivery-cycle page): MT-CP501 page count 85 → 86, Reference 17 → 18 — added `/docs/reference/delivery-cycle`.
+- #353 (operational docs): MT-CP501 page count 86 → 87, Process Lifecycle 5 → 6 — added `/docs/developer-journey/tag-driven-automation`.
