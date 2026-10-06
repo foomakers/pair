@@ -1,0 +1,75 @@
+{
+  "$meta": {
+    "pr": "531",
+    "phase": "r1-g1",
+    "base": "b8c88aebb3eff7a430f07d127eecbdaa348c1849",
+    "trailer": "Pair-RED-Snapshot: pr=531; phase=r1-g1; base=b8c88aebb3eff7a430f07d127eecbdaa348c1849; manifest=.pair/red-snapshots/pr-531-r1-g1.json",
+    "artifacts": [
+      "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts"
+    ]
+  },
+  "mode": "repair",
+  "inputHead": "b8c88aebb3eff7a430f07d127eecbdaa348c1849",
+  "sourceOfTruth": "packages/knowledge-hub/src/tools/skills-conformance-check.ts compareScriptTwin",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "compareScriptTwin (skills-conformance-check.ts:1036)",
+      "inputs": [
+        "dataset script file",
+        "installed twin file"
+      ],
+      "representations": [
+        "dataset scripts/",
+        "installed twin scripts/"
+      ],
+      "consumers": [
+        "checkScriptTwins",
+        "checkSkillLocalScripts",
+        "runChecks"
+      ],
+      "classes": [
+        "readable identical",
+        "readable drifted",
+        "twin missing",
+        "dataset unreadable"
+      ],
+      "interactions": [
+        "unreadable dataset + existing twin"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "skills-conformance-check",
+    "mode": "test",
+    "allowedPaths": []
+  },
+  "matrix": [
+    {
+      "id": "r0-1-w1",
+      "kind": "witness",
+      "baseline": "pass",
+      "condition": "dataset script chmod 000, twin present",
+      "oracle": "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts: AC2 unreadable dataset script",
+      "expected": "errors[0] contains 'unreadable' and both paths; fails when catch returns undefined",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "mode test: production already correct; fails under injected regression (catch => undefined)"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:cf9e60a4cf5a7e48ea8003138d8a69fa4bcfe7fbedfd87055a7115159b9fa12d",
+      "command": "pnpm --filter @pair/knowledge-hub exec vitest run src/tools/skills-conformance-check.test.ts -t unreadable",
+      "observed": "3 passed | 296 skipped"
+    }
+  ],
+  "testExempt": false,
+  "changedRows": [
+    "r0-1-w1"
+  ]
+}

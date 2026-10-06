@@ -1,5 +1,13 @@
 import { describe, it, expect, afterAll } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+  chmodSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
@@ -2886,6 +2894,23 @@ describe('checkSkillLocalScripts — scripts ship with their skill and mirror by
     write(installed, 'pair-workflow-demo/scripts/orphan.mjs', 'x')
     mkdirSync(join(skills, 'workflow/demo/scripts/empty'), { recursive: true })
     expect(checkSkillLocalScripts(skills, installed)).toEqual([])
+  })
+
+  it('AC2: an unreadable dataset script is an error naming both paths, never identical', () => {
+    const { skills, installed } = fixture('unreadable', 'No links.')
+    write(skills, 'workflow/demo/scripts/a.mjs', 'same')
+    write(installed, 'pair-workflow-demo/scripts/a.mjs', 'same')
+    const locked = join(skills, 'workflow/demo/scripts/a.mjs')
+    chmodSync(locked, 0o000)
+    try {
+      const errors = checkSkillLocalScripts(skills, installed)
+      expect(errors).toHaveLength(1)
+      expect(errors[0]).toContain('unreadable')
+      expect(errors[0]).toContain('workflow/demo/scripts/a.mjs')
+      expect(errors[0]).toContain('pair-workflow-demo/scripts/a.mjs')
+    } finally {
+      chmodSync(locked, 0o644)
+    }
   })
 
   it('AC3: the real corpus passes and the summary names the check', () => {
