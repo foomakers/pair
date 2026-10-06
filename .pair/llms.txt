@@ -482,6 +482,7 @@
 - [Quality Model](.pair/knowledge/guidelines/quality-assurance/quality-model.md)
 - [Quality Monitoring Framework](.pair/knowledge/guidelines/quality-assurance/quality-monitoring/README.md)
 - [Code Quality Monitoring](.pair/knowledge/guidelines/quality-assurance/quality-monitoring/code-quality.md)
+- [Cost & Billing Telemetry](.pair/knowledge/guidelines/quality-assurance/quality-monitoring/cost-billing-telemetry.md)
 - [Observability Requirements](.pair/knowledge/guidelines/quality-assurance/quality-monitoring/observability-requirements.md)
 - [Performance Gates Implementation](.pair/knowledge/guidelines/quality-assurance/quality-monitoring/performance-gates.md)
 - [Quality Standards Framework](.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md)

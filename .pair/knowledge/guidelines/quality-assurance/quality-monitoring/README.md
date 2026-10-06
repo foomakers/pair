@@ -27,6 +27,7 @@ Comprehensive quality monitoring framework ensuring continuous quality assessmen
 - **[code-quality.md](code-quality.md)** ✅ - Code quality metrics, monitoring, and automated reporting
 - **[performance-gates.md](performance-gates.md)** ✅ - Performance quality checkpoints and threshold enforcement
 - **[observability-requirements.md](observability-requirements.md)** ✅ - Quality observability standards and monitoring integration
+- **[cost-billing-telemetry.md](cost-billing-telemetry.md)** ✅ - Optional deploy/billing telemetry behind `assess-cost` report-mode deploy-match: provider APIs, equal-length windows, attribution, minimum read-only permissions
 
 ### **Related Quality Standards**
 
