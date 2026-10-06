@@ -72,6 +72,14 @@ export async function rename(
   const resolvedOldPath = state.resolvePath(oldPath)
   const resolvedNewPath = state.resolvePath(newPath)
 
+  // A symlink moves by its own path, replacing any link already at the destination
+  if (state.symlinks.has(resolvedOldPath)) {
+    state.symlinks.set(resolvedNewPath, state.symlinks.get(resolvedOldPath)!)
+    state.symlinks.delete(resolvedOldPath)
+    state.addParentDirectories(resolvedNewPath)
+    return
+  }
+
   // Check if source exists (either as file or directory)
   const sourceExists = state.files.has(resolvedOldPath) || state.dirs.has(resolvedOldPath)
   if (!sourceExists) {

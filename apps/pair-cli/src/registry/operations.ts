@@ -408,10 +408,17 @@ async function createOrReplaceSymlink(
   linkPath: string,
 ): Promise<void> {
   await fileService.mkdir(dirname(linkPath), { recursive: true })
-  if (fileService.existsSync(linkPath)) {
-    await fileService.unlink(linkPath)
-  }
   // Use relative path so symlinks are portable across machines
   const relTarget = relative(dirname(linkPath), target)
-  await fileService.symlink(relTarget, linkPath)
+  // Atomic last-writer-wins: build the link at a unique temp name, rename it over linkPath.
+  // A concurrent run's replacement is never an ENOENT/EEXIST abort. A real directory at
+  // linkPath makes the rename fail (never deleted); the temp link is cleaned up.
+  const tmpLink = `${linkPath}.tmp-${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  await fileService.symlink(relTarget, tmpLink)
+  try {
+    await fileService.rename(tmpLink, linkPath)
+  } catch (err) {
+    await fileService.unlink(tmpLink).catch(() => undefined)
+    throw err
+  }
 }
