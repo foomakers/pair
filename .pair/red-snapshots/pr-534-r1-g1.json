@@ -1,0 +1,454 @@
+{
+  "$meta": {
+    "pr": "534",
+    "phase": "r1-g1",
+    "base": "0fb67c7e51c9c97ae6481e0ce71cbe67975cbecb",
+    "trailer": "Pair-RED-Snapshot: pr=534; phase=r1-g1; base=0fb67c7e51c9c97ae6481e0ce71cbe67975cbecb; manifest=.pair/red-snapshots/pr-534-r1-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/registry/atomic-target-race.test.ts"
+    ]
+  },
+  "run": "story-134",
+  "story": 134,
+  "pr": 534,
+  "phase": "r1-g1",
+  "mode": "remediation",
+  "groupId": "r1-g1",
+  "inputHead": "0fb67c7e51c9c97ae6481e0ce71cbe67975cbecb",
+  "sourceOfTruth": "GitHub issue #134 body: AC1, AC9 (not blocked, does not abort; last writer wins), Risks table row \"Predictable stage name next to the target -> Stage created with exclusive semantics; never followed through a symlink\"; review r0 findings r0-1, r0-4",
+  "findings": {
+    "received": [
+      "r0-1",
+      "r0-3",
+      "r0-4"
+    ],
+    "covered": [
+      "r0-1",
+      "r0-4"
+    ]
+  },
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "writeDirAtomically seed (copyTree: existsSync(target) -> readdir/copy/readlink over the live target, apps/pair-cli/src/registry/atomic-target.ts:72-85,134) and the post-copy target readers that do exists(target) -> stat(target) -> walk/read: postCopyOps (operations.ts:376-398), rewriteSkillRefsInTarget and detectOrphanedSkillReferences (skill-refs.ts, reached from reconcileSkillNameRegistry in both install and update handlers)",
+      "inputs": [
+        "a registry target directory that a concurrent run renames aside (swap step 1) and later replaces with its own stage (swap step 2)"
+      ],
+      "representations": [
+        "live target dir",
+        "<target>.bak.tmp-<pid>-<n> aside",
+        "<target>.tmp-<pid>-<n> stage",
+        "CLI exit code / registry status (install handler installRegistryOrReportFailure, update rollback)"
+      ],
+      "consumers": [
+        "install handler installRegistry -> doCopyAndUpdateLinks -> finalizeRegistryCopy -> postCopyOps",
+        "update handler updateSingleRegistry (same path)",
+        "executeInstall/update -> reconcileSkillNameRegistry -> applySkillRefsToNonSkillRegistries -> rewriteSkillRefsInTarget; detectOrphanedSkillReferences",
+        "writeProjectLlmsTxt and applyLinkTransformation (try/catch -> warn; cannot abort)",
+        "distributeToSecondaryTargets (reads canonical only when file-valued)"
+      ],
+      "classes": [
+        "seed: target root readdir ENOENT",
+        "seed: nested subtree readdir ENOENT after partial seed",
+        "seed: file copy ENOENT",
+        "seed: symlink readlink ENOENT",
+        "seed: undisturbed (control)",
+        "seed: non-ENOENT error still aborts with live tree intact (control)",
+        "postCopyOps: exists true then stat ENOENT",
+        "postCopyOps: target absent (control)",
+        "postCopyOps: non-ENOENT stat error still rejects (control)",
+        "rewriteSkillRefsInTarget: exists->stat ENOENT, walk readdir ENOENT, file read ENOENT",
+        "rewriteSkillRefsInTarget: undisturbed (control)",
+        "detectOrphanedSkillReferences: exists->stat ENOENT",
+        "secondary distribution / caught consumers (not-applicable)"
+      ],
+      "interactions": [
+        "two real writeDirAtomically runs: A seeds inside B's aside window (between B rename-target-aside and rename-stage-in); both must complete and the target holds one run end-to-end",
+        "seed retry x stage reuse: a seed interrupted after a partial copy must not leave the pre-race files mixed with the new target's tree (asserted in every seed witness: the seeded part equals exactly one consistent tree)"
+      ]
+    },
+    {
+      "id": "r0-4",
+      "producer": "stage/temp creation in writeDirAtomically (fs.mkdir(stage,{recursive:true}), atomic-target.ts:131-132) and writeFileAtomically (produce(tmp) at atomic-target.ts:150-152), named by stagePathFor <target>.tmp-<pid>-<counter>; recoverTarget spares live pids (atomic-target.ts:61)",
+      "inputs": [
+        "a pre-existing path at the exact stage/temp name: leftover directory from a crashed run under a reused pid, a symlink (dir or file)"
+      ],
+      "representations": [
+        "<target>.tmp-<pid>-<n> stage dir",
+        "<file>.tmp-<pid>-<n> temp file",
+        "live target after swap/rename"
+      ],
+      "consumers": [
+        "copyDirectoryAtomically (all non-add directory registries)",
+        "doCopyAndUpdateLinks file branch, stripMarkersFromTarget, writeSecondaryTarget (file registries AGENTS.md / CLAUDE.md)"
+      ],
+      "classes": [
+        "stale directory at stage name, live (own) pid",
+        "symlink-to-dir at stage name",
+        "symlink-to-file at file temp name",
+        "stale regular file at file temp name (control: overwritten whole)",
+        "live concurrent stage under another suffix (control: untouched, never merged)",
+        "dead-pid leftover stage (control: swept)"
+      ],
+      "interactions": [
+        "r0-1 seed retry x r0-4: a re-seed after ENOENT must reuse/recreate only this run's exclusive stage (covered by seed witnesses asserting one consistent tree and no residue)"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "apps/pair-cli/src/registry (atomic target write + post-copy target readers)",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/registry/atomic-target.ts",
+      "apps/pair-cli/src/registry/operations.ts",
+      "apps/pair-cli/src/registry/skill-refs.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "W-r01-seed-root",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: W-r01-seed-root — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"W-r01-seed-root\"",
+      "condition": "other run renames the target aside at our seed readdir(target), then lands its tree",
+      "expected": "writeDirAtomically resolves; target = mine.md + exactly one consistent seed (pre tree or other run's tree); no .tmp-/.bak residue",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "rejects ENOENT scandir <root>/k"
+    },
+    {
+      "id": "W-r01-seed-subtree",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: W-r01-seed-subtree — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"W-r01-seed-subtree\"",
+      "condition": "race fires at readdir(target/x) after the root was listed and a.md copied",
+      "expected": "resolves; seeded part is one consistent tree, never pre a.md + other.md; no residue",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "rejects ENOENT scandir <root>/k/x"
+    },
+    {
+      "id": "W-r01-seed-file",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: W-r01-seed-file — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"W-r01-seed-file\"",
+      "condition": "race fires at copy(target/a.md)",
+      "expected": "resolves; one consistent seed; no residue",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "rejects ENOENT copyfile <root>/k/a.md"
+    },
+    {
+      "id": "W-r01-seed-symlink",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: W-r01-seed-symlink — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"W-r01-seed-symlink\"",
+      "condition": "race fires at readlink(target/l)",
+      "expected": "resolves; one consistent seed; no residue",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "rejects ENOENT readlink <root>/k/l"
+    },
+    {
+      "id": "C-r01-seed-stable",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: C-r01-seed-stable — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"C-r01-seed-stable\"",
+      "condition": "undisturbed seed of files, nested subtree and a symlink",
+      "expected": "target = pre tree + mine.md, symlink preserved, no residue",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "C-r01-seed-eacces",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: C-r01-seed-eacces — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"C-r01-seed-eacces\"",
+      "condition": "seed readdir(target) throws EACCES (not a vanished target)",
+      "expected": "writeDirAtomically rejects EACCES; live tree unchanged; no residue — guards against a fix that swallows every error",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "I-r01-two-runs",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: I-r01-two-runs — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"I-r01-two-runs\"",
+      "condition": "two real runs: A's first readdir(target) starts B, waits until B renamed the target aside, reads, then releases B",
+      "expected": "both runs fulfilled; one.md === two.md in {A,B}; no residue (AC1 + AC9)",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "statuses ['rejected','fulfilled'] (A aborts)"
+    },
+    {
+      "id": "W-r01-postcopy-stat",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: W-r01-postcopy-stat — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"W-r01-postcopy-stat\"",
+      "condition": "postCopyOps: exists(target) true, target renamed aside before stat",
+      "expected": "postCopyOps resolves",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "rejects ENOENT stat <root>/k"
+    },
+    {
+      "id": "C-r01-postcopy-absent",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: C-r01-postcopy-absent — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"C-r01-postcopy-absent\"",
+      "condition": "postCopyOps on an absent target",
+      "expected": "resolves",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "C-r01-postcopy-eacces",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: C-r01-postcopy-eacces — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"C-r01-postcopy-eacces\"",
+      "condition": "postCopyOps: stat(target) throws EACCES",
+      "expected": "rejects EACCES — non-race errors still propagate",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "W-r01-rewrite-stat",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: W-r01-rewrite-stat — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"W-r01-rewrite-stat\"",
+      "condition": "rewriteSkillRefsInTarget: exists true, target renamed aside before stat",
+      "expected": "resolves",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "rejects ENOENT stat <root>/k"
+    },
+    {
+      "id": "W-r01-rewrite-walk",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: W-r01-rewrite-walk — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"W-r01-rewrite-walk\"",
+      "condition": "rewriteSkillRefsInTarget: target swapped at the walk readdir(target)",
+      "expected": "resolves",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "rejects ENOENT scandir <root>/k"
+    },
+    {
+      "id": "W-r01-rewrite-read",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: W-r01-rewrite-read — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"W-r01-rewrite-read\"",
+      "condition": "rewriteSkillRefsInTarget: target swapped at readFile(target/a.md)",
+      "expected": "resolves",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "rejects ENOENT open <root>/k/a.md"
+    },
+    {
+      "id": "C-r01-rewrite-stable",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: C-r01-rewrite-stable — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"C-r01-rewrite-stable\"",
+      "condition": "undisturbed target with \"Run /next to start.\"",
+      "expected": "rewritten to \"Run /pair-next to start.\"",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "W-r01-detect-stat",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: W-r01-detect-stat — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"W-r01-detect-stat\"",
+      "condition": "detectOrphanedSkillReferences: exists true, target renamed aside before stat",
+      "expected": "resolves",
+      "covers": [
+        "r0-1"
+      ],
+      "observed": "rejects ENOENT stat <root>/k"
+    },
+    {
+      "id": "NA-r01-secondary",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/operations.ts distributeToSecondaryTargets/writeSecondaryTarget",
+      "condition": "secondary distribution reading a canonical that vanished",
+      "expected": "n/a",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "writeSecondaryTarget reads canonicalPath only in copy/transform mode, used only by the file-valued agents registry (AGENTS.md -> CLAUDE.md); a file canonical is replaced by rename-over-file (writeFileAtomically), never absent. Directory canonicals (skills) get symlink targets only (createOrReplaceSymlink never reads the canonical)."
+    },
+    {
+      "id": "NA-r01-caught",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/llms-generation.ts writeProjectLlmsTxt; apps/pair-cli/src/commands/update-link/logic.ts applyLinkTransformation",
+      "condition": "post-run readers of the target hitting ENOENT",
+      "expected": "n/a",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "both wrap their whole body in try/catch -> pushLog warn; a vanished target cannot abort the run or change the exit code, so AC9 cannot be violated there."
+    },
+    {
+      "id": "W-r04-stale-dir",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: W-r04-stale-dir — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"W-r04-stale-dir\"",
+      "condition": "fresh module (counter 0); <root>/t.tmp-<pid>-0/stale.md planted (own live pid, so not swept)",
+      "expected": "target tree = [a.md, mine.md]; stale.md absent",
+      "covers": [
+        "r0-4"
+      ],
+      "observed": "['a.md','mine.md','stale.md']"
+    },
+    {
+      "id": "W-r04-symlink-dir",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: W-r04-symlink-dir — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"W-r04-symlink-dir\"",
+      "condition": "fresh module; <root>/t.tmp-<pid>-0 is a symlink to <root>/outside",
+      "expected": "target is a real dir (not a symlink) = [a.md, mine.md]; outside untouched = [keep.md]",
+      "covers": [
+        "r0-4"
+      ],
+      "observed": "lstat(t).isSymbolicLink() === true"
+    },
+    {
+      "id": "W-r04-symlink-file",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: W-r04-symlink-file — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"W-r04-symlink-file\"",
+      "condition": "fresh module; <root>/AGENTS.md.tmp-<pid>-0 is a symlink to outside.md; writeFileAtomically writes \"new\"",
+      "expected": "AGENTS.md is a regular file \"new\"; outside.md still \"outside\"",
+      "covers": [
+        "r0-4"
+      ],
+      "observed": "lstat(AGENTS.md).isSymbolicLink() === true"
+    },
+    {
+      "id": "C-r04-stale-file",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: C-r04-stale-file — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"C-r04-stale-file\"",
+      "condition": "regular leftover file at the file temp name",
+      "expected": "AGENTS.md === \"new\" (whole overwrite)",
+      "covers": [
+        "r0-4"
+      ]
+    },
+    {
+      "id": "C-r04-live-other",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: C-r04-live-other — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"C-r04-live-other\"",
+      "condition": "live concurrent stage t.tmp-<pid>-zz present",
+      "expected": "left in place; target = [a.md, mine.md]",
+      "covers": [
+        "r0-4"
+      ]
+    },
+    {
+      "id": "C-r04-dead-stale",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "oracle": "apps/pair-cli/src/registry/atomic-target-race.test.ts :: C-r04-dead-stale — cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"C-r04-dead-stale\"",
+      "condition": "dead-pid leftover stage t.tmp-<deadpid>-0",
+      "expected": "swept; target = [a.md, mine.md]; no residue",
+      "covers": [
+        "r0-4"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:dc1266ae3d1188257ec3623ac28cde9747fc3c8623c18962ac68bda9ca54d24f",
+      "command": "cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts",
+      "observed": "Tests 13 failed | 8 passed (21) — every W-*/I-* row fails (ENOENT rejections; stale.md / symlink assertions)"
+    }
+  ],
+  "controlsCommand": {
+    "command": "cd apps/pair-cli && pnpm vitest run src/registry/atomic-target-race.test.ts -t \"C-r0\"",
+    "observed": "Tests 8 passed | 13 skipped (21)"
+  },
+  "testExempt": false,
+  "notes": [
+    "Real filesystem rows on purpose: the in-memory double raises no EEXIST on non-recursive mkdir and has no link-following mkdir, so it cannot discriminate r0-4 fixes.",
+    "r0-4 rows use vi.resetModules + dynamic import so the stage counter starts at 0 and the planted path is exactly the first name the run picks; a fix that changes the naming scheme also satisfies them.",
+    "Satisfiability probe (isolated APFS clone, not committed): ENOENT-retry seed into a fresh exclusive stage, non-recursive mkdir with EEXIST->next suffix, discard(tmp) before produce, ENOENT-tolerant stat/walk in postCopyOps and skill-refs -> 21/21 here and 268/268 in src/registry.",
+    "Reviewer VERIFY (20x concurrent-install.sh smoke) is an end-to-end check for review; not run here and not claimed."
+  ],
+  "plan": {
+    "remediationBatchId": "r1",
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1",
+          "r0-4"
+        ],
+        "owner": "apps/pair-cli/src/registry (atomic target write + post-copy target readers)",
+        "oracle": "US-134 AC9 + AC1; risk table \"exclusive stage, never followed through a symlink\"",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "apps/pair-cli/src/registry/atomic-target.ts",
+          "apps/pair-cli/src/registry/operations.ts",
+          "apps/pair-cli/src/registry/skill-refs.ts"
+        ],
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g2",
+        "findings": [
+          "r0-3"
+        ],
+        "owner": "apps/pair-cli/src/registry/atomic-target.test.ts (AC1 guard)",
+        "oracle": "US-134 AC1; injected regression: writeDirAtomically = mkdir(target)+populate(target) in place",
+        "mode": "test",
+        "allowedPaths": [],
+        "dependsOn": []
+      }
+    ],
+    "carried": []
+  }
+}
