@@ -37,6 +37,10 @@ function asidePathFor(target: string): string {
   return `${target}${ASIDE_INFIX}${uniqueSuffix()}`
 }
 
+function isGone(err: unknown): boolean {
+  return (err as NodeJS.ErrnoException | undefined)?.code === 'ENOENT'
+}
+
 async function discard(path: string, fs: FileSystemService): Promise<void> {
   await fs.rm(path, { recursive: true, force: true })
 }
@@ -118,6 +122,48 @@ async function swap(stage: string, target: string, fs: FileSystemService): Promi
 }
 
 /**
+ * A stage is always created empty: whatever sits at its name (a crashed run's leftover under a
+ * reused pid, or a symlink, which `rm` removes without following) is removed first.
+ */
+async function freshStage(stage: string, fs: FileSystemService): Promise<void> {
+  await discard(stage, fs)
+  await fs.mkdir(stage, { recursive: true })
+}
+
+/**
+ * Creates the stage with exclusive semantics: non-recursive mkdir never reuses nor follows an
+ * existing path (EEXIST -> next suffix). The parent is created first, separately.
+ */
+async function createExclusiveStage(target: string, fs: FileSystemService): Promise<string> {
+  await fs.mkdir(dirname(target), { recursive: true })
+  for (let i = 0; ; i++) {
+    const stage = stagePathFor(target)
+    try {
+      await fs.mkdir(stage)
+      return stage
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException)?.code !== 'EEXIST' || i >= 100) throw err
+    }
+  }
+}
+
+/**
+ * Seeds the stage from the live target. A target that vanishes mid-read was swapped away by a
+ * concurrent run (lost race, AC9): restart from an empty stage and re-read whatever landed.
+ */
+async function seedStage(target: string, stage: string, fs: FileSystemService): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      if (fs.existsSync(target)) await copyTree(fs, target, stage)
+      return
+    } catch (err) {
+      if (!isGone(err) || attempt >= 3) throw err
+      await freshStage(stage, fs)
+    }
+  }
+}
+
+/**
  * Runs `populate` against a stage seeded from `target`, then swaps the stage in. A failing
  * `populate` removes the stage and rethrows: the live tree was never touched. The stage is
  * created before anything else, so an unwritable parent fails before any change.
@@ -128,10 +174,9 @@ export async function writeDirAtomically(
   populate: (stagePath: string) => Promise<void>,
 ): Promise<void> {
   await recoverTarget(target, fs)
-  const stage = stagePathFor(target)
-  await fs.mkdir(stage, { recursive: true })
+  const stage = await createExclusiveStage(target, fs)
   try {
-    if (fs.existsSync(target)) await copyTree(fs, target, stage)
+    await seedStage(target, stage, fs)
     await populate(stage)
     await swap(stage, target, fs)
   } catch (err) {
@@ -148,6 +193,7 @@ export async function writeFileAtomically(
 ): Promise<void> {
   await recoverTarget(target, fs)
   const tmp = stagePathFor(target)
+  await discard(tmp, fs)
   try {
     await produce(tmp)
     await fs.rename(tmp, target)

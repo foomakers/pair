@@ -383,8 +383,12 @@ export async function postCopyOps(ctx: {
   const { fs, registryConfig, effectiveTarget, datasetPath, baseTarget } = ctx
   const canonicalTarget = getCanonicalTarget(registryConfig.targets)
   if (await fs.exists(effectiveTarget)) {
-    const stat = await fs.stat(effectiveTarget)
-    if (!stat.isDirectory()) {
+    // A concurrent run's swap may move the target away between exists and stat: lost race, not an error.
+    const stat = await fs.stat(effectiveTarget).catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === 'ENOENT') return undefined
+      throw err
+    })
+    if (stat && !stat.isDirectory()) {
       await stripMarkersFromTarget(fs, effectiveTarget, canonicalTarget?.transform)
     }
   }
