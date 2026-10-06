@@ -106,14 +106,32 @@ describe('writeDirAtomically (AC1, AC2, AC3)', () => {
 
   it('two overlapping runs each leave one run end-to-end, never an interleaving', async () => {
     const fs = createTestFs({}, { '/p/t/old.md': 'old' }, cwd)
-    const run = (tag: string) =>
-      writeDirAtomically('/p/t', fs, async stage => {
-        await fs.writeFile(`${stage}/one.md`, tag)
-        await new Promise(r => setTimeout(r, 1))
-        await fs.writeFile(`${stage}/two.md`, tag)
-      })
-    await Promise.all([run('A'), run('B')])
-    expect(fs.getContent('/p/t/one.md')).toBe(fs.getContent('/p/t/two.md'))
+    const live = () => ({
+      old: fs.getContent('/p/t/old.md'),
+      one: fs.getContent('/p/t/one.md'),
+      two: fs.getContent('/p/t/two.md'),
+    })
+    let release!: () => void
+    const gate = new Promise<void>(r => (release = r))
+    let suspended!: () => void
+    const aSuspended = new Promise<void>(r => (suspended = r))
+    // Run A writes its first file, then is suspended until run B has completed end-to-end.
+    const runA = writeDirAtomically('/p/t', fs, async stage => {
+      await fs.writeFile(`${stage}/one.md`, 'A')
+      suspended()
+      await gate
+      await fs.writeFile(`${stage}/two.md`, 'A')
+    })
+    await aSuspended
+    expect(live()).toEqual({ old: 'old', one: undefined, two: undefined })
+    await writeDirAtomically('/p/t', fs, async stage => {
+      await fs.writeFile(`${stage}/one.md`, 'B')
+      await fs.writeFile(`${stage}/two.md`, 'B')
+    })
+    expect(live()).toEqual({ old: 'old', one: 'B', two: 'B' })
+    release()
+    await runA
+    expect(live()).toEqual({ old: 'old', one: 'A', two: 'A' })
   })
 })
 
