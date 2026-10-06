@@ -26,6 +26,10 @@ import {
   checkBatchEngineWorkflows,
   batchEngineErrors,
   checkListTargetsSamples,
+  PLANNED_MARKER_RE,
+  findStalePlannedMarkers,
+  plannedMarkerErrors,
+  queryIssueState,
 } from './docs-staleness-check'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
@@ -1020,7 +1024,7 @@ describe('runAllChecks (in-process, real docs tree)', () => {
   // files sharing two cores), where vitest's default budget failed it. Same shape as
   // deploy-build-command.test.ts: an explicit budget with the measurement it came from.
   it('reports zero drift and 51 skills against the actual repo', () => {
-    const { errors, skillCount } = runAllChecks(REPO_ROOT)
+    const { errors, skillCount } = runAllChecks(REPO_ROOT, () => 'open')
     expect(errors, errors.join('\n')).toHaveLength(0)
     expect(skillCount).toBe(51)
   }, 60_000)
@@ -1177,7 +1181,7 @@ describe('US-514 T-8: check 2d removed — a stale header no longer fails docs:s
         'utf-8',
       )
       expect(catalog).toContain('**Last updated:** 2000-01-01')
-      const { errors } = mod.runAllChecks(REPO_ROOT)
+      const { errors } = mod.runAllChecks(REPO_ROOT, () => 'open')
       expect(errors, errors.join('\n')).toHaveLength(0)
     } finally {
       vi.doUnmock('node:fs')
@@ -1411,5 +1415,121 @@ describe('checkListTargetsSamples', () => {
   it('flags a behavior change the sample does not follow', () => {
     const rebehaved = { ...registries, github: { behavior: 'add', targets: [{ path: '.github' }] } }
     expect(checkListTargetsSamples(rebehaved, [{ rel: 'a.mdx', content: real }])).toHaveLength(1)
+  })
+})
+
+// US-353 AC8 — a planned-capability marker whose issue is closed (or unresolvable) fails the gate.
+describe('planned-capability marker (US-353 AC7/AC8)', () => {
+  const marker = (n: number) =>
+    `<Callout type="info">\n**Planned** — tracked in #${n}, not yet wired.\n</Callout>`
+  const stateOf =
+    (m: Record<number, 'open' | 'closed' | 'unresolvable' | 'unavailable'>) => (n: number) =>
+      m[n] ?? 'unresolvable'
+
+  it('matches the pinned sentence and captures the issue number', () => {
+    const nums = [...marker(212).matchAll(PLANNED_MARKER_RE)].map(m => Number(m[1]))
+    expect(nums).toEqual([212])
+  })
+
+  it('does not match prose that merely mentions an issue or PR number', () => {
+    const prose = 'See ADR-3. PR #212 fixed X. Planned for later, tracked in #212 of the board.'
+    expect([...prose.matchAll(PLANNED_MARKER_RE)]).toHaveLength(0)
+  })
+
+  it('open issue passes', () => {
+    expect(findStalePlannedMarkers(marker(212), 'a.mdx', stateOf({ 212: 'open' }))).toEqual([])
+  })
+
+  it('closed issue fails naming the page and the issue', () => {
+    const errors = findStalePlannedMarkers(
+      marker(212),
+      'developer-journey/x.mdx',
+      stateOf({ 212: 'closed' }),
+    )
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('developer-journey/x.mdx')
+    expect(errors[0]).toContain('#212')
+    expect(errors[0]).toContain('closed')
+  })
+
+  it('unresolvable issue fails with a message distinct from closed', () => {
+    const closed = findStalePlannedMarkers(marker(9), 'a.mdx', stateOf({ 9: 'closed' }))
+    const missing = findStalePlannedMarkers(marker(9), 'a.mdx', stateOf({}))
+    expect(missing).toHaveLength(1)
+    expect(missing[0]).toContain('does not resolve')
+    expect(missing[0]).not.toEqual(closed[0])
+  })
+
+  it('unavailable lookup yields no per-page error (handled by plannedMarkerErrors)', () => {
+    expect(findStalePlannedMarkers(marker(212), 'a.mdx', stateOf({ 212: 'unavailable' }))).toEqual(
+      [],
+    )
+  })
+
+  it('reports every stale marker on a page, once per marker', () => {
+    const errors = findStalePlannedMarkers(
+      `${marker(1)}\n\n${marker(2)}\n\n${marker(3)}`,
+      'a.mdx',
+      stateOf({ 1: 'closed', 2: 'open', 3: 'closed' }),
+    )
+    expect(errors).toHaveLength(2)
+  })
+
+  describe('queryIssueState (gh adapter)', () => {
+    it('maps OPEN/CLOSED', () => {
+      expect(queryIssueState(1, () => 'OPEN\n')).toBe('open')
+      expect(queryIssueState(1, () => 'CLOSED\n')).toBe('closed')
+    })
+    it('maps a gh not-found failure to unresolvable', () => {
+      const exec = () => {
+        throw Object.assign(new Error('x'), {
+          stderr: 'GraphQL: Could not resolve to an Issue with the number of 9.',
+        })
+      }
+      expect(queryIssueState(9, exec)).toBe('unresolvable')
+    })
+    it('maps any other failure (gh missing, offline, unauthenticated) to unavailable', () => {
+      const exec = () => {
+        throw Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' })
+      }
+      expect(queryIssueState(9, exec)).toBe('unavailable')
+    })
+  })
+
+  describe('plannedMarkerErrors', () => {
+    const docs = [{ rel: 'a.mdx', content: marker(212) }]
+    it('local run with unavailable lookup warns, never fails', () => {
+      const warn = vi.fn()
+      expect(plannedMarkerErrors(docs, () => 'unavailable', { ci: false, warn })).toEqual([])
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(warn.mock.calls[0][0]).toContain('#212')
+    })
+    it('CI run with unavailable lookup fails loudly', () => {
+      const errors = plannedMarkerErrors(docs, () => 'unavailable', { ci: true, warn: vi.fn() })
+      expect(errors).toHaveLength(1)
+      expect(errors[0]).toContain('#212')
+    })
+    it('queries each distinct issue once', () => {
+      const lookup = vi.fn(() => 'open' as const)
+      plannedMarkerErrors(
+        [
+          { rel: 'a.mdx', content: marker(212) },
+          { rel: 'b.mdx', content: marker(212) },
+        ],
+        lookup,
+        { ci: false, warn: vi.fn() },
+      )
+      expect(lookup).toHaveBeenCalledTimes(1)
+    })
+    it('no markers ⇒ no lookup', () => {
+      const lookup = vi.fn(() => 'open' as const)
+      expect(
+        plannedMarkerErrors([{ rel: 'a.mdx', content: 'plain' }], lookup, {
+          ci: true,
+          warn: vi.fn(),
+        }),
+      ).toEqual([])
+      expect(lookup).not.toHaveBeenCalled()
+    })
   })
 })

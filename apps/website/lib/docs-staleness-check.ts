@@ -1281,7 +1281,103 @@ function cliConfigDerivedErrors(
   return [...batchEngineErrors(paths), ...listTargetsSampleErrors(paths)]
 }
 
-export function runAllChecks(root: string): RunResult {
+/**
+ * US-353 AC7/AC8 — planned-capability marker. A page describing behaviour that is not wired yet
+ * wraps ONE pinned sentence in a `<Callout type="info">`:
+ *
+ *   **Planned** — tracked in #212, not yet wired.
+ *
+ * The issue number is the capture group. Prose that merely mentions a number ("PR #212 fixed X")
+ * does not match: the literal anchor is the contract. When the issue is closed the page is stale
+ * (shipped or dropped) and the gate fails; an unresolvable number fails with a distinct message.
+ */
+export const PLANNED_MARKER_RE = /\*\*Planned\*\* — tracked in #(\d+)/g
+
+export type IssueState = 'open' | 'closed' | 'unresolvable' | 'unavailable'
+export type IssueStateLookup = (issue: number) => IssueState
+
+/** Adapter over `gh issue view`; `exec` returns stdout and throws on non-zero exit. */
+export function queryIssueState(
+  issue: number,
+  exec: (args: string[]) => string = args =>
+    execFileSync('gh', args, {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 20_000,
+    }),
+): IssueState {
+  try {
+    const out = exec(['issue', 'view', String(issue), '--json', 'state', '--jq', '.state']).trim()
+    if (out === 'OPEN') return 'open'
+    if (out === 'CLOSED') return 'closed'
+    return 'unavailable'
+  } catch (e) {
+    const stderr = String((e as { stderr?: unknown }).stderr ?? '')
+    return /could not resolve to an issue|not found/i.test(stderr) ? 'unresolvable' : 'unavailable'
+  }
+}
+
+export function findStalePlannedMarkers(
+  content: string,
+  rel: string,
+  stateOf: IssueStateLookup,
+): string[] {
+  const errors: string[] = []
+  for (const m of content.matchAll(PLANNED_MARKER_RE)) {
+    const issue = Number(m[1])
+    const state = stateOf(issue)
+    if (state === 'closed') {
+      errors.push(
+        `${rel}: planned marker references #${issue}, which is closed — the capability shipped or was dropped; update the page and remove the marker`,
+      )
+    } else if (state === 'unresolvable') {
+      errors.push(
+        `${rel}: planned marker references #${issue}, which does not resolve to an issue — fix the number or remove the marker`,
+      )
+    }
+  }
+  return errors
+}
+
+/**
+ * Check 6. Each distinct issue is queried once. When the lookup is unavailable (no `gh`, offline,
+ * unauthenticated): CI fails loudly, a local run warns and skips — never a silent pass.
+ */
+export function plannedMarkerErrors(
+  docs: { rel: string; content: string }[],
+  stateOf: IssueStateLookup,
+  env: { ci: boolean; warn: (message: string) => void },
+): string[] {
+  const cache = new Map<number, IssueState>()
+  const lookup: IssueStateLookup = n => {
+    if (!cache.has(n)) cache.set(n, stateOf(n))
+    return cache.get(n) as IssueState
+  }
+  const errors: string[] = []
+  for (const { rel, content } of docs) errors.push(...findStalePlannedMarkers(content, rel, lookup))
+  const unavailable = [...cache].filter(([, s]) => s === 'unavailable').map(([n]) => `#${n}`)
+  if (unavailable.length > 0) {
+    const msg = `planned-marker issue state unavailable (gh missing, offline or unauthenticated) for ${unavailable.join(', ')}`
+    if (env.ci) errors.push(`${msg} — cannot verify planned markers in CI`)
+    else env.warn(`${msg} — skipped locally; CI enforces it`)
+  }
+  return errors
+}
+
+function liveMarkerErrors(
+  docs: { rel: string; content: string }[],
+  issueState: IssueStateLookup,
+): string[] {
+  return plannedMarkerErrors(docs, issueState, {
+    ci: Boolean(process.env['CI']),
+    warn: m => console.warn(`WARN ${m}`),
+  })
+}
+
+export function runAllChecks(
+  root: string,
+  issueState: IssueStateLookup = queryIssueState,
+): RunResult {
   const paths = checkPaths(root)
   const { SKILLS_DIR, DOCS_DIR, HOW_TO_DIR } = paths
 
@@ -1292,7 +1388,6 @@ export function runAllChecks(root: string): RunResult {
   const declaredPluginSkills = countDeclaredPluginSkills(paths.PLUGIN_MANIFEST)
   const validRoutes = buildValidRoutes(docsFiles, DOCS_DIR)
   const howToCount = countHowToGuides(HOW_TO_DIR)
-
   // Check 2b (loud failure if the how-to dataset dir moved)
   if (howToCount === null) {
     errors.push(`How-to guides dir not found: ${HOW_TO_DIR} — guide-count check cannot run`)
@@ -1318,14 +1413,13 @@ export function runAllChecks(root: string): RunResult {
   errors.push(...cliConfigDerivedErrors(paths))
   errors.push(...catalogErrors(catalog, allSkills, SKILLS_DIR))
 
-  // Checks 3 & 4: CLI command anchors + tutorial references
+  // Checks 3 & 4: CLI command anchors + tutorial references; 6: planned-capability markers
   const docs = docsFiles.map(file => ({
     rel: relative(DOCS_DIR, file),
     content: readFileSync(file, 'utf-8'),
   }))
   const cli = checkCliCommands(paths.COMMANDS_DIR, paths.COMMANDS_FILE, docs)
-  errors.push(...cli.errors)
-
+  errors.push(...cli.errors, ...liveMarkerErrors(docs, issueState))
   errors.push(...readmeErrors(join(root, 'README.md'), skillCount, howToCount))
 
   return { errors, skillCount, commandCount: cli.commandCount }
