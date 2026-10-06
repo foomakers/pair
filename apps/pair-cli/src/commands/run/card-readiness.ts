@@ -262,3 +262,20 @@ export function resolveCardReadiness(card: CardDocument, mapping: StateMapping):
   if (macrostate === 'Review') return { readiness: 'ready', explanation: via }
   return readyVerdict(card, via)
 }
+
+/**
+ * Conflicting signals (US-253; definition-of-ready-and-done.md § Conflicting Signals): the board
+ * resolves the card to `Ready` but its body fails the Definition of Ready. The mapped state wins
+ * outright — `resolveCardReadiness` is unchanged — and the unmet criteria are reported as a warning
+ * for visibility, never as a block. `undefined` ⇒ no conflict (state not `Ready`, no board state,
+ * an unmapped literal, or every criterion met).
+ */
+export function conflictingSignals(
+  card: CardDocument,
+  mapping: StateMapping,
+): readonly string[] | undefined {
+  if (card.boardState === undefined) return undefined
+  if (resolveMacrostate(card.boardState, mapping) !== 'Ready') return undefined
+  const unmet = unmetReadinessCriteria(card)
+  return unmet.length > 0 ? unmet : undefined
+}
