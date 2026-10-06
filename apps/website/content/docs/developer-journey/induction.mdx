@@ -46,6 +46,10 @@ The AI guides you through five decision areas:
 
 Each decision produces an adoption file. Bootstrap composes several capability skills internally (`/pair-capability-assess-architecture`, `/pair-capability-assess-stack`, etc.) — you don't need to invoke them individually.
 
+### Where Classification Is Switched On
+
+Risk classification is configured at bootstrap, in `.pair/adoption/tech/risk-matrix.md` (the tag projection, an optional criticality table, optional per-tier overrides) and, for tier-aware gates, in `way-of-working.md`. Without the file, KB defaults apply and no tags are emitted — nothing fails. How to set each up is in [Customize for Your Team](/docs/customization/team#enable-classification-tiers); the process it feeds is in the [Process Lifecycle](/docs/developer-journey#the-risk-driven-flow).
+
 **For existing projects**: Start here instead of Step 1. Ask the AI assistant to analyze your codebase and produce adoption files from what it finds, rather than writing them from scratch.
 
 ## Step 3: Plan Initiatives

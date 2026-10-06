@@ -68,6 +68,18 @@ After all tasks are complete, the skill's closing phase splits the handoff from 
 
 If subagent spawning is unavailable, the skill degrades to running `/pair-capability-publish-pr` inline in the same session (checkpoint still written) and notes the degradation. Re-invoking `/pair-process-implement` on an interrupted story reads the checkpoint and resumes from the first pending task — completed tasks are never repeated, and `publish-pr` updates the existing PR rather than opening a second one.
 
+### What Your PR's Tier Changes
+
+The `risk:*` tag copied from your story onto the PR (see the closing phase above) is what scales the rest of the flow. Five things change with it; the model behind each is linked, not repeated here.
+
+1. **Review re-classifies from the diff — it may raise, never lower (D17).** The tier from refinement is a floor. If the actual diff is riskier than the story implied, review raises it and says so; if it is safer, the tier stays. Raising only ever widens what runs.
+2. **Gates scale with the tier.** The pre-merge gate reads the tag and runs the checks that tier needs — the matrix is in [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates#the-matrix-when-tiering-is-enabled). Locally, `/pair-capability-verify-quality` runs the same set before you push.
+3. **Review effort scales with the tier.** Green: no human review wait, the AI review is informational. Yellow: blocked until one reviewer approves, within one working day. Red: blocked until an explicit approval, within two working days. These are KB defaults a project can override per tier; the full table is in the [Quality Model](/docs/reference/quality-model#classification--tiers).
+4. **The PR moves through three states** — `to-be-reviewed`, `ready-to-merge`, `not-approved` — synthesized from gate, review and tier; you never set them by hand. See [PR State Flow](/docs/concepts/pr-state-flow).
+5. **No tag means red.** A PR with no resolvable `risk:*` tag is gated as 🔴 and runs the full matrix with a warning: missing classification never means fewer checks.
+
+*Source: D17 (confirm-or-raise, never lower), D21 (defaults overridable per tier in adoption), D22 (verdict-first review).*
+
 ## Step 9: Code Review
 
 Review a pull request through a structured 6-phase process.

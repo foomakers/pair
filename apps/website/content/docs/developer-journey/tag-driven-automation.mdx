@@ -1,0 +1,40 @@
+---
+title: "Tag-Driven Automation"
+description: "What gets tagged and when, how automation eligibility is a filter over those tags, and how the supervised automation loop uses them."
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+Tags are how the delivery process hands decisions to automation without a second source of truth: classification writes them once, and everything downstream — gates, review, the automation loop — only **reads** them. This page is the operational view; the model is in [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates) and the cycle in [Delivery Cycle](/docs/reference/delivery-cycle).
+
+## What gets tagged, and when
+
+| When | What is written | By |
+| --- | --- | --- |
+| Story refinement | the classification matrix on the card, plus the `risk:*` tag when tag projection is on | `/pair-capability-classify` |
+| PR publish | the story's tags copied onto the one PR | `/pair-capability-publish-pr` |
+| Review | the PR's tier **raised** if the diff warrants it — never lowered; the PR state label | `/pair-process-review` |
+
+Only the tag families your project's tag projection lists are emitted (`risk` by default; `cost` opt-in). With projection off, the matrix is still written to the card, but nothing downstream can filter on it. Turning it on is a configuration step: [Enable Classification Tiers](/docs/customization/team#enable-classification-tiers).
+
+## Eligibility is a filter over tags
+
+Which cards an unattended run may pick up is not a new tag. It is **one label** declared in `.pair/adoption/tech/automation.md` under `## Eligibility`, matched by plain string equality against the labels classification already put on the card.
+
+- Declare `risk:green` and only green cards are ever selected; yellow and red never match, by construction.
+- No file, or no `## Eligibility` section: the eligible set is empty and automation is off — it never widens itself.
+- The tier→gate and tier→approval policy is not restated by eligibility; it stays in the [quality model](/docs/reference/quality-model).
+
+The selection query is `/pair-next` with that label as its filter — see [pair-next](/docs/reference/pair-next). The full schema (single label, validation rules, fail-safes) is the shipped automation-policy guideline.
+
+## The supervised automation loop
+
+`/pair-loop` and `pair-cli run` select eligible cards, drive each through the delivery cycle (prepare → implement → verify → green), and stop on the project's stop predicate (for example, any card tagged `risk:red`). A card that clears review stops at ready-for-merge unless the project's `## Auto-Advance` names its tier. The stages, the three ways to run them and the hooks are in [Delivery Cycle](/docs/reference/delivery-cycle).
+
+<Callout type="info">
+  **Planned** — tracked in #212, not yet wired. Supervised automation as a whole — an operator watching
+  the loop end to end and stepping in — is the epic still open; use the loop today with an eligibility
+  label you trust and review what it publishes.
+</Callout>
+
+*Source: requirement-triage decisions D17 (never lower), D21 (adoption delta), and ADR-013 Q2b (eligibility is a filter over classification tags, no dedicated tag).*

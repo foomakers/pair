@@ -69,6 +69,7 @@ pair-cli update-link --dry-run
 | Testing framework, language, library  | `.pair/adoption/tech/tech-stack.md`      |
 | Architecture pattern                   | `.pair/adoption/tech/architecture.md`    |
 | Methodology, quality gates             | `.pair/adoption/tech/way-of-working.md`  |
+| Classification tiers (tag projection, criticality, overrides) | `.pair/adoption/tech/risk-matrix.md` |
 | Add a new guideline                    | Create a new file in `.pair/adoption/`   |
 | Record a significant decision          | Create an ADR in `.pair/adoption/tech/adr/` |
 
@@ -161,6 +162,49 @@ Reviewer count, SLA, checklist depth and whether 🔴 needs explicit approval ar
 ```
 
 The defaults are not copied into your adoption file, deliberately: a copy that matches is a second version of the same truth with nothing keeping the two in step, and because adoption wins over the KB default, a stale copy would quietly override an improved one. **Once you do override, write the effective table into that file** — when the values differ from the defaults, the ones in force belong where they are decided.
+
+## Enable Classification Tiers
+
+Classification (the `risk:*` tier that scales gates and review) is configured in `.pair/adoption/tech/risk-matrix.md`. The file is optional: absent, KB defaults apply and no tags are emitted. It has three independent sections; add only the ones you need. What the tiers mean is in the [Quality Model](/docs/reference/quality-model) and [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates); how the process uses them is in the [Process Lifecycle](/docs/developer-journey#the-risk-driven-flow).
+
+**Tag projection** — which tag families are written onto cards and PRs. Without it nothing is tagged, so gates, review effort and automation eligibility cannot read a tier.
+
+```markdown
+## Tag Projection
+
+Active: risk
+```
+
+Add `cost` to the list to also emit `cost:*`.
+
+**Criticality Table** — how critical each deployable is, as the input to the Service/domain criticality dimension. Rows are keyed by the app, package or path scope that owns the touched files; a diff touching several takes the highest. A deployable not listed contributes the conservative High, so list every one you own. `/pair-process-bootstrap` can propose the rows from your domain model.
+
+```markdown
+## Criticality Table
+
+| Service/Domain | Criticality |
+| --- | --- |
+| apps/api | High |
+| apps/website | Low |
+```
+
+**Overrides** — per-tier reviewer count and SLA, threshold tweaks, and dimension-resolution rules. Write only the keys you change; the defaults are not copied into your file (see [Changing what each tier requires](#changing-what-each-tier-requires) above).
+
+```markdown
+## Overrides
+
+- tier.red.reviewers: 2
+- tier.red.sla_days: 3
+```
+
+Tier-aware pre-merge gating is a separate switch (`Pre-merge tiering: enabled` in `way-of-working.md`), described in [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates#setting-it-up-opt-in).
+
+<Callout type="info">
+  **Planned** — tracked in #262, not yet wired. Migrating an existing project's adoption files to a new
+  KB version through a published prompt is not available yet; until then, update by hand.
+</Callout>
+
+*Source: `tech/risk-matrix.md` sections as documented in `quality-model.md` §5–§6; D21 (adoption holds only the delta over KB defaults).*
 
 ## Record Significant Decisions
 

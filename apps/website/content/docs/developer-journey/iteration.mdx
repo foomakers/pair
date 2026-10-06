@@ -72,6 +72,14 @@ Story points using the team's estimation methodology. The AI proposes a size bas
 
 Refinement also shifts classification left: `/pair-capability-classify` scores the story against the quality model (risk and cost dimensions, coupling fed by the scoped subdomain/context mapping) and writes the matrix into the story's `## Classification` section — so the risk tier is known before a line of code is written, not first surfaced at review.
 
+**What you see on the card.** A `## Classification` section: the resulting tier up front, then one line per dimension with its value, where it came from and a short note, collapsed under a `<details>` so the card stays readable. When the project projects tags, the card also carries the `risk:*` tag. The dimensions and tiers themselves are defined in [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates) and the [Quality Model](/docs/reference/quality-model).
+
+**What you are asked to confirm.** Classification is a proposal: the refinement reports the matrix and you accept it or correct a dimension you know better (a story that actually touches a critical service, say). The tier is derived from the story's declared scope — a story that names no deployable falls back to the project's defaults — so a vague scope is the usual reason to correct it here rather than at review.
+
+Review later re-classifies from the real diff; that side is in [Execution](/docs/developer-journey/execution#what-your-prs-tier-changes).
+
+*Source: D17, D21, D22 of the requirement-triage decisions; classification-at-refinement scenario.*
+
 ## Step 7: Create Tasks
 
 Break a refined story into concrete implementation tasks.
