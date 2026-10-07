@@ -46,6 +46,8 @@ export interface FileSystemService {
   isFile: (path: string) => Promise<boolean>
   isFolder: (path: string) => Promise<boolean>
   symlink: (target: string, path: string) => Promise<void>
+  /** The link's own target text (never followed). */
+  readlink: (path: string) => Promise<string>
   createZip: (sourcePaths: string[], outputPath: string) => Promise<void>
   extractZip: (zipPath: string, outputDir: string) => Promise<void>
 }
@@ -80,6 +82,7 @@ export const fileSystemService: FileSystemService = {
   copy: (oldPath, newPath) => fs.copyFile(oldPath, newPath),
   copySync: (oldPath, newPath) => copyFileSync(oldPath, newPath),
   symlink: (target, path) => fs.symlink(target, path, 'dir'),
+  readlink: path => fs.readlink(path),
   rm: async (path, options) => {
     await fs.rm(path, options)
   },

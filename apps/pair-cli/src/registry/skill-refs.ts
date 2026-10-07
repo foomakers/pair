@@ -33,6 +33,33 @@ export type SkillRefContext = {
   pushLog: (level: LogEntry['level'], message: string) => void
 }
 
+function isGone(err: unknown): boolean {
+  return (err as NodeJS.ErrnoException | undefined)?.code === 'ENOENT'
+}
+
+/** ENOENT-tolerant: a target swapped away by a concurrent run lists as empty (lost race). */
+async function listMarkdownFiles(fs: FileSystemService, target: string): Promise<string[]> {
+  try {
+    if (!(await fs.exists(target))) return []
+    const stat = await fs.stat(target)
+    if (stat.isDirectory()) return await walkMarkdownFiles(target, fs)
+    return target.endsWith('.md') ? [target] : []
+  } catch (err) {
+    if (isGone(err)) return []
+    throw err
+  }
+}
+
+/** ENOENT-tolerant read: undefined when the file vanished. */
+async function readIfPresent(fs: FileSystemService, path: string): Promise<string | undefined> {
+  try {
+    return await fs.readFile(path)
+  } catch (err) {
+    if (isGone(err)) return undefined
+    throw err
+  }
+}
+
 /**
  * Rewrites skill references AND SKILL.md cross-reference link paths in all
  * markdown files under a target path. If target is a file, rewrites that single
@@ -51,17 +78,11 @@ export async function rewriteSkillRefsInTarget(
   pushLog: (level: LogEntry['level'], message: string) => void,
 ): Promise<void> {
   const { skillNameMap, skillLinkPathMap } = maps
-  if (!(await fs.exists(target))) return
-
-  const stat = await fs.stat(target)
-  const files: string[] = stat.isDirectory()
-    ? await walkMarkdownFiles(target, fs)
-    : target.endsWith('.md')
-      ? [target]
-      : []
+  const files = await listMarkdownFiles(fs, target)
 
   for (const filePath of files) {
-    const content = await fs.readFile(filePath)
+    const content = await readIfPresent(fs, filePath)
+    if (content === undefined) continue
     let rewritten = rewriteSkillReferences(content, skillNameMap)
     rewritten = rewriteSkillLinkPaths(rewritten, skillLinkPathMap)
     if (rewritten !== content) {
@@ -117,17 +138,11 @@ export async function detectOrphanedSkillReferences(
       const target = baseTarget
         ? fs.resolve(baseTarget, targetCfg.path)
         : fs.resolve(targetCfg.path)
-      if (!(await fs.exists(target))) continue
-
-      const stat = await fs.stat(target)
-      const files: string[] = stat.isDirectory()
-        ? await walkMarkdownFiles(target, fs)
-        : target.endsWith('.md')
-          ? [target]
-          : []
+      const files = await listMarkdownFiles(fs, target)
 
       for (const filePath of files) {
-        const content = await fs.readFile(filePath)
+        const content = await readIfPresent(fs, filePath)
+        if (content === undefined) continue
         const found = findSkillReferences(content, orphanedInstalledNames)
         for (const name of found) {
           pushLog(

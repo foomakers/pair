@@ -253,6 +253,7 @@ export async function copyDirectoryWithTransforms(params: {
   source: string
   target: string
   datasetRoot: string
+  logicalDest?: string // final home of a staged destPath: links map to it, files go to destPath
   options?: SyncOptions
 }): Promise<CopyPathOpsResult> {
   const { fileService, srcPath, destPath, options } = params
@@ -402,6 +403,7 @@ async function rewriteLinksForTransformedDirs(
     datasetRoot: string
     srcPath: string
     destPath: string
+    logicalDest?: string
     source: string
     target: string
   },
@@ -409,7 +411,8 @@ async function rewriteLinksForTransformedDirs(
   transformOpts: TransformOpts,
 ): Promise<void> {
   const sourceRelative = relative(params.datasetRoot, params.srcPath) || params.source
-  const targetRelative = relative(params.datasetRoot, params.destPath) || params.target
+  const targetRelative =
+    relative(params.datasetRoot, params.logicalDest ?? params.destPath) || params.target
   const pathMapping = buildPathMapping(
     dirMappingFiles,
     transformOpts,

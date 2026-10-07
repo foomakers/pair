@@ -32,6 +32,17 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
   [GitHub Releases](https://github.com/foomakers/pair/releases) names the release that introduced
   it.
 
+- **Registry writes are atomic; the last writer wins.** `install` and `update` build each
+  registry's result in a sibling directory (`<target>.tmp-<pid>-<n>`) seeded from the live target,
+  then swap it in with renames, so an interrupted or concurrent run never leaves a tree that is
+  neither the old state nor the new one. File targets (`AGENTS.md`, `CLAUDE.md`) are replaced by a
+  rename. There is no lock: a second run is never blocked, and when two runs overlap the later swap
+  wins wholesale (two runs on different dataset versions leave the project consistently on one of
+  them). Leftovers of a dead run are swept, and a target left absent by an interrupted swap is
+  restored, on the next run — no manual cleanup. `behavior: add` registries (`.pair/adoption`) are
+  never staged. The target is transiently duplicated on disk while a run is in flight. On Windows,
+  `rename` over an existing directory is not atomic, so these guarantees hold on POSIX platforms only.
+
 ---
 
 ## install
