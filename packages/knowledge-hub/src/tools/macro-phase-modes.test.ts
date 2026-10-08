@@ -635,20 +635,132 @@ describe('r0-4: a fallback-only step is RUN once by its mode, under the profile'
     expect(run.halted).toBe('brainstorm')
   })
 
-  // Precedence, decided: the mode's own fallback-only step is run BEFORE a wrong-context report,
-  // even when another mode's row holds for the unit. Backlog shape: no epics, one story, Ready with
-  // a task breakdown (row 9 belongs to `implementation`); under poc row 3 is skipped.
-  it('R04-I2: no row of the mode selects while another mode row holds (Ready + tasks, stories but no epics): the mode runs its fallback-only step instead of a wrong-context report', () => {
-    const readyWithTasks: Unit = { id: 'S3', macrostate: 'Ready', tasks: true, checkpoint: false }
-    const run = analysisOn(
-      facts({ initiatives: 0, epics: 0, stories: 1 }),
-      POC,
-      undefined,
-      readyWithTasks,
+  // Precedence: /next Step 5 is reached only when the UNMODED cascade proposes nothing, so a mode runs
+  // its fallback-only step only then. When a row of another mode holds for the unit (an enabled
+  // row, after the profile filter) the session is a wrong-context report suggesting that mode,
+  // even though the profile skipped the mode's own planning rows. Backlog shape: no epics, one
+  // story; under poc row 3 is skipped.
+  const oneStory = facts({ initiatives: 0, epics: 0, stories: 1 })
+  const wrongContext = (unit: Unit, suggest: string): void => {
+    const run = analysisOn(oneStory, POC, undefined, unit)
+    expect(run.steps).toEqual([])
+    expect(run.exit).toBe('wrong-context')
+    expect(run.suggest).toBe(suggest)
+    expect(run.skipped).toEqual(['plan-initiatives'])
+  }
+
+  it('R04-I2: no row of the mode selects while a row of another mode holds (Ready + tasks, stories but no epics): wrong context suggesting implementation, brainstorm is not run', () => {
+    wrongContext(
+      { id: 'S3', macrostate: 'Ready', tasks: true, checkpoint: false },
+      'implementation',
     )
+  })
+
+  it('R04-I2r: a story in Review under analysis (poc, no epics) is a wrong-context report suggesting review, brainstorm is not run', () => {
+    wrongContext({ id: 'S5', macrostate: 'Review', tasks: true, checkpoint: false }, 'review')
+  })
+
+  it('R04-I2k: an In Progress story with a checkpoint under analysis (poc, no epics) is a wrong-context report suggesting implementation, brainstorm is not run', () => {
+    wrongContext(
+      { id: 'S4', macrostate: 'In Progress', tasks: true, checkpoint: true },
+      'implementation',
+    )
+  })
+
+  it('R04-I3: control: every story Done (poc, no epics, one story) leaves the unmoded cascade empty, so analysis still runs brainstorm once', () => {
+    const run = analysisOn(oneStory, POC)
     expect(run.steps).toEqual(['brainstorm'])
     expect(run.exit).toBe('exit')
     expect(run.skipped).toEqual(['plan-initiatives'])
+  })
+
+  it('R04-B4: boundary: a row of another mode that the profile disables does not hold (poc without implement, Ready + tasks): the unmoded cascade is empty and analysis runs brainstorm once', () => {
+    const noImplement = POC.filter(s => s !== 'implement')
+    const readyWithTasks: Unit = { id: 'S3', macrostate: 'Ready', tasks: true, checkpoint: false }
+    const run = analysisOn(oneStory, noImplement, undefined, readyWithTasks)
+    expect(run.steps).toEqual(['brainstorm'])
+    expect(run.exit).toBe('exit')
+  })
+
+  // Independent transcription of /next Step 2-3 rows 1-11 over (project facts, unit, enabled set):
+  // the answer of the cascade run once WITHOUT the mode filter. The mode of a row is the KB table's.
+  const PROJECT_ROWS: Array<{ row: number; step: string; when: (p: ProjectFacts) => boolean }> = [
+    { row: 1, step: 'specify-prd', when: p => p.prd === 'template' },
+    { row: 2, step: 'bootstrap', when: p => p.prd === 'populated' && p.techTemplates >= 3 },
+    { row: 3, step: 'plan-initiatives', when: p => p.initiatives === 0 && p.epics === 0 },
+    { row: 4, step: 'plan-epics', when: p => p.initiatives > 0 && p.epics === 0 },
+    { row: 5, step: 'plan-stories', when: p => p.epics > 0 && p.stories === 0 },
+  ]
+  const rowMode = (row: number): string =>
+    row === 6 ? 'review' : row >= 7 && row <= 9 ? 'implementation' : 'analysis'
+
+  interface Expectation {
+    startsWith?: string
+    steps?: string[]
+    exit?: string
+    suggest?: string
+  }
+
+  // What the unmoded cascade (plus Step 5 rule 2) dictates for an analysis session.
+  const expectedAnalysis = (project: ProjectFacts, unit: Unit, enabled: string[]): Expectation => {
+    const on = (step: string): boolean => step === 'checkpoint' || enabled.includes(step)
+    const holding = [
+      ...PROJECT_ROWS.filter(r => r.when(project)),
+      ...LITERAL_ROWS.filter(r => r.when(unit)),
+    ]
+    const live = holding.filter(r => on(r.step))
+    const own = live.find(r => rowMode(r.row) === 'analysis')
+    if (own) return { startsWith: own.step }
+    const [first] = live
+    if (first) return { steps: [], exit: 'wrong-context', suggest: rowMode(first.row) }
+    if (project.epics === 0 && on('brainstorm')) return { steps: ['brainstorm'], exit: 'exit' }
+    const reported = holding.some(r => rowMode(r.row) === 'analysis' && !on(r.step))
+    return { steps: [], exit: reported ? 'all-disabled' : 'nothing-to-do' }
+  }
+
+  const mismatch = (run: ReturnType<typeof runModeSession>, want: Expectation): boolean =>
+    want.startsWith !== undefined
+      ? run.steps[0] !== want.startsWith || run.steps.includes('brainstorm')
+      : run.steps.join() !== (want.steps ?? []).join() ||
+        run.exit !== want.exit ||
+        run.suggest !== want.suggest
+
+  it('R04-I5: analysis over every unit x profile x backlog equals the unmoded cascade: its own enabled row first, else wrong context for another mode, else brainstorm once (no epics), else the profile report', () => {
+    const macrostates: Unit['macrostate'][] = ['Draft', 'Ready', 'In Progress', 'Review', 'Done']
+    const units: Unit[] = macrostates.flatMap(macrostate =>
+      [false, true].flatMap(tasks =>
+        [false, true].map(checkpoint => ({ id: 'G', macrostate, tasks, checkpoint })),
+      ),
+    )
+    const profiles: Record<string, string[]> = {
+      all: ALL_STEPS,
+      poc: POC,
+      pocNoImplement: POC.filter(s => s !== 'implement'),
+      pocNoBrainstorm: POC.filter(s => s !== 'brainstorm'),
+      pocNoReviewNoImplement: POC.filter(s => s !== 'review' && s !== 'implement'),
+    }
+    const backlogs: ProjectFacts[] = [
+      facts({ initiatives: 0, epics: 0, stories: 0 }),
+      facts({ initiatives: 0, epics: 0, stories: 1 }),
+      facts({ initiatives: 1, epics: 0, stories: 1 }),
+      facts({ initiatives: 1, epics: 1, stories: 0 }),
+      facts({ initiatives: 1, epics: 1, stories: 1 }),
+      facts({ prd: 'template', techTemplates: 5, initiatives: 0, epics: 0, stories: 1 }),
+    ]
+    const diffs = Object.entries(profiles).flatMap(([name, enabled]) =>
+      backlogs.flatMap(project =>
+        units.flatMap(unit => {
+          const want = expectedAnalysis(project, unit, enabled)
+          const run = analysisOn(project, enabled, undefined, unit)
+          return mismatch(run, want)
+            ? [
+                `${name} ${JSON.stringify(project)} ${JSON.stringify(unit)}: expected ${JSON.stringify(want)}, got ${run.exit} ${run.suggest} ${run.steps}`,
+              ]
+            : []
+        }),
+      ),
+    )
+    expect(diffs).toEqual([])
   })
 })
 

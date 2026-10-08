@@ -94,16 +94,37 @@ const statesFallbackRuns = (text: string): boolean =>
   hasSentence(text, /fallback-only/i, /once/i, /\b(runs?|invok\w+)\b/i)
 
 /**
- * The statement of the precedence between a mode's fallback-only step and a wrong-context report:
- * the step is run first, even when another mode's row would select for the unit.
+ * The precondition of the run: a mode runs its fallback-only step only when the cascade run once
+ * WITHOUT the mode filter also reaches the Step 5 fallback (no enabled row of any mode holds).
  */
-const statesFallbackPrecedence = (text: string): boolean =>
+const statesFallbackPrecondition = (text: string): boolean =>
   hasSentence(
     text,
     /fallback-only/i,
+    /(without the mode filter|unmoded)/i,
+    /Step 5/,
+    /\b(only when|only if|only after)\b/i,
+  )
+
+/** The consequence: when a row of another mode holds, the step is not run: wrong context, suggesting that mode. */
+const statesOtherModeWrongContext = (text: string): boolean =>
+  hasSentence(
+    text,
+    /fallback-only/i,
+    /(another|other) mode/i,
+    /\b(row|rows)\b/i,
+    /\bnot\b/i,
     /wrong[- ]context/i,
-    /\b(instead of|before|rather than|precedes?|pre-?empts?)\b/i,
-  ) && hasSentence(text, /fallback-only/i, /(another|other) mode/i, /\b(row|rows)\b/i)
+  )
+
+/** The retired carve-out: the step "even when" a row of another mode holds. */
+const statesRetiredCarveOut = (text: string): boolean =>
+  hasSentence(
+    text,
+    /(fallback-only|brainstorm|discovery)/i,
+    /(another|other) mode/i,
+    /\beven (when|if)\b/i,
+  )
 
 const POLICY_SCRIPT = join(DATASET, '.skills/workflow/cycle/scripts/autonomy-policy.mjs')
 
@@ -425,15 +446,27 @@ describe.each(nextSources)(
 )
 
 describe.each(nextSources)(
-  '/next — %s SKILL.md — r0-4 precedence of the fallback-only step over a wrong-context report',
+  '/next — %s SKILL.md — r0-4 the fallback-only step needs the unmoded cascade to be empty',
   (_, content) => {
-    it('R04-I2: Step 6 states the fallback-only step is run before a wrong-context report, even when another mode row holds', () => {
-      const step6 = section(content, STEP_6)
+    const step6 = section(content, STEP_6)
+
+    it('R04-I2p: Step 6 states the fallback-only step is run only when the cascade without the mode filter also reaches the Step 5 fallback', () => {
       expect(step6, 'Step 6 (Run the Phase) is missing').not.toBe('')
       expect(
-        statesFallbackPrecedence(step6),
-        'Step 6 must state the fallback-only step is run before a wrong-context report even when another mode row holds',
+        statesFallbackPrecondition(step6),
+        'Step 6 must state the fallback-only step runs only when the unmoded cascade also reaches Step 5',
       ).toBe(true)
+    })
+
+    it('R04-I2p: Step 6 states a row of another mode holding is a wrong-context report and the fallback-only step is not run', () => {
+      expect(
+        statesOtherModeWrongContext(step6),
+        'Step 6 must state a row of another mode is wrong context, not a fallback-only run',
+      ).toBe(true)
+    })
+
+    it('R04-I2p: no sentence of the skill runs the fallback-only step "even when" a row of another mode holds', () => {
+      expect(statesRetiredCarveOut(content)).toBe(false)
     })
   },
 )
@@ -446,11 +479,15 @@ describe('KB macro-phase-modes.md — How a session runs states the same two rul
     expect(statesHandOff(session), 'the KB must state the row 7 -> row 8 hand-off').toBe(true)
   })
 
-  it('R04-I2: states the fallback-only step is run before a wrong-context report, even when another mode row holds (r0-4)', () => {
+  it('R04-I2p: states the fallback-only step is run only when the cascade without the mode filter also reaches the Step 5 fallback (r0-4)', () => {
     expect(session, '`## How a session runs` is missing').not.toBe('')
     expect(
-      statesFallbackPrecedence(session),
-      'the KB must state the fallback-only step precedence over a wrong-context report',
+      statesFallbackPrecondition(session),
+      'the KB must state the fallback-only step runs only when the unmoded cascade also reaches Step 5',
+    ).toBe(true)
+    expect(
+      statesOtherModeWrongContext(session),
+      'the KB must state a row of another mode is wrong context, not a fallback-only run',
     ).toBe(true)
   })
 
@@ -463,11 +500,40 @@ describe('KB macro-phase-modes.md — How a session runs states the same two rul
   })
 })
 
+describe('KB macro-phase-modes.md — Wrong context agrees with the fallback-only precondition (r0-4)', () => {
+  it('R04-I2w: states a row of another mode holding is a wrong-context report and the fallback-only step is not run', () => {
+    const wrong = section(read(GUIDELINE), /^## Wrong context/)
+    expect(wrong, '`## Wrong context` is missing').not.toBe('')
+    expect(
+      statesOtherModeWrongContext(wrong),
+      'the Wrong context section must state a row of another mode is wrong context, not a fallback-only run',
+    ).toBe(true)
+    expect(statesRetiredCarveOut(read(GUIDELINE))).toBe(false)
+  })
+})
+
 describe('docs site — analysis and the discovery run (r0-4)', () => {
+  const docs = section(read(DOCS_PAGE), /^## Macro-phase modes/)
+
   it('states that analysis runs brainstorm once when the profile leaves an empty backlog (agrees with Step 6 and the KB)', () => {
-    const docs = section(read(DOCS_PAGE), /^## Macro-phase modes/)
     expect(docs, '`## Macro-phase modes` is missing').not.toBe('')
     expect(hasSentence(docs, /brainstorm/i, /once/i, /\b(runs?|invok\w+)\b/i)).toBe(true)
+  })
+
+  it('R04-I2d: states the discovery run needs no row of any mode to hold, and that a row of another mode is a wrong-context report', () => {
+    expect(docs, '`## Macro-phase modes` is missing').not.toBe('')
+    expect(
+      hasSentence(docs, /brainstorm/i, /once/i, /\bany mode\b/i),
+      'the docs must state the brainstorm run needs no row of any mode to hold',
+    ).toBe(true)
+    expect(
+      hasSentence(docs, /analysis/i, /(another|other) mode/i, /wrong[- ]context/i),
+      'the docs must state a story another mode would select is a wrong-context report under analysis',
+    ).toBe(true)
+  })
+
+  it('R04-I2d: the docs no longer run the discovery run "even when" a row of another mode would select', () => {
+    expect(statesRetiredCarveOut(read(DOCS_PAGE))).toBe(false)
   })
 })
 
