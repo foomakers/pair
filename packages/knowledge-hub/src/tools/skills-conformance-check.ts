@@ -56,6 +56,7 @@ import { basename, dirname, join, relative, resolve, sep } from 'path'
 // The real `pair update` dataset→`.claude/skills/**` name transform: the mirror
 // check below maps names through the production path, never a copy of it.
 import { installedSkillDir } from './skill-md-mirror'
+import { checkModesInCorpus } from './macro-phase-modes'
 
 const ROOT = join(__dirname, '..', '..')
 const SKILLS_DIR = join(ROOT, 'dataset', '.skills')
@@ -2676,6 +2677,12 @@ export function checkProcessStepCorpus(skillsDir: string, proseRoot: string): st
       skillDirs: collectAllSkillDirs(skillsDir),
     }),
     ...checkStepMarkers(entries, skillsDir),
+    // The `/next --mode` facades: every step and cascade row 1–11 is in exactly one mode (#252).
+    ...checkModesInCorpus(
+      skillsDir,
+      proseRoot,
+      entries.map(e => e.id),
+    ),
   ]
 
   // The installed mirror, when this is the framework repo (an adopting project has
@@ -2975,7 +2982,7 @@ if (require.main === module) {
 
   if (errors.length === 0) {
     console.log(
-      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, skill-local scripts shipped and mirrored, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal, process-step catalogue + markers (dataset and mirror), profile schema, both way-of-working files resolved as DECLARATIONS (shipped adoption template, this repo's own) + every shipped worked example (KB schema, adoption template, docs site, both way-of-working files), manual-path entrypoint (dataset AGENTS.md + the generated root AGENTS.md/CLAUDE.md), installed KB copies of the catalogue and the profiles incl. their worked examples, installed gate convention)`,
+      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, skill-local scripts shipped and mirrored, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal, process-step catalogue + markers (dataset and mirror), macro-phase mode table ↔ catalogue ↔ /next rows, profile schema, both way-of-working files resolved as DECLARATIONS (shipped adoption template, this repo's own) + every shipped worked example (KB schema, adoption template, docs site, both way-of-working files), manual-path entrypoint (dataset AGENTS.md + the generated root AGENTS.md/CLAUDE.md), installed KB copies of the catalogue and the profiles incl. their worked examples, installed gate convention)`,
     )
     process.exit(0)
   } else {

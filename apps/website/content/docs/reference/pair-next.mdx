@@ -1,6 +1,6 @@
 ---
 title: pair-next Arguments
-description: Scope the /pair-next navigator with --root (subtree selection) and --filter (generic tag match), re-evaluated on every run and step.
+description: Scope the /pair-next navigator with --root (subtree selection) and --filter (generic tag match), or run a whole macro-phase with --mode (analysis, implementation, review) — re-evaluated on every run and step.
 ---
 
 `/pair-next` is the project navigator: it reads adoption files and PM-tool state and recommends the single most relevant skill to run next. See [Skills](/docs/concepts/skills) for how skills work and [Canonical States](/docs/concepts/canonical-states) for how backlog items resolve to macrostates.
@@ -15,6 +15,7 @@ By default `/pair-next` considers the whole backlog. Two **optional** arguments 
 | ---------- | -------------------------------------------- | -------------------------------------------------------------- |
 | `--root`   | an issue id (epic or story)                  | Restrict selection to that issue's subtree in the PM hierarchy. |
 | `--filter` | a single tag/label (e.g. `ui`, `risk:red`)   | Restrict selection to issues carrying that exact label.         |
+| `--mode`   | `analysis`, `implementation` or `review`    | Run that macro-phase end to end instead of only recommending ([below](#macro-phase-modes)). |
 
 With neither argument, behaviour is unchanged: the full backlog is in scope.
 
@@ -42,6 +43,36 @@ Both arguments **presuppose an established project** (adoption files populated, 
 ```
 
 Combining both arguments applies the **intersection**: `subtree ∩ matching tags`.
+
+## Macro-phase modes
+
+If you do not want to know the granular steps, name the phase instead. `/pair-next --mode <mode>` runs one branch of the process on the first work unit in scope, then re-evaluates the board and keeps going until that phase is done:
+
+```bash
+/pair-next --mode analysis         # Draft story → Ready with a task breakdown
+/pair-next --mode implementation   # Ready story → open PR (resumes an In Progress story from its checkpoint)
+/pair-next --mode review           # open PR → review verdict published
+```
+
+| Mode             | Runs (in order)                                                                                              | Stops when                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `analysis`       | `specify-prd`, `bootstrap`, `plan-initiatives`, `plan-epics`, `plan-stories`, `refine-story`, `plan-tasks`   | the planning gap is filled, or the story is Ready with a task breakdown       |
+| `implementation` | `implement`                                                                                                  | the story reached `Review` — its PR is open                                   |
+| `review`         | `review`                                                                                                     | the review verdict is published on the PR (merging stays with your policy)    |
+
+When no row of any mode holds and the profile leaves a backlog with no epics and no other way in, `analysis` runs a discovery run (`brainstorm`) once. When a story another mode would select exists, `analysis` reports wrong context and suggests that mode instead. Nothing else is surfaced: capabilities such as `/pair-capability-setup-gates` or `/pair-capability-grill` belong to no mode.
+
+A mode is a **facade, not a new skill**:
+
+- **Granular skills are unchanged.** Invoking `/pair-process-refine-story` or `/pair-process-implement` directly behaves exactly as before; a mode simply invokes them for you, with their own approval gates and checks.
+- **Narration is at phase level.** You hear "Analysis: refining story #252, then breaking it into tasks"; ask what is running and you get the step names.
+- **Same scope, same rules.** `--root`, `--filter`, `--assignee` and `--status` still narrow the work, and macrostates and the Definition of Ready still decide what a story may enter — a mode never moves a story past a gate.
+- **The process profile applies inside the phase.** A step your [process profile](#process-profile--steps-this-project-does-not-run) disables is skipped and the enabled steps still chain across the gap; if every step that could run is disabled, the mode says which and stops.
+- **A HALT is shown as-is.** If a step halts, the mode stops and prints that step's message unchanged — it never retries or continues with the next one.
+- **Wrong context is reported, not guessed.** `--mode review` with no open PR says what is missing (for example "no open PR or item in `Review` in scope") and suggests the mode that fits, such as `--mode implementation`.
+- **One work unit per run.** A mode drives one story (or one planning gap); when more are in scope it says so — use `/pair-loop` to drive many cards.
+
+> **Source:** the mode ↔ step table lives only in `packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/macro-phase-modes.md`; this page is checked against it.
 
 ## Control state — macrostate first, Definition of Ready second, never titles
 

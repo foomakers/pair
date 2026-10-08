@@ -190,6 +190,7 @@
 - [Decision: registry targets are written by stage-and-rename, not by a lock; `add` registries are never staged](.pair/adoption/decision-log/2026-10-06-atomic-target-write-staging-over-lock.md)
 - [Decision: `mode: doc` remediation groups; the loop retries only transient failures](.pair/adoption/decision-log/2026-10-06-doc-remediation-groups-and-transient-only-retry.md)
 - [Decision: The loop re-drives escalated and failed cards; only terminal outcomes end a card's drive](.pair/adoption/decision-log/2026-10-06-loop-card-drive-rules-terminal-escalated-retry.md)
+- [Decision: macro-phase modes are a row-filter facade on `/pair-next`, not loop state and not skills](.pair/adoption/decision-log/2026-10-06-macro-phase-modes-are-a-selection-facade.md)
 - [Decision: planned-marker issue state is read live via `gh`, skipped locally when unavailable, fatal in CI](.pair/adoption/decision-log/2026-10-06-planned-marker-issue-state-lookup.md)
 
 ## How-To Guides
@@ -534,6 +535,7 @@
 - [pi](.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/pi.md)
 - [AI Development Tools](.pair/knowledge/guidelines/technical-standards/ai-development/ai-tools.md)
 - [AI Development Documentation Standards](.pair/knowledge/guidelines/technical-standards/ai-development/documentation-standards.md)
+- [Macro-Phase Modes](.pair/knowledge/guidelines/technical-standards/ai-development/macro-phase-modes.md)
 - [Model Context Protocol (MCP) Integration](.pair/knowledge/guidelines/technical-standards/ai-development/mcp-integration.md)
 - [Process Profiles](.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md)
 - [Skill Conventions — Shared KB References](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/README.md)
