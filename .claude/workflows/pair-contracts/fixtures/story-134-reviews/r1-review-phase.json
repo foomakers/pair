@@ -1,0 +1,181 @@
+{
+  "skill": "review-phase",
+  "run": "story-134",
+  "story": "134",
+  "phase": "r1",
+  "pr": 534,
+  "inputHead": "0fb67c7e51c9c97ae6481e0ce71cbe67975cbecb",
+  "mode": "re-review",
+  "tier": "risk:red",
+  "tierSource": "classified",
+  "passes": [
+    "general",
+    "security",
+    "boundary",
+    "architecture",
+    "adversarial"
+  ],
+  "reviewedHead": "26b2096730e620607c6f9f3891b1903204adad4e",
+  "verdict": "CHANGES-REQUESTED",
+  "remediationBatchId": "r1",
+  "findings": [
+    {
+      "id": "r0-1",
+      "location": "apps/pair-cli/src/registry/atomic-target.ts:154-164; apps/pair-cli/src/registry/operations.ts:385-394; apps/pair-cli/src/registry/skill-refs.ts:40-61",
+      "severity": "Major",
+      "kind": "defect",
+      "transition": "resolved",
+      "blocking": false,
+      "description": "Resolved on 26b20967. seedStage restarts from a fresh stage on ENOENT, postCopyOps treats a stat ENOENT as a lost race, and skill-refs list/read are ENOENT-tolerant. The sealed r1-g1 witnesses pass (atomic-target-race.test.ts). Re-run here: concurrent-install.sh 21/21 green, and 50 concurrent full-dataset installs, both runs exit 0, no ENOENT.",
+      "recommendation": "None. VERIFY: atomic-target-race.test.ts plus concurrent-install.sh x20; ORACLE: AC9; ASSERT: 0 failures (observed).",
+      "failureScenario": {
+        "input": "two concurrent pair install into one project",
+        "actual": "registry failed ENOENT stat (r0)",
+        "expected": "no abort"
+      }
+    },
+    {
+      "id": "r0-2",
+      "location": "apps/pair-cli/src/registry/atomic-target.ts:106-119",
+      "severity": "Questions",
+      "kind": "question",
+      "transition": "open",
+      "blocking": false,
+      "description": "Unchanged by this round, carried as a question. On a fresh target, a lost race followed by a non-race failure of the second rename(stage,target) leaves the target absent: the other run's tree remains only in the 'raced' aside until a later invocation recovers it.",
+      "recommendation": "Optional: in the catch, restore 'raced' when the target is absent. VERIFY: rename mock throws ENOTEMPTY then EPERM on a fresh /p/t; ORACLE: AC3; ASSERT: /p/t exists after the rejection."
+    },
+    {
+      "id": "r0-3",
+      "location": "apps/pair-cli/src/registry/atomic-target.test.ts:107-135",
+      "severity": "Minor",
+      "kind": "defect",
+      "transition": "resolved",
+      "blocking": false,
+      "description": "Resolved. The AC1 test now suspends run A mid-populate and asserts the live target, before and after run B. Mutation probe re-run here: writeDirAtomically replaced by mkdir(target)+populate(target) makes the test fail (AssertionError, one: 'A' vs undefined). It passes on the head.",
+      "recommendation": "None. VERIFY: in-place mutation; ORACLE: AC1; ASSERT: the test fails under the mutation (observed).",
+      "reproducer": {
+        "testRef": "apps/pair-cli/src/registry/atomic-target.test.ts"
+      }
+    },
+    {
+      "id": "r0-4",
+      "location": "apps/pair-cli/src/registry/atomic-target.ts:137-149,196",
+      "severity": "Minor",
+      "kind": "defect",
+      "transition": "resolved",
+      "blocking": false,
+      "description": "Resolved. createExclusiveStage uses a non-recursive mkdir (EEXIST -> next suffix), so a leftover directory or symlink at the stage name is never reused or followed. writeFileAtomically discards any pre-existing temp path. The W-r04-* witnesses pass.",
+      "recommendation": "None. VERIFY: atomic-target-race.test.ts r0-4 suite; ORACLE: story risk table; ASSERT: stale.md absent (observed).",
+      "failureScenario": {
+        "input": "leftover /p/t.tmp-<pid>-0/stale.md",
+        "actual": "stale.md swapped in (r0)",
+        "expected": "absent"
+      }
+    },
+    {
+      "id": "r1-5",
+      "location": "apps/pair-cli/src/registry/operations.ts:405-416 (createOrReplaceSymlink, reached from postCopyOps -> distributeToSecondaryTargets:396)",
+      "severity": "Minor",
+      "kind": "defect",
+      "transition": "open",
+      "blocking": true,
+      "missedUpstream": true,
+      "description": "This is the same AC9 class as r0-1, with a distinct cause the r1 fix did not reach. The skills registry's symlink secondary targets (.github/skills, .cursor/skills, ...) are replaced non-atomically with existsSync -> unlink -> symlink. When two runs overlap there, one gets ENOENT (unlink after the other's unlink) or EEXIST (symlink after the other's symlink). The registry is then reported failed and the install exits 1. Probe: two node processes each call distributeToSecondaryTargets 300 times on one real project (canonical .claude/skills plus a .github/skills symlink). Result: pid A ok 150 / EEXIST 119 / ENOENT 31; pid B ok 155 / EEXIST 107 / ENOENT 38. In-process Promise.all of two calls gives EEXIST 30/30. The race needs both runs' skills post-copy to overlap: 0/50 real concurrent full-dataset installs hit it, and concurrent-install.sh cannot reach it because its mock KB ships no skills registry.",
+      "recommendation": "Make the link replacement race-tolerant and last-writer-wins: create the link at a unique temp name and rename it over linkPath (atomic on POSIX), or treat ENOENT on unlink and EEXIST on symlink as a lost race and retry once. VERIFY: a unit test that runs two distributeToSecondaryTargets concurrently on a real temp dir (Promise.all, x30); ORACLE: AC9 'is not blocked and does not abort'; ASSERT: every call resolves and .github/skills is a symlink resolving to .claude/skills.",
+      "failureScenario": {
+        "input": "real fs project with .claude/skills/x/SKILL.md and .github/skills -> ../.claude/skills; await Promise.all([distributeToSecondaryTargets(p), distributeToSecondaryTargets(p)]) with targets [{.claude/skills/, canonical}, {.github/skills/, symlink}]",
+        "actual": "one call rejects EEXIST (30/30 iterations); across two processes, EEXIST/ENOENT on about 50% of overlapping calls",
+        "expected": "both calls resolve; .github/skills is a valid link (AC9: no abort, last writer wins)"
+      }
+    }
+  ],
+  "scopeChanges": [],
+  "custody": {
+    "verified": true,
+    "contractBreach": false,
+    "breaches": []
+  },
+  "readiness": {
+    "ready": false,
+    "remoteHead": "26b2096730e620607c6f9f3891b1903204adad4e"
+  },
+  "worked": [
+    {
+      "id": "w-1",
+      "claim": "seedStage restarts from a fresh empty stage on ENOENT (bounded at 3), so a lost race never mixes two partial seeds, and a non-ENOENT seed error still aborts with the live tree intact",
+      "appliesTo": [
+        "apps/pair-cli/src/registry/atomic-target.ts",
+        "r0-1"
+      ],
+      "evidence": [
+        {
+          "id": "w-1-e1",
+          "testRef": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+          "expected": "W-r01-seed-* and C-r01-seed-eacces pass"
+        }
+      ]
+    },
+    {
+      "id": "w-2",
+      "claim": "Exclusive stage creation via non-recursive mkdir with EEXIST -> next suffix (never reuse, never follow a symlink)",
+      "appliesTo": [
+        "apps/pair-cli/src/registry/atomic-target.ts",
+        "r0-4"
+      ],
+      "evidence": [
+        {
+          "id": "w-2-e1",
+          "testRef": "apps/pair-cli/src/registry/atomic-target-race.test.ts",
+          "expected": "W-r04-* and C-r04-* pass"
+        }
+      ]
+    },
+    {
+      "id": "w-3",
+      "claim": "The AC1 test suspends run A mid-populate and observes the live target: it fails under the in-place mutation",
+      "appliesTo": [
+        "apps/pair-cli/src/registry/atomic-target.test.ts",
+        "r0-3"
+      ],
+      "evidence": [
+        {
+          "id": "w-3-e1",
+          "testRef": "apps/pair-cli/src/registry/atomic-target.test.ts",
+          "expected": "two overlapping runs passes on head, fails under mkdir(target)+populate(target)"
+        }
+      ]
+    }
+  ],
+  "attempt": 1,
+  "reviewer": 1,
+  "partial": false,
+  "published": {
+    "firstReview": false,
+    "escalation": false,
+    "scopeDecisionPacket": false
+  },
+  "gates": {
+    "command": "pnpm quality-gate",
+    "identity": "head:26b2096730e620607c6f9f3891b1903204adad4e",
+    "exitCode": 0
+  },
+  "inputsDigest": "6cf7f468a451c732",
+  "acHash": "sha256:f406c6222c0fdaa1ce14f1186c3834a3fe06c85106091fc2e67441207c2e3a32",
+  "severityRanks": {
+    "Critical": 4,
+    "Major": 3,
+    "Minor": 2,
+    "Questions": 1
+  },
+  "elapsedMs": 2400000,
+  "acHashSource": "publish",
+  "schemaVersion": 3,
+  "workflowVersion": "4.0.1",
+  "seq": 8,
+  "createdAt": "2026-10-06T14:24:29.499Z",
+  "predecessor": "r1-g2-red-verify",
+  "workflowProfile": {
+    "name": "KB default",
+    "hash": "66ce0ad62074d14bbb720bc881ab980117412588f33d53c161853d89f1b9c1d0"
+  }
+}

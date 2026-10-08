@@ -1,4 +1,14 @@
-import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync, type Stats } from 'fs'
+import {
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+  type Stats,
+} from 'fs'
+import { hostname } from 'os'
+import { livenessOf, readHolder } from './lock-holder'
 import { join } from 'path'
 import { isSafeId } from './prompt-safety'
 
@@ -49,13 +59,21 @@ export interface CardLockRequest {
  * already being written to `holder.json`; this is the path that reads it back.
  */
 export type CardLockOutcome =
-  | { readonly kind: 'acquired'; readonly lock: CardLock }
+  | {
+      readonly kind: 'acquired'
+      readonly lock: CardLock
+      /** Set when a STALE lock (holder pid dead on this host) was reclaimed to take this one. */
+      readonly reclaimed?: { readonly pid: number }
+    }
   | {
       readonly kind: 'held'
       /** The holder's lock directory — the thing an operator removes to clear a stale one. */
       readonly path: string
       /** The holder's `acquiredAt`, when it is readable. Best-effort: the LOCK is the directory. */
       readonly since?: string | undefined
+      /** The holder's pid and whether it is alive, when the note says (a live holder is respected). */
+      readonly pid?: number | undefined
+      readonly alive?: boolean | undefined
     }
 
 /** Acquires the card's lock, or reports the holder that already has it. */
@@ -87,7 +105,15 @@ const inspectPath: PathInspector = path => {
   }
 }
 
-export function createCardLockAcquirer(inspect: PathInspector = inspectPath): LockAcquirer {
+/** Test seams for the stale-lock reclaim interleaving: called after the holder was read as dead, before the guard is taken. */
+export interface ReclaimHooks {
+  readonly afterLivenessRead?: () => void
+}
+
+export function createCardLockAcquirer(
+  inspect: PathInspector = inspectPath,
+  hooks: ReclaimHooks = {},
+): LockAcquirer {
   return ({ workingArea, card }) => {
     // The card id is a PATH SEGMENT here, so it gets the same rule `--root` and `--skill` get. The
     // parser already applied it; a second check belongs where the path is actually built.
@@ -103,6 +129,10 @@ export function createCardLockAcquirer(inspect: PathInspector = inspectPath): Lo
     const path = join(directory, card)
     if (createExclusively(path)) return acquired(path, card)
 
+    const stale = reclaimStale(path, hooks)
+    if (stale !== undefined && createExclusively(path)) {
+      return withReclaimed(acquired(path, card), stale)
+    }
     const holder = inspect(path)
     // Nothing is there: the holder released in the window between our create and our probe — the
     // interleaving a trigger burst produces on a persistent daemon, where the two triggers share
@@ -114,6 +144,60 @@ export function createCardLockAcquirer(inspect: PathInspector = inspectPath): Lo
 }
 
 export const acquireCardLock: LockAcquirer = createCardLockAcquirer()
+
+/**
+ * A lock whose holder pid is dead on this host is STALE (a SIGKILLed driver never released it): moved aside
+ * with one atomic `rename` — of two racing reclaimers exactly one wins — then removed. Returns the dead pid
+ * when THIS caller reclaimed it, else `undefined` (alive, unknown, or lost the race: the normal flow decides).
+ */
+/** The sidecar guard; one a crashed reclaimer left behind (older than a minute) is cleared once, never trusted forever. */
+function takeGuard(guard: string): boolean {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      mkdirSync(guard)
+      return true
+    } catch {
+      try {
+        if (Date.now() - statSync(guard).mtimeMs < 60_000) return false
+        rmSync(guard, { recursive: true, force: true })
+      } catch {
+        return false
+      }
+    }
+  }
+  return false
+}
+
+function reclaimStale(path: string, hooks: ReclaimHooks = {}): number | undefined {
+  const liveness = livenessOf(path)
+  if (liveness.state !== 'dead') return undefined
+  const seen = readHolder(path)
+  hooks.afterLivenessRead?.()
+  // Exclusive sidecar: only one reclaimer at a time. The liveness read above and the rename below are not atomic — between
+  // them another run may have reclaimed the lock and created its OWN, live one, which a blind rename would take from it.
+  const guard = `${path}.reclaim`
+  if (!takeGuard(guard)) return undefined
+  try {
+    const now = livenessOf(path)
+    const holder = readHolder(path)
+    if (now.state !== 'dead' || holder.pid !== seen.pid || holder.acquiredAt !== seen.acquiredAt)
+      return undefined
+    const aside = `${path}.reclaimed-${process.pid}-${Date.now()}`
+    try {
+      renameSync(path, aside)
+    } catch {
+      return undefined
+    }
+    rmSync(aside, { recursive: true, force: true })
+    return liveness.pid
+  } finally {
+    rmSync(guard, { recursive: true, force: true })
+  }
+}
+
+function withReclaimed(outcome: CardLockOutcome, pid: number): CardLockOutcome {
+  return outcome.kind === 'acquired' ? { ...outcome, reclaimed: { pid } } : outcome
+}
 
 /** One exclusive create: `true` when this caller made the directory, `false` when it already existed. */
 function createExclusively(path: string): boolean {
@@ -158,7 +242,14 @@ function heldBy(path: string, holder: Stats): CardLockOutcome {
     throw new Error(`Lock path ${path} exists but is not a directory: the working area is broken`)
   }
   const since = heldSince(path)
-  return { kind: 'held', path, ...(since !== undefined && { since }) }
+  const liveness = livenessOf(path)
+  return {
+    kind: 'held',
+    path,
+    ...(since !== undefined && { since }),
+    ...(liveness.pid !== undefined && { pid: liveness.pid }),
+    ...(liveness.state !== 'unknown' && { alive: liveness.state === 'alive' }),
+  }
 }
 
 function acquired(path: string, card: string): CardLockOutcome {
@@ -167,7 +258,7 @@ function acquired(path: string, card: string): CardLockOutcome {
   try {
     writeFileSync(
       join(path, 'holder.json'),
-      `${JSON.stringify({ card, pid: process.pid, acquiredAt: new Date().toISOString() }, null, 2)}\n`,
+      `${JSON.stringify({ card, pid: process.pid, host: hostname(), acquiredAt: new Date().toISOString() }, null, 2)}\n`,
     )
   } catch {
     // A working area that cannot hold the holder note still holds the lock itself.

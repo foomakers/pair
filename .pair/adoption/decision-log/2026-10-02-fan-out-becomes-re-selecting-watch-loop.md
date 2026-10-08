@@ -6,7 +6,7 @@
 
 ## Status
 
-Active
+Active — **partly superseded** by [2026-10-06 card-drive rules](2026-10-06-loop-card-drive-rules-terminal-escalated-retry.md) and [2026-10-06 doc groups and transient-only retry](2026-10-06-doc-remediation-groups-and-transient-only-retry.md): the "already driven in this run" exclusion and "a failed card is never retried" no longer hold (terminal outcomes and durable failures stay excluded; escalated cards re-enter once cleared; transient failures are retried within a budget), and an empty stop-predicate snapshot is never satisfied. The rest stands.
 
 ## Category
 

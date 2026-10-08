@@ -1,0 +1,32 @@
+{
+  "run": "story-482",
+  "story": "482",
+  "phase": "r1-g1",
+  "skill": "red-verify",
+  "inputHead": "b8c88aebb3eff7a430f07d127eecbdaa348c1849",
+  "inputsDigest": "169d89c6f69c4eda",
+  "attempt": 2,
+  "verified": true,
+  "findings": [],
+  "sealed": true,
+  "snapshot": "b2c4c4139f3e6d9f2e3a47f8242ed44121000b89",
+  "manifest": ".pair/red-snapshots/pr-531-r1-g1.json",
+  "contractHash": "sha256:273ec076f3e577d58618fc4c82f1382134604e7c75df31f1aa9c78798ddf263f",
+  "contractPath": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-482/482/r1-g1-red-contract.attempt-2.json",
+  "reproduced": [
+    {
+      "rowId": "r0-1-w1",
+      "baseline": "pass",
+      "command": "pnpm --filter @pair/knowledge-hub exec vitest run src/tools/skills-conformance-check.test.ts -t unreadable",
+      "exitCode": 0,
+      "observed": "3 passed | 296 skipped; with catch injected to return undefined: 1 failed"
+    }
+  ],
+  "elapsedMs": 600000,
+  "pr": 531,
+  "schemaVersion": 3,
+  "workflowVersion": "4.0.1",
+  "seq": 6,
+  "createdAt": "2026-10-06T09:48:38.664Z",
+  "predecessor": "r1-g1-red-spec"
+}

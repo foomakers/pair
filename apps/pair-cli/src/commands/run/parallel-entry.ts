@@ -1,6 +1,7 @@
 import type { FileSystemService } from '@pair/content-ops'
+import { readCardTitle } from './cycle-wiring'
+import { adoptionSelection } from './autonomy-policy'
 import chalk from 'chalk'
-import { describeMergePosture } from './automation-policy'
 import { acquireCardLock } from './card-lock'
 import { resolveEngineFor } from './cycle-entry'
 import { appendAuditLine } from './dispatch-audit'
@@ -17,6 +18,9 @@ import {
   describeScope,
   iterationFields,
   loopEndFields,
+  forwardedAutonomy,
+  forwardedFields,
+  describeMergeLine,
   loopStartFields,
   renderIterationLine,
   renderLoopAuditLine,
@@ -38,7 +42,13 @@ import {
 } from './parallel'
 import type { RunCommandConfig } from './parser'
 import { describeEngineResolution, resolveEngine } from './resolve-engine'
-import { computeRootPlan, describeRootPlan, type RootCandidate, type RootPlan } from './root-plan'
+import {
+  completeCandidates,
+  computeRootPlan,
+  describeRootPlan,
+  type RootCandidate,
+  type RootPlan,
+} from './root-plan'
 import { selectRootAnswer, selectRootCandidates, type SelectRootInput } from './root-select'
 import {
   declaredEngine,
@@ -64,6 +74,12 @@ export interface ParallelRunInput {
   readonly cwd: string
 }
 
+/** The run's effective `until`, from the one autonomy resolution (`pr` is the KB default). */
+function effectiveUntilOf(resolution: RunContext['autonomySelection']): string | undefined {
+  const value = resolution?.effective?.['until']?.value
+  return typeof value === 'string' ? value : undefined
+}
+
 function reportHeader(
   input: ParallelRunInput,
   engineLine: string,
@@ -85,7 +101,12 @@ function reportHeader(
         : ''),
   )
   console.log(`  Unit: one \`pair-cli run --card <id>\` process per card`)
-  console.log(`  ${describeMergePosture(policy)}`)
+  const forwarded = forwardedAutonomy(config, context.autonomySelection)
+  if (forwarded.length > 0)
+    console.log(`  Forwarded to each card: ${forwarded.map(([k, v]) => `--${k} ${v}`).join(' · ')}`)
+  console.log(
+    `  ${describeMergeLine(policy, forwarded, effectiveUntilOf(context.autonomySelection))}`,
+  )
   for (const warning of policy.warnings) console.log(chalk.yellow(`  ! ${warning}`))
 }
 
@@ -155,6 +176,15 @@ interface FanOut {
 }
 
 /** One fresh selection process, scoped by the resolved selection (and the loop contract, in loop mode). */
+/**
+ * The child's ELIGIBILITY input: the effective filter when it came from an argument or `## Autonomy`
+ * (never the legacy `## Eligibility`, which the child reads itself). Sent as `--eligibility-filter`, not
+ * `--filter`: `--filter` is a loop-mode selector the cycle coordinator refuses on a `--card` entry.
+ */
+function forwardedEligibility(input: ParallelRunInput): string | undefined {
+  return input.config.scope.filter ?? adoptionSelection(input.context.autonomySelection, 'filter')
+}
+
 function selectionInput(fan: FanOut, loop?: SelectRootInput['loop']): SelectRootInput {
   const { input, deps, selection, engineDef } = fan
   return {
@@ -175,9 +205,12 @@ function selectionInput(fan: FanOut, loop?: SelectRootInput['loop']): SelectRoot
 function planFor(fan: FanOut, candidates: RootCandidate[]): RootPlan {
   const { input } = fan
   const { policy } = input.context
+  const { readCardTitle: readTitle = readCardTitle } = fan.deps
   const plan = computeRootPlan({
-    candidates,
-    eligibility: policy.eligibility,
+    candidates: completeCandidates(candidates, id => readTitle(id, input.cwd)),
+    // Only the legacy `## Eligibility` is a tier gate; a filter from an argument or `## Autonomy` already
+    // chose the cards (argument > adoption, ADR-027).
+    eligibility: fan.selection.filter?.source === '## Eligibility' ? policy.eligibility : undefined,
     maxParallelism: {
       global: policy.maxParallelism,
       perTier: policy.maxParallelismOverrides ?? {},
@@ -278,10 +311,18 @@ async function runCardInBatch({
   const outcome = await runPlannedCard({
     card,
     config: input.config,
+    ...(forwardedEligibility(input) !== undefined && {
+      eligibilityFilter: forwardedEligibility(input)!,
+    }),
     cwd: input.cwd,
     workingArea: input.context.workingArea,
     acquireLock: deps.acquireLock ?? acquireCardLock,
     runCardProcess: deps.runCardProcess ?? spawnCardProcess,
+    onReclaim: (lock, pid) =>
+      (deps.appendAudit ?? appendAuditLine)(
+        input.context.auditPath,
+        `${new Date().toISOString()} event=lock-reclaimed card=${card.id} lock=${lock} pid=${pid}`,
+      ),
     heldLocks,
   })
   finished.set(card.id, outcome)
@@ -370,15 +411,12 @@ async function runBatch({
 function probeLockFor(workingArea: string) {
   return (card: RootCandidate): ReturnType<typeof probeCardLock> => {
     const own = probeCardLock({ workingArea, card: card.id })
-    if (own.kind === 'held') return own
+    if (own.kind !== 'free') return own
     const resource = probeResourceLocks({ card, workingArea })
-    return resource.kind === 'held'
-      ? {
-          kind: 'held',
-          path: resource.path,
-          ...(resource.since !== undefined && { since: resource.since }),
-        }
-      : { kind: 'free' }
+    if (resource.kind === 'free') return { kind: 'free' }
+    return resource.kind === 'stale'
+      ? { kind: 'stale', path: resource.path, pid: resource.pid }
+      : { ...resource, kind: 'held' }
   }
 }
 
@@ -477,22 +515,30 @@ function finishLoop(
   return result.exitCode
 }
 
+function startFields(fan: FanOut, values: LoopValues): Array<[string, string]> {
+  const { config, context } = fan.input
+  return [
+    ...loopStartFields(values, fan.selection, config.parallel!, context.policy.maxParallelism),
+    ...forwardedFields(forwardedAutonomy(config, context.autonomySelection)),
+  ]
+}
+
 /**
  * The fan-out as a loop: ONE `whileInterruptible` owns the whole run, so a signal anywhere (a batch or
  * the idle wait) writes the batch line (if one is running), releases the locks, writes `loop-end` and
  * exits 128 + signal — never two handlers, never a second `end`.
  */
 async function runLoop(fan: FanOut, values: LoopValues): Promise<number> {
-  const { input, deps, selection } = fan
+  const { input, deps } = fan
   const { config, context } = input
   const audit = auditWriter(input, deps)
-  const predicate = parsePredicate(context.policy.stopPredicate)
+  const predicate = parsePredicate(config.predicate ?? context.policy.stopPredicate)
 
   let started = 0
   let currentBatch: ((signal: string) => void) | undefined
   const end = onceWriter(audit)
 
-  audit(loopStartFields(values, selection, config.parallel!, context.policy.maxParallelism))
+  audit(startFields(fan, values))
 
   const onInterrupt = (signal: InterruptSignal): void => {
     currentBatch?.(signal)

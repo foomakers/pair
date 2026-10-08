@@ -17,7 +17,8 @@ The map of the whole automation mechanism: what the delivery cycle is, how each 
 6. [The `merge` stage and `## Auto-Advance`](#6-the-merge-stage-and--auto-advance)
 7. [Host adapters — PM tool and code host](#7-host-adapters--pm-tool-and-code-host)
 8. [Automation as one whole](#8-automation-as-one-whole)
-9. [Where to go next](#9-where-to-go-next)
+9. [Timeouts, stalls and retries by surface](#9-timeouts-stalls-and-retries-by-surface)
+10. [Where to go next](#10-where-to-go-next)
 
 ## 1. The cycle and its authority
 
@@ -225,6 +226,7 @@ The `merge` stage ([#490](https://github.com/foomakers/pair/issues/490)) is the 
 - the PR's current remote head is identical to the head that was reviewed (a moved head is never merged);
 - the `pair-review` check is `success` on that head;
 - the `pair-explicit-approval` check is `success` on that head (below the highest-risk tier it passes by itself; at that tier it requires a recorded human approval);
+- every OTHER CI check on that head (check runs and commit statuses, read through the code-host adapter) is `success` — a failed one refuses the merge (`ci-not-green`, halted), a still-running one parks it awaiting the build;
 - the tier's gate set is green.
 
 Anything unreadable, moved or not `success` **parks** the card with the failing item named — it is never merged. On success the merge follows merge-and-cascade: the adopted strategy, story close, parent cascade with read-back, branch deletion.
@@ -286,7 +288,19 @@ Had `## Auto-Advance` named `risk:green`, step 6 would have run the `merge` stag
 
 The mechanics of every step are in the owner links of sections 1–7; the walk-through as a hands-on tutorial is on the docs site ([Unattended Delivery](/docs/tutorials/unattended-delivery)).
 
-## 9. Where to go next
+## 9. Timeouts, stalls and retries by surface
+
+What bounds a stage that hangs, and what is retried, differs by *who drives the cycle*. The rules of the cycle never change; the enforcement does. Single owner of this table — other pages link here.
+
+| Surface | What bounds a hang | What happens next |
+| --- | --- | --- |
+| **`pair-cli run`** (console driver, tier 2) | One wall-clock watchdog per engine process: `--iteration-timeout <seconds>` (default `1800`). It covers every cycle stage, every `run --skill` iteration **and the loop's `pair-next` selection process** (same bound, passed to each). No terminal event in the stream within the bound ⇒ the engine gets `SIGTERM` and the run is reported `stalled` (a terminal event already read keeps its outcome). | A stalled **stage** is re-dispatched fresh, sharing the dead-dispatch budget `policy.deadDispatchRetries` (default `1`, read from `cycle-state`); the next unadvanced handoff ends the cycle `failed-<stage>`. A stalled or failed **selection** stops the loop `selection failed` (exit `1`) and is never retried. |
+| **`pair-cli run --parallel` / `--watch`** (the loop) | The same watchdog per child `run --card`, plus the per-card lock (no timeout of its own). | **Transient** failures are retried: a child that crashed, was killed, or never reported a cycle status (engine/API error) is retried within the per-run **retry budget** (default `1`, printed in the loop header and audited). A **durable** terminal — a reported `failed-contract` or any `failed-*`, or `escalate` (the review/fix budget is spent, a human decision is owed) — is reported with its reason and excluded, never retried. An `escalated` card (an autonomy gate fired) is not durable: it is skipped until its escalation is cleared, then re-picked. A lock whose holder pid is dead on this host (a SIGKILLed driver) is a **stale lock**: reclaimed and audited `lock-reclaimed`; a live holder is respected (`locked by pid P (alive)`). |
+| **In-session `/pair-workflow-cycle`** (any harness) | The coordinator enforces it, not a process: **Step 4** of the skill — a stage that is still running but makes no progress for its time bound is a stall. | Resume it once on the same subagent (or re-dispatch the same prompt fresh where resume is unavailable), within the same `deadDispatchRetries` budget as a dead dispatch; then `failed-<step>`. A stage may never leave a command in the background or end its turn on one ([headless stage execution](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/headless-stage-execution.md)). |
+| **Claude Code Workflows** (`pair-loop`, `pair-implement-batch`) | The runtime's `agent()` has no timeout option, so each call races a timer: `args.agentTimeoutMinutes` (default 30 minutes, aligned with the 1800 s of `pair-cli`) when the sandbox exposes `setTimeout`; where it does not, the call is unbounded and the limit cannot be enforced. | A selection that times out is retried once, then the run ends `failed: true, reason: "selection failed: timeout after <n>m"`; any other `pair-loop` stage that times out fails the run naming the stage; a `pair-implement-batch` stage agent that times out is NOT retried — the runtime cannot cancel it, so it may still be writing to the worktree and a retry would be a second writer: the stage ends `failed-<step>` with `timed out after <n>m — the agent may still be running; human check required`, and a human must check the worktree before re-running. The loop retries only transient failures and keeps no cross-run halt memory beyond the card's current durable state. |
+| **`/pair-loop` in other coding agents** | No loop runs there: the skill drives exactly **one** eligible card per invocation and prints a continue-token; the caller re-invokes it. | Unattended multi-card delivery on those agents is the console driver (first row). |
+
+## 10. Where to go next
 
 | You want to… | Read |
 | --- | --- |

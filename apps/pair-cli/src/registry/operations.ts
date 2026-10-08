@@ -15,6 +15,7 @@ import { type SyncOptions, defaultSyncOptions } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
 import { isAbsolute, dirname, relative } from 'path'
 import { getCanonicalTarget } from './layout'
+import { writeDirAtomically, writeFileAtomically } from './atomic-target'
 
 /**
  * Performs the actual copy/mirror operation for a registry.
@@ -39,7 +40,7 @@ export async function doCopyAndUpdateLinks(
 
   const stat = await fsService.stat(srcPath)
   if (stat.isDirectory()) {
-    return await copyDirectory(fsService, {
+    return await copyDirectoryAtomically(fsService, {
       srcPath,
       tgtPath,
       source,
@@ -49,7 +50,9 @@ export async function doCopyAndUpdateLinks(
     })
   } else {
     await fsService.mkdir(dirname(tgtPath), { recursive: true })
-    await copyFileHelper(fsService, srcPath, tgtPath, 'overwrite')
+    await writeFileAtomically(tgtPath, fsService, tmp =>
+      copyFileHelper(fsService, srcPath, tmp, 'overwrite'),
+    )
   }
 
   return {}
@@ -105,7 +108,14 @@ function mirrorsAnyPath(options?: SyncOptions): boolean {
   return Object.values(options?.folderBehavior ?? {}).includes('mirror')
 }
 
-async function copyDirectory(
+/**
+ * Lands a registry's directory write all-or-nothing (US-134): the unchanged copy pipeline runs
+ * against a stage seeded from the live target, which is swapped in whole when complete.
+ *
+ * `behavior: add` registries (`.pair/adoption`) are never staged: add is skip-if-exists, so
+ * nothing there can be half-replaced, and the adopter's edits must never ride through a swap.
+ */
+async function copyDirectoryAtomically(
   fsService: FileSystemService,
   ctx: {
     srcPath: string
@@ -116,17 +126,50 @@ async function copyDirectory(
     options?: SyncOptions
   },
 ): Promise<CopyPathOpsResult> {
-  const { srcPath, tgtPath, source, target, datasetRoot, options } = ctx
+  if (ctx.options?.defaultBehavior === 'add') return await copyDirectory(fsService, ctx)
+  let result: CopyPathOpsResult = {}
+  await writeDirAtomically(ctx.tgtPath, fsService, async stage => {
+    result = await copyDirectory(fsService, { ...ctx, tgtPath: stage, logicalDest: ctx.tgtPath })
+  })
+  return result
+}
+
+async function copyWithTransforms(
+  fileService: FileSystemService,
+  ctx: {
+    srcPath: string
+    tgtPath: string
+    source: string
+    target: string
+    datasetRoot: string
+    logicalDest?: string
+    options: SyncOptions
+  },
+): Promise<CopyPathOpsResult> {
+  const { tgtPath, logicalDest, ...rest } = ctx
+  return await copyDirectoryWithTransforms({
+    fileService,
+    destPath: tgtPath,
+    ...(logicalDest && { logicalDest }),
+    ...rest,
+  })
+}
+
+async function copyDirectory(
+  fsService: FileSystemService,
+  ctx: {
+    srcPath: string
+    tgtPath: string
+    source: string
+    target: string
+    datasetRoot: string
+    logicalDest?: string
+    options?: SyncOptions
+  },
+): Promise<CopyPathOpsResult> {
+  const { srcPath, tgtPath, datasetRoot, options } = ctx
   if (options?.flatten || options?.prefix) {
-    return await copyDirectoryWithTransforms({
-      fileService: fsService,
-      srcPath,
-      destPath: tgtPath,
-      source,
-      target,
-      datasetRoot,
-      options,
-    })
+    return await copyWithTransforms(fsService, { ...ctx, options })
   }
 
   const helperCtx = buildCopyDirHelperContext({
@@ -260,7 +303,7 @@ export async function stripMarkersFromTarget(
     result = applyTransformCommands(result, transform.prefix)
   }
   result = stripAllMarkers(result)
-  await fsService.writeFile(targetPath, result)
+  await writeFileAtomically(targetPath, fsService, tmp => fsService.writeFile(tmp, result))
 }
 
 /**
@@ -281,11 +324,11 @@ async function writeSecondaryTarget(params: {
     const transformed = applyTransformCommands(content, target.transform.prefix)
     const clean = stripAllMarkers(transformed)
     await fileService.mkdir(dirname(targetPath), { recursive: true })
-    await fileService.writeFile(targetPath, clean)
+    await writeFileAtomically(targetPath, fileService, tmp => fileService.writeFile(tmp, clean))
   } else if (target.mode === 'symlink') {
     await createOrReplaceSymlink(fileService, canonicalPath, targetPath)
   } else if (target.mode === 'copy') {
-    await fileService.copy(canonicalPath, targetPath)
+    await writeFileAtomically(targetPath, fileService, tmp => fileService.copy(canonicalPath, tmp))
   }
 }
 
@@ -340,8 +383,12 @@ export async function postCopyOps(ctx: {
   const { fs, registryConfig, effectiveTarget, datasetPath, baseTarget } = ctx
   const canonicalTarget = getCanonicalTarget(registryConfig.targets)
   if (await fs.exists(effectiveTarget)) {
-    const stat = await fs.stat(effectiveTarget)
-    if (!stat.isDirectory()) {
+    // A concurrent run's swap may move the target away between exists and stat: lost race, not an error.
+    const stat = await fs.stat(effectiveTarget).catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === 'ENOENT') return undefined
+      throw err
+    })
+    if (stat && !stat.isDirectory()) {
       await stripMarkersFromTarget(fs, effectiveTarget, canonicalTarget?.transform)
     }
   }
@@ -361,10 +408,17 @@ async function createOrReplaceSymlink(
   linkPath: string,
 ): Promise<void> {
   await fileService.mkdir(dirname(linkPath), { recursive: true })
-  if (fileService.existsSync(linkPath)) {
-    await fileService.unlink(linkPath)
-  }
   // Use relative path so symlinks are portable across machines
   const relTarget = relative(dirname(linkPath), target)
-  await fileService.symlink(relTarget, linkPath)
+  // Atomic last-writer-wins: build the link at a unique temp name, rename it over linkPath.
+  // A concurrent run's replacement is never an ENOENT/EEXIST abort. A real directory at
+  // linkPath makes the rename fail (never deleted); the temp link is cleaned up.
+  const tmpLink = `${linkPath}.tmp-${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  await fileService.symlink(relTarget, tmpLink)
+  try {
+    await fileService.rename(tmpLink, linkPath)
+  } catch (err) {
+    await fileService.unlink(tmpLink).catch(() => undefined)
+    throw err
+  }
 }

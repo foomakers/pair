@@ -829,3 +829,41 @@ test('F3: azure deleteBranch: repo required, success, not-found, success:false',
   t = mk([{ match: 'ref list', stdout: JSON.stringify(refs) }, { match: 'ref delete', stdout: JSON.stringify({ success: false, updateStatus: 'rejected' }) }])
   assert.throws(() => withEnv(t.env, () => t.h.deleteBranch({ branch: 'feature/x', repo: 'P/R' })), /delete|success|rejected/i)
 })
+
+// ── AL: the PR's CI checks on the pinned head are part of the merge decision ──────────────────────────────────
+test('AL decideMerge: a failed CI check on the head halts the merge (`ci-not-green`); a pending one parks awaiting-human; green/neutral/skipped and pair-* contexts do not count', () => {
+  const ci = list => ({ ...OK, ci: list })
+  const failed = decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'failure' }, { name: 'lint', conclusion: 'success' }]) })
+  assert.equal(failed.mergeAllowed, false)
+  assert.deepEqual(failed.failed.map(f => f.code), ['ci-not-green'])
+  assert.match(failed.reason, /build/)
+  assert.equal(failed.parkKind, 'halted')
+  const pending = decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'pending' }]) })
+  assert.equal(pending.parkKind, 'awaiting-human')
+  assert.deepEqual(pending.failed.map(f => f.code), ['ci-not-green'])
+  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'success' }, { name: 'docs', conclusion: 'success' }]) }).mergeAllowed, true)
+  assert.equal(decideMerge({ ...base, signals: ci([]) }).mergeAllowed, true, 'no CI configured is not a failure')
+  const own = decideMerge({ ...base, signals: ci([{ name: 'pair-review', conclusion: 'failure' }, { name: 'pair-explicit-approval', conclusion: 'pending' }]) })
+  assert.equal(own.failed.some(f => f.code === 'ci-not-green'), false, 'pair-review / pair-explicit-approval are judged by their own conditions')
+  const both = decideMerge({ ...base, signals: ci([{ name: 'a', conclusion: 'pending' }, { name: 'b', conclusion: 'failure' }]) })
+  assert.equal(both.parkKind, 'halted', 'a failure beside a pending one stays halted')
+})
+
+test('AL readSignals: reads the CI checks through the adapter on the pinned head; an adapter without the method leaves `ci` absent; a read that throws makes the signals unreadable', () => {
+  const h = fakeHosts({ checks: { 'pair-review': 'success', 'pair-explicit-approval': 'success' } })
+  const code = { ...h.hosts.code, readCiChecks: ({ sha }) => (assert.equal(sha, SHA('a')), [{ name: 'build', conclusion: 'failure' }]) }
+  assert.deepEqual(readSignals({ code, pr: 7 }).ci, [{ name: 'build', conclusion: 'failure' }])
+  assert.equal('ci' in readSignals({ code: h.hosts.code, pr: 7 }), false)
+  assert.equal(readSignals({ code: { ...h.hosts.code, readCiChecks: () => { throw new Error('rate limited') } }, pr: 7 }), null)
+})
+
+test('AL/C6 decideMerge: approval not yet recorded (missing/pending) + CI still pending ⇒ awaiting-human (both are waits), but any real failure beside them stays halted', () => {
+  const red = { ...base, cardTier: RED, currentTier: RED, autoAdvanceTiers: [RED] }
+  const sig = (approval, ci) => ({ ...OK, explicitApproval: approval, ci })
+  const wait = decideMerge({ ...red, signals: sig('pending', [{ name: 'build', conclusion: 'pending' }]) })
+  assert.deepEqual(wait.failed.map(f => f.code).sort(), ['ci-not-green', 'explicit-approval'])
+  assert.equal(wait.parkKind, 'awaiting-human')
+  assert.equal(decideMerge({ ...red, signals: sig('missing', [{ name: 'build', conclusion: 'pending' }]) }).parkKind, 'awaiting-human')
+  assert.equal(decideMerge({ ...red, signals: sig('pending', [{ name: 'build', conclusion: 'failure' }]) }).parkKind, 'halted')
+  assert.equal(decideMerge({ ...red, signals: sig('failure', [{ name: 'build', conclusion: 'pending' }]) }).parkKind, 'halted')
+})

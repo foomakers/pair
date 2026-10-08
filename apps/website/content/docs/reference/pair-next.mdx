@@ -74,6 +74,27 @@ A mode is a **facade, not a new skill**:
 
 > **Source:** the mode ↔ step table lives only in `packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/macro-phase-modes.md`; this page is checked against it.
 
+## Control state — macrostate first, Definition of Ready second, never titles
+
+Every decision `/pair-next` makes rests on one **Control-State Resolution** procedure (the same one `/pair-loop`, `/pair-workflow-cycle` and `pair-cli run` reference — none re-derives it). Its inputs are the item's board-state literal, its body and the optional `## State Mapping` in `way-of-working.md`; nothing else.
+
+| Situation | Resolution |
+| --- | --- |
+| **Mapped board** | The literal is looked up in the [state mapping](/docs/concepts/canonical-states) (case-insensitive) and the item decides on its **macrostate**. Board-state names never appear in decision logic. |
+| **No state expresses readiness** (e.g. `Todo` / `In Progress` / `Done`) | The mapped state gives no `Ready`, so readiness is read from the **body** through the canonical [Definition of Ready](/docs/concepts/definition-of-ready-and-done) — AC, estimate and dependencies, or the inline task breakdown that covers them. A failing item stays `Draft` and the **failing criteria are listed by name**. |
+| **Unmapped board state** | Reported as **out-of-process** — "unmapped states allowed" — never an error, never proposed. |
+| **No `## State Mapping` at all** | Canonical macrostate names are assumed; the Definition of Ready fallback stays active. |
+| **Conflicting signals** (state says `Ready`, the Definition of Ready fails) | The item is **flagged** with the failing criteria listed. The mapped state wins — a warning, never a block. |
+
+**Titles are never a control signal.** A title that says "Draft" on a `Ready` item, or "Done" on an open one, changes nothing: state and body decide. The title is read for a single purpose — the Definition of Ready's check that it is not a template placeholder.
+
+```text
+OUT-OF-PROCESS: #<id> — board state "<literal>" is unmapped (not an error; ignored for pair semantics)
+CONFLICT: #<id> — state says Ready, DoR fails: <failing criterion>, <failing criterion>
+```
+
+The automation loop shares the implementation: `pair-cli run --card` resolves a card with the same grammar (`apps/pair-cli/src/commands/run/card-readiness.ts`), so a skill-driven session and an unattended run route the same board identically.
+
 ## Process profile — steps this project does not run
 
 Independently of the two arguments above, `/pair-next` reads the optional `## Process Profile` section of `way-of-working.md` before the cascade and **never proposes a step the project has disabled** ([adoption files](/docs/concepts/adoption-files)). The two mechanisms are unrelated: arguments narrow **which items** are in scope, the profile narrows **which steps** exist at all.

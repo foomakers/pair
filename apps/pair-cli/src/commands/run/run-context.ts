@@ -88,6 +88,8 @@ export interface RunHandlerDependencies {
   /** US-521: resolves the run's autonomy policy (default: the installed `autonomy-policy.mjs`). */
   resolveAutonomy?: AutonomyResolver
   /** US-491: the `pair-next --root` selection (one engine process, shipped `selectRootCandidates`). */
+  /** Live title read for a candidate the selection returned without one. */
+  readCardTitle?: (card: string, cwd: string) => string | undefined
   selectCandidates?: (input: SelectRootInput) => Promise<RootCandidate[]>
   /** US-522: the loop's selection (candidates + predicate snapshot); defaults to `selectCandidates` or the shipped one. */
   selectAnswer?: (input: SelectRootInput) => Promise<SelectionAnswer>
@@ -120,6 +122,23 @@ export interface ResolvedRun {
  * that is ineligible, unmapped, or covered by no declaration at all is reported and the run exits,
  * without resolving an invocation or a perimeter for work that is not going to happen.
  */
+/**
+ * ADR-027: an argument/`## Autonomy` filter overrides the legacy `## Eligibility` (argument > adoption).
+ * The loop forwards its effective filter to each child `run --card --filter`, so a card the filter admits
+ * is not skipped again on the adoption's legacy label: for a card run the `--eligibility-filter` (the any-of label the
+ * card carries, else the filter as given) IS the eligibility. No filter ⇒ the policy untouched.
+ */
+function effectiveCardEligibility(
+  policy: AutomationPolicy,
+  config: RunCommandConfig,
+): AutomationPolicy {
+  const filter = config.eligibilityFilter
+  if (config.dispatch === undefined || filter === undefined) return policy
+  const labels = filter.split(',').map(l => l.trim())
+  const carried = labels.find(l => config.dispatch?.tags.includes(l))
+  return { ...policy, eligibility: carried ?? filter }
+}
+
 export interface RunContext {
   config: Config
   probe: SkillProbe
@@ -143,7 +162,7 @@ export function resolveContext(
   const loaded = loadConfigWithOverrides(fs, { projectRoot: cwd })
   // One probe per RUN, not per iteration: the installed skill set does not change mid-run.
   const probe = createSkillProbe(fs, loaded.config, cwd)
-  const policy = readAutomationPolicy(fs, cwd)
+  const policy = effectiveCardEligibility(readAutomationPolicy(fs, cwd), config)
   const dispatch =
     config.dispatch &&
     decideDispatch({
@@ -333,7 +352,16 @@ export function takeCardLock(
     workingArea: context.workingArea,
     card,
   })
-  if (acquisition.kind === 'acquired') return acquisition.lock
+  if (acquisition.kind === 'acquired') {
+    if (acquisition.reclaimed !== undefined) {
+      console.log(`  Reclaimed stale lock for #${card} (pid ${acquisition.reclaimed.pid} dead)`)
+      ;(deps.appendAudit ?? appendAuditLine)(
+        context.auditPath,
+        `${new Date().toISOString()} event=lock-reclaimed card=${card} pid=${acquisition.reclaimed.pid}`,
+      )
+    }
+    return acquisition.lock
+  }
   const skipped = lockedSkip(card, acquisition)
   console.log(`  ${describeDispatch(skipped)}`)
   recordSkip(context, deps, skipped)

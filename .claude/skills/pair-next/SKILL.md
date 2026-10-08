@@ -148,7 +148,7 @@ Run this before every other step, on **every** invocation — the result is neve
    - Otherwise: the candidate set is **the root issue itself plus its transitive children** through the PM-tool hierarchy (parent/child links). The root is a **first-class member** — a childless story or epic root yields a **one-issue** set, not an empty one — and is itself subject to the item-selection rows (a Draft story root → `/pair-process-refine-story`; a Ready story root → `/pair-process-implement` or `/pair-process-plan-tasks`). Later steps read this set instead of the full backlog.
 3. **`--filter <tag>`** → narrow the candidate set to issues carrying ANY listed tag (a single tag is a list of one), using a plain string-equality label query (tag-agnostic — no tag value gets special treatment). **When `--root` is absent the candidate set defaults to the full backlog, which `--filter` then narrows**; when `--root` is present it narrows that subtree.
    - **`--assignee <login|@me>`** → keep issues assigned to that user. `@me` resolves to the code-host user through the host adapter (`gh api user`); with no authenticated code host **HALT** naming the host — never a silent unassigned scope.
-   - **`--status <macrostates>`** → keep issues in ANY listed canonical macrostate, resolved through the state mapping; a value the board does not map **HALTs** naming the value and the mapped set. Absent ⇒ all open.
+   - **`--status <macrostates>`** → keep issues in ANY listed canonical macrostate, resolved through [Control-State Resolution](#control-state-resolution); `Draft` and `Ready` always resolve (on a board with no state mapped to `Ready` the procedure's DoR fallback decides, never a HALT); a value that is not one of the five canonical macrostates, or any other macrostate no board state maps, **HALTs** naming the value and the mapped set. Absent ⇒ all open.
 4. **Several** → apply the intersection of every argument given: `subtree ∩ matching tags ∩ assignee ∩ macrostates`.
 5. **Empty candidate set** — **zero issues** (e.g. `--filter` matches no issue): report `no matching issues` and exit cleanly — an empty result is normal, **not an error**. A childless `--root` (root with no children) is **one** issue, not empty: it flows into the cascade (see item 2). A **non-empty** set whose issues happen to be all non-actionable (e.g. all Done) is likewise not empty here — it falls through to the Step 5 fallback; actionability is decided in Steps 3–4, not by this emptiness check. Item 5's clean exit governs **backlog-item selection only**: a scoped run that finds no actionable item exits here and does **not** surface the project-wide config rows 12–15.
 
@@ -206,6 +206,17 @@ Skip when no `--mode` is given — the cascade runs unchanged and recommends. Ot
 2. **Read the row set** for the mode from the [macro-phase modes guideline](../../../.pair/knowledge/guidelines/technical-standards/ai-development/macro-phase-modes.md) → `## The Mode Table`. A missing or unreadable table → **HALT** naming the file; never fall back to plain `/pair-next`.
 3. **Carry the row set into Steps 2–5**: a row outside it is skipped, exactly like a disabled step. Evaluation stays top-to-bottom, first match wins; the scope (Step 0) and the profile (Step 0.5) apply first.
 
+### Control-State Resolution
+
+The ONE procedure that turns a backlog item into a **control state** (R2.5, D4). Step 0's `--status`, rows 6–11 of Step 3 and every orchestration mode (`/pair-loop`, `/pair-workflow-cycle`, `pair-cli run`) **reference** it and never re-derive it. Its only inputs are the item's board-state literal, its body and the `## State Mapping` — nothing else. Decision logic speaks in **macrostates**, never board-state names; a **title is never a control signal** — it is read for exactly one thing, the Definition of Ready's presence check (is it a template placeholder?), and its wording, prefix or keywords never move an item between states.
+
+1. **Map lookup (primary).** Read `## State Mapping` in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md); look the literal up case-insensitively → its macrostate. **Section absent (missing WoW)** → the canonical names are assumed (D21): the literal is a macrostate when it case-insensitively equals one of the five. Rules and examples: [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md).
+2. **Unmapped ⇒ out-of-process.** A literal neither mapped nor canonical is **out-of-process** — "unmapped states allowed" (#202, Reading rule 4): report it in one line (see Output Format), leave it out of every row, and carry on. **Not an error**, never a HALT, never proposed.
+3. **Readiness (the Draft/Ready boundary only).** The mapped state is the **primary** signal: a literal that resolves to `Ready` is `Ready`. The DoR is the **fallback**, used only when the map gives no answer for the boundary — **no board state in the map resolves to `Ready`** (a board without a Ready column; with the section absent, a board whose own states give no `Ready`). Then evaluate the [Definition of Ready](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md) against the item's **body**: all criteria met ⇒ effectively `Ready`; otherwise `Draft`, and the report lists **every failing criterion by name** — never a blanket "not ready", never readiness guessed from a subset. The criteria — including the inline task-breakdown signal — are the canonical set from that document: **single source, no local variant** here.
+4. **Conflicting signals.** The state says `Ready` but the DoR fails ⇒ **flag** the item to the user with the failing criteria listed (see Output Format). The mapped state wins — the item stays `Ready` and the flag is a warning for visibility, never a block.
+
+Everything downstream (rows 6–11, the tie-break, the profile filter) consumes the resolved macrostate and nothing earlier.
+
 ### Step 1: Read Adoption Files
 
 Read the following files and classify each as **populated** or **template**:
@@ -250,7 +261,7 @@ Rows 12–15 are likewise project-wide and not surfaced under a scope; when the 
 
 **Code host discovery**: **row 6's open-PR detection queries the code host, not the PM tool** — a PR read is a code-host operation. Resolve `code-host` from way-of-working.md → `## Git Workflow`; **absent ⇒ the code host is the PM tool**, so a single-tool project queries one tool exactly as before. When the two differ, match each open PR to its backlog item through the `Refs: <issue-id>` cross-link in the PR body (that is how "the PR's linked issue" is determined for the candidate-set restriction), while every item/state read below stays on the PM tool. Resolution + routing table: [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
 
-**State resolution**: The conditions below refer to canonical **macrostates** (`Draft`, `Ready`, `In Progress`, `Review`, `Done`), never board-specific labels. Resolve each item's board state to a macrostate via the `## State Mapping` section in way-of-working.md — omitted ⇒ canonical names are assumed. See [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) for the full resolution rule. When a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback: evaluate the [Definition of Ready criteria](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md) against the item instead of guessing from the board-state name.
+**State resolution**: The conditions below refer to canonical **macrostates** (`Draft`, `Ready`, `In Progress`, `Review`, `Done`), never board-specific labels. Resolve every item through [Control-State Resolution](#control-state-resolution) — the map lookup, the DoR fallback for a board with no Ready state, the out-of-process report for an unmapped state and the conflict flag live there, once; this step only consumes the result.
 
 | #   | Condition                                                        | Suggestion          | Rationale                                   |
 | --- | ---------------------------------------------------------------- | ------------------- | ------------------------------------------- |
@@ -262,7 +273,7 @@ Rows 12–15 are likewise project-wide and not surfaced under a scope; when the 
 | 8   | A story resolves to macrostate `In Progress` but has NO checkpoint file | `/pair-process-implement`   | Continue the in-progress work — `/pair-process-implement` re-derives state from scratch when no checkpoint exists |
 | 9   | Stories resolve to macrostate `Ready` AND a task breakdown exists | `/pair-process-implement`        | Work is ready to start                      |
 | 10  | Stories resolve to macrostate `Ready` but have NO task breakdown  | `/pair-process-plan-tasks`       | Tasks must be created before implementation |
-| 11  | Stories resolve to macrostate `Draft` (missing acceptance criteria, or failing Definition of Ready via the Readiness Fallback) | `/pair-process-refine-story` | Stories need refinement before work |
+| 11  | Stories resolve to macrostate `Draft` (missing acceptance criteria, or failing the Definition of Ready through Control-State Resolution) | `/pair-process-refine-story` | Stories need refinement before work |
 
 **Tie-break**: on a real backlog several of rows 6–11 can hold at once (e.g. Draft stories AND an open PR). Row order resolves this — rows are sorted by delivery proximity (`/pair-process-review` > `/pair-capability-checkpoint` > `/pair-process-implement` > `/pair-process-plan-tasks` > `/pair-process-refine-story`): evaluate top-to-bottom, stop at the first match. For a single item the distinguishing predicates (macrostate, checkpoint file present/absent, task breakdown present/absent) make rows 7–11 mutually exclusive; across items, row order decides. Every `In Progress` story matches row 7 or row 8 — the fallback (Step 5) is never reached for active work.
 
@@ -324,13 +335,21 @@ PROJECT STATE:
 ├── Scope: [full backlog | root #ID (subtree) | filter <tag[,tag…]> | assignee <login> | status <macrostates> | any intersection of them], each value with its source (argument | adoption | default)
 ├── Profile: [default (no section) | poc | custom — N/M steps enabled]
 ├── Mode: [none (recommend only) | analysis | implementation | review — from `--mode`]
-└── Backlog: [summary of current items — within scope]
+├── Control state: [per item: macrostate, and how it resolved — state mapping | canonical name | DoR fallback]
+└── Backlog: [summary of current items — within scope; out-of-process items counted apart]
 
 RECOMMENDATION: /skill-name
 REASON: [one-line explanation]
 ```
 
 When `--root`/`--filter` yield no work, replace the recommendation with the corresponding Step 0 outcome (`root <id> not found` → HALT; `root <id> is Done` → exit; `no matching issues` → clean exit).
+
+Control-State Resolution reports, each on its own line after the recommendation:
+
+```text
+OUT-OF-PROCESS: #<id> — board state "<literal>" is unmapped (not an error; ignored for pair semantics)
+CONFLICT: #<id> — state says Ready, DoR fails: <failing criterion>, <failing criterion>
+```
 
 Then ask: "Shall I run `/skill-name`?"
 
@@ -351,9 +370,9 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **Argument edge cases** (see Step 0): `--root` not found → HALT, no action; `--root` resolves to a Done issue → report and exit; `--filter` (or the subtree) matches nothing → report `no matching issues` and exit cleanly (an empty result is not an error).
 - If a suggested skill is not installed, tell the user which skill is needed and where to find it.
 - If way-of-working.md has no `## Process Profile` section, the `default` profile applies — every step enabled, cascade unchanged. This is the zero-configuration default, not a degradation; the profile's own error cases (unknown name/id, empty whitelist) HALT instead, per Step 0.5.
-- If way-of-working.md has no `## State Mapping` section, canonical macrostate names are assumed — this is the zero-configuration default, not a degradation.
+- If way-of-working.md has no `## State Mapping` section, canonical macrostate names are assumed (D21) and the DoR fallback stays active — this is the zero-configuration default, not a degradation.
 - If way-of-working.md declares no `code-host`, the code host is the PM tool — likewise the zero-configuration default, not a degradation. If a **declared** code host is unreachable, skip row 6's open-PR detection (say so) and evaluate the remaining rows from PM-tool state; never HALT a read-only recommendation over it.
-- If a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback ([Definition of Ready criteria](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md)) rather than treating row 11's condition as unresolvable.
+- If a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), Control-State Resolution's DoR fallback decides rather than row 11's condition being unresolvable.
 
 ## Notes
 

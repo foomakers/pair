@@ -261,6 +261,63 @@ export function applyTerminalOutcome({ delivery, terminal }) {
 }
 const cohortStateOf = delivery => (delivery === 'ready-for-merge' ? 'completed' : delivery === 'in-progress' ? 'running' : delivery === 'interrupted' || delivery === 'abandoned' ? delivery : 'blocked')
 
+// ── AK helpers: honest wording, round labels, findings rendering ───────────────────────────────────────────
+const roundOf = review => (review ? /^(r\d+)/.exec(String(review.phase ?? ''))?.[1] ?? String(review.phase ?? '?') : '?')
+/** What is knowable with no host runtime: the wall-clock span of the handoff timestamps. */
+function handoffSpanOf(list) {
+  const times = list.map(h => Date.parse(h.data.createdAt)).filter(Number.isFinite)
+  return times.length > 1 ? { ms: Math.max(...times) - Math.min(...times), handoffs: times.length } : null
+}
+const humanSpan = ms => {
+  const m = Math.floor(ms / 60000)
+  return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}m` : `${m}m`
+}
+const oneLine = (text, max = 110) => {
+  const flat = String(text ?? '').replace(/\s+/g, ' ').trim()
+  const first = /^(.+?[.!?])(\s|$)/.exec(flat)?.[1] ?? flat
+  return (first.length > max ? `${first.slice(0, max - 1)}…` : first).replace(/\|/g, '\\|')
+}
+const evidenceOf = f => {
+  if (f.transition !== 'resolved') return '—'
+  const explicit = typeof f.evidence === 'string' && f.evidence.trim() ? f.evidence.trim() : null
+  const sha = /\b[0-9a-f]{7,40}\b/.exec(String(f.description ?? ''))?.[0]
+  return (explicit ? oneLine(explicit, 60) : sha ? `commit ${sha}` : 'resolved (see the re-review)').replace(/\|/g, '\\|')
+}
+const findingRow = f => `| ${f.id} | ${f.severity ?? '—'} | ${f.roundFound ?? '?'} | ${f.transition ?? 'open'} | ${String(f.location ?? '—').replace(/\|/g, '\\|').slice(0, 120)} | ${oneLine(f.description)} | ${evidenceOf(f)} |`
+const FINDINGS_HEADER = ['| id | severity | found | status | location | summary | resolution |', '| --- | --- | --- | --- | --- | --- | --- |']
+
+/** Findings first reported by a RE-REVIEW (never the first review, which has its own comment). */
+export function newFindingsOf(reviews) {
+  const first = reviews[0]
+  const seen = new Set((first?.findings ?? []).map(f => f.id))
+  const out = []
+  for (const r of reviews.slice(1)) {
+    for (const f of r.findings ?? []) {
+      if (!f?.id || seen.has(f.id)) continue
+      seen.add(f.id)
+      out.push({ ...f, roundFound: roundOf(r) })
+    }
+  }
+  return out
+}
+
+/**
+ * The visible comment a non-converging re-review owes the PR: every OPEN finding as of the latest review, those first
+ * opened by a re-review marked "new in <round>". `null` when the re-reviews opened nothing new (silence is allowed then).
+ */
+export function renderFindingsComment({ reviews, story, pr, runId }) {
+  const fresh = newFindingsOf(reviews)
+  if (!fresh.length) return null
+  const latest = new Map()
+  const found = new Map()
+  for (const r of reviews) for (const f of r.findings ?? []) if (f?.id) { latest.set(f.id, f); if (!found.has(f.id)) found.set(f.id, roundOf(r)) }
+  const freshIds = new Set(fresh.map(f => f.id))
+  // Every OPEN finding as of the latest review, plus the findings a re-review first opened (shown with their latest status).
+  const open = [...latest.values()].filter(f => freshIds.has(f.id) || (f.transition !== 'resolved' && f.transition !== 'superseded')).map(f => ({ ...f, roundFound: found.get(f.id) }))
+  const marker = `<!-- pair:findings #${story} PR#${pr}${runId ? ` run:${runId}` : ''} -->`
+  return [marker, '## Open findings', '', `Re-review ${roundOf(reviews[reviews.length - 1])}: ${fresh.length} new (${fresh.map(f => `${f.id} new in ${f.roundFound}`).join(', ')}), ${open.filter(f => f.transition !== 'resolved' && f.transition !== 'superseded').length} still open.`, '', ...FINDINGS_HEADER, ...open.map(f => findingRow({ ...f, description: `${freshIds.has(f.id) ? '(new) ' : ''}${f.description ?? ''}` })), ''].join('\n')
+}
+
 export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations = [], revision = 1, asOf = null, dispatchStats, sharedCost, terminal }) {
   const handoffs = readHandoffs(dir)
   // The marker is this story's when it names one; a caller that already resolved ownership
@@ -281,15 +338,21 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   const reviews = list.filter(h => h.skill === 'review-phase' && h.data.recordType !== 'migration')
   const lastReview = reviews[reviews.length - 1]
   const findingsById = new Map()
-  for (const r of reviews) for (const f of r.data.findings ?? []) if (f?.id) findingsById.set(f.id, f)
+  // AK: the review round a finding was FIRST reported in (`r0`, `r1`…), from the handoffs themselves — never inferred.
+  const foundIn = new Map()
+  for (const r of reviews) for (const f of r.data.findings ?? []) if (f?.id) { findingsById.set(f.id, f); if (!foundIn.has(f.id)) foundIn.set(f.id, r) }
   const openBySeverity = {}
   const closedBySeverity = {}
-  const late = { preexistingMissed: 0, introducedByRemediation: 0, unknown: 0 }
+  const late = { preexistingMissed: 0, introducedByRemediation: 0, unknown: 0, missedUpstream: 0 }
   for (const f of findingsById.values()) {
     const bucket = f.transition === 'resolved' || f.transition === 'superseded' ? closedBySeverity : openBySeverity
     bucket[f.severity] = (bucket[f.severity] ?? 0) + 1
-    if (f.discoveredAtReviewId && f.discoveredAtReviewId !== reviews[0]?.name) {
-      if (f.origin === 'preexisting-missed') late.preexistingMissed++
+    // AK: a LATE defect is one first reported after the first review. `missedUpstream` (the reviewer's own flag that an earlier
+    // stage should have caught it) is read from the handoffs; absent an explicit origin it counts as preexisting-missed.
+    if (f.missedUpstream === true) late.missedUpstream++
+    const lateFound = (f.discoveredAtReviewId && f.discoveredAtReviewId !== reviews[0]?.name) || (foundIn.get(f.id) && foundIn.get(f.id) !== reviews[0] && f.missedUpstream === true)
+    if (lateFound) {
+      if (f.origin === 'preexisting-missed' || (f.origin === undefined && f.missedUpstream === true)) late.preexistingMissed++
       else if (f.origin === 'introduced-by-remediation') late.introducedByRemediation++
       else late.unknown++
     }
@@ -537,7 +600,7 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
   return {
     schemaVersion: METRICS_SCHEMA_VERSION,
     identity: { repository, storyId: story, prNumber: Number.isInteger(pr) ? pr : null, branch, canonicalRunId: runId ?? null, runIds: [...(runId ? [runId] : []), ...predecessorRuns.filter(r => r !== runId)], predecessorRuns, scopeEpoch: lastReview?.data.scopeEpoch ?? 1 },
-    workflow: { name: 'pair-implement-batch', versions, sourceShas: [], artifactDigests: [], models: [...new Set(merged.flatMap(o => (Array.isArray(o.models) ? o.models : [])))].sort(), mixedVersions: versions.length > 1 },
+    workflow: { name: 'pair-implement-batch', versions, profile: list.find(h => h.data.workflowProfile?.name)?.data.workflowProfile.name ?? null, sourceShas: [], artifactDigests: [], models: [...new Set(merged.flatMap(o => (Array.isArray(o.models) ? o.models : [])))].sort(), mixedVersions: versions.length > 1 },
     snapshot: { revision, asOf, sourceDigest: sha256(canonical(list.map(h => h.name))), completeness, missingSources },
     outcome: { quality, delivery, cohortState: cohortStateOf(delivery), reason: deliveryReason, qualityConvergedHead: quality === 'converged' ? lastReview?.data.reviewedHead ?? null : null, reviewedHead: lastReview?.data.reviewedHead ?? null },
     cycles: { attempted: counters.attemptedCycles, spent: counters.spentCycles, completed: counters.completedCycles, perScopeEpoch: [] },
@@ -550,8 +613,9 @@ export function reduceCycleMetrics({ dir, repository, story, branch, pr, runId, 
     // `lastObservedAt` keeps the meaning it always had — the last DEMONSTRATED end — and
     // `lastDemonstratedAt` says so in its name; the host's read clock lives only under
     // `observation`, labelled, so the two can never be confused again (US-479 F4).
+    handoffSpan: handoffSpanOf(list),
     time: { startedAt: known.length ? new Date(Math.min(...known.map(i => i.startMs))).toISOString() : null, lastObservedAt: known.length ? new Date(Math.max(...known.map(i => i.endMs))).toISOString() : null, lastDemonstratedAt: known.length ? new Date(Math.max(...known.map(i => i.endMs))).toISOString() : null, terminalAt: delivery === 'ready-for-merge' ? asOf : null, elapsedMs: time.elapsedMs, activeWallMs: time.activeWallMs, agentMs: time.agentMs, waitMs: time.waitMs, incomplete: time.incomplete, messageSpan, observation, byPhase: [] },
-    defects: { openBySeverity, closedBySeverity, late, entries: [...findingsById.values()] },
+    defects: { openBySeverity, closedBySeverity, late, entries: [...findingsById.values()].map(f => ({ ...f, roundFound: roundOf(foundIn.get(f.id)) })) },
     scopeChanges: { ...scopeCounts, entries: scopeEntries },
     steps: merged,
     publication: { marker: null, commentId: null, url: null, metricsRevision: revision, sourceDigest: null, state: 'not-applicable', lastError: null },
@@ -653,7 +717,7 @@ export function renderPrSummary(view) {
   const lines = []
   lines.push('## Delivery workflow summary')
   lines.push('')
-  lines.push(`**1. Identity** — ${view.workflow.name} ${view.workflow.versions.join(', ') || 'unknown'}${view.workflow.mixedVersions ? ' (mixed versions)' : ''} | run \`${view.identity.canonicalRunId ?? 'unknown'}\`${(view.identity.runIds ?? []).length > 1 ? ` (+${view.identity.runIds.length - 1} other run(s))` : ''} | models: ${view.workflow.models.join(', ') || 'unknown'} | reviewed head: \`${view.outcome.reviewedHead ?? 'none yet'}\``)
+  lines.push(`**1. Identity** — ${view.workflow.name} ${view.workflow.versions.join(', ') || 'unknown'}${view.workflow.mixedVersions ? ' (mixed versions)' : ''} | run \`${view.identity.canonicalRunId ?? 'unknown'}\`${(view.identity.runIds ?? []).length > 1 ? ` (+${view.identity.runIds.length - 1} other run(s))` : ''} | models: ${view.workflow.models.join(', ') || 'not recorded (in-session)'} | reviewed head: \`${view.outcome.reviewedHead ?? 'none yet'}\``)
   lines.push('')
   lines.push(`**2. Status** — quality: **${view.outcome.quality}** · delivery: **${view.outcome.delivery}**${view.outcome.reason ? ` (${view.outcome.reason})` : ''} · gate/custody: ${view.outcome.quality === 'converged' ? 'passed' : 'pending'}`)
   lines.push('')
@@ -661,6 +725,12 @@ export function renderPrSummary(view) {
   lines.push('')
   const cov = view.usage.coverage
   const tk = k => (typeof view.usage[k] === 'number' ? view.usage[k] : 'unknown')
+  // AK: with no usage observed at all the host recorded nothing — say so once, instead of repeating "unknown".
+  const inSession = cov.total === 0 && view.usage.observedTotalTokens == null
+  if (inSession) {
+    const span = view.handoffSpan
+    lines.push(`**4. Cost / time** — tokens not recorded (in-session: no host runtime supplied usage) · ${view.time.elapsedMs != null ? `elapsed ${view.time.elapsedMs}ms` : span ? `elapsed ≈ ${humanSpan(span.ms)} (handoff timestamps, ${span.handoffs} handoffs; wall clock including waits)` : 'elapsed not recorded'}${view.workflow.profile ? ` · profile ${view.workflow.profile}` : ''}`)
+  } else
   lines.push(`**4. Cost / time** — tokens ${view.usage.observedTotalTokens ?? 'unknown'} (in ${tk('inputTokens')} · out ${tk('outputTokens')} · cache read ${tk('cacheReadTokens')} · cache write ${tk('cacheWriteTokens')}; known ${cov.known}/${cov.total}${view.usage.missingExecutionIds.length ? `; missing: ${view.usage.missingExecutionIds.join(', ')}` : ''}${view.usage.incompleteExecutionIds?.length ? `; unfinished provider requests in ${view.usage.incompleteExecutionIds.length} execution(s)` : ''}) · elapsed ${view.time.elapsedMs ?? 'unknown'}ms · active ${view.time.activeWallMs ?? 'unknown'}ms · agent ${view.time.agentMs ?? 'unknown'}ms · wait ${view.time.waitMs ?? 'unknown'}ms${spanClause(view.time)}`)
   // US-479 B2: what this PR cost across every run it actually had — never silently reduced to the
   // current run directory, and explicitly partial when a predecessor persisted no metrics.
@@ -668,7 +738,13 @@ export function renderPrSummary(view) {
     lines.push(`   *Lifetime across ${view.lifetime.predecessorRuns.length + 1} run(s) (${[view.identity.canonicalRunId, ...view.lifetime.predecessorRuns.map(r => r.runId)].filter(Boolean).join(', ')})* — cycles ${view.lifetime.cycles.completed} completed / ${view.lifetime.cycles.attempted} attempted · tokens ${view.lifetime.usage.observedTotalTokens ?? 'unknown'} · agent ${view.lifetime.time.agentMs ?? 'unknown'}ms · coverage **${view.lifetime.coverage}**${lifetimeCaveats(view.lifetime)}`)
   lines.push('')
   const late = view.defects.late
-  lines.push(`**5. Late defects** (by origin) — preexisting-missed ${late.preexistingMissed} · introduced-by-remediation ${late.introducedByRemediation} · unknown ${late.unknown}`)
+  lines.push(`**5. Late defects** (by origin) — preexisting-missed ${late.preexistingMissed} · introduced-by-remediation ${late.introducedByRemediation} · unknown ${late.unknown} · missedUpstream ${late.missedUpstream ?? 0}`)
+  lines.push('')
+  // AK: the findings table is ALWAYS in the synthesis — every finding of every round with its transition, so none is invisible.
+  lines.push('**Findings**')
+  lines.push('')
+  if ((view.defects.entries ?? []).length) lines.push(...FINDINGS_HEADER, ...view.defects.entries.map(findingRow))
+  else lines.push('No findings were reported.')
   lines.push('')
   if (view.scopeChanges.entries.length) {
     lines.push('| Scope proposal | Type | Status | Link |')
@@ -946,6 +1022,13 @@ export function main(argv) {
     const res = writeMetrics({ dir: opts.dir, view })
     return { out: res, code: res.written ? 0 : 1 }
   }
+  if (cmd === 'findings') {
+    need('dir', 'story', 'pr')
+    const reviews = readHandoffs(opts.dir).filter(h => h.data && h.skill === 'review-phase' && h.data.recordType !== 'migration').map(h => ({ ...h.data, phase: h.phase }))
+    const body = renderFindingsComment({ reviews, story: opts.story, pr: Number(opts.pr), runId: opts.runId })
+    if (body !== null && opts.out) writeFileSync(opts.out, body)
+    return { out: { needed: body !== null, newFindings: newFindingsOf(reviews).map(f => f.id), ...(body !== null && opts.out && { out: opts.out }) }, code: 0 }
+  }
   if (cmd === 'aggregate') {
     need('inputs', 'out')
     const manifest = JSON.parse(readFileSync(opts.inputs, 'utf8'))
@@ -957,7 +1040,7 @@ export function main(argv) {
     writeFileSync(join(opts.out, 'cohort.md'), `# Cohort report\n\nN=${cohort.n}, completed=${(cohort.completedRate ?? 0) * 100}%, mean cycles=${cohort.meanCompletedCycles ?? 'n/a'}\n`)
     return { out: cohort, code: 0 }
   }
-  throw new Error(`unknown command: ${cmd} (expected reduce | write | aggregate)`)
+  throw new Error(`unknown command: ${cmd} (expected reduce | write | findings | aggregate)`)
 }
 
 import { realpathSync } from 'node:fs'

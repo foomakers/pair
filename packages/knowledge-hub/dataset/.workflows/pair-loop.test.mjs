@@ -38,7 +38,7 @@ const HELPERS_SRC = FULL_SRC.slice(0, FULL_SRC.indexOf(ORCH_MARKER))
 const SRC = FULL_SRC
 
 const HELPERS = new Function(
-  `${HELPERS_SRC}\nreturn { extractEligibility, extractAutoAdvance, parseStopPredicate, evaluateStopPredicate, parseMaxParallelism, resolveMaxParallelism, resolveAuditLocation, dependencyFilter, computeMutexBatch, resolveCards, composeBatch, reconcileCapAudit, renderContinueToken, validateArgs, APPROVAL_DECLARING_SKILLS, approvalArgsFor }`,
+  `${HELPERS_SRC}\nreturn { currentHalted, selectionFailure, completeCandidates, stopVerdict, outcomeKind, newDriveState, recordOutcome, decideDrive, DEFAULT_RETRY_BUDGET, extractEligibility, extractAutoAdvance, parseStopPredicate, evaluateStopPredicate, parseMaxParallelism, resolveMaxParallelism, resolveAuditLocation, dependencyFilter, computeMutexBatch, resolveCards, composeBatch, reconcileCapAudit, renderContinueToken, validateArgs, APPROVAL_DECLARING_SKILLS, approvalArgsFor }`,
 )()
 
 function getHelpers() {
@@ -191,10 +191,37 @@ test('parseStopPredicate: malformed max-iterations (0, negative, non-integer) HA
   assert.throws(() => parseStopPredicate('## Stop Predicate\n\nmax-iterations: abc\n'), /HALT/)
 })
 
-test('evaluateStopPredicate: unsatisfiable selector (matches nothing) reports satisfied, not malformed', () => {
+test('evaluateStopPredicate: unsatisfiable selector (matches nothing) reports satisfied, not malformed (the pure rule; the loop never trusts an EMPTY snapshot — stopVerdict)', () => {
   const { evaluateStopPredicate } = getHelpers()
   const result = evaluateStopPredicate({ selector: 'tag:no-such-label', condition: 'Done' }, [])
   assert.equal(result.satisfied, true)
+})
+
+// ── Z: ported from pair-cli (E: branch derived for a card with none; R: empty/omitted snapshot guards) ─────────
+test('Z/E completeCandidates: a card with a title and no branch gets feature/US-<id>-<slug(title)>; an existing branch is kept; no title stays unresolved', () => {
+  const { completeCandidates, resolveCards } = getHelpers()
+  const out = completeCandidates([
+    { id: '399', title: 'Add CLI Thing!', branch: '' },
+    { id: '262', title: 'x', branch: 'bug/BUG-1-x' },
+    { id: '5', title: '', branch: '' },
+  ])
+  assert.deepEqual(out.map(c => c.branch), ['feature/US-399-add-cli-thing', 'bug/BUG-1-x', ''])
+  assert.deepEqual(resolveCards(out).audit.map(a => a.id), ['5'])
+})
+
+test('Z/R stopVerdict: an empty snapshot is never satisfied; a selected card carrying the selector tag but missing from the snapshot is not satisfied; evidence is reported', () => {
+  const { stopVerdict } = getHelpers()
+  const predicate = { selector: 'tag:risk:red', condition: 'Done' }
+  const done = id => ({ id, tags: ['risk:red'], macrostate: 'Done' })
+  assert.equal(stopVerdict(predicate, [], []).satisfied, false)
+  const red = { id: '262', labels: ['risk:red'], tier: 'risk:red' }
+  const omitted = stopVerdict(predicate, [done('9')], [red])
+  assert.equal(omitted.satisfied, false)
+  assert.match(omitted.evidence, /omits #262/)
+  const ok = stopVerdict(predicate, [done('9')], [])
+  assert.equal(ok.satisfied, true)
+  assert.match(ok.evidence, /1 card\(s\) match tag:risk:red ⇒ Done, 1 hold it/)
+  assert.equal(stopVerdict(predicate, [{ id: '9', tags: [], macrostate: 'Ready' }], []).satisfied, false)
 })
 
 test('evaluateStopPredicate: satisfied only when every matched card holds the condition', () => {
@@ -518,6 +545,164 @@ test('orchestration: nothing eligible ends the run cleanly, engine never invoked
   assert.equal(result.iterations, 0) // breaks before the counter increments
 })
 
+test('I decideDrive/recordOutcome: terminal never again; failed within budget; escalated until the selection says cleared', () => {
+  const { newDriveState, recordOutcome, decideDrive, outcomeKind } = getHelpers()
+  const st = newDriveState()
+  const card = (extra = {}) => ({ id: '1', escalated: false, labels: [], ...extra })
+  assert.equal(decideDrive(st, card()).drive, true)
+  recordOutcome(st, '1', 'transient')
+  assert.deepEqual(decideDrive(st, card()), { drive: true, retried: 1, budget: 1 })
+  recordOutcome(st, '1', 'transient')
+  assert.deepEqual(decideDrive(st, card()), { drive: false, reason: 'retry budget exhausted' })
+  const st2 = newDriveState()
+  recordOutcome(st2, '2', 'escalated')
+  assert.equal(decideDrive(st2, card({ id: '2' })).drive, true, 'cleared (selection says escalated:false) -> re-picked')
+  recordOutcome(st2, '2', 'escalated')
+  assert.deepEqual(decideDrive(st2, card({ id: '2', escalated: true })), { drive: false, reason: 'escalated' })
+  assert.deepEqual(decideDrive(st2, { id: '2' }), { drive: false, reason: 'escalated' })
+  assert.deepEqual(decideDrive(st2, card({ id: '2', labels: ['needs-review'] })), { drive: false, reason: 'escalated' })
+  const st3 = newDriveState()
+  recordOutcome(st3, '3', 'terminal')
+  assert.deepEqual(decideDrive(st3, card({ id: '3' })), { drive: false, reason: 'already driven this run' })
+  assert.deepEqual(['merged', 'awaiting-human', 'ready-for-merge', 'target-ready', 'escalated', 'escalate', 'failed-x', 'other', 'dead-dispatch', 'stalled', 'api-error'].map(outcomeKind), ['terminal', 'terminal', 'terminal', 'terminal', 'escalated', 'durable', 'durable', 'durable', 'transient', 'transient', 'transient'])
+  const st4 = newDriveState()
+  recordOutcome(st4, '4', 'durable')
+  assert.deepEqual(decideDrive(st4, card({ id: '4' })), { drive: false, reason: 'durable failure' })
+})
+
+// ── AA: a FAILED selection is never reported as "nothing eligible" (pair-cli: `selection failed`, exit 1) ──────────
+test('AA selectionFailure: a missing/empty-because-errored answer is a failure; an explicit empty candidates array is not', () => {
+  const { selectionFailure } = getHelpers()
+  assert.match(selectionFailure(undefined), /no response/)
+  assert.match(selectionFailure(null), /no response/)
+  assert.match(selectionFailure({}), /no candidates array/)
+  assert.match(selectionFailure({ candidates: 'x' }), /no candidates array/)
+  assert.equal(selectionFailure({ candidates: [] }), undefined)
+})
+
+test('AA orchestration: a selection that FAILS (no response) twice stops the run as failed — `selection failed: <reason>`, never "nothing eligible", the batch never invoked', async () => {
+  let selects = 0
+  let batch = false
+  const { result } = await runWorkflow({
+    args: LOOP3,
+    dispatch: (_p, opts) => {
+      if (opts.phase === 'Select') {
+        selects++
+        return undefined
+      }
+      return {}
+    },
+    workflowDispatch: () => ((batch = true), { batch: [] }),
+  })
+  assert.equal(selects, 2, 'retried once')
+  assert.equal(batch, false)
+  assert.equal(result.failed, true)
+  assert.match(result.reason, /^selection failed: /)
+  assert.ok(result.log.some(l => l.selectionFailed === true && /no response/.test(l.reason)))
+  assert.equal(result.log.some(l => l.note === 'nothing eligible this iteration'), false)
+})
+
+test('AA orchestration: a selection that throws once and then answers is recovered by the single retry', async () => {
+  let selects = 0
+  const { result } = await runWorkflow({
+    args: LOOP3,
+    dispatch: (_p, opts) => {
+      if (opts.phase !== 'Select') return {}
+      selects++
+      if (selects === 1) throw new Error('No response from API')
+      return { candidates: [] }
+    },
+  })
+  assert.equal(selects, 2)
+  assert.notEqual(result.failed, true)
+  assert.ok(result.log.some(l => l.note === 'nothing eligible this iteration'))
+})
+
+// ── AG: the cross-run halt memory reflects the CURRENT durable state, not the audit's history ────────────────────
+test('AG currentHalted: only a card that is STILL terminal now stays excluded on resume; an unknown state is fail-safe halted; in-progress / escalated re-enter', () => {
+  const { currentHalted } = getHelpers()
+  const h = currentHalted(['1', '2', '3', '4', '5', '6'], [
+    { id: '1', state: 'merged' },
+    { id: '2', state: 'parked' },
+    { id: '3', state: 'durable' },
+    { id: '4', state: 'in-progress' },
+    { id: '5', state: 'escalated' },
+  ])
+  assert.deepEqual([...h].sort(), ['1', '2', '3', '6'])
+})
+
+test('AG orchestration: the audit says halted (failed-contract) but the run dir now resolves in-progress (after a supersede) ⇒ the card is DRIVEN, not filtered forever', async () => {
+  let driven = null
+  let stateAsked = null
+  const { result } = await runWorkflow({
+    args: LOOP3,
+    resumeHaltedIds: ['253', '252'],
+    dispatch: (prompt, opts) => {
+      if (opts.phase === 'Policy' && /CURRENT state/.test(prompt)) {
+        stateAsked = prompt
+        return { states: [{ id: '253', state: 'in-progress' }, { id: '252', state: 'durable' }] }
+      }
+      if (opts.phase === 'Select') return { candidates: ['253', '252'].map(id => ({ id, title: `T${id}`, branch: `feature/US-${id}-t`, tier: 'risk:green', mutexResources: [], prerequisites: [], escalated: false })) }
+      return {}
+    },
+    workflowDispatch: (_n, wfArgs) => ((driven = wfArgs.cards.map(c => c.id)), { batch: wfArgs.cards.map(c => ({ id: c.id, status: 'ready-for-merge', prNumber: 7, reviewedHead: HEAD40, verdict: 'APPROVED' })) }),
+  })
+  assert.match(stateAsked, /253/)
+  assert.deepEqual(driven, ['253'], 'the recovered card re-enters; the still-durable one stays excluded')
+  assert.notEqual(result.iterations, 0)
+})
+
+// ── AH: every agent() call is time-bounded (the runtime has no per-agent timeout option) ─────────────────────────
+test('AH orchestration: a selection agent that NEVER returns is bounded — one retry, then `selection failed: timeout after <n>m`, never an infinite wait', async () => {
+  let selects = 0
+  const { result } = await runWorkflow({
+    args: { ...LOOP3, agentTimeoutMinutes: 0.0003 },
+    dispatch: (_p, opts) => {
+      if (opts.phase === 'Select') {
+        selects++
+        return new Promise(() => {})
+      }
+      return {}
+    },
+  })
+  assert.equal(selects, 2, 'retried once')
+  assert.equal(result.failed, true)
+  assert.match(result.reason, /^selection failed: timeout after /)
+  assert.ok(result.log.some(l => l.selectionFailed === true && /timeout after/.test(l.reason)))
+})
+
+test('AH orchestration: any other stage that never returns (the stop-predicate board read) fails the run with the stage named — never hangs', async () => {
+  await assert.rejects(
+    runWorkflow({
+      args: { policyText: '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nroot ⇒ Done\nmax-iterations: 3\n', agentTimeoutMinutes: 0.0003 },
+      dispatch: (prompt, opts) => {
+        if (opts.phase === 'Select' && /Evaluate the board/.test(prompt)) return new Promise(() => {})
+        if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [], escalated: false }] }
+        return {}
+      },
+      workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7, reviewedHead: HEAD40, verdict: 'APPROVED' }] }),
+    }),
+    /Predicate: timeout after/,
+  )
+})
+
+test('Z orchestration: a selected card with a title and NO branch is driven with the derived branch, not excluded (live: "branch/title could not be resolved")', async () => {
+  let cards = null
+  const { result } = await runWorkflow({
+    args: { policyText: '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n2\n' },
+    dispatch: (_prompt, opts) => {
+      if (opts.phase === 'Select') return { candidates: [{ id: '253', title: 'Add CLI Thing', branch: '', tier: 'risk:green', mutexResources: [], prerequisites: [] }, { id: '252', title: '', branch: '', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+      return {}
+    },
+    workflowDispatch: (_name, wfArgs) => {
+      cards = wfArgs.cards
+      return { batch: [{ id: '253', status: 'failed-implement' }] }
+    },
+  })
+  assert.deepEqual(cards.map(c => [c.id, c.branch]), [['253', 'feature/US-253-add-cli-thing']])
+  assert.ok(result.log.some(l => l.id === '252' && l.excluded === true && /could not be resolved/.test(l.reason)), 'only an unreadable title stays excluded')
+})
+
 test('orchestration: min(D,P)==1 drives a single story through the SAME implement-batch call', async () => {
   let batchArgsSeen = null
   const { result } = await runWorkflow({
@@ -536,51 +721,85 @@ test('orchestration: min(D,P)==1 drives a single story through the SAME implemen
   assert.equal(result.iterations, 1)
 })
 
-test('orchestration: an escalated card is excluded from every subsequent iteration, never re-driven (review M1)', async () => {
-  let batchCalls = 0
+// Maintainer decision 2026-10-06 (supersedes US-524 BR-4's "every outcome ends the card's drive"): only TERMINAL outcomes
+// (merged, awaiting-human park, PR-ready, target reached) end a card's drive for the run. An escalated card is skipped while
+// escalated and re-picked once the selection reports it cleared; a failed card is retried within a per-run budget (default 1).
+const ONE_CARD = (extra = {}) => (_prompt, opts) =>
+  opts.phase === 'Select' ? { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [], ...extra }] } : {}
+const LOOP3 = { policyText: '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 4\n' }
+
+test('orchestration (I): an escalated card is skipped while the selection still reports it escalated, and re-picked in a later iteration once cleared', async () => {
+  const driven = []
+  let iteration = 0
+  const card = (id, extra = {}) => ({ id, title: `C${id}`, branch: `feature/#${id}-c`, tier: 'risk:green', mutexResources: [], prerequisites: [], ...extra })
   const { result } = await runWorkflow({
-    args: {
-      policyText: '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 3\n',
-    },
+    args: LOOP3,
     dispatch: (_prompt, opts) => {
-      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
-      return {}
+      if (opts.phase !== 'Select') return {}
+      iteration++
+      // 1: #1 first selected. 2: #1 still escalated, #2 keeps the loop busy. 3: #1 cleared.
+      if (iteration === 1) return { candidates: [card('1', { escalated: false })] }
+      if (iteration === 2) return { candidates: [card('1', { escalated: true }), card('2', { escalated: false })] }
+      return { candidates: [card('1', { escalated: false })] }
     },
-    workflowDispatch: () => {
-      batchCalls++
-      return { batch: [{ id: '1', status: 'escalate' }] }
+    workflowDispatch: (_name, wfArgs) => {
+      const ids = wfArgs.cards.map(c => c.id)
+      driven.push(ids.join('+'))
+      return { batch: ids.map(id => (id === '1' && driven.filter(d => d.includes('1')).length === 1 ? { id, status: 'escalated', stage: 'prepare', conditions: ['has:cost:red'] } : { id, status: 'ready-for-merge', prNumber: 7, reviewedHead: HEAD40, verdict: 'APPROVED' })) }
     },
   })
-  // Iteration 0 drives it once, sees `escalate`, halts card #1 — every
-  // subsequent iteration must select nothing (card #1 is the only candidate
-  // the Select stub ever returns) and the run ends on "nothing eligible".
-  assert.equal(batchCalls, 1)
-  assert.equal(result.log.filter(l => l.status === 'escalate').length, 1)
+  assert.deepEqual(driven, ['1', '2', '1'], 'driven, then skipped while escalated (only #2 runs), then re-driven once cleared')
+  assert.ok(result.log.some(l => l.id === '1' && l.skipped === 'escalated'), 'the skip is audited with its reason')
 })
 
-test('orchestration: ANY non-ready status halts the card — a status outside escalate/failed-* is never re-driven (US-479 c0)', async () => {
-  // The engine emits statuses that start with neither `failed` nor `escalate` (`seal-invalidated`,
-  // `stale-history-decision`). A halt rule spelled as an allow-list of failure prefixes let those
-  // cards fall through: not halted, not parked, re-selected and re-driven on every iteration until
-  // max-iterations. The only status that may ever advance is `ready-for-merge`; everything else halts.
+test('orchestration (I): an outcome-escalated card whose selection does not say `escalated: false` stays skipped (fail-safe)', async () => {
+  let batchCalls = 0
+  await runWorkflow({
+    args: LOOP3,
+    dispatch: ONE_CARD(),
+    workflowDispatch: () => (batchCalls++, { batch: [{ id: '1', status: 'escalate' }] }),
+  })
+  assert.equal(batchCalls, 1)
+})
+
+test('AD orchestration: a DURABLE cycle terminal (failed-contract, failed-*, an unknown status) is reported with its reason and never retried; a missing outcome (engine/API error) is transient', async () => {
+  for (const status of ['failed-contract', 'failed-implement', 'seal-invalidated', 'some-future-status']) {
+    let batchCalls = 0
+    const { result } = await runWorkflow({ args: LOOP3, dispatch: ONE_CARD({ escalated: false }), workflowDispatch: () => (batchCalls++, { batch: [{ id: '1', status }] }) })
+    assert.equal(batchCalls, 1, `${status}: never retried`)
+    assert.ok(result.log.some(l => l.id === '1' && l.excluded === true && l.durable === true && new RegExp(status).test(l.reason)), `${status}: reported with its reason`)
+  }
+  let calls = 0
+  await runWorkflow({ args: LOOP3, dispatch: ONE_CARD({ escalated: false }), workflowDispatch: () => (calls++, { batch: [] }) })
+  assert.equal(calls, 2, 'no outcome row for the card = the engine/API errored: transient, retried once')
+})
+
+test('orchestration (I): a failed card is retried within the per-run budget (default 1), then excluded: retry budget exhausted', async () => {
+  let batchCalls = 0
+  const { result } = await runWorkflow({
+    args: { policyText: '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 5\n' },
+    dispatch: ONE_CARD({ escalated: false }),
+    workflowDispatch: () => (batchCalls++, { batch: [{ id: '1', status: 'dead-dispatch' }] }),
+  })
+  assert.equal(batchCalls, 2, 'driven once, retried once, never a third time')
+  assert.ok(result.log.some(l => l.id === '1' && l.retried === 1 && l.budget === 1), 'the retry is audited')
+  assert.ok(result.log.some(l => l.id === '1' && l.skipped === 'retry budget exhausted'))
+})
+
+test('orchestration (I): a status outside the terminal set — named or not — is a DURABLE failure: reported, excluded, never looped silently (US-479 c0; AD)', async () => {
   for (const status of ['seal-invalidated', 'stale-history-decision', 'some-future-status']) {
     let batchCalls = 0
     const { result } = await runWorkflow({
-      args: {
-        policyText: '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 3\n',
-      },
-      dispatch: (_prompt, opts) => {
-        if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
-        return {}
-      },
+      args: LOOP3,
+      dispatch: ONE_CARD({ escalated: false }),
       workflowDispatch: () => {
         batchCalls++
         return { batch: [{ id: '1', status }] }
       },
     })
-    assert.equal(batchCalls, 1, `${status}: card was re-driven`)
+    assert.equal(batchCalls, 1, `${status}: not retried`)
     const halted = result.log.find(l => l.id === '1' && l.excluded === true && /halted/.test(l.reason ?? ''))
-    assert.ok(halted, `${status}: no halted audit entry`)
+    assert.ok(halted, `${status}: no audit entry`)
     assert.match(halted.reason, new RegExp(status))
   }
 })
@@ -939,22 +1158,22 @@ test('US-524 AC-2/5: the batch outcome is recorded — merged (autoAdvance), cas
   assert.ok(parked.result.log.some(l => l.id === '1' && l.parked === true && /awaiting human — merge: always/.test(l.reason)))
   assert.ok(parked.result.log.some(l => l.id === '1' && /could not be confirmed posted/.test(l.note ?? '')), 'an unconfirmed comment is recorded, never swallowed')
   const esc = await driveRows({ id: '1', status: 'escalated', stage: 'prepare', conditions: ['has:cost:red'] })
-  assert.ok(esc.result.log.some(l => l.id === '1' && l.escalated === true && l.excluded === true && l.stage === 'prepare' && l.conditions[0] === 'has:cost:red' && /not re-drivable/.test(l.reason)))
+  assert.ok(esc.result.log.some(l => l.id === '1' && l.escalated === true && l.excluded === true && l.stage === 'prepare' && l.conditions[0] === 'has:cost:red' && /skipped until the escalation is cleared/.test(l.reason)))
   const target = await driveRows({ id: '1', status: 'target-ready', target: 'ready', stage: 'implement' })
   assert.ok(target.result.log.some(l => l.id === '1' && l.excluded === true && /until target \(ready\)/.test(l.reason)))
   const ready = await driveRows(READY_ROW)
   assert.ok(ready.result.log.some(l => l.id === '1' && l.parked === true && /PR-ready/.test(l.reason)))
 })
 
-test('US-524 AC-5/BR-4: every outcome ends the card\'s drive — merged, parked, escalated, halted are never re-selected', async () => {
-  for (const row of [{ ...READY_ROW, status: 'merged', cascaded: true }, { ...READY_ROW, status: 'awaiting-human' }, { id: '1', status: 'escalated', conditions: ['lacks:x'] }, { ...READY_ROW, status: 'halted', reason: 'tier changed risk:green -> risk:red' }, READY_ROW]) {
+test('US-524 AC-5/BR-4 (revised 2026-10-06): TERMINAL outcomes — merged, parked, PR-ready, target reached — are never re-selected', async () => {
+  for (const row of [{ ...READY_ROW, status: 'merged', cascaded: true }, { ...READY_ROW, status: 'awaiting-human' }, READY_ROW, { id: '1', status: 'target-ready', target: 'ready' }]) {
     let batchCalls = 0
     await runWorkflow({ args: { policyText: `${LEGACY_LOOP_POLICY}\n## Stop Predicate\n\nmax-iterations: 3\n` }, dispatch: oneEligible, workflowDispatch: () => (batchCalls++, { batch: [row] }) })
     assert.equal(batchCalls, 1, JSON.stringify(row))
   }
 })
 
-test('US-524: a halted batch row (a refused merge, a moved head, a red gate, malformed signals) is excluded with its reason — never retried silently', async () => {
+test('US-524: a halted batch row (a refused merge, a moved head, a red gate, malformed signals) is excluded with its reason after its one budgeted retry — never looped silently', async () => {
   for (const reason of ['PR head moved since the review', 'pair-review conclusion is failure', 'the merge stage returned no readable decision', 'the tier\'s gate set came back red at merge time']) {
     const r = await driveRows({ ...READY_ROW, status: 'halted', reason })
     assert.ok(r.result.log.some(l => l.id === '1' && l.excluded === true && /halted — engine reported halted/.test(l.reason)), reason)
@@ -1157,4 +1376,15 @@ test('r1-1: an injecting filter HALTs before any agent is dispatched', async () 
     )
     assert.equal(prompts.length, 0, `${key}: no agent may run`)
   }
+})
+
+test('B2 escalation rule: `escalate` (review/fix budget spent, a human decision owed) is DURABLE and excluded even when the selection reports escalated:false; `escalated` (autonomy gate) is re-picked once cleared', async () => {
+  let calls = 0
+  const { result } = await runWorkflow({
+    args: LOOP3,
+    dispatch: ONE_CARD({ escalated: false }),
+    workflowDispatch: () => (calls++, { batch: [{ id: '1', status: 'escalate' }] }),
+  })
+  assert.equal(calls, 1, 'never re-picked')
+  assert.ok(result.log.some(l => l.id === '1' && l.excluded === true && l.durable === true && /escalate/.test(l.reason)))
 })

@@ -439,7 +439,8 @@ function parseBatchArgs(raw) {
   // parsed object, once.
   const autonomyError = autonomyArgError(a)
   if (autonomyError) throw new Error(`implement-batch: ${autonomyError}`)
-  rejectUnknownKeys(a, ['cards', 'stories', 'policyText', 'until', 'prepare', 'merge', 'severityFloor', 'model', 'models', 'effort', 'efforts', 'pipeline', 'maxParallelism', 'runId', 'entryCapsules'], 'args')
+  if (a.agentTimeoutMinutes !== undefined && !(typeof a.agentTimeoutMinutes === 'number' && a.agentTimeoutMinutes > 0)) throw new Error('implement-batch: args.agentTimeoutMinutes must be a positive number of minutes')
+  rejectUnknownKeys(a, ['cards', 'stories', 'policyText', 'until', 'prepare', 'merge', 'severityFloor', 'model', 'models', 'effort', 'efforts', 'pipeline', 'maxParallelism', 'runId', 'entryCapsules', 'agentTimeoutMinutes'], 'args')
   // Reject the TYPE before anything coerces it, the same rule `constrain` applies to card
   // fields. Checked HERE, at parse time, not where each is consumed: `severityFloor` is only
   // rankable after the contract dispatch, and a wrong TYPE should not wait on an agent to be
@@ -525,7 +526,7 @@ function parseBatchArgs(raw) {
       entryCapsules[id] = capsule
     }
   }
-  return { stories, severityFloor: a.severityFloor, model: a.model, models, effort: a.effort, efforts, pipeline: a.pipeline, maxParallelism: a.maxParallelism, runId, entryCapsules, policyText: a.policyText ?? undefined, autonomyArgs: Object.fromEntries(AUTONOMY_ARG_KEYS.filter(k => a[k] !== undefined && a[k] !== null).map(k => [k, a[k]])) }
+  return { stories, agentTimeoutMinutes: a.agentTimeoutMinutes, severityFloor: a.severityFloor, model: a.model, models, effort: a.effort, efforts, pipeline: a.pipeline, maxParallelism: a.maxParallelism, runId, entryCapsules, policyText: a.policyText ?? undefined, autonomyArgs: Object.fromEntries(AUTONOMY_ARG_KEYS.filter(k => a[k] !== undefined && a[k] !== null).map(k => [k, a[k]])) }
 }
 const PARSED = parseBatchArgs(args)
 const RUN_ID = PARSED.runId
@@ -1488,8 +1489,45 @@ function usableSchema(contract) {
 // no clock (a clock call is forbidden there: it would break resume) and exposes no usage — so both
 // are reported as 'unknown' here and read from the harness's own run summary; never as zero.
 const METRICS = { dispatches: [], retries: 0, redirects: 0 }
+// ── Every agent() call is time-bounded (AH) ──────────────────────────────────────────────────────────
+// The Workflow runtime has NO per-agent timeout / maxTurns option (agent opts: label, phase, schema, model, effort,
+// isolation, agentType), and an agent that never answers would wait forever (a live run sat ~80 minutes). So each call
+// races a timer — when the sandbox exposes `setTimeout` (it has no clock: Date.now() throws, so this is feature-detected;
+// without it the limit cannot be enforced and the call is made unbounded, as before). `args.agentTimeoutMinutes`
+// overrides the default; a timeout throws an error carrying `.timeout` ("timeout after <n>m") and `.stage`.
+const AGENT_TIMEOUT_MINUTES = 30 // aligned with pair-cli's 1800 s per-stage watchdog
+async function boundedAgent(stage, prompt, opts) {
+  const minutes = PARSED.agentTimeoutMinutes ?? AGENT_TIMEOUT_MINUTES
+  if (typeof setTimeout !== 'function' || !(minutes > 0)) return agent(prompt, opts)
+  let timer
+  const expired = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(`${stage}: timeout after ${minutes}m`)
+      error.timeout = `timeout after ${minutes}m`
+      error.stage = stage
+      reject(error)
+    }, minutes * 60000)
+  })
+  try {
+    return await Promise.race([agent(prompt, opts), expired])
+  } finally {
+    if (typeof clearTimeout === 'function') clearTimeout(timer)
+  }
+}
+
 async function dispatch(prompt, opts, { retry = false } = {}) {
-  const result = await agent(prompt, opts)
+  // A timed-out agent is NOT cancelled — the runtime has no abort — so it may still be writing to the worktree. NEVER re-dispatch
+  // after a timeout (a retry would be a second writer on the same worktree): the stage is a durable failure that a human checks.
+  let result
+  try {
+    result = await boundedAgent(opts.label ?? 'stage', prompt, opts)
+  } catch (error) {
+    if (!error?.timeout) throw error
+    log(`${opts.label}: ${error.timeout} — the stage agent never returned; NOT retried (it may still be running)`)
+    const timedOut = new Error(`${opts.label}: timed out after ${error.timeout.replace('timeout after ', '')} — the agent may still be running; human check required`)
+    timedOut.stageTimeout = { label: String(opts.label ?? ''), minutes: error.timeout.replace('timeout after ', '') }
+    throw timedOut
+  }
   METRICS.dispatches.push({ label: opts.label, agentType: opts.agentType, phase: opts.phase, model: opts.model ?? 'frontmatter', effort: opts.effort, retry, usable: result !== null && result !== undefined })
   if (retry) METRICS.retries++
   return result
@@ -1670,7 +1708,18 @@ const canonical = v => (Array.isArray(v) ? `[${v.map(canonical).join(',')}]` : v
 const compactFinding = f => ({ id: f.id, severity: f.severity, location: f.location, description: f.description, recommendation: f.recommendation, ...(f.kind ? { kind: f.kind } : {}), ...(f.groupId ? { groupId: f.groupId } : {}), ...(f.rowId ? { rowId: f.rowId } : {}), ...(f.external ? { external: true } : {}), ...(f.missedUpstream ? { missedUpstream: true } : {}) })
 
 // ── Per-story lifecycle ──────────────────────────────────────────────────
+const STAGE_STATUS = { prepare: 'failed-preparation', validate: 'failed-contract', implement: 'failed-implement', green: 'failed-fix', verify: 'failed-verify' }
 async function driveStory(story) {
+  try {
+    return await driveStoryInner(story)
+  } catch (error) {
+    if (!error?.stageTimeout) throw error
+    // A stage agent that timed out is a DURABLE failure of that stage (never retried: it may still be running).
+    const status = STAGE_STATUS[error.stageTimeout.label.split(':')[0]] ?? 'failed-resume'
+    return { story, status, reason: error.message, acceptedFindings: [], metrics: { dispatches: METRICS.dispatches.length, retries: METRICS.retries, redirects: METRICS.redirects, wallMs: 'unknown', tokens: 'unknown' }, durable: true }
+  }
+}
+async function driveStoryInner(story) {
   const tag = `#${story.id}`
   const worktreePath = `${PIPELINE.worktreeRoot}/${story.id}`
   const reviewWorktreePath = `${PIPELINE.worktreeRoot}/${story.id}-review`

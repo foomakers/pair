@@ -116,7 +116,7 @@ describe('parity with .claude/workflows/pair-loop.js', () => {
     join(__dirname, '../../../../../.claude/workflows/pair-loop.js'),
     'utf-8',
   )
-  const body = /export (function evaluateStopPredicate[\s\S]*?\n\})\n/.exec(source)?.[1]
+  const body = /^(function evaluateStopPredicate[\s\S]*?\n\})\n/m.exec(source)?.[1]
   const original = new Function(`${body}; return evaluateStopPredicate`)() as (
     predicate: unknown,
     snapshot: unknown,

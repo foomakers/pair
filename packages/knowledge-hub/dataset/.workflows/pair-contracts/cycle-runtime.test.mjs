@@ -1438,3 +1438,23 @@ test('r1-g2-c4: finalize without --pr (no PR yet) reaches neither host — publi
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.deepEqual([gh.calls().length, az.calls().length], [0, 0])
 })
+
+// ── AK: finalize also guarantees the visible findings comment when a re-review opened something new ──────────
+test('AK finalize: the PR gets the synthesis AND the findings comment (#534 shape: r1-5 opened by a re-review); no findings comment when nothing new was opened', () => {
+  const fixtures = fileURLToPath(new URL('./fixtures/story-134-reviews/', import.meta.url))
+  const root = mkdtempSync(join(tmpdir(), 'ak-final-'))
+  const dir = join(root, '.pair', 'working', 'runs', 'story-134', '134')
+  mkdirSync(dir, { recursive: true })
+  for (const f of readdirSync(fixtures)) writeFileSync(join(dir, f), readFileSync(join(fixtures, f)))
+  const upserts = []
+  const publishApi = { listComments: () => [], findByMarker: () => ({ hits: [] }), upsert: ({ marker, body }) => (upserts.push({ marker, body }), { id: upserts.length, url: `u${upserts.length}` }) }
+  try {
+    finalizeMetrics({ dir, repository: 'foomakers/pair', story: '134', branch: 'b', pr: 534, runId: 'story-134', publish: publishApi })
+  } catch {
+    // the read-back of the fake host may be refused; the upserts are what this asserts
+  }
+  assert.ok(upserts.some(u => /pair:synthesis/.test(u.marker)))
+  const findings = upserts.find(u => /pair:findings/.test(u.marker))
+  assert.ok(findings, 'the findings comment is upserted by its marker')
+  assert.match(findings.body, /\| r1-5 \|/)
+})

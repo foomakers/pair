@@ -18,7 +18,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import { contractHash } from '../../skills/pair-workflow-red-verify/scripts/cycle-state.mjs'
-import { contractErrors, hashFile, isTestPath, manifestPathFor, seal, trailerFor, verify, verifyChain, predecessorPhase, scopeNarrowing, isModulePath, OVERRIDABLE_BREACH_CODES } from '../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs'
+import { pushSnapshot, artifactPaths as artifactPathsOf, contractErrors, hashFile, isTestPath, manifestPathFor, seal, trailerFor, verify, verifyChain, predecessorPhase, scopeNarrowing, isModulePath, OVERRIDABLE_BREACH_CODES } from '../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url))
 
@@ -1513,3 +1513,127 @@ for (const [name, prEdits] of [['E3 the PR never touched it', false], ['E4 the P
     assert.deepEqual(chain.mergedBase?.paths, ['src/other.js'])
     rmSync(cwd, { recursive: true, force: true })
   })
+
+// ── X: a sealed `mode: test` group has no green-fix to push the seal — red-verify's push step does it ──────────
+test('pushSnapshot: a local-only seal reaches the story branch; the repo pre-push hook that rejects tracked RED manifests passes because the manifest is removed first (the commit green-fix makes), and custody still finds the snapshot', () => {
+  const { cwd, base } = repo()
+  const remote = mkdtempSync(join(tmpdir(), 'red-remote-'))
+  git(remote, 'init', '-q', '--bare', '-b', 'main')
+  git(cwd, 'remote', 'add', 'origin', remote)
+  git(cwd, 'push', '-q', 'origin', 'main:refs/heads/feature/US-1-x')
+  // the repository's own hygiene gate: no tracked `.pair/red-snapshots/*.json` may be pushed (husky pre-push, live)
+  const hooks = mkdtempSync(join(tmpdir(), 'red-hooks-'))
+  mkdirSync(hooks, { recursive: true })
+  writeFileSync(join(hooks, 'pre-push'), '#!/bin/sh\nif git ls-files | grep -q "^.pair/red-snapshots/"; then echo "tracked RED manifest" >&2; exit 1; fi\n', { mode: 0o755 })
+  git(cwd, 'config', 'core.hooksPath', hooks)
+  const { contractPath } = redContract(cwd)
+  const sealed = seal({ pr: PR, phase: PHASE, base, contractPath, cwd })
+  assert.equal(sealed.sealed, true, JSON.stringify(sealed))
+  const manifest = manifestPathFor(PR, PHASE)
+  assert.ok(git(cwd, 'ls-files').split('\n').includes(manifest), 'precondition: the seal tracks the manifest')
+
+  const clone = () => {
+    const d = mkdtempSync(join(tmpdir(), 'red-clone-'))
+    git(d, 'clone', '-q', '-b', 'feature/US-1-x', remote, '.')
+    return d
+  }
+  assert.notEqual(verify({ pr: PR, phase: PHASE, base, cwd: clone() }).verified, true)
+
+  const out = pushSnapshot({ snapshot: sealed.snapshot, branch: 'feature/US-1-x', cwd })
+  assert.equal(out.pushed, true, JSON.stringify(out))
+  assert.equal(out.removedManifest, true)
+  assert.equal(out.remoteHead, git(cwd, 'rev-parse', 'HEAD'))
+  assert.equal(git(cwd, 'rev-parse', `${out.outputHead}^`), sealed.snapshot, 'one removal commit directly on top of the seal')
+  assert.equal(git(cwd, 'ls-files').split('\n').includes(manifest), false)
+
+  const fresh = clone()
+  git(fresh, 'merge-base', '--is-ancestor', sealed.snapshot, 'HEAD')
+  assert.equal(verifyChain({ pr: PR, base, cwd: fresh, expectContract: true }).verified, true, JSON.stringify(verifyChain({ pr: PR, base, cwd: fresh, expectContract: true })))
+  assert.equal(verify({ pr: PR, phase: PHASE, base, cwd: fresh }).verified, true)
+
+  // idempotent
+  assert.equal(pushSnapshot({ snapshot: sealed.snapshot, branch: 'feature/US-1-x', cwd }).pushed, true)
+})
+
+test('pushSnapshot: never forces — a diverged remote branch is a typed refusal', () => {
+  const { cwd, base } = repo()
+  const remote = mkdtempSync(join(tmpdir(), 'red-remote-'))
+  git(remote, 'init', '-q', '--bare', '-b', 'main')
+  git(cwd, 'remote', 'add', 'origin', remote)
+  git(cwd, 'push', '-q', 'origin', 'main:refs/heads/feature/US-1-x')
+  const { contractPath } = redContract(cwd)
+  const sealed = seal({ pr: PR, phase: PHASE, base, contractPath, cwd })
+  const other = mkdtempSync(join(tmpdir(), 'red-other-'))
+  git(other, 'clone', '-q', '-b', 'feature/US-1-x', remote, '.')
+  git(other, 'config', 'user.email', 't@example.com'); git(other, 'config', 'user.name', 'T')
+  write(other, 'x.txt', 'x'); git(other, 'add', '-A'); git(other, 'commit', '-q', '--no-verify', '-m', 'diverge'); git(other, 'push', '-q', 'origin', 'HEAD')
+  const out = pushSnapshot({ snapshot: sealed.snapshot, branch: 'feature/US-1-x', cwd })
+  assert.equal(out.pushed, false)
+  assert.equal(out.reason, 'push-rejected')
+})
+
+// ── AE: `mode: doc` — a prose-only remediation group (checklist + scope, no executable tests) ──────────────────
+const docContract = (extra = {}) => ({
+  sourceOfTruth: 'docs/guide.md',
+  fixScope: { owner: 'guide', mode: 'doc', allowedPaths: ['docs/guide.md', 'docs/'] },
+  checklist: [
+    { id: 'c1', finding: 'r0-1', requirement: 'The guide states that the cache is invalidated on write.', authority: 'src/cache.ts invalidates on write (line 12)' },
+  ],
+  ...extra,
+})
+
+test('doc contractErrors: a prose scope + checklist is valid; code paths, tests, a missing/duplicate/incomplete checklist are not', () => {
+  assert.deepEqual(contractErrors(docContract()), [])
+  assert.match(contractErrors(docContract({ fixScope: { owner: 'g', mode: 'doc', allowedPaths: ['src/a.js'] } })).join(), /prose/i)
+  assert.match(contractErrors(docContract({ fixScope: { owner: 'g', mode: 'doc', allowedPaths: ['docs/a.md', 'scripts/x.mjs'] } })).join(), /prose/i)
+  assert.match(contractErrors(docContract({ redTests: [{ file: 'test/a.test.js', kind: 'test', sha256: 'sha256:' + 'a'.repeat(64), command: 'x', observed: 'FAIL' }] })).join(), /never carries executable tests/i)
+  assert.match(contractErrors(docContract({ checklist: undefined })).join(), /checklist/)
+  assert.match(contractErrors(docContract({ checklist: [] })).join(), /checklist/)
+  assert.match(contractErrors(docContract({ checklist: [{ id: 'c1', finding: 'r0-1', requirement: 'x', authority: 'y' }, { id: 'c1', finding: 'r0-1', requirement: 'x', authority: 'y' }] })).join(), /twice/)
+  assert.match(contractErrors(docContract({ checklist: [{ id: 'c1', finding: 'r0-1', requirement: '', authority: 'y' }] })).join(), /requirement/)
+  assert.match(contractErrors(docContract({ checklist: [{ id: 'c1', finding: 'r0-1', requirement: 'x' }] })).join(), /authority/)
+  assert.equal(artifactPathsOf(docContract()).length, 0)
+})
+
+test('doc seal + verify: a manifest-only snapshot; custody passes for a prose edit inside the scope, breaches on code or an out-of-scope file', () => {
+  const { cwd, base } = repo()
+  write(cwd, 'docs/guide.md', 'old\n')
+  git(cwd, 'add', '-A'); git(cwd, 'commit', '-q', '--no-verify', '-m', 'docs')
+  const docBase = git(cwd, 'rev-parse', 'HEAD')
+  write(cwd, '.pair/working/doc-draft.json', JSON.stringify(docContract()))
+  const sealed = seal({ pr: PR, phase: PHASE, base: docBase, contractPath: '.pair/working/doc-draft.json', cwd })
+  assert.equal(sealed.sealed, true, JSON.stringify(sealed))
+  assert.deepEqual(git(cwd, 'diff-tree', '--no-commit-id', '--name-only', '-r', sealed.snapshot).split('\n'), [manifestPathFor(PR, PHASE)], 'the snapshot IS the contract: no tests')
+  // GREEN: prose inside the scope
+  write(cwd, 'docs/guide.md', 'new\n')
+  git(cwd, 'add', 'docs/guide.md'); git(cwd, 'commit', '-q', '--no-verify', '-m', 'fix docs')
+  assert.equal(verify({ pr: PR, phase: PHASE, base: docBase, cwd }).verified, true, JSON.stringify(verify({ pr: PR, phase: PHASE, base: docBase, cwd })))
+  // code outside the scope
+  write(cwd, 'src/a.js', 'export const a = () => 2\n')
+  git(cwd, 'add', 'src/a.js'); git(cwd, 'commit', '-q', '--no-verify', '-m', 'sneak code')
+  const out = verify({ pr: PR, phase: PHASE, base: docBase, cwd })
+  assert.equal(out.verified, false)
+  assert.ok(out.breaches.some(b => /scope|production|doc-code-change/.test(b.code)), JSON.stringify(out.breaches))
+})
+
+test('C1 doc custody: a DIRECTORY in allowedPaths admits only PROSE files — code inside it (skills/x/scripts/run.mjs) is a breach in verify AND verify-chain, prose is not', () => {
+  const { cwd } = repo()
+  write(cwd, 'skills/x/SKILL.md', 'old\n')
+  git(cwd, 'add', '-A'); git(cwd, 'commit', '-q', '--no-verify', '-m', 'skill')
+  const docBase = git(cwd, 'rev-parse', 'HEAD')
+  write(cwd, '.pair/working/doc-draft.json', JSON.stringify(docContract({ fixScope: { owner: 'x', mode: 'doc', allowedPaths: ['skills/x/'] } })))
+  const sealed = seal({ pr: PR, phase: PHASE, base: docBase, contractPath: '.pair/working/doc-draft.json', cwd })
+  assert.equal(sealed.sealed, true, JSON.stringify(sealed))
+  write(cwd, 'skills/x/SKILL.md', 'new\n')
+  git(cwd, 'add', 'skills/x/SKILL.md'); git(cwd, 'commit', '-q', '--no-verify', '-m', 'prose')
+  assert.equal(verify({ pr: PR, phase: PHASE, base: docBase, cwd }).verified, true)
+  assert.equal(verifyChain({ pr: PR, base: docBase, cwd, expectContract: true }).verified, true, JSON.stringify(verifyChain({ pr: PR, base: docBase, cwd, expectContract: true })))
+  write(cwd, 'skills/x/scripts/run.mjs', 'export const run = () => 1\n')
+  git(cwd, 'add', 'skills/x/scripts/run.mjs'); git(cwd, 'commit', '-q', '--no-verify', '-m', 'code in a doc segment')
+  const one = verify({ pr: PR, phase: PHASE, base: docBase, cwd })
+  assert.equal(one.verified, false)
+  assert.ok(one.breaches.some(b => b.code === 'doc-code-change' && b.path === 'skills/x/scripts/run.mjs'), JSON.stringify(one.breaches))
+  const chain = verifyChain({ pr: PR, base: docBase, cwd, expectContract: true })
+  assert.equal(chain.verified, false)
+  assert.ok(chain.breaches.some(b => b.code === 'doc-code-change'), JSON.stringify(chain.breaches))
+})

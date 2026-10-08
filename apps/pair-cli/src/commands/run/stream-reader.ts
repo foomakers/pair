@@ -32,6 +32,97 @@ export interface IterationResult {
    * dead-dispatch budget; a process realization resumes fresh.
    */
   readonly stalled?: true
+  /** The stage's final JSON result from the terminal event's text, when the engine exposes it and it carries one. */
+  readonly final?: StageFinalResult
+}
+
+/**
+ * A stage's own final JSON result (`{ status, reason?, next? }`), kept from the terminal event's final
+ * text so a deliberate `failed`/`blocked` is never mistaken for a dead dispatch. Relayed, never judged.
+ */
+export interface StageFinalResult {
+  readonly status?: string
+  readonly reason?: string
+  readonly verdict?: string
+  readonly next?: { readonly step?: string; readonly [key: string]: unknown } | undefined
+}
+
+function asFinal(value: unknown): StageFinalResult | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const found = value as Record<string, unknown>
+  if (typeof found['status'] !== 'string') return undefined
+  const next =
+    typeof found['next'] === 'object' && found['next'] !== null ? found['next'] : undefined
+  return {
+    status: found['status'],
+    ...(typeof found['reason'] === 'string' && { reason: found['reason'] }),
+    ...(typeof found['verdict'] === 'string' && { verdict: found['verdict'] }),
+    ...(next !== undefined && { next: next as StageFinalResult['next'] }),
+  }
+}
+
+/** Every TOP-LEVEL `{…}` span of a text (string-aware, so braces in strings and nested objects never count). */
+function topLevelObjects(text: string): string[] {
+  const spans: string[] = []
+  const scan = { depth: 0, start: -1, inString: false, escaped: false }
+  for (let i = 0; i < text.length; i++) {
+    if (stepString(scan, text[i]!)) continue
+    if (text[i] === '"' && scan.depth > 0) scan.inString = true
+    else if (text[i] === '{') openBrace(scan, i)
+    else if (text[i] === '}' && scan.depth > 0 && --scan.depth === 0) {
+      spans.push(text.slice(scan.start, i + 1))
+    }
+  }
+  return spans
+}
+
+interface Scan {
+  depth: number
+  start: number
+  inString: boolean
+  escaped: boolean
+}
+
+function openBrace(scan: Scan, at: number): void {
+  if (scan.depth === 0) scan.start = at
+  scan.depth++
+}
+
+/** Advances the in-string state; `true` when the character was consumed as string content. */
+function stepString(scan: Scan, ch: string): boolean {
+  if (!scan.inString) return false
+  if (scan.escaped) scan.escaped = false
+  else if (ch === '\\') scan.escaped = true
+  else if (ch === '"') scan.inString = false
+  return true
+}
+
+/** A stage's own result carries more than a bare `status` (a `cache-hit` echo does not). */
+const RESULT_KEYS = ['verdict', 'reviewedHead', 'prNumber', 'next', 'reason']
+const isResultShaped = (raw: Record<string, unknown>): boolean =>
+  RESULT_KEYS.some(key => key in raw)
+
+/**
+ * The stage's final result: the LAST top-level JSON object with a string `status` that is result-shaped
+ * (`verdict`, `reviewedHead`, `prNumber`, `next` or `reason`); failing that, the last one with a `status`.
+ * Intermediate objects (a contract-phase `cache-hit`) and nested ones never win over the real result.
+ */
+export function parseFinalResult(text: string): StageFinalResult | undefined {
+  let shaped: StageFinalResult | undefined
+  let any: StageFinalResult | undefined
+  for (const span of topLevelObjects(text)) {
+    let raw: unknown
+    try {
+      raw = JSON.parse(span)
+    } catch {
+      continue
+    }
+    const found = asFinal(raw)
+    if (found === undefined) continue
+    any = found
+    if (isResultShaped(raw as Record<string, unknown>)) shaped = found
+  }
+  return shaped ?? any
 }
 
 const NO_TERMINAL_EVENT: IterationResult = {
@@ -154,7 +245,10 @@ function matches(payload: unknown, expected: Readonly<Record<string, unknown>>):
 function outcomeFor(rule: TerminalEventRule, payload: unknown): IterationResult {
   const success = rule.successWhen === undefined || matches(payload, rule.successWhen)
   const detail = rule.detailField ? fieldAt(payload, rule.detailField) : undefined
+  const text = rule.resultField ? fieldAt(payload, rule.resultField) : undefined
+  const final = typeof text === 'string' ? parseFinalResult(text) : undefined
   return {
+    ...(final !== undefined && { final }),
     outcome: success ? 'success' : 'failed',
     detail:
       typeof detail === 'string'

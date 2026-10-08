@@ -45,6 +45,8 @@ Two sibling sections cover git concerns and the split is deliberate: **`## Merge
 
 ## Algorithm
 
+**Headless execution (single owner: `.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/headless-stage-execution.md`)** — this stage runs headless: never leave a command in the background and never end your turn while a command runs (a push with a pre-push gate, a quality gate): use the maximum tool timeout, poll to completion in the same turn, and ALWAYS end with the stage's structured result — on partial progress `{ status: "failed", reason: "incomplete", detail, branch, outputHead }`.
+
 Each phase follows the **check → skip → act → verify** pattern. Phases run in order; a HALT stops the skill without side effects.
 
 ### Phase 0: Resolve Story & Handoff (BLOCKING)
