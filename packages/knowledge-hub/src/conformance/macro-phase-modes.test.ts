@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync, readdirSync } from 'fs'
+import { execFileSync } from 'child_process'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
 import { join } from 'path'
 import { MACRO_PHASE_MODES, parseModeTable } from '../tools/macro-phase-modes'
 
@@ -39,6 +41,87 @@ const nextSources: Array<[string, string]> = [
   ['mirror', read(NEXT_MIRROR)],
 ]
 
+/** The body of the heading matching `heading` up to the next heading of the same or a higher level; '' when absent. */
+const section = (content: string, heading: RegExp): string => {
+  const lines = content.replace(/\r\n/g, '\n').split('\n')
+  const start = lines.findIndex(l => heading.test(l))
+  if (start === -1) return ''
+  const level = /^#+/.exec(lines[start] as string)?.[0].length ?? 1
+  const body: string[] = []
+  for (const line of lines.slice(start + 1)) {
+    const m = /^(#+) /.exec(line)
+    if (m && (m[1] as string).length <= level) break
+    body.push(line)
+  }
+  return body.join('\n').trim()
+}
+
+/** Non-empty lines (list items, table rows, paragraphs). */
+const linesOf = (text: string): string[] =>
+  text
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+
+/** Sentences, never crossing a line: the unit a behavior is stated in. */
+const sentencesOf = (text: string): string[] =>
+  linesOf(text).flatMap(l => l.split(/(?<=[.!?])\s+(?=[A-Z`*([])/))
+
+const hasSentence = (text: string, ...patterns: RegExp[]): boolean =>
+  sentencesOf(text).some(s => patterns.every(p => p.test(s)))
+
+const hasLine = (text: string, ...patterns: RegExp[]): boolean =>
+  linesOf(text).some(l => patterns.every(p => p.test(l)))
+
+const STEP_0_6 = /^### Step 0\.6/
+const STEP_6 = /^### Step 6: Run the Phase/
+const MODE_SECTION = /^### `--mode/
+const STEP_0_ITEM_0 = /^0\. \*\*Resolve the effective selection first\*\*/
+const WITHHELD = /\b(never|not|without|excluding|except|withh\w+|outside)\b/i
+const MODE_WORD = /`--mode`|\bmode\b/i
+
+/** The Step 0 item the skill tells the agent to resolve the scope with. */
+const stepZeroItemZero = (content: string): string =>
+  content.split('\n').find(l => STEP_0_ITEM_0.test(l)) ?? ''
+
+/** The statement that a session hands row 7 (/checkpoint resume) over to row 8's implement. */
+const statesHandOff = (text: string): boolean =>
+  hasSentence(text, /row 7/i, /row 8/i, /checkpoint/i, /implement/i, /(same unit|the unit)/i) &&
+  hasSentence(text, /read-only/i, /unchanged/i, /\b(not|never)\b/i)
+
+/** The statement that a mode RUNS its fallback-only step, once. */
+const statesFallbackRuns = (text: string): boolean =>
+  hasSentence(text, /fallback-only/i, /once/i, /\b(runs?|invok\w+)\b/i)
+
+/**
+ * The statement of the precedence between a mode's fallback-only step and a wrong-context report:
+ * the step is run first, even when another mode's row would select for the unit.
+ */
+const statesFallbackPrecedence = (text: string): boolean =>
+  hasSentence(
+    text,
+    /fallback-only/i,
+    /wrong[- ]context/i,
+    /\b(instead of|before|rather than|precedes?|pre-?empts?)\b/i,
+  ) && hasSentence(text, /fallback-only/i, /(another|other) mode/i, /\b(row|rows)\b/i)
+
+const POLICY_SCRIPT = join(DATASET, '.skills/workflow/cycle/scripts/autonomy-policy.mjs')
+
+/** The shared autonomy-policy script, run for real (no network, no spawn) over an empty adoption file. */
+const resolvePolicy = (
+  args: Record<string, unknown>,
+): { ok: boolean; errors: Array<{ key: string }> } => {
+  const dir = mkdtempSync(join(tmpdir(), 'policy-'))
+  const adoption = join(dir, 'automation.md')
+  writeFileSync(adoption, '')
+  const out = execFileSync(
+    process.execPath,
+    [POLICY_SCRIPT, 'resolve', '--adoption', adoption, '--args', JSON.stringify(args)],
+    { encoding: 'utf-8' },
+  )
+  return JSON.parse(out) as { ok: boolean; errors: Array<{ key: string }> }
+}
+
 describe.each(nextSources)('/next — %s SKILL.md documents the mode argument', (_, content) => {
   const lower = content.toLowerCase()
 
@@ -66,15 +149,32 @@ describe.each(nextSources)('/next — %s SKILL.md documents the mode argument', 
     expect(offenders).toEqual([])
   })
 
-  it('composes the mode with scope and profile: same cascade, same filters (AC4)', () => {
-    expect(lower).toMatch(/intersection/)
-    expect(lower).toMatch(/process profile/)
-    expect(lower).toMatch(/skipped/)
+  it('composes the mode with scope and profile: a row filter, the same intersection, a disabled step skipped (AC4)', () => {
+    const mode = section(content, MODE_SECTION)
+    expect(mode, 'the `--mode` section is missing').not.toBe('')
+    expect(
+      hasLine(mode, /row filter/i, /intersection/i, /process profile/i, /skipped/i),
+      'the row-filter bullet must compose with the intersection and the process profile',
+    ).toBe(true)
+    const step06 = section(content, STEP_0_6)
+    expect(step06, 'Step 0.6 (Resolve the Mode) is missing').not.toBe('')
+    expect(
+      hasSentence(step06, /row outside/i, /skipped/i, /disabled step/i),
+      'Step 0.6 must skip a row outside the mode set exactly like a disabled step',
+    ).toBe(true)
   })
 
   it('keeps macrostates and DoR in force inside a mode', () => {
-    expect(lower).toMatch(/macrostate/)
-    expect(lower).toMatch(/definition of ready|readiness fallback|dor/)
+    const mode = section(content, MODE_SECTION)
+    expect(mode, 'the `--mode` section is missing').not.toBe('')
+    expect(
+      hasLine(
+        mode,
+        /macrostates?/i,
+        /(definition of ready|readiness fallback)/i,
+        /\b(stay in force|never)\b/i,
+      ),
+    ).toBe(true)
   })
 
   it('reports a mode invoked in the wrong context and suggests the right mode', () => {
@@ -216,5 +316,166 @@ describe('decision record', () => {
     expect(adl).toMatch(/ADR-017/)
     expect(adl).toMatch(/--mode/)
     expect(read(ADR_017)).toMatch(/macro-phase-modes-are-a-selection-facade/)
+  })
+})
+
+// --- US-252 review r0: the run mechanism, pinned to the text that carries it --------------------
+
+describe.each(nextSources)(
+  '/next — %s SKILL.md run mechanism (Step 0.6 and Step 6)',
+  (_, content) => {
+    const step06 = section(content, STEP_0_6)
+    const step6 = section(content, STEP_6)
+
+    it('Step 0.6 validates the mode and HALTs on an unknown one, listing the three (AC1, AC2)', () => {
+      expect(step06, 'Step 0.6 (Resolve the Mode) is missing').not.toBe('')
+      expect(
+        hasSentence(step06, /unknown mode/i, /halt/i, /`analysis`/, /`implementation`/, /`review`/),
+      ).toBe(true)
+    })
+
+    it('Step 0.6 HALTs on a missing mode table naming the file, never falling back to plain next', () => {
+      expect(step06, 'Step 0.6 (Resolve the Mode) is missing').not.toBe('')
+      expect(
+        hasSentence(step06, /(missing|unreadable)/i, /table/i, /halt/i, /naming the file/i),
+      ).toBe(true)
+      expect(hasSentence(step06, /never fall back to plain/i)).toBe(true)
+    })
+
+    it('Step 6 invokes the granular skill the row names and leaves its gates to it (AC1, AC2)', () => {
+      expect(step6, 'Step 6 (Run the Phase) is missing').not.toBe('')
+      expect(hasSentence(step6, /invoke/i, /granular skill/i)).toBe(true)
+      expect(hasSentence(step6, /gates/i, /halts/i, /belong to it/i)).toBe(true)
+    })
+
+    it('Step 6 re-evaluates against the current board state after every step, never a cached selection', () => {
+      expect(step6, 'Step 6 (Run the Phase) is missing').not.toBe('')
+      expect(hasSentence(step6, /re-evaluate/i, /step 0/i, /current board state/i)).toBe(true)
+    })
+
+    it('Step 6 stops on the phase exit, on a HALT (surfaced as-is) or on an unchanged unit', () => {
+      expect(step6, 'Step 6 (Run the Phase) is missing').not.toBe('')
+      expect(
+        hasSentence(step6, /\bstop\b/i, /exit/i, /halt/i, /as-is/i, /unchanged unit/i),
+        'Step 6 must name all three stop conditions',
+      ).toBe(true)
+    })
+
+    it('Step 6 reports a wrong context and suggests the mode of the unmoded answer (AC edge case)', () => {
+      expect(step6, 'Step 6 (Run the Phase) is missing').not.toBe('')
+      expect(hasSentence(step6, /wrong context/i, /suggest/i, /mode/i)).toBe(true)
+    })
+
+    it('Step 6 reports at phase level and lists the remaining units without running them', () => {
+      expect(step6, 'Step 6 (Run the Phase) is missing').not.toBe('')
+      expect(hasSentence(step6, /phase level/i)).toBe(true)
+      expect(hasSentence(step6, /remaining units/i, /without running/i)).toBe(true)
+    })
+  },
+)
+
+describe.each(nextSources)('/next — %s SKILL.md — r0-1 row 7 hands over to row 8', (_, content) => {
+  it('Step 6 states that, after the read-only /checkpoint resume ran for the unit, the same unit continues with row 8 implement, and the unchanged-unit stop does not apply to it', () => {
+    const step6 = section(content, STEP_6)
+    expect(step6, 'Step 6 (Run the Phase) is missing').not.toBe('')
+    expect(statesHandOff(step6), 'Step 6 must state the row 7 -> row 8 hand-off').toBe(true)
+  })
+})
+
+describe.each(nextSources)(
+  '/next — %s SKILL.md — r0-3 Step 0 item 0 never passes the mode',
+  (_, content) => {
+    const item0 = stepZeroItemZero(content)
+
+    it('names the selection keys it passes and withholds `mode` from autonomy-policy.mjs', () => {
+      expect(item0, 'Step 0 item 0 is missing').not.toBe('')
+      expect(item0, 'item 0 must not tell the agent to pass every argument given').not.toMatch(
+        /<JSON of the arguments given>/,
+      )
+      for (const key of ['root', 'filter', 'assignee', 'status']) {
+        expect(item0, `item 0 must name \`${key}\``).toContain(`\`${key}\``)
+      }
+      expect(
+        hasSentence(item0, MODE_WORD, WITHHELD),
+        'item 0 must state that the mode is not passed to the policy script',
+      ).toBe(true)
+    })
+
+    it('a --mode invocation resolves through the real autonomy-policy.mjs once item 0 is followed', () => {
+      const given = { filter: 'ui', mode: 'analysis' }
+      const withheld = hasSentence(item0, MODE_WORD, WITHHELD)
+      const passed = withheld ? { filter: given.filter } : given
+      expect(resolvePolicy(passed).ok, JSON.stringify(passed)).toBe(true)
+    })
+  },
+)
+
+describe.each(nextSources)(
+  '/next — %s SKILL.md — r0-4 a mode runs its fallback-only step once',
+  (_, content) => {
+    it('Step 6 states that, when no row selects and the mode lists a fallback-only step, it invokes the step Step 5 names once under its own gates', () => {
+      const step6 = section(content, STEP_6)
+      expect(step6, 'Step 6 (Run the Phase) is missing').not.toBe('')
+      expect(
+        statesFallbackRuns(step6),
+        'Step 6 must state that the fallback-only step is run once',
+      ).toBe(true)
+    })
+  },
+)
+
+describe.each(nextSources)(
+  '/next — %s SKILL.md — r0-4 precedence of the fallback-only step over a wrong-context report',
+  (_, content) => {
+    it('R04-I2: Step 6 states the fallback-only step is run before a wrong-context report, even when another mode row holds', () => {
+      const step6 = section(content, STEP_6)
+      expect(step6, 'Step 6 (Run the Phase) is missing').not.toBe('')
+      expect(
+        statesFallbackPrecedence(step6),
+        'Step 6 must state the fallback-only step is run before a wrong-context report even when another mode row holds',
+      ).toBe(true)
+    })
+  },
+)
+
+describe('KB macro-phase-modes.md — How a session runs states the same two rules as Step 6', () => {
+  const session = section(read(GUIDELINE), /^## How a session runs/)
+
+  it('states the row 7 -> row 8 hand-off (r0-1)', () => {
+    expect(session, '`## How a session runs` is missing').not.toBe('')
+    expect(statesHandOff(session), 'the KB must state the row 7 -> row 8 hand-off').toBe(true)
+  })
+
+  it('R04-I2: states the fallback-only step is run before a wrong-context report, even when another mode row holds (r0-4)', () => {
+    expect(session, '`## How a session runs` is missing').not.toBe('')
+    expect(
+      statesFallbackPrecedence(session),
+      'the KB must state the fallback-only step precedence over a wrong-context report',
+    ).toBe(true)
+  })
+
+  it('states that a fallback-only step is run once (r0-4)', () => {
+    expect(session, '`## How a session runs` is missing').not.toBe('')
+    expect(
+      statesFallbackRuns(session),
+      'the KB must state the fallback-only step is run once',
+    ).toBe(true)
+  })
+})
+
+describe('docs site — analysis and the discovery run (r0-4)', () => {
+  it('states that analysis runs brainstorm once when the profile leaves an empty backlog (agrees with Step 6 and the KB)', () => {
+    const docs = section(read(DOCS_PAGE), /^## Macro-phase modes/)
+    expect(docs, '`## Macro-phase modes` is missing').not.toBe('')
+    expect(hasSentence(docs, /brainstorm/i, /once/i, /\b(runs?|invok\w+)\b/i)).toBe(true)
+  })
+})
+
+describe('r0-3 premise: the real policy script refuses `mode` and accepts the selection keys', () => {
+  it('control: {"filter":"ui"} resolves, {"mode":"analysis"} is refused naming `mode`', () => {
+    expect(resolvePolicy({ filter: 'ui' }).ok).toBe(true)
+    const refused = resolvePolicy({ mode: 'analysis' })
+    expect(refused.ok).toBe(false)
+    expect(refused.errors.map(e => e.key)).toContain('mode')
   })
 })
