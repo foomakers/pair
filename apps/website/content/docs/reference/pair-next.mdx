@@ -60,7 +60,7 @@ If you do not want to know the granular steps, name the phase instead. `/pair-ne
 | `implementation` | `implement`                                                                                                  | the story reached `Review` — its PR is open                                   |
 | `review`         | `review`                                                                                                     | the review verdict is published on the PR (merging stays with your policy)    |
 
-`analysis` can also open a discovery run (`brainstorm`) when the profile leaves an empty backlog with no other way in. Nothing else is surfaced: capabilities such as `/pair-capability-setup-gates` or `/pair-capability-grill` belong to no mode.
+When no row selects and the profile leaves an empty backlog with no other way in, `analysis` runs a discovery run (`brainstorm`) once, before any wrong-context report and even when a row of another mode would select for a story. Nothing else is surfaced: capabilities such as `/pair-capability-setup-gates` or `/pair-capability-grill` belong to no mode.
 
 A mode is a **facade, not a new skill**:
 

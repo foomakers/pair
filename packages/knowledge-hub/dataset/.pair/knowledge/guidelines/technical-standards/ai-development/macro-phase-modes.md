@@ -12,7 +12,7 @@ A mode is a **facade**, never a skill (D24: no new process steps). It adds one t
 
 ## The Mode Table
 
-`Rows` are the cascade rows of `/next` (Steps 2–3) the mode may select, evaluated in cascade order. `Steps` are the catalogue ids those rows propose — row 7 proposes `/checkpoint`, a capability that is not a step, and is the first link of the `implementation` chain. `Fallback-only` steps have no cascade row: the mode reaches them only through `/next`'s Step 5 fallback and never invents them.
+`Rows` are the cascade rows of `/next` (Steps 2–3) the mode may select, evaluated in cascade order. `Steps` are the catalogue ids those rows propose — row 7 proposes `/checkpoint`, a capability that is not a step, and is the first link of the `implementation` chain. `Fallback-only` steps have no cascade row: the mode **runs** them once, only when no row selects and `/next`'s Step 5 rule 2 reaches them, and never invents them.
 
 | Mode             | Rows        | Steps                                                                                                       | Fallback-only | Exit                                                                                                                                                  |
 | ---------------- | ----------- | ----------------------------------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -34,8 +34,8 @@ Cascade rows 12–16 (`/setup-gates`, `/assess-stack`, `/analyze-debt`, `/estima
 ## How a session runs
 
 1. **Resolve** the scope (`--root`, `--filter`, `--assignee`, `--status`) and the process profile exactly as `/next` does, then the mode's row set from the table. An unknown mode **HALTs** listing the valid ones (`analysis`, `implementation`, `review`) — never a quiet fallback to plain `/next`.
-2. **Select the work unit**: the first item (or, for the structural rows 3–5, planning gap) the mode's rows select. A mode drives **one unit per invocation** — context isolation is an invariant (ADR-017 §3); when more units remain in scope, say so and point to `/pair-loop` (many cards) or a re-invocation.
-3. **Run the selected step** by invoking the granular skill for the unit, then **re-evaluate** selection against the current board state — never reuse the previous selection.
+2. **Select the work unit**: the first item (or, for the structural rows 3–5, planning gap) the mode's rows select. When no row selects and the mode lists a fallback-only step, run it once: invoke the step `/next`'s Step 5 rule 2 names (`brainstorm` for `analysis`, on a backlog with no epics whose producing rows the profile disables), under its own gates. The fallback-only step is run before a wrong-context report, even when a row of another mode holds for the unit. A mode drives **one unit per invocation** — context isolation is an invariant (ADR-017 §3); when more units remain in scope, say so and point to `/pair-loop` (many cards) or a re-invocation.
+3. **Run the selected step** by invoking the granular skill for the unit, then **re-evaluate** selection against the current board state — never reuse the previous selection. Row 7 and row 8 hand over: after the row 7 `/checkpoint` resume has run for the unit in this session, the same unit continues with row 8's step `/implement`, because the resume leaves the checkpoint file in place and row 8's own predicate (no checkpoint file) would never hold. The resume is read-only and leaves the unit unchanged, so the unchanged-unit stop of the next item does not apply to it.
 4. **Repeat** until the table's Exit holds, a step HALTs, or the selected step would run again on a unit whose state did not change (a step that leaves the state as it was is not repeated — this is how `review` ends).
 5. **Report** at phase level: what the phase did to the unit and why it stopped, plus the mode that continues the process (`analysis` → `implementation` → `review`).
 
@@ -47,7 +47,7 @@ The [process profile](process-profiles.md) is re-read every run. A row whose ste
 
 ## Wrong context
 
-When the mode's rows select nothing for the scope, report **what is missing**, then run the unmoded cascade once and **suggest the mode whose rows match** the action it would have proposed — for example `review` with no open PR and a `Ready` story reports "no open PR or item in `Review` in scope" and suggests `/next --mode implementation`. When the unmoded cascade proposes nothing either, report `no matching issues` / the Step 5 fallback. A wrong-context report is a clean exit, not an error.
+When the mode's rows select nothing for the scope and no fallback-only step runs, report **what is missing**, then run the unmoded cascade once and **suggest the mode whose rows match** the action it would have proposed — for example `review` with no open PR and a `Ready` story reports "no open PR or item in `Review` in scope" and suggests `/next --mode implementation`. When the unmoded cascade proposes nothing either, report `no matching issues` / the Step 5 fallback. A wrong-context report is a clean exit, not an error.
 
 ## HALTs surface as-is
 

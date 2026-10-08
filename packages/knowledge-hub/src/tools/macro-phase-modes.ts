@@ -15,8 +15,10 @@
  * - `runModeSession` / `manualSequence` model "what a mode session does" against "what the user
  *   would run by hand" over a fixture board, so the transcript-equality acceptance check is a test.
  *
- * The reference model owns no process rule: row predicates mirror `/next`'s Step 3 table, and
- * which rows a mode runs always comes from the parsed table.
+ * The reference model owns no process rule: row predicates mirror `/next`'s Steps 2–3 table
+ * literally (a unit carries only the inputs `/next` reads), the two session rules are the ones
+ * Step 6 states (the row 7 → row 8 hand-off, the fallback-only step), and which rows a mode runs
+ * always comes from the parsed table.
  */
 
 import { existsSync, readFileSync } from 'fs'
@@ -283,51 +285,146 @@ export interface Unit {
   tasks: boolean
   /** A checkpoint file exists. */
   checkpoint: boolean
-  /** The checkpoint has been resumed in this session (row 7 done; row 8 then applies). */
-  resumed?: boolean
+}
+
+/** The project-level facts `/next` rows 1–5 read (PRD, bootstrap, backlog shape). */
+export interface ProjectFacts {
+  prd: 'template' | 'populated'
+  /** How many of the tech adoption files are still templates. */
+  techTemplates: number
+  initiatives: number
+  epics: number
+  stories: number
+}
+
+/** What a row's predicate reads: the work unit and, when known, the project. */
+interface Board {
+  unit: Unit
+  project?: ProjectFacts
 }
 
 interface ModelRow {
   row: number
   step: string
-  when: (u: Unit) => boolean
-  effect: (u: Unit) => Unit
+  when: (b: Board) => boolean
+  effect: (b: Board) => Board
 }
 
-/** `/next` Step 3 rows 6–11 over one story. Order = cascade order = delivery proximity. */
+const onUnit = (
+  when: (u: Unit) => boolean,
+  effect: (u: Unit) => Unit,
+): Pick<ModelRow, 'when' | 'effect'> => ({
+  when: b => when(b.unit),
+  effect: b => ({ ...b, unit: effect(b.unit) }),
+})
+
+/** A project-level row: matches only when the project facts are known. */
+const onProject = (
+  when: (p: ProjectFacts) => boolean,
+  effect: (p: ProjectFacts) => ProjectFacts,
+): Pick<ModelRow, 'when' | 'effect'> => ({
+  when: b => (b.project ? when(b.project) : false),
+  effect: b => (b.project ? { ...b, project: effect(b.project) } : b),
+})
+
+/** `/next` Steps 2–3 rows 1–11. Order = cascade order; rows 6–11 are per story. */
 const MODEL_ROWS: ModelRow[] = [
-  { row: 6, step: 'review', when: u => u.macrostate === 'Review', effect: u => u },
+  {
+    row: 1,
+    step: 'specify-prd',
+    ...onProject(
+      p => p.prd === 'template',
+      p => ({ ...p, prd: 'populated' }),
+    ),
+  },
+  {
+    row: 2,
+    step: 'bootstrap',
+    ...onProject(
+      p => p.prd === 'populated' && p.techTemplates >= 3,
+      p => ({ ...p, techTemplates: 0 }),
+    ),
+  },
+  {
+    row: 3,
+    step: 'plan-initiatives',
+    ...onProject(
+      p => p.initiatives === 0 && p.epics === 0,
+      p => ({ ...p, initiatives: 1 }),
+    ),
+  },
+  {
+    row: 4,
+    step: 'plan-epics',
+    ...onProject(
+      p => p.initiatives > 0 && p.epics === 0,
+      p => ({ ...p, epics: 1 }),
+    ),
+  },
+  {
+    row: 5,
+    step: 'plan-stories',
+    ...onProject(
+      p => p.epics > 0 && p.stories === 0,
+      p => ({ ...p, stories: 1 }),
+    ),
+  },
+  {
+    row: 6,
+    step: 'review',
+    ...onUnit(
+      u => u.macrostate === 'Review',
+      u => u,
+    ),
+  },
   {
     row: 7,
     step: 'checkpoint',
-    when: u => u.macrostate === 'In Progress' && u.checkpoint && !u.resumed,
-    effect: u => ({ ...u, resumed: true }),
+    ...onUnit(
+      u => u.macrostate === 'In Progress' && u.checkpoint,
+      u => u,
+    ),
   },
   {
     row: 8,
     step: 'implement',
-    when: u => u.macrostate === 'In Progress' && (!u.checkpoint || Boolean(u.resumed)),
-    effect: u => ({ ...u, macrostate: 'Review' }),
+    ...onUnit(
+      u => u.macrostate === 'In Progress' && !u.checkpoint,
+      u => ({ ...u, macrostate: 'Review' }),
+    ),
   },
   {
     row: 9,
     step: 'implement',
-    when: u => u.macrostate === 'Ready' && u.tasks,
-    effect: u => ({ ...u, macrostate: 'Review' }),
+    ...onUnit(
+      u => u.macrostate === 'Ready' && u.tasks,
+      u => ({ ...u, macrostate: 'Review' }),
+    ),
   },
   {
     row: 10,
     step: 'plan-tasks',
-    when: u => u.macrostate === 'Ready' && !u.tasks,
-    effect: u => ({ ...u, tasks: true }),
+    ...onUnit(
+      u => u.macrostate === 'Ready' && !u.tasks,
+      u => ({ ...u, tasks: true }),
+    ),
   },
   {
     row: 11,
     step: 'refine-story',
-    when: u => u.macrostate === 'Draft',
-    effect: u => ({ ...u, macrostate: 'Ready' }),
+    ...onUnit(
+      u => u.macrostate === 'Draft',
+      u => ({ ...u, macrostate: 'Ready' }),
+    ),
   },
 ]
+
+const ROW_RESUME = 7
+const ROW_CONTINUE = 8
+const ROW_8 = MODEL_ROWS.find(r => r.row === ROW_CONTINUE) as ModelRow
+
+/** The enabled step `/next`'s Step 5 rule 2 names when the backlog has no epics. */
+const FALLBACK_PRODUCER = 'brainstorm'
 
 /** `checkpoint` is a capability, never filtered by a profile (row 7 is not a step). */
 const isEnabled = (step: string, enabled: string[]): boolean =>
@@ -347,9 +444,11 @@ export interface SessionOptions {
   enabled: string[]
   /** A step whose invocation HALTs. */
   haltOn?: string
+  /** Project facts for rows 1–5 and the fallback; absent = a story-scoped session (rows 6–11). */
+  project?: ProjectFacts
 }
 
-const signature = (step: string, u: Unit): string => `${step}|${JSON.stringify(u)}`
+const signature = (step: string, b: Board): string => `${step}|${JSON.stringify(b)}`
 
 function modeOfRow(table: ModeTable, row: number): string | undefined {
   return table.modes.find(m => m.rows.includes(row))?.mode
@@ -358,36 +457,61 @@ function modeOfRow(table: ModeTable, row: number): string | undefined {
 /** Why a session that ran nothing ended: a profile gap, another mode's row, or nothing at all. */
 function endWithoutSteps(
   table: ModeTable,
-  unit: Unit,
+  board: Board,
   enabled: string[],
   skipped: string[],
 ): ModeSession {
+  const { unit } = board
   if (skipped.length > 0) return { steps: [], exit: 'all-disabled', unit, skipped }
-  const elsewhere = MODEL_ROWS.find(r => r.when(unit) && isEnabled(r.step, enabled))
+  const elsewhere = MODEL_ROWS.find(r => r.when(board) && isEnabled(r.step, enabled))
   const suggest = elsewhere ? modeOfRow(table, elsewhere.row) : undefined
   return suggest
     ? { steps: [], exit: 'wrong-context', unit, skipped, suggest }
     : { steps: [], exit: 'nothing-to-do', unit, skipped }
 }
 
-/** First matching row whose step is enabled; every matching row whose step is disabled is recorded. */
-function pickRow(
-  rows: ModelRow[],
-  unit: Unit,
-  enabled: string[],
-  skipped: string[],
-): ModelRow | undefined {
-  const matching = rows.filter(r => r.when(unit))
+/** What a session carries besides the board: the profile, what it skipped, and the resume. */
+interface SessionState {
+  enabled: string[]
+  skipped: string[]
+  /** The row 7 resume has run for the unit in this session (session-local, never part of the unit). */
+  resumed: boolean
+}
+
+/**
+ * First matching row whose step is enabled; every matching row whose step is disabled is recorded.
+ * Step 6 hand-off: once the row 7 resume has run for the unit in this session, row 7 stands for
+ * row 8's step (the resume leaves the checkpoint file in place, so row 8's own predicate is false).
+ */
+function pickRow(rows: ModelRow[], board: Board, state: SessionState): ModelRow | undefined {
+  const matching = rows
+    .filter(r => r.when(board))
+    .map(r => (r.row === ROW_RESUME && state.resumed ? ROW_8 : r))
   for (const r of matching) {
-    if (!isEnabled(r.step, enabled) && !skipped.includes(r.step)) skipped.push(r.step)
+    if (!isEnabled(r.step, state.enabled) && !state.skipped.includes(r.step)) {
+      state.skipped.push(r.step)
+    }
   }
-  return matching.find(r => isEnabled(r.step, enabled))
+  return matching.find(r => isEnabled(r.step, state.enabled))
+}
+
+/**
+ * Step 6 item 1: no row selects, the mode lists the fallback-only step and the Step 5 rule 2
+ * input is missing (no epics) — the step runs once, before any wrong-context report.
+ */
+function fallbackStep(entry: ModeEntry, board: Board, enabled: string[]): string | undefined {
+  return board.project?.epics === 0 &&
+    entry.fallbackSteps.includes(FALLBACK_PRODUCER) &&
+    isEnabled(FALLBACK_PRODUCER, enabled)
+    ? FALLBACK_PRODUCER
+    : undefined
 }
 
 /**
  * One mode session over one work unit: select within the mode's rows, run the step, re-select
  * against the new state, until the rows select nothing (the phase exit), a step HALTs, or the same
- * step would run again on an unchanged unit (a step that leaves the state as it was is not repeated).
+ * step would run again on an unchanged unit (a step that leaves the state as it was is not repeated;
+ * the read-only row 7 resume is not a repeat — it hands over to row 8).
  */
 export function runModeSession(
   table: ModeTable,
@@ -400,37 +524,63 @@ export function runModeSession(
     throw new Error(`unknown mode \`${mode}\` — valid modes: ${MACRO_PHASE_MODES.join(', ')}`)
   const rows = MODEL_ROWS.filter(r => entry.rows.includes(r.row))
   const steps: string[] = []
-  const skipped: string[] = []
+  const state: SessionState = { enabled: opts.enabled, skipped: [], resumed: false }
   const seen = new Set<string>()
-  let unit = start
+  let board: Board = { unit: start, ...(opts.project ? { project: opts.project } : {}) }
 
   for (;;) {
-    const next = pickRow(rows, unit, opts.enabled, skipped)
-    if (!next || seen.has(signature(next.step, unit))) break
-    seen.add(signature(next.step, unit))
+    const next = pickRow(rows, board, state)
+    if (!next || seen.has(signature(next.step, board))) break
+    seen.add(signature(next.step, board))
     steps.push(next.step)
-    if (opts.haltOn === next.step) return { steps, exit: 'halt', unit, skipped, halted: next.step }
-    unit = next.effect(unit)
+    if (opts.haltOn === next.step) return halted(steps, board, state, next.step)
+    if (next.row === ROW_RESUME) state.resumed = true
+    board = next.effect(board)
   }
 
-  return steps.length > 0
-    ? { steps, exit: 'exit', unit, skipped }
-    : endWithoutSteps(table, unit, opts.enabled, skipped)
+  return settle(table, entry, { steps, board, state }, opts)
+}
+
+/** How a session ends once the loop stopped: the phase exit, the fallback-only step, or nothing. */
+function settle(
+  table: ModeTable,
+  entry: ModeEntry,
+  run: { steps: string[]; board: Board; state: SessionState },
+  opts: SessionOptions,
+): ModeSession {
+  const { steps, board, state } = run
+  if (steps.length > 0) return { steps, exit: 'exit', unit: board.unit, skipped: state.skipped }
+  const fallback = fallbackStep(entry, board, opts.enabled)
+  if (!fallback) return endWithoutSteps(table, board, opts.enabled, state.skipped)
+  return opts.haltOn === fallback
+    ? halted([fallback], board, state, fallback)
+    : { steps: [fallback], exit: 'exit', unit: board.unit, skipped: state.skipped }
+}
+
+function halted(steps: string[], board: Board, state: SessionState, step: string): ModeSession {
+  return { steps, exit: 'halt', unit: board.unit, skipped: state.skipped, halted: step }
 }
 
 /** The steps the user would run by hand: the unmoded cascade, re-evaluated after every step. */
-export function manualSequence(_table: ModeTable, start: Unit, enabled: string[]): string[] {
+export function manualSequence(
+  _table: ModeTable,
+  start: Unit,
+  enabled: string[],
+  project?: ProjectFacts,
+): string[] {
   const steps: string[] = []
   const seen = new Set<string>()
-  let unit = start
+  const state: SessionState = { enabled, skipped: [], resumed: false }
+  let board: Board = { unit: start, ...(project ? { project } : {}) }
   for (;;) {
-    const next = MODEL_ROWS.find(r => r.when(unit) && isEnabled(r.step, enabled))
+    const next = pickRow(MODEL_ROWS, board, state)
     if (!next) break
-    const sig = signature(next.step, unit)
+    const sig = signature(next.step, board)
     if (seen.has(sig)) break
     seen.add(sig)
     steps.push(next.step)
-    unit = next.effect(unit)
+    if (next.row === ROW_RESUME) state.resumed = true
+    board = next.effect(board)
   }
   return steps
 }
