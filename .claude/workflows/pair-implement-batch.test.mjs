@@ -2409,3 +2409,35 @@ test('US-523 r2-8: nothing declared and nothing passed ⇒ the pre-#523 batch (i
   const withText = await runWorkflow({ args: { cards: [STORY], policyText: '## Eligibility\n\nrisk:green\n' }, dispatch: stdDispatch(), autonomy: scripted({ resolved: { ok: true, active: false, policy: { until: 'pr', merge: GATE('always'), prepare: GATE('always') }, lines: [], warnings: [], errors: [] }, prepare: NEEDS_HUMAN }) })
   assert.equal(rowOf(withText).status, 'awaiting-human')
 })
+
+test('defect #252: the relayed decide and merge commands carry a COMPLETE gate (has + lacks) even when the resolve relay dropped the empty arrays', async () => {
+  const r = await driveWith({ until: 'merged', merge: 'when; has: needs-review' }, { resolved: { ok: true, active: true, policy: { until: 'merged', merge: { mode: 'when', has: ['needs-review'] }, prepare: { mode: 'always' } }, lines: [], warnings: [], errors: [] } })
+  const decide = r.calls.find(c => c.opts.label === 'decide:#292 implement')
+  assert.match(decide.prompt, /decide --policy '\{"until":"merged","merge":\{"mode":"when","has":\["needs-review"\],"lacks":\[\]\}\}' --boundary stage:implement/)
+  const check = r.calls.find(c => c.opts.label === 'merge-check:#292')
+  assert.ok(check, 'the merge check was dispatched')
+  assert.match(check.prompt, /--mergeGate '\{"mode":"when","has":\["needs-review"\],"lacks":\[\]\}'/)
+})
+
+test('F4: a resolved gate with a shell-unsafe label or a non-array has/lacks HALTs before any card is touched', async () => {
+  for (const merge of [{ mode: 'when', has: ["x'; rm -rf /"] }, { mode: 'when', has: 'needs-review' }, { mode: 'when', lacks: [1] }]) {
+    await assert.rejects(driveWith({ until: 'merged', merge: 'never' }, { resolved: { ok: true, active: true, policy: { until: 'merged', merge, prepare: { mode: 'always' } }, lines: [], warnings: [], errors: [] } }), /automation-policy-unresolved/)
+  }
+})
+
+test('relay role: script-relay dispatches default to haiku; models.relay / efforts.relay override; stage agents keep their models', async () => {
+  const relayLabels = /^(autonomy:resolve|tier:|decide:|escalate:|pr-state:|cascade:|merge-check:)/
+  const d = await driveWith({ until: 'merged', merge: 'never' }, { resolved: RESOLVED('merged') })
+  const relays = d.calls.filter(c => relayLabels.test(c.opts.label ?? ''))
+  assert.ok(relays.length >= 4, 'relay calls were made')
+  for (const c of relays) assert.equal(c.opts.model, 'haiku', c.opts.label)
+  for (const c of d.calls.filter(c => !relayLabels.test(c.opts.label ?? '') && c.opts.agentType)) assert.notEqual(c.opts.model, 'haiku', c.opts.label)
+  const mergeRun = d.calls.find(c => c.opts.label === 'merge:#292')
+  assert.ok(mergeRun, 'merge run was dispatched')
+  assert.notEqual(mergeRun.opts.model, 'haiku', 'merge: runs verify-quality and judges the gate colour — a judgement, never a relay')
+  const o = await driveWith({ until: 'merged', merge: 'never', model: 'opus', effort: 'max', models: { relay: 'sonnet' }, efforts: { relay: 'high' } }, { resolved: RESOLVED('merged') })
+  for (const c of o.calls.filter(c => relayLabels.test(c.opts.label ?? ''))) { assert.equal(c.opts.model, 'sonnet', c.opts.label); assert.equal(c.opts.effort, 'high', c.opts.label) }
+  for (const c of o.calls.filter(c => c.opts.agentType === 'pair-implementer')) assert.equal(c.opts.model, 'opus')
+  await assert.rejects(driveWith({ models: { relay: 'gpt' } }, { resolved: RESOLVED('pr') }), /unknown model/)
+  await assert.rejects(driveWith({ models: { planner: 'haiku' } }, { resolved: RESOLVED('pr') }), /retired/)
+})

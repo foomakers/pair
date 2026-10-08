@@ -427,13 +427,13 @@ test('T-6: the KB workflow-profiles.md example profile validates and resolves, a
   const config = blocks.find(b => b.workflowProfiles)
   assert.ok(example && config)
   assert.deepEqual(errorsOf(example), [])
-  // the doc's own claim: prepare/green cheap + reuse, validate/verify frontier + fresh
+  // the doc's own claim: green cheap + reuse, prepare frontier + reuse, validate/verify frontier + fresh, implement balanced
   const root = project({ config: { workflowProfiles: { default: 'cheap-green', files: GLOB } }, files: { '.pair/adoption/tech/workflow-profiles/cheap-green.json': example, '.pair/adoption/tech/automation.md': POLICY_MD } })
   const r = resolveProfile({ root, tier: 'risk:yellow' })
-  assert.deepEqual([r.stages.prepare.model.resolved.class, r.stages.prepare.context.value], ['cheap', 'reuse'])
+  assert.deepEqual([r.stages.prepare.model.resolved.class, r.stages.prepare.context.value], ['frontier', 'reuse'])
   assert.deepEqual([r.stages.green.model.resolved.class, r.stages.green.context.value], ['cheap', 'reuse'])
   for (const s of ['validate', 'verify']) assert.deepEqual([r.stages[s].model.resolved.class, r.stages[s].context.value], ['frontier', 'fresh'])
-  assert.equal(r.stages.implement.model.resolved.class, 'balanced', 'by-tier on risk:yellow')
+  assert.equal(r.stages.implement.model.resolved.class, 'balanced')
   // every key the config example uses is one the resolver accepts
   const inlineOnly = project({ config: { workflowProfiles: { inline: config.workflowProfiles.inline } } })
   assert.equal(resolveProfile({ root: inlineOnly, profile: 'quick' }).stages.implement.effort.value, 'low')
@@ -510,4 +510,20 @@ test('PR517-C3: the CLI still resolves a class and an explicit id side by side (
   const r = cli('resolve', '--root', root, '--workflow-config', 'ext.json')
   assert.equal(r.code, 0, JSON.stringify(r.out))
   assert.deepEqual([r.out.stages.verify.model.resolved.id, r.out.stages.green.model.resolved.id], ['m-frontier', 'sonnet'])
+})
+
+// ── cheap-green pilot: the KB table + adoption sample (conformance) ────────────────────────────
+test('cheap-green: the KB documents the stage->model table with *-5-5 ids; the adoption sample is valid, resolves and is NOT activated', () => {
+  const repo = fileURLToPath(new URL('../../../', import.meta.url))
+  const kb = readFileSync(join(repo, '.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md'), 'utf8')
+  assert.match(kb, /### Recommended stage → model mapping \(pilot\)/)
+  for (const row of ['contract', 'relay', 'green on `doc` groups', 'selection, implement, green on behavioral groups', 'prepare, validate, verify', 'post-merge closure']) assert.ok(kb.includes(`| ${row}`), row)
+  assert.match(kb, /at least 2 of 3 cards/)
+  const ids = [...kb.matchAll(/claude-[a-z]+-[0-9]+-[0-9]+/g)].map(m => m[0])
+  assert.ok(ids.length >= 3)
+  for (const id of ids) assert.match(id, /^claude-(haiku|sonnet|opus)-5-5$/)
+  const sample = JSON.parse(readFileSync(join(repo, '.pair/adoption/tech/workflow-profiles/cheap-green.json'), 'utf8'))
+  assert.deepEqual(validateProfile(sample).errors, [])
+  assert.deepEqual(sample.modelClasses, { cheap: 'claude-haiku-5-5', balanced: 'claude-sonnet-5-5', frontier: 'claude-opus-5-5' })
+  assert.equal(existsSync(join(repo, 'pair.config.json')), false, 'the pilot is never activated by a shipped pair.config.json')
 })

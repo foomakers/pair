@@ -886,3 +886,8 @@ test('a gate value that could become a shell fragment is rejected before any ref
   await assert.rejects(() => runWorkflow({ args: { items: [{ id: '216', mode: 'refine' }], prepare: "never'; id" }, dispatch: okDispatch }), /args\.prepare/)
   await assert.rejects(() => runWorkflow({ args: { items: [{ id: '216', mode: 'refine' }] }, dispatch: () => null }), /HALT automation-policy-unresolved/)
 })
+
+test('F3: a relayed prepare gate that dropped its empty `lacks` (or `has`) array is completed, not halted', async () => {
+  const p = await refinePrompt({ items: [{ id: '216', mode: 'refine', breakdown: true }], prepare: 'when; has: needs-spec' }, gateDispatch({ mode: 'when', has: ['needs-spec'] }, 'argument'))
+  assert.match(p, /--gate '\{"mode":"when","has":\["needs-spec"\],"lacks":\[\]\}'/)
+})

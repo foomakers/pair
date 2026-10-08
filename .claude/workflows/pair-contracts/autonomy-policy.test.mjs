@@ -230,3 +230,40 @@ test('CLI: resolve and decide round-trip JSON', () => {
   const bad = spawnSync(process.execPath, [CLI, 'nope'], { encoding: 'utf8' })
   assert.equal(bad.status, 2)
 })
+
+// Defect (#252 halt): a merge gate relayed without `lacks` (empty arrays dropped) crashed `decide` — `gate.lacks.filter`.
+test('gate shape tolerance: a gate missing `lacks` / `has` / both decides, prints and resolves without crashing', () => {
+  const labels = ['user story', 'risk:yellow', 'needs-review']
+  const noLacks = { mode: 'when', has: ['needs-review'] }
+  const noHas = { mode: 'when', lacks: ['risk:green'] }
+  assert.deepEqual(decide({ boundary: { kind: 'stage', stage: 'implement' }, labels, policy: { until: 'merged', merge: noLacks } }).conditions, ['has:needs-review'])
+  assert.deepEqual(decide({ boundary: { kind: 'stage', stage: 'implement' }, labels, policy: { until: 'merged', merge: noHas } }).conditions, ['lacks:risk:green'])
+  assert.equal(decide({ boundary: { kind: 'merge' }, labels, policy: { until: 'merged', merge: { mode: 'never' } } }).decision, 'proceed')
+  assert.equal(decide({ boundary: { kind: 'merge' }, labels, policy: { until: 'merged', merge: { mode: 'always' } } }).decision, 'await-human')
+  assert.equal(gateToString(noLacks), 'when; has: needs-review')
+  assert.equal(gateToString(noHas), 'when; lacks: risk:green')
+  assert.equal(gateToString({ mode: 'never' }), 'never')
+  assert.equal(gateToString({ mode: 'when' }), 'when')
+})
+
+test('gate shape tolerance: resolve output carries complete gates; an object gate with missing arrays parses; an unknown mode errors cleanly', () => {
+  const r = resolvePolicy({ args: { until: 'merged', merge: { mode: 'when', has: ['needs-review'] } } })
+  assert.equal(r.ok, true)
+  assert.deepEqual(r.policy.merge, { mode: 'when', has: ['needs-review'], lacks: [] })
+  assert.deepEqual(resolvePolicy({ args: { merge: { mode: 'never' } } }).policy.merge, { mode: 'never', has: [], lacks: [] })
+  const bad = resolvePolicy({ args: { merge: { mode: 'sometimes' } } })
+  assert.equal(bad.ok, false)
+  assert.match(bad.errors[0].reason, /not one of/)
+})
+
+test('gate shape tolerance: the CLI decide with the relayed, lacks-less policy answers JSON (the #252 command)', () => {
+  const p = spawnSync('node', [CLI, 'decide', '--policy', '{"until":"merged","merge":{"mode":"when","has":["needs-review"]}}', '--boundary', 'stage:implement', '--labels', '["user story","risk:yellow","next-release","surface:loop"]'], { encoding: 'utf8' })
+  assert.equal(p.status, 0, p.stderr)
+  assert.equal(JSON.parse(p.stdout).decision, 'proceed')
+})
+
+test('F1 fail-closed: decide throws on a `when` gate with no conditions or an unknown mode — never proceeds', () => {
+  for (const merge of [{ mode: 'when' }, { mode: 'when', has: [], lacks: [] }, { mode: 'sometimes' }]) {
+    assert.throws(() => decide({ boundary: { kind: 'merge' }, labels: ['x'], policy: { until: 'merged', merge } }), /gate/)
+  }
+})

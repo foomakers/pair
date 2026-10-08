@@ -102,7 +102,13 @@ export function parseGate(key, raw) {
   return errors.length ? { errors } : { value: gate }
 }
 
-export const gateToString = g => (g.mode === 'when' ? ['when', g.has.length ? `has: ${g.has.join(',')}` : null, g.lacks.length ? `lacks: ${g.lacks.join(',')}` : null].filter(Boolean).join('; ') : g.mode)
+// A gate is `mode` + `has[]` + `lacks[]`; a relayed one may drop the empty arrays — every consumer reads it through here.
+export const normalizeGate = g => (g && typeof g === 'object' ? { ...g, has: Array.isArray(g.has) ? g.has : [], lacks: Array.isArray(g.lacks) ? g.lacks : [] } : g)
+
+export const gateToString = g => {
+  const n = normalizeGate(g)
+  return n.mode === 'when' ? ['when', n.has.length ? `has: ${n.has.join(',')}` : null, n.lacks.length ? `lacks: ${n.lacks.join(',')}` : null].filter(Boolean).join('; ') : n.mode
+}
 
 // ── one key's value ─────────────────────────────────────────────────────────────────────────
 export function parseValue(key, raw) {
@@ -290,7 +296,7 @@ export function resolvePolicy({ args = {}, adoptionText = '' } = {}) {
     const v = e.value === undefined ? (key === 'filter' || key === 'status' ? '(all)' : '(none)') : display(key, e.value)
     return `${key}: ${v} (${e.source})`
   })
-  const policy = { until: effective.until.value, merge: effective.merge.value, prepare: effective.prepare.value, ...(legacyActive ? { legacyTiers: legacyMerge.legacyTiers } : {}) }
+  const policy = { until: effective.until.value, merge: normalizeGate(effective.merge.value), prepare: normalizeGate(effective.prepare.value), ...(legacyActive ? { legacyTiers: legacyMerge.legacyTiers } : {}) }
   // `active`: the run declared its own target or merge gate (argument or `## Autonomy`). Legacy-only and
   // nothing-declared runs are NOT active — consumers keep today's code path, byte for byte.
   const active = ['until', 'merge'].some(k => effective[k].source === 'argument' || effective[k].source === 'adoption')
@@ -302,6 +308,7 @@ export function resolvePolicy({ args = {}, adoptionText = '' } = {}) {
 // Escalation wins over every proceed, and the gate is evaluated ONLY under `until: merged`.
 export function escalationConditions(gate, labels) {
   if (!gate || gate.mode !== 'when') return []
+  gate = normalizeGate(gate)
   const have = new Set((labels ?? []).map(String))
   return [...gate.has.filter(l => have.has(l)).map(l => `has:${l}`), ...gate.lacks.filter(l => !have.has(l)).map(l => `lacks:${l}`)]
 }
@@ -324,7 +331,10 @@ export function effectiveLabels({ labels, prLabels, atMerge = false } = {}) {
 export function decide({ boundary, labels: cardLabels, prLabels, policy } = {}) {
   const labels = effectiveLabels({ labels: cardLabels, prLabels, atMerge: boundary?.kind === 'merge' })
   const until = policy?.until ?? 'pr'
-  const gate = policy?.merge ?? DEFAULTS.merge
+  const gate = normalizeGate(policy?.merge ?? DEFAULTS.merge)
+  // Fail closed: a gate that is not a known mode, or a `when` with no condition, is never read as "proceed".
+  if (!GATE_MODES.includes(gate?.mode)) throw new Error(`merge gate mode ${JSON.stringify(gate?.mode ?? null)} is not one of ${GATE_MODES.join(' | ')}`)
+  if (gate.mode === 'when' && gate.has.length === 0 && gate.lacks.length === 0) throw new Error('merge gate `when` needs at least one `has:` or `lacks:` condition')
   const kind = boundary?.kind === 'merge' ? 'merge' : 'stage'
   const stage = kind === 'merge' ? 'merge' : boundary?.stage
   if (kind === 'stage' && !STAGE_STEPS.includes(stage)) return { decision: 'proceed', reason: `${stage} is not a delivery stage boundary` }

@@ -304,13 +304,13 @@ async function resolvePrepareGate() {
     throw new Error(`refine-batch: HALT automation-policy-unresolved — the autonomy policy script returned no readable answer${r?.error ? ` (${r.error})` : ''}; no card was touched.`)
   if (r.ok === false) throw new Error(`refine-batch: HALT automation-policy-malformed — ${(r.errors ?? []).map(e => `${e?.key}: ${e?.reason}`).join('; ') || 'no reason given'}; no card was touched.`)
   const g = r.policy?.prepare
-  const list = v => Array.isArray(v) && v.every(x => typeof x === 'string' && GATE_LABEL_RE.test(x) && !x.includes('$('))
+  const list = v => v === undefined || Array.isArray(v) && v.every(x => typeof x === 'string' && GATE_LABEL_RE.test(x) && !x.includes('$('))
   const source = String(r.effective?.prepare?.source ?? '')
   if (!g || !['always', 'never', 'when'].includes(g.mode) || (g.mode === 'when' && !(list(g.has) && list(g.lacks))) || !GATE_SOURCES.includes(source))
     throw new Error('refine-batch: HALT automation-policy-unresolved — the autonomy policy script answered without a usable prepare gate (or a gate value that could become a shell fragment); no card was touched.')
   for (const l of r.lines ?? []) log(`autonomy ${String(l).slice(0, 200)}`)
   if (g.mode === 'always') return
-  const gate = { mode: g.mode, has: g.mode === 'when' ? g.has : [], lacks: g.mode === 'when' ? g.lacks : [] }
+  const gate = { mode: g.mode, has: g.mode === 'when' ? (g.has ?? []) : [], lacks: g.mode === 'when' ? (g.lacks ?? []) : [] }
   PREPARE = { gate, json: JSON.stringify(gate), text: gateString(gate), source }
 }
 
