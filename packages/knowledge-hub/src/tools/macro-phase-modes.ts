@@ -454,19 +454,17 @@ function modeOfRow(table: ModeTable, row: number): string | undefined {
   return table.modes.find(m => m.rows.includes(row))?.mode
 }
 
-/** Why a session that ran nothing ended: a profile gap, another mode's row, or nothing at all. */
-function endWithoutSteps(
-  table: ModeTable,
-  board: Board,
-  enabled: string[],
-  skipped: string[],
-): ModeSession {
+/** The mode of the first enabled row of ANY mode that holds: what the unmoded cascade proposes. */
+function otherModeRow(table: ModeTable, board: Board, enabled: string[]): string | undefined {
+  const holding = MODEL_ROWS.find(r => r.when(board) && isEnabled(r.step, enabled))
+  return holding ? modeOfRow(table, holding.row) : undefined
+}
+
+/** A session that ran nothing and has no fallback-only step to run: a profile gap, or nothing at all. */
+function endWithoutSteps(board: Board, skipped: string[]): ModeSession {
   const { unit } = board
-  if (skipped.length > 0) return { steps: [], exit: 'all-disabled', unit, skipped }
-  const elsewhere = MODEL_ROWS.find(r => r.when(board) && isEnabled(r.step, enabled))
-  const suggest = elsewhere ? modeOfRow(table, elsewhere.row) : undefined
-  return suggest
-    ? { steps: [], exit: 'wrong-context', unit, skipped, suggest }
+  return skipped.length > 0
+    ? { steps: [], exit: 'all-disabled', unit, skipped }
     : { steps: [], exit: 'nothing-to-do', unit, skipped }
 }
 
@@ -496,8 +494,9 @@ function pickRow(rows: ModelRow[], board: Board, state: SessionState): ModelRow 
 }
 
 /**
- * Step 6 item 1: no row selects, the mode lists the fallback-only step and the Step 5 rule 2
- * input is missing (no epics) — the step runs once, before any wrong-context report.
+ * Step 6 item 1: no row of the mode selects, no enabled row of any mode holds (the unmoded cascade
+ * reaches Step 5), the mode lists the fallback-only step and the Step 5 rule 2 input is missing
+ * (no epics) — the step runs once.
  */
 function fallbackStep(entry: ModeEntry, board: Board, enabled: string[]): string | undefined {
   return board.project?.epics === 0 &&
@@ -541,7 +540,11 @@ export function runModeSession(
   return settle(table, entry, { steps, board, state }, opts)
 }
 
-/** How a session ends once the loop stopped: the phase exit, the fallback-only step, or nothing. */
+/**
+ * How a session ends once the loop stopped: the phase exit; else a wrong-context report when an
+ * enabled row of another mode holds (it outranks the profile report and the fallback); else the
+ * fallback-only step; else the profile report or nothing.
+ */
 function settle(
   table: ModeTable,
   entry: ModeEntry,
@@ -550,8 +553,12 @@ function settle(
 ): ModeSession {
   const { steps, board, state } = run
   if (steps.length > 0) return { steps, exit: 'exit', unit: board.unit, skipped: state.skipped }
+  const suggest = otherModeRow(table, board, opts.enabled)
+  if (suggest) {
+    return { steps: [], exit: 'wrong-context', unit: board.unit, skipped: state.skipped, suggest }
+  }
   const fallback = fallbackStep(entry, board, opts.enabled)
-  if (!fallback) return endWithoutSteps(table, board, opts.enabled, state.skipped)
+  if (!fallback) return endWithoutSteps(board, state.skipped)
   return opts.haltOn === fallback
     ? halted([fallback], board, state, fallback)
     : { steps: [fallback], exit: 'exit', unit: board.unit, skipped: state.skipped }
