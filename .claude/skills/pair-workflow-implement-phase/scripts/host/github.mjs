@@ -7,7 +7,7 @@
 //
 // Transport: `gh` from PATH, or `transport.ghBin` / PAIR_GH_BIN (a test's recorder). `gh`
 // authenticates itself; this file never reads a token.
-import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, splitPages, CLASSIFICATION_FAMILIES } from './adapter-kit.mjs'
+import { defineAdapter, assertBranchName, runCli, parseJson, HostError, upsertByMarker, splitPages, splitObjectPages, CLASSIFICATION_FAMILIES } from './adapter-kit.mjs'
 
 export const CHECK_CONTEXT = 'pair-review'
 export const STATE_LABELS = ['pr-state:to-be-reviewed', 'pr-state:ready-to-merge', 'pr-state:not-approved']
@@ -72,6 +72,31 @@ export default defineAdapter({
       if (!runs.length) return null
       const last = runs[runs.length - 1]
       return last.status === 'completed' ? String(last.conclusion ?? 'pending') : 'pending'
+    }
+    // AL: EVERY CI check on the head (check runs AND commit statuses), as `{ name, conclusion }` with the conclusion folded to
+    // success | failure | pending. The most recent run of a name wins; neutral/skipped count as success; a run still in flight,
+    // or any status/conclusion this map does not know, is NOT green (cancelled, timed_out, action_required… ⇒ failure).
+    const readCiChecks = ({ sha, repo }) => {
+      const byName = new Map()
+      // `--paginate`: more than one page of runs/statuses must not hide a failing check on a later page.
+      const pagesOf = path => {
+        try {
+          return splitObjectPages(gh(['api', '--paginate', path]))
+        } catch (e) {
+          throw new HostError('invalid-json', { message: e.message, command: 'gh api --paginate' })
+        }
+      }
+      const runs = pagesOf(`${apiRepo(repo)}/commits/${sha}/check-runs?per_page=100`).flatMap(page => page.check_runs ?? [])
+      for (const r of [...runs].sort((a, b) => String(a.started_at ?? '').localeCompare(String(b.started_at ?? '')))) {
+        const conclusion = r.status !== 'completed' ? 'pending' : ['success', 'neutral', 'skipped'].includes(r.conclusion) ? 'success' : 'failure'
+        byName.set(String(r.name), conclusion)
+      }
+      const statuses = pagesOf(`${apiRepo(repo)}/commits/${sha}/status?per_page=100`).flatMap(page => page.statuses ?? [])
+      for (const st of statuses) {
+        const name = String(st.context)
+        if (!byName.has(name)) byName.set(name, st.state === 'success' ? 'success' : st.state === 'pending' ? 'pending' : 'failure')
+      }
+      return [...byName].map(([name, conclusion]) => ({ name, conclusion }))
     }
     const readLabels = ({ pr, repo }) => JSON.parse(gh(['api', `${apiRepo(repo)}/issues/${pr}/labels`])).map(l => String(l.name))
     const closeIssue = (id, repo) => gh(withRepo(['issue', 'close', String(id), '--reason', 'completed'], repo))
@@ -253,6 +278,7 @@ export default defineAdapter({
       },
       readCheck,
       readCheckRun,
+      readCiChecks,
       readLabels,
       // The required check on the EXACT head sha (a commit status). A refused write is reported, not
       // thrown: a token without `repo:status` degrades to advisory (github-implementation.md).

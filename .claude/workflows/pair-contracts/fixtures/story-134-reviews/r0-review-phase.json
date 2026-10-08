@@ -1,0 +1,198 @@
+{
+  "skill": "review-phase",
+  "inputHead": "0fb67c7e51c9c97ae6481e0ce71cbe67975cbecb",
+  "mode": "first",
+  "tier": "risk:red",
+  "tierSource": "classified",
+  "passes": [
+    "general",
+    "security",
+    "boundary",
+    "architecture",
+    "adversarial"
+  ],
+  "reviewedHead": "0fb67c7e51c9c97ae6481e0ce71cbe67975cbecb",
+  "verdict": "CHANGES-REQUESTED",
+  "findings": [
+    {
+      "id": "r0-1",
+      "location": "apps/pair-cli/src/registry/operations.ts:385-386; apps/pair-cli/src/registry/atomic-target.ts:134",
+      "severity": "Major",
+      "kind": "defect",
+      "transition": "open",
+      "blocking": true,
+      "description": "A concurrent run aborts with ENOENT while the other run's swap has moved the target aside. postCopyOps does exists(target) then stat(target), and copyTree's seed readdir runs on a subtree that has just been renamed away. The registry is reported failed and the install exits 1, which violates AC9 ('does not abort'). The PR's concurrent-install.sh smoke flaked once in 13 runs: '[2/7] knowledge ✗ ENOENT: no such file or directory, stat .../concurrent-install/.pair/knowledge'.",
+      "recommendation": "Treat a target that disappears mid-read as a lost race: re-check and retry the seed and the post-copy stat once (or seed from the aside), never error. VERIFY: unit probes (fs.exists / fs.readdir spy that renames the target aside) plus 20 consecutive concurrent-install.sh runs; ORACLE: AC9; ASSERT: both runs exit 0 or hit the 'already installed' precondition, and no ENOENT appears in either log.",
+      "failureScenario": {
+        "input": "two concurrent `pair install` into one project (scripts/smoke-tests/scenarios/concurrent-install.sh), or in-memory: fs.exists spied to rename /p/k aside after returning true, then postCopyOps(effectiveTarget=/p/k)",
+        "actual": "registry 'knowledge' failed: ENOENT stat .pair/knowledge; install exit 1 (smoke 1/13 FAIL); probe rejects 'no such file or directory /p/k'",
+        "expected": "no abort; last writer wins (AC9)"
+      }
+    },
+    {
+      "id": "r0-2",
+      "location": "apps/pair-cli/src/registry/atomic-target.ts:103-114",
+      "severity": "Questions",
+      "kind": "question",
+      "transition": "open",
+      "blocking": false,
+      "description": "Retry path: on a fresh target (asideTaken=false), a lost race followed by a non-race failure of the second rename(stage,target) leaves the target ABSENT. The other run's tree is left only in the 'raced' aside until a later invocation recovers it. The catch restores 'aside' but never 'raced'. Recorded as a Question because the trigger is a lost race plus EPERM on POSIX.",
+      "recommendation": "In the catch, if the target is absent, restore 'raced' (or 'aside'). VERIFY: rename mock throws ENOTEMPTY then EPERM on a fresh /p/t; ORACLE: AC3 'never neither'; ASSERT: /p/t exists after the rejection.",
+      "failureScenario": {
+        "input": "fresh /p; rename(stage,/p/t) throws ENOTEMPTY after another run wrote /p/t/other.md, then EPERM",
+        "actual": "/p/t absent; other run's tree only in /p/t.bak.tmp-<pid>-n",
+        "expected": "/p/t holds a complete tree"
+      }
+    },
+    {
+      "id": "r0-3",
+      "location": "apps/pair-cli/src/registry/atomic-target.test.ts:107",
+      "severity": "Minor",
+      "kind": "defect",
+      "transition": "open",
+      "blocking": true,
+      "description": "The AC1 unit test cannot fail. With writeDirAtomically mutated to populate(target) in place (no stage, no swap), 'two overlapping runs each leave one run end-to-end' still passes, because in-place writes also end with one.md == two.md. AC1 then rests only on the smoke scenario, which is flaky (r0-1).",
+      "recommendation": "Suspend run A's populate between its two writes while run B completes, then assert on the live target at that point and at the end. VERIFY: the in-place mutation; ORACLE: AC1; ASSERT: the test fails under the mutation and passes on the PR code.",
+      "reproducer": {
+        "testRef": "apps/pair-cli/src/registry/atomic-target.test.ts"
+      },
+      "failureScenario": {
+        "input": "writeDirAtomically body replaced by mkdir(target)+populate(target)",
+        "actual": "test passes",
+        "expected": "test fails"
+      }
+    },
+    {
+      "id": "r0-4",
+      "location": "apps/pair-cli/src/registry/atomic-target.ts:132 (with :61)",
+      "severity": "Minor",
+      "kind": "defect",
+      "transition": "open",
+      "blocking": true,
+      "description": "The stage is created with mkdir(stage,{recursive:true}), so a pre-existing directory (or a symlink, which is followed) is reused instead of failing. recoverTarget skips stages whose pid is alive, the current pid included. A crashed run's leftover stage under a reused pid (deterministic container pids) is therefore not swept, becomes the stage, and its stale files are swapped into the target. The story's risk table requires 'stage created with exclusive semantics; never followed through a symlink'.",
+      "recommendation": "Create the stage with a non-recursive mkdir (on EEXIST pick the next suffix), or remove any pre-existing path with that name before use. VERIFY: unit probe; ORACLE: story risk-table mitigation plus 'same files written'; ASSERT: stale.md is absent from the target after the run.",
+      "failureScenario": {
+        "input": "createTestFs({'/p/t/a.md':'a','/p/t.tmp-<process.pid>-0/stale.md':'from a crashed run'}); writeDirAtomically('/p/t', fs, noop)",
+        "actual": "/p/t/stale.md === 'from a crashed run'",
+        "expected": "/p/t/stale.md undefined"
+      }
+    }
+  ],
+  "acAssessment": [
+    {
+      "ac": "AC1",
+      "tests": [
+        "atomic-target.test.ts > two overlapping runs each leave one run end-to-end",
+        "scripts/smoke-tests/scenarios/concurrent-install.sh"
+      ],
+      "assessment": "weak",
+      "findingId": "r0-3"
+    },
+    {
+      "ac": "AC2",
+      "tests": [
+        "atomic-target.test.ts > recoverTarget (AC2) suite"
+      ],
+      "assessment": "proven"
+    },
+    {
+      "ac": "AC3",
+      "tests": [
+        "atomic-target.test.ts > AC3: cleanup + re-copy is invisible half-way",
+        "atomic-target.test.ts > observer between cleanup and re-copy sees the complete PRE state"
+      ],
+      "assessment": "proven"
+    },
+    {
+      "ac": "AC4",
+      "tests": [
+        "atomic-target.test.ts > AC4: add registry is never staged or swapped"
+      ],
+      "assessment": "proven"
+    },
+    {
+      "ac": "AC5",
+      "tests": [
+        "atomic-target.test.ts > AC5 (x2)"
+      ],
+      "assessment": "proven"
+    },
+    {
+      "ac": "AC6",
+      "tests": [
+        "atomic-target.test.ts > writeFileAtomically (AC6) suite",
+        "AC6 registry tests (x2)"
+      ],
+      "assessment": "proven"
+    },
+    {
+      "ac": "AC7",
+      "tests": [
+        "atomic-target.test.ts > real filesystem (AC7) x2"
+      ],
+      "assessment": "proven"
+    },
+    {
+      "ac": "AC8",
+      "tests": [
+        "scripts/smoke-tests/scenarios/concurrent-install.sh (CI_TESTS)"
+      ],
+      "assessment": "proven"
+    },
+    {
+      "ac": "AC9",
+      "tests": [
+        "scripts/smoke-tests/scenarios/concurrent-install.sh"
+      ],
+      "assessment": "proven",
+      "findingId": "r0-1"
+    }
+  ],
+  "scopeChanges": [],
+  "custody": {
+    "verified": true,
+    "contractBreach": false,
+    "breaches": [],
+    "contract": "none"
+  },
+  "readiness": {
+    "ready": false,
+    "remoteHead": "0fb67c7e51c9c97ae6481e0ce71cbe67975cbecb"
+  },
+  "attempt": 1,
+  "reviewer": 1,
+  "partial": false,
+  "published": {
+    "firstReview": true,
+    "escalation": false,
+    "scopeDecisionPacket": false
+  },
+  "gates": {
+    "command": "pnpm quality-gate",
+    "identity": "head:0fb67c7e51c9c97ae6481e0ce71cbe67975cbecb",
+    "exitCode": 0
+  },
+  "inputsDigest": "6cf7f468a451c732",
+  "acHash": "sha256:f406c6222c0fdaa1ce14f1186c3834a3fe06c85106091fc2e67441207c2e3a32",
+  "severityRanks": {
+    "Critical": 4,
+    "Major": 3,
+    "Minor": 2,
+    "Questions": 1
+  },
+  "elapsedMs": 1200000,
+  "run": "story-134",
+  "story": "134",
+  "phase": "r0",
+  "pr": 534,
+  "acHashSource": "publish",
+  "schemaVersion": 3,
+  "workflowVersion": "4.0.1",
+  "seq": 2,
+  "createdAt": "2026-10-06T12:54:15.771Z",
+  "predecessor": "a0-implement-phase",
+  "workflowProfile": {
+    "name": "KB default",
+    "hash": "66ce0ad62074d14bbb720bc881ab980117412588f33d53c161853d89f1b9c1d0"
+  }
+}

@@ -834,6 +834,23 @@ test('TC-10: a dead step (null or an unusable shape) is retried ONCE with the sa
   assert.equal(deadImpl.result.batch[0].status, 'failed-implement')
 })
 
+test('AH/B1: a stage agent that NEVER returns is bounded — and NEVER re-dispatched (a timed-out agent is not cancelled: a retry would be a second writer on the same worktree); the stage is failed-<stage> with a human-check reason', async () => {
+  const never = () => new Promise(() => {})
+  let implementerCalls = 0
+  const hung = await runWorkflow({ args: { cards: [STORY], agentTimeoutMinutes: 0.0003 }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-implementer' ? (implementerCalls++, never()) : {}) })
+  assert.equal(implementerCalls, 1, 'exactly ONE dispatch — no retry after a timeout')
+  assert.equal(hung.result.batch[0].status, 'failed-implement')
+  assert.match(hung.result.batch[0].reason, /timed out after .*m — the agent may still be running; human check required/)
+  assert.ok(hung.logs.some(l => /timeout after/.test(l)))
+})
+
+test('AH/B6: `agentTimeoutMinutes` is read from the PARSED args — a JSON-string args works like an object', async () => {
+  let implementerCalls = 0
+  const hung = await runWorkflow({ args: JSON.stringify({ cards: [STORY], agentTimeoutMinutes: 0.0003 }), dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-implementer' ? (implementerCalls++, new Promise(() => {})) : {}) })
+  assert.equal(implementerCalls, 1)
+  assert.equal(hung.result.batch[0].status, 'failed-implement')
+})
+
 test('TC-10 / TC-08: a verified contract that was not sealed, or sealed under a different hash, is failed-seal — the trusted state is never blessed by a new hash', async () => {
   const unsealed = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-red-contract-verifier' ? { verified: true, findings: [], sealed: false, reason: 'head-not-base' } : {}) })
   assert.equal(unsealed.result.batch[0].status, 'failed-seal')

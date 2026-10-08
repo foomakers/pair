@@ -116,6 +116,36 @@ function trailerBlockOf(body, cwd) {
   return r.status === 0 ? r.stdout : ''
 }
 
+
+// `mode: doc` (maintainer decision 2026-10-06): a PROSE-only remediation group. Its contract is a scope + an acceptance
+// checklist, never executable tests: every allowedPaths entry is a Markdown/text file or a directory of them, the
+// checklist quotes what the text must state per finding against its authority, and the snapshot is the contract alone.
+const PROSE_RE = /\.(md|mdx|markdown|txt|rst|adoc)$/i
+const docPathErrors = scope => {
+  const errs = []
+  if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length === 0) return ['fixScope.allowedPaths must be a non-empty array']
+  for (const p of scope.allowedPaths) {
+    if (typeof p !== 'string') errs.push(`fixScope.allowedPaths has an invalid path: ${JSON.stringify(p)}`)
+    else if (!p.endsWith('/') && !PROSE_RE.test(p)) errs.push(`fixScope.allowedPaths for mode doc must be prose files (.md/.mdx/.txt…) or directories, not code: ${p}`)
+  }
+  return errs
+}
+const docChecklistErrors = c => {
+  const errs = []
+  if (c.redTests !== undefined && !(Array.isArray(c.redTests) && c.redTests.length === 0)) errs.push('a doc group never carries executable tests (redTests) — a finding that touches behaviour stays behavioral')
+  if (!Array.isArray(c.checklist) || c.checklist.length === 0) return [...errs, 'checklist must be a non-empty array for mode doc']
+  const ids = new Set()
+  for (const [i, item] of c.checklist.entries()) {
+    const id = String(item?.id ?? '').trim()
+    if (!id) errs.push(`checklist[${i}].id is required`)
+    else if (ids.has(id)) errs.push(`checklist[${i}].id is listed twice: ${id}`)
+    else ids.add(id)
+    for (const k of ['finding', 'requirement', 'authority']) if (!String(item?.[k] ?? '').trim()) errs.push(`checklist[${i}].${k} is required`)
+  }
+  return errs
+}
+const isDocContract = c => c?.fixScope?.mode === 'doc'
+
 // ── Contract shape (the RED author's return value, persisted as the manifest) ──────────────
 export function contractErrors(c) {
   const errs = []
@@ -124,14 +154,16 @@ export function contractErrors(c) {
   if (!scope || typeof scope !== 'object') errs.push('fixScope missing')
   else {
     if (!String(scope.owner ?? '').trim()) errs.push('fixScope.owner missing')
-    if (!['behavioral', 'structural', 'test'].includes(scope.mode)) errs.push('fixScope.mode must be behavioral | structural | test')
+    if (!['behavioral', 'structural', 'test', 'doc'].includes(scope.mode)) errs.push('fixScope.mode must be behavioral | structural | test | doc')
     // A `test` scope repairs a guard: it declares NO production paths, and verify treats any
     // production change after the seal as a breach.
     if (scope.mode === 'test') {
       if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length !== 0) errs.push('fixScope.allowedPaths must be an empty array for mode test')
     } else if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length === 0) errs.push('fixScope.allowedPaths must be a non-empty array')
     else for (const p of scope.allowedPaths) if (!isRelPath(p)) errs.push(`fixScope.allowedPaths has an invalid path: ${JSON.stringify(p)}`)
+    if (scope.mode === 'doc') errs.push(...docPathErrors(scope))
   }
+  if (isDocContract(c)) return [...errs, ...docChecklistErrors(c)]
   if (c.testExempt === true) {
     if (!String(c.exemptionRationale ?? '').trim()) errs.push('testExempt requires exemptionRationale')
     return errs
@@ -198,10 +230,10 @@ export function contractErrors(c) {
 }
 
 export const artifactBaseline = a => String(a?.baseline ?? 'red')
-export const artifactPaths = c => (c.testExempt === true ? [] : c.redTests.map(a => a.file))
+export const artifactPaths = c => (c.testExempt === true || isDocContract(c) ? [] : c.redTests.map(a => a.file))
 // Artifacts the seal requires to have CHANGED at the base: red witnesses. A `pass` control is an
 // already-correct test and may be sealed unchanged.
-export const witnessPaths = c => (c.testExempt === true ? [] : c.redTests.filter(a => artifactBaseline(a) === 'red').map(a => a.file))
+export const witnessPaths = c => (c.testExempt === true || isDocContract(c) ? [] : c.redTests.filter(a => artifactBaseline(a) === 'red').map(a => a.file))
 
 // ── scope inheritance ──────────────────────────────────────────────────────────────────────
 // A repair or a revision (`<stem>-rev<m>`) re-contracts the SAME obligation: it inherits the
@@ -314,7 +346,7 @@ export function sealedContracts(cwd) {
   }
   return out
 }
-const testArtifacts = c => (c.testExempt === true ? [] : c.redTests.filter(a => (a?.kind ?? 'test') === 'test'))
+const testArtifacts = c => (c.testExempt === true || isDocContract(c) ? [] : c.redTests.filter(a => (a?.kind ?? 'test') === 'test'))
 const rowMentions = (row, file) => {
   const base = basename(file)
   return Object.values(row ?? {}).some(v => (Array.isArray(v) ? v : [v]).some(x => typeof x === 'string' && (x.includes(file) || x.includes(base))))
@@ -325,7 +357,7 @@ export function changedRowsErrors({ prev, contract, cwd }) {
   const changed = new Set(Array.isArray(contract.changedRows) ? contract.changedRows : [])
   const prevListed = new Map((prev.contract?.redTests ?? []).map(a => [a.file, a]))
   const changedRows = (contract.matrix ?? []).filter(r => changed.has(r?.id))
-  for (const a of contract.testExempt === true ? [] : contract.redTests) {
+  for (const a of contract.testExempt === true || isDocContract(contract) ? [] : contract.redTests) {
     if (!prevListed.has(a.file)) continue
     const atPrev = git(['rev-parse', '--verify', '-q', `${prev.sha}:${a.file}`], cwd, { allowFail: true })
     const now = existsSync(join(cwd, a.file)) ? git(['hash-object', a.file], cwd) : null
@@ -517,6 +549,39 @@ export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, he
 const inScope = (path, allowed) =>
   allowed.some(a => (a.endsWith('/') ? path.startsWith(a) : path === a || path.startsWith(`${a}/`)))
 
+/**
+ * Publishes a sealed snapshot to the story branch. `green-fix` normally pushes the seal with its GREEN commit, but a
+ * sealed `mode: test` group has no green step (the sealed tests ARE the fix), so the seal would stay a local commit
+ * and the final verifier's custody check would breach `snapshot-missing`. The stage that owns the seal (red-verify)
+ * therefore pushes it: a plain, never-forced push of the snapshot commit to `refs/heads/<branch>`, read back with
+ * `ls-remote`. Already on the remote ⇒ `pushed: true`; a diverged or rejected branch ⇒ a typed refusal, never a force.
+ */
+export function pushSnapshot({ snapshot, branch, cwd, remote = 'origin' }) {
+  if (!/^[0-9a-f]{40}$/.test(String(snapshot ?? ''))) return { pushed: false, reason: 'snapshot-invalid' }
+  if (!/^[A-Za-z0-9._/#-]+$/.test(String(branch ?? ''))) return { pushed: false, reason: 'branch-invalid' }
+  if (git(['cat-file', '-e', `${snapshot}^{commit}`], cwd, { allowFail: true }) === null) return { pushed: false, reason: 'snapshot-not-found' }
+  const remoteHeadOf = () => (git(['ls-remote', '--heads', remote, `refs/heads/${branch}`], cwd, { allowFail: true }) ?? '').split(/\s+/)[0] || undefined
+  // The transient manifest is never pushed: the repository's own pre-push hygiene gate rejects a tracked
+  // `.pair/red-snapshots/*.json`. `green-fix` removes it in its GREEN commit; a `mode: test` group has no green, so the
+  // same removal commit is made here — directly on top of the seal, touching ONLY the manifest — and the verify-chain
+  // already allows it (the snapshot stays an ancestor; a manifest path is never a "PR change").
+  const trailer = (git(['log', '-1', '--format=%B', snapshot], cwd, { allowFail: true }) ?? '').split('\n').map(l => SNAP_TRAILER_RE.exec(l)).find(Boolean)
+  const manifest = trailer?.[4]
+  let removedManifest = false
+  if (manifest && git(['ls-files', '--error-unmatch', '--', manifest], cwd, { allowFail: true }) !== null) {
+    git(['rm', '-q', '--', manifest], cwd)
+    git(['commit', '-q', '--no-verify', '-m', `chore: remove the transient RED manifest (${trailer[2]}, phase ${trailer[3]})`], cwd)
+    removedManifest = true
+  }
+  const outputHead = git(['rev-parse', 'HEAD'], cwd)
+  if (remoteHeadOf() === outputHead) return { pushed: true, snapshot, outputHead, remoteHead: outputHead, removedManifest }
+  // A plain push — never `--no-verify`, never forced: the repository's own gates run.
+  const r = spawnSync('git', ['push', remote, `HEAD:refs/heads/${branch}`], { cwd, encoding: 'utf8', env: cleanGitEnv() })
+  if (r.status !== 0) return { pushed: false, reason: 'push-rejected', snapshot, outputHead, removedManifest, detail: r.stderr.trim().split('\n').slice(-3).join(' | ') }
+  const remoteHead = remoteHeadOf()
+  return remoteHead === outputHead ? { pushed: true, snapshot, outputHead, remoteHead, removedManifest } : { pushed: false, reason: 'push-not-confirmed', snapshot, outputHead, remoteHead, removedManifest }
+}
+
 export function verify({ pr, phase, base, cwd }) {
   const breaches = []
   const breach = (code, extra = {}) => breaches.push({ code, ...extra })
@@ -578,6 +643,9 @@ export function verify({ pr, phase, base, cwd }) {
     for (const { status, path } of after) {
       if (isTestPath(path)) continue
       if (mode === 'test') breach('test-mode-production-change', { path, status })
+      // A doc segment admits PROSE only, by extension — whatever directory its scope names (a directory entry would otherwise let
+      // `skills/x/scripts/run.mjs` change without a breach).
+      else if (mode === 'doc' && !PROSE_RE.test(path)) breach('doc-code-change', { path, status })
       else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path })
       else if (mode === 'behavioral' && status !== 'M' && isModulePath(path)) breach('behavioral-adds-or-moves-module', { path, status })
     }
@@ -871,6 +939,7 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [],
       if (!c.contract?.fixScope) continue
       const { allowedPaths, mode } = c.contract.fixScope
       if (mode === 'test') breach('test-mode-production-change', { path, status, segment: c.phase })
+      else if (mode === 'doc' && !PROSE_RE.test(path)) breach('doc-code-change', { path, status, segment: c.phase })
       else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path, segment: c.phase })
       else if (mode === 'behavioral' && status !== 'M' && isModulePath(path)) breach('behavioral-adds-or-moves-module', { path, status, segment: c.phase })
     }
@@ -920,12 +989,17 @@ if (isMain()) {
   try {
     const { cmd, opts } = parseCli(process.argv.slice(2))
     // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
-    const FLAGS = { 'verify-chain': ['pr', 'base', 'cwd', 'contract-expected', 'run-dir', 'base-ref'], seal: ['pr', 'phase', 'base', 'cwd', 'contract', 'root', 'static-gates'], verify: ['pr', 'phase', 'base', 'cwd'] }
+    const FLAGS = { 'verify-chain': ['pr', 'base', 'cwd', 'contract-expected', 'run-dir', 'base-ref'], seal: ['pr', 'phase', 'base', 'cwd', 'contract', 'root', 'static-gates'], push: ['snapshot', 'branch', 'cwd'], verify: ['pr', 'phase', 'base', 'cwd'] }
     if (FLAGS[cmd]) {
       const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
       if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
     }
     const cwd = opts.cwd ?? process.cwd()
+    if (cmd === 'push') {
+      const out = pushSnapshot({ snapshot: opts.snapshot, branch: opts.branch, cwd: opts.cwd ?? process.cwd() })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.pushed ? 0 : 1)
+    }
     const common = { pr: opts.pr, phase: opts.phase, base: opts.base, cwd }
     for (const k of cmd === 'verify-chain' ? ['pr', 'base'] : ['pr', 'phase', 'base']) if (!opts[k]) throw new Error(`--${k} is required`)
     if (!/^\d+$/.test(String(opts.pr))) throw new Error(`--pr must be a number, got ${JSON.stringify(opts.pr)}`)
@@ -958,7 +1032,7 @@ if (isMain()) {
       out = verify(common)
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.verified ? 0 : 1)
-    } else throw new Error(`unknown command: ${cmd} (expected seal | verify | verify-chain)`)
+    } else throw new Error(`unknown command: ${cmd} (expected seal | verify | verify-chain | push)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)

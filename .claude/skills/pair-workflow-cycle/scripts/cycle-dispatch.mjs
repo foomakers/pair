@@ -381,7 +381,10 @@ function packetCommand(opts) {
   // into `$policy` — REPLACING a declared floor, no conflict error, still never a severity list.
   // With no flag the policy is rendered VERBATIM: the default floor is never stamped into it (a
   // project that declared none keeps declaring none).
-  const declaredPolicy = JSON.parse(opts.policy ?? '{}')
+  // Autonomy (and the card labels it reads) belong to the coordinator's own `resolve` ONLY: a stage's Step 0 resolve
+  // reads this `$policy` with no `--labels`, so an `autonomy` key rendered here makes it escalate `labels-unreadable`
+  // (a fail-safe, nothing implemented). Stripped even when the caller reused its resolve policy object.
+  const { autonomy: _coordinatorOnly, ...declaredPolicy } = JSON.parse(opts.policy ?? '{}')
   // r1-4: the retired `policy.blockingSeverities` (a severity LIST) is refused HERE too — the same
   // reason `publish` refuses it — never silently rendered into a stage's own `$policy`.
   must(!Object.prototype.hasOwnProperty.call(declaredPolicy, 'blockingSeverities'), 'policy-legacy-blocking-severities', '`policy.blockingSeverities` is retired — declare `policy.blockingFloor` (a single severity), never a list')

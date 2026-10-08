@@ -132,3 +132,34 @@ test('US-506 T-8: the batch engine spells the guardrail byte-identically — the
   assert.equal(constOf(batchSrc), constOf(dispatchSrc))
   assert.match(batchSrc, /Do NOT merge\. \$\{BOUNDED_COMMANDS\}`/)
 })
+
+// S: autonomy (and labels) belong to the coordinator's `resolve` ONLY. A stage's own Step 0 resolve reads the
+// packet's `$policy` and passes NO `--labels`, so an autonomy policy rendered into it escalates `labels-unreadable`
+// (live #134) — nothing implemented. The packet therefore never renders `autonomy`, whatever `--policy` carried.
+test('S: a packet rendered from an autonomy policy carries no autonomy, so the stage Step 0 resolve does not escalate labels-unreadable', async () => {
+  const { resolvePolicy } = await import(join(SCRIPTS, 'autonomy-policy.mjs'))
+  const { policy: autonomy } = resolvePolicy({ args: { until: 'merged', merge: 'when; has: risk:red', prepare: 'when; has: risk:red' } })
+  const declared = { blockingFloor: 'major', deadDispatchRetries: 1, autonomy }
+  const r = spawnSync(process.execPath, [join(SCRIPTS, 'cycle-dispatch.mjs'), 'packet', '--next', PREPARE, '--card', CARD, '--run', 'story-135', '--workflow-version', '4.0.1', '--policy', JSON.stringify(declared), '--style', 'instruction'], { encoding: 'utf8' })
+  assert.equal(r.status, 0, r.stderr)
+  const { prompt } = JSON.parse(r.stdout)
+  const rendered = /\$policy=(\{.*?\})(?:\s\$|\s|$)/.exec(prompt)
+  assert.ok(rendered, 'the packet renders $policy')
+  const stagePolicy = JSON.parse(rendered[1])
+  assert.equal('autonomy' in stagePolicy, false)
+  assert.equal(stagePolicy.blockingFloor, 'major')
+  assert.equal(stagePolicy.deadDispatchRetries, 1)
+
+  // the stage's own Step 0: resolve with the packet's policy and no --labels
+  const root = mkdtempSync(join(tmpdir(), 'packet-s-'))
+  const dir = join(root, '.pair', 'working', 'runs', 'story-135', '135')
+  mkdirSync(dir, { recursive: true })
+  const resolveWith = policy => JSON.parse(spawnSync(process.execPath, [join(SCRIPTS, 'cycle-state.mjs'), 'resolve', '--dir', dir, '--workflowVersion', '4.0.1', '--policy', JSON.stringify(policy), '--entry', 'pr', '--pr', '7', '--story', '135', '--runsRoot', join(root, '.pair', 'working', 'runs')], { encoding: 'utf8' }).stdout)
+  try {
+    const out = resolveWith(stagePolicy)
+    assert.notEqual(out.status, 'escalated')
+    assert.notDeepEqual(out.next?.conditions, ['labels-unreadable'])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})

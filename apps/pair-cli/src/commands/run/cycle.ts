@@ -8,6 +8,7 @@
  * Zero merit logic here (D18/BR1): the loop never judges a stage's CONTENT, it only reacts to
  * `resolve`'s own `next` and to whether the handoff it reads back advanced.
  */
+import type { StageFinalResult } from './stream-reader'
 
 /** What `resolve()` answered — the durable cycle state's own shape, read verbatim. */
 export interface CycleResolveResult {
@@ -30,6 +31,8 @@ export interface CycleStageResult {
   readonly detail?: string
   /** US-506 T-8 (AC12): the stage made no progress within its time bound and was stopped. */
   readonly stalled?: true
+  /** The stage's own final JSON result (`status`, `reason`, `next`), when the stream carried one. */
+  readonly final?: StageFinalResult
 }
 
 /** One dispatched stage, as logged to `onStage`/`appendAudit` once the NEXT resolve reveals whether it advanced. */
@@ -40,6 +43,7 @@ export interface CycleStageRecord {
   readonly detail?: string
   readonly handoffAdvanced: boolean
   readonly stalled?: true
+  readonly final?: StageFinalResult
 }
 
 /** A `next` resolve actually answered — every dispatch and every stage record is keyed by one. */
@@ -67,6 +71,8 @@ export interface CycleOutcome {
   readonly merge?: unknown
   /** US-521: the escalation comment's own answer (`{ posted, error? }`), relayed verbatim. */
   readonly escalation?: unknown
+  /** The stage's own reason when it deliberately stopped the card (`failed`/`blocked` final result). */
+  readonly reason?: string
 }
 
 export interface CyclePolicy {
@@ -156,7 +162,52 @@ function buildStageRecord(
     ...(dispatchedResult.detail !== undefined && { detail: dispatchedResult.detail }),
     handoffAdvanced,
     ...(dispatchedResult.stalled === true && { stalled: true as const }),
+    ...(dispatchedResult.final !== undefined && { final: dispatchedResult.final }),
   }
+}
+
+/** The one reason a stage reports for PARTIAL progress it can resume from (`implement-phase`'s `incomplete`). */
+const RESUMABLE_REASON = 'incomplete'
+
+/**
+ * A stage that said `next.step: blocked`, or `failed` with an explicit non-resumable reason, did not die — it stopped on
+ * purpose. `failed` + `incomplete` is the opposite: partial progress, resumable, so it goes through the dead-dispatch budget.
+ */
+function deliberateStop(final: StageFinalResult | undefined): string | undefined {
+  if (final === undefined) return undefined
+  const blocked = final.next?.step === 'blocked'
+  const failedOnPurpose =
+    final.status === 'failed' && final.reason !== undefined && final.reason !== RESUMABLE_REASON
+  if (!blocked && !failedOnPurpose) return undefined
+  return final.reason ?? 'blocked'
+}
+
+function noticeStallResume(
+  record: CycleStageRecord,
+  retryCount: number,
+  deadDispatchRetries: number,
+  observers: StageObservers,
+): void {
+  if (record.stalled !== true) return
+  observers.onNotice?.(
+    `Stage ${record.step}${record.phase ? `:${record.phase}` : ''} stalled (${record.detail ?? 'no progress'}) — ` +
+      'resumed fresh: a process realization cannot resume a session (ADR-021 §2); ' +
+      `retry ${retryCount} of ${deadDispatchRetries}.`,
+  )
+}
+
+function deliberateOutcome(
+  state: LoopState,
+  next: CycleNext,
+  record: CycleStageRecord,
+  observers: StageObservers,
+): CycleOutcome | null {
+  const reason = deliberateStop(record.final)
+  if (reason === undefined) return null
+  observers.onNotice?.(
+    `Stage ${record.step}${record.phase ? `:${record.phase}` : ''} stopped the card: ${reason} — not retried.`,
+  )
+  return { status: `failed-${record.step}`, stagesRun: state.stagesRun, next, reason }
 }
 
 interface StageObservers {
@@ -186,18 +237,15 @@ function settlePreviousDispatch(
     state.retryCount = 0
     return null
   }
+  const deliberate = deliberateOutcome(state, next, record, observers)
+  if (deliberate !== null) return deliberate
   if (state.retryCount >= deadDispatchRetries) {
     return { status: `failed-${state.dispatchedNext.step}`, stagesRun: state.stagesRun, next }
   }
   state.retryCount += 1
   // US-506 T-8 (AC12): a stall is resumed within the SAME budget as a dead dispatch. A process
   // realization has no session to resume, so the resume is a fresh dispatch of the same step.
-  if (record.stalled === true)
-    observers.onNotice?.(
-      `Stage ${record.step}${record.phase ? `:${record.phase}` : ''} stalled (${record.detail ?? 'no progress'}) — ` +
-        'resumed fresh: a process realization cannot resume a session (ADR-021 §2); ' +
-        `retry ${state.retryCount} of ${deadDispatchRetries}.`,
-    )
+  noticeStallResume(record, state.retryCount, deadDispatchRetries, observers)
   return null
 }
 

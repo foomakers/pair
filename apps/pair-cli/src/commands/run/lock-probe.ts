@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from 'fs'
+import { livenessOf } from './lock-holder'
 import { join } from 'path'
 import { LOCK_DIRECTORY, type CardLockRequest } from './card-lock'
 import { resourceLockId } from './parallel'
@@ -14,15 +15,31 @@ import type { RootCandidate } from './root-plan'
 
 export type LockProbe =
   | { readonly kind: 'free' }
-  | { readonly kind: 'held'; readonly path: string; readonly since?: string }
+  /** The holder pid is dead on this host: reclaimable by whoever acquires it next. */
+  | { readonly kind: 'stale'; readonly path: string; readonly pid: number }
+  | {
+      readonly kind: 'held'
+      readonly path: string
+      readonly since?: string
+      readonly pid?: number
+      readonly alive?: boolean
+    }
 
 export type ResourceLockProbe =
   | { readonly kind: 'free' }
+  | {
+      readonly kind: 'stale'
+      readonly resource: string
+      readonly path: string
+      readonly pid: number
+    }
   | {
       readonly kind: 'held'
       readonly resource: string
       readonly path: string
       readonly since?: string
+      readonly pid?: number
+      readonly alive?: boolean
     }
 
 export function probeCardLock({ workingArea, card }: CardLockRequest): LockProbe {
@@ -42,7 +59,7 @@ export function probeResourceLocks(input: {
 }): ResourceLockProbe {
   for (const resource of new Set(input.card.mutexResources)) {
     const probe = probePath(join(input.workingArea, LOCK_DIRECTORY, resourceLockId(resource)))
-    if (probe.kind === 'held') return { ...probe, resource }
+    if (probe.kind === 'held' || probe.kind === 'stale') return { ...probe, resource }
   }
   return { kind: 'free' }
 }
@@ -59,8 +76,16 @@ function probePath(path: string): LockProbe {
   if (!stats.isDirectory()) {
     throw new Error(`Lock path ${path} exists but is not a directory: the working area is broken`)
   }
+  const liveness = livenessOf(path)
+  if (liveness.state === 'dead') return { kind: 'stale', path, pid: liveness.pid }
   const since = heldSince(path)
-  return { kind: 'held', path, ...(since !== undefined && { since }) }
+  return {
+    kind: 'held',
+    path,
+    ...(since !== undefined && { since }),
+    ...(liveness.pid !== undefined && { pid: liveness.pid }),
+    ...(liveness.state === 'alive' && { alive: true }),
+  }
 }
 
 /** Best-effort, as in `card-lock.ts`: an unreadable note means age unknown, never free. */

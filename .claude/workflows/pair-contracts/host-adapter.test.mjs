@@ -1774,3 +1774,33 @@ test('r2-3-d: the concludeCheck row does not claim azure-devops.mjs posts on wha
   assert.match(row, /azure-devops\.mjs.*iteration|iteration.*azure-devops\.mjs/i, `concludeCheck row does not describe azure-devops.mjs's iteration mapping for sha: ${row}`)
   assert.match(row, /published:\s*false|published: false/, `concludeCheck row does not state the published:false outcome for a sha that is not an iteration: ${row}`)
 })
+
+// ── AL: readCiChecks — the GitHub adapter (stubbed gh) ────────────────────────────────────────────────────────
+test('AL github readCiChecks: check runs + commit statuses on the head, mapped to success | failure | pending (neutral/skipped = success, cancelled/timed_out = failure, in flight = pending)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gh-ci-'))
+  const bin = join(dir, 'gh')
+  const runs = [
+    { name: 'build', status: 'completed', conclusion: 'failure', started_at: '2026-01-01T00:00:00Z' },
+    { name: 'build', status: 'completed', conclusion: 'success', started_at: '2025-12-31T00:00:00Z' },
+    { name: 'lint', status: 'completed', conclusion: 'neutral', started_at: '1' },
+    { name: 'docs', status: 'completed', conclusion: 'skipped', started_at: '1' },
+    { name: 'e2e', status: 'in_progress', conclusion: null, started_at: '1' },
+    { name: 'unit', status: 'completed', conclusion: 'timed_out', started_at: '1' },
+  ]
+  const statuses = [{ context: 'ci/legacy', state: 'success' }, { context: 'ci/other', state: 'error' }, { context: 'ci/queued', state: 'pending' }]
+  writeFileSync(join(dir, 'data.json'), JSON.stringify({ runs, statuses }))
+  writeFileSync(bin, `#!/usr/bin/env node
+const fs = require('fs')
+const a = process.argv.slice(2)
+const d = JSON.parse(fs.readFileSync(${JSON.stringify(join(dir, 'data.json'))}, 'utf8'))
+const url = a.find(x => /^repos[/]|[/]commits[/]/.test(x)) || ''
+// --paginate prints ONE JSON document per page, concatenated: check runs and statuses are spread over two pages
+if (a[0] === 'api' && /check-runs/.test(url)) { const h = Math.ceil(d.runs.length / 2); process.stdout.write(JSON.stringify({ check_runs: d.runs.slice(0, h) }) + JSON.stringify({ check_runs: d.runs.slice(h) })); process.exit(0) }
+if (a[0] === 'api' && /[/]status([?]|$)/.test(url)) { process.stdout.write(JSON.stringify({ statuses: d.statuses.slice(0, 1) }) + JSON.stringify({ statuses: d.statuses.slice(1) })); process.exit(0) }
+process.stderr.write('unexpected gh call: ' + a.join(' '))
+process.exit(3)
+`)
+  chmodSync(bin, 0o755)
+  const out = Object.fromEntries(github.instantiate({ ghBin: bin }).readCiChecks({ sha: 'a'.repeat(40), repo: 'o/r' }).map(c => [c.name, c.conclusion]))
+  assert.deepEqual(out, { build: 'failure', lint: 'success', docs: 'success', e2e: 'pending', unit: 'failure', 'ci/legacy': 'success', 'ci/other': 'failure', 'ci/queued': 'pending' })
+})

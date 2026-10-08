@@ -1,0 +1,137 @@
+{
+  "skill": "review-phase",
+  "run": "story-134",
+  "story": "134",
+  "phase": "r2",
+  "pr": 534,
+  "inputHead": "26b2096730e620607c6f9f3891b1903204adad4e",
+  "mode": "re-review",
+  "tier": "risk:red",
+  "tierSource": "classified",
+  "passes": [
+    "general",
+    "security",
+    "boundary",
+    "architecture",
+    "adversarial"
+  ],
+  "reviewedHead": "4d128eb9bf7f8cbe3dfea9aad8766b2329e672c8",
+  "verdict": "APPROVED",
+  "remediationBatchId": "r2",
+  "findings": [
+    {
+      "id": "r0-1",
+      "location": "apps/pair-cli/src/registry/atomic-target.ts:154-164; apps/pair-cli/src/registry/operations.ts:385-394; apps/pair-cli/src/registry/skill-refs.ts:40-61",
+      "severity": "Major",
+      "kind": "defect",
+      "transition": "resolved",
+      "blocking": false,
+      "description": "Resolved on 26b20967. seedStage restarts from a fresh stage on ENOENT, postCopyOps treats a stat ENOENT as a lost race, and skill-refs list/read are ENOENT-tolerant. The sealed r1-g1 witnesses pass (atomic-target-race.test.ts). Re-run here: concurrent-install.sh 21/21 green, and 50 concurrent full-dataset installs, both runs exit 0, no ENOENT.",
+      "recommendation": "None. VERIFY: atomic-target-race.test.ts plus concurrent-install.sh x20; ORACLE: AC9; ASSERT: 0 failures (observed).",
+      "failureScenario": {
+        "input": "two concurrent pair install into one project",
+        "actual": "registry failed ENOENT stat (r0)",
+        "expected": "no abort"
+      }
+    },
+    {
+      "id": "r0-2",
+      "location": "apps/pair-cli/src/registry/atomic-target.ts:106-119",
+      "severity": "Questions",
+      "kind": "question",
+      "transition": "open",
+      "blocking": false,
+      "description": "Unchanged by r2 (delta does not touch atomic-target.ts); carried as a question, non-blocking. On a fresh target, a lost race followed by a non-race failure of the second rename(stage,target) leaves the target absent: the other run's tree remains only in the 'raced' aside until a later invocation recovers it.",
+      "recommendation": "Optional: in the catch, restore 'raced' when the target is absent. VERIFY: rename mock throws ENOTEMPTY then EPERM on a fresh /p/t; ORACLE: AC3; ASSERT: /p/t exists after the rejection."
+    },
+    {
+      "id": "r0-3",
+      "location": "apps/pair-cli/src/registry/atomic-target.test.ts:107-135",
+      "severity": "Minor",
+      "kind": "defect",
+      "transition": "resolved",
+      "blocking": false,
+      "description": "Resolved. The AC1 test now suspends run A mid-populate and asserts the live target, before and after run B. Mutation probe re-run here: writeDirAtomically replaced by mkdir(target)+populate(target) makes the test fail (AssertionError, one: 'A' vs undefined). It passes on the head.",
+      "recommendation": "None. VERIFY: in-place mutation; ORACLE: AC1; ASSERT: the test fails under the mutation (observed).",
+      "reproducer": {
+        "testRef": "apps/pair-cli/src/registry/atomic-target.test.ts"
+      }
+    },
+    {
+      "id": "r0-4",
+      "location": "apps/pair-cli/src/registry/atomic-target.ts:137-149,196",
+      "severity": "Minor",
+      "kind": "defect",
+      "transition": "resolved",
+      "blocking": false,
+      "description": "Resolved. createExclusiveStage uses a non-recursive mkdir (EEXIST -> next suffix), so a leftover directory or symlink at the stage name is never reused or followed. writeFileAtomically discards any pre-existing temp path. The W-r04-* witnesses pass.",
+      "recommendation": "None. VERIFY: atomic-target-race.test.ts r0-4 suite; ORACLE: story risk table; ASSERT: stale.md absent (observed).",
+      "failureScenario": {
+        "input": "leftover /p/t.tmp-<pid>-0/stale.md",
+        "actual": "stale.md swapped in (r0)",
+        "expected": "absent"
+      }
+    },
+    {
+      "id": "r1-5",
+      "location": "apps/pair-cli/src/registry/operations.ts:405-416 (createOrReplaceSymlink, reached from postCopyOps -> distributeToSecondaryTargets:396)",
+      "severity": "Minor",
+      "kind": "defect",
+      "transition": "resolved",
+      "blocking": false,
+      "missedUpstream": true,
+      "description": "Resolved on 4d128eb9. createOrReplaceSymlink now builds the link at a unique temp name (pid+time+random) and renames it over linkPath (POSIX-atomic, last-writer-wins); on rename failure the temp link is removed and the error rethrown, so a real directory at linkPath is never deleted. Sealed r2-g1 witnesses W-r15-unlink-enoent, W-r15-symlink-eexist, B-r15-dangling, W-r15-promise-all-x30, I-r15-postcopyops-x30 and controls C-r15-* pass on the head (symlink-race.test.ts 8/8). Independent cross-process probe of the same fs call sequence: 3 node processes x 300 replacements on one project: 900/900 ok, 0 EEXIST/ENOENT, final .github/skills -> ../.claude/skills, no leftover temp link.",
+      "recommendation": "None. VERIFY: symlink-race.test.ts + 3-process x300 probe; ORACLE: AC9; ASSERT: 0 rejections (observed).",
+      "failureScenario": {
+        "input": "real fs project with .claude/skills/x/SKILL.md and .github/skills -> ../.claude/skills; await Promise.all([distributeToSecondaryTargets(p), distributeToSecondaryTargets(p)]) with targets [{.claude/skills/, canonical}, {.github/skills/, symlink}]",
+        "actual": "one call rejects EEXIST (30/30 iterations); across two processes, EEXIST/ENOENT on about 50% of overlapping calls",
+        "expected": "both calls resolve; .github/skills is a valid link (AC9: no abort, last writer wins)"
+      },
+      "reproducer": {
+        "testRef": "apps/pair-cli/src/registry/symlink-race.test.ts"
+      }
+    }
+  ],
+  "scopeChanges": [],
+  "custody": {
+    "verified": true,
+    "contractBreach": false,
+    "breaches": []
+  },
+  "readiness": {
+    "ready": true,
+    "remoteHead": "4d128eb9bf7f8cbe3dfea9aad8766b2329e672c8"
+  },
+  "attempt": 1,
+  "reviewer": 1,
+  "partial": false,
+  "published": {
+    "firstReview": false,
+    "escalation": false,
+    "scopeDecisionPacket": false
+  },
+  "gates": {
+    "command": "pnpm quality-gate (root, includes turbo ts:check test lint); pnpm lint in apps/pair-cli",
+    "identity": "head:4d128eb9bf7f8cbe3dfea9aad8766b2329e672c8",
+    "exitCode": 0
+  },
+  "inputsDigest": "6cf7f468a451c732",
+  "acHash": "sha256:f406c6222c0fdaa1ce14f1186c3834a3fe06c85106091fc2e67441207c2e3a32",
+  "severityRanks": {
+    "Critical": 4,
+    "Major": 3,
+    "Minor": 2,
+    "Questions": 1
+  },
+  "elapsedMs": 600000,
+  "acHashSource": "publish",
+  "schemaVersion": 3,
+  "workflowVersion": "4.0.1",
+  "seq": 12,
+  "createdAt": "2026-10-06T15:17:58.576Z",
+  "predecessor": "r2-g1-green-fix",
+  "workflowProfile": {
+    "name": "KB default",
+    "hash": "66ce0ad62074d14bbb720bc881ab980117412588f33d53c161853d89f1b9c1d0"
+  }
+}
