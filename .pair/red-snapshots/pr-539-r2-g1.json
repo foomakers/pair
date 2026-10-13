@@ -1,0 +1,128 @@
+{
+  "$meta": {
+    "pr": "539",
+    "phase": "r2-g1",
+    "base": "3bbfc65591ed2363300609b3bb1f910aa324f552",
+    "trailer": "Pair-RED-Snapshot: pr=539; phase=r2-g1; base=3bbfc65591ed2363300609b3bb1f910aa324f552; manifest=.pair/red-snapshots/pr-539-r2-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/tokens/tokens.pipe.test.ts"
+    ]
+  },
+  "run": "story-433",
+  "story": "433",
+  "phase": "r2-g1",
+  "mode": "remediation",
+  "inputHead": "3bbfc65591ed2363300609b3bb1f910aa324f552",
+  "sourceOfTruth": "apps/pair-cli/src/cli.ts main() exit path; oracle = the same command's file-redirect output (finding r1-6 VERIFY/ORACLE/ASSERT)",
+  "inventory": [
+    {
+      "id": "r1-6",
+      "producer": "apps/pair-cli/src/cli.ts main(): process.exit(finalExitCode(...)) after runCli resolves, with the tokens report written by console.log in apps/pair-cli/src/commands/tokens/handler.ts report() — exit discards pending async pipe writes beyond the first 64 KiB chunk",
+      "inputs": [
+        "tokens --json over a corpus whose report exceeds 65536 bytes",
+        "stdout kind: pipe vs file descriptor"
+      ],
+      "representations": [
+        "src/cli.ts (canonical)",
+        "dist/cli.js (built bin, same main())",
+        "pair-cli tokens --json documented in metadata.ts and shrink-discipline rule 6"
+      ],
+      "consumers": [
+        "shell pipes (jq, tee, CI capture)",
+        "tokens --baseline <file> reading a piped capture (loadBaseline JSON.parse)"
+      ],
+      "classes": [
+        "pipe, report > 64 KiB — defective at base (cut at 65536, exit 0)",
+        "pipe, report < 64 KiB — correct at base",
+        "file redirect, report > 64 KiB — correct at base (the oracle)",
+        "text (non --json) report — at most 8 lines, cannot exceed one chunk"
+      ],
+      "interactions": [
+        "piped --json capture fed back as --baseline (record-then-compare path of rule 6)"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "pair-cli process exit path (apps/pair-cli/src/cli.ts main) and the tokens report writer",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/cli.ts",
+      "apps/pair-cli/src/commands/tokens/handler.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r2-g1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/tokens/tokens.pipe.test.ts",
+      "condition": "900-file fixture, tokens --root <fx> --json, stdout piped",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/tokens/tokens.pipe.test.ts -t r2-g1-w1",
+      "expected": "exit 0, stdout byte-identical to the redirect oracle (140289 bytes), JSON.parse succeeds",
+      "covers": [
+        "r1-6"
+      ]
+    },
+    {
+      "id": "r2-g1-w2",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/tokens/tokens.pipe.test.ts",
+      "condition": "piped --json capture written to a file, then tokens --baseline <that file>",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/tokens/tokens.pipe.test.ts -t r2-g1-w2",
+      "expected": "exit 0, no 'cannot read baseline' on stderr",
+      "covers": [
+        "r1-6"
+      ]
+    },
+    {
+      "id": "r2-g1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/tokens/tokens.pipe.test.ts",
+      "condition": "same fixture, stdout redirected to a file fd",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/tokens/tokens.pipe.test.ts -t r2-g1-c1",
+      "expected": "exit 0, file > 65536 bytes, valid JSON (oracle for w1)",
+      "covers": [
+        "r1-6"
+      ]
+    },
+    {
+      "id": "r2-g1-c2",
+      "kind": "boundary",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/tokens/tokens.pipe.test.ts",
+      "condition": "3-file fixture, --json piped, report under one pipe chunk",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/tokens/tokens.pipe.test.ts -t r2-g1-c2",
+      "expected": "exit 0, complete JSON, total.files 3",
+      "covers": [
+        "r1-6"
+      ]
+    },
+    {
+      "id": "r2-g1-n1",
+      "kind": "not-applicable",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/tokens/tokens.pipe.test.ts",
+      "condition": "text (non --json) report on a pipe",
+      "oracle": "apps/pair-cli/src/commands/tokens/handler.ts report(): one line per area (7) + total",
+      "expected": "n/a",
+      "covers": [
+        "r1-6"
+      ],
+      "rationale": "text mode prints at most 8 short lines (TOKEN_AREAS has 7 entries + total), far below 65536 bytes; the fix in main()/report() covers it by construction"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/tokens/tokens.pipe.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:05b927fabd8e2bd3850d9fdab5c49c92fdc879524140abe620397c433726dcd0",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/tokens/tokens.pipe.test.ts",
+      "observed": "Tests  2 failed | 2 passed (4). Failed: r2-g1-w1 expected 65536 to be 140289; r2-g1-w2 expected 'tokens failed: cannot read baseline /…' not to contain 'cannot read baseline'"
+    }
+  ],
+  "testExempt": false,
+  "notes": "missedUpstream: w1/w2 are regression rows that stay in the suite. Witnesses spawn src/cli.ts via ts-node (same main() as dist/cli.js; mirrors tokens.acceptance.test.ts) so the suite needs no prior build; fixture built in os.tmpdir, no network, no gh. Lint + prettier:check green on the test file."
+}
