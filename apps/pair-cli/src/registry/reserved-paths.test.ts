@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { posix } from 'path'
-import { getReservedPaths, detectReservedPathOverlap, isPackageLocalPairPath } from './reserved-paths'
+import {
+  getReservedPaths,
+  detectReservedPathOverlap,
+  isPackageLocalPairPath,
+} from './reserved-paths'
 import { DEFAULT_WORKING_PATH } from './working-area'
 import { RegistryConfig } from './resolver'
 import { INSTALLED_VERSION_MARKER } from '../commands/kb-info/version-resolver'
@@ -158,7 +162,9 @@ describe('package-local .pair dirs (#237)', () => {
   })
 
   it('rejects a target inside a package-local .pair dir', () => {
-    expect(detectReservedPathOverlap(withTarget('apps/web/.pair/adoption'), reserved)).toHaveLength(1)
+    expect(detectReservedPathOverlap(withTarget('apps/web/.pair/adoption'), reserved)).toHaveLength(
+      1,
+    )
   })
 
   it('rejects a non-canonical target resolving into a package-local .pair dir', () => {

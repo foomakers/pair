@@ -15,7 +15,11 @@ const central = `# Architecture
 // 3-package fixture: apps/web (local), packages/ui (local), packages/api (no local)
 const existing = new Set(['apps/web/.pair', 'packages/ui/.pair'])
 const run = (files: string[], text: string | undefined = central) =>
-  resolveScopedContext({ centralAdoption: text, touchedFiles: files, dirExists: d => existing.has(d) })
+  resolveScopedContext({
+    centralAdoption: text,
+    touchedFiles: files,
+    dirExists: d => existing.has(d),
+  })
 
 describe('scoped context resolution (monorepo fixture)', () => {
   it('parses router rows', () => {
@@ -55,7 +59,9 @@ describe('scoped context resolution (monorepo fixture)', () => {
   it('dangling router entry is reported, globals continue', () => {
     const r = run(['packages/gone/x.ts'])
     expect(r.localDirs).toEqual([])
-    expect(r.warnings).toEqual(["dangling router entry: packages/gone (packages/gone/.pair missing)"])
+    expect(r.warnings).toEqual([
+      'dangling router entry: packages/gone (packages/gone/.pair missing)',
+    ])
   })
 
   it('AC1: no router ⇒ inactive, loads nothing local', () => {

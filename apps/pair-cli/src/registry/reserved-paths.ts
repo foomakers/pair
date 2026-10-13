@@ -35,10 +35,7 @@ export function getReservedPaths(workingPath: string): string[] {
  * dir (`<pkg>/.pair`, any depth) — the opt-in package-local adoption override
  * (#237). The root `.pair` (first segment) is the KB itself and is not matched.
  */
-export function isPackageLocalPairPath(
-  path: string,
-  platform: string = process.platform,
-): boolean {
+export function isPackageLocalPairPath(path: string, platform: string = process.platform): boolean {
   const slashed = platform === 'win32' ? path.replace(/\\/g, '/') : path
   const segments = posixPath.normalize(slashed).split('/')
   return segments.slice(1).includes('.pair')
