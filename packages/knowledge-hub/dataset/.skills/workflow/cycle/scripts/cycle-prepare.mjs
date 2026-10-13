@@ -20,7 +20,7 @@
 //            [--refinedAutonomously <true|false>] [--repo <o/n>]
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { parseGate, escalationConditions, gateToString, conditionError, GATE_MODES } from './autonomy-policy.mjs'
+import { parseGate, escalationConditions, gateToString, normalizeGate, conditionError, GATE_MODES } from './autonomy-policy.mjs'
 import { assertRunOwnsStory } from './run-guard.mjs'
 
 export const ROUTES = ['run-interactive', 'run-autonomous', 'skip-needs-human', 'skip-escalated', 'escalate', 'nothing-to-prepare']
@@ -41,7 +41,8 @@ const ASSUMPTIONS_HEADING_RE = /^##\s+Assumptions\s*$/m
 // `labels` unreadable (not an array) under a `when` gate escalates, as #521's `decide` does for the merge gate.
 export function decide({ gate, labels, readiness, attended, boundary, source } = {}) {
   if (!gate || !GATE_MODES.includes(gate.mode)) throw new Error(`gate must be a prepare gate {mode, has, lacks}, got ${JSON.stringify(gate ?? null)}`)
-  if (gate.mode === 'when' && (!Array.isArray(gate.has) || !Array.isArray(gate.lacks))) throw new Error('a `when` gate needs has and lacks arrays')
+  gate = normalizeGate(gate)
+  if (gate.mode === 'when' && gate.has.length === 0 && gate.lacks.length === 0) throw new Error('a `when` gate needs at least one has or lacks label')
   if (!READINESS.includes(readiness)) throw new Error(`readiness must be ${READINESS.join(' | ')}, got ${JSON.stringify(readiness ?? null)}`)
   if (!BOUNDARIES.includes(boundary)) throw new Error(`boundary must be ${BOUNDARIES.join(' | ')}, got ${JSON.stringify(boundary ?? null)}`)
   if (typeof attended !== 'boolean') throw new Error(`attended must be a boolean, got ${JSON.stringify(attended ?? null)}`)

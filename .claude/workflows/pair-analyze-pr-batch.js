@@ -77,6 +77,7 @@ const isSegment = v => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v) && !v.includes('..
 const isPosInt = v => typeof v === 'number' && Number.isInteger(v) && v >= 1
 
 let batchModel
+let agentTimeoutMinutes
 function parseArgs(raw) {
   let a = raw
   if (typeof a === 'string') {
@@ -96,7 +97,10 @@ function parseArgs(raw) {
         `${a === undefined || a === null ? String(a) : JSON.stringify(a).slice(0, 80)}. ` +
         `Nothing was run — this is an input error, not an empty batch.`,
     )
-  rejectUnknownKeys(a, ['prs', 'model'], 'args')
+  rejectUnknownKeys(a, ['prs', 'model', 'agentTimeoutMinutes'], 'args')
+  if (a.agentTimeoutMinutes !== undefined && !(typeof a.agentTimeoutMinutes === 'number' && a.agentTimeoutMinutes > 0))
+    throw new Error('analyze-pr-batch: args.agentTimeoutMinutes must be a positive number of minutes')
+  agentTimeoutMinutes = a.agentTimeoutMinutes
   // Validated against the known set: an unrecognised model name would otherwise be
   // ignored in silence, and a run on the wrong tier is indistinguishable from a run on
   // the intended one.
@@ -211,6 +215,33 @@ function parseArgs(raw) {
   })
 }
 const PRS = parseArgs(args)
+
+// Every agent() call is time-bounded: the runtime has no per-agent timeout, so each call races a timer (feature-detected
+// `setTimeout`; without it the call is unbounded). A timed-out agent is NEVER re-dispatched (it cannot be cancelled);
+// the PR is dropped from the rows and reported in `failed`. Same pattern as pair-loop / pair-implement-batch.
+const AGENT_TIMEOUT_MINUTES = 30 // aligned with pair-cli's 1800 s per-stage watchdog
+async function boundedAgent(stage, prompt, opts) {
+  const minutes = agentTimeoutMinutes ?? AGENT_TIMEOUT_MINUTES
+  if (typeof setTimeout !== 'function' || !(minutes > 0)) return agent(prompt, opts)
+  let timer
+  const expired = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(`${stage}: timeout after ${minutes}m`)
+      error.timeout = `timeout after ${minutes}m`
+      reject(error)
+    }, minutes * 60000)
+  })
+  try {
+    return await Promise.race([agent(prompt, opts), expired])
+  } catch (e) {
+    if (!e?.timeout) throw e
+    log(`${stage}: ${e.timeout} — the agent may still be running; human check required`)
+    return TIMED_OUT
+  } finally {
+    if (typeof clearTimeout === 'function') clearTimeout(timer)
+  }
+}
+const TIMED_OUT = Symbol('timed-out')
 const OUT_DIR = '.pair/working/pr-analyses'
 
 const ANALYSIS_SCHEMA = {
@@ -248,7 +279,8 @@ const SAFETY = `SAFETY (mandatory, read-only): do NOT switch the main checkout's
 const results = await pipeline(
   PRS,
   pr =>
-    agent(
+    boundedAgent(
+      `analyze:PR#${pr.number}`,
       `Analyze pull request #${pr.number} (branch \`${pr.branch}\`${pr.story ? `, story #${pr.story}` : ''}) by invoking the **/analyze-pr** skill with $PR=${pr.number}. ${SAFETY} Follow that skill exactly — every count must come from the real \`git\`/\`gh\` commands it prescribes, never an estimate, and where a fact cannot be derived say so instead of guessing. Run \`git fetch origin ${pr.branch}\` first, and capture the head SHA you analysed with \`git rev-parse origin/${pr.branch}\` BEFORE you start counting. Write the skill's six sections to \`${OUT_DIR}/PR-${pr.number}-${pr.branch.replace(/[^A-Za-z0-9._-]/g, '-')}.md\`, creating the directory if needed. Begin the file with a short front-matter block giving: PR number, branch${pr.story ? ', story' : ''}, the head SHA you analysed, and the diff base (\`origin/main\`, three-dot). That stamp is what lets a later reader tell whether the analysis still describes the PR. Return the path, the head SHA, and — in \`verdictRisk\` — the ONE thing a person about to merge this PR should see first (a red check, a finding the PR does not address, a surprising blast radius); write \`none\` if the analysis surfaced nothing of the kind.`,
       // `args.model` routes the ANALYSIS stage. The freshness check below stays pinned to
       // sonnet/low: it exists to be reliable, and what counts as 'still current' must not
@@ -262,10 +294,10 @@ const results = await pipeline(
         ...(pr.model || batchModel ? { model: pr.model || batchModel } : {}),
       },
     ),
-  async (wrote, pr) => ({
-    pr,
-    wrote,
-    check: await agent(
+  async (wrote, pr) => {
+    if (wrote === TIMED_OUT) return null
+    const check = await boundedAgent(
+      `fresh:PR#${pr.number}`,
       `Check the freshness of the PR analysis at \`${wrote?.path ?? `${OUT_DIR}/PR-${pr.number}-*.md`}\`. ${SAFETY} Read the file's front-matter stamp to get \`stampedSha\`, then run \`git fetch origin ${pr.branch} -q\` and \`git rev-parse origin/${pr.branch}\` to get \`currentSha\`. Report \`fresh\` = true ONLY if the two SHAs are equal — if the PR moved while the analysis was being written, the file describes a commit that is no longer the head and must be reported stale, not passed off as current. Also report \`sectionsPresent\`: how many of the analyse-pr skill's SIX required sections the file actually contains. Do NOT edit or regenerate the file; just report.`,
       {
         agentType: 'general-purpose',
@@ -275,8 +307,10 @@ const results = await pipeline(
         effort: 'low',
         schema: FRESHNESS_SCHEMA,
       },
-    ),
-  }),
+    )
+    // the writer already posted: a freshness check that timed out leaves the analysis UNVERIFIED, never failed
+    return check === TIMED_OUT ? { pr, wrote, check: undefined, unverified: true } : { pr, wrote, check }
+  },
 )
 
 const rows = results.filter(Boolean)
@@ -292,10 +326,12 @@ return {
   })),
   // Called out separately so a stale artifact is never read as a current one.
   stale: rows
-    .filter(r => r.check?.fresh !== true)
+    .filter(r => !r.unverified && r.check?.fresh !== true)
     .map(r => ({ pr: r.pr.number, stamped: r.check?.stampedSha, current: r.check?.currentSha })),
+  // The freshness check never answered (timeout): the analysis exists but is neither confirmed fresh nor stale.
+  unverified: rows.filter(r => r.unverified).map(r => ({ pr: r.pr.number, path: r.wrote?.path })),
   incomplete: rows
-    .filter(r => (r.check?.sectionsPresent ?? 0) < 6)
+    .filter(r => !r.unverified && (r.check?.sectionsPresent ?? 0) < 6)
     .map(r => ({ pr: r.pr.number, sections: r.check?.sectionsPresent })),
   failed: PRS.filter(p => !rows.some(r => r.pr.number === p.number)).map(p => p.number),
   outputDir: OUT_DIR,

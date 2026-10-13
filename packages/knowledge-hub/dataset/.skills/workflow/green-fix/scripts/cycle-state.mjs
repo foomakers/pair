@@ -269,6 +269,35 @@ const isRelPathLocal = p =>
   !p.startsWith('/') &&
   !p.startsWith('-') &&
   !p.replace(/\/$/, '').split('/').some(seg => seg === '' || seg === '.' || seg === '..')
+
+// `mode: doc` (maintainer decision 2026-10-06): a PROSE-only remediation group. Its contract is a scope + an acceptance
+// checklist, never executable tests: every allowedPaths entry is a Markdown/text file or a directory of them, the
+// checklist quotes what the text must state per finding against its authority, and the snapshot is the contract alone.
+const PROSE_RE = /\.(md|mdx|markdown|txt|rst|adoc)$/i
+const docPathErrors = scope => {
+  const errs = []
+  if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length === 0) return ['fixScope.allowedPaths must be a non-empty array']
+  for (const p of scope.allowedPaths) {
+    if (typeof p !== 'string') errs.push(`fixScope.allowedPaths has an invalid path: ${JSON.stringify(p)}`)
+    else if (!p.endsWith('/') && !PROSE_RE.test(p)) errs.push(`fixScope.allowedPaths for mode doc must be prose files (.md/.mdx/.txt…) or directories, not code: ${p}`)
+  }
+  return errs
+}
+const docChecklistErrors = c => {
+  const errs = []
+  if (c.redTests !== undefined && !(Array.isArray(c.redTests) && c.redTests.length === 0)) errs.push('a doc group never carries executable tests (redTests) — a finding that touches behaviour stays behavioral')
+  if (!Array.isArray(c.checklist) || c.checklist.length === 0) return [...errs, 'checklist must be a non-empty array for mode doc']
+  const ids = new Set()
+  for (const [i, item] of c.checklist.entries()) {
+    const id = String(item?.id ?? '').trim()
+    if (!id) errs.push(`checklist[${i}].id is required`)
+    else if (ids.has(id)) errs.push(`checklist[${i}].id is listed twice: ${id}`)
+    else ids.add(id)
+    for (const k of ['finding', 'requirement', 'authority']) if (!String(item?.[k] ?? '').trim()) errs.push(`checklist[${i}].${k} is required`)
+  }
+  return errs
+}
+const isDocContract = c => c?.fixScope?.mode === 'doc'
 const artifactBaselineLocal = a => String(a?.baseline ?? 'red')
 export function contractErrors(c) {
   const errs = []
@@ -277,12 +306,14 @@ export function contractErrors(c) {
   if (!scope || typeof scope !== 'object') errs.push('fixScope missing')
   else {
     if (!String(scope.owner ?? '').trim()) errs.push('fixScope.owner missing')
-    if (!['behavioral', 'structural', 'test'].includes(scope.mode)) errs.push('fixScope.mode must be behavioral | structural | test')
+    if (!['behavioral', 'structural', 'test', 'doc'].includes(scope.mode)) errs.push('fixScope.mode must be behavioral | structural | test | doc')
     if (scope.mode === 'test') {
       if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length !== 0) errs.push('fixScope.allowedPaths must be an empty array for mode test')
     } else if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length === 0) errs.push('fixScope.allowedPaths must be a non-empty array')
     else for (const p of scope.allowedPaths) if (!isRelPathLocal(p)) errs.push(`fixScope.allowedPaths has an invalid path: ${JSON.stringify(p)}`)
+    if (scope.mode === 'doc') errs.push(...docPathErrors(scope))
   }
+  if (isDocContract(c)) return [...errs, ...docChecklistErrors(c)]
   if (c.testExempt === true) {
     if (!String(c.exemptionRationale ?? '').trim()) errs.push('testExempt requires exemptionRationale')
     return errs
@@ -741,7 +772,11 @@ export function envelopeErrors(data, { phase, skill }) {
   // A rejection may carry its audited rows too; when it does they are held to the same shape.
   if (skill === 'red-verify') {
     const rows = data.reproduced
-    if (data.verified === true && (!Array.isArray(rows) || !rows.length)) errs.push('reproduced-missing')
+    // AE (`mode: doc`): a prose contract has no test to reproduce. The validator proves it checked the CHECKLIST: it names
+    // every checklist item id it validated against the authority, in `checklistValidated` (never `reproduced` rows).
+    if (data.contractMode === 'doc') {
+      if (data.verified === true && !(Array.isArray(data.checklistValidated) && data.checklistValidated.length > 0 && data.checklistValidated.every(nonBlank))) errs.push('checklistValidated-missing')
+    } else if (data.verified === true && (!Array.isArray(rows) || !rows.length)) errs.push('reproduced-missing')
     else if (rows !== undefined && !Array.isArray(rows)) errs.push('reproduced-not-an-array')
     else if (Array.isArray(rows)) {
       const byRow = new Map()
@@ -1567,6 +1602,44 @@ function sealedContractHashOf({ cwd, phase }) {
   }
   return null
 }
+
+// ── Plan validation (AJ): doc-vs-code grouping is deterministic, never red-spec's judgement ─────────────────────────
+// A finding's TARGET paths are the ones the planner DECLARES for it (`group.findingPaths[<id>]`), else every path token in
+// the review finding's `location` text. A finding whose targets are ALL prose (.md/.mdx/.txt/.rst/.adoc) belongs in a `doc`
+// group; one that touches any code stays `behavioral` (a MIXED finding — code + its own doc text — may list the prose files
+// in `allowedPaths`; its witnesses cover behaviour only and the review verifies the prose); a mixed ROUND is split into a
+// `behavioral` group and a `doc` group with `dependsOn` the behavioral one. No target path at all ⇒ cannot judge ⇒ accepted.
+const PATH_TOKEN_RE = /[A-Za-z0-9_.\-/]+\.[A-Za-z][A-Za-z0-9]*/g
+// A REAL path shape: any `name.ext` token (a bare `App.vue`, `Button.svelte`, `main.kt` is a file), minus the prose
+// abbreviations (e.g / i.e / etc / vs / cf) and tokens that end in a dot.
+const ABBREVIATION_RE = /^(?:[A-Za-z]\.[A-Za-z]|etc|vs|cf|ca|approx|resp|incl|esp)\.?$/i
+const isPathToken = t => !ABBREVIATION_RE.test(t) && !/\.$/.test(t) && /\.[A-Za-z][A-Za-z0-9]*$/.test(t)
+const pathsIn = text => (String(text ?? '').match(PATH_TOKEN_RE) ?? []).map(t => t.replace(/[.,;:]+$/, '')).filter(isPathToken)
+const findingTargetPaths = (group, finding) => {
+  const declared = group?.findingPaths?.[finding?.id]
+  // UNION, never a replacement: a declared prose file cannot hide that the location names code (and vice versa).
+  const own = Array.isArray(declared) ? declared.filter(p => typeof p === 'string') : []
+  return [...new Set([...own, ...pathsIn(finding?.location)])]
+}
+export function planErrors(plan, findings) {
+  const errs = []
+  const byId = new Map((findings ?? []).map(f => [f?.id, f]))
+  for (const group of plan?.groups ?? []) {
+    const ids = group.findings ?? group.findingIds ?? []
+    if (group.mode === 'doc') for (const e of docPathErrors({ allowedPaths: group.allowedPaths })) errs.push(`doc-group-code-paths: ${group.groupId}: ${e}`)
+    for (const id of ids) {
+      const finding = byId.get(id)
+      if (!finding) continue
+      const targets = findingTargetPaths(group, finding)
+      if (!targets.length) continue
+      const proseOnly = targets.every(p => PROSE_RE.test(p))
+      if ((group.mode === 'behavioral' || group.mode === 'test') && proseOnly) errs.push(`prose-finding-not-doc: ${id} belongs in a doc group`)
+      if (group.mode === 'doc' && !proseOnly) errs.push(`code-finding-in-doc-group: ${id} touches code, it stays behavioral`)
+    }
+  }
+  return errs
+}
+
 export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, pr, lockWaitMs = 5000, host, repoRoot = process.cwd(), policy = {}, ...transport }) {
   const where = safeRunDir(dir)
   if (where.error) return { published: false, reason: where.error, path: where.path }
@@ -1632,7 +1705,41 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       }
       const shapeErrs = contractErrors(parsed)
       if (shapeErrs.length) return { published: false, reason: 'contract-invalid', errors: shapeErrs }
+      // C5: the contract's own fixScope.mode is AUTHORITATIVE — stamped on the handoff (resolve reads it, never the plan) and
+      // the plan may not disagree with it.
+      if (skill === 'red-spec' && parsed?.fixScope?.mode) {
+        data = { ...data, contractFixMode: parsed.fixScope.mode }
+        const gid = phaseParts(phase)?.groupId
+        const planned = data.plan?.groups?.find(g => g.groupId === gid)
+        if (planned && planned.mode !== parsed.fixScope.mode) return { published: false, reason: `plan-contract-mode-mismatch: plan group ${gid} says ${planned.mode}, its contract fixScope.mode is ${parsed.fixScope.mode}`, errors: [`plan-contract-mode-mismatch:${gid}`] }
+      }
     }
+  }
+  if (skill === 'red-verify') {
+    // C3: the validator's `contractMode` is CHECKED against the prepared contract — never taken on its word (a doc claim on a
+    // behavioral contract would skip every reproduction), and a doc checklist is validated in FULL.
+    const prepared = existingHandoffs.filter(x => x.skill === 'red-spec' && x.phase === phase && x.data?.contractPath).pop()
+    let preparedContract = null
+    try {
+      preparedContract = prepared ? JSON.parse(readFileSync(prepared.data.contractPath, 'utf8')) : null
+    } catch {
+      preparedContract = null
+    }
+    if (preparedContract?.fixScope?.mode) {
+      const actual = preparedContract.fixScope.mode === 'doc' ? 'doc' : 'code'
+      const claimed = data.contractMode === 'doc' ? 'doc' : 'code'
+      if (actual !== claimed) return { published: false, reason: `contract-mode-mismatch:${claimed}!=${actual}`, errors: [`contract-mode-mismatch:${claimed}!=${actual}`] }
+      if (actual === 'doc' && data.verified === true) {
+        const want = (preparedContract.checklist ?? []).map(i => i?.id).sort().join(',')
+        const got = [...(Array.isArray(data.checklistValidated) ? data.checklistValidated : [])].sort().join(',')
+        if (want !== got) return { published: false, reason: `checklistValidated-mismatch:expected ${want}`, errors: [`checklistValidated-mismatch:expected ${want}`] }
+      }
+    }
+  }
+  if (skill === 'red-spec' && data.plan && typeof data.plan === 'object') {
+    const reviewed = existingHandoffs.filter(x => x.skill === 'review-phase' && x.data).flatMap(x => x.data.findings ?? [])
+    const planErrs = planErrors(data.plan, reviewed)
+    if (planErrs.length) return { published: false, reason: planErrs[0], errors: planErrs }
   }
   if (skill === 'red-spec') {
     const cp = String(data.contractPath ?? '').trim()
@@ -2126,6 +2233,39 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     return null
   }
 
+  // What follows a group's fix: the next planned group, a retry of another group, or the round's re-review. A
+  // `mode: test` group (guard-strength — production already correct) has NO green step: its sealed tests ARE the
+  // fix, so the same continuation runs from the seal (red-spec/green-fix SKILL: it never reaches green-fix).
+  const afterGreen = (phase, outputHead) => {
+    const plan = planFor(parts.round)
+    const groups = orderGroups(plan?.groups ?? []) ?? []
+    const idx = groups.findIndex(g => g.groupId === parts.groupId)
+    // idx is -1 when the current phase was dispatched OUTSIDE the plan this round's red-spec wrote
+    // (a group added later, after a review discovered a new finding not in the original plan) —
+    // groups[-1 + 1] would silently resolve to groups[0], re-dispatching the FIRST planned group as
+    // if it were still due, even when it is already sealed/green/resolved. undefined here correctly
+    // falls through to the round re-review below instead.
+    const nextGroup = idx === -1 ? undefined : groups[idx + 1]
+    const roundReview = reviews.filter(h => (phaseParts(h.phase)?.round ?? -1) === parts.round).pop()
+    if (roundReview) {
+      // This GREEN was a retry after the round's review: the other groups whose approved test
+      // still failed take their own retry before the one re-review of all of them.
+      const still = (roundReview.data.findings ?? []).filter(f => isBlocking(f) && f.kind === 'approved-test-failing' && f.groupId).filter(f => !list.some(h => h.skill === 'green-fix' && h.phase === latestGroupPhase(f.groupId) && h.data.seq > roundReview.data.seq))
+      const retry = still.length ? greenRetryFor(still, parts.round) : null
+      if (retry) return retry
+    } else if (nextGroup) return { step: 'prepare', mode: 'remediation', phase: nextGroup.groupId, round: parts.round, attempt: 1, base: outputHead, group: nextGroup, findings: findingsByIds(nextGroup.findings), plan }
+    const prior = lastReview
+    // A GREEN that follows a REGRESSION REWIND of this batch (US-479 T-29) produced a new head:
+    // its verification is the next review round, never a second reviewer of the round already
+    // judged at the old head. An ordinary approved-test retry keeps the round's own re-review.
+    const repaired = list.some(h => h.skill === 'red-spec' && h.phase === phase && h.data.regressionRepairOf)
+    const reviewRound = repaired ? parts.round + 1 : parts.round
+    // US-479 V2 (F-RR-03): the review is the participant that DISCHARGES, so it receives the same
+    // derived guard set red-spec, red-verify and green-fix received — attached for every branch by
+    // `deriveNext` (R1), never left to the reviewer to infer.
+    return { step: 'verify', mode: 're-review', phase: `r${reviewRound}`, round: reviewRound, attempt: byPhase('review-phase', `r${reviewRound}`).length + 1, base: prior?.data.reviewedHead, prior: prior?.name, openIds: (prior?.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: priorFindings() }
+  }
+
   if (last.skill === 'red-spec') {
     // US-479 B1 (S3, AC-08, DT-04): a CONTRADICTION with sealed rows is not a dead end — it routes
     // the minimal successor revision of the contract it names, in the same canonical cycle. The
@@ -2206,6 +2346,8 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     }
     if (d.sealed !== true) return blocked('failed-seal', { phase: last.phase, detail: d.reason })
     if (parts.kind === 'initial') return { step: 'implement', mode: parts.revision > 1 ? 'revision' : 'initial', phase: last.phase, round: 0, attempt: byPhase('implement-phase', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), pr: list.map(h => h.data.pr).find(x => Number.isInteger(x)) }
+    // A sealed `mode: test` group has nothing to implement: the guard is the fix, verified on the sealed head.
+    if (fixModeOf(list, last.phase) === 'test') return afterGreen(last.phase, d.outputHead ?? d.snapshot ?? d.inputHead)
     // The GREEN attempt follows what this phase has already seen: a batch prepared again after a
     // regression rewind (US-479 T-29) fixes forward as attempt n+1, never over its own handoff.
     return { step: 'green', mode: parts.revision > 1 ? 'revision' : 'remediation', phase: last.phase, round: parts.round, attempt: byPhase('green-fix', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupOf(last.phase)?.findings), ...greenDirective(last.phase) }
@@ -2226,33 +2368,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
   if (last.skill === 'green-fix') {
     if (d.needsHumanDecision === true) return blocked('escalate', { detail: 'green-fix asked for a human decision', phase: last.phase })
     if (d.fixed !== true) return blocked('failed-fix', { phase: last.phase, detail: d.reason })
-    const plan = planFor(parts.round)
-    const groups = orderGroups(plan?.groups ?? []) ?? []
-    const idx = groups.findIndex(g => g.groupId === parts.groupId)
-    // idx is -1 when the current phase was dispatched OUTSIDE the plan this round's red-spec wrote
-    // (a group added later, after a review discovered a new finding not in the original plan) —
-    // groups[-1 + 1] would silently resolve to groups[0], re-dispatching the FIRST planned group as
-    // if it were still due, even when it is already sealed/green/resolved. undefined here correctly
-    // falls through to the round re-review below instead.
-    const nextGroup = idx === -1 ? undefined : groups[idx + 1]
-    const roundReview = reviews.filter(h => (phaseParts(h.phase)?.round ?? -1) === parts.round).pop()
-    if (roundReview) {
-      // This GREEN was a retry after the round's review: the other groups whose approved test
-      // still failed take their own retry before the one re-review of all of them.
-      const still = (roundReview.data.findings ?? []).filter(f => isBlocking(f) && f.kind === 'approved-test-failing' && f.groupId).filter(f => !list.some(h => h.skill === 'green-fix' && h.phase === latestGroupPhase(f.groupId) && h.data.seq > roundReview.data.seq))
-      const retry = still.length ? greenRetryFor(still, parts.round) : null
-      if (retry) return retry
-    } else if (nextGroup) return { step: 'prepare', mode: 'remediation', phase: nextGroup.groupId, round: parts.round, attempt: 1, base: d.outputHead, group: nextGroup, findings: findingsByIds(nextGroup.findings), plan }
-    const prior = lastReview
-    // A GREEN that follows a REGRESSION REWIND of this batch (US-479 T-29) produced a new head:
-    // its verification is the next review round, never a second reviewer of the round already
-    // judged at the old head. An ordinary approved-test retry keeps the round's own re-review.
-    const repaired = list.some(h => h.skill === 'red-spec' && h.phase === last.phase && h.data.regressionRepairOf)
-    const reviewRound = repaired ? parts.round + 1 : parts.round
-    // US-479 V2 (F-RR-03): the review is the participant that DISCHARGES, so it receives the same
-    // derived guard set red-spec, red-verify and green-fix received — attached for every branch by
-    // `deriveNext` (R1), never left to the reviewer to infer.
-    return { step: 'verify', mode: 're-review', phase: `r${reviewRound}`, round: reviewRound, attempt: byPhase('review-phase', `r${reviewRound}`).length + 1, base: prior?.data.reviewedHead, prior: prior?.name, openIds: (prior?.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: priorFindings() }
+    return afterGreen(last.phase, d.outputHead)
   }
   if (last.skill === 'review-phase') {
     if (d.custody?.contractBreach === true) return blocked('failed-custody', { phase: last.phase, breaches: d.custody.breaches })
@@ -2417,8 +2533,33 @@ function withActiveGuards(next, active) {
   if (!next || typeof next !== 'object' || next.regressionRisks !== undefined || !GUARDED_STEPS.has(next.step)) return next
   return active.length ? { ...next, regressionRisks: active } : next
 }
+/**
+ * The group a handoff's phase belongs to is `mode: test` (guard-strength: production already correct) — read from
+ * the round's plan group or the preparation's own `fixScope`. A SEALED such group has no green step: its sealed
+ * tests ARE the fix.
+ */
+const fixModeOf = (handoffs, phase) => {
+  const p = phaseParts(phase)
+  const specs = handoffs.filter(h => h.skill === 'red-spec' && h.data)
+  // The contract's own mode (stamped at publish) is authoritative; the plan group's mode only for handoffs that predate it.
+  const stamped = specs.filter(h => h.phase === phase && h.data.contractFixMode).pop()?.data.contractFixMode
+  if (stamped) return stamped
+  const own = specs.filter(h => h.phase === phase && h.data.fixScope?.mode).pop()?.data.fixScope.mode
+  if (own) return own
+  if (!p?.groupId) return undefined
+  const planned = specs.find(h => phaseParts(h.phase)?.groupId?.startsWith(`r${p.round}-g`) === true && h.data.plan)?.data.plan
+  return planned?.groups?.find(g => g.groupId === p.groupId)?.mode
+}
+const isTestModeGroup = (handoffs, phase) => fixModeOf(handoffs, phase) === 'test'
+
+/** Green-fix handoffs that never should have run: their group is a SEALED `mode: test` one. They are void. */
+export function voidedGreenHandoffs(handoffs) {
+  return handoffs.filter(h => h.skill === 'green-fix' && h.data && isTestModeGroup(handoffs, h.phase) && handoffs.some(v => v.skill === 'red-verify' && v.phase === h.phase && v.data?.sealed === true))
+}
+
 export function deriveNext(handoffs, policy, ctx = {}) {
-  const next = deriveNextStep(handoffs, policy, ctx)
+  const voided = new Set(voidedGreenHandoffs(handoffs))
+  const next = deriveNextStep(voided.size ? handoffs.filter(h => !voided.has(h)) : handoffs, policy, ctx)
   const active = ctx.ledger ? ctx.ledger.filter(r => r.state === 'active') : activeRegressionRisks(handoffs.filter(h => h.data && h.data.recordType !== 'migration'))
   return withActiveGuards(next, active)
 }
@@ -2768,7 +2909,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // US-521: with `policy.autonomy` the decision is the shared `decide` — a stage boundary may escalate or stop at
   // the `until` target, `ready-for-merge` is offered to `merge` only under `until: merged`.
   next = applyAutonomy(next, { policy, tier, labels, prLabels })
-  const warnings = []
+  const warnings = voidedGreenHandoffs(handoffs).map(h => `${h.name}: green-fix ran on a sealed mode: test group (${h.phase}) — the sealed tests are the fix; the handoff is void and ignored`)
   if (next.step !== 'done' && next.step !== 'blocked' && next.step !== 'merge') {
     const md = policy.maxDispatches
     if (md && typeof md === 'object' && Number.isInteger(md.n) && md.n > 0 && handoffs.length >= md.n) {
@@ -2931,14 +3072,17 @@ export function supersede({ dir, phase, skill = 'red-spec', attempt, reason, by,
     // Sealed is checked BEFORE the tail rule: a sealed contract is refused as `supersede-sealed`
     // (the specific, actionable reason) even though a later red-verify also makes it a non-tail
     // handoff — the maintainer needs to know WHY, not just that it isn't last.
-    if (verdicts.some(v => v.data.sealed === true && (!target.data.contractHash || v.data.contractHash === target.data.contractHash))) return { superseded: false, reason: 'supersede-sealed', file: basename(target.file) }
+    // The seal belongs to red-verify. A green-fix handoff of a `mode: test` group never had a green step to seal over (it
+    // is void: `resolve` ignores it), so it alone may be set aside; every other handoff of a sealed contract stays protected.
+    const voidGreen = skill === 'green-fix' && voidedGreenHandoffs(handoffs).includes(target)
+    if (!voidGreen && verdicts.some(v => v.data.sealed === true && (!target.data.contractHash || v.data.contractHash === target.data.contractHash))) return { superseded: false, reason: 'supersede-sealed', file: basename(target.file) }
     // US-514 T-4 (#514/AC4, business rule): only the TAIL of the run can be set aside — a maintainer
     // recovers the last mistake, never rewrites history underneath evidence already built on it.
     if (handoffs[handoffs.length - 1] !== target) return { superseded: false, reason: 'supersede-not-last' }
     // A verdict published AFTER this attempt answered it: a rejection is evidence the next repair
     // is checked against, never something to set aside. (Subsumed by the tail check above for most
     // cases — kept as a second, independent guard against phase-label collisions across skills.)
-    if (verdicts.some(v => handoffs.indexOf(v) > handoffs.indexOf(target))) return { superseded: false, reason: 'supersede-validated', file: basename(target.file) }
+    if (!voidGreen && verdicts.some(v => handoffs.indexOf(v) > handoffs.indexOf(target))) return { superseded: false, reason: 'supersede-validated', file: basename(target.file) }
     const prefix = `superseded-${dayOf(now)}-`
     const from = basename(target.file)
     const to = `${prefix}${from}`
@@ -3053,7 +3197,8 @@ function parseCli(argv) {
   const opts = {}
   for (let i = 0; i < rest.length; i += 2) {
     const k = rest[i]
-    if (!k?.startsWith('--') || rest[i + 1] === undefined) throw new Error(`bad argument: ${k}`)
+    if (!k?.startsWith('--')) throw new Error(`bad argument: ${k} — a value without its flag (an unquoted value split by the shell? quote it, or pass one word per flag)`)
+    if (rest[i + 1] === undefined) throw new Error(`bad argument: ${k}`)
     opts[k.slice(2)] = rest[i + 1]
   }
   return { cmd, opts }

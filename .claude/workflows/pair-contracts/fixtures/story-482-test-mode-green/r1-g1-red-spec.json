@@ -1,0 +1,49 @@
+{
+  "run": "story-482",
+  "story": "482",
+  "pr": 531,
+  "branch": "feature/US-482-skill-local-scripts-conformance",
+  "phase": "r1-g1",
+  "skill": "red-spec",
+  "inputHead": "b8c88aebb3eff7a430f07d127eecbdaa348c1849",
+  "inputsDigest": "169d89c6f69c4eda",
+  "acHash": "sha256:4f3fb9c949a928a040a275b839ceb8f3f80749e3776379fed9015dff1b340587",
+  "attempt": 1,
+  "mode": "remediation",
+  "status": "red",
+  "contractPath": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-482/482/r1-g1-red-contract.json",
+  "contractHash": "sha256:7fcc777e81882c79e2f3cf643a4d39a9b899e43ff664a0ba653ded5837da787f",
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "owner": "skills-conformance-check",
+        "mode": "test",
+        "allowedPaths": [],
+        "dependsOn": [],
+        "findingIds": [
+          "r0-1"
+        ]
+      }
+    ],
+    "carried": []
+  },
+  "groupId": "r1-g1",
+  "remediationBatchId": "r1",
+  "reconciled": [],
+  "preserved": [],
+  "findings": {
+    "received": [
+      "r0-1"
+    ],
+    "covered": [
+      "r0-1"
+    ]
+  },
+  "elapsedMs": 0,
+  "acHashSource": "publish",
+  "schemaVersion": 3,
+  "workflowVersion": "4.0.1",
+  "seq": 3,
+  "createdAt": "2026-10-06T09:44:45.321Z"
+}

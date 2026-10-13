@@ -1,0 +1,93 @@
+{
+  "skill": "review-phase",
+  "inputHead": "b8c88aebb3eff7a430f07d127eecbdaa348c1849",
+  "mode": "first",
+  "tier": "risk:green",
+  "tierSource": "classified",
+  "passes": [
+    "general"
+  ],
+  "reviewedHead": "b8c88aebb3eff7a430f07d127eecbdaa348c1849",
+  "verdict": "CHANGES-REQUESTED",
+  "findings": [
+    {
+      "id": "r0-1",
+      "location": "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts:2833",
+      "severity": "Minor",
+      "kind": "defect",
+      "transition": "open",
+      "blocking": true,
+      "description": "Card edge case: unreadable script must be reported as error, never identical. No test covers compareScriptTwin catch branch; a regression to 'identical' passes the suite.",
+      "recommendation": "Add fixture with chmod 0 dataset script, assert 'unreadable' error with both paths. VERIFY: vitest skills-conformance-check; ORACLE: remove catch branch => test fails; ASSERT: errors[0] contains 'unreadable'.",
+      "failureScenario": {
+        "input": "dataset script chmod 000 + installed twin",
+        "actual": "no test would fail if catch returned undefined",
+        "expected": "a test asserts an 'unreadable' error"
+      }
+    }
+  ],
+  "acAssessment": [
+    {
+      "ac": "AC1",
+      "tests": [
+        "AC1: a linked script absent from scripts/ is an error naming skill and script"
+      ],
+      "assessment": "proven"
+    },
+    {
+      "ac": "AC2",
+      "tests": [
+        "AC2: missing and drifted installed twins are reported with both paths"
+      ],
+      "assessment": "proven"
+    },
+    {
+      "ac": "AC3",
+      "tests": [
+        "AC3: the real corpus passes and the summary names the check"
+      ],
+      "assessment": "proven"
+    },
+    {
+      "ac": "Edge: unreadable script",
+      "tests": [],
+      "assessment": "missing",
+      "findingId": "r0-1"
+    }
+  ],
+  "scopeChanges": [],
+  "custody": {
+    "verified": true,
+    "contractBreach": false
+  },
+  "readiness": {
+    "ready": false,
+    "remoteHead": "b8c88aebb3eff7a430f07d127eecbdaa348c1849"
+  },
+  "published": {
+    "firstReview": true,
+    "escalation": false,
+    "scopeDecisionPacket": false
+  },
+  "gates": {
+    "command": "pnpm --filter @pair/knowledge-hub vitest run skills-conformance-check + pnpm skills:conformance",
+    "identity": "review-r0",
+    "exitCode": 0
+  },
+  "inputsDigest": "169d89c6f69c4eda",
+  "acHash": "sha256:4f3fb9c949a928a040a275b839ceb8f3f80749e3776379fed9015dff1b340587",
+  "attempt": 1,
+  "reviewer": 1,
+  "partial": false,
+  "elapsedMs": 0,
+  "run": "story-482",
+  "story": "482",
+  "phase": "r0",
+  "pr": 531,
+  "schemaVersion": 3,
+  "workflowVersion": "4.0.1",
+  "acHashSource": "publish",
+  "seq": 2,
+  "createdAt": "2026-10-06T09:43:23.044Z",
+  "predecessor": "a0-implement-phase"
+}

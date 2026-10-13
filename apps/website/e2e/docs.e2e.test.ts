@@ -856,11 +856,19 @@ test('smoke: concepts and reference section indexes return 200 with headings', a
 // E2E: Search — Orama client-side search
 // ============================================================
 
-test('search: open dialog, type query, verify results appear', async ({ page }) => {
+/**
+ * `goto` resolves at `load`, but React attaches the global shortcut listener only AFTER hydration; a shortcut sent in
+ * between is lost and the dialog never opens (the one-off 30s timeout). Wait for the app's own readiness signal.
+ */
+async function openSearch(page: import('@playwright/test').Page) {
   await page.goto('/docs')
-
-  // Open search dialog via keyboard shortcut
+  await page.locator('html[data-hydrated="true"]').waitFor({ state: 'attached' })
   await page.keyboard.press('Meta+k')
+}
+
+test('search: open dialog, type query, verify results appear', async ({ page }) => {
+  // Open search dialog via keyboard shortcut (once the app is hydrated)
+  await openSearch(page)
   const dialog = page.locator('[role="dialog"]')
   await expect(dialog).toBeVisible()
 
@@ -877,11 +885,18 @@ test('search: open dialog, type query, verify results appear', async ({ page }) 
   expect(count).toBeGreaterThan(0)
 })
 
-test('search: results update when query changes', async ({ page }) => {
-  await page.goto('/docs')
+test('search: on a slow CPU the shortcut still opens the dialog (root cause of the one-off 30s timeout: sent before hydration attached the listener)', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 20 })
+  await openSearch(page)
+  await expect(page.locator('[role="dialog"] input')).toBeVisible({ timeout: 5000 })
+})
 
+test('search: results update when query changes', async ({ page }) => {
   // Open search dialog
-  await page.keyboard.press('Meta+k')
+  await openSearch(page)
   const dialog = page.locator('[role="dialog"]')
   const searchInput = dialog.locator('input')
 
@@ -896,10 +911,8 @@ test('search: results update when query changes', async ({ page }) => {
 })
 
 test('search: empty query shows no results', async ({ page }) => {
-  await page.goto('/docs')
-
-  // Open search dialog
-  await page.keyboard.press('Meta+k')
+  // Open search dialog (once hydrated — see openSearch)
+  await openSearch(page)
   const dialog = page.locator('[role="dialog"]')
   const searchInput = dialog.locator('input')
 

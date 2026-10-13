@@ -116,6 +116,36 @@ function trailerBlockOf(body, cwd) {
   return r.status === 0 ? r.stdout : ''
 }
 
+
+// `mode: doc` (maintainer decision 2026-10-06): a PROSE-only remediation group. Its contract is a scope + an acceptance
+// checklist, never executable tests: every allowedPaths entry is a Markdown/text file or a directory of them, the
+// checklist quotes what the text must state per finding against its authority, and the snapshot is the contract alone.
+const PROSE_RE = /\.(md|mdx|markdown|txt|rst|adoc)$/i
+const docPathErrors = scope => {
+  const errs = []
+  if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length === 0) return ['fixScope.allowedPaths must be a non-empty array']
+  for (const p of scope.allowedPaths) {
+    if (typeof p !== 'string') errs.push(`fixScope.allowedPaths has an invalid path: ${JSON.stringify(p)}`)
+    else if (!p.endsWith('/') && !PROSE_RE.test(p)) errs.push(`fixScope.allowedPaths for mode doc must be prose files (.md/.mdx/.txt…) or directories, not code: ${p}`)
+  }
+  return errs
+}
+const docChecklistErrors = c => {
+  const errs = []
+  if (c.redTests !== undefined && !(Array.isArray(c.redTests) && c.redTests.length === 0)) errs.push('a doc group never carries executable tests (redTests) — a finding that touches behaviour stays behavioral')
+  if (!Array.isArray(c.checklist) || c.checklist.length === 0) return [...errs, 'checklist must be a non-empty array for mode doc']
+  const ids = new Set()
+  for (const [i, item] of c.checklist.entries()) {
+    const id = String(item?.id ?? '').trim()
+    if (!id) errs.push(`checklist[${i}].id is required`)
+    else if (ids.has(id)) errs.push(`checklist[${i}].id is listed twice: ${id}`)
+    else ids.add(id)
+    for (const k of ['finding', 'requirement', 'authority']) if (!String(item?.[k] ?? '').trim()) errs.push(`checklist[${i}].${k} is required`)
+  }
+  return errs
+}
+const isDocContract = c => c?.fixScope?.mode === 'doc'
+
 // ── Contract shape (the RED author's return value, persisted as the manifest) ──────────────
 export function contractErrors(c) {
   const errs = []
@@ -124,14 +154,16 @@ export function contractErrors(c) {
   if (!scope || typeof scope !== 'object') errs.push('fixScope missing')
   else {
     if (!String(scope.owner ?? '').trim()) errs.push('fixScope.owner missing')
-    if (!['behavioral', 'structural', 'test'].includes(scope.mode)) errs.push('fixScope.mode must be behavioral | structural | test')
+    if (!['behavioral', 'structural', 'test', 'doc'].includes(scope.mode)) errs.push('fixScope.mode must be behavioral | structural | test | doc')
     // A `test` scope repairs a guard: it declares NO production paths, and verify treats any
     // production change after the seal as a breach.
     if (scope.mode === 'test') {
       if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length !== 0) errs.push('fixScope.allowedPaths must be an empty array for mode test')
     } else if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length === 0) errs.push('fixScope.allowedPaths must be a non-empty array')
     else for (const p of scope.allowedPaths) if (!isRelPath(p)) errs.push(`fixScope.allowedPaths has an invalid path: ${JSON.stringify(p)}`)
+    if (scope.mode === 'doc') errs.push(...docPathErrors(scope))
   }
+  if (isDocContract(c)) return [...errs, ...docChecklistErrors(c)]
   if (c.testExempt === true) {
     if (!String(c.exemptionRationale ?? '').trim()) errs.push('testExempt requires exemptionRationale')
     return errs
@@ -198,10 +230,10 @@ export function contractErrors(c) {
 }
 
 export const artifactBaseline = a => String(a?.baseline ?? 'red')
-export const artifactPaths = c => (c.testExempt === true ? [] : c.redTests.map(a => a.file))
+export const artifactPaths = c => (c.testExempt === true || isDocContract(c) ? [] : c.redTests.map(a => a.file))
 // Artifacts the seal requires to have CHANGED at the base: red witnesses. A `pass` control is an
 // already-correct test and may be sealed unchanged.
-export const witnessPaths = c => (c.testExempt === true ? [] : c.redTests.filter(a => artifactBaseline(a) === 'red').map(a => a.file))
+export const witnessPaths = c => (c.testExempt === true || isDocContract(c) ? [] : c.redTests.filter(a => artifactBaseline(a) === 'red').map(a => a.file))
 
 // ── scope inheritance ──────────────────────────────────────────────────────────────────────
 // A repair or a revision (`<stem>-rev<m>`) re-contracts the SAME obligation: it inherits the
@@ -314,7 +346,7 @@ export function sealedContracts(cwd) {
   }
   return out
 }
-const testArtifacts = c => (c.testExempt === true ? [] : c.redTests.filter(a => (a?.kind ?? 'test') === 'test'))
+const testArtifacts = c => (c.testExempt === true || isDocContract(c) ? [] : c.redTests.filter(a => (a?.kind ?? 'test') === 'test'))
 const rowMentions = (row, file) => {
   const base = basename(file)
   return Object.values(row ?? {}).some(v => (Array.isArray(v) ? v : [v]).some(x => typeof x === 'string' && (x.includes(file) || x.includes(base))))
@@ -325,7 +357,7 @@ export function changedRowsErrors({ prev, contract, cwd }) {
   const changed = new Set(Array.isArray(contract.changedRows) ? contract.changedRows : [])
   const prevListed = new Map((prev.contract?.redTests ?? []).map(a => [a.file, a]))
   const changedRows = (contract.matrix ?? []).filter(r => changed.has(r?.id))
-  for (const a of contract.testExempt === true ? [] : contract.redTests) {
+  for (const a of contract.testExempt === true || isDocContract(contract) ? [] : contract.redTests) {
     if (!prevListed.has(a.file)) continue
     const atPrev = git(['rev-parse', '--verify', '-q', `${prev.sha}:${a.file}`], cwd, { allowFail: true })
     const now = existsSync(join(cwd, a.file)) ? git(['hash-object', a.file], cwd) : null
@@ -517,6 +549,39 @@ export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, he
 const inScope = (path, allowed) =>
   allowed.some(a => (a.endsWith('/') ? path.startsWith(a) : path === a || path.startsWith(`${a}/`)))
 
+/**
+ * Publishes a sealed snapshot to the story branch. `green-fix` normally pushes the seal with its GREEN commit, but a
+ * sealed `mode: test` group has no green step (the sealed tests ARE the fix), so the seal would stay a local commit
+ * and the final verifier's custody check would breach `snapshot-missing`. The stage that owns the seal (red-verify)
+ * therefore pushes it: a plain, never-forced push of the snapshot commit to `refs/heads/<branch>`, read back with
+ * `ls-remote`. Already on the remote ⇒ `pushed: true`; a diverged or rejected branch ⇒ a typed refusal, never a force.
+ */
+export function pushSnapshot({ snapshot, branch, cwd, remote = 'origin' }) {
+  if (!/^[0-9a-f]{40}$/.test(String(snapshot ?? ''))) return { pushed: false, reason: 'snapshot-invalid' }
+  if (!/^[A-Za-z0-9._/#-]+$/.test(String(branch ?? ''))) return { pushed: false, reason: 'branch-invalid' }
+  if (git(['cat-file', '-e', `${snapshot}^{commit}`], cwd, { allowFail: true }) === null) return { pushed: false, reason: 'snapshot-not-found' }
+  const remoteHeadOf = () => (git(['ls-remote', '--heads', remote, `refs/heads/${branch}`], cwd, { allowFail: true }) ?? '').split(/\s+/)[0] || undefined
+  // The transient manifest is never pushed: the repository's own pre-push hygiene gate rejects a tracked
+  // `.pair/red-snapshots/*.json`. `green-fix` removes it in its GREEN commit; a `mode: test` group has no green, so the
+  // same removal commit is made here — directly on top of the seal, touching ONLY the manifest — and the verify-chain
+  // already allows it (the snapshot stays an ancestor; a manifest path is never a "PR change").
+  const trailer = (git(['log', '-1', '--format=%B', snapshot], cwd, { allowFail: true }) ?? '').split('\n').map(l => SNAP_TRAILER_RE.exec(l)).find(Boolean)
+  const manifest = trailer?.[4]
+  let removedManifest = false
+  if (manifest && git(['ls-files', '--error-unmatch', '--', manifest], cwd, { allowFail: true }) !== null) {
+    git(['rm', '-q', '--', manifest], cwd)
+    git(['commit', '-q', '--no-verify', '-m', `chore: remove the transient RED manifest (${trailer[2]}, phase ${trailer[3]})`], cwd)
+    removedManifest = true
+  }
+  const outputHead = git(['rev-parse', 'HEAD'], cwd)
+  if (remoteHeadOf() === outputHead) return { pushed: true, snapshot, outputHead, remoteHead: outputHead, removedManifest }
+  // A plain push — never `--no-verify`, never forced: the repository's own gates run.
+  const r = spawnSync('git', ['push', remote, `HEAD:refs/heads/${branch}`], { cwd, encoding: 'utf8', env: cleanGitEnv() })
+  if (r.status !== 0) return { pushed: false, reason: 'push-rejected', snapshot, outputHead, removedManifest, detail: r.stderr.trim().split('\n').slice(-3).join(' | ') }
+  const remoteHead = remoteHeadOf()
+  return remoteHead === outputHead ? { pushed: true, snapshot, outputHead, remoteHead, removedManifest } : { pushed: false, reason: 'push-not-confirmed', snapshot, outputHead, remoteHead, removedManifest }
+}
+
 export function verify({ pr, phase, base, cwd }) {
   const breaches = []
   const breach = (code, extra = {}) => breaches.push({ code, ...extra })
@@ -578,6 +643,9 @@ export function verify({ pr, phase, base, cwd }) {
     for (const { status, path } of after) {
       if (isTestPath(path)) continue
       if (mode === 'test') breach('test-mode-production-change', { path, status })
+      // A doc segment admits PROSE only, by extension — whatever directory its scope names (a directory entry would otherwise let
+      // `skills/x/scripts/run.mjs` change without a breach).
+      else if (mode === 'doc' && !PROSE_RE.test(path)) breach('doc-code-change', { path, status })
       else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path })
       else if (mode === 'behavioral' && status !== 'M' && isModulePath(path)) breach('behavioral-adds-or-moves-module', { path, status })
     }
@@ -703,7 +771,7 @@ export function mergedBaseParents({ from, to, baseRef, cwd }) {
     for (const p of others) {
       if (git(['merge-base', '--is-ancestor', p, baseCommit], cwd, { allowFail: true }) === null) continue
       const changed = new Set((git(['-c', 'core.quotePath=false', 'diff', '--name-only', first, m], cwd) ?? '').split('\n').filter(Boolean))
-      out.push({ merge: m, parent: p, changed, mergeBase: git(['merge-base', first, p], cwd, { allowFail: true }) })
+      out.push({ merge: m, parent: p, first, changed, mergeBase: git(['merge-base', first, p], cwd, { allowFail: true }) })
     }
   }
   return out
@@ -713,17 +781,144 @@ const blobAt = (rev, path, cwd) => git(['rev-parse', '--verify', '-q', `${rev}:$
 // byte-identical to a non-null base blob, or — for a deletion — a path the BASE removed that existed
 // before the branches split. A path the PR created (absent from the merge-base) deleted anywhere is
 // never exempt: a deletion of a PR-owned file is the PR's change.
-const identicalToMergedBase = (path, end, merged, cwd) =>
-  merged.some(({ parent, changed, mergeBase }) => {
+const identicalToMergedBase = (path, end, merged, cwd, segStart, baseRef) =>
+  merged.some(entry => {
+    const { parent, changed, mergeBase } = entry
     if (!changed.has(path)) return false
     const atEnd = blobAt(end, path, cwd)
     const atBase = blobAt(parent, path, cwd)
     // US-506 F-6: the BASE must itself have changed the path since the fork — otherwise a revert of the
     // PR's own edit hidden inside the merge commit would pass as "brought in by the merge".
     if (!mergeBase || blobAt(mergeBase, path, cwd) === atBase) return false
-    if (atBase !== null) return atEnd === atBase
+    if (atBase !== null) return atEnd === atBase || sealedBlobBroughtByBase({ path, snapshot: segStart, head: end, baseRef, cwd })
     return atEnd === null
   })
+// AN — the base moved while the cycle ran. A path BOTH sides edited (in different places) merges clean: its blob at the
+// segment end is neither the base's nor the story's, so byte-equality with the base saw an agent edit where there was
+// only git's own three-way merge. The merge is RECOMPUTED here (`git merge-tree --write-tree` of the merge commit's two
+// parents) and the path is attributed to the base only when the blob the merge commit carries IS the recomputed one:
+// conflict resolution or an evil merge (content beyond the recomputation) differs from it and stays the PR's change.
+// A recomputation that conflicts, or a git without `--write-tree` (< 2.38), yields no exemption — fail closed.
+function autoMergeTree(entry, cwd) {
+  if (entry.autoTree === undefined) {
+    const out = git(['merge-tree', '--write-tree', '--no-messages', entry.first, entry.parent], cwd, { allowFail: true })
+    const tree = (out ?? '').split('\n')[0].trim()
+    entry.autoTree = SHA_RE.test(tree) ? tree : null
+  }
+  return entry.autoTree
+}
+// A path (sealed, or unsealed within a segment) whose blob differs from its blob at the segment start is still a breach — unless every difference was brought in by a
+// merge of the base: walking the story's merges of the base in order, each merge that touched the path must find the
+// path exactly as the previous step left it on its first parent, carry the clean-merge result (or the base's own blob),
+// and nothing may touch the path outside those merges. An edit before, between or after the merges breaks the chain.
+function sealedBlobBroughtByBase({ path, snapshot, head, baseRef, cwd }) {
+  const merges = mergedBaseParents({ from: snapshot, to: head, baseRef, cwd }).filter(e => e.changed.has(path)).reverse()
+  if (!merges.length) return false
+  let expected = blobAt(snapshot, path, cwd)
+  for (const entry of merges) {
+    if (blobAt(entry.first, path, cwd) !== expected) return false
+    const atMerge = blobAt(entry.merge, path, cwd)
+    const atBase = blobAt(entry.parent, path, cwd)
+    if (!entry.mergeBase || blobAt(entry.mergeBase, path, cwd) === atBase) return false
+    const tree = autoMergeTree(entry, cwd)
+    if (atMerge === null || !(atMerge === atBase || (tree !== null && atMerge === blobAt(tree, path, cwd)))) return false
+    expected = atMerge
+  }
+  return blobAt(head, path, cwd) === expected
+}
+// AN2 — files GENERATED by a script after a merge of the base (the mirrors of the dataset, the `.pair/llms.txt`
+// index) are not the agent's changes, and no override is needed or honored for them: the exemption is derived HERE, from
+// the repository's own bytes, never declared by an agent. A path under a mirror root is generated iff its blob at the
+// segment end is byte-identical to a file of the same name under the dataset (`packages/knowledge-hub/dataset/`) — the
+// invariant `skills:conformance` enforces — so a mirror that diverges, or any file with no dataset counterpart, stays a
+// breach. A DELETED mirror is generated iff every dataset file it mirrored at the segment start is gone at the end.
+// The llms index is generated iff every line the segment changed in it is an index line (blank, heading, or
+// `- [title](path)`) and every added link resolves to a file at the end: prose smuggled into it, or a ghost link, is not.
+export const GENERATED_MIRROR_ROOTS = Object.freeze(['.claude/', '.agents/', '.agent/', '.cursor/', '.windsurf/', '.github/', '.pair/knowledge/'])
+export const GENERATED_DATASET_ROOT = 'packages/knowledge-hub/dataset/'
+export const GENERATED_LLMS_INDEX = '.pair/llms.txt'
+const LLMS_ENTRY_RE = /^- \[(.+)\]\(([^()\s]+)\)$/
+const stripDot = seg => seg.replace(/^\./, '')
+// The mirror's path must be the dataset file's path under the mirror transform: identical relative path, or — for the
+// flattened/prefixed skill and workflow layouts — the same basename and a mirror parent directory that ends with the
+// dataset parent directory (`pair-capability-foo` ↔ `capability/foo`, `workflows` ↔ `.workflows`). Basename alone is not enough.
+function mirrorPathMatches(mirrorPath, originPath) {
+  const rel = originPath.slice(GENERATED_DATASET_ROOT.length)
+  if (rel === mirrorPath) return true
+  const m = mirrorPath.split('/')
+  const o = rel.split('/')
+  if (m.at(-1) !== o.at(-1) || m.length < 2 || o.length < 2) return false
+  const mp = stripDot(m.at(-2))
+  const op = stripDot(o.at(-2))
+  return mp === op || mp.endsWith(`-${op}`)
+}
+const modeAt = (rev, path, cwd) => /^(\d+) /.exec(git(['ls-tree', rev, '--', path], cwd, { allowFail: true }) ?? '')?.[1] ?? null
+function datasetBlobIndex(rev, cwd, cache) {
+  if (!cache.has(rev)) {
+    const byBlob = new Map()
+    const ls = git(['-c', 'core.quotePath=false', 'ls-tree', '-r', rev, '--', GENERATED_DATASET_ROOT], cwd, { allowFail: true }) ?? ''
+    for (const line of ls.split('\n').filter(Boolean)) {
+      const m = /^(\d+) blob ([0-9a-f]{40})\t(.+)$/.exec(line)
+      if (!m) continue
+      if (!byBlob.has(m[2])) byBlob.set(m[2], [])
+      byBlob.get(m[2]).push({ path: m[3], mode: m[1] })
+    }
+    cache.set(rev, byBlob)
+  }
+  return cache.get(rev)
+}
+// Origins of a mirror path at `rev`: same blob, same mode (never a symlink: 120000), a corresponding dataset path.
+const mirrorOrigins = (path, rev, cwd, cache) => {
+  const blob = blobAt(rev, path, cwd)
+  const mode = blob === null ? null : modeAt(rev, path, cwd)
+  if (blob === null || mode === null || mode === '120000') return []
+  return (datasetBlobIndex(rev, cwd, cache).get(blob) ?? []).filter(o => o.mode === mode && mirrorPathMatches(path, o.path)).map(o => o.path)
+}
+// An index title is the generator's own (`apps/pair-cli/src/registry/llms-generation.ts`, reused EXACTLY): the file's first
+// single-`#` heading, else the file name without its `.md`/`.mdx` extension; `Skills Guide` for the skills guide. The
+// title the entry already had at the segment start is also accepted. Free text anywhere else is not index content.
+export function llmsDerivedTitle(target, rev, cwd) {
+  if (target === '.pair/knowledge/skills-guide.md') return 'Skills Guide'
+  const body = git(['show', `${rev}:${target}`], cwd, { allowFail: true })
+  if (body === null) return null
+  return /^#\s+(.+)$/m.exec(body)?.[1] ?? basename(target).replace(/\.mdx?$/, '')
+}
+function llmsIndexRegenerated({ from, end, cwd }) {
+  const diff = git(['diff', '-U0', '--no-color', '--no-ext-diff', from, end, '--', GENERATED_LLMS_INDEX], cwd, { allowFail: true })
+  if (diff === null) return false
+  const before = git(['show', `${from}:${GENERATED_LLMS_INDEX}`], cwd, { allowFail: true }) ?? ''
+  const headings = new Set(before.split('\n').filter(l => /^#{1,6} /.test(l)))
+  const existing = new Map()
+  for (const l of before.split('\n')) {
+    const m = LLMS_ENTRY_RE.exec(l)
+    if (m) existing.set(m[2], m[1])
+  }
+  for (const line of diff.split('\n')) {
+    if (!/^[+-]/.test(line) || /^(\+\+\+|---) /.test(line)) continue
+    const text = line.slice(1)
+    if (text === '') continue
+    if (/^#{1,6} /.test(text)) {
+      if (line[0] === '+' && !headings.has(text)) return false
+      continue
+    }
+    const m = LLMS_ENTRY_RE.exec(text)
+    if (!m) return false
+    if (line[0] !== '+') continue
+    const target = m[2].split('#')[0]
+    if (blobAt(end, target, cwd) === null) return false
+    if (existing.get(m[2]) !== m[1] && llmsDerivedTitle(target, end, cwd) !== m[1]) return false
+  }
+  return true
+}
+export function isGeneratedPath({ path, status, from, end, cwd, cache }) {
+  if (path === GENERATED_LLMS_INDEX) return status !== 'D' && llmsIndexRegenerated({ from, end, cwd })
+  if (!GENERATED_MIRROR_ROOTS.some(r => path.startsWith(r))) return false
+  if (status === 'D') {
+    const origins = mirrorOrigins(path, from, cwd, cache)
+    return origins.length > 0 && origins.every(o => blobAt(end, o, cwd) === null)
+  }
+  return mirrorOrigins(path, end, cwd, cache).length > 0
+}
 
 export function verifyChain({ pr, base, cwd, expectContract, runDir, baseRef }) {
   const overrides = runDir !== undefined ? readCustodyOverrides(runDir) : []
@@ -826,12 +1021,18 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [],
   }
   // Blob identity: at HEAD every sealed artifact equals the LATEST snapshot that lists it.
   const latestBy = new Map()
+  const sealedFromBase = new Set()
+  const generated = new Set()
+  const mirrorCache = new Map()
   for (const c of contracts) for (const f of c.listed) latestBy.set(f, c)
   for (const [f, c] of latestBy) {
     const atSnap = git(['rev-parse', '--verify', '-q', `${c.sha}:${f}`], cwd, { allowFail: true })
     const atHead = git(['rev-parse', '--verify', '-q', `HEAD:${f}`], cwd, { allowFail: true })
     if (!atHead) breach('test-artifact-removed', { path: f })
-    else if (atSnap !== atHead) breach('test-blob-changed', { path: f, sealedBy: c.phase })
+    else if (atSnap !== atHead) {
+      if (sealedBlobBroughtByBase({ path: f, snapshot: c.sha, head, baseRef, cwd })) sealedFromBase.add(f)
+      else breach('test-blob-changed', { path: f, sealedBy: c.phase })
+    }
   }
   // Segments: the commits between one snapshot and the next (or HEAD) live under that snapshot's scope.
   const fromBase = new Set()
@@ -850,8 +1051,14 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [],
     for (const { status, path } of changes) {
       // US-506 AC-11: byte-identical to the base this segment merged ⇒ the base's change, not the PR's.
       // A sealed blob is never exempted this way: its identity is checked below regardless.
-      if (mergedParents.length && !contracts.slice(0, i + 1).some(x => x.listed.includes(path)) && identicalToMergedBase(path, end, mergedParents, cwd)) {
+      if (mergedParents.length && !contracts.slice(0, i + 1).some(x => x.listed.includes(path)) && identicalToMergedBase(path, end, mergedParents, cwd, c.sha, baseRef)) {
         fromBase.add(path)
+        continue
+      }
+      // AN2: a mirror / index a script regenerated — derived from the bytes, never from an agent's claim. A sealed
+      // blob is never exempted this way (its identity is checked regardless).
+      if (!contracts.slice(0, i + 1).some(x => x.listed.includes(path)) && isGeneratedPath({ path, status, from: c.sha, end, cwd, cache: mirrorCache })) {
+        generated.add(path)
         continue
       }
       // A blob sealed by THIS or an EARLIER snapshot stays sealed through every later segment: its
@@ -871,6 +1078,7 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [],
       if (!c.contract?.fixScope) continue
       const { allowedPaths, mode } = c.contract.fixScope
       if (mode === 'test') breach('test-mode-production-change', { path, status, segment: c.phase })
+      else if (mode === 'doc' && !PROSE_RE.test(path)) breach('doc-code-change', { path, status, segment: c.phase })
       else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path, segment: c.phase })
       else if (mode === 'behavioral' && status !== 'M' && isModulePath(path)) breach('behavioral-adds-or-moves-module', { path, status, segment: c.phase })
     }
@@ -890,7 +1098,8 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [],
     snapshots: snaps.map(s => ({ pr: s.pr, phase: s.phase, snapshot: s.sha, base: s.base, manifest: s.manifest })),
     breaches: unique,
     ...(overriddenBreaches.length ? { overriddenBreaches } : {}),
-    ...(fromBase.size ? { mergedBase: { baseRef, paths: [...fromBase].sort() } } : {}),
+    ...(fromBase.size || sealedFromBase.size ? { mergedBase: { baseRef, paths: [...fromBase].sort(), ...(sealedFromBase.size ? { sealedPaths: [...sealedFromBase].sort() } : {}) } } : {}),
+    ...(generated.size ? { generated: { paths: [...generated].sort() } } : {}),
   }
 }
 
@@ -920,12 +1129,17 @@ if (isMain()) {
   try {
     const { cmd, opts } = parseCli(process.argv.slice(2))
     // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
-    const FLAGS = { 'verify-chain': ['pr', 'base', 'cwd', 'contract-expected', 'run-dir', 'base-ref'], seal: ['pr', 'phase', 'base', 'cwd', 'contract', 'root', 'static-gates'], verify: ['pr', 'phase', 'base', 'cwd'] }
+    const FLAGS = { 'verify-chain': ['pr', 'base', 'cwd', 'contract-expected', 'run-dir', 'base-ref'], seal: ['pr', 'phase', 'base', 'cwd', 'contract', 'root', 'static-gates'], push: ['snapshot', 'branch', 'cwd'], verify: ['pr', 'phase', 'base', 'cwd'] }
     if (FLAGS[cmd]) {
       const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
       if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
     }
     const cwd = opts.cwd ?? process.cwd()
+    if (cmd === 'push') {
+      const out = pushSnapshot({ snapshot: opts.snapshot, branch: opts.branch, cwd: opts.cwd ?? process.cwd() })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.pushed ? 0 : 1)
+    }
     const common = { pr: opts.pr, phase: opts.phase, base: opts.base, cwd }
     for (const k of cmd === 'verify-chain' ? ['pr', 'base'] : ['pr', 'phase', 'base']) if (!opts[k]) throw new Error(`--${k} is required`)
     if (!/^\d+$/.test(String(opts.pr))) throw new Error(`--pr must be a number, got ${JSON.stringify(opts.pr)}`)
@@ -958,7 +1172,7 @@ if (isMain()) {
       out = verify(common)
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.verified ? 0 : 1)
-    } else throw new Error(`unknown command: ${cmd} (expected seal | verify | verify-chain)`)
+    } else throw new Error(`unknown command: ${cmd} (expected seal | verify | verify-chain | push)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)

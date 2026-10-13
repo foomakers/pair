@@ -349,7 +349,7 @@ test('TC-11: the workflow source dispatches ONLY skill invocations — no free-f
   // the prepare phase (cycle-prepare.mjs). No rule lives in them.
   const scriptRunners = all.filter(d => /^`(Run EXACTLY|Card )/.test(d))
   const dispatches = all.filter(d => !scriptRunners.includes(d))
-  assert.equal(scriptRunners.length, 9, `expected the nine autonomy script runners, found ${scriptRunners.length}`)
+  assert.equal(scriptRunners.length, 10, `expected the ten script runners (nine autonomy runners + the AO gh pr list lookup), found ${scriptRunners.length}`)
   assert.equal(dispatches.length, 5, `expected the five stage dispatches and nothing else (the template contract rides on the first review, t9d-2), found ${dispatches.length}`)
   for (const gone of ['PACING', 'TEXT SHAPE', 'CONTRACT INVENTORY', 'FINITE-STATE', 'SEALED RED SNAPSHOT', 'CONVERGENCE SWEEP', 'DO NOT FILE NEW ISSUES', 'ISOLATION (mandatory', 'sha256sum', 'git diff-tree', "'pair-remediation-planner'", "'pair-red-sealer'", "'pair-fix-verifier'", "'/pair-workflow-remediation-plan'", "'/pair-workflow-red-seal'", "'/pair-workflow-p3-verify'", "'/pair-workflow-cycle-comments'", "'/pair-workflow-pr-phase'"])
     assert.equal(code.includes(gone), false, `${gone} is still spelled in the workflow code`)
@@ -834,6 +834,23 @@ test('TC-10: a dead step (null or an unusable shape) is retried ONCE with the sa
   assert.equal(deadImpl.result.batch[0].status, 'failed-implement')
 })
 
+test('AH/B1: a stage agent that NEVER returns is bounded — and NEVER re-dispatched (a timed-out agent is not cancelled: a retry would be a second writer on the same worktree); the stage is failed-<stage> with a human-check reason', async () => {
+  const never = () => new Promise(() => {})
+  let implementerCalls = 0
+  const hung = await runWorkflow({ args: { cards: [STORY], agentTimeoutMinutes: 0.0003 }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-implementer' ? (implementerCalls++, never()) : {}) })
+  assert.equal(implementerCalls, 1, 'exactly ONE dispatch — no retry after a timeout')
+  assert.equal(hung.result.batch[0].status, 'failed-implement')
+  assert.match(hung.result.batch[0].reason, /timed out after .*m — the agent may still be running; human check required/)
+  assert.ok(hung.logs.some(l => /timeout after/.test(l)))
+})
+
+test('AH/B6: `agentTimeoutMinutes` is read from the PARSED args — a JSON-string args works like an object', async () => {
+  let implementerCalls = 0
+  const hung = await runWorkflow({ args: JSON.stringify({ cards: [STORY], agentTimeoutMinutes: 0.0003 }), dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-implementer' ? (implementerCalls++, new Promise(() => {})) : {}) })
+  assert.equal(implementerCalls, 1)
+  assert.equal(hung.result.batch[0].status, 'failed-implement')
+})
+
 test('TC-10 / TC-08: a verified contract that was not sealed, or sealed under a different hash, is failed-seal — the trusted state is never blessed by a new hash', async () => {
   const unsealed = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-red-contract-verifier' ? { verified: true, findings: [], sealed: false, reason: 'head-not-base' } : {}) })
   assert.equal(unsealed.result.batch[0].status, 'failed-seal')
@@ -931,9 +948,9 @@ test('finding history across cycles (canary v4): the FIRST review of a PR-entry 
   const carried = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review }) })
   assert.equal(carried.result.batch[0].status, 'ready-for-merge', JSON.stringify(carried.result.batch[0]))
   assert.deepEqual(stageLabels(carried.calls).slice(0, 3), ['verify:#292 r0', 'prepare:#292 r1-g1', 'validate:#292 r1-g1'])
-  const noEvidence = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'Rework', findings: [{ ...history, evidence: '' }, finding({ id: 'r5-11' })] } : { verdict: 'Approved', findings: [] }) }) })
+  const noEvidence = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review: pass => (pass <= 1 ? { verdict: 'Rework', findings: [{ ...history, evidence: '' }, finding({ id: 'r5-11' })] } : { verdict: 'Approved', findings: [] }) }) })
   assert.equal(noEvidence.result.batch[0].status, 'failed-verify')
-  const fresh = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'Rework', findings: [history, finding({ id: 'r0-1' })] } : { verdict: 'Approved', findings: [] }) }) })
+  const fresh = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review: pass => (pass <= 1 ? { verdict: 'Rework', findings: [history, finding({ id: 'r0-1' })] } : { verdict: 'Approved', findings: [] }) }) })
   assert.equal(fresh.result.batch[0].status, 'failed-verify')
 })
 
@@ -2391,4 +2408,111 @@ test('US-523 r2-8: nothing declared and nothing passed ⇒ the pre-#523 batch (i
   assert.equal(rowOf(none).status, 'ready-for-merge')
   const withText = await runWorkflow({ args: { cards: [STORY], policyText: '## Eligibility\n\nrisk:green\n' }, dispatch: stdDispatch(), autonomy: scripted({ resolved: { ok: true, active: false, policy: { until: 'pr', merge: GATE('always'), prepare: GATE('always') }, lines: [], warnings: [], errors: [] }, prepare: NEEDS_HUMAN }) })
   assert.equal(rowOf(withText).status, 'awaiting-human')
+})
+
+test('defect #252: the relayed decide and merge commands carry a COMPLETE gate (has + lacks) even when the resolve relay dropped the empty arrays', async () => {
+  const r = await driveWith({ until: 'merged', merge: 'when; has: needs-review' }, { resolved: { ok: true, active: true, policy: { until: 'merged', merge: { mode: 'when', has: ['needs-review'] }, prepare: { mode: 'always' } }, lines: [], warnings: [], errors: [] } })
+  const decide = r.calls.find(c => c.opts.label === 'decide:#292 implement')
+  assert.match(decide.prompt, /decide --policy '\{"until":"merged","merge":\{"mode":"when","has":\["needs-review"\],"lacks":\[\]\}\}' --boundary stage:implement/)
+  const check = r.calls.find(c => c.opts.label === 'merge-check:#292')
+  assert.ok(check, 'the merge check was dispatched')
+  assert.match(check.prompt, /--mergeGate '\{"mode":"when","has":\["needs-review"\],"lacks":\[\]\}'/)
+})
+
+test('F4: a resolved gate with a shell-unsafe label or a non-array has/lacks HALTs before any card is touched', async () => {
+  for (const merge of [{ mode: 'when', has: ["x'; rm -rf /"] }, { mode: 'when', has: 'needs-review' }, { mode: 'when', lacks: [1] }]) {
+    await assert.rejects(driveWith({ until: 'merged', merge: 'never' }, { resolved: { ok: true, active: true, policy: { until: 'merged', merge, prepare: { mode: 'always' } }, lines: [], warnings: [], errors: [] } }), /automation-policy-unresolved/)
+  }
+})
+
+test('relay role: script-relay dispatches default to haiku; models.relay / efforts.relay override; stage agents keep their models', async () => {
+  const relayLabels = /^(autonomy:resolve|tier:|decide:|escalate:|pr-state:|pr-lookup:|cascade:|merge-check:)/
+  const d = await driveWith({ until: 'merged', merge: 'never' }, { resolved: RESOLVED('merged') })
+  const relays = d.calls.filter(c => relayLabels.test(c.opts.label ?? ''))
+  assert.ok(relays.length >= 4, 'relay calls were made')
+  for (const c of relays) assert.equal(c.opts.model, 'haiku', c.opts.label)
+  for (const c of d.calls.filter(c => !relayLabels.test(c.opts.label ?? '') && c.opts.agentType)) assert.notEqual(c.opts.model, 'haiku', c.opts.label)
+  const mergeRun = d.calls.find(c => c.opts.label === 'merge:#292')
+  assert.ok(mergeRun, 'merge run was dispatched')
+  assert.notEqual(mergeRun.opts.model, 'haiku', 'merge: runs verify-quality and judges the gate colour — a judgement, never a relay')
+  const o = await driveWith({ until: 'merged', merge: 'never', model: 'opus', effort: 'max', models: { relay: 'sonnet' }, efforts: { relay: 'high' } }, { resolved: RESOLVED('merged') })
+  for (const c of o.calls.filter(c => relayLabels.test(c.opts.label ?? ''))) { assert.equal(c.opts.model, 'sonnet', c.opts.label); assert.equal(c.opts.effort, 'high', c.opts.label) }
+  for (const c of o.calls.filter(c => c.opts.agentType === 'pair-implementer')) assert.equal(c.opts.model, 'opus')
+  await assert.rejects(driveWith({ models: { relay: 'gpt' } }, { resolved: RESOLVED('pr') }), /unknown model/)
+  await assert.rejects(driveWith({ models: { planner: 'haiku' } }, { resolved: RESOLVED('pr') }), /retired/)
+})
+
+// ── AO: a handoff / result format error is validated, then retried ONCE with the exact error ─────────────
+// A stage agent that wrote a malformed handoff (a finding whose `blocking` disagrees with the policy, a result with no
+// PR number, an unusable `next`) halted the whole card at the first defect. The coordinator now re-dispatches that same
+// step once — it is re-entrant — telling the agent the EXACT validation error; a second failure ends as it always did.
+const reviewerCalls = calls => calls.filter(c => c.opts.agentType === 'pair-reviewer')
+test('AO w1: a verifier result that fails format validation is re-prompted once with the EXACT error; the corrected answer carries the card on', async () => {
+  const bad = { verdict: 'Rework', findings: [finding({ blocking: false })] }
+  const { result, calls, logs } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? bad : { verdict: 'Approved', findings: [] }) }) })
+  assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+  const reviews = reviewerCalls(calls)
+  assert.equal(reviews.length, 2, 'one rejected answer, one corrected answer — no more')
+  assert.ok(!/REJECTED by the coordinator/.test(reviews[0].prompt), 'the first dispatch carries no correction')
+  assert.match(reviews[1].prompt, /REJECTED by the coordinator/)
+  assert.match(reviews[1].prompt, /finding r0-1: blocking=false disagrees with the severity policy \(floor Minor, severity Major, transition open\)/)
+  assert.ok(logs.some(l => /failed format validation/.test(l)))
+})
+
+test('AO w2: a SECOND format failure ends exactly as before (failed-verify with the error), after exactly one retry', async () => {
+  const bad = { verdict: 'Rework', findings: [finding({ blocking: false })] }
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review: bad }) })
+  assert.equal(result.batch[0].status, 'failed-verify')
+  assert.match(result.batch[0].reason, /blocking=false disagrees with the severity policy/)
+  assert.equal(reviewerCalls(calls).length, 2)
+})
+
+test('AO w3: an implementation reported ok with no PR number is re-prompted once with the exact error, then proceeds; twice is failed-implement', async () => {
+  const std = stdDispatch()
+  let impl = 0
+  // the engine's first guess `implement a0` is redirected to the sealed path (no `$snapshot` yet): the defect is injected on the REAL implementation
+  const real = (p, o) => o.agentType === 'pair-implementer' && o.label.startsWith('implement:') && p.includes('$snapshot=')
+  const first = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (real(p, o) && impl++ === 0 ? { prNumber: null } : std(p, o)) })
+  assert.equal(first.result.batch[0].status, 'ready-for-merge', JSON.stringify(first.result.batch[0]))
+  const prompts = first.calls.filter(c => c.opts.label.startsWith('implement:') && c.prompt.includes('$snapshot=')).map(c => c.prompt)
+  assert.equal(prompts.length, 2)
+  assert.match(prompts[1], /implementation returned no PR number or head/)
+  assert.match(prompts[1], /resolve the existing durable state, branch and PR/)
+  assert.match(prompts[1], /do NOT open or publish a second PR/i)
+  const both = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (real(p, o) ? { prNumber: null } : std(p, o)) })
+  assert.equal(both.result.batch[0].status, 'failed-implement')
+  assert.equal(both.calls.filter(c => c.opts.label.startsWith('implement:') && c.prompt.includes('$snapshot=')).length, 2)
+})
+
+test('AO w3b: an implementation with no PR number whose branch ALREADY has exactly one open PR adopts it — no second dispatch; zero or several PRs fall back to the retry', async () => {
+  const std = stdDispatch()
+  const real = (p, o) => o.agentType === 'pair-implementer' && o.label.startsWith('implement:') && p.includes('$snapshot=')
+  const drive = prs => runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.label?.startsWith('pr-lookup:') ? { prs } : real(p, o) ? { prNumber: null } : std(p, o)) })
+  const adopt = await drive([{ number: 7, headRefOid: HEAD }])
+  assert.equal(adopt.calls.filter(c => c.opts.label.startsWith('implement:') && c.prompt.includes('$snapshot=')).length, 1, 'adopted, not re-dispatched')
+  const lookup = adopt.calls.find(c => c.opts.label === 'pr-lookup:#292')
+  assert.match(lookup.prompt, /gh pr list --head feat\/#292-x --state open/)
+  assert.equal(lookup.opts.model, 'haiku')
+  assert.equal(adopt.result.batch[0].status, 'ready-for-merge', JSON.stringify(adopt.result.batch[0]))
+  for (const prs of [[], [{ number: 7, headRefOid: HEAD }, { number: 8, headRefOid: HEAD }]]) {
+    const r = await drive(prs)
+    assert.equal(r.calls.filter(c => c.opts.label.startsWith('implement:') && c.prompt.includes('$snapshot=')).length, 2, JSON.stringify(prs))
+  }
+})
+
+test('AO w4: an unusable `next` in a stage result (malformed handoff) is re-prompted once with the exact defect, then proceeds', async () => {
+  const std = stdDispatch()
+  let impl = 0
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-implementer' && o.label.startsWith('implement:') && p.includes('$snapshot=') && impl++ === 0 ? { next: { step: 'verify', mode: 'first', phase: 'not a phase', round: 0, attempt: 1 } } : std(p, o)) })
+  assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+  const prompts = calls.filter(c => c.opts.label.startsWith('implement:') && c.prompt.includes('$snapshot=')).map(c => c.prompt)
+  assert.equal(prompts.length, 2)
+  assert.match(prompts[1], /phase "not a phase" is not a phase id/)
+})
+
+test('AO control: a stage that answers correctly is dispatched once — no retry, no correction note', async () => {
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch() })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.equal(reviewerCalls(calls).length, 1)
+  assert.ok(!calls.some(c => /REJECTED by the coordinator/.test(c.prompt)))
 })

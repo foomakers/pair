@@ -1,3 +1,4 @@
+import { validateStopPredicateLine } from './automation-policy'
 import { ENGINE_IDS, isEngineId, type EngineId } from './engines'
 import { idSafetyFailure, isSafeId, isSafePromptText, promptSafetyFailure } from './prompt-safety'
 
@@ -89,6 +90,10 @@ export interface RunCommandConfig {
   approveProjectTrust: boolean
   /** `--approve-ineligible`: this ONE run may proceed on a card `## Eligibility` would exclude. */
   approveIneligible: boolean
+  /** Internal (the loop sets it): the effective filter as THIS card's eligibility; needs `--card`. */
+  eligibilityFilter?: string
+  /** `--predicate '<selector> ⇒ <condition>'`: the loop's stop predicate, overriding `## Stop Predicate` (needs `--parallel`). */
+  predicate?: string
   iterationTimeoutSeconds: number
   /** Present only when `--card` was passed: the run is a tag-driven dispatch (US-217). */
   dispatch?: RunDispatchRequest
@@ -135,6 +140,8 @@ interface ParseRunOptions {
   autonomous?: boolean
   approveProjectTrust?: boolean
   approveIneligible?: boolean
+  eligibilityFilter?: string
+  predicate?: string
   iterationTimeout?: string | number
   card?: string
   cardTags?: string
@@ -485,23 +492,54 @@ function resolveScope(options: ParseRunOptions): RunScopeOptions {
 }
 
 /**
- * US-521: `--until`, `--prepare`, `--merge` drive ONE card's delivery cycle, so they need `--card`. The
- * loop flavours (`--root`, `--watch`) do not carry them through this driver — refused here, never silently ignored.
+ * US-521: `--until`, `--prepare`, `--merge` drive ONE card's delivery cycle, so they need `--card` — or
+ * `--parallel` (with or without `--watch`), whose fan-out forwards them to every child `run --card` it spawns.
+ * Anywhere else they are refused here, never silently ignored.
  * Content is only safety-checked (prompt/shell); the grammar is the shared script's.
  */
+function refuseAutonomyOffCycle(until?: string, prepare?: string): never {
+  const flag = until !== undefined ? '--until' : prepare !== undefined ? '--prepare' : '--merge'
+  throw new Error(
+    `${flag} sets how far ONE card's delivery cycle goes and is only meaningful with --card or --parallel ` +
+      '(the loop forwards it to every child card; a plain skill run takes no autonomy arguments)',
+  )
+}
+
 function resolveAutonomyArguments(options: ParseRunOptions): RunAutonomyArguments | undefined {
   const until = promptSafeText(options.until, '--until')
   const prepare = promptSafeText(options.prepare, '--prepare')
   const merge = promptSafeText(options.merge, '--merge')
   if (until === undefined && prepare === undefined && merge === undefined) return undefined
-  if (options.card === undefined) {
-    const flag = until !== undefined ? '--until' : prepare !== undefined ? '--prepare' : '--merge'
+  if (options.card === undefined && options.parallel === undefined)
+    refuseAutonomyOffCycle(until, prepare)
+  return { ...(until && { until }), ...(prepare && { prepare }), ...(merge && { merge }) }
+}
+
+/**
+ * `--predicate '<selector> ⇒ <condition>'` — the loop's stop predicate, argument > `## Stop Predicate`. Only a
+ * loop (`--parallel`) has one; it is validated with the adoption's own grammar HERE, before anything spawns.
+ */
+function predicateOf(options: ParseRunOptions): { predicate?: string } {
+  const text = promptSafeText(options.predicate, '--predicate')
+  if (text === undefined) return {}
+  if (options.parallel === undefined) {
     throw new Error(
-      `${flag} sets how far ONE card's delivery cycle goes and is only meaningful with --card ` +
-        '(the loop flavours do not carry it through this driver; the skill takes the autonomy arguments)',
+      '--predicate is the stop predicate of the loop and needs --parallel (with or without --watch)',
     )
   }
-  return { ...(until && { until }), ...(prepare && { prepare }), ...(merge && { merge }) }
+  return { predicate: validateStopPredicateLine(text.trim()) }
+}
+
+/** The loop's per-card eligibility input (`--eligibility-filter`): meaningless without `--card`. */
+function eligibilityFilterOf(options: ParseRunOptions): { eligibilityFilter?: string } {
+  const value = promptSafeText(options.eligibilityFilter, '--eligibility-filter')
+  if (value === undefined) return {}
+  if (options.card === undefined) {
+    throw new Error(
+      "--eligibility-filter is the loop's per-card eligibility input and needs --card",
+    )
+  }
+  return { eligibilityFilter: value }
 }
 
 /**
@@ -540,6 +578,8 @@ export function parseRunCommand(options: ParseRunOptions, args: string[] = []): 
     autonomous: options.autonomous === true,
     approveProjectTrust: options.approveProjectTrust === true,
     approveIneligible: options.approveIneligible === true,
+    ...eligibilityFilterOf(options),
+    ...predicateOf(options),
     iterationTimeoutSeconds:
       options.iterationTimeout === undefined
         ? DEFAULT_ITERATION_TIMEOUT_SECONDS

@@ -20,6 +20,8 @@ import {
   reduceCycleMetrics,
   renderMarkdown,
   renderPrSummary,
+  renderFindingsComment,
+  newFindingsOf,
   publishSummary,
   updatePublicationState,
   HUMAN_BOUNDARY,
@@ -1207,4 +1209,53 @@ test('DR3-07: the folded lifetime cycle counts are DISCRIMINATED — not inherit
     { a: folded.cycles.attempted, s: folded.cycles.spent, c: folded.cycles.completed },
     'the two readings inside one entry must agree — and `a` alone would give 1/1/1 beside 5/4/3',
   )
+})
+
+// ── AK: the synthesis always carries the findings table; late defects read missedUpstream; honest metrics ─────────
+const FIXTURE_134 = fileURLToPath(new URL('./fixtures/story-134-reviews/', import.meta.url))
+function dir134() {
+  const { dir } = runDir()
+  for (const f of readdirSync(FIXTURE_134)) writeFileSync(join(dir, f), readFileSync(join(FIXTURE_134, f)))
+  return dir
+}
+const view134 = () => reduceCycleMetrics({ dir: dir134(), repository: 'foomakers/pair', story: '134', branch: 'feature/US-134-x', pr: 534, runId: 'story-134', observations: [] })
+
+test('AK (#534 fixture): the synthesis ALWAYS includes a findings table — id, severity, round found, status, location, one-line summary, resolution evidence', () => {
+  const md = renderPrSummary(view134())
+  assert.match(md, /\*\*Findings\*\*/)
+  assert.match(md, /\| id \| severity \| found \| status \| location \| summary \| resolution \|/)
+  for (const id of ['r0-1', 'r0-2', 'r0-3', 'r0-4', 'r1-5']) assert.match(md, new RegExp(`\\| ${id} \\|`), id)
+  const row = id => md.split('\n').find(l => l.startsWith(`| ${id} |`))
+  assert.match(row('r0-1'), /\| Major \| r0 \| resolved \|/)
+  assert.match(row('r0-1'), /26b20967/, 'resolution evidence: the commit the finding was resolved on')
+  assert.match(row('r1-5'), /\| Minor \| r1 \| resolved \|/, 'found at r1, resolved at r2')
+  assert.match(row('r0-2'), /\| Questions \| r0 \| open \|/)
+})
+
+test('AK: late defects read `missedUpstream` — r1-5 is counted, not "preexisting-missed 0"', () => {
+  const late = view134().defects.late
+  assert.equal(late.missedUpstream, 1)
+  assert.equal(late.preexistingMissed, 1)
+  assert.match(renderPrSummary(view134()), /preexisting-missed 1 · introduced-by-remediation 0 · unknown 0 · missedUpstream 1/)
+})
+
+test('AK: with no host usage the metrics say "not recorded (in-session)", and the elapsed time is derived from the handoff timestamps', () => {
+  const md = renderPrSummary(view134())
+  assert.match(md, /tokens not recorded \(in-session/)
+  assert.doesNotMatch(md, /unknown \(coverage|in unknown/)
+  assert.match(md, /elapsed ≈ 2h23m \(handoff timestamps/)
+})
+
+test('AK: a re-review that opens NEW findings gets a visible comment — only the findings first seen in a re-review, plus every open one; silent when it opens nothing new', () => {
+  const dir = dir134()
+  const reviews = readdirSync(dir).filter(f => f.endsWith('-review-phase.json')).sort().map(f => JSON.parse(readFileSync(join(dir, f), 'utf8')))
+  assert.deepEqual(newFindingsOf(reviews.slice(0, 2)).map(f => f.id), ['r1-5'])
+  assert.deepEqual(newFindingsOf(reviews.slice(0, 1)), [], 'the first review is the first-review comment, not a re-review')
+  const body = renderFindingsComment({ reviews: reviews.slice(0, 2), story: '134', pr: 534, runId: 'story-134' })
+  assert.ok(body.startsWith('<!-- pair:findings #134 PR#534 run:story-134 -->'))
+  assert.match(body, /Open findings/)
+  assert.match(body, /\| r1-5 \| Minor \| r1 \|/)
+  assert.match(body, /new in r1/i)
+  assert.doesNotMatch(body, /\| r0-1 \|/, 'a resolved finding is not an open one')
+  assert.equal(renderFindingsComment({ reviews: reviews.slice(0, 1), story: '134', pr: 534 }), null)
 })

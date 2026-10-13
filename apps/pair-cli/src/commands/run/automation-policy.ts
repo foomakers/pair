@@ -269,6 +269,39 @@ const SELECTOR = /^(root|tag:.+|type:.+)\s*⇒\s*(.+)$/
 const ASCII_ARROW = /^(root|tag:.+|type:.+)\s*=>\s*(.+)$/
 const CONDITIONS = ['Draft', 'Ready', 'In Progress', 'Done']
 
+/**
+ * One `<selector> ⇒ <condition>` predicate line, validated with the grammar `## Stop Predicate` uses (also what
+ * `--predicate` takes): HALTs on a near-miss arrow, a malformed line, an empty selector payload, a bad condition
+ * or content that could become a command fragment. Returns the line, trimmed.
+ */
+export function validateStopPredicateLine(line: string): string {
+  const match = SELECTOR.exec(line)
+  if (!match) {
+    // Named separately from "matches neither grammar": an ASCII arrow is a spelling mistake with
+    // an obvious fix, and reporting it as an unrecognised line sends the maintainer hunting.
+    if (ASCII_ARROW.test(line)) {
+      policyHalt(
+        `\`## Stop Predicate\` line \`${line}\` uses \`=>\`, but the documented arrow is \`⇒\` ` +
+          `(U+21D2) — the same form the fan-out workflow requires, so the two realizations of the ` +
+          `loop read this file identically`,
+      )
+    }
+    policyHalt(
+      `\`## Stop Predicate\` line \`${line}\` matches neither \`<selector> ⇒ <condition>\` nor \`max-iterations: <n>\``,
+    )
+  }
+  assertSelector(match[1]!.trim(), line)
+  assertCondition(match[2]!.trim(), line)
+  // The WHOLE LINE is what `readStopPredicate` returns and what reaches the prompt, so the whole
+  // line is what gets content-checked (round 5, Major). Checking the selector payload alone left
+  // `root ⇒ has-tag:$(whoami)` through: `/^has-tag:\S+$/` is a SHAPE rule, and `\S+` happily
+  // admits a backtick, `$(` or 4000 characters. This exposure is TIER-2-ONLY — tier 1 accepts the
+  // same strings but evaluates the predicate in JS and never inlines it — so no parity comparison
+  // can catch it; the guard has to be applied here, directly.
+  assertSafePromptText('Stop Predicate', line)
+  return line
+}
+
 /** `## Stop Predicate` — the predicate line (borrowed verbatim) plus its `max-iterations` backstop. */
 function readStopPredicate(markdown: string): { predicate?: string; maxIterations: number } {
   const lines = sectionLines(markdown, 'Stop Predicate')
@@ -285,31 +318,7 @@ function readStopPredicate(markdown: string): { predicate?: string; maxIteration
       maxIterations = positiveInteger(iterations[1]!, '`## Stop Predicate` max-iterations')
       continue
     }
-    const match = SELECTOR.exec(line)
-    if (!match) {
-      // Named separately from "matches neither grammar": an ASCII arrow is a spelling mistake with
-      // an obvious fix, and reporting it as an unrecognised line sends the maintainer hunting.
-      if (ASCII_ARROW.test(line)) {
-        policyHalt(
-          `\`## Stop Predicate\` line \`${line}\` uses \`=>\`, but the documented arrow is \`⇒\` ` +
-            `(U+21D2) — the same form the fan-out workflow requires, so the two realizations of the ` +
-            `loop read this file identically`,
-        )
-      }
-      policyHalt(
-        `\`## Stop Predicate\` line \`${line}\` matches neither \`<selector> ⇒ <condition>\` nor \`max-iterations: <n>\``,
-      )
-    }
-    assertSelector(match[1]!.trim(), line)
-    assertCondition(match[2]!.trim(), line)
-    // The WHOLE LINE is what `readStopPredicate` returns and what reaches the prompt, so the whole
-    // line is what gets content-checked (round 5, Major). Checking the selector payload alone left
-    // `root ⇒ has-tag:$(whoami)` through: `/^has-tag:\S+$/` is a SHAPE rule, and `\S+` happily
-    // admits a backtick, `$(` or 4000 characters. This exposure is TIER-2-ONLY — tier 1 accepts the
-    // same strings but evaluates the predicate in JS and never inlines it — so no parity comparison
-    // can catch it; the guard has to be applied here, directly.
-    assertSafePromptText('Stop Predicate', line)
-    predicate = line
+    predicate = validateStopPredicateLine(line)
   }
 
   return {

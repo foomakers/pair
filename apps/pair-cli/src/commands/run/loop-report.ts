@@ -1,9 +1,14 @@
 import { adoptionSelection } from './autonomy-policy'
-import type { AutomationPolicy } from './automation-policy'
+import { describeMergePosture, type AutomationPolicy } from './automation-policy'
 import type { AutonomyResolution } from './cycle-scripts'
 import { FAIL_SAFE_MAX_ITERATIONS } from './automation-policy'
 import { DEFAULT_WATCH_INTERVAL, type RunCommandConfig } from './parser'
-import type { IterationRecord, LoopResult, StopReason } from './watch-loop'
+import {
+  DEFAULT_RETRY_BUDGET,
+  type IterationRecord,
+  type LoopResult,
+  type StopReason,
+} from './watch-loop'
 
 /**
  * What the `--parallel` fan-out resolved to run, and the text it prints about it (US-522 AC11, AC12).
@@ -30,6 +35,8 @@ export interface LoopValues {
   readonly interval: Sourced & { readonly ms: number }
   /** The effective iteration cap, and what bound it. */
   readonly cap: { readonly value: number; readonly bound: string }
+  /** The effective stop predicate and where it came from; absent ⇒ none declared. */
+  readonly predicate?: Sourced | undefined
 }
 
 const flagOr = (
@@ -106,6 +113,12 @@ export function resolveLoopValues(config: RunCommandConfig, policy: AutomationPo
       ms: interval.seconds * 1000,
     },
     cap: resolveCap(config, policy),
+    predicate:
+      config.predicate !== undefined
+        ? { value: config.predicate, source: '--predicate' }
+        : policy.stopPredicate !== undefined
+          ? { value: policy.stopPredicate, source: '## Stop Predicate' }
+          : undefined,
   }
 }
 
@@ -144,12 +157,20 @@ export function describeLoopValues(
     `  filter: ${show(selection.filter)}`,
     `  assignee: ${show(selection.assignee)}`,
     `  status: ${show(selection.status)}`,
-    'Excluded every iteration: escalated, locked and already-driven cards.',
+    `  stop predicate: ${values.predicate === undefined ? '(none)' : show(values.predicate)} — checked at each iteration boundary, before work: once satisfied the goal is reached and no new work starts; never satisfied by an empty or incomplete snapshot`,
+    `  retry budget: ${DEFAULT_RETRY_BUDGET} per failed card (KB default) — then excluded: retry budget exhausted`,
+    'Excluded: escalated (until cleared), locked and terminal cards (merged, parked, target reached); a failed card is retried within its budget.',
   ]
 }
 
 const humanInterval = (ms: number): string =>
   ms % 60_000 === 0 ? `${ms / 60_000}m` : `${ms / 1000}s`
+
+/** What a satisfied stop predicate was judged on, so the stop is auditable. */
+function stopEvidence(record: IterationRecord): string {
+  const judged = record.next.kind === 'stop' && record.next.reason === 'stop predicate satisfied'
+  return judged && record.predicateEvidence !== undefined ? ` (${record.predicateEvidence})` : ''
+}
 
 /** AC11: the ONE line printed per iteration. */
 export function renderIterationLine(record: IterationRecord, intervalText: string): string {
@@ -157,17 +178,24 @@ export function renderIterationLine(record: IterationRecord, intervalText: strin
     record.skipped.length === 0
       ? 'none'
       : record.skipped.map(s => `#${s.id} ${s.detail}`).join(', ')
+  const retried =
+    (record.retried ?? []).length === 0
+      ? ''
+      : ` · ${record.retried!.map(r => `retried #${r.id} (retry ${r.attempt} of ${r.budget})`).join(', ')}`
+  const reclaimed = (record.reclaimed ?? [])
+    .map(r => ` · reclaimed stale lock #${r.id} (pid ${r.pid} dead)`)
+    .join('')
   const ran =
     record.outcomes.length === 0
       ? 'none'
       : record.outcomes.map(o => `#${o.id} ${o.outcome}`).join(', ')
   const next =
     record.next.kind === 'stop'
-      ? `stopping: ${record.next.reason}`
+      ? `stopping: ${record.next.reason}${stopEvidence(record)}`
       : record.next.kind === 'waiting'
         ? `waiting ${intervalText || humanInterval(record.next.ms)}`
         : 'next iteration'
-  return `  Iteration ${record.iteration}/${record.cap}: selected ${record.selected} · skipped ${skipped} · ran ${ran}${describePrepare(record.outcomes)} · ${next}`
+  return `  Iteration ${record.iteration}/${record.cap}: selected ${record.selected} · skipped ${skipped}${retried}${reclaimed} · ran ${ran}${describePrepare(record.outcomes)} · ${next}`
 }
 
 /** US-523: ` · prepare: N prepared, N escalated, N needs-human` — only when a card's prepare phase reported. */
@@ -190,6 +218,19 @@ export function renderLoopAuditLine(
   return `${at} ${fields.map(([k, v]) => `${k}=${oneLine(v)}`).join(' ')}`
 }
 
+/** What each child `run --card` is handed: only the autonomy arguments the operator passed, with the resolved source. */
+export function forwardedAutonomy(
+  config: RunCommandConfig,
+  autonomy: AutonomyResolution | undefined,
+): Array<[string, string]> {
+  return (['until', 'prepare', 'merge'] as const).flatMap(key => {
+    const value = config.autonomy?.[key]
+    if (value === undefined) return []
+    const source = autonomy?.effective?.[key]?.source ?? 'argument'
+    return [[key, `${value} (${source})`] as [string, string]]
+  })
+}
+
 export function loopStartFields(
   values: LoopValues,
   selection: FanOutSelection,
@@ -210,6 +251,13 @@ export function loopStartFields(
   ]
 }
 
+/** The loop-start audit fields for the autonomy arguments forwarded to each child (empty when none). */
+export function forwardedFields(
+  forwarded: ReadonlyArray<readonly [string, string]>,
+): Array<[string, string]> {
+  return forwarded.map(([k, v]) => [`child-${k}`, v])
+}
+
 export function iterationFields(record: IterationRecord): Array<[string, string]> {
   return [
     ['event', 'iteration'],
@@ -221,6 +269,22 @@ export function iterationFields(record: IterationRecord): Array<[string, string]
         ? '(none)'
         : record.skipped.map(s => `${s.id}:${s.reason}`).join(','),
     ],
+    ...((record.retried ?? []).length > 0
+      ? [
+          ['retried', record.retried!.map(r => `${r.id}:${r.attempt}/${r.budget}`).join(',')] as [
+            string,
+            string,
+          ],
+        ]
+      : []),
+    ...((record.reclaimed ?? []).length > 0
+      ? [
+          ['lock-reclaimed', record.reclaimed!.map(r => `${r.id}:pid${r.pid}`).join(',')] as [
+            string,
+            string,
+          ],
+        ]
+      : []),
     [
       'ran',
       record.outcomes.length === 0
@@ -259,4 +323,28 @@ export function describeLoopEnd(
   return result.reason === 'selection failed'
     ? `  Loop stopped at iteration ${result.iterations}: selection failed — ${result.selectionError ?? 'unknown'}`
     : `  Loop stopped after ${result.iterations} iteration(s): ${result.reason}`
+}
+
+/** The forwarded merge gate's real effect, or the policy's own posture when nothing is forwarded. */
+export function describeMergeLine(
+  policy: AutomationPolicy,
+  forwarded: ReadonlyArray<readonly [string, string]>,
+  /** The EFFECTIVE `until` (argument > adoption > default): only `merged` enters the merge stage at all. */
+  effectiveUntil?: string,
+) {
+  const merge = forwarded.find(([k]) => k === 'merge')?.[1]
+  if (merge === undefined) return describeMergePosture(policy)
+  const until = forwarded.find(([k]) => k === 'until')?.[1]
+  const target = effectiveUntil ?? until?.split(' ')[0]
+  if (target !== undefined && target !== 'merged') {
+    return (
+      `Merge: the gate (${merge.replace(/ \(([^()]*)\)$/, ', $1')}) is not evaluated — until is ${target}, no card enters the merge stage` +
+      ` (pass --until merged for it to apply)`
+    )
+  }
+  return (
+    `Merge: each card merges per its gate (${merge.replace(/ \(([^()]*)\)$/, ', $1')})` +
+    (until !== undefined ? `; delivery goes ${until}` : '') +
+    ` — #490's signal checks stay mandatory`
+  )
 }

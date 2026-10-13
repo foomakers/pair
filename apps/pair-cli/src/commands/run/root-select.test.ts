@@ -141,6 +141,16 @@ describe('selectRootCandidates — one engine process, its marker read back', ()
     )
   })
 
+  it('the selection process gets the SAME watchdog bound as a stage, and a stalled selection fails closed (documented in delivery-cycle.md, "Timeouts, stalls and retries by surface")', async () => {
+    const runIteration = vi.fn(async (_spawn: SpawnIterationInput) => ({
+      outcome: 'failed' as const,
+      detail: 'stalled: no terminal event within 60s — the engine was stopped',
+      stalled: true as const,
+    }))
+    await expect(selectRootCandidates({ ...input, runIteration })).rejects.toThrow(/stalled/)
+    expect(runIteration.mock.calls[0]![0].timeoutSeconds).toBe(60)
+  })
+
   it('fails closed when the stream carried no marker at all', async () => {
     const runIteration = vi.fn(async () => ({ outcome: 'success' as const, detail: 'ok' }))
     await expect(selectRootCandidates({ ...input, runIteration })).rejects.toThrow(

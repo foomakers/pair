@@ -1,6 +1,7 @@
 import { RootProvider } from 'fumadocs-ui/provider'
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
+import { HydrationMarker } from '@/components/hydration-marker'
 import { PostHogProvider } from '@/components/posthog-provider'
 import './global.css'
 
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <PostHogProvider>
           <RootProvider search={{ options: { type: 'static' } }}>{children}</RootProvider>
+          <HydrationMarker />
         </PostHogProvider>
       </body>
     </html>

@@ -21,6 +21,8 @@ Derive the machine contract from the human template so the reviewer's structured
 
 ## Algorithm
 
+**Headless execution (single owner: `.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/headless-stage-execution.md`)** — this stage runs headless: never leave a command in the background and never end your turn while a command runs (a push with a pre-push gate, a quality gate): use the maximum tool timeout, poll to completion in the same turn, and ALWAYS end with the stage's structured result — on partial progress `{ status: "failed", reason: "incomplete", detail, branch, outputHead }`.
+
 > Since 4.0.1 (t9d-2, AC-06) this skill is invoked by the FIRST review dispatch of a run (`$contractSpec`), not by a generator-only dispatch: the same steps, the same cache-by-hash, returned as the review's `templateContract`.
 
 1. Run `node "$SKILL_DIR/scripts/ensure-contract.mjs" check $template $contract` — where `$SKILL_DIR` is the directory this SKILL.md was loaded from; the script ships beside it ([scripts/ensure-contract.mjs](scripts/ensure-contract.mjs)) — for ALL hash/cache/validation work; never hand-roll hashing or freshness logic.

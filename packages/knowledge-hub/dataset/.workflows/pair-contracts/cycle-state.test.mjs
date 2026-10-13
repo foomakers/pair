@@ -459,6 +459,233 @@ test('resolve: remediation round — prepare(g1) → validate+seal → green →
   assert.equal(r.next.prior, 'r0-review-phase')
 })
 
+// ── C5: the SEALED/prepared contract's fixScope.mode is authoritative — the plan may not disagree, and resolve reads the contract's ──
+test('C5 publish: a red-spec whose plan group mode disagrees with its contract fixScope.mode is refused (`plan-contract-mode-mismatch`)', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1', { location: 'src/a.ts:1' })] })
+  const contractPath = join(dir, 'r1-g1-red-contract.json')
+  const contract = { fixScope: { owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] }, redTests: [{ file: 'test/a.test.ts', sha256: `sha256:${'1'.repeat(64)}`, command: 'node --test', baseline: 'red', observed: 'FAIL' }] }
+  writeFileSync(contractPath, JSON.stringify(contract))
+  const attempt = mode => publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'remediation', groupId: 'r1-g1', plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode, allowedPaths: mode === 'test' ? [] : ['src/a.ts'] }], carried: [] }, contractPath, contractHash: contractHash(contract) }), phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r0-review-phase' })
+  assert.match(String(attempt('test').reason), /^plan-contract-mode-mismatch/)
+  assert.equal(attempt('behavioral').published, true)
+})
+
+test('C5 resolve: the contract mode stamped at publish decides routing — a plan that says `behavioral` over a `test` contract still skips green-fix, and a `test` plan over a behavioral contract can no longer starve it', () => {
+  const route = (planMode, contractMode) => {
+    const { dir } = runDir()
+    review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1', { location: 'src/a.ts:1' })] })
+    redSpec(dir, 'r1-g1', { plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: planMode, allowedPaths: planMode === 'test' ? [] : ['src/a.ts'] }], carried: [] }, groupId: 'r1-g1', contractFixMode: contractMode }, { predecessor: 'r0-review-phase' })
+    redVerify(dir, 'r1-g1', {}, { predecessor: 'r1-g1-red-spec' })
+    return resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next.step
+  }
+  assert.equal(route('behavioral', 'test'), 'verify', 'contract test wins over the plan')
+  assert.equal(route('test', 'behavioral'), 'green', 'contract behavioral wins over the plan (no starved green)')
+})
+
+test('resolve: a sealed `mode: test` group (guard-strength, production already correct) never dispatches green-fix — the sealed tests ARE the fix', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1')] })
+  const plan = { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'test', allowedPaths: [] }], carried: [] }
+  redSpec(dir, 'r1-g1', { plan, groupId: 'r1-g1' }, { predecessor: 'r0-review-phase' })
+  redVerify(dir, 'r1-g1', {}, { predecessor: 'r1-g1-red-spec' })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.notEqual(r.next.step, 'green')
+  assert.notEqual(r.next.reason, 'escalate')
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase, round: r.next.round }, { step: 'verify', mode: 're-review', phase: 'r1', round: 1 })
+  assert.deepEqual(r.next.openIds, ['r0-1'])
+})
+
+test('resolve: a test-mode group followed by a behavioral group continues with the next group, based on the head the seal push PRODUCED (outputHead: the manifest-removal commit), the snapshot only when nothing was pushed (C4)', () => {
+  const build = pushed => {
+    const { dir } = runDir()
+    review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1'), finding('r0-2', { location: 'src/b.ts:4' })] })
+    const plan = { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'test', allowedPaths: [] }, { groupId: 'r1-g2', findings: ['r0-2'], owner: 'b', mode: 'behavioral', allowedPaths: ['src/b.ts'], dependsOn: ['r1-g1'] }], carried: [] }
+    redSpec(dir, 'r1-g1', { plan, groupId: 'r1-g1' }, { predecessor: 'r0-review-phase' })
+    redVerify(dir, 'r1-g1', pushed ? { pushed: true, outputHead: SHA('d') } : {}, { predecessor: 'r1-g1-red-spec' })
+    return resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next
+  }
+  assert.deepEqual([build(true).step, build(true).phase, build(true).base], ['prepare', 'r1-g2', SHA('d')], 'the next group builds on the pushed head, never on the snapshot it descends from')
+  assert.equal(build(false).base, SHA('b'), 'no push recorded: the sealed snapshot')
+})
+
+// P: the exact run-dir shape of story-482 (a sealed `mode: test` group, then a green-fix that should never have run)
+// recovers deterministically — the stray green-fix handoff is VOID, reported, and the cycle goes on to the re-review.
+const FIXTURE_482 = fileURLToPath(new URL('./fixtures/story-482-test-mode-green/', import.meta.url))
+function copyFixture482() {
+  const { dir } = runDir()
+  for (const f of readdirSync(FIXTURE_482)) writeFileSync(join(dir, f), readFileSync(join(FIXTURE_482, f)))
+  return dir
+}
+
+test('resolve: a green-fix handoff on a sealed mode:test group is void — story-482 run-dir shape routes to verify / re-review r1, never escalate', () => {
+  const dir = copyFixture482()
+  const r = resolve({ dir, workflowVersion: '4.0.1', policy: POLICY, entry: 'pr', pr: 531 })
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase, round: r.next.round }, { step: 'verify', mode: 're-review', phase: 'r1', round: 1 })
+  assert.deepEqual(r.next.openIds, ['r0-1'])
+  assert.notEqual(r.status, 'escalated')
+  assert.ok(r.warnings.some(w => /r1-g1-green-fix/.test(w) && /mode: test/.test(w)), 'the void handoff is reported')
+})
+
+test('supersede: a green-fix handoff of a sealed mode:test group can be set aside (the seal belongs to red-verify)', () => {
+  const dir = copyFixture482()
+  const out = supersede({ dir, phase: 'r1-g1', skill: 'green-fix', reason: 'mode:test group must not run green-fix', by: 'maintainer', workflowVersion: '4.0.1', policy: POLICY, entry: 'pr', pr: 531 })
+  assert.equal(out.superseded, true)
+  assert.equal(out.next.step, 'verify')
+  assert.equal(out.next.mode, 're-review')
+})
+
+test('supersede: the seal still protects red-spec/red-verify and a behavioral group\'s green-fix', () => {
+  const dir = copyFixture482()
+  assert.equal(supersede({ dir, phase: 'r1-g1', skill: 'red-spec', attempt: 2, reason: 'x', by: 'm', workflowVersion: '4.0.1', policy: POLICY, entry: 'pr', pr: 531 }).reason, 'supersede-sealed')
+})
+
+// ── AE: `mode: doc` (a prose-only remediation group) ────────────────────────────────────────────────────────────
+const DOC_CHECKLIST = [{ id: 'c1', finding: 'r0-1', requirement: 'The guide states X.', authority: 'src/a.ts:12' }]
+
+test('AE publish: a red-spec doc contract is validated by scope + checklist (code in allowedPaths and a missing checklist are refused, typed)', () => {
+  const { dir } = runDir()
+  const publishContract = (contract, phase = 'a0') => {
+    const contractPath = join(dir, `${phase}-red-contract.json`)
+    writeFileSync(contractPath, JSON.stringify(contract))
+    const f = writeDraft(dir, { run: 'run-1', story: '42', phase, skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath, contractHash: contractHash(contract) })
+    return publish({ dir, file: f, phase, skill: 'red-spec', workflowVersion: V })
+  }
+  const bad = publishContract({ fixScope: { owner: 'g', mode: 'doc', allowedPaths: ['src/a.ts'] }, checklist: DOC_CHECKLIST })
+  assert.equal(bad.reason, 'contract-invalid')
+  assert.ok(bad.errors.some(e => /prose/.test(e)), JSON.stringify(bad.errors))
+  const noList = publishContract({ fixScope: { owner: 'g', mode: 'doc', allowedPaths: ['docs/a.md'] } })
+  assert.ok(noList.errors.some(e => /checklist/.test(e)), JSON.stringify(noList.errors))
+  const ok = publishContract({ fixScope: { owner: 'g', mode: 'doc', allowedPaths: ['docs/a.md'] }, checklist: DOC_CHECKLIST })
+  assert.equal(ok.published, true, JSON.stringify(ok))
+})
+
+test('AE publish: a doc red-verify is verified on its checklist (no reproduction rows); a non-doc one still needs reproduced rows', () => {
+  const { dir } = runDir()
+  const base = { run: 'run-1', story: '42', phase: 'r1-g1', skill: 'red-verify', inputHead: SHA('a'), verified: true, sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, findings: [] }
+  const tryPublish = extra => publish({ dir, file: writeDraft(dir, { ...base, ...extra }), phase: 'r1-g1', skill: 'red-verify', workflowVersion: V })
+  assert.match(String(tryPublish({}).reason), /reproduced-missing/)
+  assert.match(String(tryPublish({ contractMode: 'doc' }).reason), /checklist/)
+  assert.equal(tryPublish({ contractMode: 'doc', checklistValidated: ['c1'] }).published, true)
+})
+
+test('AJ/C3 publish: a red-verify `contractMode` must match the PREPARED contract (a doc claim on a behavioral contract skips reproduction — refused), and checklistValidated must equal the contract checklist ids', () => {
+  const { dir } = runDir()
+  const specWith = (contract, phase = 'a0') => {
+    const contractPath = join(dir, `${phase}-red-contract.json`)
+    writeFileSync(contractPath, JSON.stringify(contract))
+    const f = writeDraft(dir, { run: 'run-1', story: '42', phase, skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath, contractHash: contractHash(contract) })
+    assert.equal(publish({ dir, file: f, phase, skill: 'red-spec', workflowVersion: V }).published, true)
+  }
+  const verifyWith = extra => publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', phase: 'a0', skill: 'red-verify', inputHead: SHA('a'), verified: true, sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, findings: [], ...extra }), phase: 'a0', skill: 'red-verify', workflowVersion: V })
+  specWith({ fixScope: { owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] }, redTests: [{ file: 'test/a.test.ts', sha256: `sha256:${'1'.repeat(64)}`, command: 'node --test', baseline: 'red', observed: 'FAIL' }] })
+  assert.match(String(verifyWith({ contractMode: 'doc', checklistValidated: ['c1'] }).reason), /contract-mode-mismatch/)
+  const { dir: d2 } = runDir()
+  const specDoc = contract => {
+    const contractPath = join(d2, 'a0-red-contract.json')
+    writeFileSync(contractPath, JSON.stringify(contract))
+    return publish({ dir: d2, file: writeDraft(d2, { run: 'run-1', story: '42', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath, contractHash: contractHash(contract) }), phase: 'a0', skill: 'red-spec', workflowVersion: V })
+  }
+  assert.equal(specDoc({ fixScope: { owner: 'g', mode: 'doc', allowedPaths: ['docs/a.md'] }, checklist: [{ id: 'c1', finding: 'r0-1', requirement: 'x', authority: 'y' }, { id: 'c2', finding: 'r0-1', requirement: 'x', authority: 'y' }] }).published, true)
+  const verifyDoc = extra => publish({ dir: d2, file: writeDraft(d2, { run: 'run-1', story: '42', phase: 'a0', skill: 'red-verify', inputHead: SHA('a'), verified: true, sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, findings: [], ...extra }), phase: 'a0', skill: 'red-verify', workflowVersion: V })
+  assert.match(String(verifyDoc({ contractMode: 'doc', checklistValidated: ['c1'] }).reason), /checklistValidated-mismatch/)
+  assert.match(String(verifyDoc({ checklistValidated: ['c1', 'c2'], reproduced: [{ rowId: 'r', baseline: 'red', command: 'node t', exitCode: 1, observed: 'FAIL' }] }).reason), /contract-mode-mismatch/, 'a doc contract verified WITHOUT contractMode: doc is refused too')
+  assert.equal(verifyDoc({ contractMode: 'doc', checklistValidated: ['c2', 'c1'] }).published, true)
+})
+
+test('AE resolve: a doc group routes prepare -> validate -> green -> verify exactly like a behavioral one (the green-fix edits the prose)', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1', { location: 'docs/guide.md:3', kind: 'defect' })] })
+  const plan = { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'guide', mode: 'doc', allowedPaths: ['docs/guide.md'] }], carried: [] }
+  redSpec(dir, 'r1-g1', { plan, groupId: 'r1-g1' }, { predecessor: 'r0-review-phase' })
+  redVerify(dir, 'r1-g1', { contractMode: 'doc', checklistValidated: ['c1'], reproduced: undefined }, { predecessor: 'r1-g1-red-spec' })
+  let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, phase: r.next.phase, mode: r.next.mode }, { step: 'green', phase: 'r1-g1', mode: 'remediation' })
+  assert.equal(r.next.group.mode, 'doc')
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('d'), evidenceLedger: [{ checklistId: 'c1', text: 'docs/guide.md:3' }] }, { predecessor: 'r1-g1-red-verify' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase }, { step: 'verify', mode: 're-review', phase: 'r1' })
+})
+
+// ── AJ: doc-vs-code grouping is DETERMINISTIC (plan validation at red-spec publish) ───────────────────────────────
+const planRound = (dir, groups, findings) => {
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings })
+  return { dir, plan: { groups, carried: [] } }
+}
+const tryPlan = (dir, plan) => {
+  const f = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'remediation', plan, groupId: 'r1-g1', contractPath: contractFileOf('r1-g1'), contractHash: `sha256:${'1'.repeat(64)}` })
+  return publish({ dir, file: f, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r0-review-phase' })
+}
+
+test('AJ plan: a behavioral/test group whose finding fixes PROSE ONLY is refused `prose-finding-not-doc: <id> belongs in a doc group`', () => {
+  const { dir } = runDir()
+  const { plan } = planRound(dir, [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'behavioral', allowedPaths: ['docs/guide.md'] }], [finding('r0-1', { location: 'docs/guide.md:3 (mirror .claude/docs/guide.md:3)' })])
+  const out = tryPlan(dir, plan)
+  assert.equal(out.published, false)
+  assert.match(out.reason, /^prose-finding-not-doc: r0-1 belongs in a doc group$/)
+  const asTest = tryPlan(dir, { groups: [{ ...plan.groups[0], mode: 'test', allowedPaths: [] }], carried: [] })
+  assert.match(asTest.reason, /^prose-finding-not-doc: r0-1/)
+  assert.equal(tryPlan(dir, { groups: [{ ...plan.groups[0], mode: 'doc' }], carried: [] }).published, true)
+})
+
+test('AJ/C2 plan: declared `findingPaths` are UNIONED with the location paths — never a replacement (declaring a prose file cannot hide that the location names code)', () => {
+  const { dir } = runDir()
+  const { plan } = planRound(dir, [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts', 'docs/guide.md'], findingPaths: { 'r0-1': ['docs/guide.md'] } }], [finding('r0-1', { location: 'src/a.ts:3' })])
+  assert.equal(tryPlan(dir, plan).published, true, 'code (location) + prose (declared) is a MIXED finding: behavioral')
+  const { dir: d2 } = runDir()
+  const p2 = planRound(d2, [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'behavioral', allowedPaths: ['docs/a.md'], findingPaths: { 'r0-1': ['docs/b.md'] } }], [finding('r0-1', { location: 'docs/a.md:3' })])
+  assert.match(tryPlan(d2, p2.plan).reason, /^prose-finding-not-doc: r0-1/)
+  const { dir: d3 } = runDir()
+  const p3 = planRound(d3, [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'doc', allowedPaths: ['docs/a.md'], findingPaths: { 'r0-1': ['docs/a.md'] } }], [finding('r0-1', { location: 'src/a.ts:3' })])
+  assert.match(tryPlan(d3, p3.plan).reason, /^code-finding-in-doc-group: r0-1/, 'declaring prose cannot smuggle a code finding into a doc group')
+})
+
+test('AJ/C7 plan: prose abbreviations in a location (e.g, i.e, vs.) are not paths', () => {
+  const { dir } = runDir()
+  const { plan } = planRound(dir, [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'behavioral', allowedPaths: ['docs/guide.md'] }], [finding('r0-1', { location: 'docs/guide.md:3 (e.g. the Step 2 bullet, i.e. the second one)' })])
+  assert.match(tryPlan(dir, plan).reason, /^prose-finding-not-doc: r0-1/, 'e.g / i.e must not count as code paths that make it "mixed"')
+})
+
+test('AJ plan: a MIXED finding (code + its own doc text) stays behavioral — prose in allowedPaths is accepted', () => {
+  const { dir } = runDir()
+  const { plan } = planRound(dir, [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts', 'docs/a.md'] }], [finding('r0-1', { location: 'src/a.ts:10 (and docs/a.md:5)' })])
+  assert.equal(tryPlan(dir, plan).published, true)
+})
+
+test('AJ plan: a code-touching finding in a doc group is refused (`code-finding-in-doc-group`); a doc group needs prose allowedPaths', () => {
+  const { dir } = runDir()
+  const { plan } = planRound(dir, [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'doc', allowedPaths: ['docs/a.md'] }], [finding('r0-1', { location: 'src/a.ts:10' })])
+  assert.match(tryPlan(dir, plan).reason, /^code-finding-in-doc-group: r0-1/)
+  const { dir: d2 } = runDir()
+  const p2 = planRound(d2, [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'doc', allowedPaths: ['src/a.ts'] }], [finding('r0-1', { location: 'docs/a.md:1' })])
+  assert.match(tryPlan(d2, p2.plan).reason, /doc-group-code-paths/)
+})
+
+test('AJ mixed round (#252 shape): a behavioral group + a doc group dependsOn it — accepted and routed in order g1 (prepare/validate/green) then g2, then ONE verify of both', () => {
+  const { dir } = runDir()
+  const groups = [
+    { groupId: 'r1-g1', findings: ['r0-1'], owner: 'facade', mode: 'behavioral', allowedPaths: ['src/facade.ts'] },
+    { groupId: 'r1-g2', findings: ['r0-2'], owner: 'skill', mode: 'doc', allowedPaths: ['skills/x/SKILL.md'], dependsOn: ['r1-g1'] },
+  ]
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1', { location: 'src/facade.ts:9' }), finding('r0-2', { location: 'skills/x/SKILL.md:4' })] })
+  redSpec(dir, 'r1-g1', { plan: { groups, carried: [] }, groupId: 'r1-g1' }, { predecessor: 'r0-review-phase' })
+  const step = () => resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next
+  assert.deepEqual([step().step, step().phase], ['validate', 'r1-g1'])
+  redVerify(dir, 'r1-g1', {}, { predecessor: 'r1-g1-red-spec' })
+  assert.deepEqual([step().step, step().phase], ['green', 'r1-g1'])
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('d'), evidenceLedger: [] }, { predecessor: 'r1-g1-red-verify' })
+  let n = step()
+  assert.deepEqual([n.step, n.phase, n.group.mode], ['prepare', 'r1-g2', 'doc'])
+  redSpec(dir, 'r1-g2', { groupId: 'r1-g2' }, { predecessor: 'r1-g1-green-fix' })
+  assert.deepEqual([step().step, step().phase], ['validate', 'r1-g2'])
+  redVerify(dir, 'r1-g2', { contractMode: 'doc', checklistValidated: ['c1'], reproduced: undefined, snapshot: SHA('e') }, { predecessor: 'r1-g2-red-spec' })
+  assert.deepEqual([step().step, step().phase], ['green', 'r1-g2'])
+  handoff(dir, 'r1-g2', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('f'), evidenceLedger: [] }, { predecessor: 'r1-g2-red-verify' })
+  n = step()
+  assert.deepEqual([n.step, n.mode, n.phase], ['verify', 're-review', 'r1'])
+  assert.deepEqual(n.openIds, ['r0-1', 'r0-2'])
+})
+
 test('resolve: an approved test failing on production returns to GREEN on the SAME seal (no new RED, no new plan); a second time exhausts the budget', () => {
   const { dir } = runDir()
   review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r0-1')] })
@@ -4714,4 +4941,31 @@ test('US-506 F-5 (AC8): `decide` refuses a finding the review did not escalate; 
   review(legacy, 'r0', { verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('c') }, needsHumanDecision: true, findings: [finding('r0-5')] })
   const one = decide({ dir: legacy, phase: 'r0', finding: 'r0-5', decision: 'd', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.equal(one.next.step, 'prepare', 'no owed list: the one decision answers the escalate')
+})
+
+// ── AF: `supersede --attempt <n>` — the CLI parses it; a value that lost its flag (shell word-splitting) is named, not "bad argument: <value>" ──
+test('AF supersede CLI: `--attempt <n>` reaches the function as a number; a dangling value is a clear error naming the shell cause', () => {
+  const { dir } = runDir()
+  const CLI_STATE = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
+  const base = ['supersede', '--dir', dir, '--phase', 'r1-g1', '--skill', 'red-spec', '--reason', 'why not', '--by', 'maintainer', '--workflowVersion', V]
+  const ok = spawnSync(process.execPath, [CLI_STATE, ...base, '--attempt', '9'], { encoding: 'utf8' })
+  assert.deepEqual(JSON.parse(ok.stdout), { superseded: false, reason: 'supersede-not-found', phase: 'r1-g1', attempt: 9 })
+  // a valueless flag keeps its exact refusal (pinned by the coordinator control tests) ...
+  const bad = spawnSync(process.execPath, [CLI_STATE, ...base, '--attempt'], { encoding: 'utf8' })
+  assert.equal(JSON.parse(bad.stdout).error, 'bad argument: --attempt')
+  // ... and a value that lost its flag (an unquoted "red-spec 2" split by a shell leaves `--attempt` empty, so the NEXT flag
+  // becomes its value and the following value is left dangling) names the shell cause
+  const dangling = spawnSync(process.execPath, [CLI_STATE, ...base.slice(0, 5), '--attempt', '--reason', 'why not', '--by', 'm', '--workflowVersion', V], { encoding: 'utf8' })
+  assert.match(JSON.parse(dangling.stdout).error, /word-splitting|quoting|shell/i)
+})
+
+test('r2-1 plan: a bare filename with ANY extension is a path (App.vue, Button.svelte, main.kt) — a code finding cannot be planned into a doc group; abbreviations (e.g / i.e / etc.) still are not paths', () => {
+  for (const location of ['App.vue:12', 'Button.svelte:3', 'main.kt:4']) {
+    const { dir } = runDir()
+    const { plan } = planRound(dir, [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'doc', allowedPaths: ['docs/a.md'] }], [finding('r0-1', { location })])
+    assert.match(String(tryPlan(dir, plan).reason), /^code-finding-in-doc-group: r0-1/, location)
+  }
+  const { dir } = runDir()
+  const { plan } = planRound(dir, [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'doc', allowedPaths: ['docs/a.md'] }], [finding('r0-1', { location: 'docs/a.md:3 (e.g. the bullet, i.e. the second, etc.)' })])
+  assert.equal(tryPlan(dir, plan).published, true, 'e.g / i.e / etc. are prose, not code paths')
 })

@@ -57,12 +57,46 @@ type MirrorPair = {
   rootOnly: Record<string, RootOnlyExclusion>
 }
 
+/** The recorded story-482 run dir the cycle-state recovery test replays: a project-specific fixture, never shipped. */
+const STORY_482_FIXTURE = [
+  'a0-implement-phase.json',
+  'r0-review-phase.json',
+  'r1-g1-green-fix.json',
+  'r1-g1-red-spec.attempt-2.json',
+  'r1-g1-red-spec.json',
+  'r1-g1-red-verify.attempt-2.json',
+  'r1-g1-red-verify.json',
+]
+
+const STORY_134_FIXTURE = ['r0-review-phase.json', 'r1-review-phase.json', 'r2-review-phase.json']
+
 const PAIRS: MirrorPair[] = [
   {
     what: 'workflows',
     dataset: 'packages/knowledge-hub/dataset/.workflows',
     installed: '.claude/workflows',
     rootOnly: {
+      ...Object.fromEntries(
+        STORY_134_FIXTURE.map(file => [
+          `pair-contracts/fixtures/story-134-reviews/${file}`,
+          {
+            why:
+              'The recorded review handoffs of story 134 (PR 534: four findings at r0, r1-5 missedUpstream at r1) that the root ' +
+              'copies of `cycle-metrics.test.mjs` / `cycle-runtime.test.mjs` replay; evidence about one story, never installed.',
+          },
+        ]),
+      ),
+      ...Object.fromEntries(
+        STORY_482_FIXTURE.map(file => [
+          `pair-contracts/fixtures/story-482-test-mode-green/${file}`,
+          {
+            why:
+              'A recorded run directory of this repository (story 482) replayed by the root copy of ' +
+              '`cycle-state.test.mjs` to prove a stray green-fix on a sealed `mode: test` group recovers; ' +
+              'it is evidence about one story, not something an adopter installs.',
+          },
+        ]),
+      ),
       'pair-analyze-pr-batch.js': {
         why:
           'It dispatches its agents to `/analyze-pr`, a PERSONAL, user-level skill that exists in ' +

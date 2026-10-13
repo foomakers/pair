@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — **§4's Realization rule is amended by [ADR-021](adr-021-fan-out-three-realizations.md)** (fan-out as one capability with three realizations: in-harness > external driver > degraded), which also **retires** this ADR's "No portable unattended loop" limitation. **§1 is amended by [ADR-027](adr-027-autonomy-model-selection-gates.md)** (2026-09-30: `pair-next` `--filter` is any-of, plus `--assignee` and `--status`; still selection only, no loop state). §§2, 3 and 6 below stand unchanged.
+Accepted — **§4's Realization rule is amended by [ADR-021](adr-021-fan-out-three-realizations.md)** (fan-out as one capability with three realizations: in-harness > external driver > degraded), which also **retires** this ADR's "No portable unattended loop" limitation. **§1 is amended by [ADR-027](adr-027-autonomy-model-selection-gates.md)** (2026-09-30: `pair-next` `--filter` is any-of, plus `--assignee` and `--status`; still selection only, no loop state). §§2, 3 and 6 below stand unchanged. **§1 is clarified by** decision-log `2026-10-06-macro-phase-modes-are-a-selection-facade` (story #252): `--mode` is a row filter on the selector that runs the chosen step, one work unit per invocation — still no `--steps/--until`, no loop state on `pair-next`.
 
 ## Date
 

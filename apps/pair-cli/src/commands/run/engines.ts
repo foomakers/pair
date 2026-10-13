@@ -40,6 +40,8 @@ export interface TerminalEventRule {
   readonly successWhen?: Readonly<Record<string, string | number | boolean>>
   /** Dotted path to a human-readable detail carried by the terminal event, when it has one. */
   readonly detailField?: string
+  /** Dotted path to the agent's final text on the terminal event — where a stage's final JSON result lives. */
+  readonly resultField?: string
 }
 
 /**
@@ -190,7 +192,12 @@ const CLAUDE: EngineDefinition = {
     note: 'claude -p skips the workspace trust dialog (claude --help)',
   },
   terminalEvents: [
-    { match: { type: 'result' }, successWhen: { subtype: 'success' }, detailField: 'subtype' },
+    {
+      match: { type: 'result' },
+      successWhen: { subtype: 'success' },
+      detailField: 'subtype',
+      resultField: 'result',
+    },
   ],
   verifiedAgainst: 'claude --help + live `claude -p --output-format stream-json` (2026-08-24)',
 }

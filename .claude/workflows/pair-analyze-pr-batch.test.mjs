@@ -260,3 +260,31 @@ test('meta is a pure literal — no expression can make the workflow silently un
   const stripped = body.replace(/'(?:[^'\\]|\\.)*'/g, "''").replace(/`(?:[^`\\]|\\.)*`/g, '``')
   assert.doesNotMatch(stripped, /\+/, 'meta must carry no concatenation — the loader rejects expression nodes')
 })
+
+// ── Every agent() call is time-bounded (same pattern as pair-loop / implement-batch) ──
+test('agentTimeoutMinutes: a hung analysis agent is bounded, never re-dispatched, and the PR lands in `failed`', async () => {
+  let analyzeCalls = 0
+  const { result, logs } = await runWorkflow({
+    args: { prs: [PR], agentTimeoutMinutes: 0.0003 },
+    dispatch: (p, o) => (o.phase === 'Analyze' ? (analyzeCalls++, new Promise(() => {})) : okDispatch(p, o)),
+  })
+  assert.equal(analyzeCalls, 1)
+  assert.deepEqual(result.failed, [424])
+  assert.ok(logs.some(l => /timeout after/.test(l)))
+})
+
+test('agentTimeoutMinutes: a hung freshness agent is bounded — the analysis was already written, so the PR is `unverified`, not failed', async () => {
+  const { result } = await runWorkflow({
+    args: JSON.stringify({ prs: [PR], agentTimeoutMinutes: 0.0003 }),
+    dispatch: (p, o) => (o.phase === 'Freshness' ? new Promise(() => {}) : okDispatch(p, o)),
+  })
+  assert.deepEqual(result.failed, [])
+  assert.deepEqual(result.unverified.map(u => u.pr), [424])
+  assert.equal(result.unverified[0].path, '.pair/working/pr-analyses/PR-424-x.md')
+  assert.deepEqual(result.stale, [])
+  assert.equal(result.analyses[0].fresh, false)
+})
+
+test('agentTimeoutMinutes must be a positive number', async () => {
+  for (const bad of [0, -1, '30', null]) await expectThrow({ prs: [PR], agentTimeoutMinutes: bad })
+})

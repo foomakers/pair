@@ -60,8 +60,8 @@ describe('parser: autonomy arguments', () => {
   it.each(['until', 'prepare', 'merge'] as const)(
     'P3: --%s without --card is refused, naming the --card path',
     flag => {
-      expect(() => parseRunCommand({ root: '485', [flag]: 'x' })).toThrow(
-        /only meaningful with --card[\s\S]*do not carry it through this driver/,
+      expect(() => parseRunCommand({ skill: 'pair-next', [flag]: 'x' })).toThrow(
+        /only meaningful with --card or --parallel/,
       )
     },
   )

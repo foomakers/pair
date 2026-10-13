@@ -35,12 +35,15 @@ No `pair.config.json`, no `workflowProfiles` block, no `--profile` / `--workflow
 {
   "name": "cheap-green",
   "defaults": { "engine": "claude", "model": "by-tier", "effort": "medium", "context": "fresh" },
-  "modelClasses": { "cheap": "claude-haiku-x", "balanced": "claude-sonnet-x", "frontier": "claude-opus-x" },
+  "modelClasses": { "cheap": "claude-haiku-5-5", "balanced": "claude-sonnet-5-5", "frontier": "claude-opus-5-5" },
   "stages": {
-    "prepare": { "model": "cheap", "context": "reuse" },
+    "contract": { "model": "cheap" },
+    "prepare": { "model": "frontier", "context": "reuse" },
     "validate": { "model": "frontier" },
+    "implement": { "model": "balanced" },
     "green": { "model": "cheap", "context": "reuse" },
-    "verify": { "model": "frontier", "effort": "high" }
+    "verify": { "model": "frontier", "effort": "high" },
+    "merge": { "model": "balanced" }
   }
 }
 ```
@@ -92,7 +95,20 @@ The resolved profile's **name and content hash** are recorded in every handoff (
 
 ## Example
 
-The `cheap-green` profile above is the shipped example: `prepare`/`green` on a cheap model with a resumed session, `validate`/`verify` on a frontier model, fresh. Copy it to `.pair/adoption/tech/workflow-profiles/cheap-green.json`, replace the ids in `modelClasses`, and set `"workflowProfiles": { "default": "cheap-green", "files": ".pair/adoption/tech/workflow-profiles/*.json" }` in `pair.config.json`.
+The `cheap-green` profile above is the shipped example, a **pilot** and never active by default. A sample sits at `.pair/adoption/tech/workflow-profiles/cheap-green.json`; to use it, pass `--profile cheap-green` and register the glob `"workflowProfiles": { "files": ".pair/adoption/tech/workflow-profiles/*.json" }` in `pair.config.json` — do **not** set it as `default`.
+
+### Recommended stage → model mapping (pilot)
+
+| Stage / role | Model class | Id (`*-5-5`) | Note |
+| --- | --- | --- | --- |
+| contract | cheap | `claude-haiku-5-5` | contract-derivation phase |
+| relay (batch/loop `models.relay`) | cheap | `claude-haiku-5-5` | pure script relays only (never the merge run, which judges gates, nor per-card state classification); the batch default |
+| green on `doc` groups | cheap | `claude-haiku-5-5` | PILOT — measure custody/review pass rate against sonnet |
+| selection, implement, green on behavioral groups | balanced | `claude-sonnet-5-5` | |
+| prepare, validate, verify | frontier | `claude-opus-5-5` | independent judgment stages |
+| post-merge closure (`merge`) | balanced | `claude-sonnet-5-5` | |
+
+**Pilot status.** A profile cannot tell a `doc` group from a behavioral one, so `cheap-green` puts the whole `green` stage on the cheap class: use it only for doc-only cards, and run behavioral cards on a profile with `green: balanced`. **Success criterion:** doc-group GREEN by Haiku passes review on the first round in at least 2 of 3 cards; otherwise return to `balanced`.
 
 ## Refusals
 

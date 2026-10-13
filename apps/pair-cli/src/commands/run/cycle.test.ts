@@ -407,3 +407,131 @@ describe('runCycle — stall resume (US-506 T-8, AC12)', () => {
     }
   })
 })
+
+describe('runCycle — handoff format errors are validated, then retried ONCE (AO)', () => {
+  const REFUSED = (reason: string): CycleStageResult => ({
+    processOutcome: 'success',
+    final: { status: 'failed', reason },
+  })
+
+  it('a stage whose publish was refused for a FORMAT error is re-dispatched ONCE with the exact validation error in its prompt; the corrected handoff advances the cycle', async () => {
+    const resolve = scriptedResolve([
+      { status: 'empty', next: IMPLEMENT_A0 },
+      { status: 'empty', next: IMPLEMENT_A0 }, // the refused publish left the state where it was
+      { status: 'completed', next: DONE },
+    ])
+    const prompts: string[] = []
+    const spawnStage = vi.fn(async (p: unknown): Promise<CycleStageResult> => {
+      prompts.push((p as { prompt: string }).prompt)
+      return prompts.length === 1
+        ? REFUSED('missing-field:inputHead')
+        : { processOutcome: 'success' }
+    })
+    const notes: string[] = []
+
+    const outcome = await runCycle({
+      resolve,
+      worktree,
+      packet,
+      spawnStage,
+      policy: {},
+      onNotice: n => notes.push(n),
+    })
+
+    expect(spawnStage).toHaveBeenCalledTimes(2)
+    expect(prompts[0]).toBe('prompt for implement:a0')
+    expect(prompts[1]).toContain('REJECTED by the handoff validation')
+    expect(prompts[1]).toContain('missing-field:inputHead')
+    expect(prompts[1]).toContain('prompt for implement:a0')
+    expect(outcome.status).toBe('ready-for-merge')
+    expect(
+      notes.some(n => n.includes('missing-field:inputHead') && /re-dispatched once/.test(n)),
+    ).toBe(true)
+  })
+
+  it('the format retry is platform-independent: the same dispatch sequence with process.platform injected as darwin, linux and win32', async () => {
+    const original = Object.getOwnPropertyDescriptor(process, 'platform')!
+    try {
+      for (const platform of ['darwin', 'linux', 'win32']) {
+        Object.defineProperty(process, 'platform', { value: platform })
+        const resolve = scriptedResolve([
+          { status: 'empty', next: IMPLEMENT_A0 },
+          { status: 'empty', next: IMPLEMENT_A0 },
+          { status: 'completed', next: DONE },
+        ])
+        const spawnStage = vi
+          .fn(async (): Promise<CycleStageResult> => ({ processOutcome: 'success' }))
+          .mockImplementationOnce(async () => REFUSED('not-json'))
+        const outcome = await runCycle({ resolve, worktree, packet, spawnStage, policy: {} })
+        expect(spawnStage, platform).toHaveBeenCalledTimes(2)
+        expect(outcome.status, platform).toBe('ready-for-merge')
+      }
+    } finally {
+      Object.defineProperty(process, 'platform', original)
+    }
+  })
+
+  it('a SECOND format failure escalates exactly as before: `failed-<step>` with the reason, after exactly one retry', async () => {
+    const resolve = scriptedResolve([{ status: 'empty', next: IMPLEMENT_A0 }])
+    const spawnStage = vi.fn(
+      async (): Promise<CycleStageResult> => REFUSED('findings-not-an-array'),
+    )
+
+    const outcome = await runCycle({ resolve, worktree, packet, spawnStage, policy: {} })
+
+    expect(spawnStage).toHaveBeenCalledTimes(2)
+    expect(outcome.status).toBe('failed-implement')
+    expect(outcome.reason).toBe('findings-not-an-array')
+  })
+
+  it('a deliberate non-format stop (a human decision, a gate) is NOT retried — only handoff format errors are', async () => {
+    for (const reason of [
+      'escalate',
+      'gate-red',
+      'needs-human-decision',
+      'gate-missing',
+      'tier-invalid',
+      'branch-invalid',
+      'publish-refused',
+      'handoff-refused',
+      'credentials-missing',
+      'path-unsafe',
+    ]) {
+      const resolve = scriptedResolve([{ status: 'empty', next: IMPLEMENT_A0 }])
+      const spawnStage = vi.fn(async (): Promise<CycleStageResult> => REFUSED(reason))
+      const outcome = await runCycle({ resolve, worktree, packet, spawnStage, policy: {} })
+      expect(spawnStage).toHaveBeenCalledTimes(1)
+      expect(outcome.status).toBe('failed-implement')
+    }
+  })
+
+  it('every handoff-refusal shape the publisher names is a format error; the budget is per dispatch — a LATER stage gets its own one retry', async () => {
+    for (const reason of [
+      'not-json',
+      'not-an-object',
+      'missing-field:story',
+      'identity-mismatch',
+      'inputHead-not-a-sha',
+      'finding-transition-invalid:r0-1',
+      'repair-incomplete:row-1',
+      'acAssessment-missing',
+      'worked-evidence-unsafe:r0-2',
+    ]) {
+      const resolve = scriptedResolve([
+        { status: 'empty', next: PREPARE_A0 },
+        { status: 'empty', next: PREPARE_A0 },
+        { status: 'empty', next: VALIDATE_A0 }, // advanced: the budget resets
+        { status: 'empty', next: VALIDATE_A0 },
+        { status: 'completed', next: DONE },
+      ])
+      const spawnStage = vi
+        .fn(async (): Promise<CycleStageResult> => ({ processOutcome: 'success' }))
+        .mockImplementationOnce(async () => REFUSED(reason))
+        .mockImplementationOnce(async () => ({ processOutcome: 'success' }))
+        .mockImplementationOnce(async () => REFUSED(reason))
+      const outcome = await runCycle({ resolve, worktree, packet, spawnStage, policy: {} })
+      expect(spawnStage, reason).toHaveBeenCalledTimes(4)
+      expect(outcome.status, reason).toBe('ready-for-merge')
+    }
+  })
+})

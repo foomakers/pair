@@ -53,7 +53,7 @@
 import { existsSync, statSync, openSync, readSync, closeSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, readdirSync, renameSync, realpathSync } from 'node:fs'
 import { join, basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { reduceCycleMetrics, writeMetrics, mergeObservations, publishSummary, readTerminalMarker } from './cycle-metrics.mjs'
+import { reduceCycleMetrics, writeMetrics, mergeObservations, publishSummary, readTerminalMarker, renderFindingsComment } from './cycle-metrics.mjs'
 export { readTerminalMarker }
 import { listComments, findByMarker, upsert } from './pr-comment.mjs'
 import { resolve as resolveCycleState, readHandoffs, SCHEMA_VERSION, safeRunDir, safePath } from './cycle-state.mjs'
@@ -746,6 +746,15 @@ export function finalizeMetrics({ dir, repository, story, branch, pr, runId, pub
       outcome = { published: false, publication: { marker, metricsRevision: view.snapshot.revision, sourceDigest: view.snapshot.sourceDigest, commentId: null, url: null, state: 'failed', lastError: `transport: ${e?.message ?? String(e)}` } }
     }
     view.publication = outcome.publication
+    // AK: a re-review that opened NEW findings must be visible on the PR — the findings comment (upserted by its own marker) is
+    // guaranteed here even when the review stage skipped it. Silent only when the re-reviews opened nothing new.
+    try {
+      const reviews = readHandoffs(dir).filter(h => h.data && h.skill === 'review-phase' && h.data.recordType !== 'migration').map(h => ({ ...h.data, phase: h.phase }))
+      const body = renderFindingsComment({ reviews, story, pr, runId })
+      if (body !== null) publish.upsert({ pr, marker: body.split('\n', 1)[0], body, repo: repository, dir })
+    } catch {
+      // never blocks the summary: the table in the synthesis already carries every finding
+    }
     if (!outcome.published && view.outcome.delivery === 'ready-for-merge') {
       view.outcome.delivery = 'failed-publication'
       view.outcome.reason = 'publication-pending'

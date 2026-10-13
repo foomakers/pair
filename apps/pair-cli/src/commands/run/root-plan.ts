@@ -50,6 +50,35 @@ const FAIL_SAFE_TIER = 'risk:red'
 
 // ── tier 1 ports (pair-loop.js), parity-tested ────────────────────────────────────────────────
 
+const slugOf = (title: string): string =>
+  title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50)
+    .replace(/-+$/, '')
+
+/**
+ * A card the selection returned without a branch or title is COMPLETED, not excluded: the title is read
+ * live from the issue (`readTitle`), the branch derived per the branch template
+ * (`feature/US-<id>-<slug-of-title>`). Only a card whose title cannot be read stays incomplete — and
+ * `resolveCards` then excludes it.
+ */
+export function completeCandidates(
+  cards: readonly RootCandidate[],
+  readTitle: (id: string) => string | undefined,
+): RootCandidate[] {
+  return cards.map(card => {
+    const title = card.title || readTitle(card.id) || ''
+    if (!title) return card
+    return {
+      ...card,
+      title,
+      branch: card.branch || `feature/US-${card.id}-${slugOf(title) || 'card'}`,
+    }
+  })
+}
+
 export function resolveCards(cards: readonly RootCandidate[]): {
   resolved: RootCandidate[]
   audit: AuditEntry[]

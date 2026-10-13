@@ -133,6 +133,19 @@ export default defineAdapter({
       const own = (invoke({ resource: 'pullRequestStatuses', repo, route: { pullRequestId: pr } })?.value ?? []).filter(s => s?.context?.name === context && s?.context?.genre === CHECK_GENRE && s.iterationId === iteration)
       return own.length ? (STATE_FROM_AZ[own[own.length - 1].state] ?? String(own[own.length - 1].state)) : null
     }
+    // AL: every PR status posted for the iteration of this head that is not pair's own, folded to success | failure | pending
+    // (Azure policy evaluations are not read: a required build policy that has not posted a status is not visible here).
+    const AZ_CI = { succeeded: 'success', notApplicable: 'success', failed: 'failure', error: 'failure', pending: 'pending', notSet: 'pending' }
+    const readCiChecks = ({ pr, repo, sha }) => {
+      const iteration = iterationOf({ pr, repo, sha })
+      const latest = new Map()
+      for (const st of invoke({ resource: 'pullRequestStatuses', repo, route: { pullRequestId: pr } })?.value ?? []) {
+        if (st?.iterationId !== undefined && st.iterationId !== iteration) continue
+        if (st?.context?.genre === CHECK_GENRE) continue
+        latest.set(`${st?.context?.genre ?? ''}/${st?.context?.name ?? ''}`.replace(/^\//, ''), AZ_CI[st.state] ?? 'failure')
+      }
+      return [...latest].map(([name, conclusion]) => ({ name, conclusion }))
+    }
     const readLabels = ({ pr, repo }) => (invoke({ resource: 'pullRequestLabels', repo, route: { pullRequestId: pr } })?.value ?? []).filter(l => l.active !== false).map(l => String(l.name))
 
     return {
@@ -256,6 +269,7 @@ export default defineAdapter({
         return threadUrl(pr, threadId, commentId)
       },
       readCheck,
+      readCiChecks,
       readLabels,
       concludeCheck({ pr, sha, repo, state, description, targetUrl, context = CHECK_CONTEXT }) {
         try {

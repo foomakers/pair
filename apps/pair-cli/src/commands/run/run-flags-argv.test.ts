@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import type { CommandConfig } from '../index'
+import { describeLoopValues, resolveLoopValues } from './loop-report'
 
 /**
  * US-487 a0 repair (rejection row AC15-W3, mechanism `run-flag-registration`) — the USER-FACING
@@ -150,5 +151,28 @@ describe('pair-cli run — the cycle-coordinator flags through the registered co
 
     expect(dispatched).toHaveLength(1)
     expect(dispatched[0]).toMatchObject({ watch: true })
+  })
+
+  it('V: --predicate reaches the parsed config through the registered command (argv -> config -> loop value + header)', async () => {
+    await runArgv([
+      '--parallel',
+      '2',
+      '--watch',
+      '--root',
+      '1',
+      '--predicate',
+      'tag:surface:cli ⇒ Done',
+    ])
+    expect(dispatched).toHaveLength(1)
+    const config = dispatched[0] as unknown as Parameters<typeof resolveLoopValues>[0]
+    expect(config.predicate).toBe('tag:surface:cli ⇒ Done')
+    const policy = { stopPredicate: 'tag:risk:red ⇒ Done' } as Parameters<
+      typeof resolveLoopValues
+    >[1]
+    const values = resolveLoopValues(config, policy)
+    expect(values.predicate).toEqual({ value: 'tag:surface:cli ⇒ Done', source: '--predicate' })
+    expect(describeLoopValues(values, {}, 2, 3).join('\n')).toMatch(
+      /stop predicate: tag:surface:cli ⇒ Done \(--predicate\)/,
+    )
   })
 })

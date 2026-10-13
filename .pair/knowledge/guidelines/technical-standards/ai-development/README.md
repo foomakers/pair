@@ -17,6 +17,7 @@ Establish enterprise-grade standards for AI development that maximize developmen
 - **[Skill Conventions](skill-conventions/README.md)** - Single-source shared conventions for the `SKILL.md` corpus (resolution cascade, idempotency, graceful degradation, template resolution, PM-tool + code-host resolution, and more)
 - **[Process Profiles](process-profiles.md)** - Schema, built-in profiles (`default`, `poc`, `custom`) and error cases for the process subset a project declares in `way-of-working.md`
 - **[Step Catalogue](step-catalogue.md)** - The catalogued process steps a profile names: stable id, how-to guide, executable skill and prerequisites
+- **[Macro-Phase Modes](macro-phase-modes.md)** - The `/pair-next --mode` facades (`analysis`, `implementation`, `review`): the one mode ↔ step table, exit conditions, wrong-context and HALT rules
 
 ### Key Focus Areas
 

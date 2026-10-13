@@ -29,6 +29,8 @@ The RED snapshot is the specification. You may change implementation inside its 
 
 ## Algorithm
 
+**Headless execution (single owner: `.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/headless-stage-execution.md`)** — this stage runs headless: never leave a command in the background and never end your turn while a command runs (a push with a pre-push gate, a quality gate): use the maximum tool timeout, poll to completion in the same turn, and ALWAYS end with the stage's structured result — on partial progress `{ status: "failed", reason: "incomplete", detail, branch, outputHead }`.
+
 ### Step 0: Resolve the durable state (mandatory)
 
 ```bash
@@ -97,6 +99,7 @@ This is a CONTENT operation. The branch stays where it is, the sealed snapshot s
 ## Notes
 
 - A `mode: test` group never reaches this skill: the guard is the fix, and the final verifier checks it directly on the sealed head.
+- `mode: doc` (prose-only, `.pair/knowledge/guidelines/collaboration/automation/doc-remediation-groups.md`): edit ONLY the prose files in `fixScope.allowedPaths`; there are no witnesses to run — re-read each `checklist` item against its authority and return an `evidenceLedger` with one entry per checklist item id (`{ checklistId, file, line, text }`: the changed sentence). Run the project's usual conformance/link tests for the files you touched.
 - Do NOT post any other PR comment; the final verifier publishes the synthesis. Never merge.
 - Blind: read nothing under `.pair/working/` except the checkpoint, `$reviewLog` and `$RUN_DIR`.
 - Your handoff publish is observed by the host runtime (`cycle-runtime.mjs`, US-479 T-25) as a phase-level progress point, through `cycle-state.mjs` — never something you invoke yourself.

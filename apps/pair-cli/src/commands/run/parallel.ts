@@ -28,6 +28,8 @@ export interface CardOutcome {
   readonly endedAt?: string
   /** US-523: how the card's prepare phase ended, when it ran or was parked (`PREPARE-RESULT:` line of the child). */
   readonly prepare?: PrepareResult
+  /** AD: the delivery-cycle status the child reported (`Cycle status: <s>`); absent ⇒ it never got to report one (a crash, an engine/API error). */
+  readonly cycleStatus?: string
 }
 
 /** How one card process ended — the child's exit, as the OS reports it. */
@@ -38,6 +40,8 @@ export interface CardProcessExit {
   readonly error?: string
   /** US-523: the prepare outcome the child printed (`PREPARE-RESULT: <result>`), when it printed one. */
   readonly prepare?: PrepareResult
+  /** AD: the cycle status the child printed, when it printed one. */
+  readonly cycleStatus?: string
 }
 
 export type CardProcessRunner = (input: {
@@ -53,7 +57,8 @@ export function outcomeOfExit(id: string, exit: CardProcessExit): Omit<CardOutco
   if (exit.signal !== null) return { id, outcome: 'crashed', detail: `killed by ${exit.signal}` }
   const prepare = exit.prepare !== undefined ? { prepare: exit.prepare } : {}
   if (exit.exitCode === 0) return { id, outcome: 'completed', detail: 'exit 0', ...prepare }
-  return { id, outcome: 'failed', detail: `exit ${String(exit.exitCode)}`, ...prepare }
+  const cycle = exit.cycleStatus !== undefined ? { cycleStatus: exit.cycleStatus } : {}
+  return { id, outcome: 'failed', detail: `exit ${String(exit.exitCode)}`, ...prepare, ...cycle }
 }
 
 // ── the pool ───────────────────────────────────────────────────────────────────────────────────
@@ -108,12 +113,19 @@ export function resourceLockId(resource: string): string {
 }
 
 export type ResourceLockOutcome =
-  | { readonly kind: 'acquired'; readonly release: () => void }
+  | {
+      readonly kind: 'acquired'
+      readonly release: () => void
+      /** Stale locks (dead holder pid) reclaimed to take these. */
+      readonly reclaimed: ReadonlyArray<{ readonly id: string; readonly pid: number }>
+    }
   | {
       readonly kind: 'held'
       readonly resource: string
       readonly path: string
       readonly since?: string
+      readonly pid?: number
+      readonly alive?: boolean
     }
 
 /**
@@ -129,6 +141,7 @@ export function acquireResourceLocks(input: {
   readonly acquireLock: LockAcquirer
 }): ResourceLockOutcome {
   const held: CardLock[] = []
+  const reclaimed: Array<{ id: string; pid: number }> = []
   // Once only: the interrupt path may release before the card's own `finally` does, and a second
   // release must never remove a lock another run acquired in between.
   let released = false
@@ -149,14 +162,25 @@ export function acquireResourceLocks(input: {
         resource,
         path: outcome.path,
         ...(outcome.since !== undefined && { since: outcome.since }),
+        ...(outcome.pid !== undefined && { pid: outcome.pid }),
+        ...(outcome.alive !== undefined && { alive: outcome.alive }),
       }
     }
     held.push(outcome.lock)
+    if (outcome.reclaimed !== undefined) {
+      reclaimed.push({ id: resourceLockId(resource), pid: outcome.reclaimed.pid })
+    }
   }
-  return { kind: 'acquired', release: releaseAll }
+  return { kind: 'acquired', release: releaseAll, reclaimed }
 }
 
 // ── one card process ───────────────────────────────────────────────────────────────────────────
+
+/** The autonomy arguments the operator passed, each a separate argv element (never shell-joined). */
+function autonomyArgv(config: RunCommandConfig): string[] {
+  // The parser builds the object in until, prepare, merge order — kept as given.
+  return Object.entries(config.autonomy ?? {}).flatMap(([key, value]) => [`--${key}`, value])
+}
 
 /**
  * The `run --card` argv for one planned card: the card, the labels `pair-next` observed on it (so
@@ -167,6 +191,8 @@ export function buildCardProcessArgs(
   config: RunCommandConfig,
   card: RootCandidate,
   cwd: string,
+  /** The loop's effective filter when it came from an argument or `## Autonomy` — the child's eligibility input. */
+  eligibilityFilter?: string,
 ): string[] {
   const labels = card.labels ?? []
   return [
@@ -175,11 +201,13 @@ export function buildCardProcessArgs(
     card.id,
     ...(labels.length > 0 ? ['--card-tags', labels.join(',')] : []),
     ...(config.engine !== undefined ? ['--engine', config.engine] : []),
+    ...(eligibilityFilter !== undefined ? ['--eligibility-filter', eligibilityFilter] : []),
     '--cwd',
     cwd,
     ...(config.autonomous ? ['--autonomous'] : []),
     ...(config.approveProjectTrust ? ['--approve-project-trust'] : []),
     ...(config.approveIneligible ? ['--approve-ineligible'] : []),
+    ...autonomyArgv(config),
     '--iteration-timeout',
     String(config.iterationTimeoutSeconds),
   ]
@@ -190,12 +218,24 @@ export function prefixLine(id: string, line: string): string {
   return line.startsWith('DISPATCH-RECORD:') ? line : `  [#${id}] ${line}`
 }
 
-function relay(child: ChildProcess, id: string, onPrepare: (result: PrepareResult) => void): void {
+/** The delivery-cycle status line a `run --card` child prints (`  Cycle status: failed-contract (…)`). */
+export function parseCycleStatus(line: string): string | undefined {
+  return /^\s*Cycle status: (\S+)/.exec(line)?.[1]
+}
+
+function relay(
+  child: ChildProcess,
+  id: string,
+  onPrepare: (result: PrepareResult) => void,
+  onCycle: (status: string) => void,
+): void {
   for (const stream of [child.stdout, child.stderr]) {
     if (stream === null) continue
     createInterface({ input: stream }).on('line', line => {
       const prepare = parsePrepareResult(line)
       if (prepare !== undefined) onPrepare(prepare)
+      const cycle = parseCycleStatus(line)
+      if (cycle !== undefined) onCycle(cycle)
       console.log(prefixLine(id, line))
     })
   }
@@ -232,10 +272,21 @@ export const spawnCardProcess: CardProcessRunner = ({ card, args, cwd }) =>
     }
     trackEngine(child)
     let prepare: PrepareResult | undefined
-    relay(child, card.id, result => (prepare = result))
+    let cycleStatus: string | undefined
+    relay(
+      child,
+      card.id,
+      result => (prepare = result),
+      status => (cycleStatus = status),
+    )
     child.once('error', error => resolve({ exitCode: null, signal: null, error: error.message }))
     child.once('close', (exitCode, signal) =>
-      resolve({ exitCode, signal, ...(prepare !== undefined && { prepare }) }),
+      resolve({
+        exitCode,
+        signal,
+        ...(prepare !== undefined && { prepare }),
+        ...(cycleStatus !== undefined && { cycleStatus }),
+      }),
     )
   })
 
@@ -244,10 +295,13 @@ export const spawnCardProcess: CardProcessRunner = ({ card, args, cwd }) =>
 export interface RunPlannedCardInput {
   readonly card: RootCandidate
   readonly config: RunCommandConfig
+  readonly eligibilityFilter?: string
   readonly cwd: string
   readonly workingArea: string
   readonly acquireLock: LockAcquirer
   readonly runCardProcess: CardProcessRunner
+  /** Told of every stale lock reclaimed to run this card (audited by the caller). */
+  readonly onReclaim?: (lock: string, pid: number) => void
   readonly now?: () => string
   /**
    * The driver's registry of resource locks still held by a running card: the release is added
@@ -255,6 +309,11 @@ export interface RunPlannedCardInput {
    * it acquired — before it exits, without waiting on the child's streams.
    */
   readonly heldLocks?: Set<() => void>
+}
+
+function holderNote(held: { pid?: number; alive?: boolean }): string {
+  if (held.pid === undefined) return ''
+  return `; locked by pid ${held.pid}${held.alive === true ? ' (alive)' : ''}`
 }
 
 export async function runPlannedCard(input: RunPlannedCardInput): Promise<CardOutcome> {
@@ -271,8 +330,12 @@ export async function runPlannedCard(input: RunPlannedCardInput): Promise<CardOu
       outcome: 'skipped',
       detail:
         `mutex resource ${locks.resource} is held by another run (${locks.path}` +
-        `${locks.since !== undefined ? `, since ${locks.since}` : ''})`,
+        `${locks.since !== undefined ? `, since ${locks.since}` : ''}${holderNote(locks)})`,
     }
+  }
+  for (const r of locks.reclaimed) {
+    console.log(`  Reclaimed stale lock ${r.id} (pid ${r.pid} dead) for #${card.id}`)
+    input.onReclaim?.(r.id, r.pid)
   }
   input.heldLocks?.add(locks.release)
   const startedAt = now()
@@ -280,7 +343,7 @@ export async function runPlannedCard(input: RunPlannedCardInput): Promise<CardOu
     console.log(`  Started #${card.id}: pair-cli run --card ${card.id}`)
     const exit = await input.runCardProcess({
       card,
-      args: buildCardProcessArgs(input.config, card, input.cwd),
+      args: buildCardProcessArgs(input.config, card, input.cwd, input.eligibilityFilter),
       cwd: input.cwd,
     })
     const outcome = isInterrupted()

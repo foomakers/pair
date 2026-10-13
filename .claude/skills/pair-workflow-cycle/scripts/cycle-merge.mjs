@@ -16,6 +16,8 @@
 //   5. both conclusions are `success` — except that below 🔴 an ABSENT `pair-explicit-approval` is satisfied (D4: the tier does
 //      not require it, so a repo with no job publishing it is not parked), and the tier that decides this and the merge gate
 //      is the PR's CURRENT `risk:*` (D5: the review writes it; an untagged PR is `risk:red`), never the card's stale one;
+//   5b. the PR's CI checks on that head (AL) — any check but pair's own that is not `success` refuses with `ci-not-green`
+//       (failed ⇒ halted, only pending ⇒ awaiting-human);
 //   6. the tier's gate set is green — `--gate green`, produced by the caller running
 //      `/pair-capability-verify-quality` (a skill, so an agent's job; the script only refuses to
 //      merge on any other value, an absent one included).
@@ -76,14 +78,25 @@ export function decideMerge({ cardTier, currentTier, effectiveTier = currentTier
     const approvalRequired = !BELOW_RED.includes(effectiveTier)
     if (signals.explicitApproval !== 'success' && (approvalRequired || signals.explicitApproval !== 'missing')) add('explicit-approval', `pair-explicit-approval conclusion on head ${signals.headSha} is ${signals.explicitApproval} (D10: no recorded human approval), never merged`)
   }
+  // AL: the PR's own CI checks on the pinned head — pair's two contexts are judged above, everything else must be green.
+  if (readable && Array.isArray(signals.ci)) {
+    const own = new Set([PR_CHECK, APPROVAL_CHECK])
+    const notGreen = signals.ci.filter(c => !own.has(c?.name) && c?.conclusion !== 'success')
+    if (notGreen.length) add('ci-not-green', `CI checks not green on head ${signals.headSha}: ${notGreen.map(c => `${c.name}=${c.conclusion}`).join(', ')} — never merged over a failing or pending build`)
+  }
   if (requireGate) {
     if (gate === 'red') add('gate-red', "the tier's gate set came back red at merge time")
     else if (gate !== 'green') add('gate-unverified', `no green gate evidence (got ${JSON.stringify(gate ?? null)}) — /pair-capability-verify-quality must run first`)
   }
   const first = failed[0]?.code
   // A human approval not yet recorded (missing / pending) as the ONLY failure is a park that awaits a person, not a problem; a rejected one (`failure`) or any other failing condition beside it stays `halted`.
-  const awaitsApproval = failed.length === 1 && first === 'explicit-approval' && ['missing', 'pending'].includes(signals?.explicitApproval)
-  return { mergeAllowed: failed.length === 0, failed, reason: failed[0]?.detail ?? null, parkKind: failed.length === 0 ? null : first === 'tier-not-auto-advance' ? 'awaiting-human' : first === 'escalated' ? 'escalated' : awaitsApproval ? 'awaiting-human' : 'halted', ...(conditions ? { conditions } : {}) }
+  // A wait is not a problem: an approval not yet recorded (missing / pending) and CI checks still running (pending only) are
+  // things a person or a build will supply. A park awaits a human when EVERY failed condition is such a wait; any real failure
+  // beside them (a failed check, a rejected approval, a moved head…) keeps it `halted`.
+  const ciPendingOnly = (signals?.ci ?? []).filter(c => c?.name !== PR_CHECK && c?.name !== APPROVAL_CHECK && c?.conclusion !== 'success').every(c => c.conclusion === 'pending')
+  const isWait = f => (f.code === 'explicit-approval' && ['missing', 'pending'].includes(signals?.explicitApproval)) || (f.code === 'ci-not-green' && ciPendingOnly)
+  const awaitsOnly = failed.length > 0 && failed.every(isWait)
+  return { mergeAllowed: failed.length === 0, failed, reason: failed[0]?.detail ?? null, parkKind: failed.length === 0 ? null : first === 'tier-not-auto-advance' ? 'awaiting-human' : awaitsOnly ? 'awaiting-human' : first === 'escalated' ? 'escalated' : 'halted', ...(conditions ? { conditions } : {}) }
 }
 
 // ── live reads — through the bound adapters, never a host CLI of our own ─────────────────────
@@ -139,7 +152,10 @@ export function readSignals({ code, pr, repo }) {
       }
       return run ?? 'missing'
     }
-    return { headSha, pairReview: conclusion(PR_CHECK), explicitApproval: conclusion(APPROVAL_CHECK) }
+    // AL: the CI checks on the SAME pinned head, through the adapter; an adapter without the method leaves `ci` absent (no
+    // evidence either way) — a read that fails makes the whole signal set unreadable (never merged on unread evidence).
+    const ci = typeof code.readCiChecks === 'function' ? code.readCiChecks({ sha: headSha, pr, repo }) : undefined
+    return { headSha, pairReview: conclusion(PR_CHECK), explicitApproval: conclusion(APPROVAL_CHECK), ...(Array.isArray(ci) ? { ci } : {}) }
   } catch {
     return null
   }

@@ -543,3 +543,22 @@ describe('parseRunCommand — --watch / --interval (US-522 AC14)', () => {
     )
   })
 })
+
+describe('R: --predicate (the loop override of ## Stop Predicate)', () => {
+  it('is accepted with --parallel and carried verbatim', () => {
+    expect(
+      parseRunCommand({ parallel: '2', filter: 'x', predicate: 'tag:risk:red ⇒ Done' }).predicate,
+    ).toBe('tag:risk:red ⇒ Done')
+  })
+  it('is refused without --parallel', () => {
+    expect(() => parseRunCommand({ skill: 'pair-next', predicate: 'root ⇒ Done' })).toThrow(
+      /--predicate.*--parallel/,
+    )
+  })
+  it.each(['tag:risk:red => Done', 'nonsense', 'tag: ⇒ Done', 'root ⇒ has-tag:$(id)'])(
+    'an invalid predicate %s is refused at parse time, before anything spawns',
+    bad => {
+      expect(() => parseRunCommand({ parallel: '2', root: '1', predicate: bad })).toThrow()
+    },
+  )
+})

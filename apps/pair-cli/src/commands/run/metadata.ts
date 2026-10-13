@@ -43,17 +43,17 @@ export const runCommandMetadata = {
     {
       flags: '--until <ready|pr|merged>',
       description:
-        "US-521: how far the card's delivery cycle goes — ready (stop before implement), pr (default: the review-approved PR), merged (enter the merge stage; the only value that evaluates the merge gate). Requires --card. Precedence: argument > adoption (`## Autonomy`, then translated legacy sections) > KB default — every effective value is printed with its source.",
+        "US-521: how far the card's delivery cycle goes — ready (stop before implement), pr (default: the review-approved PR), merged (enter the merge stage; the only value that evaluates the merge gate). Requires --card or --parallel (the loop forwards it to every child card). Precedence: argument > adoption (`## Autonomy`, then translated legacy sections) > KB default — every effective value is printed with its source.",
     },
     {
       flags: '--prepare <gate>',
       description:
-        'US-523: the prepare gate `<always|never|when>[; has: <labels>][; lacks: <labels>]` — who prepares a Draft card: `always` (default) needs a human (R3.11), `never` proceeds alone recording assumptions, `when` proceeds alone unless a boundary escalates (`needs-review`, card stays Draft). Requires --card',
+        'US-523: the prepare gate `<always|never|when>[; has: <labels>][; lacks: <labels>]` (with --card or --parallel; forwarded to every child card) — who prepares a Draft card: `always` (default) needs a human (R3.11), `never` proceeds alone recording assumptions, `when` proceeds alone unless a boundary escalates (`needs-review`, card stays Draft). Requires --card',
     },
     {
       flags: '--merge <gate>',
       description:
-        "US-521: the merge gate, same grammar: always parks awaiting-human (default), never/when enter the merge stage unless a has/lacks escalation fires (status escalated, exit 1, on-halt). #490's signal checks stay mandatory. Requires --card",
+        "US-521: the merge gate, same grammar: always parks awaiting-human (default), never/when enter the merge stage unless a has/lacks escalation fires (status escalated, exit 1, on-halt). #490's signal checks stay mandatory. Requires --card or --parallel (forwarded to every child card)",
     },
     {
       flags: '--card <id>',
@@ -118,6 +118,16 @@ export const runCommandMetadata = {
       flags: '--approve-ineligible',
       description:
         'Explicit operator authorization for THIS --autonomous run on a card `## Eligibility` would exclude (announced, never persisted)',
+    },
+    {
+      flags: '--predicate <selector⇒condition>',
+      description:
+        'With --parallel: the loop stop predicate (same grammar as `## Stop Predicate`), argument > adoption, printed with its source. Checked at each iteration boundary before work; an empty or incomplete board snapshot never counts as satisfied',
+    },
+    {
+      flags: '--eligibility-filter <labels>',
+      description:
+        "Internal: set by the --parallel loop on each child --card run — the loop's effective filter (argument or ## Autonomy) as THIS card's eligibility, replacing the legacy ## Eligibility label. Needs --card; not a selector",
     },
     {
       flags: '--iteration-timeout <seconds>',

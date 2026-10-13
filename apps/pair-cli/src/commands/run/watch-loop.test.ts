@@ -106,16 +106,16 @@ describe('runWatchLoop (US-522 T-6)', () => {
     })
   })
 
-  it('AC6: a card driven once is excluded afterwards whatever its outcome, and reported', async () => {
+  it('AC6 (I): a card that reached a terminal outcome is excluded afterwards, and reported', async () => {
     const h = harness([sel(card('1')), sel(card('1'), card('2')), sel(card('1'))], {
-      outcomes: ids => ids.map(id => outcome(id, 'failed')),
+      outcomes: ids => ids.map(id => outcome(id, 'completed')),
     })
     const r = await runWatchLoop(config(), h.deps)
     expect(h.batches).toEqual([['1'], ['2']])
     expect(h.records[1]!.skipped).toEqual([
       { id: '1', reason: 'already driven this run', detail: 'already driven this run' },
     ])
-    expect(r.exitCode).toBe(1)
+    expect(r.exitCode).toBe(0)
   })
 
   it('US-523 AC7: a card labelled needs-review (a prepare escalation) is skipped as escalated even when the selection says escalated:false', async () => {
@@ -233,11 +233,40 @@ describe('runWatchLoop (US-522 T-6)', () => {
       expect(r).toMatchObject({ reason: 'stop predicate satisfied', iterations: 1 })
     })
 
-    it('an empty snapshot counts as satisfied', async () => {
-      const h = harness([{ candidates: [card('1')], snapshot: [] }])
-      expect((await runWatchLoop(config({ predicate }), h.deps)).reason).toBe(
-        'stop predicate satisfied',
-      )
+    it('R: an empty snapshot is NEVER read as satisfied (an unconfirmed board is not a finished one)', async () => {
+      const h = harness([
+        { candidates: [card('1')], snapshot: [] },
+        { candidates: [card('1')], snapshot: [] },
+      ])
+      const r = await runWatchLoop(config({ predicate, cap: 2 }), h.deps)
+      expect(r.reason).not.toBe('stop predicate satisfied')
+      expect(h.batches).toEqual([['1']])
+    })
+
+    it('R: a snapshot that omits a selected card carrying the selector tag is unusable (#262 red, not Done, was missing)', async () => {
+      const red = card('262', { labels: ['risk:red'], tier: 'risk:red' })
+      const h = harness([{ candidates: [card('482'), red], snapshot: [done('9')] }])
+      const r = await runWatchLoop(config({ predicate }), h.deps)
+      expect(r).toMatchObject({ reason: 'selection failed', exitCode: 1 })
+      expect(r.selectionError).toMatch(/#262/)
+      expect(h.batches).toEqual([])
+    })
+
+    it('R: a red card that is not Done keeps the predicate unsatisfied, and the selected workable cards run', async () => {
+      const red = card('262', { labels: ['risk:red'], tier: 'risk:red' })
+      const h = harness([
+        { candidates: [card('482'), red], snapshot: [open('262')] },
+        { candidates: [card('482'), red], snapshot: [open('262')] },
+      ])
+      const r = await runWatchLoop(config({ predicate, cap: 2 }), h.deps)
+      expect(r.reason).not.toBe('stop predicate satisfied')
+      expect(h.batches[0]).toEqual(['482', '262'])
+    })
+
+    it('R: the stop line carries the evidence (cards matched, all holding)', async () => {
+      const h = harness([{ candidates: [], snapshot: [done('9'), done('8')] }])
+      await runWatchLoop(config({ predicate }), h.deps)
+      expect(h.records[0]!.predicateEvidence).toMatch(/2 card\(s\).*tag:risk:red ⇒ Done/)
     })
 
     it('satisfied at iteration k: the earlier iterations worked', async () => {

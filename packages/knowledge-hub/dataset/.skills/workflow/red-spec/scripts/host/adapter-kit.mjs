@@ -23,10 +23,10 @@ export const REQUIRED_METHODS = INTERFACE_METHODS.filter(m => m !== 'cardHash')
 // Primitives the cycle's scope-decision and pr-state paths already used through `gh` beyond the
 // eight (card create/search/edit, one comment read, the check/label read-backs, ref parsing). An
 // adapter MAY omit them: the feature that needs one then fails typed, naming the method.
-export const SUPPORT_METHODS = ['createCard', 'findCards', 'updateCard', 'parseCardRef', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readLabels', 'setClassification', 'commentOnCard', 'setBoardState']
+export const SUPPORT_METHODS = ['createCard', 'findCards', 'updateCard', 'parseCardRef', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'commentOnCard', 'setBoardState']
 // ADR-018's split: card operations resolve `pm-tool`, pull-request operations resolve `code-host`.
 export const PM_METHODS = ['readCard', 'cardHash', 'closeAndCascade', 'createCard', 'findCards', 'updateCard', 'parseCardRef', 'commentOnCard', 'setBoardState', 'labelCard', 'unlabelCard']
-export const CODE_METHODS = ['prHead', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readLabels', 'setClassification', 'deleteBranch']
+export const CODE_METHODS = ['prHead', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'deleteBranch']
 // setClassification's family/value vocabulary (the review's classification tags, pr-states.md /
 // quality-model.md §5): each family carries its own chromatic enum — never shared across families.
 export const CLASSIFICATION_FAMILIES = { risk: ['green', 'yellow', 'red'], cost: ['green', 'yellow', 'orange', 'red'] }
@@ -111,6 +111,38 @@ export function splitPages(out) {
       if (depth === 0) start = i
       depth++
     } else if (c === ']') {
+      depth--
+      if (depth === 0 && start >= 0) {
+        pages.push(JSON.parse(out.slice(start, i + 1)))
+        start = -1
+      }
+    }
+  }
+  if (inString || depth !== 0 || start >= 0) throw new Error('unterminated JSON page in gh --paginate output')
+  return pages
+}
+
+// `--paginate` on an endpoint that answers an OBJECT per page (`{ check_runs: [...] }`, `{ statuses: [...] }`) concatenates
+// consecutive top-level objects: same string-aware split, over `{ }`.
+export function splitObjectPages(out) {
+  const pages = []
+  let depth = 0
+  let start = -1
+  let inString = false
+  let escaped = false
+  for (let i = 0; i < out.length; i++) {
+    const c = out[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (c === '\\') escaped = true
+      else if (c === '"') inString = false
+      continue
+    }
+    if (c === '"') inString = true
+    else if (c === '{') {
+      if (depth === 0) start = i
+      depth++
+    } else if (c === '}') {
       depth--
       if (depth === 0 && start >= 0) {
         pages.push(JSON.parse(out.slice(start, i + 1)))

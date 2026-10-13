@@ -886,3 +886,33 @@ test('a gate value that could become a shell fragment is rejected before any ref
   await assert.rejects(() => runWorkflow({ args: { items: [{ id: '216', mode: 'refine' }], prepare: "never'; id" }, dispatch: okDispatch }), /args\.prepare/)
   await assert.rejects(() => runWorkflow({ args: { items: [{ id: '216', mode: 'refine' }] }, dispatch: () => null }), /HALT automation-policy-unresolved/)
 })
+
+test('F3: a relayed prepare gate that dropped its empty `lacks` (or `has`) array is completed, not halted', async () => {
+  const p = await refinePrompt({ items: [{ id: '216', mode: 'refine', breakdown: true }], prepare: 'when; has: needs-spec' }, gateDispatch({ mode: 'when', has: ['needs-spec'] }, 'argument'))
+  assert.match(p, /--gate '\{"mode":"when","has":\["needs-spec"\],"lacks":\[\]\}'/)
+})
+
+// ── Every agent() call is time-bounded (same pattern as pair-loop / implement-batch) ──
+test('agentTimeoutMinutes: a hung work agent is bounded, NEVER re-dispatched, and the card lands in `failed`', async () => {
+  let workCalls = 0
+  const { result, logs } = await runWorkflow({
+    args: { items: [{ id: '216', mode: 'classify' }], agentTimeoutMinutes: 0.0003 },
+    dispatch: (p, o) => (o.phase === 'Work' && o.label !== 'autonomy:resolve' ? (workCalls++, new Promise(() => {})) : okDispatch(p, o)),
+  })
+  assert.equal(workCalls, 1, 'no retry after a timeout: the hung agent may still be writing')
+  assert.deepEqual(result.failed, ['216'])
+  assert.ok(logs.some(l => /timeout after/.test(l)))
+})
+
+test('agentTimeoutMinutes: a hung verify agent is bounded — the card is unverified, not a hang', async () => {
+  const { result } = await runWorkflow({
+    args: JSON.stringify({ items: [{ id: '216', mode: 'classify' }], agentTimeoutMinutes: 0.0003 }),
+    dispatch: (p, o) => (o.phase === 'Verify' ? new Promise(() => {}) : okDispatch(p, o)),
+  })
+  assert.deepEqual(result.unverified.map(u => u.id), ['216'])
+})
+
+test('agentTimeoutMinutes must be a positive number', async () => {
+  for (const bad of [0, -1, '30', null])
+    await assert.rejects(runWorkflow({ args: { items: [{ id: '1', mode: 'classify' }], agentTimeoutMinutes: bad }, dispatch: okDispatch }), /agentTimeoutMinutes/)
+})

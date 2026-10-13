@@ -1,4 +1,4 @@
-import { describe, expect, beforeEach, vi, test } from 'vitest'
+import { describe, expect, beforeEach, afterEach, vi, test } from 'vitest'
 import { handleUpdateCommand } from './handler'
 import type { UpdateCommandConfig } from './parser'
 import { handleInstallCommand } from '../install/handler'
@@ -1739,6 +1739,12 @@ describe('US-396: update distinguishes skipped from updated, and the exit code f
   const cwd = '/consumer'
   const kb = '/acme-kb'
 
+  // Spies installed here (console, the shared `BackupService.prototype`) must not outlive their test,
+  // whether it passed or threw before its inline `mockRestore()`.
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   const twoRegistries = {
     asset_registries: {
       knowledge: {
@@ -1865,6 +1871,14 @@ describe('US-396: update distinguishes skipped from updated, and the exit code f
 
     expect(printed.join('\n')).toContain('Rolling back')
     expect(printed.join('\n')).not.toContain('Update complete')
+  })
+
+  // Flake root cause: the test above spies on `BackupService.prototype.commit` (shared, process-wide) and
+  // nothing restored it. In definition order no later test noticed; under any other order (shuffle, a
+  // filtered run, a reordered file) every later `update` that reaches the backup commit rejected with
+  // `post-copy step exploded` — five unrelated tests in this file went red.
+  test('spies on shared prototypes never leak out of the test that installed them', () => {
+    expect(vi.isMockFunction(BackupService.prototype.commit)).toBe(false)
   })
 })
 

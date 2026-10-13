@@ -9,6 +9,7 @@ import {
   type CycleNext,
   type CycleOutcome,
   type CycleResolveAnswer,
+  type CycleStageRecord,
   type CycleStageResult,
 } from './cycle'
 import { AUTO_ADVANCE_OFF, readAutomationPolicy } from './automation-policy'
@@ -120,6 +121,16 @@ export function readCardLabels(card: string, cwd: string): readonly string[] | u
       labels?: ReadonlyArray<{ name?: string }>
     }
     return (parsed.labels ?? []).map(label => label.name ?? '')
+  } catch {
+    return undefined
+  }
+}
+
+/** The card's title, read live from the tracker; `undefined` when it cannot be read (the card is then excluded). */
+export function readCardTitle(card: string, cwd: string): string | undefined {
+  try {
+    const title = (JSON.parse(ghIssueView(card, cwd, 'title')) as { title?: string }).title
+    return title?.trim() || undefined
   } catch {
     return undefined
   }
@@ -772,6 +783,19 @@ function loadCycleHooks(ctx: CycleDriverContext, co: Coordinates) {
   return hooks
 }
 
+/** The stage line's tail: the stage's own final result, or a flag that a "successful" stage ended without one. */
+export function finalPart(record: CycleStageRecord): string {
+  const { final } = record
+  if (final !== undefined) {
+    const reason = final.reason ? ` reason=${final.reason}` : ''
+    const verdict = final.verdict ? ` verdict=${final.verdict}` : ''
+    const next = final.next?.step ? ` next=${final.next.step}` : ''
+    return ` — final: status=${final.status ?? '?'}${reason}${verdict}${next}`
+  }
+  if (record.processOutcome !== 'success' || record.handoffAdvanced) return ''
+  return ' — no final result (the stage ended without its structured JSON; the retry resumes from the commits already on the branch)'
+}
+
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {
   return async (requested: CycleDriverRequest): Promise<CycleOutcome> => {
     let input = requested
@@ -808,7 +832,8 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
         console.log(
           `  Stage ${record.step}${record.phase ? `:${record.phase}` : ''} — process ` +
             `${record.processOutcome}, handoff ${record.handoffAdvanced ? 'advanced' : 'NOT advanced'}` +
-            `${record.detail ? ` (${record.detail})` : ''}`,
+            `${record.detail ? ` (${record.detail})` : ''}` +
+            finalPart(record),
         ),
     })
   }

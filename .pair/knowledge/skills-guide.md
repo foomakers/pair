@@ -145,6 +145,12 @@ Delivery-stage skills the batch engine (`pair-implement-batch`) or the in-sessio
 | `/pair-workflow-contract-phase` | 0 | Ensure the template-derived machine contract (cache-by-hash via ensure-contract.mjs) |
 | `/pair-workflow-cycle` | coordinator | Turns the crank from inside a session: `resolve` → dispatch one stage to a subagent → `resolve`, on any harness with a subagent primitive (probed, never inferred). Owns no cycle rule and never merges |
 
+## Macro-Phase Modes
+
+`/pair-next --mode analysis|implementation|review` runs one branch of the process end to end for a user who does not want to know the granular steps. A mode is a **facade over `/pair-next`'s cascade, not a skill**: the catalog above is unchanged, the granular skills behave exactly as when invoked directly, and the mode ↔ step mapping — rows, steps, exit conditions — lives in the [macro-phase modes guideline](guidelines/technical-standards/ai-development/macro-phase-modes.md) and nowhere else.
+
+**Authoring checklist item (facade drift)**: a new process step, or a new `/pair-next` cascade row, is placed in the mode table (or declared under "Outside the modes") in the same change — `skills:conformance` fails when a catalogue step or a row 1–11 belongs to no mode.
+
 ## Directory Structure
 
 ```text
@@ -283,6 +289,6 @@ Skills read from and write to adoption files in `.pair/adoption/`:
 
 ## Navigation
 
-- **Start here**: Run `/pair-next` to determine what to do
+- **Start here**: Run `/pair-next` to determine what to do — or `/pair-next --mode analysis|implementation|review` to run a whole phase
 - **Process flow**: (`/pair-process-brainstorm` — optional discovery) → `/pair-process-specify-prd` → `/pair-process-bootstrap` → `/pair-process-plan-initiatives` → ... → `/pair-process-implement` → `/pair-process-review`
 - **Independent capability**: Any capability skill can be invoked directly (e.g., `/pair-capability-estimate`, `/pair-capability-analyze-debt`)

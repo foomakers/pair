@@ -8,6 +8,7 @@
  * Zero merit logic here (D18/BR1): the loop never judges a stage's CONTENT, it only reacts to
  * `resolve`'s own `next` and to whether the handoff it reads back advanced.
  */
+import type { StageFinalResult } from './stream-reader'
 
 /** What `resolve()` answered — the durable cycle state's own shape, read verbatim. */
 export interface CycleResolveResult {
@@ -30,6 +31,8 @@ export interface CycleStageResult {
   readonly detail?: string
   /** US-506 T-8 (AC12): the stage made no progress within its time bound and was stopped. */
   readonly stalled?: true
+  /** The stage's own final JSON result (`status`, `reason`, `next`), when the stream carried one. */
+  readonly final?: StageFinalResult
 }
 
 /** One dispatched stage, as logged to `onStage`/`appendAudit` once the NEXT resolve reveals whether it advanced. */
@@ -40,6 +43,7 @@ export interface CycleStageRecord {
   readonly detail?: string
   readonly handoffAdvanced: boolean
   readonly stalled?: true
+  readonly final?: StageFinalResult
 }
 
 /** A `next` resolve actually answered — every dispatch and every stage record is keyed by one. */
@@ -67,6 +71,8 @@ export interface CycleOutcome {
   readonly merge?: unknown
   /** US-521: the escalation comment's own answer (`{ posted, error? }`), relayed verbatim. */
   readonly escalation?: unknown
+  /** The stage's own reason when it deliberately stopped the card (`failed`/`blocked` final result). */
+  readonly reason?: string
 }
 
 export interface CyclePolicy {
@@ -139,6 +145,10 @@ interface LoopState {
   dispatchedNext: CycleNext | null
   dispatchedResult: CycleStageResult | null
   retryCount: number
+  /** AO: the ONE format-validation retry of the current dispatch was spent (reset whenever a handoff advances). */
+  formatRetryUsed: boolean
+  /** AO: the exact validation error to quote in the NEXT dispatch's prompt, once. */
+  formatCorrection: string | undefined
   reuseNoticeGiven: boolean
   /** The story worktree, once created: where `pre-<stage>`/`post-<stage>` hooks run. */
   worktreePath: string | undefined
@@ -156,13 +166,123 @@ function buildStageRecord(
     ...(dispatchedResult.detail !== undefined && { detail: dispatchedResult.detail }),
     handoffAdvanced,
     ...(dispatchedResult.stalled === true && { stalled: true as const }),
+    ...(dispatchedResult.final !== undefined && { final: dispatchedResult.final }),
   }
+}
+
+/**
+ * AO: the EXACT reasons `cycle-state.mjs publish` / `envelopeErrors` refuse a handoff for — a FORMAT defect of what the
+ * agent wrote, correctable by writing it again. An explicit list, never a shape: any other reason (a decision, a red gate,
+ * a refused publish with no format cause, a missing credential) is a deliberate stop and is never retried.
+ */
+const HANDOFF_FORMAT_REASON = new RegExp(
+  '^(?:' +
+    [
+      'not-json',
+      'not-an-object',
+      'identity-mismatch',
+      'inputHead-not-a-sha',
+      'workflowVersion-invalid',
+      'scopeEpoch-invalid',
+      'scopeBaselineHash-invalid',
+      'firstReviewHead-invalid',
+      'remediationBatchId-invalid',
+      'findings-not-an-array',
+      'findings-not-an-object',
+      'findings-(?:received|covered)-invalid',
+      'humanDecisionIds-invalid',
+      'acAssessment-missing',
+      'missing-field:.+',
+      'phase-invalid:.+',
+      'skill-unknown:.+',
+      'recordType-invalid:.+',
+      'finding-(?:transition|origin)-invalid:.+',
+      'humanDecisionIds-unknown:.+',
+      'self-review-not-recordable:.+',
+      'repair-incomplete:.+',
+      'worked-evidence-unsafe:.+',
+      'acAssessment-(?:invalid|finding-missing):.+',
+    ].join('|') +
+    ')$',
+)
+
+/** The validation error a stage's final result names, when it is a handoff FORMAT error; `undefined` otherwise. */
+function handoffFormatError(final: StageFinalResult | undefined): string | undefined {
+  if (final === undefined || final.status !== 'failed' || final.reason === undefined)
+    return undefined
+  return HANDOFF_FORMAT_REASON.test(final.reason) ? final.reason : undefined
+}
+
+const formatCorrectionNote = (error: string): string =>
+  `Your previous handoff for this step was REJECTED by the handoff validation: ${error}. ` +
+  'The step is re-entrant — resolve the durable state again, correct exactly that defect in the ' +
+  'handoff you publish, and return the corrected result.\n\n'
+
+/** The one reason a stage reports for PARTIAL progress it can resume from (`implement-phase`'s `incomplete`). */
+const RESUMABLE_REASON = 'incomplete'
+
+/**
+ * A stage that said `next.step: blocked`, or `failed` with an explicit non-resumable reason, did not die — it stopped on
+ * purpose. `failed` + `incomplete` is the opposite: partial progress, resumable, so it goes through the dead-dispatch budget.
+ */
+function deliberateStop(final: StageFinalResult | undefined): string | undefined {
+  if (final === undefined) return undefined
+  const blocked = final.next?.step === 'blocked'
+  const failedOnPurpose =
+    final.status === 'failed' && final.reason !== undefined && final.reason !== RESUMABLE_REASON
+  if (!blocked && !failedOnPurpose) return undefined
+  return final.reason ?? 'blocked'
+}
+
+function noticeStallResume(
+  record: CycleStageRecord,
+  retryCount: number,
+  deadDispatchRetries: number,
+  observers: StageObservers,
+): void {
+  if (record.stalled !== true) return
+  observers.onNotice?.(
+    `Stage ${record.step}${record.phase ? `:${record.phase}` : ''} stalled (${record.detail ?? 'no progress'}) — ` +
+      'resumed fresh: a process realization cannot resume a session (ADR-021 §2); ' +
+      `retry ${retryCount} of ${deadDispatchRetries}.`,
+  )
+}
+
+function deliberateOutcome(
+  state: LoopState,
+  next: CycleNext,
+  record: CycleStageRecord,
+  observers: StageObservers,
+): CycleOutcome | null {
+  const reason = deliberateStop(record.final)
+  if (reason === undefined) return null
+  observers.onNotice?.(
+    `Stage ${record.step}${record.phase ? `:${record.phase}` : ''} stopped the card: ${reason} — not retried.`,
+  )
+  return { status: `failed-${record.step}`, stagesRun: state.stagesRun, next, reason }
 }
 
 interface StageObservers {
   readonly onStage: RunCycleInput['onStage']
   readonly appendAudit: RunCycleInput['appendAudit']
   readonly onNotice: RunCycleInput['onNotice']
+}
+
+/** AO: arms the ONE format-validation retry of this dispatch (returns whether it did); a second refusal is not retried. */
+function scheduleFormatRetry(
+  state: LoopState,
+  record: CycleStageRecord,
+  observers: StageObservers,
+): boolean {
+  const formatError = handoffFormatError(record.final)
+  if (formatError === undefined || state.formatRetryUsed) return false
+  state.formatRetryUsed = true
+  state.formatCorrection = formatError
+  observers.onNotice?.(
+    `Stage ${record.step}${record.phase ? `:${record.phase}` : ''} wrote a malformed handoff (${formatError}) — ` +
+      're-dispatched once with the exact validation error; a second failure escalates.',
+  )
+  return true
 }
 
 /**
@@ -184,20 +304,21 @@ function settlePreviousDispatch(
 
   if (handoffAdvanced) {
     state.retryCount = 0
+    state.formatRetryUsed = false
     return null
   }
+  // AO: validate-then-retry-ONCE — a handoff refused for a FORMAT error is re-dispatched with the exact error; the
+  // second refusal falls through to the deliberate stop below, exactly as before.
+  if (scheduleFormatRetry(state, record, observers)) return null
+  const deliberate = deliberateOutcome(state, next, record, observers)
+  if (deliberate !== null) return deliberate
   if (state.retryCount >= deadDispatchRetries) {
     return { status: `failed-${state.dispatchedNext.step}`, stagesRun: state.stagesRun, next }
   }
   state.retryCount += 1
   // US-506 T-8 (AC12): a stall is resumed within the SAME budget as a dead dispatch. A process
   // realization has no session to resume, so the resume is a fresh dispatch of the same step.
-  if (record.stalled === true)
-    observers.onNotice?.(
-      `Stage ${record.step}${record.phase ? `:${record.phase}` : ''} stalled (${record.detail ?? 'no progress'}) — ` +
-        'resumed fresh: a process realization cannot resume a session (ADR-021 §2); ' +
-        `retry ${state.retryCount} of ${deadDispatchRetries}.`,
-    )
+  noticeStallResume(record, state.retryCount, deadDispatchRetries, observers)
   return null
 }
 
@@ -332,6 +453,8 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     dispatchedNext: null,
     dispatchedResult: null,
     retryCount: 0,
+    formatRetryUsed: false,
+    formatCorrection: undefined,
     reuseNoticeGiven: false,
     worktreePath: undefined,
   }
@@ -359,10 +482,21 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     if (gated !== null) return gated
 
     const stagePacket = await packet(next)
-    state.dispatchedResult = await spawnStage(stagePacket)
+    state.dispatchedResult = await spawnStage(withFormatCorrection(stagePacket, state))
     state.stagesRun += 1
     state.dispatchedNext = next
   }
+}
+
+/** AO: the dispatch that follows a format-validation failure carries the exact error ahead of the same prompt, once. */
+function withFormatCorrection<P extends { readonly prompt: string }>(
+  stagePacket: P,
+  state: LoopState,
+): P {
+  const error = state.formatCorrection
+  if (error === undefined) return stagePacket
+  state.formatCorrection = undefined
+  return { ...stagePacket, prompt: formatCorrectionNote(error) + stagePacket.prompt }
 }
 
 /**
