@@ -43,6 +43,8 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
   never staged. The target is transiently duplicated on disk while a run is in flight. On Windows,
   `rename` over an existing directory is not atomic, so these guarantees hold on POSIX platforms only.
 
+- **Package-local `.pair` dirs are never touched.** `<pkg>/.pair/` directories (the opt-in [package-local adoption override](/docs/customization/package-local-adoption)) are project content: `install`/`update` leave them alone, and `validate-config` rejects a registry `target` at or inside one.
+
 ---
 
 ## install

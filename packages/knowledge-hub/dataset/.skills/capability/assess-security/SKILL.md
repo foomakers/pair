@@ -1,7 +1,7 @@
 ---
 name: assess-security
 description: "Assesses security posture against resolved rules (KB global + per-service + per-web-app + adoption project rules): `$mode: review` — composed by /review to produce a 1-line verdict + collapsed findings feeding the risk matrix's security dimension (D22), CHANGES-REQUESTED on vulnerabilities the PR introduces; `$mode: audit` — one-shot codebase scan against OWASP Top 10, writes a report to .pair/working/reports/security/ and proposes project rules for /record-decision to persist. Deterministic secret-scanning is a separate CI layer (see /setup-gates) — this skill never scans for committed secrets itself (D24)."
-version: 0.2.0
+version: 0.3.0
 author: Foomakers
 ---
 
@@ -37,6 +37,10 @@ Every rule the skill applies is resolved through the same layered set, most-spec
 2. **Skip**: If provided, use it. Proceed to Step 1.
 3. **Act**: Auto-detect: invoked with a PR/diff in context (i.e. by `/review`) → `review`; otherwise → `audit`.
 4. **Verify**: Mode is set.
+
+### Scoped Context (package-local override)
+
+Opt-in. When the central adoption file carries a `## Package-Local Adoption` router, resolve the rule set per [scoped context resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/scoped-context-resolution.md) (diff-scoped here: globals + `<pkg>/.pair/` of the packages the diff touches, nothing else); report a central↔local conflict, a dangling router entry, and — when the [complexity signals](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/package-local-adoption.md#activation-proposal) fire — PROPOSE the override and wait for approval, never activate. No router ⇒ unchanged behaviour.
 
 ### Step 1: Load Rule Set
 

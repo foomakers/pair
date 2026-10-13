@@ -494,6 +494,7 @@ test('smoke: all customization pages return 200 with correct titles', async ({ p
     { url: '/docs/customization/adopt', title: 'Adopt a Knowledge Base' },
     { url: '/docs/customization/team', title: 'Customize for Your Team' },
     { url: '/docs/customization/templates', title: 'Customize Templates' },
+    { url: '/docs/customization/package-local-adoption', title: 'Package-Local Adoption' },
     { url: '/docs/customization/organization', title: 'Publish a Knowledge Base' },
   ]
   for (const { url, title } of pages) {
@@ -951,6 +952,7 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/customization/adopt',
     '/docs/customization/team',
     '/docs/customization/templates',
+    '/docs/customization/package-local-adoption',
     '/docs/customization/organization',
     '/docs/integrations',
     '/docs/integrations/claude-code',

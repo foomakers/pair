@@ -1,7 +1,7 @@
 ---
 name: pair-capability-assess-stack
 description: "Evaluates and recommends the tech stack — languages, frameworks, database, libraries, versions — when the choice is open: full evaluation at bootstrap, a single new dependency during implementation ('should we add Redis', 'is this new dependency consistent with our stack'), or composed by /pair-process-review when it finds an unlisted dependency in code. Doesn't audit code already written (that's /pair-capability-verify-adoption). Output-only: emits a proposal + target for /pair-capability-record-decision to persist."
-version: 0.6.0
+version: 0.7.0
 author: Foomakers
 ---
 
@@ -56,6 +56,10 @@ Detect and evaluate unlisted dependencies. Used when `/pair-process-review` find
      - Called by `/pair-process-review` → `review`
      - Otherwise → confirm existing adoption (Path B of cascade)
 4. **Verify**: Mode is set.
+
+### Scoped Context (package-local override)
+
+Opt-in. When the central adoption file carries a `## Package-Local Adoption` router, resolve the rule set per [scoped context resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/scoped-context-resolution.md) (diff-scoped here: globals + `<pkg>/.pair/` of the packages the diff touches, nothing else); report a central↔local conflict, a dangling router entry, and — when the [complexity signals](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/package-local-adoption.md#activation-proposal) fire — PROPOSE the override and wait for approval, never activate. No router ⇒ unchanged behaviour.
 
 ### Step 1: Resolution Cascade
 

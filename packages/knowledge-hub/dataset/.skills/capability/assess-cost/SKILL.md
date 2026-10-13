@@ -1,7 +1,7 @@
 ---
 name: assess-cost
 description: "Assesses the financial exposure of a change as a chromatic cost class (green/yellow/orange/red) against the KB cost-signal catalog resolved through the project's stack/architecture/infrastructure adoption, in two modes — review/refinement classification and period cost-monitoring reports: `$mode: classify` — the review/refinement-time class, output-only, emitted as the cost dimension of the classification matrix (1-line verdict + collapsed details, D22) for /classify and /review to consume; `$mode: report` — bidirectional cost monitoring over a period's merged PRs (predicted class vs. real signals, drift flagged, deploy-match when telemetry exists), rendered as a consolidated panel written to .pair/working/reports/cost/, idempotent by period key. Multi-provider by construction: adding a provider touches adoption/KB only, never this skill."
-version: 0.2.0
+version: 0.3.0
 author: Foomakers
 ---
 
@@ -46,6 +46,10 @@ A missing/malformed adoption file is treated as absent: warn and fall back to KB
 1. **Check**: Does [quality-model.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) resolve (KB installed)?
 2. **Act**: If it is **missing**, **HALT** — the quality model is a prerequisite, not a default this skill can invent. Report: _"Quality model not found — install/bootstrap the KB (`quality-model.md` §3.3) before running assess-cost."_
 3. **Verify**: The Cost class section (§3.3) and the [cost-assessment guideline](../../../.pair/knowledge/guidelines/quality-assurance/cost-assessment.md) are loaded.
+
+### Scoped Context (package-local override)
+
+Opt-in. When the central adoption file carries a `## Package-Local Adoption` router, resolve the rule set per [scoped context resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/scoped-context-resolution.md) (diff-scoped here: globals + `<pkg>/.pair/` of the packages the diff touches, nothing else); report a central↔local conflict, a dangling router entry, and — when the [complexity signals](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/package-local-adoption.md#activation-proposal) fire — PROPOSE the override and wait for approval, never activate. No router ⇒ unchanged behaviour.
 
 ### Step 1: Detect Mode
 
