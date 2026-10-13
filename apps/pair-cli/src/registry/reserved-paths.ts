@@ -14,6 +14,8 @@ import { pathsOverlap } from './working-area'
  * members:
  *   - `.pair/working` (or the `working_path` override) — the operational working area.
  *   - `.pair/.kb-version.json` (#261) — the KB version marker (a version pin).
+ *   - package-local `<pkg>/.pair/` dirs (#237) — project content, see
+ *     `isPackageLocalPairPath`; matched by pattern, not listed here.
  * Append further meta/config files below as needed.
  *
  * @param workingPath - the resolved (project-relative) working-area path.
@@ -26,6 +28,16 @@ export function getReservedPaths(workingPath: string): string[] {
     // commands/kb-info/version-resolver.ts (a test asserts they agree).
     '.pair/.kb-version.json',
   ]
+}
+
+/**
+ * True when a project-relative path lies at or inside a package-local `.pair`
+ * dir (`<pkg>/.pair`, any depth) — the opt-in package-local adoption override
+ * (#237). The root `.pair` (first segment) is the KB itself and is not matched.
+ */
+export function isPackageLocalPairPath(path: string): boolean {
+  const segments = posixPath.normalize(path.replace(/\\/g, '/')).split('/')
+  return segments.slice(1).includes('.pair')
 }
 
 /**
@@ -52,6 +64,12 @@ export function detectReservedPathOverlap(
       // non-canonical target — e.g. '.pair/knowledge/../working' or './.pair' —
       // that actually covers a reserved path cannot slip past the overlap check.
       const normTarget = posixPath.normalize(target.path)
+      if (isPackageLocalPairPath(normTarget)) {
+        errors.push(
+          `Registry '${name}' target '${target.path}' lies within a package-local '.pair' dir. ` +
+            `Package-local adoption dirs are project content and must stay outside every asset registry (D14).`,
+        )
+      }
       for (const reserved of reservedPaths) {
         if (pathsOverlap(normTarget, posixPath.normalize(reserved))) {
           errors.push(
