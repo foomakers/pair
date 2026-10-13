@@ -81,7 +81,7 @@ pnpm lint --filter <package_name>                      # quality checks
 
 ## 🐛 Bug Resolution Workflow
 
-**Critical principle**: Test-first debugging proves the fix addresses the actual problem, prevents regressions, and documents expected behavior.
+**Critical principle**: Test-first debugging proves the fix, prevents regressions, documents behavior. Confidence: lint + tests pass before committing.
 
 1. **Understand the bug** - Read error messages, logs, and problem descriptions thoroughly
 2. **Create a failing test** - Write a test that reproduces the bug (test should FAIL)

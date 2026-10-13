@@ -37,7 +37,7 @@ Example: `How-to: 10-how-to-implement-a-task.md` · `Role: product-engineer` · 
 
 ### How to establish session context
 
-1. **Determine how-to**: exact match (developer names a how-to ID/filename → use it); otherwise follow "If unsure" below; category progression: induction → strategic → iteration → execution → review
+1. **Determine how-to**: exact match (developer names a how-to ID/filename → use it); otherwise follow "If unsure" below; category progression: induction → strategic → iteration → execution → review; when ambiguous: show top 2 matches with their tags and ask for confirmation
 2. **Identify role**: check user language/request type, or ask if unclear
 3. **Find PM tool**: read `.pair/adoption/tech/way-of-working.md` (primary source, contains the adopted PM tool); if not specified, ask the developer which PM tool to use
 4. **Get PM access**: extract MCP commands or URLs for your tool from `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md`
@@ -122,7 +122,7 @@ Role hints: Product Manager language → prefer `role_preference: ["product-mana
 
 ## 🐛 Bug Resolution Workflow
 
-**Critical principle**: Test-first debugging proves the fix addresses the actual problem, prevents regressions, and documents expected behavior.
+**Critical principle**: Test-first debugging proves the fix, prevents regressions, documents behavior. Confidence: lint + tests pass before committing.
 
 1. **Understand the bug** - Read error messages, logs, and problem descriptions thoroughly
 2. **Create a failing test** - Write a test that reproduces the bug (test should FAIL)
