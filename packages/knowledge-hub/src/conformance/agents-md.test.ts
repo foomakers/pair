@@ -21,8 +21,8 @@ const wordCount = (s: string) => s.split(/\s+/).filter(Boolean).length
 
 describe('dataset AGENTS.md shrink (#433 T-7)', () => {
   it('carries the default agent style and the minimal-code rule, one line each', () => {
-    const style = AGENTS_MD.split('\n').filter(l => /terse/i.test(l) && /recap/i.test(l))
-    const code = AGENTS_MD.split('\n').filter(l => /minimal code/i.test(l))
+    const style = AGENTS_MD.split('\n').filter(l => /^default style:.*terse.*recap/i.test(l))
+    const code = AGENTS_MD.split('\n').filter(l => /^minimal code:/i.test(l))
     expect(style).toHaveLength(1)
     expect(code).toHaveLength(1)
   })

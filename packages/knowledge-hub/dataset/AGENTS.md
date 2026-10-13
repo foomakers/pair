@@ -4,7 +4,9 @@ This repository uses a structured approach for AI agents. **Always start by read
 
 In all interactions and commit messages, be extremely coincise and sacrify grammar for the sake of coincision.
 
-Default style: terse, no recap, no preamble. Minimal code: the least code that solves the task, no speculative abstractions.
+Default style: terse, no recap, no preamble.
+
+Minimal code: the least code that solves the task, no speculative abstractions.
 
 ## Skill-Enabled Assistants
 
