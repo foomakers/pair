@@ -19,6 +19,7 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 - [kb-verify](#kb-verify) — Verify KB package integrity
 - [kb-validate](#kb-validate) — Validate KB structure
 - [validate-config](#validate-config) — Validate configuration
+- [tokens](#tokens) — Count words and estimated tokens per area of a project's pair files
 - [run](#run) — Run a pair skill headlessly on a chosen engine, in a re-invocation loop
 
 ## Rules that apply to every command
@@ -735,6 +736,25 @@ pair-cli validate-config --config ./my-config.json
 ```
 
 ---
+
+## tokens
+
+Count words and estimated tokens (`ceil(characters / 4)`, no tokenizer) per area of the project's
+markdown: templates, adoption, adr, decision-log, skills, guidelines, agent-context.
+
+### Usage
+
+```bash
+pair-cli tokens [options]
+```
+
+### Options
+
+| Option            | Description                                                          |
+| ----------------- | -------------------------------------------------------------------- |
+| `--root <dir>`    | Project root to count (default: the current directory)               |
+| `--area <name>`   | Report one area only; an unknown name exits 1 and lists the valid ones |
+| `--json`          | Output areas, per-file items and the total as JSON                   |
 
 ## run
 
