@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url'
 import { contractHash } from '../../skills/pair-workflow-red-verify/scripts/cycle-state.mjs'
 import { llmsDerivedTitle, pushSnapshot, artifactPaths as artifactPathsOf, contractErrors, hashFile, isTestPath, manifestPathFor, seal, trailerFor, verify, verifyChain, predecessorPhase, scopeNarrowing, isModulePath, OVERRIDABLE_BREACH_CODES } from '../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs'
 
+const CLI_URL = new URL('../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url).href
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url))
 
 // The module ships inside the skills that run it — `red-verify` (seal, after validation) and
@@ -1289,6 +1290,96 @@ test('US-506 T-6 w1 (AC9): a listed test that fails the repo static gates is ref
   const ok = sealCli(good.cwd, ['--pr', PR, '--phase', PHASE, '--base', good.base, '--contract', good.contractPath, '--static-gates', LINT_UNUSED])
   assert.equal(ok.json.sealed, true, JSON.stringify(ok.json))
   assert.deepEqual(ok.json.preSeal.staticGates.map(g => [g.gate, g.path, g.exitCode]), [['lint', 'test/w.test.js', 0]])
+})
+
+// defect AQ (#237): a sealed test failed the owning package's lint (complexity) that the pre-push hook
+// enforces; `--static-gates '[]'` let it through. The sealer now derives the owning package's `lint` itself,
+// SCOPED to the listed test files (a violation elsewhere never blocks); `ts:check` is deliberately not derived.
+function pkgWitnessRepo({ lintJs, scripts = lintJs ? { lint: 'node lint.js' } : {}, testBody, pkgJsonRaw, root = false } = {}) {
+  const { cwd } = repo()
+  const dir = root ? '' : 'packages/p/'
+  const tf = `${dir}${root ? 'test/w.test.js' : 'src/a.test.js'}`
+  write(cwd, `${dir}package.json`, pkgJsonRaw ?? JSON.stringify({ name: 'p', scripts }))
+  if (lintJs) write(cwd, `${dir}lint.js`, lintJs)
+  write(cwd, `${dir}src/a.js`, 'export const a = () => 1\n')
+  write(cwd, `${dir}src/other.js`, 'export const o = 0\n')
+  write(cwd, tf, 'import("./a.js").then(m => { if (m.a() !== 3) throw new Error("FAIL") })\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'pkg')
+  const base = git(cwd, 'rev-parse', 'HEAD')
+  write(cwd, tf, testBody ?? 'import("./a.js").then(m => { if (m.a() !== 2) throw new Error("FAIL") })\n')
+  const contract = {
+    sourceOfTruth: 'a()',
+    fixScope: { owner: 'a()', mode: 'test', allowedPaths: [] },
+    matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'default', oracle: `node ${tf}`, expected: '2', covers: ['r0-1'] }],
+    redTests: [{ file: tf, kind: 'test', sha256: hashFile(tf, cwd), command: `node ${tf}`, observed: 'Error: FAIL' }],
+    testExempt: false,
+  }
+  write(cwd, '.pair/working/w-draft.json', JSON.stringify(contract))
+  return { cwd, base, tf, contractPath: '.pair/working/w-draft.json' }
+}
+const sealEmpty = r => sealCli(r.cwd, ['--pr', PR, '--phase', PHASE, '--base', r.base, '--contract', r.contractPath, '--static-gates', '[]'])
+// what an eslint stylish report looks like: an absolute path header, then the messages, then the summary
+const LINT_REPORTS = (file, tail = '✖ 1 problem (1 error, 0 warnings)') => `console.error(require('path').resolve(${JSON.stringify(file)}) + '\\n  38:1  error  complexity 13 > 10\\n\\n${tail}'); process.exit(1)`
+
+test('defect AQ (c): a lint violation IN the listed test is refused as package:lint, nothing committed', () => {
+  const r = pkgWitnessRepo({ lintJs: LINT_REPORTS('src/a.test.js') })
+  const out = sealEmpty(r)
+  assert.deepEqual([out.json.sealed, out.json.reason, out.json.gate, out.json.path], [false, 'static-gate-failed', 'package:lint', r.tf], JSON.stringify(out.json))
+  assert.match(out.json.output, /complexity 13 > 10/)
+  assert.equal(git(r.cwd, 'rev-parse', 'HEAD'), r.base, 'nothing committed')
+})
+
+test('defect AQ (b): a pre-existing lint violation in an UNRELATED file never blocks the seal', () => {
+  const r = pkgWitnessRepo({ lintJs: LINT_REPORTS('src/other.js') })
+  const out = sealEmpty(r)
+  assert.equal(out.json.sealed, true, JSON.stringify(out.json))
+  assert.deepEqual(out.json.preSeal.staticGates.map(g => [g.gate, g.path, g.scoped]), [['package:lint', 'packages/p', true]])
+})
+
+test('defect AQ (a, control): a RED witness importing a symbol that does not exist yet seals with `[]` — package ts:check is not derived', () => {
+  const r = pkgWitnessRepo({ scripts: { 'ts:check': `node -e "console.error('src/a.test.js: Cannot find name notYet'); process.exit(1)"` }, testBody: 'import("./a.js").then(m => { if (m.notYet() !== 2) throw new Error("FAIL") })\n' })
+  const out = sealEmpty(r)
+  assert.equal(out.json.sealed, true, JSON.stringify(out.json))
+})
+
+test('defect AQ: a clean package lint seals; a lint run that crashed without any report fails closed', () => {
+  const ok = sealEmpty(pkgWitnessRepo({ lintJs: 'process.exit(0)' }))
+  assert.equal(ok.json.sealed, true, JSON.stringify(ok.json))
+  const word = sealEmpty(pkgWitnessRepo({ lintJs: 'console.error("fatal: no problem reporter, config problem"); process.exit(2)' }))
+  assert.deepEqual([word.json.sealed, word.json.reason], [false, 'static-gate-failed'], 'the word problem alone is not an eslint report')
+  const crash = sealEmpty(pkgWitnessRepo({ lintJs: 'console.error("Oops! Something went wrong: config not found"); process.exit(2)' }))
+  assert.deepEqual([crash.json.sealed, crash.json.reason, crash.json.gate], [false, 'static-gate-failed', 'package:lint'], JSON.stringify(crash.json))
+})
+
+test('defect AQ: a test at the repo ROOT is gated by the root package.json lint; an unparseable package.json is refused, typed', () => {
+  const root = pkgWitnessRepo({ root: true, lintJs: LINT_REPORTS('test/w.test.js') })
+  const refused = sealEmpty(root)
+  assert.deepEqual([refused.json.sealed, refused.json.reason, refused.json.gate, refused.json.path], [false, 'static-gate-failed', 'package:lint', root.tf], JSON.stringify(refused.json))
+  const bad = sealEmpty(pkgWitnessRepo({ pkgJsonRaw: '{ not json' }))
+  assert.deepEqual([bad.json.sealed, bad.json.reason, bad.json.path], [false, 'package-json-unparseable', 'packages/p/package.json'], JSON.stringify(bad.json))
+})
+
+test('defect AQ: a gate that hangs is killed with its WHOLE process tree on timeout; chatty output is not refused as ENOBUFS', async () => {
+  const { runStaticGates } = await import(CLI_URL)
+  const { cwd } = repo()
+  const pidFile = join(cwd, 'child.pid')
+  const contract = { testExempt: false, redTests: [{ file: 'test/a.test.js', kind: 'test' }] }
+  const hang = [{ name: 'hang', command: ['sh', '-c', `sleep 60 & echo $! > ${pidFile}; wait`] }]
+  const r = runStaticGates({ gates: hang, contract, cwd, timeoutMs: 700 })
+  assert.deepEqual([r.refusal.reason, r.refusal.gate], ['static-gate-failed', 'hang'])
+  assert.match(r.refusal.output, /timed out/)
+  const pid = Number(readFileSync(pidFile, 'utf8').trim())
+  let alive = true
+  try { process.kill(pid, 0) } catch { alive = false }
+  assert.equal(alive, false, 'the grandchild died with the group')
+  // a daemon that inherits the pipes and outlives the gate must not hang the seal
+  const t0 = Date.now()
+  const daemon = runStaticGates({ gates: [{ name: 'daemon', command: ['sh', '-c', 'sleep 60 & exit 3'] }], contract, cwd, timeoutMs: 2000 })
+  assert.equal(daemon.refusal.reason, 'static-gate-failed')
+  assert.ok(Date.now() - t0 < 8000, `returned in ${Date.now() - t0}ms`)
+  const chatty = runStaticGates({ gates: [{ name: 'chatty', command: [process.execPath, '-e', 'process.stdout.write("x".repeat(20 * 1024 * 1024))'] }], contract, cwd })
+  assert.equal(chatty.refusal, undefined, JSON.stringify(chatty.refusal))
 })
 
 test('US-506 T-6 w2 (AC9): a listed test that spawns a REAL `gh` or reaches the network is refused, naming the file; a stubbed `gh` and a loopback socket seal', () => {
