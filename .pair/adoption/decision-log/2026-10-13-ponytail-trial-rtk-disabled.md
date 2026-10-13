@@ -1,4 +1,4 @@
-# Decision: ponytail enabled as a repo-level trial; rtk disabled
+# Decision: ponytail enabled as a repo-level trial; rtk enabled for the review stage only
 
 ## Date
 
@@ -6,7 +6,7 @@
 
 ## Status
 
-Active (trial — ponytail)
+Active (trial — ponytail; rtk scoped to review)
 
 ## Category
 
@@ -27,17 +27,27 @@ rtk cut command output ~70% but saved nothing overall (context dominated by cach
 ## Decision
 
 - **ponytail**: enabled for this repo via `.claude/settings.json` (`enabledPlugins`, marketplace pinned to `v5.2.0`). Trial; per-session opt-out `/ponytail off`.
-- **rtk**: disabled — no hook, not installed by `pnpm install`. `scripts/dev/install-rtk.sh` (pinned, checksum-verified) stays only for the review A/B (#433 T-12).
+- **rtk**: enabled ONLY for the review stage. A `PreToolUse` Bash hook (`.claude/settings.json` → `scripts/dev/rtk-review-hook.mjs`) runs `rtk hook claude` only when the hook input's `agent_type` is `pair-reviewer`, is a no-op when `.tools/bin/rtk` is absent, and rewrites `rtk` to its absolute path (never PATH). Still opt-in: `scripts/dev/install-rtk.sh` (pinned, checksum-verified); not installed by `pnpm install`.
+- **Scope**: `agent_type` is set in hook input for subagents and `claude --agent`. `pair-cli` run stages carry no `agent_type`, so they are NOT covered; implementation and main sessions are never rewritten.
 - **caveman**: not installed; its effect is pursued by the shrink-discipline guideline.
+
+Review A/B (T-12; Opus reviewer, 3 runs/arm, 2 seeded defects S1/S2):
+
+| Arm | S1 found | S2 found | Cost/run |
+| --- | --- | --- | --- |
+| without rtk | 2/3 | 3/3 | $0.93 |
+| with rtk | 3/3 | 3/3 | $0.82 (−12%; context −16%) |
+
+Identical-or-better findings at lower cost: the condition set for reconsidering rtk is met for review only.
 
 ## Alternatives Considered
 
-- rtk hook by default: no measured gain, lossy on review-sized diffs.
+- rtk hook everywhere: no gain on implementation, lossy on large diffs; only review showed a gain.
 - ponytail at user level only: leaves the repo's agents unconfigured.
 
 ## Consequences
 
-Every Claude Code session and subagent in this repo receives the ponytail ruleset. Exit criterion: ponytail is removed if a later measurement shows lower correctness or no cost/line reduction; rtk is reconsidered only if T-12 shows identical findings at lower cost.
+Every Claude Code session and subagent in this repo receives the ponytail ruleset. Exit criterion: ponytail is removed if a later measurement shows lower correctness or no cost/line reduction; rtk review scoping is removed if a later review A/B shows fewer findings.
 
 ## Related
 

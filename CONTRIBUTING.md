@@ -24,9 +24,9 @@ Thank you for your interest in contributing to Pair!
 - Follow the guidelines in `.pair/knowledge/guidelines/` for architecture and code design.
 - For process and collaboration, see `.pair/adoption/tech/way-of-working.md`.
 
-## Optional: rtk (not enabled)
+## Optional: rtk (review stage only)
 
-`./scripts/dev/install-rtk.sh` installs a pinned, checksum-verified [rtk](https://github.com/rtk-ai/rtk) into `.tools/bin` (gitignored). It is **not** installed by `pnpm install` and no hook uses it: measured on #433 it saved no cost on implementation tasks, and it truncates large diffs. It is kept for the code-review A/B planned at the end of #433 (T-12).
+`./scripts/dev/install-rtk.sh` installs a pinned, checksum-verified [rtk](https://github.com/rtk-ai/rtk) into `.tools/bin` (gitignored). It is **not** installed by `pnpm install`. When installed, a `PreToolUse` Bash hook (`scripts/dev/rtk-review-hook.mjs`) runs `rtk hook claude` only for the `pair-reviewer` subagent (hook input `agent_type`), with the absolute rtk path; absent rtk is a no-op. `pair-cli` run stages carry no `agent_type` and are not covered. Review A/B (3 runs/arm, Opus, 2 seeded defects): without rtk S1 2/3, S2 3/3, $0.93; with rtk S1 3/3, S2 3/3, $0.82 (−12%, context −16%). On implementation it saved nothing and truncates large diffs. See `.pair/adoption/decision-log/2026-10-13-ponytail-trial-rtk-disabled.md`.
 
 ## Trial: ponytail (#433)
 
