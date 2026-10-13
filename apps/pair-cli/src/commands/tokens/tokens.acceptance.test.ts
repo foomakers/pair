@@ -6,7 +6,6 @@ import { dirname, join, resolve } from 'path'
 import { tokensCommandMetadata } from './metadata'
 
 const CLI_CWD = resolve(__dirname, '../../..')
-const REPO_ROOT = resolve(CLI_CWD, '../..')
 const AREAS = [
   'templates',
   'adoption',
@@ -133,25 +132,39 @@ describe('pair-cli tokens (acceptance)', () => {
   })
 
   it('r1-g1-i1 --area + a baseline recorded by the CLI on the same corpus: total delta 0', () => {
-    writeFileSync(join(root, 'base.json'), run(root, '--json').out)
-    const j = JSON.parse(run(root, '--json', '--area', 'skills', '--baseline', 'base.json').out)
+    const base = join(root, 'base.json')
+    writeFileSync(base, run(root, '--json').out)
+    const j = JSON.parse(run(root, '--json', '--area', 'skills', '--baseline', base).out)
     expect(j.total.delta).toEqual({ words: 0, tokens: 0 })
   })
 
   it('r1-g1-i3 full run + a baseline recorded by the CLI with --area: no total delta', () => {
-    writeFileSync(join(root, 'skills-base.json'), run(root, '--json', '--area', 'skills').out)
-    const j = JSON.parse(run(root, '--json', '--baseline', 'skills-base.json').out)
+    const base = join(root, 'skills-base.json')
+    writeFileSync(base, run(root, '--json', '--area', 'skills').out)
+    const j = JSON.parse(run(root, '--json', '--baseline', base).out)
     expect(area(j, 'skills')).toMatchObject({ delta: { words: 0, tokens: 0 } })
     expect(j.total.delta).toBeUndefined()
   })
 
-  it('r1-g1-i2 the help --baseline example, run verbatim on the repo root, exits 0 with a delta', () => {
+  it('r1-g1-i2 the help --baseline recipe: record with --json into a file, then --baseline that file', () => {
     const example = tokensCommandMetadata.examples.find(e => e.includes('--baseline'))!
-    const args = example.split('#')[0]!.trim().split(/\s+/).slice(2)
-    const r = run(REPO_ROOT, ...args)
-    expect(r.err).not.toMatch(/tokens failed/)
+    expect(example).not.toContain('scripts/dev')
+    const file = join(root, 'my-baseline.json')
+    writeFileSync(file, run(root, '--json').out)
+    const r = run(root, '--baseline', file)
     expect(r.code).toBe(0)
     expect(r.out).toContain('Δ')
+  })
+
+  it('--baseline is resolved against the current directory, not --root', () => {
+    writeFileSync(join(CLI_CWD, 'cwd-base.tmp.json'), run(root, '--json').out)
+    try {
+      const r = run(root, '--json', '--baseline', 'cwd-base.tmp.json')
+      expect(r.code).toBe(0)
+      expect(JSON.parse(r.out).total.delta).toEqual({ words: 0, tokens: 0 })
+    } finally {
+      rmSync(join(CLI_CWD, 'cwd-base.tmp.json'))
+    }
   })
 
   it('prints a human report naming every area and the total when --json is absent', () => {

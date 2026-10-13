@@ -1,15 +1,15 @@
-import { existsSync } from 'fs'
-import { resolve } from 'path'
 import { describe, expect, it } from 'vitest'
 import { tokensCommandMetadata } from './metadata'
 
-const REPO_ROOT = resolve(__dirname, '../../../../..')
-
 describe('tokensCommandMetadata', () => {
-  it('r1-g1-w4 the --baseline example names a committed baseline, not a git-ignored path', () => {
+  it('r1-g1-w4 the --baseline example names no repo-only path (the CLI ships to adopters)', () => {
     const example = tokensCommandMetadata.examples.find(e => e.includes('--baseline'))!
-    const path = /--baseline\s+(\S+)/.exec(example)![1]!
-    expect(path.startsWith('.pair/working/')).toBe(false)
-    expect(existsSync(resolve(REPO_ROOT, path))).toBe(true)
+    expect(example).not.toMatch(/scripts\/|\.pair\/working/)
+    expect(tokensCommandMetadata.examples.some(e => /--json\s*>/.test(e))).toBe(true)
+  })
+
+  it('documents that --baseline resolves against the current directory', () => {
+    const opt = tokensCommandMetadata.options.find(o => o.flags.startsWith('--baseline'))!
+    expect(opt.description).toMatch(/current directory/)
   })
 })

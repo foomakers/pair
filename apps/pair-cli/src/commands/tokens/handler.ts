@@ -75,7 +75,7 @@ interface Baseline {
 
 /** A baseline is a previous `--json` report; anything else is an error, never a silent no-delta. */
 async function loadBaseline(fs: FileSystemService, config: TokensCommandConfig): Promise<Baseline> {
-  const file = resolve(config.root, config.baseline as string)
+  const file = resolve(config.baseline as string)
   let j: Baseline
   try {
     j = JSON.parse(await fs.readFile(file))

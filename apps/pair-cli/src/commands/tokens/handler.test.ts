@@ -96,7 +96,7 @@ describe('handleTokensCommand --baseline', () => {
     })
 
   it('r1-g1-w5 partial baseline, no --area: per-area delta where present, no total delta', async () => {
-    const { code, out } = await run(cfg({ baseline: 'b.json' }), {
+    const { code, out } = await run(cfg({ baseline: '/r/b.json' }), {
       ...files,
       '/r/b.json': report(10, 4),
     })
@@ -108,7 +108,7 @@ describe('handleTokensCommand --baseline', () => {
   })
 
   it('human output shows signed deltas', async () => {
-    const { out } = await run(cfg({ json: false, baseline: 'b.json' }), {
+    const { out } = await run(cfg({ json: false, baseline: '/r/b.json' }), {
       ...files,
       '/r/b.json': report(10, 4),
     })
@@ -139,12 +139,12 @@ describe('handleTokensCommand --baseline', () => {
   })
 
   it('r1-g1-c1 no --area, unchanged corpus: total delta 0', async () => {
-    const { out } = await run(cfg({ baseline: 'b.json' }), { ...files, '/r/b.json': full() })
+    const { out } = await run(cfg({ baseline: '/r/b.json' }), { ...files, '/r/b.json': full() })
     expect(JSON.parse(out).total.delta).toEqual({ words: 0, tokens: 0 })
   })
 
   it('r1-g1-w1 --area + baseline of the unchanged corpus: total delta 0', async () => {
-    const { code, out } = await run(cfg({ area: 'adr', baseline: 'b.json' }), {
+    const { code, out } = await run(cfg({ area: 'adr', baseline: '/r/b.json' }), {
       ...files,
       '/r/b.json': full(),
     })
@@ -153,7 +153,7 @@ describe('handleTokensCommand --baseline', () => {
   })
 
   it('r1-g1-w2 --area: total delta is the selected area delta', async () => {
-    const { out } = await run(cfg({ area: 'templates', baseline: 'b.json' }), {
+    const { out } = await run(cfg({ area: 'templates', baseline: '/r/b.json' }), {
       ...files,
       '/r/b.json': full({ words: 10, tokens: 4 }),
     })
@@ -163,7 +163,7 @@ describe('handleTokensCommand --baseline', () => {
   })
 
   it('r1-g1-w3 --area human output: total line shows a zero delta', async () => {
-    const { out } = await run(cfg({ json: false, area: 'adr', baseline: 'b.json' }), {
+    const { out } = await run(cfg({ json: false, area: 'adr', baseline: '/r/b.json' }), {
       ...files,
       '/r/b.json': full(),
     })
@@ -172,7 +172,7 @@ describe('handleTokensCommand --baseline', () => {
   })
 
   it('r1-g1-b1 --area absent from the baseline: no total delta', async () => {
-    const { out } = await run(cfg({ area: 'adr', baseline: 'b.json' }), {
+    const { out } = await run(cfg({ area: 'adr', baseline: '/r/b.json' }), {
       ...files,
       '/r/b.json': report(10, 4),
     })
@@ -181,10 +181,18 @@ describe('handleTokensCommand --baseline', () => {
     expect(j.total.delta).toBeUndefined()
   })
 
+  it('--baseline resolves against the current directory, not --root', async () => {
+    vi.spyOn(process, 'cwd').mockReturnValue('/c')
+    const seed = { ...files, '/c/b.json': report(0, 0), '/r/b.json': report(99, 99) }
+    const { code, out } = await run(cfg({ area: 'templates', baseline: 'b.json' }), seed)
+    expect(code).toBe(0)
+    expect(JSON.parse(out).areas[0].delta).toEqual({ words: 6, tokens: 6 })
+  })
+
   it('missing or malformed baseline: exit 1', async () => {
-    expect((await run(cfg({ baseline: 'nope.json' }))).code).toBe(1)
+    expect((await run(cfg({ baseline: '/r/nope.json' }))).code).toBe(1)
     expect(
-      (await run(cfg({ baseline: 'b.json' }), { ...files, '/r/b.json': '{"x":1}' })).code,
+      (await run(cfg({ baseline: '/r/b.json' }), { ...files, '/r/b.json': '{"x":1}' })).code,
     ).toBe(1)
   })
 })
