@@ -2488,13 +2488,18 @@ test('AO w3b: an implementation with no PR number whose branch ALREADY has exact
   const std = stdDispatch()
   const real = (p, o) => o.agentType === 'pair-implementer' && o.label.startsWith('implement:') && p.includes('$snapshot=')
   const drive = prs => runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.label?.startsWith('pr-lookup:') ? { prs } : real(p, o) ? { prNumber: null } : std(p, o)) })
-  const adopt = await drive([{ number: 7, headRefOid: HEAD }])
+  const own = { number: 7, headRefOid: HEAD, isCrossRepository: false, headRepositoryOwner: { login: 'Acme' }, url: 'https://github.com/acme/repo/pull/7' }
+  const adopt = await drive([own])
   assert.equal(adopt.calls.filter(c => c.opts.label.startsWith('implement:') && c.prompt.includes('$snapshot=')).length, 1, 'adopted, not re-dispatched')
   const lookup = adopt.calls.find(c => c.opts.label === 'pr-lookup:#292')
   assert.match(lookup.prompt, /gh pr list --head feat\/#292-x --state open/)
+  assert.match(lookup.prompt, /--json [^`]*isCrossRepository/, 'the lookup reads isCrossRepository')
+  assert.match(lookup.prompt, /--json [^`]*headRepositoryOwner/)
   assert.equal(lookup.opts.model, 'haiku')
   assert.equal(adopt.result.batch[0].status, 'ready-for-merge', JSON.stringify(adopt.result.batch[0]))
-  for (const prs of [[], [{ number: 7, headRefOid: HEAD }, { number: 8, headRefOid: HEAD }]]) {
+  // a same-named head branch in a FORK (isCrossRepository), an unreadable flag, or a head owner that is not the base repo's owner is never adopted
+  const nope = [[], [own, { ...own, number: 8 }], [{ ...own, isCrossRepository: true }], [{ ...own, isCrossRepository: undefined }], [{ ...own, headRepositoryOwner: { login: 'mallory' } }], [{ ...own, headRepositoryOwner: undefined }], [{ ...own, url: undefined }], [{ number: 7, headRefOid: HEAD }]]
+  for (const prs of nope) {
     const r = await drive(prs)
     assert.equal(r.calls.filter(c => c.opts.label.startsWith('implement:') && c.prompt.includes('$snapshot=')).length, 2, JSON.stringify(prs))
   }

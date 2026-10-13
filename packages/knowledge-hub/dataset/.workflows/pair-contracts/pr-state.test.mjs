@@ -33,11 +33,11 @@ test('the verdict → check conclusion / state label mapping is the KB one (pr-s
 
 // A `gh api` recorder: labels and statuses live in a state file, every call is logged, and the two
 // refusals the live host can answer (no `repo:status` scope, labels never provisioned) are switchable.
-function fakeGh({ labels = [], refuseStatus = false, refuseLabels = false, refuseFamily = null } = {}) {
+function fakeGh({ labels = [], refuseStatus = false, refuseLabels = false, refuseFamily = null, failStatusRead = false, checkRuns = [], seedStatuses = [] } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'gh-state-'))
   const state = join(dir, 'state.json')
   const log = join(dir, 'calls.log')
-  writeFileSync(state, JSON.stringify({ labels, statuses: [] }))
+  writeFileSync(state, JSON.stringify({ labels, statuses: seedStatuses }))
   writeFileSync(join(dir, 'gh'), `#!/usr/bin/env node
 const fs = require('fs')
 const args = process.argv.slice(2)
@@ -54,7 +54,10 @@ if (/\\/statuses\\//.test(path)) {
   st.statuses.push({ sha: path.split('/').pop(), state: field('state'), context: field('context'), description: field('description') }); save()
   process.stdout.write(JSON.stringify({ id: 1, state: field('state'), context: field('context') })); process.exit(0)
 }
-if (/\\/commits\\/[0-9a-f]+\\/status$/.test(path)) { process.stdout.write(JSON.stringify({ statuses: st.statuses })); process.exit(0) }
+if (/\\/check-runs\\?/.test(path)) { process.stdout.write(JSON.stringify({ check_runs: ${JSON.stringify(checkRuns)} })); process.exit(0) }
+if (/\\/commits\\/[0-9a-f]+\\/status$/.test(path)) {
+  if (${failStatusRead}) { process.stderr.write('HTTP 502: Bad Gateway'); process.exit(1) }
+  process.stdout.write(JSON.stringify({ statuses: st.statuses })); process.exit(0) }
 if (/\\/labels(\\/|$)/.test(path)) {
   if (${refuseLabels}) { process.stderr.write('HTTP 404: Not Found'); process.exit(1) }
   if (method === 'GET') { process.stdout.write(JSON.stringify(st.labels.map(n => ({ name: n })))); process.exit(0) }
@@ -272,4 +275,87 @@ test('conclude is idempotent: the same conclusion on a head that already carries
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.equal(out(r).action, 'unchanged')
   assert.equal(fake.calls().filter(c => c.includes('POST') || c.includes('DELETE')).length, 0, 'nothing written twice')
+})
+
+// Defect: a PR published by the implement stage carried no `pair-review` status at t0 — the registration
+// was prose-only (hand-built gh calls). `register` is the deterministic t0 half: pending on the head sha
+// + `pr-state:to-be-reviewed`, idempotent, never downgrading a conclusion the head already carries.
+test('register: ONE pending `pair-review` status on the exact head sha + `pr-state:to-be-reviewed`, read back — exit 0', () => {
+  const fake = fakeGh({ labels: ['risk:green'] })
+  const r = run(fake, 'register', '--pr', '7', '--sha', SHA, '--repo', 'foomakers/pair')
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const o = out(r)
+  assert.equal(o.action, 'registered')
+  assert.deepEqual(o.check, { context: 'pair-review', sha: SHA, state: 'pending', published: true, error: null })
+  assert.equal(o.label.applied, 'pr-state:to-be-reviewed')
+  const st = fake.state()
+  assert.deepEqual(st.statuses.map(s => [s.sha, s.state, s.context]), [[SHA, 'pending', 'pair-review']])
+  assert.deepEqual(st.labels.sort(), ['pr-state:to-be-reviewed', 'risk:green'])
+})
+
+test('register is idempotent: a head already pending gets no second status', () => {
+  const fake = fakeGh({ labels: ['pr-state:to-be-reviewed'] })
+  run(fake, 'register', '--pr', '7', '--sha', SHA)
+  const r = run(fake, 'register', '--pr', '7', '--sha', SHA)
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.equal(out(r).action, 'unchanged')
+  assert.equal(fake.state().statuses.length, 1)
+})
+
+test('register never downgrades: a head already concluded keeps its conclusion', () => {
+  const fake = fakeGh({ labels: ['pr-state:ready-to-merge'] })
+  run(fake, 'conclude', '--pr', '7', '--sha', SHA, '--verdict', 'approved')
+  const r = run(fake, 'register', '--pr', '7', '--sha', SHA)
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.equal(out(r).action, 'unchanged')
+  assert.deepEqual(fake.state().statuses.map(s => s.state), ['success'])
+  assert.deepEqual(fake.state().labels, ['pr-state:ready-to-merge'])
+})
+
+test('register on a refused status write reports it (published=false), never faked; still labels', () => {
+  const fake = fakeGh({ labels: [], refuseStatus: true })
+  const r = run(fake, 'register', '--pr', '7', '--sha', SHA)
+  const o = out(r)
+  assert.equal(o.check.published, false)
+  assert.equal(o.advisory, true)
+  assert.equal(o.label.applied, 'pr-state:to-be-reviewed')
+})
+
+test('register: a FAILED status read is not "no status" — nothing is written over a possibly-concluded head (read-failed, published=false, exit 1)', () => {
+  const fake = fakeGh({ labels: [], failStatusRead: true, seedStatuses: [{ sha: SHA, state: 'success', context: 'pair-review' }] })
+  const r = run(fake, 'register', '--pr', '7', '--sha', SHA)
+  const o = out(r)
+  assert.equal(r.status, 1)
+  assert.equal(o.action, 'unchanged')
+  assert.equal(o.check.published, false)
+  assert.equal(o.reason, 'read-failed')
+  assert.deepEqual(fake.state().statuses.map(s => s.state), ['success'])
+  assert.deepEqual(fake.state().labels, [])
+})
+
+test('register: an existing pair-review CHECK RUN (app identity form) is the producer — no second producer is added', () => {
+  const fake = fakeGh({ labels: [], checkRuns: [{ name: 'pair-review', status: 'in_progress', conclusion: null, started_at: '2026-01-01T00:00:00Z' }] })
+  const r = run(fake, 'register', '--pr', '7', '--sha', SHA)
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const o = out(r)
+  assert.equal(o.action, 'unchanged')
+  assert.equal(o.reason, 'check-run-producer-exists')
+  assert.equal(fake.state().statuses.length, 0)
+})
+
+test('register: pending status present but the to-be-reviewed label missing => the label is repaired, no second status', () => {
+  const fake = fakeGh({ labels: ['risk:green'], seedStatuses: [{ sha: SHA, state: 'pending', context: 'pair-review' }] })
+  const r = run(fake, 'register', '--pr', '7', '--sha', SHA)
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const o = out(r)
+  assert.equal(o.action, 'unchanged')
+  assert.equal(o.label.applied, 'pr-state:to-be-reviewed')
+  assert.equal(fake.state().statuses.length, 1)
+  assert.deepEqual(fake.state().labels.sort(), ['pr-state:to-be-reviewed', 'risk:green'])
+})
+
+test('register: a concluded head keeps its label (repair only applies to a pending head)', () => {
+  const fake = fakeGh({ labels: ['pr-state:not-approved'], seedStatuses: [{ sha: SHA, state: 'failure', context: 'pair-review' }] })
+  run(fake, 'register', '--pr', '7', '--sha', SHA)
+  assert.deepEqual(fake.state().labels, ['pr-state:not-approved'])
 })

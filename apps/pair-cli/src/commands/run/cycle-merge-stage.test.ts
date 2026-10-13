@@ -14,7 +14,7 @@ import {
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
-import { createDefaultCycleDriver, readCardTier } from './cycle-wiring'
+import { createDefaultCycleDriver, readCardTier, type CycleDriverContext } from './cycle-wiring'
 import { POLICY_PATH } from './automation-policy'
 import {
   createCycleScriptsBridge,
@@ -127,7 +127,9 @@ const count = existsSync(log) ? readFileSync(log, 'utf8').split('\\n').filter(Bo
 appendFileSync(log, JSON.stringify({ cmd, opts }) + '\\n')
 if (count >= 6) { process.stdout.write(JSON.stringify({ error: 'merge stub: called too many times' }) + '\\n'); process.exit(2) }
 if (cmd === 'check') {
-  const answer = process.env.FAKE_MERGE_CHECK ? JSON.parse(process.env.FAKE_MERGE_CHECK) : { mergeAllowed: true, failed: [], reason: null, parkKind: null }
+  const checks = existsSync(log) ? readFileSync(log, 'utf8').split('\\n').filter(Boolean).filter(l => JSON.parse(l).cmd === 'check').length - 1 : 0
+  const first = Number(process.env.FAKE_MERGE_CHECK_FIRST_N || 0)
+  const answer = process.env.FAKE_MERGE_CHECK_FIRST && checks < first ? JSON.parse(process.env.FAKE_MERGE_CHECK_FIRST) : process.env.FAKE_MERGE_CHECK ? JSON.parse(process.env.FAKE_MERGE_CHECK) : { mergeAllowed: true, failed: [], reason: null, parkKind: null }
   process.stdout.write(JSON.stringify({ stage: 'merge', mode: 'check', ...answer }) + '\\n')
 } else if (cmd === 'run') {
   const green = opts.gate === 'green'
@@ -303,8 +305,9 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
 
   const ELIGIBLE = '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n'
 
-  const drive = (fs: InMemoryFileSystemService) =>
+  const drive = (fs: InMemoryFileSystemService, ciWait?: CycleDriverContext['ciWait']) =>
     createDefaultCycleDriver({
+      ...(ciWait !== undefined && { ciWait }),
       engine: { ...ENGINES.claude, command: join(root, 'bin', 'fake-engine') },
       cwd: main,
       fs,
@@ -520,6 +523,91 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
     expect(mergeCalls().map(c => c.cmd)).toEqual(['check'])
     expect(gatePrompts()).toHaveLength(0)
   }, 60_000)
+
+  describe('pending CI: bounded wait, then re-check', () => {
+    const PENDING = JSON.stringify({
+      mergeAllowed: false,
+      ciPending: true,
+      failed: [{ code: 'ci-not-green', detail: 'CI checks not green: build=pending' }],
+      reason: 'CI checks not green: build=pending',
+      parkKind: 'awaiting-human',
+    })
+    const clock = () => {
+      let t = 0
+      const waits: number[] = []
+      return {
+        waits,
+        ciWait: {
+          capSeconds: 120,
+          intervalSeconds: 30,
+          now: () => t,
+          wait: async (ms: number) => {
+            waits.push(ms)
+            t += ms
+            return 'elapsed' as const
+          },
+        },
+      }
+    }
+
+    it('ci-w1: pending CI is polled, the check re-run once it settles, then the merge proceeds', async () => {
+      vi.stubEnv('FAKE_GATE_RESULT', GATE_PASS)
+      vi.stubEnv('FAKE_MERGE_CHECK_FIRST', PENDING)
+      vi.stubEnv('FAKE_MERGE_CHECK_FIRST_N', '2')
+      const { waits, ciWait } = clock()
+
+      const outcome = await drive(adopt(ELIGIBLE), ciWait)
+
+      expect(waits).toEqual([30_000, 30_000])
+      expect(mergeCalls().map(c => c.cmd)).toEqual(['check', 'check', 'check', 'run'])
+      expect(
+        mergeCalls()
+          .filter(c => c.cmd === 'check')
+          .every(c => c.opts['deferPark'] === 'true'),
+      ).toBe(true)
+      expect(outcome.status).toBe('merged')
+    }, 60_000)
+
+    it('ci-w2: still pending after the cap parks as today (merge-parked, no run)', async () => {
+      vi.stubEnv('FAKE_MERGE_CHECK', PENDING)
+      const { waits, ciWait } = clock()
+
+      const outcome = await drive(adopt(ELIGIBLE), ciWait)
+
+      expect(waits).toEqual([30_000, 30_000, 30_000, 30_000])
+      expect(outcome.status).toBe('merge-parked')
+      expect(mergeCalls().every(c => c.cmd === 'check')).toBe(true)
+      // 5 polls post no park comment (deferPark); the ONE final check after the cap parks for real
+      expect(mergeCalls().map(c => c.opts['deferPark'])).toEqual([
+        'true',
+        'true',
+        'true',
+        'true',
+        'true',
+        undefined,
+      ])
+    }, 60_000)
+
+    it('ci-w3: failed CI parks at once, no wait', async () => {
+      vi.stubEnv(
+        'FAKE_MERGE_CHECK',
+        JSON.stringify({
+          mergeAllowed: false,
+          ciPending: false,
+          failed: [{ code: 'ci-not-green', detail: 'build=failure' }],
+          reason: 'build=failure',
+          parkKind: 'halted',
+        }),
+      )
+      const { waits, ciWait } = clock()
+
+      const outcome = await drive(adopt(ELIGIBLE), ciWait)
+
+      expect(waits).toEqual([])
+      expect(outcome.status).toBe('merge-parked')
+      expect(mergeCalls()).toHaveLength(1)
+    }, 60_000)
+  })
 
   it('g2-w15: the squash message follows the commit template — [<story code>] <type>: <description>', async () => {
     vi.stubEnv('FAKE_GATE_RESULT', GATE_PASS)

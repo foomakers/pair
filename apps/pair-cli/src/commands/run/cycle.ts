@@ -207,13 +207,13 @@ const HANDOFF_FORMAT_REASON = new RegExp(
 )
 
 /** The validation error a stage's final result names, when it is a handoff FORMAT error; `undefined` otherwise. */
-function handoffFormatError(final: StageFinalResult | undefined): string | undefined {
+export function handoffFormatError(final: StageFinalResult | undefined): string | undefined {
   if (final === undefined || final.status !== 'failed' || final.reason === undefined)
     return undefined
   return HANDOFF_FORMAT_REASON.test(final.reason) ? final.reason : undefined
 }
 
-const formatCorrectionNote = (error: string): string =>
+export const formatCorrectionNote = (error: string): string =>
   `Your previous handoff for this step was REJECTED by the handoff validation: ${error}. ` +
   'The step is re-entrant — resolve the durable state again, correct exactly that defect in the ' +
   'handoff you publish, and return the corrected result.\n\n'

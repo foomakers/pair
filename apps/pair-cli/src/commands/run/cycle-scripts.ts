@@ -129,6 +129,8 @@ export interface CycleMergeOptions {
   readonly pr: number
   readonly reviewedHead: string
   readonly cardTier: string
+  /** `check` only: a pending-CI poll — the script posts no park comment (the driver parks once, after the wait). */
+  readonly deferPark?: boolean
   /** The legacy `--autoAdvance '<tiers>'` call (pair-loop's, and every run without an active autonomy policy). */
   readonly autoAdvance?: readonly string[]
   /** US-521: the merge gate of an active autonomy policy (`--mergeGate`) — replaces the tier check only. */
@@ -481,7 +483,11 @@ function mergeMethods(
   script: string,
 ): Pick<CycleScriptsBridge, 'mergeCheck' | 'mergeRun'> {
   return {
-    mergeCheck: options => runScript(script, 'check', mergeArgs(options)) as CycleMergeResult,
+    mergeCheck: options =>
+      runScript(script, 'check', [
+        ...mergeArgs(options),
+        ...(options.deferPark === true ? ([['deferPark', 'true']] as ScriptArgs) : []),
+      ]) as CycleMergeResult,
     mergeRun: options =>
       runScript(script, 'run', [
         ...mergeArgs(options),

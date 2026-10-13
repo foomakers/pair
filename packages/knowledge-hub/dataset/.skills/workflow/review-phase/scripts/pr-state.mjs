@@ -13,6 +13,14 @@
 //     a token without `repo:status` degrades to advisory, exactly as github-implementation.md says);
 //     exit 1 when neither landed; exit 2 on a usage error (a verdict that is not a decision publishes nothing).
 //
+//   node <skill dir>/scripts/pr-state.mjs register --pr <n> --sha <40hex> [--repo owner/name] [--dir <run/story dir>]
+//     The t0 half, run by publish-pr right after the PR exists: publishes the required `pair-review` check as
+//     `pending` on the PR HEAD sha and applies `pr-state:to-be-reviewed`, so the merge is blocked from t0.
+//     Idempotent: a head that already carries ANY `pair-review` state (pending or concluded) is left alone —
+//     never a second status, never a downgrade of a conclusion (a pending head only gets a missing label
+//     repaired). A failed status READ writes nothing (reason read-failed, exit 1); an existing check RUN
+//     (app identity form) is the producer, so no commit status is added (reason check-run-producer-exists). Same exit codes and degradation as conclude.
+//
 //   node <skill dir>/scripts/pr-state.mjs find --pr <n> --sha <40hex> [--repo owner/name] [--dir <run/story dir>]
 //     Read-only: { check: <pair-review state on that sha or null>, label: <pr-state:* label or null> }.
 //
@@ -117,6 +125,37 @@ export function conclude({ pr, sha, verdict, repo, description, targetUrl, dir, 
   return classification === undefined ? out : { ...out, classification }
 }
 
+export function register({ pr, sha, repo, description, dir, host = codeHost(dir) }) {
+  const label = 'pr-state:to-be-reviewed'
+  const unchanged = (state, extra = {}) => ({ action: 'unchanged', check: { context: host.checkContext, sha, state, published: true, error: null }, label: { applied: null, removed: [], confirmed: true, error: null }, advisory: false, ...extra })
+  // A failed READ is not "no status": writing pending over a possibly-concluded head would un-conclude it.
+  const readFailed = e => ({ action: 'unchanged', reason: 'read-failed', check: { context: host.checkContext, sha, state: null, published: false, error: e?.message ?? String(e) }, label: { applied: null, removed: [], confirmed: false, error: null }, advisory: true })
+  const readStatus = () => host.readCheck({ pr, sha, repo })
+  let existing
+  try { existing = readStatus() } catch (e) { return readFailed(e) }
+  if (existing) {
+    // pending head: repair a missing to-be-reviewed label (idempotent); a concluded head is never touched
+    if (existing !== 'pending') return unchanged(existing)
+    let labels
+    try { labels = host.readLabels({ pr, repo }) } catch (e) { return readFailed(e) }
+    if (labels.includes(label)) return unchanged(existing)
+    return unchanged(existing, { label: host.setPrState({ pr, repo, label }) })
+  }
+  // `Review identity: app` publishes a CHECK RUN: a commit status here would be a second producer of one context.
+  try {
+    const run = host.readCheckRun({ pr, sha, repo, context: host.checkContext })
+    if (run) return unchanged(run, { reason: 'check-run-producer-exists' })
+  } catch (e) {
+    if (e?.kind !== 'not-implemented') return readFailed(e)
+  }
+  // re-read right before the write: narrows the window in which a concurrent conclude could be overwritten
+  try { existing = readStatus() } catch (e) { return readFailed(e) }
+  if (existing) return unchanged(existing)
+  const check = host.concludeCheck({ pr, sha, repo, state: 'pending', description: description ?? 'pair review pending' })
+  const labelOut = host.setPrState({ pr, repo, label })
+  return { action: 'registered', check, label: labelOut, advisory: !check.published }
+}
+
 function parseCli(argv) {
   const [cmd, ...rest] = argv
   const opts = {}
@@ -139,7 +178,7 @@ if (isMain()) {
   try {
     const { cmd, opts } = parseCli(process.argv.slice(2))
     // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
-    const FLAGS = { conclude: ['pr', 'sha', 'verdict', 'repo', 'description', 'target-url', 'dir', 'tier', 'cost', 'repo-root'], find: ['pr', 'sha', 'repo', 'dir'] }
+    const FLAGS = { conclude: ['pr', 'sha', 'verdict', 'repo', 'description', 'target-url', 'dir', 'tier', 'cost', 'repo-root'], find: ['pr', 'sha', 'repo', 'dir'], register: ['pr', 'sha', 'repo', 'dir', 'description'] }
     if (FLAGS[cmd]) {
       const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
       if (unknown.length) throw new Error(`unknown flag(s) for ${cmd}: ${unknown.map(k => `--${k}`).join(', ')}`)
@@ -148,7 +187,11 @@ if (isMain()) {
     if (!/^\d+$/.test(String(opts.pr))) throw new Error(`--pr must be a number, got ${JSON.stringify(opts.pr)}`)
     if (!SHA_RE.test(String(opts.sha))) throw new Error(`--sha must be a lower-case 40-hex commit, got ${JSON.stringify(opts.sha)}`)
     if (opts.repo !== undefined && !/^[^/\s]+\/[^/\s]+$/.test(opts.repo)) throw new Error(`--repo must be owner/name, got ${JSON.stringify(opts.repo)}`)
-    if (cmd === 'conclude') {
+    if (cmd === 'register') {
+      const out = register({ pr: opts.pr, sha: opts.sha, repo: opts.repo, description: opts.description, dir: opts.dir })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.check.published || out.label.confirmed ? 0 : 1)
+    } else if (cmd === 'conclude') {
       if (!opts.verdict) throw new Error('--verdict approved|changes-requested is required')
       if (opts.tier !== undefined && !CLASSIFICATION_FAMILIES.risk.includes(opts.tier)) throw new Error(`--tier must be one of ${CLASSIFICATION_FAMILIES.risk.join(' | ')}, got ${JSON.stringify(opts.tier)}`)
       if (opts.cost !== undefined && !CLASSIFICATION_FAMILIES.cost.includes(opts.cost)) throw new Error(`--cost must be one of ${CLASSIFICATION_FAMILIES.cost.join(' | ')}, got ${JSON.stringify(opts.cost)}`)
@@ -171,7 +214,7 @@ if (isMain()) {
       } catch {}
       process.stdout.write(JSON.stringify({ check, label }) + '\n')
       process.exit(0)
-    } else throw new Error(`unknown command: ${cmd} (expected conclude | find)`)
+    } else throw new Error(`unknown command: ${cmd} (expected register | conclude | find)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)

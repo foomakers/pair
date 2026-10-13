@@ -32,6 +32,28 @@ const packet = (scriptsDir, style) => {
   return { status: r.status, out: JSON.parse(r.stdout) }
 }
 
+// Defect: the implement stage cut `feature/#262-...` (SKILL text said so) — a valid git ref that the strict SAFE_REF
+// validators refuse downstream. The branch name is now DERIVED from the card id + title per branch-template.md.
+test('branch name: a card without a branch gets the template-conformant `feature/US-<n>-<slug>`, matching SAFE_REF', async () => {
+  const derive = (id, title) => JSON.parse(spawnSync(process.execPath, [join(SCRIPTS, 'cycle-dispatch.mjs'), 'branch', '--id', id, '--title', title], { encoding: 'utf8' }).stdout).branch
+  assert.equal(derive('262', 'Dogfood v0.4 to v0.5 migration on pair!'), 'feature/US-262-dogfood-v0-4-to-v0-5')
+  assert.equal(derive('9', ''), 'feature/US-9')
+  const card = JSON.stringify({ id: '262', base: 'origin/main', title: 'Dogfood migration' })
+  const r = spawnSync(process.execPath, [join(SCRIPTS, 'cycle-dispatch.mjs'), 'packet', '--next', PREPARE, '--card', card, '--run', 'story-262', '--workflow-version', '4.0.1'], { encoding: 'utf8' })
+  assert.equal(r.status, 0, r.stderr)
+  const branch = /\$branch=(\S+)/.exec(JSON.parse(r.stdout).prompt)?.[1]
+  assert.equal(branch, 'feature/US-262-dogfood-migration')
+  assert.match(branch, /^[A-Za-z0-9._\-/]+$/)
+  assert.doesNotMatch(branch, /#/)
+})
+
+test('branch name: an underivable branch (card id not a path segment, no branch) is an explicit packet error, never a silently missing branch', () => {
+  const card = JSON.stringify({ id: 'a b', base: 'origin/main', title: 't' })
+  const r = spawnSync(process.execPath, [join(SCRIPTS, 'cycle-dispatch.mjs'), 'packet', '--next', PREPARE, '--card', card, '--run', 'story-1', '--workflow-version', '4.0.1'], { encoding: 'utf8' })
+  assert.equal(r.status, 1)
+  assert.equal(JSON.parse(r.stdout).halt, 'branch-underivable')
+})
+
 // A line of the preparer's OWN definition body — present only if the file was actually read.
 const ROLE_LINE = 'You own the preparation stage of a delivery cycle'
 

@@ -15,7 +15,7 @@
 
 ## 2. Branch
 
-**Branch:** `feature/#[story-id]-[short-description]`
+**Branch:** `feature/US-[story-id]-[short-description]`
 **Commit strategy:** [commit-per-task | commit-per-story]
 **Commits so far:** [N] — [most recent commit subject, or "none yet"]
 

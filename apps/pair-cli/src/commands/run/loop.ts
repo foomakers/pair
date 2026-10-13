@@ -1,3 +1,4 @@
+import { handoffFormatError } from './cycle'
 import type { IterationResult } from './stream-reader'
 
 /**
@@ -39,9 +40,13 @@ export interface IterationContext {
   readonly iteration: number
   /** The previous iteration's continue-token, when there was one. */
   readonly continueToken?: string
+  /** AO: set on the ONE re-run of an iteration whose handoff failed format validation — the exact error. */
+  readonly formatCorrection?: string
 }
 
 export interface LoopInput {
+  /** AO: told when an iteration is re-run once for a format-class failure. */
+  readonly onFormatRetry?: (error: string) => void
   /** The perimeter's hard cap (already narrowed against the policy). */
   readonly maxIterations: number
   /** Runs ONE iteration in a FRESH process and returns what its stream said. */
@@ -63,10 +68,18 @@ export async function runLoop(input: LoopInput): Promise<LoopOutcome> {
   let continueToken: string | undefined
 
   for (let iteration = 1; iteration <= input.maxIterations; iteration += 1) {
-    const result = await input.runIteration({
+    const context: IterationContext = {
       iteration,
       ...(continueToken !== undefined && { continueToken }),
-    })
+    }
+    let result = await input.runIteration(context)
+    // AO: validate-then-retry-ONCE (same helper as the cycle driver) — an iteration refused for a FORMAT defect of its
+    // handoff is re-run with the exact error; decisions (escalate, gate-red…), crashes and a second refusal are never retried.
+    const formatError = result.outcome === 'failed' ? handoffFormatError(result.final) : undefined
+    if (formatError !== undefined) {
+      input.onFormatRetry?.(formatError)
+      result = await input.runIteration({ ...context, formatCorrection: formatError })
+    }
     const record = { iteration, result }
     records.push(record)
     input.onIteration?.(record)

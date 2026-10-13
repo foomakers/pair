@@ -96,7 +96,9 @@ export function decideMerge({ cardTier, currentTier, effectiveTier = currentTier
   const ciPendingOnly = (signals?.ci ?? []).filter(c => c?.name !== PR_CHECK && c?.name !== APPROVAL_CHECK && c?.conclusion !== 'success').every(c => c.conclusion === 'pending')
   const isWait = f => (f.code === 'explicit-approval' && ['missing', 'pending'].includes(signals?.explicitApproval)) || (f.code === 'ci-not-green' && ciPendingOnly)
   const awaitsOnly = failed.length > 0 && failed.every(isWait)
-  return { mergeAllowed: failed.length === 0, failed, reason: failed[0]?.detail ?? null, parkKind: failed.length === 0 ? null : first === 'tier-not-auto-advance' ? 'awaiting-human' : awaitsOnly ? 'awaiting-human' : first === 'escalated' ? 'escalated' : 'halted', ...(conditions ? { conditions } : {}) }
+  // A driver may POLL (bounded) and re-check only when CI is the sole thing in the way and every unsettled check is still running.
+  const ciPending = failed.length > 0 && failed.every(f => f.code === 'ci-not-green') && ciPendingOnly
+  return { mergeAllowed: failed.length === 0, ciPending, failed, reason: failed[0]?.detail ?? null, parkKind: failed.length === 0 ? null : first === 'tier-not-auto-advance' ? 'awaiting-human' : awaitsOnly ? 'awaiting-human' : first === 'escalated' ? 'escalated' : 'halted', ...(conditions ? { conditions } : {}) }
 }
 
 // ── live reads — through the bound adapters, never a host CLI of our own ─────────────────────
@@ -231,6 +233,13 @@ function worktreeHolding({ git, branch, root }) {
   return { path: null }
 }
 
+// The `owner/name` of `origin` (URL or scp form), or null (a local path, no remote). Host-neutral: this file names no host.
+const repoFromRemote = (git, root) => {
+  const r = git(['remote', 'get-url', 'origin'], root)
+  const m = r.status === 0 ? /^(?:[A-Za-z+]+:\/\/[^/\s]+\/|[^@\s]+@[^:\s]+:)([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/.exec(String(r.stdout).trim()) : null
+  return m ? m[1] : null
+}
+
 export function closeStory({ hosts, story, repo, branch, root = process.cwd(), git = defaultGit, fs = { exists: existsSync, rm: rmSync } }) {
   const steps = {}
   const run = (name, fn) => {
@@ -260,7 +269,17 @@ export function closeStory({ hosts, story, repo, branch, root = process.cwd(), g
   })
   run('branch', () => {
     if (!branch) return { ok: false, error: 'no --branch given: branch and worktree left in place' }
-    if (!SAFE_REF_RE.test(branch)) return { ok: false, error: `unsafe branch name ${JSON.stringify(branch)}` }
+    if (!SAFE_REF_RE.test(branch)) {
+      // Valid git refs outside SAFE_REF (a `#`, from a pre-template implement stage) are never handed to git or an adapter; the
+      // cleanup is named, with the one command that is safe: the REST ref delete (NOT `git push --delete` — that runs the
+      // pre-push gate; NOT a rename — renaming a PR's head branch closes the PR). Encoded per segment, single-quoted.
+      const slug = repo ?? repoFromRemote(git, root)
+      const manual = `branch-cleanup-manual: unsafe branch name ${JSON.stringify(branch)} left in place`
+      if (!slug) return { ok: false, status: 'branch-cleanup-manual', error: `${manual} — repo unknown (no --repo, origin is not an owner/name remote): delete it by hand through the code host's ref API` }
+      const ref = String(branch).split('/').map(encodeURIComponent).join('/')
+      const command = `gh api -X DELETE '${`repos/${slug}/git/refs/heads/${ref}`.replace(/'/g, `'\\''`)}'`
+      return { ok: false, status: 'branch-cleanup-manual', command, error: `${manual} — delete it by hand: ${command}` }
+    }
     const notes = []
     const held = worktreeHolding({ git, branch, root })
     if (held.error) return { ok: false, error: `git worktree list failed: ${held.error}` }
@@ -312,7 +331,9 @@ const record = (input, decision, merged = false) =>
 export function checkMerge(input) {
   const decision = evaluate({ ...input, requireGate: false })
   const out = { stage: 'merge', mode: 'check', ...decision }
-  if (!decision.mergeAllowed) out.comment = record(input, decision)
+  // A ciPending POLL (`--deferPark true`) posts nothing: the driver parks once, after the wait ends (cap) — not ~60 edits of a
+  // comment that goes stale the moment CI turns green.
+  if (!decision.mergeAllowed && !(input.deferPark === 'true' && decision.ciPending)) out.comment = record(input, decision)
   return out
 }
 
@@ -336,7 +357,7 @@ export function runMerge({ message, branch, root, git, fs, ...input }) {
 
 // ── CLI ────────────────────────────────────────────────────────────────────────────────────
 const FLAGS = {
-  check: ['dir', 'story', 'pr', 'reviewedHead', 'cardTier', 'autoAdvance', 'mergeGate', 'repo'],
+  check: ['dir', 'story', 'pr', 'reviewedHead', 'cardTier', 'autoAdvance', 'mergeGate', 'repo', 'deferPark'],
   run: ['dir', 'story', 'pr', 'reviewedHead', 'cardTier', 'autoAdvance', 'mergeGate', 'repo', 'gate', 'message', 'branch', 'root'],
   escalate: ['dir', 'story', 'stage', 'conditions', 'repo'],
 }

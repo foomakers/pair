@@ -37,7 +37,7 @@ Executable form of the **`implement`** step. A **direct** invocation while a ste
 
 | Argument | Required | Description                                                                                                                                                                                                                             |
 | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `$story` | No       | Story ID to implement, supplied by the invocation (e.g. `/implement #256`). If omitted, detected from session context or the current branch (`feature/#<id>-*`). This is the id the resume probe (Step 0.0) uses and the closing phase forwards to `/checkpoint` and `/publish-pr`. If it cannot be resolved when a checkpoint operation needs it → **HALT**. |
+| `$story` | No       | Story ID to implement, supplied by the invocation (e.g. `/implement #256`). If omitted, detected from session context or the current branch (`feature/US-<id>-*`). This is the id the resume probe (Step 0.0) uses and the closing phase forwards to `/checkpoint` and `/publish-pr`. If it cannot be resolved when a checkpoint operation needs it → **HALT**. |
 
 ## Phase 0: Story & Task Analysis (BLOCKING)
 
@@ -82,7 +82,8 @@ The opening phase re-reads the checkpoint so an interrupted story resumes exactl
    - Implementation approach (technical design, files, dependencies)
    - Acceptance criteria (deliverable, quality standards, verification)
    - Development workflow (TDD approach if development task, implementation steps)
-3. **Verify**: All tasks are complete and follow the task template. If any task is incomplete → **HALT** and propose specific task updates.
+   - **Inline checklist shape (what `/plan-tasks` writes into the story body)**: a task that is only a checklist line `- [ ] **T-N**: <title>` is **complete** when the story's `## Task Breakdown` also carries the **AC Coverage** row(s) mapping it to ≥1 AC and the **Dependency Graph** places it. Its implementation approach, steps and verification are then **derived** from the story's Technical Analysis + the covered ACs and stated at Step 0.3 for confirmation — never a HALT. In an **autonomous/unattended run** (no human to confirm at Step 0.3) the derived approach is not silently adopted: it is recorded in the checkpoint and the PR body (under the task, marked `derived from Technical Analysis`) so the reviewer sees what was assumed. A task with a `### T-N` detailed block is validated against the fields above as before.
+3. **Verify**: All tasks are complete (full template fields, or the inline checklist shape above). Only a task with **no AC mapping / no place in the graph**, or a detailed block with missing fields, is incomplete → **HALT** and propose specific task updates.
 
 ### Step 0.3: Confirm with Developer
 
@@ -115,14 +116,15 @@ Ask: _"Ready to proceed with implementation?"_
 
 ### Step 1.2: Create or Switch to Feature Branch
 
-1. **Check**: Does a branch for this story already exist? (`git branch --list 'feature/#<story-id>-*'`)
+1. **Check**: Does a branch for this story already exist? (`git branch --list 'feature/US-<story-id>-*'`)
 2. **Skip**: If branch exists, switch to it (`git checkout <branch>`) and move to Step 1.3.
 3. **Act**: Create the branch from the adopted base branch — resolved by the convention's **`base-branch` resolution** order (`## Git Workflow` → legacy `## Merge Strategy` → default `main`), never re-derived here, so this skill and `/publish-pr` (the other reader of the key) cannot disagree on the branch — on the **code host**: branches and PRs are code-host operations, story/state writes (Step 0.1b, Step 2.8) are PM-tool operations; see the [routing table + `base-branch` resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md). Absent `code-host` ⇒ the same tool as the PM tool, so nothing changes for a single-tool project:
 
    ```bash
    # <base-branch> is the resolved adopted value, NOT a literal
    git checkout <base-branch> && git pull origin <base-branch>
-   git checkout -b feature/#<story-id>-<brief-description>
+   # name per branch-template.md: feature/US-<id>-<slug> (slug = first 6 words of the title, kebab-case) — never `#` (the SAFE_REF validators and adapter assertBranchName refuse it); the cycle derives the same name via `cycle-dispatch.mjs branch`
+   git checkout -b feature/US-<story-id>-<brief-description>
    ```
 
 4. **Verify**: On the correct feature branch.
@@ -163,7 +165,7 @@ Process tasks **sequentially**, one at a time. For each task:
 
 ### Step 2.2: Validate Task Completeness
 
-1. **Check**: Does the active task have all required fields per the task template?
+1. **Check**: Does the active task have all required fields per the task template — or, for an inline checklist task (Step 0.2), its AC Coverage mapping, with the approach/steps derived from the story's Technical Analysis?
 2. **Skip**: If complete, proceed to Step 2.3.
 3. **Act**: If incomplete → **HALT**. Report missing fields and propose specific updates.
 
@@ -353,7 +355,7 @@ At the closing phase (Phase 3):
 ```text
 IMPLEMENTATION COMPLETE:
 ├── Story:      [#ID: Title]
-├── Branch:     [feature/#ID-description]
+├── Branch:     [feature/US-ID-description]
 ├── Strategy:   [commit-per-task | commit-per-story]
 ├── Tasks:      [N/N completed]
 ├── Commits:    [N commits on branch]

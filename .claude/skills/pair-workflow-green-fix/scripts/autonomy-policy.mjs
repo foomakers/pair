@@ -8,7 +8,7 @@
 // Pure functions + a CLI. `parse`, `resolvePolicy` and `decide` read no file, spawn no process and
 // import no host adapter; only the CLI reads the adoption file it is pointed at.
 //
-//   node autonomy-policy.mjs resolve --adoption <tech/automation.md> [--args '<json>'] [--json]
+//   node autonomy-policy.mjs resolve --adoption <tech/automation.md> [--args '<json>'] [--surface interactive|unattended] [--json]
 //     → { ok, effective: { key: { value, source } }, lines: [...], warnings: [...], errors: [...] }
 //   node autonomy-policy.mjs decide --policy '<json {until, merge}>' --boundary <stage:<step>|merge>
 //                                   [--labels '<JSON array>']
@@ -265,7 +265,9 @@ const DEFAULTS = {
   merge: { mode: 'always', has: [], lacks: [] },
 }
 
-export function resolvePolicy({ args = {}, adoptionText = '' } = {}) {
+export const SURFACES = ['unattended', 'interactive']
+
+export function resolvePolicy({ args = {}, adoptionText = '', surface = 'unattended' } = {}) {
   const parsed = parse(adoptionText)
   const errors = [...parsed.errors]
   const effective = {}
@@ -286,6 +288,18 @@ export function resolvePolicy({ args = {}, adoptionText = '' } = {}) {
     else if (parsed.translated[key]) effective[key] = { value: parsed.translated[key].value, source: `adoption (translated from ${parsed.translated[key].from})` }
     else effective[key] = { value: DEFAULTS[key], source: 'default' }
   }
+  // Selection is scoped by surface. A `filter` that comes ONLY from the legacy `## Eligibility` translation is the
+  // unattended-loop eligibility (pair-cli run, /pair-loop, batch): an interactive run sets it aside. An explicit
+  // `--root` is never excluded by an inherited (adoption) filter on an INTERACTIVE run (unattended runs keep the filter together with the root); an explicit `--filter` argument still narrows.
+  const notes = []
+  if (!SURFACES.includes(surface)) errors.push(err('surface', `${JSON.stringify(surface)} is not one of ${SURFACES.join(' | ')}`))
+  if (surface === 'interactive' && effective.filter.source.startsWith('adoption (translated')) {
+    notes.push(`filter: legacy \`## Eligibility\` (${display('filter', effective.filter.value)}) set aside for this interactive run — it governs unattended runs only`)
+    effective.filter = { value: undefined, source: 'default' }
+  } else if (surface === 'interactive' && effective.root.source === 'argument' && effective.filter.source.startsWith('adoption')) {
+    notes.push(`filter: adoption filter (${display('filter', effective.filter.value)}) not applied — the explicit root #${effective.root.value} is never excluded by an inherited filter`)
+    effective.filter = { value: undefined, source: 'default' }
+  }
   // A merge gate translated from a legacy `## Auto-Advance <tier>` is the today's-behaviour path: with no
   // `until` declared anywhere, the target is `merged` (legacy sections had no target; the tier switch WAS it).
   const legacyMerge = parsed.translated.merge
@@ -295,7 +309,7 @@ export function resolvePolicy({ args = {}, adoptionText = '' } = {}) {
     const e = effective[key]
     const v = e.value === undefined ? (key === 'filter' || key === 'status' ? '(all)' : '(none)') : display(key, e.value)
     return `${key}: ${v} (${e.source})`
-  })
+  }).concat(notes)
   const policy = { until: effective.until.value, merge: normalizeGate(effective.merge.value), prepare: normalizeGate(effective.prepare.value), ...(legacyActive ? { legacyTiers: legacyMerge.legacyTiers } : {}) }
   // `active`: the run declared its own target or merge gate (argument or `## Autonomy`). Legacy-only and
   // nothing-declared runs are NOT active — consumers keep today's code path, byte for byte.
@@ -381,7 +395,7 @@ function cli(argv) {
   }
   if (cmd === 'resolve') {
     const adoptionText = opts.adoption && existsSync(opts.adoption) ? readFileSync(opts.adoption, 'utf8') : ''
-    return resolvePolicy({ args: opts.args ? JSON.parse(opts.args) : {}, adoptionText })
+    return resolvePolicy({ args: opts.args ? JSON.parse(opts.args) : {}, adoptionText, surface: opts.surface })
   }
   if (cmd === 'decide') {
     if (!opts.policy || !opts.boundary) throw new Error('--policy and --boundary are required')

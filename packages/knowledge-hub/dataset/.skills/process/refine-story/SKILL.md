@@ -91,6 +91,7 @@ Under `$approval: auto` there is nobody to confirm a pick: `$story` is required,
 
 2. **Act**: Determine refinement state:
    - **All sections present** → story is already Ready. Run Step 1b, then offer selective update (Step 6) — the route passes **through** Step 1b, which has no skip condition and is what Step 6 relies on having run.
+   - **Ready by state, only a post-hoc DoR criterion missing** — the story is already `Ready` **by board state** — the item's current board state is one the State Mapping resolves to `Ready` (read from the PM tool, not inferred from the body); an unreadable or missing state falls to the normal "some sections present" path below and the **only** missing section is the Design flag (DoR criterion 6, introduced after the story was refined) → treat as already Ready: **confirm and exit**, reporting the gap as a **flag**, never a rewrite (definition-of-ready-and-done.md § Conflicting Signals: the Ready state wins, unmet criteria are a warning). Report `DoR flag: Design line missing (criterion 6) — story stays Ready; add it via selective update (Step 6) if wanted`. Do **not** resume at the Design-flag section; do not touch the body unless the user asks.
    - **Some sections present** → partial refinement. Resume from first missing section (Steps 2–5).
    - **No sections (only Initial Breakdown)** → full refinement needed (Steps 2–5).
 3. **Verify**: Refinement state determined. Report:

@@ -25,6 +25,8 @@ import { runStage, styleFor } from './stage-runner'
 import { spawnIteration } from './spawn'
 import { readStateMapping, resolveCardReadiness, type CardDocument } from './card-readiness'
 import { resolveBlockingSeverities } from './blocking-severities'
+import { checkWithCiWait, type CiWaitOptions } from './ci-wait'
+import { wait } from './wait'
 import { stageSettings, type ResolvedWorkflowProfile } from './workflow-profile'
 
 /**
@@ -318,6 +320,11 @@ export interface CycleDriverContext {
    * posture and declared `engine.model` of each (resolved at the entry, like the run's engine).
    */
   readonly stageEngines?: Readonly<Record<string, StageEngine>> | undefined
+  /**
+   * Bounded wait for PENDING CI before the merge stage parks (default cap 30 min, interval 30 s; env
+   * `PAIR_CI_WAIT_CAP_SECONDS` / `PAIR_CI_WAIT_INTERVAL_SECONDS`). Injectable for tests.
+   */
+  readonly ciWait?: CiWaitOptions | undefined
 }
 
 export interface StageEngine {
@@ -704,7 +711,12 @@ const mergeFor =
   (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) =>
   async (next: CycleNext, answer: CycleResolveAnswer): Promise<CycleMergeOutcome> => {
     const pins = mergePinsFor(input, co, next, answer)
-    const check = co.bridge.mergeCheck(pins)
+    const check = await checkWithCiWait(
+      deferPark => co.bridge.mergeCheck({ ...pins, deferPark }),
+      wait,
+      ctx.ciWait,
+      message => console.log(message),
+    )
     if (check.mergeAllowed !== true) {
       console.log(`  Merge: parked — ${check.reason ?? 'the merge check did not allow it'}`)
       return { status: mergeStatus(check), stagesRun: 0, merge: check }

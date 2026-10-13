@@ -2,6 +2,7 @@ import chalk from 'chalk'
 import type { RunCommandConfig } from './parser'
 import { buildPromptText } from './invocation'
 import { loopExitCode, runLoop, type IterationContext, type LoopOutcome } from './loop'
+import { formatCorrectionNote } from './cycle'
 import { spawnIteration } from './spawn'
 import type { IterationResult } from './stream-reader'
 import type { ResolvedRun, RunHandlerDependencies } from './run-context'
@@ -18,6 +19,10 @@ export async function driveRun(
   const outcome = await runLoop({
     maxIterations: resolved.perimeter.maxIterations,
     runIteration: context => driveIteration(resolved, config, context, deps),
+    onFormatRetry: error =>
+      console.log(
+        `  Iteration wrote a malformed handoff (${error}) — re-run once with the exact validation error`,
+      ),
     onIteration: entry =>
       console.log(
         `  Iteration ${entry.iteration}: ${entry.result.outcome} — ${entry.result.detail}`,
@@ -41,7 +46,7 @@ function driveIteration(
   context: IterationContext,
   deps: RunHandlerDependencies,
 ): Promise<IterationResult> {
-  const promptText = buildPromptText(resolved.engine.engine, resolved.invocation, {
+  const basePrompt = buildPromptText(resolved.engine.engine, resolved.invocation, {
     ...(resolved.perimeter.root !== undefined && { root: resolved.perimeter.root }),
     // Passed ONLY when the invocation actually carries it. `buildSkillArgs` would drop it anyway,
     // but relying on that is how a flag ends up looking effective while changing nothing: the
@@ -57,6 +62,10 @@ function driveIteration(
     ...approvalArguments(resolved),
   })
 
+  const promptText =
+    context.formatCorrection === undefined
+      ? basePrompt
+      : formatCorrectionNote(context.formatCorrection) + basePrompt
   const run = deps.runIteration ?? spawnIteration
   return run({
     engine: resolved.engine.engine,

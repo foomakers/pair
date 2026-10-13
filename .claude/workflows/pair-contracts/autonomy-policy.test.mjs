@@ -267,3 +267,56 @@ test('F1 fail-closed: decide throws on a `when` gate with no conditions or an un
     assert.throws(() => decide({ boundary: { kind: 'merge' }, labels: ['x'], policy: { until: 'merged', merge } }), /gate/)
   }
 })
+
+// ── /pair-next eligibility: legacy filter is unattended-only; explicit root is first-class ──
+const LEGACY = '## Eligibility\n\nrisk:green\n'
+test('interactive: a filter coming ONLY from legacy ## Eligibility is not applied, and the lines say so', () => {
+  const r = resolvePolicy({ adoptionText: LEGACY, surface: 'interactive' })
+  assert.equal(r.ok, true)
+  assert.equal(r.effective.filter.value, undefined)
+  assert.ok(r.lines.some(l => /legacy `## Eligibility`.*set aside for this interactive run/.test(l)))
+})
+test('unattended (default surface): the legacy ## Eligibility filter still applies', () => {
+  for (const surface of [undefined, 'unattended']) {
+    const r = resolvePolicy({ adoptionText: LEGACY, surface })
+    assert.deepEqual(r.effective.filter.value, ['risk:green'])
+    assert.match(r.effective.filter.source, /translated from ## Eligibility/)
+  }
+})
+test('interactive: an explicit ## Autonomy filter still applies', () => {
+  const r = resolvePolicy({ adoptionText: section('filter: risk:green'), surface: 'interactive' })
+  assert.deepEqual(r.effective.filter.value, ['risk:green'])
+  assert.equal(r.effective.filter.source, 'adoption')
+})
+test('unattended: root + inherited adoption filter => filter kept (intersection), also via the CLI as the loop calls it (no --surface)', () => {
+  for (const text of [LEGACY, section('filter: risk:green')]) {
+    const r = resolvePolicy({ args: { root: '5' }, adoptionText: text })
+    assert.equal(r.effective.root.value, '5')
+    assert.deepEqual(r.effective.filter.value, ['risk:green'], text)
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'ap-'))
+  const file = join(dir, 'automation.md')
+  writeFileSync(file, LEGACY)
+  const r = JSON.parse(spawnSync(process.execPath, [CLI, 'resolve', '--adoption', file, '--args', '{"root":"5"}'], { encoding: 'utf8' }).stdout)
+  assert.deepEqual(r.effective.filter.value, ['risk:green'])
+})
+test('interactive: explicit --root is never excluded by an inherited filter (legacy or ## Autonomy); an explicit --filter argument still narrows', () => {
+  for (const text of [LEGACY, section('filter: risk:green')]) {
+    const r = resolvePolicy({ args: { root: '262' }, adoptionText: text, surface: 'interactive' })
+    assert.equal(r.effective.root.value, '262')
+    assert.equal(r.effective.filter.value, undefined, text)
+    assert.ok(r.lines.some(l => /explicit root #262|set aside/.test(l)))
+  }
+  const narrowed = resolvePolicy({ args: { root: '262', filter: 'risk:red' }, adoptionText: LEGACY, surface: 'interactive' })
+  assert.deepEqual(narrowed.effective.filter.value, ['risk:red'])
+  assert.equal(narrowed.effective.filter.source, 'argument')
+})
+test('unknown surface is an error; CLI --surface interactive sets the legacy filter aside', () => {
+  assert.equal(resolvePolicy({ surface: 'bogus' }).ok, false)
+  const dir = mkdtempSync(join(tmpdir(), 'ap-'))
+  const file = join(dir, 'automation.md')
+  writeFileSync(file, LEGACY)
+  const run = extra => JSON.parse(spawnSync(process.execPath, [CLI, 'resolve', '--adoption', file, ...extra], { encoding: 'utf8' }).stdout)
+  assert.equal(run(['--surface', 'interactive']).effective.filter.value, undefined)
+  assert.deepEqual(run([]).effective.filter.value, ['risk:green'])
+})

@@ -2,3 +2,9 @@
 . "$(dirname -- "$0")/_/husky.sh"
 
 pnpm ts:check
+
+# docs:staleness is cheap (measured ~3.4s wall, ts:check ~5.6s) and was push-gate-only, so a stale
+# doc string (planned marker on a closed issue, skill/command counts, dead /docs links) failed late,
+# at push. Run it here too. Offline-safe: without `gh` the planned-marker lookup warns and skips
+# locally (CI enforces). If it ever exceeds ~10s, scope it to staged docs instead of dropping it.
+pnpm docs:staleness

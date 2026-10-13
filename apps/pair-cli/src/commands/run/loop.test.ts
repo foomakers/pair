@@ -115,6 +115,61 @@ describe('runLoop — the merge gate holds (AC10, BR3)', () => {
     expect(surface).toBe(1)
   })
 
+  describe('AO validate-then-retry-once (format-class failures only)', () => {
+    const refused = (reason: string): IterationResult => ({
+      outcome: 'failed',
+      detail: 'stage reported failed',
+      final: { status: 'failed', reason },
+    })
+
+    it('re-runs the SAME iteration once with the exact validation error, then proceeds', async () => {
+      const spawn = fakeSpawn([refused('missing-field:inputHead'), ok()])
+      const notices: string[] = []
+
+      const outcome = await runLoop({
+        maxIterations: 5,
+        runIteration: spawn.runIteration,
+        onFormatRetry: error => notices.push(error),
+      })
+
+      expect(spawn.contexts.map(c => c.iteration)).toEqual([1, 1])
+      expect(spawn.contexts[0]?.formatCorrection).toBeUndefined()
+      expect(spawn.contexts[1]?.formatCorrection).toBe('missing-field:inputHead')
+      expect(notices).toEqual(['missing-field:inputHead'])
+      expect(outcome.stopReason).toBe('skill-reported-complete')
+      expect(outcome.records).toHaveLength(1)
+    })
+
+    it('a second format refusal is not retried again: the iteration fails', async () => {
+      const spawn = fakeSpawn([refused('not-json'), refused('not-json')])
+
+      const outcome = await runLoop({ maxIterations: 5, runIteration: spawn.runIteration })
+
+      expect(spawn.contexts).toHaveLength(2)
+      expect(outcome.stopReason).toBe('iteration-failed')
+    })
+
+    it.each(['escalate', 'gate-red', 'incomplete', 'tier-changed'])(
+      'a decision-class failure (%s) is never retried',
+      async reason => {
+        const spawn = fakeSpawn([refused(reason), ok()])
+
+        const outcome = await runLoop({ maxIterations: 5, runIteration: spawn.runIteration })
+
+        expect(spawn.contexts).toHaveLength(1)
+        expect(outcome.stopReason).toBe('iteration-failed')
+      },
+    )
+
+    it('a failure without a final result (crash, no terminal event) is never retried here', async () => {
+      const spawn = fakeSpawn([failed, ok()])
+
+      await runLoop({ maxIterations: 5, runIteration: spawn.runIteration })
+
+      expect(spawn.contexts).toHaveLength(1)
+    })
+  })
+
   it('maps only a failed iteration to a non-zero exit code', async () => {
     const succeeded = await runLoop({ maxIterations: 1, runIteration: async () => ok('t') })
     const failure = await runLoop({ maxIterations: 1, runIteration: async () => failed })

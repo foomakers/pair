@@ -374,9 +374,21 @@ function resolvePipeline(raw) {
   }
 }
 
+// The story branch, DERIVED (never invented per run) from the card id + title per branch-template.md:
+// `feature/US-<id>-<slug>`. No `#` — a valid ref, but the strict validators (SAFE_REF here, the host adapter-kit's
+// assertBranchName, cycle-merge's closure) refuse it, which stranded a merged PR's branch cleanup.
+function deriveBranch({ id, title }) {
+  const slug = String(title ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').split('-').filter(Boolean).slice(0, 6).join('-')
+  return `feature/US-${id}${slug ? `-${slug}` : ''}`
+}
+
 function packetCommand(opts) {
   const next = JSON.parse(opts.next)
   const card = JSON.parse(opts.card)
+  if (card.branch === undefined || card.branch === null || card.branch === '') {
+    must(isSegment(String(card.id)), 'branch-underivable', `no card.branch and card.id ${JSON.stringify(card.id)} is not one safe path segment: cannot derive a feature/US-<id>-<slug> branch`)
+    card.branch = deriveBranch(card)
+  }
   // US-514 r1-g1 g1-w2/g1-w10b/g1-c4 (the #514/AC1 revision): `--severity-floor F` writes `blockingFloor: F`
   // into `$policy` — REPLACING a declared floor, no conflict error, still never a severity list.
   // With no flag the policy is rendered VERBATIM: the default floor is never stamped into it (a
@@ -603,6 +615,7 @@ const FLAGS = {
   packet: ['next', 'card', 'policy', 'run', 'workflow-version', 'pipeline', 'profile', 'contract-resolved', 'required', 'severity-floor', 'severities', 'verdicts', 'ranks', 'style', 'agents-dir'],
   realizations: ['tools', 'product', 'story', 'pr'],
   'context-table': [],
+  branch: ['id', 'title'],
 }
 function parseCli(argv) {
   const cmd = argv[0]
@@ -637,6 +650,10 @@ try {
     OUT = packetCommand(opts)
   } else if (cmd === 'realizations') {
     OUT = realizationsCommand(opts)
+  } else if (cmd === 'branch') {
+    need('id')
+    must(isSegment(String(opts.id)), 'card-invalid', `--id must be one safe path segment: ${opts.id}`)
+    OUT = emit({ branch: deriveBranch({ id: opts.id, title: opts.title }) })
   } else if (cmd === 'context-table') {
     // Exposed, never copied: this prints cycle-state's own table (AC-12).
     OUT = emit({ ...CONTEXT_TABLE })

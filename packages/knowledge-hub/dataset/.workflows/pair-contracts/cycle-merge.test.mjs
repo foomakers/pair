@@ -795,6 +795,58 @@ test('F1: closeStory refuses a `#` branch (no host call)', () => {
   assert.equal(called, false)
 })
 
+test('F1b: closeStory on a non-SAFE_REF head branch reports `branch-cleanup-manual` with the exact encoded gh api DELETE command (no host call, no git)', () => {
+  const g = gitFixture()
+  const f = fakeHosts()
+  let called = false
+  f.hosts.code.deleteBranch = () => ((called = true), { deleted: true })
+  const out = closeStory({ hosts: f.hosts, story: 42, repo: 'o/r', branch: 'feature/#262-dogfood-migration', root: g.main })
+  assert.equal(called, false)
+  assert.equal(out.steps.branch.ok, false)
+  assert.equal(out.steps.branch.status, 'branch-cleanup-manual')
+  assert.equal(out.steps.branch.command, "gh api -X DELETE 'repos/o/r/git/refs/heads/feature/%23262-dogfood-migration'")
+  assert.match(out.reason, /branch-cleanup-manual/)
+  assert.match(out.reason, /gh api -X DELETE/)
+  // a quote in the name cannot break out of the command
+  const q = closeStory({ hosts: fakeHosts().hosts, story: 42, repo: 'o/r', branch: "a'b", root: g.main })
+  assert.equal(q.steps.branch.command, "gh api -X DELETE 'repos/o/r/git/refs/heads/a'\\''b'")
+})
+
+test('CI-wait park: `deferPark` skips the park comment on a ciPending poll only; the same check without it still parks once', () => {
+  const pending = () => {
+    const h = fakeHosts()
+    h.hosts.code.readCiChecks = () => [{ name: 'build', conclusion: 'pending' }]
+    return h
+  }
+  const polled = pending()
+  const out = checkMerge({ ...input(polled), deferPark: 'true' })
+  assert.equal(out.ciPending, true)
+  assert.equal('comment' in out, false)
+  assert.equal(polled.calls.some(c => c[0] === 'commentOnCard'), false, 'no comment while waiting')
+  const final = pending()
+  assert.deepEqual(checkMerge(input(final)).comment, { posted: true })
+  assert.equal(final.calls.filter(c => c[0] === 'commentOnCard').length, 1)
+  // a NON-pending refusal is parked even when deferPark is set (nothing to wait for)
+  const failing = fakeHosts({ checks: { 'pair-review': 'failure', 'pair-explicit-approval': 'success' } })
+  assert.deepEqual(checkMerge({ ...input(failing), deferPark: 'true' }).comment, { posted: true })
+})
+
+test('F1c: the manual cleanup command resolves the repo from the origin remote; unknown repo omits the command and says so (never a literal placeholder)', () => {
+  const g = gitFixture()
+  const real = (args, cwd) => {
+    const r = spawnSync('git', args, { cwd, encoding: 'utf8' })
+    return { status: r.status, stdout: r.stdout, stderr: r.stderr }
+  }
+  const remote = url => (args, cwd) => (args[0] === 'remote' ? { status: 0, stdout: `${url}\n`, stderr: '' } : real(args, cwd))
+  const run = git => closeStory({ hosts: fakeHosts().hosts, story: 42, branch: 'feature/#1-x', root: g.main, git }).steps.branch
+  assert.equal(run(remote('git@github.com:acme/widgets.git')).command, "gh api -X DELETE 'repos/acme/widgets/git/refs/heads/feature/%231-x'")
+  assert.equal(run(remote('https://github.com/acme/widgets')).command, "gh api -X DELETE 'repos/acme/widgets/git/refs/heads/feature/%231-x'")
+  const unknown = run(remote('/local/path/remote.git'))
+  assert.equal('command' in unknown, false)
+  assert.match(unknown.error, /repo unknown/)
+  assert.doesNotMatch(JSON.stringify(unknown), /\{owner\}/)
+})
+
 test('F2: github deleteBranch: only "Reference does not exist" means already gone', () => {
   const run = stderr => {
     const s = stubCli({ stderr, status: 1 })
@@ -847,6 +899,14 @@ test('AL decideMerge: a failed CI check on the head halts the merge (`ci-not-gre
   assert.equal(own.failed.some(f => f.code === 'ci-not-green'), false, 'pair-review / pair-explicit-approval are judged by their own conditions')
   const both = decideMerge({ ...base, signals: ci([{ name: 'a', conclusion: 'pending' }, { name: 'b', conclusion: 'failure' }]) })
   assert.equal(both.parkKind, 'halted', 'a failure beside a pending one stays halted')
+})
+
+test('CI-wait decideMerge: `ciPending` is true ONLY when every failure is a pending CI check (a driver may poll); never with a failed check or another failed condition', () => {
+  const ci = list => ({ ...OK, ci: list })
+  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'pending' }]) }).ciPending, true)
+  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'success' }]) }).ciPending, false)
+  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'a', conclusion: 'pending' }, { name: 'b', conclusion: 'failure' }]) }).ciPending, false)
+  assert.equal(decideMerge({ ...base, signals: { ...ci([{ name: 'a', conclusion: 'pending' }]), pairReview: 'failure' } }).ciPending, false)
 })
 
 test('AL readSignals: reads the CI checks through the adapter on the pinned head; an adapter without the method leaves `ci` absent; a read that throws makes the signals unreadable', () => {

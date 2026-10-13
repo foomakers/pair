@@ -1,3 +1,4 @@
+import { formatCorrectionNote } from './cycle'
 import type { EngineDefinition } from './engines'
 import { buildPromptText } from './invocation'
 import { isSafeId, isSafePromptText } from './prompt-safety'
@@ -100,8 +101,9 @@ function loopRequest(predicateSelector: string | undefined, scope: SelectionScop
   ]
 }
 
-function fail(detail: string): never {
-  throw new Error(`pair-next selection for --parallel is unusable: ${detail}`)
+function fail(detail: string, format = false): never {
+  const message = `pair-next selection for --parallel is unusable: ${detail}`
+  throw format ? new SelectionFormatError(message) : new Error(message)
 }
 
 function stringArray(value: unknown, field: string, id: string): string[] {
@@ -278,8 +280,27 @@ export interface SelectRootInput extends SelectionScope {
   readonly runIteration?: (input: SpawnIterationInput) => Promise<IterationResult>
 }
 
-/** Runs the selection in ONE fresh engine process and returns its answer — or throws. */
-export async function selectRootAnswer(input: SelectRootInput): Promise<SelectionAnswer> {
+/**
+ * The ONLY selection faults worth a retry: structural, fixed-text ones. Any other parse error (an unsafe label, a bad
+ * prerequisite…) echoes model-produced text and is a semantic fault: never retried, never put in a prompt.
+ */
+const FIXED_FORMAT_FAULTS = [
+  'the candidates line is not valid JSON',
+  'the candidates line carries no `candidates` array',
+  'the answer carries no `snapshot` array for the stop predicate',
+  `the stream carried no ${CANDIDATES_MARKER} line`,
+]
+
+const fixedFault = (error: unknown): string | undefined =>
+  FIXED_FORMAT_FAULTS.find(
+    fault => error instanceof Error && error.message.endsWith(`unusable: ${fault}`),
+  )
+
+/** A selection whose ANSWER is malformed (unparseable marker, none at all) — the only retryable failure. */
+class SelectionFormatError extends Error {}
+
+/** One fresh selection process; throws a `SelectionFormatError` for a malformed answer, a plain error for a dead process. */
+async function selectOnce(input: SelectRootInput, correction: string): Promise<SelectionAnswer> {
   let answer: SelectionAnswer | undefined
   let invalid: unknown
   const run = input.runIteration ?? spawnIteration
@@ -289,7 +310,7 @@ export async function selectRootAnswer(input: SelectRootInput): Promise<Selectio
       : { loop: true, snapshot: input.loop.predicateSelector !== undefined }
   const result = await run({
     engine: input.engine,
-    promptText: buildSelectionPrompt(input.engine, input),
+    promptText: correction + buildSelectionPrompt(input.engine, input),
     cwd: input.cwd,
     autonomyArgs: input.autonomyArgs,
     ...(input.model !== undefined && { model: input.model }),
@@ -304,8 +325,26 @@ export async function selectRootAnswer(input: SelectRootInput): Promise<Selectio
   })
   if (result.outcome !== 'success') fail(`the selection process failed (${result.detail})`)
   if (answer !== undefined) return answer
-  if (invalid !== undefined) throw invalid
-  return fail(`the stream carried no ${CANDIDATES_MARKER} line`)
+  if (invalid !== undefined) {
+    const fault = fixedFault(invalid)
+    if (fault === undefined) throw invalid
+    return fail(fault, true)
+  }
+  return fail(`the stream carried no ${CANDIDATES_MARKER} line`, true)
+}
+
+/**
+ * Runs the selection in ONE fresh engine process and returns its answer — or throws. AO: a MALFORMED answer (the same
+ * validate-then-retry-once as the cycle driver) is re-asked once with the exact validation error; a dead, failed or
+ * stalled process is never retried, and a second malformed answer fails closed.
+ */
+export async function selectRootAnswer(input: SelectRootInput): Promise<SelectionAnswer> {
+  try {
+    return await selectOnce(input, '')
+  } catch (error) {
+    if (!(error instanceof SelectionFormatError)) throw error
+    return selectOnce(input, formatCorrectionNote(error.message))
+  }
 }
 
 /** Runs the selection in ONE fresh engine process and returns its candidate set — or throws. */

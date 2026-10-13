@@ -14,7 +14,7 @@ Write and resume a self-contained progress checkpoint so a fresh session (or a s
 | Argument   | Required | Description                                                                                                                                                          |
 | ---------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `$mode`    | Yes      | `write` — persist/return current state. `resume` — locate and parse the existing checkpoint for a story.                                                              |
-| `$story`   | No       | Story ID. If omitted, detected from session context or the current branch (`feature/#<id>-*`). If it cannot be detected → **HALT**.                                   |
+| `$story`   | No       | Story ID. If omitted, detected from session context or the current branch (`feature/US-<id>-*`). If it cannot be detected → **HALT**.                                   |
 | `$persist` | No       | Write mode only. `true` (default) — write/update the file at the default location. `false` — write-free: synthesize and return the checkpoint text without touching the filesystem; the composer decides where it lands. |
 
 ## Core Rules
@@ -31,7 +31,7 @@ Write and resume a self-contained progress checkpoint so a fresh session (or a s
 2. **Skip**: If yes, proceed to Step 2.
 3. **Act**: Attempt detection, in order:
    - Active story already loaded in the current session.
-   - Current branch name matching `feature/#<id>-*` (`git branch --show-current`).
+   - Current branch name matching `feature/US-<id>-*` (`git branch --show-current`).
    - Resume mode only: a single checkpoint file present under `.pair/working/checkpoints/`.
 4. **Verify**: Story ID resolved. If not → **HALT**: "Cannot detect story context — pass `$story` explicitly."
 
@@ -62,7 +62,8 @@ Write and resume a self-contained progress checkpoint so a fresh session (or a s
 
 1. **Act**: Render the checkpoint following the [checkpoint template](../../../.pair/knowledge/guidelines/collaboration/templates/checkpoint-template.md), filling all five sections.
 2. **Check**: Is `$persist` `false`?
-3. **Skip**: If `$persist` is `true` (default) — create `.pair/working/checkpoints/` if missing, write the rendered content to `<story-id>.md` (overwrite in place, per Core Rule).
+3. **Skip**: If `$persist` is `true` (default) — write the rendered content to `<story-id>.md` (overwrite in place, per Core Rule) **with the harness's file-write tool, never a shell construct** (`cat >`, heredoc, `echo >`, `tee`): harness guards can block writes under `.pair/working/` or shell redirections. The file-write tool creates `.pair/working/checkpoints/` if missing.
+   - **Write refused** (guard, permission, read-only tree): do NOT retry through a shell workaround to bypass the guard and do NOT skip silently. Report `checkpoint-write-blocked` (with the refusal reason) and return the full rendered checkpoint inline (Output Format) so the handoff carries the content itself. The caller embeds it in the handoff/PR body; Path is `checkpoint-write-blocked — content inline`.
 4. **Act**: If `$persist` is `false` — do not touch the filesystem. Synthesize the text only.
 5. **Verify**: Regardless of `$persist`, the full rendered checkpoint text is returned to the caller (Output Format). If an issue-body mirror is requested, mark it explicitly: "Mirror of `.pair/working/checkpoints/<story-id>.md` — file is the source of truth."
 
@@ -92,8 +93,8 @@ Write mode:
 ```text
 CHECKPOINT WRITTEN:
 ├── Story:    [#ID: Title]
-├── Branch:   [feature/#ID-description]
-├── Path:     [.pair/working/checkpoints/<story-id>.md | write-free — not persisted]
+├── Branch:   [feature/US-ID-description]
+├── Path:     [.pair/working/checkpoints/<story-id>.md | write-free — not persisted | checkpoint-write-blocked — content inline]
 ├── Mode:     [Created | Updated in place]
 └── Tasks:    [N done / M total]
 ```
@@ -105,7 +106,7 @@ Resume mode:
 ```text
 CHECKPOINT RESUMED:
 ├── Story:      [#ID: Title]
-├── Branch:     [feature/#ID-description]
+├── Branch:     [feature/US-ID-description]
 ├── Tasks done: [list T-N]
 ├── Tasks left: [list T-N]
 ├── Decisions:  [N recorded | None yet]
@@ -175,6 +176,7 @@ When invoked **independently**:
 
 - **No story context detectable**: **HALT** and ask the caller to pass `$story` explicitly (Step 1).
 - **Corrupted or incomplete checkpoint on resume**: report exactly what was parsed, list what's missing/ambiguous, and ask for confirmation before the caller proceeds (Step 7).
+- **Checkpoint write refused by a harness guard**: report `checkpoint-write-blocked` and return the content inline in the handoff; never silently skip, never bypass the guard via shell (Step 5).
 - **Multiple checkpoints found for one story**: use the most recently modified file; flag the duplicates to the caller for cleanup (Steps 4 and 6).
 
 ## Graceful Degradation

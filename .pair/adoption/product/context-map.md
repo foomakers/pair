@@ -33,6 +33,8 @@ Ubiquitous language, one row per term. Terms owned by Collaborative Workflow (ma
 | Knowledge Base (KB) | The structured corpus of guidelines Pair ships and a project customizes; the shared source of truth every adoption and how-to references. | Adoption & Guidelines |
 | How-to | An operational instruction describing *how* the assistant executes a given task, so the workflow is transparent and repeatable. | How-To Knowledge |
 | Integration | A connection to an external code assistant or project-management tool (GitHub and the local file system as the base). | Integration & Process Standardization |
+| Marketplace | The Claude Code plugin marketplace channel (`/plugin marketplace add foomakers/pair`) that installs pair's skills natively, alongside the tool-agnostic `pair-cli` channel. | Integration & Process Standardization |
+| Quickstart | The shortest guided path from install to a first working pair session, published in the docs site. | Integration & Process Standardization |
 
 ## Entities
 
