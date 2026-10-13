@@ -1,5 +1,7 @@
 # User Story Template
 
+<!-- word-limits: Initial Breakdown Template=600; Refined User Story Template=1600; Story Statement=40; Epic Context=40; User Value=60; Rough Sizing=40; Initial Scope=90; Definition of Done Expectations=70; Dependencies=30; Notes=40; Classification=80; Acceptance Criteria=250; Definition of Done Checklist=120; Story Sizing and Sprint Readiness=100; Dependencies and Coordination=70; Validation and Testing Strategy=60; Notes and Additional Context=60; Technical Analysis=140 -->
+
 ## 📋 Table of Contents
 
 - [Initial Breakdown Template](#initial-breakdown-template)
@@ -11,7 +13,7 @@
 ## Story Statement
 
 **As a** [user persona]
-**I want** [general functionality or capability]
+**I want** [capability]
 **So that** [business value or user benefit]
 
 ## Epic Context
@@ -22,47 +24,41 @@
 
 ### Status Workflow
 
-- **Todo**: Story is created but not yet refined
-- **Refined**: Story is detailed, estimated, and ready for development
-- **In Progress**: Story is actively being developed
-- **Done**: Story delivered and accepted
+- **Todo**: created, not yet refined
+- **Refined**: detailed, estimated, ready for development
+- **In Progress**: being developed
+- **Done**: delivered and accepted
 
 ## User Value
 
-**User Benefit**: [High-level benefit this story delivers to users]
-**Business Impact**: [How this story contributes to epic and business objectives]
-**Visible UI Value**: [Specific UI element, screen, interaction, or feedback that will be demonstrable in sprint review]
+**User Benefit**: [High-level benefit for users]
+**Business Impact**: [Contribution to epic and business objectives]
+**Visible UI Value**: [UI element, screen, interaction or feedback demonstrable in sprint review]
 
 ## Rough Sizing
 
-**Story Points**: [Initial size estimate: XS(1), S(2), M(3), L(5), XL(8)]
+**Story Points**: [XS(1), S(2), M(3), L(5), XL(8)]
 **Confidence**: [High | Medium | Low]
-**Reasoning**: [Brief justification for sizing - uncertainty is expected]
+**Reasoning**: [Brief justification — uncertainty is expected]
 
 ## Initial Scope
 
 ### Likely In Scope
 
-- [General functionality expected to be included]
-- [High-level user interaction patterns]
-- [Core system capabilities]
+- [Expected functionality, interaction patterns, core capabilities]
 - [UI components and interactions that make value visible]
 
 ### Likely Out of Scope
 
-- [Functionality probably excluded]
-- [Future story considerations]
-- [Related but separate capabilities]
+- [Excluded functionality, future stories, related but separate capabilities]
 
 ### Open Questions
 
-- [Uncertainties to be resolved during refinement]
-- [Implementation details to be decided]
-- [Requirements to be clarified]
+- [Uncertainties, implementation details to decide, requirements to clarify]
 
 ## Definition of Done Expectations
 
-**Standard DoD Requirements** (to be detailed during refinement):
+**Standard DoD Requirements** (detailed during refinement):
 
 - [ ] Functionality implemented and working
 - [ ] **UI demonstrates the user value** (screen, interaction, feedback, data display)
@@ -73,25 +69,21 @@
 
 ## Dependencies
 
-**Story Dependencies**: [Other user stories this likely depends on]
-**Epic Dependencies**: [Epic-level dependencies affecting this story]
+**Story Dependencies**: [Stories this likely depends on]
+**Epic Dependencies**: [Epic-level dependencies]
 
 ## Notes
 
-[Brief additional context, assumptions, or planning considerations - uncertainty is expected and normal]
+[Context, assumptions, planning considerations — uncertainty is expected]
 ```
 
 ## Refined User Story Template
 
-> **Section ordering**: Functional sections first, technical sections last.
-> Technical Analysis is positioned at the end as the bridge to Task Breakdown
-> (appended by `/pair-process-plan-tasks`).
+> **Section ordering**: functional sections first, technical last. Technical Analysis is the bridge to Task Breakdown (appended by `/pair-process-plan-tasks`).
 
 <!-- -->
 
-> **Definition of Ready**: each of the 6 canonical DoR criteria maps to one section below —
-> see [definition-of-ready-and-done.md](../project-management-tool/definition-of-ready-and-done.md)
-> for the full mapping table and the fallback used when a board has no dedicated Ready state.
+> **Definition of Ready**: each of the 6 canonical DoR criteria maps to one section below — see [definition-of-ready-and-done.md](../project-management-tool/definition-of-ready-and-done.md) for the mapping table and the fallback when a board has no Ready state.
 
 ```markdown
 ## Story Statement
@@ -100,7 +92,7 @@
 **I want** [detailed functionality and user interaction]
 **So that** [specific business value and user benefit]
 
-**Where**: [Specific application/interface where user experiences the value]
+**Where**: [Application/interface where the user experiences the value]
 
 ## Epic Context
 
@@ -110,13 +102,13 @@
 
 ### Status Workflow
 
-- **Refined**: Story is detailed, estimated, and ready for development
-- **In Progress**: Story is actively being developed
-- **Done**: Story delivered and accepted
+- **Refined**: detailed, estimated, ready for development
+- **In Progress**: being developed
+- **Done**: delivered and accepted
 
 ## Classification
 
-> Risk/cost matrix compiled by `/classify` in **refinement** context during refinement — written as **1 line + `<details>`** (D22 reading budget), never an inline table. Review re-runs `/classify` in review context: it may **confirm or raise** a dimension, **never lower** it (the refinement tier is a floor, G6/D17). Symmetric with the review side, where the template owns the slot. Leave the placeholder below until `/classify` populates it; when `/classify` is not installed the section stays empty and refinement notes the skip.
+> Risk/cost matrix compiled by `/classify` in **refinement** context, written as **1 line + `<details>`** (D22 reading budget), never an inline table. Review re-runs `/classify`: it may **confirm or raise** a dimension, **never lower** it (the refinement tier is a floor, G6/D17). Leave the placeholder until `/classify` populates it; when `/classify` is not installed the section stays empty and refinement notes the skip.
 
 `risk:[green | yellow | red]` · `cost:[green | yellow | orange | red]` [· coupling: not assessed — no domain artifacts]
 
@@ -151,48 +143,45 @@
 
 ### Business Rules
 
-- [Specific business rule with measurable criteria]
-- [Data validation requirements]
-- [User permission and access control rules]
-- [Integration with existing system rules]
+- [Business rule with measurable criteria; data validation; permission and access control; integration with existing rules]
 
 ### Edge Cases and Error Handling
 
-- **Invalid Input**: [How system handles and responds]
-- **System Errors**: [Error conditions and user feedback]
-- **Boundary Conditions**: [Limits and constraint handling]
-- **Exceptional Scenarios**: [Unusual but valid use cases]
+- **Invalid Input**: [handling and response]
+- **System Errors**: [conditions and user feedback]
+- **Boundary Conditions**: [limits and constraints]
+- **Exceptional Scenarios**: [unusual but valid use cases]
 
 ## Definition of Done Checklist
 
 ### Development Completion
 
 - [ ] All acceptance criteria implemented and verified
-- [ ] Code follows project coding standards and conventions
-- [ ] Code review completed and approved by team member
-- [ ] Unit tests written and passing (minimum coverage: [X]% - specify project standard)
-- [ ] Integration tests implemented for external interfaces and API endpoints
+- [ ] Code follows project standards and conventions
+- [ ] Code review completed and approved by a team member
+- [ ] Unit tests written and passing (minimum coverage: [X]% - project standard)
+- [ ] Integration tests for external interfaces and API endpoints
 - [ ] Documentation updated (API docs, user guides, technical documentation)
-- [ ] Security scan completed and vulnerabilities addressed
+- [ ] Security scan completed, vulnerabilities addressed
 - [ ] Performance benchmarks met and verified through testing
 
 ### Quality Assurance
 
-- [ ] All acceptance criteria tested and verified against specifications
+- [ ] All acceptance criteria tested against specifications
 - [ ] Edge cases and error conditions tested comprehensively
-- [ ] Cross-browser/platform testing completed (specify supported browsers/devices)
-- [ ] Performance criteria met and verified (response times, throughput, resource usage)
+- [ ] Cross-browser/platform testing completed (supported browsers/devices)
+- [ ] Performance criteria verified (response times, throughput, resource usage)
 - [ ] Security requirements validated through testing and review
-- [ ] Accessibility standards compliance verified (specify WCAG level)
-- [ ] User experience validation completed (usability testing if applicable)
+- [ ] Accessibility compliance verified (WCAG level)
+- [ ] User experience validated (usability testing if applicable)
 - [ ] Regression testing completed for existing functionality
 
 ### Deployment and Release
 
-- [ ] Feature deployed to staging environment successfully
+- [ ] Deployed to staging successfully
 - [ ] Staging validation completed by product owner
 - [ ] Production deployment checklist completed
-- [ ] Feature flags configured appropriately (if applicable)
+- [ ] Feature flags configured (if applicable)
 - [ ] Monitoring and alerting configured for new functionality
 - [ ] Database migrations tested and validated (if applicable)
 - [ ] User documentation and help content updated and reviewed
@@ -203,15 +192,15 @@
 
 ### Refined Story Points
 
-**Final Story Points**: [X points based on detailed analysis]
+**Final Story Points**: [X points from detailed analysis]
 **Confidence Level**: [High | Medium | Low]
-**Sizing Justification**: [Detailed reasoning based on technical analysis]
+**Sizing Justification**: [Reasoning from technical analysis]
 
 ### Sprint Capacity Validation
 
-**Sprint Fit Assessment**: [Does story fit in single sprint?]
-**Development Time Estimate**: [X days based on technical analysis]
-**Testing Time Estimate**: [Y days for comprehensive validation]
+**Sprint Fit Assessment**: [Fits in a single sprint?]
+**Development Time Estimate**: [X days]
+**Testing Time Estimate**: [Y days]
 **Total Effort Assessment**: [Fits within sprint capacity: Yes/No]
 
 ### Story Splitting Recommendations
@@ -226,68 +215,65 @@
    - **Acceptance Criteria**: [Extended criteria]
    - **Dependencies**: [Depends on Story A]
    - **Size Estimate**: [Remaining points]
-     **Split Rationale**: [Why this split maintains user value and enables incremental delivery]
+     **Split Rationale**: [Why the split keeps user value and enables incremental delivery]
 
 ## Dependencies and Coordination
 
 ### Story Dependencies
 
-**Prerequisite Stories**: [Stories that must be completed first]
-**Dependent Stories**: [Stories that depend on this story]
+**Prerequisite Stories**: [Must be completed first]
+**Dependent Stories**: [Depend on this story]
 **Shared Components**: [Common elements with other stories]
 
 ### Team Coordination
 
 **Development Roles Involved**:
 
-- **Frontend**: [Specific frontend work and coordination]
+- **Frontend**: [Work and coordination]
 - **Backend**: [API and data layer responsibilities]
-- **QA**: [Testing strategy and coordination needs]
-- **UX/UI**: [Design review and validation requirements]
+- **QA**: [Testing strategy and coordination]
+- **UX/UI**: [Design review and validation]
 
 ### External Dependencies
 
 **Third-party Integrations**: [External services or APIs]
 **Infrastructure Requirements**: [Deployment or environment needs]
-**Compliance Requirements**: [Legal, security, or regulatory coordination]
+**Compliance Requirements**: [Legal, security or regulatory coordination]
 
 ## Validation and Testing Strategy
 
 ### Acceptance Testing Approach
 
-**Testing Methods**: [How acceptance criteria will be validated]
-**Test Data Requirements**: [Specific data needed for testing]
-**Environment Requirements**: [Testing environment specifications]
+**Testing Methods**: [How acceptance criteria are validated]
+**Test Data Requirements**: [Data needed]
+**Environment Requirements**: [Test environment]
 
 ### User Validation
 
-**User Feedback Collection**: [How to gather user validation]
-**Success Metrics**: [Measurable outcomes for story success]
-**Rollback Plan**: [What to do if story doesn't meet expectations]
+**User Feedback Collection**: [How to gather it]
+**Success Metrics**: [Measurable outcomes]
+**Rollback Plan**: [If the story misses expectations]
 
 ## Notes and Additional Context
 
-**Refinement Session Insights**: [Key decisions and considerations from refinement discussion]
-**Team Concerns**: [Any concerns raised during refinement]
-**Future Considerations**: [Items noted for future development]
-**Documentation Links**: [References to detailed technical specs or design documents]
+**Refinement Session Insights**: [Key decisions and considerations]
+**Team Concerns**: [Concerns raised]
+**Future Considerations**: [Items for later]
+**Documentation Links**: [Technical specs or design documents]
 
 ## Technical Analysis
 
 ### Implementation Approach
 
-**Technical Strategy**: [High-level implementation approach]
-**Key Components**: [Major technical components involved]
+**Technical Strategy**: [High-level approach]
+**Key Components**: [Major components involved]
 **Data Flow**: [How data moves through the system]
-**Integration Points**: [External systems or APIs involved]
+**Integration Points**: [External systems or APIs]
 **Design**: [not required | required — reference: link/path to the design doc]
 
 ### Technical Requirements
 
-- [Specific technical constraint or requirement]
-- [Performance criteria and benchmarks]
-- [Security considerations and requirements]
-- [Accessibility and usability standards]
+- [Technical constraints; performance criteria and benchmarks; security; accessibility and usability standards]
 
 ### Technical Risks and Mitigation
 
@@ -302,7 +288,7 @@
 
 - [Spike 1]: [Research question and acceptance criteria]
 - [Spike 2]: [Technical investigation scope]
-  **Estimated Spike Effort**: [Time needed for technical investigation]
+  **Estimated Spike Effort**: [Time for investigation]
 
 ---
 
