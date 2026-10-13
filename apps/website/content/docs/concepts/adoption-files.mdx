@@ -326,6 +326,10 @@ Each analysis-log entry documents:
 
 Like DDR↔context-map, this follows a history↔state split: the record is history (never edited once written — a repeated analysis always adds a new record), while the pertinent adoption file's summary is current state, always replaced with the latest analysis' findings. If no adoption file is clearly pertinent, the AI asks instead of guessing; if the findings contradict an existing ADR, it flags that instead of silently overwriting the summary.
 
+## Package-Local Override
+
+On large monorepos an opt-in override co-locates rules in `<pkg>/.pair/` and turns the central file into a router; skills then load only the packages a diff or story touches. See [Package-Local Adoption](/docs/customization/package-local-adoption).
+
 ## Protection
 
 Adoption files are protected by design. When pair updates the Knowledge Base (`pair-cli update`):

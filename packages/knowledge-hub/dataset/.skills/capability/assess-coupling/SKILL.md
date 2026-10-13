@@ -1,7 +1,7 @@
 ---
 name: assess-coupling
 description: "Assesses architecture coupling against the three-dimensional model (integration strength x socio-technical distance x volatility + balance rule): `$scope: diff` — composed by /review, emits a 1-line Architecture verdict + collapsed findings (D22), critical findings flagged for the merge decision; `$scope: full` — one-shot codebase audit written to .pair/working/reports/architecture/, handing every unbalanced integration (volatile as critical/significant, stable as tolerable) to the caller for tech-debt promotion. Reads real integration points, never structure alone; never a single-dimension decouple. Output-only; the model lives in one guideline (D37)."
-version: 0.1.0
+version: 0.2.0
 author: Foomakers
 ---
 
@@ -49,6 +49,10 @@ A missing/malformed adoption file is treated as absent: warn and fall back (neve
 2. **Skip**: If provided, use it. Proceed to Step 1.
 3. **Act**: Auto-detect: invoked with a PR/diff in context (i.e. by `/review`) → `diff`; otherwise → `full`.
 4. **Verify**: Scope is set.
+
+### Scoped Context (package-local override)
+
+Opt-in. When the central adoption file carries a `## Package-Local Adoption` router, resolve the rule set per [scoped context resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/scoped-context-resolution.md) (diff-scoped here: globals + `<pkg>/.pair/` of the packages the diff touches, nothing else); report a central↔local conflict, a dangling router entry, and — when the [complexity signals](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/package-local-adoption.md#activation-proposal) fire — PROPOSE the override and wait for approval, never activate. No router ⇒ unchanged behaviour.
 
 ### Step 1: Load the Model
 
