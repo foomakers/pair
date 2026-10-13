@@ -1,27 +1,4 @@
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "[ -x \"$CLAUDE_PROJECT_DIR/.tools/bin/rtk\" ] && [ -n \"$CLAUDE_ENV_FILE\" ] && echo \"export PATH=\\\"$CLAUDE_PROJECT_DIR/.tools/bin:\\$PATH\\\"\" >> \"$CLAUDE_ENV_FILE\"; exit 0"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "R=\"$CLAUDE_PROJECT_DIR/.tools/bin/rtk\"; [ -x \"$R\" ] && \"$R\" hook claude || true"
-          }
-        ]
-      }
-    ]
-  },
   "extraKnownMarketplaces": {
     "ponytail": {
       "source": {

@@ -24,9 +24,9 @@ Thank you for your interest in contributing to Pair!
 - Follow the guidelines in `.pair/knowledge/guidelines/` for architecture and code design.
 - For process and collaboration, see `.pair/adoption/tech/way-of-working.md`.
 
-## Optional: rtk (shell-output compression for Claude Code)
+## Optional: rtk (not enabled)
 
-`./scripts/dev/install-rtk.sh` installs a pinned, checksum-verified [rtk](https://github.com/rtk-ai/rtk) into `.tools/bin` (gitignored, nothing global). With it present, the project `.claude/settings.json` hooks rewrite Bash commands through rtk; without it they do nothing. rtk is lossy (long listings and log bodies are summarised): re-run a command as `rtk proxy <cmd>` for the raw output.
+`./scripts/dev/install-rtk.sh` installs a pinned, checksum-verified [rtk](https://github.com/rtk-ai/rtk) into `.tools/bin` (gitignored). It is **not** installed by `pnpm install` and no hook uses it: measured on #433 it saved no cost on implementation tasks, and it truncates large diffs. It is kept for the code-review A/B planned at the end of #433 (T-12).
 
 ## Trial: ponytail (#433)
 
