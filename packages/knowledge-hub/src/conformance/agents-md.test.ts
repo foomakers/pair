@@ -167,3 +167,68 @@ describe('task selection rules survive the shrink (#433 r0-1)', () => {
     expect(noDanglingStepOne(CLAUDE_MD)).toBe(true)
   })
 })
+
+// #433 r0-1 rev2: full rule inventory of origin/main dataset AGENTS.md vs head. Two rules found lost:
+// Task Selection item 5 (origin :216, claude-skip -> AGENTS.md only) and Key Benefits "Confidence"
+// (origin :207, outside claude-skip -> AGENTS.md and CLAUDE.md). Role context (item 4) survives in step 2.
+const lines = (md: string) => md.split('\n')
+const hasAmbiguityRule = (md: string) =>
+  lines(md).some(
+    l =>
+      /ambiguous/i.test(l) &&
+      /\b(top (2|two)|(2|two) highest)\b/i.test(l) &&
+      /with their tags/i.test(l) &&
+      /confirm/i.test(l),
+  )
+const hasConfidenceRule = (md: string) =>
+  lines(md).some(
+    l => /lint/i.test(l) && /\btests?\b/i.test(l) && /\bpass/i.test(l) && /before commit/i.test(l),
+  )
+const hasRoleRule = (md: string) =>
+  lines(md).some(l => /\*\*Identify role\*\*/i.test(l) && /ask if unclear/i.test(l)) &&
+  lines(md).some(l => /product-manager.*product-engineer.*staff-engineer/i.test(l))
+
+describe('full rule inventory survives the shrink (#433 r0-1 rev2)', () => {
+  it('W6: dataset AGENTS.md carries the ambiguity rule (top 2 matches with their tags, confirm)', () => {
+    expect(hasAmbiguityRule(AGENTS_MD)).toBe(true)
+  })
+
+  it('W7: root AGENTS.md mirror carries the ambiguity rule', () => {
+    expect(hasAmbiguityRule(ROOT_AGENTS_MD)).toBe(true)
+  })
+
+  it('W8: dataset AGENTS.md carries the lint + tests pass before committing rule', () => {
+    expect(hasConfidenceRule(AGENTS_MD)).toBe(true)
+  })
+
+  it('W9: root AGENTS.md mirror carries the lint + tests pass before committing rule', () => {
+    expect(hasConfidenceRule(ROOT_AGENTS_MD)).toBe(true)
+  })
+
+  it('W10: CLAUDE.md carries the lint + tests pass before committing rule', () => {
+    expect(hasConfidenceRule(CLAUDE_MD)).toBe(true)
+  })
+
+  it('C3: role context (origin item 4) survives in step 2 of the source and the root mirror', () => {
+    expect(hasRoleRule(AGENTS_MD)).toBe(true)
+    expect(hasRoleRule(ROOT_AGENTS_MD)).toBe(true)
+  })
+
+  it('B2: predicates accept the origin/main wording and reject the head near-misses', () => {
+    expect(
+      hasAmbiguityRule(
+        '5. **When ambiguous**: Show top 2 matches with their tags and ask for confirmation',
+      ),
+    ).toBe(true)
+    expect(
+      hasAmbiguityRule(
+        '**Still unclear?** Show the 2 highest tag-matching tasks and ask the developer to confirm.',
+      ),
+    ).toBe(false)
+    expect(hasConfidenceRule('- **Confidence**: Linting + tests pass before committing')).toBe(true)
+    expect(
+      hasConfidenceRule('pnpm lint --filter <package_name>                      # quality checks'),
+    ).toBe(false)
+    expect(hasRoleRule('2. **Identify role**: check user language/request type')).toBe(false)
+  })
+})
