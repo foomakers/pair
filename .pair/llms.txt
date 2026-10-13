@@ -193,7 +193,7 @@
 - [Decision: macro-phase modes are a row-filter facade on `/pair-next`, not loop state and not skills](.pair/adoption/decision-log/2026-10-06-macro-phase-modes-are-a-selection-facade.md)
 - [Decision: planned-marker issue state is read live via `gh`, skipped locally when unavailable, fatal in CI](.pair/adoption/decision-log/2026-10-06-planned-marker-issue-state-lookup.md)
 - [Decision: legacy `## Eligibility` filter bounds unattended runs only; explicit `--root` is never filtered out](.pair/adoption/decision-log/2026-10-13-legacy-eligibility-is-unattended-only.md)
-- [Decision: ponytail enabled as a repo-level trial; rtk enabled for the review stage only](.pair/adoption/decision-log/2026-10-13-ponytail-trial-rtk-disabled.md)
+- [Decision: ponytail enabled as a repo-level trial; rtk enabled for the review stage only](.pair/adoption/decision-log/2026-10-13-ponytail-trial-rtk-review-only.md)
 
 ## How-To Guides
 

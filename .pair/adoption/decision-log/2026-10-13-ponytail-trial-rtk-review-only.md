@@ -14,7 +14,7 @@ Process Decision
 
 ## Context
 
-Story #433 evaluated three third-party token-reduction tools for this repo only (never framework features): rtk (shell-output proxy), caveman (terse output), ponytail (least-code ruleset). Measured A/B: the same `pair-cli tokens` feature implemented 3× per arm, fixed acceptance tests, model sonnet.
+Story #433 evaluated three third-party token-reduction tools for this repo only (never framework features): rtk (shell-output proxy), caveman (terse output), ponytail (least-code ruleset). rtk and ponytail were measured (A/B below); caveman was not (see Decision). Implementation A/B: the same `pair-cli tokens` feature implemented 3× per arm, fixed acceptance tests, model sonnet.
 
 | Arm | Tests | Prod lines added | Output tokens | Cost |
 | --- | --- | --- | --- | --- |
@@ -29,7 +29,7 @@ rtk cut command output ~70% but saved nothing overall (context dominated by cach
 - **ponytail**: enabled for this repo via `.claude/settings.json` (`enabledPlugins`, marketplace pinned to `v5.2.0`). Trial; per-session opt-out `/ponytail off`.
 - **rtk**: enabled ONLY for the review stage. A `PreToolUse` Bash hook (`.claude/settings.json` → `scripts/dev/rtk-review-hook.mjs`) runs `rtk hook claude` only when the hook input's `agent_type` is `pair-reviewer`, is a no-op when `.tools/bin/rtk` is absent, and forwards only rtk's `updatedInput` (command text never rewritten; `permissionDecision` dropped, so the normal permission flow applies). A `SessionStart` hook (`scripts/dev/rtk-session-path.mjs`) prepends `$CLAUDE_PROJECT_DIR/.tools/bin` to PATH via `$CLAUDE_ENV_FILE` (created if missing) when the binary exists. Maintainer design decision 2026-10-13. Still opt-in: `scripts/dev/install-rtk.sh` (pinned, checksum-verified); not installed by `pnpm install`.
 - **Scope**: `agent_type` is set in hook input for subagents and `claude --agent`. `pair-cli` run stages carry no `agent_type`, so they are NOT covered; implementation and main sessions are never rewritten.
-- **caveman**: not installed; its effect is pursued by the shrink-discipline guideline.
+- **caveman**: not installed and not measured. Maintainer exception to AC6 (2026-10-13): its technique (terse output) is the same as the guideline's default agent style, so it is covered by the shrink-discipline guideline.
 
 Review A/B (T-12; Opus reviewer, 3 runs/arm, 2 seeded defects S1/S2):
 

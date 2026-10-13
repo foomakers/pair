@@ -33,7 +33,7 @@ Indicative, not a gate. Example from pair's own repo: numbers measured on pair's
 
 **Story/issue** — before: "As a user I would really like to be able to..., because it would help me..." (three sentences of motivation). After: one `As a / I want / So that` line each.
 
-**Template** — before: section prose "Describe in detail what the change does and why it was needed." After: `## Summary (≤40 words)`.
+**Template** — before: section prose "Describe in detail what the change does and why it was needed." After: `## Summary` with `<!-- word-limits: Summary=40 -->` at the top of the template (heading unchanged).
 
 **Adoption** — before: the same stack list in `tech-stack.md` and `architecture.md`. After: one list, the other file links to it.
 
