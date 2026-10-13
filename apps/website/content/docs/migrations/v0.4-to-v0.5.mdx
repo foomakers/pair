@@ -3,7 +3,7 @@ title: "v0.4 → v0.5: Canonical States + Domain Modeling"
 description: Migration prompt for pair's canonical backlog states, n-m state-mapping schema, the map-subdomains/map-contexts process-to-capability rename, the classification / risk-matrix capability, and mirror cleanup on pair-cli update.
 ---
 
-This page grows incrementally as the stories driving the v0.4 → v0.5 jump land — it currently covers canonical states (including the legacy `Refined` state case), the domain-modeling capability rename, the classification / risk-matrix capability, and the one change in this jump that **deletes files**: mirror cleanup on `pair-cli update`.
+This page grows incrementally as the stories driving the v0.4 → v0.5 jump land — it currently covers canonical states (including the legacy `Refined` state case), the domain context map and `.pair/working/` area, the domain-modeling capability rename, the classification / risk-matrix capability, and the one change in this jump that **deletes files**: mirror cleanup on `pair-cli update`.
 
 Structural background: [Canonical states (#202)](https://github.com/foomakers/pair/issues/202) · [map-subdomains/map-contexts reclassification (#246)](https://github.com/foomakers/pair/issues/246) · [Versioning & migration epic (#214)](https://github.com/foomakers/pair/issues/214) · [Migration note: legacy `Refined` boards (#243)](https://github.com/foomakers/pair/issues/243) · [Classification & risk matrix (#233)](https://github.com/foomakers/pair/issues/233) · [Mirror cleanup on the CLI path (#393)](https://github.com/foomakers/pair/issues/393)
 
@@ -43,6 +43,17 @@ If your board already has a literal `Refined` column — as pair's own recommend
   ```
 
 Full schema and the worked n-m example (Example 2b): `.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md` in your installed Knowledge Base.
+
+### Domain context map and the working area
+
+Two structures arrive that need no file from you but that the prompt confirms:
+
+- **`.pair/adoption/product/context-map.md`** — optional. Created inline the first time a brainstorm or refine session sharpens a domain term; absent is a valid steady state. Projects that want their ubiquitous language up front can create it from the `context-map-template.md` in the KB (`.pair/knowledge/guidelines/collaboration/templates/`).
+- **`.pair/working/`** — the operational area (checkpoints, reports, PR analyses). It is excluded from every `pair-cli` registry, so install/update never write or delete it, and it should be ignored by version control. Skills create it on first use; you only need to make sure it is ignored.
+
+### Check the installed KB version
+
+`pair-cli kb-info` (no package path) compares the KB version recorded by your last `install`/`update` with the current one and prints the migration-page pointer on drift. Run it after the migration: a project that has never recorded a version reports `unknown` — run `pair-cli update` once to record it.
 
 ### Skill renames: map-subdomains, map-contexts (process → capability)
 
@@ -90,7 +101,7 @@ Two cases, and only the second one is new:
 
 ## Prompt
 
-Copy-paste this into any AI coding agent (Claude Code, Cursor, Copilot, Codex, or similar) with write access to your project. It only touches files under `.pair/adoption/` and `.pair/working/` — never `.pair/knowledge/`, skill files, or application code. Safe to re-run.
+Copy-paste this into any AI coding agent (Claude Code, Cursor, Copilot, Codex, or similar) with write access to your project. It only touches files under `.pair/adoption/` and `.pair/working/` (plus one `.gitignore` line) — never `.pair/knowledge/`, skill files, or application code. Safe to re-run.
 
 ```text
 You are migrating this project's `.pair/` structure to pair's canonical-states
@@ -155,9 +166,22 @@ only if not already done, and report what you skipped.
       removed file — path, verdict, and where it was re-homed. This file is the
       marker that makes step 4 idempotent, so write it only when (d) is done.
 
-5. Summarize what you created or changed versus what was already in place, and
+5. (Context map and working area) Do not create `.pair/adoption/product/context-map.md`
+   unless the project wants it now: it is created inline by later brainstorm/refine
+   sessions. If it exists, leave it as is. Then make sure `.pair/working/` is
+   ignored by version control: if `.gitignore` has no entry covering
+   `.pair/working`, append `.pair/working`; if it does, skip. Never create files
+   inside `.pair/working/` other than step 4's snapshot, and never add it to any
+   pair registry.
+
+6. (Version check) Ask the operator to run `pair-cli kb-info` and report its
+   output. Do not install or invoke pair yourself if it is not already available.
+   "Unknown installed version" is expected until the operator has run
+   `pair-cli update` once; record whatever it reports and skip if already done.
+
+7. Summarize what you created or changed versus what was already in place, and
    confirm with `git status` (or equivalent) that only files under
-   `.pair/adoption/` and `.pair/working/` were touched.
+   `.pair/adoption/`, `.pair/working/` and `.gitignore` were touched.
 ```
 
 ## Verify
@@ -169,7 +193,9 @@ only if not already done, and report what you skipped.
 - [ ] `.pair/working/pre-v0.5-mirror-snapshot/` holds the **pre-update** copy of `.pair/knowledge/` (and `.github/agents/`, if you have it), and its `REPORT.md` accounts for every file the update removed
 - [ ] Each ⚠️ `Mirror: removed …` line in the update output matches a line in `REPORT.md` — one that doesn't means something you own was living inside a mirror tree
 - [ ] Nothing this project authored is left under `.pair/knowledge/` — project standards live in `.pair/adoption/`, organization standards in your central KB repository
-- [ ] `git status` (or equivalent) shows changes only under `.pair/adoption/` and `.pair/working/`
+- [ ] `.pair/working/` is ignored by version control and was not added to any registry; `context-map.md` exists only if you chose to create it
+- [ ] `pair-cli kb-info` reports clean (no drift), or its drift/unknown output was acted on
+- [ ] `git status` (or equivalent) shows changes only under `.pair/adoption/`, `.pair/working/` and `.gitignore`
 - [ ] Re-running the prompt makes no further changes — a second run reports each step as skipped
 
 If you're several versions behind, run the earlier pages in the [Migrations index](/docs/migrations) first, then this one.

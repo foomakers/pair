@@ -20,7 +20,7 @@ Before picking a starting page:
 - If you still have the KB package/ZIP you installed from, run `pair-cli kb-info <package-path>` to read its version metadata.
 - Otherwise, check for the structural markers a migration would have added — e.g. does `.pair/adoption/product/context-map.md` exist? Does `.pair/working/` exist? Their absence means you're pre-migration for that jump.
 
-A dedicated CLI check (installed KB vs. current, compared directly) is landing in a follow-up story — until then, use the checks above.
+Or run `pair-cli kb-info` (no package path): it compares the installed KB version with the current one and prints the migration-page pointer when they differ.
 
 ## Published migration pages
 
