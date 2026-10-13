@@ -35,6 +35,15 @@ export function parseRouter(centralAdoption: string | undefined): RouterRow[] {
   return rows
 }
 
+function owningPackage(router: RouterRow[], file: string): RouterRow | undefined {
+  let best: RouterRow | undefined
+  for (const row of router) {
+    const hit = file === row.package || file.startsWith(row.package + '/')
+    if (hit && (!best || row.package.length > best.package.length)) best = row
+  }
+  return best
+}
+
 export function resolveScopedContext(input: {
   centralAdoption: string | undefined
   touchedFiles: string[]
@@ -45,11 +54,7 @@ export function resolveScopedContext(input: {
 
   const touched = new Map<string, RouterRow>()
   for (const file of input.touchedFiles) {
-    let best: RouterRow | undefined
-    for (const row of router) {
-      const hit = file === row.package || file.startsWith(row.package + '/')
-      if (hit && (!best || row.package.length > best.package.length)) best = row
-    }
+    const best = owningPackage(router, file)
     if (best) touched.set(best.package, best)
   }
 
