@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Installs the pinned rtk release into .tools/bin (repo-local, gitignored). No global changes.
 set -euo pipefail
+[ -n "${CI:-}" ] || [ -n "${RTK_SKIP:-}" ] && { echo "rtk: skipped (CI or RTK_SKIP set)"; exit 0; }
 VERSION="0.52.0"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DEST="$ROOT/.tools/bin"

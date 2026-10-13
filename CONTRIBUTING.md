@@ -28,6 +28,10 @@ Thank you for your interest in contributing to Pair!
 
 `./scripts/dev/install-rtk.sh` installs a pinned, checksum-verified [rtk](https://github.com/rtk-ai/rtk) into `.tools/bin` (gitignored, nothing global). With it present, the project `.claude/settings.json` hooks rewrite Bash commands through rtk; without it they do nothing. rtk is lossy (long listings and log bodies are summarised): re-run a command as `rtk proxy <cmd>` for the raw output.
 
+## Trial: ponytail (#433)
+
+The project settings enable the [ponytail](https://ponytail.dev) plugin (pinned `v5.2.0`) for Claude Code: a "least code that works" ruleset injected at session start and into subagents. It is a trial for story #433 and is removed if the measurement does not justify it. Switch it off per session with `/ponytail off`.
+
 ## Operational Activities
 
 - For step-by-step instructions on common tasks, see `.pair/knowledge/how-to/`.

@@ -19,7 +19,7 @@
     "deps:outdated": "pnpm --recursive outdated",
     "catalog:update": "pnpm update",
     "catalog:check": "pnpm list",
-    "prepare": "husky install",
+    "prepare": "husky install && (bash scripts/dev/install-rtk.sh || true)",
     "pi": "pi --no-skills",
     "clean": "pnpm -w -r turbo prune && turbo clean && find . -type d \\( -name node_modules -o -name .turbo -o -name dist -o -name coverage \\) -exec rm -rf {} + 2>/dev/null || true; find . -type d -path './scripts/workflows/release' -prune -o -type d -name release -exec rm -rf {} + 2>/dev/null || true; find . -type f -name \"*tsbuildinfo\" -exec rm -f {} + 2>/dev/null || true",
     "a11y:report": "turbo a11y:report",

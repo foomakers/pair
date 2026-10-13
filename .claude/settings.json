@@ -21,5 +21,17 @@
         ]
       }
     ]
+  },
+  "extraKnownMarketplaces": {
+    "ponytail": {
+      "source": {
+        "source": "github",
+        "repo": "DietrichGebert/ponytail",
+        "ref": "v5.2.0"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "ponytail@ponytail": true
   }
 }
