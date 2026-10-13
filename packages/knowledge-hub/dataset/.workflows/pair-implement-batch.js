@@ -317,7 +317,7 @@ function parseBatchArgs(raw) {
           `an absent one would reach a shell command as \`undefined\`.`,
       )
     // Presence is not validity. Every field below is interpolated VERBATIM into command text a
-    // Bash-capable agent then runs — `git worktree add <root>/<id> -B <branch> <base>` and `git
+    // Bash-capable agent then runs — `cycle-dispatch.mjs worktree` and `git
     // worktree remove --force <root>/<id>-review` — so a card value carries the authority of
     // the command line it lands on.
     const constrain = (value, key, ok, what) => {

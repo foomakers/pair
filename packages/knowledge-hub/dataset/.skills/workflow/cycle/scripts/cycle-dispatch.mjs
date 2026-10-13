@@ -224,7 +224,21 @@ function worktreeCommand(opts) {
   if (existsSync(path)) fail('worktree-conflict', `${path} exists but is not a registered worktree of ${main} — resolve it by hand`, { path, expected: branch, actual: null })
 
   mkdirSync(dirname(path), { recursive: true })
-  gitOk(main, ['worktree', 'add', '-q', '-B', branch, path, base])
+  // An existing card branch is the work in progress: check it out as it is, never `-B` it back to
+  // the base. A branch only on origin is checked out from origin; only a new one starts at the base.
+  const has = ref => git(main, ['rev-parse', '--verify', '--quiet', ref]).status === 0
+  // Ask origin itself, not a remote-tracking ref of unknown age: a branch pushed from elsewhere is
+  // fetched, one deleted upstream loses its stale tracking ref. Offline (or no origin) ⇒ local refs as they are.
+  // Never prompt, never hang: a credential prompt or a dead network leaves the local refs as they are.
+  const net = args => spawnSync('git', args, { cwd: main, encoding: 'utf8', timeout: 30_000, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? 'ssh -o BatchMode=yes -o ConnectTimeout=10' } })
+  const remote = net(['ls-remote', '--exit-code', '--heads', 'origin', `refs/heads/${branch}`])
+  if (remote.status === 0) {
+    const fetched = net(['fetch', '-q', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`])
+    if (fetched.status !== 0) fail('git-failed', `origin has ${branch} but fetching it failed — refusing to cut a second branch of the same name: ${String(fetched.stderr ?? '').trim()}`, { branch })
+  } else if (remote.status === 2) git(main, ['update-ref', '-d', `refs/remotes/origin/${branch}`])
+  if (has(`refs/heads/${branch}`)) gitOk(main, ['worktree', 'add', '-q', path, branch])
+  else if (has(`refs/remotes/origin/${branch}`)) gitOk(main, ['worktree', 'add', '-q', '--track', '-b', branch, path, `origin/${branch}`])
+  else gitOk(main, ['worktree', 'add', '-q', '-b', branch, path, base])
   return emit({ path, created: true, reused: false, branch })
 }
 
