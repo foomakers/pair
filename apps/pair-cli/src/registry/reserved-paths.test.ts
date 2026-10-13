@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { posix } from 'path'
-import { getReservedPaths, detectReservedPathOverlap } from './reserved-paths'
+import { getReservedPaths, detectReservedPathOverlap, isPackageLocalPairPath } from './reserved-paths'
 import { DEFAULT_WORKING_PATH } from './working-area'
 import { RegistryConfig } from './resolver'
 import { INSTALLED_VERSION_MARKER } from '../commands/kb-info/version-resolver'
@@ -172,5 +172,11 @@ describe('package-local .pair dirs (#237)', () => {
 
   it('does not flag lookalike segments', () => {
     expect(detectReservedPathOverlap(withTarget('apps/web/.pairs'), reserved)).toHaveLength(0)
+  })
+
+  it('treats backslash as a separator only on win32 (platform injected)', () => {
+    expect(isPackageLocalPairPath('apps\\web\\.pair', 'win32')).toBe(true)
+    expect(isPackageLocalPairPath('apps\\web\\.pair', 'linux')).toBe(false)
+    expect(isPackageLocalPairPath('apps/web/.pair', 'darwin')).toBe(true)
   })
 })
