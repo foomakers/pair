@@ -2493,7 +2493,14 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       }
       return { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], priorFindings: priorFindings(), headMoved: true, detail: SHA_RE.test(remote) ? 'readiness not confirmed on the remote head' : 'readiness not bound to a 40-hex remote head' }
     }
-    if (blocking.every(f => f.external === true)) return blocked('escalate', { detail: 'external blockers need a human disposition or a read-back-verified correction', findings: blocking })
+    if (blocking.every(f => f.external === true)) {
+      // A human decided every external blocker and the head has moved since the review: the
+      // correction is on the remote — re-verify it (custody judges the new commits), never wait.
+      // Only a decision record answers it — a later judgment that merely copies `humanDecision` does not.
+      const decided = new Set(d.recordType === 'decision' ? (d.humanDecisions ?? []).map(h => h.findingId) : [])
+      if (blocking.every(f => decided.has(f.id)) && ctx.head && SHA_RE.test(ctx.head) && ctx.head !== d.reviewedHead) return { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: blocking.map(f => f.id), priorFindings: priorFindings(), headMoved: true }
+      return blocked('escalate', { detail: 'external blockers need a human disposition or a read-back-verified correction', findings: blocking })
+    }
     // US-479 T-21 (S4): the budget bounds COMPLETED corrective cycles, never the raw round
     // counter — a metadata-only re-review (inputsChanged, a moved head) bumps `round` without any
     // actual fix and must not spend the budget a real remediation earns.
@@ -3085,15 +3092,18 @@ export function supersede({ dir, phase, skill = 'red-spec', attempt, reason, by,
     if (!voidGreen && verdicts.some(v => handoffs.indexOf(v) > handoffs.indexOf(target))) return { superseded: false, reason: 'supersede-validated', file: basename(target.file) }
     const prefix = `superseded-${dayOf(now)}-`
     const from = basename(target.file)
-    const to = `${prefix}${from}`
-    if (existsSync(join(dir, to))) return { superseded: false, reason: 'supersede-target-exists', file: to }
+    // The same phase may be set aside more than once on one day: never overwrite an earlier one.
+    let n = 1
+    const named = file => (n === 1 ? `${prefix}${file}` : `${prefix}${n}-${file}`)
+    while (existsSync(join(dir, named(from)))) n++
+    const to = named(from)
     renameSync(target.file, join(dir, to))
     // The attempt's own contract file goes with it when it lives in this run directory and no other
     // handoff names it — a listing then shows the attempt and its contract side by side.
     let contract
     const cp = String(target.data.contractPath ?? '').trim()
     if (cp && existsSync(cp) && dirname(resolvePath(cp)) === resolvePath(dir) && !handoffs.some(h => h !== target && h.data?.contractPath === cp)) {
-      const cto = `${prefix}${basename(cp)}`
+      const cto = named(basename(cp))
       if (!existsSync(join(dir, cto))) {
         renameSync(cp, join(dir, cto))
         contract = { from: basename(cp), to: cto }

@@ -1421,6 +1421,42 @@ test('T-4 (AC4): supersede accepts a failed-custody review-phase handoff (tail o
   assert.ok(out.index)
 })
 
+test('T-4 (AC4): supersede sets the SAME phase aside twice on one day — distinct names, both invisible to resolve', () => {
+  const { dir } = runDir()
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true }, { predecessor: undefined })
+  review(dir, 'r0', { mode: 'partial', custody: { verified: false, contractBreach: true, breaches: ['x'] } })
+  const one = supersede({ dir, phase: 'r0', skill: 'review-phase', reason: 'first', by: 'rucka', workflowVersion: V, now: ON })
+  assert.equal(one.superseded, true, JSON.stringify(one))
+  review(dir, 'r0', { mode: 'partial', custody: { verified: false, contractBreach: true, breaches: ['x'] } })
+  const two = supersede({ dir, phase: 'r0', skill: 'review-phase', reason: 'second', by: 'rucka', workflowVersion: V, now: ON })
+  assert.equal(two.superseded, true, JSON.stringify(two))
+  assert.notEqual(two.to, one.to)
+  assert.match(two.to, /^superseded-/)
+  assert.equal(resolve({ dir, workflowVersion: V, policy: {}, entry: 'fresh' }).next.step, 'verify')
+})
+
+test('external blocker decided by a human and corrected on a NEW head ⇒ re-review; same head ⇒ still escalate', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('c') }, needsHumanDecision: true, humanDecisionIds: ['r0-1'], findings: [finding('r0-1', { external: true })] })
+  decide({ dir, phase: 'r0', finding: 'r0-1', decision: 'maintainer corrects it in this PR', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, now: ON })
+  const same = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, head: SHA('c') })
+  assert.deepEqual(pick(same.next, 'step', 'reason'), { step: 'blocked', reason: 'escalate' })
+  const moved = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, head: SHA('e') })
+  assert.deepEqual(pick(moved.next, 'step', 'mode', 'phase'), { step: 'verify', mode: 're-review', phase: 'r1' })
+})
+
+test('external blocker: only the DECISION record unlocks the re-review — a later judgment copying humanDecision, a missing head, or a still-owed decision all escalate', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('c') }, needsHumanDecision: true, humanDecisionIds: ['r0-1', 'r0-2'], findings: [finding('r0-1', { external: true }), finding('r0-2', { external: true })] })
+  decide({ dir, phase: 'r0', finding: 'r0-1', decision: 'fixed here', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, now: ON })
+  assert.deepEqual(pick(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, head: SHA('e') }).next, 'step', 'reason'), { step: 'blocked', reason: 'escalate' }, 'r0-2 still owed')
+  decide({ dir, phase: 'r0', finding: 'r0-2', decision: 'fixed here', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, now: ON })
+  assert.deepEqual(pick(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next, 'step', 'reason'), { step: 'blocked', reason: 'escalate' }, 'no head given')
+  const { dir: d2 } = runDir()
+  review(d2, 'r1', { mode: 're-review', verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('e') }, findings: [finding('r0-1', { external: true, humanDecision: { decision: 'copied', by: 'x', at: ON.toISOString() } })] })
+  assert.deepEqual(pick(resolve({ dir: d2, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, head: SHA('f') }).next, 'step', 'reason'), { step: 'blocked', reason: 'escalate' }, 'a judgment copying humanDecision is no decision')
+})
+
 test('T-4 (AC4): supersede refuses a handoff that is NOT the run\'s last one', () => {
   const { dir } = runDir()
   handoff(dir, 'a0', 'implement-phase', { status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true })
