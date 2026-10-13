@@ -48,6 +48,8 @@ Reclassified from process skills — see [Migration Notes](/docs/reference/skill
 
 All `assess-*` skills are **output-only**: they produce a proposal (rendered adoption content + target) plus a human-facing report and write **no adoption files**. Persistence of a proposal is delegated to `/pair-capability-record-decision`, the **sole adoption writer**, composed by the caller (a process skill or a human/agent). See ADR-009 (`adr-009-assess-output-only`) in the project adoption records.
 
+When the opt-in [package-local adoption override](/docs/customization/package-local-adoption) is active, `assess-*` load global rules plus the `<pkg>/.pair/` of the packages the diff touches, report central↔local conflicts, and may PROPOSE activating the override — never activating it.
+
 The only writes any of them perform are **operational reports** under `.pair/working/reports/` (D14) — `assess-security`'s audit, `assess-coupling`'s full-scope audit, and `assess-cost`'s report-mode panel. Never adoption, never backlog items.
 
 | Skill | Command | Description |
@@ -161,3 +163,7 @@ Skills are invoked as slash commands in your AI coding assistant:
 ```
 
 For details on how skills are resolved and transformed, see the [Skill Management Reference](/docs/reference/skill-management).
+
+## Package-Local Scoping
+
+`review` (PR diff), `assess-*` (diff) and `refine-story` (packages the story references) load only the touched packages' `<pkg>/.pair/` when the opt-in [package-local adoption override](/docs/customization/package-local-adoption) is active, and may PROPOSE activating it — never activating it. Without the override nothing changes.

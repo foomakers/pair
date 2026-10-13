@@ -1,7 +1,7 @@
 ---
 name: assess-infrastructure
 description: "Evaluates and recommends infrastructure strategy — cloud provider, CI/CD pipeline, deployment pattern, IaC, environments — when the choice is open. Output-only: emits a proposal + target for /record-decision to persist."
-version: 0.6.0
+version: 0.7.0
 author: Foomakers
 ---
 
@@ -28,6 +28,10 @@ The rendered adoption content is destined for this file — the caller writes it
 - **Ownership**: Full file, except observability section (owned by /assess-observability)
 
 ## Algorithm
+
+### Scoped Context (package-local override)
+
+Opt-in. When the central adoption file carries a `## Package-Local Adoption` router, resolve the rule set per [scoped context resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/scoped-context-resolution.md) (diff-scoped here: globals + `<pkg>/.pair/` of the packages the diff touches, nothing else); report a central↔local conflict, a dangling router entry, and — when the [complexity signals](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/package-local-adoption.md#activation-proposal) fire — PROPOSE the override and wait for approval, never activate. No router ⇒ unchanged behaviour.
 
 ### Step 1: Resolution Cascade
 

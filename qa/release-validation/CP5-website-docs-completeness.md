@@ -55,7 +55,7 @@
 - `$BASE_URL/docs/developer-journey/execution`
 - `$BASE_URL/docs/developer-journey/tag-driven-automation`
 
-**Customization** (7 pages):
+**Customization** (8 pages):
 
 - `$BASE_URL/docs/customization`
 - `$BASE_URL/docs/customization/adopt`
@@ -63,6 +63,7 @@
 - `$BASE_URL/docs/customization/team`
 - `$BASE_URL/docs/customization/templates`
 - `$BASE_URL/docs/customization/organization`
+- `$BASE_URL/docs/customization/package-local-adoption`
 - `$BASE_URL/docs/customization/external-kb`
 
 **Integrations** (10 pages):
@@ -141,13 +142,13 @@
 
 ### Expected Result
 
-- All 87 URLs return HTTP 200
+- All 88 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 87 pages
+- Total: 88 pages
 
 ---
 
@@ -197,3 +198,4 @@
 - #464 (approval signal threaded into composed skills): MT-CP501 page count 83 → 84, Tutorials 7 → 8 — added `/docs/tutorials/unattended-delivery` (configuring `tech/automation.md` and daemonizing `pair-cli run` on a dedicated box).
 - #493 (consolidated delivery-cycle page): MT-CP501 page count 85 → 86, Reference 17 → 18 — added `/docs/reference/delivery-cycle`.
 - #353 (operational docs): MT-CP501 page count 86 → 87, Process Lifecycle 5 → 6 — added `/docs/developer-journey/tag-driven-automation`.
+- #237 (package-local adoption override): MT-CP501 page count 87 → 88, Customization 7 → 8 — added `/docs/customization/package-local-adoption`.

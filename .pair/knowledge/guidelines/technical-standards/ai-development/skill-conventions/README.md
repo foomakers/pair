@@ -19,6 +19,8 @@ Single-source explanations for patterns that recur across many `SKILL.md` files.
 | Adoption-informed generation (decision log + ADR + context map read before drafting) | [adoption-informed-generation.md](adoption-informed-generation.md) | 3 generating skills (new convention — the reading step is defined here, never per skill) |
 | Approval rounds and the `$approval` signal (`interactive` default; `auto` asks nothing, still reports; a judgement gate still HALTs) | [approval-rounds.md](approval-rounds.md) | the `assess-*` and `map-*` families (replaces per-caller suppression notes) |
 | Process-profile gate (direct invocation of a step disabled by the project's profile warns and confirms; a composed one degrades as not-installed) | [process-profile-gate.md](process-profile-gate.md) | the 12 skills representing a [catalogued step](../step-catalogue.md) (new convention — written once, referenced) |
+| Package-local adoption override (`<pkg>/.pair/`, router, precedence, activation proposal) | [package-local-adoption.md](package-local-adoption.md) | 0 skills (opt-in convention — new) |
+| Scoped context resolution (touched packages → local `.pair` set; diff- or story-scoped) | [scoped-context-resolution.md](scoped-context-resolution.md) | `review`, `assess-*`, `refine-story` (new) |
 
 ## Skill `version:` frontmatter — when to bump
 

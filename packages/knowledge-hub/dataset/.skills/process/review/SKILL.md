@@ -1,7 +1,7 @@
 ---
 name: review
 description: "Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) — validation, technical review, adoption compliance, completeness, decision — to decide whether it merges. Gate before judgment: a red mechanical gate caps the verdict, and the decision is published as the required `pair-review` check plus the synthesized PR state (to-be-reviewed / ready-to-merge / not-approved), so merge stays blocked until gates are green, the review is approved, and (at risk:red) a human approves explicitly. Not a quick build/test sanity check (use /verify-quality). Composes /classify, /verify-quality, /verify-done, /record-decision, /analyze-debt, /assess-security (required), /verify-adoption, /assess-stack (optional)."
-version: 0.7.0
+version: 0.8.0
 author: Foomakers
 ---
 
@@ -87,6 +87,10 @@ CODE REVIEW STATE:
    - Task breakdown and completion claims
    - Epic context
 4. **Verify**: Story loaded with AC. If story not found, warn and proceed with PR-only review.
+
+### Step 1.2b: Scoped Context (package-local override)
+
+Opt-in. With a `## Package-Local Adoption` router in central adoption, load global rules + the `<pkg>/.pair/` of the packages the PR diff touches (`git diff --name-only`) and no other package's context — see [scoped context resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/scoped-context-resolution.md). Report central↔local rule conflicts and dangling router entries in the review report; when the [complexity signals](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/package-local-adoption.md#activation-proposal) fire, PROPOSE activation and wait for approval — never activate. No router ⇒ unchanged behaviour. Composed `assess-*` skills inherit the same scope.
 
 ### Step 1.3: Classify Review Type
 

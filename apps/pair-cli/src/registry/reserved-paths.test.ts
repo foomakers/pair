@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { posix } from 'path'
-import { getReservedPaths, detectReservedPathOverlap } from './reserved-paths'
+import {
+  getReservedPaths,
+  detectReservedPathOverlap,
+  isPackageLocalPairPath,
+} from './reserved-paths'
 import { DEFAULT_WORKING_PATH } from './working-area'
 import { RegistryConfig } from './resolver'
 import { INSTALLED_VERSION_MARKER } from '../commands/kb-info/version-resolver'
@@ -142,5 +146,43 @@ describe('detectReservedPathOverlap', () => {
       '.pair/.kb-version.json',
     ])
     expect(errors).toHaveLength(2)
+  })
+})
+
+describe('package-local .pair dirs (#237)', () => {
+  const reserved = getReservedPaths(DEFAULT_WORKING_PATH)
+  const withTarget = (path: string): Record<string, RegistryConfig> => ({
+    pkg: { ...baseRegistry, targets: [{ path, mode: 'canonical' }] },
+  })
+
+  it('rejects a target equal to a package-local .pair dir', () => {
+    const errors = detectReservedPathOverlap(withTarget('apps/web/.pair'), reserved)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('package-local')
+  })
+
+  it('rejects a target inside a package-local .pair dir', () => {
+    expect(detectReservedPathOverlap(withTarget('apps/web/.pair/adoption'), reserved)).toHaveLength(
+      1,
+    )
+  })
+
+  it('rejects a non-canonical target resolving into a package-local .pair dir', () => {
+    expect(detectReservedPathOverlap(withTarget('apps/x/../web/.pair/a'), reserved)).toHaveLength(1)
+  })
+
+  it('still allows the root .pair targets', () => {
+    expect(detectReservedPathOverlap(withTarget('.pair/knowledge'), reserved)).toHaveLength(0)
+    expect(detectReservedPathOverlap(withTarget('./.pair/adoption'), reserved)).toHaveLength(0)
+  })
+
+  it('does not flag lookalike segments', () => {
+    expect(detectReservedPathOverlap(withTarget('apps/web/.pairs'), reserved)).toHaveLength(0)
+  })
+
+  it('treats backslash as a separator only on win32 (platform injected: linux, darwin vs win32)', () => {
+    expect(isPackageLocalPairPath('apps\\web\\.pair', 'win32')).toBe(true)
+    expect(isPackageLocalPairPath('apps\\web\\.pair', 'linux')).toBe(false)
+    expect(isPackageLocalPairPath('apps/web/.pair', 'darwin')).toBe(true)
   })
 })

@@ -39,7 +39,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 // The ONE canonical contract identity (US-506 AC-9: `predecessorContractHash` is checked against it).
@@ -370,6 +370,38 @@ export function changedRowsErrors({ prev, contract, cwd }) {
   return null
 }
 const tail = s => String(s ?? '').trim().split('\n').slice(-20).join('\n')
+// A gate runs in its own process group with a hard timeout (the WHOLE tree is killed, never an orphaned
+// grandchild) and a large output buffer (a chatty linter is never refused as ENOBUFS).
+const RUNNER = `const { spawn, spawnSync } = require('child_process')
+const [cwd, ms, ...argv] = process.argv.slice(1)
+const c = spawn(argv[0], argv.slice(1), { cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
+let out = '', err = '', timedOut = false, done = false
+const keep = (s, d) => (s + d).slice(-4000000)
+const killTree = () => {
+  try { process.kill(-c.pid, 'SIGKILL'); return } catch {}
+  try { if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(c.pid), '/T', '/F']); else c.kill('SIGKILL') } catch {}
+}
+c.stdout.on('data', d => { out = keep(out, d) })
+c.stderr.on('data', d => { err = keep(err, d) })
+const finish = code => {
+  if (done) return
+  done = true
+  clearTimeout(t)
+  killTree()
+  process.stdout.write(JSON.stringify({ status: code, stdout: out, stderr: err, timedOut }), () => process.exit(0))
+}
+const t = setTimeout(() => { timedOut = true; killTree(); setTimeout(() => finish(-1), 200) }, Number(ms))
+c.on('error', e => { err += String(e); finish(-1) })
+c.on('exit', code => setTimeout(() => finish(code), 100))`
+function runBounded(argv, cwd, timeoutMs) {
+  const r = spawnSync(process.execPath, ['-e', RUNNER, cwd, String(timeoutMs), ...argv], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs + 10000, killSignal: 'SIGKILL', env: cleanGitEnv() })
+  try {
+    const j = JSON.parse(r.stdout)
+    return { status: j.timedOut ? -1 : (j.status ?? -1), stdout: j.stdout, stderr: `${j.stderr}${j.timedOut ? `\ntimed out after ${timeoutMs}ms` : ''}` }
+  } catch {
+    return { status: -1, stdout: '', stderr: `gate runner failed: ${r.error ?? r.stderr}` }
+  }
+}
 // The repo's static gates over every listed TEST artifact. A gate is `{ name, command: [argv] }`; `{file}`
 // runs it once per file (so the refusal names the file), `{files}` once over all of them.
 export function runStaticGates({ gates, contract, cwd, timeoutMs = 300000 }) {
@@ -377,22 +409,69 @@ export function runStaticGates({ gates, contract, cwd, timeoutMs = 300000 }) {
     return { refusal: { reason: 'static-gates-invalid', detail: 'each gate is { name, command: [argv…] } with an optional {file} or {files} placeholder' } }
   const files = testArtifacts(contract).map(a => a.file)
   const results = []
-  const run = argv => spawnSync(argv[0], argv.slice(1), { cwd, encoding: 'utf8', timeout: timeoutMs, env: cleanGitEnv() })
   for (const g of gates) {
     const perFile = g.command.includes('{file}')
     const groups = perFile ? files.map(f => [f]) : [files]
     for (const group of groups) {
       if (!group.length) continue
       const argv = g.command.flatMap(a => (a === '{file}' ? group : a === '{files}' ? group : [a]))
-      const r = run(argv)
+      const r = runBounded(argv, cwd, timeoutMs)
       const output = tail(`${r.stdout ?? ''}\n${r.stderr ?? ''}`)
-      const exitCode = r.status ?? (r.error ? -1 : 0)
+      const exitCode = r.status
       if (exitCode !== 0) {
         const named = group.find(f => output.includes(f)) ?? group[0]
         return { refusal: { reason: 'static-gate-failed', gate: g.name, path: named, exitCode, output } }
       }
       results.push({ gate: g.name, path: perFile ? group[0] : group.join(','), exitCode })
     }
+  }
+  const derived = runPackageLint({ files, cwd, timeoutMs })
+  if (derived.refusal) return derived
+  return { results: [...results, ...derived.results] }
+}
+// Defect AQ: the pre-push hook runs each package's own `lint` script (its config, cwd = package dir). The sealer
+// derives it for every listed test's OWNING package (nearest package.json, the repo root included), so a test the
+// repo gate would reject cannot be sealed even when the verifier passed `[]`. The script lints its whole package, so
+// the verdict is SCOPED: only a lint message located in a LISTED test file refuses; a violation elsewhere (pre-existing,
+// not this contract's) never blocks, and a run that failed without any lint report (crash, bad config) fails closed.
+// `ts:check` is deliberately NOT derived: a RED witness may import a symbol that does not exist yet.
+function owningPackage(file, cwd) {
+  let dir = dirname(join(cwd, file))
+  for (;;) {
+    if (existsSync(join(dir, 'package.json'))) return dir
+    if (dir === cwd || dirname(dir) === dir) return null
+    dir = dirname(dir)
+  }
+}
+// A recognized eslint report: the `✖ N problem(s)` summary AND at least one `line:col  error|warning` message line.
+const ESLINT_SUMMARY = /^\s*✖ \d+ problems?\b/m
+const ESLINT_MESSAGE = /^\s+\d+:\d+\s+(error|warning)\b/m
+const mentions = (output, abs, relPkg, relRoot) => [abs, relPkg, relRoot].some(p => p && output.includes(p))
+function runPackageLint({ files, cwd, timeoutMs }) {
+  const pm = ['pnpm-workspace.yaml', 'pnpm-lock.yaml'].some(f => existsSync(join(cwd, f))) ? 'pnpm' : 'npm'
+  const byPkg = new Map()
+  for (const f of files) {
+    const dir = owningPackage(f, cwd)
+    if (dir) byPkg.set(dir, [...(byPkg.get(dir) ?? []), f])
+  }
+  const results = []
+  for (const [dir, listed] of byPkg) {
+    const rel = relative(cwd, dir) || '.'
+    let scripts
+    try {
+      scripts = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).scripts ?? {}
+    } catch (e) {
+      return { refusal: { reason: 'package-json-unparseable', path: join(rel, 'package.json'), detail: String(e.message ?? e) } }
+    }
+    if (typeof scripts.lint !== 'string') continue
+    const r = runBounded([pm, 'run', ...(pm === 'npm' ? ['--silent'] : []), 'lint'], dir, timeoutMs)
+    const output = `${r.stdout ?? ''}\n${r.stderr ?? ''}`
+    if (r.status !== 0) {
+      const hit = listed.find(f => mentions(output, join(cwd, f), relative(dir, join(cwd, f)), f))
+      if (hit) return { refusal: { reason: 'static-gate-failed', gate: 'package:lint', path: hit, exitCode: r.status, output: tail(output) } }
+      if (!ESLINT_SUMMARY.test(output) || !ESLINT_MESSAGE.test(output)) return { refusal: { reason: 'static-gate-failed', gate: 'package:lint', path: listed[0], exitCode: r.status, output: tail(output) } }
+    }
+    results.push({ gate: 'package:lint', path: rel, exitCode: 0, scoped: r.status !== 0 })
   }
   return { results }
 }

@@ -1,7 +1,7 @@
 ---
 name: pair-process-refine-story
 description: "Refines a user story from Draft to Ready — the single Draft→Ready path (D24): phase 0 grill(sync), Given-When-Then acceptance criteria, map-subdomains/map-contexts scoped analysis, classify matrix, sprint readiness. Composes /pair-capability-grill, /pair-capability-map-subdomains, /pair-capability-map-contexts, /pair-capability-classify, /pair-capability-write-issue. Not for sizing an already-refined story (use /pair-capability-estimate)."
-version: 0.9.0
+version: 0.10.0
 author: Foomakers
 ---
 
@@ -105,6 +105,10 @@ Under `$approval: auto` there is nobody to confirm a pick: `$story` is required,
 2. **Skip**: If none exists (a fresh project, an empty decision log), note it in one line and proceed: refinement authors exactly what it authored before this step, with no citations and no revisit flags.
 3. **Act**: Read it per the shared [adoption-informed-generation.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/adoption-informed-generation.md) convention — **read-only**, bounded to the subject's scope, never a write (recording stays with `/pair-capability-record-decision`). **This skill's subject**: this one story — the read is scoped to the subdomains, contexts, and terms the story touches, never the project's whole history. Step 2's context-map load and this read are **one** load, not two. Do not restate the convention's sources or precedence rules here; follow them there.
 4. **Verify**: The in-scope records are available to Steps 2–4 with their ids, so a criterion or an approach can be constrained by one, **cite** it, or carry a `Revisits <id>` flag. Absence is a noted skip, never a HALT.
+
+### Step 1c: Scoped Context (package-local override)
+
+Opt-in. With a `## Package-Local Adoption` router in central adoption, load global rules + the `<pkg>/.pair/` of the packages the story references (paths/package names in body, AC, notes) only — see [scoped context resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/scoped-context-resolution.md). Story referencing no package ⇒ central-only. When the [complexity signals](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/package-local-adoption.md#activation-proposal) fire, PROPOSE activation and wait for approval — never activate. No router ⇒ unchanged behaviour.
 
 ### Step 2: Requirements Analysis
 
