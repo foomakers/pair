@@ -3,8 +3,10 @@ import { spawnSync } from 'child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join, resolve } from 'path'
+import { tokensCommandMetadata } from './metadata'
 
 const CLI_CWD = resolve(__dirname, '../../..')
+const REPO_ROOT = resolve(CLI_CWD, '../..')
 const AREAS = [
   'templates',
   'adoption',
@@ -128,6 +130,28 @@ describe('pair-cli tokens (acceptance)', () => {
     expect(r.code).toBe(0)
     expect(r.err).toMatch(/bad\.md/)
     expect(area(JSON.parse(r.out), 'templates').files).toBe(2)
+  })
+
+  it('r1-g1-i1 --area + a baseline recorded by the CLI on the same corpus: total delta 0', () => {
+    writeFileSync(join(root, 'base.json'), run(root, '--json').out)
+    const j = JSON.parse(run(root, '--json', '--area', 'skills', '--baseline', 'base.json').out)
+    expect(j.total.delta).toEqual({ words: 0, tokens: 0 })
+  })
+
+  it('r1-g1-i3 full run + a baseline recorded by the CLI with --area: no total delta', () => {
+    writeFileSync(join(root, 'skills-base.json'), run(root, '--json', '--area', 'skills').out)
+    const j = JSON.parse(run(root, '--json', '--baseline', 'skills-base.json').out)
+    expect(area(j, 'skills')).toMatchObject({ delta: { words: 0, tokens: 0 } })
+    expect(j.total.delta).toBeUndefined()
+  })
+
+  it('r1-g1-i2 the help --baseline example, run verbatim on the repo root, exits 0 with a delta', () => {
+    const example = tokensCommandMetadata.examples.find(e => e.includes('--baseline'))!
+    const args = example.split('#')[0]!.trim().split(/\s+/).slice(2)
+    const r = run(REPO_ROOT, ...args)
+    expect(r.err).not.toMatch(/tokens failed/)
+    expect(r.code).toBe(0)
+    expect(r.out).toContain('Δ')
   })
 
   it('prints a human report naming every area and the total when --json is absent', () => {

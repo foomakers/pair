@@ -95,7 +95,7 @@ describe('handleTokensCommand --baseline', () => {
       total: { words, tokens },
     })
 
-  it('adds per-area and total delta; areas missing in the baseline get none', async () => {
+  it('r1-g1-w5 partial baseline, no --area: per-area delta where present, no total delta', async () => {
     const { code, out } = await run(cfg({ baseline: 'b.json' }), {
       ...files,
       '/r/b.json': report(10, 4),
@@ -104,7 +104,7 @@ describe('handleTokensCommand --baseline', () => {
     expect(code).toBe(0)
     expect(j.areas[0].delta).toEqual({ words: -4, tokens: 2 })
     expect(j.areas[1].delta).toBeUndefined()
-    expect(j.total.delta).toEqual({ words: 3, tokens: 9 })
+    expect(j.total.delta).toBeUndefined()
   })
 
   it('human output shows signed deltas', async () => {
@@ -118,6 +118,67 @@ describe('handleTokensCommand --baseline', () => {
   it('no baseline: no delta key', async () => {
     const { out } = await run(cfg())
     expect(JSON.parse(out).total).not.toHaveProperty('delta')
+  })
+
+  // the unchanged seed corpus as a full `--json` report (r0-1)
+  const full = (templates = { words: 6, tokens: 6 }) => {
+    const areas = [
+      { name: 'templates', ...templates },
+      { name: 'adoption', words: 1, tokens: 1 },
+      { name: 'adr', words: 1, tokens: 1 },
+      { name: 'decision-log', words: 1, tokens: 1 },
+      { name: 'skills', words: 1, tokens: 1 },
+      { name: 'guidelines', words: 2, tokens: 2 },
+      { name: 'agent-context', words: 1, tokens: 1 },
+    ]
+    return JSON.stringify({ areas, total: sumOf(areas) })
+  }
+  const sumOf = (rows: { words: number; tokens: number }[]) => ({
+    words: rows.reduce((n, r) => n + r.words, 0),
+    tokens: rows.reduce((n, r) => n + r.tokens, 0),
+  })
+
+  it('r1-g1-c1 no --area, unchanged corpus: total delta 0', async () => {
+    const { out } = await run(cfg({ baseline: 'b.json' }), { ...files, '/r/b.json': full() })
+    expect(JSON.parse(out).total.delta).toEqual({ words: 0, tokens: 0 })
+  })
+
+  it('r1-g1-w1 --area + baseline of the unchanged corpus: total delta 0', async () => {
+    const { code, out } = await run(cfg({ area: 'adr', baseline: 'b.json' }), {
+      ...files,
+      '/r/b.json': full(),
+    })
+    expect(code).toBe(0)
+    expect(JSON.parse(out).total.delta).toEqual({ words: 0, tokens: 0 })
+  })
+
+  it('r1-g1-w2 --area: total delta is the selected area delta', async () => {
+    const { out } = await run(cfg({ area: 'templates', baseline: 'b.json' }), {
+      ...files,
+      '/r/b.json': full({ words: 10, tokens: 4 }),
+    })
+    const j = JSON.parse(out)
+    expect(j.areas[0].delta).toEqual({ words: -4, tokens: 2 })
+    expect(j.total.delta).toEqual({ words: -4, tokens: 2 })
+  })
+
+  it('r1-g1-w3 --area human output: total line shows a zero delta', async () => {
+    const { out } = await run(cfg({ json: false, area: 'adr', baseline: 'b.json' }), {
+      ...files,
+      '/r/b.json': full(),
+    })
+    const total = out.split('\n').find(l => l.startsWith('total'))
+    expect(total).toContain('Δ 0 words  0 tokens')
+  })
+
+  it('r1-g1-b1 --area absent from the baseline: no total delta', async () => {
+    const { out } = await run(cfg({ area: 'adr', baseline: 'b.json' }), {
+      ...files,
+      '/r/b.json': report(10, 4),
+    })
+    const j = JSON.parse(out)
+    expect(j.areas[0].delta).toBeUndefined()
+    expect(j.total.delta).toBeUndefined()
   })
 
   it('missing or malformed baseline: exit 1', async () => {
