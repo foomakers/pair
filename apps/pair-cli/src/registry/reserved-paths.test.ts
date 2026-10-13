@@ -174,7 +174,7 @@ describe('package-local .pair dirs (#237)', () => {
     expect(detectReservedPathOverlap(withTarget('apps/web/.pairs'), reserved)).toHaveLength(0)
   })
 
-  it('treats backslash as a separator only on win32 (platform injected)', () => {
+  it('treats backslash as a separator only on win32 (platform injected: linux, darwin vs win32)', () => {
     expect(isPackageLocalPairPath('apps\\web\\.pair', 'win32')).toBe(true)
     expect(isPackageLocalPairPath('apps\\web\\.pair', 'linux')).toBe(false)
     expect(isPackageLocalPairPath('apps/web/.pair', 'darwin')).toBe(true)
