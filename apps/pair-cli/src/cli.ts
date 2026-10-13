@@ -149,6 +149,8 @@ export async function main() {
     // Force exit so open handles (e.g. HTTP sockets from KB download) don't hang — but
     // forward the code the dispatcher reported: an explicit `process.exit(0)` OVERRIDES
     // `process.exitCode`, which is what made a failing install exit 0 (US-396 AC5).
+    // Pipes are async: drain stdout first or large output is cut at 64 KiB.
+    await new Promise<void>(resolve => process.stdout.write('', () => resolve()))
     process.exit(finalExitCode(process.exitCode))
   } catch (err: unknown) {
     // Handling Commander specific errors (like --help or invalid command)
