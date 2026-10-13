@@ -27,7 +27,7 @@ rtk cut command output ~70% but saved nothing overall (context dominated by cach
 ## Decision
 
 - **ponytail**: enabled for this repo via `.claude/settings.json` (`enabledPlugins`, marketplace pinned to `v5.2.0`). Trial; per-session opt-out `/ponytail off`.
-- **rtk**: enabled ONLY for the review stage. A `PreToolUse` Bash hook (`.claude/settings.json` → `scripts/dev/rtk-review-hook.mjs`) runs `rtk hook claude` only when the hook input's `agent_type` is `pair-reviewer`, is a no-op when `.tools/bin/rtk` is absent, and rewrites `rtk` to its absolute path (never PATH). Still opt-in: `scripts/dev/install-rtk.sh` (pinned, checksum-verified); not installed by `pnpm install`.
+- **rtk**: enabled ONLY for the review stage. A `PreToolUse` Bash hook (`.claude/settings.json` → `scripts/dev/rtk-review-hook.mjs`) runs `rtk hook claude` only when the hook input's `agent_type` is `pair-reviewer`, is a no-op when `.tools/bin/rtk` is absent, and forwards only rtk's `updatedInput` (command text never rewritten; `permissionDecision` dropped, so the normal permission flow applies). A `SessionStart` hook (`scripts/dev/rtk-session-path.mjs`) prepends `$CLAUDE_PROJECT_DIR/.tools/bin` to PATH via `$CLAUDE_ENV_FILE` (created if missing) when the binary exists. Maintainer design decision 2026-10-13. Still opt-in: `scripts/dev/install-rtk.sh` (pinned, checksum-verified); not installed by `pnpm install`.
 - **Scope**: `agent_type` is set in hook input for subagents and `claude --agent`. `pair-cli` run stages carry no `agent_type`, so they are NOT covered; implementation and main sessions are never rewritten.
 - **caveman**: not installed; its effect is pursued by the shrink-discipline guideline.
 
