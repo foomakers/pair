@@ -1,0 +1,186 @@
+{
+  "$meta": {
+    "pr": "539",
+    "phase": "r2-g2",
+    "base": "f8b8fff5e26baf6626070bd09ba6ab34aef8df5b",
+    "trailer": "Pair-RED-Snapshot: pr=539; phase=r2-g2; base=f8b8fff5e26baf6626070bd09ba6ab34aef8df5b; manifest=.pair/red-snapshots/pr-539-r2-g2.json",
+    "artifacts": [
+      "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts"
+    ]
+  },
+  "run": "story-433",
+  "story": "433",
+  "pr": 539,
+  "branch": "feature/US-433-rtk-trial",
+  "phase": "r2-g2",
+  "mode": "remediation",
+  "groupId": "r2-g2",
+  "remediationBatchId": "r2",
+  "inputHead": "f8b8fff5e26baf6626070bd09ba6ab34aef8df5b",
+  "base": "f8b8fff5e26baf6626070bd09ba6ab34aef8df5b",
+  "sourceOfTruth": "root package.json scripts (quality-gate and every root script it reaches through `pnpm <script>`) + .github/workflows/ci.yml job steps at f8b8fff5; finding r0-1 (r0/r1 review); engines.node >=20.19 and ci.yml Setup Node 20",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "root package.json `quality-gate` script (&&-chain of root scripts, incl. workflows:test = cd .claude/workflows && node --test) and .github/workflows/ci.yml job steps (`run: pnpm <script>`)",
+      "inputs": [
+        "package.json scripts",
+        ".github/workflows/ci.yml jobs.*.steps[].run",
+        "scripts/dev/*.test.mjs",
+        "scripts/dev/rtk-review-hook.mjs",
+        "scripts/dev/rtk-session-path.mjs",
+        ".claude/settings.json hooks"
+      ],
+      "representations": [
+        "package.json quality-gate (local + release.yml gate)",
+        "ci.yml build job steps (PR gate)",
+        "pre-push hook via quality-gate"
+      ],
+      "consumers": [
+        "pnpm quality-gate (pre-push, release)",
+        "GitHub CI on pull_request/push"
+      ],
+      "classes": [
+        "quality-gate reaches a node --test invocation targeting scripts/dev (directly or through pnpm <script>)",
+        "a ci.yml step reaches such an invocation",
+        "agent_type guard removed -> gate invocation red with a failed test",
+        "SessionStart PATH hook no-op -> gate invocation red with a failed test",
+        "unmodified suites -> gate invocation green and runs every scripts/dev test (pass count = sum of direct per-file runs)",
+        "boundary: invocation not swallowed (segment carrying ; | || is opaque -> not counted)",
+        "boundary: quoted (node-expanded) glob is Node 21+ -> refused; shell glob / explicit files accepted",
+        "boundary: directory argument fails to load on Node >=22 -> refused by w5"
+      ],
+      "interactions": [
+        "gate invocation x injected hook regression (guard removal / session-path no-op) x suite discriminance (c1, c2)"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "root gate composition (package.json quality-gate/workflows:test + .github/workflows/ci.yml)",
+    "mode": "structural",
+    "allowedPaths": [
+      "package.json",
+      ".github/workflows/ci.yml"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
+      "condition": "package.json quality-gate &&-chain, followed through root pnpm <script> references",
+      "oracle": "dev-scripts-gate.test.ts r0-1-w1",
+      "expected": "at least one `node --test` invocation whose cwd or positional args resolve inside scripts/dev",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
+      "condition": "ci.yml steps without continue-on-error, each run line parsed the same way",
+      "oracle": "dev-scripts-gate.test.ts r0-1-w2",
+      "expected": "a CI step reaches a node --test invocation targeting scripts/dev",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w3",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
+      "condition": "the gate's own invocation run under /bin/sh in an isolated copy of scripts/dev + .claude/settings.json with `JSON.parse(stdin).agent_type !== 'pair-reviewer' || ` removed from rtk-review-hook.mjs",
+      "oracle": "dev-scripts-gate.test.ts r0-1-w3",
+      "expected": "exit != 0 and node --test summary fail > 0",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w4",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
+      "condition": "same, with rtk-session-path.mjs made a no-op (process.exit(0) before its try)",
+      "oracle": "dev-scripts-gate.test.ts r0-1-w4",
+      "expected": "exit != 0 and fail > 0",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w5",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
+      "condition": "the gate's invocation on an unmodified copy",
+      "oracle": "dev-scripts-gate.test.ts r0-1-w5",
+      "expected": "exit 0 and pass count == sum of per-file direct runs over every scripts/dev/*.test.mjs (>= 2 files)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-b1",
+      "kind": "boundary",
+      "baseline": "red",
+      "file": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
+      "condition": "args of every scripts/dev invocation in quality-gate and ci.yml",
+      "oracle": "dev-scripts-gate.test.ts r0-1-b1",
+      "expected": "no quoted glob (node-expanded globs need Node 21+; engines >=20.19, CI Node 20)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
+      "condition": "node --test rtk-review-hook.test.mjs directly on a copy, unmodified vs guard removed",
+      "oracle": "dev-scripts-gate.test.ts r0-1-c1",
+      "expected": "unmodified exit 0; guard removed exit != 0 with fail > 0 (suite discriminates the finding's regression)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
+      "condition": "node --test rtk-session-path.test.mjs directly on a copy, unmodified vs no-op hook",
+      "oracle": "dev-scripts-gate.test.ts r0-1-c2",
+      "expected": "unmodified exit 0; no-op exit != 0 with fail > 0",
+      "covers": [
+        "r0-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/dev-tools/src/quality-gates/dev-scripts-gate.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:440ee4a77ae787a2bbb63473fcc7a675150a19dfec72fac4b12845e42d0cdee1",
+      "command": "pnpm --dir packages/dev-tools exec vitest run src/quality-gates/dev-scripts-gate.test.ts",
+      "observed": "Tests 6 failed | 2 passed (8) at f8b8fff5: r0-1-w1..w5, r0-1-b1 fail with `package.json quality-gate reaches no node --test targeting scripts/dev` / `.github/workflows/ci.yml reaches no ...`"
+    }
+  ],
+  "probes": [
+    "scratch copy (package.json, ci.yml, scripts/dev, settings, dev-tools test) with fix simulations: `node --test scripts/dev/*.test.mjs` (shell glob) and explicit file list wired into quality-gate + a ci.yml step -> 8/8 pass; `node --test scripts/dev/` -> w5 red (directory not loadable on Node 24); quoted glob -> w1..w5,b1 red; `... || true` -> w1..w5,b1 red"
+  ],
+  "testExempt": false,
+  "findings": {
+    "received": [
+      "r0-1"
+    ],
+    "covered": [
+      "r0-1"
+    ]
+  }
+}
