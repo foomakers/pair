@@ -99,7 +99,12 @@ function report(json: boolean, areas: Row[], total: Omit<Row, 'name'>, base?: Ba
       base?.areas.find(x => x.name === a.name),
     ),
   }))
-  const all = { ...total, ...diff(total, base?.total) }
+  // total delta only when the baseline covers every measured area, summed over those areas
+  const sel = base && areas.map(a => base.areas.find(b => b.name === a.name))
+  const all = {
+    ...total,
+    ...(sel?.every(Boolean) ? diff(total, sum(sel as Baseline['areas'])) : {}),
+  }
   if (json) {
     console.log(JSON.stringify({ areas: rows, total: all }, null, 2))
     return

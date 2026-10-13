@@ -6,7 +6,7 @@ export const tokensCommandMetadata = {
   examples: [
     'pair-cli tokens                        # every area, current directory',
     'pair-cli tokens --area skills          # one area',
-    'pair-cli tokens --baseline .pair/working/tokens-baseline.json  # delta vs the committed baseline',
+    'pair-cli tokens --baseline scripts/dev/tokens-baseline.json  # delta vs the committed baseline',
     'pair-cli tokens --root ../other --json # machine-readable report',
   ],
   options: [
