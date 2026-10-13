@@ -1,0 +1,195 @@
+{
+  "$meta": {
+    "pr": "539",
+    "phase": "r1-g1",
+    "base": "01244300b613b154e4fcca93609486893d2c8e97",
+    "trailer": "Pair-RED-Snapshot: pr=539; phase=r1-g1; base=01244300b613b154e4fcca93609486893d2c8e97; manifest=.pair/red-snapshots/pr-539-r1-g1.json",
+    "artifacts": [
+      "packages/knowledge-hub/src/conformance/agents-md.test.ts"
+    ]
+  },
+  "run": "story-433",
+  "story": "433",
+  "pr": 539,
+  "phase": "r1-g1",
+  "mode": "repair",
+  "groupId": "r1-g1",
+  "remediationBatchId": "r1",
+  "inputHead": "01244300b613b154e4fcca93609486893d2c8e97",
+  "base": "origin/main",
+  "sourceOfTruth": "origin/main:packages/knowledge-hub/dataset/AGENTS.md lines 210-216 (Task Selection Algorithm items 1 and 3); mirror generator packages/knowledge-hub/src/tools/mirror-guard.ts (AGENTS_MD_MIRROR verbatim, CLAUDE_MD_MIRROR strips @claude-skip blocks)",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "packages/knowledge-hub/dataset/AGENTS.md (canonical source), mirrored by mirror-guard/transfer-dataset into root AGENTS.md (verbatim + skill prefix) and CLAUDE.md (claude-skip blocks stripped)",
+      "inputs": [
+        "dataset AGENTS.md text",
+        "origin/main Task Selection Algorithm items 1 and 3"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/AGENTS.md",
+        "AGENTS.md",
+        "CLAUDE.md"
+      ],
+      "consumers": [
+        "agents reading AGENTS.md / CLAUDE.md each turn",
+        "packages/knowledge-hub/src/conformance/agents-md.test.ts"
+      ],
+      "classes": [
+        "exact-match rule present in source",
+        "category progression rule present in source (ordered, one line)",
+        "step-1 (\"**Determine how-to**\") present in dataset AGENTS.md AND its pointer resolves to an existing heading (task selection or if-unsure); absence = rule lost = fail",
+        "root mirror carries both rules",
+        "root mirror step 1 present AND its pointer resolves; absence = fail",
+        "CLAUDE.md: rules live in a claude-skip block at origin/main, so never carried — only no dangling pointer",
+        "word budgets (dataset <=1100, CLAUDE.md <=800) still hold after restore",
+        "step 1 deleted + both rules appended (rules back, step-1 rule lost) — rejected"
+      ],
+      "interactions": [
+        "restored lines x word budget",
+        "placement inside/outside claude-skip block x CLAUDE.md budget and content",
+        "step-1 wording x section heading chosen",
+        "step-1 deletion x restored rules (W1/W2/W4 pass, W3/W5 must fail)"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "packages/knowledge-hub/dataset/AGENTS.md",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/AGENTS.md",
+      "AGENTS.md",
+      "CLAUDE.md"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "W1",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/knowledge-hub/src/conformance/agents-md.test.ts",
+      "condition": "dataset AGENTS.md",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/agents-md.test.ts -t W1",
+      "expected": "a line with \"exact match\" and ID/filename exists",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "W2",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/knowledge-hub/src/conformance/agents-md.test.ts",
+      "condition": "dataset AGENTS.md",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/agents-md.test.ts -t W2",
+      "expected": "one line induction -> strategic -> iteration -> execution -> review (→ or ->)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "W3",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/knowledge-hub/src/conformance/agents-md.test.ts",
+      "condition": "dataset AGENTS.md: \"**Determine how-to**\" line present in How to establish session context",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/agents-md.test.ts -t W3",
+      "expected": "step-1 line exists AND names task selection or if-unsure AND that heading exists (absent step = fail)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "W4",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "packages/knowledge-hub/src/conformance/agents-md.test.ts",
+      "condition": "root AGENTS.md mirror",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/agents-md.test.ts -t W4",
+      "expected": "both rules present",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "W5",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "packages/knowledge-hub/src/conformance/agents-md.test.ts",
+      "condition": "root AGENTS.md mirror: \"**Determine how-to**\" line present",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/agents-md.test.ts -t W5",
+      "expected": "step-1 line exists AND its pointer resolves (absent step = fail)",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "B1",
+      "kind": "boundary",
+      "baseline": "pass",
+      "file": "packages/knowledge-hub/src/conformance/agents-md.test.ts",
+      "condition": "predicates vs origin/main oracle wording, arrow-free category list, dangling pointer, and dataset AGENTS.md with step 1 deleted + both rules appended",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/agents-md.test.ts -t B1",
+      "expected": "oracle lines accepted; per-line category list rejected; dangling pointer rejected; step+heading accepted; step-deleted+rules-appended text rejected by the W3 predicate (while W1 predicate accepts it); CLAUDE.md predicate tolerates absence",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "proves W3/W5 discriminate step-1 deletion (r1-g1 attempt-1 rejection) and the rule, not the Available Tasks list that survives at base"
+    },
+    {
+      "id": "C1",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/knowledge-hub/src/conformance/agents-md.test.ts",
+      "condition": "existing anchors + word budgets after restore",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/agents-md.test.ts -t 1100",
+      "expected": "pass: dataset <=1100 words, CLAUDE.md <=800 words",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "C2",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "packages/knowledge-hub/src/conformance/agents-md.test.ts",
+      "condition": "CLAUDE.md (claude-skip strips session context and task selection at origin/main too)",
+      "oracle": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/agents-md.test.ts -t C2",
+      "expected": "no dangling step-1 pointer (absence tolerated only here: step sits in a claude-skip block)",
+      "covers": [
+        "r0-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/knowledge-hub/src/conformance/agents-md.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:5cbeeae47b520af4ce83ab256cecc06b6041860526654d799902952b3d06fd6b",
+      "command": "pnpm --filter @pair/knowledge-hub exec vitest run src/conformance/agents-md.test.ts",
+      "observed": "Tests 5 failed | 6 passed (11): W1-W5 fail expected false to be true; B1, C2 and 4 shrink tests pass"
+    }
+  ],
+  "testExempt": false,
+  "attempt": 2,
+  "changedRows": [
+    "W3",
+    "W5",
+    "B1"
+  ],
+  "predecessorContract": {
+    "path": "/Users/gianlucacarucci5/projects/pair/.pair/working/runs/story-433/433/r1-g1-red-contract.json",
+    "hash": "sha256:b7d16c625398e186028cba6b2ec07101a49a04dc45d1080637aac23480735098"
+  },
+  "discriminance": [
+    {
+      "injection": "step 1 deleted + both origin/main rules appended to dataset AGENTS.md and root AGENTS.md (isolated copy)",
+      "observed": "W3 and W5 fail; W1, W2, W4, B1, C1, C2 pass (2 failed | 9 passed)"
+    },
+    {
+      "injection": "both rules appended under a ## Task Selection Algorithm heading, step 1 kept (isolated copy)",
+      "observed": "11 passed (11)"
+    }
+  ]
+}

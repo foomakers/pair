@@ -80,3 +80,90 @@ describe('dataset AGENTS.md shrink (#433 T-7)', () => {
     expect(wordCount(CLAUDE_MD)).toBeLessThanOrEqual(800)
   })
 })
+
+// #433 r0-1: the trim dropped the Task Selection Algorithm (oracle: origin/main dataset AGENTS.md items 1
+// and 3) while step 1 still pointed at it. Both rules stay, in the source and its root mirror, and the
+// step-1 pointer names a section that exists.
+const ROOT_AGENTS_MD = readFileSync(join(__dirname, '../../../../AGENTS.md'), 'utf-8')
+const hasExactMatchRule = (md: string) =>
+  md.split('\n').some(l => /exact match/i.test(l) && /(\bid\b|filename)/i.test(l))
+const ARROW = '\\s*(?:→|->)\\s*'
+const PROGRESSION = new RegExp(
+  ['induction', 'strategic', 'iteration', 'execution', 'review'].join(ARROW),
+  'i',
+)
+const hasProgressionRule = (md: string) => md.split('\n').some(l => PROGRESSION.test(l))
+const headingsOf = (md: string) =>
+  md
+    .split('\n')
+    .filter(l => /^#{2,} /.test(l))
+    .map(l => l.toLowerCase())
+const stepOneLine = (md: string) => md.split('\n').find(l => /\*\*Determine how-to\*\*/.test(l))
+// AGENTS.md (source and root mirror): step 1 must exist AND resolve — deleting the step loses a rule.
+const stepOnePresentAndResolves = (md: string) => {
+  const step = stepOneLine(md)
+  if (step === undefined) return false
+  const headings = headingsOf(md)
+  const toSelection =
+    /task selection/i.test(step) && headings.some(h => h.includes('task selection'))
+  const toUnsure = /if unsure/i.test(step) && headings.some(h => h.includes('if unsure'))
+  return toSelection || toUnsure
+}
+// CLAUDE.md only: step 1 sits in a claude-skip block, so absence is tolerated; presence must resolve.
+const noDanglingStepOne = (md: string) =>
+  stepOneLine(md) === undefined || stepOnePresentAndResolves(md)
+
+describe('task selection rules survive the shrink (#433 r0-1)', () => {
+  it('W1: dataset AGENTS.md carries the exact-match rule (named how-to ID/filename -> use it)', () => {
+    expect(hasExactMatchRule(AGENTS_MD)).toBe(true)
+  })
+
+  it('W2: dataset AGENTS.md carries the category progression induction -> strategic -> iteration -> execution -> review', () => {
+    expect(hasProgressionRule(AGENTS_MD)).toBe(true)
+  })
+
+  it('W3: dataset AGENTS.md keeps step 1 and it points at a section that exists', () => {
+    expect(stepOnePresentAndResolves(AGENTS_MD)).toBe(true)
+  })
+
+  it('W4: root AGENTS.md mirror carries both rules', () => {
+    expect(hasExactMatchRule(ROOT_AGENTS_MD)).toBe(true)
+    expect(hasProgressionRule(ROOT_AGENTS_MD)).toBe(true)
+  })
+
+  it('W5: root AGENTS.md mirror keeps step 1 and it points at a section that exists', () => {
+    expect(stepOnePresentAndResolves(ROOT_AGENTS_MD)).toBe(true)
+  })
+
+  it('B1: the origin/main oracle wording and the arrow-free available-tasks list are told apart', () => {
+    const oracle = [
+      '1. **Exact match**: Developer mentions specific how-to ID/filename → use it',
+      '3. **Category workflow**: Follow the natural progression (induction → strategic → iteration → execution → review)',
+    ].join('\n')
+    expect(hasExactMatchRule(oracle)).toBe(true)
+    expect(hasProgressionRule(oracle)).toBe(true)
+    expect(hasProgressionRule('- **Induction**: a\n- **Strategic**: b\n- **Review**: c')).toBe(
+      false,
+    )
+    expect(
+      stepOnePresentAndResolves('1. **Determine how-to**: use the task selection algorithm below'),
+    ).toBe(false)
+    expect(
+      stepOnePresentAndResolves(
+        '1. **Determine how-to**: use the task selection algorithm below\n## Task Selection Algorithm',
+      ),
+    ).toBe(true)
+    // step 1 deleted + both rules appended: the rules are back but step 1 is lost -> rejected
+    const stepDeleted = [
+      ...AGENTS_MD.split('\n').filter(l => !/\*\*Determine how-to\*\*/.test(l)),
+      ...oracle.split('\n'),
+    ].join('\n')
+    expect(hasExactMatchRule(stepDeleted)).toBe(true)
+    expect(stepOnePresentAndResolves(stepDeleted)).toBe(false)
+    expect(noDanglingStepOne('no step here')).toBe(true)
+  })
+
+  it('C2: CLAUDE.md carries no dangling step-1 pointer', () => {
+    expect(noDanglingStepOne(CLAUDE_MD)).toBe(true)
+  })
+})
