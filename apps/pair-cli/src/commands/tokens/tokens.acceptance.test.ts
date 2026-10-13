@@ -52,7 +52,7 @@ describe('pair-cli tokens (acceptance)', () => {
     const j = json()
     expect(j.areas.map((a: Area) => a.name)).toEqual(AREAS)
     expect(Object.keys(j.total).sort()).toEqual(['files', 'tokens', 'words'])
-    expect(j.total.words).toBe(j.areas.reduce((s: number, a: any) => s + a.words, 0))
+    expect(j.total.words).toBe(j.areas.reduce((s: number, a: Area) => s + a.words, 0))
   })
 
   it('counts words by whitespace and tokens as ceil(chars/4), per area and per file', () => {
@@ -61,7 +61,7 @@ describe('pair-cli tokens (acceptance)', () => {
     expect(t.words).toBe(6)
     const pr = t.items.find((i: Item) => i.path.endsWith('pr-template.md'))
     expect(pr).toEqual({ path: '.pair/knowledge/guidelines/collaboration/templates/pr-template.md', words: 4, tokens: Math.ceil('one two three four'.length / 4) })
-    expect(t.tokens).toBe(t.items.reduce((s: number, i: any) => s + i.tokens, 0))
+    expect(t.tokens).toBe(t.items.reduce((s: number, i: Item) => s + i.tokens, 0))
   })
 
   it('keeps areas disjoint: adr and decision-log are not adoption; templates are not guidelines', () => {
