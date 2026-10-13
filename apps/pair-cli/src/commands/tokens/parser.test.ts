@@ -23,3 +23,9 @@ describe('parseTokensCommand', () => {
     expect(() => parseTokensCommand({ area: 'nope' })).toThrow(/templates.*agent-context/)
   })
 })
+
+describe('parseTokensCommand --baseline', () => {
+  it('carries the baseline path', () => {
+    expect(parseTokensCommand({ root: '/r', baseline: 'b.json' }).baseline).toBe('b.json')
+  })
+})

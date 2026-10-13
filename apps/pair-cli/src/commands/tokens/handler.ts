@@ -1,5 +1,5 @@
 import type { FileSystemService } from '@pair/content-ops'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { TOKEN_AREAS, type TokenArea, type TokensCommandConfig } from './parser'
 
 interface Item {
@@ -66,6 +66,51 @@ const sum = (items: { words: number; tokens: number }[]) => ({
   tokens: items.reduce((n, i) => n + i.tokens, 0),
 })
 
+const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`)
+
+interface Baseline {
+  areas: { name: string; words: number; tokens: number }[]
+  total: { words: number; tokens: number }
+}
+
+/** A baseline is a previous `--json` report; anything else is an error, never a silent no-delta. */
+async function loadBaseline(fs: FileSystemService, config: TokensCommandConfig): Promise<Baseline> {
+  const file = resolve(config.root, config.baseline as string)
+  let j: Baseline
+  try {
+    j = JSON.parse(await fs.readFile(file))
+  } catch (err) {
+    throw new Error(`cannot read baseline ${file}: ${err instanceof Error ? err.message : err}`)
+  }
+  if (!Array.isArray(j?.areas) || !j.total)
+    throw new Error(`baseline ${file} is not a tokens --json report`)
+  return j
+}
+
+type Row = { name: string; files: number; words: number; tokens: number }
+
+function report(json: boolean, areas: Row[], total: Omit<Row, 'name'>, base?: Baseline) {
+  const diff = (r: { words: number; tokens: number }, b?: { words: number; tokens: number }) =>
+    b ? { delta: { words: r.words - b.words, tokens: r.tokens - b.tokens } } : {}
+  const rows = areas.map(a => ({
+    ...a,
+    ...diff(
+      a,
+      base?.areas.find(x => x.name === a.name),
+    ),
+  }))
+  const all = { ...total, ...diff(total, base?.total) }
+  if (json) {
+    console.log(JSON.stringify({ areas: rows, total: all }, null, 2))
+    return
+  }
+  for (const [name, r] of [...rows.map(a => [a.name, a] as const), ['total', all] as const]) {
+    const d =
+      'delta' in r ? `  Δ ${signed(r.delta.words)} words  ${signed(r.delta.tokens)} tokens` : ''
+    console.log(`${name.padEnd(14)} ${r.files} files  ${r.words} words  ${r.tokens} tokens${d}`)
+  }
+}
+
 export async function handleTokensCommand(
   config: TokensCommandConfig,
   fs: FileSystemService,
@@ -80,14 +125,8 @@ export async function handleTokensCommand(
     }
     const total = { files: areas.reduce((n, a) => n + a.files, 0), ...sum(areas) }
 
-    if (config.json) console.log(JSON.stringify({ areas, total }, null, 2))
-    else {
-      for (const a of areas)
-        console.log(`${a.name.padEnd(14)} ${a.files} files  ${a.words} words  ${a.tokens} tokens`)
-      console.log(
-        `${'total'.padEnd(14)} ${total.files} files  ${total.words} words  ${total.tokens} tokens`,
-      )
-    }
+    const base = config.baseline ? await loadBaseline(fs, config) : undefined
+    report(config.json, areas, total, base)
     return 0
   } catch (error) {
     console.error(`tokens failed: ${error instanceof Error ? error.message : String(error)}`)

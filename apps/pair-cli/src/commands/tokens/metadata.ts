@@ -6,6 +6,7 @@ export const tokensCommandMetadata = {
   examples: [
     'pair-cli tokens                        # every area, current directory',
     'pair-cli tokens --area skills          # one area',
+    'pair-cli tokens --baseline .pair/working/tokens-baseline.json  # delta vs the committed baseline',
     'pair-cli tokens --root ../other --json # machine-readable report',
   ],
   options: [
@@ -16,6 +17,10 @@ export const tokensCommandMetadata = {
         'Only this area: templates|adoption|adr|decision-log|skills|guidelines|agent-context',
     },
     { flags: '--json', description: 'Output as JSON' },
+    {
+      flags: '--baseline <file>',
+      description: 'A previous `--json` report; adds the per-area and total delta against it',
+    },
     {
       flags: '-l, --log-level <level>',
       description: 'Set minimum log level (debug|info|warn|error)',

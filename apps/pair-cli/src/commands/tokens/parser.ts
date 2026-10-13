@@ -15,12 +15,14 @@ export interface TokensCommandConfig {
   root: string
   area?: TokenArea
   json: boolean
+  baseline?: string
 }
 
 export interface ParseTokensOptions {
   root?: string
   area?: string
   json?: boolean
+  baseline?: string
 }
 
 export function parseTokensCommand(options: ParseTokensOptions = {}): TokensCommandConfig {
@@ -33,5 +35,6 @@ export function parseTokensCommand(options: ParseTokensOptions = {}): TokensComm
     root: options.root ?? process.cwd(),
     ...(area !== undefined && { area: area as TokenArea }),
     json: options.json === true,
+    ...(options.baseline !== undefined && { baseline: options.baseline }),
   }
 }

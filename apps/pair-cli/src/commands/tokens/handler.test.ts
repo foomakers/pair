@@ -87,3 +87,43 @@ describe('handleTokensCommand platform paths', () => {
     expect(paths).toEqual([`${T}/a.md`, `${T}/b.md`])
   })
 })
+
+describe('handleTokensCommand --baseline', () => {
+  const report = (words: number, tokens: number) =>
+    JSON.stringify({
+      areas: [{ name: 'templates', words, tokens }],
+      total: { words, tokens },
+    })
+
+  it('adds per-area and total delta; areas missing in the baseline get none', async () => {
+    const { code, out } = await run(cfg({ baseline: 'b.json' }), {
+      ...files,
+      '/r/b.json': report(10, 4),
+    })
+    const j = JSON.parse(out)
+    expect(code).toBe(0)
+    expect(j.areas[0].delta).toEqual({ words: -4, tokens: 2 })
+    expect(j.areas[1].delta).toBeUndefined()
+    expect(j.total.delta).toEqual({ words: 3, tokens: 9 })
+  })
+
+  it('human output shows signed deltas', async () => {
+    const { out } = await run(cfg({ json: false, baseline: 'b.json' }), {
+      ...files,
+      '/r/b.json': report(10, 4),
+    })
+    expect(out).toContain('Δ -4 words  +2 tokens')
+  })
+
+  it('no baseline: no delta key', async () => {
+    const { out } = await run(cfg())
+    expect(JSON.parse(out).total).not.toHaveProperty('delta')
+  })
+
+  it('missing or malformed baseline: exit 1', async () => {
+    expect((await run(cfg({ baseline: 'nope.json' }))).code).toBe(1)
+    expect(
+      (await run(cfg({ baseline: 'b.json' }), { ...files, '/r/b.json': '{"x":1}' })).code,
+    ).toBe(1)
+  })
+})
