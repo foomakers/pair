@@ -9,11 +9,11 @@ Fewer words per section, same information. Input (files re-read every turn) cost
 3. **Drop restatement**: headings repeated in prose, "as mentioned above", recaps of the diff, intent announced before the content.
 4. **Sections stay**, words per section shrink. Each template section declares a word limit; the number of sections never drops.
 5. **Decision, status, consequences, links and identifiers are never trimmed.**
-6. **Measure, don't judge.** `pair-cli tokens --baseline scripts/dev/tokens-baseline.json` reports words and estimated tokens (`ceil(characters / 4)`, no tokenizer) per area. The counter never replaces review of what was removed.
+6. **Measure, don't judge.** Record a baseline once with `pair-cli tokens --json` into a file your project chooses; later, `pair-cli tokens --baseline <that file>` reports the delta in words and estimated tokens (`ceil(characters / 4)`, no tokenizer) per area. The counter never replaces review of what was removed.
 
 ## Targets
 
-Indicative, not a gate. Measured against `scripts/dev/tokens-baseline.json` (words; −30% = target):
+Indicative, not a gate. Example from pair's own repo: numbers measured on pair's corpus (its committed baseline, words; −30% = target). In your project, derive targets from your own baseline.
 
 | Area | Baseline words | Target words | Rule of thumb |
 | --- | --- | --- | --- |
