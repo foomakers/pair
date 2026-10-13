@@ -539,6 +539,7 @@
 - [Macro-Phase Modes](.pair/knowledge/guidelines/technical-standards/ai-development/macro-phase-modes.md)
 - [Model Context Protocol (MCP) Integration](.pair/knowledge/guidelines/technical-standards/ai-development/mcp-integration.md)
 - [Process Profiles](.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md)
+- [Shrink Discipline](.pair/knowledge/guidelines/technical-standards/ai-development/shrink-discipline.md)
 - [Skill Conventions — Shared KB References](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/README.md)
 - [Adoption-Informed Generation (decision log + ADR + context map)](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/adoption-informed-generation.md)
 - [Approval Rounds and the `$approval` Signal](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md)

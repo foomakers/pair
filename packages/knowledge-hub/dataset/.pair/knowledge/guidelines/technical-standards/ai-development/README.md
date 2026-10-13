@@ -18,6 +18,7 @@ Establish enterprise-grade standards for AI development that maximize developmen
 - **[Process Profiles](process-profiles.md)** - Schema, built-in profiles (`default`, `poc`, `custom`) and error cases for the process subset a project declares in `way-of-working.md`
 - **[Step Catalogue](step-catalogue.md)** - The catalogued process steps a profile names: stable id, how-to guide, executable skill and prerequisites
 - **[Macro-Phase Modes](macro-phase-modes.md)** - The `/next --mode` facades (`analysis`, `implementation`, `review`): the one mode ↔ step table, exit conditions, wrong-context and HALT rules
+- **[Shrink Discipline](shrink-discipline.md)** - Fewer words per section, same information: rules, per-area targets, before/after, agent style, minimal code; measured by `pair-cli tokens`
 
 ### Key Focus Areas
 
