@@ -5,7 +5,15 @@ import { tmpdir } from 'os'
 import { dirname, join, resolve } from 'path'
 
 const CLI_CWD = resolve(__dirname, '../../..')
-const AREAS = ['templates', 'adoption', 'adr', 'decision-log', 'skills', 'guidelines', 'agent-context']
+const AREAS = [
+  'templates',
+  'adoption',
+  'adr',
+  'decision-log',
+  'skills',
+  'guidelines',
+  'agent-context',
+]
 
 const run = (root: string, ...args: string[]) => {
   const r = spawnSync(
@@ -62,7 +70,11 @@ describe('pair-cli tokens (acceptance)', () => {
     expect(t.files).toBe(2)
     expect(t.words).toBe(6)
     const pr = t.items.find((i: Item) => i.path.endsWith('pr-template.md'))
-    expect(pr).toEqual({ path: '.pair/knowledge/guidelines/collaboration/templates/pr-template.md', words: 4, tokens: Math.ceil('one two three four'.length / 4) })
+    expect(pr).toEqual({
+      path: '.pair/knowledge/guidelines/collaboration/templates/pr-template.md',
+      words: 4,
+      tokens: Math.ceil('one two three four'.length / 4),
+    })
     expect(t.tokens).toBe(t.items.reduce((s: number, i: Item) => s + i.tokens, 0))
   })
 
@@ -109,7 +121,9 @@ describe('pair-cli tokens (acceptance)', () => {
   })
 
   it('skips an unreadable .md entry with a warning on stderr and exits 0', () => {
-    mkdirSync(join(root, '.pair/knowledge/guidelines/collaboration/templates/bad.md'), { recursive: true })
+    mkdirSync(join(root, '.pair/knowledge/guidelines/collaboration/templates/bad.md'), {
+      recursive: true,
+    })
     const r = run(root, '--json')
     expect(r.code).toBe(0)
     expect(r.err).toMatch(/bad\.md/)

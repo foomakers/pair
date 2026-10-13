@@ -73,3 +73,17 @@ describe('handleTokensCommand', () => {
     expect(out.toLowerCase()).toContain('total')
   })
 })
+
+const platforms = ['darwin', 'linux', 'win32']
+
+describe('handleTokensCommand platform paths', () => {
+  const real = process.platform
+  afterEach(() => Object.defineProperty(process, 'platform', { value: real }))
+
+  it.each(platforms)('platform %s: items are root-relative and "/"-separated', async platform => {
+    Object.defineProperty(process, 'platform', { value: platform })
+    const { out } = await run(cfg({ area: 'templates' }))
+    const paths = JSON.parse(out).areas[0].items.map((i: { path: string }) => i.path)
+    expect(paths).toEqual([`${T}/a.md`, `${T}/b.md`])
+  })
+})
