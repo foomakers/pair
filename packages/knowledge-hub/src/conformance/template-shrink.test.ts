@@ -69,6 +69,53 @@ describe.each(ROOTS)('template word limits — %s', (_label, root) => {
   }
 })
 
+// The templates README is cut under the same discipline (#433 AC3, finding r0-4): every `##` section
+// origin/main had is kept, each declares a word limit, and the README's own sections fit them.
+const declaredLimits = (t: string) => {
+  const m = /<!-- word-limits: (.*?) -->/s.exec(t)
+  const out = new Map<string, number>()
+  for (const part of m ? m[1]!.split(';') : []) {
+    const kv = /^\s*(.+?)=(\d+)\s*$/.exec(part)
+    if (kv) out.set(kv[1]!, Number(kv[2]))
+  }
+  return out
+}
+
+describe.each(ROOTS)('templates README — %s', (_label, root) => {
+  const t = readFileSync(join(root, 'README.md'), 'utf-8')
+  const heads = [...t.matchAll(/^## (.+)$/gm)].map(m => m[1]!.trim())
+  const before = (headings as Record<string, string[]>)['README']!
+
+  it('keeps every ## section it had before the cut', () => {
+    for (const h of before) expect(heads, `README: dropped "${h}"`).toContain(h)
+    expect(heads.length).toBeGreaterThanOrEqual(before.length)
+  })
+
+  it('declares a numeric word limit for every ## section', () => {
+    const limits = limitsOf(t)
+    for (const h of heads) expect(limits.get(h), `README: no limit for "${h}"`).toBeGreaterThan(0)
+  })
+
+  it('keeps every ## section within its declared limit', () => {
+    const limits = limitsOf(t)
+    for (const [h, body] of sectionsOf(t))
+      expect(words(body), `README: "${h}" over its limit`).toBeLessThanOrEqual(limits.get(h)!)
+  })
+
+  it('declares no limit for a section that does not exist', () => {
+    for (const k of declaredLimits(t).keys())
+      expect(heads, `README: stray limit "${k}"`).toContain(k)
+  })
+})
+
+describe('templates README — headings fixture', () => {
+  it('records the 11 distinct ## sections of the pre-cut README', () => {
+    const before = (headings as Record<string, string[]>)['README']!
+    expect(before).toHaveLength(11)
+    expect(new Set(before).size).toBe(11)
+  })
+})
+
 describe('template samples — within limits and accepted by their reader format', () => {
   const t = (n: Name) => tpl(ROOTS[0][1], n)
 

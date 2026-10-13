@@ -68,5 +68,18 @@
     "Task Breakdown Format for Story Body",
     "Task Breakdown"
   ],
-  "code-review": ["Verdict", "Assessments", "Details"]
+  "code-review": ["Verdict", "Assessments", "Details"],
+  "README": [
+    "Template Overview",
+    "Template Categories",
+    "Template Usage Guidelines",
+    "Template Customization",
+    "Best Practices",
+    "Template Maintenance",
+    "Getting Help",
+    "Template Index",
+    "Template Excellence Categories",
+    "Implementation Excellence",
+    "Quality Assurance Framework"
+  ]
 }
