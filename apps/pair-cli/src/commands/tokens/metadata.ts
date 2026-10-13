@@ -20,7 +20,8 @@ export const tokensCommandMetadata = {
     { flags: '--json', description: 'Output as JSON' },
     {
       flags: '--baseline <file>',
-      description: 'A previous `--json` report, resolved against the current directory (not --root); adds the per-area and total delta against it',
+      description:
+        'A previous `--json` report, resolved against the current directory (not --root); adds the per-area and total delta against it',
     },
     {
       flags: '-l, --log-level <level>',

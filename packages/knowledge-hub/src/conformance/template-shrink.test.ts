@@ -19,7 +19,8 @@ const SAMPLES = join(__dirname, '__fixtures__/template-samples')
 const NAMES = ['pr', 'commit', 'user-story', 'task', 'code-review'] as const
 type Name = (typeof NAMES)[number]
 const tpl = (root: string, n: Name) => readFileSync(join(root, `${n}-template.md`), 'utf-8')
-const sample = (n: Name) => readFileSync(join(SAMPLES, `${n === 'task' ? 'task' : n}.md`), 'utf-8')
+const sample = (n: Name) =>
+  readFileSync(join(SAMPLES, `${n}.${n === 'commit' ? 'txt' : 'md'}`), 'utf-8')
 
 const words = (s: string) => s.split(/\s+/).filter(Boolean).length
 const limitsOf = (t: string) => {
@@ -114,7 +115,8 @@ describe('template samples — within limits and accepted by their reader format
 
   it('user-story: Given/When/Then blocks parse like the cycle parser, Design line kept', () => {
     const s = sample('user-story')
-    const gwt = /^(\d+)\.[ \t]+\*\*Given\*\*[ \t]+(.*)\n[ \t]+\*\*When\*\*[ \t]+(.*)\n[ \t]+\*\*Then\*\*[ \t]+(.*)$/gm
+    const gwt =
+      /^(\d+)\.[ \t]+\*\*Given\*\*[ \t]+(.*)\n[ \t]+\*\*When\*\*[ \t]+(.*)\n[ \t]+\*\*Then\*\*[ \t]+(.*)$/gm
     expect([...s.matchAll(gwt)].length).toBe(2)
     expect(s).toMatch(/\*\*Design\*\*: (not required|required — reference: .+)/)
   })
