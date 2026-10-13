@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { spawnSync } from 'child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
@@ -17,6 +17,8 @@ const run = (root: string, ...args: string[]) => {
 }
 
 describe('pair-cli tokens (acceptance)', () => {
+  // each case spawns a real CLI process: under the parallel gate the default 5s is too tight
+  vi.setConfig({ testTimeout: 60_000 })
   let root: string
   const put = (rel: string, body: string) => {
     mkdirSync(dirname(join(root, rel)), { recursive: true })
