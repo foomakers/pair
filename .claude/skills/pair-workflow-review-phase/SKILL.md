@@ -43,8 +43,9 @@ Judge the whole result on its own merits, adversarially, from the story (accepta
 SKILL_DIR="$(dirname "<absolute path of this SKILL.md>")"
 MAIN="$(pwd)"                                   # the main checkout — you have not cd'd yet
 RUN_DIR="$MAIN/.pair/working/runs/$run/$story"
+AC_HASH="$(node "$SKILL_DIR/scripts/cycle-state.mjs" ac-hash --story $story --dir "$RUN_DIR" | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).acHash')"   # canonical card hash — the SAME input every stage resolves with
 node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVersion $workflowVersion \
-  --policy '$policy' --entry $entry --story $story --inputs $inputs --runsRoot "$MAIN/.pair/working/runs" --pr $pr --head "$(git ls-remote origin refs/heads/$branch | cut -c1-40)"
+  --policy '$policy' --entry $entry --story $story --inputs $inputs --acHash "$AC_HASH" --runsRoot "$MAIN/.pair/working/runs" --pr $pr --head "$(git ls-remote origin refs/heads/$branch | cut -c1-40)"
 ```
 
 - `status: other-run` ⇒ return `{ status: "other-run", runId }`. `incompatible | invalid` ⇒ return `{ status: "redirect", next: { step: "blocked", reason: "failed-resume", detail: <reason> } }`.

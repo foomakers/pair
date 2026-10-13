@@ -88,9 +88,10 @@ Ask the one authority, from the MAIN checkout:
 
 ```bash
 WV="$(node "$SKILL_DIR/scripts/cycle-state.mjs" version)"
+AC_HASH="$(node "$SKILL_DIR/scripts/cycle-state.mjs" ac-hash --story $card --dir ".pair/working/runs/$runId/$card" | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).acHash')"   # canonical card hash — the SAME input every stage resolves with
 node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir ".pair/working/runs/$runId/$card" \
   --workflowVersion "$WV" --policy '<policy JSON>' --entry <fresh|pr> [--pr $pr] \
-  --story $card --inputs <digest> --runsRoot .pair/working/runs [--contextPolicy '<contextPolicy JSON>'] [--redirects <n>]
+  --story $card --inputs <digest> --acHash "$AC_HASH" --runsRoot .pair/working/runs [--contextPolicy '<contextPolicy JSON>'] [--redirects <n>]
 ```
 
 The PM tool and code host are bound ONCE, here, before the first `resolve` of this invocation — every script a stage runs against this run directory (card hash, PR comment, check, label, scope decision) then goes through that binding, never a re-read of way-of-working mid-cycle (US-492, ADR-018 split):
