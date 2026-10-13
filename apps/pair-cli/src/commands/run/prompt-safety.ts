@@ -22,21 +22,13 @@
  * fragment. Delimiting is not validation.
  */
 
+import { hasControlCharacters } from '../../config/loader'
+
 /** Tier 1's bound on any value that reaches a prompt (`isSafePromptText`). */
 export const MAX_PROMPT_VALUE_LENGTH = 200
 
-/**
- * Newlines and C0/C1 control characters, checked with a LOOP rather than a control-character regex
- * literal — same shape and same reason as `config/loader.ts`: this repo's code-hygiene gate flags
- * linter-suppression comments with no exception mechanism, and a loop needs none.
- */
-export function hasControlCharacters(value: string): boolean {
-  for (const char of value) {
-    const code = char.codePointAt(0) ?? 0
-    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return true
-  }
-  return false
-}
+/** Same C0/C1 loop as the config reader (one definition). */
+export { hasControlCharacters }
 
 /**
  * Tier 1's `isSafePromptText`, verbatim in effect: non-empty, bounded, no backtick, no `$(`, no

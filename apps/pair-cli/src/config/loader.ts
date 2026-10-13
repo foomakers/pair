@@ -269,7 +269,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * value is a path segment or a single report line — ANY control character, `\n`/`\r`
  * included, invalidates it outright rather than being escaped for display.
  */
-function hasControlCharacters(value: string): boolean {
+export function hasControlCharacters(value: string): boolean {
   for (const char of value) {
     const code = char.codePointAt(0) ?? 0
     if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return true
