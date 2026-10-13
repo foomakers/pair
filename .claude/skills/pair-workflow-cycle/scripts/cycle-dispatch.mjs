@@ -224,7 +224,12 @@ function worktreeCommand(opts) {
   if (existsSync(path)) fail('worktree-conflict', `${path} exists but is not a registered worktree of ${main} — resolve it by hand`, { path, expected: branch, actual: null })
 
   mkdirSync(dirname(path), { recursive: true })
-  gitOk(main, ['worktree', 'add', '-q', '-B', branch, path, base])
+  // An existing card branch is the work in progress: check it out as it is, never `-B` it back to
+  // the base. A branch only on origin is checked out from origin; only a new one starts at the base.
+  const has = ref => git(main, ['rev-parse', '--verify', '--quiet', ref]).status === 0
+  if (has(`refs/heads/${branch}`)) gitOk(main, ['worktree', 'add', '-q', path, branch])
+  else if (has(`refs/remotes/origin/${branch}`)) gitOk(main, ['worktree', 'add', '-q', '--track', '-b', branch, path, `origin/${branch}`])
+  else gitOk(main, ['worktree', 'add', '-q', '-b', branch, path, base])
   return emit({ path, created: true, reused: false, branch })
 }
 
