@@ -755,13 +755,13 @@ pair-cli tokens [options]
 | `--root <dir>`    | Project root to count (default: the current directory)               |
 | `--area <name>`   | Report one area only; an unknown name exits 1 and lists the valid ones |
 | `--json`          | Output areas, per-file items and the total as JSON                   |
-| `--baseline <file>` | A previous `--json` report; adds the per-area and total delta (`Δ`) against it. A missing or non-report file exits 1 |
+| `--baseline <file>` | A previous `--json` report; resolved against the current directory (not `--root`); adds the per-area and total delta (`Δ`) against it. A missing or non-report file exits 1 |
 
 ### Example
 
 ```bash
-pair-cli tokens --json > scripts/dev/tokens-baseline.json   # record a baseline
-pair-cli tokens --baseline scripts/dev/tokens-baseline.json # later: delta per area
+pair-cli tokens --json > base.json   # record a baseline
+pair-cli tokens --baseline base.json # later: delta per area
 ```
 
 ## run
