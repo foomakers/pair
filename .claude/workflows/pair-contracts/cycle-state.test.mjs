@@ -1484,6 +1484,17 @@ test('external blocker decided by a human and corrected on a NEW head ⇒ re-rev
   assert.deepEqual(pick(moved.next, 'step', 'mode', 'phase'), { step: 'verify', mode: 're-review', phase: 'r1' })
 })
 
+test('external blocker without needsHumanDecision (the #366 deadlock): resolve escalates AND decide answers it — never decide-not-escalated', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('c') }, needsHumanDecision: false, findings: [finding('r0-3', { external: true }), finding('r0-9', { kind: 'question' })] })
+  assert.deepEqual(pick(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, head: SHA('c') }).next, 'step', 'reason'), { step: 'blocked', reason: 'escalate' })
+  assert.equal(decide({ dir, phase: 'r0', finding: 'r0-9', decision: 'd', by: 'rucka', workflowVersion: V }).reason, 'decide-not-owed:r0-9')
+  const out = decide({ dir, phase: 'r0', finding: 'r0-3', decision: 'maintainer corrects it in this PR', by: 'rucka', workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, now: ON })
+  assert.equal(out.decided, true, out.reason)
+  assert.deepEqual(out.pendingDecisions, [])
+  assert.deepEqual(pick(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, head: SHA('e') }).next, 'step', 'mode'), { step: 'verify', mode: 're-review' })
+})
+
 test('external blocker: only the DECISION record unlocks the re-review — a later judgment copying humanDecision, a missing head, or a still-owed decision all escalate', () => {
   const { dir } = runDir()
   review(dir, 'r0', { verdict: 'CHANGES-REQUESTED', readiness: { ready: false, remoteHead: SHA('c') }, needsHumanDecision: true, humanDecisionIds: ['r0-1', 'r0-2'], findings: [finding('r0-1', { external: true }), finding('r0-2', { external: true })] })

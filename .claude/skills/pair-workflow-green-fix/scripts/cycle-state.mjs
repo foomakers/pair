@@ -3147,7 +3147,11 @@ export function decide({ dir, phase, finding, decision, by, now = new Date(), wo
   // already recorded on top of it (several findings, several answers — each its own record).
   const asked = [...list].reverse().find(h => h.skill === 'review-phase' && (h.data.recordType ?? 'judgment') === 'judgment')
   const onTop = last && last.skill === 'review-phase' && (last === asked || (last.data.recordType === 'decision' && Array.isArray(last.data.humanDecisions)))
-  if (!asked || !onTop || asked.phase !== phase || asked.data.needsHumanDecision !== true) return { decided: false, reason: 'decide-not-escalated', phase }
+  // A review whose every blocker is external is escalated by `resolve` whatever its flag says, so it owes those
+  // decisions too — without this the escalate had no legal answer (#366: `needsHumanDecision: false` + external r0-3).
+  const askedBlocking = (Array.isArray(asked?.data.findings) ? asked.data.findings : []).filter(isBlocking)
+  const externalOwed = askedBlocking.length && askedBlocking.every(f => f.external === true) ? askedBlocking.map(f => f.id) : null
+  if (!asked || !onTop || asked.phase !== phase || (asked.data.needsHumanDecision !== true && !externalOwed)) return { decided: false, reason: 'decide-not-escalated', phase }
   const base = last.data
   const findings = Array.isArray(base.findings) ? base.findings : []
   if (!findings.some(f => f?.id === finding)) return { decided: false, reason: `decide-finding-unknown:${finding}` }
@@ -3155,7 +3159,7 @@ export function decide({ dir, phase, finding, decision, by, now = new Date(), wo
   if (prior.some(d => d.findingId === finding)) return { decided: false, reason: `decide-already-decided:${finding}` }
   // US-506 F-5: the decisions OWED are the ones the review named; the escalate stands until every one
   // is recorded. A review that named none (pre-#506) owes the one answer it asked for.
-  const owed = Array.isArray(asked.data.humanDecisionIds) && asked.data.humanDecisionIds.length ? asked.data.humanDecisionIds : null
+  const owed = Array.isArray(asked.data.humanDecisionIds) && asked.data.humanDecisionIds.length ? asked.data.humanDecisionIds : asked.data.needsHumanDecision === true ? null : externalOwed
   if (owed && !owed.includes(finding)) return { decided: false, reason: `decide-not-owed:${finding}`, owed }
   const decidedIds = new Set([...prior.map(d => d.findingId), finding])
   const pendingDecisions = owed ? owed.filter(id => !decidedIds.has(id)) : []
