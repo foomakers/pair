@@ -1376,6 +1376,26 @@ export function findAdoptionFile(from, rel = join('.pair', 'adoption', 'tech', '
     cur = up
   }
 }
+// The refusals the adopted `format-check-command` (way-of-working, run at the repo root) yields for these artifacts;
+// none adopted ⇒ []. Fail closed: a missing artifact, an extension outside its declared `(covers: …)`, or a check that
+// does not finish in PAIR_FORMAT_CHECK_TIMEOUT_MS (default 5 min) is refused, never skipped.
+export function formatRefusals(repoRoot, files) {
+  const file = findAdoptionFile(repoRoot)
+  const m = file && /^\s*[-*]\s*\**`format-check-command`\**\s*:\s*`([^`]+)`(?:\s*\(covers:\s*([^)]*)\))?/m.exec(readFileSync(file, 'utf8'))
+  if (!m || !files.length) return []
+  const root = resolvePath(dirname(file), '..', '..', '..')
+  const missing = files.filter(f => !existsSync(join(root, f)))
+  if (missing.length) return missing.map(f => `artifact-missing:${f}`)
+  const covers = m[2]?.split(/[\s,]+/).filter(Boolean)
+  const uncovered = covers ? files.filter(f => !covers.includes(f.split('.').pop())) : []
+  if (uncovered.length) return uncovered.map(f => `artifact-format-uncovered:${f}`)
+  const r = spawnSync(m[1], { cwd: root, shell: true, encoding: 'utf8', timeout: Number(process.env.PAIR_FORMAT_CHECK_TIMEOUT_MS) || 300000 })
+  if (r.error?.code === 'ETIMEDOUT' || r.signal) return ['artifact-format-check-timeout']
+  if (r.error) return [`artifact-format-check-failed:${r.error.message}`]
+  if (r.status === 0) return []
+  const out = `${r.stdout ?? ''}${r.stderr ?? ''}`
+  return files.filter(f => out.includes(f)).map(f => `artifact-unformatted:${f}`)
+}
 export function resolveMaintainer({ dir, maintainer }) {
   if (maintainer && typeof maintainer === 'object' && maintainer.login) return { login: String(maintainer.login), source: maintainer.source ?? 'flag' }
   if (typeof maintainer === 'string' && maintainer.trim()) return { login: maintainer.trim(), source: 'flag' }
@@ -1621,11 +1641,13 @@ const findingTargetPaths = (group, finding) => {
   const own = Array.isArray(declared) ? declared.filter(p => typeof p === 'string') : []
   return [...new Set([...own, ...pathsIn(finding?.location)])]
 }
+// A plan group names its finding ids as `findings` (canonical) or `findingIds` (alias) — every reader goes through here.
+export const groupFindingIds = group => group?.findings ?? group?.findingIds ?? []
 export function planErrors(plan, findings) {
   const errs = []
   const byId = new Map((findings ?? []).map(f => [f?.id, f]))
   for (const group of plan?.groups ?? []) {
-    const ids = group.findings ?? group.findingIds ?? []
+    const ids = groupFindingIds(group)
     if (group.mode === 'doc') for (const e of docPathErrors({ allowedPaths: group.allowedPaths })) errs.push(`doc-group-code-paths: ${group.groupId}: ${e}`)
     for (const id of ids) {
       const finding = byId.get(id)
@@ -1705,6 +1727,10 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       }
       const shapeErrs = contractErrors(parsed)
       if (shapeErrs.length) return { published: false, reason: 'contract-invalid', errors: shapeErrs }
+      // A sealed byte can never be reformatted: a test artifact the adopted format check rejects is refused HERE, before
+      // the validator spends a round on it.
+      const fmt = formatRefusals(repoRoot, (parsed.redTests ?? []).map(t => t?.file).filter(Boolean))
+      if (fmt.length) return { published: false, reason: fmt[0], errors: fmt }
       // C5: the contract's own fixScope.mode is AUTHORITATIVE — stamped on the handoff (resolve reads it, never the plan) and
       // the plan may not disagree with it.
       if (skill === 'red-spec' && parsed?.fixScope?.mode) {
@@ -1956,7 +1982,7 @@ function batchObligations(list, batch) {
     const parts = phaseParts(h.phase)
     const its = h.data.remediationBatchId ?? (parts?.round ? `r${parts.round}` : undefined)
     if (its !== batch || h.data.regressionRepairOf) continue
-    for (const g of h.data.plan?.groups ?? []) if (g.groupId && phaseParts(g.groupId)?.groupId?.startsWith(`${batch}-`)) for (const id of g.findings ?? []) ids.add(id)
+    for (const g of h.data.plan?.groups ?? []) if (g.groupId && phaseParts(g.groupId)?.groupId?.startsWith(`${batch}-`)) for (const id of groupFindingIds(g)) ids.add(id)
     for (const id of h.data.findings?.received ?? []) ids.add(id)
   }
   return [...ids]
@@ -2253,7 +2279,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       const still = (roundReview.data.findings ?? []).filter(f => isBlocking(f) && f.kind === 'approved-test-failing' && f.groupId).filter(f => !list.some(h => h.skill === 'green-fix' && h.phase === latestGroupPhase(f.groupId) && h.data.seq > roundReview.data.seq))
       const retry = still.length ? greenRetryFor(still, parts.round) : null
       if (retry) return retry
-    } else if (nextGroup) return { step: 'prepare', mode: 'remediation', phase: nextGroup.groupId, round: parts.round, attempt: 1, base: outputHead, group: nextGroup, findings: findingsByIds(nextGroup.findings), plan }
+    } else if (nextGroup) return { step: 'prepare', mode: 'remediation', phase: nextGroup.groupId, round: parts.round, attempt: 1, base: outputHead, group: nextGroup, findings: findingsByIds(groupFindingIds(nextGroup)), plan }
     const prior = lastReview
     // A GREEN that follows a REGRESSION REWIND of this batch (US-479 T-29) produced a new head:
     // its verification is the next review round, never a second reviewer of the round already
@@ -2350,7 +2376,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     if (fixModeOf(list, last.phase) === 'test') return afterGreen(last.phase, d.outputHead ?? d.snapshot ?? d.inputHead)
     // The GREEN attempt follows what this phase has already seen: a batch prepared again after a
     // regression rewind (US-479 T-29) fixes forward as attempt n+1, never over its own handoff.
-    return { step: 'green', mode: parts.revision > 1 ? 'revision' : 'remediation', phase: last.phase, round: parts.round, attempt: byPhase('green-fix', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupOf(last.phase)?.findings), ...greenDirective(last.phase) }
+    return { step: 'green', mode: parts.revision > 1 ? 'revision' : 'remediation', phase: last.phase, round: parts.round, attempt: byPhase('green-fix', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupFindingIds(groupOf(last.phase))), ...greenDirective(last.phase) }
   }
   if (last.skill === 'implement-phase') {
     if (d.status === 'ok' && d.gatesPassed === true && Number.isInteger(d.prNumber) && SHA_RE.test(String(d.outputHead ?? ''))) {
@@ -3129,7 +3155,11 @@ export function decide({ dir, phase, finding, decision, by, now = new Date(), wo
   // already recorded on top of it (several findings, several answers — each its own record).
   const asked = [...list].reverse().find(h => h.skill === 'review-phase' && (h.data.recordType ?? 'judgment') === 'judgment')
   const onTop = last && last.skill === 'review-phase' && (last === asked || (last.data.recordType === 'decision' && Array.isArray(last.data.humanDecisions)))
-  if (!asked || !onTop || asked.phase !== phase || asked.data.needsHumanDecision !== true) return { decided: false, reason: 'decide-not-escalated', phase }
+  // A review whose every blocker is external is escalated by `resolve` whatever its flag says, so it owes those
+  // decisions too — without this the escalate had no legal answer (#366: `needsHumanDecision: false` + external r0-3).
+  const askedBlocking = (Array.isArray(asked?.data.findings) ? asked.data.findings : []).filter(isBlocking)
+  const externalOwed = askedBlocking.length && askedBlocking.every(f => f.external === true) ? askedBlocking.map(f => f.id) : null
+  if (!asked || !onTop || asked.phase !== phase || (asked.data.needsHumanDecision !== true && !externalOwed)) return { decided: false, reason: 'decide-not-escalated', phase }
   const base = last.data
   const findings = Array.isArray(base.findings) ? base.findings : []
   if (!findings.some(f => f?.id === finding)) return { decided: false, reason: `decide-finding-unknown:${finding}` }
@@ -3137,7 +3167,7 @@ export function decide({ dir, phase, finding, decision, by, now = new Date(), wo
   if (prior.some(d => d.findingId === finding)) return { decided: false, reason: `decide-already-decided:${finding}` }
   // US-506 F-5: the decisions OWED are the ones the review named; the escalate stands until every one
   // is recorded. A review that named none (pre-#506) owes the one answer it asked for.
-  const owed = Array.isArray(asked.data.humanDecisionIds) && asked.data.humanDecisionIds.length ? asked.data.humanDecisionIds : null
+  const owed = Array.isArray(asked.data.humanDecisionIds) && asked.data.humanDecisionIds.length ? asked.data.humanDecisionIds : asked.data.needsHumanDecision === true ? null : externalOwed
   if (owed && !owed.includes(finding)) return { decided: false, reason: `decide-not-owed:${finding}`, owed }
   const decidedIds = new Set([...prior.map(d => d.findingId), finding])
   const pendingDecisions = owed ? owed.filter(id => !decidedIds.has(id)) : []
@@ -3229,7 +3259,7 @@ if (isMain()) {
     // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
     const FLAGS = {
       resolve: ['acHash', 'contextPolicy', 'dir', 'entry', 'head', 'inputs', 'labels', 'policy', 'pr', 'prLabels', 'redirects', 'runsRoot', 'story', 'tier', 'workflowVersion'],
-      publish: ['attempt', 'dir', 'file', 'phase', 'policy', 'pr', 'predecessor', 'skill', 'workflowVersion'],
+      publish: ['attempt', 'dir', 'file', 'phase', 'policy', 'pr', 'predecessor', 'repoRoot', 'skill', 'workflowVersion'],
       hash: ['file'],
       'ac-hash': ['dir', 'story'],
       'bind-hosts': ['dir', 'from'],
@@ -3279,7 +3309,7 @@ if (isMain()) {
       need('dir', 'file', 'phase', 'skill', 'workflowVersion')
       // US-514 T-2: the SAME policy `resolve` was dispatched with — review-phase's `blocking`
       // derivation reads `policy.blockingFloor` from it, never a re-read of adoption here.
-      out = publish({ dir: opts.dir, file: opts.file, phase: opts.phase, skill: opts.skill, workflowVersion: opts.workflowVersion, predecessor: opts.predecessor, attempt: opts.attempt ? Number(opts.attempt) : undefined, pr: opts.pr !== undefined ? Number(opts.pr) : undefined, policy: opts.policy ? JSON.parse(opts.policy) : {} })
+      out = publish({ dir: opts.dir, file: opts.file, phase: opts.phase, skill: opts.skill, workflowVersion: opts.workflowVersion, predecessor: opts.predecessor, attempt: opts.attempt ? Number(opts.attempt) : undefined, pr: opts.pr !== undefined ? Number(opts.pr) : undefined, policy: opts.policy ? JSON.parse(opts.policy) : {}, ...(opts.repoRoot ? { repoRoot: opts.repoRoot } : {}) })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.published ? 0 : 1)
     } else if (cmd === 'hash') {

@@ -60,6 +60,14 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVer
 
 Independently derive, from the authoritative producer named by each `inventory` item (the function that mutates the state, the grammar, the command — never a downstream consumer), every class the producer recognises including the ordinary complement and the smallest interaction cross-product. Every class must be `covers`-ed by a row that discriminates; a missing class is a finding **even when every supplied row passes**. Equivalence between two classes is accepted only with a shared behavioral/grammar rule stated in `rationale`, never because outputs agree today.
 
+**Enumerate first, only then decide** — for every inventory producer list, and check each has a discriminating row:
+
+- (a) every representation/consumer: the pure function AND every CLI/script entry that wires it;
+- (b) every value of every enumerated input dimension the guard is generic over (each channel, mode, kind — never one standing for all);
+- (c) the interaction pairs between (a) and (b).
+
+Every missing entry is a gap in THIS rejection; a later pass may not raise one that existed now.
+
 ### Step 4: Decide — ALL gaps in one answer
 
 Report **every** concrete gap found in this pass as findings `{ rowId?, mechanismId?, location, severity, description (the failing example / the violated rule), recommendation (the evidence required), obligationIds?, sourceRef?, observedHead?, closureAssertions?, reproducer?, applicability?, counterexampleToCurrentContract?, changedRows? }` — stable `rowId`s so the repair can be traced. Never return the first gap and stop; a second pass on the repaired contract may only add gaps that the repair introduced or that need new evidence.
