@@ -69,11 +69,6 @@ refine ──► classify ──► publish-pr ──► tiered gates ──► 
 5. **Tiered review** — review re-classifies from the actual diff, may raise the tier but never lower it, and reviewer effort scales with the tier ([Execution](/docs/developer-journey/execution#what-your-prs-tier-changes)).
 6. **Tag-driven automation** — tags decide which cards the automation loop may pick up and when it stops ([Tag-Driven Automation](/docs/developer-journey/tag-driven-automation)).
 
-<Callout type="info">
-  **Planned** — tracked in #212, not yet wired. The supervised, unattended end of step 6 (the loop advancing
-  a card past ready-for-review on its own) is the part of supervised automation still open.
-</Callout>
-
 Classification is switched on per project, not per developer — see [where it is switched on](/docs/developer-journey/induction#where-classification-is-switched-on) in Induction and [how to enable it](/docs/customization/team#enable-classification-tiers) in Customization.
 
 *Source: requirement-triage decisions D17 (review confirms or raises, never lowers), D21 (adoption holds only the delta over KB defaults), D22 (verdict first, detail collapsed).*

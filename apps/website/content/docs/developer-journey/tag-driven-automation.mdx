@@ -31,10 +31,4 @@ The selection query is `/pair-next` with that label as its filter — see [pair-
 
 `/pair-loop` and `pair-cli run` select eligible cards, drive each through the delivery cycle (prepare → implement → verify → green), and stop on the project's stop predicate (for example, any card tagged `risk:red`). A card that clears review stops at ready-for-merge unless the project's `## Auto-Advance` names its tier. The stages, the three ways to run them and the hooks are in [Delivery Cycle](/docs/reference/delivery-cycle).
 
-<Callout type="info">
-  **Planned** — tracked in #212, not yet wired. Supervised automation as a whole — an operator watching
-  the loop end to end and stepping in — is the epic still open; use the loop today with an eligibility
-  label you trust and review what it publishes.
-</Callout>
-
 *Source: requirement-triage decisions D17 (never lower), D21 (adoption delta), and ADR-013 Q2b (eligibility is a filter over classification tags, no dedicated tag).*
