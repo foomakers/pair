@@ -30,6 +30,8 @@
 //     → { action: bound | reused, binding }   (US-492) the coordinator's ONE resolution of `pm-tool` /
 //     `code-host` (ADR-018), written to <dir>/.host-binding.json and reused verbatim by every later call
 //     naming that directory; a declared tool without an adapter in scripts/host/ ⇒ { halt: 'host-unsupported', detail, side, declared, implemented }, exit 1.
+//   node … activate-card --dir <run/story dir> --story <id>
+//     → { state, applied, confirmed, error }   (#543) board state mapped to `In Progress`, via the bound PM tool; exit 1 unconfirmed.
 //   node … migrate-acknowledge --dir <new run/story dir> --legacy <legacy dir>[,<dir>...]
 //        --workflowVersion <v> --story <id> --run <runId> --head <40-hex> [--pr <n>] [--branch <b>]
 //     → { applied, migrationKey, predecessorRuns }   (US-479 B2, S10)
@@ -367,6 +369,24 @@ export function contractErrors(c) {
     const r = c.reattest
     if (!r || typeof r !== 'object' || Array.isArray(r)) errs.push('reattest must be an object when present')
     else if (!String(r.reason ?? '').trim()) errs.push('reattest.reason missing')
+  }
+  return errs
+}
+// #543: what red-verify would refuse a round later, refused at red-spec publish — the SAME predicate the
+// validator applies to `reproduced[].command` (SHELL_METACHAR_RE), and a witness/control row with nothing
+// runnable (`control-cannot-pass`): a row is runnable when it carries a safe `command` or names (in `file`
+// or `oracle`) a listed test that has one.
+function commandRefusals(c) {
+  const errs = []
+  const tests = Array.isArray(c?.redTests) ? c.redTests : []
+  tests.forEach((t, i) => {
+    if (t?.command !== undefined && SHELL_METACHAR_RE.test(String(t.command))) errs.push(`command-unsafe:redTests[${i}] ${t.file}: ${JSON.stringify(t.command)} — no leading sh/bash, no shell syntax; record a directly executable command (node <path>, pnpm --dir <d> exec …)`)
+  })
+  const runnable = tests.filter(t => (t?.kind ?? 'test') === 'test' && String(t?.command ?? '').trim() && !SHELL_METACHAR_RE.test(String(t.command)))
+  for (const row of Array.isArray(c?.matrix) ? c.matrix : []) {
+    if (!['witness', 'control'].includes(row?.kind)) continue
+    if (row.command !== undefined && SHELL_METACHAR_RE.test(String(row.command))) errs.push(`command-unsafe:${row.id} ${JSON.stringify(row.command)} — no leading sh/bash, no shell syntax`)
+    else if (!String(row.command ?? '').trim() && !runnable.some(t => t.file === row.file || String(row.oracle ?? '').includes(t.file))) errs.push(`row-not-runnable:${row.id} (${row.kind}) has no runnable command — name a listed redTests test (with its command) in \`file\` or \`oracle\`, never a prose oracle`)
   }
   return errs
 }
@@ -972,6 +992,21 @@ export function cardHash({ story, dir, host, ...transport }) {
     return { acHash: (host ?? bindHosts({ dir, transport })).pm.cardHash(story) }
   } catch (e) {
     return { error: `${e.command ?? e.method ?? 'readCard'} failed: ${hostDetail(e)}` }
+  }
+}
+// #543: the implement path's board write, a script call instead of prose (a skipped prose step left the
+// card `Refined` for a whole cycle). The board column is the FIRST `## State Mapping` row whose macrostate
+// is `In Progress` (no section ⇒ the canonical name; a section with no such row ⇒ nothing written), written
+// through the bound PM adapter and read back. Reported, never thrown: an inaccessible PM tool warns.
+export function activateCard({ story, dir, host }) {
+  const file = HOSTS?.findAdoptionFile(dir ?? process.cwd())
+  const section = /^##\s+State Mapping\s*$([\s\S]*?)(?=^##\s|$(?![\s\S]))/m.exec(file ? readFileSync(file, 'utf8') : '')?.[1]
+  const state = section === undefined ? 'In Progress' : section.split('\n').map(l => l.split('|').map(c => c.trim())).find(c => c.length > 3 && c[2] === 'In Progress')?.[1]
+  if (!state) return { state: null, confirmed: false, error: 'no board state maps to `In Progress` in ## State Mapping — nothing written' }
+  try {
+    return { state, ...(host ?? bindHosts({ dir })).pm.setBoardState({ id: story, state }) }
+  } catch (e) {
+    return { state, confirmed: false, error: hostDetail(e) }
   }
 }
 // The detail a host failure reports (the CLI's stderr), or the adapter's own message.
@@ -1727,6 +1762,8 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       }
       const shapeErrs = contractErrors(parsed)
       if (shapeErrs.length) return { published: false, reason: 'contract-invalid', errors: shapeErrs }
+      const cmdErrs = commandRefusals(parsed)
+      if (cmdErrs.length) return { published: false, reason: cmdErrs[0].split(' ')[0], errors: cmdErrs }
       // A sealed byte can never be reformatted: a test artifact the adopted format check rejects is refused HERE, before
       // the validator spends a round on it.
       const fmt = formatRefusals(repoRoot, (parsed.redTests ?? []).map(t => t?.file).filter(Boolean))
@@ -3263,6 +3300,7 @@ if (isMain()) {
       hash: ['file'],
       'ac-hash': ['dir', 'story'],
       'bind-hosts': ['dir', 'from'],
+      'activate-card': ['dir', 'story'],
       inputs: ['json', 'story', 'workflowVersion'],
       'apply-scope-decisions': ['decision-ref', 'dir', 'maintainer', 'pr', 'repo', 'workflowVersion'],
       'scope-baseline': ['dir'],
@@ -3345,6 +3383,11 @@ if (isMain()) {
       }
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
+    } else if (cmd === 'activate-card') {
+      need('dir', 'story')
+      out = activateCard({ story: opts.story, dir: opts.dir })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.confirmed === true ? 0 : 1)
     } else if (cmd === 'inputs') {
       // Two surfaces, two digests, both published and both consumed — never one re-keyed into the
       // other. `--json` is the canonical `sha256:<64 hex>` of an arbitrary object (the handoff
@@ -3419,7 +3462,7 @@ if (isMain()) {
       out = testIdentity({ cwd: opts.cwd, command: opts.command, env, toolchain: opts.toolchain ?? `node ${process.version}` })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
-    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | migrate-inspect | apply-scope-decisions | scope-baseline | supersede | decide | test-identity | version)`)
+    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | activate-card | migrate-inspect | apply-scope-decisions | scope-baseline | supersede | decide | test-identity | version)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)

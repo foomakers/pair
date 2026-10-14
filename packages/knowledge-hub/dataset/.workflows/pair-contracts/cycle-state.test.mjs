@@ -5100,3 +5100,73 @@ test('r2-1 plan: a bare filename with ANY extension is a path (App.vue, Button.s
   const { plan } = planRound(dir, [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'doc', allowedPaths: ['docs/a.md'] }], [finding('r0-1', { location: 'docs/a.md:3 (e.g. the bullet, i.e. the second, etc.)' })])
   assert.equal(tryPlan(dir, plan).published, true, 'e.g / i.e / etc. are prose, not code paths')
 })
+
+// ── #543 delivery-cycle gaps: the board write and the validator's command rule, moved to the producer ──
+const CS = await import('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs')
+const stubPm = () => {
+  const calls = []
+  return { calls, host: { pm: { setBoardState: a => (calls.push(a), { applied: a.state, confirmed: true, error: null }) } } }
+}
+
+test('activateCard (#543): writes the board state mapped to `In Progress` through the bound PM adapter', () => {
+  const { root, dir } = runDir()
+  seedAdoption(root, '## State Mapping\n\n| Board State | Macrostate |\n| ----------- | ----------- |\n| Refined | Ready |\n| Doing | In Progress |\n\n## Assignment\n')
+  const { calls, host } = stubPm()
+  const out = CS.activateCard({ story: '42', dir, host })
+  assert.deepEqual(calls, [{ id: '42', state: 'Doing' }])
+  assert.equal(out.confirmed, true, JSON.stringify(out))
+})
+
+test('activateCard (#543): no State Mapping ⇒ the canonical `In Progress`; a mapping with no `In Progress` row writes nothing and says why', () => {
+  const { dir } = runDir()
+  const a = stubPm()
+  CS.activateCard({ story: '42', dir, host: a.host })
+  assert.deepEqual(a.calls, [{ id: '42', state: 'In Progress' }])
+  const { root, dir: dir2 } = runDir()
+  seedAdoption(root, '## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| Refined | Ready |\n')
+  const b = stubPm()
+  const out = CS.activateCard({ story: '42', dir: dir2, host: b.host })
+  assert.deepEqual(b.calls, [])
+  assert.equal(out.confirmed, false)
+  assert.match(out.error, /In Progress/)
+})
+
+test('CLI activate-card (#543): registered; a host failure is reported unconfirmed (exit 1), never thrown', () => {
+  const { dir } = runDir()
+  const r = spawnSync(process.execPath, [CLI, 'activate-card', '--dir', dir, '--story', '42'], { encoding: 'utf8' })
+  const out = JSON.parse(r.stdout)
+  assert.equal(out.state, 'In Progress', r.stdout + r.stderr)
+  assert.equal(out.confirmed, false)
+  assert.equal(r.status, 1)
+})
+
+const publishContract543 = contract => {
+  const { dir } = runDir()
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1', { location: 'src/a.ts:1' })] })
+  const contractPath = join(dir, 'r1-g1-red-contract.json')
+  writeFileSync(contractPath, JSON.stringify(contract))
+  const file = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'remediation', groupId: 'r1-g1', plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, contractPath, contractHash: contractHash(contract) })
+  return publish({ dir, file, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r0-review-phase' })
+}
+const witness543 = (command = 'node --test test/a.test.mjs') => ({ file: 'test/a.test.mjs', sha256: `sha256:${'1'.repeat(64)}`, command, baseline: 'red', observed: 'FAIL 1 of 1' })
+const control543 = (command = 'node --test test/c.test.mjs') => ({ file: 'test/c.test.mjs', sha256: `sha256:${'2'.repeat(64)}`, command, baseline: 'pass', observed: 'pass 1/1' })
+const row543 = (id, kind, extra) => ({ id, kind, baseline: kind === 'control' ? 'pass' : 'red', condition: 'c', expected: 'e', covers: ['r0-1'], ...extra })
+const SCOPE543 = { owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] }
+
+test('publish (#543): a redTests command the validator refuses as unsafe (`bash …`) is refused at publish, naming the row', () => {
+  const out = publishContract543({ fixScope: SCOPE543, redTests: [witness543('bash test/a.sh')], matrix: [row543('W-1', 'witness', { file: 'test/a.test.mjs', oracle: 'bash test/a.sh' })] })
+  assert.equal(out.published, false)
+  assert.equal(out.reason, 'command-unsafe:redTests[0]', JSON.stringify(out))
+  assert.match(out.errors.join('\n'), /test\/a\.test\.mjs.*bash test\/a\.sh/)
+})
+
+test('publish (#543): a control/witness row with only a prose oracle (no runnable command) is refused at publish, naming the row', () => {
+  const out = publishContract543({ fixScope: SCOPE543, redTests: [witness543()], matrix: [row543('W-1', 'witness', { file: 'test/a.test.mjs', oracle: 'node --test test/a.test.mjs' }), row543('C-1', 'control', { file: 'src/run.sh', oracle: '4b-5 in run.sh itself' })] })
+  assert.equal(out.published, false)
+  assert.equal(out.reason, 'row-not-runnable:C-1', JSON.stringify(out))
+})
+
+test('publish (#543): a control backed by its own passing redTests command publishes', () => {
+  const out = publishContract543({ fixScope: SCOPE543, redTests: [witness543(), control543()], matrix: [row543('W-1', 'witness', { file: 'test/a.test.mjs', oracle: 'node --test test/a.test.mjs' }), row543('C-1', 'control', { oracle: 'node --test test/c.test.mjs' })] })
+  assert.equal(out.published, true, JSON.stringify(out))
+})
