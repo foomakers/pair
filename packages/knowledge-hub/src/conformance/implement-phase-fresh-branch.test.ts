@@ -60,3 +60,20 @@ describe('implement-phase fresh path: deterministic branch-freshness check', () 
     expect(fresh).toMatch(/local story branch/i)
   })
 })
+
+// #545 review: a broken worktree setup HALTs before any gate, and its exit is recorded with the gates run.
+for (const [label, rel] of [
+  ['dataset', '../../dataset/.skills/workflow/implement-phase/SKILL.md'],
+  ['mirror', '../../../../.claude/skills/pair-workflow-implement-phase/SKILL.md'],
+] as const) {
+  describe(`implement-phase Step 3.2 worktree setup (${label})`, () => {
+    const text = readFileSync(join(__dirname, rel), 'utf-8')
+    const s3 = text.slice(text.indexOf('### Step 3'), text.indexOf('### Step 4'))
+    it('a non-zero `worktree-setup-command` exit HALTs: no gate runs on a broken setup', () => {
+      expect(s3).toMatch(/`worktree-setup-command`[^\n]*non-zero exit[^\n]*HALT[^\n]*no gate runs/)
+    })
+    it('records `setup: <cmd> exit N` alongside the gates run', () => {
+      expect(s3).toMatch(/`setup: <cmd> exit N`[^\n]*gates/)
+    })
+  })
+}

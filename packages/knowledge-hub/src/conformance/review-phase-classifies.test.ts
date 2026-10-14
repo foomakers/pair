@@ -50,4 +50,18 @@ for (const [label, path] of [
       expect(text).toMatch(/tierSource/)
     })
   })
+
+  // #545 review: a broken worktree setup HALTs before any gate, and its exit is recorded with the gates run.
+  describe(`review-phase Step 1.1 worktree setup (${label})`, () => {
+    const s1 = text.slice(
+      text.indexOf('### Step 1'),
+      text.indexOf('\n### ', text.indexOf('### Step 1') + 1),
+    )
+    it('a non-zero `worktree-setup-command` exit HALTs: no gate runs on a broken setup', () => {
+      expect(s1).toMatch(/`worktree-setup-command`[^\n]*non-zero exit[^\n]*HALT[^\n]*no gate runs/)
+    })
+    it('records `setup: <cmd> exit N` alongside the gates run', () => {
+      expect(s1).toMatch(/`setup: <cmd> exit N`[^\n]*gates/)
+    })
+  })
 }
