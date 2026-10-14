@@ -489,6 +489,27 @@ test('C5 publish: a red-spec whose plan group mode disagrees with its contract f
   assert.equal(attempt('behavioral').published, true)
 })
 
+test('publish: a red-spec contract whose test artifact fails the adopted `format-check-command` is refused naming the file; a clean check publishes', () => {
+  const attempt = exitCode => {
+    const { dir } = runDir()
+    const repo = mkdtempSync(join(tmpdir(), 'fmt-repo-'))
+    mkdirSync(join(repo, '.pair', 'adoption', 'tech'), { recursive: true })
+    mkdirSync(join(repo, 'test'), { recursive: true })
+    writeFileSync(join(repo, 'test', 'a.test.ts'), 'x\n')
+    writeFileSync(join(repo, 'check.mjs'), `process.stdout.write('test/a.test.ts\\n'); process.exit(${exitCode})`)
+    writeFileSync(join(repo, '.pair', 'adoption', 'tech', 'way-of-working.md'), '- **`format-check-command`**: `node check.mjs`\n')
+    review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1', { location: 'src/a.ts:1' })] })
+    const contractPath = join(dir, 'r1-g1-red-contract.json')
+    const contract = { fixScope: { owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] }, redTests: [{ file: 'test/a.test.ts', sha256: `sha256:${'1'.repeat(64)}`, command: 'node --test', baseline: 'red', observed: 'FAIL' }] }
+    writeFileSync(contractPath, JSON.stringify(contract))
+    return publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'remediation', groupId: 'r1-g1', plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, contractPath, contractHash: contractHash(contract) }), phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r0-review-phase', repoRoot: repo })
+  }
+  const refused = attempt(1)
+  assert.equal(refused.published, false)
+  assert.equal(refused.reason, 'artifact-unformatted:test/a.test.ts')
+  assert.equal(attempt(0).published, true)
+})
+
 test('C5 resolve: the contract mode stamped at publish decides routing — a plan that says `behavioral` over a `test` contract still skips green-fix, and a `test` plan over a behavioral contract can no longer starve it', () => {
   const route = (planMode, contractMode) => {
     const { dir } = runDir()

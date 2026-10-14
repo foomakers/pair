@@ -1376,6 +1376,18 @@ export function findAdoptionFile(from, rel = join('.pair', 'adoption', 'tech', '
     cur = up
   }
 }
+// The artifacts the adopted `format-check-command` (way-of-working, run at the repo root) names when it fails; none adopted ⇒ [].
+export function unformattedArtifacts(repoRoot, files) {
+  const file = findAdoptionFile(repoRoot)
+  const cmd = file && /^\s*[-*]\s*\**`format-check-command`\**\s*:\s*`([^`]+)`/m.exec(readFileSync(file, 'utf8'))?.[1]
+  const root = file && resolvePath(dirname(file), '..', '..', '..')
+  const present = files.filter(f => root && existsSync(join(root, f)))
+  if (!cmd || !present.length) return []
+  const r = spawnSync(cmd, { cwd: root, shell: true, encoding: 'utf8' })
+  if (r.status === 0) return []
+  const out = `${r.stdout ?? ''}${r.stderr ?? ''}`
+  return present.filter(f => out.includes(f))
+}
 export function resolveMaintainer({ dir, maintainer }) {
   if (maintainer && typeof maintainer === 'object' && maintainer.login) return { login: String(maintainer.login), source: maintainer.source ?? 'flag' }
   if (typeof maintainer === 'string' && maintainer.trim()) return { login: maintainer.trim(), source: 'flag' }
@@ -1707,6 +1719,10 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       }
       const shapeErrs = contractErrors(parsed)
       if (shapeErrs.length) return { published: false, reason: 'contract-invalid', errors: shapeErrs }
+      // A sealed byte can never be reformatted: a test artifact the adopted format check rejects is refused HERE, before
+      // the validator spends a round on it.
+      const unformatted = unformattedArtifacts(repoRoot, (parsed.redTests ?? []).map(t => t?.file).filter(Boolean))
+      if (unformatted.length) return { published: false, reason: `artifact-unformatted:${unformatted[0]}`, errors: unformatted.map(f => `artifact-unformatted:${f}`) }
       // C5: the contract's own fixScope.mode is AUTHORITATIVE — stamped on the handoff (resolve reads it, never the plan) and
       // the plan may not disagree with it.
       if (skill === 'red-spec' && parsed?.fixScope?.mode) {
