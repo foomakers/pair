@@ -157,7 +157,12 @@ assert_output_contains "Cycle status: target-ready" || FAILED=1
 [ "$(spawns)" = "0" ] || fail "--until ready spawned a stage"
 
 log_info "Test 4b-5: --engine pi without pi installed ⇒ engine-not-located, nothing spawned"
-if run_pair run --card 12 --autonomous --engine pi; then fail "a missing engine was accepted"; fi
+# hermetic: PATH without any dir holding a `pi`, whatever the host has installed
+OLD_PATH="$PATH"; NOPI=""
+IFS=:; for d in $OLD_PATH; do [ -e "$d/pi" ] || NOPI="$NOPI${NOPI:+:}$d"; done; unset IFS
+PATH="$NOPI"
+if run_pair run --card 12 --autonomous --engine pi; then PATH="$OLD_PATH"; fail "a missing engine was accepted"; fi
+PATH="$OLD_PATH"
 assert_output_contains "Engine 'pi' could not be located" || FAILED=1
 [ "$(spawns)" = "0" ] || fail "a stage was spawned without its engine"
 rm -rf "$MAIN/.pair/working/runs"
