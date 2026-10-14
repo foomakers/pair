@@ -45,6 +45,37 @@ Indicative, not a gate. Example from pair's own repo: numbers measured on pair's
 
 **Code** — before: an interface, a factory and one implementation for a single call site. After: the function.
 
+## Skeletal output model
+
+Applies to what skills write: card/story body, PR body, code-review comment, task. Template sections unchanged; content = fields, not prose.
+
+Style:
+
+- Fields: `key: value` lines, short bullets, tables.
+- Telegraphic: drop articles, auxiliaries, connectives.
+- No prose paragraph, no recap, no restated context (link the card, ADR, commit).
+- One fact per bullet; numbers over adjectives.
+- Within the template's `<!-- word-limits -->`; check before publishing: `node scripts/word-limits.mjs check --template <template.md> --body <body.md>` (exit 1 lists each section over its limit).
+
+Skeletons:
+
+| Artifact | Skeleton |
+| --- | --- |
+| Card/story | `As a / I want / So that` lines · AC as Given/When/Then, one line each · Notes: `- <date> <who>: <decision>` · tables for risks, AC coverage |
+| PR body | `Summary:` 1 line · Changes: `- <path or T-id>: <what> (<was>)` · Measured: table · Testing: `<gate>: pass/fail` |
+| Code-review comment | Verdict line: `risk:* · cost:* · <verdict> — <reason>` · findings table `id · severity · location · issue → fix` |
+| Task | `- [ ] **T-n**: <deliverable>` · detail: `<type> · <path> · <done when>` |
+
+Before → after (real, #433 / PR #539):
+
+**Card** — before (46): "Maintainer decision (2026-10-13, in session): caveman is NOT measured. Authorized exception to the tool-evaluation criterion: its technique (terse output) is the same as the guideline's default agent style, so it is covered there; the ADL must state caveman was not installed and not measured, and why." After (20): "- 2026-10-13 maintainer: caveman not measured — tool-evaluation exception; technique = default agent style. ADL: not installed, not measured, why."
+
+**PR body** — before (29): "T-10: `hasControlCharacters` was defined twice, byte-identical (`config/loader.ts`, `commands/run/prompt-safety.ts`); now one export in loader, re-exported by prompt-safety. Behavior-preserving; existing tests green (pair-cli 96 files / 1700 tests), no new test." After (22): "- T-10 `hasControlCharacters`: 2 identical copies → 1 (`config/loader.ts`), re-exported by `prompt-safety.ts`; behavior unchanged; pair-cli 96 files/1700 tests green; no new test."
+
+**Code-review comment** — before (21): "tokens not recorded (in-session: no host runtime supplied usage) · elapsed ≈ 8h31m (handoff timestamps, 2 handoffs; wall clock including waits)" After (15): `tokens: n/a (in-session, no host usage) · elapsed: 8h31m (2 handoffs, wall clock incl. waits)`
+
+**Task** — before (45): "T-12 (Research, last): seed a defect in a real PR diff; run the reviewer (`pair-reviewer`) 3× with and 3× without rtk; compare whether the defect is found, all findings, cost. rtk is adopted for review only if findings are identical or better and cost drops." After (23): "- **T-12** research, last: seeded-defect PR, `pair-reviewer` 3× ± rtk · measure: defect found, findings, cost · adopt iff findings ≥, cost ↓"
+
 ## Agent style
 
 Default for any agent working in a pair project:

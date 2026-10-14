@@ -73,6 +73,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
    - Match `$content` fields to template sections.
    - Preserve template structure and section ordering.
    - Omit optional sections that have no content (do not leave empty placeholders).
+   - Write to the [skeletal model](../../../.pair/knowledge/guidelines/technical-standards/ai-development/shrink-discipline.md#skeletal-output-model) within the template's `word-limits`; before Step 7 run `node <this skill dir>/scripts/word-limits.mjs check --template <resolved template> --body <body.md>` ([script](./scripts/word-limits.mjs)) — exit 1 ⇒ shorten the listed sections, re-run.
 3. **Verify**: Issue body is formatted following the template structure.
 
 ### Step 5: Load PM Tool Implementation Guide

@@ -271,6 +271,7 @@ Run the procedure for the level determined in Step 3.1 — see [degradation-leve
      - **Cost** — `cost:*` class + signals (from `/pair-capability-assess-cost`, Step 2.5)
      - **Architecture (Coupling)** — balance verdict (from `/pair-capability-assess-coupling`, Step 2.6; "not assessed" when the skill is absent)
      - **Bug fix — Red test before fix** — the reproducing-test verdict + evidence on a bug-fix PR (Step 2.7); **not applicable — not a bug fix** on a feature PR, written out rather than dropped
+   - **Skeletal**: every section written to the [skeletal model](../../../.pair/knowledge/guidelines/technical-standards/ai-development/shrink-discipline.md#skeletal-output-model) within the template's `word-limits`; before publishing run `node <this skill dir>/scripts/word-limits.mjs check --template <code-review-template> --body <review.md>` ([script](./scripts/word-limits.mjs)) — exit 1 ⇒ shorten the listed sections, re-run.
    - **Details** (collapsed): findings by severity + positive feedback (Phase 2); functionality / AC coverage; testing & quality gates (from /pair-capability-verify-quality); adoption compliance with degradation level (Phase 3); tech debt (from /pair-capability-analyze-debt); documentation (from /pair-capability-verify-done).
 
 ### Step 5.2: Make Review Decision

@@ -181,6 +181,7 @@ Opt-in. With a `## Package-Local Adoption` router in central adoption, load glob
 1. **Act**: Assemble the complete refined story body using the [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)) Refined template:
    - **Functional sections first**: Story Statement → Epic Context → Classification (the Step 3b matrix) → Acceptance Criteria → Definition of Done → Story Sizing → Dependencies → Validation → Notes.
    - **Technical sections last**: Technical Analysis → (Task Breakdown added later by `/plan-tasks`).
+   - **Skeletal**: every section written to the [skeletal model](../../../.pair/knowledge/guidelines/technical-standards/ai-development/shrink-discipline.md#skeletal-output-model) within the template's `word-limits`; `/write-issue` runs the over-limit check before publishing.
    - **Under `$prepare: never|when`**: the body also carries `## Assumptions` (phase 0 exception) and a Notes line `Prepared autonomously under prepare: <value> (<source>) — ADR-028`.
 2. **Act**: Compose `/write-issue` with:
    - `$type: story`
