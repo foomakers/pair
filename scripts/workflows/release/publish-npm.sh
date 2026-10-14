@@ -7,7 +7,8 @@ set -euo pipefail
 #
 # Requires NPM_TOKEN env var (CI) or active npm login (local).
 
-REGISTRY="https://registry.npmjs.org/"
+# GitHub Packages for pre/rc: NPM_REGISTRY=https://npm.pkg.github.com/ NPM_TOKEN=$GITHUB_TOKEN
+REGISTRY="${NPM_REGISTRY:-https://registry.npmjs.org/}"
 SCOPE="@foomakers"
 
 TGZ_PATH=""
@@ -68,7 +69,7 @@ fi
 if [ -n "${NPM_TOKEN:-}" ]; then
   echo "Auth:     NPM_TOKEN env var"
   npm config set "${SCOPE}:registry" "$REGISTRY"
-  npm config set "//registry.npmjs.org/:_authToken" "$NPM_TOKEN"
+  npm config set "//${REGISTRY#https://}:_authToken" "$NPM_TOKEN"
 elif npm whoami --registry "$REGISTRY" >/dev/null 2>&1; then
   echo "Auth:     npm login session"
 else

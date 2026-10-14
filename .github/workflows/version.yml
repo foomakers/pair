@@ -1,183 +1,103 @@
-name: Version (Changesets)
+name: Version (release dispatch)
 
+# Dispatch-only: nothing releases on merge. Run `pnpm release <channel>` (or dispatch here).
+# Two runs per release: this one versions + tags, then dispatches release.yml (publish).
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '.changeset/**'
   workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Release channel'
+        required: true
+        type: choice
+        options: [pre, rc, final]
+      version:
+        description: 'Optional base version override (X.Y.Z, > last final, untagged)'
+        required: false
+        type: string
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   version:
-    name: Create version commits and tags
+    name: Version, tag, dispatch publish
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
+      actions: write
     steps:
-      - name: Checkout repository (full)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
         with:
           version: '10.15.0'
 
-      - name: Ensure pnpm is available (fallback)
-        run: |
-          if ! command -v pnpm >/dev/null 2>&1; then
-            corepack enable || true
-            corepack prepare pnpm@10.15.0 --activate || true
-          fi
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
-      - name: Check for changeset files
-        id: check_changeset
-        run: |
-          if [ -d ".changeset" ] && [ "$(ls -A .changeset/*.md 2>/dev/null | wc -l)" -gt 0 ]; then
-            echo "has_changeset=true" >> $GITHUB_OUTPUT
-            echo "HAS_NEW_CHANGESET=true" >> $GITHUB_ENV
-            echo "Found $(ls -A .changeset/*.md | wc -l) changeset files"
-          else
-            echo "has_changeset=false" >> $GITHUB_OUTPUT
-            echo "HAS_NEW_CHANGESET=false" >> $GITHUB_ENV
-            echo "No changeset files found"
-          fi
-
-      - name: Create version commits and tags (Changesets)
-        if: ${{ env.HAS_NEW_CHANGESET == 'true' }}
+      # Same state module as `pnpm release` — CI is authoritative (stale local tags can't pass).
+      - name: Validate and plan
+        id: plan
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          OVERRIDE: ${{ inputs.version }}
         run: |
           set -euo pipefail
+          git fetch --tags --force origin
+          ARGS=("$CHANNEL" --no-fetch --json)
+          [ -n "$OVERRIDE" ] && ARGS+=(--version "$OVERRIDE")
+          pnpm --silent release "${ARGS[@]}" | tee plan.json
+          node -e "
+            const p=JSON.parse(require('fs').readFileSync('plan.json','utf8').split('\n').filter(l=>l.startsWith('{')).pop());
+            if(!p.ok){console.error(p.error);process.exit(1)}
+            require('fs').appendFileSync(process.env.GITHUB_OUTPUT,'version='+p.version+'\ntag='+p.tag+'\n')"
 
-          # Shell-level guard in case env interpolation isn't available yet
-          if [ "${HAS_NEW_CHANGESET:-}" != "true" ]; then
-            echo "No new .changeset files were added in this push. Skipping changeset versioning."
-            echo "HAS_CHANGES=false" >> $GITHUB_ENV
-            exit 0
-          fi
+      - name: Version packages
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          OLD=$(node -p "require('./apps/pair-cli/package.json').version")
+          pnpm changeset version
+          # one version for the whole fixed group (+ root), incl. the -pre.N/-rc.N suffix
+          node -e "
+            const fs=require('fs');
+            const group=JSON.parse(fs.readFileSync('.changeset/config.json','utf8')).fixed[0];
+            const files=['package.json',...require('child_process').execSync('git ls-files \"**/package.json\" package.json',{encoding:'utf8'}).split('\n').filter(Boolean)];
+            for(const f of files){const p=JSON.parse(fs.readFileSync(f,'utf8'));
+              if(f==='package.json'||group.includes(p.name)){p.version=process.env.VERSION;fs.writeFileSync(f,JSON.stringify(p,null,2)+'\n')}}
+            const bad=group.filter(n=>{const f=files.find(x=>x!=='package.json'&&JSON.parse(fs.readFileSync(x,'utf8')).name===n);return f&&JSON.parse(fs.readFileSync(f,'utf8')).version!==process.env.VERSION});
+            if(bad.length){console.error('fixed group out of sync: '+bad);process.exit(1)}"
+          pnpm sync-version -- "$OLD"
 
-          # Configure git user
+      - name: Commit and tag
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # Get current CLI version before changesets
-          OLD_CLI_VERSION=$(node -e "console.log(require('./apps/pair-cli/package.json').version)")
-          echo "Old CLI version: $OLD_CLI_VERSION"
-
-          # Run changesets version (this updates package.json files and removes changeset files)
-          pnpm changeset version
-
-          # Sync version into markdown/MDX files that hardcode it
-          pnpm sync-version -- "$OLD_CLI_VERSION"
-
-          # Get new CLI version after changesets
-          CLI_VERSION=$(node -e "console.log(require('./apps/pair-cli/package.json').version)")
-          echo "New CLI version: $CLI_VERSION"
-
-          # Check if there are any changes to commit
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "Changes detected, creating commit..."
-            
-            # Update root package.json version to match CLI version
-            node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.version=process.argv[1]; fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');" "$CLI_VERSION"
-
-            # Stage all changes (updated package.json files and removed changeset files)
-            git add .
-
-            # Create the version commit (skip hooks — quality gate runs in dedicated workflows)
-            HUSKY=0 git commit -m "chore: release v$CLI_VERSION" -m "Version packages and remove changesets"
-
-            # Set environment variable for PR creation
-            echo "CLI_VERSION=$CLI_VERSION" >> $GITHUB_ENV
-            echo "HAS_CHANGES=true" >> $GITHUB_ENV
+          git add -A
+          HUSKY=0 git commit -m "chore: release $TAG"
+          git tag -a "$TAG" -m "Release $TAG"
+          if [ "$CHANNEL" = final ]; then
+            HUSKY=0 git push origin main "$TAG"   # version commit + changelog land on main
           else
-            echo "No changes detected, skipping commit creation"
-            echo "HAS_CHANGES=false" >> $GITHUB_ENV
+            HUSKY=0 git push origin "$TAG"        # ephemeral commit: tag only, main stays clean
           fi
+
+      - name: Dispatch publish (second run)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create and push release branch
-        id: create_branch
-        if: ${{ env.HAS_CHANGES == 'true' }}
-        run: |
-          set -euo pipefail
-          # Create a new branch for the PR from current commit
-          BRANCH_NAME="changeset-release/v${{ env.CLI_VERSION }}-${{ github.run_number }}"
-          git checkout -b "$BRANCH_NAME"
-
-          # Push the new branch (skip hooks — quality gate runs in dedicated workflows)
-          HUSKY=0 git push origin "$BRANCH_NAME"
-
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-
-      - name: Create release PR via REST API (no gh CLI) with retries
-        if: ${{ env.HAS_CHANGES == 'true' }}
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const branch = '${{ steps.create_branch.outputs.branch_name }}'
-            const title = `chore: release v${{ env.CLI_VERSION }}`
-            const body = `Automated release PR for version ${{ env.CLI_VERSION }}.
-
-            This PR includes:
-            - Updated package versions based on changesets
-            - Removed processed changeset files
-            - Synchronized root package.json version
-
-            Created by the version workflow.`
-
-            const maxAttempts = 3
-            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-              try {
-                // Check for existing PR from branch
-                const existing = await github.rest.pulls.list({ 
-                  owner: context.repo.owner, 
-                  repo: context.repo.repo, 
-                  head: `${context.repo.owner}:${branch}`, 
-                  state: 'open' 
-                })
-                
-                if (existing.data && existing.data.length > 0) {
-                  core.info(`Existing PR found: #${existing.data[0].number}`)
-                  break
-                }
-
-                const response = await github.rest.pulls.create({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  title,
-                  head: branch,
-                  base: 'main',
-                  body,
-                })
-                core.info(`Created PR #${response.data.number}`)
-                break
-              } catch (err) {
-                core.warning(`Attempt ${attempt} failed to create PR: ${err.message}`)
-                if (attempt === maxAttempts) throw err
-                const delay = 5000 * attempt
-                core.info(`Retrying after ${delay}ms...`)
-                await new Promise(r => setTimeout(r, delay))
-              }
-            }
-
-      - name: No changes detected
-        if: ${{ env.HAS_CHANGES == 'false' }}
-        run: |
-          echo "No changesets were processed. This might happen if:"
-          echo "- Changeset files were already processed"
-          echo "- No valid changeset files exist"
-          echo "- Changeset files don't contain version bumps"
-          echo "Workflow completed without creating a PR."
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: gh workflow run release.yml --ref main -f version="$TAG"

@@ -123,7 +123,10 @@ else
   if [ "$DRY_RUN" = true ]; then
     echo "[DRY RUN] Would create release $VERSION with notes from $NOTES_FILE"
   else
-    gh release create "$VERSION" --title "Release $VERSION" --notes-file "$NOTES_FILE"
+    # prerelease (X.Y.Z-pre.N / -rc.N): flagged, never "latest"
+    PRE_FLAGS=()
+    [[ "$VERSION" == *-* ]] && PRE_FLAGS=(--prerelease --latest=false)
+    gh release create "$VERSION" ${PRE_FLAGS[@]+"${PRE_FLAGS[@]}"} --title "Release $VERSION" --notes-file "$NOTES_FILE"
     echo "Release $VERSION created successfully."
   fi
 fi
