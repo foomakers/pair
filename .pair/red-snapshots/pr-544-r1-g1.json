@@ -1,0 +1,91 @@
+{
+  "$meta": {
+    "pr": "544",
+    "phase": "r1-g1",
+    "base": "fd8584d32963bba6ce4fb87d1371e4ca0b9cd33a",
+    "trailer": "Pair-RED-Snapshot: pr=544; phase=r1-g1; base=fd8584d32963bba6ce4fb87d1371e4ca0b9cd33a; manifest=.pair/red-snapshots/pr-544-r1-g1.json",
+    "artifacts": [
+      "scripts/smoke-tests/witnesses/run-card-engine-missing.sh",
+      "scripts/smoke-tests/witnesses/run-card-engine-missing-control.sh"
+    ]
+  },
+  "mode": "remediation",
+  "phase": "r1-g1",
+  "inputHead": "fd8584d32963bba6ce4fb87d1371e4ca0b9cd33a",
+  "sourceOfTruth": "scripts/smoke-tests/scenarios/run-card.sh",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "scripts/smoke-tests/scenarios/run-card.sh Test 4b-5 (PATH given to run_pair)",
+      "inputs": [
+        "host PATH with/without pi"
+      ],
+      "representations": [
+        "scripts/smoke-tests/scenarios/run-card.sh"
+      ],
+      "consumers": [
+        "pnpm smoke-tests",
+        "CI"
+      ],
+      "classes": [
+        "pi on PATH",
+        "no pi on PATH"
+      ],
+      "interactions": [
+        "PATH x --engine pi engine-not-located refusal"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "smoke-tests",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "scripts/smoke-tests/scenarios/run-card.sh"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "W-1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "stub pi on PATH, run run-card.sh",
+      "oracle": "scripts/smoke-tests/witnesses/run-card-engine-missing.sh",
+      "expected": "4b-5 passes: output contains Engine 'pi' could not be located",
+      "covers": [
+        "r0-1"
+      ],
+      "file": "scripts/smoke-tests/witnesses/run-card-engine-missing.sh"
+    },
+    {
+      "id": "C-1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "no pi dir on PATH (PATH stripped of dirs holding pi)",
+      "oracle": "scripts/smoke-tests/witnesses/run-card-engine-missing-control.sh",
+      "expected": "4b-5 passes",
+      "covers": [
+        "r0-1"
+      ],
+      "file": "scripts/smoke-tests/witnesses/run-card-engine-missing-control.sh"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "scripts/smoke-tests/witnesses/run-card-engine-missing.sh",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:668ae735d4a10fce4170f0c8922541861acf492e192d0423cebc83fc23dc2e52",
+      "command": "scripts/smoke-tests/witnesses/run-card-engine-missing.sh",
+      "observed": "exit 1: [FAIL] Output does not contain 'Engine 'pi' could not be located' (4b-5 with stub pi on PATH)"
+    },
+    {
+      "file": "scripts/smoke-tests/witnesses/run-card-engine-missing-control.sh",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:ab4fbd46ea93511c05f95c1c82ef712e454e18a371dd1f0ef073c3fad6aa12da",
+      "command": "scripts/smoke-tests/witnesses/run-card-engine-missing-control.sh",
+      "observed": "exit 0: ok: 4b-5 passes (none)"
+    }
+  ],
+  "testExempt": false
+}
