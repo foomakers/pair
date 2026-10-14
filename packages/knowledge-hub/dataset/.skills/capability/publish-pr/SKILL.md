@@ -93,6 +93,7 @@ Hooks run **before** the gate, and the order is load-bearing in both directions:
 
 ### Phase 3: Compose the PR Body
 
+0. **Changeset**: Changeset: `.changeset/<story-id>.md` mirrors the PR description and states the bump (below 1.0 a breaking change is `minor`); write it, or refresh it when the description changed, and commit it with the change. A PR with no release-relevant change takes the `no-changeset` label instead. The PR body and the changeset say the same thing.
 1. **Act**: Read the [pr-template](../../../.pair/knowledge/guidelines/collaboration/templates/pr-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md); the same resolution applies to the commit and branch templates referenced above). Fill the always-applicable sections from the handoff/story:
    - **Title**: `[#<story-id>] <type>: <brief description>` (`<type>` from commit-format / story type).
    - **Summary** (What Changed + Why) from the story statement and the handoff's decisions.

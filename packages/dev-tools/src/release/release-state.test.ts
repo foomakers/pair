@@ -137,3 +137,22 @@ describe('predecessors', () => {
     ])
   })
 })
+
+describe('pre -> rc -> final sequence (AC10 offline simulation)', () => {
+  it('cleans each previous channel step and ends with only the final', () => {
+    const tags: Record<string, string> = { 'v0.4.3': 'h0' }
+    const run = (channel: PlanInput['channel'], head: string) => {
+      const r = planRelease({ channel, tags, bumps: ['minor'], head })
+      if (!r.ok) throw new Error(r.error)
+      for (const t of r.predecessors) delete tags[t]
+      tags[r.tag] = head
+      return r
+    }
+    run('pre', 'a')
+    expect(run('pre', 'b').predecessors).toEqual(['v0.5.0-pre.1'])
+    run('rc', 'c')
+    expect(Object.keys(tags).sort()).toEqual(['v0.4.3', 'v0.5.0-pre.2', 'v0.5.0-rc.1'])
+    expect(run('final', 'd').predecessors.sort()).toEqual(['v0.5.0-pre.2', 'v0.5.0-rc.1'])
+    expect(Object.keys(tags).sort()).toEqual(['v0.4.3', 'v0.5.0'])
+  })
+})

@@ -7,7 +7,13 @@ import { execFileSync } from 'child_process'
 import { readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { REPO_ROOT } from '../quality-gates/repo-root'
-import { type Bump, type Channel, parseChangesetBump, planRelease, predecessors } from './release-state'
+import {
+  type Bump,
+  type Channel,
+  parseChangesetBump,
+  planRelease,
+  predecessors,
+} from './release-state'
 
 const CHANNELS: Channel[] = ['pre', 'rc', 'final']
 const sh = (cmd: string, args: string[]) => execFileSync(cmd, args, { encoding: 'utf8' }).trim()

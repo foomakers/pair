@@ -7,58 +7,56 @@ For development setup see [DEVELOPMENT.md](DEVELOPMENT.md). For changelog see [C
 ## Overview
 
 ```text
-Developer        CI (version.yml)      CI (tag.yml)          CI (release.yml)
-    │                   │                    │                       │
-    │  pnpm changeset   │                    │                       │
-    │  add + push       │                    │                       │
-    │──────────────────▶│                    │                       │
-    │                   │  changeset version │                       │
-    │                   │  + create PR       │                       │
-    │                   │───────────────────▶│                       │
-    │                   │                    │  merge PR → tag vX.Y.Z│
-    │                   │                    │──────────────────────▶│
-    │                   │                    │                       │  build + package
-    │                   │                    │                       │  + publish release
+Maintainer          version.yml (run 1)            release.yml (run 2)
+    │                      │                              │
+    │ pnpm release <ch>    │                              │
+    │ (plan printed)       │                              │
+    │─────────────────────▶│ re-validate (same state      │
+    │                      │ module), version, tag        │
+    │                      │─────────────────────────────▶│ build from tag,
+    │                      │                              │ publish, cleanup
 ```
 
-**Build once, verify, publish.** Changesets manages versions, CI builds artifacts, GitHub Releases distributes them.
+**Dispatched, never merge-triggered.** A merge never releases. Changesets manages versions, CI builds artifacts from the tag, GitHub Releases distributes them. Decision: [`2026-10-14-release-is-dispatched-with-a-changeset-per-pr`](.pair/adoption/decision-log/2026-10-14-release-is-dispatched-with-a-changeset-per-pr.md).
+
+## Every PR carries a changeset
+
+`.changeset/<story-id>.md` mirrors the PR description, with the bump stated. CI (`ci.yml` → `changeset`) fails a PR without one unless it is labelled `no-changeset`. Below 1.0 a breaking change is bumped `minor`. Cycle skills (`implement-phase`, `green-fix`, `publish-pr`) keep the file in sync with the PR description; review checks they match.
 
 ## Creating a Release
 
-### 1. Create a changeset
-
 ```bash
-pnpm exec changeset add
+pnpm release <pre|rc|final> [--version X.Y.Z] [--dry-run]
 ```
 
-Select the affected package(s) and bump type (patch/minor/major).
+Or dispatch `version.yml` from Actions (`channel`, optional `version`). The command prints the plan (version, tag, what cleanup will delete) and dispatches `version.yml`; CI re-validates with the same state module (`packages/dev-tools/src/release/release-state.ts`) and is authoritative over stale local tags. Two runs per release: `version.yml`, then `release.yml`.
 
-**When:** at the moment a release is being scheduled — covering everything merged since the
-last one — not on every PR that changes behaviour. Any file under `.changeset/` keeps the
-Changesets release PR open and continuously regenerating `CHANGELOG.md`, so on a repository
-that releases in deliberate batches the changeset is the first step of the release, not the
-last step of the feature. Decision:
-[`.pair/adoption/decision-log/2026-08-20-a-changeset-is-added-when-a-release-is-scheduled.md`](.pair/adoption/decision-log/2026-08-20-a-changeset-is-added-when-a-release-is-scheduled.md).
+### Version rules
 
-A PR that changes published behaviour therefore states the user-visible change in its
-description; the release author turns those into the changeset.
+- Base = `changeset version` result, or `--version` (must be > last final and untagged).
+- Suffix `-<channel>.N` is derived from existing tags. Channels are forward-only (`pre` → `rc` → `final`) and skippable.
+- Re-releasing the same channel needs new commits on `main`. Duplicate or backward requests are refused.
 
-### 2. Merge to main
+### Channels
 
-When your PR merges, the **Version workflow** (`version.yml`) detects the changeset and creates a version PR that bumps `package.json` versions and updates `CHANGELOG.md`.
+| Channel | Version | Git | Registry | GitHub Release | Website |
+|---------|---------|-----|----------|----------------|---------|
+| `pre` / `rc` | `X.Y.Z-pre.N` / `-rc.N` | ephemeral commit, tag-only push (`main` untouched) | GitHub Packages | prerelease, not latest | not deployed |
+| `final` | `X.Y.Z` | version commit + CHANGELOG on `main`, tag | npmjs.org | latest | deployed |
 
-### 3. Merge the version PR
+### Cleanup
 
-Merging the version PR triggers the **Tag workflow** (`tag-on-changeset-merge.yml`) which creates a `v{X.Y.Z}` git tag.
+The last `release.yml` job runs only after a successful publish and deletes (GitHub Release, assets, tag, package version): the previous same-channel pre/rc; on `final` or a base change, every pre/rc of that base. A failed publish deletes nothing. Users on a deleted prerelease lose its KB download (accepted for unstable channels).
 
-### 4. Tag triggers release
+### Installing a prerelease
 
-The tag push triggers the **Release workflow** (`release.yml`) which:
+Create a token with `read:packages`, then:
 
-1. Runs `pnpm quality-gate`
-2. Builds all packages (`pnpm build`)
-3. Packages the CLI bundle (`scripts/package-manual.sh`)
-4. Creates a GitHub Release with artifacts
+```bash
+npm config set @foomakers:registry https://npm.pkg.github.com
+npm config set //npm.pkg.github.com/:_authToken <token>
+npm install -g @foomakers/pair-cli@<version>
+```
 
 ## Release Checklist: Skill Marketplace Manifest
 
@@ -76,16 +74,12 @@ The catalog guard (`packages/knowledge-hub/src/tools/claude-plugin-manifest.test
 
 | Workflow | File | Trigger | Purpose |
 |----------|------|---------|---------|
-| Version | `version.yml` | Push to `main` with `.changeset/**` | Bump versions, create version PR |
-| Tag | `tag-on-changeset-merge.yml` | Version PR merged | Create `vX.Y.Z` tag |
-| Release | `release.yml` | Tag `v*` pushed | Build, package, publish |
+| Version | `version.yml` | `workflow_dispatch` (`channel`, `version`) | Validate, version, tag, dispatch `release.yml` |
+| Release | `release.yml` | `workflow_dispatch` (tag, from `version.yml`) | Build from tag, publish, cleanup |
 
-### Manual dispatch
+Both share a `release` concurrency group. `GITHUB_TOKEN` only: the old `tag-on-changeset-merge.yml` and its PAT secret are gone.
 
-```bash
-gh workflow run "Version (Changesets)" --ref main
-gh workflow run "Release" --ref main -f version="v1.0.0"
-```
+If `main` gets branch protection, the final version commit needs a bot bypass.
 
 ## Release Artifacts
 
@@ -166,13 +160,12 @@ npm install -g @foomakers/pair-cli
 
 - **`GITHUB_TOKEN`** (default): sufficient for creating tags, releases, and uploading release assets.
 - **`NPM_TOKEN`**: required for publishing to npmjs.org. Granular access token scoped to `@foomakers`.
-- **`GH_RELEASE_TOKEN`** (optional PAT): only needed if org policy prevents `GITHUB_TOKEN` from creating tags/releases. Add as repository secret with `repo` scope.
 - Workflow permissions: "Read and write permissions" required.
 
 ### Branch protection for `main`
 
 - Require PR reviews (1+ approver)
-- Require status checks: `Version (Changesets) / version`, `Tag on Changeset PR Merge / tag`, `Release / release`
+- Require status checks: `CI / changeset`, `CI / build`
 - Require branches to be up-to-date before merging
 
 ### Actions used
@@ -191,8 +184,8 @@ All actions pinned to specific versions.
 ## Rollback
 
 1. Delete the GitHub Release and tag from the GitHub UI
-2. Revert the version commit from the changeset PR merge
-3. Create a new changeset with the fix
+2. Revert the final version commit on `main`
+3. Add a changeset with the fix
 4. The pipeline re-runs automatically (new version PR → tag → release)
 
 ## Manual Installation

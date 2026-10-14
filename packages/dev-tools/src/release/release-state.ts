@@ -27,7 +27,11 @@ type Parsed = { base: string; channel: Channel; n: number }
 const parseTag = (tag: string): Parsed | null => {
   const m = TAG.exec(tag)
   if (!m) return null
-  return { base: `${m[1]}.${m[2]}.${m[3]}`, channel: (m[4] as Channel) ?? 'final', n: Number(m[5] ?? 0) }
+  return {
+    base: `${m[1]}.${m[2]}.${m[3]}`,
+    channel: (m[4] as Channel) ?? 'final',
+    n: Number(m[5] ?? 0),
+  }
 }
 const nums = (v: string) => v.split('.').map(Number) as [number, number, number]
 const cmp = (a: string, b: string) => {
@@ -50,7 +54,11 @@ export function highestBump(bumps: Bump[], lastFinal: string): Bump | null {
 
 function bumpVersion(v: string, bump: Bump): string {
   const [a, b, c] = nums(v)
-  return bump === 'major' ? `${a + 1}.0.0` : bump === 'minor' ? `${a}.${b + 1}.0` : `${a}.${b}.${c + 1}`
+  return bump === 'major'
+    ? `${a + 1}.0.0`
+    : bump === 'minor'
+      ? `${a}.${b + 1}.0`
+      : `${a}.${b}.${c + 1}`
 }
 
 /** pre/rc tags the successful publish of `version` makes obsolete (never finals). */
@@ -73,7 +81,8 @@ export function planRelease(i: PlanInput): Plan {
 
   let base: string
   if (i.override !== undefined) {
-    if (!/^\d+\.\d+\.\d+$/.test(i.override)) return refuse(`invalid version '${i.override}' (X.Y.Z)`)
+    if (!/^\d+\.\d+\.\d+$/.test(i.override))
+      return refuse(`invalid version '${i.override}' (X.Y.Z)`)
     if (cmp(i.override, lastFinal) <= 0)
       return refuse(`version ${i.override} not greater than last final ${lastFinal}`)
     base = i.override
@@ -85,7 +94,8 @@ export function planRelease(i: PlanInput): Plan {
 
   const mine = parsed.filter(([, p]) => p && p.base === base)
   const highest = Math.max(-1, ...mine.map(([, p]) => ORDER[p!.channel]))
-  if (highest > ORDER[i.channel]) return refuse(`backward: ${base} already has a later channel than ${i.channel}`)
+  if (highest > ORDER[i.channel])
+    return refuse(`backward: ${base} already has a later channel than ${i.channel}`)
 
   const same = mine.filter(([, p]) => p!.channel === i.channel)
   if (same.some(([t]) => i.tags[t] === i.head))

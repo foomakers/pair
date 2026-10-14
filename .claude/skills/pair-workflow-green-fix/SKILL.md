@@ -66,6 +66,7 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVer
 
 ### Step 3: Prove and commit
 
+0. **Changeset**: Changeset: `.changeset/<story-id>.md` mirrors the PR description and states the bump (below 1.0 a breaking change is `minor`); write it, or refresh it when the description changed, and commit it with the change. A PR with no release-relevant change takes the `no-changeset` label instead. Never touch a sealed test artifact for it.
 1. Re-run every witness command from the manifest (all green), every control (still green), the findings' evidence commands and the mapped boundary cases. Record each run's `command`, `identity` (`cycle-state.mjs test-identity --cwd $worktree --command "<cmd>"`) and `exitCode`.
 2. Run `/pair-capability-verify-quality` for the story's tier. Record any forced decision with `/pair-capability-record-decision`.
 3. Commit GREEN strictly on top of the snapshot (or the previous GREEN on attempt 2); remove only the transient manifest path in that commit. Push.

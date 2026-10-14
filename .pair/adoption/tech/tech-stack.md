@@ -108,7 +108,7 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 
 ## Release & versioning
 
-- changesets (`@changesets/cli`) is adopted for version management, changelog generation, and CI-driven release automation.
+- changesets (`@changesets/cli`, changelog via `@changesets/changelog-github`) is adopted for version management and changelog generation: one changeset per PR, releases dispatched via `pnpm release <pre|rc|final>` (ADL 2026-10-14-release-is-dispatched-with-a-changeset-per-pr).
 - changesets v2.29.7 is the adopted version for workspace release workflows and CI pipelines.
 
 ---
