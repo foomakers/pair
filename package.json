@@ -4,6 +4,7 @@
   "description": "pair is a suite of resources and workflows designed to guide and enable collaboration between development teams and AI assistants throughout all phases of the product lifecycle. It provides tools for defining epics, stories, guidelines, and adoptions, integrating with major code assistants and project management tools to ensure structured processes, consistency, and quality in delivery.",
   "private": true,
   "scripts": {
+    "release": "pnpm --filter @pair/dev-tools release --",
     "test": "turbo test",
     "test:coverage": "turbo test:coverage",
     "test:perf": "pnpm --filter @pair/dev-tools benchmark-update-link",
@@ -46,6 +47,7 @@
     "node": ">=20.19.0"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "catalog:",
     "@earendil-works/pi-coding-agent": "catalog:",
     "@pair/prettier-config": "workspace:*",

@@ -154,6 +154,8 @@ Ask: _"Proceed with review?"_ — **only in an interactive run**. A **dispatched
 
 ### Step 2.2: Code Quality Assessment
 
+**Changeset**: the PR carries `.changeset/<story-id>.md` (or the `no-changeset` label) and its text and bump match the PR description; a missing or contradicting changeset is a finding.
+
 1. **Check**: Have code quality issues already been identified in this session?
 2. **Skip**: If already assessed — move to Step 2.3.
 3. **Act**: Review changed files against:

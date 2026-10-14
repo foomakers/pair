@@ -151,13 +151,13 @@ When adding a new shared dependency, add it to the catalog first.
 
 ## Changesets
 
-We use `@changesets/cli` for version management. When your change affects a published package, create a changeset:
+We use `@changesets/cli` for version management. Every PR carries a changeset (or the `no-changeset` label):
 
 ```bash
 pnpm exec changeset add
 ```
 
-Select the affected package(s) and bump type (patch/minor/major). Commit the `.changeset/*.md` file with your PR.
+Select the affected package(s) and bump type (patch/minor/major). Name it `.changeset/<story-id>.md` and mirror the PR description. Releases are cut with `pnpm release <pre|rc|final>`.
 
 See the [Release Process](/docs/contributing/release-process) for the full workflow.
 

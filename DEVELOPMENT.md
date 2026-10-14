@@ -185,8 +185,10 @@ We use `@changesets/cli` for version management:
 
 ```bash
 pnpm exec changeset add       # Create a changeset (interactive)
-pnpm exec changeset version    # Generate version bumps + changelogs
+pnpm release <pre|rc|final> [--version X.Y.Z] [--dry-run]   # plan + dispatch a release
 ```
+
+Every PR carries `.changeset/<story-id>.md` (CI fails without it; label `no-changeset` to skip). Releases are dispatched, never merge-triggered — see [RELEASE.md](RELEASE.md).
 
 ## Dependency Management
 

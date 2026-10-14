@@ -4,10 +4,12 @@ This directory contains the extracted scripts from the `release.yml` GitHub Acti
 
 ## Overview
 
-The release workflow handles the complete process of building, packaging, testing, and publishing releases of the pair CLI tool. The workflow is divided into two jobs:
+The release workflow handles the complete process of building, packaging, testing, and publishing releases of the pair CLI tool. `release.yml` is dispatch-only (called by `version.yml` with the release tag; see [RELEASE.md](../../../RELEASE.md)). Its jobs:
 
-1. **`release` job**: Builds artifacts, creates releases, and uploads to GitHub
-2. **`publish-gh-packages` job**: Publishes to GitHub Packages registry
+1. **`release`**: builds from the tag, creates the GitHub Release (prerelease + not latest when the version has a `-pre.N`/`-rc.N` suffix), uploads assets
+2. **`deploy-website`**: final releases only
+3. **`publish-npm`**: `publish-npm.sh` to npmjs.org (final) or GitHub Packages (pre/rc, via `NPM_REGISTRY`)
+4. **`cleanup`**: after a successful publish, deletes obsolete pre/rc releases, tags and package versions
 
 ## Scripts
 

@@ -194,9 +194,9 @@ echo "Creating ncc bundle inside artifact..."
 if [ -f "$PKG_DIR/dist/cli.js" ]; then
   # Run ncc from the package directory so dependency resolution (pnpm workspace) works
   if [ "$DRY_RUN" = true ]; then
-    echo "[dry-run] would run: (cd $PKG_DIR && npx @vercel/ncc build dist/cli.js -o $RELEASE_DIR/bundle-cli --source-map)"
+    echo "[dry-run] would run: (cd $PKG_DIR && npx @vercel/ncc build dist/cli.js -o $RELEASE_DIR/bundle-cli)"
   else
-    (cd "$PKG_DIR" && npx @vercel/ncc build "dist/cli.js" -o "$RELEASE_DIR/bundle-cli" --source-map) || { echo "ncc bundling failed"; exit 1; }
+    (cd "$PKG_DIR" && npx @vercel/ncc build "dist/cli.js" -o "$RELEASE_DIR/bundle-cli") || { echo "ncc bundling failed"; exit 1; }
   fi
 
   # Remove unnecessary package.json from bundle-cli (created by ncc)
