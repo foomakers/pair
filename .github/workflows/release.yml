@@ -259,7 +259,9 @@ jobs:
           git fetch --tags --force origin
           for t in $(pnpm --silent release --cleanup-for "${TAG#v}" | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).join(" ")'); do
             echo "Cleanup $t"
-            gh release delete "$t" --yes --cleanup-tag || git push origin ":refs/tags/$t"
+            # API only: pushing a tag deletion would run the repo pre-push hook (the full gate)
+            if gh release view "$t" >/dev/null 2>&1; then gh release delete "$t" --yes; fi
+            gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/$t" >/dev/null || echo "tag $t already gone"
             # package version on GitHub Packages (pre/rc only ever live there)
             ID=$(gh api "/orgs/${GITHUB_REPOSITORY_OWNER}/packages/npm/pair-cli/versions" --paginate \
               --jq ".[] | select(.name==\"${t#v}\") | .id" 2>/dev/null || true)

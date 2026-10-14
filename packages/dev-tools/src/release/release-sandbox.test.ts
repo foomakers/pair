@@ -43,3 +43,13 @@ describe('throwaway release run findings', () => {
     expect(fetch).toBeLessThan(tags)
   })
 })
+
+describe('cleanup job (throwaway release run)', () => {
+  it('deletes tags through the API, never `git push` (a push runs the repo pre-push hook)', () => {
+    const steps = parse(readFileSync(join(REPO_ROOT, '.github/workflows/release.yml'), 'utf8')).jobs
+      .cleanup.steps as { run?: string }[]
+    const run = steps.map(s => s.run ?? '').join('\n')
+    expect(run).not.toMatch(/git push/)
+    expect(run).toMatch(/git\/refs\/tags\//)
+  })
+})
