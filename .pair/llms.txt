@@ -194,6 +194,7 @@
 - [Decision: planned-marker issue state is read live via `gh`, skipped locally when unavailable, fatal in CI](.pair/adoption/decision-log/2026-10-06-planned-marker-issue-state-lookup.md)
 - [Decision: legacy `## Eligibility` filter bounds unattended runs only; explicit `--root` is never filtered out](.pair/adoption/decision-log/2026-10-13-legacy-eligibility-is-unattended-only.md)
 - [Decision: ponytail enabled for this repo; rtk enabled for the review stage only](.pair/adoption/decision-log/2026-10-13-ponytail-trial-rtk-review-only.md)
+- [Decision: closed-not-planned items move to an unmapped `Not planned` board column, never `Done`](.pair/adoption/decision-log/2026-10-14-not-planned-board-column.md)
 
 ## How-To Guides
 
