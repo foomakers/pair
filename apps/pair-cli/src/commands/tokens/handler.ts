@@ -82,7 +82,10 @@ async function loadBaseline(fs: FileSystemService, config: TokensCommandConfig):
   } catch (err) {
     throw new Error(`cannot read baseline ${file}: ${err instanceof Error ? err.message : err}`)
   }
-  if (!Array.isArray(j?.areas) || !j.total)
+  const counts = (x: unknown) =>
+    Number.isFinite((x as Baseline['total'])?.words) &&
+    Number.isFinite((x as Baseline['total'])?.tokens)
+  if (!Array.isArray(j?.areas) || !counts(j.total) || !j.areas.every(counts))
     throw new Error(`baseline ${file} is not a tokens --json report`)
   return j
 }

@@ -195,4 +195,29 @@ describe('handleTokensCommand --baseline', () => {
       (await run(cfg({ baseline: '/r/b.json' }), { ...files, '/r/b.json': '{"x":1}' })).code,
     ).toBe(1)
   })
+
+  it.each([
+    [
+      'area without words/tokens',
+      { areas: [{ name: 'templates' }], total: { words: 1, tokens: 1 } },
+    ],
+    [
+      'area with string words',
+      { areas: [{ name: 'templates', words: '6', tokens: 6 }], total: { words: 6, tokens: 6 } },
+    ],
+    ['total without numbers', { areas: [{ name: 'templates', words: 6, tokens: 6 }], total: {} }],
+  ])('t11 malformed baseline (%s): exit 1, clear stderr, no NaN', async (_, bad) => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const code = await handleTokensCommand(
+      cfg({ json: false, baseline: '/r/b.json' }),
+      new InMemoryFileSystemService({ ...files, '/r/b.json': JSON.stringify(bad) }, '/', '/'),
+    )
+    const out = log.mock.calls.map(x => x[0]).join('\n')
+    expect(code).toBe(1)
+    expect(out).not.toContain('NaN')
+    expect(err.mock.calls.map(x => x[0]).join('\n')).toMatch(
+      /baseline .* is not a tokens --json report/,
+    )
+  })
 })
