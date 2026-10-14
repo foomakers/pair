@@ -51,6 +51,8 @@ CI_TESTS=(
   "concurrent-install.sh"
   "no-dataset-in-artifacts.sh"
   "github-dispatch-adapter.sh"
+  "update-removes-files.sh"
+  "inspect-commands.sh"
   "run-card.sh"
   "cycle-hooks.sh"
   "runner-outcomes.sh"
