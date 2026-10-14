@@ -55,7 +55,7 @@ Style:
 - Telegraphic: drop articles, auxiliaries, connectives.
 - No prose paragraph, no recap, no restated context (link the card, ADR, commit).
 - One fact per bullet; numbers over adjectives.
-- Within the template's `<!-- word-limits -->`; check before publishing: `node scripts/word-limits.mjs check --template <template.md> --body <body.md>` (exit 1 lists each section over its limit).
+- Within the template's `<!-- word-limits -->`; check before publishing: `node <skill dir>/scripts/word-limits.mjs check --template <template.md> --body <body.md>` (exit 1 lists each section over its limit).
 
 Skeletons:
 
