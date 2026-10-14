@@ -25,6 +25,15 @@ export function readTags(): Record<string, string> {
   return tags
 }
 
+export function readTagParents(): Record<string, string> {
+  const parents: Record<string, string> = {}
+  for (const t of sh('git', ['tag', '-l', 'v*']).split('\n').filter(Boolean)) {
+    const parent = sh('git', ['rev-list', '-n1', '--parents', t]).split(' ')[1]
+    if (parent) parents[t] = parent
+  }
+  return parents
+}
+
 export function readBumps(dir = join(REPO_ROOT, '.changeset')): Bump[] {
   return readdirSync(dir)
     .filter(f => f.endsWith('.md') && f !== 'README.md')
@@ -70,6 +79,7 @@ export function main(argv = process.argv.slice(2)): number {
   const plan = planRelease({
     channel,
     tags: readTags(),
+    tagParents: readTagParents(),
     bumps: readBumps(),
     head: readHead(flag('--no-fetch')),
     override: val('--version'),

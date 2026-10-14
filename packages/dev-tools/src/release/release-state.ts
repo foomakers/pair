@@ -9,6 +9,8 @@ export interface PlanInput {
   channel: Channel
   /** every `v*` tag → the commit it points at */
   tags: Record<string, string>
+  /** tag → first parent of the commit it points at (pre/rc tags sit on an ephemeral release commit) */
+  tagParents?: Record<string, string> | undefined
   /** bump of each pending changeset */
   bumps: Bump[]
   head: string
@@ -68,7 +70,7 @@ export function predecessors(version: string, tags: string[]): string[] {
   return tags.filter(t => {
     const p = parseTag(t)
     if (!p || p.channel === 'final' || t === `v${version}`) return false
-    if (p.base !== me.base) return cmp(p.base, me.base) !== 0
+    if (p.base !== me.base) return cmp(p.base, me.base) < 0
     return me.channel === 'final' || (p.channel === me.channel && p.n < me.n)
   })
 }
@@ -98,7 +100,7 @@ export function planRelease(i: PlanInput): Plan {
     return refuse(`backward: ${base} already has a later channel than ${i.channel}`)
 
   const same = mine.filter(([, p]) => p!.channel === i.channel)
-  if (same.some(([t]) => i.tags[t] === i.head))
+  if (same.some(([t]) => i.tags[t] === i.head || i.tagParents?.[t] === i.head))
     return refuse(`no new commits on main since the last ${i.channel} of ${base}`)
 
   const n = Math.max(0, ...same.map(([, p]) => p!.n)) + 1
