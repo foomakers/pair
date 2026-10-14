@@ -73,7 +73,10 @@ EOF
 cat >"$STUB/claude" <<EOF
 #!/usr/bin/env node
 require('fs').appendFileSync('$ENGINE_LOG', JSON.stringify(process.argv.slice(2)) + '\n')
-process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\n')
+const prompt = process.argv.join(' ')
+// A --parallel selection reads PAIR-ROOT-CANDIDATES from the stream: answer it with an empty set.
+const result = prompt.includes('PAIR-ROOT-CANDIDATES') ? 'PAIR-ROOT-CANDIDATES: {"candidates":[]}' : ''
+process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }) + '\n')
 EOF
 chmod +x "$STUB/gh" "$STUB/claude"
 export PATH="$STUB:$PATH"
@@ -130,6 +133,34 @@ assert_output_contains "Cycle status: failed-implement" || FAILED=1
 grep -q "/pair-workflow-implement-phase" "$ENGINE_LOG" || fail "the implement stage was never dispatched"
 if grep -q "/pair-workflow-red-spec" "$ENGINE_LOG"; then fail "a fresh card dispatched a preparation before any code"; fi
 [ -d "$WORK/pair-worktrees/12" ] || fail "the story worktree was not created under the script's root"
+
+# ── 4b. #543 AC7: the v0.5.0 run flags, each asserted at its shipped outcome (stub engine, no spawn
+#    that matters). A mismatch with these is a product bug card, never a reason to edit the assertion. ──
+log_info "Test 4b-1: --root --parallel 2 with an empty selection ⇒ clean 'Nothing to do'"
+: >"$ENGINE_LOG"
+run_pair run --root 12 --parallel 2 || fail "--root --parallel 2 exited non-zero"
+assert_output_contains "Requested: --parallel 2" || FAILED=1
+assert_output_contains "Nothing to do: pair-next --root 12 selected no card." || FAILED=1
+
+log_info "Test 4b-2: --watch --max-iterations 1 ⇒ one iteration, stops on the cap"
+run_pair run --root 12 --parallel 2 --watch --max-iterations 1 || fail "--watch --max-iterations 1 exited non-zero"
+assert_output_contains "Loop stopped after 1 iteration(s): iteration cap" || FAILED=1
+
+log_info "Test 4b-3: --watch without --parallel is refused"
+if run_pair run --watch --max-iterations 1 --autonomous; then fail "--watch without --parallel was accepted"; fi
+assert_output_contains "--watch requires --parallel" || FAILED=1
+
+log_info "Test 4b-4: --until ready stops at the prepare→implement boundary, nothing spawned"
+: >"$ENGINE_LOG"
+run_pair run --card 12 --autonomous --until ready || fail "--until ready exited non-zero"
+assert_output_contains "Cycle status: target-ready" || FAILED=1
+[ "$(spawns)" = "0" ] || fail "--until ready spawned a stage"
+
+log_info "Test 4b-5: --engine pi without pi installed ⇒ engine-not-located, nothing spawned"
+if run_pair run --card 12 --autonomous --engine pi; then fail "a missing engine was accepted"; fi
+assert_output_contains "Engine 'pi' could not be located" || FAILED=1
+[ "$(spawns)" = "0" ] || fail "a stage was spawned without its engine"
+rm -rf "$MAIN/.pair/working/runs"
 
 # ── 5. AC11: the FIRST stage's missing agent definition HALTs agent-definition-missing before any
 #    spawn (the role is checked per packet: a later stage's role is checked when that stage is due) ─
