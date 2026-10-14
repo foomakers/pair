@@ -1,11 +1,13 @@
 # Pull Request Template
 
+<!-- word-limits: PR Information=60; Summary=120; Changes Made=150; Services to Release=60; Testing=100; Screenshots=20; Quality Assurance=60; Deployment Information=80; Breaking Changes=80; Documentation=60; Performance Impact=80; Security Considerations=80; Accessibility=60; Risk Assessment=100; Reviewer Guide=120; Dependencies & Related Work=80; Stakeholder Communication=80 ; Pre-Submission Checklist=80 -->
+
 ## PR Information
 
-> Conditional — the `Refs:` line closing this block is included ONLY when the code host differs from the PM tool (`way-of-working.md` → `## Git Workflow` → `code-host`); omit the line entirely on a single-tool project, where the host links PR and item natively. It is the PR → item half of the text-convention cross-link: `/pair-capability-publish-pr` writes it verbatim from the story id, `/pair-process-review` Step 1.2 and `/pair-next`'s open-PR row read it back. Keep the token PLAIN — nothing before it on the line, no bold, **no trailing markdown hard-break spaces** — and keep it in its own paragraph, so the convention's anchored read-back (`^Refs:[ \t]*(.+?)[ \t]*$`) captures the item id and nothing else.
+> Conditional — the closing `Refs:` line is included ONLY when the code host differs from the PM tool (`way-of-working.md` → `## Git Workflow` → `code-host`); omit it on a single-tool project (the host links PR and item natively). It is the PR → item half of the text-convention cross-link: `/pair-capability-publish-pr` writes it verbatim from the story id; `/pair-process-review` Step 1.2 and `/pair-next`'s open-PR row read it back. Keep the token PLAIN — nothing before it on the line, no bold, **no trailing markdown hard-break spaces** — in its own paragraph, so the anchored read-back (`^Refs:[ \t]*(.+?)[ \t]*$`) captures the item id and nothing else.
 
-**PR Title:** [US-XXX] [type]: [brief description of changes]  
-**Story/Epic:** [Link to user story or epic]  
+**PR Title:** [US-XXX] [type]: [brief description]  
+**Story/Epic:** [Link]  
 **Type:** [Feature/Bug Fix/Refactor/Chore/Documentation/Hotfix]  
 **Priority:** [High/Medium/Low]  
 **Assignee:** [Developer name]  
@@ -18,50 +20,50 @@ Refs: [PM-tool item id — renders as `Refs: ENG-412`]
 
 ### What Changed
 
-[Brief description of what was implemented, fixed, or changed in this PR]
+[What was implemented, fixed or changed]
 
 ### Why This Change
 
-[Explanation of the business value, problem solved, or improvement delivered]
+[Business value, problem solved or improvement delivered]
 
 ### Story Context
 
-**User Story:** [Copy the user story statement]  
-**Acceptance Criteria:** [Reference to acceptance criteria being addressed]
+**User Story:** [Story statement]  
+**Acceptance Criteria:** [Criteria addressed]
 
 ## Changes Made
 
 ### Implementation Details
 
-- [ ] **Change 1:** [Specific implementation detail]
-- [ ] **Change 2:** [Another key implementation aspect]
-- [ ] **Change 3:** [Additional change made]
-- [ ] **Change 4:** [Further implementation details]
+- [ ] **Change 1:** [Implementation detail]
+- [ ] **Change 2:** [Key implementation aspect]
+- [ ] **Change 3:** [Change made]
+- [ ] **Change 4:** [Further detail]
 
 ### Files Changed
 
-- **Modified:** [List of key files modified]
-- **Added:** [New files created]
-- **Deleted:** [Files removed if any]
-- **Renamed:** [Files renamed if any]
+- **Modified:** [Key files]
+- **Added:** [New files]
+- **Deleted:** [Removed files]
+- **Renamed:** [Renamed files]
 
 ### Database Changes
 
-- [ ] **Schema Changes:** [Database schema modifications]
-- [ ] **Migration Scripts:** [Data migration requirements]
-- [ ] **Data Changes:** [Data updates or transformations]
-- [ ] **Performance Impact:** [Database performance considerations]
+- [ ] **Schema Changes:** […]
+- [ ] **Migration Scripts:** [Data migration needs]
+- [ ] **Data Changes:** [Updates or transformations]
+- [ ] **Performance Impact:** […]
 
 ### API Changes
 
-- [ ] **New Endpoints:** [New API endpoints added]
-- [ ] **Modified Endpoints:** [Existing endpoints changed]
-- [ ] **Breaking Changes:** [Any breaking changes to API]
-- [ ] **Documentation:** [API documentation updates]
+- [ ] **New Endpoints:** […]
+- [ ] **Modified Endpoints:** […]
+- [ ] **Breaking Changes:** […]
+- [ ] **Documentation:** [API docs updates]
 
 ## Services to Release
 
-> Conditional — include ONLY when the branch touches one or more **deployable** packages/services. Derived from `git diff --name-only <base-branch>...HEAD` grouped by owning package (`packages/*`, `apps/*`), keeping only deployable ones — exclude content/docs-only packages (e.g. `packages/knowledge-hub`, `apps/website` content). Omit the whole section when nothing deployable changed.
+> Conditional — include ONLY when the branch touches **deployable** packages/services, derived from `git diff --name-only <base-branch>...HEAD` grouped by owning package (`packages/*`, `apps/*`); exclude content/docs-only packages (e.g. `packages/knowledge-hub`, `apps/website` content). Omit the whole section when nothing deployable changed.
 
 - **[package/service name]:** [what changed, release-relevant summary]
 
@@ -69,10 +71,10 @@ Refs: [PM-tool item id — renders as `Refs: ENG-412`]
 
 ### Test Coverage
 
-- [ ] **Unit Tests:** [New unit tests added and coverage percentage]
-- [ ] **Integration Tests:** [Integration test coverage]
-- [ ] **End-to-End Tests:** [E2E test scenarios covered]
-- [ ] **Manual Testing:** [Manual testing completed]
+- [ ] **Unit Tests:** [New tests, coverage %]
+- [ ] **Integration Tests:** […]
+- [ ] **End-to-End Tests:** [E2E scenarios]
+- [ ] **Manual Testing:** [Completed checks]
 
 ### Test Results
 
@@ -86,14 +88,14 @@ Linting: ✅ Clean
 
 ### Testing Strategy
 
-- **Happy Path:** [Main user journey tested]
-- **Edge Cases:** [Boundary conditions and edge cases]
-- **Error Handling:** [Error scenarios and recovery]
-- **Performance:** [Performance testing results]
+- **Happy Path:** [Main journey]
+- **Edge Cases:** [Boundaries]
+- **Error Handling:** [Error scenarios, recovery]
+- **Performance:** [Results]
 
 ## Screenshots
 
-> Conditional — include ONLY when the diff touches UI (per the project's UI package globs, else a path heuristic). Show before/after. Omit the whole section for non-UI changes; if UI changed but no capture is available, keep the section with a `TODO: attach before/after` marker.
+> Conditional — include ONLY when the diff touches UI (project UI package globs, else a path heuristic); before/after. Omit for non-UI changes; if UI changed but no capture is available, keep the section with a `TODO: attach before/after` marker.
 
 | Before | After |
 | ------ | ----- |
@@ -103,21 +105,21 @@ Linting: ✅ Clean
 
 ### Code Quality Checklist
 
-- [ ] Code follows established style guides and conventions
-- [ ] Functions and classes have appropriate documentation
-- [ ] Error handling implemented for edge cases
+- [ ] Style guides and conventions followed
+- [ ] Functions and classes documented
+- [ ] Error handling for edge cases
 - [ ] Security best practices followed
 - [ ] Performance considerations addressed
-- [ ] No debugging code or console logs left behind
+- [ ] No debugging code or console logs left
 
 ### Review Areas
 
-- [ ] **Business Logic:** Verify implementation matches requirements
-- [ ] **Code Structure:** Check for maintainability and readability
-- [ ] **Error Handling:** Ensure robust error handling and recovery
-- [ ] **Performance:** Review for performance implications
-- [ ] **Security:** Check for security vulnerabilities
-- [ ] **Testing:** Validate test coverage and quality
+- [ ] **Business Logic:** implementation matches requirements
+- [ ] **Code Structure:** maintainability and readability
+- [ ] **Error Handling:** robust handling and recovery
+- [ ] **Performance:** performance implications
+- [ ] **Security:** vulnerabilities
+- [ ] **Testing:** coverage and quality
 
 ## Deployment Information
 
@@ -130,101 +132,101 @@ Linting: ✅ Clean
 
 ### Deployment Notes
 
-- **Database Migration:** [Required migration steps]
-- **Configuration Changes:** [Environment variable updates]
-- **Feature Flags:** [Feature flag configuration]
-- **Dependencies:** [New dependencies or version updates]
+- **Database Migration:** [Steps]
+- **Configuration Changes:** [Environment variables]
+- **Feature Flags:** [Configuration]
+- **Dependencies:** [New or updated]
 
 ### Rollback Plan
 
-[Steps to rollback this change if issues are discovered post-deployment]
+[Steps to roll back if issues appear post-deployment]
 
 ## Breaking Changes
 
 ### API Breaking Changes
 
-- [ ] **Endpoint Changes:** [Modified or removed endpoints]
-- [ ] **Request/Response Format:** [Changes to data structures]
+- [ ] **Endpoint Changes:** [Modified or removed]
+- [ ] **Request/Response Format:** [Data structure changes]
 - [ ] **Authentication:** [Authentication or authorization changes]
 
 ### Integration Breaking Changes
 
-- [ ] **Third-party Services:** [Changes affecting external integrations]
-- [ ] **Internal Services:** [Changes affecting other internal systems]
-- [ ] **Client Applications:** [Changes affecting frontend or mobile apps]
+- [ ] **Third-party Services:** [External integrations affected]
+- [ ] **Internal Services:** [Internal systems affected]
+- [ ] **Client Applications:** [Frontend or mobile apps affected]
 
 ### Migration Guide
 
-[Instructions for updating dependent systems or client code]
+[How to update dependent systems or client code]
 
 ## Documentation
 
 ### Documentation Updates
 
-- [ ] **README:** [README file updates made]
-- [ ] **API Documentation:** [API docs updated]
-- [ ] **User Documentation:** [User-facing documentation changes]
+- [ ] **README:** […]
+- [ ] **API Documentation:** […]
+- [ ] **User Documentation:** […]
 - [ ] **Technical Documentation:** [Architecture or technical docs]
 
 ### Knowledge Sharing
 
-- [ ] **Technical Decisions:** [Key technical decisions documented]
-- [ ] **Learning Notes:** [Lessons learned or new knowledge gained]
-- [ ] **Best Practices:** [New patterns or practices established]
+- [ ] **Technical Decisions:** [Documented decisions]
+- [ ] **Learning Notes:** [Lessons or new knowledge]
+- [ ] **Best Practices:** [New patterns or practices]
 
 ## Performance Impact
 
 ### Performance Metrics
 
-- **Load Time:** [Impact on application load time]
-- **Response Time:** [API response time changes]
-- **Memory Usage:** [Memory footprint changes]
-- **Database Performance:** [Database query performance impact]
+- **Load Time:** […]
+- **Response Time:** [API changes]
+- **Memory Usage:** [Footprint changes]
+- **Database Performance:** [Query impact]
 
 ### Benchmarking Results
 
 ```text
-Before: [Performance baseline metrics]
-After:  [Performance after changes]
-Impact: [Improvement/degradation percentage]
+Before: [Baseline metrics]
+After:  [Metrics after changes]
+Impact: [Improvement/degradation %]
 ```
 
 ### Monitoring
 
-- [ ] **Metrics Added:** [New monitoring metrics implemented]
-- [ ] **Alerts Configured:** [Performance alerts set up]
-- [ ] **Dashboards Updated:** [Monitoring dashboards modified]
+- [ ] **Metrics Added:** […]
+- [ ] **Alerts Configured:** […]
+- [ ] **Dashboards Updated:** […]
 
 ## Security Considerations
 
 ### Security Review
 
-- [ ] **Authentication:** [Authentication mechanisms reviewed]
-- [ ] **Authorization:** [Access control properly implemented]
-- [ ] **Data Protection:** [Sensitive data handling reviewed]
-- [ ] **Input Validation:** [User input properly validated]
-- [ ] **Dependency Security:** [Dependencies scanned for vulnerabilities]
+- [ ] **Authentication:** [Mechanisms reviewed]
+- [ ] **Authorization:** [Access control]
+- [ ] **Data Protection:** [Sensitive data handling]
+- [ ] **Input Validation:** [User input validated]
+- [ ] **Dependency Security:** [Dependencies scanned]
 
 ### Security Testing
 
-- [ ] **Security Scan:** [Automated security scanning completed]
-- [ ] **Penetration Testing:** [Manual security testing if required]
-- [ ] **Compliance Check:** [Regulatory compliance verified]
+- [ ] **Security Scan:** [Automated scan completed]
+- [ ] **Penetration Testing:** [Manual testing if required]
+- [ ] **Compliance Check:** [Regulatory compliance]
 
 ## Accessibility
 
 ### Accessibility Compliance
 
-- [ ] **WCAG 2.1 AA:** [Accessibility standards compliance]
-- [ ] **Screen Reader:** [Screen reader compatibility tested]
-- [ ] **Keyboard Navigation:** [Keyboard accessibility verified]
-- [ ] **Color Contrast:** [Color contrast requirements met]
+- [ ] **WCAG 2.1 AA:** [Standards compliance]
+- [ ] **Screen Reader:** [Compatibility tested]
+- [ ] **Keyboard Navigation:** [Verified]
+- [ ] **Color Contrast:** [Requirements met]
 
 ### Accessibility Testing
 
-- [ ] **Automated Testing:** [Accessibility testing tools used]
-- [ ] **Manual Testing:** [Manual accessibility verification]
-- [ ] **User Testing:** [Testing with accessibility users if applicable]
+- [ ] **Automated Testing:** [Tools used]
+- [ ] **Manual Testing:** [Manual verification]
+- [ ] **User Testing:** [With accessibility users, if applicable]
 
 ## Risk Assessment
 
@@ -246,22 +248,9 @@ Impact: [Improvement/degradation percentage]
 
 ### Review Focus Areas
 
-1. **Business Logic Validation:**
-
-   - Verify implementation matches acceptance criteria
-   - Check edge cases and error scenarios
-   - Validate user experience flows
-
-2. **Code Quality Assessment:**
-
-   - Review code structure and organization
-   - Check for code reusability and maintainability
-   - Verify naming conventions and documentation
-
-3. **Technical Implementation:**
-   - Assess architectural decisions
-   - Review performance implications
-   - Validate security considerations
+1. **Business Logic Validation:** implementation matches acceptance criteria; edge cases and error scenarios; user experience flows
+2. **Code Quality Assessment:** structure and organization; reusability and maintainability; naming conventions and documentation
+3. **Technical Implementation:** architectural decisions; performance implications; security considerations
 
 ### Testing the Changes
 
@@ -271,44 +260,44 @@ Impact: [Improvement/degradation percentage]
 
 ### Key Test Scenarios
 
-1. **Scenario 1:** [Step-by-step testing instructions]
-2. **Scenario 2:** [Another test scenario]
-3. **Scenario 3:** [Edge case testing]
+1. **Scenario 1:** [Step-by-step instructions]
+2. **Scenario 2:** [Another scenario]
+3. **Scenario 3:** [Edge case]
 
 ## Dependencies & Related Work
 
 ### Blocking Dependencies
 
-- [ ] **PR Dependency:** [Link to dependent PRs that must merge first]
-- [ ] **Infrastructure:** [Infrastructure changes required]
+- [ ] **PR Dependency:** [PRs that must merge first]
+- [ ] **Infrastructure:** [Changes required]
 - [ ] **Third-party:** [External service updates needed]
 
 ### Related PRs
 
-- **Follows:** [Link to PRs this builds upon]
-- **Blocks:** [Link to PRs waiting for this]
-- **Related:** [Link to related or parallel work]
+- **Follows:** [PRs this builds upon]
+- **Blocks:** [PRs waiting for this]
+- **Related:** [Related or parallel work]
 
 ### Follow-up Work
 
-- [ ] **Technical Debt:** [Technical debt created or addressed]
-- [ ] **Future Enhancements:** [Planned future improvements]
-- [ ] **Monitoring:** [Ongoing monitoring requirements]
+- [ ] **Technical Debt:** [Created or addressed]
+- [ ] **Future Enhancements:** [Planned]
+- [ ] **Monitoring:** [Ongoing needs]
 
 ## Stakeholder Communication
 
 ### Stakeholder Notification
 
-- [ ] **Product Owner:** [Product owner approval needed]
-- [ ] **Business Stakeholders:** [Business stakeholder communication]
-- [ ] **Customer Support:** [Customer support team notification]
-- [ ] **Operations Team:** [Operations team awareness needed]
+- [ ] **Product Owner:** [Approval needed]
+- [ ] **Business Stakeholders:** [Communication]
+- [ ] **Customer Support:** [Notification]
+- [ ] **Operations Team:** [Awareness needed]
 
 ### Communication Plan
 
-- **Before Merge:** [Pre-deployment communication needed]
-- **After Deployment:** [Post-deployment communication plan]
-- **Issue Response:** [Plan for handling deployment issues]
+- **Before Merge:** [Pre-deployment communication]
+- **After Deployment:** [Post-deployment communication]
+- **Issue Response:** [Handling deployment issues]
 
 ---
 
@@ -319,7 +308,7 @@ Type emphasis: Feature → user impact + technical decisions; Bug Fix → proble
 ### Before Creating PR
 
 - [ ] All acceptance criteria implemented and tested
-- [ ] Code follows team standards and style guides
+- [ ] Team standards and style guides followed
 - [ ] All tests passing (unit, integration, E2E)
 - [ ] Documentation updated where necessary
 - [ ] Security considerations reviewed
@@ -328,10 +317,10 @@ Type emphasis: Feature → user impact + technical decisions; Bug Fix → proble
 
 ### PR Description Complete
 
-- [ ] Clear summary of changes and business value
+- [ ] Summary of changes and business value
 - [ ] Testing strategy and results documented
 - [ ] Deployment considerations noted
-- [ ] Review areas highlighted for reviewers
+- [ ] Review areas highlighted
 - [ ] Related work and dependencies linked
 
 ### Ready for Review

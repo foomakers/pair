@@ -1,7 +1,8 @@
 # Task Template
 
-> **Note**: This template is used to document individual tasks within the Task Breakdown section of a User Story.
-> Tasks are appended to the story body using this format.
+<!-- word-limits: Task Information=30; Summary=30; Task Type=10; Description=80; Acceptance Criteria=90; Implementation Approach=120; Dependencies=50; Implementation Steps=70; Testing Strategy=50; Notes=50; Task Breakdown Format for Story Body=60; Task Breakdown=500 -->
+
+> Documents individual tasks in a User Story's Task Breakdown; tasks are appended to the story body in this format.
 
 ## Task Information
 
@@ -12,7 +13,7 @@
 
 ## Summary
 
-[Clear, concise description of what needs to be accomplished]
+[What needs to be accomplished]
 
 ## Task Type
 
@@ -20,85 +21,83 @@
 
 ## Description
 
-[Comprehensive explanation of task requirements, context, and expected outcomes]
+[Requirements, context, expected outcomes]
 
 ## Acceptance Criteria
 
 #### Completion Criteria:
 
-- **Primary deliverable:** [Main output or result expected]
-- **Quality standard:** [Code quality, test coverage, or documentation standard]
-- **Integration requirement:** [How this integrates with existing system]
-- **Verification method:** [How completion will be verified]
+- **Primary deliverable:** [Main output]
+- **Quality standard:** [Code quality, test coverage or documentation standard]
+- **Integration requirement:** [Integration with the existing system]
+- **Verification method:** [How completion is verified]
 
 #### Technical Requirements:
 
-- **Functionality:** [Specific functional requirements]
-- **Performance:** [Performance or efficiency requirements]
-- **Security:** [Security considerations or requirements]
-- **Compatibility:** [Browser, platform, or system compatibility]
+- **Functionality:** [Functional requirements]
+- **Performance:** [Performance or efficiency]
+- **Security:** [Security]
+- **Compatibility:** [Browser, platform or system]
 
 ## Implementation Approach
 
 **Technical Design:**
-[High-level approach to implementing the task]
+[High-level approach]
 
 #### Bounded Context & Modules:
 
-- **Bounded Context:** [Specific context for implementation]
-- **Affected Modules:** [Specific components that will be modified]
+- **Bounded Context:** [Implementation context]
+- **Affected Modules:** [Components modified]
 
 #### Files to Modify/Create:
 
-- `path/to/file.ext` - [Purpose of changes]
-- `path/to/file.ext` - [What will be modified]
-- `path/to/file.ext` - [New file creation purpose]
+- `path/to/file.ext` - [Purpose]
+- `path/to/file.ext` - [What is modified]
+- `path/to/file.ext` - [New file purpose]
 
 #### Technical Standards References:
 
-- [Link to relevant Architecture Guidelines section]
-- [Link to relevant Code Design Guidelines section]
-- [Link to relevant Testing Strategy section]
+- [Architecture Guidelines section]
+- [Code Design Guidelines section]
+- [Testing Strategy section]
 
 ## Dependencies
 
 #### Technical Dependencies:
 
-- [Required library, service, or component]
+- [Library, service or component]
 
 #### Task Dependencies:
 
-- [Other tasks that must be completed first]
+- [Tasks to complete first]
 
 #### Resource Dependencies:
 
-- [Required access, credentials, or permissions]
+- [Access, credentials or permissions]
 
 ## Implementation Steps
 
-1. **Step 1:** [Specific action or milestone]
-2. **Step 2:** [Next implementation step]
-3. **Step 3:** [Subsequent development action]
-4. **Step 4:** [Testing or validation step]
-5. **Step 5:** [Documentation or cleanup step]
+1. **Step 1:** [Action or milestone]
+2. **Step 2:** [Next step]
+3. **Step 3:** [Next development action]
+4. **Step 4:** [Testing or validation]
+5. **Step 5:** [Documentation or cleanup]
 
 ## Testing Strategy
 
-**Unit Tests:** [Required unit test coverage and scenarios]  
-**Integration Tests:** [Integration testing requirements]  
-**Manual Testing:** [Manual verification steps needed]
+**Unit Tests:** [Coverage and scenarios]  
+**Integration Tests:** [Requirements]  
+**Manual Testing:** [Verification steps]
 
 ## Notes
 
-[Space for technical decisions, implementation details, or architectural choices]
+[Technical decisions, implementation details, architectural choices]
 
 ---
 
 ## Task Breakdown Format for Story Body
 
-When appending tasks to a User Story, use this format. The Task Breakdown is
-appended after Technical Analysis (last content section in the story body,
-before the footer).
+Appended after Technical Analysis (last content section of the story body, before the footer):
 
 ```markdown
 ## Task Breakdown
@@ -128,18 +127,18 @@ before the footer).
 
 **Priority:** P0 | **Estimated Hours:** 4h | **Bounded Context:** [Context]
 
-**Summary:** [Brief description]
+**Summary:** [Description]
 
 **Type:** Feature Implementation
 
-**Description:** [Detailed explanation]
+**Description:** [Explanation]
 
 **Acceptance Criteria:**
 
-- Primary deliverable: [Deliverable]
-- Quality standard: [Standard]
-- Integration requirement: [Requirement]
-- Verification method: [Method]
+- Primary deliverable: […]
+- Quality standard: […]
+- Integration requirement: […]
+- Verification method: […]
 
 **Technical Requirements:**
 
@@ -171,11 +170,11 @@ before the footer).
 - Unit Tests: [Coverage]
 - Integration Tests: [Requirements]
 
-**Notes:** [Any additional context]
+**Notes:** [Context]
 
 ---
 
 ### T-2: [Task title]
 
-[Repeat format for each task]
+[Repeat per task]
 ```

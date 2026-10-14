@@ -37,8 +37,8 @@ export function finalExitCode(pending: unknown): number {
 
 type ResolvedOptions = ReturnType<typeof resolveOptions>
 
-/** kb-* inspection/validation commands, split out to keep each dispatch small */
-type KbCommandConfig = Extract<CommandConfig, { command: `kb-${string}` }>
+/** kb-* inspection/validation commands (+ tokens), split out to keep each dispatch small */
+type KbCommandConfig = Extract<CommandConfig, { command: `kb-${string}` | 'tokens' }>
 
 /**
  * Dispatch CommandConfig to appropriate handler using command registry
@@ -84,6 +84,8 @@ function dispatchKbCommand(
   opts: ResolvedOptions,
 ): Promise<void> {
   switch (config.command) {
+    case 'tokens':
+      return dispatchWithExitCode(() => commandRegistry.tokens.handle(config, fs))
     case 'kb-validate':
       return commandRegistry['kb-validate'].handle(config, fs)
     case 'kb-verify':

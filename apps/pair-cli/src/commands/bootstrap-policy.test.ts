@@ -28,6 +28,7 @@ describe('requiresKbBootstrap', () => {
       'validate-config',
       'update-link',
       'kb-cache',
+      'tokens',
     ])
       expect(requiresKbBootstrap(cmd), `${cmd} must not trigger a KB download`).toBe(false)
   })

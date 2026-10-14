@@ -4,6 +4,10 @@ This repository uses a structured approach for AI agents. **Always start by read
 
 In all interactions and commit messages, be extremely coincise and sacrify grammar for the sake of coincision.
 
+Default style: terse, no recap, no preamble.
+
+Minimal code: the least code that solves the task, no speculative abstractions.
+
 ## Skill-Enabled Assistants
 
 If your agent supports **Agent Skills** (agentskills.io), start every session by running:
@@ -18,7 +22,7 @@ The `/pair-next` skill reads project adoption files and PM tool state to recomme
 
 ## 🧠 Session Context (Maintain Throughout Conversation)
 
-**CRITICAL**: Establish and maintain these 4 key pieces of information for the entire session:
+**CRITICAL**: Establish and maintain these 4 pieces of information for the entire session:
 
 ```text
 SESSION STATE:
@@ -28,28 +32,14 @@ SESSION STATE:
 └── PM Access: [MCP command | URL/location for project management queries]
 ```
 
-### Example session state
-
-```text
-How-to: 10-how-to-implement-a-task.md
-Role: product-engineer
-PM Tool: GitHub Projects
-PM Access: MCP github_projects (org: mycompany, repo: myproject)
-```
+Example: `How-to: 10-how-to-implement-a-task.md` · `Role: product-engineer` · `PM Tool: GitHub Projects` · `PM Access: MCP github_projects (org: mycompany, repo: myproject)`
 
 ### How to establish session context
 
-1. **Determine how-to**: Use task selection algorithm below
-2. **Identify role**: Check user language/request type, or ask if unclear
-3. **Find PM tool**: Read `.pair/adoption/tech/way-of-working.md` to get the current project management tool
-4. **Get PM access**: Extract tool-specific access instructions from `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md`
-
-#### PM Tool Setup Process
-
-- **Primary source**: `.pair/adoption/tech/way-of-working.md` (contains the adopted PM tool)
-- **Usage instructions**: `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` (contains tool-specific guidance)
-- **If tool not specified**: Ask developer which PM tool to use
-- **Access details**: Extract MCP commands or URLs from the framework file for your specific tool
+1. **Determine how-to**: exact match (developer names a how-to ID/filename → use it); otherwise follow "If unsure" below; category progression: induction → strategic → iteration → execution → review; when ambiguous: show top 2 matches with their tags and ask for confirmation
+2. **Identify role**: check user language/request type, or ask if unclear
+3. **Find PM tool**: read `.pair/adoption/tech/way-of-working.md` (primary source, contains the adopted PM tool); if not specified, ask the developer which PM tool to use
+4. **Get PM access**: extract MCP commands or URLs for your tool from `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md`
 
 **Include this context in ALL subsequent responses** - it ensures consistency and prevents context drift as conversations grow long.
 
@@ -70,46 +60,21 @@ PM Access: MCP github_projects (org: mycompany, repo: myproject)
 
 **Task index**: `.pair/knowledge/how-to` - consult this for precise task matching
 
-### Induction (Getting Started)
-
-| - **Create PRD** → `01-how-to-create-PRD.md`                      | Tags: prd, requirements, planning  |
-| - **Setup project** → `02-how-to-complete-bootstrap-checklist.md` | Tags: bootstrap, setup, onboarding, subdomain, bounded-context, domain-model |
-
-### Strategic (High-level Planning)
-
-| - **Plan initiatives** → `03-how-to-create-and-prioritize-initiatives.md` | Tags: initiative, roadmap, subdomain |
-| - **Break down epics** → `06-how-to-breakdown-epics.md`                   | Tags: epic, breakdown, subdomain      |
-
-### Iteration (Sprint Planning)
-
-| - **Create user stories** → `07-how-to-breakdown-user-stories.md` | Tags: story, requirements          |
-| - **Refine stories** → `08-how-to-refine-a-user-story.md`         | Tags: refine, acceptance, criteria |
-| - **Create tasks** → `09-how-to-create-tasks.md`                  | Tags: task, breakdown, assign, bounded-context |
-
-### Execution (Development)
-
-- **Implement feature** → `10-how-to-implement-a-task.md` | Tags: implement, feature, code
-
-### Review (Quality Assurance)
-
-- **Code review** → `11-how-to-code-review.md` | Tags: review, code, approve
+- **Induction**: Create PRD → `01-how-to-create-PRD.md` (prd, requirements, planning); Setup project → `02-how-to-complete-bootstrap-checklist.md` (bootstrap, setup, onboarding, subdomain, bounded-context, domain-model)
+- **Strategic**: Plan initiatives → `03-how-to-create-and-prioritize-initiatives.md` (initiative, roadmap, subdomain); Break down epics → `06-how-to-breakdown-epics.md` (epic, breakdown, subdomain)
+- **Iteration**: Create user stories → `07-how-to-breakdown-user-stories.md` (story, requirements); Refine stories → `08-how-to-refine-a-user-story.md` (refine, acceptance, criteria); Create tasks → `09-how-to-create-tasks.md` (task, breakdown, assign, bounded-context)
+- **Execution**: Implement feature → `10-how-to-implement-a-task.md` (implement, feature, code)
+- **Review**: Code review → `11-how-to-code-review.md` (review, code, approve)
 
 ## 🛠️ Essential Commands
 
 ```bash
-# Setup
-pnpm install
-
-# Development
-pnpm dlx turbo run --filter <package_name> <task>
+pnpm install                                           # setup
+pnpm dlx turbo run --filter <package_name> <task>      # development
 pnpm --filter <package_name> dev
-
-# Testing
-pnpm --filter <package_name> test
+pnpm --filter <package_name> test                      # testing
 pnpm vitest run -t "<test name>"
-
-# Quality checks
-pnpm lint --filter <package_name>
+pnpm lint --filter <package_name>                      # quality checks
 ```
 
 ## 📚 Key References
@@ -127,18 +92,13 @@ pnpm lint --filter <package_name>
 
 **Use the index**: Load `.pair/knowledge/how-to/` and match user request keywords to task `tags`
 
-### Workflow categories
-
 - **Getting started / new project?** → Induction tasks
 - **Planning roadmap / high-level design?** → Strategic tasks
 - **Sprint planning / story work?** → Iteration tasks
 - **Writing code / implementing?** → Execution tasks
 - **Quality checks / reviewing?** → Review tasks
 
-#### Role hints in request
-
-- Product Manager language → prefer `role_preference: ["product-manager"]` tasks
-- Technical/code language → prefer `product-engineer` or `staff-engineer` tasks
+Role hints: Product Manager language → prefer `role_preference: ["product-manager"]` tasks; technical/code language → prefer `product-engineer` or `staff-engineer` tasks.
 
 **Still unclear?** Show the 2 highest tag-matching tasks and ask the developer to confirm.
 
@@ -158,9 +118,7 @@ pnpm lint --filter <package_name>
 
 ## 🐛 Bug Resolution Workflow
 
-**Critical principle**: Test-first debugging prevents code changes that don't fix the actual problem.
-
-### Process
+**Critical principle**: Test-first debugging proves the fix, prevents regressions, documents behavior. Confidence: lint + tests pass before committing.
 
 1. **Understand the bug** - Read error messages, logs, and problem descriptions thoroughly
 2. **Create a failing test** - Write a test that reproduces the bug (test should FAIL)
@@ -169,81 +127,4 @@ pnpm lint --filter <package_name>
 5. **Verify fix** - Run all tests to ensure fix doesn't break anything else
 6. **Clean up** - Refactor and optimize once the test passes
 
-### Example Bug Fix
-
-```typescript
-// ❌ WRONG: modifying code before understanding the bug
-// Just changing things hoping it works
-
-// ✅ RIGHT: create test first, then fix
-// Step 1: Write failing test
-test('should handle local path in --url parameter', () => {
-  const result = isLocalPath('/absolute/path')
-  expect(result).toBe(true) // This FAILS first
-})
-
-// Step 2: Verify it fails
-// $ pnpm test  →  FAIL: expected false to equal true
-
-// Step 3: Fix the code
-function isLocalPath(str: string): boolean {
-  return str.startsWith('/') || str.startsWith('./')
-  // was missing slash check
-}
-
-// Step 4: Verify test passes
-// $ pnpm test  →  PASS
-```
-
-### Key Benefits
-
-- **Evidence-based**: Proves the fix actually works
-- **Regression prevention**: Test stays in codebase to catch future breaks
-- **Clarity**: Test documents expected behavior
-- **Confidence**: Linting + tests pass before committing
-
-## 🔄 Task Selection Algorithm
-
-1. **Exact match**: Developer mentions specific how-to ID/filename → use it
-2. **Tag matching**: Use `.pair/knowledge/how-to/` to match request keywords to task tags
-3. **Category workflow**: Follow the natural progression (induction → strategic → iteration → execution → review)
-4. **Role context**: Consider if developer specified a role (product-manager, product-engineer, staff-engineer)
-5. **When ambiguous**: Show top 2 matches with their tags and ask for confirmation
-
-**Example**: "implement login feature" → matches tags `["implement", "feature", "code"]` → task `10-how-to-implement-a-task.md`
-
----
-
-## 📝 Session Context Examples
-
-### Example 1: Implementation task
-
-```text
-SESSION STATE:
-├── How-to: 10-how-to-implement-a-task.md
-├── Role: product-engineer
-├── PM Tool: GitHub Projects
-└── PM Access: MCP github_projects --org=mycompany --repo=myproject
-```
-
-### Example 2: Planning task
-
-```text
-SESSION STATE:
-├── How-to: 06-how-to-breakdown-epics.md
-├── Role: product-manager
-├── PM Tool: Linear
-└── PM Access: https://linear.app/myteam/projects/active
-```
-
-### Example 3: Review task
-
-```text
-SESSION STATE:
-├── How-to: 11-how-to-code-review.md
-├── Role: staff-engineer
-├── PM Tool: Jira
-└── PM Access: MCP jira --project=MYPROJ --board=123
-```
-
-_This AGENTS.md follows the task-first approach: establish context, identify what you need to do, then follow the specific guidance files consistently throughout the session._
+Example: `isLocalPath('/absolute/path')` expected `true`, returns `false` → write that failing test first, then fix `str.startsWith('/') || str.startsWith('./')`, then re-run.

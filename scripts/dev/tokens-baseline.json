@@ -1,0 +1,3485 @@
+{
+  "areas": [
+    {
+      "name": "templates",
+      "files": 20,
+      "words": 15008,
+      "tokens": 27450,
+      "items": [
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/README.md",
+          "words": 2272,
+          "tokens": 4541
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/adl-template.md",
+          "words": 131,
+          "tokens": 229
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/adr-template.md",
+          "words": 227,
+          "tokens": 414
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/analysis-log-template.md",
+          "words": 160,
+          "tokens": 298
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/bounded-context-template.md",
+          "words": 381,
+          "tokens": 655
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/branch-template.md",
+          "words": 549,
+          "tokens": 1014
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/checkpoint-template.md",
+          "words": 288,
+          "tokens": 477
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/code-review-template.md",
+          "words": 1892,
+          "tokens": 3217
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/commit-template.md",
+          "words": 859,
+          "tokens": 1530
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/context-map-template.md",
+          "words": 383,
+          "tokens": 610
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/ddr-template.md",
+          "words": 177,
+          "tokens": 301
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/epic-template.md",
+          "words": 1339,
+          "tokens": 2541
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/initiative-template.md",
+          "words": 1629,
+          "tokens": 3117
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/manual-test-case-template.md",
+          "words": 256,
+          "tokens": 430
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/manual-test-report-template.md",
+          "words": 320,
+          "tokens": 486
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/pr-template.md",
+          "words": 1676,
+          "tokens": 2955
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/subdomain-context-template.md",
+          "words": 150,
+          "tokens": 254
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/subdomain-template.md",
+          "words": 187,
+          "tokens": 372
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/task-template.md",
+          "words": 578,
+          "tokens": 1090
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/templates/user-story-template.md",
+          "words": 1554,
+          "tokens": 2919
+        }
+      ]
+    },
+    {
+      "name": "adoption",
+      "files": 23,
+      "words": 17511,
+      "tokens": 33543,
+      "items": [
+        {
+          "path": ".pair/adoption/product/PRD.md",
+          "words": 2037,
+          "tokens": 3596
+        },
+        {
+          "path": ".pair/adoption/product/context-map.md",
+          "words": 977,
+          "tokens": 1706
+        },
+        {
+          "path": ".pair/adoption/product/subdomain/README.md",
+          "words": 366,
+          "tokens": 855
+        },
+        {
+          "path": ".pair/adoption/product/subdomain/adoption-guidelines.md",
+          "words": 118,
+          "tokens": 247
+        },
+        {
+          "path": ".pair/adoption/product/subdomain/code-documentation-generation.md",
+          "words": 138,
+          "tokens": 288
+        },
+        {
+          "path": ".pair/adoption/product/subdomain/collaborative-workflow.context.md",
+          "words": 2597,
+          "tokens": 4965
+        },
+        {
+          "path": ".pair/adoption/product/subdomain/collaborative-workflow.md",
+          "words": 139,
+          "tokens": 298
+        },
+        {
+          "path": ".pair/adoption/product/subdomain/development-tooling-standards.md",
+          "words": 258,
+          "tokens": 526
+        },
+        {
+          "path": ".pair/adoption/product/subdomain/how-to-knowledge.md",
+          "words": 132,
+          "tokens": 268
+        },
+        {
+          "path": ".pair/adoption/product/subdomain/integration-process-standardization.md",
+          "words": 116,
+          "tokens": 257
+        },
+        {
+          "path": ".pair/adoption/tech/README.md",
+          "words": 340,
+          "tokens": 914
+        },
+        {
+          "path": ".pair/adoption/tech/architecture.md",
+          "words": 1088,
+          "tokens": 1957
+        },
+        {
+          "path": ".pair/adoption/tech/automation.md",
+          "words": 108,
+          "tokens": 222
+        },
+        {
+          "path": ".pair/adoption/tech/boundedcontext/README.md",
+          "words": 261,
+          "tokens": 529
+        },
+        {
+          "path": ".pair/adoption/tech/boundedcontext/development-collaboration.md",
+          "words": 348,
+          "tokens": 618
+        },
+        {
+          "path": ".pair/adoption/tech/boundedcontext/integration-process-standardization.md",
+          "words": 905,
+          "tokens": 1646
+        },
+        {
+          "path": ".pair/adoption/tech/boundedcontext/knowledge-standards.md",
+          "words": 260,
+          "tokens": 468
+        },
+        {
+          "path": ".pair/adoption/tech/coverage-baseline.md",
+          "words": 634,
+          "tokens": 1200
+        },
+        {
+          "path": ".pair/adoption/tech/infrastructure.md",
+          "words": 273,
+          "tokens": 608
+        },
+        {
+          "path": ".pair/adoption/tech/risk-matrix.md",
+          "words": 895,
+          "tokens": 1584
+        },
+        {
+          "path": ".pair/adoption/tech/tech-stack.md",
+          "words": 1145,
+          "tokens": 2208
+        },
+        {
+          "path": ".pair/adoption/tech/ux-ui.md",
+          "words": 268,
+          "tokens": 480
+        },
+        {
+          "path": ".pair/adoption/tech/way-of-working.md",
+          "words": 4108,
+          "tokens": 8103
+        }
+      ]
+    },
+    {
+      "name": "adr",
+      "files": 30,
+      "words": 54166,
+      "tokens": 95120,
+      "items": [
+        {
+          "path": ".pair/adoption/tech/adr/adr-001-tty-detection-pattern.md",
+          "words": 282,
+          "tokens": 588
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-002-http-range-resume.md",
+          "words": 242,
+          "tokens": 467
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-003-checksum-validation.md",
+          "words": 278,
+          "tokens": 552
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-004-streaming-downloads.md",
+          "words": 236,
+          "tokens": 449
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-005-skills-infrastructure.md",
+          "words": 503,
+          "tokens": 1087
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-006-shared-tsconfig.md",
+          "words": 457,
+          "tokens": 937
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-007-brand-identity-package.md",
+          "words": 661,
+          "tokens": 1243
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-008-vercel-cli-deployment.md",
+          "words": 621,
+          "tokens": 1115
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-009-assess-output-only.md",
+          "words": 1040,
+          "tokens": 2121
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-010-skill-authoring-effectiveness-standard.md",
+          "words": 773,
+          "tokens": 1456
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-011-canonical-states-state-mapping.md",
+          "words": 865,
+          "tokens": 1671
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-012-map-subdomains-contexts-process-to-capability.md",
+          "words": 964,
+          "tokens": 2030
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-013-quality-model-resolution-cascade.md",
+          "words": 1534,
+          "tokens": 2819
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-014-tool-package-boundary-by-bounded-context.md",
+          "words": 1101,
+          "tokens": 2165
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-015-security-deterministic-layer-not-a-skill.md",
+          "words": 1510,
+          "tokens": 2804
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-016-ai-generated-template-contracts.md",
+          "words": 1093,
+          "tokens": 1994
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-017-automation-loop-pair-loop-over-atom.md",
+          "words": 1329,
+          "tokens": 2434
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-018-code-host-optional-wow-override.md",
+          "words": 1548,
+          "tokens": 2660
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-018-pr-state-flow-required-checks.md",
+          "words": 8503,
+          "tokens": 14244
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-020-bounded-flatten-depth-entry-granularity.md",
+          "words": 1881,
+          "tokens": 3246
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-021-approval-signal-on-the-composed-skill.md",
+          "words": 2500,
+          "tokens": 4130
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-021-fan-out-three-realizations.md",
+          "words": 1739,
+          "tokens": 2857
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-022-coverage-ratchet-exposed-through-the-cli.md",
+          "words": 1902,
+          "tokens": 3311
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-023-coverage-ratchet-ships-as-a-generated-kb-asset.md",
+          "words": 466,
+          "tokens": 842
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-024-delivery-phases-are-skills.md",
+          "words": 16683,
+          "tokens": 28813
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-024-tag-driven-dispatch-agnostic-core-host-adapter.md",
+          "words": 2357,
+          "tokens": 3669
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-025-process-profile-unit-is-the-step.md",
+          "words": 1096,
+          "tokens": 1905
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-026-pm-code-host-adapter-interface.md",
+          "words": 845,
+          "tokens": 1458
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-027-autonomy-model-selection-gates.md",
+          "words": 575,
+          "tokens": 1040
+        },
+        {
+          "path": ".pair/adoption/tech/adr/adr-028-autonomous-prepare-r3-11-exception.md",
+          "words": 582,
+          "tokens": 1013
+        }
+      ]
+    },
+    {
+      "name": "decision-log",
+      "files": 130,
+      "words": 132801,
+      "tokens": 226646,
+      "items": [
+        {
+          "path": ".pair/adoption/decision-log/2026-02-14-prompt-deletion-over-deprecation.md",
+          "words": 275,
+          "tokens": 490
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-04-17-backfill-dotenv-markdownlint.md",
+          "words": 280,
+          "tokens": 588
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-04-17-backfill-playwright-jsdom.md",
+          "words": 284,
+          "tokens": 622
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-08-grill-standalone-no-composition-context.md",
+          "words": 422,
+          "tokens": 742
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-08-husky-default-hook-manager.md",
+          "words": 453,
+          "tokens": 870
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-08-test-file-colocation-multi-module.md",
+          "words": 847,
+          "tokens": 1715
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-11-agent-execution-layer.md",
+          "words": 830,
+          "tokens": 1464
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-11-working-artifacts-task-scoped.md",
+          "words": 453,
+          "tokens": 831
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-12-adr-sequential-naming-convention.md",
+          "words": 1077,
+          "tokens": 2002
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-12-docs-website-ia-restructuring-assessment.md",
+          "words": 2505,
+          "tokens": 5149
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-12-one-pr-per-story-default.md",
+          "words": 339,
+          "tokens": 567
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-12-website-coverage-baseline.md",
+          "words": 544,
+          "tokens": 988
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-13-gate-tooling-code-in-tested-modules.md",
+          "words": 831,
+          "tokens": 1549
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-13-skill-naming-verb-taxonomy.md",
+          "words": 656,
+          "tokens": 1356
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-16-dor-dod-doc-placement.md",
+          "words": 572,
+          "tokens": 1153
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-18-conformance-test-per-file-not-per-story.md",
+          "words": 486,
+          "tokens": 897
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-18-d22-classification-verdict-collapsed-details.md",
+          "words": 554,
+          "tokens": 973
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-18-workspace-gotcha-doc-placement.md",
+          "words": 562,
+          "tokens": 1016
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-19-merge-kb-management-into-integration.md",
+          "words": 494,
+          "tokens": 985
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-20-pre-merge-tiering-opt-in.md",
+          "words": 543,
+          "tokens": 979
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-24-review-template-lane-226-228-one-pr.md",
+          "words": 342,
+          "tokens": 575
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-25-ul-borrowed-terms-and-docs-site-dissemination-ownership.md",
+          "words": 700,
+          "tokens": 1319
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-28-brainstorm-no-how-to-guide-and-no-next-cascade-row.md",
+          "words": 904,
+          "tokens": 1741
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-28-marketplace-plugin-packaging.md",
+          "words": 3714,
+          "tokens": 6339
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-28-reports-area-period-keyed-panels.md",
+          "words": 1169,
+          "tokens": 1994
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-28-scaffold-file-ownership-model.md",
+          "words": 751,
+          "tokens": 1299
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-29-yaml-parser-for-generated-yaml-tests.md",
+          "words": 483,
+          "tokens": 858
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-30-amended-adr-surfaces-the-amendment-in-status.md",
+          "words": 647,
+          "tokens": 1068
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-30-coverage-ratchet-pr-not-push.md",
+          "words": 2119,
+          "tokens": 3586
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-31-bootstrap-quick-is-a-depth-not-a-skill.md",
+          "words": 1090,
+          "tokens": 1850
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-31-pm-adapter-visibility-contract.md",
+          "words": 1014,
+          "tokens": 1701
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-07-31-pre-push-gate-is-check-only.md",
+          "words": 3073,
+          "tokens": 5173
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-11-a-mirror-guard-compares-the-transform.md",
+          "words": 3667,
+          "tokens": 6352
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-11-criticality-delta-is-authored-after-domain-modeling.md",
+          "words": 1136,
+          "tokens": 1897
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-11-criticality-rows-are-keyed-by-the-deployable-a-diff-resolves-to.md",
+          "words": 656,
+          "tokens": 1116
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-11-kb-cache-slots-keyed-by-source-identity.md",
+          "words": 6010,
+          "tokens": 9859
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-11-no-write-is-assumed.md",
+          "words": 3887,
+          "tokens": 6124
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-11-smoke-suite-runs-in-ci-pre-merge.md",
+          "words": 1692,
+          "tokens": 2846
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-11-verify-quality-pr-argument-names-the-pr-not-the-tier.md",
+          "words": 3702,
+          "tokens": 5847
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-12-implementation-never-files-a-card-it-extends-the-story.md",
+          "words": 1049,
+          "tokens": 1616
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-12-manual-cli-artifact-types-are-optional.md",
+          "words": 718,
+          "tokens": 1208
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-12-story-local-marker-ban-covers-kb-with-curated-allowlist.md",
+          "words": 604,
+          "tokens": 1127
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-13-delivery-state-is-read-from-the-pr-not-the-board.md",
+          "words": 186,
+          "tokens": 332
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-13-pair-update-deletes-what-the-mirror-no-longer-ships.md",
+          "words": 2039,
+          "tokens": 3436
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-13-the-agent-execution-layer-ships.md",
+          "words": 1033,
+          "tokens": 1702
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-13-tree-resolution-ships-as-an-executable-asset.md",
+          "words": 1108,
+          "tokens": 1984
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-14-risk-matrix-overrides-close-the-zero-green-gap.md",
+          "words": 615,
+          "tokens": 1130
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-14-tier-resolution-downgrades-artifact-yellows-not-observed-ones.md",
+          "words": 513,
+          "tokens": 985
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-19-adoption-informed-generation-is-a-convention-not-a-capability.md",
+          "words": 1430,
+          "tokens": 2473
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-19-install-outcomes-absent-is-not-failed.md",
+          "words": 1573,
+          "tokens": 2561
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-19-optional-link-globs-use-an-internal-matcher.md",
+          "words": 1526,
+          "tokens": 2537
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-20-a-changeset-is-added-when-a-release-is-scheduled.md",
+          "words": 462,
+          "tokens": 739
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-20-a-user-facing-cli-fix-carries-its-changeset.md",
+          "words": 347,
+          "tokens": 572
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-20-cp5-page-list-is-asserted-against-the-filesystem.md",
+          "words": 747,
+          "tokens": 1251
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-20-eligibility-is-one-literal-label-until-the-filter-widens.md",
+          "words": 679,
+          "tokens": 1113
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-20-eligibility-schema-lives-in-collaboration-automation.md",
+          "words": 332,
+          "tokens": 598
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-20-git-kb-current-version-is-manifest-only.md",
+          "words": 805,
+          "tokens": 1388
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md",
+          "words": 788,
+          "tokens": 1311
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-20-source-kb-declaration-is-validated-not-trusted.md",
+          "words": 2478,
+          "tokens": 4102
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-21-review-severity-classification-and-convergence.md",
+          "words": 879,
+          "tokens": 1516
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-23-bootstrap-composes-setup-harness-optionally.md",
+          "words": 648,
+          "tokens": 1280
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-23-pair-loop-auto-advance-fail-closed-default.md",
+          "words": 492,
+          "tokens": 858
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-23-pair-loop-resumes-from-its-own-audit-file-not-a-checkpoint.md",
+          "words": 491,
+          "tokens": 891
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-24-ai-metrics-panel-is-an-analyze-capability.md",
+          "words": 683,
+          "tokens": 1206
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-24-config-schema-guards-take-their-vocabulary-injected.md",
+          "words": 926,
+          "tokens": 1608
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-25-cli-invocation-canonical-name-is-pair-cli.md",
+          "words": 558,
+          "tokens": 1033
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-25-post-merge-cleanup-covers-local-branches-pr-analyses-retire-at-merge.md",
+          "words": 255,
+          "tokens": 434
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-28-a-config-reader-detects-loosely-and-accepts-strictly.md",
+          "words": 7826,
+          "tokens": 12315
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-28-a-conventions-marker-is-the-entrypoints-its-pointer-may-be-disclosed.md",
+          "words": 668,
+          "tokens": 1134
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-28-task-progress-feedback-is-one-mechanism-owned-by-implement.md",
+          "words": 1225,
+          "tokens": 2081
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-28-tier1-approval-posture-is-unconditional-and-has-no-declaring-composition-site-yet.md",
+          "words": 725,
+          "tokens": 1245
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-30-atomicity-primitives-use-node-fs-directly.md",
+          "words": 547,
+          "tokens": 910
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-30-business-impact-reads-what-a-trivial-change-does-not-where-it-lives.md",
+          "words": 2033,
+          "tokens": 3597
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-30-docs-site-journey-first-audit.md",
+          "words": 1257,
+          "tokens": 2046
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-30-docs-staleness-invocation-rule-and-repo-wide-pair-cli-sweep.md",
+          "words": 4380,
+          "tokens": 7256
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-30-empty-card-tags-is-an-observation-not-a-malformed-flag.md",
+          "words": 666,
+          "tokens": 998
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-08-31-review-baseline-and-provisioned-artifact-contract.md",
+          "words": 366,
+          "tokens": 650
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-01-a-byte-compared-generated-artifact-sorts-by-codepoint.md",
+          "words": 2030,
+          "tokens": 3228
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-01-a-gate-imports-its-generator-by-source-and-gets-a-read-only-slice.md",
+          "words": 1661,
+          "tokens": 2905
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-01-external-boundary-proof-prevents-false-equivalence.md",
+          "words": 326,
+          "tokens": 585
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-01-publish-pr-realigns-mirrors-before-the-gate.md",
+          "words": 3297,
+          "tokens": 5442
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-01-quoted-echo-arguments-are-data-not-commands.md",
+          "words": 672,
+          "tokens": 1080
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-01-repo-wide-guard-enforced-by-turbo-root-input.md",
+          "words": 1255,
+          "tokens": 2125
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-01-review-contract-inventory-prevents-serial-findings.md",
+          "words": 372,
+          "tokens": 637
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-01-workflow-guard-rejects-what-it-cannot-read.md",
+          "words": 3473,
+          "tokens": 5728
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-03-a-gate-names-a-remedy-it-can-run.md",
+          "words": 1422,
+          "tokens": 2463
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-03-the-review-severity-floor-defaults-to-minor.md",
+          "words": 453,
+          "tokens": 714
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-08-deploy-build-routes-through-turbo.md",
+          "words": 465,
+          "tokens": 835
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-08-repo-citation-anchors-are-githubs-own-slugs.md",
+          "words": 1309,
+          "tokens": 2195
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-08-repo-citations-are-gated-through-the-site-compiler.md",
+          "words": 889,
+          "tokens": 1499
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-09-deterministic-code-canary-for-delivery-workflow.md",
+          "words": 212,
+          "tokens": 388
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-10-scope-proposals-are-a-human-decision.md",
+          "words": 818,
+          "tokens": 1444
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-10-unknown-ac-card-format-fails-closed.md",
+          "words": 862,
+          "tokens": 1433
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-12-custody-never-infers-a-breach-from-what-it-cannot-see.md",
+          "words": 740,
+          "tokens": 1102
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-12-rollback-notes-are-derived-from-handoffs.md",
+          "words": 979,
+          "tokens": 1546
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-13-pr-comment-marker-matching-stays-author-blind.md",
+          "words": 850,
+          "tokens": 1434
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-13-scope-decision-identity-is-the-proposal-id.md",
+          "words": 568,
+          "tokens": 960
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-13-tech-debt-card-transport-is-claude-code-plus-github-for-now.md",
+          "words": 500,
+          "tokens": 883
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-13-the-final-reviewer-concludes-the-pair-review-check-and-the-pr-state-label.md",
+          "words": 424,
+          "tokens": 823
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-13-the-final-reviewer-finalizes-when-no-host-runtime-is-present.md",
+          "words": 660,
+          "tokens": 1167
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-13-the-paired-baseline-measurement-is-not-run.md",
+          "words": 730,
+          "tokens": 1162
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-13-the-run-directory-lock-has-an-owner-and-a-staleness-rule.md",
+          "words": 308,
+          "tokens": 521
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-13-the-scope-baseline-hash-has-a-producer-the-reviewer-can-run.md",
+          "words": 508,
+          "tokens": 911
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-13-the-scope-decision-principal-is-read-from-adoption.md",
+          "words": 344,
+          "tokens": 644
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-15-publish-pr-hooks-are-configurable-via-adoption-not-hardcoded.md",
+          "words": 383,
+          "tokens": 733
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-16-auto-advance-executes-merge-on-reverified-signals.md",
+          "words": 334,
+          "tokens": 609
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-17-freshness-is-a-transition-policy-and-the-realization-table-is-data.md",
+          "words": 793,
+          "tokens": 1324
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-18-a-custody-breach-is-waived-only-by-an-explicit-attributed-override.md",
+          "words": 1158,
+          "tokens": 1843
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-21-us-487-cycle-coordinator-contract-compromises.md",
+          "words": 843,
+          "tokens": 1614
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-22-tier-2-is-realized-at-the-stage-level-and-reuse-degrades-to-fresh.md",
+          "words": 727,
+          "tokens": 1172
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-23-pi-in-session-cycle-through-pinned-pi-subagents.md",
+          "words": 572,
+          "tokens": 1007
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-23-us-487-card-fallback-outcome-classes.md",
+          "words": 970,
+          "tokens": 1769
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-23-us-491-portable-fan-out-ports-pair-loop-analysis.md",
+          "words": 659,
+          "tokens": 1135
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-23-us-506-validator-execution-evidence-and-pre-seal-guard.md",
+          "words": 566,
+          "tokens": 980
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-24-blocking-severities-from-adoption.md",
+          "words": 1416,
+          "tokens": 2547
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-25-only-substantive-findings-cost-a-review-round.md",
+          "words": 273,
+          "tokens": 444
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-25-pr-tags-only-from-review-classification.md",
+          "words": 246,
+          "tokens": 400
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-28-codex-in-session-realization-go.md",
+          "words": 242,
+          "tokens": 447
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-29-cycle-hooks-one-executor-two-coordinators.md",
+          "words": 337,
+          "tokens": 589
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-29-first-json-adoption-file-workflow-profiles.md",
+          "words": 392,
+          "tokens": 706
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-29-mirrors-counted-once.md",
+          "words": 341,
+          "tokens": 599
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-09-30-the-batch-merges-per-the-merge-gate.md",
+          "words": 573,
+          "tokens": 1009
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-10-02-fan-out-becomes-re-selecting-watch-loop.md",
+          "words": 380,
+          "tokens": 677
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-10-05-delivery-cycle-diagrams-as-committed-svgs.md",
+          "words": 169,
+          "tokens": 284
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-10-06-atomic-target-write-staging-over-lock.md",
+          "words": 350,
+          "tokens": 582
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-10-06-doc-remediation-groups-and-transient-only-retry.md",
+          "words": 363,
+          "tokens": 648
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-10-06-loop-card-drive-rules-terminal-escalated-retry.md",
+          "words": 386,
+          "tokens": 615
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-10-06-macro-phase-modes-are-a-selection-facade.md",
+          "words": 360,
+          "tokens": 589
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-10-06-planned-marker-issue-state-lookup.md",
+          "words": 176,
+          "tokens": 291
+        },
+        {
+          "path": ".pair/adoption/decision-log/2026-10-13-legacy-eligibility-is-unattended-only.md",
+          "words": 245,
+          "tokens": 476
+        }
+      ]
+    },
+    {
+      "name": "skills",
+      "files": 52,
+      "words": 162700,
+      "tokens": 297728,
+      "items": [
+        {
+          "path": ".claude/skills/agent-browser/SKILL.md",
+          "words": 1676,
+          "tokens": 3355
+        },
+        {
+          "path": ".claude/skills/pair-capability-analyze-code-quality/SKILL.md",
+          "words": 1184,
+          "tokens": 2321
+        },
+        {
+          "path": ".claude/skills/pair-capability-analyze-debt/SKILL.md",
+          "words": 1341,
+          "tokens": 2578
+        },
+        {
+          "path": ".claude/skills/pair-capability-analyze-delivery-metrics/SKILL.md",
+          "words": 3717,
+          "tokens": 6155
+        },
+        {
+          "path": ".claude/skills/pair-capability-assess-ai/SKILL.md",
+          "words": 1164,
+          "tokens": 2587
+        },
+        {
+          "path": ".claude/skills/pair-capability-assess-architecture/SKILL.md",
+          "words": 1349,
+          "tokens": 2956
+        },
+        {
+          "path": ".claude/skills/pair-capability-assess-cost/SKILL.md",
+          "words": 6710,
+          "tokens": 11346
+        },
+        {
+          "path": ".claude/skills/pair-capability-assess-coupling/SKILL.md",
+          "words": 2285,
+          "tokens": 4556
+        },
+        {
+          "path": ".claude/skills/pair-capability-assess-infrastructure/SKILL.md",
+          "words": 1126,
+          "tokens": 2630
+        },
+        {
+          "path": ".claude/skills/pair-capability-assess-methodology/SKILL.md",
+          "words": 1131,
+          "tokens": 2657
+        },
+        {
+          "path": ".claude/skills/pair-capability-assess-observability/SKILL.md",
+          "words": 1149,
+          "tokens": 2698
+        },
+        {
+          "path": ".claude/skills/pair-capability-assess-pm/SKILL.md",
+          "words": 1246,
+          "tokens": 2856
+        },
+        {
+          "path": ".claude/skills/pair-capability-assess-security/SKILL.md",
+          "words": 2109,
+          "tokens": 4317
+        },
+        {
+          "path": ".claude/skills/pair-capability-assess-stack/SKILL.md",
+          "words": 2170,
+          "tokens": 4702
+        },
+        {
+          "path": ".claude/skills/pair-capability-assess-testing/SKILL.md",
+          "words": 1434,
+          "tokens": 3150
+        },
+        {
+          "path": ".claude/skills/pair-capability-checkpoint/SKILL.md",
+          "words": 1868,
+          "tokens": 3502
+        },
+        {
+          "path": ".claude/skills/pair-capability-classify/SKILL.md",
+          "words": 2939,
+          "tokens": 5254
+        },
+        {
+          "path": ".claude/skills/pair-capability-design-manual-tests/SKILL.md",
+          "words": 1171,
+          "tokens": 2236
+        },
+        {
+          "path": ".claude/skills/pair-capability-estimate/SKILL.md",
+          "words": 824,
+          "tokens": 1790
+        },
+        {
+          "path": ".claude/skills/pair-capability-execute-manual-tests/SKILL.md",
+          "words": 1450,
+          "tokens": 2689
+        },
+        {
+          "path": ".claude/skills/pair-capability-grill/SKILL.md",
+          "words": 2162,
+          "tokens": 4092
+        },
+        {
+          "path": ".claude/skills/pair-capability-manage-flags/SKILL.md",
+          "words": 865,
+          "tokens": 1689
+        },
+        {
+          "path": ".claude/skills/pair-capability-map-contexts/SKILL.md",
+          "words": 1980,
+          "tokens": 4076
+        },
+        {
+          "path": ".claude/skills/pair-capability-map-subdomains/SKILL.md",
+          "words": 1663,
+          "tokens": 3419
+        },
+        {
+          "path": ".claude/skills/pair-capability-publish-pr/SKILL.md",
+          "words": 11223,
+          "tokens": 18348
+        },
+        {
+          "path": ".claude/skills/pair-capability-record-decision/SKILL.md",
+          "words": 3141,
+          "tokens": 5961
+        },
+        {
+          "path": ".claude/skills/pair-capability-setup-gates/SKILL.md",
+          "words": 4800,
+          "tokens": 9257
+        },
+        {
+          "path": ".claude/skills/pair-capability-setup-harness/SKILL.md",
+          "words": 2749,
+          "tokens": 4904
+        },
+        {
+          "path": ".claude/skills/pair-capability-setup-pm/SKILL.md",
+          "words": 1892,
+          "tokens": 3709
+        },
+        {
+          "path": ".claude/skills/pair-capability-verify-adoption/SKILL.md",
+          "words": 1165,
+          "tokens": 2614
+        },
+        {
+          "path": ".claude/skills/pair-capability-verify-done/SKILL.md",
+          "words": 1728,
+          "tokens": 3270
+        },
+        {
+          "path": ".claude/skills/pair-capability-verify-quality/SKILL.md",
+          "words": 6132,
+          "tokens": 9876
+        },
+        {
+          "path": ".claude/skills/pair-capability-write-issue/SKILL.md",
+          "words": 7136,
+          "tokens": 12115
+        },
+        {
+          "path": ".claude/skills/pair-loop/SKILL.md",
+          "words": 2674,
+          "tokens": 4620
+        },
+        {
+          "path": ".claude/skills/pair-next/SKILL.md",
+          "words": 8011,
+          "tokens": 14423
+        },
+        {
+          "path": ".claude/skills/pair-process-bootstrap/SKILL.md",
+          "words": 6533,
+          "tokens": 11876
+        },
+        {
+          "path": ".claude/skills/pair-process-brainstorm/SKILL.md",
+          "words": 3926,
+          "tokens": 6984
+        },
+        {
+          "path": ".claude/skills/pair-process-implement/SKILL.md",
+          "words": 5815,
+          "tokens": 10564
+        },
+        {
+          "path": ".claude/skills/pair-process-plan-epics/SKILL.md",
+          "words": 1970,
+          "tokens": 3899
+        },
+        {
+          "path": ".claude/skills/pair-process-plan-initiatives/SKILL.md",
+          "words": 846,
+          "tokens": 1831
+        },
+        {
+          "path": ".claude/skills/pair-process-plan-stories/SKILL.md",
+          "words": 2233,
+          "tokens": 4251
+        },
+        {
+          "path": ".claude/skills/pair-process-plan-tasks/SKILL.md",
+          "words": 1581,
+          "tokens": 3104
+        },
+        {
+          "path": ".claude/skills/pair-process-refine-story/SKILL.md",
+          "words": 4402,
+          "tokens": 8454
+        },
+        {
+          "path": ".claude/skills/pair-process-review/SKILL.md",
+          "words": 12425,
+          "tokens": 21627
+        },
+        {
+          "path": ".claude/skills/pair-process-specify-prd/SKILL.md",
+          "words": 1308,
+          "tokens": 2433
+        },
+        {
+          "path": ".claude/skills/pair-workflow-contract-phase/SKILL.md",
+          "words": 531,
+          "tokens": 1039
+        },
+        {
+          "path": ".claude/skills/pair-workflow-cycle/SKILL.md",
+          "words": 6649,
+          "tokens": 11527
+        },
+        {
+          "path": ".claude/skills/pair-workflow-green-fix/SKILL.md",
+          "words": 2312,
+          "tokens": 4078
+        },
+        {
+          "path": ".claude/skills/pair-workflow-implement-phase/SKILL.md",
+          "words": 2898,
+          "tokens": 4949
+        },
+        {
+          "path": ".claude/skills/pair-workflow-red-spec/SKILL.md",
+          "words": 4268,
+          "tokens": 7613
+        },
+        {
+          "path": ".claude/skills/pair-workflow-red-verify/SKILL.md",
+          "words": 3038,
+          "tokens": 5352
+        },
+        {
+          "path": ".claude/skills/pair-workflow-review-phase/SKILL.md",
+          "words": 6601,
+          "tokens": 11439
+        }
+      ]
+    },
+    {
+      "name": "guidelines",
+      "files": 427,
+      "words": 650062,
+      "tokens": 1373285,
+      "items": [
+        {
+          "path": ".pair/knowledge/guidelines/README.md",
+          "words": 976,
+          "tokens": 2616
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/README.md",
+          "words": 762,
+          "tokens": 1652
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/architectural-patterns/README.md",
+          "words": 1179,
+          "tokens": 2430
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/architectural-patterns/clean-architecture.md",
+          "words": 1672,
+          "tokens": 4486
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/architectural-patterns/continuous-architecture.md",
+          "words": 964,
+          "tokens": 1830
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/architectural-patterns/cqrs.md",
+          "words": 304,
+          "tokens": 726
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/architectural-patterns/crud.md",
+          "words": 788,
+          "tokens": 1781
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/architectural-patterns/event-sourcing.md",
+          "words": 487,
+          "tokens": 1083
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/architectural-patterns/hexagonal.md",
+          "words": 1017,
+          "tokens": 2855
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/architectural-patterns/layer-architecture.md",
+          "words": 1179,
+          "tokens": 3013
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/architectural-patterns/transaction-script.md",
+          "words": 619,
+          "tokens": 1132
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/decision-frameworks/README.md",
+          "words": 524,
+          "tokens": 1085
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/decision-frameworks/adr-process.md",
+          "words": 975,
+          "tokens": 2022
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/decision-frameworks/decision-tracking.md",
+          "words": 1110,
+          "tokens": 2153
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/decision-frameworks/evolution-strategy.md",
+          "words": 1357,
+          "tokens": 2514
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/decision-frameworks/technology-selection.md",
+          "words": 1323,
+          "tokens": 2456
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/deployment-architectures/README.md",
+          "words": 786,
+          "tokens": 1639
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/deployment-architectures/desktop-self-hosted.md",
+          "words": 790,
+          "tokens": 1651
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/deployment-architectures/hybrid.md",
+          "words": 785,
+          "tokens": 1962
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/deployment-architectures/microservices.md",
+          "words": 573,
+          "tokens": 1272
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/deployment-architectures/modular-monolith.md",
+          "words": 544,
+          "tokens": 1140
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/deployment-architectures/serverless.md",
+          "words": 497,
+          "tokens": 1100
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/deployment-architectures/structured-monolith.md",
+          "words": 426,
+          "tokens": 878
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/design-patterns/README.md",
+          "words": 633,
+          "tokens": 1374
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/design-patterns/bounded-contexts.md",
+          "words": 545,
+          "tokens": 1177
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/design-patterns/context-map-maintenance.md",
+          "words": 1036,
+          "tokens": 1870
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/design-patterns/coupling-balance.md",
+          "words": 1668,
+          "tokens": 2844
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/design-patterns/domain-driven-design.md",
+          "words": 275,
+          "tokens": 591
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/design-patterns/integration-patterns.md",
+          "words": 388,
+          "tokens": 739
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/design-patterns/monorepo.md",
+          "words": 1300,
+          "tokens": 2697
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/design-patterns/repository-structure.md",
+          "words": 1073,
+          "tokens": 1885
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/design-patterns/strategic-subdomain-definition.md",
+          "words": 1247,
+          "tokens": 2544
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/design-patterns/system-design.md",
+          "words": 891,
+          "tokens": 1569
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/design-patterns/workspace-organization.md",
+          "words": 1073,
+          "tokens": 2265
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/llm-integration/README.md",
+          "words": 664,
+          "tokens": 1316
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/llm-integration/agent-coordination.md",
+          "words": 1442,
+          "tokens": 2801
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/llm-integration/ai-workflows.md",
+          "words": 1520,
+          "tokens": 2779
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/llm-integration/mcp-development.md",
+          "words": 1530,
+          "tokens": 2732
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/llm-integration/performance-security.md",
+          "words": 1490,
+          "tokens": 3746
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/llm-integration/rag-architecture.md",
+          "words": 1203,
+          "tokens": 2471
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/llm-integration/vector-databases.md",
+          "words": 1385,
+          "tokens": 2462
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/project-constraints/README.md",
+          "words": 237,
+          "tokens": 537
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/project-constraints/deployment-constraints.md",
+          "words": 1041,
+          "tokens": 2058
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/project-constraints/platform-constraints.md",
+          "words": 737,
+          "tokens": 1523
+        },
+        {
+          "path": ".pair/knowledge/guidelines/architecture/project-constraints/team-constraints.md",
+          "words": 637,
+          "tokens": 1284
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/README.md",
+          "words": 226,
+          "tokens": 469
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/code-organization/README.md",
+          "words": 315,
+          "tokens": 667
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/code-organization/feature-architecture.md",
+          "words": 1729,
+          "tokens": 3921
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/code-organization/file-structure.md",
+          "words": 1232,
+          "tokens": 2198
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/code-organization/naming-conventions.md",
+          "words": 1255,
+          "tokens": 2407
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/code-organization/workspace-structure.md",
+          "words": 1246,
+          "tokens": 2580
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/design-principles/README.md",
+          "words": 901,
+          "tokens": 1758
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/design-principles/design-rules.md",
+          "words": 972,
+          "tokens": 1737
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/design-principles/error-handling.md",
+          "words": 1900,
+          "tokens": 4300
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/design-principles/functional-programming.md",
+          "words": 2059,
+          "tokens": 4146
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/design-principles/mocking-strategy.md",
+          "words": 1154,
+          "tokens": 2667
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/design-principles/service-abstraction.md",
+          "words": 1679,
+          "tokens": 4383
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/design-principles/service-factory.md",
+          "words": 1325,
+          "tokens": 3329
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/design-principles/solid-principles.md",
+          "words": 2979,
+          "tokens": 6382
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/framework-patterns/README.md",
+          "words": 2438,
+          "tokens": 4723
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/framework-patterns/components.md",
+          "words": 3246,
+          "tokens": 7923
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/framework-patterns/dependency-injection.md",
+          "words": 1302,
+          "tokens": 3097
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/framework-patterns/fastify.md",
+          "words": 3604,
+          "tokens": 8567
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/framework-patterns/hooks.md",
+          "words": 3681,
+          "tokens": 8088
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/framework-patterns/react-nextjs.md",
+          "words": 3448,
+          "tokens": 7330
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/framework-patterns/repository-pattern.md",
+          "words": 1510,
+          "tokens": 3350
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/framework-patterns/server-patterns.md",
+          "words": 1663,
+          "tokens": 4091
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/framework-patterns/service-layer.md",
+          "words": 1563,
+          "tokens": 4243
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/framework-patterns/state-management.md",
+          "words": 2748,
+          "tokens": 5514
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/framework-patterns/typescript.md",
+          "words": 2994,
+          "tokens": 5965
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/package-management/README.md",
+          "words": 184,
+          "tokens": 349
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/package-management/pnpm.md",
+          "words": 880,
+          "tokens": 2032
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/package-management/shared-dependencies.md",
+          "words": 763,
+          "tokens": 1873
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/package-management/version-catalog.md",
+          "words": 911,
+          "tokens": 2342
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/package-management/workspace-config.md",
+          "words": 1078,
+          "tokens": 2567
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/quality-standards/README.md",
+          "words": 316,
+          "tokens": 621
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/quality-standards/automation.md",
+          "words": 1643,
+          "tokens": 3919
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/quality-standards/code-metrics.md",
+          "words": 1141,
+          "tokens": 2581
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/quality-standards/coverage.md",
+          "words": 938,
+          "tokens": 1744
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/quality-standards/eslint.md",
+          "words": 856,
+          "tokens": 1733
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/quality-standards/linting-tools.md",
+          "words": 1941,
+          "tokens": 4751
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/quality-standards/prettier-formatting.md",
+          "words": 780,
+          "tokens": 1508
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/quality-standards/shared-config-packages.md",
+          "words": 981,
+          "tokens": 1856
+        },
+        {
+          "path": ".pair/knowledge/guidelines/code-design/quality-standards/technical-debt.md",
+          "words": 869,
+          "tokens": 1932
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/README.md",
+          "words": 1757,
+          "tokens": 3611
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/automation/README.md",
+          "words": 1111,
+          "tokens": 2231
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/automation/automation-policy.md",
+          "words": 12131,
+          "tokens": 19528
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/automation/azure-devops-automation.md",
+          "words": 810,
+          "tokens": 1597
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+          "words": 5002,
+          "tokens": 8629
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/automation/doc-remediation-groups.md",
+          "words": 597,
+          "tokens": 995
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/automation/filesystem-automation.md",
+          "words": 1185,
+          "tokens": 2541
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/automation/github-automation.md",
+          "words": 2606,
+          "tokens": 4523
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md",
+          "words": 1501,
+          "tokens": 2491
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/decision-records.md",
+          "words": 1697,
+          "tokens": 3316
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/estimation/README.md",
+          "words": 1346,
+          "tokens": 2630
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/estimation/ai-assisted-estimation.md",
+          "words": 1166,
+          "tokens": 2210
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/estimation/complexity-based-estimation.md",
+          "words": 1396,
+          "tokens": 2536
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/estimation/forecast-based-estimation.md",
+          "words": 2485,
+          "tokens": 5570
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/estimation/hybrid-estimation.md",
+          "words": 1631,
+          "tokens": 3650
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/estimation/time-based-estimation.md",
+          "words": 1376,
+          "tokens": 2524
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/issue-management/README.md",
+          "words": 725,
+          "tokens": 1536
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/issue-management/azure-devops-issues.md",
+          "words": 1034,
+          "tokens": 2026
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/issue-management/filesystem-issues.md",
+          "words": 794,
+          "tokens": 1656
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/issue-management/github-issues.md",
+          "words": 2315,
+          "tokens": 3986
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/issue-management/linear-issues.md",
+          "words": 1251,
+          "tokens": 2502
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/methodology/README.md",
+          "words": 3465,
+          "tokens": 6424
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/methodology/kanban.md",
+          "words": 2373,
+          "tokens": 3821
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/methodology/lean.md",
+          "words": 2393,
+          "tokens": 4314
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/methodology/less.md",
+          "words": 2330,
+          "tokens": 4278
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/methodology/safe.md",
+          "words": 2183,
+          "tokens": 4010
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/methodology/scrum.md",
+          "words": 1831,
+          "tokens": 3225
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/methodology/waterfall.md",
+          "words": 2337,
+          "tokens": 4425
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/project-management-tool/README.md",
+          "words": 2207,
+          "tokens": 4055
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/project-management-tool/azure-devops-implementation.md",
+          "words": 1931,
+          "tokens": 3605
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md",
+          "words": 2446,
+          "tokens": 4329
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md",
+          "words": 1025,
+          "tokens": 1650
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/project-management-tool/filesystem-implementation.md",
+          "words": 2889,
+          "tokens": 5586
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md",
+          "words": 18970,
+          "tokens": 32396
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/project-management-tool/host-adapter-extension-guide.md",
+          "words": 2865,
+          "tokens": 5400
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/project-management-tool/linear-implementation.md",
+          "words": 3181,
+          "tokens": 5882
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md",
+          "words": 4263,
+          "tokens": 7111
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md",
+          "words": 3215,
+          "tokens": 4751
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/project-tracking/README.md",
+          "words": 1384,
+          "tokens": 2831
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/project-tracking/azure-devops-tracking.md",
+          "words": 901,
+          "tokens": 1718
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/project-tracking/filesystem-tracking.md",
+          "words": 1172,
+          "tokens": 2349
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/project-tracking/github-tracking.md",
+          "words": 1135,
+          "tokens": 2026
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/team/README.md",
+          "words": 918,
+          "tokens": 1998
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/team/communication-protocols.md",
+          "words": 2341,
+          "tokens": 4242
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/team/decision-making.md",
+          "words": 1237,
+          "tokens": 2306
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/team/remote-work.md",
+          "words": 2094,
+          "tokens": 4207
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/team/role-responsibilities.md",
+          "words": 4238,
+          "tokens": 8775
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/team/scenarios.md",
+          "words": 2925,
+          "tokens": 5873
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/team/standards.md",
+          "words": 2117,
+          "tokens": 4308
+        },
+        {
+          "path": ".pair/knowledge/guidelines/collaboration/working-area.md",
+          "words": 1722,
+          "tokens": 2919
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/README.md",
+          "words": 1208,
+          "tokens": 2637
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md",
+          "words": 2113,
+          "tokens": 4311
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cicd-strategy/artifacts.md",
+          "words": 628,
+          "tokens": 1409
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cicd-strategy/github-actions-implementation.md",
+          "words": 1768,
+          "tokens": 4803
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cicd-strategy/secrets-management.md",
+          "words": 1909,
+          "tokens": 5158
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cicd-strategy/strategy.md",
+          "words": 1936,
+          "tokens": 5169
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md",
+          "words": 3789,
+          "tokens": 6812
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cloud-providers/README.md",
+          "words": 1760,
+          "tokens": 3649
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cloud-providers/aws-deployment.md",
+          "words": 1047,
+          "tokens": 2476
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cloud-providers/cost-optimization.md",
+          "words": 1212,
+          "tokens": 2287
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cloud-providers/gcp-deployment.md",
+          "words": 1611,
+          "tokens": 3859
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cloud-providers/multi-cloud.md",
+          "words": 964,
+          "tokens": 1886
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cloud-providers/provider-evaluation.md",
+          "words": 691,
+          "tokens": 1201
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cloud-providers/vercel-deployment.md",
+          "words": 2079,
+          "tokens": 4427
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cloud-services/README.md",
+          "words": 2424,
+          "tokens": 5138
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cloud-services/cloud-compute.md",
+          "words": 1198,
+          "tokens": 2841
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cloud-services/cloud-databases.md",
+          "words": 2242,
+          "tokens": 4744
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cloud-services/cloud-devops.md",
+          "words": 2145,
+          "tokens": 5540
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/cloud-services/cloud-storage.md",
+          "words": 1498,
+          "tokens": 3626
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/container-orchestration/README.md",
+          "words": 2204,
+          "tokens": 4669
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/container-orchestration/container-strategy.md",
+          "words": 1488,
+          "tokens": 3742
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/container-orchestration/docker-compose.md",
+          "words": 1999,
+          "tokens": 5384
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/container-orchestration/docker.md",
+          "words": 913,
+          "tokens": 2007
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/container-orchestration/kubernetes.md",
+          "words": 1230,
+          "tokens": 3064
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/deployment-patterns/README.md",
+          "words": 1684,
+          "tokens": 3580
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/deployment-patterns/deployment-strategies.md",
+          "words": 1477,
+          "tokens": 4014
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/deployment-patterns/monitoring.md",
+          "words": 2174,
+          "tokens": 5499
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/deployment-patterns/performance.md",
+          "words": 1811,
+          "tokens": 5382
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/deployment-patterns/security.md",
+          "words": 1573,
+          "tokens": 3970
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/environments/README.md",
+          "words": 1649,
+          "tokens": 3633
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/environments/environment-config.md",
+          "words": 1728,
+          "tokens": 5119
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/environments/environment-consistency.md",
+          "words": 1345,
+          "tokens": 3281
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/environments/local-development.md",
+          "words": 1678,
+          "tokens": 4338
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/environments/production-development.md",
+          "words": 890,
+          "tokens": 1961
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/environments/service-discovery.md",
+          "words": 880,
+          "tokens": 1896
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/environments/staging-development.md",
+          "words": 879,
+          "tokens": 1888
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md",
+          "words": 870,
+          "tokens": 1852
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/infrastructure-as-code/automation.md",
+          "words": 954,
+          "tokens": 2079
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/infrastructure-as-code/aws-cdk-implementation.md",
+          "words": 1057,
+          "tokens": 2332
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/infrastructure-as-code/iac-best-practices.md",
+          "words": 1035,
+          "tokens": 2222
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/infrastructure-as-code/operational-excellence.md",
+          "words": 1057,
+          "tokens": 2374
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/infrastructure-as-code/state-management.md",
+          "words": 1133,
+          "tokens": 2394
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/infrastructure-as-code/terraform.md",
+          "words": 1658,
+          "tokens": 3783
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/testing-infrastructure/README.md",
+          "words": 1872,
+          "tokens": 3899
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/testing-infrastructure/performance-testing.md",
+          "words": 1454,
+          "tokens": 3205
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/testing-infrastructure/test-databases.md",
+          "words": 1019,
+          "tokens": 2073
+        },
+        {
+          "path": ".pair/knowledge/guidelines/infrastructure/testing-infrastructure/test-environments.md",
+          "words": 926,
+          "tokens": 1987
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/README.md",
+          "words": 780,
+          "tokens": 1520
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/ai-enhanced-observability.md",
+          "words": 863,
+          "tokens": 1665
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/alerting/README.md",
+          "words": 962,
+          "tokens": 1771
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/alerting/notifications.md",
+          "words": 1114,
+          "tokens": 2158
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/alerting/strategy.md",
+          "words": 1241,
+          "tokens": 2359
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/dashboards-visualization.md",
+          "words": 1233,
+          "tokens": 2380
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/distributed-tracing.md",
+          "words": 964,
+          "tokens": 1928
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/metrics/README.md",
+          "words": 1087,
+          "tokens": 1995
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/metrics/application-monitoring.md",
+          "words": 302,
+          "tokens": 585
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/metrics/business-metrics.md",
+          "words": 196,
+          "tokens": 357
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/metrics/custom-metrics.md",
+          "words": 247,
+          "tokens": 485
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/metrics/feature-usage.md",
+          "words": 200,
+          "tokens": 360
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/metrics/performance-metrics.md",
+          "words": 266,
+          "tokens": 518
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/metrics/strategy.md",
+          "words": 1104,
+          "tokens": 2128
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/metrics/user-experience.md",
+          "words": 304,
+          "tokens": 543
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/observability-principles/README.md",
+          "words": 367,
+          "tokens": 744
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/observability-principles/proactive-monitoring.md",
+          "words": 369,
+          "tokens": 739
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/observability-principles/three-pillars.md",
+          "words": 345,
+          "tokens": 694
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/observability-tools.md",
+          "words": 1308,
+          "tokens": 2385
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/performance-analysis.md",
+          "words": 1144,
+          "tokens": 2271
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/proactive-detection.md",
+          "words": 1205,
+          "tokens": 2342
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/structured-logging/README.md",
+          "words": 546,
+          "tokens": 1005
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/structured-logging/contextual-information.md",
+          "words": 1069,
+          "tokens": 2497
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/structured-logging/json-logging.md",
+          "words": 269,
+          "tokens": 526
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/structured-logging/log-levels.md",
+          "words": 426,
+          "tokens": 846
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/structured-logging/logging-standards.md",
+          "words": 1328,
+          "tokens": 2753
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/structured-logging/sensitive-data-protection.md",
+          "words": 1128,
+          "tokens": 2259
+        },
+        {
+          "path": ".pair/knowledge/guidelines/observability/workflow-integration.md",
+          "words": 1253,
+          "tokens": 2551
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/README.md",
+          "words": 1675,
+          "tokens": 3518
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/README.md",
+          "words": 1480,
+          "tokens": 2965
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/assistive-technology.md",
+          "words": 1153,
+          "tokens": 2238
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/automated-testing.md",
+          "words": 0,
+          "tokens": 0
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/browser-extensions.md",
+          "words": 1124,
+          "tokens": 2349
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/cli-tools.md",
+          "words": 1453,
+          "tokens": 3380
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/code-examples-patterns.md",
+          "words": 1207,
+          "tokens": 2342
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/compliance-reporting.md",
+          "words": 1202,
+          "tokens": 2698
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/compliance-verification.md",
+          "words": 1196,
+          "tokens": 2575
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/continuous-improvement.md",
+          "words": 1148,
+          "tokens": 2568
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/dod-integration.md",
+          "words": 1335,
+          "tokens": 2785
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/eslint-configuration.md",
+          "words": 903,
+          "tokens": 2088
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/ide-integration.md",
+          "words": 822,
+          "tokens": 1820
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/inclusive-design.md",
+          "words": 1384,
+          "tokens": 2880
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/platform-specific.md",
+          "words": 1326,
+          "tokens": 2918
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/pour-principles.md",
+          "words": 1794,
+          "tokens": 4400
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/react-typescript-patterns.md",
+          "words": 2141,
+          "tokens": 5300
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/shadcn-ui-integration.md",
+          "words": 1819,
+          "tokens": 4665
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/testing-tools.md",
+          "words": 1920,
+          "tokens": 5006
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/training-materials.md",
+          "words": 1875,
+          "tokens": 4171
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/universal-design.md",
+          "words": 1644,
+          "tokens": 3846
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/user-feedback.md",
+          "words": 1469,
+          "tokens": 3638
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/validation-workflow.md",
+          "words": 1540,
+          "tokens": 4272
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/accessibility/wcag-compliance.md",
+          "words": 1494,
+          "tokens": 2817
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/automated-verification.md",
+          "words": 1165,
+          "tokens": 2407
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/cost-assessment.md",
+          "words": 1315,
+          "tokens": 2205
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/delivery-metrics.md",
+          "words": 2191,
+          "tokens": 3534
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/manual-testing.md",
+          "words": 706,
+          "tokens": 1278
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/manual-verification.md",
+          "words": 1403,
+          "tokens": 2468
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/README.md",
+          "words": 1436,
+          "tokens": 2866
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/benchmarking.md",
+          "words": 1379,
+          "tokens": 3176
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/cls.md",
+          "words": 1025,
+          "tokens": 1930
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/continuous-improvement.md",
+          "words": 1570,
+          "tokens": 3801
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/core-web-vitals.md",
+          "words": 1465,
+          "tokens": 2821
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/deployment-optimization.md",
+          "words": 1447,
+          "tokens": 3604
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/fcp.md",
+          "words": 1965,
+          "tokens": 4941
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/fid.md",
+          "words": 1704,
+          "tokens": 3933
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/lcp.md",
+          "words": 898,
+          "tokens": 1764
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/measurement.md",
+          "words": 1151,
+          "tokens": 2589
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/monitoring.md",
+          "words": 1434,
+          "tokens": 3435
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/optimization-strategies.md",
+          "words": 1560,
+          "tokens": 3130
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/performance-budgets.md",
+          "words": 1596,
+          "tokens": 3616
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/performance-debugging.md",
+          "words": 1627,
+          "tokens": 3906
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/performance-first-development.md",
+          "words": 1533,
+          "tokens": 3905
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/performance-fundamentals.md",
+          "words": 1382,
+          "tokens": 2769
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/performance-tools.md",
+          "words": 1864,
+          "tokens": 5274
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/targets-benchmarks.md",
+          "words": 1620,
+          "tokens": 3869
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/testing-strategies.md",
+          "words": 954,
+          "tokens": 1989
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/performance/user-centric-performance.md",
+          "words": 1706,
+          "tokens": 4195
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/quality-model.md",
+          "words": 4856,
+          "tokens": 8092
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/quality-monitoring/README.md",
+          "words": 1936,
+          "tokens": 3933
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/quality-monitoring/code-quality.md",
+          "words": 2254,
+          "tokens": 6406
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/quality-monitoring/cost-billing-telemetry.md",
+          "words": 1424,
+          "tokens": 2694
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/quality-monitoring/observability-requirements.md",
+          "words": 5820,
+          "tokens": 14291
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/quality-monitoring/performance-gates.md",
+          "words": 1094,
+          "tokens": 2432
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/quality-standards/README.md",
+          "words": 442,
+          "tokens": 925
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/quality-standards/checklist.md",
+          "words": 1188,
+          "tokens": 1936
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/quality-standards/code-review.md",
+          "words": 1057,
+          "tokens": 1965
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md",
+          "words": 1616,
+          "tokens": 3567
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/quality-standards/improvement-process.md",
+          "words": 13117,
+          "tokens": 31824
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/quality-standards/quality-gates.md",
+          "words": 983,
+          "tokens": 1960
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/quality-standards/responsibility-matrix.md",
+          "words": 4086,
+          "tokens": 10509
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/quality-standards/verification-methods.md",
+          "words": 2260,
+          "tokens": 6136
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/README.md",
+          "words": 2185,
+          "tokens": 4384
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/ai-enhanced-security.md",
+          "words": 1757,
+          "tokens": 4880
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/api-security.md",
+          "words": 1256,
+          "tokens": 3094
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/authentication-authorization.md",
+          "words": 1413,
+          "tokens": 2845
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/compliance.md",
+          "words": 1010,
+          "tokens": 2259
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/dast-dynamic-testing.md",
+          "words": 734,
+          "tokens": 1468
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/data-encryption.md",
+          "words": 1426,
+          "tokens": 3438
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/data-privacy.md",
+          "words": 1010,
+          "tokens": 2076
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/dependency-security.md",
+          "words": 1202,
+          "tokens": 3207
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/dependency-testing.md",
+          "words": 942,
+          "tokens": 2336
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/incident-response.md",
+          "words": 1360,
+          "tokens": 3002
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/risk-based-security.md",
+          "words": 1392,
+          "tokens": 2946
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/sast-static-testing.md",
+          "words": 1929,
+          "tokens": 5293
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md",
+          "words": 1014,
+          "tokens": 1920
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/secure-development.md",
+          "words": 1422,
+          "tokens": 2977
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/security-automation.md",
+          "words": 1487,
+          "tokens": 3340
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/security-by-design.md",
+          "words": 1412,
+          "tokens": 2870
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/security-guidelines.md",
+          "words": 1090,
+          "tokens": 2221
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/security-metrics.md",
+          "words": 1489,
+          "tokens": 3074
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/security-quality-gates.md",
+          "words": 1042,
+          "tokens": 2484
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/security-testing.md",
+          "words": 1778,
+          "tokens": 4209
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/sensitive-data.md",
+          "words": 1706,
+          "tokens": 4017
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/supply-chain-security.md",
+          "words": 1442,
+          "tokens": 3099
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/threat-detection.md",
+          "words": 1702,
+          "tokens": 3791
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/vulnerability-assessment.md",
+          "words": 849,
+          "tokens": 1809
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/vulnerability-prevention.md",
+          "words": 1250,
+          "tokens": 2625
+        },
+        {
+          "path": ".pair/knowledge/guidelines/quality-assurance/security/web-app-security.md",
+          "words": 1210,
+          "tokens": 2872
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/README.md",
+          "words": 812,
+          "tokens": 1694
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/README.md",
+          "words": 972,
+          "tokens": 1872
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/README.md",
+          "words": 825,
+          "tokens": 1471
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/claude-code.md",
+          "words": 493,
+          "tokens": 853
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/codex.md",
+          "words": 996,
+          "tokens": 1729
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/opencode.md",
+          "words": 885,
+          "tokens": 1576
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/pi.md",
+          "words": 1677,
+          "tokens": 2937
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/ai-tools.md",
+          "words": 2219,
+          "tokens": 5579
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/documentation-standards.md",
+          "words": 1656,
+          "tokens": 3452
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/macro-phase-modes.md",
+          "words": 1342,
+          "tokens": 2322
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/mcp-integration.md",
+          "words": 2258,
+          "tokens": 5922
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md",
+          "words": 3135,
+          "tokens": 5011
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/README.md",
+          "words": 936,
+          "tokens": 1701
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/adoption-informed-generation.md",
+          "words": 2857,
+          "tokens": 4510
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md",
+          "words": 1873,
+          "tokens": 2723
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md",
+          "words": 368,
+          "tokens": 604
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/guided-quick-setup.md",
+          "words": 1097,
+          "tokens": 1815
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/headless-stage-execution.md",
+          "words": 262,
+          "tokens": 393
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md",
+          "words": 280,
+          "tokens": 484
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/nested-sub-documents.md",
+          "words": 886,
+          "tokens": 1446
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/output-shapes.md",
+          "words": 567,
+          "tokens": 1012
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/package-local-adoption.md",
+          "words": 632,
+          "tokens": 1087
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md",
+          "words": 1103,
+          "tokens": 1857
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md",
+          "words": 570,
+          "tokens": 1149
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md",
+          "words": 602,
+          "tokens": 968
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/scoped-context-resolution.md",
+          "words": 252,
+          "tokens": 439
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/story-local-markers.md",
+          "words": 444,
+          "tokens": 701
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md",
+          "words": 435,
+          "tokens": 738
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md",
+          "words": 892,
+          "tokens": 1420
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md",
+          "words": 3217,
+          "tokens": 5781
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/ai-development/step-catalogue.md",
+          "words": 849,
+          "tokens": 1975
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/coding-standards/README.md",
+          "words": 604,
+          "tokens": 1257
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/coding-standards/error-handling.md",
+          "words": 1238,
+          "tokens": 2803
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/coding-standards/i18n-localization.md",
+          "words": 1519,
+          "tokens": 3576
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/coding-standards/technical-debt.md",
+          "words": 1507,
+          "tokens": 3334
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/coding-standards/versioning.md",
+          "words": 1398,
+          "tokens": 3018
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/deployment-workflow/README.md",
+          "words": 2357,
+          "tokens": 4750
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/deployment-workflow/build-standards.md",
+          "words": 2541,
+          "tokens": 6972
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/deployment-workflow/deployment-automation.md",
+          "words": 1465,
+          "tokens": 3647
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/deployment-workflow/release-management.md",
+          "words": 1394,
+          "tokens": 3871
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/deployment-workflow/strategy.md",
+          "words": 1605,
+          "tokens": 4243
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/development-tools/README.md",
+          "words": 1950,
+          "tokens": 3926
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/development-tools/environment-setup.md",
+          "words": 1323,
+          "tokens": 2322
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/development-tools/recommended-tools.md",
+          "words": 1534,
+          "tokens": 2996
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/development-tools/required-tools.md",
+          "words": 1247,
+          "tokens": 2345
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/development-tools/tool-configuration.md",
+          "words": 1309,
+          "tokens": 3476
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/development-tools/workflow-tools.md",
+          "words": 1717,
+          "tokens": 4141
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/feature-flags.md",
+          "words": 860,
+          "tokens": 1927
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/git-workflow/README.md",
+          "words": 1405,
+          "tokens": 2734
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/git-workflow/development-process.md",
+          "words": 1877,
+          "tokens": 3186
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/git-workflow/quality-assurance.md",
+          "words": 2619,
+          "tokens": 7622
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/git-workflow/version-control.md",
+          "words": 2118,
+          "tokens": 4106
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/integration-standards/README.md",
+          "words": 2317,
+          "tokens": 4680
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/integration-standards/api-design.md",
+          "words": 1793,
+          "tokens": 4917
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/integration-standards/data-management.md",
+          "words": 2122,
+          "tokens": 5545
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/integration-standards/external-services.md",
+          "words": 1936,
+          "tokens": 5395
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/integration-standards/integration-patterns.md",
+          "words": 2275,
+          "tokens": 6407
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/technology-stack/README.md",
+          "words": 845,
+          "tokens": 1859
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/technology-stack/conventions.md",
+          "words": 2093,
+          "tokens": 5664
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/technology-stack/framework-selection.md",
+          "words": 1935,
+          "tokens": 4935
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/technology-stack/stack-standards.md",
+          "words": 1770,
+          "tokens": 5247
+        },
+        {
+          "path": ".pair/knowledge/guidelines/technical-standards/technology-stack/tech-decisions.md",
+          "words": 1796,
+          "tokens": 4966
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/README.md",
+          "words": 1624,
+          "tokens": 3278
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/accessibility-testing/README.md",
+          "words": 686,
+          "tokens": 1390
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/accessibility-testing/automated-a11y.md",
+          "words": 732,
+          "tokens": 1585
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/accessibility-testing/manual-a11y.md",
+          "words": 847,
+          "tokens": 1766
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/e2e-testing/README.md",
+          "words": 658,
+          "tokens": 1233
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/e2e-testing/cypress.md",
+          "words": 727,
+          "tokens": 1473
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/e2e-testing/playwright.md",
+          "words": 727,
+          "tokens": 1444
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/e2e-testing/test-scenarios.md",
+          "words": 861,
+          "tokens": 1656
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/integration-testing/README.md",
+          "words": 401,
+          "tokens": 771
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/integration-testing/api-testing.md",
+          "words": 2029,
+          "tokens": 4261
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/integration-testing/database-testing.md",
+          "words": 2156,
+          "tokens": 4663
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/integration-testing/service-integration.md",
+          "words": 676,
+          "tokens": 1367
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/performance-testing/README.md",
+          "words": 489,
+          "tokens": 984
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/performance-testing/benchmarking.md",
+          "words": 746,
+          "tokens": 1655
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/performance-testing/load-testing.md",
+          "words": 725,
+          "tokens": 1460
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/performance-testing/stress-testing.md",
+          "words": 711,
+          "tokens": 1425
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/test-automation/README.md",
+          "words": 683,
+          "tokens": 1469
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/test-automation/ci-integration.md",
+          "words": 788,
+          "tokens": 1594
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/test-automation/test-reporting.md",
+          "words": 807,
+          "tokens": 1693
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/test-strategy/README.md",
+          "words": 1400,
+          "tokens": 2986
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/test-strategy/bdd-behavior-driven-development.md",
+          "words": 3163,
+          "tokens": 6460
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/test-strategy/coverage-strategy.md",
+          "words": 1576,
+          "tokens": 3289
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/test-strategy/tdd-test-driven-development.md",
+          "words": 3232,
+          "tokens": 6922
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/test-strategy/test-pyramid.md",
+          "words": 1542,
+          "tokens": 3197
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/test-strategy/testing-philosophy.md",
+          "words": 1420,
+          "tokens": 3030
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/unit-testing/README.md",
+          "words": 410,
+          "tokens": 744
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/unit-testing/jest-configuration.md",
+          "words": 1366,
+          "tokens": 2910
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/unit-testing/mocking-strategies.md",
+          "words": 594,
+          "tokens": 1243
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/unit-testing/test-patterns.md",
+          "words": 1929,
+          "tokens": 4015
+        },
+        {
+          "path": ".pair/knowledge/guidelines/testing/unit-testing/vitest-setup.md",
+          "words": 1473,
+          "tokens": 3178
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/README.md",
+          "words": 1384,
+          "tokens": 2966
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/asset-collection.md",
+          "words": 910,
+          "tokens": 1636
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/brand-alignment.md",
+          "words": 1000,
+          "tokens": 1854
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/cat-tools.md",
+          "words": 1199,
+          "tokens": 2309
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/content-strategy/README.md",
+          "words": 1181,
+          "tokens": 2686
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/content-strategy/communication-design.md",
+          "words": 1268,
+          "tokens": 2370
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/content-strategy/content-guidelines.md",
+          "words": 1387,
+          "tokens": 2666
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/content-strategy/information-architecture.md",
+          "words": 1451,
+          "tokens": 3059
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/content-strategy/translation-management.md",
+          "words": 1485,
+          "tokens": 3126
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/design-principles/README.md",
+          "words": 1472,
+          "tokens": 3395
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/design-principles/accessibility-integration.md",
+          "words": 1666,
+          "tokens": 3395
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/design-principles/color-contrast.md",
+          "words": 1661,
+          "tokens": 3277
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/design-principles/consistency-standards.md",
+          "words": 1968,
+          "tokens": 3997
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/design-principles/layout-spacing.md",
+          "words": 1743,
+          "tokens": 3330
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/design-principles/typography.md",
+          "words": 1828,
+          "tokens": 3702
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/design-principles/user-centered-design.md",
+          "words": 1941,
+          "tokens": 3892
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/design-systems/README.md",
+          "words": 1385,
+          "tokens": 3136
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/design-systems/component-libraries.md",
+          "words": 1789,
+          "tokens": 3649
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/design-systems/design-tokens.md",
+          "words": 1787,
+          "tokens": 3628
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/design-systems/system-architecture.md",
+          "words": 2052,
+          "tokens": 3953
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/design-systems/tailwind-shadcn.md",
+          "words": 2201,
+          "tokens": 4782
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/figma-workflows.md",
+          "words": 1187,
+          "tokens": 2200
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/interface-design/README.md",
+          "words": 1451,
+          "tokens": 3386
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/interface-design/component-design.md",
+          "words": 1900,
+          "tokens": 4344
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/interface-design/interaction-design.md",
+          "words": 2480,
+          "tokens": 5122
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/interface-design/layout-principles.md",
+          "words": 1462,
+          "tokens": 2862
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/interface-design/responsive-principles.md",
+          "words": 1584,
+          "tokens": 3209
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/interface-design/ui-patterns.md",
+          "words": 1944,
+          "tokens": 3906
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/interface-design/visual-standards.md",
+          "words": 2096,
+          "tokens": 3992
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/markdown-templates.md",
+          "words": 1128,
+          "tokens": 1814
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/user-research/README.md",
+          "words": 1455,
+          "tokens": 3283
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/user-research/research-methods.md",
+          "words": 1831,
+          "tokens": 3823
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/user-research/testing-validation.md",
+          "words": 1946,
+          "tokens": 4054
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/user-research/user-feedback.md",
+          "words": 1956,
+          "tokens": 4027
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/user-research/ux-testing.md",
+          "words": 2136,
+          "tokens": 4442
+        },
+        {
+          "path": ".pair/knowledge/guidelines/user-experience/ux-performance.md",
+          "words": 1282,
+          "tokens": 2485
+        }
+      ]
+    },
+    {
+      "name": "agent-context",
+      "files": 2,
+      "words": 2379,
+      "tokens": 4638,
+      "items": [
+        {
+          "path": "AGENTS.md",
+          "words": 1436,
+          "tokens": 2796
+        },
+        {
+          "path": "CLAUDE.md",
+          "words": 943,
+          "tokens": 1842
+        }
+      ]
+    }
+  ],
+  "total": {
+    "files": 684,
+    "words": 1034627,
+    "tokens": 2058410
+  }
+}

@@ -13,8 +13,10 @@ import type { KbInfoCommandConfig } from './kb-info/parser'
 import type { ScaffoldKbCommandConfig } from './scaffold-kb/parser'
 import type { KbCacheCommandConfig } from './kb-cache/parser'
 import type { RunCommandConfig } from './run/parser'
+import type { TokensCommandConfig } from './tokens/parser'
 
 export type {
+  TokensCommandConfig,
   RunCommandConfig,
   InstallCommandConfig,
   UpdateCommandConfig,
@@ -62,8 +64,13 @@ import { kbCacheCommandMetadata } from './kb-cache/metadata'
 import { parseRunCommand } from './run/parser'
 import { handleRunCommand } from './run/handler'
 import { runCommandMetadata } from './run/metadata'
+import { parseTokensCommand } from './tokens/parser'
+import { handleTokensCommand } from './tokens/handler'
+import { tokensCommandMetadata } from './tokens/metadata'
 
 export {
+  handleTokensCommand,
+  parseTokensCommand,
   handleRunCommand,
   parseRunCommand,
   handleInstallCommand,
@@ -101,6 +108,7 @@ export type CommandConfig =
   | ScaffoldKbCommandConfig
   | KbCacheCommandConfig
   | RunCommandConfig
+  | TokensCommandConfig
 
 /**
  * Command registry mapping command names to their parse/handle/metadata functions.
@@ -160,6 +168,11 @@ export const commandRegistry = {
     parse: parseRunCommand,
     handle: handleRunCommand,
     metadata: runCommandMetadata,
+  },
+  tokens: {
+    parse: parseTokensCommand,
+    handle: handleTokensCommand,
+    metadata: tokensCommandMetadata,
   },
 } as const
 

@@ -24,6 +24,14 @@ Thank you for your interest in contributing to Pair!
 - Follow the guidelines in `.pair/knowledge/guidelines/` for architecture and code design.
 - For process and collaboration, see `.pair/adoption/tech/way-of-working.md`.
 
+## Optional: rtk (review stage only)
+
+`./scripts/dev/install-rtk.sh` installs a pinned, checksum-verified [rtk](https://github.com/rtk-ai/rtk) into `.tools/bin` (gitignored). It is **not** installed by `pnpm install`. When installed, a `SessionStart` hook (`scripts/dev/rtk-session-path.mjs`) prepends `.tools/bin` to PATH via `$CLAUDE_ENV_FILE` (created if missing), and a `PreToolUse` Bash hook (`scripts/dev/rtk-review-hook.mjs`) runs `rtk hook claude` only for the `pair-reviewer` subagent (hook input `agent_type`), forwarding only `updatedInput` (command text is never rewritten, `permissionDecision` is dropped so the normal permission flow applies); absent rtk is a no-op. `pair-cli` run stages carry no `agent_type` and are not covered. Review A/B (3 runs/arm, Opus, 2 seeded defects): without rtk S1 2/3, S2 3/3, $0.93; with rtk S1 3/3, S2 3/3, $0.82 (−12%, context −16%). On implementation it saved nothing and truncates large diffs. See `.pair/adoption/decision-log/2026-10-13-ponytail-trial-rtk-review-only.md`.
+
+## ponytail (#433)
+
+The project settings enable the [ponytail](https://ponytail.dev) plugin (pinned `v5.2.0`) for Claude Code: a "least code that works" ruleset injected at session start and into subagents. Adopted after the #433 A/B (−16% production lines, −9% cost, same correctness); removed if a later measurement shows lower correctness or no reduction. Switch it off per session with `/ponytail off`.
+
 ## Operational Activities
 
 - For step-by-step instructions on common tasks, see `.pair/knowledge/how-to/`.

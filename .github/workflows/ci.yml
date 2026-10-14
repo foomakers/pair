@@ -137,6 +137,8 @@ jobs:
       # ~0.5s, no build needed.
       - name: Run workflow dry-run tests
         run: pnpm workflows:test
+      - name: Run dev-scripts tests
+        run: pnpm dev-scripts:test
       - name: Install Playwright browsers
         run: |
           pnpm --filter @pair/brand exec playwright install --with-deps chromium

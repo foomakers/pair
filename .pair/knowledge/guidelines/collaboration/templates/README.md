@@ -1,10 +1,10 @@
 # Project Management Templates
 
-This directory contains comprehensive templates for all major project management activities in software development projects. These templates provide standardized formats and checklists to ensure consistency and completeness across all project deliverables.
+<!-- word-limits: Template Overview=210; Template Categories=190; Template Usage Guidelines=210; Template Customization=130; Best Practices=100; Template Maintenance=70; Getting Help=70; Template Index=330; Template Excellence Categories=120; Implementation Excellence=110; Quality Assurance Framework=80 -->
+
+Standardized formats and checklists for every project management activity, from strategic planning to code delivery.
 
 ## Template Overview
-
-Our template collection covers the complete software development lifecycle, from strategic planning to code delivery:
 
 ### Planning Templates
 
@@ -17,62 +17,41 @@ Our template collection covers the complete software development lifecycle, from
 
 - **[Branch Template](branch-template.md)** - Git branch naming and workflow standards
 - **[Commit Template](commit-template.md)** - Commit message formats and best practices
-- **[Pull Request Template](pr-template.md)** - Comprehensive PR description and review guide
+- **[Pull Request Template](pr-template.md)** - PR description and review guide
 - **[Code Review Template](code-review-template.md)** - Structured code review checklists
 - **[Team Template](user-story-template.md)** - Team formation and collaboration guidelines
 
+### Quality, Domain and Operational Templates
+
+- **[Manual Test Case Template](manual-test-case-template.md)** - Manual test case design with version-agnostic variables and priority classification
+- **[Manual Test Report Template](manual-test-report-template.md)** - Manual test execution results with sign-off criteria
+- **[Context Map Template](context-map-template.md)** - Dispatcher + index + core domain glossary, entities, and common rules, maintained inline (see [Context Map Maintenance](../../architecture/design-patterns/context-map-maintenance.md))
+- **[Subdomain Context Template](subdomain-context-template.md)** - Lazy per-subdomain split of the context map, co-located with the subdomain catalog entry
+- **[Checkpoint Template](checkpoint-template.md)** - Resumable progress state (story, branch, tasks done, decisions, remaining todos) for context-reset handoffs
+
 ## Template Categories
 
-### 🎯 Strategic Templates
-
-For high-level planning and business alignment:
-
-| Template       | Purpose                  | When to Use               | Key Sections                                |
-| -------------- | ------------------------ | ------------------------- | ------------------------------------------- |
-| **Initiative** | Strategic business goals | Quarterly/annual planning | Business case, objectives, success metrics  |
-| **Epic**       | Large feature sets       | Sprint planning, roadmap  | Business value, solution approach, timeline |
-
-### 📋 Requirement Templates
-
-For capturing and managing requirements:
-
-| Template       | Purpose             | When to Use              | Key Sections                                   |
-| -------------- | ------------------- | ------------------------ | ---------------------------------------------- |
-| **User Story** | Individual features | Sprint planning, backlog | Acceptance criteria, tasks, design specs       |
-| **Task**       | Implementation work | Daily development        | TDD workflow, quality standards, time tracking |
-
-### 🔧 Development Templates
-
-For code development and delivery:
-
-| Template         | Purpose           | When to Use         | Key Sections                                 |
-| ---------------- | ----------------- | ------------------- | -------------------------------------------- |
-| **Branch**       | Git workflow      | Feature development | Naming standards, workflow steps             |
-| **Commit**       | Code changes      | Every commit        | Message format, TDD patterns, atomic changes |
-| **Pull Request** | Code review       | Feature completion  | Changes, testing, deployment info            |
-| **Code Review**  | Quality assurance | PR review process   | Review criteria, feedback guidelines         |
-
-### 👥 Team Templates
-
-For team collaboration and communication:
-
-| Template | Purpose        | When to Use    | Key Sections                           |
-| -------- | -------------- | -------------- | -------------------------------------- |
-| **Team** | Team structure | Team formation | Roles, responsibilities, collaboration |
+| Template       | Purpose                  | When to Use               | Key Sections                                   |
+| -------------- | ------------------------ | ------------------------- | ---------------------------------------------- |
+| **Initiative** | Strategic business goals | Quarterly/annual planning | Business case, objectives, success metrics     |
+| **Epic**       | Large feature sets       | Sprint planning, roadmap  | Business value, solution approach, timeline    |
+| **User Story** | Individual features      | Sprint planning, backlog  | Acceptance criteria, tasks, design specs       |
+| **Task**       | Implementation work      | Daily development         | TDD workflow, quality standards, time tracking |
+| **Branch**     | Git workflow             | Feature development       | Naming standards, workflow steps               |
+| **Commit**     | Code changes             | Every commit              | Message format, TDD patterns, atomic changes   |
+| **Pull Request** | Code review            | Feature completion        | Changes, testing, deployment info              |
+| **Code Review** | Quality assurance       | PR review process         | Review criteria, feedback guidelines           |
+| **Team**       | Team structure           | Team formation            | Roles, responsibilities, collaboration         |
 
 ## Template Usage Guidelines
 
-### Getting Started
-
-1. **Choose the Right Template:** Use the template overview table to identify which template fits your current activity
-2. **Copy the Template:** Copy the template content as a starting point for your document
-3. **Customize for Context:** Adapt sections and fields based on your specific project needs
-4. **Complete All Sections:** Ensure all relevant sections are filled out completely
-5. **Review and Validate:** Have stakeholders review the completed template
+1. **Choose the Right Template:** match your current activity in the tables above
+2. **Copy the Template:** use it as a starting point
+3. **Customize for Context:** adapt sections and fields to your project
+4. **Complete All Sections:** fill every relevant section
+5. **Review and Validate:** have stakeholders review the result
 
 ### Template Relationships
-
-Templates are designed to work together in a hierarchical relationship:
 
 ```text
 Initiative (Strategic Level)
@@ -97,138 +76,64 @@ Task → Branch → Commits → Pull Request → Code Review
 
 ### Quality Standards
 
-#### Completeness Checklist
-
-- [ ] All required sections filled out
-- [ ] Acceptance criteria clearly defined
-- [ ] Dependencies and risks identified
-- [ ] Testing approach documented
-- [ ] Review criteria established
-
-#### Consistency Requirements
-
-- [ ] Consistent terminology used across templates
-- [ ] Traceability links maintained between levels
-- [ ] Standard formatting and structure followed
-- [ ] Team-specific customizations applied
+- [ ] All required sections filled out; acceptance criteria clearly defined
+- [ ] Dependencies and risks identified; testing approach documented; review criteria established
+- [ ] Consistent terminology across templates; traceability links maintained between levels
+- [ ] Standard formatting and structure followed; team-specific customizations applied
 
 ## Template Customization
 
-### Organization-Specific Adaptations
+1. **Add Company Branding:** logo, color schemes, standard headers
+2. **Modify Sections:** add, remove, or reorder sections to fit your process
+3. **Include Tool Integration:** fields for your tools (Jira, Azure DevOps, etc.)
+4. **Update Terminology:** use your organization's terms
+5. **Add Compliance Requirements:** regulatory or compliance sections if needed
 
-Each template can be customized for your organization:
+### Process and Tool Integration
 
-1. **Add Company Branding:** Include logo, color schemes, standard headers
-2. **Modify Sections:** Add, remove, or reorder sections based on your process
-3. **Include Tool Integration:** Add fields for your specific tools (Jira, Azure DevOps, etc.)
-4. **Update Terminology:** Use your organization's standard terminology
-5. **Add Compliance Requirements:** Include regulatory or compliance sections if needed
-
-### Process Integration
-
-Templates integrate with common development processes:
-
-- **Agile/Scrum:** User stories, tasks, and sprints
-- **SAFe:** Initiatives, epics, and program increments
-- **Kanban:** Continuous flow with user stories and tasks
-- **DevOps:** Branch, commit, and PR templates for CI/CD
-
-### Tool Integration
-
-Templates work with popular project management tools:
-
-- **GitHub:** Issues, PRs, and project boards
-- **Jira:** Stories, epics, and tasks
-- **Azure DevOps:** Work items and backlogs
-- **Linear:** Issues and projects
-- **Trello:** Cards and boards
+- **Agile/Scrum:** user stories, tasks, sprints. **SAFe:** initiatives, epics, program increments. **Kanban:** continuous flow with stories and tasks. **DevOps:** branch, commit and PR templates for CI/CD.
+- **GitHub** (issues, PRs, project boards), **Jira** (stories, epics, tasks), **Azure DevOps** (work items, backlogs), **Linear** (issues, projects), **Trello** (cards, boards).
 
 ## Best Practices
 
-### Template Completion
-
-1. **Start Early:** Begin with templates during planning phases
-2. **Involve Stakeholders:** Get input from all relevant team members
-3. **Iterate and Improve:** Refine templates based on team feedback
-4. **Maintain Traceability:** Link related templates and work items
-5. **Review Regularly:** Ensure templates stay current with completed work
-
-### Quality Assurance
-
-1. **Peer Review:** Have teammates review template completions
-2. **Standard Validation:** Check against team standards and guidelines
-3. **Completeness Check:** Verify all sections are appropriately filled
-4. **Consistency Audit:** Ensure consistent information across related templates
-
-### Continuous Improvement
-
-1. **Collect Feedback:** Regularly gather team input on template effectiveness
-2. **Update Templates:** Evolve templates based on lessons learned
-3. **Share Best Practices:** Document successful template usage patterns
-4. **Train Team Members:** Ensure everyone knows how to use templates effectively
+1. **Start Early:** begin with templates during planning
+2. **Involve Stakeholders:** get input from all relevant team members
+3. **Iterate and Improve:** refine templates from team feedback; evolve them from lessons learned
+4. **Maintain Traceability:** link related templates and work items
+5. **Review Regularly:** keep templates current; peer-review completions, check against team standards, verify completeness and cross-template consistency
+6. **Share and Train:** document successful usage patterns; ensure everyone knows how to use templates
 
 ## Template Maintenance
 
-### Version Control
-
-- Templates are versioned with the project documentation
-- Changes are tracked through pull requests
-- Historical versions maintained for reference
-
-### Update Process
-
-1. **Identify Improvement Needs:** Gather feedback from template users
-2. **Propose Changes:** Create PR with template modifications
-3. **Review and Approve:** Team reviews and approves changes
-4. **Communicate Updates:** Notify team of template changes
-5. **Update Training:** Ensure team knows about new template features
-
-### Feedback Collection
-
-- Regular retrospectives include template effectiveness discussion
-- Anonymous feedback channels for template improvement suggestions
-- Usage analytics to identify most/least effective templates
+- Templates are versioned with the project documentation; changes go through pull requests; history is kept for reference.
+- Update process: gather feedback → propose changes (PR) → team review and approval → notify the team → update training.
+- Feedback: retrospectives include template effectiveness; anonymous feedback channels; usage analytics for most/least effective templates.
 
 ## Getting Help
 
-### Template Support
-
-- **Documentation:** Detailed guidance within each template
-- **Examples:** Sample completions available for reference
-- **Team Support:** Reach out to team leads for template assistance
-- **Training Resources:** Regular training sessions on effective template use
-
-### Common Issues
-
-1. **Incomplete Templates:** Use the completeness checklist in each template
-2. **Inconsistent Information:** Cross-reference with related templates
-3. **Process Confusion:** Refer to the template relationship diagram
-4. **Tool Integration:** Check tool-specific guidance in methodology documentation
+- **Documentation:** guidance within each template. **Examples:** sample completions for reference. **Team Support:** ask team leads. **Training:** regular sessions on template use.
+- Common issues: incomplete templates → use each template's completeness checklist; inconsistent information → cross-reference related templates; process confusion → see the relationship diagram; tool integration → methodology documentation.
 
 ---
 
 ## Template Index
 
-### Quick Reference
-
-| File                      | Type           | Use Case          | Complexity |
-| ------------------------- | -------------- | ----------------- | ---------- |
-| `initiative-template.md`  | Strategic      | Business planning | High       |
-| `epic-template.md`        | Feature        | Feature planning  | Medium     |
-| `user-story-template.md`  | Requirement    | Sprint planning   | Medium     |
-| `task-template.md`        | Implementation | Daily development | Low        |
-| `branch-template.md`      | Development    | Git workflow      | Low        |
-| `commit-template.md`      | Development    | Code commits      | Low        |
-| `pr-template.md`          | Development    | Code review       | Medium     |
-| `code-review-template.md` | Quality        | Review process    | Medium     |
-| `team-template.md`        | Collaboration  | Team formation    | Medium     |
-| `manual-test-case-template.md`   | Quality | Manual test design   | Low     |
-| `manual-test-report-template.md` | Quality | Test execution report | Low     |
-| `context-map-template.md`        | Domain  | Ubiquitous language, entities, common rules | Medium |
-| `subdomain-context-template.md`  | Domain  | Lazy per-subdomain context split | Low |
-| `checkpoint-template.md`         | Operational | Resumable progress state | Low |
-
-### Template Relationships
+| File                             | Type           | Use Case                                    | Complexity |
+| -------------------------------- | -------------- | ------------------------------------------- | ---------- |
+| `initiative-template.md`         | Strategic      | Business planning                           | High       |
+| `epic-template.md`               | Feature        | Feature planning                            | Medium     |
+| `user-story-template.md`         | Requirement    | Sprint planning                             | Medium     |
+| `task-template.md`               | Implementation | Daily development                           | Low        |
+| `branch-template.md`             | Development    | Git workflow                                | Low        |
+| `commit-template.md`             | Development    | Code commits                                | Low        |
+| `pr-template.md`                 | Development    | Code review                                 | Medium     |
+| `code-review-template.md`        | Quality        | Review process                              | Medium     |
+| `team-template.md`               | Collaboration  | Team formation                              | Medium     |
+| `manual-test-case-template.md`   | Quality        | Manual test design                          | Low        |
+| `manual-test-report-template.md` | Quality        | Test execution report                       | Low        |
+| `context-map-template.md`        | Domain         | Ubiquitous language, entities, common rules | Medium     |
+| `subdomain-context-template.md`  | Domain         | Lazy per-subdomain split                    | Low        |
+| `checkpoint-template.md`         | Operational    | Resumable progress state                    | Low        |
 
 ```mermaid
 graph TD
@@ -257,147 +162,25 @@ graph TD
     TT -.-> US3
 ```
 
-This template collection provides a comprehensive foundation for professional software development project management. Each template includes detailed guidance, checklists, and examples to ensure consistent, high-quality deliverables across your entire development lifecycle.
-
-The **TemplateOrchestrator** provides comprehensive template management through specialized engines:
-
-- **TemplateEngine**: Template creation, version management, and automated application
-- **StandardizationEngine**: Consistency enforcement, quality validation, and best practice integration
-- **WorkflowEngine**: Process automation, template-driven workflows, and efficiency optimization
-- **CustomizationEngine**: Context adaptation, personalization options, and flexible configuration
-- **GovernanceEngine**: Template governance, approval processes, and compliance management
-- **AnalyticsEngine**: Usage tracking, effectiveness measurement, and optimization insights
+The **TemplateOrchestrator** manages templates through specialized engines: **TemplateEngine** (creation, versioning, application), **StandardizationEngine** (consistency, quality validation), **WorkflowEngine** (process automation), **CustomizationEngine** (context adaptation, configuration), **GovernanceEngine** (governance, approvals, compliance), **AnalyticsEngine** (usage tracking, effectiveness, optimization).
 
 ## Template Excellence Categories
 
-### 1. **Development Workflow Templates**
-
-#### Code Review Excellence
-
-- Pull request templates with comprehensive review guidance and quality checklists
-- Commit message standards with clear change description and context preservation
-- Branch naming conventions with consistent patterns and traceability
-- Issue templates with structured problem description and solution frameworks
-
-#### Development Process Templates
-
-- Task breakdown templates with systematic decomposition and estimation guidance
-- Feature specification templates with comprehensive requirement documentation
-- Bug report templates with detailed reproduction steps and environment information
-- Technical decision templates with evaluation criteria and rationale documentation
-- **[Checkpoint Template](checkpoint-template.md)** - Resumable progress state (story, branch, tasks done, decisions, remaining todos) for context-reset handoffs
-
-### 2. **Project Management Templates**
-
-#### Planning and Coordination
-
-- Epic templates with strategic alignment and business value articulation
-- User story templates with acceptance criteria and stakeholder perspective
-- Sprint planning templates with capacity planning and goal alignment
-- Retrospective templates with systematic reflection and improvement identification
-
-#### Communication and Reporting
-
-- Status update templates with consistent progress reporting and stakeholder communication
-- Meeting agenda templates with structured discussion and effective time management
-- Decision record templates with comprehensive evaluation and outcome documentation
-- Escalation templates with clear issue presentation and resolution pathways
-
-### 3. **Quality Assurance Templates**
-
-#### Review and Validation
-
-- Code review checklists with systematic evaluation and quality standards
-- Testing templates with comprehensive coverage and validation frameworks
-- Quality gate templates with consistent criteria and approval processes
-- Documentation review templates with accuracy validation and completeness verification
-- **[Manual Test Case Template](manual-test-case-template.md)** - Structured format for manual test case design with version-agnostic variables and priority classification
-- **[Manual Test Report Template](manual-test-report-template.md)** - Standardized report for manual test execution results with sign-off criteria
-- **[Context Map Template](context-map-template.md)** - Dispatcher + index + core domain glossary, entities, and common rules, maintained inline (see [Context Map Maintenance](../../architecture/design-patterns/context-map-maintenance.md))
-- **[Subdomain Context Template](subdomain-context-template.md)** - Lazy per-subdomain split of the context map, co-located with the subdomain catalog entry
-
-#### Process Improvement
-
-- Incident response templates with systematic investigation and resolution procedures
-- Change management templates with impact assessment and communication planning
-- Risk assessment templates with comprehensive evaluation and mitigation strategies
-- Improvement proposal templates with structured enhancement and implementation planning
-
-### 4. **Stakeholder Communication Templates**
-
-#### External Communication
-
-- Client update templates with professional communication and clear progress reporting
-- Vendor coordination templates with service level management and relationship maintenance
-- Partnership templates with collaboration framework and mutual benefit alignment
-- Customer support templates with professional service and issue resolution
-
-#### Internal Alignment
-
-- Cross-team communication templates with effective coordination and information sharing
-- Leadership reporting templates with strategic insight and decision support
-- Knowledge transfer templates with comprehensive information exchange
-- Training templates with effective skill development and knowledge distribution
+- **Development workflow:** PR templates with review guidance and quality checklists; commit standards; branch naming; issue templates; task breakdown with estimation guidance; feature specification; bug reports with reproduction steps and environment; technical decision templates with criteria and rationale.
+- **Project management:** epics with strategic alignment; user stories with acceptance criteria; sprint planning with capacity; retrospectives; status updates; meeting agendas; decision records; escalations.
+- **Quality assurance:** code review checklists; testing templates; quality gates; documentation review; incident response; change management; risk assessment; improvement proposals.
+- **Stakeholder communication:** client updates, vendor coordination, partnerships, customer support; cross-team communication, leadership reporting, knowledge transfer, training.
 
 ## Implementation Excellence
 
-### **Template Lifecycle Management**
-
-#### Creation and Evolution
-
-- Template development with user research and effectiveness validation
-- Version control with change tracking and backward compatibility
-- Approval processes with stakeholder review and quality assurance
-- Maintenance schedules with regular updates and relevance validation
-
-#### Adoption and Training
-
-- Onboarding integration with new team member template familiarity
-- Training programs with effective template usage and best practice sharing
-- Change management with smooth template updates and adoption support
-- Feedback collection with user experience improvement and template optimization
-
-### **Automation and Integration**
-
-#### Workflow Automation
-
-- Template auto-application with context-aware selection and intelligent defaults
-- Integration platforms with seamless tool connectivity and workflow optimization
-- Validation automation with quality checking and compliance verification
-- Metrics collection with usage tracking and effectiveness measurement
-
-#### Customization Framework
-
-- Context adaptation with environment-specific modifications and relevance optimization
-- Team customization with group-specific needs and preference accommodation
-- Role-based templates with responsibility-appropriate information and workflow design
-- Dynamic templates with intelligent content adjustment and personalized guidance
+- **Lifecycle:** creation with user research and validation; version control with backward compatibility; approval with stakeholder review; scheduled maintenance. Adoption: onboarding, training, change management, feedback collection.
+- **Automation:** context-aware auto-application, integration platforms, validation automation, metrics collection. Customization: context adaptation, team and role-based templates, dynamic content.
+- **Effectiveness metrics:** utilization and adoption, quality improvement, user satisfaction, process efficiency. Continuous improvement: optimization, best-practice and feedback integration, innovation adoption.
+- **Governance and compliance:** quality standards (accuracy, completeness), consistency enforcement, compliance verification and audit preparation, access control.
 
 ## Quality Assurance Framework
 
-### **Template Effectiveness**
+- **Template effectiveness:** utilization and adoption tracking, outcome measurement, user-satisfaction feedback, time savings and workflow improvement. Continuous improvement: optimization, best-practice and feedback integration, new-pattern adoption.
+- **Governance and compliance:** accuracy and completeness validation, consistency enforcement, regulatory compliance and audit preparation, access control and security.
 
-#### Usage and Adoption Metrics
-
-- Template utilization with frequency analysis and adoption rate tracking
-- Quality improvement with outcome measurement and effectiveness validation
-- User satisfaction with feedback collection and experience optimization
-- Process efficiency with time savings and workflow improvement measurement
-
-#### Continuous Improvement
-
-- Template optimization with performance enhancement and user experience improvement
-- Best practice integration with proven approach incorporation and knowledge sharing
-- Feedback integration with user input incorporation and collaborative improvement
-- Innovation adoption with new pattern integration and methodology advancement
-
-### **Governance and Compliance**
-
-#### Quality Standards
-
-- Template quality with accuracy validation and completeness verification
-- Consistency enforcement with standardization maintenance and pattern adherence
-- Compliance verification with regulatory requirement satisfaction and audit preparation
-- Access control with appropriate permissions and security management
-
-This collaboration templates framework ensures systematic standardization excellence, workflow automation, and communication consistency that enables teams to operate with efficiency, quality, and alignment through proven template patterns and collaborative best practices.
+This framework ensures standardization, workflow automation, and communication consistency across teams.
