@@ -1376,17 +1376,25 @@ export function findAdoptionFile(from, rel = join('.pair', 'adoption', 'tech', '
     cur = up
   }
 }
-// The artifacts the adopted `format-check-command` (way-of-working, run at the repo root) names when it fails; none adopted ⇒ [].
-export function unformattedArtifacts(repoRoot, files) {
+// The refusals the adopted `format-check-command` (way-of-working, run at the repo root) yields for these artifacts;
+// none adopted ⇒ []. Fail closed: a missing artifact, an extension outside its declared `(covers: …)`, or a check that
+// does not finish in PAIR_FORMAT_CHECK_TIMEOUT_MS (default 5 min) is refused, never skipped.
+export function formatRefusals(repoRoot, files) {
   const file = findAdoptionFile(repoRoot)
-  const cmd = file && /^\s*[-*]\s*\**`format-check-command`\**\s*:\s*`([^`]+)`/m.exec(readFileSync(file, 'utf8'))?.[1]
-  const root = file && resolvePath(dirname(file), '..', '..', '..')
-  const present = files.filter(f => root && existsSync(join(root, f)))
-  if (!cmd || !present.length) return []
-  const r = spawnSync(cmd, { cwd: root, shell: true, encoding: 'utf8' })
+  const m = file && /^\s*[-*]\s*\**`format-check-command`\**\s*:\s*`([^`]+)`(?:\s*\(covers:\s*([^)]*)\))?/m.exec(readFileSync(file, 'utf8'))
+  if (!m || !files.length) return []
+  const root = resolvePath(dirname(file), '..', '..', '..')
+  const missing = files.filter(f => !existsSync(join(root, f)))
+  if (missing.length) return missing.map(f => `artifact-missing:${f}`)
+  const covers = m[2]?.split(/[\s,]+/).filter(Boolean)
+  const uncovered = covers ? files.filter(f => !covers.includes(f.split('.').pop())) : []
+  if (uncovered.length) return uncovered.map(f => `artifact-format-uncovered:${f}`)
+  const r = spawnSync(m[1], { cwd: root, shell: true, encoding: 'utf8', timeout: Number(process.env.PAIR_FORMAT_CHECK_TIMEOUT_MS) || 300000 })
+  if (r.error?.code === 'ETIMEDOUT' || r.signal) return ['artifact-format-check-timeout']
+  if (r.error) return [`artifact-format-check-failed:${r.error.message}`]
   if (r.status === 0) return []
   const out = `${r.stdout ?? ''}${r.stderr ?? ''}`
-  return present.filter(f => out.includes(f))
+  return files.filter(f => out.includes(f)).map(f => `artifact-unformatted:${f}`)
 }
 export function resolveMaintainer({ dir, maintainer }) {
   if (maintainer && typeof maintainer === 'object' && maintainer.login) return { login: String(maintainer.login), source: maintainer.source ?? 'flag' }
@@ -1721,8 +1729,8 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       if (shapeErrs.length) return { published: false, reason: 'contract-invalid', errors: shapeErrs }
       // A sealed byte can never be reformatted: a test artifact the adopted format check rejects is refused HERE, before
       // the validator spends a round on it.
-      const unformatted = unformattedArtifacts(repoRoot, (parsed.redTests ?? []).map(t => t?.file).filter(Boolean))
-      if (unformatted.length) return { published: false, reason: `artifact-unformatted:${unformatted[0]}`, errors: unformatted.map(f => `artifact-unformatted:${f}`) }
+      const fmt = formatRefusals(repoRoot, (parsed.redTests ?? []).map(t => t?.file).filter(Boolean))
+      if (fmt.length) return { published: false, reason: fmt[0], errors: fmt }
       // C5: the contract's own fixScope.mode is AUTHORITATIVE — stamped on the handoff (resolve reads it, never the plan) and
       // the plan may not disagree with it.
       if (skill === 'red-spec' && parsed?.fixScope?.mode) {
@@ -3251,7 +3259,7 @@ if (isMain()) {
     // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
     const FLAGS = {
       resolve: ['acHash', 'contextPolicy', 'dir', 'entry', 'head', 'inputs', 'labels', 'policy', 'pr', 'prLabels', 'redirects', 'runsRoot', 'story', 'tier', 'workflowVersion'],
-      publish: ['attempt', 'dir', 'file', 'phase', 'policy', 'pr', 'predecessor', 'skill', 'workflowVersion'],
+      publish: ['attempt', 'dir', 'file', 'phase', 'policy', 'pr', 'predecessor', 'repoRoot', 'skill', 'workflowVersion'],
       hash: ['file'],
       'ac-hash': ['dir', 'story'],
       'bind-hosts': ['dir', 'from'],
@@ -3301,7 +3309,7 @@ if (isMain()) {
       need('dir', 'file', 'phase', 'skill', 'workflowVersion')
       // US-514 T-2: the SAME policy `resolve` was dispatched with — review-phase's `blocking`
       // derivation reads `policy.blockingFloor` from it, never a re-read of adoption here.
-      out = publish({ dir: opts.dir, file: opts.file, phase: opts.phase, skill: opts.skill, workflowVersion: opts.workflowVersion, predecessor: opts.predecessor, attempt: opts.attempt ? Number(opts.attempt) : undefined, pr: opts.pr !== undefined ? Number(opts.pr) : undefined, policy: opts.policy ? JSON.parse(opts.policy) : {} })
+      out = publish({ dir: opts.dir, file: opts.file, phase: opts.phase, skill: opts.skill, workflowVersion: opts.workflowVersion, predecessor: opts.predecessor, attempt: opts.attempt ? Number(opts.attempt) : undefined, pr: opts.pr !== undefined ? Number(opts.pr) : undefined, policy: opts.policy ? JSON.parse(opts.policy) : {}, ...(opts.repoRoot ? { repoRoot: opts.repoRoot } : {}) })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.published ? 0 : 1)
     } else if (cmd === 'hash') {

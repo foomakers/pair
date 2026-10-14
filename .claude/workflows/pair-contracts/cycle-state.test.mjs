@@ -155,6 +155,9 @@ import { fileURLToPath } from 'node:url'
 import { SCHEMA_VERSION, METRICS_SCHEMA_VERSION, FINDING_TRANSITIONS, RECORD_TYPES, SCOPE_CHANGE_TYPES, SCOPE_CHANGE_STATUSES, NEW_PUBLIC_STATUSES, SCOPE_DECISION_ACTIONS, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash, migrateInspect, migrateAcknowledge, predecessorEvidence, cycleCounters, scopeBaselineHashOf, parseScopeDecisionComment, applyScopeDecisions, discoverScopeDecisions, withLock, supersede, decide, resolveMaintainer, CAPS } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
+// `publish` defaults `repoRoot` to the cwd; run from a neutral directory so this repo's own adoption (its
+// `format-check-command`) never applies to fixture contracts — the format tests name their own repo.
+process.chdir(mkdtempSync(join(tmpdir(), 'cycle-state-cwd-')))
 const V = '3.0.0'
 const SHA = c => c.repeat(40)
 const POLICY = { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 }
@@ -477,6 +480,16 @@ test('resolve: a plan group keyed `findingIds` hands its findings to the next pr
   assert.deepEqual(r.next.findings.map(f => f.id), ['r0-4'])
 })
 
+test('batch obligations: a plan keyed `findingIds` makes the g2 finding an obligation — a review that drops it does not complete the cycle', () => {
+  const { dir } = runDir()
+  const plan = { groups: [{ groupId: 'r1-g1', findingIds: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }, { groupId: 'r1-g2', findingIds: ['r0-4'], owner: 'b', mode: 'behavioral', allowedPaths: ['src/b.ts'], dependsOn: ['r1-g1'] }], carried: [] }
+  redSpec(dir, 'r1-g1', { plan, groupId: 'r1-g1' })
+  redVerify(dir, 'r1-g1')
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('d'), evidenceLedger: [] })
+  handoff(dir, 'r1', 'review-phase', { partial: false, reviewedHead: SHA('d'), verdict: 'APPROVED', findings: [finding('r0-1', { transition: 'resolved', blocking: false })], custody: { verified: true, contractBreach: false }, readiness: { ready: true, remoteHead: SHA('d') } })
+  assert.equal(cycleCounters(readHandoffs(dir)).completedCycles, 0, 'r0-4 (g2) is an obligation of r1 and was never closed')
+})
+
 // ── C5: the SEALED/prepared contract's fixScope.mode is authoritative — the plan may not disagree, and resolve reads the contract's ──
 test('C5 publish: a red-spec whose plan group mode disagrees with its contract fixScope.mode is refused (`plan-contract-mode-mismatch`)', () => {
   const { dir } = runDir()
@@ -489,25 +502,57 @@ test('C5 publish: a red-spec whose plan group mode disagrees with its contract f
   assert.equal(attempt('behavioral').published, true)
 })
 
-test('publish: a red-spec contract whose test artifact fails the adopted `format-check-command` is refused naming the file; a clean check publishes', () => {
-  const attempt = exitCode => {
-    const { dir } = runDir()
-    const repo = mkdtempSync(join(tmpdir(), 'fmt-repo-'))
-    mkdirSync(join(repo, '.pair', 'adoption', 'tech'), { recursive: true })
-    mkdirSync(join(repo, 'test'), { recursive: true })
-    writeFileSync(join(repo, 'test', 'a.test.ts'), 'x\n')
-    writeFileSync(join(repo, 'check.mjs'), `process.stdout.write('test/a.test.ts\\n'); process.exit(${exitCode})`)
-    writeFileSync(join(repo, '.pair', 'adoption', 'tech', 'way-of-working.md'), '- **`format-check-command`**: `node check.mjs`\n')
-    review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1', { location: 'src/a.ts:1' })] })
-    const contractPath = join(dir, 'r1-g1-red-contract.json')
-    const contract = { fixScope: { owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] }, redTests: [{ file: 'test/a.test.ts', sha256: `sha256:${'1'.repeat(64)}`, command: 'node --test', baseline: 'red', observed: 'FAIL' }] }
-    writeFileSync(contractPath, JSON.stringify(contract))
-    return publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'remediation', groupId: 'r1-g1', plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, contractPath, contractHash: contractHash(contract) }), phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r0-review-phase', repoRoot: repo })
+// A throwaway repo adopting a `format-check-command` (check.mjs prints `prints`, exits `exitCode`, or hangs) and a
+// red-spec draft whose contract lists `files`; `present` are the files written under the repo.
+const fmtFixture = ({ exitCode = 0, prints = 'test/a.test.ts', hang = false, files = ['test/a.test.ts'], present = files, covers = '' } = {}) => {
+  const { dir } = runDir()
+  const repo = mkdtempSync(join(tmpdir(), 'fmt-repo-'))
+  mkdirSync(join(repo, '.pair', 'adoption', 'tech'), { recursive: true })
+  for (const f of present) {
+    mkdirSync(join(repo, f, '..'), { recursive: true })
+    writeFileSync(join(repo, f), 'x\n')
   }
-  const refused = attempt(1)
+  writeFileSync(join(repo, 'check.mjs'), hang ? 'setInterval(() => {}, 1000)' : `process.stdout.write(${JSON.stringify(prints + '\n')}); process.exit(${exitCode})`)
+  writeFileSync(join(repo, '.pair', 'adoption', 'tech', 'way-of-working.md'), `- **\`format-check-command\`**: \`node check.mjs\`${covers}\n`)
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1', { location: 'src/a.ts:1' })] })
+  const contractPath = join(dir, 'r1-g1-red-contract.json')
+  const contract = { fixScope: { owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] }, redTests: files.map(file => ({ file, sha256: `sha256:${'1'.repeat(64)}`, command: 'node --test', baseline: 'red', observed: 'FAIL' })) }
+  writeFileSync(contractPath, JSON.stringify(contract))
+  const file = writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'red-spec', inputHead: SHA('a'), status: 'red', mode: 'remediation', groupId: 'r1-g1', plan: { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }, contractPath, contractHash: contractHash(contract) })
+  return { dir, repo, file, args: { dir, file, phase: 'r1-g1', skill: 'red-spec', workflowVersion: V, predecessor: 'r0-review-phase', repoRoot: repo } }
+}
+
+test('publish: a red-spec contract whose test artifact fails the adopted `format-check-command` is refused naming the file; a clean check publishes', () => {
+  const refused = publish(fmtFixture({ exitCode: 1 }).args)
   assert.equal(refused.published, false)
   assert.equal(refused.reason, 'artifact-unformatted:test/a.test.ts')
-  assert.equal(attempt(0).published, true)
+  assert.equal(publish(fmtFixture({ exitCode: 0 }).args).published, true)
+})
+
+test('publish: with a format check adopted, a listed artifact missing under the repo root is refused (`artifact-missing`), never skipped', () => {
+  const out = publish(fmtFixture({ files: ['test/a.test.ts', 'test/gone.test.ts'], present: ['test/a.test.ts'] }).args)
+  assert.equal(out.reason, 'artifact-missing:test/gone.test.ts')
+})
+
+test('publish: a format check that does not finish in time is refused (`artifact-format-check-timeout`), never a silent pass', () => {
+  process.env.PAIR_FORMAT_CHECK_TIMEOUT_MS = '500'
+  try {
+    assert.equal(publish(fmtFixture({ hang: true }).args).reason, 'artifact-format-check-timeout')
+  } finally {
+    delete process.env.PAIR_FORMAT_CHECK_TIMEOUT_MS
+  }
+})
+
+test('publish: an artifact whose extension the adopted check does not cover is refused (`artifact-format-uncovered`), never passed unchecked', () => {
+  const out = publish(fmtFixture({ files: ['test/a.test.mjs'], covers: ' (covers: ts js)' }).args)
+  assert.equal(out.reason, 'artifact-format-uncovered:test/a.test.mjs')
+  assert.equal(publish(fmtFixture({ files: ['test/a.test.ts'], covers: ' (covers: ts js)' }).args).published, true)
+})
+
+test('CLI publish --repoRoot: the format check runs against the named worktree, not the cwd', () => {
+  const { dir, repo, file } = fmtFixture({ exitCode: 1 })
+  const r = spawnSync(process.execPath, [CLI, 'publish', '--dir', dir, '--file', file, '--phase', 'r1-g1', '--skill', 'red-spec', '--workflowVersion', V, '--predecessor', 'r0-review-phase', '--repoRoot', repo], { encoding: 'utf8', cwd: tmpdir() })
+  assert.equal(JSON.parse(r.stdout).reason, 'artifact-unformatted:test/a.test.ts', r.stdout + r.stderr)
 })
 
 test('C5 resolve: the contract mode stamped at publish decides routing — a plan that says `behavioral` over a `test` contract still skips green-fix, and a `test` plan over a behavioral contract can no longer starve it', () => {
