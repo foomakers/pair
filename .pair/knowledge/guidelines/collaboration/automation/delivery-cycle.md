@@ -60,6 +60,7 @@ Each subsection below says what the stage is for, who runs it, what it reads and
 - **Who / context**: the implementer, `fresh`.
 - **Reads → produces**: the card and the base branch → commits in the story worktree, a checkpoint, the PR (created or updated, never duplicated), and the stage handoff.
 - **Self-review**: the implementer reviews its own diff against the acceptance criteria and fixes what it finds — and records nothing of it, so the verifier judges the result without the author's conclusions in front of it.
+- **External ACs**: an AC needing live external verification the stage cannot run (a real release) is listed in the PR body and the result as `external — pending live verification`, so the coordinator knows before review.
 - **Skipped when**: a PR already exists for the card (the cycle enters at `verify`).
 - **Ends**: success — handoff published, next is `verify`; a red gate still publishes the PR and routes one retry on the same base; a second red gate stops the cycle.
 
