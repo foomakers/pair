@@ -63,7 +63,12 @@ qa/release-validation/
 ├── CP4-kb-dataset.md                   # KB structure, validation, content integrity
 ├── CP5-website-docs-completeness.md    # All doc pages return 200
 ├── CP6-website-search-navigation.md    # Search, responsive nav, 404
-└── CP7-registry-publish.md             # Package visibility, install from registry
+├── CP7-registry-publish.md             # Package visibility, install from registry (channel-aware)
+├── CP8-packaging.md                    # pair-cli package layouts, metadata
+├── CP9-quickstart-onboarding.md        # Timed quickstart onboarding
+├── CP10-web-cloud-environment.md       # Claude Code Web session (manual)
+├── CP11-release-pipeline.md            # pnpm release, dispatch-only, cleanup
+└── CP12-plugin-marketplace.md          # Claude Code marketplace channel (manual)
 ```
 
 Each test case follows this format:
@@ -166,6 +171,7 @@ Before each release, check if the suite needs updates:
 
 - **New feature added?** → Run `/pair-capability-design-manual-tests` with extend mode
 - **Page or route changed?** → Update the relevant CP file
+- **Pre/rc release?** → Set `$CHANNEL`: registry becomes GitHub Packages (`read:packages` token, never recorded) and the website CPs (CP1, CP5, CP6) are final-only or run on a PR preview
 - **New CLI command?** → Add tests to CP3 or create a new CP
 - **Test case drift?** → Update expected results to match current behavior (after confirming the new behavior is correct)
 

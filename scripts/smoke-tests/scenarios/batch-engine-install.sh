@@ -37,6 +37,7 @@ assert_dir ".claude/agents"
 # script produces a stage that dies at its first step.
 assert_file ".claude/workflows/pair-implement-batch.js"
 assert_file ".claude/workflows/pair-refine-batch.js"
+assert_file ".claude/workflows/pair-loop.js"
 assert_file ".claude/skills/pair-workflow-contract-phase/scripts/ensure-contract.mjs"
 for skill in red-spec red-verify implement-phase green-fix review-phase; do
   assert_file ".claude/skills/pair-workflow-${skill}/scripts/cycle-state.mjs"
@@ -59,6 +60,7 @@ assert_file ".claude/workflows/pair-contracts/.gitignore"
 # excluded from the registry. They must NOT land in the directory a workflow loader scans.
 assert_no_file ".claude/workflows/pair-implement-batch.test.mjs"
 assert_no_file ".claude/workflows/pair-refine-batch.test.mjs"
+assert_no_file ".claude/workflows/pair-loop.test.mjs"
 assert_no_file ".claude/workflows/pair-contracts/ensure-contract.test.mjs"
 assert_no_file ".claude/workflows/pair-contracts/cycle-state.test.mjs"
 assert_no_file ".claude/workflows/pair-contracts/pr-comment.test.mjs"

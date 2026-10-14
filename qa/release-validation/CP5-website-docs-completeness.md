@@ -2,6 +2,7 @@
 
 **Priority**: P1
 **Scope**: All doc pages return HTTP 200, version references are consistent, internal links work
+**Channels**: final only — pre/rc deploy no website (`release.yml`). Run against a PR preview `$BASE_URL` (Vercel preview) when validating a pre/rc, otherwise mark SKIP (final-only).
 **Preconditions**: Website deployed at `$BASE_URL`
 
 ---
@@ -161,7 +162,7 @@
 ### Steps
 
 1. Navigate to `$BASE_URL/docs/getting-started/quickstart`
-2. Search for any version string pattern (e.g. `0.x.y`, `v0.x.y`)
+2. Search for **install/version snippets only** (`npm i @foomakers/pair-cli@x.y.z`, `pair-cli --version` sample output, install URLs) — not changelog or migration history, which legitimately name older versions
 3. Repeat on `$BASE_URL/docs/reference/cli/commands`
 
 ### Expected Result
@@ -199,3 +200,4 @@
 - #493 (consolidated delivery-cycle page): MT-CP501 page count 85 → 86, Reference 17 → 18 — added `/docs/reference/delivery-cycle`.
 - #353 (operational docs): MT-CP501 page count 86 → 87, Process Lifecycle 5 → 6 — added `/docs/developer-journey/tag-driven-automation`.
 - #237 (package-local adoption override): MT-CP501 page count 87 → 88, Customization 7 → 8 — added `/docs/customization/package-local-adoption`.
+- #543: channel note (final-only / PR preview); MT-CP502 scoped to install/version snippets.

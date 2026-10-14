@@ -217,7 +217,7 @@ assert_contains() {
 assert_output_contains() {
   local string="$1"
   local file="$TMP_DIR/last_cmd_output.log"
-  if grep -Fq "$string" "$file"; then
+  if grep -Fq -e "$string" "$file"; then
     log_succ "Output contains '$string'"
   else
     log_fail "Output does not contain '$string'"

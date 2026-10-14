@@ -84,6 +84,8 @@
 - `AGENTS.md` exists and is non-empty
 - `CLAUDE.md` exists (transform with claude prefix)
 - `.github/` directory exists
+- `.claude/skills/`, `.claude/workflows/` (incl. `pair-loop.js`) and `.claude/agents/` exist
+- `.claude/skills/` canonical; `.github/skills/`, `.cursor/skills/`, `.agent/skills/`, `.agents/skills/` are symlinks to it
 
 ---
 
@@ -185,7 +187,7 @@
 ### Expected Result
 
 - Exit code 0
-- Lists target registries from config.json (knowledge, adoption, github, agents, skills)
+- Lists the 7 registries from config.json: github, knowledge, adoption, agents, skills, workflows, agent-definitions
 
 ---
 
@@ -205,6 +207,13 @@
 - Exit code 0
 - Backup created (output mentions backup)
 - Files updated
+
+### Step: dropped files are removed (#421)
+
+1. Remove one file from `$WORKDIR/kb-source/.pair/knowledge/` and add a marker line to an installed `.pair/adoption/*.md`
+2. `$CLI update --source $WORKDIR/kb-source` again
+3. Expected: the removed file is gone from `project-auto/.pair/knowledge/` (mirror registry); the `.pair/adoption` edit survives (add registry)
+4. Offline equivalent: `scripts/smoke-tests/scenarios/update-removes-files.sh`
 
 ---
 
@@ -422,58 +431,45 @@
 
 ### Steps
 
-1. Save the CLI `config.json` and change skills source to match the repo layout:
-
-   ```bash
-   CLI_DIR=$(dirname $(dirname $CLI))   # pair-cli package root
-   cp $CLI_DIR/config.json $WORKDIR/config.json.bak
-   node -e "
-     const fs=require('fs'), p='$CLI_DIR/config.json';
-     const c=JSON.parse(fs.readFileSync(p,'utf-8'));
-     c.asset_registries.skills.source='.claude/skills';
-     fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
-   "
-   ```
-
-2. `rm -rf ~/.pair/kb/git-*` (clear git KB cache entries)
+1. Use the CLI's default `config.json` (no remap): the repo root's `.claude/skills` is an installed, flattened catalog that also holds third-party skills (e.g. `agent-browser`), so remapping `skills.source` to it fails with an ambiguous-flatten error; the repo has no root `.workflows`
+2. `rm -rf ~/.pair/kb/external/git-*` (clear git KB cache entries)
 3. `mkdir -p $WORKDIR/project-git && cd $WORKDIR/project-git`
 4. `$CLI install --source https://github.com/foomakers/pair.git#main`
-5. Verify cache uses hash-based path: `ls ~/.pair/kb/ | grep '^git-'`
-6. Verify `.git` removed from cache: `ls ~/.pair/kb/git-*/.git` (should fail)
-7. Restore original config: `cp $WORKDIR/config.json.bak $CLI_DIR/config.json`
+5. Verify cache uses hash-based path: `ls ~/.pair/kb/external/ | grep '^git-'` (`~/.pair/kb/external/git-<hash>/`)
+6. Verify `.git` removed from cache: `ls ~/.pair/kb/external/git-*/.git` (should fail)
 
 ### Expected Result
 
-- Exit code 0 (all 5 registries succeed including skills)
-- Cache directory is `~/.pair/kb/git-<hash>/` (not version-based)
+- Exit code 0
+- Registries present at the repo root (`github`, `knowledge`, `adoption`, `agents`, `agent-definitions`) install; `skills` and `workflows` report `skipped — not shipped by this source` — skipped registries are OK, not a failure
+- Cache directory is `~/.pair/kb/external/git-<hash>/` (not version-based)
 - No `.git` directory inside cache
-- Same file structure as MT-CP302
-- Original `config.json` restored after test
 
 ### Notes
 
-- The default `config.json` has `skills.source: ".skills"` but the pair repo uses `.claude/skills/` — step 1 remaps this temporarily
+- The repo root is not a KB source layout: the distributable KB lives in `packages/knowledge-hub/dataset` (`.skills`, `.workflows`). This case validates git fetch + cache + install of what the root ships, not a full 7-registry install (that is MT-CP302)
 - Git cache key is a SHA-256 hash of the full URL (including `#ref`), independent of CLI version
 - Different URLs/refs produce different cache entries (no collisions)
 
 ---
 
-## MT-CP320: npx @foomakers/pair-cli install from npmjs.org (no prior config)
+## MT-CP320: npx @foomakers/pair-cli install from the channel registry (no prior config)
 
 **Priority**: P0
-**Preconditions**: Package published to npmjs.org, internet available, no `.npmrc` for `@foomakers` scope
+**Preconditions**: `$CHANNEL=final`: package on npmjs.org, no `.npmrc` for `@foomakers` scope. `$CHANNEL=pre|rc`: package on GitHub Packages; `$REGISTRY_TOKEN` (`read:packages`) available — never written to the report; no token ⇒ BLOCKED, not FAIL
 **Category**: CLI Functional
 
 ### Steps
 
 1. `mkdir -p $WORKDIR/project-npx && cd $WORKDIR/project-npx`
 2. Verify no `.npmrc` exists in `$WORKDIR/project-npx/` or parent dirs that configures `@foomakers` scope
-3. `npx @foomakers/pair-cli install`
+3. `$CHANNEL=final`: `npx @foomakers/pair-cli install`
+   `$CHANNEL=pre|rc`: `npm config set @foomakers:registry https://npm.pkg.github.com --location=project`, put the `read:packages` token in a project `.npmrc` (`//npm.pkg.github.com/:_authToken=...`, deleted afterwards), then `npx @foomakers/pair-cli@$VERSION install`
 
 ### Expected Result
 
 - Exit code 0
-- CLI downloaded from npmjs.org (no 404, no auth error)
+- CLI downloaded from the channel registry (`registry.npmjs.org` on final, `npm.pkg.github.com` on pre/rc; no 404, no auth error)
 - `.pair/knowledge/` directory created and non-empty
 - `AGENTS.md` created at project root
 
@@ -482,3 +478,29 @@
 - This is the primary adoption path — validates that a user with zero configuration can install pair
 - If 404: package not published to npmjs.org. If 401: registry still pointing to GitHub Packages
 - Complements MT-CP301 (tests auto-download KB) by validating the npm registry path
+
+---
+
+## MT-CP321: Error paths exit non-zero (#543)
+
+**Priority**: P1
+**Preconditions**: `$CLI` functional
+**Category**: CLI Functional
+
+### Steps
+
+1. `echo notzip > $WORKDIR/corrupt.zip`
+2. `$CLI kb-verify $WORKDIR/corrupt.zip`; `$CLI kb-info $WORKDIR/corrupt.zip`
+3. `mkdir $WORKDIR/empty-src $WORKDIR/project-empty && echo x > $WORKDIR/empty-src/a.md && cd $WORKDIR/project-empty && $CLI install --no-kb --offline --source $WORKDIR/empty-src`
+
+### Expected Result
+
+- Step 2: both exit != 0 (not an exact code), stderr names the invalid ZIP
+- Step 3: exit 1, `Invalid KB structure at: ...`, nothing installed
+- Offline equivalent: `scripts/smoke-tests/scenarios/update-removes-files.sh`
+
+---
+
+## Changelog
+
+- #543: channel-aware MT-CP320 (`$CHANNEL`); MT-CP302 adds workflows/agents/skills paths; MT-CP307 lists 7 registries; MT-CP308 dropped-file step; MT-CP319 `external/git-<hash>` cache path, default config (no stale `.claude/skills` remap), skipped skills/workflows OK; new MT-CP321 error paths.

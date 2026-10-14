@@ -1,7 +1,8 @@
-# CP7 — Registry Publish (npmjs.org)
+# CP7 — Registry Publish (npmjs.org / GitHub Packages)
 
 **Priority**: P0
-**Scope**: Package visibility on npmjs.org, install from public registry
+**Scope**: Package visibility and install from the channel registry
+**Channels**: `$CHANNEL=final` → npmjs.org, as written below. `$CHANNEL=pre|rc` → GitHub Packages (`https://npm.pkg.github.com`): the npmjs.org cases are final-only (SKIP); run them against `npm view @foomakers/pair-cli@$VERSION --registry https://npm.pkg.github.com` and `npm install` with a `read:packages` token in a project `.npmrc` (never recorded; no token ⇒ BLOCKED, not FAIL). See [README](README.md#channels-channel).
 **Preconditions**: `publish-npm` job completed (or local `scripts/workflows/release/publish-npm.sh` run). `$WORKDIR` created outside the repo.
 
 ---
@@ -105,3 +106,9 @@
 
 - Exit code 0
 - KB installed (`.pair/knowledge/` exists and non-empty)
+
+---
+
+## Changelog
+
+- #543: channel-aware header; npmjs.org cases final-only, pre/rc use GitHub Packages.

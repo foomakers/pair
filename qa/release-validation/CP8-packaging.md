@@ -57,13 +57,17 @@
 ### Steps
 
 1. `cd $WORKDIR/project-auto`
-2. `$CLI package --name "Test KB" --version $VERSION --author "Tester" -o $WORKDIR/pkg-meta.zip`
+2. `$CLI package --name "Test KB" --pkg-version $VERSION --author "Tester" -o $WORKDIR/pkg-meta.zip`
 
 ### Expected Result
 
 - Exit code 0
 - `$WORKDIR/pkg-meta.zip` exists
 - ZIP contains a manifest with name="Test KB", version=$VERSION, author="Tester"
+
+### Notes
+
+- The package version flag is `--pkg-version`: `--version` is the program-level `-V, --version` and prints the CLI version without packaging
 
 ---
 

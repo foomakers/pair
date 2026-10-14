@@ -125,7 +125,7 @@
 ### Expected Result
 
 - Exit code 0
-- Shows name, version, file count
+- Shows the `Package Information` block: Name, Version, Description, Author, License, Tags, Created, Registries (plus Checksum when the manifest has one). No file count — kb-info never printed one
 - Version matches `$VERSION`
 
 ---
@@ -145,3 +145,26 @@
 
 - Valid JSON output
 - `version` field matches `$VERSION`
+
+---
+
+## MT-CP409: kb-verify / kb-info reject a corrupt ZIP (#543)
+
+**Priority**: P1
+**Preconditions**: `$CLI` functional
+**Category**: Dataset
+
+### Steps
+
+1. `echo notzip > $WORKDIR/corrupt.zip`
+2. `$CLI kb-verify $WORKDIR/corrupt.zip`; `$CLI kb-info $WORKDIR/corrupt.zip`
+
+### Expected Result
+
+- Both exit != 0 and name the invalid archive
+
+---
+
+## Changelog
+
+- #543: MT-CP407 expected output aligned with what kb-info prints (no file count); new MT-CP409 corrupt ZIP (offline equivalent: `scenarios/update-removes-files.sh`).

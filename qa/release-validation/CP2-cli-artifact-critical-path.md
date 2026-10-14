@@ -108,7 +108,7 @@
 ### Expected Result
 
 - Exit code 0
-- Lists all 8 commands: install, update, package, kb-validate, kb-verify, kb-info, update-link, validate-config
+- Lists all 12 commands: install, update, update-link, package, kb-validate, kb-verify, kb-info, validate-config, scaffold-kb, kb-cache, tokens, run
 
 ---
 
@@ -205,6 +205,7 @@
 - `version` == `$VERSION`
 - `private` == `false`
 - `publishConfig.registry` == `https://registry.npmjs.org/`
+- On `$CHANNEL=pre|rc` the same file reports the npmjs `publishConfig` while the package is published to GitHub Packages: **expected**, not a failure (the pre/rc tag is tag-only; `create-registry-tgz.sh` writes npmjs unconditionally — product behaviour, tracked outside this suite)
 
 ---
 
@@ -223,3 +224,9 @@
 
 - File exists
 - Contains `node` invocation pointing to `bundle-cli\index.js`
+
+---
+
+## Changelog
+
+- #543: MT-CP206 lists all 12 commands (was 8); MT-CP211 documents the expected npmjs `publishConfig` on pre/rc.
