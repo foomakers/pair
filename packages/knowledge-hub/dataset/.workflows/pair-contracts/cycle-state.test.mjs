@@ -459,6 +459,24 @@ test('resolve: remediation round — prepare(g1) → validate+seal → green →
   assert.equal(r.next.prior, 'r0-review-phase')
 })
 
+test('resolve: a plan group keyed `findingIds` hands its findings to the next prepare AND its green (later groups are never empty)', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1'), finding('r0-2'), finding('r0-4', { location: 'src/b.ts:4' })] })
+  const plan = { groups: [{ groupId: 'r1-g1', findingIds: ['r0-1', 'r0-2'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }, { groupId: 'r1-g2', findingIds: ['r0-4'], owner: 'b', mode: 'behavioral', allowedPaths: ['src/b.ts'], dependsOn: ['r1-g1'] }], carried: [] }
+  redSpec(dir, 'r1-g1', { plan, groupId: 'r1-g1' }, { predecessor: 'r0-review-phase' })
+  redVerify(dir, 'r1-g1', {}, { predecessor: 'r1-g1-red-spec' })
+  assert.deepEqual(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next.findings.map(f => f.id), ['r0-1', 'r0-2'])
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: true, needsHumanDecision: false, outputHead: SHA('d'), evidenceLedger: [] }, { predecessor: 'r1-g1-red-verify' })
+  let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual([r.next.step, r.next.phase], ['prepare', 'r1-g2'])
+  assert.deepEqual(r.next.findings.map(f => f.id), ['r0-4'])
+  redSpec(dir, 'r1-g2', { groupId: 'r1-g2' }, { predecessor: 'r1-g1-green-fix' })
+  redVerify(dir, 'r1-g2', { snapshot: SHA('e') }, { predecessor: 'r1-g2-red-spec' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual([r.next.step, r.next.phase], ['green', 'r1-g2'])
+  assert.deepEqual(r.next.findings.map(f => f.id), ['r0-4'])
+})
+
 // ── C5: the SEALED/prepared contract's fixScope.mode is authoritative — the plan may not disagree, and resolve reads the contract's ──
 test('C5 publish: a red-spec whose plan group mode disagrees with its contract fixScope.mode is refused (`plan-contract-mode-mismatch`)', () => {
   const { dir } = runDir()

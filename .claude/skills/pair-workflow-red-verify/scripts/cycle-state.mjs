@@ -1621,11 +1621,13 @@ const findingTargetPaths = (group, finding) => {
   const own = Array.isArray(declared) ? declared.filter(p => typeof p === 'string') : []
   return [...new Set([...own, ...pathsIn(finding?.location)])]
 }
+// A plan group names its finding ids as `findings` (canonical) or `findingIds` (alias) — every reader goes through here.
+export const groupFindingIds = group => group?.findings ?? group?.findingIds ?? []
 export function planErrors(plan, findings) {
   const errs = []
   const byId = new Map((findings ?? []).map(f => [f?.id, f]))
   for (const group of plan?.groups ?? []) {
-    const ids = group.findings ?? group.findingIds ?? []
+    const ids = groupFindingIds(group)
     if (group.mode === 'doc') for (const e of docPathErrors({ allowedPaths: group.allowedPaths })) errs.push(`doc-group-code-paths: ${group.groupId}: ${e}`)
     for (const id of ids) {
       const finding = byId.get(id)
@@ -1956,7 +1958,7 @@ function batchObligations(list, batch) {
     const parts = phaseParts(h.phase)
     const its = h.data.remediationBatchId ?? (parts?.round ? `r${parts.round}` : undefined)
     if (its !== batch || h.data.regressionRepairOf) continue
-    for (const g of h.data.plan?.groups ?? []) if (g.groupId && phaseParts(g.groupId)?.groupId?.startsWith(`${batch}-`)) for (const id of g.findings ?? []) ids.add(id)
+    for (const g of h.data.plan?.groups ?? []) if (g.groupId && phaseParts(g.groupId)?.groupId?.startsWith(`${batch}-`)) for (const id of groupFindingIds(g)) ids.add(id)
     for (const id of h.data.findings?.received ?? []) ids.add(id)
   }
   return [...ids]
@@ -2253,7 +2255,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
       const still = (roundReview.data.findings ?? []).filter(f => isBlocking(f) && f.kind === 'approved-test-failing' && f.groupId).filter(f => !list.some(h => h.skill === 'green-fix' && h.phase === latestGroupPhase(f.groupId) && h.data.seq > roundReview.data.seq))
       const retry = still.length ? greenRetryFor(still, parts.round) : null
       if (retry) return retry
-    } else if (nextGroup) return { step: 'prepare', mode: 'remediation', phase: nextGroup.groupId, round: parts.round, attempt: 1, base: outputHead, group: nextGroup, findings: findingsByIds(nextGroup.findings), plan }
+    } else if (nextGroup) return { step: 'prepare', mode: 'remediation', phase: nextGroup.groupId, round: parts.round, attempt: 1, base: outputHead, group: nextGroup, findings: findingsByIds(groupFindingIds(nextGroup)), plan }
     const prior = lastReview
     // A GREEN that follows a REGRESSION REWIND of this batch (US-479 T-29) produced a new head:
     // its verification is the next review round, never a second reviewer of the round already
@@ -2350,7 +2352,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     if (fixModeOf(list, last.phase) === 'test') return afterGreen(last.phase, d.outputHead ?? d.snapshot ?? d.inputHead)
     // The GREEN attempt follows what this phase has already seen: a batch prepared again after a
     // regression rewind (US-479 T-29) fixes forward as attempt n+1, never over its own handoff.
-    return { step: 'green', mode: parts.revision > 1 ? 'revision' : 'remediation', phase: last.phase, round: parts.round, attempt: byPhase('green-fix', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupOf(last.phase)?.findings), ...greenDirective(last.phase) }
+    return { step: 'green', mode: parts.revision > 1 ? 'revision' : 'remediation', phase: last.phase, round: parts.round, attempt: byPhase('green-fix', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupFindingIds(groupOf(last.phase))), ...greenDirective(last.phase) }
   }
   if (last.skill === 'implement-phase') {
     if (d.status === 'ok' && d.gatesPassed === true && Number.isInteger(d.prNumber) && SHA_RE.test(String(d.outputHead ?? ''))) {
