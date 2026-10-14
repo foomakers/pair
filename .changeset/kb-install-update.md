@@ -11,6 +11,7 @@ KB install, update and verification:
 - Cache slots are keyed by source identity, so installing an external KB no longer corrupts the official KB cache for other projects (#423).
 - `kb-info` reports installed vs current KB version, including git sources, and points to the migration page on drift (#309, #444).
 - `kb-validate` accepts optional link patterns (`link_validation.optional_link_patterns`, `--optional-link-patterns`): a missing target that matches is a warning, not an error (#445).
+- Two new registries install the Claude Code workflows (`.claude/workflows/`: `pair-implement-batch`, `pair-refine-batch`, `pair-loop`) and the delivery subagents (`.claude/agents/`), all `pair-` prefixed (#219, #432).
 - Skills install flattened and prefixed, with `/command` references rewritten across runs. A skill's nested `references/` stays inside the skill (#269, #411).
 - `.pair/working` (or the `working_path` override) is never a registry target, and a config that overlaps a reserved path is rejected (#308).
 - `pair-cli package` quick mode uses the same defaults cascade as guided mode (#349).
