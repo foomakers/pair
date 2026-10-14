@@ -41,7 +41,7 @@ OFFLINE_ONLY="false"
 
 while [[ "$#" -gt 0 ]]; do
   case $1 in
-    --binary) BINARY_PATH="$2"; shift ;;
+    --binary) BINARY_PATH="$2"; BINARY_EXPLICIT="true"; shift ;;
     --kb-source) KB_SOURCE="$2"; shift ;;
     --cleanup) CLEANUP="true" ;;
     --ci)
@@ -191,6 +191,14 @@ clear_problematic_npm_envs
 # The packaging scenario writes the packaged CLI absolute path to $TMP_DIR/packaged-cli
 PACKAGED_CLI_FILE="$TMP_DIR/packaged-cli"
 PACKAGING_SCRIPT="$SCENARIOS_DIR/00-create-install-package.sh"
+
+# An explicit --binary IS the binary under test (the release smokes pass the installed
+# artifact): seed the marker with it so neither this preflight nor ensure_packaged_cli
+# rebuilds the CLI from source and silently replaces it (#543). `node <cli.js>` forms
+# are not an executable file the marker can hold, so they keep the preflight.
+if [ "${BINARY_EXPLICIT:-}" = "true" ] && [ -x "$TEST_BINARY" ] && [ ! -d "$TEST_BINARY" ]; then
+  echo "$TEST_BINARY" > "$PACKAGED_CLI_FILE"
+fi
 
 if [ -f "$PACKAGED_CLI_FILE" ]; then
   export TEST_BINARY="$(cat "$PACKAGED_CLI_FILE")"

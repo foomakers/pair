@@ -48,6 +48,8 @@ This scenario performs the _initial_ packaging preflight and **is executed first
 
 When you run an individual scenario that requires the packaged CLI (for example `lifecycle-kb.sh`) it will call `ensure_packaged_cli` which executes this preflight automatically when necessary.
 
+An explicit `--binary <executable>` skips this preflight: the runner seeds `$TMP_DIR/packaged-cli` with it, so the release artifact smokes test the artifact, not a CLI rebuilt from source.
+
 ### 2. Installation (`scenarios/install-basic.sh`)
 
 Verifies the `pair-cli install` command:

@@ -51,12 +51,12 @@
 ### Steps
 
 1. In `.github/workflows/version.yml` and `release.yml`, list the `on:` triggers
-2. Merge-triggered history: `gh run list --workflow release.yml --limit 5 --json event`
+2. Run history since the #366 merge (`19e9c634`, 2026-10-14T16:35:00Z): `gh run list --workflow release.yml --created ">=2026-10-14T16:35:00Z" --json event,createdAt` (same for `version.yml`)
 
 ### Expected Result
 
 - Only `workflow_dispatch` in both files (no `push`, `pull_request`, `schedule`); `tag-on-changeset-merge.yml` does not exist
-- Every recorded run has `event == workflow_dispatch`
+- Every run created after the #366 merge has `event == workflow_dispatch`. Older `push` runs (e.g. 2026-04 v0.4.3 era) predate the dispatch-only pipeline and are out of scope
 
 ---
 
@@ -100,4 +100,4 @@
 
 ## Changelog
 
-- #543: new CP for the #366 release pipeline.
+- #543: new CP for the #366 release pipeline; MT-CP1103 run history scoped to runs after the #366 merge.

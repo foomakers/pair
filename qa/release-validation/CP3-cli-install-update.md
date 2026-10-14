@@ -431,37 +431,23 @@
 
 ### Steps
 
-1. Save the CLI `config.json` and change skills source to match the repo layout:
-
-   ```bash
-   CLI_DIR=$(dirname $(dirname $CLI))   # pair-cli package root
-   cp $CLI_DIR/config.json $WORKDIR/config.json.bak
-   node -e "
-     const fs=require('fs'), p='$CLI_DIR/config.json';
-     const c=JSON.parse(fs.readFileSync(p,'utf-8'));
-     c.asset_registries.skills.source='.claude/skills';
-     fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
-   "
-   ```
-
+1. Use the CLI's default `config.json` (no remap): the repo root's `.claude/skills` is an installed, flattened catalog that also holds third-party skills (e.g. `agent-browser`), so remapping `skills.source` to it fails with an ambiguous-flatten error; the repo has no root `.workflows`
 2. `rm -rf ~/.pair/kb/external/git-*` (clear git KB cache entries)
 3. `mkdir -p $WORKDIR/project-git && cd $WORKDIR/project-git`
 4. `$CLI install --source https://github.com/foomakers/pair.git#main`
 5. Verify cache uses hash-based path: `ls ~/.pair/kb/external/ | grep '^git-'` (`~/.pair/kb/external/git-<hash>/`)
 6. Verify `.git` removed from cache: `ls ~/.pair/kb/external/git-*/.git` (should fail)
-7. Restore original config: `cp $WORKDIR/config.json.bak $CLI_DIR/config.json`
 
 ### Expected Result
 
-- Exit code 0 (all 7 registries succeed including skills)
+- Exit code 0
+- Registries present at the repo root (`github`, `knowledge`, `adoption`, `agents`, `agent-definitions`) install; `skills` and `workflows` report `skipped — not shipped by this source` — skipped registries are OK, not a failure
 - Cache directory is `~/.pair/kb/external/git-<hash>/` (not version-based)
 - No `.git` directory inside cache
-- Same file structure as MT-CP302
-- Original `config.json` restored after test
 
 ### Notes
 
-- The default `config.json` has `skills.source: ".skills"` but the pair repo uses `.claude/skills/` — step 1 remaps this temporarily
+- The repo root is not a KB source layout: the distributable KB lives in `packages/knowledge-hub/dataset` (`.skills`, `.workflows`). This case validates git fetch + cache + install of what the root ships, not a full 7-registry install (that is MT-CP302)
 - Git cache key is a SHA-256 hash of the full URL (including `#ref`), independent of CLI version
 - Different URLs/refs produce different cache entries (no collisions)
 
@@ -517,4 +503,4 @@
 
 ## Changelog
 
-- #543: channel-aware MT-CP320 (`$CHANNEL`); MT-CP302 adds workflows/agents/skills paths; MT-CP307 lists 7 registries; MT-CP308 dropped-file step; MT-CP319 `external/git-<hash>` cache path and 7 registries; new MT-CP321 error paths.
+- #543: channel-aware MT-CP320 (`$CHANNEL`); MT-CP302 adds workflows/agents/skills paths; MT-CP307 lists 7 registries; MT-CP308 dropped-file step; MT-CP319 `external/git-<hash>` cache path, default config (no stale `.claude/skills` remap), skipped skills/workflows OK; new MT-CP321 error paths.

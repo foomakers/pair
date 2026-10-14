@@ -195,6 +195,37 @@ check "repo_relative_path strips a known root" \
   "scripts/a.sh" \
   "$(REPO_ROOT=/Users/x/repo repo_relative_path /Users/x/repo/scripts/a.sh)"
 
+# --- 3b. An explicit --binary is the binary under test (#543) ---
+#
+# The release artifact smokes pass the INSTALLED artifact as --binary. The packaging
+# preflight used to rebuild the CLI from source and overwrite TEST_BINARY, so every
+# scenario after install tested the worktree, not the artifact. The fixture
+# preflight below writes a different marker — if it wins, the binary was replaced.
+BIN_ROOT="$FIX/binary"
+mkdir -p "$BIN_ROOT/scenarios" "$BIN_ROOT/tmp"
+cat >"$BIN_ROOT/scenarios/00-create-install-package.sh" <<'FX'
+#!/usr/bin/env bash
+echo "/rebuilt/from/source" >"$TMP_DIR/packaged-cli"
+FX
+cat >"$BIN_ROOT/scenarios/fx-record-binary.sh" <<FX
+#!/usr/bin/env bash
+source "$SMOKE_DIR/lib/utils.sh"
+ensure_packaged_cli >/dev/null 2>&1 || true
+echo "\$TEST_BINARY" >"$BIN_ROOT/seen-binary"
+FX
+chmod 755 "$BIN_ROOT/scenarios/"*.sh
+printf 'CI_TESTS=("fx-record-binary.sh")\nCI_EXCLUDED=()\n' >"$BIN_ROOT/ci-tests.sh"
+set +e
+env -u PAIR_DIAG \
+  SCENARIOS_DIR="$BIN_ROOT/scenarios" \
+  CI_TESTS_FILE="$BIN_ROOT/ci-tests.sh" \
+  RUNNER_TEMP="$BIN_ROOT/tmp" \
+  GITHUB_STEP_SUMMARY="" \
+  "$RUNNER" --ci --binary "$RUN_ROOT/fake-pair" >"$BIN_ROOT/run.log" 2>&1
+set -e
+check "an explicit --binary reaches the scenarios (preflight does not replace it)" \
+  "$RUN_ROOT/fake-pair" "$(cat "$BIN_ROOT/seen-binary" 2>/dev/null)"
+
 # --- 4. CI list integrity (AC7) ---
 # shellcheck source=/dev/null
 source "$SMOKE_DIR/lib/ci-tests.sh"

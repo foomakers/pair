@@ -121,9 +121,19 @@ log_succ "Remote install succeeded and KB content verified on disk"
 # AC4 as originally drafted (a `formatProgress` percentage line) is unreachable
 # from the real CLI and was descoped 2026-09-18 (see the card).
 # -------------------------------------------------------------------
+# The version these lines name is the CLI's, not the URL's KB (a separate product
+# bug), so the assertions match any version: pinning one made this pass only when
+# CLI version == 0.4.3 (#543). The URL's KB lands in a cache dir named after it.
 log_info "Test 3: non-TTY download-in-progress evidence"
-assert_output_contains "downloading v0.4.3 from GitHub" || exit 1
-assert_output_contains "KB v0.4.3 installed at" || exit 1
+assert_output_matches() {
+  if grep -Eq -e "$1" "$TMP_DIR/last_cmd_output.log"; then
+    log_succ "Output matches '$1'"
+  else
+    log_fail "Output does not match '$1'"; cat "$TMP_DIR/last_cmd_output.log"; return 1
+  fi
+}
+assert_output_matches "downloading v[^ ]+ from GitHub" || exit 1
+assert_output_matches "KB v[^ ]+ installed at .*knowledge-base-0\.4\.3" || exit 1
 log_succ "Download-in-progress evidence present via announceDownload/announceSuccess"
 
 # -------------------------------------------------------------------
