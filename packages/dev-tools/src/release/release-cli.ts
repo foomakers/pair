@@ -76,12 +76,13 @@ export function main(argv = process.argv.slice(2)): number {
     console.error('Usage: release <pre|rc|final> [--version X.Y.Z] [--dry-run] [--json]')
     return 1
   }
+  const head = readHead(flag('--no-fetch')) // fetch first: tags read below must be current
   const plan = planRelease({
     channel,
     tags: readTags(),
     tagParents: readTagParents(),
     bumps: readBumps(),
-    head: readHead(flag('--no-fetch')),
+    head,
     override: val('--version'),
   })
   const json = flag('--json')

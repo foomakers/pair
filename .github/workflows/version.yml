@@ -53,11 +53,12 @@ jobs:
           git fetch --tags --force origin
           ARGS=("$CHANNEL" --no-fetch --json)
           [ -n "$OVERRIDE" ] && ARGS+=(--version "$OVERRIDE")
-          pnpm --silent release "${ARGS[@]}" | tee plan.json
+          PLAN="$RUNNER_TEMP/plan.json"  # outside the repo: never committed
+          pnpm --silent release "${ARGS[@]}" | tee "$PLAN"
           node -e "
-            const p=JSON.parse(require('fs').readFileSync('plan.json','utf8').split('\n').filter(l=>l.startsWith('{')).pop());
+            const p=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8').split('\n').filter(l=>l.startsWith('{')).pop());
             if(!p.ok){console.error(p.error);process.exit(1)}
-            require('fs').appendFileSync(process.env.GITHUB_OUTPUT,'version='+p.version+'\ntag='+p.tag+'\n')"
+            require('fs').appendFileSync(process.env.GITHUB_OUTPUT,'version='+p.version+'\ntag='+p.tag+'\n')" "$PLAN"
 
       - name: Version packages
         env:
