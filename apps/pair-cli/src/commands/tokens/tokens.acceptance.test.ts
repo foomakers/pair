@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import { spawnSync } from 'child_process'
+import { spawn } from 'child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join, resolve } from 'path'
@@ -16,14 +16,21 @@ const AREAS = [
   'agent-context',
 ]
 
-const run = (root: string, ...args: string[]) => {
-  const r = spawnSync(
-    'node',
-    ['-r', 'ts-node/register/transpile-only', 'src/cli.ts', 'tokens', '--root', root, ...args],
-    { cwd: CLI_CWD, encoding: 'utf-8', env: { ...process.env, NO_COLOR: '1' } },
-  )
-  return { code: r.status, out: r.stdout, err: r.stderr }
-}
+// async, never spawnSync: a blocked worker cannot answer vitest's RPC ("Timeout calling onTaskUpdate")
+const run = (root: string, ...args: string[]) =>
+  new Promise<{ code: number | null; out: string; err: string }>((done, fail) => {
+    const c = spawn(
+      'node',
+      ['-r', 'ts-node/register/transpile-only', 'src/cli.ts', 'tokens', '--root', root, ...args],
+      { cwd: CLI_CWD, env: { ...process.env, NO_COLOR: '1' } },
+    )
+    let out = ''
+    let err = ''
+    c.stdout.setEncoding('utf-8').on('data', d => (out += d))
+    c.stderr.setEncoding('utf-8').on('data', d => (err += d))
+    c.on('error', fail)
+    c.on('close', code => done({ code, out, err }))
+  })
 
 describe('pair-cli tokens (acceptance)', () => {
   // each case spawns a real CLI process: under the parallel gate the default 5s is too tight
@@ -49,8 +56,8 @@ describe('pair-cli tokens (acceptance)', () => {
   })
   afterAll(() => rmSync(root, { recursive: true, force: true }))
 
-  const json = (...extra: string[]): Report => {
-    const r = run(root, '--json', ...extra)
+  const json = async (...extra: string[]): Promise<Report> => {
+    const r = await run(root, '--json', ...extra)
     expect(r.code).toBe(0)
     return JSON.parse(r.out)
   }
@@ -59,15 +66,15 @@ describe('pair-cli tokens (acceptance)', () => {
   type Report = { areas: Area[]; total: { files: number; words: number; tokens: number } }
   const area = (j: Report, n: string) => j.areas.find(a => a.name === n)!
 
-  it('reports every area, in a fixed order, with files/words/tokens and a total', () => {
-    const j = json()
+  it('reports every area, in a fixed order, with files/words/tokens and a total', async () => {
+    const j = await json()
     expect(j.areas.map((a: Area) => a.name)).toEqual(AREAS)
     expect(Object.keys(j.total).sort()).toEqual(['files', 'tokens', 'words'])
     expect(j.total.words).toBe(j.areas.reduce((s: number, a: Area) => s + a.words, 0))
   })
 
-  it('counts words by whitespace and tokens as ceil(chars/4), per area and per file', () => {
-    const t = area(json(), 'templates')
+  it('counts words by whitespace and tokens as ceil(chars/4), per area and per file', async () => {
+    const t = area(await json(), 'templates')
     expect(t.files).toBe(2)
     expect(t.words).toBe(6)
     const pr = t.items.find((i: Item) => i.path.endsWith('pr-template.md'))
@@ -79,8 +86,8 @@ describe('pair-cli tokens (acceptance)', () => {
     expect(t.tokens).toBe(t.items.reduce((s: number, i: Item) => s + i.tokens, 0))
   })
 
-  it('keeps areas disjoint: adr and decision-log are not adoption; templates are not guidelines', () => {
-    const j = json()
+  it('keeps areas disjoint: adr and decision-log are not adoption; templates are not guidelines', async () => {
+    const j = await json()
     expect(area(j, 'adoption').files).toBe(1)
     expect(area(j, 'adr').files).toBe(1)
     expect(area(j, 'decision-log').files).toBe(1)
@@ -89,22 +96,22 @@ describe('pair-cli tokens (acceptance)', () => {
     expect(area(j, 'agent-context').files).toBe(2)
   })
 
-  it('--area limits the report to that area', () => {
-    const j = json('--area', 'adr')
+  it('--area limits the report to that area', async () => {
+    const j = await json('--area', 'adr')
     expect(j.areas.map((a: Area) => a.name)).toEqual(['adr'])
     expect(j.total.files).toBe(1)
   })
 
-  it('an unknown area exits 1 and names the valid areas', () => {
-    const r = run(root, '--area', 'nope')
+  it('an unknown area exits 1 and names the valid areas', async () => {
+    const r = await run(root, '--area', 'nope')
     expect(r.code).toBe(1)
     for (const a of AREAS) expect(r.out + r.err).toContain(a)
   })
 
-  it('an area with no files is reported with zeros, never an error', () => {
+  it('an area with no files is reported with zeros, never an error', async () => {
     const empty = mkdtempSync(join(tmpdir(), 'tokens-empty-'))
     try {
-      const r = run(empty, '--json')
+      const r = await run(empty, '--json')
       expect(r.code).toBe(0)
       const j = JSON.parse(r.out)
       expect(j.areas).toHaveLength(AREAS.length)
@@ -114,52 +121,52 @@ describe('pair-cli tokens (acceptance)', () => {
     }
   })
 
-  it('is deterministic and sorts items by path', () => {
-    const a = run(root, '--json').out
-    expect(run(root, '--json').out).toBe(a)
+  it('is deterministic and sorts items by path', async () => {
+    const a = (await run(root, '--json')).out
+    expect((await run(root, '--json')).out).toBe(a)
     const paths = area(JSON.parse(a), 'templates').items.map((i: Item) => i.path)
     expect(paths).toEqual([...paths].sort())
   })
 
-  it('skips an unreadable .md entry with a warning on stderr and exits 0', () => {
+  it('skips an unreadable .md entry with a warning on stderr and exits 0', async () => {
     mkdirSync(join(root, '.pair/knowledge/guidelines/collaboration/templates/bad.md'), {
       recursive: true,
     })
-    const r = run(root, '--json')
+    const r = await run(root, '--json')
     expect(r.code).toBe(0)
     expect(r.err).toMatch(/bad\.md/)
     expect(area(JSON.parse(r.out), 'templates').files).toBe(2)
   })
 
-  it('r1-g1-i1 --area + a baseline recorded by the CLI on the same corpus: total delta 0', () => {
+  it('r1-g1-i1 --area + a baseline recorded by the CLI on the same corpus: total delta 0', async () => {
     const base = join(root, 'base.json')
-    writeFileSync(base, run(root, '--json').out)
-    const j = JSON.parse(run(root, '--json', '--area', 'skills', '--baseline', base).out)
+    writeFileSync(base, (await run(root, '--json')).out)
+    const j = JSON.parse((await run(root, '--json', '--area', 'skills', '--baseline', base)).out)
     expect(j.total.delta).toEqual({ words: 0, tokens: 0 })
   })
 
-  it('r1-g1-i3 full run + a baseline recorded by the CLI with --area: no total delta', () => {
+  it('r1-g1-i3 full run + a baseline recorded by the CLI with --area: no total delta', async () => {
     const base = join(root, 'skills-base.json')
-    writeFileSync(base, run(root, '--json', '--area', 'skills').out)
-    const j = JSON.parse(run(root, '--json', '--baseline', base).out)
+    writeFileSync(base, (await run(root, '--json', '--area', 'skills')).out)
+    const j = JSON.parse((await run(root, '--json', '--baseline', base)).out)
     expect(area(j, 'skills')).toMatchObject({ delta: { words: 0, tokens: 0 } })
     expect(j.total.delta).toBeUndefined()
   })
 
-  it('r1-g1-i2 the help --baseline recipe: record with --json into a file, then --baseline that file', () => {
+  it('r1-g1-i2 the help --baseline recipe: record with --json into a file, then --baseline that file', async () => {
     const example = tokensCommandMetadata.examples.find(e => e.includes('--baseline'))!
     expect(example).not.toContain('scripts/dev')
     const file = join(root, 'my-baseline.json')
-    writeFileSync(file, run(root, '--json').out)
-    const r = run(root, '--baseline', file)
+    writeFileSync(file, (await run(root, '--json')).out)
+    const r = await run(root, '--baseline', file)
     expect(r.code).toBe(0)
     expect(r.out).toContain('Δ')
   })
 
-  it('--baseline is resolved against the current directory, not --root', () => {
-    writeFileSync(join(CLI_CWD, 'cwd-base.tmp.json'), run(root, '--json').out)
+  it('--baseline is resolved against the current directory, not --root', async () => {
+    writeFileSync(join(CLI_CWD, 'cwd-base.tmp.json'), (await run(root, '--json')).out)
     try {
-      const r = run(root, '--json', '--baseline', 'cwd-base.tmp.json')
+      const r = await run(root, '--json', '--baseline', 'cwd-base.tmp.json')
       expect(r.code).toBe(0)
       expect(JSON.parse(r.out).total.delta).toEqual({ words: 0, tokens: 0 })
     } finally {
@@ -167,8 +174,8 @@ describe('pair-cli tokens (acceptance)', () => {
     }
   })
 
-  it('prints a human report naming every area and the total when --json is absent', () => {
-    const r = run(root)
+  it('prints a human report naming every area and the total when --json is absent', async () => {
+    const r = await run(root)
     expect(r.code).toBe(0)
     for (const a of AREAS) expect(r.out).toContain(a)
     expect(r.out.toLowerCase()).toContain('total')

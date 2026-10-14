@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import { spawnSync } from 'child_process'
+import { spawn } from 'child_process'
 import {
   closeSync,
   mkdirSync,
@@ -18,24 +18,31 @@ const ARGS = ['-r', 'ts-node/register/transpile-only', 'src/cli.ts', 'tokens']
 const ENV = { ...process.env, NO_COLOR: '1' }
 const PIPE_CHUNK = 65536
 
-/** stdout piped (spawnSync default): the shape `tokens --json | jq` / `| tee` sees. */
+// async, never spawnSync: a blocked worker cannot answer vitest's RPC ("Timeout calling onTaskUpdate")
+/** stdout piped: the shape `tokens --json | jq` / `| tee` sees. */
 const piped = (...args: string[]) =>
-  spawnSync('node', [...ARGS, ...args], { cwd: CLI_CWD, encoding: 'utf-8', env: ENV })
+  new Promise<{ status: number | null; stdout: string; stderr: string }>((done, fail) => {
+    const c = spawn('node', [...ARGS, ...args], { cwd: CLI_CWD, env: ENV })
+    let stdout = ''
+    let stderr = ''
+    c.stdout.setEncoding('utf-8').on('data', d => (stdout += d))
+    c.stderr.setEncoding('utf-8').on('data', d => (stderr += d))
+    c.on('error', fail)
+    c.on('close', status => done({ status, stdout, stderr }))
+  })
 
 /** stdout redirected to a file descriptor: the shape `tokens --json > file` sees (the oracle). */
-const redirected = (file: string, ...args: string[]) => {
-  const fd = openSync(file, 'w')
-  try {
-    const r = spawnSync('node', [...ARGS, ...args], {
+const redirected = (file: string, ...args: string[]) =>
+  new Promise<number | null>((done, fail) => {
+    const fd = openSync(file, 'w')
+    const c = spawn('node', [...ARGS, ...args], {
       cwd: CLI_CWD,
       env: ENV,
       stdio: ['ignore', fd, 'pipe'],
     })
-    return r.status
-  } finally {
-    closeSync(fd)
-  }
-}
+    c.on('error', e => (closeSync(fd), fail(e)))
+    c.on('close', status => (closeSync(fd), done(status)))
+  })
 
 const fill = (root: string, count: number) => {
   const dir = join(root, '.pair/knowledge/guidelines/g')
@@ -50,13 +57,13 @@ describe('pair-cli tokens --json on a piped stdout (r1-6)', () => {
   let small: string
   let oracle: string
 
-  beforeAll(() => {
+  beforeAll(async () => {
     big = mkdtempSync(join(tmpdir(), 'tokens-pipe-big-'))
     small = mkdtempSync(join(tmpdir(), 'tokens-pipe-small-'))
     fill(big, 900) // > 64 KiB of JSON
     fill(small, 3) // well under one pipe chunk
     oracle = join(big, 'redirect.json')
-    expect(redirected(oracle, '--root', big, '--json')).toBe(0)
+    expect(await redirected(oracle, '--root', big, '--json')).toBe(0)
   })
 
   afterAll(() => {
@@ -70,24 +77,24 @@ describe('pair-cli tokens --json on a piped stdout (r1-6)', () => {
     expect(() => JSON.parse(text)).not.toThrow()
   })
 
-  it('r2-g1-w1: piped output is byte-identical to the redirect oracle and parses', () => {
-    const r = piped('--root', big, '--json')
+  it('r2-g1-w1: piped output is byte-identical to the redirect oracle and parses', async () => {
+    const r = await piped('--root', big, '--json')
     expect(r.status).toBe(0)
     expect(r.stdout.length).toBe(readFileSync(oracle, 'utf-8').length)
     expect(r.stdout).toBe(readFileSync(oracle, 'utf-8'))
     expect(() => JSON.parse(r.stdout)).not.toThrow()
   })
 
-  it('r2-g1-w2: a baseline captured through a pipe is readable by --baseline', () => {
+  it('r2-g1-w2: a baseline captured through a pipe is readable by --baseline', async () => {
     const file = join(big, 'piped-baseline.json')
-    writeFileSync(file, piped('--root', big, '--json').stdout)
-    const r = piped('--root', big, '--baseline', file)
+    writeFileSync(file, (await piped('--root', big, '--json')).stdout)
+    const r = await piped('--root', big, '--baseline', file)
     expect(r.stderr).not.toContain('cannot read baseline')
     expect(r.status).toBe(0)
   })
 
-  it('r2-g1-c2: piped output under one pipe chunk is complete', () => {
-    const r = piped('--root', small, '--json')
+  it('r2-g1-c2: piped output under one pipe chunk is complete', async () => {
+    const r = await piped('--root', small, '--json')
     expect(r.status).toBe(0)
     expect(r.stdout.length).toBeLessThan(PIPE_CHUNK)
     expect(JSON.parse(r.stdout).total.files).toBe(3)
