@@ -50,6 +50,15 @@ if [ "$DATASET_COUNT" -gt 0 ]; then
 fi
 log_succ "Manual ZIP: no dataset (0 entries)"
 
+# No source maps in release artifacts (the npm TGZ derives from this ZIP)
+MAP_COUNT=$(unzip -l "$ZIP_PATH" | grep -c "\.map$" || true)
+if [ "$MAP_COUNT" -gt 0 ]; then
+  log_fail "source maps found in manual ZIP ($MAP_COUNT entries)"
+  rm -rf "$RELEASE_DIR" "$ZIP_PATH" "${ZIP_PATH}.sha256"
+  exit 1
+fi
+log_succ "Manual ZIP: no source maps"
+
 # Size check: ZIP < 1.5 MB
 ZIP_SIZE=$(stat -f%z "$ZIP_PATH" 2>/dev/null || stat -c%s "$ZIP_PATH" 2>/dev/null)
 MAX_ZIP=$((1536 * 1024))

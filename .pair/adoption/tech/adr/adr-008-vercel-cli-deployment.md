@@ -59,7 +59,7 @@ Deploy `apps/website/` to Vercel Hobby plan using the Vercel CLI from GitHub Act
 - Website deploys automatically on every release, zero manual steps
 - Preview URLs on PRs for doc review
 - Stays within Vercel Hobby plan (free)
-- Integrates cleanly with existing release pipeline (changeset → tag → release → deploy)
+- Integrates cleanly with existing release pipeline (dispatch → version/tag → release → deploy, final channel only)
 - No vendor lock-in change — already using Vercel
 
 **Negative:**

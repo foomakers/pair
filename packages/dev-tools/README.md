@@ -14,13 +14,15 @@ Pair's own automation scripts for development and deployment — gate/tooling sc
 | `sync-version`          | `src/quality-gates/sync-version-in-docs.ts`     | Detects/rewrites hardcoded CLI version strings across `.md`/`.mdx` docs                                                              | `pnpm sync-version -- <old-version>` |
 | `benchmark-update-link` | `src/quality-gates/benchmark-update-link.ts`    | Perf gate for the CLI's `update-link` command — thresholds: <30,000ms (large KB), >100 links/sec (every size)                        | `pnpm test:perf`        |
 | `determine-version`     | `src/release/determine-version.ts`              | Resolves the release version from `--input-version` > `--release-tag` > `--github-ref` tag pattern, writes GITHUB_OUTPUT/GITHUB_ENV  | — (release workflow)    |
+| `release`               | `src/release/release-cli.ts` (+ `release-state.ts`) | `pnpm release <pre\|rc\|final> [--version X.Y.Z] [--dry-run]`: pure state (tags + changesets + `main` HEAD → version/plan or refusal), prints the plan, dispatches `version.yml`; also the CI guard and cleanup oracle (`--json`, `--cleanup-for`) | `pnpm release`          |
+| `changeset-check`       | `src/release/changeset-check.ts`                | Fails a PR without `.changeset/*.md` unless labelled `no-changeset` | `ci.yml` `changeset` job |
 
 Every root script above delegates here (`pnpm --filter @pair/dev-tools <script>`); `determine-version` has no root alias and is invoked directly by `.github/workflows/release.yml`'s "Determine version" step. `llms-index:check` runs `ts-node -T`, deliberately: it compiles a source file from `apps/pair-cli` whose type imports resolve only in a built tree, and a gate that dies with a compiler error instead of returning a verdict is a gate contributors stop trusting.
 
 ## Folder structure
 
 - `src/quality-gates/` — repo-wide dev/CI gates (code hygiene, KB-index drift + its regeneration remedy, smoke-scenario modes, gate composition, doc version sync, perf benchmark).
-- `src/release/` — release-pipeline decision logic (currently `determine-version`).
+- `src/release/` — release-pipeline decision logic (`determine-version`, `release-state`, `release-cli`, `changeset-check`).
 
 ## Scope
 

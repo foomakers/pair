@@ -1,67 +1,46 @@
 ---
 title: Release Process
-description: How pair releases work — changesets, automated versioning, tagging, and artifact publishing.
+description: How pair releases work — changeset per PR, dispatched channels, and artifact publishing.
 ---
 
-Releases are fully automated via GitHub Actions and [Changesets](https://github.com/changesets/changesets). This guide covers how to create a release and what happens behind the scenes.
+Releases are dispatched via GitHub Actions and [Changesets](https://github.com/changesets/changesets). This guide covers how to create a release and what happens behind the scenes.
 
 ## Overview
 
-The release pipeline has three phases:
+Releases are **dispatched, never merge-triggered**. Two runs per release:
 
 ```text
-Developer               version.yml           tag.yml              release.yml
-    │                       │                    │                       │
-    │  changeset + PR       │                    │                       │
-    │──────────────────────▶│                    │                       │
-    │                       │  version bump      │                       │
-    │                       │  + version PR      │                       │
-    │                       │──────────────────▶ │                       │
-    │                       │                    │  merge → tag vX.Y.Z   │
-    │                       │                    │─────────────────────▶ │
-    │                       │                    │                       │  build + package
-    │                       │                    │                       │  + publish release
+Maintainer        version.yml (run 1)        release.yml (run 2)
+    │ pnpm release <channel> │                       │
+    │───────────────────────▶│ validate, version, tag│
+    │                        │──────────────────────▶│ build from tag,
+    │                        │                       │ publish, cleanup
 ```
 
-**Build once, verify, publish.** Changesets manages versions, CI builds artifacts, GitHub Releases distributes them.
+**Build once, verify, publish.** Changesets manages versions, CI builds artifacts from the tag, GitHub Releases distributes them.
 
-## Creating a release
+## Every PR carries a changeset
 
-### 1. Create a changeset
-
-When your PR includes changes to a published package, create a changeset:
-
-```bash
-pnpm exec changeset add
-```
-
-This opens an interactive prompt:
-1. Select the affected package(s).
-2. Choose the bump type: **patch** (bug fix), **minor** (new feature), or **major** (breaking change).
-3. Write a brief description of the change.
-
-A `.changeset/*.md` file is created. Commit it with your PR.
+`.changeset/<story-id>.md` mirrors the PR description and states the bump. CI fails a PR without one unless it is labelled `no-changeset`. Below 1.0 a breaking change is a `minor` bump.
 
 If the change breaks `.pair/adoption/` or `.pair/knowledge/` structure, add a migration page under [Migrations](/docs/migrations) before merging — see [Writing Migration Pages](/docs/contributing/writing-migration-pages).
 
-### 2. Merge your PR to main
+## Creating a release
 
-When your PR merges, the **Version workflow** (`version.yml`) detects the changeset and automatically:
-- Bumps `package.json` versions.
-- Updates `CHANGELOG.md`.
-- Creates a **version PR** with these changes.
+```bash
+pnpm release <pre|rc|final> [--version X.Y.Z] [--dry-run]
+```
 
-### 3. Merge the version PR
+The command prints the plan (version, tag, cleanup) and dispatches `version.yml`; CI re-validates with the same state module. Channels are forward-only (`pre` → `rc` → `final`) and skippable; the same channel needs new `main` commits; duplicates are refused.
 
-Merging the version PR triggers the **Tag workflow** (`tag-on-changeset-merge.yml`) which creates a `v{X.Y.Z}` git tag.
+| Channel | Registry | GitHub Release | Website |
+|---------|----------|----------------|---------|
+| `pre` / `rc` (`X.Y.Z-pre.N`) | GitHub Packages, tag-only (`main` untouched) | prerelease | not deployed |
+| `final` | npmjs.org, version commit + CHANGELOG on `main` | latest | deployed |
 
-### 4. Tag triggers release
+After a successful publish, the previous same-channel pre/rc is deleted; on `final` (or a base change) every pre/rc of that base is deleted — release, assets, tag and package version.
 
-The tag push triggers the **Release workflow** (`release.yml`) which:
-1. Runs `pnpm quality-gate`.
-2. Builds all packages (`pnpm build`).
-3. Packages the CLI bundle (`scripts/package-manual.sh`).
-4. Creates a GitHub Release with all artifacts.
+To install a prerelease, use a token with `read:packages` and `npm config set @foomakers:registry https://npm.pkg.github.com`.
 
 ## Release checklist: skill marketplace manifest
 
@@ -79,9 +58,8 @@ The catalog guard in `packages/knowledge-hub/src/tools/claude-plugin-manifest.te
 
 | Workflow | File | Trigger | Purpose |
 |----------|------|---------|---------|
-| Version | `version.yml` | Push to `main` with `.changeset/**` | Bump versions, create version PR |
-| Tag | `tag-on-changeset-merge.yml` | Version PR merged | Create `vX.Y.Z` tag |
-| Release | `release.yml` | Tag `v*` pushed | Build, package, publish |
+| Version | `version.yml` | Dispatch (`channel`, `version`) | Validate, version, tag, dispatch release |
+| Release | `release.yml` | Dispatch (tag) | Build from tag, publish, cleanup |
 
 ## Release artifacts
 
@@ -108,8 +86,7 @@ The CLI auto-downloads the KB on first run from GitHub Releases and caches it at
 Workflows can be triggered manually:
 
 ```bash
-gh workflow run "Version (Changesets)" --ref main
-gh workflow run "Release" --ref main -f version="v1.0.0"
+gh workflow run version.yml --ref main -f channel=final
 ```
 
 ## Post-release validation
@@ -135,7 +112,6 @@ See the [Release Testing tutorial](/docs/tutorials/release-testing) for a full w
 If a release needs to be reverted:
 
 1. Delete the GitHub Release and tag from the GitHub UI.
-2. Revert the version commit from the changeset PR merge.
-3. Create a new changeset with the fix.
-4. The pipeline re-runs automatically (new version PR → tag → release).
+2. Revert the final version commit on `main`.
+3. Add a changeset with the fix and dispatch a new release.
 

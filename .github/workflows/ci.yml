@@ -17,12 +17,34 @@ on:
     paths-ignore:
       - '.changeset/**'
   pull_request:
+    # labeled/unlabeled: re-evaluate the changeset check when `no-changeset` toggles
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     branches:
       - main
-    paths-ignore:
-      - '.changeset/**'
 
 jobs:
+  changeset:
+    name: Changeset present
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.15.0'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: pnpm install --frozen-lockfile
+      - name: Require .changeset/*.md (or label no-changeset)
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          git diff --name-only --diff-filter=AM "origin/${{ github.base_ref }}...HEAD" \
+            | pnpm --silent --filter @pair/dev-tools changeset-check "$LABELS"
+
   secret-scan:
     runs-on: ubuntu-latest
     steps:

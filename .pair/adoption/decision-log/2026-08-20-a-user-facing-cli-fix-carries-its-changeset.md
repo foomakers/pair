@@ -6,7 +6,7 @@
 
 ## Status
 
-Active
+Superseded by [2026-10-14-release-is-dispatched-with-a-changeset-per-pr.md](2026-10-14-release-is-dispatched-with-a-changeset-per-pr.md)
 
 ## Category
 
