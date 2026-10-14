@@ -1,0 +1,251 @@
+{
+  "$meta": {
+    "pr": "541",
+    "phase": "r1-g1",
+    "base": "53d5b35cd8e2f93e2ed71f2834af47dffa9662a6",
+    "trailer": "Pair-RED-Snapshot: pr=541; phase=r1-g1; base=53d5b35cd8e2f93e2ed71f2834af47dffa9662a6; manifest=.pair/red-snapshots/pr-541-r1-g1.json",
+    "artifacts": [
+      "packages/dev-tools/src/release/release-remediation.test.ts"
+    ]
+  },
+  "mode": "remediation",
+  "inputHead": "53d5b35cd8e2f93e2ed71f2834af47dffa9662a6",
+  "sourceOfTruth": "packages/dev-tools/src/release/release-state.ts",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "planRelease (release-state.ts)",
+      "inputs": [
+        "tags",
+        "tagParents (new optional tag->parent-of-tagged-commit map)",
+        "head"
+      ],
+      "representations": [
+        "release-cli.ts readTags -> planRelease tagParents"
+      ],
+      "consumers": [
+        "release-cli.ts",
+        "version.yml"
+      ],
+      "classes": [
+        "pre tag at ephemeral commit with parent==head (refuse)",
+        "parent!=head (plan)",
+        "tag==head (refuse)",
+        "CLI computes tag-commit parent (git rev-parse tag^)"
+      ],
+      "interactions": [
+        "tagParents x same-channel guard",
+        "tagParents(pre) x rc channel (must not block)"
+      ]
+    },
+    {
+      "id": "r0-2",
+      "producer": "predecessors (release-state.ts)",
+      "inputs": [
+        "version",
+        "tags"
+      ],
+      "representations": [
+        "planRelease.predecessors",
+        "--cleanup-for CLI"
+      ],
+      "consumers": [
+        "release.yml cleanup"
+      ],
+      "classes": [
+        "higher base (excluded)",
+        "lower base (included)"
+      ],
+      "interactions": [
+        "planRelease final patch x higher rc"
+      ],
+      "rationale": "--cleanup-for CLI calls predecessors() directly via printCleanup; no separate filtering, covered by CLI row"
+    }
+  ],
+  "fixScope": {
+    "owner": "release-state",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/dev-tools/src/release/release-state.ts",
+      "packages/dev-tools/src/release/release-cli.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "pre, tags {v0.5.0-pre.1:EPHEMERAL}, tagParents {v0.5.0-pre.1:head} (pure planRelease)",
+      "oracle": "packages/dev-tools/src/release/release-remediation.test.ts",
+      "expected": "refused /no new commits/",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "pure planRelease half; CLI wiring half proven by r0-1-w2"
+    },
+    {
+      "id": "r0-1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "tagParents parent older than head",
+      "oracle": "packages/dev-tools/src/release/release-remediation.test.ts",
+      "expected": "0.5.0-pre.2",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "tag points at head directly",
+      "oracle": "packages/dev-tools/src/release/release-remediation.test.ts",
+      "expected": "refused",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "also guards channel interaction via r0-1-c4"
+    },
+    {
+      "id": "r0-2-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "final patch, tags {v0.4.3,v0.6.0-rc.1}",
+      "oracle": "packages/dev-tools/src/release/release-remediation.test.ts",
+      "expected": "predecessors not contain v0.6.0-rc.1",
+      "covers": [
+        "r0-2"
+      ],
+      "rationale": "--cleanup-for CLI shares predecessors() (printCleanup, no filtering); proven by r0-2-w3"
+    },
+    {
+      "id": "r0-2-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "predecessors('0.4.4',[v0.6.0-rc.1,v0.7.0-pre.2])",
+      "oracle": "packages/dev-tools/src/release/release-remediation.test.ts",
+      "expected": "[]",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r0-2-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "predecessors('0.5.0',[v0.4.4-rc.1,v0.5.0-pre.1])",
+      "oracle": "packages/dev-tools/src/release/release-remediation.test.ts",
+      "expected": "both",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r0-1-c4",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "channel rc, tags {v0.5.0-pre.1:EPHEMERAL}, tagParents parent==head",
+      "oracle": "packages/dev-tools/src/release/release-remediation.test.ts",
+      "expected": "ok rc.1",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "CLI main(pre --version 0.5.0 --no-fetch) in real temp git repo, pre.1 tag on ephemeral commit with parent HEAD",
+      "oracle": "packages/dev-tools/src/release/release-remediation.test.ts",
+      "expected": "exit 1, stderr /no new commits/",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c3",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "CLI main(rc ...) same temp repo",
+      "oracle": "packages/dev-tools/src/release/release-remediation.test.ts",
+      "expected": "exit 0, v0.5.0-rc.1",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-2-w3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "CLI main(--cleanup-for 0.4.4) in temp repo with v0.5.0-pre.1, v0.6.0-rc.1",
+      "oracle": "packages/dev-tools/src/release/release-remediation.test.ts",
+      "expected": "stdout []",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r0-1-w3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "rc, tags {v0.5.0-rc.1:EPHEMERAL}, tagParents {v0.5.0-rc.1:head} (pure planRelease)",
+      "oracle": "packages/dev-tools/src/release/release-remediation.test.ts",
+      "expected": "refused /no new commits/",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "channel-generic guard: rc same-channel tag cut from head must refuse, not only pre"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/dev-tools/src/release/release-remediation.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:164975ec460b3b69a37a71407b0ea1883fd2fb7759734988b5efc6bcfc2735ae",
+      "command": "pnpm --dir packages/dev-tools exec vitest run src/release/release-remediation.test.ts",
+      "observed": "6 failed | 5 passed: r0-1-w1, r0-1-w2 (CLI), r0-1-w3, r0-2-w1, r0-2-w2, r0-2-w3 (CLI) fail at base"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "owner": "release-state",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/dev-tools/src/release/release-state.ts",
+          "packages/dev-tools/src/release/release-cli.ts"
+        ],
+        "findingIds": [
+          "r0-1",
+          "r0-2"
+        ],
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g2",
+        "owner": "release-workflows",
+        "mode": "behavioral",
+        "allowedPaths": [
+          ".github/workflows/version.yml",
+          ".github/workflows/release.yml"
+        ],
+        "findingIds": [
+          "r0-4"
+        ],
+        "dependsOn": []
+      }
+    ],
+    "carried": [
+      {
+        "id": "r0-3",
+        "disposition": "external: live throwaway pre->rc->final releases and PR body read-back are outside the repo; stays blocking until a human or read-back proves it"
+      }
+    ]
+  },
+  "changedRows": [
+    "r0-1-w3"
+  ]
+}
