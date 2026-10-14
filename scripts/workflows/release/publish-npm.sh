@@ -79,10 +79,14 @@ else
   exit 1
 fi
 
+# Prereleases (X.Y.Z-<channel>.N) go out under their channel dist-tag, never `latest`
+DIST_TAG=""
+[[ "$PKG_VERSION" =~ -([a-z]+)\.[0-9]+$ ]] && DIST_TAG="${BASH_REMATCH[1]}"
+
 # Publish
 echo ""
-echo "Publishing $PKG_NAME@$PKG_VERSION to $REGISTRY..."
-if npm publish "$TGZ_PATH" --access public --registry "$REGISTRY" ${DRY_RUN:+"$DRY_RUN"}; then
+echo "Publishing $PKG_NAME@$PKG_VERSION to $REGISTRY${DIST_TAG:+ (dist-tag $DIST_TAG)}..."
+if npm publish "$TGZ_PATH" --access public --registry "$REGISTRY" ${DIST_TAG:+--tag "$DIST_TAG"} ${DRY_RUN:+"$DRY_RUN"}; then
   echo "Published successfully."
 else
   EXIT_CODE=$?
