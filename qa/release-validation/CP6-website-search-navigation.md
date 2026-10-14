@@ -2,6 +2,7 @@
 
 **Priority**: P1
 **Scope**: Orama search, sidebar navigation, prev/next links, llms.txt endpoints, privacy page
+**Channels**: final only — pre/rc deploy no website (`release.yml`). Run against a PR preview `$BASE_URL` (Vercel preview) when validating a pre/rc, otherwise mark SKIP (final-only).
 **Preconditions**: Website deployed at `$BASE_URL`
 
 ---
@@ -111,7 +112,7 @@
 
 ### Expected Result
 
-- All major sections visible: Getting Started, Concepts, Developer Journey, Customization, Integrations, PM Tools, Guides, Reference, Support, Tutorials, Contributing
+- All top-level sections visible, in `apps/website/content/docs/meta.json` order: Getting Started, Tutorials, Concepts, Developer Journey, Customization, Integrations, PM Tools, then (after the separator) Reference, Migrations, Support, Contributing
 - Sections are collapsible/expandable
 
 ---
@@ -212,3 +213,9 @@
 - HTTP 200
 - Title contains "Privacy"
 - Content mentions PostHog, cookieless/analytics approach
+
+---
+
+## Changelog
+
+- #543: channel note (final-only / PR preview); MT-CP606 sidebar matches current `meta.json` (no Guides; Migrations added).

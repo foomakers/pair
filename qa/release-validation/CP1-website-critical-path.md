@@ -2,6 +2,7 @@
 
 **Priority**: P0
 **Scope**: Landing page live, core navigation, responsive layout, meta tags, favicon
+**Channels**: final only — pre/rc deploy no website (`release.yml`). Run against a PR preview `$BASE_URL` (Vercel preview) when validating a pre/rc, otherwise mark SKIP (final-only).
 **Preconditions**: Website deployed to production at `$BASE_URL`
 
 ---
@@ -240,3 +241,9 @@
 ### Notes
 
 - Link may open in new tab
+
+---
+
+## Changelog
+
+- #543: channel note (final-only / PR preview).
