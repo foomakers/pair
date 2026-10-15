@@ -1,0 +1,182 @@
+{
+  "$meta": {
+    "pr": "551",
+    "phase": "r1-g1",
+    "base": "dc038d7fb3f27f4a7c076420717223ec30f5d8e8",
+    "trailer": "Pair-RED-Snapshot: pr=551; phase=r1-g1; base=dc038d7fb3f27f4a7c076420717223ec30f5d8e8; manifest=.pair/red-snapshots/pr-551-r1-g1.json",
+    "artifacts": [
+      "scripts/smoke-tests/witnesses/package-roundtrip-mutation.sh",
+      "scripts/smoke-tests/witnesses/package-roundtrip-claude.sh",
+      "scripts/smoke-tests/witnesses/package-roundtrip-control.sh"
+    ]
+  },
+  "mode": "remediation",
+  "phase": "r1-g1",
+  "inputHead": "dc038d7fb3f27f4a7c076420717223ec30f5d8e8",
+  "fixScope": {
+    "owner": "scripts/smoke-tests package-roundtrip scenario",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "scripts/smoke-tests/scenarios/package-roundtrip.sh",
+      "qa/release-validation/CP8-packaging.md"
+    ]
+  },
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "scripts/smoke-tests/scenarios/package-roundtrip.sh (tree_digest + diff) over the CLI `package` and `install --source <zip>` output",
+      "inputs": [
+        "installed tree first",
+        "package zip",
+        "reinstalled tree second"
+      ],
+      "representations": [
+        "kb.zip entries",
+        "first/ and second/ installed trees (regular files)",
+        "CLAUDE.md generated from AGENTS.md at install"
+      ],
+      "consumers": [
+        "smoke runner",
+        "qa/release-validation/CP8-packaging.md MT-CP801"
+      ],
+      "classes": [
+        "link target retargeted to another existing file (kb-verify passes, checksum resealed)",
+        "link re-spelling only (./, trailing /, a/../b) - declared divergence, must pass",
+        "CLAUDE.md existing line altered",
+        "CLAUDE.md first-install trimmed vs second full (declared divergence: pure insertion of 2 generated sections) - must pass",
+        "extra file in zip (file list differs)",
+        "clean round-trip"
+      ],
+      "interactions": [
+        "link retarget x kb-verify checksum (mutation must reseal or the failure is kb-verify, not the scenario)",
+        "CLAUDE.md derived from AGENTS.md at install: not packaged, so mutation is applied post-install"
+      ]
+    },
+    {
+      "id": "r0-2",
+      "producer": "story #550 AC2 text (amended by maintainer decision Option A) + CP8",
+      "inputs": [
+        "maintainer decision"
+      ],
+      "representations": [
+        "card body",
+        "CP8 MT-CP801"
+      ],
+      "consumers": [
+        "scenario oracle"
+      ],
+      "classes": [
+        "amended AC2: same file list; link targets equal after resolution relative to each file; CLAUDE.md by content with declared divergence"
+      ],
+      "interactions": [
+        "covered executably by r0-1 rows"
+      ]
+    },
+    {
+      "id": "r0-3",
+      "producer": "PR #551 body Testing section",
+      "inputs": [
+        "PR text"
+      ],
+      "representations": [
+        "PR body"
+      ],
+      "consumers": [
+        "reviewers"
+      ],
+      "classes": [
+        "PR text claim vs reproduced failure at fcbe1be4^"
+      ],
+      "interactions": []
+    }
+  ],
+  "matrix": [
+    {
+      "id": "r0-1-link-retarget",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "zip link ](../assets/PRD_template.md) -> ](../assets/PRD_example.md) in 01-how-to-create-PRD.md, manifest resealed",
+      "oracle": "scripts/smoke-tests/witnesses/package-roundtrip-mutation.sh link",
+      "file": "scripts/smoke-tests/witnesses/package-roundtrip-mutation.sh",
+      "expected": "package-roundtrip.sh exits non-zero",
+      "covers": [
+        "r0-1",
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r0-1-claude-content",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "reinstalled CLAUDE.md line \"Quick Start Process\" altered",
+      "oracle": "scripts/smoke-tests/witnesses/package-roundtrip-claude.sh",
+      "file": "scripts/smoke-tests/witnesses/package-roundtrip-claude.sh",
+      "expected": "package-roundtrip.sh exits non-zero",
+      "covers": [
+        "r0-1",
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r0-1-clean-control",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "no corruption; real re-spelled links and CLAUDE.md insertion present",
+      "oracle": "scripts/smoke-tests/witnesses/package-roundtrip-control.sh",
+      "file": "scripts/smoke-tests/witnesses/package-roundtrip-control.sh",
+      "expected": "scenario passes (declared divergence tolerated)",
+      "covers": [
+        "r0-1",
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r0-1-extra-file-control",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "extra file in zip",
+      "oracle": "scripts/smoke-tests/witnesses/package-roundtrip-control.sh",
+      "file": "scripts/smoke-tests/witnesses/package-roundtrip-control.sh",
+      "expected": "scenario fails (file list differs)",
+      "covers": [
+        "r0-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "scripts/smoke-tests/witnesses/package-roundtrip-mutation.sh",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:efcc92537f4e9e990fd2c5e78850c98c393b292aa8e269f13499090ad87d2a49",
+      "command": "scripts/smoke-tests/witnesses/package-roundtrip-mutation.sh link",
+      "observed": "FAIL exit 1: scenario passed despite corruption (link)"
+    },
+    {
+      "file": "scripts/smoke-tests/witnesses/package-roundtrip-claude.sh",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:7c3e6a5c756c014d8bf91fa13c71fee788d3530b0e08983176279e2c61660dfc",
+      "command": "scripts/smoke-tests/witnesses/package-roundtrip-claude.sh",
+      "observed": "FAIL exit 1: scenario passed despite corruption (claude)"
+    },
+    {
+      "file": "scripts/smoke-tests/witnesses/package-roundtrip-control.sh",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:491b7b75fd2690143746a8d8bb39604f5e0d0d5cebca3945e25c4a235686e1ef",
+      "command": "scripts/smoke-tests/witnesses/package-roundtrip-control.sh",
+      "observed": "ok: clean round-trip passes; extra-file corruption detected; exit 0"
+    }
+  ],
+  "testExempt": false,
+  "notes": {
+    "amendedAC2": "same file list; link targets equal after resolving relative to each file; CLAUDE.md compared by content with divergence declared explicitly and annotated as known limit in CP8",
+    "claudeMdFinding": "first install CLAUDE.md = 93 lines (trimmed); reinstalled from zip = 130 lines, identical to AGENTS.md; diff is two pure insertions (23 + 14 lines: \"Session Context\" and \"If unsure about your task\" sections). No loss, no duplication; asymmetry between first-install and reinstall generation is the open point (which is intended is undetermined). Not in the zip: CLAUDE.md is generated at install.",
+    "fixerNonTest": [
+      "r0-3: correct PR #551 body Testing section (AC3 fails on build of fcbe1be4^ at \".pair/backups empty after --persist-backup\")",
+      "CP8 annotation of the declared divergence as known limit",
+      "record the CLAUDE.md asymmetry as an open point in #550 (no new card)"
+    ]
+  }
+}
