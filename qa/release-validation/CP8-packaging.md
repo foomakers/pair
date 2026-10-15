@@ -22,7 +22,7 @@
 - Exit code 0
 - `$WORKDIR/pkg-target.zip` exists and is non-empty
 - ZIP contains files from installed target directories (e.g., `.pair/knowledge/`, `.claude/skills/`)
-- `$CLI kb-verify $WORKDIR/pkg-target.zip` exits 0 and `$CLI install --source $WORKDIR/pkg-target.zip` into an empty dir exits 0 with the same file tree (link spelling and `CLAUDE.md` aside)
+- `$CLI kb-verify $WORKDIR/pkg-target.zip` exits 0 and `$CLI install --source $WORKDIR/pkg-target.zip` into an empty dir exits 0 with the same file list; link targets equal after resolving relative to each file; `CLAUDE.md` compared by content, divergence declared. Known limit: link spelling differs after round trip; first-install `CLAUDE.md` is the trimmed 93-line one, reinstall from the zip (no `CLAUDE.md` inside) generates the full 130-line one, identical to `AGENTS.md` — which of the two is intended is undetermined
 - Offline equivalent: `scripts/smoke-tests/scenarios/package-roundtrip.sh`
 
 ---

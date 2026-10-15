@@ -29,15 +29,28 @@ assert_success || exit 1
 
 # Regular files only (find does not follow the skill-folder symlinks, which make `diff -r` loop).
 # Excluded: .kb-version.json (records the package version), the CLI symlink run_pair drops in the
-# workspace. Normalised: markdown link targets `](...)` -> `]()` — the round-trip re-spells
-# relative links (`./`, trailing `/`, `a/../b`); resolution is covered by the kb-validate
-# round-trip unit test. CLAUDE.md is compared by presence only: the
-# reinstalled copy carries extra sections (known divergence, reported in #550).
+# workspace. Markdown link targets are compared RESOLVED relative to their file (the round-trip
+# re-spells them: `./`, trailing `/`, `a/../b`). Declared divergence (#550): first-install CLAUDE.md is
+# the trimmed one, the reinstall from the zip generates the full one == AGENTS.md; so CLAUDE.md is
+# checked as: present in both, reinstalled == its AGENTS.md. Which of the two is intended is open.
 tree_digest() {
-  (cd "$1" && find . -type f ! -name .kb-version.json ! -path './apps/*' | sort | while read -r f; do
-    if [ "$f" = "./CLAUDE.md" ]; then echo "$f present"; continue; fi
-    echo "$f $(sed -E 's#\]\([^)]*\)#]()#g' "$f" | cksum)"
+  (cd "$1" && find . -type f ! -name .kb-version.json ! -path './apps/*' ! -name CLAUDE.md | sort | while read -r f; do
+    case "$f" in
+      *.md) echo "$f $(node -e '
+        const p = require("path").posix, f = process.argv[1]
+        process.stdout.write(require("fs").readFileSync(f, "utf8").replace(/\]\(([^)]*)\)/g, (m, t) => {
+          if (/^([a-z][a-z0-9+.-]*:|#|\/)/i.test(t)) return m
+          const [u, ...h] = t.split("#")
+          return "](" + p.normalize(p.join(p.dirname(f), u)).replace(/\/$/, "") + (h.length ? "#" + h.join("#") : "") + ")"
+        }))' "$f" | cksum)" ;;
+      *) echo "$f $(cksum <"$f")" ;;
+    esac
   done)
+  [ -f "$1/CLAUDE.md" ] && echo "./CLAUDE.md present"
+}
+[ -f "$WS/second/CLAUDE.md" ] && [ -f "$WS/second/AGENTS.md" ] && cmp -s "$WS/second/CLAUDE.md" "$WS/second/AGENTS.md" || {
+  log_fail "reinstalled CLAUDE.md missing or differs from AGENTS.md"
+  exit 1
 }
 if ! diff <(tree_digest "$WS/first") <(tree_digest "$WS/second"); then
   log_fail "installed tree from the package differs from the original install"
