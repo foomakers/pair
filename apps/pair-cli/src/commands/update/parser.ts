@@ -10,6 +10,7 @@ export interface UpdateCommandConfigDefault {
   offline: false
   kb: boolean
   target?: string
+  persistBackup?: boolean
 }
 
 /**
@@ -22,6 +23,7 @@ export interface UpdateCommandConfigRemote {
   offline: false
   kb: boolean
   target?: string
+  persistBackup?: boolean
 }
 
 /**
@@ -34,6 +36,7 @@ export interface UpdateCommandConfigLocal {
   offline: boolean
   kb: boolean
   target?: string
+  persistBackup?: boolean
 }
 
 /**
@@ -46,6 +49,7 @@ export interface UpdateCommandConfigGit {
   offline: false
   kb: boolean
   target?: string
+  persistBackup?: boolean
 }
 
 /**
@@ -64,18 +68,20 @@ interface ParseUpdateOptions {
   offline?: boolean
   kb?: boolean
   config?: string
+  persistBackup?: boolean
 }
 
 function resolveSourceConfig(
   source: string,
   kb: boolean,
   offline: boolean,
-  target?: string,
+  extras: { target?: string | undefined; persistBackup?: boolean | undefined },
 ): UpdateCommandConfig {
   if (isUnsupportedProtocol(source)) {
     throw new Error(`Unsupported source protocol: ${source}`)
   }
-  const optional = target ? { target } : {}
+  const { target, persistBackup } = extras
+  const optional = { ...(target && { target }), ...(persistBackup && { persistBackup }) }
   if (isGitUrl(source)) {
     return { command: 'update', resolution: 'git', url: source, offline: false, kb, ...optional }
   }
@@ -102,7 +108,7 @@ export function parseUpdateCommand(
   // Same rule as install: the program-level `--url` names a source (US-395).
   const source = namedSource(options)
   validateCommandOptions('update', { ...options, ...(source !== undefined && { source }) })
-  const { offline = false, kb = true } = options
+  const { offline = false, kb = true, persistBackup } = options
   const target = args[0]
   if (!source) {
     return {
@@ -111,7 +117,8 @@ export function parseUpdateCommand(
       offline: false,
       kb,
       ...(target && { target }),
+      ...(persistBackup && { persistBackup }),
     }
   }
-  return resolveSourceConfig(source, kb, offline, target)
+  return resolveSourceConfig(source, kb, offline, { target, persistBackup })
 }

@@ -83,7 +83,7 @@ async function createAndReportZip(params: {
       manifest,
       outputPath,
       ...(config.root && { root: config.root }),
-      ...(config.layout && { layout: config.layout }),
+      layout: config.layout ?? 'target',
     },
     fs,
   )

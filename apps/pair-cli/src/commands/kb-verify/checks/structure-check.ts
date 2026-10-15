@@ -8,7 +8,7 @@ export interface StructureCheckResult {
 }
 
 /**
- * Verify registry directories exist in ZIP
+ * Verify registry directories and files exist in ZIP
  * @param zipEntries - ZIP file entries
  * @param manifest - Parsed manifest
  * @returns Check result
@@ -30,7 +30,7 @@ export function verifyStructure(
     .filter(e => !e.isDirectory)
     .forEach(e => {
       const parts = e.entryName.split('/')
-      for (let i = 1; i < parts.length; i++) {
+      for (let i = 1; i <= parts.length; i++) {
         zipDirs.add(parts.slice(0, i).join('/'))
       }
     })

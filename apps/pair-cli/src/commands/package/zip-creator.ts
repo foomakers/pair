@@ -3,7 +3,12 @@ import { rewriteLinksInFile } from '@pair/content-ops'
 import type { ManifestMetadata } from './metadata'
 import type { RegistryConfig } from '#registry'
 import { rewriteFileLinks } from './link-rewriter'
-import { collectLayoutFiles, resolveLayoutPaths, type LayoutMode } from '../../registry/layout'
+import {
+  collectLayoutFiles,
+  getCanonicalTarget,
+  resolveLayoutPaths,
+  type LayoutMode,
+} from '../../registry/layout'
 import { createHash } from 'crypto'
 import path from 'path'
 import { comparePathsDeterministic } from '../kb-verify/sort-paths'
@@ -120,6 +125,33 @@ async function writeManifest(
   await fsService.writeFile(path.join(tempDir, 'manifest.json'), manifestJson)
 }
 
+interface RegistryPlan {
+  registry: RegistryConfig
+  files: string[]
+  layoutPaths: string[]
+}
+
+async function planRegistry(
+  declared: RegistryConfig,
+  options: ZipOptions,
+  fsService: FileSystemService,
+): Promise<RegistryPlan> {
+  const layout: LayoutMode = options.layout || 'source'
+  if (!declared.source) {
+    throw new Error(`Registry missing source field`)
+  }
+  // Target layout packages the canonical copy only: `copy`-mode targets (CLAUDE.md) are derived
+  const canonical = layout === 'target' ? getCanonicalTarget(declared.targets) : undefined
+  const registry = canonical ? { ...declared, targets: [canonical] } : declared
+  const base = { registry, layout, baseDir: options.projectRoot, fs: fsService }
+
+  const files = await collectLayoutFiles(base)
+  if (files.length === 0) {
+    throw new Error(`Registry source contains no files: ${registry.source}`)
+  }
+  return { registry, files, layoutPaths: resolveLayoutPaths({ name: '', ...base }) }
+}
+
 async function copyRegistrySources(
   tempDir: string,
   options: ZipOptions,
@@ -127,30 +159,18 @@ async function copyRegistrySources(
 ): Promise<void> {
   const layout: LayoutMode = options.layout || 'source'
 
-  for (const registry of options.registries) {
-    if (!registry.source) {
-      throw new Error(`Registry missing source field`)
-    }
+  const plans: RegistryPlan[] = []
+  for (const declared of options.registries) {
+    plans.push(await planRegistry(declared, options, fsService))
+  }
 
-    const files = await collectLayoutFiles({
-      registry,
-      layout,
-      baseDir: options.projectRoot,
-      fs: fsService,
-    })
+  // Global: a link in ANY registry may point into a directory another registry moved
+  const movedDirs =
+    layout === 'target'
+      ? plans.flatMap(p => collectMovedSkillDirs(p.files, p.layoutPaths, p.registry, options))
+      : []
 
-    if (files.length === 0) {
-      throw new Error(`Registry source contains no files: ${registry.source}`)
-    }
-
-    const layoutPaths = resolveLayoutPaths({
-      name: '',
-      registry,
-      layout,
-      baseDir: options.projectRoot,
-      fs: fsService,
-    })
-
+  for (const { registry, files, layoutPaths } of plans) {
     for (const filePath of files) {
       await copyFileToTemp({
         filePath,
@@ -159,6 +179,7 @@ async function copyRegistrySources(
         tempDir,
         options,
         fsService,
+        movedDirs,
       })
     }
   }
@@ -171,15 +192,83 @@ interface CopyFileOptions {
   tempDir: string
   options: ZipOptions
   fsService: FileSystemService
+  movedDirs: MovedDir[]
+}
+
+type MovedDir = { originalDir: string; newDir: string }
+
+/**
+ * Reverse of flatten+prefix (`naming-transforms.ts`): `<prefix>-<category>-<name>` → `<category>/<name>`.
+ * Flatten re-joins with `-`, so the installed name round-trips. Single-segment entries
+ * (`<prefix>-next`) keep their name; a name without the prefix is left alone.
+ */
+export function unflattenEntry(entry: string, prefix: string): string {
+  if (!entry.startsWith(`${prefix}-`)) return entry
+  return entry.slice(prefix.length + 1).replace('-', '/')
+}
+
+function entryOf(
+  filePath: string,
+  layoutPaths: string[],
+  registry: RegistryConfig,
+  projectRoot: string,
+) {
+  const base = layoutPaths.find(p => filePath.startsWith(p + '/') || filePath === p)
+  const baseDir = base ?? path.join(projectRoot, registry.source)
+  const relative = path.relative(baseDir, filePath)
+  return { baseDir, relative, entry: relative.split(path.sep)[0] ?? '' }
+}
+
+function isUnflattening(registry: RegistryConfig): registry is RegistryConfig & { prefix: string } {
+  return !!registry.flatten && !!registry.prefix
+}
+
+function collectMovedSkillDirs(
+  files: string[],
+  layoutPaths: string[],
+  registry: RegistryConfig,
+  options: ZipOptions,
+): MovedDir[] {
+  if (!isUnflattening(registry)) return []
+  const seen = new Map<string, MovedDir>()
+  for (const f of files) {
+    const { baseDir, relative, entry } = entryOf(f, layoutPaths, registry, options.projectRoot)
+    if (!relative.includes(path.sep) || seen.has(entry)) continue
+    seen.set(entry, {
+      originalDir: path.join(
+        options.projectRoot,
+        path.relative(options.projectRoot, baseDir),
+        entry,
+      ),
+      newDir: path.join(
+        options.projectRoot,
+        registry.source,
+        unflattenEntry(entry, registry.prefix),
+      ),
+    })
+  }
+  return [...seen.values()]
+}
+
+function targetRelativePath(relative: string, registry: RegistryConfig, layout: LayoutMode) {
+  if (layout !== 'target' || !isUnflattening(registry) || !relative.includes(path.sep)) {
+    return relative
+  }
+  const [entry = '', ...rest] = relative.split(path.sep)
+  return path.join(unflattenEntry(entry, registry.prefix), ...rest)
 }
 
 async function copyFileToTemp(opts: CopyFileOptions): Promise<void> {
-  const { filePath, layoutPaths, registry, tempDir, options, fsService } = opts
+  const { filePath, layoutPaths, registry, tempDir, options, fsService, movedDirs } = opts
   const layout: LayoutMode = options.layout || 'source'
   const basePath = layoutPaths.find(p => filePath.startsWith(p + '/') || filePath === p)
   const baseForRelative = basePath || path.join(options.projectRoot, registry.source)
 
-  const relativePath = path.relative(baseForRelative, filePath)
+  const relativePath = targetRelativePath(
+    path.relative(baseForRelative, filePath),
+    registry,
+    layout,
+  )
   const targetPath = path.join(tempDir, registry.source, relativePath)
 
   await fsService.mkdir(path.dirname(targetPath), { recursive: true })
@@ -196,13 +285,14 @@ async function copyFileToTemp(opts: CopyFileOptions): Promise<void> {
   if (layout === 'target' && filePath.endsWith('.md')) {
     const originalDir = path.relative(options.projectRoot, path.dirname(filePath))
     const newDir = path.dirname(path.join(registry.source, relativePath))
-    if (originalDir !== newDir) {
+    if (originalDir !== newDir || movedDirs.length > 0) {
       await rewriteLinksInFile({
         fileService: fsService,
         filePath: targetPath,
         originalDir,
         newDir,
         datasetRoot: options.projectRoot,
+        movedDirs,
       })
     }
   }

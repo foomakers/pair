@@ -103,7 +103,7 @@ export const packageCommandMetadata = {
     'pair-cli package                                   # Package current directory',
     'pair-cli package -o dist/kb-v1.0.0.zip            # Package with custom output path',
     'pair-cli package -s ./kb-content -o kb.zip        # Package specific source directory',
-    'pair-cli package --name "My KB" --version 1.0.0   # Package with metadata',
+    'pair-cli package --name "My KB" --pkg-version 1.0.0   # Package with metadata',
     'pair-cli package --layout source                   # Package from source layout',
     'pair-cli package --skip-registries adoption        # Skip adoption registry',
     'pair-cli package --root /my/kb                     # Set custom root for link relativization',

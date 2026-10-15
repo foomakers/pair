@@ -8,7 +8,12 @@ import { verifyManifest } from '../kb-verify/checks/manifest-check'
  * local-zip source handling.
  */
 export function readManifestFromZip(packagePath: string): ManifestMetadata {
-  const zip = new AdmZip(packagePath)
+  let zip: AdmZip
+  try {
+    zip = new AdmZip(packagePath)
+  } catch {
+    throw new Error(`Invalid ZIP archive: ${packagePath}`)
+  }
   const entry = zip.getEntry('manifest.json')
   if (!entry) throw new Error('Missing manifest.json in package')
 

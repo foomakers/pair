@@ -73,6 +73,34 @@ describe('handlePackageCommand - real services integration', () => {
     expect(await fs.readFile(`${extractDir}/source/reg1/file.txt`)).toBe('content of reg1')
   })
 
+  test('no --layout defaults to target for validator and zip (#548 AC-2)', async () => {
+    const tfs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            reg1: {
+              source: 'source/reg1',
+              behavior: 'mirror',
+              targets: [{ path: 'installed/reg1', mode: 'canonical' }],
+              description: 'Registry 1',
+            },
+          },
+        }),
+        [`${cwd}/installed/reg1/file.txt`]: 'installed content',
+        [`${cwd}/README.md`]: '# My KB',
+      },
+      cwd,
+      cwd,
+    )
+    const outputPath = `${cwd}/dist/t.zip`
+    await handlePackageCommand(
+      { command: 'package', output: outputPath, interactive: false, tags: [], license: 'MIT' },
+      tfs,
+    )
+    await tfs.extractZip(outputPath, `${cwd}/x`)
+    expect(await tfs.readFile(`${cwd}/x/source/reg1/file.txt`)).toBe('installed content')
+  })
+
   test('quick path (no --name flag) resolves manifest name from package.json via shared cascade', async () => {
     // Repo whose package.json name is 'foo' → manifest name must be 'foo', NOT the
     // hardcoded 'kb-package'. Proves the non-interactive/quick path reads the same

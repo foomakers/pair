@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops'
-import { createPackageZip } from './zip-creator'
+import { createPackageZip, unflattenEntry } from './zip-creator'
 import type { ManifestMetadata } from './metadata'
 import type { RegistryConfig } from '#registry'
 import fs from 'fs'
@@ -809,3 +809,89 @@ describe('createPackageZip - source KB declaration', () => {
     expect(Object.keys(await packagedEntries())).not.toContain('pair.config.json')
   })
 })
+
+describe('unflattenEntry (#548 AC-3)', () => {
+  it.each([
+    ['pair-capability-verify-quality', 'capability/verify-quality'],
+    ['pair-next', 'next'],
+    ['pair-my-skill', 'my/skill'], // hyphenated top-level: installed name round-trips
+    ['other-name', 'other-name'],
+  ])('%s -> %s', (entry, expected) => {
+    expect(unflattenEntry(entry, 'pair')).toBe(expected)
+  })
+})
+
+// platform-injected (darwin, linux): smoke-ci-platform AC6
+describe.each(['darwin', 'linux'] as const)(
+  'createPackageZip - target->source unflatten (platform %s)',
+  platform => {
+    beforeEach(() => {
+      setupTest()
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+    })
+    afterEach(() => {
+      vi.restoreAllMocks()
+      cleanupTest()
+    })
+
+    it('maps flattened skill dirs to category/name and rewrites links into them (#548 AC-3/4)', async () => {
+      const projectRoot = '/test-project'
+      const skills: RegistryConfig = {
+        source: '.skills',
+        behavior: 'overwrite',
+        description: 'Skills',
+        include: [],
+        flatten: true,
+        prefix: 'pair',
+        targets: [
+          { path: '.claude/skills/', mode: 'canonical' },
+          { path: '.cursor/skills/', mode: 'symlink' },
+        ],
+      }
+      const knowledge = testRegistry('.pair/knowledge')
+      const agents: RegistryConfig = {
+        source: 'AGENTS.md',
+        behavior: 'mirror',
+        description: 'Agents',
+        include: [],
+        flatten: false,
+        targets: [
+          { path: 'AGENTS.md', mode: 'canonical' },
+          { path: 'CLAUDE.md', mode: 'copy' },
+        ],
+      }
+      await fsService.writeFile(
+        `${projectRoot}/.claude/skills/pair-capability-a/SKILL.md`,
+        '[b](../pair-capability-b/SKILL.md) [k](../../../.pair/knowledge/g.md)\n',
+      )
+      await fsService.writeFile(`${projectRoot}/.claude/skills/pair-capability-b/SKILL.md`, '# b')
+      await fsService.writeFile(`${projectRoot}/.claude/skills/pair-next/SKILL.md`, '# n')
+      await fsService.writeFile(
+        `${projectRoot}/.pair/knowledge/g.md`,
+        '[a](../../.claude/skills/pair-capability-a/SKILL.md)\n',
+      )
+      await fsService.writeFile(`${projectRoot}/AGENTS.md`, 'agents')
+      await fsService.writeFile(`${projectRoot}/CLAUDE.md`, 'claude')
+
+      await createPackageZip(
+        {
+          projectRoot,
+          registries: [skills, knowledge, agents],
+          manifest: testManifest({ registries: ['.skills', '.pair/knowledge', 'AGENTS.md'] }),
+          outputPath,
+          layout: 'target',
+        },
+        fsService,
+      )
+
+      const z = JSON.parse(fsService.readFileSync(outputPath))
+      expect(z['.skills/capability/a/SKILL.md']).toBe(
+        '[b](../b/SKILL.md) [k](../../../.pair/knowledge/g.md)\n',
+      )
+      expect(z['.skills/capability/b/SKILL.md']).toBe('# b')
+      expect(z['.skills/next/SKILL.md']).toBe('# n')
+      expect(z['.pair/knowledge/g.md']).toBe('[a](../../.skills/capability/a/SKILL.md)\n')
+      expect(z['AGENTS.md']).toBe('agents')
+    })
+  },
+)

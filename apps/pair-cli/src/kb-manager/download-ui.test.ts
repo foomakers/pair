@@ -6,6 +6,7 @@ import {
   toIncomingMessage,
 } from '@pair/content-ops'
 import { ensureKBAvailable } from './kb-availability'
+import { announceDownload } from './download-ui'
 
 describe('Download UI', () => {
   it('should display download start message', async () => {
@@ -66,5 +67,16 @@ describe('Download UI', () => {
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('✅ KB v0.2.0 installed'))
 
     consoleLogSpy.mockRestore()
+  })
+})
+
+describe('announceDownload (#548 AC-9)', () => {
+  it('names no version for a custom URL', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    announceDownload('0.4.3', 'https://kb.example.com/kb.zip')
+    const out = log.mock.calls.map(c => String(c[0])).join('\n')
+    log.mockRestore()
+    expect(out).toContain('downloading from https://kb.example.com/kb.zip')
+    expect(out).not.toMatch(/0\.4\.3|downloading v/)
   })
 })

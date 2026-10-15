@@ -89,7 +89,7 @@ Create and verify KB packages for distribution:
 
 ```bash
 # Package KB for distribution
-pair-cli package --name "My KB" --version "1.0.0" -o dist/kb-v1.0.0.zip
+pair-cli package --name "My KB" --pkg-version "1.0.0" -o dist/kb-v1.0.0.zip
 
 # Verify package integrity before distribution
 pair-cli kb-verify dist/kb-v1.0.0.zip
@@ -107,7 +107,7 @@ pair-cli kb-validate
 # 2. Package KB with metadata
 pair-cli package \
   --name "Production KB" \
-  --version "2.1.0" \
+  --pkg-version "2.1.0" \
   --author "DevOps Team" \
   -o dist/kb-prod-v2.1.0.zip
 
@@ -138,7 +138,7 @@ pair-cli install --source kb-v1.0.0.zip
 pair-cli package --interactive
 
 # Pre-fill some fields, edit others interactively
-pair-cli package --interactive --name "my-kb" --version 2.0.0
+pair-cli package --interactive --name "my-kb" --pkg-version 2.0.0
 ```
 
 Interactive mode resolves smart defaults from `package.json`, `git config`, and saved preferences (`~/.pair/preferences.json`). Each field can be accepted or overridden. A preview is shown before confirmation.

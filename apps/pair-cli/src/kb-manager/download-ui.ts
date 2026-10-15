@@ -11,7 +11,8 @@ export function announceDownload(version: string, url: string): void {
     return
   }
 
-  logger.info(`KB not found, downloading v${clean} from ${url}...`)
+  // A custom URL's KB version is unknown before download: naming the CLI's would mislead
+  logger.info(`KB not found, downloading from ${url}...`)
 }
 
 export function announceSuccess(version: string, cachePath: string): void {

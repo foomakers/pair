@@ -154,6 +154,7 @@ describe('handleKbInfoCommand', () => {
 
   it('returns 1 for invalid ZIP', async () => {
     fs.writeFileSync(packagePath, 'not a zip file')
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const exitCode = await handleKbInfoCommand(
       { command: 'kb-info', mode: 'package', packagePath, json: false },
@@ -161,6 +162,8 @@ describe('handleKbInfoCommand', () => {
     )
 
     expect(exitCode).toBe(1)
+    expect(err).toHaveBeenCalledWith(`Invalid ZIP archive: ${packagePath}`)
+    err.mockRestore()
   })
 
   it('returns 1 for ZIP with malformed JSON in manifest', async () => {

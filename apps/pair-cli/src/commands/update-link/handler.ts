@@ -11,8 +11,8 @@ import {
 } from '@pair/content-ops'
 import { dirname } from 'path'
 import { getKnowledgeHubDatasetPath } from '#config'
-import { createLogger, type LogEntry } from '#diagnostics'
-import { setLogLevel } from '@pair/content-ops'
+import type { LogEntry } from '#diagnostics'
+import { logger, setLogLevel } from '@pair/content-ops'
 import { createRegistryBackupConfig, handleBackupRollback } from '#registry'
 
 function transformLink(
@@ -118,6 +118,7 @@ async function processFiles(params: {
   const aggregateStats = {
     totalLinks: 0,
     filesModified: 0,
+    filesToChange: 0,
     linksByCategory: {} as Record<string, number>,
   }
 
@@ -135,17 +136,25 @@ async function processFiles(params: {
         (aggregateStats.linksByCategory[category] || 0) + (count as number)
     }
 
-    if (modified && !dryRun) {
-      await fs.writeFile(filePath, newContent)
-      aggregateStats.filesModified++
-      pushLog('info', `Updated ${filePath}`)
-    } else if (modified && dryRun) {
+    if (!modified) continue
+    if (dryRun) {
+      aggregateStats.filesToChange++
       pushLog('info', `Would update ${filePath}`)
+      continue
     }
+    await fs.writeFile(filePath, newContent)
+    aggregateStats.filesModified++
+    pushLog('info', `Updated ${filePath}`)
   }
 
+  if (dryRun && aggregateStats.filesToChange === 0) pushLog('info', 'No changes')
   return aggregateStats
 }
+
+// User-facing messages go through the content-ops logger (what install/package print);
+// the diagnostics `createLogger` only collects entries, nothing reaches the terminal.
+const pushLog = (level: LogEntry['level'], message: string): void =>
+  logger[level === 'trace' ? 'debug' : level](message)
 
 /**
  * Update link options for handler
@@ -163,8 +172,6 @@ export async function handleUpdateLinkCommand(
   options?: UpdateLinkHandlerOptions,
 ): Promise<void> {
   if (config.logLevel) setLogLevel(config.logLevel)
-  const { pushLog } = createLogger((config.logLevel as LogEntry['level']) ?? 'info')
-
   pushLog('info', 'Starting update-link command')
 
   try {
