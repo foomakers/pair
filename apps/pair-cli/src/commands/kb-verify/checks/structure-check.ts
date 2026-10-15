@@ -30,7 +30,6 @@ export function verifyStructure(
     .filter(e => !e.isDirectory)
     .forEach(e => {
       const parts = e.entryName.split('/')
-      // i <= length: the file itself counts too (file registries such as AGENTS.md)
       for (let i = 1; i <= parts.length; i++) {
         zipDirs.add(parts.slice(0, i).join('/'))
       }

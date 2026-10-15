@@ -125,6 +125,33 @@ async function writeManifest(
   await fsService.writeFile(path.join(tempDir, 'manifest.json'), manifestJson)
 }
 
+interface RegistryPlan {
+  registry: RegistryConfig
+  files: string[]
+  layoutPaths: string[]
+}
+
+async function planRegistry(
+  declared: RegistryConfig,
+  options: ZipOptions,
+  fsService: FileSystemService,
+): Promise<RegistryPlan> {
+  const layout: LayoutMode = options.layout || 'source'
+  if (!declared.source) {
+    throw new Error(`Registry missing source field`)
+  }
+  // Target layout packages the canonical copy only: `copy`-mode targets (CLAUDE.md) are derived
+  const canonical = layout === 'target' ? getCanonicalTarget(declared.targets) : undefined
+  const registry = canonical ? { ...declared, targets: [canonical] } : declared
+  const base = { registry, layout, baseDir: options.projectRoot, fs: fsService }
+
+  const files = await collectLayoutFiles(base)
+  if (files.length === 0) {
+    throw new Error(`Registry source contains no files: ${registry.source}`)
+  }
+  return { registry, files, layoutPaths: resolveLayoutPaths({ name: '', ...base }) }
+}
+
 async function copyRegistrySources(
   tempDir: string,
   options: ZipOptions,
@@ -132,34 +159,9 @@ async function copyRegistrySources(
 ): Promise<void> {
   const layout: LayoutMode = options.layout || 'source'
 
-  const plans: Array<{ registry: RegistryConfig; files: string[]; layoutPaths: string[] }> = []
+  const plans: RegistryPlan[] = []
   for (const declared of options.registries) {
-    if (!declared.source) {
-      throw new Error(`Registry missing source field`)
-    }
-    // Target layout packages the canonical copy only: `copy`-mode targets (CLAUDE.md) are derived
-    const canonical = layout === 'target' ? getCanonicalTarget(declared.targets) : undefined
-    const registry = canonical ? { ...declared, targets: [canonical] } : declared
-
-    const files = await collectLayoutFiles({
-      registry,
-      layout,
-      baseDir: options.projectRoot,
-      fs: fsService,
-    })
-
-    if (files.length === 0) {
-      throw new Error(`Registry source contains no files: ${registry.source}`)
-    }
-
-    const layoutPaths = resolveLayoutPaths({
-      name: '',
-      registry,
-      layout,
-      baseDir: options.projectRoot,
-      fs: fsService,
-    })
-    plans.push({ registry, files, layoutPaths })
+    plans.push(await planRegistry(declared, options, fsService))
   }
 
   // Global: a link in ANY registry may point into a directory another registry moved
@@ -248,17 +250,25 @@ function collectMovedSkillDirs(
   return [...seen.values()]
 }
 
+function targetRelativePath(relative: string, registry: RegistryConfig, layout: LayoutMode) {
+  if (layout !== 'target' || !isUnflattening(registry) || !relative.includes(path.sep)) {
+    return relative
+  }
+  const [entry = '', ...rest] = relative.split(path.sep)
+  return path.join(unflattenEntry(entry, registry.prefix), ...rest)
+}
+
 async function copyFileToTemp(opts: CopyFileOptions): Promise<void> {
   const { filePath, layoutPaths, registry, tempDir, options, fsService, movedDirs } = opts
   const layout: LayoutMode = options.layout || 'source'
   const basePath = layoutPaths.find(p => filePath.startsWith(p + '/') || filePath === p)
   const baseForRelative = basePath || path.join(options.projectRoot, registry.source)
 
-  let relativePath = path.relative(baseForRelative, filePath)
-  if (layout === 'target' && isUnflattening(registry) && relativePath.includes(path.sep)) {
-    const [entry = '', ...rest] = relativePath.split(path.sep)
-    relativePath = path.join(unflattenEntry(entry, registry.prefix), ...rest)
-  }
+  const relativePath = targetRelativePath(
+    path.relative(baseForRelative, filePath),
+    registry,
+    layout,
+  )
   const targetPath = path.join(tempDir, registry.source, relativePath)
 
   await fsService.mkdir(path.dirname(targetPath), { recursive: true })
