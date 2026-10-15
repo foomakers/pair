@@ -1,7 +1,7 @@
 import { describe, expect, beforeEach, vi, test } from 'vitest'
 import { handleUpdateLinkCommand } from './handler'
 import type { UpdateLinkCommandConfig } from './parser'
-import { InMemoryFileSystemService } from '@pair/content-ops'
+import { InMemoryFileSystemService, logger } from '@pair/content-ops'
 
 describe('handleUpdateLinkCommand - integration with in-memory services', () => {
   let fs: InMemoryFileSystemService
@@ -42,6 +42,25 @@ describe('handleUpdateLinkCommand - integration with in-memory services', () => 
     await handleUpdateLinkCommand(config, fs)
 
     expect(writeSpy).not.toHaveBeenCalled()
+  })
+
+  test('dry run prints what would change and writes nothing (#548 AC-7)', async () => {
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => {})
+    const writeSpy = vi.spyOn(fs, 'writeFile')
+
+    await handleUpdateLinkCommand({ command: 'update-link', dryRun: true }, fs)
+
+    expect(info.mock.calls.map(c => c[0]).join('\n')).toMatch(/Would update .*file1\.md/)
+    expect(writeSpy).not.toHaveBeenCalled()
+  })
+
+  test('dry run with nothing to do prints "No changes" (#548 AC-7)', async () => {
+    await fs.writeFile(`${cwd}/.pair/knowledge/file1.md`, '[link](./x)')
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => {})
+
+    await handleUpdateLinkCommand({ command: 'update-link', dryRun: true }, fs)
+
+    expect(info.mock.calls.map(c => c[0])).toContain('No changes')
   })
 
   test('converts files to absolute paths', async () => {
