@@ -161,7 +161,8 @@
 
 ### Expected Result
 
-- Both exit != 0 and name the invalid archive
+- `kb-verify` exits != 0
+- `kb-info` exits 1 and prints `Invalid ZIP archive: $WORKDIR/corrupt.zip`
 
 ---
 

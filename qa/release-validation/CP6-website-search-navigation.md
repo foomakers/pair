@@ -112,7 +112,7 @@
 
 ### Expected Result
 
-- All top-level sections visible, in `apps/website/content/docs/meta.json` order: Getting Started, Tutorials, Concepts, Developer Journey, Customization, Integrations, PM Tools, then (after the separator) Reference, Migrations, Support, Contributing
+- All top-level sections visible, in `apps/website/content/docs/meta.json` order: Getting Started, Tutorials, Concepts, Process Lifecycle, Customization, Integrations, PM Tools, then (after the separator) Reference, Migrations, Support, Contributing
 - Sections are collapsible/expandable
 
 ---

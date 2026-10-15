@@ -51,6 +51,8 @@
 - Exit code 0
 - `.pair/knowledge/` and `.claude/skills/pair-process-bootstrap/SKILL.md` exist
 - `.pair/adoption/tech/` holds templates only — no populated adoption file (this is a genuinely empty project)
+- No `tech/automation.md`, no `mirrors:regenerate` anywhere in `.pair/adoption`, `decision-log/` holds no entries
+- Offline equivalent: `scripts/smoke-tests/scenarios/install-no-pair-adoption.sh`
 
 ---
 
