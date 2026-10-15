@@ -47,7 +47,12 @@ describe('package round-trip on the shipped dataset', () => {
       )
       process.chdir(cwd)
 
-      expect(await handleKbVerifyCommand({ command: 'kb-verify', packagePath: zip, json: false }, fileSystemService)).toBe(0)
+      expect(
+        await handleKbVerifyCommand(
+          { command: 'kb-verify', packagePath: zip, json: false },
+          fileSystemService,
+        ),
+      ).toBe(0)
 
       await fileSystemService.extractZip(zip, unzipped)
       copyFileSync(resolve(__dirname, '../../../config.json'), join(unzipped, 'config.json'))

@@ -170,7 +170,15 @@ async function copyRegistrySources(
 
   for (const { registry, files, layoutPaths } of plans) {
     for (const filePath of files) {
-      await copyFileToTemp({ filePath, layoutPaths, registry, tempDir, options, fsService, movedDirs })
+      await copyFileToTemp({
+        filePath,
+        layoutPaths,
+        registry,
+        tempDir,
+        options,
+        fsService,
+        movedDirs,
+      })
     }
   }
 }
@@ -197,7 +205,12 @@ export function unflattenEntry(entry: string, prefix: string): string {
   return entry.slice(prefix.length + 1).replace('-', '/')
 }
 
-function entryOf(filePath: string, layoutPaths: string[], registry: RegistryConfig, projectRoot: string) {
+function entryOf(
+  filePath: string,
+  layoutPaths: string[],
+  registry: RegistryConfig,
+  projectRoot: string,
+) {
   const base = layoutPaths.find(p => filePath.startsWith(p + '/') || filePath === p)
   const baseDir = base ?? path.join(projectRoot, registry.source)
   const relative = path.relative(baseDir, filePath)
@@ -220,8 +233,16 @@ function collectMovedSkillDirs(
     const { baseDir, relative, entry } = entryOf(f, layoutPaths, registry, options.projectRoot)
     if (!relative.includes(path.sep) || seen.has(entry)) continue
     seen.set(entry, {
-      originalDir: path.join(options.projectRoot, path.relative(options.projectRoot, baseDir), entry),
-      newDir: path.join(options.projectRoot, registry.source, unflattenEntry(entry, registry.prefix)),
+      originalDir: path.join(
+        options.projectRoot,
+        path.relative(options.projectRoot, baseDir),
+        entry,
+      ),
+      newDir: path.join(
+        options.projectRoot,
+        registry.source,
+        unflattenEntry(entry, registry.prefix),
+      ),
     })
   }
   return [...seen.values()]

@@ -68,7 +68,9 @@ describe('verifyStructure', () => {
       registries: ['AGENTS.md'],
     } as ManifestMetadata
     expect(verifyStructure([mockZipEntry('AGENTS.md')], manifest).status).toBe('PASS')
-    expect(verifyStructure([mockZipEntry('OTHER.md')], manifest).missingPaths).toEqual(['AGENTS.md'])
+    expect(verifyStructure([mockZipEntry('OTHER.md')], manifest).missingPaths).toEqual([
+      'AGENTS.md',
+    ])
   })
 
   it('infers directories from file paths', () => {
