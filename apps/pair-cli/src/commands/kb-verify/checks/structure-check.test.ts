@@ -56,6 +56,21 @@ describe('verifyStructure', () => {
     expect(result.missingPaths).toEqual(['adoption'])
   })
 
+  it('matches file registries (AGENTS.md) at ZIP root (#548)', () => {
+    const manifest = {
+      name: 't',
+      version: '1.0.0',
+      description: 'T',
+      author: 'T',
+      tags: [],
+      license: 'MIT',
+      created_at: '2025-01-01',
+      registries: ['AGENTS.md'],
+    } as ManifestMetadata
+    expect(verifyStructure([mockZipEntry('AGENTS.md')], manifest).status).toBe('PASS')
+    expect(verifyStructure([mockZipEntry('OTHER.md')], manifest).missingPaths).toEqual(['AGENTS.md'])
+  })
+
   it('infers directories from file paths', () => {
     const entries: IZipEntry[] = [mockZipEntry('knowledge/subdir/file.md')]
 
