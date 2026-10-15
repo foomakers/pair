@@ -63,7 +63,7 @@
 ## MT-CP1104: same-channel cleanup after a successful publish
 
 **Priority**: P1
-**Preconditions**: at least two releases of the same channel and base exist or existed (e.g. `v0.5.0-pre.1`, `v0.5.0-pre.2`)
+**Preconditions**: at least two releases of the same channel and base exist or existed (e.g. `v0.5.0-pre.1`, `v0.5.0-pre.2`). Executable only after pre.N+1 is published; with a single prerelease this MT is BLOCKED, not failed
 **Category**: Release
 
 ### Steps
@@ -73,7 +73,7 @@
 
 ### Expected Result
 
-- Only the latest pre (or rc) of the base remains: release, assets, tag and package version of the previous one are gone
+- Only the latest pre (or rc) of the base remains: release, assets, tag and package version of pre.N are gone (`gh release view v$BASE-pre.N` fails, the tag is absent from `ls-remote`, the version is absent from the packages list)
 - After a `final`: no pre/rc of that base remains
 - Cleanup ran only after the publish succeeded (the cleanup step in the release run is after publish and green)
 
@@ -82,7 +82,7 @@
 ## MT-CP1105: installing from a cleaned-up prerelease needs `--source`
 
 **Priority**: P1
-**Preconditions**: a prerelease version known to have been cleaned up (`$OLD_VERSION`)
+**Preconditions**: pre.N+1 published, so pre.N (`$OLD_VERSION`) was cleaned up. With a single prerelease this MT is BLOCKED, not failed
 **Category**: Release
 
 ### Steps
@@ -93,7 +93,7 @@
 
 ### Expected Result
 
-- Step 2: fails to download the KB (release asset deleted) — accepted for unstable channels
+- Step 2: the old prerelease CLI needs `--source` — without it the KB download fails (release asset deleted), accepted for unstable channels
 - Step 3: exit 0, KB installed from the local source
 
 ---

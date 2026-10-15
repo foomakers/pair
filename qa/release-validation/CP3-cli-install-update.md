@@ -231,7 +231,8 @@
 ### Expected Result
 
 - Exit code 0
-- Backup files/directory retained after update (not cleaned up)
+- `.pair/backups/` remains after update with at least one entry (without the flag it is emptied)
+- Offline equivalent: `scripts/smoke-tests/scenarios/update-minor-fixes.sh`
 
 ---
 
@@ -284,8 +285,9 @@
 ### Expected Result
 
 - Exit code 0
-- Shows what would change (or "no changes needed")
+- Output lists the planned changes, or `No changes` when nothing would change
 - No files modified (dry-run)
+- Offline equivalent: `scripts/smoke-tests/scenarios/update-minor-fixes.sh`
 
 ---
 
@@ -495,9 +497,9 @@
 
 ### Expected Result
 
-- Step 2: both exit != 0 (not an exact code), stderr names the invalid ZIP
+- Step 2: `kb-verify` exits != 0; `kb-info` exits 1 and prints `Invalid ZIP archive: $WORKDIR/corrupt.zip`
 - Step 3: exit 1, `Invalid KB structure at: ...`, nothing installed
-- Offline equivalent: `scripts/smoke-tests/scenarios/update-removes-files.sh`
+- Offline equivalent: `scripts/smoke-tests/scenarios/update-removes-files.sh` (`update-minor-fixes.sh` for the `kb-info` message)
 
 ---
 

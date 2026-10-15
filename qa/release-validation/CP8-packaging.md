@@ -22,6 +22,8 @@
 - Exit code 0
 - `$WORKDIR/pkg-target.zip` exists and is non-empty
 - ZIP contains files from installed target directories (e.g., `.pair/knowledge/`, `.claude/skills/`)
+- `$CLI kb-verify $WORKDIR/pkg-target.zip` exits 0 and `$CLI install --source $WORKDIR/pkg-target.zip` into an empty dir exits 0 with the same file tree (link spelling and `CLAUDE.md` aside)
+- Offline equivalent: `scripts/smoke-tests/scenarios/package-roundtrip.sh`
 
 ---
 
