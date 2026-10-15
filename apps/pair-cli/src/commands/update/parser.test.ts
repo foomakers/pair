@@ -133,3 +133,15 @@ describe('US-395: the program-level --url names the source when --source does no
     expect(config.resolution).toBe('local')
   })
 })
+
+describe('#548 AC-6: --persist-backup reaches the config', () => {
+  it.each([
+    [{}, undefined],
+    [{ source: '/kb' }, undefined],
+    [{ persistBackup: true }, true],
+    [{ source: '/kb', persistBackup: true }, true],
+    [{ source: 'https://x.test/kb.zip', persistBackup: true }, true],
+  ])('%j -> persistBackup %s', (opts, expected) => {
+    expect(parseUpdateCommand(opts).persistBackup).toBe(expected)
+  })
+})

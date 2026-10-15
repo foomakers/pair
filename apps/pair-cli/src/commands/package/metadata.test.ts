@@ -3,6 +3,7 @@ import {
   generateManifestMetadata,
   createOrganizationMetadata,
   type OrganizationMetadata,
+  packageCommandMetadata,
 } from './metadata'
 
 describe('generateManifestMetadata - defaults', () => {
@@ -160,5 +161,13 @@ describe('createOrganizationMetadata', () => {
     expect(org.team).toBeUndefined()
     expect(org.department).toBeUndefined()
     expect(org.approver).toBeUndefined()
+  })
+})
+
+describe('packageCommandMetadata help (#548 AC-5)', () => {
+  it('documents --pkg-version, never package --version', () => {
+    expect(packageCommandMetadata.examples.join('\n')).not.toMatch(/package[^\n]*--version/)
+    expect(packageCommandMetadata.options.map(o => o.flags)).toContain('--pkg-version <version>')
+    expect(packageCommandMetadata.options.map(o => o.flags.split(' ')[0])).not.toContain('--version')
   })
 })

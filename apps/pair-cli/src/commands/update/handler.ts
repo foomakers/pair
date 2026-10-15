@@ -88,6 +88,10 @@ export async function handleUpdateCommand(
     'info'
   const { pushLog } = createLogger(logLevel as LogEntry['level'])
   const presenter = options?.presenter ?? createCliPresenter(pushLog)
+  // `--persist-backup` arrives on the parsed config; an explicit handler option wins
+  if (config.persistBackup && options?.persistBackup === undefined) {
+    options = { ...options, persistBackup: true }
+  }
 
   try {
     const { datasetRoot, registries, baseTarget, sourceDeclaration, resolution } =

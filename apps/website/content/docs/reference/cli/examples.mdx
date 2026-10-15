@@ -218,7 +218,7 @@ pair-cli package -o dist/kb-v1.2.0.zip
 ```bash
 pair-cli package \
   --name "Company Knowledge Base" \
-  --version "1.2.0" \
+  --pkg-version "1.2.0" \
   --description "Internal documentation and guides" \
   --author "DevOps Team" \
   -o dist/company-kb-v1.2.0.zip
@@ -301,7 +301,7 @@ pair-cli install --source https://github.com/org/repo/releases/download/v1.2.0/k
 pair-cli update-link || exit 1
 
 # Step 4: Package for distribution
-pair-cli package --name "Production KB" --version "1.2.0" -o dist/kb-production-v1.2.0.zip || exit 1
+pair-cli package --name "Production KB" --pkg-version "1.2.0" -o dist/kb-production-v1.2.0.zip || exit 1
 
 # Step 5: Verify package integrity
 pair-cli kb-verify dist/kb-production-v1.2.0.zip || exit 1

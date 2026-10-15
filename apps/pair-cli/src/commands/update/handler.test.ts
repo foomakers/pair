@@ -72,6 +72,20 @@ describe('handleUpdateCommand - integration with in-memory services', () => {
     expect(nestedContent).toBe('# Nested New Content')
   })
 
+  test('keeps .pair/backups when the parsed config carries persistBackup (#548 AC-6)', async () => {
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+      persistBackup: true,
+    }
+
+    await handleUpdateCommand(config, fs, { httpClient })
+
+    expect((await fs.readdir(`${cwd}/.pair/backups`)).length).toBeGreaterThan(0)
+  })
+
   test('creates backup before update when persistBackup is true', async () => {
     const config: UpdateCommandConfig = {
       command: 'update',

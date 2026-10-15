@@ -219,7 +219,7 @@ pair-cli package [options]
 | `--source-dir <path>`         | `-s`  | Source directory to package (default: current directory)     |
 | `--config <path>`             | `-c`  | Path to config.json file                                     |
 | `--name <name>`               |       | Package name for manifest                                    |
-| `--version <version>`         |       | Package version for manifest                                 |
+| `--pkg-version <version>`     |       | Package version for manifest                                 |
 | `--description <description>` |       | Package description for manifest                             |
 | `--author <author>`           |       | Package author for manifest                                  |
 | `--skip-registries <list>`    |       | Comma-separated registry names to exclude                    |
@@ -249,7 +249,7 @@ pair-cli package --layout source
 pair-cli package -o dist/kb-v1.0.0.zip
 
 # Package with metadata
-pair-cli package --name "My KB" --version 1.0.0
+pair-cli package --name "My KB" --pkg-version 1.0.0
 
 # Interactive package creation
 pair-cli package --interactive
