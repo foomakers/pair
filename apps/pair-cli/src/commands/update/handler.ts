@@ -43,6 +43,15 @@ import {
 } from '../registry-run'
 import { emitVersionDriftHint, recordInstalledVersion } from '../kb-info/version-hint'
 
+/** `--persist-backup` arrives on the parsed config; an explicit handler option wins */
+function withConfigPersistBackup(
+  config: UpdateCommandConfig,
+  options: UpdateHandlerOptions | undefined,
+): UpdateHandlerOptions | undefined {
+  if (!config.persistBackup || options?.persistBackup !== undefined) return options
+  return { ...options, persistBackup: true }
+}
+
 /**
  * Update options for handler
  */
@@ -88,10 +97,7 @@ export async function handleUpdateCommand(
     'info'
   const { pushLog } = createLogger(logLevel as LogEntry['level'])
   const presenter = options?.presenter ?? createCliPresenter(pushLog)
-  // `--persist-backup` arrives on the parsed config; an explicit handler option wins
-  if (config.persistBackup && options?.persistBackup === undefined) {
-    options = { ...options, persistBackup: true }
-  }
+  options = withConfigPersistBackup(config, options)
 
   try {
     const { datasetRoot, registries, baseTarget, sourceDeclaration, resolution } =

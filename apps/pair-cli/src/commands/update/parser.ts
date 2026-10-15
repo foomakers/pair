@@ -75,12 +75,12 @@ function resolveSourceConfig(
   source: string,
   kb: boolean,
   offline: boolean,
-  target?: string,
-  persistBackup?: boolean,
+  extras: { target?: string | undefined; persistBackup?: boolean | undefined },
 ): UpdateCommandConfig {
   if (isUnsupportedProtocol(source)) {
     throw new Error(`Unsupported source protocol: ${source}`)
   }
+  const { target, persistBackup } = extras
   const optional = { ...(target && { target }), ...(persistBackup && { persistBackup }) }
   if (isGitUrl(source)) {
     return { command: 'update', resolution: 'git', url: source, offline: false, kb, ...optional }
@@ -120,5 +120,5 @@ export function parseUpdateCommand(
       ...(persistBackup && { persistBackup }),
     }
   }
-  return resolveSourceConfig(source, kb, offline, target, persistBackup)
+  return resolveSourceConfig(source, kb, offline, { target, persistBackup })
 }

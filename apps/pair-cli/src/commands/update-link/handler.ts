@@ -136,14 +136,15 @@ async function processFiles(params: {
         (aggregateStats.linksByCategory[category] || 0) + (count as number)
     }
 
-    if (modified) aggregateStats.filesToChange++
-    if (modified && !dryRun) {
-      await fs.writeFile(filePath, newContent)
-      aggregateStats.filesModified++
-      pushLog('info', `Updated ${filePath}`)
-    } else if (modified && dryRun) {
+    if (!modified) continue
+    if (dryRun) {
+      aggregateStats.filesToChange++
       pushLog('info', `Would update ${filePath}`)
+      continue
     }
+    await fs.writeFile(filePath, newContent)
+    aggregateStats.filesModified++
+    pushLog('info', `Updated ${filePath}`)
   }
 
   if (dryRun && aggregateStats.filesToChange === 0) pushLog('info', 'No changes')
