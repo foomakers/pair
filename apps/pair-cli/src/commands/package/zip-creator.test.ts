@@ -821,6 +821,7 @@ describe('unflattenEntry (#548 AC-3)', () => {
   })
 })
 
+// platform-injected (darwin, linux): smoke-ci-platform AC6
 describe.each(['darwin', 'linux'] as const)(
   'createPackageZip - target->source unflatten (platform %s)',
   platform => {
