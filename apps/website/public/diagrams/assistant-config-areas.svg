@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 430" width="1060" height="430" role="img" aria-labelledby="t d" font-family="Helvetica, Arial, sans-serif" font-size="12">
+<title id="t">What /pair-assistant configures: area, owner, validator</title>
+<desc id="d">Each configuration area maps to the file it lives in, the owner that writes it and the validator it runs before writing. Autonomy, cycle hooks and blocking severities live in tech/automation.md and are written through record-decision after autonomy-policy, cycle-hooks or blocking-severities validation. Workflow profiles and skipRegistries live in pair.config.json. PM tool and State Mapping go to setup-pm, harness to setup-harness, gates to setup-gates and a full pass to bootstrap.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#444"/></marker></defs>
+<rect width="1060" height="430" fill="#ffffff"/>
+<text x="30" y="24" font-size="14" font-weight="bold" fill="#222">What /pair-assistant configures: area, owner, validator</text>
+<text x="30" y="56" text-anchor="start" font-size="12" fill="#333" font-weight="bold">Area</text>
+<text x="330" y="56" text-anchor="start" font-size="12" fill="#333" font-weight="bold">File and section</text>
+<text x="640" y="56" text-anchor="start" font-size="12" fill="#333" font-weight="bold">Owner</text>
+<text x="860" y="56" text-anchor="start" font-size="12" fill="#333" font-weight="bold">Validator</text>
+<rect x="20" y="70" width="1020" height="38" rx="4" fill="#eef3fb" stroke="#bbb"/>
+<text x="30" y="93" text-anchor="start" font-size="11" fill="#333">Autonomy, Cycle Hooks, Blocking Severities</text>
+<text x="330" y="93" text-anchor="start" font-size="11" fill="#333">tech/automation.md</text>
+<text x="640" y="93" text-anchor="start" font-size="11" fill="#333">record-decision</text>
+<text x="860" y="93" text-anchor="start" font-size="11" fill="#333">autonomy-policy / cycle-hooks / blocking-severities</text>
+<rect x="20" y="114" width="1020" height="38" rx="4" fill="#fff6df" stroke="#bbb"/>
+<text x="30" y="137" text-anchor="start" font-size="11" fill="#333">workflowProfiles</text>
+<text x="330" y="137" text-anchor="start" font-size="11" fill="#333">pair.config.json</text>
+<text x="640" y="137" text-anchor="start" font-size="11" fill="#333">shown edit + ADL</text>
+<text x="860" y="137" text-anchor="start" font-size="11" fill="#333">workflow-profile resolve</text>
+<rect x="20" y="158" width="1020" height="38" rx="4" fill="#eef3fb" stroke="#bbb"/>
+<text x="30" y="181" text-anchor="start" font-size="11" fill="#333">skipRegistries</text>
+<text x="330" y="181" text-anchor="start" font-size="11" fill="#333">pair.config.json</text>
+<text x="640" y="181" text-anchor="start" font-size="11" fill="#333">update --skip-registries</text>
+<text x="860" y="181" text-anchor="start" font-size="11" fill="#333">none (CLI)</text>
+<rect x="20" y="202" width="1020" height="38" rx="4" fill="#fff6df" stroke="#bbb"/>
+<text x="30" y="225" text-anchor="start" font-size="11" fill="#333">format-check, worktree-setup, review, coverage</text>
+<text x="330" y="225" text-anchor="start" font-size="11" fill="#333">tech/way-of-working.md</text>
+<text x="640" y="225" text-anchor="start" font-size="11" fill="#333">record-decision</text>
+<text x="860" y="225" text-anchor="start" font-size="11" fill="#333">none</text>
+<rect x="20" y="246" width="1020" height="38" rx="4" fill="#eef3fb" stroke="#bbb"/>
+<text x="30" y="269" text-anchor="start" font-size="11" fill="#333">PM tool, State Mapping</text>
+<text x="330" y="269" text-anchor="start" font-size="11" fill="#333">tech/way-of-working.md</text>
+<text x="640" y="269" text-anchor="start" font-size="11" fill="#333">/pair-capability-setup-pm</text>
+<text x="860" y="269" text-anchor="start" font-size="11" fill="#333">setup-pm</text>
+<rect x="20" y="290" width="1020" height="38" rx="4" fill="#fff6df" stroke="#bbb"/>
+<text x="30" y="313" text-anchor="start" font-size="11" fill="#333">Harness, Model Policy</text>
+<text x="330" y="313" text-anchor="start" font-size="11" fill="#333">harness adoption</text>
+<text x="640" y="313" text-anchor="start" font-size="11" fill="#333">/pair-capability-setup-harness</text>
+<text x="860" y="313" text-anchor="start" font-size="11" fill="#333">setup-harness</text>
+<rect x="20" y="334" width="1020" height="38" rx="4" fill="#eef3fb" stroke="#bbb"/>
+<text x="30" y="357" text-anchor="start" font-size="11" fill="#333">Gates, branch protection</text>
+<text x="330" y="357" text-anchor="start" font-size="11" fill="#333">CI, repo settings</text>
+<text x="640" y="357" text-anchor="start" font-size="11" fill="#333">/pair-capability-setup-gates</text>
+<text x="860" y="357" text-anchor="start" font-size="11" fill="#333">setup-gates</text>
+<rect x="20" y="378" width="1020" height="38" rx="4" fill="#fff6df" stroke="#bbb"/>
+<text x="30" y="401" text-anchor="start" font-size="11" fill="#333">Everything</text>
+<text x="330" y="401" text-anchor="start" font-size="11" fill="#333">.pair/adoption/</text>
+<text x="640" y="401" text-anchor="start" font-size="11" fill="#333">/pair-process-bootstrap</text>
+<text x="860" y="401" text-anchor="start" font-size="11" fill="#333">bootstrap</text>
+</svg>
