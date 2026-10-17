@@ -1,0 +1,77 @@
+{
+  "$meta": {
+    "pr": "553",
+    "phase": "r1-g1",
+    "base": "158f75dcc6d7b7ca3ee7d70af9dfbac49f1af59d",
+    "trailer": "Pair-RED-Snapshot: pr=553; phase=r1-g1; base=158f75dcc6d7b7ca3ee7d70af9dfbac49f1af59d; manifest=.pair/red-snapshots/pr-553-r1-g1.json",
+    "artifacts": []
+  },
+  "mode": "remediation",
+  "inputHead": "158f75dcc6d7b7ca3ee7d70af9dfbac49f1af59d",
+  "sourceOfTruth": "apps/pair-cli/src/commands/install/handler.ts:validateInstallContext (L257-270); apps/pair-cli/config.json registries",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "validateInstallContext in apps/pair-cli/src/commands/install/handler.ts",
+      "inputs": [
+        "existing .pair/adoption",
+        "existing .claude/skills",
+        "existing .github",
+        "existing .pair/knowledge",
+        "existing .claude/workflows",
+        "existing .claude/agents",
+        "existing AGENTS.md/CLAUDE.md"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/plugin/skills/pair-assistant/SKILL.md",
+        "apps/pair-cli/config.json"
+      ],
+      "consumers": [
+        "pair-assistant Step 0b reader"
+      ],
+      "classes": [
+        "own .pair/adoption exists (registry adoption)",
+        "own .claude/skills exists (registry skills)",
+        "own .github exists (registry github)",
+        "AGENTS.md/CLAUDE.md exists (registry agents)",
+        "own .pair/knowledge exists (registry knowledge)",
+        "own .claude/workflows exists (registry workflows)",
+        "own .claude/agents exists (registry agent-definitions)"
+      ],
+      "interactions": [
+        "--skip-registries <name> per existing registry"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "pair-assistant-skill",
+    "mode": "doc",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/plugin/skills/pair-assistant/SKILL.md"
+    ]
+  },
+  "checklist": [
+    {
+      "id": "C-1",
+      "finding": "r0-1",
+      "requirement": "Step 0b no longer says .pair/adoption installs 'add' (new files only, existing untouched) nor that .claude/skills is overwritten in place; it states install refuses (exit 1, 'already exists', nothing written) when .pair/adoption or .claude/skills already exists",
+      "authority": "handler.ts:268 \"Target '<path>' already exists. Project already installed...\" thrown for every registry target that exists"
+    },
+    {
+      "id": "C-2",
+      "finding": "r0-1",
+      "requirement": "Step 0b names the skip option per existing registry: --skip-registries adoption for existing .pair/adoption, --skip-registries skills for existing .claude/skills (comma-joined with agents/github as applicable)",
+      "authority": "handler.ts:268 '--skip-registries <name>'; config.json registry names adoption, skills, agents, github"
+    },
+    {
+      "id": "C-3",
+      "finding": "r0-1",
+      "requirement": "Step 0b states the --skip-registries list is built from EVERY existing registry target by registry name, covering all seven config.json registries: github (.github), knowledge (.pair/knowledge), adoption (.pair/adoption), agents (AGENTS.md, CLAUDE.md), skills (.claude/skills), workflows (.claude/workflows), agent-definitions (.claude/agents) — not a four-name enumeration and not only github; each existing target needs its registry name in the comma-joined list",
+      "authority": "handler.ts validateInstallContext iterates every registry in apps/pair-cli/config.json (github, knowledge, adoption, agents, skills, workflows, agent-definitions)"
+    }
+  ],
+  "redTests": [],
+  "matrix": [],
+  "testExempt": true,
+  "exemptionRationale": "doc group: prose-only fix, checklist replaces witnesses"
+}
