@@ -23,6 +23,8 @@ import {
   resolveEffectiveDatasetRoot,
   writeProjectLlmsTxt,
   resolveWorkingPathOverride,
+  filterRegistries,
+  validateSkipList,
   type RegistryConfig,
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
@@ -103,8 +105,9 @@ async function runInstall(ctx: {
   presenter: CliPresenter
 }): Promise<number> {
   const { fs, config, options, pushLog, presenter } = ctx
-  const { datasetRoot, registries, baseTarget, sourceDeclaration, resolution } =
-    await setupInstallContext(fs, config, options)
+  const setup = await setupInstallContext(fs, config, options)
+  const { datasetRoot, baseTarget, sourceDeclaration, resolution } = setup
+  const registries = applySkipRegistries(setup.registries, config.skipRegistries)
   // A source that ships a broken config never aborts the install: it is reported — on the
   // console, not only in the diagnostics log nobody reads — and the consumer's own
   // resolution stands (US-396).
@@ -235,6 +238,20 @@ async function setupInstallContext(
   }
 }
 
+function applySkipRegistries(
+  registries: Record<string, RegistryConfig>,
+  skipList: string[] | undefined,
+): Record<string, RegistryConfig> {
+  if (!skipList) return registries
+  const invalid = validateSkipList(registries, skipList)
+  if (invalid.length > 0) {
+    throw new Error(
+      `Unknown registry '${invalid.join("', '")}' in --skip-registries. Valid names: ${Object.keys(registries).join(', ')}`,
+    )
+  }
+  return filterRegistries(registries, skipList)
+}
+
 async function validateInstallContext(
   fs: FileSystemService,
   registries: Record<string, RegistryConfig>,
@@ -244,9 +261,11 @@ async function validateInstallContext(
   for (const [name, config] of Object.entries(registries)) {
     const target = resolveTarget(name, config, fs, baseTarget)
     targets[name] = target
-    if (fs.existsSync(target)) {
+    // Copy targets too (a lone own CLAUDE.md): the copy would overwrite it silently.
+    const existing = [target, ...copyTargets(config, fs, baseTarget)].find(t => fs.existsSync(t))
+    if (existing) {
       throw new Error(
-        `Target '${target}' already exists. Project already installed. Use 'pair-cli update' to update.`,
+        `Target '${existing}' already exists. Project already installed. Use 'pair-cli update' to update, or --skip-registries ${name} to keep it.`,
       )
     }
   }
@@ -254,6 +273,10 @@ async function validateInstallContext(
   if (overlapping.length > 0) {
     throw new Error(`Overlapping registry targets detected: ${overlapping.join('; ')}`)
   }
+}
+
+function copyTargets(config: RegistryConfig, fs: FileSystemService, baseTarget: string): string[] {
+  return config.targets.filter(t => t.mode === 'copy').map(t => fs.resolve(baseTarget, t.path))
 }
 
 type RegistryInstallCtx = {

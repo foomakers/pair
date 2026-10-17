@@ -231,3 +231,19 @@ describe('US-395: the program-level --url names the source when --source does no
     )
   })
 })
+
+describe.each(['darwin', 'linux'] as const)('install --skip-registries (platform %s)', platform => {
+  it('parses the comma list into skipRegistries', () => {
+    const orig = process.platform
+    Object.defineProperty(process, 'platform', { value: platform })
+    try {
+      expect(parseInstallCommand({ skipRegistries: 'agents,github' })).toMatchObject({
+        resolution: 'default',
+        skipRegistries: ['agents', 'github'],
+      })
+      expect(parseInstallCommand({})).not.toHaveProperty('skipRegistries')
+    } finally {
+      Object.defineProperty(process, 'platform', { value: orig })
+    }
+  })
+})
