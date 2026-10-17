@@ -50,6 +50,8 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 
 ## install
 
+**Via `/pair-assistant` (optional, Claude Code):** ask for "pair in this project, first time".
+
 Install documentation and assets from KB source to target folder.
 
 ### Usage
@@ -118,6 +120,8 @@ pair-cli install --offline --source ./local-kb-content
 
 ## update
 
+**Via `/pair-assistant` (optional, Claude Code):** ask for "the KB and skills refreshed".
+
 Update existing documentation and assets from KB source.
 
 ### Usage
@@ -163,6 +167,8 @@ pair-cli update --offline --source ./local-kb-content
 
 ## update-link
 
+**Via `/pair-assistant` (optional, Claude Code):** ask for "broken links in installed KB content fixed".
+
 Validate and update internal links in installed KB content.
 
 ### Usage
@@ -201,6 +207,8 @@ For detailed usage, see the [Link Update Guide](/docs/reference/cli/update-link)
 ---
 
 ## package
+
+**Via `/pair-assistant` (optional, Claude Code):** ask for "to publish or share a KB".
 
 Package KB content into validated ZIP file for distribution.
 
@@ -269,6 +277,8 @@ When `--org` is active, the CLI looks for `.pair/org-template.json` to pre-fill 
 ---
 
 ## kb-info
+
+**Via `/pair-assistant` (optional, Claude Code):** ask for "the installed KB version, or whether it is behind".
 
 Display metadata from a KB package ZIP file, or — when no package path is given — check the
 project's installed KB version against the current one.
@@ -361,6 +371,8 @@ pair-cli kb-info --source https://github.com/acme/kb.git#v2.0.0
 
 ## kb-cache
 
+**Via `/pair-assistant` (optional, Claude Code):** ask for "the shared KB cache inspected or reclaimed".
+
 Inspect and reclaim the shared KB cache — the machine-wide directory where `install` and
 `update` keep downloaded knowledge bases so repeated runs do not re-fetch them.
 
@@ -425,6 +437,8 @@ pair-cli kb-cache list --json
 
 ## kb-verify
 
+**Via `/pair-assistant` (optional, Claude Code):** ask for "a KB package checked for integrity".
+
 Verify KB package integrity before installation or distribution. Validates checksum (SHA-256), structure, and manifest.
 
 ### Usage
@@ -462,6 +476,8 @@ pair-cli kb-verify kb-package.zip --log-level debug
 ---
 
 ## kb-validate
+
+**Via `/pair-assistant` (optional, Claude Code):** ask for "the KB checked for structural soundness".
 
 Validate KB structure, links, and metadata using layout-aware validation.
 
@@ -619,6 +635,8 @@ Rules:
 
 ## scaffold-kb
 
+**Via `/pair-assistant` (optional, Claude Code):** ask for "their own knowledge base repository".
+
 Scaffold an external knowledge base repository — a pure KB repo (knowledge + skills)
 plus the script that releases it. Publishing itself lives in the generated script, not
 in the CLI, so any code host works.
@@ -703,6 +721,8 @@ See [Scaffold an External KB](/docs/customization/external-kb) for the full work
 
 ## validate-config
 
+**Via `/pair-assistant` (optional, Claude Code):** ask for "their registry config validated".
+
 Validate asset registry configuration file.
 
 ### Usage
@@ -739,6 +759,8 @@ pair-cli validate-config --config ./my-config.json
 
 ## tokens
 
+**Via `/pair-assistant` (optional, Claude Code):** ask for "words or estimated tokens of their pair files counted".
+
 Count words and estimated tokens (`ceil(characters / 4)`, no tokenizer) per area of the project's
 markdown: templates, adoption, adr, decision-log, skills, guidelines, agent-context.
 
@@ -765,6 +787,8 @@ pair-cli tokens --baseline base.json # later: delta per area
 ```
 
 ## run
+
+**Via (optional, Claude Code):** `--card` is `/pair-workflow-cycle`; `--root`, `--parallel` and `--watch` are `/pair-loop`.
 
 Run a pair skill **headlessly** on a chosen engine, re-invoking it until it stops — the portable
 unattended loop (`ADR-021` tier 2: the external driver).

@@ -186,6 +186,74 @@ export function findDeadLinks(content: string, rel: string, validRoutes: Set<str
   return errors
 }
 
+/** Heading slugs per docs route (github-slugger, as check 5c). */
+export function buildDocSlugs(contents: Map<string, string>): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>()
+  for (const [route, md] of contents) out.set(route, githubHeadingSlugs(md))
+  return out
+}
+
+/** Check 5d: every internal `/docs/...#anchor` resolves to a heading slug of the target page. */
+export function findDeadAnchors(
+  content: string,
+  rel: string,
+  slugs: Map<string, Set<string>>,
+): string[] {
+  const errors: string[] = []
+  for (const re of [LINK_RE, HREF_RE]) {
+    for (const m of content.matchAll(re)) {
+      const raw = m[1]
+      const hash = raw?.indexOf('#') ?? -1
+      if (raw === undefined || hash < 0) continue
+      const route = (raw.slice(0, hash).split('?')[0] ?? '').replace(/\/$/, '') || '/docs'
+      const known = slugs.get(route)
+      const frag = safeDecode(raw.slice(hash + 1))
+      if (known && frag && !known.has(frag)) {
+        errors.push(`Dead anchor in ${rel}: ${raw} — no heading "#${frag}" on ${route}`)
+      }
+    }
+  }
+  return errors
+}
+
+/** The `/pair-assistant` intent table: command -> the "user wants" cells that map to it. */
+export function parseIntentRequests(skillMd: string): Map<string, string[]> {
+  const out = new Map<string, string[]>()
+  for (const line of skillMd.split('\n')) {
+    const cells = line.split('|').map(c => c.trim())
+    const cmd = /^`([a-z][a-z-]*)`$/.exec(cells[2] ?? '')?.[1]
+    if (cells.length < 4 || !cmd || !cells[1]) continue
+    out.set(cmd, [...(out.get(cmd) ?? []), cells[1].replaceAll('**', '')])
+  }
+  return out
+}
+
+/** Check 5e: each `## <command>` in commands.mdx has one "Via" line naming a real intent request, or CLI only. */
+export function checkViaLines(commands: string[], commandsDoc: string, skillMd: string): string[] {
+  const intents = parseIntentRequests(skillMd)
+  const errors: string[] = []
+  for (const cmd of commands) {
+    const start = commandsDoc.search(new RegExp(`^## ${cmd}$`, 'm'))
+    if (start < 0) continue
+    const rest = commandsDoc.slice(start + 1)
+    const body = rest.slice(0, rest.search(/^## /m) < 0 ? undefined : rest.search(/^## /m))
+    const via = body.split('\n').filter(l => l.startsWith('**Via'))
+    if (via.length !== 1) {
+      errors.push(`commands.mdx: ## ${cmd} needs exactly one "**Via" line (found ${via.length})`)
+      continue
+    }
+    const line = via[0] ?? ''
+    if (/CLI only/.test(line) || !line.includes('/pair-assistant')) continue
+    const asked = /"([^"]+)"/.exec(line)?.[1]
+    if (!asked || !(intents.get(cmd) ?? []).includes(asked)) {
+      errors.push(
+        `commands.mdx: ## ${cmd} Via line asks for "${asked ?? ''}", not a /pair-assistant intent-table request for \`${cmd}\``,
+      )
+    }
+  }
+  return errors
+}
+
 /**
  * Check 5b: every repo citation the SITE RENDERS AS A LINK resolves to a tracked file.
  *
@@ -991,6 +1059,7 @@ function perFileErrors(params: {
   howToCount: number | null
   validRoutes: Set<string>
   repoRoot: string
+  slugs: Map<string, Set<string>>
 }): string[] {
   const {
     docsFiles,
@@ -1000,6 +1069,7 @@ function perFileErrors(params: {
     howToCount,
     validRoutes,
     repoRoot,
+    slugs,
   } = params
   const tracked = trackedFiles(repoRoot)
   const targetSource = readTracked(repoRoot)
@@ -1013,6 +1083,7 @@ function perFileErrors(params: {
     }
     if (howToCount !== null) errors.push(...findGuideCountMismatches(content, rel, howToCount))
     errors.push(...findDeadLinks(content, rel, validRoutes))
+    errors.push(...findDeadAnchors(content, rel, slugs))
     errors.push(...findDeadRepoCitations(content, rel, tracked, targetSource))
   }
   return errors
@@ -1064,6 +1135,7 @@ function checkPaths(root: string) {
     HOW_TO_DIR: join(root, 'packages/knowledge-hub/dataset/.pair/knowledge/how-to'),
     // The plugin manifest lives at the PLUGIN root (the bootstrap corpus), not at the
     // repo root: the marketplace entry's `source` points there.
+    ASSISTANT_SKILL: join(root, 'packages/knowledge-hub/dataset/plugin/skills/pair-assistant/SKILL.md'),
     PLUGIN_MANIFEST: join(root, 'packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json'),
     BATCH_ENGINE_FILE: join(DOCS_DIR, 'reference/batch-engine.mdx'),
     CLI_CONFIG: join(root, 'apps/pair-cli/config.json'),
@@ -1402,6 +1474,14 @@ export function runAllChecks(
       howToCount,
       validRoutes,
       repoRoot: repoRootOf(root),
+      slugs: buildDocSlugs(
+        new Map(
+          docsFiles.map(f => [
+            [...buildValidRoutes([f], DOCS_DIR)][0] as string,
+            readFileSync(f, 'utf-8'),
+          ]),
+        ),
+      ),
     }),
   )
 
@@ -1420,6 +1500,15 @@ export function runAllChecks(
   }))
   const cli = checkCliCommands(paths.COMMANDS_DIR, paths.COMMANDS_FILE, docs)
   errors.push(...cli.errors, ...liveMarkerErrors(docs, issueState))
+  errors.push(
+    ...checkViaLines(
+      readdirSync(paths.COMMANDS_DIR, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .map(d => d.name),
+      readFileSync(paths.COMMANDS_FILE, 'utf-8'),
+      readFileSync(paths.ASSISTANT_SKILL, 'utf-8'),
+    ),
+  )
   errors.push(...readmeErrors(join(root, 'README.md'), skillCount, howToCount))
 
   return { errors, skillCount, commandCount: cli.commandCount }
