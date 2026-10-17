@@ -46,15 +46,23 @@ First, check which of the user's own agent files exist: `ls AGENTS.md CLAUDE.md 
 > `AGENTS.md` exists. **Keep** it (pair installs around it) or **overwrite** it (I move yours to `AGENTS.md.bak`, then install pair's)? Same question for `CLAUDE.md`.
 
 - **Overwrite** → offer `mv AGENTS.md AGENTS.md.bak` (and/or `mv CLAUDE.md CLAUDE.md.bak`), run it only after the user agrees, then install normally. Use `mv`, never `cp`: a leftover original makes install refuse. `CLAUDE.md` is never overwritten silently.
-- **Keep** → install with `--skip-registries agents` (add `,github` when `.github` already exists). Then tell the user: pair is **not reachable from their `AGENTS.md`** — they should add a pointer to `.pair/knowledge/` and `.pair/adoption/` themselves. Do not edit their file.
+- **Keep** → install with `--skip-registries agents` (plus every other existing registry, per the table below). Then tell the user: pair is **not reachable from their `AGENTS.md`** — they should add a pointer to `.pair/knowledge/` and `.pair/adoption/` themselves. Do not edit their file.
 - `AGENTS.md` and `CLAUDE.md` come from the same registry (`agents`), so a mix (keep one, overwrite the other) is not installable: re-ask keep-both or overwrite-both.
 - A lone own `CLAUDE.md` (no `AGENTS.md`) is the same question, for that one file.
 
-What else install does, so nothing surprises them:
+Install is **all-or-nothing per registry target**: if ANY target below already exists it exits 1 (`Target '<path>' already exists`, nothing written). So before installing, check every target and build `--skip-registries` from the registry name of each one that exists, comma-joined:
 
-- **Your adoption decisions are safe.** `.pair/adoption/**` installs with `add` behaviour — new files only, existing ones untouched.
-- **`.pair/knowledge/**` and `.github/**` are mirrored** — replaced, and files no longer in the source are deleted.
-- `.claude/skills/**` is overwritten in place, without deleting.
+| Existing target | Registry name |
+| --- | --- |
+| `.github` | `github` |
+| `.pair/knowledge` | `knowledge` |
+| `.pair/adoption` | `adoption` |
+| `AGENTS.md`, `CLAUDE.md` | `agents` |
+| `.claude/skills` | `skills` |
+| `.claude/workflows` | `workflows` |
+| `.claude/agents` | `agent-definitions` |
+
+Example: own `.claude/skills` and `.github` → `--skip-registries skills,github`. A skipped registry is left untouched, so your own files are safe; a registry that is not skipped installs as usual (`.pair/knowledge` and `.github` mirror; `.pair/adoption` adds new files only).
 
 Then ask, presenting both outcomes concretely:
 
