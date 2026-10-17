@@ -847,6 +847,7 @@ describe('update backup covers copy targets (#552 AC9/AC10)', () => {
     offline: false,
   }
 
+  // platform injected: darwin, linux
   test.each(['darwin', 'linux'])(
     'platform %s: --persist-backup keeps CLAUDE.md too',
     async plat => {
