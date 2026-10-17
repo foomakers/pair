@@ -33,8 +33,7 @@ function originTags(): string[] {
 
 export function readTags(): Record<string, string> {
   const tags: Record<string, string> = {}
-  for (const t of originTags())
-    tags[t] = sh('git', ['rev-list', '-n1', t])
+  for (const t of originTags()) tags[t] = sh('git', ['rev-list', '-n1', t])
   return tags
 }
 
