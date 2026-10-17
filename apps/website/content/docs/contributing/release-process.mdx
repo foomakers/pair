@@ -9,13 +9,10 @@ Releases are dispatched via GitHub Actions and [Changesets](https://github.com/c
 
 Releases are **dispatched, never merge-triggered**. Two runs per release:
 
-```text
-Maintainer        version.yml (run 1)        release.yml (run 2)
-    │ pnpm release <channel> │                       │
-    │───────────────────────▶│ validate, version, tag│
-    │                        │──────────────────────▶│ build from tag,
-    │                        │                       │ publish, cleanup
-```
+1. **Run 1, `version.yml`**: the maintainer runs `pnpm release <channel>`; the workflow validates, versions and tags.
+2. **Run 2, `release.yml`**: builds from the tag, publishes and cleans up.
+
+![Release channels: pre, rc, final and cleanup of earlier pre-releases](/diagrams/release-channels.svg)
 
 **Build once, verify, publish.** Changesets manages versions, CI builds artifacts from the tag, GitHub Releases distributes them.
 
@@ -31,7 +28,7 @@ If the change breaks `.pair/adoption/` or `.pair/knowledge/` structure, add a mi
 pnpm release <pre|rc|final> [--version X.Y.Z] [--dry-run]
 ```
 
-The command prints the plan (version, tag, cleanup) and dispatches `version.yml`; CI re-validates with the same state module. Channels are forward-only (`pre` → `rc` → `final`) and skippable; the same channel needs new `main` commits; duplicates are refused.
+The command prints the plan (version, tag, cleanup) and dispatches `version.yml`; CI re-validates with the same state module. Channels are forward-only (`pre` → `rc` → `final`, see the [channel diagram](#overview)) and skippable; the same channel needs new `main` commits; duplicates are refused.
 
 | Channel | Registry | GitHub Release | Website |
 |---------|----------|----------------|---------|

@@ -273,7 +273,7 @@ A request to change how pair behaves ("let green cards go up to merge", "add a p
 | Kept registries | `pair.config.json` `skipRegistries` | `update --skip-registries`; removal is a shown edit |
 | `format-check-command`, `worktree-setup-command`, Review enforcement, Review identity, Coverage guardrail, PR states | `tech/way-of-working.md` | `/pair-capability-record-decision` |
 | PM tool, code host, `## State Mapping` (incl. unmapped states and not-planned) | `tech/way-of-working.md` | `/pair-capability-setup-pm` |
-| Definition of Ready / Definition of Done | DoR / DoD adoption files | `/pair-capability-record-decision` |
+| Definition of Ready / Definition of Done tier requirements | `tech/way-of-working.md` Review Tier Matrix (the criteria themselves are in the KB) | `/pair-capability-record-decision` |
 | `## Process Profile` | `tech/way-of-working.md` | `/pair-capability-record-decision` |
 | risk matrix, `## Tag Projection` | `tech/risk-matrix.md` | `/pair-capability-record-decision` |
 | Harness, Model Policy | harness adoption | `/pair-capability-setup-harness` |

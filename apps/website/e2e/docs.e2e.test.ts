@@ -52,6 +52,10 @@ test('quickstart journey: overview → quickstart with content verification', as
   await expect(main).toContainText('pair-cli update')
   await expect(main).toContainText('Development Process')
   await expect(main).toContainText('Choose Your Setup')
+  // US-552: optional marketplace path, CLI stays default
+  await expect(main).toContainText('Optional: install via the Claude Code marketplace')
+  await expect(main).toContainText('/pair-assistant')
+  await expect(main).toContainText('--skip-registries agents')
 })
 
 test('solo setup journey: quickstart → solo setup with content verification', async ({ page }) => {
@@ -1003,8 +1007,10 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     // set — so a new page must still be added here manually, but forgetting to now fails red
     // there instead of silently passing. The per-section smoke arrays below (integrations,
     // guides, tutorials, …) are a different list and remain hand-maintained and unguarded.
+    '/docs/developer-journey/lifecycle-modes',
     '/docs/concepts',
     '/docs/concepts/canonical-states',
+    '/docs/concepts/delivery-workflow',
     '/docs/concepts/code-host',
     '/docs/concepts/definition-of-ready-and-done',
     '/docs/concepts/pr-state-flow',
@@ -1019,6 +1025,8 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/reference/batch-engine',
     '/docs/reference/delivery-cycle',
     '/docs/reference/coupling-model',
+    '/docs/reference/pair-assistant',
+    '/docs/reference/adoption-settings',
     '/docs/reference/pair-next',
     '/docs/reference/quality-gates-configuration',
     '/docs/reference/quality-model',

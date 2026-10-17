@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 430" width="1080" height="430" role="img" aria-labelledby="t d" font-family="Helvetica, Arial, sans-serif" font-size="12">
 <title id="t">Three lifecycle modes compared</title>
-<desc id="d">Step-by-step runs every phase explicitly: PRD, bootstrap, planning, refine, plan-tasks, implement, review. Accelerated shortens setup and refinement with quick bootstrap, grilling and triage, and runs implementation through the delivery workflows. Autonomous runs unattended delivery through pair-loop and pair-cli run under autonomy gates, with escalation to a human.</desc>
+<desc id="d">Assisted runs every phase explicitly with the AI assisting: PRD, bootstrap, planning, refine, plan-tasks, implement, review. Orchestrated shortens setup and refinement with quick bootstrap, grilling and triage, and runs implementation through the delivery workflows. Autonomous runs unattended delivery through pair-loop and pair-cli run under autonomy gates, with escalation to a human.</desc>
 <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#444"/></marker></defs>
 <rect width="1080" height="430" fill="#ffffff"/>
 <text x="30" y="24" font-size="14" font-weight="bold" fill="#222">Three lifecycle modes compared</text>
 <rect x="30" y="50" width="320" height="56" rx="6" fill="#eef3fb" stroke="#3b5b92" stroke-width="1.3"/>
-<text x="190.0" y="74.0" text-anchor="middle" fill="#222" font-weight="bold">Step-by-step</text>
-<text x="190.0" y="90.0" text-anchor="middle" fill="#222">You run every phase</text>
+<text x="190.0" y="74.0" text-anchor="middle" fill="#222" font-weight="bold">Assisted</text>
+<text x="190.0" y="90.0" text-anchor="middle" fill="#222">AI assists every phase you run</text>
 <rect x="50" y="126" width="280" height="36" rx="6" fill="#ffffff" stroke="#3b5b92" stroke-width="1.3"/>
 <text x="190.0" y="148.0" text-anchor="middle" fill="#222">PRD</text>
 <rect x="50" y="172" width="280" height="36" rx="6" fill="#ffffff" stroke="#3b5b92" stroke-width="1.3"/>
@@ -20,8 +20,8 @@
 <rect x="30" y="356" width="320" height="40" rx="6" fill="#eef3fb" stroke="#3b5b92" stroke-width="1.3"/>
 <text x="190.0" y="380.0" text-anchor="middle" fill="#222">Use when: Learning pair, high-risk work</text>
 <rect x="380" y="50" width="320" height="56" rx="6" fill="#fff6df" stroke="#a06a00" stroke-width="1.3"/>
-<text x="540.0" y="74.0" text-anchor="middle" fill="#222" font-weight="bold">Accelerated</text>
-<text x="540.0" y="90.0" text-anchor="middle" fill="#222">You steer, workflows do the legwork</text>
+<text x="540.0" y="74.0" text-anchor="middle" fill="#222" font-weight="bold">Orchestrated</text>
+<text x="540.0" y="90.0" text-anchor="middle" fill="#222">You trigger per card, stops at checkpoints</text>
 <rect x="400" y="126" width="280" height="36" rx="6" fill="#ffffff" stroke="#a06a00" stroke-width="1.3"/>
 <text x="540.0" y="148.0" text-anchor="middle" fill="#222">quick bootstrap</text>
 <rect x="400" y="172" width="280" height="36" rx="6" fill="#ffffff" stroke="#a06a00" stroke-width="1.3"/>

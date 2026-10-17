@@ -75,12 +75,15 @@ pair-cli install [registry:target ...]
 | `--source <url\|path\|git>` | KB source: URL, local path, or git repo (overrides auto-download) |
 | `--offline`                 | Skip KB download, use local source only                           |
 | `--skip-verify`             | Skip package integrity verification (for ZIP sources)             |
+| `--skip-registries <names>` | Comma-separated registry names to leave out (e.g. `agents` keeps your own `AGENTS.md`/`CLAUDE.md`); remembered in `pair.config.json` |
 
 **KB Source Options:**
 
 - `--source <url>` — Download KB from custom HTTP/HTTPS URL or use local path
 - `--source <git-url>` — Clone KB from a git repository (`*.git`, `git@…`, `ssh://git@…`, append `#ref` to pin version)
 - `--offline` — Skip automatic KB download (requires `--source` with local path)
+
+**Existing files:** install is all-or-nothing per registry target. If any target already exists (`AGENTS.md`, `CLAUDE.md`, `.claude/skills`, `.pair/knowledge`, …) it exits 1 with `Target '<path>' already exists` and writes nothing. Use `--skip-registries <names>` to leave a registry untouched; an unknown name exits 1 and lists the valid ones.
 
 **Note:** Cannot combine `--source <url>` or `--source <git-url>` with `--offline`. The `--offline` flag requires `--source` with a local filesystem path.
 
@@ -94,6 +97,9 @@ pair-cli install --list-targets
 
 # Install with defaults
 pair-cli install
+
+# Existing repo with its own AGENTS.md/CLAUDE.md: keep them
+pair-cli install --skip-registries agents
 
 # Install to custom directory
 pair-cli install ./my-custom-path
@@ -143,6 +149,8 @@ pair-cli update [registry:target ...]
 | `--config <file>`           | Use custom configuration file (default: `config.json`)            |
 | `--source <url\|path\|git>` | KB source: URL, local path, or git repo (overrides auto-download) |
 | `--offline`                 | Skip KB download, use local source only                           |
+| `--skip-registries <names>` | Comma-separated registry names to leave out; remembered in `pair.config.json` `skipRegistries` (remove the name to opt back in) |
+| `--persist-backup`          | Keep backup files after a successful update                       |
 
 ### Examples
 
