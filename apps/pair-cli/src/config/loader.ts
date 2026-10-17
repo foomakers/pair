@@ -95,7 +95,9 @@ function withSkipRegistries(loaded: LoadedConfig): LoadedConfig {
 }
 
 function assertSkipRegistries(parsed: unknown, path: string, objectOnly = false): void {
-  if (objectOnly && !isPlainObject(parsed)) throw new Error(`Invalid ${path}: must be a JSON object`)
+  if (objectOnly && !isPlainObject(parsed)) {
+    throw new Error(`Invalid ${path}: must be a JSON object`)
+  }
   const skip = isPlainObject(parsed) ? parsed['skipRegistries'] : undefined
   if (skip !== undefined && !(Array.isArray(skip) && skip.every(n => typeof n === 'string'))) {
     throw new Error(`Invalid ${path}: skipRegistries must be an array of registry names`)
