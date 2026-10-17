@@ -50,7 +50,7 @@ The last `release.yml` job runs only after a successful publish and deletes (Git
 
 ### Installing a prerelease
 
-Create a token with `read:packages`, then:
+`pre`/`rc` packages on GitHub Packages are private to the `foomakers` org by design (release testing, short window): you need org membership and a token with `read:packages`. Then:
 
 ```bash
 npm config set @foomakers:registry https://npm.pkg.github.com

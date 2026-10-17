@@ -32,6 +32,7 @@ All test cases use these variables — resolve them before execution:
 | Registry | npmjs.org, no auth | GitHub Packages `https://npm.pkg.github.com`, `read:packages` token |
 | Website (CP1, CP5, CP6) | production `$BASE_URL` | not deployed: final-only, or a PR preview `$BASE_URL` |
 | npmjs-only cases (CP7 npmjs.org, MT-CP320 npmjs path) | run | SKIP (final-only); use the GitHub Packages variant |
+| Package visibility | public | private to the `foomakers` org by design (release testing, short window): testers need org membership + `read:packages` |
 | MT-CP211 `publishConfig` | npmjs | npmjs `publishConfig` is expected |
 
 Token rules: supplied by the operator via a project `.npmrc` or env var, deleted after the run, **never recorded** in the suite or a report. No token on pre/rc ⇒ the install cases are **BLOCKED**, not FAILED.

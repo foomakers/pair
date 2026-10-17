@@ -27,6 +27,22 @@ describe('KB Download Manager', () => {
     ).rejects.toThrow(/KB v0\.2\.0 not found \(404\).*Download manually from/)
   })
 
+  it('404 message keeps the prerelease', async () => {
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '0' })),
+    ])
+    httpClient.setGetResponses([toIncomingMessage(buildTestResponse(404, {}))])
+    await expect(
+      downloadFile(
+        'https://github.com/foomakers/pair/releases/download/v0.5.0-pre.1/kb.zip',
+        '/tmp/kb.zip',
+        { httpClient, fs },
+      ),
+    ).rejects.toThrow(/KB v0\.5\.0-pre\.1 not found \(404\)/)
+  })
+
   it('should throw KB-specific 403 error', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
     const httpClient = new MockHttpClientService()

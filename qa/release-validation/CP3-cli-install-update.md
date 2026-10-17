@@ -542,7 +542,7 @@
 
 - Step 2: exit 0; `AGENTS.md`/`CLAUDE.md` are pair's; no skip line; `AGENTS.md.bak` holds your original
 - Step 3: option documented
-- Step 4: backup kept only with `--persist-backup`
+- Step 4: backup kept only with `--persist-backup`, and then holds both originals: `.pair/backups/<session>/AGENTS.md` and `.../CLAUDE.md`
 - Offline equivalent: `install-preconditions.sh` Test 8
 
 ---
@@ -551,3 +551,4 @@
 
 - #543: channel-aware MT-CP320 (`$CHANNEL`); MT-CP302 adds workflows/agents/skills paths; MT-CP307 lists 7 registries; MT-CP308 dropped-file step; MT-CP319 `external/git-<hash>` cache path, default config (no stale `.claude/skills` remap), skipped skills/workflows OK; new MT-CP321 error paths.
 - #552: new MT-CP322 (keep persisted in `pair.config.json`, update preserves), MT-CP323 (opt back in).
+- #552 (3rd): MT-CP323 step 4 asserts `CLAUDE.md` in the backup.
