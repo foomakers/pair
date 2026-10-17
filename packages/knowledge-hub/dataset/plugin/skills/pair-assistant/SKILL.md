@@ -41,20 +41,26 @@ Detect the CLI by looking for the binary (above), never by invoking it.
 
 Adopting pair into a project that already exists is not the same as starting one with it. The project already has a stack, conventions and a way of working; pair's value there is that its adoption files **describe that reality**, not that they arrive as blank templates. So do not decide for the user.
 
-First, tell them exactly what install touches, because one part of it **does** overwrite and they must know before they answer:
+First, check which of the user's own agent files exist: `ls AGENTS.md CLAUDE.md 2>/dev/null`. Install **refuses** to overwrite them (exit 1, "already exists", nothing written) — so you ask, per file, before running it:
+
+> `AGENTS.md` exists. **Keep** it (pair installs around it) or **overwrite** it (I move yours to `AGENTS.md.bak`, then install pair's)? Same question for `CLAUDE.md`.
+
+- **Overwrite** → offer `mv AGENTS.md AGENTS.md.bak` (and/or `mv CLAUDE.md CLAUDE.md.bak`), run it only after the user agrees, then install normally. Use `mv`, never `cp`: a leftover original makes install refuse. `CLAUDE.md` is never overwritten silently.
+- **Keep** → install with `--skip-registries agents` (add `,github` when `.github` already exists). Then tell the user: pair is **not reachable from their `AGENTS.md`** — they should add a pointer to `.pair/knowledge/` and `.pair/adoption/` themselves. Do not edit their file.
+- `AGENTS.md` and `CLAUDE.md` come from the same registry (`agents`), so a mix (keep one, overwrite the other) is not installable: re-ask keep-both or overwrite-both.
+- A lone own `CLAUDE.md` (no `AGENTS.md`) is the same question, for that one file.
+
+What else install does, so nothing surprises them:
 
 - **Your adoption decisions are safe.** `.pair/adoption/**` installs with `add` behaviour — new files only, existing ones untouched.
-- **`CLAUDE.md` and `AGENTS.md` are REPLACED.** They are targets of a mirrored registry and the copy is unconditional. If this project has its own — very likely — it will be overwritten. Say so, and offer to save a copy first (`cp CLAUDE.md CLAUDE.md.bak`) or to stop.
 - **`.pair/knowledge/**` and `.github/**` are mirrored** — replaced, and files no longer in the source are deleted.
 - `.claude/skills/**` is overwritten in place, without deleting.
-
-Do not compress this into "nothing you have is overwritten". That sentence was in an earlier draft of this skill and it was false.
 
 Then ask, presenting both outcomes concretely:
 
 > This project already has code. I can do either of these:
 >
-> 1. **Install pair only** — adds `.pair/` (knowledge base, adoption templates) and `.claude/skills/` (the skill catalog), and replaces `CLAUDE.md`/`AGENTS.md` as noted above. You end up with pair's standards available, and adoption files still to fill in.
+> 1. **Install pair only** — adds `.pair/` (knowledge base, adoption templates) and `.claude/skills/` (the skill catalog), and keeps or backs up your `CLAUDE.md`/`AGENTS.md` per your answers above. You end up with pair's standards available, and adoption files still to fill in.
 > 2. **Install pair and adopt this project into it** — the same install, then a pass that describes this project in pair's terms: its tech stack, its architecture, its way of working, its quality gates. That is the difference between having pair's defaults and having *your* project on record — which is what every process skill then reads.
 >
 >    One thing to know, because it decides whether option 2 does anything: install writes the adoption files **already populated with pair's own choices**, and the adoption pass skips a section whose file is already populated. So it will not silently rewrite them — where a section already says something, you and I have to change it deliberately. I will show you which sections those are before touching any.
