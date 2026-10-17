@@ -1,5 +1,12 @@
 # @pair/website
 
+## 0.5.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @pair/brand@0.5.0
+
 ## 0.4.3
 
 ### Patch Changes
