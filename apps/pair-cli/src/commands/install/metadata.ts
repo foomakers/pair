@@ -8,6 +8,7 @@ export const installMetadata = {
     'pair-cli install --source /absolute/path/to/kb     # Install from local directory',
     'pair-cli install --source ./relative/path/to/kb    # Install from relative directory',
     'pair-cli install --offline --source /local/kb      # Install offline from local source',
+    'pair-cli install --skip-registries agents          # Keep own AGENTS.md/CLAUDE.md, install the rest',
     'pair-cli install --list-targets                    # List available asset registries',
   ],
   options: [
@@ -21,6 +22,11 @@ export const installMetadata = {
     {
       flags: '--skip-verify',
       description: 'Skip package integrity verification (for local ZIP sources only)',
+    },
+    {
+      flags: '--skip-registries <names>',
+      description:
+        'Comma-separated registry names to leave out (e.g. agents keeps your own AGENTS.md/CLAUDE.md)',
     },
     { flags: '--list-targets', description: 'List available target folders and descriptions' },
     {

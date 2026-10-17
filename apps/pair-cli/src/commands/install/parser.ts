@@ -1,3 +1,4 @@
+import { parseSkipRegistriesOption } from '#registry'
 import { namedSource, validateCommandOptions } from '#config/cli'
 import { isGitUrl, isRemoteUrl, isUnsupportedProtocol } from '@pair/content-ops'
 
@@ -11,6 +12,7 @@ export interface InstallCommandConfigDefault {
   kb: boolean
   target?: string
   skipVerify?: boolean
+  skipRegistries?: string[]
 }
 
 /**
@@ -24,6 +26,7 @@ export interface InstallCommandConfigRemote {
   kb: boolean
   target?: string
   skipVerify?: boolean
+  skipRegistries?: string[]
 }
 
 /**
@@ -37,6 +40,7 @@ export interface InstallCommandConfigLocal {
   kb: boolean
   target?: string
   skipVerify?: boolean
+  skipRegistries?: string[]
 }
 
 /**
@@ -50,6 +54,7 @@ export interface InstallCommandConfigGit {
   kb: boolean
   target?: string
   skipVerify: boolean
+  skipRegistries?: string[]
 }
 
 /**
@@ -77,6 +82,7 @@ interface ParseInstallOptions {
   offline?: boolean
   kb?: boolean
   skipVerify?: boolean
+  skipRegistries?: string
   listTargets?: boolean
   config?: string
 }
@@ -131,7 +137,7 @@ function resolveInstallSourceConfig(
  * - Remote URL (http/https): remote resolution
  * - Local path (absolute/relative): local resolution
  */
-export function parseInstallCommand(
+function parseInstallCommandBase(
   options: ParseInstallOptions,
   args: string[] = [],
 ): InstallCommandConfig {
@@ -155,4 +161,14 @@ export function parseInstallCommand(
     }
   }
   return resolveInstallSourceConfig(source, { kb, skipVerify, offline, ...(target && { target }) })
+}
+
+export function parseInstallCommand(
+  options: ParseInstallOptions,
+  args: string[] = [],
+): InstallCommandConfig {
+  const config = parseInstallCommandBase(options, args)
+  const skipRegistries = parseSkipRegistriesOption(options.skipRegistries)
+  if (config.resolution === 'list-targets' || skipRegistries === undefined) return config
+  return { ...config, skipRegistries }
 }

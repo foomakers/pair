@@ -583,3 +583,16 @@ describe('assertNoRootPluginComponents — payload-level skills-only guarantee',
     expect(ROOT_PLUGIN_COMPONENT_PATHS).toContain('.mcp.json')
   })
 })
+
+describe('pair-assistant Step 0b (US-552)', () => {
+  const skill = readFileSync(join(PLUGIN_ROOT, 'skills/pair-assistant/SKILL.md'), 'utf-8')
+  it('asks keep/overwrite per file, backs up with mv, keeps via --skip-registries', () => {
+    expect(skill).toMatch(/\*\*Keep\*\*[\s\S]*--skip-registries agents/)
+    expect(skill).toContain('mv AGENTS.md AGENTS.md.bak')
+    expect(skill).toMatch(/never overwritten silently/)
+    expect(skill).toMatch(/not reachable from their `AGENTS.md`/)
+  })
+  it('never says AGENTS.md is REPLACED', () => {
+    expect(skill).not.toMatch(/REPLACED/)
+  })
+})
