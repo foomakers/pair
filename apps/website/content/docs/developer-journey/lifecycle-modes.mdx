@@ -1,11 +1,11 @@
 ---
 title: Lifecycle Modes
-description: Three ways to run the pair lifecycle — Assisted, Orchestrated and Autonomous — what each consists of and when to use which.
+description: Three ways to run the pair lifecycle — Assisted, Semi-automatic and Automatic — what each consists of and when to use which.
 ---
 
 The nine-step lifecycle is the same in every mode. What changes is **who drives it**: you, step by step; a delivery workflow you trigger per card; or a loop that runs unattended. Pick per project, or per card.
 
-![Three lifecycle modes compared: Assisted, Orchestrated, Autonomous](/diagrams/lifecycle-modes.svg)
+![Three lifecycle modes compared: Assisted, Semi-automatic, Automatic](/diagrams/lifecycle-modes.svg)
 
 ## Assisted
 
@@ -19,7 +19,7 @@ The classic mode: **you run every phase explicitly and the AI assists at each st
 
 **Use it when** you are learning pair, the project is new or high-risk, or you want to read and approve every decision.
 
-## Orchestrated
+## Semi-automatic
 
 **You steer the planning, a delivery workflow runs the stages and stops at checkpoints for you.**
 
@@ -29,7 +29,7 @@ The classic mode: **you run every phase explicitly and the AI assists at each st
 
 **Use it when** the project is set up, the backlog is known, and you want independent verification without running each stage by hand. Details: [Delivery cycle](/docs/reference/delivery-cycle#3-three-realizations-and-which-to-use).
 
-## Autonomous
+## Automatic
 
 **Pair selects cards and delivers them without you, within the gates you set.**
 
@@ -44,9 +44,9 @@ The classic mode: **you run every phase explicitly and the AI assists at each st
 | Situation | Mode |
 | --- | --- |
 | New to pair, new project, high-risk work | Assisted |
-| Known backlog, you want to trigger and review per card | Orchestrated |
-| Mature gates, trusted low-risk backlog, no one watching | Autonomous |
+| Known backlog, you want to trigger and review per card | Semi-automatic |
+| Mature gates, trusted low-risk backlog, no one watching | Automatic |
 
-Modes mix: plan Assisted, deliver Orchestrated, and hand the green cards to Autonomous.
+Modes mix: plan Assisted, deliver Semi-automatic, and hand the green cards to Automatic.
 
-**With the CLI:** Assisted and Orchestrated use skills in your assistant; Autonomous is `pair-cli run`. **With `/pair-assistant` (optional, Claude Code):** ask it to configure the gates ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
+**With the CLI:** Assisted and Semi-automatic use skills in your assistant; Automatic is `pair-cli run`. **With `/pair-assistant` (optional, Claude Code):** ask it to configure the gates ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
