@@ -55,7 +55,7 @@ Execute in order. P0 blocks release sign-off.
 | CP9 | [CP9-quickstart-onboarding.md](CP9-quickstart-onboarding.md) | P1 | Timed quickstart onboarding: bootstrap `$mode: quick` under 10 min, guided regression |
 | CP10 | [CP10-web-cloud-environment.md](CP10-web-cloud-environment.md) | P1 | pair from Claude Code Web: skills executable, story end-to-end to a PR, dev-server limit as expected result. **Manual, run inside the web session** |
 | CP11 | [CP11-release-pipeline.md](CP11-release-pipeline.md) | P0 | `pnpm release --dry-run`, duplicate refusal, dispatch-only workflows, same-channel cleanup, `--source` after cleanup. **Inspection only, no real dispatch** |
-| CP12 | [CP12-plugin-marketplace.md](CP12-plugin-marketplace.md) | P1 | Claude Code marketplace: add, install `pair@pair`, `/pair-assistant`. **Manual, run inside Claude Code** |
+| CP12 | [CP12-plugin-marketplace.md](CP12-plugin-marketplace.md) | P1 | Claude Code marketplace: add, install `pair@pair`, `/pair-assistant`, existing-repo keep/overwrite. **Manual, run inside Claude Code** |
 
 ## Execution by AI Assistant
 

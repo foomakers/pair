@@ -210,7 +210,7 @@
 
 ### Step: dropped files are removed (#421)
 
-1. Remove one file from `$WORKDIR/kb-source/.pair/knowledge/` and add a marker line to an installed `.pair/adoption/*.md`
+1. Remove one file from `$WORKDIR/kb-source/.pair/knowledge/` and add a marker line to an installed `.pair/adoption/tech/*.md`
 2. `$CLI update --source $WORKDIR/kb-source` again
 3. Expected: the removed file is gone from `project-auto/.pair/knowledge/` (mirror registry); the `.pair/adoption` edit survives (add registry)
 4. Offline equivalent: `scripts/smoke-tests/scenarios/update-removes-files.sh`
