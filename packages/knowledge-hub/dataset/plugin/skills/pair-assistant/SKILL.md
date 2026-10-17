@@ -41,20 +41,34 @@ Detect the CLI by looking for the binary (above), never by invoking it.
 
 Adopting pair into a project that already exists is not the same as starting one with it. The project already has a stack, conventions and a way of working; pair's value there is that its adoption files **describe that reality**, not that they arrive as blank templates. So do not decide for the user.
 
-First, tell them exactly what install touches, because one part of it **does** overwrite and they must know before they answer:
+First, check which of the user's own agent files exist: `ls AGENTS.md CLAUDE.md 2>/dev/null`. Install **refuses** to overwrite them (exit 1, "already exists", nothing written) — so you ask, per file, before running it:
 
-- **Your adoption decisions are safe.** `.pair/adoption/**` installs with `add` behaviour — new files only, existing ones untouched.
-- **`CLAUDE.md` and `AGENTS.md` are REPLACED.** They are targets of a mirrored registry and the copy is unconditional. If this project has its own — very likely — it will be overwritten. Say so, and offer to save a copy first (`cp CLAUDE.md CLAUDE.md.bak`) or to stop.
-- **`.pair/knowledge/**` and `.github/**` are mirrored** — replaced, and files no longer in the source are deleted.
-- `.claude/skills/**` is overwritten in place, without deleting.
+> `AGENTS.md` exists. **Keep** it (pair installs around it) or **overwrite** it (I move yours to `AGENTS.md.bak`, then install pair's)? Same question for `CLAUDE.md`.
 
-Do not compress this into "nothing you have is overwritten". That sentence was in an earlier draft of this skill and it was false.
+- **Overwrite** → offer `mv AGENTS.md AGENTS.md.bak` (and/or `mv CLAUDE.md CLAUDE.md.bak`), run it only after the user agrees, then install normally. Use `mv`, never `cp`: a leftover original makes install refuse. `CLAUDE.md` is never overwritten silently.
+- **Keep** → install with `--skip-registries agents` (plus every other existing registry, per the table below). Then tell the user: pair is **not reachable from their `AGENTS.md`** — they should add a pointer to `.pair/knowledge/` and `.pair/adoption/` themselves. Do not edit their file. The choice is **remembered**: install writes `"skipRegistries": ["agents"]` into the project's `pair.config.json`, and every later `update` honours it (`skipping agents (from pair.config.json)`).
+- `AGENTS.md` and `CLAUDE.md` come from the same registry (`agents`), so a mix (keep one, overwrite the other) is not installable: re-ask keep-both or overwrite-both.
+- A lone own `CLAUDE.md` (no `AGENTS.md`) is the same question, for that one file.
+
+Install is **all-or-nothing per registry target**: if ANY target below already exists it exits 1 (`Target '<path>' already exists`, nothing written). So before installing, check every target and build `--skip-registries` from the registry name of each one that exists, comma-joined:
+
+| Existing target | Registry name |
+| --- | --- |
+| `.github` | `github` |
+| `.pair/knowledge` | `knowledge` |
+| `.pair/adoption` | `adoption` |
+| `AGENTS.md`, `CLAUDE.md` | `agents` |
+| `.claude/skills` | `skills` |
+| `.claude/workflows` | `workflows` |
+| `.claude/agents` | `agent-definitions` |
+
+Example: own `.claude/skills` and `.github` → `--skip-registries skills,github`. A skipped registry is left untouched, so your own files are safe; a registry that is not skipped installs as usual (`.pair/knowledge` and `.github` mirror; `.pair/adoption` adds new files only).
 
 Then ask, presenting both outcomes concretely:
 
 > This project already has code. I can do either of these:
 >
-> 1. **Install pair only** — adds `.pair/` (knowledge base, adoption templates) and `.claude/skills/` (the skill catalog), and replaces `CLAUDE.md`/`AGENTS.md` as noted above. You end up with pair's standards available, and adoption files still to fill in.
+> 1. **Install pair only** — adds `.pair/` (knowledge base, adoption templates) and `.claude/skills/` (the skill catalog), and keeps or backs up your `CLAUDE.md`/`AGENTS.md` per your answers above. You end up with pair's standards available, and adoption files still to fill in.
 > 2. **Install pair and adopt this project into it** — the same install, then a pass that describes this project in pair's terms: its tech stack, its architecture, its way of working, its quality gates. That is the difference between having pair's defaults and having *your* project on record — which is what every process skill then reads.
 >
 >    One thing to know, because it decides whether option 2 does anything: install writes the adoption files **already populated with pair's own choices**, and the adoption pass skips a section whose file is already populated. So it will not silently rewrite them — where a section already says something, you and I have to change it deliberately. I will show you which sections those are before touching any.
@@ -207,7 +221,7 @@ This map is judgment rather than syntax, which is why it is worth stating. Confi
 | The user wants | Source | Notes |
 | --- | --- | --- |
 | pair in this project, first time | `install` | the Setup branch above already does this |
-| the KB and skills refreshed | `update` | not `install` — update is the in-place refresh |
+| the KB and skills refreshed | `update` | not `install` — update is the in-place refresh. It honours `skipRegistries` in `pair.config.json` (e.g. a kept own `AGENTS.md`/`CLAUDE.md`); to opt back in, remove the name there — the next `update` then overwrites, so `mv AGENTS.md AGENTS.md.bak` first (and `CLAUDE.md`) or pass `--persist-backup` |
 | the installed KB version, or whether it is behind | `kb-info` | also reads a packaged KB's metadata |
 | the KB checked for structural soundness | `kb-validate` | structure + manifest |
 | a KB **package** checked for integrity | `kb-verify` | checksum + structure + manifest, on a package path |

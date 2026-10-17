@@ -41,6 +41,7 @@ import {
   reportNotShipped,
   reportSourceDeclaration,
 } from '../registry-run'
+import { applySkipRegistries, persistSkipRegistries } from '../skip-registries'
 import { emitVersionDriftHint, recordInstalledVersion } from '../kb-info/version-hint'
 
 /** `--persist-backup` arrives on the parsed config; an explicit handler option wins */
@@ -100,15 +101,21 @@ export async function handleUpdateCommand(
   options = withConfigPersistBackup(config, options)
 
   try {
-    const { datasetRoot, registries, baseTarget, sourceDeclaration, resolution } =
-      await setupUpdateContext(fs, config, options)
+    const setup = await setupUpdateContext(fs, config, options)
+    const { datasetRoot, baseTarget, sourceDeclaration, resolution } = setup
+    const registries = applySkipRegistries(
+      setup.registries,
+      { flag: config.skipRegistries, config: setup.skipRegistries },
+      presenter,
+      'update',
+    )
     // Same reporting as install: a source that ships a broken config never aborts the run,
     // the consumer's own resolution stands, and an applied declaration names its chain
     // (US-396).
     reportSourceDeclaration({ declaration: sourceDeclaration, resolution, presenter })
     await emitVersionDriftHint({ fs, datasetRoot, baseTarget, presenter })
     validateUpdateContext(fs, registries, baseTarget)
-    return await executeUpdate({
+    const exitCode = await executeUpdate({
       fs,
       datasetRoot,
       registries,
@@ -118,6 +125,8 @@ export async function handleUpdateCommand(
       presenter,
       ...(sourceDeclaration && { sourceDeclaration }),
     })
+    if (exitCode === 0) await persistSkipRegistries(fs, baseTarget, config.skipRegistries)
+    return exitCode
   } catch (err) {
     pushLog('error', `Update failed: ${String(err)}`)
     throw err
@@ -159,6 +168,7 @@ async function setupUpdateContext(
   baseTarget: string
   sourceDeclaration?: SourceDeclarationOutcome | undefined
   resolution: string
+  skipRegistries?: string[] | undefined
 }> {
   const datasetRoot = await resolveDatasetRoot(fs, config, {
     cliVersion: options?.cliVersion,
@@ -187,6 +197,7 @@ async function setupUpdateContext(
     registries,
     baseTarget,
     resolution: configContent.source,
+    skipRegistries: configContent.skipRegistries,
     ...(configContent.sourceDeclaration && {
       sourceDeclaration: configContent.sourceDeclaration,
     }),

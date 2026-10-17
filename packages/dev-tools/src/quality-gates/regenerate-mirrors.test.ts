@@ -281,6 +281,8 @@ function isolatedHome(dir: string): Record<string, string> {
 // budget. `SCRIPT_RUN_TIMEOUT_MS` is per test, and the same explicit-timeout treatment
 // run-format.test.ts already gives its multi-subprocess cases.
 const SCRIPT_RUN_TIMEOUT_MS = 120_000
+const EARLY_INTERRUPT_RUNS = 12
+const EARLY_INTERRUPT_POLL_MS = 10_000
 
 describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419)', () => {
   let tmp = ''
@@ -1297,23 +1299,25 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       writeTurboStub(tmp, 'sleep 30\n')
       const tmpEnvDir = join(tmp, '.tmpdir')
       mkdirSync(tmpEnvDir, { recursive: true })
-      for (let i = 0; i < 12; i++) {
+      for (let i = 0; i < EARLY_INTERRUPT_RUNS; i++) {
         const child = spawn(join(tmp, 'scripts/regenerate-mirrors.sh'), [], {
           cwd: tmp,
           detached: true,
           env: { ...process.env, ...isolatedHome(tmp), TMPDIR: tmpEnvDir },
         })
         const exited = new Promise<void>(resolve => child.on('close', () => resolve()))
-        // Tight poll: the signal must land as close to mktemp as the observer can get.
-        const deadline = Date.now() + 10_000
+        // Poll close to mktemp, but yield 1ms per check: a setImmediate spin pins a CPU and, on a
+        // loaded CI runner, starved the very script it observes until the test timed out.
+        const deadline = Date.now() + EARLY_INTERRUPT_POLL_MS
         while (readdirSync(tmpEnvDir).length === 0 && Date.now() < deadline)
-          await new Promise(r => setImmediate(r))
+          await new Promise(r => setTimeout(r, 1))
         process.kill(-(child.pid as number), 'SIGTERM')
         await exited
         expect(readdirSync(tmpEnvDir), `run ${i}`).toEqual([])
       }
     },
-    SCRIPT_RUN_TIMEOUT_MS,
+    // Budget the worst case of every run (poll deadline + exit), not one script run.
+    EARLY_INTERRUPT_RUNS * (EARLY_INTERRUPT_POLL_MS + 5_000),
   )
 
   // #518: turbo replays a cache hit by rewriting `dist/**` IN PLACE (same inode, new mtime).

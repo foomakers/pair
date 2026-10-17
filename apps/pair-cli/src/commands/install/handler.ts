@@ -42,6 +42,7 @@ import {
   reportNotShipped,
   reportSourceDeclaration,
 } from '../registry-run'
+import { applySkipRegistries, persistSkipRegistries } from '../skip-registries'
 import { emitVersionDriftHint, recordInstalledVersion } from '../kb-info/version-hint'
 
 /**
@@ -103,15 +104,21 @@ async function runInstall(ctx: {
   presenter: CliPresenter
 }): Promise<number> {
   const { fs, config, options, pushLog, presenter } = ctx
-  const { datasetRoot, registries, baseTarget, sourceDeclaration, resolution } =
-    await setupInstallContext(fs, config, options)
+  const setup = await setupInstallContext(fs, config, options)
+  const { datasetRoot, baseTarget, sourceDeclaration, resolution } = setup
+  const registries = applySkipRegistries(
+    setup.registries,
+    { flag: config.skipRegistries, config: setup.skipRegistries },
+    presenter,
+    'install',
+  )
   // A source that ships a broken config never aborts the install: it is reported — on the
   // console, not only in the diagnostics log nobody reads — and the consumer's own
   // resolution stands (US-396).
   reportSourceDeclaration({ declaration: sourceDeclaration, resolution, presenter })
   await emitVersionDriftHint({ fs, datasetRoot, baseTarget, presenter })
   await validateInstallContext(fs, registries, baseTarget)
-  return executeInstall({
+  const exitCode = await executeInstall({
     fs,
     datasetRoot,
     registries,
@@ -121,6 +128,8 @@ async function runInstall(ctx: {
     presenter,
     ...(sourceDeclaration && { sourceDeclaration }),
   })
+  if (exitCode === 0) await persistSkipRegistries(fs, baseTarget, config.skipRegistries)
+  return exitCode
 }
 
 /**
@@ -203,6 +212,7 @@ async function setupInstallContext(
   baseTarget: string
   sourceDeclaration?: SourceDeclarationOutcome | undefined
   resolution: string
+  skipRegistries?: string[] | undefined
 }> {
   const datasetRoot = await resolveDatasetRoot(fs, config, {
     cliVersion: options?.cliVersion,
@@ -229,6 +239,7 @@ async function setupInstallContext(
     registries,
     baseTarget,
     resolution: configContent.source,
+    skipRegistries: configContent.skipRegistries,
     ...(configContent.sourceDeclaration && {
       sourceDeclaration: configContent.sourceDeclaration,
     }),
@@ -244,9 +255,11 @@ async function validateInstallContext(
   for (const [name, config] of Object.entries(registries)) {
     const target = resolveTarget(name, config, fs, baseTarget)
     targets[name] = target
-    if (fs.existsSync(target)) {
+    // Copy targets too (a lone own CLAUDE.md): the copy would overwrite it silently.
+    const existing = [target, ...copyTargets(config, fs, baseTarget)].find(t => fs.existsSync(t))
+    if (existing) {
       throw new Error(
-        `Target '${target}' already exists. Project already installed. Use 'pair-cli update' to update.`,
+        `Target '${existing}' already exists. Project already installed. Use 'pair-cli update' to update, or --skip-registries ${name} to keep it.`,
       )
     }
   }
@@ -254,6 +267,10 @@ async function validateInstallContext(
   if (overlapping.length > 0) {
     throw new Error(`Overlapping registry targets detected: ${overlapping.join('; ')}`)
   }
+}
+
+function copyTargets(config: RegistryConfig, fs: FileSystemService, baseTarget: string): string[] {
+  return config.targets.filter(t => t.mode === 'copy').map(t => fs.resolve(baseTarget, t.path))
 }
 
 type RegistryInstallCtx = {

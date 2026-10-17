@@ -8,6 +8,7 @@ export const updateMetadata = {
     'pair-cli update --source /absolute/path/to/kb      # Update from local directory',
     'pair-cli update --source ./relative/kb             # Update from relative path',
     'pair-cli update --offline --source /local/kb       # Update offline mode',
+    'pair-cli update --skip-registries agents           # Leave your own AGENTS.md/CLAUDE.md alone (remembered)',
     'pair-cli update --list-targets                     # List available targets',
   ],
   options: [
@@ -22,6 +23,11 @@ export const updateMetadata = {
     {
       flags: '--link-style <style>',
       description: 'Link style: relative, absolute, or auto (default: auto-detect)',
+    },
+    {
+      flags: '--skip-registries <names>',
+      description:
+        'Comma-separated registry names to leave out; remembered in pair.config.json skipRegistries (remove the name to opt back in)',
     },
     { flags: '--persist-backup', description: 'Keep backup files after successful update' },
     {

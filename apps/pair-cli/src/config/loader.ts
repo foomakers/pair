@@ -51,6 +51,8 @@ export interface LoadedConfig {
   source: string
   /** Present only when a `sourceRoot` was named. */
   sourceDeclaration?: SourceDeclarationOutcome
+  /** Registries the project (or `--config`) chose to leave alone; validated string array. */
+  skipRegistries?: string[]
 }
 
 /**
@@ -72,7 +74,7 @@ export function loadConfigWithOverrides(
     ? { config: { asset_registries: {} } as Config, source: 'empty' }
     : loadBaseConfig(fsService)
 
-  if (!sourceRoot) return layerOverrides(fsService, base, options)
+  if (!sourceRoot) return withSkipRegistries(layerOverrides(fsService, base, options))
 
   const declared = readSourceDeclaration(
     fsService,
@@ -80,7 +82,26 @@ export function loadConfigWithOverrides(
     Object.keys(base.config.asset_registries ?? {}),
   )
   const { layered, declaration } = resolveWithDeclaration(fsService, base, declared, options)
-  return { ...layered, sourceDeclaration: summarizeDeclaration(declaration, layered.config) }
+  return withSkipRegistries({
+    ...layered,
+    sourceDeclaration: summarizeDeclaration(declaration, layered.config),
+  })
+}
+
+/** Layer 2 builds `asset_registries` only, so this key can only come from layers 3/4 (validated there). */
+function withSkipRegistries(loaded: LoadedConfig): LoadedConfig {
+  const skip = (loaded.config as Record<string, unknown>)['skipRegistries'] as string[] | undefined
+  return skip ? { ...loaded, skipRegistries: skip } : loaded
+}
+
+function assertSkipRegistries(parsed: unknown, path: string, objectOnly = false): void {
+  if (objectOnly && !isPlainObject(parsed)) {
+    throw new Error(`Invalid ${path}: must be a JSON object`)
+  }
+  const skip = isPlainObject(parsed) ? parsed['skipRegistries'] : undefined
+  if (skip !== undefined && !(Array.isArray(skip) && skip.every(n => typeof n === 'string'))) {
+    throw new Error(`Invalid ${path}: skipRegistries must be an array of registry names`)
+  }
 }
 
 /**
@@ -492,8 +513,12 @@ function applyPairConfigIfExists(
     try {
       const pairConfigContent = fsService.readFileSync(configPath)
       const pairConfig = JSON.parse(pairConfigContent)
+      assertSkipRegistries(pairConfig, configPath, options.pairConfigOnly)
       return { config: mergeConfigs(baseConfig, pairConfig) }
-    } catch {
+    } catch (err) {
+      // install/update: an unreadable project config silently dropping `skipRegistries`
+      // would overwrite the user's own files.
+      if (options.pairConfigOnly) throw new Error(`Failed to load ${configPath}: ${String(err)}`)
       console.warn(`Warning: Failed to load ${configPath}, continuing with base config`)
     }
   }
@@ -508,6 +533,7 @@ function mergeWithCustomConfig(
   try {
     const customConfigContent = fsService.readFileSync(customConfigPath)
     const customConfig = JSON.parse(customConfigContent)
+    assertSkipRegistries(customConfig, customConfigPath)
     return mergeConfigs(baseConfig, customConfig)
   } catch (err) {
     throw new Error(`Failed to load custom config file ${customConfigPath}: ${String(err)}`)
