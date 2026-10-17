@@ -12,7 +12,7 @@ import {
 const kbErrorHandler: DownloadErrorHandler = {
   handleHttpError(statusCode: number, url: string): Error | null {
     if (statusCode === 404) {
-      const version = url.match(/v(\d+\.\d+\.\d+)/)?.[1] || 'unknown'
+      const version = url.match(/v(\d+\.\d+\.\d+(?:-[\w.]+)?)/)?.[1] || 'unknown'
       return new Error(
         `KB v${version} not found (404). Download manually from: ${url.replace(
           /\/[^/]+\.zip$/,

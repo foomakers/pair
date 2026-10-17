@@ -56,7 +56,7 @@ function channelOf(args: string[], version: string | undefined): Channel | undef
 /** origin/main after a tag+main fetch; `local` (CI, already on main) uses HEAD. */
 function readHead(local: boolean): string {
   if (local) return sh('git', ['rev-parse', 'HEAD'])
-  sh('git', ['fetch', '--tags', '--force', 'origin', 'main'])
+  sh('git', ['fetch', '--tags', '--force', '--prune', '--prune-tags', 'origin', 'main'])
   return sh('git', ['rev-parse', 'origin/main'])
 }
 

@@ -13,6 +13,7 @@ import {
   extractRegistries,
   validateAllRegistries,
   resolveTarget,
+  getNonSymlinkTargets,
   resolveRegistryPaths,
   forEachRegistry,
   doCopyAndUpdateLinks,
@@ -285,7 +286,12 @@ async function performBackup(backupService: BackupService, context: UpdateContex
   const { fs, registries, baseTarget, presenter } = context
   const backupConfig: Record<string, string> = {}
   for (const [name, config] of Object.entries(registries)) {
-    backupConfig[name] = resolveTarget(name, config, fs, baseTarget)
+    const canonical = resolveTarget(name, config, fs, baseTarget)
+    backupConfig[name] = canonical
+    for (const t of getNonSymlinkTargets(config)) {
+      const path = baseTarget ? fs.resolve(baseTarget, t.path) : fs.resolve(t.path)
+      if (path !== canonical) backupConfig[`${name}:${t.path}`] = path
+    }
   }
   presenter.phase('Creating backup...')
   await backupService.backupAllRegistries(backupConfig)

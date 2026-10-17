@@ -42,6 +42,13 @@ describe('throwaway release run findings', () => {
     expect(fetch).toBeGreaterThanOrEqual(0)
     expect(fetch).toBeLessThan(tags)
   })
+  it('the fetch prunes tags deleted on origin, so the plan omits them', () => {
+    calls.length = 0
+    main(['pre', '--dry-run'])
+    expect(calls.find(c => c.startsWith('git fetch'))).toMatch(
+      /--prune\b.*--prune-tags|--prune-tags.*--prune\b/,
+    )
+  })
 })
 
 describe('cleanup job (throwaway release run)', () => {

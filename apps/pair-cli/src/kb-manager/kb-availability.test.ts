@@ -160,7 +160,7 @@ describe('KB Manager - 404 error handling', () => {
     httpClient.setRequestResponses([headResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
     await expect(ensureKBAvailable(testVersion404, { httpClient, fs })).rejects.toThrow(
-      /KB v0\.0\.404 not found \(404\).*github\.com/s,
+      /KB v0\.0\.404-test not found \(404\).*github\.com/s,
     )
   })
 })
