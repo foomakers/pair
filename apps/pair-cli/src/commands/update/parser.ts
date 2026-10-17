@@ -1,3 +1,4 @@
+import { parseSkipRegistriesOption } from '#registry'
 import { isGitUrl, isRemoteUrl, isUnsupportedProtocol } from '@pair/content-ops'
 import { namedSource, validateCommandOptions } from '#config/cli'
 
@@ -11,6 +12,7 @@ export interface UpdateCommandConfigDefault {
   kb: boolean
   target?: string
   persistBackup?: boolean
+  skipRegistries?: string[]
 }
 
 /**
@@ -24,6 +26,7 @@ export interface UpdateCommandConfigRemote {
   kb: boolean
   target?: string
   persistBackup?: boolean
+  skipRegistries?: string[]
 }
 
 /**
@@ -37,6 +40,7 @@ export interface UpdateCommandConfigLocal {
   kb: boolean
   target?: string
   persistBackup?: boolean
+  skipRegistries?: string[]
 }
 
 /**
@@ -50,6 +54,7 @@ export interface UpdateCommandConfigGit {
   kb: boolean
   target?: string
   persistBackup?: boolean
+  skipRegistries?: string[]
 }
 
 /**
@@ -69,6 +74,7 @@ interface ParseUpdateOptions {
   kb?: boolean
   config?: string
   persistBackup?: boolean
+  skipRegistries?: string
 }
 
 function resolveSourceConfig(
@@ -105,6 +111,12 @@ export function parseUpdateCommand(
   options: ParseUpdateOptions,
   args: string[] = [],
 ): UpdateCommandConfig {
+  const config = parseUpdateBase(options, args)
+  const skipRegistries = parseSkipRegistriesOption(options.skipRegistries)
+  return skipRegistries === undefined ? config : { ...config, skipRegistries }
+}
+
+function parseUpdateBase(options: ParseUpdateOptions, args: string[]): UpdateCommandConfig {
   // Same rule as install: the program-level `--url` names a source (US-395).
   const source = namedSource(options)
   validateCommandOptions('update', { ...options, ...(source !== undefined && { source }) })

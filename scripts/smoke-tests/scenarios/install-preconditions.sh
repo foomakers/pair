@@ -123,4 +123,28 @@ assert_success || exit 1
 [ "$(cat CLAUDE.md)" = "own claude" ] || { log_fail "CLAUDE.md changed"; exit 1; }
 log_succ "CLAUDE.md untouched"
 
+# ─── Test 7: keep choice persisted, honoured by update (O1) ─────────
+log_info "Test 7: install(keep) -> pair.config.json -> update keeps own files"
+
+TEST_DIR=$(setup_workspace "precond-keep-persisted")
+cd "$TEST_DIR"
+own_repo
+run_pair install $CMD_ARGS --skip-registries agents
+assert_success || exit 1
+grep -q '"skipRegistries"' pair.config.json && grep -q '"agents"' pair.config.json \
+  || { log_fail "skipRegistries not persisted"; exit 1; }
+run_pair update $CMD_ARGS
+assert_success || exit 1
+assert_output_contains "skipping agents (from pair.config.json)" || exit 1
+assert_own_untouched || exit 1
+
+# ─── Test 8: removing the exclusion opts back in ───────────────────
+log_info "Test 8: remove agents from skipRegistries -> update installs pair's files"
+
+echo '{"skipRegistries": []}' > pair.config.json
+run_pair update $CMD_ARGS
+assert_success || exit 1
+[ "$(cat AGENTS.md)" != "own agents" ] || { log_fail "AGENTS.md not updated after opt-in"; exit 1; }
+log_succ "Opt-in installed pair's AGENTS.md"
+
 echo "=== $TEST_NAME Completed ==="

@@ -586,6 +586,15 @@ describe('assertNoRootPluginComponents — payload-level skills-only guarantee',
 
 describe('pair-assistant Step 0b (US-552)', () => {
   const skill = readFileSync(join(PLUGIN_ROOT, 'skills/pair-assistant/SKILL.md'), 'utf-8')
+  it('explains the keep choice lives in pair.config.json skipRegistries, update honours it, how to opt back in', () => {
+    expect(skill).toMatch(
+      /skipRegistries[^\n]*pair\.config\.json[^\n]*every later `update` honours it/,
+    )
+    expect(skill).toMatch(
+      /remove the name[\s\S]*mv AGENTS\.md AGENTS\.md\.bak[\s\S]*--persist-backup/,
+    )
+  })
+
   it('asks keep/overwrite per file, backs up with mv, keeps via --skip-registries', () => {
     expect(skill).toMatch(/\*\*Keep\*\*[\s\S]*--skip-registries agents/)
     expect(skill).toContain('mv AGENTS.md AGENTS.md.bak')
