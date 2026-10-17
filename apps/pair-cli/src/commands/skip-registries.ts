@@ -32,7 +32,9 @@ export function applySkipRegistries(
   const fromFlag = new Set(flag)
   const names = [...new Set([...flag, ...config])].filter(n => known.has(n))
   for (const name of names) {
-    presenter.phase(`skipping ${name} (from ${fromFlag.has(name) ? '--skip-registries' : 'pair.config.json'})`)
+    presenter.phase(
+      `skipping ${name} (from ${fromFlag.has(name) ? '--skip-registries' : 'pair.config.json'})`,
+    )
   }
   return names.length > 0 ? filterRegistries(registries, names) : registries
 }

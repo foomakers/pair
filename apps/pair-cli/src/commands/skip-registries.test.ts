@@ -54,14 +54,24 @@ describe.each(['darwin', 'linux'] as const)('US-552 keep choice persisted (%s)',
   const install = (fs: InMemoryFileSystemService, skipRegistries?: string[]) =>
     onPlatform(() =>
       handleInstallCommand(
-        { command: 'install', resolution: 'default', ...base, ...(skipRegistries && { skipRegistries }) },
+        {
+          command: 'install',
+          resolution: 'default',
+          ...base,
+          ...(skipRegistries && { skipRegistries }),
+        },
         fs,
       ),
     )
   const update = (fs: InMemoryFileSystemService, skipRegistries?: string[]) =>
     onPlatform(() =>
       handleUpdateCommand(
-        { command: 'update', resolution: 'default', ...base, ...(skipRegistries && { skipRegistries }) },
+        {
+          command: 'update',
+          resolution: 'default',
+          ...base,
+          ...(skipRegistries && { skipRegistries }),
+        },
         fs,
       ),
     )
@@ -146,12 +156,15 @@ describe.each(['darwin', 'linux'] as const)('US-552 keep choice persisted (%s)',
     ['unparseable', '{ nope'],
     ['non-array skipRegistries', JSON.stringify({ skipRegistries: 'agents' })],
     ['non-string entries', JSON.stringify({ skipRegistries: [1] })],
-  ])('AC6 %s config: install and update exit 1 naming the file, nothing written', async (_n, raw) => {
-    for (const run of [install, update]) {
-      const fs = makeFs({ ...own, '.pair/adoption/a.md': 'old', 'pair.config.json': raw })
-      await expect(run(fs, ['agents'])).rejects.toThrow(/pair\.config\.json/)
-      expect(fs.readFileSync(`${cwd}/pair.config.json`)).toBe(raw)
-      expect(fs.readFileSync(`${cwd}/.pair/adoption/a.md`)).toBe('old')
-    }
-  })
+  ])(
+    'AC6 %s config: install and update exit 1 naming the file, nothing written',
+    async (_n, raw) => {
+      for (const run of [install, update]) {
+        const fs = makeFs({ ...own, '.pair/adoption/a.md': 'old', 'pair.config.json': raw })
+        await expect(run(fs, ['agents'])).rejects.toThrow(/pair\.config\.json/)
+        expect(fs.readFileSync(`${cwd}/pair.config.json`)).toBe(raw)
+        expect(fs.readFileSync(`${cwd}/.pair/adoption/a.md`)).toBe('old')
+      }
+    },
+  )
 })
