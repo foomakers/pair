@@ -94,7 +94,8 @@ function withSkipRegistries(loaded: LoadedConfig): LoadedConfig {
   return skip ? { ...loaded, skipRegistries: skip } : loaded
 }
 
-function assertSkipRegistries(parsed: unknown, path: string): void {
+function assertSkipRegistries(parsed: unknown, path: string, objectOnly = false): void {
+  if (objectOnly && !isPlainObject(parsed)) throw new Error(`Invalid ${path}: must be a JSON object`)
   const skip = isPlainObject(parsed) ? parsed['skipRegistries'] : undefined
   if (skip !== undefined && !(Array.isArray(skip) && skip.every(n => typeof n === 'string'))) {
     throw new Error(`Invalid ${path}: skipRegistries must be an array of registry names`)
@@ -510,7 +511,7 @@ function applyPairConfigIfExists(
     try {
       const pairConfigContent = fsService.readFileSync(configPath)
       const pairConfig = JSON.parse(pairConfigContent)
-      assertSkipRegistries(pairConfig, configPath)
+      assertSkipRegistries(pairConfig, configPath, options.pairConfigOnly)
       return { config: mergeConfigs(baseConfig, pairConfig) }
     } catch (err) {
       // install/update: an unreadable project config silently dropping `skipRegistries`
