@@ -46,7 +46,7 @@ First, check which of the user's own agent files exist: `ls AGENTS.md CLAUDE.md 
 > `AGENTS.md` exists. **Keep** it (pair installs around it) or **overwrite** it (I move yours to `AGENTS.md.bak`, then install pair's)? Same question for `CLAUDE.md`.
 
 - **Overwrite** → offer `mv AGENTS.md AGENTS.md.bak` (and/or `mv CLAUDE.md CLAUDE.md.bak`), run it only after the user agrees, then install normally. Use `mv`, never `cp`: a leftover original makes install refuse. `CLAUDE.md` is never overwritten silently.
-- **Keep** → install with `--skip-registries agents` (plus every other existing registry, per the table below). Then tell the user: pair is **not reachable from their `AGENTS.md`** — they should add a pointer to `.pair/knowledge/` and `.pair/adoption/` themselves. Do not edit their file.
+- **Keep** → install with `--skip-registries agents` (plus every other existing registry, per the table below). Then tell the user: pair is **not reachable from their `AGENTS.md`** — they should add a pointer to `.pair/knowledge/` and `.pair/adoption/` themselves. Do not edit their file. The choice is **remembered**: install writes `"skipRegistries": ["agents"]` into the project's `pair.config.json`, and every later `update` honours it (`skipping agents (from pair.config.json)`).
 - `AGENTS.md` and `CLAUDE.md` come from the same registry (`agents`), so a mix (keep one, overwrite the other) is not installable: re-ask keep-both or overwrite-both.
 - A lone own `CLAUDE.md` (no `AGENTS.md`) is the same question, for that one file.
 
@@ -221,7 +221,7 @@ This map is judgment rather than syntax, which is why it is worth stating. Confi
 | The user wants | Source | Notes |
 | --- | --- | --- |
 | pair in this project, first time | `install` | the Setup branch above already does this |
-| the KB and skills refreshed | `update` | not `install` — update is the in-place refresh |
+| the KB and skills refreshed | `update` | not `install` — update is the in-place refresh. It honours `skipRegistries` in `pair.config.json` (e.g. a kept own `AGENTS.md`/`CLAUDE.md`); to opt back in, remove the name there — the next `update` then overwrites, so `mv AGENTS.md AGENTS.md.bak` first (and `CLAUDE.md`) or pass `--persist-backup` |
 | the installed KB version, or whether it is behind | `kb-info` | also reads a packaged KB's metadata |
 | the KB checked for structural soundness | `kb-validate` | structure + manifest |
 | a KB **package** checked for integrity | `kb-verify` | checksum + structure + manifest, on a package path |
