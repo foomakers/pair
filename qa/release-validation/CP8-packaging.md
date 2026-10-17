@@ -123,7 +123,7 @@
 3. Note the link depth (portable, no `-P`): `grep -oE '\]\(\.\.[^)]+' $SKILL_FILE | head -3`
 4. `$CLI package --layout target -o $WORKDIR/pkg-link-test.zip`
 5. `mkdir -p $WORKDIR/pkg-link-extract && cd $WORKDIR/pkg-link-extract && unzip $WORKDIR/pkg-link-test.zip`
-6. Find the same skill in extracted package: `find .skills/ -name "$(basename $SKILL_FILE)"` → `$PKG_SKILL`
+6. Find the same skill in the package: `$SKILL_FILE` is `.claude/skills/pair-<category>-<name>/SKILL.md`, so map it to `.skills/<category>/<name>/SKILL.md` (e.g. `pair-process-implement` → `.skills/process/implement/SKILL.md`) → `$PKG_SKILL`; `find .skills -name SKILL.md` matches every skill and is not a lookup
 7. Compare link depth: `grep -oE '\]\(\.\.[^)]+' $PKG_SKILL | head -3`
 
 ### Expected Result

@@ -82,7 +82,26 @@
 
 ---
 
+## MT-CP1205: keep choice survives a later `update`
+
+**Priority**: P1
+**Preconditions**: MT-CP1203 keep path done (own files kept, `.pair/` installed)
+**Category**: Plugin
+
+### Steps
+
+1. Check `pair.config.json` has `"skipRegistries": ["agents"]`
+2. Run `/pair-assistant`, ask to update the KB (or run `pair-cli update`)
+
+### Expected Result
+
+- Own `AGENTS.md`/`CLAUDE.md` byte-identical after the update; output says `skipping agents (from pair.config.json)`
+- The skill states the choice lives in `pair.config.json` and how to opt back in (remove the name; `mv X X.bak` first or `--persist-backup`)
+
+---
+
 ## Changelog
 
 - #543: new CP (marketplace channel, README:103 / claude-code integration page).
 - #552: MT-CP1203 (keep/overwrite on own-files repo), MT-CP1204 (skill vs CLI parity).
+- #552: MT-CP1205 (keep persisted, later update).
