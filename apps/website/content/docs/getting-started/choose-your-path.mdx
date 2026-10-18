@@ -1,0 +1,22 @@
+---
+title: Solo, team or organization
+description: What changes about pair when you work alone, lead a team, or roll it out across an organization, and where each path continues.
+---
+
+The [Quickstart](/docs/getting-started/quickstart) is the same for everyone. What differs is who records the decisions and where the Knowledge Base comes from.
+
+## Solo
+
+You are the only reader of `.pair/adoption/`, so the process stays light: start every session with `/pair-next`, skip the ceremonies (no sprint planning, no standups), and run the skills directly, `/pair-process-implement` to start a story, `/pair-process-review` to self-review your PR. Change a decision whenever you like by editing the adoption file. Continue with the [Your first project](/docs/tutorials/first-project) tutorial (30 minutes), or [Adopting pair on an existing project](/docs/tutorials/existing-project) if the code exists already.
+
+## Team
+
+One repository, several assistants, one set of decisions. Bootstrap records them ([guided or quick](/docs/getting-started/bootstrap-quick-mode)) and you commit `.pair/adoption/`: every teammate who pulls gets the same architecture, stack and way of working, whatever tool they use, because every bridge file (`AGENTS.md`, `CLAUDE.md`, `.cursor/rules/`) points at the same `.pair/`. Team-level behaviour (card states, quality gates, review enforcement, autonomy) is a set of recipes: [Customize the Knowledge Base for your team](/docs/guides/customize-for-your-team). Continue with the [Team setup](/docs/tutorials/team-setup) tutorial (45 minutes); new teammates read [Join a project that already uses pair](/docs/guides/join-a-pair-project).
+
+## Organization
+
+Several teams should start from the same standards. Own a Knowledge Base: scaffold a repository with `pair-cli scaffold-kb`, author the guidelines and skills there, cut versions with the generated release script, and have every project install it with `pair-cli install --source <git-url>#<tag>`. Teams customize through their own adoption files; your standards reach them through releases. The whole path is one guide, [Own and publish a Knowledge Base](/docs/guides/external-kb); the walkthrough with governance and the first team onboarded is [Enterprise adoption](/docs/tutorials/enterprise-adoption) (60 minutes).
+
+Whatever the path, the flow you follow afterwards is the same: the [Process Lifecycle](/docs/process-lifecycle).
+
+**Next:** [Verify your setup](/docs/getting-started/verify).

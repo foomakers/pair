@@ -1,31 +1,33 @@
 ---
 title: Deliver a card with the delivery workflow
-description: Take one refined card to a review-approved PR.
+description: Take one Ready card to a review-approved PR, in your session or from a shell.
 ---
 
-**Goal**: run the delivery cycle on a single card.
+**Goal**: run the delivery cycle on a single card and get one review-approved pull request.
 
 ## Prerequisites
 
-- A refined card with a task breakdown
-- pair skills installed
+- A Ready card with a task breakdown ([Refinement](/docs/tutorials/refinement))
+- pair skills installed; for the shell path, an engine on the PATH (`claude`, `codex`, `pi` or `opencode`)
 
 ## Steps
 
 1. **Start the cycle**
-   - With the CLI: `pair-cli run --card <id>`.
-   - With `/pair-assistant` (optional, Claude Code): in Claude Code, `/pair-workflow-cycle <id>`.
-2. **Follow the stages**
-   - With the CLI: prepare, validate, implement, verify; each finding round repeats the sequence.
-3. **Review the PR**
-   - With the CLI: it stops at a review-approved PR; you merge.
+   - In your assistant: `/pair-workflow-cycle <id>` (Claude Code, Codex, or pi with subagents).
+   - With pair-cli: `pair-cli run --card <id>` on any engine, from a shell, cron or CI.
+   - With `/pair-assistant` (optional, Claude Code): not involved; it configures the gates, it never drives a card.
+2. **Let the stages run**
+   - A fresh card runs `implement → verify → merge`: tests and code are written together, an independent reviewer verifies the exact PR head, and `merge` only runs when your merge gate allows it. Blocking review findings add a remediation round, `prepare → validate → green → verify`, where the failing test is written and sealed before the fix.
+3. **Pick up the result**
+   - It stops at a review-approved PR (the default `until: pr`), or at an escalation with one comment on the card naming the reason. You merge; or declare `until: merged` with a `merge` gate to let the cycle do it ([Autonomy](/docs/guides/autonomy-and-profiles)).
 
 ## Verify
 
-- One PR exists for the card and `pair-review` is approved.
+- One PR exists for the card and the `pair-review` check is green on its head.
+- The card is in review on your board; the run directory under `.pair/working/runs/` holds one handoff per stage.
 
 ## Related
 
 - [Delivery workflow](/docs/process-lifecycle/delivery-workflow)
-- [The delivery cycle](/docs/process-lifecycle/delivery-cycle)
-- [Lifecycle modes](/docs/process-lifecycle/lifecycle-modes)
+- [The delivery cycle in depth](/docs/process-lifecycle/delivery-cycle)
+- [Lifecycle modes, by assistant](/docs/process-lifecycle/lifecycle-modes#modes-by-assistant)

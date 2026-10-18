@@ -12,7 +12,7 @@ Before starting, make sure you have:
 - **Node.js** v18 or later ([download](https://nodejs.org/))
 - **pnpm** v9+ or **npm** v9+ ([install pnpm](https://pnpm.io/installation))
 - **Git** initialized in your project (or a new empty directory)
-- A **terminal** (macOS Terminal, iTerm2, Windows Terminal, or VS Code integrated terminal)
+- A **terminal** (macOS Terminal, iTerm2, WSL2 or Git Bash on Windows, or the VS Code integrated terminal)
 - An **AI coding assistant** that supports Agent Skills, [Claude Code](https://claude.ai/), [GitHub Copilot](https://github.com/features/copilot), [Cursor](https://cursor.sh/), or similar
 
 <Callout type="info">
@@ -43,63 +43,12 @@ By the end of this tutorial you'll have:
 
 ### 1. Install pair-cli
 
-#### Option A: Global install (recommended)
-
 ```bash
 pnpm add -g @foomakers/pair-cli
-```
-
-Then run it anywhere:
-
-```bash
 pair-cli --version
 ```
 
-<Callout type="warn">
-  If the command is not found, make sure pnpm's global bin directory is in your PATH. Run `pnpm bin -g` to check the location.
-</Callout>
-
-#### Option B: Dev dependency (JavaScript/TypeScript projects)
-
-Add pair-cli to your project so it's pinned to a specific version and available to every developer via `package.json`:
-
-```bash
-pnpm add -D @foomakers/pair-cli
-```
-
-Then run it via `npx` or `pnpm`:
-
-```bash
-npx pair-cli --version
-# or
-pnpm pair-cli --version
-```
-
-All `pair-cli` commands in this tutorial work the same way, just prefix them with `npx` or `pnpm`.
-
-#### Option C: Manual download (non-JavaScript projects)
-
-If your project uses Python, Go, Rust, or any language without a Node.js toolchain, download the CLI directly:
-
-1. Download `pair-cli-manual-vX.Y.Z.zip` from [GitHub Releases](https://github.com/foomakers/pair/releases)
-2. Extract the archive
-3. Run the CLI from the extracted folder:
-
-```bash
-./path/to/pair-cli --version
-```
-
-<Callout type="info">
-  The manual download still requires **Node.js 18+** to run, pair-cli is a Node.js application. You don't need npm/pnpm as a package manager though.
-</Callout>
-
-Verify the installation (any option):
-
-```bash
-pair-cli --version
-```
-
-You should see a version number like `0.4.0`.
+The three install options (global, as a dev dependency with `npx pair-cli`, or a manual download for projects without a Node toolchain) are in the [Quickstart](/docs/getting-started/quickstart#install-pair-cli). Every `pair-cli` command below works the same way whichever you chose.
 
 ### 2. Create and initialize your project
 
@@ -116,20 +65,9 @@ git init
 pair-cli install
 ```
 
-**With pair-cli:** `pair-cli install`. **With `/pair-assistant` (optional, Claude Code):** ask for "pair in this project, first time" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
+**With `/pair-assistant` (optional, Claude Code):** ask for "pair in this project, first time" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
 
-This downloads the Knowledge Base and creates the `.pair/` directory with:
-
-- `knowledge/`: guidelines, how-tos, templates (reference material)
-- `adoption/`: empty templates for your project decisions
-
-It also installs bridge files (`AGENTS.md`, `.claude/`, `.github/copilot/`, `.cursor/`) so every AI assistant finds the same context.
-
-<Callout type="info">
-  The `.pair/knowledge/` directory is managed by pair-cli. Don't edit files there: your changes would be overwritten on the next update. Your decisions go in `.pair/adoption/`.
-</Callout>
-
-**Optional, Claude Code only:** instead of steps 1 and 3 you can add the marketplace plugin (`/plugin marketplace add foomakers/pair`, `/plugin install pair@pair`) and run `/pair-assistant`, which installs and runs the CLI for you. The CLI stays the default path: see the [Quickstart](/docs/getting-started/quickstart#with-the-claude-code-plugin-optional).
+This creates `.pair/` with `knowledge/` (guidelines, how-tos, templates) and `adoption/` (empty templates for your decisions), and the bridge files (`AGENTS.md`, `.claude/`, `.github/copilot/`, `.cursor/`) so every AI assistant finds the same context. A repository that already has an `AGENTS.md`: [Adopt pair in an existing repository](/docs/guides/adopt-existing-repo).
 
 ### 4. Start your AI assistant
 
@@ -259,6 +197,6 @@ The review skill checks adoption compliance, quality gates, Definition of Done, 
 ## Next steps
 
 - **[Concepts](/docs/concepts)**: Understand how the Knowledge Base, Skills, and Adoption Files work together
-- **[Customization](/docs/customization)**: Adjust guidelines and quality gates for your specific needs
+- **[Guides](/docs/guides)**: configure card states, quality gates, templates and the Knowledge Base for your team
 - **[Team Setup tutorial](/docs/tutorials/team-setup)**: Ready to share pair with your team? Follow the team configuration tutorial
 - **[Support](/docs/support)**: FAQ and troubleshooting when something doesn't work

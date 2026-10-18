@@ -1,37 +1,42 @@
 ---
 title: Adopt pair in an existing repository
-description: Install pair next to existing code and your own AGENTS.md or CLAUDE.md without losing them.
+description: Install pair next to existing code and your own AGENTS.md or CLAUDE.md without losing them, then describe the project from what is already there.
 ---
 
-**Goal**: add pair to a repo that already has code and agent instruction files.
+**Goal**: add pair to a repository that already has code and agent instruction files.
 
 ## Prerequisites
 
 - A clean git working tree
-- Node.js 18+ and `pair-cli` installed
+- Node.js 18+ and `pair-cli` installed ([Quickstart](/docs/getting-started/quickstart))
+
+![Installing pair into a repository that already has files: refusal, keep or overwrite](/diagrams/existing-repo-install.svg)
+
+*Figure: install never overwrites silently. The only two ways past the refusal are moving your file aside or telling install to skip that registry.*
 
 ## Steps
 
 1. **Decide what happens to your agent files**
-   - With the CLI: keep them: `pair-cli install --skip-registries agents`. Overwrite them: plain `pair-cli install` (it stops if a target exists).
-   - With `/pair-assistant` (optional, Claude Code): "keep my own AGENTS.md" routes to `update --skip-registries`.
+   - `pair-cli install` is all-or-nothing per registry target: if `AGENTS.md`, `CLAUDE.md`, `.claude/skills` or `.pair/knowledge` already exists it exits 1 with `Target '<path>' already exists` and writes nothing. For your own `AGENTS.md` and `CLAUDE.md` (one registry, decided together): **keep** them, or **overwrite** them.
 2. **Install**
-   - With the CLI: `pair-cli install`. The choice is saved in `pair.config.json` as `skipRegistries`.
-   - With `/pair-assistant` (optional, Claude Code): "install pair, keep my files".
-3. **Describe the project**
-   - With the CLI: run `/pair-process-bootstrap` (quick mode is enough to start).
-   - With `/pair-assistant` (optional, Claude Code): ask for "a full adoption pass".
-4. **Wire your agent file to pair**
-   - With the CLI: add a line in your `AGENTS.md` pointing at `.pair/`.
+   - With pair-cli, keep: `pair-cli install --skip-registries agents`. The choice is saved in `pair.config.json` as `"skipRegistries": ["agents"]` and every later `pair-cli update` honours it. Other targets you own are kept the same way: `--skip-registries skills,github`.
+   - With pair-cli, overwrite: `mv AGENTS.md AGENTS.md.bak` (and `CLAUDE.md`), then `pair-cli install`. Use `mv`, not `cp`: a leftover original makes install refuse again.
+   - With `/pair-assistant` (optional, Claude Code): "install pair, keep my files". It checks every target, asks keep or overwrite per file, and runs the `mv` or the `--skip-registries` after you agree.
+3. **Wire your kept file to pair**
+   - In your assistant: add one line to your `AGENTS.md` pointing at `.pair/knowledge/` and `.pair/adoption/`. pair never edits a kept file, so without the pointer your assistant will not find it.
    - With `/pair-assistant` (optional, Claude Code): ask it to draft the line and show the diff.
+4. **Describe the project**
+   - In your assistant: `/pair-process-bootstrap` reads the codebase, config and git history and proposes the adoption files; `$mode: quick` takes the defaults. The full reverse-engineering walkthrough is the [Existing project tutorial](/docs/tutorials/existing-project).
+   - With `/pair-assistant` (optional, Claude Code): ask for "a full adoption pass"; it hands off to `/pair-process-bootstrap`.
 
 ## Verify
 
 - `pair-cli kb-validate` passes.
-- Your own `AGENTS.md`/`CLAUDE.md` are unchanged (`git diff`).
+- `git diff AGENTS.md CLAUDE.md` is empty when you chose keep.
+- A new session in your assistant describes the project from `.pair/adoption/`.
 
 ## Related
 
 - [Existing project tutorial](/docs/tutorials/existing-project)
-- [Quickstart](/docs/getting-started/quickstart)
-- [Bootstrap quick mode](/docs/getting-started/bootstrap-quick-mode)
+- [Bootstrap: guided or quick](/docs/getting-started/bootstrap-quick-mode)
+- [Update the Knowledge Base](/docs/guides/update-kb): how to opt a kept registry back in later

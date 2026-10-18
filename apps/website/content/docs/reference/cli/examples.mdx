@@ -333,10 +333,53 @@ pair-cli install --source https://github.com/org/repo/releases/download/v1.3.0-r
 pair-cli install --source https://github.com/org/repo/releases/download/v1.2.0/kb.zip
 ```
 
----
+## Monorepo usage
+
+When pair-cli is a dependency of a package inside a monorepo, run it with `pnpm --filter` from the root; the CLI reads `INIT_CWD` so the output lands at the monorepo root, not in the filtered package:
+
+```bash
+pnpm --filter pair-cli dev update .
+```
+
+## Setup scripts and CI
+
+```bash
+#!/bin/bash
+# setup.sh
+pnpm install
+pnpm dlx pair-cli install
+pnpm dlx pair-cli update-link --dry-run
+```
+
+```yaml
+# .github/workflows/ci.yml
+- name: Install pair assets
+  run: |
+    npm install -g @foomakers/pair-cli
+    pair-cli install
+```
+
+## Maintenance after an update
+
+```bash
+pair-cli update
+pair-cli update-link --dry-run
+pair-cli update-link
+git add .pair/
+git commit -m "chore: update KB content and fix links"
+```
+
+## Try it in a temporary directory
+
+```bash
+mkdir /tmp/pair-test && cd /tmp/pair-test
+pair-cli install
+cd - && rm -rf /tmp/pair-test
+```
 
 ## Related
 
-- [CLI Commands Reference](/docs/reference/cli/commands): Complete command documentation
-- [CLI Workflows Guide](/docs/reference/cli/workflows): Common workflows
-- [KB Source Resolution Spec](/docs/reference/specs/kb-source-resolution): Technical specification
+- [CLI commands](/docs/reference/cli/commands): complete command documentation
+- [Install sources](/docs/reference/cli/install-sources): every `--source` form
+- [update-link](/docs/reference/cli/update-link): link validation and repair
+- [KB source resolution](/docs/reference/specs/kb-source-resolution): the resolution algorithm

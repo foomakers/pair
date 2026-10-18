@@ -5,41 +5,17 @@ description: Let pair deliver cards for you, semi-automatically (you trigger eac
 
 This tutorial shows how to let pair deliver cards without you writing the code or driving every stage. **Semi-automatic**: you start one card (`pair-cli run --card`, `/pair-workflow-cycle`) or one batch and review the result. **Automatic**: a daemon (`pair-cli run --root --parallel --watch`, or `/pair-loop`) picks cards from your backlog and ships those your gates allow. You will go from a manual dry-run to a systemd-managed daemon on a dedicated box in about 30 minutes.
 
-## Orientation
+## Before you start
 
-Automated development is **one delivery cycle** (a state machine that takes one card to a review-approved pull request, optionally to a merge), **three ways to drive it**, and **one set of autonomy gates** that decides how far it may go without you. Read those four parts first; the walkthrough from [Prerequisites](#prerequisites) on then builds a working daemon.
-
-It is the third of the [lifecycle modes](/docs/process-lifecycle/lifecycle-modes#automatic): Automatic. Concepts: [Delivery workflow](/docs/process-lifecycle/delivery-workflow). Reference: [Delivery cycle](/docs/process-lifecycle/delivery-cycle). Tag-driven triggers: [Tag-driven automation](/docs/process-lifecycle/tag-driven-automation). Knowledge base: [`delivery-cycle.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md).
-
-**In your assistant:** `/pair-workflow-cycle 217` drives one card, `/pair-loop` a backlog (Claude Code, Codex or pi with subagents). **With pair-cli:** `pair-cli run --card 217` drives one card; `pair-cli run --root 212 --parallel 3 --watch` drives a backlog on any engine. **With `/pair-assistant` (optional, Claude Code):** ask it to configure the policy ("let green cards go up to merge"); it never runs the cycle itself.
-
-## The cycle
-
-![The delivery cycle: both entries, the remediation loop, terminal states and the human decision points](/diagrams/cycle-overview.svg)
-
-*Figure: the delivery cycle: both entries, the remediation loop, terminal states and the human decision points.*
-
-- **Stages**: a fresh card runs `implement → verify → merge`. Tests and code are written together, test-first, in `implement`.
-- **Roles**: the implementer, the reviewer (`verify`), the test author (`prepare`) and the contract validator (`validate`) are different agents. The agent that implements never reviews; the one that writes a finding's failing test never fixes it.
-- **Remediation rounds**: blocking review findings loop `prepare → validate → green → verify`. The failing test is written first, sealed by the validator, then the fixer makes it pass above the seal.
-- **Merge stage**: opt-in. A review-approved PR stops at *ready-for-merge* unless the merge gate allows the stage; it re-verifies the reviewed head, the checks and the tier gates before merging.
-- **Durable handoffs**: every stage publishes a file under the run directory; the next question ("what is due?") is answered from those files, so an interrupted cycle resumes from its first incomplete stage.
-
-Detail per stage: [Delivery cycle, the stages](/docs/process-lifecycle/delivery-cycle#2-the-stages-one-by-one).
-
-## Three drivers
-
-![Three drivers, one set of autonomy gates, escalation](/diagrams/drive-and-gates.svg)
-
-*Figure: three drivers, one set of autonomy gates, escalation.*
+Automated development is **one delivery cycle** (a state machine that takes one card to a review-approved pull request, optionally to a merge), **three ways to drive it**, and **one set of autonomy gates** that decides how far it may go without you. The model is on two pages you should have read once: [Delivery workflow](/docs/process-lifecycle/delivery-workflow) (why, roles, handoffs, gates) and [The delivery cycle in depth](/docs/process-lifecycle/delivery-cycle) (every stage, every realization). This tutorial only drives it.
 
 | Driver | Use it for |
 | --- | --- |
-| `pair-cli run --card` | one card from a shell, cron or CI, on any engine |
-| `/pair-workflow-cycle` | one card in a Claude Code, Codex or pi session, you nearby |
-| `/pair-loop` or `pair-cli run --root --parallel --watch` | a whole backlog, repeatedly |
+| `/pair-workflow-cycle <id>` | one card in a Claude Code, Codex or pi session, you nearby |
+| `pair-cli run --card <id>` | one card from a shell, cron or CI, on any engine |
+| `/pair-loop`, or `pair-cli run --root --parallel --watch` | a whole backlog, repeatedly |
 
-All three read the same state machine and the same gates. Choosing between them: [Delivery cycle, realizations](/docs/process-lifecycle/delivery-cycle#3-three-realizations-and-which-to-use).
+All three read the same state machine and the same gates. Which assistants support which: [Modes by assistant](/docs/process-lifecycle/lifecycle-modes#modes-by-assistant).
 
 ## Autonomy: until, gates, escalation
 
@@ -79,20 +55,13 @@ Declared once in `## Autonomy` of `tech/automation.md` (or passed as `--until`, 
 
 ## Step 1: Declare the automation policy
 
-Everything here lives in one adoption file: `.pair/adoption/tech/automation.md`. It's optional:
-absent, it means "automation is off," never "automation runs on everything." Seven independent
-sections, each with its own fail-closed default. Five of them are below; `## Workflows` is what
-Option D in Step 4 adds, and `## Harness` / `## Model Policy` (supported engines, per-tier model
-class) live in the guideline:
+Everything here lives in one adoption file: `.pair/adoption/tech/automation.md`. It is optional: absent, it means "automation is off", never "automation runs on everything". Each section has its own fail-closed default. `## Workflows` is what Option D in Step 4 adds; `## Harness` and `## Model Policy` (supported engines, per-tier model class) are in the guideline.
 
 ```markdown
-## Eligibility
+## Autonomy
 
-risk:green
-
-## Auto-Advance
-
-(none)
+filter: risk:green
+until: pr
 
 ## Stop Predicate
 
@@ -109,43 +78,28 @@ automation/loop-audit.md
 ```
 
 <Callout type="info">
-  **Eligibility is a filter over tags `classify` already emits, never a new tag of its own.**
-  Nothing is ever written onto a card to make it eligible; `risk:green` here means exactly the same
-  `risk:green` your review process already assigns. If your project renamed the family in
-  `tech/risk-matrix.md`'s Tag Projection (`priority` instead of `risk`, say), write the renamed
-  label here, matching is plain string equality, no tier arithmetic.
+  **The filter is a list of tags `classify` already emits, never a new tag of its own.** Nothing is
+  written onto a card to make it selectable; `risk:green` here is exactly the `risk:green` your
+  review process assigns. If your project renamed the family in `tech/risk-matrix.md`'s Tag
+  Projection (`priority` instead of `risk`, say), write the renamed label here. Matching is plain
+  string equality, any-of, no tier arithmetic.
 </Callout>
 
-**`## Auto-Advance` is the one line that turns on unattended merging.** Shipped default is `(none)`
-: every card stops at a review-approved PR, whatever its tier. To let the loop push and merge
-`risk:green` cards on its own once the PR is review-approved and gates are green, write:
+**The `merge` gate is the one line that turns on unattended merging.** The shipped default is `merge: always`, and `always` parks every review-approved card for a human, whatever its tier. To let the loop merge the cards it selected once the PR is review-approved and the gates are green, write both lines:
 
 ```markdown
-## Auto-Advance
+## Autonomy
 
-risk:green
+filter: risk:green
+until: merged
+merge: never
 ```
 
-It can only ever name your `## Eligibility` value or `(none)`, never a tier your run couldn't have
-picked up anyway, and never a tier your eligibility filter doesn't already cover. This isn't a
-second risk model: the per-tier gate table already lives in the
-[quality model](/docs/reference/quality-model) (lint+type+build for 🟢, +unit for 🟡, +integration/E2E
-for 🔴); auto-advance only *enacts* that table, on the one tier you've named, it never redefines it.
+`merge: when; has: cost:red; lacks: risk:green` enters the merge stage too, but escalates any card matching the condition instead of merging it. The gate is a switch, not a second risk model: the per-tier gate table lives in the [quality model](/docs/reference/quality-model) (lint, type, build for green; unit tests from yellow; integration and E2E on red), and the merge stage enacts it.
 
-**Using a team-specific tag instead of `risk:green`.** Nothing about this mechanism is tied to the
-`risk` family. If your team wants a distinct opt-in label for auto-development (say a maintainer
-adds `automate` to specific cards rather than trusting the whole `risk:green` set) declare that
-instead:
+**Using a team-specific tag instead of `risk:green`.** Nothing ties the filter to the `risk` family. If a maintainer adds `automate` to specific cards rather than trusting the whole green set, declare `filter: automate`; the label only has to exist on the card.
 
-```markdown
-## Eligibility
-
-automate
-```
-
-The label just has to exist on the card and be a single, unadorned tag (no expressions, no lists (see [Quality Model) Tag Projection & Eligibility](/docs/reference/quality-model#tag-projection--eligibility) for the exact grammar).
-`## Auto-Advance` would then read `automate` too, if you also want that tag's cards to merge
-unattended, or stay `(none)` to develop them unattended but still gate the merge on a human.
+**Projects written for v0.4** may still carry `## Eligibility` (one label) and `## Auto-Advance` (`(none)` or a tier). They are legacy: `autonomy-policy.mjs` translates them to `filter` and to the `merge` gate, and a `## Autonomy` section that disagrees with them is refused. Write `## Autonomy` only in a new project.
 
 ## Step 2: Prepare the engine for headless, unattended runs
 

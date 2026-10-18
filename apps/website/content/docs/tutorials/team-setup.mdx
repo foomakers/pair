@@ -84,7 +84,7 @@ Edit `.pair/adoption/tech/tech-stack.md` to match your team's actual technology 
 
 The adoption declaration pattern (`[tool] is adopted for [purpose]`) tells every AI assistant this is a decision, not a suggestion.
 
-See [Customize for Your Team](/docs/customization/team) for the full customization guide.
+See [Customize the Knowledge Base for your team](/docs/guides/customize-for-your-team) for the full customization guide.
 
 ### 4. Customize code design guidelines
 
@@ -151,7 +151,7 @@ Security judgment (authn/authz, injection, OWASP Top 10) is a separate concern, 
 
 ### More team options
 
-Every option below is optional; the full catalog with defaults is [Adoption settings](/docs/reference/adoption-settings), and [Team customization](/docs/customization/team#all-team-options) has the table. Each: hand edit, or ask `/pair-assistant` (optional, Claude Code; it shows the diff, validates, writes through record-decision).
+Every option below is optional; the full catalog with defaults is [Adoption settings](/docs/reference/adoption-settings); the recipe is [Customize the Knowledge Base for your team](/docs/guides/customize-for-your-team). Each: hand edit, or ask `/pair-assistant` (optional, Claude Code; it shows the diff, validates, writes through record-decision).
 
 - **Autonomy** (`until`, `prepare`, `merge`): how far cards go unattended ([Automated development](/docs/tutorials/automated-development#autonomy-until-gates-escalation)). *"let green cards go up to merge"*
 - **Cycle Hooks**: commands at stage boundaries ([Delivery cycle](/docs/process-lifecycle/delivery-cycle#5-cycle-hooks)). *"add a pre-verify hook that runs the tests"*
@@ -167,7 +167,7 @@ Every option below is optional; the full catalog with defaults is [Adoption sett
 - **Risk matrix and Tag Projection**: [Quality model](/docs/reference/quality-model#project-overrides-techrisk-matrixmd). *"also emit cost tags"*
 - **Harness and Model Policy**: `/pair-capability-setup-harness`. *"switch the harness to pi"*
 - **Gates and branch protection**: `/pair-capability-setup-gates`. *"set up the pre-push gate"*
-- **Package-local adoption, template overrides**: [Package-local adoption](/docs/customization/package-local-adoption), [Templates](/docs/customization/templates).
+- **Package-local adoption, template overrides**: [Package-local adoption](/docs/concepts/package-local-adoption), [Customize templates](/docs/guides/customize-templates).
 
 ### 7. Record key decisions
 
@@ -239,7 +239,7 @@ If everything works end-to-end, your team setup is complete.
 
 ## Next steps
 
-- **[Customize for Your Team](/docs/customization/team)**: Deep dive into all customization options
-- **[Publish a Knowledge Base](/docs/customization/organization)**: Package your team's KB for distribution
+- **[Customize the Knowledge Base for your team](/docs/guides/customize-for-your-team)**: Deep dive into all customization options
+- **[Own and publish a Knowledge Base](/docs/guides/external-kb)**: Package your team's KB for distribution
 - **[Enterprise Adoption tutorial](/docs/tutorials/enterprise-adoption)**: Rolling out pair across an organization
 - **[Support](/docs/support)**: FAQ and troubleshooting when something doesn't work

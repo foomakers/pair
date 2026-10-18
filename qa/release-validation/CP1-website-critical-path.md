@@ -92,8 +92,8 @@
 
 - Each CTA navigates to a distinct docs page:
   - Solo Dev → `$BASE_URL/docs`
-  - Team → `$BASE_URL/docs/customization/team`
-  - Organization → `$BASE_URL/docs/customization/organization`
+  - Team → `$BASE_URL/docs/guides/customize-for-your-team`
+  - Organization → `$BASE_URL/docs/guides/external-kb`
 - Each destination returns HTTP 200
 
 ---

@@ -15,7 +15,7 @@ description: Take one user story from Draft to Ready, grill sync, refine, plan t
 
 Then the skill writes Given-When-Then acceptance criteria, the technical analysis, a [classification](/docs/reference/quality-model) and a size, and moves the card toward Ready. Detail: [Iteration](/docs/process-lifecycle/phases/iteration#step-6-refine-a-user-story).
 
-**With pair-cli:** `pair-cli run --card 88 --prepare never --until ready` refines alone and stops before implementation. **With `/pair-assistant` (optional, Claude Code):** CLI only for the run; ask [`/pair-assistant`](/docs/reference/pair-assistant#how-to-ask) to set the `prepare` gate.
+**With pair-cli:** `pair-cli run --card 88 --prepare never --until ready` refines alone and stops before implementation. **With `/pair-assistant` (optional, Claude Code):** ask it to set the `prepare` gate ([how to ask](/docs/reference/pair-assistant#how-to-ask)); the run itself is pair-cli.
 
 ## 2. Plan tasks
 

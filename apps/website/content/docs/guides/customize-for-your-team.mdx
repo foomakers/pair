@@ -1,0 +1,54 @@
+---
+title: Customize the Knowledge Base for your team
+description: Override guidelines, set quality gates and record decisions in adoption files, so your changes survive every pair-cli update.
+---
+
+**Goal**: adjust pair to your team's stack, process and gates without losing the ability to pull upstream updates.
+
+## Prerequisites
+
+- A pair-enabled project ([Quickstart](/docs/getting-started/quickstart))
+- Bootstrap done, so `.pair/adoption/tech/` holds your first decisions
+
+## How it works
+
+`.pair/` has two layers. `.pair/knowledge/` is the Knowledge Base, replaced by `pair-cli update`; never edit it. `.pair/adoption/` is yours, never overwritten. **Adoption always wins**: when both have an opinion, the AI reads the adoption file first, so every default is overridable by recording a decision.
+
+| You want to change | Edit |
+| --- | --- |
+| testing framework, language, library | `tech/tech-stack.md` |
+| architecture pattern | `tech/architecture.md` |
+| methodology, quality gates, review enforcement, PM tool | `tech/way-of-working.md` |
+| classification tiers, tag projection | `tech/risk-matrix.md` |
+| autonomy, hooks, blocking severities | `tech/automation.md` |
+| a guideline the KB does not have | a new file under `.pair/adoption/tech/` |
+| a decision that needs a rationale | an ADR in `tech/adr/` |
+
+## Steps
+
+1. **Find the default you want to change**
+   - In your assistant: `ls .pair/knowledge/guidelines/` and read the file; or ask the assistant which guideline governs the thing.
+2. **Record the decision in the adoption file**
+   - In your assistant: write it as an adopted decision, for example in `tech/tech-stack.md`: `- jest is adopted as the testing framework (jest v29.x).` The next session uses Jest; the KB default is ignored.
+   - With `/pair-assistant` (optional, Claude Code): name the setting ("make the review a required check", "switch to the poc profile"); it shows the diff, validates and writes through `/pair-capability-record-decision`.
+3. **Adjust the gates**
+   - In your assistant: in `tech/way-of-working.md` set the quality gate command and, if you want more, a `### Custom Gate Registry` table (`Order | Gate | Command | Required`). Tiered gates and the coverage ratchet are their own recipe: [Quality gates](/docs/guides/quality-gates).
+4. **Decide whether the review may block**
+   - In your assistant: `- **Review enforcement**: enabled` in `way-of-working.md` makes `pair-review` and `pair-explicit-approval` required checks; then apply branch protection by hand (admin rights). It ships `disabled`: the review posts its verdict and state label, and nothing stops a merge. On a one-person repository a red PR needs a non-author approval, so enable it only with a second account or with the explicit-approval check left optional. Details: [PR state flow](/docs/concepts/pr-state-flow).
+5. **Record significant decisions**
+   - In your assistant: `/pair-capability-record-decision` writes an ADR (architectural) or an ADL entry (everything else). Future teammates and assistants read why, not only what.
+6. **Commit and share**
+   - `git add .pair/adoption && git commit`. Every teammate who pulls gets the decision; every assistant adapts on its next session.
+
+## Verify
+
+- `pair-cli kb-validate` passes and `pair-cli update-link --dry-run` reports no broken links.
+- After `pair-cli update`, `git diff .pair/adoption/` is empty and the new guidelines appear under `.pair/knowledge/`.
+- A new session follows the decision (ask the assistant which testing framework the project uses).
+
+## Related
+
+- [Adoption settings](/docs/reference/adoption-settings): every section and key you can set, with defaults
+- [Adoption files](/docs/concepts/adoption-files): what each file records
+- [Classify stories and use risk tags](/docs/guides/classify-risk), [Card states, DoR/DoD and the process profile](/docs/guides/card-states), [Customize templates](/docs/guides/customize-templates)
+- [Own and publish a Knowledge Base](/docs/guides/external-kb): when the customizations should become an organization KB
