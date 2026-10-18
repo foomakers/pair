@@ -125,6 +125,18 @@ export function findEmDashes(content: string, rel: string): string[] {
     .flatMap((line, i) => (line.includes('\u2014') ? [`${rel}:${i + 1}: em dash (U+2014)`] : []))
 }
 
+/** Every /diagrams image is followed (after blank lines) by an italic caption line. */
+export function findUncaptionedDiagrams(content: string, rel: string): string[] {
+  const lines = content.split('\n')
+  return lines.flatMap((line, i) => {
+    if (!/!\[[^\]]*\]\(\/diagrams\/[^)]*\)/.test(line)) return []
+    const next = lines.slice(i + 1).find(l => l.trim() !== '')
+    return next && /^\*[^*].*\*$/.test(next.trim())
+      ? []
+      : [`${rel}:${i + 1}: diagram without figure caption`]
+  })
+}
+
 /** Check 1: every "N skills" phrasing in content matches the actual skill count. */
 export function findSkillCountMismatches(content: string, rel: string, actual: number): string[] {
   return countMismatches(content, rel, actual, { re: SKILL_COUNT_RE, label: 'Skill count' })
@@ -1099,6 +1111,7 @@ function perFileErrors(params: {
     const content = readFileSync(file, 'utf-8')
     const rel = relative(docsDir, file)
     errors.push(...findEmDashes(content, rel))
+    errors.push(...findUncaptionedDiagrams(content, rel))
     errors.push(...findSkillCountMismatches(content, rel, skillCount))
     if (declaredPluginSkills !== null) {
       errors.push(...findPluginSkillCountMismatches(content, rel, declaredPluginSkills))
