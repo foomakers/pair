@@ -1,0 +1,31 @@
+---
+title: Deliver a card with the delivery workflow
+description: Take one refined card to a review-approved PR.
+---
+
+**Goal**: run the delivery cycle on a single card.
+
+## Prerequisites
+
+- A refined card with a task breakdown
+- pair skills installed
+
+## Steps
+
+1. **Start the cycle**
+   - With the CLI: `pair-cli run --card <id>`.
+   - With `/pair-assistant` (optional, Claude Code): in Claude Code, `/pair-workflow-cycle <id>`.
+2. **Follow the stages**
+   - With the CLI: prepare, validate, implement, verify; each finding round repeats the sequence.
+3. **Review the PR**
+   - With the CLI: it stops at a review-approved PR; you merge.
+
+## Verify
+
+- One PR exists for the card and `pair-review` is approved.
+
+## Related
+
+- [Delivery workflow](/docs/developer-journey/delivery-workflow)
+- [The delivery cycle](/docs/reference/delivery-cycle)
+- [Lifecycle modes](/docs/developer-journey/lifecycle-modes)

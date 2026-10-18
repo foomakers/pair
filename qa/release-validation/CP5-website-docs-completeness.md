@@ -17,11 +17,12 @@
 
 1. For each URL below, issue an HTTP request and check status code
 
-**Docs Root** (1 page):
+**Docs Root** (2 pages):
 
 - `$BASE_URL/docs`
+- `$BASE_URL/docs/whats-new`
 
-**Getting Started** (7 pages):
+**Getting Started** (6 pages):
 
 - `$BASE_URL/docs/getting-started`
 - `$BASE_URL/docs/getting-started/quickstart`
@@ -29,7 +30,6 @@
 - `$BASE_URL/docs/getting-started/quickstart-team`
 - `$BASE_URL/docs/getting-started/quickstart-org`
 - `$BASE_URL/docs/getting-started/bootstrap-quick-mode`
-- `$BASE_URL/docs/getting-started/checklist`
 
 **Concepts** (13 pages):
 
@@ -60,11 +60,10 @@
 - `$BASE_URL/docs/developer-journey/execution`
 - `$BASE_URL/docs/developer-journey/tag-driven-automation`
 
-**Customization** (8 pages):
+**Customization** (7 pages):
 
 - `$BASE_URL/docs/customization`
 - `$BASE_URL/docs/customization/adopt`
-- `$BASE_URL/docs/customization/install-from-url`
 - `$BASE_URL/docs/customization/team`
 - `$BASE_URL/docs/customization/templates`
 - `$BASE_URL/docs/customization/organization`
@@ -93,13 +92,12 @@
 - `$BASE_URL/docs/pm-tools/azure-devops`
 - `$BASE_URL/docs/pm-tools/custom`
 
-**Reference** (20 pages):
+**Reference** (19 pages):
 
 - `$BASE_URL/docs/reference`
 - `$BASE_URL/docs/reference/cli/commands`
 - `$BASE_URL/docs/reference/cli/examples`
 - `$BASE_URL/docs/reference/cli/workflows`
-- `$BASE_URL/docs/reference/cli/update-link`
 - `$BASE_URL/docs/reference/specs/cli-contracts`
 - `$BASE_URL/docs/reference/specs/kb-source-resolution`
 - `$BASE_URL/docs/reference/skills-catalog`
@@ -127,7 +125,31 @@
 - `$BASE_URL/docs/support/general-faq`
 - `$BASE_URL/docs/support/troubleshooting`
 
-**Tutorials** (10 pages):
+**Guides** (21 pages):
+
+- `$BASE_URL/docs/guides`
+- `$BASE_URL/docs/guides/adopt-existing-repo`
+- `$BASE_URL/docs/guides/adoption-checklist`
+- `$BASE_URL/docs/guides/assess-security-cost-coupling`
+- `$BASE_URL/docs/guides/autonomy-and-profiles`
+- `$BASE_URL/docs/guides/card-states`
+- `$BASE_URL/docs/guides/classify-risk`
+- `$BASE_URL/docs/guides/configure-harness`
+- `$BASE_URL/docs/guides/customize-templates`
+- `$BASE_URL/docs/guides/deliver-a-card`
+- `$BASE_URL/docs/guides/deliver-many-cards`
+- `$BASE_URL/docs/guides/delivery-metrics`
+- `$BASE_URL/docs/guides/external-kb`
+- `$BASE_URL/docs/guides/hooks-and-severities`
+- `$BASE_URL/docs/guides/install-via-marketplace`
+- `$BASE_URL/docs/guides/monorepo-rules`
+- `$BASE_URL/docs/guides/quality-gates`
+- `$BASE_URL/docs/guides/release-tests`
+- `$BASE_URL/docs/guides/review-identity`
+- `$BASE_URL/docs/guides/tag-automation`
+- `$BASE_URL/docs/guides/update-kb`
+
+**Tutorials** (8 pages):
 
 - `$BASE_URL/docs/tutorials`
 - `$BASE_URL/docs/tutorials/first-project`
@@ -137,8 +159,6 @@
 - `$BASE_URL/docs/tutorials/refinement`
 - `$BASE_URL/docs/tutorials/enterprise-adoption`
 - `$BASE_URL/docs/tutorials/automated-development`
-- `$BASE_URL/docs/tutorials/managing-ai-artifacts`
-- `$BASE_URL/docs/tutorials/release-testing`
 
 **Contributing** (7 pages):
 
@@ -152,13 +172,13 @@
 
 ### Expected Result
 
-- All 97 URLs return HTTP 200
+- All 114 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 97 pages
+- Total: 114 pages
 
 ---
 

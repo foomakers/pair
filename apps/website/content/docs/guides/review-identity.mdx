@@ -1,0 +1,33 @@
+---
+title: Configure a review identity and light auto-approval
+description: Run reviews as a dedicated identity and optionally auto-approve light PRs.
+---
+
+**Goal**: get native review verdicts under a bot or app account.
+
+## Prerequisites
+
+- Review enforcement `enabled`
+- A host App or machine user that does not open PRs
+
+## Steps
+
+1. **Create the identity**
+   - With the CLI: grant it the permissions your host guide lists; store the credential outside the repo.
+2. **Declare it**
+   - With the CLI: set Review identity to `app` or `bot-user` in `way-of-working.md`.
+   - With `/pair-assistant` (optional, Claude Code): shows the diff, validates and writes.
+3. **Provision the login (bot-user only)**
+   - With the CLI: set the `REVIEW_IDENTITY_LOGIN` repository variable.
+4. **Opt in to light approval (optional)**
+   - With the CLI: declare the `light` family in `## Tag Projection` and restrict who can apply the label.
+
+## Verify
+
+- A review is published as the identity.
+- A `risk:red` PR still needs a second human.
+
+## Related
+
+- [Review identity](/docs/concepts/review-identity)
+- [PR state flow](/docs/concepts/pr-state-flow)

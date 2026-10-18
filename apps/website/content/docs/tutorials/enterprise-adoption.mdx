@@ -3,14 +3,14 @@ title: Enterprise Adoption
 description: Create an org-level Knowledge Base, structure it for multiple teams, distribute via npm, set governance policies, and onboard the first team.
 ---
 
-A strategic walkthrough for enterprise architects planning org-wide pair adoption. You'll design a multi-team KB structure, publish it for distribution, and onboard your first team — all in about 60 minutes.
+A strategic walkthrough for enterprise architects planning org-wide pair adoption. You'll design a multi-team KB structure, publish it for distribution, and onboard your first team: all in about 60 minutes.
 
 ## Prerequisites
 
 Before starting, make sure you have:
 
 - Completed the [Team Setup](/docs/tutorials/team-setup) tutorial (or equivalent team-level pair experience)
-- An **npm registry** — public npmjs.com or a private registry (GitHub Packages, Artifactory, Verdaccio)
+- An **npm registry**: public npmjs.com or a private registry (GitHub Packages, Artifactory, Verdaccio)
 - An **organization** on GitHub (or equivalent) with at least two teams
 - **Admin access** to create repositories, npm packages, and GitHub Projects at the org level
 - **pair-cli** installed (`pair-cli --version` should return a version)
@@ -34,7 +34,7 @@ By the end of this tutorial you'll understand how to:
 ## Step-by-step instructions
 
 <Callout type="info">
-  **At any step**, you can run `/pair-next` instead of a specific skill. pair reads your project state and suggests the right action — so you never need to remember which skill comes next.
+  **At any step**, you can run `/pair-next` instead of a specific skill. pair reads your project state and suggests the right action, so you never need to remember which skill comes next.
 </Callout>
 
 ### 1. Plan your KB structure
@@ -43,7 +43,7 @@ Before writing anything, decide on the scope:
 
 | Decision | Options | Recommendation |
 |----------|---------|----------------|
-| **Scope** | Full SDLC / Specific concern | Start with full SDLC — narrow later |
+| **Scope** | Full SDLC / Specific concern | Start with full SDLC, narrow later |
 | **Layers** | Single KB / Base + overlays | Base + overlays for org → team customization |
 | **Distribution** | npm / GitHub Releases / internal | npm for version management and easy updates |
 
@@ -55,7 +55,7 @@ The recommended approach is a **base KB** with team overlays:
 └── team-beta overrides    ← via adoption files in team-beta's repo
 ```
 
-Teams install the base KB and customize it through adoption files — the same layered architecture from the [team setup tutorial](/docs/tutorials/team-setup), but with a shared, versioned base.
+Teams install the base KB and customize it through adoption files: the same layered architecture from the [team setup tutorial](/docs/tutorials/team-setup), but with a shared, versioned base.
 
 ### 2. Create the org KB repository
 
@@ -76,7 +76,7 @@ pair-cli install
   If you installed pair-cli as a dev dependency instead of globally, use `npx pair-cli install`. See [installation options](/docs/tutorials/first-project#1-install-pair-cli) for details.
 </Callout>
 
-This gives you the full `.pair/` structure to modify. The default KB serves as a scaffold — replace the content with your organization's standards.
+This gives you the full `.pair/` structure to modify. The default KB serves as a scaffold, replace the content with your organization's standards.
 
 ### 3. Customize org-wide guidelines
 
@@ -152,7 +152,7 @@ Create template files in `.pair/adoption/tech/`:
 -->
 ```
 
-These templates serve as guided forms — teams fill them in during their bootstrap process.
+These templates serve as guided forms, teams fill them in during their bootstrap process.
 
 ### 5. Define governance policies
 
@@ -222,7 +222,7 @@ npm publish --registry https://npm.your-org.com
 ```
 
 <Callout type="info">
-  If publishing to npmjs.org as a public scoped package, consumers need no extra configuration — `npm install @your-org/your-cli` works out of the box. Publishing requires an npm access token with write scope.
+  If publishing to npmjs.org as a public scoped package, consumers need no extra configuration, `npm install @your-org/your-cli` works out of the box. Publishing requires an npm access token with write scope.
 </Callout>
 
 ### 8. Onboard the first team
@@ -235,12 +235,12 @@ pair-cli install --source npm --url @your-org/pair-kb
 
 Then run the team setup workflow:
 
-1. **Bootstrap**: Run `/pair-next` (or `/pair-process-bootstrap` directly) — the AI uses your org KB as the base, team fills in adoption files
+1. **Bootstrap**: Run `/pair-next` (or `/pair-process-bootstrap` directly): the AI uses your org KB as the base, team fills in adoption files
 2. **Customize**: Edit adoption files to override org defaults where needed
 3. **Commit**: Push `.pair/` to the team's repository
 4. **Verify**: Run `/pair-next` and confirm the assistant reads both org guidelines and team overrides
 
-The team gets your organization's standards as the foundation. Their adoption files layer on top — customizations without divergence.
+The team gets your organization's standards as the foundation. Their adoption files layer on top, customizations without divergence.
 
 ### 9. Set up the update workflow
 
@@ -252,7 +252,7 @@ pair-cli update
 
 What happens:
 1. `.pair/knowledge/` is replaced with the latest org KB content
-2. `.pair/adoption/` is untouched — team decisions survive
+2. `.pair/adoption/` is untouched: team decisions survive
 3. New guidelines appear automatically
 4. Removed guidelines disappear
 
@@ -267,9 +267,9 @@ For each new team:
 1. **Install**: `pair-cli install --source npm --url @your-org/pair-kb`
 2. **Bootstrap**: Run `/pair-next` (or `/pair-process-bootstrap` directly) for team-specific configuration
 3. **Customize**: Fill adoption templates with team choices
-4. **Verify**: Run `/pair-next` — confirm the assistant reads both org guidelines and team overrides
+4. **Verify**: Run `/pair-next`: confirm the assistant reads both org guidelines and team overrides
 
-Each team gets the same org foundation with their own customization layer. The AI assistant reads both layers — org standards plus team decisions — producing code that is simultaneously org-compliant and team-appropriate.
+Each team gets the same org foundation with their own customization layer. The AI assistant reads both layers (org standards plus team decisions) producing code that is simultaneously org-compliant and team-appropriate.
 
 ## Troubleshooting
 
@@ -278,7 +278,7 @@ Each team gets the same org foundation with their own customization layer. The A
 </Callout>
 
 <Callout type="warn">
-  **Teams override org standards they shouldn't**: Governance is advisory — pair doesn't enforce it technically. Use code review and the `/pair-process-review` skill to catch non-compliant overrides. Consider adding org-level quality gates that verify adoption file compliance.
+  **Teams override org standards they shouldn't**: Governance is advisory: pair doesn't enforce it technically. Use code review and the `/pair-process-review` skill to catch non-compliant overrides. Consider adding org-level quality gates that verify adoption file compliance.
 </Callout>
 
 <Callout type="warn">
@@ -287,16 +287,16 @@ Each team gets the same org foundation with their own customization layer. The A
 
 ## What you've learned
 
-- **Base + overlay architecture** — org KB provides shared standards, teams customize through adoption files
-- **npm distribution** — publish versioned KBs that teams install and update independently
-- **Governance policies** — define who can change what, with approval workflows
-- **Adoption templates** — guide teams through customization with structured templates
-- **Update workflow** — `pair-cli update` replaces knowledge, preserves adoption — no manual merge
-- **Scalable onboarding** — every new team gets the same foundation in one command
+- **Base + overlay architecture**: org KB provides shared standards, teams customize through adoption files
+- **npm distribution**: publish versioned KBs that teams install and update independently
+- **Governance policies**: define who can change what, with approval workflows
+- **Adoption templates**: guide teams through customization with structured templates
+- **Update workflow**: `pair-cli update` replaces knowledge, preserves adoption: no manual merge
+- **Scalable onboarding**: every new team gets the same foundation in one command
 
 ## Next steps
 
-- **[Publish a Knowledge Base](/docs/customization/organization)** — Detailed reference for all packaging and distribution options
-- **[KB Structure Reference](/docs/reference/kb-structure)** — Full directory layout and file purposes
-- **[Contributing](/docs/contributing)** — Contribute improvements back to the pair project
-- **[Support](/docs/support)** — FAQ and troubleshooting when something doesn't work
+- **[Publish a Knowledge Base](/docs/customization/organization)**: Detailed reference for all packaging and distribution options
+- **[KB Structure Reference](/docs/reference/kb-structure)**: Full directory layout and file purposes
+- **[Contributing](/docs/contributing)**: Contribute improvements back to the pair project
+- **[Support](/docs/support)**: FAQ and troubleshooting when something doesn't work

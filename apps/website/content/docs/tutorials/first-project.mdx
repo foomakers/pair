@@ -1,6 +1,6 @@
 ---
 title: Your First Project
-description: Install pair, bootstrap a project, create a PRD, generate your first initiative/epic/story, implement, and review — all in one session.
+description: Install pair, bootstrap a project, create a PRD, generate your first initiative/epic/story, implement, and review, all in one session.
 ---
 
 A complete walkthrough for solo developers. You'll go from zero to a fully scaffolded project with AI-assisted planning in about 30 minutes.
@@ -13,10 +13,10 @@ Before starting, make sure you have:
 - **pnpm** v9+ or **npm** v9+ ([install pnpm](https://pnpm.io/installation))
 - **Git** initialized in your project (or a new empty directory)
 - A **terminal** (macOS Terminal, iTerm2, Windows Terminal, or VS Code integrated terminal)
-- An **AI coding assistant** that supports Agent Skills — [Claude Code](https://claude.ai/), [GitHub Copilot](https://github.com/features/copilot), [Cursor](https://cursor.sh/), or similar
+- An **AI coding assistant** that supports Agent Skills, [Claude Code](https://claude.ai/), [GitHub Copilot](https://github.com/features/copilot), [Cursor](https://cursor.sh/), or similar
 
 <Callout type="info">
-  pair works with any AI coding assistant that can read structured files. This tutorial uses generic skill invocation syntax — your assistant's exact interface may vary.
+  pair works with any AI coding assistant that can read structured files. This tutorial uses generic skill invocation syntax, your assistant's exact interface may vary.
 </Callout>
 
 ## What you'll build
@@ -38,7 +38,7 @@ By the end of this tutorial you'll have:
 ## Step-by-step instructions
 
 <Callout type="info">
-  **At any step**, you can run `/pair-next` instead of a specific skill. pair reads your project state and suggests the right action — so you never need to remember which skill comes next.
+  **At any step**, you can run `/pair-next` instead of a specific skill. pair reads your project state and suggests the right action, so you never need to remember which skill comes next.
 </Callout>
 
 ### 1. Install pair-cli
@@ -75,7 +75,7 @@ npx pair-cli --version
 pnpm pair-cli --version
 ```
 
-All `pair-cli` commands in this tutorial work the same way — just prefix them with `npx` or `pnpm`.
+All `pair-cli` commands in this tutorial work the same way, just prefix them with `npx` or `pnpm`.
 
 #### Option C: Manual download (non-JavaScript projects)
 
@@ -90,7 +90,7 @@ If your project uses Python, Go, Rust, or any language without a Node.js toolcha
 ```
 
 <Callout type="info">
-  The manual download still requires **Node.js 18+** to run — pair-cli is a Node.js application. You don't need npm/pnpm as a package manager though.
+  The manual download still requires **Node.js 18+** to run, pair-cli is a Node.js application. You don't need npm/pnpm as a package manager though.
 </Callout>
 
 Verify the installation (any option):
@@ -122,13 +122,13 @@ pair-cli install
 
 This downloads the Knowledge Base and creates the `.pair/` directory with:
 
-- `knowledge/` — guidelines, how-tos, templates (reference material)
-- `adoption/` — empty templates for your project decisions
+- `knowledge/`: guidelines, how-tos, templates (reference material)
+- `adoption/`: empty templates for your project decisions
 
 It also installs bridge files (`AGENTS.md`, `.claude/`, `.github/copilot/`, `.cursor/`) so every AI assistant finds the same context.
 
 <Callout type="info">
-  The `.pair/knowledge/` directory is managed by pair-cli. Don't edit files there — your changes would be overwritten on the next update. Your decisions go in `.pair/adoption/`.
+  The `.pair/knowledge/` directory is managed by pair-cli. Don't edit files there: your changes would be overwritten on the next update. Your decisions go in `.pair/adoption/`.
 </Callout>
 
 **Optional, Claude Code only:** instead of steps 1 and 3 you can add the marketplace plugin (`/plugin marketplace add foomakers/pair`, `/plugin install pair@pair`) and run `/pair-assistant`, which installs and runs the CLI for you. The CLI stays the default path: see the [Quickstart](/docs/getting-started/quickstart#with-the-claude-code-plugin-optional).
@@ -155,7 +155,7 @@ Since this is a fresh project with no PRD and no adoption files, pair will recom
 
 ### 6. Create your PRD
 
-Follow pair's recommendation (or run `/pair-next` — it will suggest this same action):
+Follow pair's recommendation (or run `/pair-next`: it will suggest this same action):
 
 ```text
 /pair-process-specify-prd
@@ -163,21 +163,21 @@ Follow pair's recommendation (or run `/pair-next` — it will suggest this same 
 
 The skill will guide you through a structured conversation:
 
-1. **Project overview** — What are you building? Who is it for?
-2. **Problem statement** — What problem does it solve?
-3. **Success metrics** — How will you measure success?
-4. **Scope** — What's in and out for the first release?
-5. **Constraints** — Budget, timeline, technology, compliance?
+1. **Project overview**: What are you building? Who is it for?
+2. **Problem statement**: What problem does it solve?
+3. **Success metrics**: How will you measure success?
+4. **Scope**: What's in and out for the first release?
+5. **Constraints**: Budget, timeline, technology, compliance?
 
 Answer each question. pair writes the PRD to `.pair/adoption/product/PRD.md`.
 
 <Callout type="info">
-  You don't need a perfect PRD. Start with what you know — you can refine it later by re-running the skill.
+  You don't need a perfect PRD. Start with what you know: you can refine it later by re-running the skill.
 </Callout>
 
 ### 7. Bootstrap the project
 
-Run the full bootstrap (or `/pair-next` — it knows PRD is done and bootstrap is next):
+Run the full bootstrap (or `/pair-next`: it knows PRD is done and bootstrap is next):
 
 ```text
 /pair-process-bootstrap
@@ -187,12 +187,12 @@ Run the full bootstrap (or `/pair-next` — it knows PRD is done and bootstrap i
 
 Bootstrap walks you through:
 
-- **Project categorization** — type, complexity, team size
-- **Tech stack assessment** — language, framework, testing, CI/CD
-- **Architecture decisions** — monolith, microservices, serverless
-- **Way of working** — methodology, commit strategy, quality gates
+- **Project categorization**: type, complexity, team size
+- **Tech stack assessment**: language, framework, testing, CI/CD
+- **Architecture decisions**: monolith, microservices, serverless
+- **Way of working**: methodology, commit strategy, quality gates
 
-Each decision is recorded in `.pair/adoption/tech/` as an adoption file. The AI reads these files in every future session — your decisions never drift.
+Each decision is recorded in `.pair/adoption/tech/` as an adoption file. The AI reads these files in every future session, your decisions never drift.
 
 ### 8. Generate initiatives
 
@@ -212,7 +212,7 @@ Pick a P0 initiative and break it into epics (`/pair-next` guides you here):
 /pair-process-plan-epics
 ```
 
-pair suggests an epic structure including "Epic 0" — the foundational setup work every project needs (repo scaffold, CI/CD, quality gates).
+pair suggests an epic structure including "Epic 0": the foundational setup work every project needs (repo scaffold, CI/CD, quality gates).
 
 ### 10. Create user stories
 
@@ -256,11 +256,11 @@ The review skill checks adoption compliance, quality gates, Definition of Done, 
 - **`/pair-next`** always tells you what to do next based on project state
 - **Process skills** follow the SDLC: PRD → Bootstrap → Initiatives → Epics → Stories → Implement → Review
 - **Adoption files** in `.pair/adoption/` record your decisions and persist across sessions
-- **Knowledge files** in `.pair/knowledge/` provide reference material — updated by pair-cli, never edited manually
+- **Knowledge files** in `.pair/knowledge/` provide reference material, updated by pair-cli, never edited manually
 
 ## Next steps
 
-- **[Concepts](/docs/concepts)** — Understand how the Knowledge Base, Skills, and Adoption Files work together
-- **[Customization](/docs/customization)** — Adjust guidelines and quality gates for your specific needs
-- **[Team Setup tutorial](/docs/tutorials/team-setup)** — Ready to share pair with your team? Follow the team configuration tutorial
-- **[Support](/docs/support)** — FAQ and troubleshooting when something doesn't work
+- **[Concepts](/docs/concepts)**: Understand how the Knowledge Base, Skills, and Adoption Files work together
+- **[Customization](/docs/customization)**: Adjust guidelines and quality gates for your specific needs
+- **[Team Setup tutorial](/docs/tutorials/team-setup)**: Ready to share pair with your team? Follow the team configuration tutorial
+- **[Support](/docs/support)**: FAQ and troubleshooting when something doesn't work

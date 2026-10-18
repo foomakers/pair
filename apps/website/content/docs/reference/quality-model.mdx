@@ -1,11 +1,11 @@
 ---
 title: Quality Model
-description: The single source of default quality rules — 3-layer principle, 3 pillars, classification dimensions, per-tier requirements, tag projection, and the risk-matrix adoption delta.
+description: The single source of default quality rules, 3-layer principle, 3 pillars, classification dimensions, per-tier requirements, tag projection, and the risk-matrix adoption delta.
 ---
 
-The Quality Model is the single source of default quality rules in the pair Knowledge Base. `classify`, `assess-cost`, `assess-security`, code review, quality gates, and bootstrap all resolve their behavior from this one document — no criteria live anywhere else. Source: [`quality-model.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/quality-model.md).
+The Quality Model is the single source of default quality rules in the pair Knowledge Base. `classify`, `assess-cost`, `assess-security`, code review, quality gates, and bootstrap all resolve their behavior from this one document: no criteria live anywhere else. Source: [`quality-model.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/quality-model.md).
 
-> **Resolution order** for every rule below: **Argument > Adoption > KB default**. A malformed adoption delta is treated as absent — skills warn and fall back to KB defaults.
+> **Resolution order** for every rule below: **Argument > Adoption > KB default**. A malformed adoption delta is treated as absent, skills warn and fall back to KB defaults.
 
 ## Three-Layer Principle
 
@@ -15,45 +15,71 @@ The Quality Model is the single source of default quality rules in the pair Know
 | **Skill** | Applies the rules on demand | `classify`, `assess-cost`, `assess-security`, code review |
 | **Automation** | Consumes tags deterministically, zero judgment | CI gates, `pair-next --filter` |
 
-Quality is classified in refinement — before code exists — not only at review time (shift-left). The matrix is built twice: once from the story context in refinement, once from the diff in review. Automation never carries its own criteria — it only reads tags.
+Quality is classified in refinement (before code exists) not only at review time (shift-left). The matrix is built twice: once from the story context in refinement, once from the diff in review. Automation never carries its own criteria: it only reads tags.
 
 ## Three Pillars
 
 | Pillar | Covers | Tag family (if exposed) |
 | --- | --- | --- |
-| **Cost** | Financial exposure of building/running the change | `cost:*` — opt-in |
+| **Cost** | Financial exposure of building/running the change | `cost:*`, opt-in |
 | **Security** | Vulnerabilities, compliance, secure-by-design | feeds `risk:*` + deterministic CI scanning |
-| **Delivery** | Correctness, performance, a11y, observability, docs, planning, architecture, release, AI metrics | `risk:*` — KB default |
+| **Delivery** | Correctness, performance, a11y, observability, docs, planning, architecture, release, AI metrics | `risk:*`: KB default |
 
-Every quality theme nests under one of these three pillars, pointing at its existing guideline — no dedicated status page per theme.
+Every quality theme nests under one of these three pillars, pointing at its existing guideline: no dedicated status page per theme.
 
 ## Classification & Tiers
 
-The compiled matrix has one row per dimension: service/domain criticality, change/diff risk, business impact, security relevance, and [coupling balance](/docs/reference/coupling-model). Each resolves to green/yellow/red; the **risk tier is the max across assessed dimensions** and is never lowered once raised by review. Cost is tracked separately as its own class, always computed and written to the matrix — it's projected as the `cost:green|yellow|orange|red` tag only if a project chooses to expose it (see Tag Projection below).
+The compiled matrix has one row per dimension: service/domain criticality, change/diff risk, business impact, security relevance, and [coupling balance](/docs/reference/coupling-model). Each resolves to green/yellow/red; the **risk tier is the max across assessed dimensions** and is never lowered once raised by review. Cost is tracked separately as its own class, always computed and written to the matrix: it's projected as the `cost:green|yellow|orange|red` tag only if a project chooses to expose it (see Tag Projection below).
 
 | Tier | Merge | Reviewers | SLA | Approval |
 | --- | --- | --- | --- | --- |
-| 🟢 Green | Self-merge at green gate checks | 0 (AI review informational) | — | none |
+| 🟢 Green | Self-merge at green gate checks | 0 (AI review informational) | n/a | none |
 | 🟡 Yellow | Blocked until reviewed | 1 reviewer | 1 working day | reviewer approval |
 | 🔴 Red | Blocked until reviewed and approved | 1 reviewer | 2 working days | explicit approval |
 
-Reviewer counts and SLAs above are KB defaults, not fixed rules — override either per tier in `tech/risk-matrix.md`'s Overrides section (e.g. `tier.red.reviewers: 2`). A PR without classification tags is treated as 🔴 (fail-safe).
+Reviewer counts and SLAs above are KB defaults, not fixed rules, override either per tier in `tech/risk-matrix.md`'s Overrides section (e.g. `tier.red.reviewers: 2`). A PR without classification tags is treated as 🔴 (fail-safe).
 
-## Cost Monitoring — Predicted vs. Real
+## Cost Monitoring: Predicted vs. Real
 
-The Cost pillar is assessed twice per change (refinement, then review) and monitored afterwards: `assess-cost`'s **report mode** takes a period — `YYYY-MM`, an ISO week, or an explicit range — and puts each **merged** PR's refinement-time *predicted* class beside the *real* class derived from its merged diff, flagging **drift** (under-predicted first: predicted green, real red). PRs **closed without merging are excluded** and counted as such in the headline — no merged diff ⇒ no real class to pair against. PRs classified before cost was ever assessed are kept as "no prediction — real only" rather than dropped, and the deploy-match dimension reads "not available" unless the project declares deploy/billing telemetry. The result is one **consolidated panel** in the working area (`.pair/working/reports/cost/<period-key>-cost-panel.md`), headline-first with per-PR detail collapsed, updated in place when the same period is re-run — except that **coverage never regresses**: a re-run that processed fewer PRs than the panel already on disk keeps that panel and reports its shortfall in the run output instead, so a partial re-run cannot overwrite fuller figures. See [KB Structure](/docs/reference/kb-structure#working--operational-area-d14) for the shared panel convention. With no cost data in the period (cost never assessed, or the `cost` tag not activated) the panel says exactly that instead of failing.
+The Cost pillar is assessed twice per change (refinement, then review) and monitored afterwards: `assess-cost`'s **report mode** takes a period (`YYYY-MM`, an ISO week, or an explicit range) and puts each **merged** PR's refinement-time *predicted* class beside the *real* class derived from its merged diff, flagging **drift** (under-predicted first: predicted green, real red).
+
+PRs **closed without merging are excluded** and counted as such in the headline: no merged diff ⇒ no real class to pair against. PRs classified before cost was ever assessed are kept as "no prediction, real only" rather than dropped, and the deploy-match dimension reads "not available" unless the project declares deploy/billing telemetry.
+
+The result is one **consolidated panel** in the working area (`.pair/working/reports/cost/<period-key>-cost-panel.md`), headline-first with per-PR detail collapsed, updated in place when the same period is re-run, except that **coverage never regresses**: a re-run that processed fewer PRs than the panel already on disk keeps that panel and reports its shortfall in the run output instead, so a partial re-run cannot overwrite fuller figures.
+
+See [KB Structure](/docs/reference/kb-structure#working-operational-area-d14) for the shared panel convention. With no cost data in the period (cost never assessed, or the `cost` tag not activated) the panel says exactly that instead of failing.
 
 ## Tag Projection & Eligibility
 
-Tags are a **chromatic projection** of the matrix. `risk:green|yellow|red` is the only tag family the KB names and proposes by default — `classify` asks to activate it the first time it runs and writes the declaration once you confirm, so you get sensible tagging without needing to know the schema exists. Every other parameter the model computes (cost class, security relevance, business impact, coupling balance) is available to expose as its own tag, but the KB doesn't pre-select which, if any — that's entirely your call, added to the declaration when you want it. There is no dedicated "eligibility" tag: automation eligibility is a **filter you declare over classification tags**, consumed generically by `pair-next`. That filter lives in the optional `tech/automation.md`, under an `## Eligibility` heading, and holds **a single literal label** — recommended `risk:green`. It is matched by plain string equality against each card's labels (no AND/OR/NOT grammar — the same rule `pair-next --filter` applies), so `risk:yellow` and `risk:red` work is never developed unattended. The file or the section being absent means **nothing** is eligible rather than everything, and a value that is not exactly one label halts instead of widening.
+Tags are a **chromatic projection** of the matrix. `risk:green|yellow|red` is the only tag family the KB names and proposes by default, `classify` asks to activate it the first time it runs and writes the declaration once you confirm, so you get sensible tagging without needing to know the schema exists.
 
-## Project Overrides — `tech/risk-matrix.md`
+Every other parameter the model computes (cost class, security relevance, business impact, coupling balance) is available to expose as its own tag, but the KB doesn't pre-select which, if any: that's entirely your call, added to the declaration when you want it.
 
-Optional file with up to three independent sections — none imply the others: **Tag Projection** (which tags are active — typically the first section a project ends up with, since `classify` proposes it), a **criticality table** (service/domain → High/Medium/Low), and **overrides** — threshold tweaks, optional per-tier reviewer count / SLA overrides (e.g. `tier.red.reviewers: 2`), and dimension-resolution overrides that change how a dimension resolves rather than where its threshold sits (today `business-impact.trivial-diff: green` — declared, an objectively trivial diff resolves Business impact green whatever subdomain it touches; absent, that dimension resolves from the subdomain class as usual). The criticality table, the threshold tweaks and the reviewer/SLA overrides are offered by `bootstrap`'s Phase 3.6, which proposes the criticality rows from your domain model and writes only what you confirm — hand-authoring stays equally valid. The dimension-resolution family is **hand-authored** today: Phase 3.6 does not ask about it, and its `## Overrides` offer is one-shot, so answering the other questions does not put you in line for this one. Criticality rows are keyed by what a diff resolves to: the deployable that owns the touched files (workspace package, app, or top-level path scope) — a change touching several of them takes the **highest** criticality among them, with any deployable not listed contributing the conservative High. At refinement time, before any diff exists, the same key comes from the story's declared scope; a story naming no deployable falls back to the file-absent default instead. Fully absent means KB defaults apply completely and no tags are emitted — nothing fails. See the full schema in [`quality-model.md` §5–§6](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/quality-model.md#6-techrisk-matrixmd--adoption-delta) and a filled-in example at [`risk-matrix-example.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/assets/risk-matrix-example.md).
+There is no dedicated "eligibility" tag: automation eligibility is a **filter you declare over classification tags**, consumed generically by `pair-next`. That filter lives in the optional `tech/automation.md`, under an `## Eligibility` heading, and holds **a single literal label**, recommended `risk:green`.
+
+It is matched by plain string equality against each card's labels (no AND/OR/NOT grammar: the same rule `pair-next --filter` applies), so `risk:yellow` and `risk:red` work is never developed unattended. The file or the section being absent means **nothing** is eligible rather than everything, and a value that is not exactly one label halts instead of widening.
+
+## Project Overrides: `tech/risk-matrix.md`
+
+Optional file with up to three independent sections, none implies the others (the dimension-resolution family is hand-authored, see below):
+
+- **Tag Projection** (which tags are active, typically the first section a project ends up with, since `classify` proposes it).
+- A **criticality table** (service/domain → High/Medium/Low).
+- **overrides**, threshold tweaks, optional per-tier reviewer count / SLA overrides (e.g. `tier.red.reviewers: 2`), and dimension-resolution overrides that change how a dimension resolves rather than where its threshold sits (today `business-impact.trivial-diff: green`, declared, an objectively trivial diff resolves Business impact green whatever subdomain it touches; absent, that dimension resolves from the subdomain class as usual).
+
+The criticality table, the threshold tweaks and the reviewer/SLA overrides are offered by `bootstrap`'s Phase 3.6, which proposes the criticality rows from your domain model and writes only what you confirm, hand-authoring stays equally valid.
+
+The dimension-resolution family is **hand-authored** today: Phase 3.6 does not ask about it, and its `## Overrides` offer is one-shot, so answering the other questions does not put you in line for this one.
+
+Criticality rows are keyed by what a diff resolves to: the deployable that owns the touched files (workspace package, app, or top-level path scope): a change touching several of them takes the **highest** criticality among them, with any deployable not listed contributing the conservative High.
+
+At refinement time, before any diff exists, the same key comes from the story's declared scope; a story naming no deployable falls back to the file-absent default instead. Fully absent means KB defaults apply completely and no tags are emitted: nothing fails.
+
+See the full schema in [`quality-model.md` §5–§6](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/quality-model.md#6-techrisk-matrixmd--adoption-delta) and a filled-in example at [`risk-matrix-example.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/assets/risk-matrix-example.md).
 
 ## Related
 
-- [Quality Gates & Configuration](/docs/reference/quality-gates-configuration) — the unifying catalog of every opt-in knob (tag projection, criticality overrides, tiering, coverage) and what is always-on
-- [Guidelines Catalog](/docs/reference/guidelines-catalog) — where the Quality Model sits among the other 9 guideline categories
-- [Customize for Your Team](/docs/customization/team) — how to override guidelines via adoption files
-- [KB Structure](/docs/reference/kb-structure) — directory layout, `knowledge/` vs `adoption/`
+- [Quality Gates & Configuration](/docs/reference/quality-gates-configuration): the unifying catalog of every opt-in knob (tag projection, criticality overrides, tiering, coverage) and what is always-on
+- [Guidelines Catalog](/docs/reference/guidelines-catalog): where the Quality Model sits among the other 9 guideline categories
+- [Customize for Your Team](/docs/customization/team): how to override guidelines via adoption files
+- [KB Structure](/docs/reference/kb-structure): directory layout, `knowledge/` vs `adoption/`

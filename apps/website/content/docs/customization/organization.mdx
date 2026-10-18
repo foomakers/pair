@@ -5,7 +5,7 @@ description: Create, structure, package, and distribute a Knowledge Base for you
 
 import { Callout } from 'fumadocs-ui/components/callout'
 
-You've customized pair for your team. Now you want to codify those practices into a distributable Knowledge Base — so every team in your organization starts from the same foundation. This guide covers the full workflow from creation to distribution.
+You've customized pair for your team. Now you want to codify those practices into a distributable Knowledge Base, so every team in your organization starts from the same foundation. This guide covers the full workflow from creation to distribution.
 
 ## Plan Your KB
 
@@ -43,7 +43,7 @@ A Knowledge Base follows the `.pair/` directory convention:
 
 ### Starting from scratch
 
-Fastest path — let the CLI scaffold the repository (structure, `pair.config.json`,
+Fastest path: let the CLI scaffold the repository (structure, `pair.config.json`,
 README, `.gitignore`, and a release script):
 
 ```bash
@@ -79,7 +79,7 @@ See [KB Structure Reference](/docs/reference/kb-structure) for the full director
 Guidelines are the core of your KB. Each guideline file should be:
 
 - **Opinionated**: State what is adopted, not what could be adopted
-- **Actionable**: AI assistants read these to make decisions — be specific
+- **Actionable**: AI assistants read these to make decisions, be specific
 - **Self-contained**: Each file should work independently
 
 ### Writing style
@@ -155,7 +155,7 @@ Use source layout when:
 
 ### Target layout
 
-Packages from **installed target directories** — the files as they appear after `pair-cli install`. This is the default.
+Packages from **installed target directories**: the files as they appear after `pair-cli install`. This is the default.
 
 ```bash
 pair-cli package --layout target
@@ -170,7 +170,7 @@ Use target layout when:
 **Example:** The same skills registry with `flatten: true, prefix: "pair"` packages from `.claude/skills/pair-category-name/SKILL.md`.
 
 <Callout type="info">
-  Target layout excludes symlink targets automatically — only canonical (physical copy) targets are
+  Target layout excludes symlink targets automatically: only canonical (physical copy) targets are
   included.
 </Callout>
 
@@ -195,7 +195,7 @@ The layout mode maps to the `source` and `targets` fields in your `config.json` 
 ```
 
 - `--layout source` reads from `.skills/`
-- `--layout target` reads from `.claude/skills/` (canonical target only — `.cursor/skills/` is excluded because it's a symlink)
+- `--layout target` reads from `.claude/skills/` (canonical target only, `.cursor/skills/` is excluded because it's a symlink)
 
 ### Packaging walkthrough
 
@@ -295,7 +295,7 @@ pair-cli install --source github --url https://github.com/your-org/your-kb/relea
 
 For organizations that restrict external package sources, host the package on an internal registry or file share. Adopters use the `--url` flag to point to the internal location.
 
-See [Install from URL](/docs/customization/install-from-url) for all source options.
+See [Install from URL](/docs/guides/external-kb) for all source options.
 
 ## Version and Maintain
 
@@ -323,6 +323,6 @@ Maintain a changelog in your KB repository. Document what changed in each versio
 
 ## Next Steps
 
-- **Start from the beginning?** [Adopt a Knowledge Base](/docs/customization/adopt) — the adopter's perspective.
-- **CLI reference?** [CLI Commands](/docs/reference/cli/commands) — all commands for packaging and distribution.
-- **Directory reference?** [KB Structure](/docs/reference/kb-structure) — full directory layout.
+- **Start from the beginning?** [Adopt a Knowledge Base](/docs/customization/adopt): the adopter's perspective.
+- **CLI reference?** [CLI Commands](/docs/reference/cli/commands): all commands for packaging and distribution.
+- **Directory reference?** [KB Structure](/docs/reference/kb-structure), full directory layout.

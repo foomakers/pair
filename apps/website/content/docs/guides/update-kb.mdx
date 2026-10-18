@@ -1,7 +1,34 @@
 ---
-title: Link Update and Validation
-description: How to validate, fix, and update links in your installed Knowledge Base content.
+title: Update the KB and migrate 0.4 to 0.5
+description: Update the installed Knowledge Base, follow the migration page and repair links.
 ---
+
+**Goal**: bring `.pair/` and the skills to the current release without losing your adoption files.
+
+## Prerequisites
+
+- A pair-enabled project with a clean git tree
+- `pair-cli` at the target version
+
+## Steps
+
+1. **Update**
+   - With the CLI: `pair-cli update` (add `--skip-registries agents` to keep your own `AGENTS.md`/`CLAUDE.md`).
+   - With `/pair-assistant` (optional, Claude Code): "update pair".
+2. **Migrate 0.4 to 0.5**: follow [v0.4 to v0.5](/docs/migrations/v0.4-to-v0.5), prompt step by step.
+3. **Repair links**: run `pair-cli update-link` (details below).
+
+## Verify
+
+- `pair-cli kb-validate` passes and `pair-cli update-link --dry-run` reports no broken links.
+
+## Related
+
+- [CLI commands](/docs/reference/cli/commands#update)
+- [Migrations](/docs/migrations)
+
+## Link update and validation
+
 
 Automatically validate, fix, and update links in your installed Knowledge Base content when your project structure changes or links become broken.
 

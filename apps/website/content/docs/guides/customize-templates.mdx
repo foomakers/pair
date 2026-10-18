@@ -1,0 +1,31 @@
+---
+title: Customize templates
+description: Override a shipped template such as the commit or PR template with your own copy.
+---
+
+**Goal**: change what pair writes for commits, PRs and stories without forking the KB.
+
+## Prerequisites
+
+- A pair-enabled project
+
+## Steps
+
+1. **Copy the template**
+   - With the CLI: copy it from `.pair/knowledge/guidelines/collaboration/templates/` to `.pair/adoption/tech/templates/<name>-template.md`.
+   - With `/pair-assistant` (optional, Claude Code): "override the PR template".
+2. **Edit your copy**
+   - With the CLI: change it; the override is used whole, override-first.
+   - With `/pair-assistant` (optional, Claude Code): it shows the diff before writing.
+3. **Record it (optional)**
+   - With the CLI: add an ADL so teammates see what you changed.
+   - With `/pair-assistant` (optional, Claude Code): done through `/pair-capability-record-decision`.
+
+## Verify
+
+- Create a PR or commit and check the new shape is used.
+
+## Related
+
+- [Templates](/docs/customization/templates)
+- [Adoption settings](/docs/reference/adoption-settings#package-local-adoption-and-templates)

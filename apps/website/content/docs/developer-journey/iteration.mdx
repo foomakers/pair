@@ -1,6 +1,6 @@
 ---
 title: "Iteration: Stories & Tasks"
-description: "Prepare work for development sprints — break epics into stories, refine acceptance criteria, and create implementation tasks."
+description: "Prepare work for development sprints, break epics into stories, refine acceptance criteria, and create implementation tasks."
 ---
 
 Iteration happens per epic. You take a feature-level epic and break it into sprint-ready work items: user stories with acceptance criteria and implementation tasks.
@@ -12,22 +12,22 @@ Slice an epic into vertical user stories that each deliver end-to-end value.
 | | |
 | --- | --- |
 | **Skill (recommended)** | `/pair-process-plan-stories` |
-| **How-to guide** | [07 — How to Break Down User Stories](/docs/reference/guidelines-catalog) |
+| **How-to guide** | [07: How to Break Down User Stories](/docs/reference/guidelines-catalog) |
 | **Input** | Epic issue from your PM tool |
 | **Output** | Issues in your PM tool (type: story) validated against INVEST criteria |
 
-The AI applies **vertical slicing** — each story delivers a thin slice of functionality from UI to database, rather than a horizontal layer. Stories are validated against the INVEST framework:
+The AI applies **vertical slicing**: each story delivers a thin slice of functionality from UI to database, rather than a horizontal layer. Stories are validated against the INVEST framework:
 
-- **I**ndependent — can be developed without waiting for other stories
-- **N**egotiable — details are open for discussion
-- **V**aluable — delivers something useful to the user
-- **E**stimable — small enough to estimate confidently
-- **S**mall — fits in a single sprint
-- **T**estable — has clear pass/fail criteria
+- **I**ndependent: can be developed without waiting for other stories
+- **N**egotiable: details are open for discussion
+- **V**aluable: delivers something useful to the user
+- **E**stimable: small enough to estimate confidently
+- **S**mall: fits in a single sprint
+- **T**estable: has clear pass/fail criteria
 
-Before candidates are even triaged, the AI reads the project's recorded decisions (ADRs, decision log) and its context map, scoped to what the epic touches: a candidate contradicting a live decision is reshaped or dropped, whatever a decision shaped is **cited** in the generated story (`(per ADR-013)`, `(per context-map: macrostate)`), and a candidate that genuinely reopens a decision is flagged `Revisits <id>` in the proposal rather than silently contradicting it. Fresh project with no decisions yet? Generation behaves exactly as before — see [Adoption files](/docs/concepts/adoption-files).
+Before candidates are even triaged, the AI reads the project's recorded decisions (ADRs, decision log) and its context map, scoped to what the epic touches: a candidate contradicting a live decision is reshaped or dropped, whatever a decision shaped is **cited** in the generated story (`(per ADR-013)`, `(per context-map: macrostate)`), and a candidate that genuinely reopens a decision is flagged `Revisits <id>` in the proposal rather than silently contradicting it. Fresh project with no decisions yet? Generation behaves exactly as before, see [Adoption files](/docs/concepts/adoption-files).
 
-Before a story is created, it's triaged against stories already linked to the epic — proposed as **EXTEND #ID** or **CREATE**, same pattern as epic breakdown (see [Strategic Planning](/docs/developer-journey/strategic-planning#triage-against-the-existing-backlog)). INVEST validation still applies to every CREATE candidate; an EXTEND re-validates INVEST for the merged scope.
+Before a story is created, it's triaged against stories already linked to the epic, proposed as **EXTEND #ID** or **CREATE**, same pattern as epic breakdown (see [Strategic Planning](/docs/developer-journey/strategic-planning#triage-against-the-existing-backlog)). INVEST validation still applies to every CREATE candidate; an EXTEND re-validates INVEST for the merged scope.
 
 ## Step 6: Refine a User Story
 
@@ -36,13 +36,13 @@ Transform a rough story into a development-ready specification.
 | | |
 | --- | --- |
 | **Skill (recommended)** | `/pair-process-refine-story` |
-| **How-to guide** | [08 — How to Refine a User Story](/docs/reference/guidelines-catalog) |
-| **Input** | Story issue (status: Draft — the concrete board column is `Todo`) |
+| **How-to guide** | [08: How to Refine a User Story](/docs/reference/guidelines-catalog) |
+| **Input** | Story issue (status: Draft: the concrete board column is `Todo`) |
 | **Output** | Story updated with acceptance criteria, technical analysis, and sizing (status: Ready) |
 
-Refinement opens with a **phase 0 alignment gate**: the AI runs a `/pair-capability-grill` shared-understanding sync — goal, acceptance criteria, edge cases, dependencies, design, and risks — one question at a time, and no readiness section is authored until you and the AI explicitly agree. It's a blocking gate: an unaligned story never proceeds to Ready.
+Refinement opens with a **phase 0 alignment gate**: the AI runs a `/pair-capability-grill` shared-understanding sync (goal, acceptance criteria, edge cases, dependencies, design, and risks) one question at a time, and no readiness section is authored until you and the AI explicitly agree. It's a blocking gate: an unaligned story never proceeds to Ready.
 
-Refinement reads the same adoption context as story breakdown — acceptance criteria and the technical approach follow (and cite) decisions already recorded, and an approach that reopens one is flagged `Revisits <id>` for you to accept or reject.
+Refinement reads the same adoption context as story breakdown, acceptance criteria and the technical approach follow (and cite) decisions already recorded, and an approach that reopens one is flagged `Revisits <id>` for you to accept or reject.
 
 Refinement then adds these to a story:
 
@@ -55,7 +55,7 @@ Then they are redirected to the dashboard
 And their session is active for 24 hours
 ```
 
-Every AC is testable — either it passes or it doesn't.
+Every AC is testable: either it passes or it doesn't.
 
 ### Technical Analysis
 
@@ -70,11 +70,11 @@ Story points using the team's estimation methodology. The AI proposes a size bas
 
 ### Classification Matrix
 
-Refinement also shifts classification left: `/pair-capability-classify` scores the story against the quality model (risk and cost dimensions, coupling fed by the scoped subdomain/context mapping) and writes the matrix into the story's `## Classification` section — so the risk tier is known before a line of code is written, not first surfaced at review.
+Refinement also shifts classification left: `/pair-capability-classify` scores the story against the quality model (risk and cost dimensions, coupling fed by the scoped subdomain/context mapping) and writes the matrix into the story's `## Classification` section, so the risk tier is known before a line of code is written, not first surfaced at review.
 
 **What you see on the card.** A `## Classification` section: the resulting tier up front, then one line per dimension with its value, where it came from and a short note, collapsed under a `<details>` so the card stays readable. When the project projects tags, the card also carries the `risk:*` tag. The dimensions and tiers themselves are defined in [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates) and the [Quality Model](/docs/reference/quality-model).
 
-**What you are asked to confirm.** Classification is a proposal: the refinement reports the matrix and you accept it or correct a dimension you know better (a story that actually touches a critical service, say). The tier is derived from the story's declared scope — a story that names no deployable falls back to the project's defaults — so a vague scope is the usual reason to correct it here rather than at review.
+**What you are asked to confirm.** Classification is a proposal: the refinement reports the matrix and you accept it or correct a dimension you know better (a story that actually touches a critical service, say). The tier is derived from the story's declared scope (a story that names no deployable falls back to the project's defaults) so a vague scope is the usual reason to correct it here rather than at review.
 
 Review later re-classifies from the real diff; that side is in [Execution](/docs/developer-journey/execution#what-your-prs-tier-changes).
 
@@ -87,11 +87,11 @@ Break a refined story into concrete implementation tasks.
 | | |
 | --- | --- |
 | **Skill (recommended)** | `/pair-process-plan-tasks` |
-| **How-to guide** | [09 — How to Create Tasks](/docs/reference/guidelines-catalog) |
+| **How-to guide** | [09: How to Create Tasks](/docs/reference/guidelines-catalog) |
 | **Input** | Refined story issue |
 | **Output** | Task Breakdown section appended to the story body |
 
-Tasks are documented **inline in the story body** — not as separate issues. Each task includes:
+Tasks are documented **inline in the story body**, not as separate issues. Each task includes:
 
 - Implementation approach and files to touch
 - Acceptance criteria mapped to the parent story's AC
@@ -141,4 +141,4 @@ Every story is development-ready: clear AC, technical approach, sized, with task
 
 ## Next
 
-[Execution](/docs/developer-journey/execution) — implement stories and review code.
+[Execution](/docs/developer-journey/execution): implement stories and review code.

@@ -1,6 +1,6 @@
 ---
 title: Cursor
-description: Set up pair with Cursor — configure .cursor/rules, discover skills, and follow the bridge pattern.
+description: Set up pair with Cursor, configure .cursor/rules, discover skills, and follow the bridge pattern.
 ---
 
 ## Prerequisites
@@ -28,11 +28,11 @@ your-project/
 └── ...
 ```
 
-The rules file contains the same information as `AGENTS.md` — task selection, essential commands, key references, and quick rules — formatted for Cursor's conventions.
+The rules file contains the same information as `AGENTS.md` (task selection, essential commands, key references, and quick rules) formatted for Cursor's conventions.
 
 ### The Bridge Pattern
 
-`.cursor/rules/` points to `.pair/` — the single source of truth. When you update adoption files or install new skills, Cursor picks up the changes at the next session start.
+`.cursor/rules/` points to `.pair/`: the single source of truth. When you update adoption files or install new skills, Cursor picks up the changes at the next session start.
 
 ```text
 .cursor/rules/  ──→ .pair/knowledge/   (guidelines)
@@ -64,7 +64,7 @@ For the full catalog, see [Skills Catalog](/docs/reference/skills-catalog).
 
 ### Cursor Rules and Adoption Files
 
-Cursor rules provide the entry point, but the real context lives in `.pair/adoption/`. When Cursor reads the rules, it discovers your architecture decisions, tech stack, and development process — keeping responses aligned with your project.
+Cursor rules provide the entry point, but the real context lives in `.pair/adoption/`. When Cursor reads the rules, it discovers your architecture decisions, tech stack, and development process, keeping responses aligned with your project.
 
 ### Multi-Agent Teams
 
@@ -72,7 +72,7 @@ If your team uses both Cursor and Claude Code (or other tools), the bridge patte
 
 ### Skills as Symlinks
 
-Skills in `.cursor/skills/` are symlinks to `.claude/skills/`. This means `pair-cli update` updates all tools simultaneously — no manual sync needed. On Windows, pair falls back to full copies if symlinks aren't available.
+Skills in `.cursor/skills/` are symlinks to `.claude/skills/`. This means `pair-cli update` updates all tools simultaneously: no manual sync needed. On Windows, pair falls back to full copies if symlinks aren't available.
 
 ## Verify It Works
 

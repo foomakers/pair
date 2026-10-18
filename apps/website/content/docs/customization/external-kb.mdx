@@ -7,7 +7,7 @@ import { Callout } from 'fumadocs-ui/components/callout'
 
 `pair-cli scaffold-kb` creates an **external Knowledge Base repository**: a repo whose
 only job is to hold knowledge and skills, package them, and publish them. A project
-installs it through the normal `pair-cli install --source <git-url-or-path>` path — no custom
+installs it through the normal `pair-cli install --source <git-url-or-path>` path: no custom
 tooling, no special-casing in the CLI.
 
 Use it when you want your own KB (private, self-hosted, or a fork) instead of
@@ -47,19 +47,23 @@ project, while a KB is knowledge. Consuming projects keep their own adoption fil
 
 ### Options
 
-`[path]`, `--name`, `--host` and `--force` — with the `--name` validation rules, why `--host` is
-never inferred from the target's remote, and what `--force` does *not* bypass — are documented once
+`[path]`, `--name`, `--host` and `--force` (with the `--name` validation rules, why `--host` is
+never inferred from the target's remote, and what `--force` does *not* bypass) are documented once
 in the [CLI reference](/docs/reference/cli/commands#scaffold-kb). This page covers the lifecycle
 around the command, not its syntax.
 
 ## What the KB declares
 
-`pair.config.json` declares exactly two registries — knowledge and skills (**abridged**
-below: the generated file also carries a `description` on each registry, and the `skills`
-registry lists the canonical `.claude/skills/` target plus five `symlink` targets —
-`.github/skills/`, `.cursor/skills/`, `.agent/skills/`, `.agents/skills/`,
-`.windsurf/skills/` — so every agent tool picks the skills up. Those extra targets are the
-scaffold's, not something you added):
+`pair.config.json` declares exactly two registries, knowledge and skills (**abridged** below).
+
+- The generated file also carries a `description` on each registry.
+- The `skills` registry lists the canonical `.claude/skills/` target plus five `symlink` targets, so every agent tool picks the skills up:
+  - `.github/skills/`
+  - `.cursor/skills/`
+  - `.agent/skills/`
+  - `.agents/skills/`
+  - `.windsurf/skills/`
+- Those extra targets are the scaffold's, not something you added.
 
 ```json
 {
@@ -85,23 +89,21 @@ KBs never collide. `pair-cli install --source <kb>` reads this file from the KB 
 nothing has to be copied into the consuming project.
 
 A consuming project that declares the same registry in its own `pair.config.json` still
-wins — **the source declares, the consumer overrides**. The full resolution order is in
+wins, **the source declares, the consumer overrides**. The full resolution order is in
 the [configuration reference](/docs/reference/configuration#resolution-order).
 
-**Known limitation — changing `prefix` on an `overwrite` registry leaves the old
-directory installed.** `skills` (and any other `behavior: "overwrite"` registry) is not
-cleaned up like a `mirror` one: `pair-cli update` installs under the new prefix but does not
-remove the directory the old prefix left behind, so a consuming project that already
-installed under one prefix and then updates to a KB declaring a different `prefix` ends
-up with both — e.g. `pair-example-skill` and `acme-kb-example-skill` side by side. Delete
-the stale `<old-prefix>-<skill-name>` directories under `.claude/skills/` (and any other
-`overwrite` target) by hand after a prefix change.
+**Known limitation: changing `prefix` on an `overwrite` registry leaves the old
+directory installed.**
+
+`skills` (and any other `behavior: "overwrite"` registry) is not cleaned up like a `mirror` one: `pair-cli update` installs under the new prefix but does not remove the directory the old prefix left behind, so a consuming project that already installed under one prefix and then updates to a KB declaring a different `prefix` ends up with both, e.g. `pair-example-skill` and `acme-kb-example-skill` side by side.
+
+Delete the stale `<old-prefix>-<skill-name>` directories under `.claude/skills/` (and any other `overwrite` target) by hand after a prefix change.
 
 ## Add content
 
 1. Write guidelines and how-tos under `.pair/knowledge/`.
 2. Add each skill as `.skills/<skill-name>/SKILL.md` with `name` and `description` frontmatter.
-3. Commit. Nothing else to wire up — the registries above already cover both paths.
+3. Commit. Nothing else to wire up: the registries above already cover both paths.
 
 ## Cut a release
 
@@ -110,7 +112,7 @@ bash scripts/release.sh 1.0.0
 ```
 
 The script wraps the existing [`pair-cli package`](/docs/reference/cli/commands#package)
-command — the same mechanism the official KB uses — and writes
+command (the same mechanism the official KB uses) and writes
 `dist/<kb-slug>-1.0.0.zip`. On the `github` host it then tags `v1.0.0` and creates a
 GitHub release with the ZIP attached. Pushing a `v*` tag runs the same script in CI via
 `.github/workflows/release.yml`.
@@ -127,14 +129,14 @@ tag cannot be pushed, the local tag is removed again.
 
 ### Hosts without automated release publishing
 
-Publishing never happens inside `pair-cli` — it lives entirely in the generated script,
+Publishing never happens inside `pair-cli`: it lives entirely in the generated script,
 which keeps the CLI code-host agnostic. When the `gh` CLI is missing, the KB directory is
 not the root of its own git repository, or you scaffolded with `--host generic`, the
 script stops after packaging and tells you where the ZIP is:
 
 ```text
 ==> Packaged: dist/acme-kb-1.0.0.zip
-    Your KB package is ready at dist/acme-kb-1.0.0.zip — publish it however your org does:
+    Your KB package is ready at dist/acme-kb-1.0.0.zip - publish it however your org does:
     attach it to a release, upload it to an artifact store, or serve it over HTTP.
     Consumers install it with: pair-cli install --source <git-url-or-path-of-this-KB>
 ```
@@ -156,44 +158,32 @@ pair-cli install --source ./dist/acme-kb-1.0.0.zip --offline
 
 <Callout>
   **No external source ever writes the official KB's slot.** An external KB that has to
-  be materialized first — a ZIP, a remote ZIP, a git clone — is cached under
-  `~/.pair/kb/external/<kind>-<hash>/` (the remote-ZIP form also keeps a label:
-  `url-<label>-<hash>/`), never in the official KB's version slot
-  (`~/.pair/kb/<cli-version>/`). A **local directory** is not cached at all: it is
-  installed from in place, so editing it changes what the next install produces. Either
-  way, installing an external KB in one project cannot change what any other project on
-  the machine resolves. If the official slot **for the
-  CLI version you are running** is found holding a different KB, it is discarded and
-  re-fetched instead of served. Slots left polluted by an older CLI (the bug fixed in
-  [foomakers/pair#395](https://github.com/foomakers/pair/issues/395)) sit under that older
-  version's directory, which the new CLI never reads again — they are abandoned, not
-  cleaned: delete `~/.pair/kb/<old-cli-version>/` yourself to reclaim the disk.
+be materialized first (a ZIP, a remote ZIP, a git clone) is cached under `~/.pair/kb/external/<kind>-<hash>/` (the remote-ZIP form also keeps a label: `url-<label>-<hash>/`), never in the official KB's version slot (`~/.pair/kb/<cli-version>/`). A **local directory** is not cached at all: it is installed from in place, so editing it changes what the next install produces.
+
+Either way, installing an external KB in one project cannot change what any other project on the machine resolves. If the official slot **for the CLI version you are running** is found holding a different KB, it is discarded and re-fetched instead of served.
+
+Slots left polluted by an older CLI (the bug fixed in [foomakers/pair#395](https://github.com/foomakers/pair/issues/395)) sit under that older version's directory, which the new CLI never reads again: they are abandoned, not cleaned: delete `~/.pair/kb/<old-cli-version>/` yourself to reclaim the disk.
 </Callout>
 
 Registries the external KB does not ship (for example `adoption`, `github`) are **skipped**,
-not failed — there is simply nothing to copy. The summary names them and the reason:
+not failed: there is simply nothing to copy. The summary names them and the reason:
 
 ```text
-✓ Installation complete (2 ok, 3 skipped — not shipped by this source, 79ms)
-    3 skipped — not shipped by this source: adoption, github, agents
+✓ Installation complete (2 ok, 3 skipped - not shipped by this source, 79ms)
+    3 skipped - not shipped by this source: adoption, github, agents
 ```
 
 The exit code follows the failures only, so it never contradicts that line: `0` here, and
 non-zero if a registry the KB **does** ship fails to install, or if the run installs
-nothing at all. A skipped registry never hides a real failure — the two are counted
+nothing at all. A skipped registry never hides a real failure: the two are counted
 separately.
 
-`pair-cli update` follows the same tally, and this is a change in behaviour: an update used to
-exit `0` unless it threw. If your source ships **none** of the registries the project has
-installed, `pair-cli update --source <kb>` now exits non-zero (`Nothing to update`) instead of
-reporting success — a script that treated any update as a success should now check the
-code. `update --source` also reads the KB's own `pair.config.json`, exactly as install
-does, so a declared `prefix` survives the round trip instead of re-installing the same
-skills under a second name. See
-[Install from URL or Path](/docs/customization/install-from-url) for every source form.
+`pair-cli update` follows the same tally, and this is a change in behaviour: an update used to exit `0` unless it threw. If your source ships **none** of the registries the project has installed, `pair-cli update --source <kb>` now exits non-zero (`Nothing to update`) instead of reporting success: a script that treated any update as a success should now check the code.
+
+`update --source` also reads the KB's own `pair.config.json`, exactly as install does, so a declared `prefix` survives the round trip instead of re-installing the same skills under a second name. See [Install from URL or Path](/docs/guides/external-kb) for every source form.
 
 A project consumes **one** distribution channel for a given skill set: an external KB
-like this one, or the marketplace — not both.
+like this one, or the marketplace, not both.
 
 ## Re-run it safely
 
@@ -208,19 +198,18 @@ duplicates anything.
 | Files of a **different** `--host` (e.g. the workflow after switching to `generic`) | left in place and named in the report as not managed by the current host |
 
 Without a terminal to ask (CI, scripts), a modified scaffold-owned file is **kept** and
-reported as skipped — nothing is silently overwritten. Use `--force` to regenerate
+reported as skipped: nothing is silently overwritten. Use `--force` to regenerate
 deliberately.
 
 Switching `--host` does not delete the previous host's files, because `scaffold-kb` never
 destroys anything on disk. Re-running with `--host generic` in a repo scaffolded for GitHub
 therefore leaves `.github/workflows/release.yml` behind, where it keeps running on every
 `v*` tag push while the regenerated `scripts/release.sh` no longer publishes a release. The
-report names it — `.github/workflows/release.yml exists but is not managed by --host generic`
-— and deleting it is your call.
+report names it (`.github/workflows/release.yml exists but is not managed by --host generic`) and deleting it is your call.
 
 ## Related
 
-- [Publish a Knowledge Base](/docs/customization/organization) — authoring, packaging, and distribution in depth
-- [CLI Commands](/docs/reference/cli/commands#scaffold-kb) — `scaffold-kb` reference
-- [Install from URL or Path](/docs/customization/install-from-url) — every KB source form
-- [KB Structure](/docs/reference/kb-structure) — full directory layout
+- [Publish a Knowledge Base](/docs/customization/organization): authoring, packaging, and distribution in depth
+- [CLI Commands](/docs/reference/cli/commands#scaffold-kb): `scaffold-kb` reference
+- [Install from URL or Path](/docs/guides/external-kb): every KB source form
+- [KB Structure](/docs/reference/kb-structure): full directory layout

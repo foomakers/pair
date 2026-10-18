@@ -1,6 +1,6 @@
 ---
 title: Claude Code plugin & /pair-assistant
-description: What the pair marketplace plugin installs, how to add, update and remove it, and what /pair-assistant can do — install, update, run CLI jobs and configure pair — and how it writes.
+description: What the pair marketplace plugin installs, how to add, update and remove it, and what /pair-assistant can do, install, update, run CLI jobs and configure pair, and how it writes.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout'
@@ -31,11 +31,21 @@ One skill: `/pair-assistant`. `claude plugin details pair@pair` reports `Skills 
 
 Ask `/pair-assistant` what it can do and it lists two things.
 
-**CLI jobs** (options always read from `pair-cli --help`, never from a list in the skill): `install`, `update`, `kb-info`, `kb-validate`, `kb-verify`, `package`, `scaffold-kb`, `update-link`, `validate-config`, `kb-cache`, `tokens`. Each [CLI command](/docs/reference/cli/commands) names its request in a "Via" line.
+**CLI jobs** (options always read from `pair-cli --help`, never from a list in the skill):
+
+- `install`, `update`
+- `kb-info`, `kb-validate`, `kb-verify`
+- `package`, `scaffold-kb`
+- `update-link`, `validate-config`
+- `kb-cache`, `tokens`
+
+ Each [CLI command](/docs/reference/cli/commands) names its request in a "Via" line.
 
 **Configuration areas**: autonomy, cycle hooks, blocking severities, Publish-PR hooks, workflow profiles, kept registries (`skipRegistries`), `format-check-command`, `worktree-setup-command`, review enforcement and identity, coverage guardrail, PR states, PM tool and State Mapping, Definition of Ready/Done, process profile, risk matrix and tag projection, harness and model policy, quality gates and branch protection, package-local adoption, template overrides, and a full adoption pass.
 
 ![Configuration areas: area, file, owner and validator for each thing /pair-assistant configures](/diagrams/assistant-config-areas.svg)
+
+*Figure: configuration areas: area, file, owner and validator for each thing /pair-assistant configures.*
 
 ## How to ask
 
@@ -53,7 +63,13 @@ Ask `/pair-assistant` what it can do and it lists two things.
 ## How it writes
 
 1. **It shows the diff** (file, section, before, after) and asks. It writes only after an explicit yes.
-2. **It validates first**, on a temporary copy, with the cycle scripts the CLI installed in `.claude/skills/pair-workflow-cycle/scripts/`: `autonomy-policy.mjs resolve`, `cycle-hooks.mjs load`, `blocking-severities.mjs read`, `workflow-profile.mjs resolve`. A non-zero result or HALT stops with the script output; nothing is written. Scripts missing: it offers `update` first.
+2. **It validates first**, on a temporary copy, with the cycle scripts the CLI installed in `.claude/skills/pair-workflow-cycle/scripts/`: 
+   - `autonomy-policy.mjs resolve`
+   - `cycle-hooks.mjs load`
+   - `blocking-severities.mjs read`
+   - `workflow-profile.mjs resolve`
+
+    A non-zero result or HALT stops with the script output; nothing is written. Scripts missing: it offers `update` first.
 3. **It writes through the owner**: `/pair-capability-record-decision` for adoption files, or the section-owning skill (`/pair-capability-setup-pm`, `-setup-harness`, `-setup-gates`, `/pair-process-bootstrap`). It never edits adoption files itself. `pair.config.json` is not an adoption file: `workflowProfiles` is a shown edit plus an ADL via record-decision.
 4. **A malformed config stops it**: it shows the script output and offers a fix; it never writes over a broken file. An area outside the menu is reported as such, never invented.
 

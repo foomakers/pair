@@ -1,6 +1,6 @@
 ---
 title: opencode
-description: Run pair on opencode — zero-wiring skill discovery, MCP-native access, headless run/serve, and opencode as a pair-cli run engine.
+description: Run pair on opencode, zero-wiring skill discovery, MCP-native access, headless run/serve, and opencode as a pair-cli run engine.
 ---
 
 opencode is a **harness** for pair's process and an **engine**
@@ -10,7 +10,7 @@ framework, and the only one with a persistent headless HTTP server.
 <Callout>
   This page is the user-facing setup guide. The facts it describes are maintained once, in the
   [agent-harness framework](https://github.com/foomakers/pair/blob/main/.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/opencode.md)
-  inside the Knowledge Base your agents read — that guide is the source of truth. Run
+  inside the Knowledge Base your agents read: that guide is the source of truth. Run
   `/pair-capability-setup-harness` to have pair configure opencode for you.
 </Callout>
 
@@ -19,12 +19,12 @@ framework, and the only one with a persistent headless HTTP server.
 - opencode installed and authenticated (`opencode auth list` shows a provider)
 - A pair-enabled project (`pair-cli install` completed, `.pair/` exists)
 
-## Skill Discovery — Nothing to Wire
+## Skill Discovery: Nothing to Wire
 
 opencode searches, in order, `.opencode/skills/`, `.claude/skills/` and `.agents/skills/` at the
 project level (walking up to the git worktree root), plus the matching global paths under
 `~/.config/opencode/`, `~/.claude/` and `~/.agents/`. `pair-cli install` writes the canonical copies to
-`.claude/skills/` and symlinks the rest, so pair's skills are already visible — **no wiring**.
+`.claude/skills/` and symlinks the rest, so pair's skills are already visible, **no wiring**.
 
 Skills present both globally and in the project produce a `duplicate skill name` warning. That is
 opencode telling you the discovery walk ran, not an error in your project.
@@ -39,7 +39,7 @@ from the same category.
 
 ## Access Paths
 
-**MCP is first-class** — `opencode mcp add|list|auth|logout|debug` manages servers directly. A
+**MCP is first-class**: `opencode mcp add|list|auth|logout|debug` manages servers directly. A
 project whose `tech/automation.md` declares `Requires: mcp` is fit for opencode (and, deliberately,
 not for pi).
 
@@ -48,13 +48,13 @@ not for pi).
 | Command | What it is |
 | ------- | ---------- |
 | `opencode run "<message>"` | One-shot non-interactive execution; `--format json` emits the JSONL event stream `pair-cli run` reads |
-| `opencode serve` | A persistent headless HTTP server — the capability no other harness in this framework has |
+| `opencode serve` | A persistent headless HTTP server: the capability no other harness in this framework has |
 | `opencode attach <url>` | Drives a running server remotely |
 
 ## Driving opencode with `pair-cli run`
 
 ```bash
-# Resolution only — see the exact command line before anything runs
+# Resolution only - see the exact command line before anything runs
 pair-cli run --engine opencode --root 212 --dry-run
 
 # Unattended within a narrow perimeter
@@ -71,13 +71,13 @@ To make opencode the project's default engine:
 { "engine": { "id": "opencode" } }
 ```
 
-## Model Providers — Two Gateways, Neither Is an Engine
+## Model Providers: Two Gateways, Neither Is an Engine
 
 Provider choice and engine choice are **different axes**: `--engine opencode` says which process
 runs, `--model` says which model it talks to.
 
-- **Zen** — pay-as-you-go, API-key based. Several models are offered free "for a limited time".
-- **Go** — subscription-based, and spendable headless: obtain a persistent API key once
+- **Zen**: pay-as-you-go, API-key based. Several models are offered free "for a limited time".
+- **Go**: subscription-based, and spendable headless: obtain a persistent API key once
   (`/connect` in the TUI), then use it like any other API key.
 
 <Callout type="warn">
@@ -85,7 +85,7 @@ runs, `--model` says which model it talks to.
   zero-retention, but free/experimental entries may use your data to improve the model;
   OpenAI/Anthropic-backed entries retain requests for 30 days regardless of tier; some vendors log
   or train unless declined. Check the specific provider's disclosure before pointing an unattended
-  run at a free model — an unattended run sends far more of your repository than a manual session
+  run at a free model: an unattended run sends far more of your repository than a manual session
   does.
 </Callout>
 
@@ -99,7 +99,7 @@ opencode run "/pair-next"
 
 ## Related
 
-- [`pair-cli run` reference](/docs/reference/cli/commands#run) — the driver, its perimeter and its flags
-- [pi](/docs/integrations/pi) — the no-MCP harness in the same framework
-- [Adding a harness](/docs/integrations/adding-a-harness) — how to bring a new engine into pair
-- [Configuration reference](/docs/reference/configuration#execution-engine-engine) — the optional `engine` key
+- [`pair-cli run` reference](/docs/reference/cli/commands#run): the driver, its perimeter and its flags
+- [pi](/docs/integrations/pi): the no-MCP harness in the same framework
+- [Adding a harness](/docs/integrations/adding-a-harness): how to bring a new engine into pair
+- [Configuration reference](/docs/reference/configuration#execution-engine-engine): the optional `engine` key

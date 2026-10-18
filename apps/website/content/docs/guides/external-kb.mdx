@@ -1,9 +1,33 @@
 ---
-title: Install from URL or Path
-description: How to install pair's Knowledge Base from a custom URL, local path, or in offline environments.
+title: Use an external or organization KB
+description: Scaffold, package and install a Knowledge Base from your own repository, a URL or a local path.
 ---
 
-This guide explains how to install pair's Knowledge Base from sources other than the default GitHub release — including custom URLs, local paths, and fully offline environments.
+**Goal**: ship your own KB and install it from a URL, git repo or local path.
+
+## Prerequisites
+
+- `pair-cli` installed; a git host for the KB repository
+
+## Steps
+
+1. **Scaffold the KB repository**
+   - With the CLI: `pair-cli scaffold-kb ../acme-kb --name "Acme KB"` ([details](/docs/customization/external-kb)).
+   - With `/pair-assistant` (optional, Claude Code): "scaffold a KB repository".
+2. **Package it**
+   - With the CLI: `pair-cli package --layout source` ([organization guide](/docs/customization/organization)).
+3. **Install it**
+   - With the CLI: `pair-cli install --source <url|path|git-url#ref>` (details below).
+   - With `/pair-assistant` (optional, Claude Code): "install the KB from this URL".
+
+## Verify
+
+- `pair-cli kb-info` shows your KB name and version.
+
+## Install from a URL or path
+
+
+This guide explains how to install pair's Knowledge Base from sources other than the default GitHub release, including custom URLs, local paths, and fully offline environments.
 
 ## Default Behavior
 
@@ -54,7 +78,7 @@ pair-cli install --source git@github.com:acme/kb-artifacts.git#main
 
 ### Private Repositories
 
-For **SSH URLs** (`git@…`), git uses your SSH keys automatically — no extra configuration.
+For **SSH URLs** (`git@…`), git uses your SSH keys automatically: no extra configuration.
 
 For **HTTPS URLs** to private repos, set `PAIR_GIT_TOKEN`:
 
@@ -170,7 +194,7 @@ pair-cli update --offline --source ./updated-kb
 
 ## Related
 
-- [CLI Commands Reference](/docs/reference/cli/commands) — Full `install` and `update` syntax
-- [KB Source Resolution Spec](/docs/reference/specs/kb-source-resolution) — Technical spec for resolution algorithm
-- [External KB Repository](/docs/customization/external-kb) — Create the repository this page installs from, with its release flow
-- [Troubleshooting](/docs/support/troubleshooting) — Common installation issues
+- [CLI Commands Reference](/docs/reference/cli/commands): Full `install` and `update` syntax
+- [KB Source Resolution Spec](/docs/reference/specs/kb-source-resolution): Technical spec for resolution algorithm
+- [External KB Repository](/docs/customization/external-kb): Create the repository this page installs from, with its release flow
+- [Troubleshooting](/docs/support/troubleshooting): Common installation issues

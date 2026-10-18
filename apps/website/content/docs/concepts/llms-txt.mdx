@@ -3,7 +3,7 @@ title: llms.txt
 description: How pair generates llms.txt files following the llmstxt.org standard, making documentation and project context natively consumable by AI assistants.
 ---
 
-pair generates [llms.txt](https://llmstxt.org) files — a standard format that lets AI assistants quickly understand what a site or project offers, without parsing full HTML pages or navigating file trees.
+pair generates [llms.txt](https://llmstxt.org) files: a standard format that lets AI assistants quickly understand what a site or project offers, without parsing full HTML pages or navigating file trees.
 
 Instead of forcing an AI to crawl documentation or read every file in `.pair/`, an llms.txt file provides a curated index: what's available, where to find it, and optionally the full content.
 
@@ -37,14 +37,14 @@ Key rules:
 
 pair produces llms.txt at three levels, each serving a different use case:
 
-### 1. Site Index — `/llms.txt`
+### 1. Site Index: `/llms.txt`
 
 Available at the pair documentation website. Lists all published doc pages with titles and URLs. An AI assistant can fetch this to understand what documentation exists and link to specific pages.
 
 ```text
 # pair
 
-> AI-assisted software development — structured Knowledge Base, Agent Skills, and adoption files for AI coding assistants.
+> AI-assisted software development - structured Knowledge Base, Agent Skills, and adoption files for AI coding assistants.
 
 ## Getting Started
 
@@ -58,11 +58,11 @@ Available at the pair documentation website. Lists all published doc pages with 
 ...
 ```
 
-### 2. Site Full — `/llms-full.txt`
+### 2. Site Full: `/llms-full.txt`
 
 Also on the documentation website. Contains the full text content of every published doc page, concatenated with heading separators. Designed to be loaded into an AI's context window so it can answer questions about pair without fetching individual pages.
 
-### 3. Project-Local — `.pair/llms.txt`
+### 3. Project-Local: `.pair/llms.txt`
 
 Generated locally when you run `pair-cli install` or `pair-cli update`. Summarizes the installed Knowledge Base: adoption files, guidelines, how-to guides, and skills. This gives an AI assistant a map of your project's pair setup without scanning the entire `.pair/` directory.
 
@@ -71,11 +71,11 @@ Generated locally when you run `pair-cli install` or `pair-cli update`. Summariz
 
 > AI-assisted development knowledge base for this project.
 
-## Adoption — Product
+## Adoption - Product
 
 - [PRD](.pair/adoption/product/PRD.md)
 
-## Adoption — Tech
+## Adoption - Tech
 
 - [Architecture](.pair/adoption/tech/architecture.md)
 - [Tech Stack](.pair/adoption/tech/tech-stack.md)
@@ -91,9 +91,9 @@ Generated locally when you run `pair-cli install` or `pair-cli update`. Summariz
 
 An AI assistant consumes llms.txt in two main ways:
 
-**Discovery** — the AI fetches `/llms.txt` from the site to learn what documentation is available, then fetches specific pages as needed. This is efficient: one small request gives a complete map.
+**Discovery**: the AI fetches `/llms.txt` from the site to learn what documentation is available, then fetches specific pages as needed. This is efficient: one small request gives a complete map.
 
-**Full context** — the AI loads `/llms-full.txt` or `.pair/llms.txt` into its context window. This works well for questions that span multiple topics or when the AI needs broad understanding of the project.
+**Full context**: the AI loads `/llms-full.txt` or `.pair/llms.txt` into its context window. This works well for questions that span multiple topics or when the AI needs broad understanding of the project.
 
 The project-local `.pair/llms.txt` is referenced from `AGENTS.md`, so AI coding assistants discover it automatically at session start.
 
@@ -101,8 +101,8 @@ The project-local `.pair/llms.txt` is referenced from `AGENTS.md`, so AI coding 
 
 | Event | What regenerates |
 |-------|-----------------|
-| Site build (CI/CD) | `/llms.txt` and `/llms-full.txt` — extracted from MDX content at build time |
-| `pair-cli install` | `.pair/llms.txt` — generated from installed KB content |
-| `pair-cli update` | `.pair/llms.txt` — regenerated to reflect updated KB |
+| Site build (CI/CD) | `/llms.txt` and `/llms-full.txt`, extracted from MDX content at build time |
+| `pair-cli install` | `.pair/llms.txt`, generated from installed KB content |
+| `pair-cli update` | `.pair/llms.txt`, regenerated to reflect updated KB |
 
-Site routes are statically generated at build time — no runtime processing required, compatible with Vercel's free tier.
+Site routes are statically generated at build time: no runtime processing required, compatible with Vercel's free tier.

@@ -3,7 +3,7 @@ title: Bootstrap Quick Mode
 description: Bootstrap your project's adoption files in one shot with KB-sensible defaults, instead of answering the full interview.
 ---
 
-Bootstrap has two resolution depths and one entry point. **Guided** — the default — interviews you decision by decision. **Quick** takes the same defaults without asking, so an empty project reaches a first workable story in minutes.
+Bootstrap has two resolution depths and one entry point. **Guided** (the default) interviews you decision by decision. **Quick** takes the same defaults without asking, so an empty project reaches a first workable story in minutes.
 
 This page is about the `/pair-process-bootstrap` skill. For installing the CLI and the Knowledge Base first, see the [Quickstart](/docs/getting-started/quickstart).
 
@@ -26,17 +26,17 @@ Quick mode is **additive**. It is a second depth of the same skill, not a separa
 
 **With the CLI:** bootstrap is a skill; there is no `pair-cli` command for it. **With `/pair-assistant` (optional, Claude Code):** ask it to adopt the project; it runs the install, then hands off to `/pair-process-bootstrap` ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
 
-**One precondition**: a populated `.pair/adoption/product/PRD.md`. Phase 0 of bootstrap is blocking in both depths — with no PRD it composes `/pair-process-specify-prd`, a full interactive authoring session that is neither defaulted nor counted below. Write the PRD first, then run quick mode.
+**One precondition**: a populated `.pair/adoption/product/PRD.md`. Phase 0 of bootstrap is blocking in both depths, with no PRD it composes `/pair-process-specify-prd`, a full interactive authoring session that is neither defaulted nor counted below. Write the PRD first, then run quick mode.
 
 With the PRD in place, expect at most two questions:
 
-- **Which PM tool?** — the choice is organisational, not technical, so there is no safe default to guess. Skipped if your `way-of-working.md` already names one.
-- **Which tech stack?** — normally read straight from `package.json`, lockfiles and config. Only asked on a genuinely empty repository, where there is nothing to read.
+- **Which PM tool?**: the choice is organisational, not technical, so there is no safe default to guess. Skipped if your `way-of-working.md` already names one.
+- **Which tech stack?**: normally read straight from `package.json`, lockfiles and config. Only asked on a genuinely empty repository, where there is nothing to read.
 
-One rarer third case can ask: `/pair-capability-map-contexts`, composed in Phase 3.5, stops on a relationship that is both unbalanced and volatile when neither a mitigation nor an explicit acceptance is on offer. Quick mode deliberately keeps that gate — recording a coupling risk nobody judged would be worse than one more question.
+One rarer third case can ask: `/pair-capability-map-contexts`, composed in Phase 3.5, stops on a relationship that is both unbalanced and volatile when neither a mitigation nor an explicit acceptance is on offer. Quick mode deliberately keeps that gate, recording a coupling risk nobody judged would be worse than one more question.
 
 
-Everything else — project categorization, the per-section architecture/infrastructure/way-of-working decisions, the testing and AI sections that follow from your stack, the adoption documents, the standard quality-gate pipeline — is resolved from defaults and reported, not asked.
+Everything else (project categorization, the per-section architecture/infrastructure/way-of-working decisions, the testing and AI sections that follow from your stack, the adoption documents, the standard quality-gate pipeline) is resolved from defaults and reported, not asked.
 
 The `assess-*` skills bootstrap composes do not add confirmations of their own either: in quick mode their resolved values are accepted as-is and listed in the final summary, instead of being confirmed one skill at a time (there are eight of them).
 
@@ -44,9 +44,9 @@ When it finishes, the summary names the depth that ran and how many questions it
 
 ```text
 BOOTSTRAP COMPLETE:
-├── Mode:            quick — 1 question asked
+├── Mode:            quick - 1 question asked
 ├── PRD:             verified
-├── Categorization:  Type B — .pair/adoption/decision-log/...
+├── Categorization:  Type B - .pair/adoption/decision-log/...
 ...
 ```
 
@@ -54,26 +54,26 @@ BOOTSTRAP COMPLETE:
 
 Every file quick mode writes is a normal adoption file, in the normal location and format: `.pair/adoption/tech/*.md`, the gate registry in `way-of-working.md`, ADRs and ADLs in the decision log. There is no quick-mode-only file, marker, or format.
 
-So a default you disagree with is not a lock-in — edit the file by hand, or re-run the relevant phase, and the change sticks like any other adopted decision. Accepting a default costs you nothing you cannot change later.
+So a default you disagree with is not a lock-in, edit the file by hand, or re-run the relevant phase, and the change sticks like any other adopted decision. Accepting a default costs you nothing you cannot change later.
 
 An already-configured project is **confirmed, not overwritten**: each phase checks its own output first, in both depths.
 
 ## Where the defaults come from
 
-Quick mode does not invent its own resolution order. It follows the shared Guided / Quick Setup Convention that `pair-cli package` and the `assess-*` skills already use — highest wins:
+Quick mode does not invent its own resolution order. It follows the shared Guided / Quick Setup Convention that `pair-cli package` and the `assess-*` skills already use, highest wins:
 
-1. **Explicit argument** — anything you named in the invocation
-2. **Project state** — what is already on disk, except the decision log: `.pair/adoption/tech/**`, `.pair/adoption/product/**`, the PRD, `package.json`, lockfiles, CI workflows, `git config`
-3. **Saved preferences** — decisions a previous run recorded in `.pair/adoption/decision-log/`
-4. **Fallback** — the _Quick-Mode Per-Project-Type Defaults_ table in the KB bootstrap checklist (never its worked examples)
+1. **Explicit argument**: anything you named in the invocation
+2. **Project state**: what is already on disk, except the decision log: `.pair/adoption/tech/**`, `.pair/adoption/product/**`, the PRD, `package.json`, lockfiles, CI workflows, `git config`
+3. **Saved preferences**: decisions a previous run recorded in `.pair/adoption/decision-log/`
+4. **Fallback**: the _Quick-Mode Per-Project-Type Defaults_ table in the KB bootstrap checklist (never its worked examples)
 
 Bootstrap only declares which of its own decisions each tier fills. That mapping, decision by decision, lives next to the skill in `quick-mode-defaults.md` (`.claude/skills/pair-process-bootstrap/quick-mode-defaults.md` once the KB is installed).
 
 ## In CI or a non-interactive session
 
-Guided needs a terminal. With no TTY, bootstrap warns and runs quick instead rather than hanging on input that can never arrive. If a still-asked decision cannot be resolved either, the run halts and tells you which input to pass explicitly — it does not guess.
+Guided needs a terminal. With no TTY, bootstrap warns and runs quick instead rather than hanging on input that can never arrive. If a still-asked decision cannot be resolved either, the run halts and tells you which input to pass explicitly: it does not guess.
 
 ## Next
 
-- [Adopter Checklist](/docs/getting-started/checklist) — verify the setup that quick mode just produced
-- [Quickstart: Solo](/docs/getting-started/quickstart-solo) · [Team](/docs/getting-started/quickstart-team) · [Organization](/docs/getting-started/quickstart-org) — environment-specific configuration
+- [Adopter Checklist](/docs/guides/adoption-checklist): verify the setup that quick mode just produced
+- [Quickstart: Solo](/docs/getting-started/quickstart-solo) · [Team](/docs/getting-started/quickstart-team) · [Organization](/docs/getting-started/quickstart-org), environment-specific configuration

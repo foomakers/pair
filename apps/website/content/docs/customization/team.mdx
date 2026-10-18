@@ -1,9 +1,9 @@
 ---
 title: Customize for Your Team
-description: Adjust an adopted Knowledge Base for your team — override guidelines, set quality gates, and preserve customizations across updates.
+description: Adjust an adopted Knowledge Base for your team, override guidelines, set quality gates, and preserve customizations across updates.
 ---
 
-You've adopted a Knowledge Base and it works. Now you want to adjust it — different testing framework, stricter quality gates, team-specific conventions. This guide shows how to customize without losing the ability to pull upstream updates.
+You've adopted a Knowledge Base and it works. Now you want to adjust it, different testing framework, stricter quality gates, team-specific conventions. This guide shows how to customize without losing the ability to pull upstream updates.
 
 ## When to Customize
 
@@ -22,8 +22,8 @@ The `.pair/` directory has two layers:
 
 | Layer | Directory | Updated by | Your changes |
 | --- | --- | --- | --- |
-| Knowledge | `.pair/knowledge/` | `pair-cli update` | Overwritten — don't edit |
-| Adoption | `.pair/adoption/` | You | Preserved — never overwritten |
+| Knowledge | `.pair/knowledge/` | `pair-cli update` | Overwritten, don't edit |
+| Adoption | `.pair/adoption/` | You | Preserved, never overwritten |
 
 **Adoption always wins.** When both layers have an opinion on the same topic, the AI reads adoption files first. This means you can override any guideline by recording a decision in the adoption layer.
 
@@ -53,7 +53,7 @@ Create or update the corresponding adoption file. For example, to change the tes
 - jest is adopted as the testing framework (jest v29.x).
 ```
 
-Adoption files always override knowledge files — no need to touch `.pair/knowledge/`.
+Adoption files always override knowledge files: no need to touch `.pair/knowledge/`.
 
 ### Step 3: Verify
 
@@ -131,13 +131,13 @@ Quality gates run before every commit. Customize them in `.pair/adoption/tech/wa
 | 2 | Security Scan | `npm audit` | Yes |
 ```
 
-## The Review Gate — Off by Default
+## The Review Gate: Off by Default
 
 pair reviews every pull request and publishes a verdict. Whether that verdict can **block a merge** is a separate switch, and it ships **off**.
 
 **Off (the default).** The review runs, posts its findings, and sets the PR's state label (`pr-state:to-be-reviewed` / `ready-to-merge` / `not-approved`). Nothing it says stops you merging. The verdict is information.
 
-**On.** Two status checks become required — `pair-review` (the verdict itself) and `pair-explicit-approval` (the 🔴 rule) — so a merge waits for the review, and a red-tier PR additionally waits for a human approval from **someone other than the author**.
+**On.** Two status checks become required, `pair-review` (the verdict itself) and `pair-explicit-approval` (the 🔴 rule), so a merge waits for the review, and a red-tier PR additionally waits for a human approval from **someone other than the author**.
 
 Turn it on in `.pair/adoption/tech/way-of-working.md`:
 
@@ -145,14 +145,14 @@ Turn it on in `.pair/adoption/tech/way-of-working.md`:
 - **Review enforcement**: `enabled`
 ```
 
-Then apply branch protection for the two checks — writing it needs admin rights, so it is a deliberate human step, not something a skill does behind you. Until that is applied the switch is declared but not in force, and pair says so rather than claiming a merge is blocked when it is not.
+Then apply branch protection for the two checks, writing it needs admin rights, so it is a deliberate human step, not something a skill does behind you. Until that is applied the switch is declared but not in force, and pair says so rather than claiming a merge is blocked when it is not.
 
 <Callout type="warn">
   **Before you enable it on a one-person repository.** The 🔴 tier requires an approval from a
-  non-author human, and hosts reject self-approval — so on a single-maintainer repo a red PR cannot
+  non-author human, and hosts reject self-approval, so on a single-maintainer repo a red PR cannot
   reach `ready-to-merge` at all. It is not a bug to work around (never self-approve to unblock):
   either a second account reviews, or `pair-explicit-approval` is deliberately not a required check
-  there. This is why the switch is off by default — a review that blocks on a fresh install produces
+  there. This is why the switch is off by default: a review that blocks on a fresh install produces
   a repository nobody can merge into.
 </Callout>
 
@@ -165,13 +165,13 @@ Reviewer count, SLA, checklist depth and whether 🔴 needs explicit approval ar
 # tier.red.sla_days: 3
 ```
 
-The defaults are not copied into your adoption file, deliberately: a copy that matches is a second version of the same truth with nothing keeping the two in step, and because adoption wins over the KB default, a stale copy would quietly override an improved one. **Once you do override, write the effective table into that file** — when the values differ from the defaults, the ones in force belong where they are decided.
+The defaults are not copied into your adoption file, deliberately: a copy that matches is a second version of the same truth with nothing keeping the two in step, and because adoption wins over the KB default, a stale copy would quietly override an improved one. **Once you do override, write the effective table into that file**: when the values differ from the defaults, the ones in force belong where they are decided.
 
 ## Enable Classification Tiers
 
 Classification (the `risk:*` tier that scales gates and review) is configured in `.pair/adoption/tech/risk-matrix.md`. The file is optional: absent, KB defaults apply and no tags are emitted. It has three independent sections; add only the ones you need. What the tiers mean is in the [Quality Model](/docs/reference/quality-model) and [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates); how the process uses them is in the [Process Lifecycle](/docs/developer-journey#the-risk-driven-flow).
 
-**Tag projection** — which tag families are written onto cards and PRs. Without it nothing is tagged, so gates, review effort and automation eligibility cannot read a tier.
+**Tag projection**: which tag families are written onto cards and PRs. Without it nothing is tagged, so gates, review effort and automation eligibility cannot read a tier.
 
 ```markdown
 ## Tag Projection
@@ -181,7 +181,7 @@ Active: risk
 
 Add `cost` to the list to also emit `cost:*`.
 
-**Criticality Table** — how critical each deployable is, as the input to the Service/domain criticality dimension. Rows are keyed by the app, package or path scope that owns the touched files; a diff touching several takes the highest. A deployable not listed contributes the conservative High, so list every one you own. `/pair-process-bootstrap` can propose the rows from your domain model.
+**Criticality Table**: how critical each deployable is, as the input to the Service/domain criticality dimension. Rows are keyed by the app, package or path scope that owns the touched files; a diff touching several takes the highest. A deployable not listed contributes the conservative High, so list every one you own. `/pair-process-bootstrap` can propose the rows from your domain model.
 
 ```markdown
 ## Criticality Table
@@ -192,7 +192,7 @@ Add `cost` to the list to also emit `cost:*`.
 | apps/website | Low |
 ```
 
-**Overrides** — per-tier reviewer count and SLA, threshold tweaks, and dimension-resolution rules. Write only the keys you change; the defaults are not copied into your file (see [Changing what each tier requires](#changing-what-each-tier-requires) above).
+**Overrides**: per-tier reviewer count and SLA, threshold tweaks, and dimension-resolution rules. Write only the keys you change; the defaults are not copied into your file (see [Changing what each tier requires](#changing-what-each-tier-requires) above).
 
 ```markdown
 ## Overrides
@@ -231,7 +231,7 @@ The CLI way is the hand edit in the file; the optional `/pair-assistant` way (Cl
 | PM tool, code host, State Mapping | `tech/way-of-working.md` | canonical names | which tracker; board states to macrostates; unmapped states ignored; Not planned never `Done` | [Canonical states](/docs/concepts/canonical-states#customizing-for-your-board) | "map Won't Do to not-planned" (`/pair-capability-setup-pm`) |
 | Definition of Ready / Done tiers | `tech/way-of-working.md` Review Tier Matrix | KB defaults | reviewers, SLA, checklist depth per tier | [Definition of Ready and Done](/docs/concepts/definition-of-ready-and-done) | "red cards need two reviewers" |
 | Process Profile | `tech/way-of-working.md` `## Process Profile` | `default` | which process steps run | [Adoption settings](/docs/reference/adoption-settings#techway-of-workingmd) | "switch to the poc profile" |
-| Risk matrix, Tag Projection | `tech/risk-matrix.md` | `risk` family | classification inputs and emitted tags | [Quality model](/docs/reference/quality-model#project-overrides--techrisk-matrixmd) | "also emit cost tags" |
+| Risk matrix, Tag Projection | `tech/risk-matrix.md` | `risk` family | classification inputs and emitted tags | [Quality model](/docs/reference/quality-model#project-overrides-techrisk-matrixmd) | "also emit cost tags" |
 | Harness, Model Policy | `tech/automation.md` | all harnesses | supported harnesses; model class per tier | [Adoption settings](/docs/reference/adoption-settings#techautomationmd) | "switch the harness to pi" (`/pair-capability-setup-harness`) |
 | Gates, branch protection | CI, repo settings | none | pre-push gates, required checks | [Quality gates configuration](/docs/reference/quality-gates-configuration) | "set up the pre-push gate" (`/pair-capability-setup-gates`) |
 | A full pass | `.pair/adoption/` | templates | describes the project in pair's terms | [Bootstrap quick mode](/docs/getting-started/bootstrap-quick-mode) | "re-run the adoption pass" (`/pair-process-bootstrap`) |
@@ -240,9 +240,11 @@ The CLI way is the hand edit in the file; the optional `/pair-assistant` way (Cl
 
 ![Configuration areas: area, file, owner and validator](/diagrams/assistant-config-areas.svg)
 
+*Figure: configuration areas: area, file, owner and validator.*
+
 ## Record Significant Decisions
 
-For decisions that need rationale and context — "why did we choose this?" — record an Architecture Decision Record:
+For decisions that need rationale and context, "why did we choose this?", record an Architecture Decision Record:
 
 ```bash
 # Using pair skills (recommended)
@@ -268,7 +270,7 @@ pair-cli update
 What happens during update:
 
 1. `.pair/knowledge/` is replaced with the latest upstream content
-2. `.pair/adoption/` is untouched — all your decisions survive
+2. `.pair/adoption/` is untouched: all your decisions survive
 3. New guidelines appear automatically; removed guidelines disappear
 4. Your adoption overrides continue to take precedence
 
@@ -296,7 +298,7 @@ Create files in `.pair/adoption/` for guidelines that don't exist in the upstrea
 - Pagination uses cursor-based approach
 ```
 
-The AI assistant reads all files in `.pair/adoption/` — custom files are treated the same as overrides.
+The AI assistant reads all files in `.pair/adoption/`, custom files are treated the same as overrides.
 
 ## Verify Your Customizations
 
@@ -316,7 +318,7 @@ pair-cli update-link --dry-run
 
 ## Next Steps
 
-- **Want to distribute your customized KB?** [Publish a Knowledge Base](/docs/customization/organization) — package and distribute for other teams.
-- **Or keep it as a repository?** [External KB Repository](/docs/customization/external-kb) — a versioned KB repo teams install from, instead of distributing a package.
-- **Need the directory reference?** [KB Structure](/docs/reference/kb-structure) — every directory and file explained.
-- **Config options?** [Configuration Reference](/docs/reference/configuration) — config.json options.
+- **Want to distribute your customized KB?** [Publish a Knowledge Base](/docs/customization/organization), package and distribute for other teams.
+- **Or keep it as a repository?** [External KB Repository](/docs/customization/external-kb): a versioned KB repo teams install from, instead of distributing a package.
+- **Need the directory reference?** [KB Structure](/docs/reference/kb-structure): every directory and file explained.
+- **Config options?** [Configuration Reference](/docs/reference/configuration), config.json options.

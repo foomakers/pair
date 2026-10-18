@@ -1,7 +1,22 @@
 ---
-title: Release Testing
-description: Design a manual test suite for your project, execute it against a release, and interpret the validation report — all with AI-assisted skills.
+title: Create and run release tests
+description: Design a manual test suite and execute it against a release.
 ---
+
+**Goal**: design release test cases and run them against a release.
+
+## Steps
+
+1. **Design**: `/pair-capability-design-manual-tests`.
+2. **Execute**: `/pair-capability-execute-manual-tests`.
+3. **Read the report**: PASS or FAIL per critical path.
+
+## Verify
+
+- A validation report exists for the release.
+
+## Walkthrough
+
 
 A complete walkthrough for validating releases with pair's manual testing skills. You'll go from zero test cases to a full release validation report in about 30 minutes.
 
@@ -12,7 +27,7 @@ Before starting, make sure you have:
 - **pair-cli** installed and a `.pair/` Knowledge Base in your project
 - A **published release** (GitHub Release, npm package, or deployed website) to validate
 - An **AI coding assistant** that supports Agent Skills
-- **Playwright** (optional) for browser-based tests — or `curl` as a fallback
+- **Playwright** (optional) for browser-based tests, or `curl` as a fallback
 
 <Callout type="info">
   This tutorial uses two skills: `/pair-capability-design-manual-tests` (generates test cases) and `/pair-capability-execute-manual-tests` (runs them). Both are included in the standard Knowledge Base.
@@ -29,7 +44,7 @@ By the end of this tutorial you'll have:
 
 ## Estimated time
 
-~30 minutes (first run — subsequent releases reuse the existing suite).
+~30 minutes (first run: subsequent releases reuse the existing suite).
 
 ## Step-by-step instructions
 
@@ -43,10 +58,10 @@ Invoke the design skill. It analyzes your project's artifacts, deployment target
 
 The skill will:
 
-1. **Discover your project surfaces** — reads your PRD, adoption files, CLI commands, website routes, and registry configuration.
-2. **Present a summary** — shows what it found and asks for confirmation.
-3. **Generate critical paths** — groups tests by category (website, CLI artifacts, CLI functional, dataset, registry).
-4. **Write files** — creates `CP*.md` files and a `README.md` in `qa/release-validation/`.
+1. **Discover your project surfaces**: reads your PRD, adoption files, CLI commands, website routes, and registry configuration.
+2. **Present a summary**: shows what it found and asks for confirmation.
+3. **Generate critical paths**: groups tests by category (website, CLI artifacts, CLI functional, dataset, registry).
+4. **Write files**: creates `CP*.md` files and a `README.md` in `qa/release-validation/`.
 
 <Callout type="info">
   If a test suite already exists, the skill offers three choices: **regenerate** (overwrite), **extend** (add new tests for new features), or **abort**.
@@ -97,9 +112,9 @@ Tests use variables (`$VERSION`, `$BASE_URL`, `$WORKDIR`) so they work across re
 
 Before executing, review the generated test cases:
 
-- **Add project-specific tests** — your app may have unique flows not covered by the default heuristics.
-- **Adjust priorities** — P0 tests block release sign-off. Make sure only true blockers are P0.
-- **Remove irrelevant CPs** — if your project doesn't have a website, delete CP1/CP5/CP6.
+- **Add project-specific tests**: your app may have unique flows not covered by the default heuristics.
+- **Adjust priorities**: P0 tests block release sign-off. Make sure only true blockers are P0.
+- **Remove irrelevant CPs**: if your project doesn't have a website, delete CP1/CP5/CP6.
 
 ### 3. Execute the test suite
 
@@ -111,11 +126,11 @@ Invoke the execution skill:
 
 The skill will:
 
-1. **Locate the suite** — finds `qa/release-validation/` automatically.
-2. **Resolve variables** — derives `$VERSION` from the release, `$BASE_URL` from deployment config, creates an isolated `$WORKDIR`.
-3. **Present variables** — asks for confirmation before executing.
-4. **Run each test** — iterates through all CPs in order, using Playwright for browser tests, Bash for CLI tests, and HTTP checks for status verification.
-5. **Generate a report** — writes a structured report to `.tmp/manual-test-reports/`.
+1. **Locate the suite**: finds `qa/release-validation/` automatically.
+2. **Resolve variables**: derives `$VERSION` from the release, `$BASE_URL` from deployment config, creates an isolated `$WORKDIR`.
+3. **Present variables**: asks for confirmation before executing.
+4. **Run each test**: iterates through all CPs in order, using Playwright for browser tests, Bash for CLI tests, and HTTP checks for status verification.
+5. **Generate a report**: writes a structured report to `.tmp/manual-test-reports/`.
 
 #### Scoping a run
 
@@ -133,22 +148,22 @@ You can limit execution to specific critical paths or priorities:
 
 The report is written to `.tmp/manual-test-reports/release-validation-{VERSION}-{DATE}.md` and includes:
 
-**Summary table** — per-CP pass/fail counts:
+**Summary table**: per-CP pass/fail counts:
 
 ```text
 | Test Group             | Total | Pass | Fail | Skip | Blocked |
 |------------------------|-------|------|------|------|---------|
-| CP1 — Website          | 13    | 13   | 0    | 0    | 0       |
-| CP2 — CLI Artifacts    | 12    | 12   | 0    | 0    | 0       |
+| CP1 - Website          | 13    | 13   | 0    | 0    | 0       |
+| CP2 - CLI Artifacts    | 12    | 12   | 0    | 0    | 0       |
 | Total                  | 25    | 25   | 0    | 0    | 0       |
 ```
 
-**Failure details** — for each failed test:
+**Failure details**: for each failed test:
 - Actual result vs expected
 - Evidence (command output, HTTP status, screenshots)
 - Severity classification (Critical, Major, Minor)
 
-**Sign-off criteria** — checklist for release approval:
+**Sign-off criteria**: checklist for release approval:
 - All P0 tests pass
 - No Critical/Major failures unresolved
 - Report reviewed
@@ -159,9 +174,9 @@ For each failure, decide:
 
 | Severity | Action |
 |----------|--------|
-| **Critical** | Fix before release — blocks sign-off |
-| **Major** | Fix or document workaround — tracked as issue |
-| **Minor** | Create issue for next release — does not block |
+| **Critical** | Fix before release, blocks sign-off |
+| **Major** | Fix or document workaround, tracked as issue |
+| **Minor** | Create issue for next release, does not block |
 
 The report includes suggested issue titles for each failure. Create them in your PM tool to track resolution.
 

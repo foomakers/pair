@@ -1,6 +1,6 @@
 ---
 title: pair-next Arguments
-description: Scope the /pair-next navigator with --root (subtree selection) and --filter (generic tag match), or run a whole macro-phase with --mode (analysis, implementation, review) — re-evaluated on every run and step.
+description: Scope the /pair-next navigator with --root (subtree selection) and --filter (generic tag match), or run a whole macro-phase with --mode (analysis, implementation, review), re-evaluated on every run and step.
 ---
 
 `/pair-next` is the project navigator: it reads adoption files and PM-tool state and recommends the single most relevant skill to run next. See [Skills](/docs/concepts/skills) for how skills work and [Canonical States](/docs/concepts/canonical-states) for how backlog items resolve to macrostates.
@@ -19,11 +19,11 @@ By default `/pair-next` considers the whole backlog. Two **optional** arguments 
 
 With neither argument, behaviour is unchanged: the full backlog is in scope.
 
-Both arguments **presuppose an established project** (adoption files populated, a real backlog). On a fresh template project you never pass `--root`/`--filter` — `/pair-next` runs its fresh-project detection and steers you to `/pair-process-bootstrap` instead; a scope has no meaning until there is a backlog to scope.
+Both arguments **presuppose an established project** (adoption files populated, a real backlog). On a fresh template project you never pass `--root`/`--filter`, `/pair-next` runs its fresh-project detection and steers you to `/pair-process-bootstrap` instead; a scope has no meaning until there is a backlog to scope.
 
-## `--root <issue-id>` — subtree scope
+## `--root <issue-id>`: subtree scope
 
-`--root` confines selection to the given issue and its transitive children, resolved through the **PM-tool parent/child hierarchy** (sub-issues / parent links) — never through title conventions. Nothing outside the subtree is ever proposed.
+`--root` confines selection to the given issue and its transitive children, resolved through the **PM-tool parent/child hierarchy** (sub-issues / parent links), never through title conventions. Nothing outside the subtree is ever proposed.
 
 - **Epic root** → work at epic level on the epic's children only: an epic with no user-story children yet resolves to `/pair-process-plan-stories` (the "plan its children" action); otherwise refine or develop those stories.
 - **Story root** → the story is itself the unit of work and a first-class candidate: a Draft story resolves to `/pair-process-refine-story`, a Ready one to `/pair-process-implement` (or `/pair-process-plan-tasks`); its subtree never steps outside it.
@@ -33,9 +33,13 @@ Both arguments **presuppose an established project** (adoption files populated, 
 /pair-next --root 249     # story #249 itself → /pair-process-refine-story (Draft) or /pair-process-implement (Ready)
 ```
 
-## `--filter <tag>` — generic tag match
+## `--filter <tag>`: generic tag match
 
-`--filter` keeps only issues carrying the given label. It takes a **single label string**, not a boolean expression — there is no AND/OR/NOT grammar; the whole argument is matched literally against each issue's labels. The tag is interpreted **generically**: `/pair-next` assigns no meaning to any tag value. `risk:red` is matched by exactly the same string-equality predicate as `team:ui` — there is no classification, tiering, or severity logic inside the navigator. A namespaced-looking label such as `tag:ui` carries **no** namespace semantics either: the whole string (colon included) is one opaque label, matched entire — so a story's original `--filter tag:ui` selects issues labelled literally `tag:ui`, exactly like `ui` selects issues labelled `ui`. A filter is a plain PM-tool label query.
+`--filter` keeps only issues carrying the given label. It takes a **single label string**, not a boolean expression: there is no AND/OR/NOT grammar; the whole argument is matched literally against each issue's labels. The tag is interpreted **generically**: `/pair-next` assigns no meaning to any tag value.
+
+`risk:red` is matched by exactly the same string-equality predicate as `team:ui`: there is no classification, tiering, or severity logic inside the navigator.
+
+A namespaced-looking label such as `tag:ui` carries **no** namespace semantics either: the whole string (colon included) is one opaque label, matched entire, so a story's original `--filter tag:ui` selects issues labelled literally `tag:ui`, exactly like `ui` selects issues labelled `ui`. A filter is a plain PM-tool label query.
 
 ```bash
 /pair-next --filter ui                    # only issues carrying the literal label "ui"
@@ -57,7 +61,7 @@ If you do not want to know the granular steps, name the phase instead. `/pair-ne
 | Mode             | Runs (in order)                                                                                              | Stops when                                                                    |
 | ---------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | `analysis`       | `specify-prd`, `bootstrap`, `plan-initiatives`, `plan-epics`, `plan-stories`, `refine-story`, `plan-tasks`   | the planning gap is filled, or the story is Ready with a task breakdown       |
-| `implementation` | `implement`                                                                                                  | the story reached `Review` — its PR is open                                   |
+| `implementation` | `implement`                                                                                                  | the story reached `Review`, its PR is open                                   |
 | `review`         | `review`                                                                                                     | the review verdict is published on the PR (merging stays with your policy)    |
 
 When no row of any mode holds and the profile leaves a backlog with no epics and no other way in, `analysis` runs a discovery run (`brainstorm`) once. When a story another mode would select exists, `analysis` reports wrong context and suggests that mode instead. Nothing else is surfaced: capabilities such as `/pair-capability-setup-gates` or `/pair-capability-grill` belong to no mode.
@@ -66,51 +70,51 @@ A mode is a **facade, not a new skill**:
 
 - **Granular skills are unchanged.** Invoking `/pair-process-refine-story` or `/pair-process-implement` directly behaves exactly as before; a mode simply invokes them for you, with their own approval gates and checks.
 - **Narration is at phase level.** You hear "Analysis: refining story #252, then breaking it into tasks"; ask what is running and you get the step names.
-- **Same scope, same rules.** `--root`, `--filter`, `--assignee` and `--status` still narrow the work, and macrostates and the Definition of Ready still decide what a story may enter — a mode never moves a story past a gate.
-- **The process profile applies inside the phase.** A step your [process profile](#process-profile--steps-this-project-does-not-run) disables is skipped and the enabled steps still chain across the gap; if every step that could run is disabled, the mode says which and stops.
-- **A HALT is shown as-is.** If a step halts, the mode stops and prints that step's message unchanged — it never retries or continues with the next one.
+- **Same scope, same rules.** `--root`, `--filter`, `--assignee` and `--status` still narrow the work, and macrostates and the Definition of Ready still decide what a story may enter: a mode never moves a story past a gate.
+- **The process profile applies inside the phase.** A step your [process profile](#process-profile-steps-this-project-does-not-run) disables is skipped and the enabled steps still chain across the gap; if every step that could run is disabled, the mode says which and stops.
+- **A HALT is shown as-is.** If a step halts, the mode stops and prints that step's message unchanged: it never retries or continues with the next one.
 - **Wrong context is reported, not guessed.** `--mode review` with no open PR says what is missing (for example "no open PR or item in `Review` in scope") and suggests the mode that fits, such as `--mode implementation`.
-- **One work unit per run.** A mode drives one story (or one planning gap); when more are in scope it says so — use `/pair-loop` to drive many cards.
+- **One work unit per run.** A mode drives one story (or one planning gap); when more are in scope it says so, use `/pair-loop` to drive many cards.
 
 > **Source:** the mode ↔ step table lives only in `packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/macro-phase-modes.md`; this page is checked against it.
 
-## Control state — macrostate first, Definition of Ready second, never titles
+## Control state: macrostate first, Definition of Ready second, never titles
 
-Every decision `/pair-next` makes rests on one **Control-State Resolution** procedure (the same one `/pair-loop`, `/pair-workflow-cycle` and `pair-cli run` reference — none re-derives it). Its inputs are the item's board-state literal, its body and the optional `## State Mapping` in `way-of-working.md`; nothing else.
+Every decision `/pair-next` makes rests on one **Control-State Resolution** procedure (the same one `/pair-loop`, `/pair-workflow-cycle` and `pair-cli run` reference, none re-derives it). Its inputs are the item's board-state literal, its body and the optional `## State Mapping` in `way-of-working.md`; nothing else.
 
 | Situation | Resolution |
 | --- | --- |
 | **Mapped board** | The literal is looked up in the [state mapping](/docs/concepts/canonical-states) (case-insensitive) and the item decides on its **macrostate**. Board-state names never appear in decision logic. |
-| **No state expresses readiness** (e.g. `Todo` / `In Progress` / `Done`) | The mapped state gives no `Ready`, so readiness is read from the **body** through the canonical [Definition of Ready](/docs/concepts/definition-of-ready-and-done) — AC, estimate and dependencies, or the inline task breakdown that covers them. A failing item stays `Draft` and the **failing criteria are listed by name**. |
-| **Unmapped board state** | Reported as **out-of-process** — "unmapped states allowed" — never an error, never proposed. |
+| **No state expresses readiness** (e.g. `Todo` / `In Progress` / `Done`) | The mapped state gives no `Ready`, so readiness is read from the **body** through the canonical [Definition of Ready](/docs/concepts/definition-of-ready-and-done): AC, estimate and dependencies, or the inline task breakdown that covers them. A failing item stays `Draft` and the **failing criteria are listed by name**. |
+| **Unmapped board state** | Reported as **out-of-process** ("unmapped states allowed") never an error, never proposed. |
 | **No `## State Mapping` at all** | Canonical macrostate names are assumed; the Definition of Ready fallback stays active. |
-| **Conflicting signals** (state says `Ready`, the Definition of Ready fails) | The item is **flagged** with the failing criteria listed. The mapped state wins — a warning, never a block. |
+| **Conflicting signals** (state says `Ready`, the Definition of Ready fails) | The item is **flagged** with the failing criteria listed. The mapped state wins: a warning, never a block. |
 
-**Titles are never a control signal.** A title that says "Draft" on a `Ready` item, or "Done" on an open one, changes nothing: state and body decide. The title is read for a single purpose — the Definition of Ready's check that it is not a template placeholder.
+**Titles are never a control signal.** A title that says "Draft" on a `Ready` item, or "Done" on an open one, changes nothing: state and body decide. The title is read for a single purpose: the Definition of Ready's check that it is not a template placeholder.
 
 ```text
-OUT-OF-PROCESS: #<id> — board state "<literal>" is unmapped (not an error; ignored for pair semantics)
-CONFLICT: #<id> — state says Ready, DoR fails: <failing criterion>, <failing criterion>
+OUT-OF-PROCESS: #<id> - board state "<literal>" is unmapped (not an error; ignored for pair semantics)
+CONFLICT: #<id> - state says Ready, DoR fails: <failing criterion>, <failing criterion>
 ```
 
 The automation loop shares the implementation: `pair-cli run --card` resolves a card with the same grammar (`apps/pair-cli/src/commands/run/card-readiness.ts`), so a skill-driven session and an unattended run route the same board identically.
 
-## Process profile — steps this project does not run
+## Process profile: steps this project does not run
 
 Independently of the two arguments above, `/pair-next` reads the optional `## Process Profile` section of `way-of-working.md` before the cascade and **never proposes a step the project has disabled** ([adoption files](/docs/concepts/adoption-files)). The two mechanisms are unrelated: arguments narrow **which items** are in scope, the profile narrows **which steps** exist at all.
 
 - **No section** ⇒ the `default` profile ⇒ every step, cascade unchanged. Nothing to configure.
 - A disabled row is **skipped**, not an error: evaluation continues, so the enabled steps still chain across the gaps.
-- The profile is re-read **every run**, exactly like the argument scope — never cached.
+- The profile is re-read **every run**, exactly like the argument scope, never cached.
 - Rows proposing a capability that is not a step (`/pair-capability-checkpoint`, `/pair-capability-setup-gates`, `/pair-capability-assess-stack`, `/pair-capability-analyze-debt`, `/pair-capability-estimate`, `/pair-capability-grill`) are never filtered by it.
-- An unknown profile name, an unknown step id, a missing or empty `custom` whitelist, a partially backticked whitelist, or a key in a shape the schema can't read **HALT** with the valid values (or the shape) listed — never a quiet fallback to `default`. So does a **duplicated** `## Process Profile` section, a heading at any level other than `##` or written as **setext** (underlined with `---` / `===`), the same key declared on two lines, a key written with no bullet or a numbered one, backticked or not (a key is one line on a `-`, `*` or `+` bullet; behind `1.` the backticks are optional, without any marker they are required), a key inside a **blockquote** — though never one inside a documentation **table row**, which stays documentation — the same step id named twice in one whitelist, a value that spills past its key's line (wrapped, or ending on a dangling `,`), a key indented by four spaces or a tab, a key sitting under **no `## Process Profile` section at all** (`## Process Profiles` plural, `## ProcessProfile`, an unrelated heading, or none — reported by its line, since every heading rule closes only the spellings it names), and a fence or HTML comment the file never closes. The key's **case** is not one of them: `` - `Profile`: `poc` `` declares the profile like its lowercase spelling does (case belongs to the key's spelling, detected loosely), while the value stays strict — `` `POC` `` is an unknown profile name. An enabled step whose prerequisites are all disabled is reported with the minimal fix.
+- An unknown profile name, an unknown step id, a missing or empty `custom` whitelist, a partially backticked whitelist, or a key in a shape the schema can't read **HALT** with the valid values (or the shape) listed, never a quiet fallback to `default`. So does a **duplicated** `## Process Profile` section, a heading at any level other than `##` or written as **setext** (underlined with `---` / `===`), the same key declared on two lines, a key written with no bullet or a numbered one, backticked or not (a key is one line on a `-`, `*` or `+` bullet; behind `1.` the backticks are optional, without any marker they are required), a key inside a **blockquote** (though never one inside a documentation **table row**, which stays documentation) the same step id named twice in one whitelist, a value that spills past its key's line (wrapped, or ending on a dangling `,`), a key indented by four spaces or a tab, a key sitting under **no `## Process Profile` section at all** (`## Process Profiles` plural, `## ProcessProfile`, an unrelated heading, or none, reported by its line, since every heading rule closes only the spellings it names), and a fence or HTML comment the file never closes. The key's **case** is not one of them: `` - `Profile`: `poc` `` declares the profile like its lowercase spelling does (case belongs to the key's spelling, detected loosely), while the value stays strict, `` `POC` `` is an unknown profile name. An enabled step whose prerequisites are all disabled is reported with the minimal fix.
 - The **fallback** (nothing matched) is filtered too: it names only enabled steps, and when the profile leaves an empty backlog with no reachable entry point it proposes `/pair-process-brainstorm` instead of a step whose input cannot exist.
 
-Under `poc`, that means no DDD-mapping step and no strategic-planning step is ever offered — the shortest demonstration that a profile is enforced and not merely documented.
+Under `poc`, that means no DDD-mapping step and no strategic-planning step is ever offered: the shortest demonstration that a profile is enforced and not merely documented.
 
-## Re-evaluation — selection is never cached
+## Re-evaluation: selection is never cached
 
-Scope is **stateless across steps**. Every run — and every step of a multi-step run — re-queries the PM tool and re-applies `--root` and `--filter` against the **current** board state. If an issue's tags change between steps (for example, a review raises `risk:yellow` to `risk:red`), the next step's selection reflects the change immediately. `/pair-next` never reuses a selection computed in a previous step.
+Scope is **stateless across steps**. Every run (and every step of a multi-step run) re-queries the PM tool and re-applies `--root` and `--filter` against the **current** board state. If an issue's tags change between steps (for example, a review raises `risk:yellow` to `risk:red`), the next step's selection reflects the change immediately. `/pair-next` never reuses a selection computed in a previous step.
 
 ## Edge cases
 
@@ -118,4 +122,4 @@ Scope is **stateless across steps**. Every run — and every step of a multi-ste
 | --------------------------------- | ------------------------------------------------------------------- |
 | `--root` id does not resolve      | HALT with a clear message (`root <id> not found`); propose no action. |
 | `--root` resolves to a Done issue | Report that the root is already Done and exit; propose no work.       |
-| Filter (or subtree) matches nothing | Report `no matching issues` and exit cleanly — an empty result is not an error. |
+| Filter (or subtree) matches nothing | Report `no matching issues` and exit cleanly: an empty result is not an error. |

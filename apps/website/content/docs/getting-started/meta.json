@@ -5,7 +5,6 @@
     "quickstart-solo",
     "quickstart-team",
     "quickstart-org",
-    "bootstrap-quick-mode",
-    "checklist"
+    "bootstrap-quick-mode"
   ]
 }
