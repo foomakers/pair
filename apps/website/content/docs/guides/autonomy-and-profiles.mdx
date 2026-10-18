@@ -13,19 +13,19 @@ description: Decide how far unattended runs go and which engine and model each s
 ## Steps
 
 1. **Set `## Autonomy`**
-   - With the CLI: edit `until`, `prepare`, `merge` and the filter in `tech/automation.md`.
+   - In your assistant: edit `until`, `prepare`, `merge` and `filter` in `tech/automation.md` ([every key](/docs/reference/adoption-settings#techautomationmd)).
    - With `/pair-assistant` (optional, Claude Code): "let green cards go up to merge" shows the diff first.
 2. **Check the effective values**
-   - With the CLI: `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve`.
+   - With pair-cli: `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve` prints each value with its source.
    - With `/pair-assistant` (optional, Claude Code): it echoes the effective gates.
 3. **Set workflow profiles**
-   - With the CLI: add `workflowProfiles` to `pair.config.json`, then `node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve`.
-   - With `/pair-assistant` (optional, Claude Code): shown edit plus an ADL.
+   - In your assistant: add `workflowProfiles` to `pair.config.json`, then `node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve`.
+   - With `/pair-assistant` (optional, Claude Code): the edit is shown, then recorded as an ADL.
 
 ## Verify
 
 - `resolve` prints each value with its source.
-- Defaults are `until: pr` and `merge: always`.
+- Defaults are `until: pr` and `merge: always`: nothing merges unattended until you change them.
 
 ## Related
 

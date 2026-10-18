@@ -11,7 +11,7 @@ Automated development is **one delivery cycle** (a state machine that takes one 
 
 It is the third of the [lifecycle modes](/docs/process-lifecycle/lifecycle-modes#automatic): Automatic. Concepts: [Delivery workflow](/docs/process-lifecycle/delivery-workflow). Reference: [Delivery cycle](/docs/process-lifecycle/delivery-cycle). Tag-driven triggers: [Tag-driven automation](/docs/process-lifecycle/tag-driven-automation). Knowledge base: [`delivery-cycle.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md).
 
-**With the CLI:** `pair-cli run --card 217` drives one card; `pair-cli run --root 212 --parallel 3 --watch` drives a backlog. **With `/pair-assistant` (optional, Claude Code):** CLI only for the run itself; ask [`/pair-assistant`](/docs/reference/pair-assistant#how-to-ask) to configure the policy ("let green cards go up to merge") and use `/pair-workflow-cycle` for one card or `/pair-loop` for a backlog.
+**In your assistant:** `/pair-workflow-cycle 217` drives one card, `/pair-loop` a backlog (Claude Code, Codex or pi with subagents). **With pair-cli:** `pair-cli run --card 217` drives one card; `pair-cli run --root 212 --parallel 3 --watch` drives a backlog on any engine. **With `/pair-assistant` (optional, Claude Code):** ask it to configure the policy ("let green cards go up to merge"); it never runs the cycle itself.
 
 ## The cycle
 
@@ -51,7 +51,7 @@ Declared once in `## Autonomy` of `tech/automation.md` (or passed as `--until`, 
 - **Escalation**: a `when` condition that fires stops the card as `escalated` with one comment on it naming the condition; the PR stays open, the rest of the backlog continues.
 - **Blocking Severities**: `## Blocking Severities` sets the floor (`Critical`, `Major`, `Minor`; default `Minor`) at or above which a review finding blocks, plus an optional `max-dispatches` ceiling on a run's handoffs.
 
-**With the CLI:** edit `tech/automation.md`, then `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve`. **With `/pair-assistant` (optional, Claude Code):** "let green cards go up to merge" shows the `## Autonomy` diff, validates it and writes it through record-decision ([how it writes](/docs/reference/pair-assistant#how-it-writes)).
+**In your assistant:** edit `tech/automation.md`, then `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve`. **With `/pair-assistant` (optional, Claude Code):** "let green cards go up to merge" shows the `## Autonomy` diff, validates it and writes it through record-decision ([how it writes](/docs/reference/pair-assistant#how-it-writes)).
 
 ## Walkthrough: your first unattended run
 

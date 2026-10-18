@@ -12,13 +12,13 @@ description: Run the output-only assessment skills on a diff or the whole codeba
 ## Steps
 
 1. **Security**
-   - With the CLI: `/pair-capability-assess-security $mode: review` on a PR, or `audit` for a one-shot OWASP scan.
+   - In your assistant: `/pair-capability-assess-security $mode: review` on a PR, or `$mode: audit` for a one-shot OWASP scan.
 2. **Cost**
-   - With the CLI: `/pair-capability-assess-cost` gives a chromatic cost class for a change.
+   - In your assistant: `/pair-capability-assess-cost` gives a chromatic cost class for a change.
 3. **Coupling**
-   - With the CLI: `/pair-capability-assess-coupling $scope: diff` for a PR, or `full` for an audit.
+   - In your assistant: `/pair-capability-assess-coupling $scope: diff` for a PR, or `$scope: full` for an audit.
 4. **Act on the findings**
-   - With the CLI: promote tolerable ones to tech debt; fix critical ones before merge.
+   - Promote tolerable ones to tech debt; fix critical ones before merge. The review runs the same three assessments and shows each as a one-line verdict.
 
 ## Verify
 

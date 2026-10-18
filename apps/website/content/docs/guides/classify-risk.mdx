@@ -13,15 +13,15 @@ description: Classify a story, project the result as risk tags and let tiers sca
 ## Steps
 
 1. **Declare the tag family**
-   - With the CLI: add `risk` under `## Tag Projection` in `tech/risk-matrix.md`.
+   - In your assistant: add `risk` under `## Tag Projection` in `tech/risk-matrix.md`. `/pair-capability-classify` offers to write it the first time it runs.
    - With `/pair-assistant` (optional, Claude Code): "enable risk tags".
 2. **Classify during refinement**
-   - With the CLI: run `/pair-process-refine-story`; it calls `/pair-capability-classify`.
+   - In your assistant: `/pair-process-refine-story`; it calls `/pair-capability-classify` and writes the matrix onto the card.
 3. **Tune the matrix (optional)**
-   - With the CLI: add a Criticality Table or Overrides in `risk-matrix.md`.
+   - In your assistant: add a Criticality Table or Overrides in `risk-matrix.md`.
    - With `/pair-assistant` (optional, Claude Code): shows the diff, then writes.
 4. **Let the tier flow**
-   - With the CLI: `publish-pr` copies the tag to the PR; the gate runs the checks for that tier.
+   - `publish-pr` copies the tag to the PR; the gate runs the checks for that tier; the review may raise the tier, never lower it.
 
 ## Verify
 

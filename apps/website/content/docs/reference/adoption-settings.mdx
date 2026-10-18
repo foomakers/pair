@@ -8,8 +8,8 @@ import { Callout } from 'fumadocs-ui/components/callout'
 One page listing **every setting you can put in your adoption files**. `reference/configuration` covers the registry part of `pair.config.json` ([Configuration](/docs/reference/configuration)); this page covers everything else. Every section is **optional**: absent means the default in the table, never an error. A malformed section is a **HALT** naming the file and line, not a silent fallback.
 
 <Callout type="info">
-  **With the CLI / With `/pair-assistant` (optional, Claude Code).** CLI first: edit the file by
-  hand, then validate. Optional: ask [`/pair-assistant`](/docs/reference/pair-assistant#how-to-ask) ("let green cards go
+  **In your assistant, or with `/pair-assistant` (optional, Claude Code).** Default: edit the file by
+  hand in your editor or assistant, then validate with the scripts below. Optional: ask [`/pair-assistant`](/docs/reference/pair-assistant#how-to-ask) ("let green cards go
   up to merge"); it shows the diff, validates with the same scripts, and writes through
   `/pair-capability-record-decision`. Rows marked **assistant** are supported by its
   [capability menu](/docs/reference/pair-assistant#capability-menu).

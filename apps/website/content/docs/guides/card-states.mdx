@@ -13,16 +13,16 @@ description: Map your board columns to pair macrostates, set readiness criteria 
 ## Steps
 
 1. **Map your board states**
-   - With the CLI: add a `## State Mapping` table (`Board State | Macrostate`) to `way-of-working.md`.
-   - With `/pair-assistant` (optional, Claude Code): "map not-planned to Done"; routed through `/pair-capability-setup-pm`.
+   - In your assistant: `/pair-capability-setup-pm` writes the `## State Mapping` table (`Board State | Macrostate`) into `way-of-working.md`; or add it by hand.
+   - With `/pair-assistant` (optional, Claude Code): "map not-planned to Done".
 2. **Review Definition of Ready and Done**
-   - With the CLI: read the criteria and add project tier requirements in the Review Tier Matrix.
+   - In your assistant: read the criteria in the Knowledge Base and add project tier requirements to the Review Tier Matrix in `way-of-working.md`.
    - With `/pair-assistant` (optional, Claude Code): ask to show the current DoR/DoD and propose a diff.
 3. **Pick a process profile**
-   - With the CLI: set `## Process Profile` with `profile: default`, `poc` or `custom` plus a `whitelist` of step ids.
+   - In your assistant: set `## Process Profile` in `way-of-working.md` to `profile: default`, `poc` or `custom` plus a `whitelist` of step ids.
    - With `/pair-assistant` (optional, Claude Code): "use the poc profile".
 4. **Start light**
-   - With the CLI: run `/pair-process-bootstrap` in quick mode.
+   - In your assistant: `/pair-process-bootstrap $mode: quick`.
    - With `/pair-assistant` (optional, Claude Code): ask for a quick bootstrap.
 
 ## Verify
@@ -35,4 +35,4 @@ description: Map your board columns to pair macrostates, set readiness criteria 
 - [Canonical states](/docs/concepts/canonical-states)
 - [Definition of Ready and Done](/docs/concepts/definition-of-ready-and-done)
 - [Adoption settings](/docs/reference/adoption-settings)
-- [Bootstrap quick mode](/docs/getting-started/bootstrap-quick-mode)
+- [Bootstrap: guided or quick](/docs/getting-started/bootstrap-quick-mode)

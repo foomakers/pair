@@ -12,11 +12,11 @@ description: Route cards to workflows by label.
 ## Steps
 
 1. **Map tags to workflows**
-   - With the CLI: add `<tag> ⇒ <workflow>` lines under `## Workflows`.
-2. **Restrict eligibility**
-   - With the CLI: set the `filter` in `## Autonomy`.
+   - In your assistant: add `<tag> ⇒ <workflow>` lines under `## Workflows` (for example `auto-dev ⇒ pair-loop`).
+2. **Restrict selection**
+   - In your assistant: set `filter` in `## Autonomy` to the labels unattended runs may pick.
 3. **Tag a card and run**
-   - With the CLI: `pair-cli run --root <id>` picks up tagged cards only.
+   - With pair-cli: `pair-cli run --root <id>` picks up tagged cards only; a host trigger can call `pair-cli run --card <id> --card-tags <labels>` when a label changes.
 
 ## Verify
 

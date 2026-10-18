@@ -24,7 +24,7 @@ Quick mode is **additive**. It is a second depth of the same skill, not a separa
 /pair-process-bootstrap $mode: quick
 ```
 
-**With the CLI:** bootstrap is a skill; there is no `pair-cli` command for it. **With `/pair-assistant` (optional, Claude Code):** ask it to adopt the project; it runs the install, then hands off to `/pair-process-bootstrap` ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
+**In your assistant:** the command above. **With `/pair-assistant` (optional, Claude Code):** ask it to adopt the project; it runs the install, then hands off to `/pair-process-bootstrap` ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
 
 **One precondition**: a populated `.pair/adoption/product/PRD.md`. Phase 0 of bootstrap is blocking in both depths, with no PRD it composes `/pair-process-specify-prd`, a full interactive authoring session that is neither defaulted nor counted below. Write the PRD first, then run quick mode.
 
