@@ -359,7 +359,7 @@ test('no broken .md links in guides/reference/support sections', async ({ page }
 
 test('developer journey: navigate through section pages', async ({ page }) => {
   // Index page (Process Lifecycle, moved from concepts)
-  await page.goto('/docs/developer-journey')
+  await page.goto('/docs/process-lifecycle')
   const main = page.locator('main')
   await expect(page.locator('main h1')).toContainText('Process Lifecycle')
   await expect(main).toContainText('/pair-next')
@@ -376,7 +376,7 @@ test('developer journey: navigate through section pages', async ({ page }) => {
     .locator('a', { hasText: /^Induction: Project Setup$/ })
     .first()
     .click()
-  await expect(page).toHaveURL('/docs/developer-journey/induction')
+  await expect(page).toHaveURL('/docs/process-lifecycle/phases/induction')
   await expect(main).toContainText('/pair-process-specify-prd')
   await expect(main).toContainText('/pair-process-bootstrap')
   await expect(main).toContainText('/pair-process-plan-initiatives')
@@ -386,7 +386,7 @@ test('developer journey: navigate through section pages', async ({ page }) => {
     .locator('a', { hasText: /^Execution/ })
     .first()
     .click()
-  await expect(page).toHaveURL('/docs/developer-journey/execution')
+  await expect(page).toHaveURL('/docs/process-lifecycle/phases/execution')
   await expect(main).toContainText('/pair-process-implement')
   await expect(main).toContainText('/pair-process-review')
   await expect(main).toContainText('TDD Discipline')
@@ -398,12 +398,12 @@ test('developer journey: navigate through section pages', async ({ page }) => {
 
 test('smoke: all developer journey pages return 200', async ({ page }) => {
   const pages = [
-    { url: '/docs/developer-journey', title: 'Process Lifecycle' },
-    { url: '/docs/developer-journey/induction', title: 'Induction' },
-    { url: '/docs/developer-journey/strategic-planning', title: 'Strategic Planning' },
-    { url: '/docs/developer-journey/iteration', title: 'Iteration' },
-    { url: '/docs/developer-journey/execution', title: 'Execution' },
-    { url: '/docs/developer-journey/tag-driven-automation', title: 'Tag-Driven Automation' },
+    { url: '/docs/process-lifecycle', title: 'Process Lifecycle' },
+    { url: '/docs/process-lifecycle/phases/induction', title: 'Induction' },
+    { url: '/docs/process-lifecycle/phases/strategic-planning', title: 'Strategic Planning' },
+    { url: '/docs/process-lifecycle/phases/iteration', title: 'Iteration' },
+    { url: '/docs/process-lifecycle/phases/execution', title: 'Execution' },
+    { url: '/docs/process-lifecycle/tag-driven-automation', title: 'Tag-Driven Automation' },
   ]
   for (const { url, title } of pages) {
     const response = await page.goto(url)
@@ -946,12 +946,12 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/getting-started/quickstart-team',
     '/docs/getting-started/quickstart-org',
     '/docs/getting-started/bootstrap-quick-mode',
-    '/docs/developer-journey',
-    '/docs/developer-journey/induction',
-    '/docs/developer-journey/strategic-planning',
-    '/docs/developer-journey/iteration',
-    '/docs/developer-journey/execution',
-    '/docs/developer-journey/tag-driven-automation',
+    '/docs/process-lifecycle',
+    '/docs/process-lifecycle/phases/induction',
+    '/docs/process-lifecycle/phases/strategic-planning',
+    '/docs/process-lifecycle/phases/iteration',
+    '/docs/process-lifecycle/phases/execution',
+    '/docs/process-lifecycle/tag-driven-automation',
     '/docs/concepts/ai-assisted-sdlc',
     '/docs/concepts/knowledge-base',
     '/docs/concepts/skills',
@@ -1013,9 +1013,9 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     // set — so a new page must still be added here manually, but forgetting to now fails red
     // there instead of silently passing. The per-section smoke arrays below (integrations,
     // guides, tutorials, …) are a different list and remain hand-maintained and unguarded.
-    '/docs/developer-journey/lifecycle-modes',
-    '/docs/developer-journey/refinement-workflow',
-    '/docs/developer-journey/skill-layers',
+    '/docs/process-lifecycle/lifecycle-modes',
+    '/docs/process-lifecycle/refinement-workflow',
+    '/docs/process-lifecycle/skill-layers',
     '/docs/tutorials/brainstorming',
     '/docs/tutorials/refinement',
     '/docs/pm-tools/custom',
@@ -1038,7 +1038,7 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/guides/tag-automation',
     '/docs/concepts',
     '/docs/concepts/canonical-states',
-    '/docs/developer-journey/delivery-workflow',
+    '/docs/process-lifecycle/delivery-workflow',
     '/docs/concepts/code-host',
     '/docs/concepts/definition-of-ready-and-done',
     '/docs/concepts/pr-state-flow',
@@ -1050,8 +1050,8 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/migrations/v0.4-to-v0.5',
     '/docs/pm-tools/azure-devops',
     '/docs/reference',
-    '/docs/reference/batch-engine',
-    '/docs/reference/delivery-cycle',
+    '/docs/contributing/batch-engine-internals',
+    '/docs/process-lifecycle/delivery-cycle',
     '/docs/reference/coupling-model',
     '/docs/reference/pair-assistant',
     '/docs/reference/adoption-settings',

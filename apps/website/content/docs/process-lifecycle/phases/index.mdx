@@ -1,0 +1,38 @@
+---
+title: Phases
+description: The four phases and nine steps of the pair lifecycle, which skill runs each, and what every phase leaves behind.
+---
+
+Four phases, nine steps. Each step has a how-to guide in the Knowledge Base and a skill that runs it. You enter at whatever phase matches your project; `/pair-next` tells you which.
+
+```text
+Discovery (optional, before Phase 1) ─── /pair-process-brainstorm
+
+Phase 1: Induction (one-time)
+  Step 1  Create PRD ─────────────── /pair-process-specify-prd
+  Step 2  Bootstrap project ──────── /pair-process-bootstrap
+  Step 3  Plan initiatives ───────── /pair-process-plan-initiatives
+
+Phase 2: Strategic planning (per initiative)
+  Step 4  Break down epics ───────── /pair-process-plan-epics
+
+Phase 3: Iteration (per epic)
+  Step 5  Break down stories ─────── /pair-process-plan-stories
+  Step 6  Refine stories ─────────── /pair-process-refine-story
+  Step 7  Create tasks ───────────── /pair-process-plan-tasks
+
+Phase 4: Execution (per story)
+  Step 8  Implement ──────────────── /pair-process-implement
+  Step 9  Code review ────────────── /pair-process-review
+```
+
+| Phase | Runs | Card | Leaves behind |
+| --- | --- | --- | --- |
+| [Induction](/docs/process-lifecycle/phases/induction) | once | PRD | `.pair/adoption/` filled in, prioritized initiatives |
+| [Strategic planning](/docs/process-lifecycle/phases/strategic-planning) | per initiative | [Initiative](/docs/concepts/glossary#initiative-epic-story-task) | epics sized for a few sprints each |
+| [Iteration](/docs/process-lifecycle/phases/iteration) | per epic | Epic | Ready stories with tasks |
+| [Execution](/docs/process-lifecycle/phases/execution) | per story | Story | a merged pull request |
+
+Two ways to follow the steps: **process skills** (recommended: one slash command, the AI runs the structured process, composes capability skills and updates your PM tool) or the **how-to guides** in `.pair/knowledge/how-to/` for the same process by hand. Both are listed in the [Skills catalog](/docs/reference/skills-catalog) and the [Guidelines and how-to catalog](/docs/reference/guidelines-catalog).
+
+**Next:** [Induction](/docs/process-lifecycle/phases/induction), the one-time setup.

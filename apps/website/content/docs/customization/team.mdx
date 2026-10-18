@@ -169,7 +169,7 @@ The defaults are not copied into your adoption file, deliberately: a copy that m
 
 ## Enable Classification Tiers
 
-Classification (the `risk:*` tier that scales gates and review) is configured in `.pair/adoption/tech/risk-matrix.md`. The file is optional: absent, KB defaults apply and no tags are emitted. It has three independent sections; add only the ones you need. What the tiers mean is in the [Quality Model](/docs/reference/quality-model) and [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates); how the process uses them is in the [Process Lifecycle](/docs/developer-journey#the-risk-driven-flow).
+Classification (the `risk:*` tier that scales gates and review) is configured in `.pair/adoption/tech/risk-matrix.md`. The file is optional: absent, KB defaults apply and no tags are emitted. It has three independent sections; add only the ones you need. What the tiers mean is in the [Quality Model](/docs/reference/quality-model) and [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates); how the process uses them is in the [Process Lifecycle](/docs/process-lifecycle#the-risk-driven-flow).
 
 **Tag projection**: which tag families are written onto cards and PRs. Without it nothing is tagged, so gates, review effort and automation eligibility cannot read a tier.
 
@@ -216,7 +216,7 @@ The CLI way is the hand edit in the file; the optional `/pair-assistant` way (Cl
 | Option | File and key | Default | Effect | Learn more | With `/pair-assistant` |
 | --- | --- | --- | --- | --- | --- |
 | Autonomy | `tech/automation.md` `## Autonomy` (`until`, `prepare`, `merge`, `filter`) | `until: pr`, gates `always` | how far a card goes unattended | [Automated development](/docs/tutorials/automated-development#autonomy-until-gates-escalation) | "let green cards go up to merge" |
-| Cycle Hooks | `tech/automation.md` `## Cycle Hooks` | none | commands at stage boundaries | [Delivery cycle](/docs/reference/delivery-cycle#5-cycle-hooks) | "add a pre-verify hook that runs the tests" |
+| Cycle Hooks | `tech/automation.md` `## Cycle Hooks` | none | commands at stage boundaries | [Delivery cycle](/docs/process-lifecycle/delivery-cycle#5-cycle-hooks) | "add a pre-verify hook that runs the tests" |
 | Blocking Severities | `tech/automation.md` `## Blocking Severities` | floor `Minor` | review findings at or above the floor block a card | [Adoption settings](/docs/reference/adoption-settings#techautomationmd) | "only Major and above should block" |
 | `max-dispatches` | same section, second line `max-dispatches: N [warn\|block]` | no ceiling | caps a run's published handoffs; `block` stops the run | [Adoption settings](/docs/reference/adoption-settings#techautomationmd) | "stop a run after 40 dispatches" |
 | Publish-PR Hooks | `tech/automation.md` `## Publish-PR Hooks` | none | `pre-publish` / `post-publish` commands | [Adoption settings](/docs/reference/adoption-settings#techautomationmd) | "regenerate mirrors before publishing" |

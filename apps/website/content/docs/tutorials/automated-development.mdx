@@ -9,7 +9,7 @@ This tutorial shows how to let pair deliver cards without you writing the code o
 
 Automated development is **one delivery cycle** (a state machine that takes one card to a review-approved pull request, optionally to a merge), **three ways to drive it**, and **one set of autonomy gates** that decides how far it may go without you. Read those four parts first; the walkthrough from [Prerequisites](#prerequisites) on then builds a working daemon.
 
-It is the third of the [lifecycle modes](/docs/developer-journey/lifecycle-modes#automatic): Automatic. Concepts: [Delivery workflow](/docs/developer-journey/delivery-workflow). Reference: [Delivery cycle](/docs/reference/delivery-cycle). Tag-driven triggers: [Tag-driven automation](/docs/developer-journey/tag-driven-automation). Knowledge base: [`delivery-cycle.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md).
+It is the third of the [lifecycle modes](/docs/process-lifecycle/lifecycle-modes#automatic): Automatic. Concepts: [Delivery workflow](/docs/process-lifecycle/delivery-workflow). Reference: [Delivery cycle](/docs/process-lifecycle/delivery-cycle). Tag-driven triggers: [Tag-driven automation](/docs/process-lifecycle/tag-driven-automation). Knowledge base: [`delivery-cycle.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md).
 
 **With the CLI:** `pair-cli run --card 217` drives one card; `pair-cli run --root 212 --parallel 3 --watch` drives a backlog. **With `/pair-assistant` (optional, Claude Code):** CLI only for the run itself; ask [`/pair-assistant`](/docs/reference/pair-assistant#how-to-ask) to configure the policy ("let green cards go up to merge") and use `/pair-workflow-cycle` for one card or `/pair-loop` for a backlog.
 
@@ -25,7 +25,7 @@ It is the third of the [lifecycle modes](/docs/developer-journey/lifecycle-modes
 - **Merge stage**: opt-in. A review-approved PR stops at *ready-for-merge* unless the merge gate allows the stage; it re-verifies the reviewed head, the checks and the tier gates before merging.
 - **Durable handoffs**: every stage publishes a file under the run directory; the next question ("what is due?") is answered from those files, so an interrupted cycle resumes from its first incomplete stage.
 
-Detail per stage: [Delivery cycle, the stages](/docs/reference/delivery-cycle#2-the-stages-one-by-one).
+Detail per stage: [Delivery cycle, the stages](/docs/process-lifecycle/delivery-cycle#2-the-stages-one-by-one).
 
 ## Three drivers
 
@@ -39,7 +39,7 @@ Detail per stage: [Delivery cycle, the stages](/docs/reference/delivery-cycle#2-
 | `/pair-workflow-cycle` | one card in a Claude Code, Codex or pi session, you nearby |
 | `/pair-loop` or `pair-cli run --root --parallel --watch` | a whole backlog, repeatedly |
 
-All three read the same state machine and the same gates. Choosing between them: [Delivery cycle, realizations](/docs/reference/delivery-cycle#3-three-realizations-and-which-to-use).
+All three read the same state machine and the same gates. Choosing between them: [Delivery cycle, realizations](/docs/process-lifecycle/delivery-cycle#3-three-realizations-and-which-to-use).
 
 ## Autonomy: until, gates, escalation
 

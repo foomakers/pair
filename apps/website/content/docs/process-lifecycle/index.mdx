@@ -1,0 +1,58 @@
+---
+title: Process Lifecycle
+description: The flow for developing with pair, four phases, two workflows, three modes and the skills that drive them, with links to configuration and commands.
+---
+
+The lifecycle is the spine of working with pair. Four [phases](/docs/process-lifecycle/phases) take a product from idea to merged code; two workflows run on top of them; three modes decide who drives; a stack of skills does the work. Every page in this section links out to the guide that configures a thing and the reference that documents its commands.
+
+![The process lifecycle: four phases, two workflows, three modes](/diagrams/lifecycle-overview.svg)
+
+*Figure: read it left to right. The phases are the ground; the two workflows sit on the last two phases; the three modes change who drives, never what runs.*
+
+## The four parts
+
+- **Phases**: [induction](/docs/process-lifecycle/phases/induction) (one-time setup), [strategic planning](/docs/process-lifecycle/phases/strategic-planning), [iteration](/docs/process-lifecycle/phases/iteration) and [execution](/docs/process-lifecycle/phases/execution). Nine numbered steps, each with a how-to guide and a skill. See [Phases](/docs/process-lifecycle/phases).
+- **Two workflows**: the [analysis and refinement workflow](/docs/process-lifecycle/refinement-workflow) turns an idea into a Ready [card](/docs/concepts/glossary#card); the [delivery workflow](/docs/process-lifecycle/delivery-workflow) turns a Ready card into a review-approved pull request. [In depth](/docs/process-lifecycle/delivery-cycle).
+- **Three modes**: Assisted, Semi-automatic and Automatic. Same phases, same workflows; what changes is who drives. See [Lifecycle modes](/docs/process-lifecycle/lifecycle-modes).
+- **Skill layers**: capability skills at the bottom, process skills in the middle, workflow, loop and batch skills on top. See [Skill layers](/docs/process-lifecycle/skill-layers).
+
+Ahead of the phases sits one optional entry: `/pair-process-brainstorm`, a structured interview that turns a theme into a Draft epic and story tree. It never modifies the PRD.
+
+## Let /pair-next guide you
+
+You do not need to memorize the sequence. Run `/pair-next` at any point: pair reads your project state (open issues, story states, task progress) and suggests the next step. Use it at the start of every session, after finishing a step, or whenever you are unsure.
+
+```text
+/pair-next
+```
+
+## Where to start
+
+| You are... | Start at | Skill |
+| --- | --- | --- |
+| Starting a brand new project | Step 1, PRD | `/pair-process-specify-prd` |
+| Adopting pair on an existing project | Step 2, Bootstrap | `/pair-process-bootstrap` |
+| Opening a new initiative or roadmap cycle | Step 3, Initiatives | `/pair-process-plan-initiatives` |
+| Planning a sprint | Step 5, Stories | `/pair-process-plan-stories` |
+| Picking up a story to develop | Step 8, Implement | `/pair-process-implement` |
+| Reviewing a PR | Step 9, Review | `/pair-process-review` |
+
+## The risk-driven thread
+
+Every story carries a **risk tier**, and the tier decides how much gate, review and merge ceremony its pull request gets. It enters at refinement (`/pair-capability-classify` writes the matrix and, when the project projects tags, the `risk:*` tag), is copied onto the PR by `publish-pr`, scales the pre-merge gate and the review, and filters what [tag-driven automation](/docs/process-lifecycle/tag-driven-automation) may pick up. Review may raise a tier, never lower it. The model lives in [Tag-driven quality gates](/docs/concepts/tag-driven-gates) and the [Quality model](/docs/reference/quality-model); switching it on is a guide: [Classify stories and use risk tags](/docs/guides/classify-risk).
+
+## What to read next
+
+| You want to | Read |
+| --- | --- |
+| Set up a project | [Induction](/docs/process-lifecycle/phases/induction) |
+| Go from idea to Ready stories | [Analysis and refinement workflow](/docs/process-lifecycle/refinement-workflow), then the [brainstorming](/docs/tutorials/brainstorming) and [refinement](/docs/tutorials/refinement) tutorials |
+| Go from Ready story to PR | [Delivery workflow](/docs/process-lifecycle/delivery-workflow), then [Deliver a card](/docs/guides/deliver-a-card) |
+| Choose how much to automate | [Lifecycle modes](/docs/process-lifecycle/lifecycle-modes), then [Automated development](/docs/tutorials/automated-development) |
+| Know which skill drives which | [Skill layers](/docs/process-lifecycle/skill-layers), then the [Skills catalog](/docs/reference/skills-catalog) |
+| Configure behaviour | [Guides](/docs/guides) for the recipe, [Adoption settings](/docs/reference/adoption-settings) for every key |
+| Look up commands | [CLI commands](/docs/reference/cli/commands) and [`/pair-assistant`](/docs/reference/pair-assistant) |
+
+Terms you will meet here (card, macrostate, harness, engine, seal, handoff) are defined once in the [glossary](/docs/concepts/glossary#card).
+
+**Next:** [Phases](/docs/process-lifecycle/phases), the nine steps and what each one leaves behind.

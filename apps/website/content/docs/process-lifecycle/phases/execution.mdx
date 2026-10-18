@@ -82,8 +82,6 @@ The `risk:*` tag copied from your story onto the PR (see the closing phase above
 4. **The PR moves through three states**: `to-be-reviewed`, `ready-to-merge`, `not-approved`: synthesized from gate, review and tier; you never set them by hand. See [PR State Flow](/docs/concepts/pr-state-flow).
 5. **No tag means red.** A PR with no resolvable `risk:*` tag is gated as 🔴 and runs the full matrix with a warning: missing classification never means fewer checks.
 
-*Source: D17 (confirm-or-raise, never lower), D21 (defaults overridable per tier in adoption), D22 (verdict-first review).*
-
 ## Step 9: Code Review
 
 Review a pull request through a structured 6-phase process.
@@ -159,8 +157,6 @@ After merge, the skill updates the status hierarchy:
 
 This loop repeats for every story. `/pair-next` always knows what comes next.
 
-## Reference
+Every skill named here is in the [Skills catalog](/docs/reference/skills-catalog); every how-to in the [Guidelines and how-to catalog](/docs/reference/guidelines-catalog).
 
-- [Skills Catalog](/docs/reference/skills-catalog): all 51 skills with commands and composition
-- [Guidelines & How-To Catalog](/docs/reference/guidelines-catalog): all 9 guideline categories and 9 how-to guides
-- [Adopt a Knowledge Base](/docs/customization/adopt): set up pair if you haven't already
+**Next:** [Analysis and refinement workflow](/docs/process-lifecycle/refinement-workflow), the first workflow that runs on top of the phases.

@@ -55,7 +55,7 @@ Capability skills perform specific, reusable operations. They are invoked indepe
 
 ### Workflow Skills
 
-Workflow skills are the **stages of the [delivery workflow](/docs/developer-journey/delivery-workflow)**. A stage skill does one stage of one card (one role, one handoff) and is dispatched by the coordinator or the batch engine, never suggested by `/pair-next`. You normally invoke only the coordinator.
+Workflow skills are the **stages of the [delivery workflow](/docs/process-lifecycle/delivery-workflow)**. A stage skill does one stage of one card (one role, one handoff) and is dispatched by the coordinator or the batch engine, never suggested by `/pair-next`. You normally invoke only the coordinator.
 
 | Skill | Role |
 |-------|------|
@@ -67,7 +67,7 @@ Workflow skills are the **stages of the [delivery workflow](/docs/developer-jour
 | `/pair-workflow-green-fix` | stage: fix above the seal |
 | `/pair-workflow-review-phase` | stage: independent verification of the PR head |
 
-Detail: [Delivery cycle](/docs/reference/delivery-cycle#2-the-stages-one-by-one), [Skills Catalog](/docs/reference/skills-catalog#workflow-skills). How the layers stack: [Skill layers](/docs/developer-journey/skill-layers).
+Detail: [Delivery cycle](/docs/process-lifecycle/delivery-cycle#2-the-stages-one-by-one), [Skills Catalog](/docs/reference/skills-catalog#workflow-skills). How the layers stack: [Skill layers](/docs/process-lifecycle/skill-layers).
 
 ### Loop and Batch Entry Points
 
@@ -81,7 +81,7 @@ Detail: [Delivery cycle](/docs/reference/delivery-cycle#2-the-stages-one-by-one)
 | `pair-red-contract-verifier` | validates and seals it |
 | `pair-reviewer` | verifies the PR head |
 
-See [Batch engine](/docs/reference/batch-engine).
+See [Batch engine](/docs/contributing/batch-engine-internals).
 
 ### Plugin Skill
 

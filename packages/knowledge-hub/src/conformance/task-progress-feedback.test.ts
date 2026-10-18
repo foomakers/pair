@@ -832,7 +832,7 @@ describe('the docs site carries the feature (DoD)', () => {
     read(join(__dirname, '../../../../apps/website/content/docs', rel))
 
   const EXECUTION_ANCHOR =
-    '/docs/developer-journey/execution#progress-feedback-ticks-and-one-comment'
+    '/docs/process-lifecycle/phases/execution#progress-feedback-ticks-and-one-comment'
 
   it('lists the guideline in the guidelines catalog', () => {
     expect(docs('reference/guidelines-catalog.mdx')).toContain('task-progress')
@@ -852,14 +852,14 @@ describe('the docs site carries the feature (DoD)', () => {
   })
 
   it('describes the progress feedback on the execution journey page', () => {
-    const page = docs('developer-journey/execution.mdx').toLowerCase()
+    const page = docs('process-lifecycle/phases/execution.mdx').toLowerCase()
     expect(page).toMatch(/task-progress|progress comment/)
   })
 
   it('the heading the catalog link targets exists, so the anchor resolves', () => {
     // A link to a slug no heading generates is a 404-in-page: the reader lands at
     // the top of a long journey page with no idea which section was meant.
-    expect(docs('developer-journey/execution.mdx')).toMatch(
+    expect(docs('process-lifecycle/phases/execution.mdx')).toMatch(
       /^#+\s+Progress Feedback: Ticks and One Comment\s*$/m,
     )
   })

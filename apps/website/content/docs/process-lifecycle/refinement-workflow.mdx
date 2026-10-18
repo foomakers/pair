@@ -1,0 +1,37 @@
+---
+title: Analysis and refinement workflow
+description: How an idea becomes a Ready story with pair, brainstorm, stories, refine, breakdown, in Assisted, Semi-automatic and Automatic modes.
+---
+
+The **analysis and refinement workflow** is the first of the two [lifecycle](/docs/process-lifecycle) workflows. It ends where the [delivery workflow](/docs/process-lifecycle/delivery-workflow) begins: at a story in the `Ready` [macrostate](/docs/concepts/glossary#macrostate).
+
+![Analysis and refinement workflow: brainstorm, stories, refine, breakdown, Ready, in three modes](/diagrams/refinement-workflow.svg)
+
+*Figure: the four steps are the same in every row; what changes down the rows is how many of them a human runs by hand.*
+
+## The four steps
+
+| Step | Skill | Result |
+| --- | --- | --- |
+| Brainstorm | `/pair-process-brainstorm`, with a `/pair-capability-grill` interview | a Draft epic and story tree from a theme |
+| Stories | `/pair-process-plan-stories`, which triages each candidate (EXTEND or CREATE) | INVEST-valid Draft stories |
+| Refine | `/pair-process-refine-story` | acceptance criteria, analysis, sizing, `## Assumptions` and `## Open Questions` |
+| Breakdown | `/pair-process-plan-tasks` | tasks, dependency graph, AC coverage; the card becomes Ready |
+
+Refinement opens with a **sync phase 0**: `/pair-capability-grill` asks one question at a time until you and the AI agree ([grill](/docs/concepts/glossary#grill)). Whatever the AI had to assume, or could not resolve, is written to the card as Assumptions and Open Questions. Detail: [Iteration](/docs/process-lifecycle/phases/iteration#step-6-refine-a-user-story).
+
+## Per mode
+
+### Assisted
+
+You run each skill by hand and read each output. Use it while learning pair or for high-risk work. Tutorials: [Brainstorming](/docs/tutorials/brainstorming), [Refinement](/docs/tutorials/refinement).
+
+### Semi-automatic
+
+You steer, a batch runs. **In your assistant:** `/pair-refine-batch` refines a set of Draft cards. **With pair-cli:** `pair-cli run --card 217 --prepare never --until ready` stops the card right after refinement, before implementation. Grill questions still reach you.
+
+### Automatic
+
+The `prepare` [autonomy gate](/docs/concepts/glossary#autonomy-gates) lets pair refine a Draft card alone. `never` proceeds and records assumptions on the card; `when` proceeds unless a condition escalates. An escalation keeps the card Draft, labels it `needs-review` and exits non-zero, so a human takes over. Default is `always`: a human prepares. Setting the gate: [Autonomy and per-stage engine and model](/docs/guides/autonomy-and-profiles).
+
+**Next:** [Delivery workflow](/docs/process-lifecycle/delivery-workflow), from Ready card to review-approved PR.

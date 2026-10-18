@@ -1,0 +1,50 @@
+---
+title: Delivery workflow
+description: How one Ready card becomes a review-approved pull request, one state machine per card, independent roles, durable handoffs, autonomy gates, and how it runs in the three modes.
+---
+
+The **delivery workflow** is the second [lifecycle](/docs/process-lifecycle) workflow, after [analysis and refinement](/docs/process-lifecycle/refinement-workflow). It takes one Ready [card](/docs/concepts/glossary#card) to a review-approved pull request, and optionally to a merge, without relying on one long conversation. It is a set of [workflow skills](/docs/concepts/skills#workflow-skills) driven by a single state machine.
+
+## Why it exists
+
+A single agent that writes the code, judges it and merges it grades its own work. The workflow splits that job so each judgment is made by someone who did not make the thing being judged, and it keeps its state in files so an interruption costs nothing.
+
+## One state machine per card
+
+![The delivery cycle: both entries, the remediation loop, terminal states and the human decision points](/diagrams/cycle-overview.svg)
+
+*Figure: a fresh card takes the straight path across the top; only blocking review findings enter the loop on the left, and every exit on the right is a place where a human decides.*
+
+- **Stages**: `implement`, `verify`, the remediation stages `prepare`, `validate` and `green`, then `merge`. A fresh card runs `implement → verify → merge`.
+- **Remediation rounds**: blocking review findings loop `prepare → validate → green → verify`. The failing test comes first, is [sealed](/docs/concepts/glossary#seal), and the fix lands above the seal.
+- **One rule authority**: a single script decides what is due next. Every driver asks it, dispatches exactly that stage, and asks again.
+
+## Independent roles
+
+Four roles, never the same agent for adjacent judgments: the **implementer** (writes tests and code), the **fix-test author** (writes a finding's failing test), the **contract verifier** (validates and seals it) and the **reviewer** (verifies the exact PR head). The implementer never reviews; the verifier never repairs.
+
+## Durable handoffs and custody
+
+Every stage publishes a [handoff](/docs/concepts/glossary#handoff) file under the run directory. State is files, not memory: a cycle resumes from its first incomplete stage. A sealed test is custody-checked byte for byte at verification; a fixer cannot weaken what it must satisfy.
+
+## Autonomy gates and escalation
+
+Three gates decide how far a card goes without you: `until` (`ready`, `pr`, `merged`), `prepare` (who refines a Draft card) and `merge` (whether a review-approved card merges). A `when` condition that fires **escalates** the card to a human. Defaults keep a human in the loop. Recipe: [Autonomy and per-stage engine and model](/docs/guides/autonomy-and-profiles); every key: [Adoption settings](/docs/reference/adoption-settings#techautomationmd).
+
+![Three drivers, one set of autonomy gates, escalation](/diagrams/drive-and-gates.svg)
+
+*Figure: whichever driver starts the run, the same gates sit between it and a merge; the only way around a gate is the escalation path to a human.*
+
+## Per mode
+
+Same three modes as the [refinement workflow](/docs/process-lifecycle/refinement-workflow#per-mode); which assistants support each is in [Lifecycle modes](/docs/process-lifecycle/lifecycle-modes#modes-by-assistant).
+
+- **Assisted**: not the workflow. You run `/pair-process-implement` and `/pair-process-review` yourself, task by task.
+- **Semi-automatic**: you trigger it per card (`/pair-workflow-cycle`, `pair-cli run --card`) or per batch (`/pair-implement-batch`). It runs implement, independent verify and remediation, then stops for you at the review-approved PR or at an escalation.
+- **Automatic**: `/pair-loop` or `pair-cli run --root --parallel --watch` re-select cards and run the cycle under the gates. A card merges only when the `merge` gate allows it.
+
+## Realizations
+
+One cycle, several drivers: the in-session coordinator `/pair-workflow-cycle` (Claude Code, Codex, pi with subagents), the console driver `pair-cli run` on any installed [engine](/docs/concepts/glossary#engine), and the Claude Code parallel batch. They differ in who dispatches the stages, never in the rules. Choosing one: [The delivery cycle in depth, realizations](/docs/process-lifecycle/delivery-cycle#3-three-realizations-and-which-to-use).
+
+**Next:** [The delivery cycle in depth](/docs/process-lifecycle/delivery-cycle), stage by stage.

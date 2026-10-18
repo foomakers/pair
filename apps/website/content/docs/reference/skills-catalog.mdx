@@ -131,7 +131,7 @@ All `analyze-*` skills **analyze and report**: they propose no adoption decision
 
 ## Workflow Skills
 
-Workflow skills are the delivery phases of the [batch engine](/docs/reference/batch-engine), one mutation boundary each, invoked by the engine (or by the in-session coordinator `/pair-workflow-cycle`) during a review ↔ remediation cycle, never cascade-suggested by `/pair-next`. Each writes one handoff under `.pair/working/runs/<run>/<story>/`.
+Workflow skills are the delivery phases of the [batch engine](/docs/contributing/batch-engine-internals), one mutation boundary each, invoked by the engine (or by the in-session coordinator `/pair-workflow-cycle`) during a review ↔ remediation cycle, never cascade-suggested by `/pair-next`. Each writes one handoff under `.pair/working/runs/<run>/<story>/`.
 
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
