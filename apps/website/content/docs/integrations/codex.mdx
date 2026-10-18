@@ -1,6 +1,6 @@
 ---
 title: Codex
-description: Set up pair with OpenAI Codex — configure AGENTS.md, discover skills, and follow the bridge pattern.
+description: Set up pair with OpenAI Codex, configure AGENTS.md, discover skills, and follow the bridge pattern.
 ---
 
 ## Prerequisites
@@ -11,7 +11,7 @@ description: Set up pair with OpenAI Codex — configure AGENTS.md, discover ski
 
 ## Configure Agent File
 
-Codex reads `AGENTS.md` at the repository root — the same universal bridge file used by Claude Code. pair generates it during `pair-cli install`.
+Codex reads `AGENTS.md` at the repository root: the same universal bridge file used by Claude Code. pair generates it during `pair-cli install`.
 
 ### AGENTS.md
 
@@ -33,11 +33,11 @@ your-project/
 └── ...
 ```
 
-No additional configuration needed — Codex and Claude Code share the same entry point. Skills are distributed to `.agents/skills/` as symlinks pointing to the canonical `.claude/skills/` directory.
+No additional configuration needed: Codex and Claude Code share the same entry point. Skills are distributed to `.agents/skills/` as symlinks pointing to the canonical `.claude/skills/` directory.
 
 ### The Bridge Pattern
 
-`AGENTS.md` points to `.pair/` — the single source of truth:
+`AGENTS.md` points to `.pair/`: the single source of truth:
 
 ```text
 AGENTS.md ──→ .pair/knowledge/   (guidelines)
@@ -71,7 +71,7 @@ For the full catalog, see [Skills Catalog](/docs/reference/skills-catalog).
 
 ### Sandboxed Execution
 
-Codex runs in a sandboxed environment by default. pair's skills work within these constraints — they read files, make code changes, and create commits through standard Git operations. No special permissions needed beyond filesystem and Git access.
+Codex runs in a sandboxed environment by default. pair's skills work within these constraints: they read files, make code changes, and create commits through standard Git operations. No special permissions needed beyond filesystem and Git access.
 
 ### Shared Entry Point with Claude Code
 
@@ -79,7 +79,7 @@ Since both Codex and Claude Code read `AGENTS.md`, teams can switch between tool
 
 ### Multi-Agent Teams
 
-Codex reads `AGENTS.md` while Cursor reads `.cursor/rules/` and Copilot reads `.github/agents/` — all pointing to the same `.pair/` directory. The AI tool is an implementation detail; the standards are consistent.
+Codex reads `AGENTS.md` while Cursor reads `.cursor/rules/` and Copilot reads `.github/agents/`: all pointing to the same `.pair/` directory. The AI tool is an implementation detail; the standards are consistent.
 
 ## Verify It Works
 

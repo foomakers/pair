@@ -10,14 +10,9 @@ Technical specification for `pair-cli` command contracts including TypeScript ty
 These apply to **every** command below, not to a single one.
 
 - **Excess positionals are rejected.** Commander runs with `allowExcessArguments(false)` for all
-  registered commands, so a stray positional fails with `error: too many arguments for '<command>'`
-  and exit code 1 instead of being silently dropped. This makes each command's positional-arity
-  validation reachable, and catches the classic unquoted option value (`--name Acme KB` used to
-  bind `name` to `Acme` and discard `KB`). This is a behavior change — earlier releases ignored the
-  extra argument, so a wrapper or CI invocation carrying one (e.g. `pair-cli install ./a ./b`) now
-  fails; drop the extra argument or quote the value.
-  [GitHub Releases](https://github.com/foomakers/pair/releases) names the release that introduced
-  it.
+registered commands, so a stray positional fails with `error: too many arguments for '<command>'` and exit code 1 instead of being silently dropped. This makes each command's positional-arity validation reachable, and catches the classic unquoted option value (`--name Acme KB` used to bind `name` to `Acme` and discard `KB`).
+
+This is a behavior change, earlier releases ignored the extra argument, so a wrapper or CI invocation carrying one (e.g. `pair-cli install ./a ./b`) now fails; drop the extra argument or quote the value. [GitHub Releases](https://github.com/foomakers/pair/releases) names the release that introduced it.
 
 ## Command Option Types
 
@@ -40,13 +35,13 @@ export interface CliOptions {
 
 `kb` is read by the KB pre-flight (`bootstrapEnvironment`), which runs before `install` and
 `update`: `false` skips the pre-flight fetch, and `false` together with a `url` is rejected by
-`validateCliOptions`. Both were dead through 0.4.3 — the pre-flight was unreachable, so
+`validateCliOptions`. Both were dead through 0.4.3: the pre-flight was unreachable, so
 `pair-cli install --no-kb` installed a KB anyway and the conflict never fired. See the
 [`--no-kb` note in the CLI reference](/docs/reference/cli/commands).
 
 The conflict is checked in the CLI hook (`runKbPreflight`), **above** the pre-flight's own
-skip, and `bootstrapEnvironment` takes no `url`: a named source — `--source`, `--git`, `--url`,
-local or remote — skips the pre-flight entirely, because the command fetches that source itself
+skip, and `bootstrapEnvironment` takes no `url`: a named source (`--source`, `--git`, `--url`,
+local or remote) skips the pre-flight entirely, because the command fetches that source itself
 into its own cache slot. A pre-flight that also warmed it downloaded the same archive twice.
 
 ### Install Command
@@ -146,17 +141,11 @@ export type ScaffoldFileKind = 'scaffold-owned' | 'seed'
 export type FileAction = 'created' | 'overwritten' | 'unchanged' | 'skipped'
 ```
 
-Validation: `--host` must be `github` or `generic`; `--name` must be non-empty, free of
-newlines/control characters and of `${{` (GitHub Actions would evaluate it as a live
-expression in the generated workflow), and at most 100 characters (it is embedded in
-generated YAML and bash); at most one positional argument (extra positionals are rejected — see
-[CLI-Wide Rules](#cli-wide-rules), which applies to every command).
-Refused targets: a path that exists and is not a directory, or a configured pair project
-(`.pair/adoption/` present) — not bypassable with `--force`.
-Re-scaffold policy: `seed` files (KB content) are never overwritten; `scaffold-owned`
-files are regenerated only when identical-check fails AND (`--force` OR interactive
-confirmation) — otherwise reported as `skipped`. The generated `scripts/release.sh` is
-written with mode `0755`.
+Validation: `--host` must be `github` or `generic`; `--name` must be non-empty, free of newlines/control characters and of `${{` (GitHub Actions would evaluate it as a live expression in the generated workflow), and at most 100 characters (it is embedded in generated YAML and bash); at most one positional argument (extra positionals are rejected, see [CLI-Wide Rules](#cli-wide-rules), which applies to every command).
+
+Refused targets: a path that exists and is not a directory, or a configured pair project (`.pair/adoption/` present), not bypassable with `--force`. Re-scaffold policy: `seed` files (KB content) are never overwritten; `scaffold-owned` files are regenerated only when identical-check fails AND (`--force` OR interactive confirmation), otherwise reported as `skipped`.
+
+The generated `scripts/release.sh` is written with mode `0755`.
 
 ### KB Verify Command
 
@@ -255,7 +244,7 @@ function validateInstallUpdateOptions(options: InstallOptions | UpdateOptions): 
 ### `install` / `update`: the code follows the tally
 
 Both commands classify every registry as `ok`, `skipped` or `failed` and derive the status
-code from that one tally — the same tally the printed summary is built from, so the text
+code from that one tally: the same tally the printed summary is built from, so the text
 and the code cannot disagree:
 
 | Tally | Summary | Code |
@@ -267,12 +256,12 @@ and the code cannot disagree:
 A registry the source does not ship is `skipped`, never `failed`, and any number of skips
 still exits `0` as long as something was installed. Two consequences for automation: `1`
 from these two commands is not necessarily a validation error (it may be a per-registry
-copy failure or a no-op), and `update` returns a non-zero code at all — it previously
+copy failure or a no-op), and `update` returns a non-zero code at all: it previously
 exited `0` unless it threw.
 
 ### `kb-verify` / `kb-info` / `kb-cache`: their non-zero code now reaches the shell
 
-Not new behaviour these commands *report* — new behaviour a caller *observes*. All three
+Not new behaviour these commands *report*, new behaviour a caller *observes*. All three
 already returned `1` from their handlers (an unreadable or unextractable KB, a checksum
 mismatch, an unknown cache slot), but the entry point force-exited with an explicit
 `process.exit(0)`, and in Node an explicit code OVERRIDES `process.exitCode`. Forwarding
@@ -285,7 +274,7 @@ the reported code (the fix AC5 required for `install`) un-swallows theirs too:
 | `pair-cli kb-cache <op>` | the cache operation that failed | `0` | `1` |
 
 A CI step that ran `pair-cli kb-verify ./kb` and passed while printing a checksum mismatch now
-fails that step. That is the contract these commands always described — but a pipeline
+fails that step. That is the contract these commands always described, but a pipeline
 relying on the old code turning green is the one place the change is felt.
 
 ## Test Matrices
@@ -303,13 +292,13 @@ relying on the old code turning green is the one place the change is felt.
 | `https://...` | Yes         | -        | ERROR                | 1         |
 
 The codes above are the OPTION-validation outcome only. A run that gets past validation
-still exits per the tally above — `1` when a shipped registry fails or when nothing was
+still exits per the tally above, `1` when a shipped registry fails or when nothing was
 installed, whatever the source.
 
 ---
 
 ## Related
 
-- [CLI Commands Reference](/docs/reference/cli/commands) — User-facing command documentation
-- [KB Source Resolution Spec](/docs/reference/specs/kb-source-resolution) — KB source resolution algorithm
-- [CLI Help Examples](/docs/reference/cli/examples) — Practical usage examples
+- [CLI Commands Reference](/docs/reference/cli/commands): User-facing command documentation
+- [KB Source Resolution Spec](/docs/reference/specs/kb-source-resolution): KB source resolution algorithm
+- [CLI Help Examples](/docs/reference/cli/examples): Practical usage examples

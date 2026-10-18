@@ -9,40 +9,32 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 
 **Quick Navigation:**
 
-- [install](#install) — Install documentation and assets
-- [update](#update) — Update existing documentation
-- [update-link](#update-link) — Validate and update links
-- [package](#package) — Package KB content into ZIP
-- [scaffold-kb](#scaffold-kb) — Scaffold an external KB repository
-- [kb-info](#kb-info) — Display package metadata, or check installed vs current KB version
-- [kb-cache](#kb-cache) — Inspect and reclaim the shared KB cache
-- [kb-verify](#kb-verify) — Verify KB package integrity
-- [kb-validate](#kb-validate) — Validate KB structure
-- [validate-config](#validate-config) — Validate configuration
-- [tokens](#tokens) — Count words and estimated tokens per area of a project's pair files
-- [run](#run) — Run a pair skill headlessly on a chosen engine, in a re-invocation loop
+- [install](#install): Install documentation and assets
+- [update](#update): Update existing documentation
+- [update-link](#update-link): Validate and update links
+- [package](#package): Package KB content into ZIP
+- [scaffold-kb](#scaffold-kb): Scaffold an external KB repository
+- [kb-info](#kb-info): Display package metadata, or check installed vs current KB version
+- [kb-cache](#kb-cache): Inspect and reclaim the shared KB cache
+- [kb-verify](#kb-verify): Verify KB package integrity
+- [kb-validate](#kb-validate): Validate KB structure
+- [validate-config](#validate-config): Validate configuration
+- [tokens](#tokens): Count words and estimated tokens per area of a project's pair files
+- [run](#run): Run a pair skill headlessly on a chosen engine, in a re-invocation loop
 
 ## Rules that apply to every command
 
 - **Extra positional arguments are an error.** Every command rejects positionals beyond the ones
-  documented for it: `pair-cli install ./a ./b` fails with `error: too many arguments for 'install'`
-  (exit 1) instead of silently ignoring `./b`. This is what catches an unquoted option value —
-  `--name Acme KB` (which used to mean `--name Acme`) now fails instead of half-working; quote it:
-  `--name "Acme KB"`. This is a behavior change — earlier releases ignored the stray argument, so a
-  wrapper script or CI job that passed one must drop it.
-  [GitHub Releases](https://github.com/foomakers/pair/releases) names the release that introduced
-  it.
+documented for it: `pair-cli install ./a ./b` fails with `error: too many arguments for 'install'` (exit 1) instead of silently ignoring `./b`. This is what catches an unquoted option value, `--name Acme KB` (which used to mean `--name Acme`) now fails instead of half-working; quote it: `--name "Acme KB"`.
+
+This is a behavior change, earlier releases ignored the stray argument, so a wrapper script or CI job that passed one must drop it. [GitHub Releases](https://github.com/foomakers/pair/releases) names the release that introduced it.
 
 - **Registry writes are atomic; the last writer wins.** `install` and `update` build each
-  registry's result in a sibling directory (`<target>.tmp-<pid>-<n>`) seeded from the live target,
-  then swap it in with renames, so an interrupted or concurrent run never leaves a tree that is
-  neither the old state nor the new one. File targets (`AGENTS.md`, `CLAUDE.md`) are replaced by a
-  rename. There is no lock: a second run is never blocked, and when two runs overlap the later swap
-  wins wholesale (two runs on different dataset versions leave the project consistently on one of
-  them). Leftovers of a dead run are swept, and a target left absent by an interrupted swap is
-  restored, on the next run — no manual cleanup. `behavior: add` registries (`.pair/adoption`) are
-  never staged. The target is transiently duplicated on disk while a run is in flight. On Windows,
-  `rename` over an existing directory is not atomic, so these guarantees hold on POSIX platforms only.
+registry's result in a sibling directory (`<target>.tmp-<pid>-<n>`) seeded from the live target, then swap it in with renames, so an interrupted or concurrent run never leaves a tree that is neither the old state nor the new one. File targets (`AGENTS.md`, `CLAUDE.md`) are replaced by a rename.
+
+There is no lock: a second run is never blocked, and when two runs overlap the later swap wins wholesale (two runs on different dataset versions leave the project consistently on one of them). Leftovers of a dead run are swept, and a target left absent by an interrupted swap is restored, on the next run: no manual cleanup.
+
+`behavior: add` registries (`.pair/adoption`) are never staged. The target is transiently duplicated on disk while a run is in flight. On Windows, `rename` over an existing directory is not atomic, so these guarantees hold on POSIX platforms only.
 
 - **Package-local `.pair` dirs are never touched.** `<pkg>/.pair/` directories (the opt-in [package-local adoption override](/docs/customization/package-local-adoption)) are project content: `install`/`update` leave them alone, and `validate-config` rejects a registry `target` at or inside one.
 
@@ -63,8 +55,8 @@ pair-cli install [registry:target ...]
 
 ### Arguments
 
-- `[target]` — Optional target directory path (default: current working directory)
-- `[registry:target ...]` — Install specific registries to custom targets
+- `[target]`: Optional target directory path (default: current working directory)
+- `[registry:target ...]`: Install specific registries to custom targets
 
 ### Options
 
@@ -79,9 +71,9 @@ pair-cli install [registry:target ...]
 
 **KB Source Options:**
 
-- `--source <url>` — Download KB from custom HTTP/HTTPS URL or use local path
-- `--source <git-url>` — Clone KB from a git repository (`*.git`, `git@…`, `ssh://git@…`, append `#ref` to pin version)
-- `--offline` — Skip automatic KB download (requires `--source` with local path)
+- `--source <url>`: Download KB from custom HTTP/HTTPS URL or use local path
+- `--source <git-url>`: Clone KB from a git repository (`*.git`, `git@…`, `ssh://git@…`, append `#ref` to pin version)
+- `--offline`: Skip automatic KB download (requires `--source` with local path)
 
 **Existing files:** install is all-or-nothing per registry target. If any target already exists (`AGENTS.md`, `CLAUDE.md`, `.claude/skills`, `.pair/knowledge`, …) it exits 1 with `Target '<path>' already exists` and writes nothing. Use `--skip-registries <names>` to leave a registry untouched; an unknown name exits 1 and lists the valid ones.
 
@@ -139,8 +131,8 @@ pair-cli update [registry:target ...]
 
 ### Arguments
 
-- `[target]` — Optional target directory path (default: current working directory)
-- `[registry:target ...]` — Update specific registries in custom targets
+- `[target]`: Optional target directory path (default: current working directory)
+- `[registry:target ...]`: Update specific registries in custom targets
 
 ### Options
 
@@ -210,7 +202,7 @@ pair-cli update-link --url https://github.com/org/repo/releases/download/v1.0/kb
 pair-cli update-link --url ./relative/path/to/kb
 ```
 
-For detailed usage, see the [Link Update Guide](/docs/reference/cli/update-link).
+For detailed usage, see the [Link Update Guide](/docs/guides/update-kb).
 
 ---
 
@@ -255,7 +247,7 @@ pair-cli package [options]
 ### Examples
 
 ```bash
-# Package current directory (target layout — default)
+# Package current directory (target layout - default)
 pair-cli package
 
 # Package from source layout
@@ -276,7 +268,7 @@ pair-cli package --org --org-name "Acme Corp" --team "Platform" --compliance "SO
 
 ### Interactive Mode
 
-Quick mode is the default: omitting `--interactive` resolves smart defaults from `package.json`, `git config`, and saved preferences (`~/.pair/preferences.json`) and applies them in one shot — so `pair-cli package` in a repo whose `package.json` name is `foo` produces a `foo` package, not `kb-package`. Passing `--interactive` (the guided selector, requires a TTY) enters a guided flow that pre-fills prompts from the _same_ resolved defaults and lets you confirm or override each. This guided/quick duality follows the [Guided / Quick Setup Convention](/docs/contributing/writing-skills#setup-skills-guided-vs-quick).
+Quick mode is the default: omitting `--interactive` resolves smart defaults from `package.json`, `git config`, and saved preferences (`~/.pair/preferences.json`) and applies them in one shot, so `pair-cli package` in a repo whose `package.json` name is `foo` produces a `foo` package, not `kb-package`. Passing `--interactive` (the guided selector, requires a TTY) enters a guided flow that pre-fills prompts from the _same_ resolved defaults and lets you confirm or override each. This guided/quick duality follows the [Guided / Quick Setup Convention](/docs/contributing/writing-skills#setup-skills-guided-vs-quick).
 
 ### Org Template
 
@@ -288,7 +280,7 @@ When `--org` is active, the CLI looks for `.pair/org-template.json` to pre-fill 
 
 **Via `/pair-assistant` (optional, Claude Code):** ask for "the installed KB version, or whether it is behind".
 
-Display metadata from a KB package ZIP file, or — when no package path is given — check the
+Display metadata from a KB package ZIP file, or (when no package path is given) check the
 project's installed KB version against the current one.
 
 ### Usage
@@ -310,13 +302,13 @@ pair-cli kb-info [package-path] [options]
 Running `pair-cli kb-info` without a package path compares the KB version recorded as installed in
 the project (written by `install`/`update` on success) against the current one:
 
-- **Up to date** — installed matches current, exit code 0.
-- **Version drift** — installed differs from current; the output includes a migration-page URL
+- **Up to date**: installed matches current, exit code 0.
+- **Version drift**: installed differs from current; the output includes a migration-page URL
   for the version jump (one page per jump, per the docs Migrations index).
-- **Unknown installed version** — legacy install with no recorded metadata; run `pair-cli install` or
+- **Unknown installed version**: legacy install with no recorded metadata; run `pair-cli install` or
   `pair-cli update` to record it.
-- **Current version unavailable** — the source could not be resolved (offline, unreachable
-  mirror, etc.); the installed version is still reported. Exit code is 0 in all cases — this is a
+- **Current version unavailable**: the source could not be resolved (offline, unreachable
+  mirror, etc.); the installed version is still reported. Exit code is 0 in all cases: this is a
   metadata check only, it never performs migration.
 
 `install` and `update` also print a non-blocking heads-up with the same migration-page pointer
@@ -334,23 +326,18 @@ the same way it would be installed:
 | Remote URL  | The URL is probed for reachability and the version is parsed out of the URL string itself (the artifact is not downloaded)                           |
 | Git URL     | The repository is shallow-cloned read-only and its root `manifest.json` is read                                                                      |
 
-A git source (`*.git`, `git://…`, `git@…`, `ssh://git@…`, optionally pinned with `#ref` — a branch
-or tag, **not** a commit SHA: the clone is issued as `git clone --depth 1 --branch <ref>`, and git
-answers a SHA with `Remote branch <sha> not found in upstream origin`) is cloned into a throwaway
-temporary directory that is deleted straight after the read — the shared KB cache (`~/.pair/kb`) is
-never written to, so a version check can never disturb an installed KB. Private repositories
-authenticate exactly as they do for `install`: `PAIR_GIT_TOKEN` or your SSH keys.
-Credentials never reach the output — any token in a git error message is redacted before it is
-printed or serialized to JSON.
+A git source (`*.git`, `git://…`, `git@…`, `ssh://git@…`, optionally pinned with `#ref`: a branch or tag, **not** a commit SHA: the clone is issued as `git clone --depth 1 --branch <ref>`, and git answers a SHA with `Remote branch <sha> not found in upstream origin`) is cloned into a throwaway temporary directory that is deleted straight after the read: the shared KB cache (`~/.pair/kb`) is never written to, so a version check can never disturb an installed KB.
 
-Only the root `manifest.json` is read from a git repository — never a root `package.json`, even
+Private repositories authenticate exactly as they do for `install`: `PAIR_GIT_TOKEN` or your SSH keys. Credentials never reach the output, any token in a git error message is redacted before it is printed or serialized to JSON.
+
+Only the root `manifest.json` is read from a git repository, never a root `package.json`, even
 when one is present. `install` records the installed version of a git source from its cache slot,
 where only a `manifest.json` is reachable; reporting a `package.json` version as "current" would
 therefore describe a version `install` can never record, leaving the check stuck on "unknown
 installed version" for good. A git KB that wants drift visibility ships a root `manifest.json`.
 
-If the clone cannot run at all — offline, `git` not installed, wrong credentials, a `#ref` that
-does not exist, or a repository with no root `manifest.json` — the check reports **Current
+If the clone cannot run at all (offline, `git` not installed, wrong credentials, a `#ref` that
+does not exist, or a repository with no root `manifest.json`) the check reports **Current
 version unavailable** with the reason and still exits **0**, like every other source kind.
 
 ### Examples
@@ -381,7 +368,7 @@ pair-cli kb-info --source https://github.com/acme/kb.git#v2.0.0
 
 **Via `/pair-assistant` (optional, Claude Code):** ask for "the shared KB cache inspected or reclaimed".
 
-Inspect and reclaim the shared KB cache — the machine-wide directory where `install` and
+Inspect and reclaim the shared KB cache: the machine-wide directory where `install` and
 `update` keep downloaded knowledge bases so repeated runs do not re-fetch them.
 
 ### Usage
@@ -405,27 +392,27 @@ pair-cli kb-cache [list|prune] [options]
 | `--json`              | Output the inventory or the prune result as JSON              |
 | `--log-level <level>` | Set minimum log level (debug, info, warn, error)              |
 
-### What prune removes — and what it never removes
+### What prune removes: and what it never removes
 
 `prune` removes only slots that a later `install`/`update` can recreate:
 
-- **backup** — a `.bak` slot left behind by an interrupted install
-- **stage** — an abandoned `.tmp-*` staging directory
-- **legacy-git** — a pre-`external/` git clone at the cache root
-- **official** — KB slots for CLI versions other than the one running
+- **backup**: a `.bak` slot left behind by an interrupted install
+- **stage**: an abandoned `.tmp-*` staging directory
+- **legacy-git**: a pre-`external/` git clone at the cache root
+- **official**: KB slots for CLI versions other than the one running
 
 It never removes:
 
-- **external KBs** (`external/`) — fetched from a URL the CLI does not retain, so deleting one
+- **external KBs** (`external/`): fetched from a URL the CLI does not retain, so deleting one
   is not undoable by re-running an install
-- **every official slot when the running version cannot be resolved** — rather than compare
+- **every official slot when the running version cannot be resolved**: rather than compare
   against an empty version and delete the KB currently in use
 
 A cache root that exists but cannot be read is reported as an error, not as an empty cache, and
 a prune that fails to remove part of what it identified exits non-zero instead of reporting a
 clean sweep.
 
-This command reads the cache only — it never downloads a KB.
+This command reads the cache only: it never downloads a KB.
 
 ### Examples
 
@@ -495,7 +482,7 @@ Validate KB structure, links, and metadata using layout-aware validation.
 pair-cli kb-validate [options]
 ```
 
-This command takes **no positional argument** — the KB directory is passed as
+This command takes **no positional argument**: the KB directory is passed as
 `--path <path>` (a stray positional is rejected, see
 [Rules that apply to every command](#rules-that-apply-to-every-command)).
 
@@ -547,8 +534,8 @@ checked, instead of switching whole registries off:
 }
 ```
 
-Patterns are written in the **resolved** form — the target's path relative to the KB
-root — because that form does not change with the depth of the file the link is written
+Patterns are written in the **resolved** form (the target's path relative to the KB
+root) because that form does not change with the depth of the file the link is written
 in. Above: links landing on `<kb-root>/apps/…`, however deep the source file is. A target
 that is a true **sibling** of the KB root resolves one level up, so its rule starts with
 `../` (`../apps/**`), and `**/apps/**` covers both anchorings at once.
@@ -562,53 +549,40 @@ Rules:
   are trimmed on both sides before the union, so declaring the same pattern twice (even with
   different surrounding whitespace) yields one matcher.
 - Each pattern is matched against the target **resolved relative to the KB root**
-  (`apps/x.ts`) and — only when the link **as written** is a genuine spelling of that same
-  target, i.e. its leading `../` climb lands exactly on the KB root (`../../apps/x.ts` from
-  `.pair/knowledge/`), or the resolved target leaves the KB tree — against the written form
-  too. A match in either form makes the link optional, and overlapping patterns still produce
-  a single warning. Every other link is matched on its **resolved form only**: one that stays
-  inside the KB (`apps/x.md`, `./apps/x.md`), and one whose `../` climb lands back inside the
-  KB (`../../apps/y.md` from `.pair/knowledge/a/b/`, resolving to
-  `.pair/knowledge/apps/y.md`). So a rule like `apps/**` or `../../apps/**` cannot silence a
-  broken link that merely **looks** like it — typically a file moved deeper, whose `../` depth
-  is now wrong and whose target will never exist.
+(`apps/x.ts`) and: only when the link **as written** is a genuine spelling of that same target, i.e. its leading `../` climb lands exactly on the KB root (`../../apps/x.ts` from `.pair/knowledge/`), or the resolved target leaves the KB tree, against the written form too. A match in either form makes the link optional, and overlapping patterns still produce a single warning.
+
+Every other link is matched on its **resolved form only**: one that stays inside the KB (`apps/x.md`, `./apps/x.md`), and one whose `../` climb lands back inside the KB (`../../apps/y.md` from `.pair/knowledge/a/b/`, resolving to `.pair/knowledge/apps/y.md`).
+
+So a rule like `apps/**` or `../../apps/**` cannot silence a broken link that merely **looks** like it, typically a file moved deeper, whose `../` depth is now wrong and whose target will never exist.
 - **Prefer the resolved form; the written form is depth-bound.** `../../apps/**` matches only
-  links whose `../` climb lands exactly on the KB root, so the same rule stops matching as soon
-  as the same target is linked from a deeper file. Measured with two files linking to the SAME
-  out-of-KB target: `[x](../../../apps/x.ts)` from `.pair/knowledge/a.md` and
-  `[x](../../../../apps/x.ts)` from `.pair/knowledge/deep/b.md` are **both errors** under
-  `../../apps/**`, and **both warnings** under `../apps/**` (their common resolved form) or
-  `**/apps/**`. Nothing is silenced by the mismatch — the error stays — but the rule does not
-  do what it looks like it does.
+links whose `../` climb lands exactly on the KB root, so the same rule stops matching as soon as the same target is linked from a deeper file.
+
+Measured with two files linking to the SAME out-of-KB target: `[x](../../../apps/x.ts)` from `.pair/knowledge/a.md` and `[x](../../../../apps/x.ts)` from `.pair/knowledge/deep/b.md` are **both errors** under `../../apps/**`, and **both warnings** under `../apps/**` (their common resolved form) or `**/apps/**`.
+
+Nothing is silenced by the mismatch (the error stays) but the rule does not do what it looks like it does.
 - Glob syntax: `**` (a whole segment: **zero or more** path segments, so `a/**/b` matches
-  `a/b` and `**/apps/**` matches `apps/x.ts`), `*` (any characters except `/`, which is also
-  what a `**` that is not a whole segment means), `?` (one character, never `/`), `[abc]` /
-  `[a-z]` / `[!abc]`. Patterns are anchored — `apps/**` does not match `vendor/apps/x.ts`.
-  Anchoring is on the KB root, so the decorations that would only restate it are stripped from
-  the pattern and from the path alike: a leading `/` or `./`, a trailing `/`, repeated `/`.
-  `/apps/**` (how an absolute internal link is written) and `./apps/**` are the same rule as
-  `apps/**`, and `apps/` the same as `apps` — note that is the directory itself, NOT everything
-  under it: write `apps/**` for that. A malformed pattern (unterminated class, out-of-order
-  range like `[z-a]`) is reported and skipped, never fatal — including under `--strict`, where the matchers are discarded but the
-  typo is still warned about. A **blank** entry is not a malformed pattern: on the flag it is
-  dropped silently (`"apps/**,,"` is one pattern), in config it is dropped with its own
-  "not a non-empty string" warning.
+`a/b` and `**/apps/**` matches `apps/x.ts`), `*` (any characters except `/`, which is also what a `**` that is not a whole segment means), `?` (one character, never `/`), `[abc]` / `[a-z]` / `[!abc]`. Patterns are anchored: `apps/**` does not match `vendor/apps/x.ts`.
+
+Anchoring is on the KB root, so the decorations that would only restate it are stripped from the pattern and from the path alike: a leading `/` or `./`, a trailing `/`, repeated `/`.
+
+`/apps/**` (how an absolute internal link is written) and `./apps/**` are the same rule as `apps/**`, and `apps/` the same as `apps`, note that is the directory itself, NOT everything under it: write `apps/**` for that.
+
+A malformed pattern (unterminated class, out-of-order range like `[z-a]`) is reported and skipped, never fatal, including under `--strict`, where the matchers are discarded but the typo is still warned about.
+
+A **blank** entry is not a malformed pattern: on the flag it is dropped silently (`"apps/**,,"` is one pattern), in config it is dropped with its own "not a non-empty string" warning.
 - **Everything outside that list is literal, not an error.** Brace expansion (`{apps,packages}/**`),
   extglob (`+(a|b)`) and leading-`!` negation (`!apps/**`) are compiled character by character, so
-  they simply never match — and they are **not** reported as malformed patterns, so nothing warns.
+  they simply never match, and they are **not** reported as malformed patterns, so nothing warns.
   Write one pattern per alternative instead (`["apps/**", "packages/**"]`).
 - A pattern containing a **comma** cannot be passed on `--optional-link-patterns` (the flag value is
   split on `,`, so `"[a,b]/*"` becomes two patterns, one of them malformed). Declare such a pattern
   in `link_validation.optional_link_patterns` instead.
 - Three places this matcher is **more permissive than `minimatch`**, so do not assume parity:
-  a trailing `/**` also matches the **directory itself** (`apps/**` matches `apps`, `**/b/**`
-  matches `a/b`), `**` **traverses `..` segments** (`**` matches `../../apps/x.ts`), and the
-  normalization above collapses spellings minimatch keeps distinct (`/apps/**` matches
-  `apps/x.ts`). All three make a pattern broader than a minimatch habit suggests — and a
-  too-broad pattern is not malformed, so nothing warns about it. Prefer the narrowest pattern that covers the links you
-  mean to tolerate.
-- A `link_validation` section of the wrong **shape** — not an object, `optional_link_patterns`
-  not an array (`"apps/**"` instead of `["apps/**"]`), a camelCase key, or non-string entries —
+a trailing `/**` also matches the **directory itself** (`apps/**` matches `apps`, `**/b/**` matches `a/b`), `**` **traverses `..` segments** (`**` matches `../../apps/x.ts`), and the normalization above collapses spellings minimatch keeps distinct (`/apps/**` matches `apps/x.ts`).
+
+All three make a pattern broader than a minimatch habit suggests, and a too-broad pattern is not malformed, so nothing warns about it. Prefer the narrowest pattern that covers the links you mean to tolerate.
+- A `link_validation` section of the wrong **shape**, not an object, `optional_link_patterns`
+  not an array (`"apps/**"` instead of `["apps/**"]`), a camelCase key, or non-string entries,
   is reported as a warning and ignored, never fatal. Without that warning the run would look
   like "all these links are broken" rather than "the config key is misspelled". An empty section
   (`"link_validation": {}`) declares nothing and is silent.
@@ -618,24 +592,21 @@ Rules:
   without scrolling back through a long report (and survives piping the report to a file), and
   in the report itself for the counted summary.
 - `--strict` **overrides** optional patterns: in strict mode every missing target is an error.
-  That is all it does today — the CLI makes **no network requests**, so external (`http`/`https`)
+  That is all it does today: the CLI makes **no network requests**, so external (`http`/`https`)
   links are never fetched, with or without `--strict`. A green `--strict` run in CI means "every
   internal target exists", never "external links are reachable".
-- Links carrying a **non-http URI scheme** — `mailto:`, `tel:`, `ftp:`, `vscode:`, any
-  `scheme:` of two characters or more — address something that is not a file: they are skipped
+- Links carrying a **non-http URI scheme** (`mailto:`, `tel:`, `ftp:`, `vscode:`, any
+  `scheme:` of two characters or more) address something that is not a file: they are skipped
   entirely, never resolved as a path and never reported broken, with or without `--strict`
   (they are not fetched either, as nothing is). A Windows drive letter (`C:/x`) is a single
   character and therefore not a scheme: it stays an internal path.
 - `--ignore-config` consults no config at all, so no registries resolve, **no files are
-  collected and nothing is validated** — structure, links and metadata are all skipped, and
-  optional patterns (config or CLI) have no effect, since there is nothing to match against.
-  The run says so rather than passing silently: a `Configuration:` notice
-  (`--ignore-config: … nothing validated …`) is printed on stderr and in the report, counted in
-  the `Warnings:` total. Use it to skip validation entirely, not as a way to run with CLI-only
-  patterns.
+collected and nothing is validated**, structure, links and metadata are all skipped, and optional patterns (config or CLI) have no effect, since there is nothing to match against. The run says so rather than passing silently: a `Configuration:` notice (`--ignore-config: … nothing validated …`) is printed on stderr and in the report, counted in the `Warnings:` total.
+
+Use it to skip validation entirely, not as a way to run with CLI-only patterns.
 - Config patterns are read from the config of the **KB being validated**
   (`<--path>/pair.config.json`, falling back to `<--path>/config.json` when the former is
-  absent), not from the invoking project — the same config `--path` already
+  absent), not from the invoking project: the same config `--path` already
   resolves registries from. Validating `--path ./my-kb` therefore ignores a `link_validation`
   section left in the repo-root config.
 
@@ -645,7 +616,7 @@ Rules:
 
 **Via `/pair-assistant` (optional, Claude Code):** ask for "their own knowledge base repository".
 
-Scaffold an external knowledge base repository — a pure KB repo (knowledge + skills)
+Scaffold an external knowledge base repository: a pure KB repo (knowledge + skills)
 plus the script that releases it. Publishing itself lives in the generated script, not
 in the CLI, so any code host works.
 
@@ -657,7 +628,7 @@ pair-cli scaffold-kb [path] [options]
 
 ### Arguments
 
-- `[path]` — Target directory for the KB repo (default: current working directory)
+- `[path]`: Target directory for the KB repo (default: current working directory)
 
 ### Options
 
@@ -670,12 +641,12 @@ pair-cli scaffold-kb [path] [options]
 `--name` is embedded in generated YAML, bash, and Markdown: newlines, control characters
 and `${{` (which GitHub Actions would evaluate as a live expression in the generated
 workflow) are rejected, and the value is limited to 100 characters. Quote names that
-contain spaces (`--name "Acme KB"`) — an unquoted value is rejected as an extra
+contain spaces (`--name "Acme KB"`): an unquoted value is rejected as an extra
 positional argument rather than silently truncated.
 
 `--host` is never inferred from the target repository's `origin` remote: pass
 `--host generic` for GitLab, Bitbucket, or self-hosted, otherwise a GitHub Actions
-workflow is generated. The command has no `--json` output — it reports a human-facing
+workflow is generated. The command has no `--json` output: it reports a human-facing
 summary only.
 
 ### Refused Targets
@@ -690,10 +661,10 @@ overwrite decision.
 | Path                            | Ownership                                           |
 | ------------------------------- | --------------------------------------------------- |
 | `.pair/knowledge/`, `.skills/`  | your content (seed files are never overwritten)     |
-| `pair.config.json`              | scaffold-owned — knowledge + skills registries      |
+| `pair.config.json`              | scaffold-owned: knowledge + skills registries      |
 | `README.md`, `.gitignore`       | scaffold-owned                                      |
-| `scripts/release.sh`            | scaffold-owned — wraps `pair-cli package` (mode `0755`) |
-| `.github/workflows/release.yml` | scaffold-owned — `--host github` only               |
+| `scripts/release.sh`            | scaffold-owned: wraps `pair-cli package` (mode `0755`) |
+| `.github/workflows/release.yml` | scaffold-owned: `--host github` only               |
 
 No `.pair/adoption/` is created: a KB is knowledge, not a configured project.
 
@@ -798,7 +769,7 @@ pair-cli tokens --baseline base.json # later: delta per area
 
 **Via (optional, Claude Code):** `--card` is `/pair-workflow-cycle`; `--root`, `--parallel` and `--watch` are `/pair-loop`.
 
-Run a pair skill **headlessly** on a chosen engine, re-invoking it until it stops — the portable
+Run a pair skill **headlessly** on a chosen engine, re-invoking it until it stops: the portable
 unattended loop (`ADR-021` tier 2: the external driver).
 
 `pair-cli run` is an **execution adapter**, not a process engine. It decides *how* to invoke (engine,
@@ -818,33 +789,33 @@ pair-cli run [options]
 | Option                          | Description                                                                                          |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `--engine <id>`                 | Engine to drive: `pi`, `opencode`, `claude` or `codex`. Precedence: flag > `pair.config.json` > schema default |
-| `--skill <name>`                | Skill to invoke. Explicit, and **never** falls back — a missing skill is an error                     |
+| `--skill <name>`                | Skill to invoke. Explicit, and **never** falls back: a missing skill is an error                     |
 | `--prompt <text>`               | Run this text instead of a skill invocation (mutually exclusive with `--skill`)                       |
-| `--root <id>`                   | Scope root, passed on under the resolved skill's own name for it (`--root` for `pair-next`/`pair-loop`, `--story` for the `pair-process-*` workflows). Not combinable with `--card` — a dispatched card **is** the scope |
-| `--filter <tag>`                | Label filter — one label or a comma-separated any-of list (`risk:green,risk:yellow`) — for a skill that declares one (`pair-next`). **Refused** for `pair-loop` — see below     |
+| `--root <id>`                   | Scope root, passed on under the resolved skill's own name for it (`--root` for `pair-next`/`pair-loop`, `--story` for the `pair-process-*` workflows). Not combinable with `--card`: a dispatched card **is** the scope |
+| `--filter <tag>`                | Label filter, one label or a comma-separated any-of list (`risk:green,risk:yellow`), for a skill that declares one (`pair-next`). **Refused** for `pair-loop`, see below     |
 | `--assignee <login\|@me>`       | Keep issues assigned to this user (`@me` = the authenticated code-host user), for a skill that declares it (`pair-next`). **Refused** for `pair-loop` (the driver declares only root/predicate/iteration for it) |
 | `--status <macrostates>`        | Comma-separated canonical macrostates (e.g. `Draft,Ready`), for a skill that declares it (`pair-next`). **Refused** for `pair-loop` (the driver declares only root/predicate/iteration for it) |
-| `--until <ready\|pr\|merged>`   | With `--card` or `--parallel` (forwarded to every child card): how far the delivery cycle goes — `ready` (stop before implement), `pr` (default), `merged` (enter the merge stage; the only value that evaluates the merge gate). Argument > `## Autonomy` > default, every effective value printed with its source |
-| `--prepare <gate>`              | With `--card` or `--parallel` (forwarded to every child card): the prepare gate `<always\|never\|when>[; has: …][; lacks: …]` — who prepares a Draft card. `always` (default) needs a human (R3.11); `never` proceeds alone recording assumptions; `when` proceeds alone unless a stage boundary escalates (`needs-review`, the card stays Draft, exit 1). `--until ready` stops right after the phase |
+| `--until <ready\|pr\|merged>`   | With `--card` or `--parallel` (forwarded to every child card): how far the delivery cycle goes, `ready` (stop before implement), `pr` (default), `merged` (enter the merge stage; the only value that evaluates the merge gate). Argument > `## Autonomy` > default, every effective value printed with its source |
+| `--prepare <gate>`              | With `--card` or `--parallel` (forwarded to every child card): the prepare gate `<always\|never\|when>[; has: …][; lacks: …]`: who prepares a Draft card. `always` (default) needs a human (R3.11); `never` proceeds alone recording assumptions; `when` proceeds alone unless a stage boundary escalates (`needs-review`, the card stays Draft, exit 1). `--until ready` stops right after the phase |
 | `--merge <gate>`                | With `--card` or `--parallel` (forwarded to every child card): the merge gate, same grammar. `always` (default) parks `awaiting-human`; `never`/`when` merge under `--until merged` unless a `has`/`lacks` condition escalates (`escalated`, exit 1, `on-halt`, one comment on the card). #490's signal checks stay mandatory |
-| `--card <id>`                   | Work this card. With a mapped tag it dispatches that workflow; with no mapping it drives the **whole delivery cycle** — see below. Not combinable with `--skill`/`--prompt`/`--root` |
+| `--card <id>`                   | Work this card. With a mapped tag it dispatches that workflow; with no mapping it drives the **whole delivery cycle**, see below. Not combinable with `--skill`/`--prompt`/`--root` |
 | `--card-tags <list>`            | Comma-separated labels the trigger observed on `--card` (explicit override). Absent with `--autonomous` ⇒ the card's live labels are read from the tracker (unreadable ⇒ fails closed, nothing runs). Empty or unmapped ⇒ the card's own readiness decides |
 | `--pr <n>`                      | Enter the cycle straight at fix-and-review on an existing PR: the first stage is `verify`, no `prepare` before it. Requires `--card` |
 | `--rounds <n\|max>`             | Bound the remediation rounds of a cycle run. Omitted ⇒ the policy's `maxFixRounds`; it can never widen it |
-| `--run-id <segment>`            | Run directory to continue. Defaults to `story-<card>` — the same convention the batch engine uses       |
-| `--parallel <n>`                | Fan-out: up to `min(dependency-allowed, ## Max Parallelism, n)` cards at once, each its own `pair-cli run --card` process — see below. Needs `--root` or `--filter` (or the policy's); not combinable with `--card`/`--skill`/`--prompt` |
-| `--watch`                       | With `--parallel`: the watch loop — every iteration re-selects (skipping escalated cards until the escalation clears, locked cards, and terminal ones — merged, parked, target reached, or a durable failure (`failed-*`, `escalate` awaiting a human); a TRANSIENT failure — a crash or an engine/API error before the cycle reported — is retried once per run, then excluded as `retry budget exhausted`) and an idle one waits `--interval`. Stops at the Stop Predicate, the iteration cap (idle polls count) or Ctrl-C. `--parallel 1` for a sequential agent |
+| `--run-id <segment>`            | Run directory to continue. Defaults to `story-<card>`: the same convention the batch engine uses       |
+| `--parallel <n>`                | Fan-out: up to `min(dependency-allowed, ## Max Parallelism, n)` cards at once, each its own `pair-cli run --card` process, see below. Needs `--root` or `--filter` (or the policy's); not combinable with `--card`/`--skill`/`--prompt` |
+| `--watch`                       | With `--parallel`: the watch loop, every iteration re-selects (skipping escalated cards until the escalation clears, locked cards, and terminal ones, merged, parked, target reached, or a durable failure (`failed-*`, `escalate` awaiting a human); a TRANSIENT failure (a crash or an engine/API error before the cycle reported) is retried once per run, then excluded as `retry budget exhausted`) and an idle one waits `--interval`. Stops at the Stop Predicate, the iteration cap (idle polls count) or Ctrl-C. `--parallel 1` for a sequential agent |
 | `--no-watch`                    | Explicitly no watch loop (the default; refused together with `--watch`)                      |
 | `--interval <n>s\|m\|h`         | The idle wait under `--watch`: default `10m`, at least `60s`. Requires `--watch`                         |
 | `--cwd <dir>`                   | Working directory every iteration runs in                                                            |
 | `--max-iterations <n>`          | Iteration cap. **Narrows** the policy's `max-iterations`; it can never widen it. With `--parallel` it enables the re-selecting loop, idle polls included |
-| `--autonomous`                  | Explicit opt-in: run without confirmations, **and** without the skill's approval rounds — see below   |
+| `--autonomous`                  | Explicit opt-in: run without confirmations, **and** without the skill's approval rounds, see below   |
 | `--approve-project-trust`       | Explicit authorization to run where the engine does not trust the project                            |
 | `--approve-ineligible`          | Let THIS `--autonomous` run through `## Eligibility` on a card that does not carry the label. Announced, never persisted |
 | `--predicate '<selector> ⇒ <condition>'` | With `--parallel`: the loop stop predicate (grammar of `## Stop Predicate`), argument > adoption, printed with its source. Checked at each iteration boundary before work; an empty or incomplete board snapshot never counts as satisfied |
-| `--eligibility-filter <labels>` | Internal — set by the `--parallel` loop on each child `--card` run: the loop's effective filter (argument or `## Autonomy`) as THIS card's eligibility, replacing the legacy `## Eligibility` label. Needs `--card`; not a selector, so the coordinator's `--filter` refusal does not apply |
-| `--profile <name>`              | With `--card`: the named workflow profile (per-stage engine/model/effort/context) from `pair.config.json`'s `workflowProfiles`. An unknown name halts `profile-unresolved` — never the KB default |
-| `--workflow-config <path>`      | With `--card`: an external profile file, used verbatim — wins over `--profile` and `pair.config.json`  |
+| `--eligibility-filter <labels>` | Internal, set by the `--parallel` loop on each child `--card` run: the loop's effective filter (argument or `## Autonomy`) as THIS card's eligibility, replacing the legacy `## Eligibility` label. Needs `--card`; not a selector, so the coordinator's `--filter` refusal does not apply |
+| `--profile <name>`              | With `--card`: the named workflow profile (per-stage engine/model/effort/context) from `pair.config.json`'s `workflowProfiles`. An unknown name halts `profile-unresolved`, never the KB default |
+| `--workflow-config <path>`      | With `--card`: an external profile file, used verbatim, wins over `--profile` and `pair.config.json`  |
 | `--iteration-timeout <seconds>` | Per-iteration wall-clock bound (hang guard, default `1800`)                                           |
 | `--dry-run`                     | Resolve engine, skill, perimeter and policy, print them, spawn nothing                               |
 
@@ -852,45 +823,36 @@ What each timeout covers (stage, selection, per-card), what is retried (transien
 
 ### A work perimeter is mandatory
 
-Without a scope the run **refuses to start** — it never falls back to "the whole backlog". A
+Without a scope the run **refuses to start**: it never falls back to "the whole backlog". A
 perimeter is a scope (`--root`, `--filter`, or the policy's `## Eligibility` label), a working
 directory, and a hard iteration cap. A `--prompt` run carries no scope parameters, so it declares
 its boundary with an explicit `--cwd`.
 
 **`--filter` only applies to a skill that declares it.** `pair-next` takes `--filter`; `pair-loop`
-does **not** — it reads `## Eligibility` from `.pair/adoption/tech/automation.md` itself. So
-`--filter` with the default cascade (which resolves `pair-loop` when installed) is **refused**, with
-a message naming the three ways forward: drop it and let the policy decide, pass
-`--skill pair-next --filter <tag>` to scope the selector directly, or change the policy file. The
-alternative — accepting the flag and quietly not applying it — would print a perimeter naming a
-label the run does not use, and the printed perimeter is exactly what makes an unattended run
-auditable. The perimeter line therefore says which one it is: `filter <tag> (…, passed to the
-skill)` or `eligibility <tag> (…, applied by the skill itself)`.
+does **not**: it reads `## Eligibility` from `.pair/adoption/tech/automation.md` itself. So `--filter` with the default cascade (which resolves `pair-loop` when installed) is **refused**, with a message naming the three ways forward: drop it and let the policy decide, pass `--skill pair-next --filter <tag>` to scope the selector directly, or change the policy file.
+
+The alternative (accepting the flag and quietly not applying it) would print a perimeter naming a label the run does not use, and the printed perimeter is exactly what makes an unattended run auditable. The perimeter line therefore says which one it is: `filter <tag> (…, passed to the skill)` or `eligibility <tag> (…, applied by the skill itself)`.
 
 ### What `--card` does: two paths, one flag
 
 `pair-cli run --card 123` answers two different questions depending on what the project declared,
-and the order is fixed — **the tag mapping is asked first, always**:
+and the order is fixed, **the tag mapping is asked first, always**:
 
 1. **A mapped tag wins.** If `## Workflows` is declared in
    [`.pair/adoption/tech/automation.md`](/docs/concepts/adoption-files) and the card carries a tag it
    maps, that single workflow runs, exactly as it always has. Tag-driven dispatch is unchanged, and
    nothing below can displace it.
 2. **No mapping matches ⇒ the card's own readiness decides.** With no `## Workflows` section, or a
-   card carrying no mapped tag, the command looks at where the card actually is — its board state
+   card carrying no mapped tag, the command looks at where the card actually is, its board state
    (the card's project status, else its `**Status**:` line) resolved through the
    [`## State Mapping`](/docs/concepts/canonical-states) of `way-of-working.md`, then the canonical
    names:
    - **Ready** or **In Progress**, with a task breakdown ⇒ it drives the **whole delivery cycle** to a
-     terminal status, one fresh engine process per stage. **Review** re-enters the cycle, whose
-     handoffs decide the step. A fresh card starts at `implement`: the implementer writes the story's
-     tests and code together, test-first, with no up-front acceptance contract, and the first `verify`
-     names per acceptance criterion the test that proves it. Review findings still go through
-     `prepare → validate → green`, their failing tests written by someone other than the fixer. A run
-     directory already on the old sealed-`a0` path finishes under its own rules.
-   - **Not ready yet** ⇒ it routes to the preparation skill that gap calls for —
-     `pair-process-refine-story` for a Draft, `pair-process-plan-tasks` for a Ready card with no
-     breakdown — and says which one it chose and why. It does **not** start a cycle on a card that
+terminal status, one fresh engine process per stage. **Review** re-enters the cycle, whose handoffs decide the step. A fresh card starts at `implement`: the implementer writes the story's tests and code together, test-first, with no up-front acceptance contract, and the first `verify` names per acceptance criterion the test that proves it.
+
+Review findings still go through `prepare → validate → green`, their failing tests written by someone other than the fixer. A run directory already on the old sealed-`a0` path finishes under its own rules.
+   - **Not ready yet** ⇒ it routes to the preparation skill that gap calls for (`pair-process-refine-story` for a Draft, `pair-process-plan-tasks` for a Ready card with no
+     breakdown) and says which one it chose and why. It does **not** start a cycle on a card that
      cannot yet produce an acceptance contract. On a board with no state mapped to Ready, the
      Definition of Ready (the six criteria, the task breakdown covering three of them) decides the
      Draft/Ready boundary.
@@ -908,9 +870,8 @@ and the order is fixed — **the tag mapping is asked first, always**:
      card without the label is skipped `ineligible` before it is read. `--approve-ineligible` lets
      that one run through, says so, and writes nothing. A supervised run is not held back by it.
      With **no `## Eligibility` declared** there is no label to require: an explicit `--card` names
-     its card rather than selecting from the board, so the run proceeds — also under `--autonomous`
-     — and the output says exactly that instead of "automation is off".
-   - **`--pr <n>`** goes straight to fix-and-review in the cycle — even on a card whose tag maps a
+     its card rather than selecting from the board, so the run proceeds (also under `--autonomous`) and the output says exactly that instead of "automation is off".
+   - **`--pr <n>`** goes straight to fix-and-review in the cycle, even on a card whose tag maps a
      workflow; the card's preparation state is not consulted.
    - **Every route that spawns is a dispatch**, like a mapped route: it takes the per-card lock and
      writes `start`/`end` to the audit trail, printing the start as the `DISPATCH-RECORD:` line with
@@ -934,48 +895,40 @@ and the order is fixed — **the tag mapping is asked first, always**:
    `maintainer-interventions.md`, and `cycle-state.mjs decide` records the answer to a review that
    asked for a human decision (see [`/pair-workflow-cycle`](/docs/reference/skills-catalog)).
 
-   The cycle's own values — the workflow version, the base branch, the worktree root and the dispatch
-   cap — are read from the installed `pair-workflow-cycle` scripts and printed before the first
-   stage, with the scripts path, the run directory, the `runId` and the `--rounds` bound. Missing
-   pieces HALT: `skill-missing` (the skill is not installed) and `worktree-conflict` (the story
-   worktree is checked out on another branch) before any spawn; `agent-definition-missing` (a stage's
-   role, located through the `agent-definitions` registry) when the stage that needs that role is
-   due — before any spawn for the first stage's role, later for a role only a later stage uses (e.g.
-   the preparation role, first needed by a finding round).
+The cycle's own values (the workflow version, the base branch, the worktree root and the dispatch cap) are read from the installed `pair-workflow-cycle` scripts and printed before the first stage, with the scripts path, the run directory, the `runId` and the `--rounds` bound.
+
+Missing pieces HALT: `skill-missing` (the skill is not installed) and `worktree-conflict` (the story worktree is checked out on another branch) before any spawn; `agent-definition-missing` (a stage's role, located through the `agent-definitions` registry) when the stage that needs that role is due, before any spawn for the first stage's role, later for a role only a later stage uses (e.g. the preparation role, first needed by a finding round).
 
 ### Fan-out: `--parallel <n>` (`--root <id>` and/or `--filter <label>`)
 
 Parallel delivery on a harness with no subagent primitive (`pi`, `opencode`, `claude -p`): one
 command drives a dependency- and mutex-safe batch of cards, each through its **own**
-`pair-cli run --card <id>` process — a separate OS process, never a worker thread.
+`pair-cli run --card <id>` process: a separate OS process, never a worker thread.
 
 ```bash
 pair-cli run --root 66 --parallel 3 --autonomous
 ```
 
-1. **Select** — one fresh engine process runs `pair-next --root <id>` (with `--filter` set to
-   `## Eligibility` when the policy declares one, exactly as `pair-loop` does) and reports the
-   candidate set on a `PAIR-ROOT-CANDIDATES:` line: prerequisites with their merged status, the
-   touched surface as mutex resources, labels, tier, title, branch. Nothing is invented here: the
-   scope is `pair-next`'s: `--root`, `--filter`, `--assignee` and `--status` are forwarded verbatim
-   (`--root` is optional when a filter resolves; with neither, the run is refused before anything
-   spawns).
-2. **Plan** — `pair-loop`'s own dependency + mutex analysis (a card whose prerequisite is not merged
+1. **Select**: one fresh engine process runs `pair-next --root <id>` (with `--filter` set to
+`## Eligibility` when the policy declares one, exactly as `pair-loop` does) and reports the candidate set on a `PAIR-ROOT-CANDIDATES:` line: prerequisites with their merged status, the touched surface as mutex resources, labels, tier, title, branch.
+
+Nothing is invented here: the scope is `pair-next`'s: `--root`, `--filter`, `--assignee` and `--status` are forwarded verbatim (`--root` is optional when a filter resolves; with neither, the run is refused before anything spawns).
+2. **Plan**: `pair-loop`'s own dependency + mutex analysis (a card whose prerequisite is not merged
    is excluded; of two cards sharing a resource, the first wins). The plan is printed **before any
    process starts**: the cards that run, every excluded card with its reason, and the effective
    parallelism `min(dependency-allowed, ## Max Parallelism, n)` naming which limit bound it.
-3. **Run** — at most that many `run --card` processes at once; the next card starts when a slot
+3. **Run**: at most that many `run --card` processes at once; the next card starts when a slot
    frees (`--parallel 1` is sequential, not a special case). Each child gets the card's labels as
    `--card-tags` and your own `--engine`/`--autonomous`/`--approve-*`/`--iteration-timeout`,
    unchanged. Output is prefixed `[#<id>]`; `DISPATCH-RECORD:` lines pass through verbatim.
-4. **Report** — every card's outcome (`completed`, `failed`, `crashed`, `skipped`), and one
+4. **Report**: every card's outcome (`completed`, `failed`, `crashed`, `skipped`), and one
    `event=batch` line in `## Audit Location` (start time, cards attempted, per-card outcome), next
    to each card's own `start`/`end` lines.
 
 - **One card failing never aborts the others.** A failed, crashed or timed-out card (its own
   per-process timeout) is that card's outcome; the batch exits `1` when any card failed or crashed.
 - **Mutex resources are locked** through the same card lock `run --card` uses, for the life of the
-  card's process: a second `--parallel` run cannot start a conflicting card meanwhile — the card is
+  card's process: a second `--parallel` run cannot start a conflicting card meanwhile: the card is
   reported `skipped`, never silently dropped.
 - **No batch-level merge.** Each card merges or parks inside its own process, exactly as
   `run --card` alone would.
@@ -990,16 +943,13 @@ pair-cli run --root 66 --parallel 3 --autonomous
 pair-cli run --filter PIPPO --assignee @me --parallel 2 --watch --interval 10m
 ```
 
-Add `--watch` (or `--max-iterations K`) and the fan-out loops: each iteration runs one fresh
-selection, skips **escalated** cards (judged by the selection process, with the autonomy model's own
-marker), **locked** cards (card lock or a held mutex resource — eligible again later) and cards this
-run **already drove** (whatever the outcome), plans and runs the rest, then re-selects. An iteration
-with nothing workable waits `--interval` (default `10m`, at least `60s`) under `--watch`, or exits
-`0` (`nothing workable`) without it. Work that ran starts the next iteration at once.
+Add `--watch` (or `--max-iterations K`) and the fan-out loops: each iteration runs one fresh selection, skips **escalated** cards (judged by the selection process, with the autonomy model's own marker), **locked** cards (card lock or a held mutex resource, eligible again later) and cards this run **already drove** (whatever the outcome), plans and runs the rest, then re-selects.
+
+An iteration with nothing workable waits `--interval` (default `10m`, at least `60s`) under `--watch`, or exits `0` (`nothing workable`) without it. Work that ran starts the next iteration at once.
 
 - **Stops** at the `## Stop Predicate` (same rule as `pair-loop`, checked at every iteration
-  boundary), at the iteration cap `min(--max-iterations, ## Stop Predicate max-iterations)` — idle
-  polls count, since each spawns an engine process — or on Ctrl-C / SIGTERM (the wait aborts at
+  boundary), at the iteration cap `min(--max-iterations, ## Stop Predicate max-iterations)` (idle
+  polls count, since each spawns an engine process) or on Ctrl-C / SIGTERM (the wait aborts at
   once, locks are released, `loop-end` is written, exit `130` / `143`).
 - **Fail closed**: a selection that fails or is malformed stops the loop with exit `1`; restarting a
   dead watcher (tmux, launchd, cron, CI) is outside pair.
@@ -1013,7 +963,7 @@ with nothing workable waits `--interval` (default `10m`, at least `60s`) under `
 ### Tag-driven dispatch
 
 Naming a card and the labels a trigger observed on it turns the command into the **entry point a
-trigger calls**: the `## Workflows` mapping decides which workflow runs — `auto-dev ⇒ pair-loop`,
+trigger calls**: the `## Workflows` mapping decides which workflow runs, `auto-dev ⇒ pair-loop`,
 `auto-plan ⇒ pair-process-plan-tasks`, whatever that project declared.
 
 ```bash
@@ -1023,20 +973,17 @@ pair-cli run --card 217 --card-tags "auto-dev,risk:green" --autonomous
 The labels are **passed in, never fetched**: the trigger that fired on a label change already has
 them, and keeping the lookup out of the CLI is what keeps it free of tracker credentials.
 
-A dispatched card is the **whole subject** of the run, so `--card` cannot be combined with
-`--skill`, `--prompt` or `--root`: the mapping is the answer to "which workflow" and the card itself
-is the answer to "on what", and a second answer to either is refused at parse time rather than
-silently ranked. `--root` matters most here — `--card 217 --root 300` would otherwise drive the
-agent over subtree 300 while the audit trail, the `DISPATCH-RECORD:` comment and the exclusive lock
-all named 217: card 300 unguarded (its own lock still free, so a second trigger on it starts a
-second agent on the same branch) and card 217 credited with work nothing did on it. `--filter` is
-still accepted — it narrows what a selector picks up *within* the run, it does not name a subject.
+A dispatched card is the **whole subject** of the run, so `--card` cannot be combined with `--skill`, `--prompt` or `--root`: the mapping is the answer to "which workflow" and the card itself is the answer to "on what", and a second answer to either is refused at parse time rather than silently ranked.
+
+`--root` matters most here: `--card 217 --root 300` would otherwise drive the agent over subtree 300 while the audit trail, the `DISPATCH-RECORD:` comment and the exclusive lock all named 217: card 300 unguarded (its own lock still free, so a second trigger on it starts a second agent on the same branch) and card 217 credited with work nothing did on it.
+
+`--filter` is still accepted: it narrows what a selector picks up *within* the run, it does not name a subject.
 
 Four properties decide what actually happens, and all four fail towards *not running*:
 
 - **Untagged ⇒ never routed by tag.** A card carrying no mapped tag is never dispatched to a mapped
   workflow, and the skip is reported. There is no default workflow: the absence of a route *is* the
-  opt-in boundary of tag dispatch — what the command does next is the readiness fallback above. An
+  opt-in boundary of tag dispatch, what the command does next is the readiness fallback above. An
   **unlabelled** card is the same case reached one step earlier: `--card-tags` is the one flag on
   this command where an empty value is *data* ("the trigger saw no labels"), not a malformed flag,
   so a trigger firing on a bare card skips cleanly instead of failing its job.
@@ -1046,13 +993,11 @@ Four properties decide what actually happens, and all four fail towards *not run
 - **Eligibility is applied before routing.** A card that does not carry the `## Eligibility` label is
   skipped before its tags are looked at at all.
 - **One run per card.** The dispatch takes an exclusive **per-card lock** (a directory under
-  `<working_path>/automation/locks/`) before spawning and releases it afterwards; a second trigger on
-  a locked card is skipped and logged, never queued, and the skip prints where the lock is and how
-  long it has been held. SIGTERM or SIGINT on the driver is handled: the engine is stopped, the
-  `end` is audited `outcome=interrupted`, the lock released, and the command exits `143`/`130`, so
-  re-running it continues. A SIGKILL (or an OOM kill) leaves the lock behind, and nothing reaps it. The lock
-  is **filesystem-local**: it guards dispatches sharing one working area, so a host that gives every
-  job a fresh checkout needs its own concurrency group as the cross-job guard.
+`<working_path>/automation/locks/`) before spawning and releases it afterwards; a second trigger on a locked card is skipped and logged, never queued, and the skip prints where the lock is and how long it has been held.
+
+SIGTERM or SIGINT on the driver is handled: the engine is stopped, the `end` is audited `outcome=interrupted`, the lock released, and the command exits `143`/`130`, so re-running it continues. A SIGKILL (or an OOM kill) leaves the lock behind, and nothing reaps it.
+
+The lock is **filesystem-local**: it guards dispatches sharing one working area, so a host that gives every job a fresh checkout needs its own concurrency group as the cross-job guard.
 
 Three things HALT instead of guessing: a mapped tag whose workflow is **not installed**, a mapped
 workflow **outside the catalog** the guideline publishes, and a card carrying **two mapped tags**
@@ -1060,12 +1005,9 @@ that no `Precedence:` line covers. All three name the file and the value to fix.
 checked before eligibility and routing, so they stop dispatch for **every** card, not only the ones
 carrying that tag.
 
-The second is what keeps the trail true. The dispatched card reaches its workflow as an argument
-under that workflow's own name for it — `--root <card>` for `pair-loop`, `--story <card>` for
-`pair-process-plan-tasks` — and the latter selects the highest-priority story on the board when it
-receives no story at all. A workflow whose scoping argument this command does not know would
-therefore run on a card nobody tagged, while the audit line and the `DISPATCH-RECORD:` comment both
-named the card that *was* tagged: so the mapping is refused instead.
+The second is what keeps the trail true. The dispatched card reaches its workflow as an argument under that workflow's own name for it (`--root <card>` for `pair-loop`, `--story <card>` for `pair-process-plan-tasks`) and the latter selects the highest-priority story on the board when it receives no story at all.
+
+A workflow whose scoping argument this command does not know would therefore run on a card nobody tagged, while the audit line and the `DISPATCH-RECORD:` comment both named the card that *was* tagged: so the mapping is refused instead.
 
 Those two are the **whole** mappable set, and knowing a skill's scope argument is not what puts it
 there. Two refusals show the gap from opposite sides:
@@ -1077,15 +1019,15 @@ there. Two refusals show the gap from opposite sides:
 - `auto-refine ⇒ pair-process-refine-story` is refused too, and the command knows exactly how that
   workflow spells its scope. Refinement is the single Draft→Ready path and it **requires a human**:
   its alignment gate ends only on an explicit approval. Dispatched unattended it either stalls until
-  the per-iteration timeout — holding the card's lock, on a card publicly commented as started — or
+  the per-iteration timeout (holding the card's lock, on a card publicly commented as started) or
   the agent approves its own work past the gate. Run it by hand
   (`--skill pair-process-refine-story --root <card>`), where someone is there to answer.
 
 Widening the set is a change to the [catalog](/docs/reference/guidelines-catalog) in
 `collaboration/automation/automation-policy.md`.
 
-Every decision — start, skip, end — is appended to the run's `## Audit Location` file, and the start
-record — only the start — is *also* printed as a single `DISPATCH-RECORD:` line. That line is what the trigger's own
+Every decision (start, skip, end) is appended to the run's `## Audit Location` file, and the start
+record (only the start) is *also* printed as a single `DISPATCH-RECORD:` line. That line is what the trigger's own
 host adapter posts as a comment on the card: `pair-cli run` writes files and prints lines, and never
 posts to a tracker. The reference GitHub Actions adapter ships in the knowledge base
 (`collaboration/automation/github-automation.md`).
@@ -1094,16 +1036,16 @@ posts to a tracker. The reference GitHub Actions adapter ships in the knowledge 
 
 Both default **off**, and neither can be granted from `pair.config.json`:
 
-- **`--autonomous`** — proceed without confirmations, inside the perimeter above. An engine with no
+- **`--autonomous`**: proceed without confirmations, inside the perimeter above. An engine with no
   confirmation mechanism at all (`pi` has no permission prompts) **refuses to run** without this
   flag rather than pretending confirmations are active.
-- **`--approve-project-trust`** — run where the engine's trust store has no decision for this
+- **`--approve-project-trust`**: run where the engine's trust store has no decision for this
   project. `pair-cli run` never writes that store: provision trust with the engine's own command or
   with `/pair-capability-setup-harness`.
 
 #### `--autonomous` also suppresses the skill's own approval rounds
 
-One operator decision — "nobody is watching this run" — governs **two** different things, and the
+One operator decision ("nobody is watching this run") governs **two** different things, and the
 flag now reaches both:
 
 1. the **engine's** permission posture (`--permission-mode bypassPermissions` for `claude`, `--auto`
@@ -1111,7 +1053,7 @@ flag now reaches both:
 2. the **composed skill's** approval rounds, through the `$approval` signal the skill itself
    declares.
 
-Some skills stop and ask a human to accept what they just produced — the nine `assess-*` skills with
+Some skills stop and ask a human to accept what they just produced: the nine `assess-*` skills with
 an approval round and both `map-*` skills. Under `--autonomous` those skills receive
 `--approval auto` and every round resolves without asking. **How** it resolves depends on the round,
 and the difference matters when you are designing an unattended pipeline:
@@ -1127,13 +1069,13 @@ and the difference matters when you are designing an unattended pipeline:
 The last two rows are the ones to plan around, because both are "a judgement the skill cannot make
 alone" and they behave differently:
 
-- **`map-contexts`** is the single round in the family that genuinely **halts** — it writes a domain
+- **`map-contexts`** is the single round in the family that genuinely **halts**: it writes a domain
   model, and recording a coupling risk nobody judged is worse than stopping. Budget for an
   unattended run of it stopping.
 - **`assess-stack` and `assess-architecture`** are **output-only** (they propose; the caller
   persists), so there is nothing to stop: they **hand the question back** in their report and the run
   carries on. An operator who reads "judgement gate" and expects a halt here gets an
-  unresolved-and-continue instead — check the skill's report rather than assuming silence means
+  unresolved-and-continue instead, check the skill's report rather than assuming silence means
   agreement.
 
 In every case `auto` suppresses *asking*, never *judging*: nothing is decided on your behalf that the
@@ -1144,7 +1086,7 @@ Three properties worth knowing:
 - **Only skills that declare it receive it.** A skill with no approval round (`pair-loop`,
   `pair-next`) never gets the flag; the driver borrows arguments, it never invents them.
 - **Without `--autonomous`, nothing is passed at all** and every round runs exactly as it does
-  today — an omitted signal *is* the interactive default.
+  today: an omitted signal *is* the interactive default.
 - **The posture is printed before anything spawns**, next to the autonomy lines, so a run that will
   approve its own proposals unattended says so in `--dry-run`:
 
@@ -1157,16 +1099,16 @@ caller's behalf.
 
 ### How an iteration's outcome is decided
 
-From an **explicit terminal event** in the engine's JSONL stream — never from the exit code (pi
+From an **explicit terminal event** in the engine's JSONL stream, never from the exit code (pi
 documents none). No recognisable terminal event means the iteration **failed** and the loop stops:
 fail-closed. Every iteration is a fresh process and therefore a fresh session, so conditions are
 re-evaluated each time and a card that becomes eligible mid-run is picked up on the next iteration.
 
 The loop stops when the skill reports itself finished (it printed no continue-token), an iteration
 fails, or the perimeter's cap is reached. The continue-token is recognised only as a **line of its
-own** naming a concrete re-invocation — the documented template (`CONTINUE-TOKEN: pair-loop [--root
+own** naming a concrete re-invocation: the documented template (`CONTINUE-TOKEN: pair-loop [--root
 <id>] …`) echoed by an agent that read the skill file is not a token, and does not extend the run. Within one `pair-cli run` process parallelism is **1**: the
-command states the policy's `## Max Parallelism` ceiling and leaves batching to `pair-loop` —
+command states the policy's `## Max Parallelism` ceiling and leaves batching to `pair-loop`,
 concurrency comes from running several driver processes.
 
 ### Merge
@@ -1186,7 +1128,7 @@ pair-cli run --root 212 --max-iterations 5
 # Unattended, on pi, scoped to green cards, autonomy explicit
 pair-cli run --engine pi --root 212 --autonomous --max-iterations 3
 
-# See exactly what would run — resolution only, nothing spawned
+# See exactly what would run - resolution only, nothing spawned
 pair-cli run --root 212 --dry-run
 
 # Scope the selector itself: --filter needs a skill that declares one
@@ -1201,7 +1143,7 @@ pair-cli run --prompt "/pair-next --root 212" --cwd . --max-iterations 1
 # Tag-driven: the `## Workflows` mapping picks the workflow, the card is the scope
 pair-cli run --card 217 --card-tags "auto-dev,risk:green" --autonomous
 
-# What a trigger would do, without doing it — route, perimeter and policy, nothing spawned
+# What a trigger would do, without doing it - route, perimeter and policy, nothing spawned
 pair-cli run --card 217 --card-tags "auto-dev,risk:green" --dry-run
 
 # No mapping, Ready card: drive this story's own delivery cycle
@@ -1210,7 +1152,7 @@ pair-cli run --card 487 --autonomous
 # Fix and review on an existing PR, at most one remediation round
 pair-cli run --card 487 --pr 504 --rounds 1 --autonomous
 
-# An unattended run on a card `## Eligibility` would exclude — this run only, announced
+# An unattended run on a card `## Eligibility` would exclude - this run only, announced
 pair-cli run --card 487 --autonomous --approve-ineligible
 ```
 
@@ -1225,19 +1167,16 @@ Options available for all commands:
 | `--help`              | Display help for command                                                                                                                                                |
 | `--version`           | Display CLI version                                                                                                                                                     |
 | `--log-level <level>` | Set global logging level (trace, debug, info, warn, error)                                                                                                              |
-| `--url <url\|path>`   | KB source for whichever command runs, used when that command names no `--source` (which outranks it); resolves exactly like `--source` — same identity, same cache slot |
-| `--no-kb`             | Skip the knowledge base download — cannot be combined with `--url` (see below)                                                                                          |
+| `--url <url\|path>`   | KB source for whichever command runs, used when that command names no `--source` (which outranks it); resolves exactly like `--source`, same identity, same cache slot |
+| `--no-kb`             | Skip the knowledge base download, cannot be combined with `--url` (see below)                                                                                          |
 
 <Callout type="warn">
   **`--no-kb` takes effect again, and now conflicts with `--url`.** The flag skips the KB
-  pre-flight that `install` and `update` run before their work, so nothing is fetched and the
-  command proceeds with whatever KB is already on disk. It was a **no-op** in every release up to
-  and including 0.4.3: its only consumer was that pre-flight, and a guard in the `preAction` hook
-  returned before it on every invocation. Two consequences of reviving it, both user-visible:
-  `pair-cli install --no-kb` no longer downloads a KB, and `--url <source>` together with `--no-kb` is
-  now **rejected** (`Cannot use --url and --no-kb together`) where it was previously accepted and
-  silently ignored — naming a source and refusing to fetch it is a contradiction. Only `install`
-  and `update` run the pre-flight at all; every other command reads what is already on disk.
+pre-flight that `install` and `update` run before their work, so nothing is fetched and the command proceeds with whatever KB is already on disk. It was a **no-op** in every release up to and including 0.4.3: its only consumer was that pre-flight, and a guard in the `preAction` hook returned before it on every invocation.
+
+Two consequences of reviving it, both user-visible: `pair-cli install --no-kb` no longer downloads a KB, and `--url <source>` together with `--no-kb` is now **rejected** (`Cannot use --url and --no-kb together`) where it was previously accepted and silently ignored, naming a source and refusing to fetch it is a contradiction.
+
+Only `install` and `update` run the pre-flight at all; every other command reads what is already on disk.
 </Callout>
 
 ---
@@ -1255,7 +1194,7 @@ Options available for all commands:
 
 ## Related
 
-- [CLI Help Examples](/docs/reference/cli/examples) — Copy-paste ready command examples
-- [KB Source Resolution Spec](/docs/reference/specs/kb-source-resolution) — Technical specification for KB source resolution
-- [CLI Contracts Spec](/docs/reference/specs/cli-contracts) — Technical contracts and validation rules
-- [pair-cli README](https://github.com/foomakers/pair/tree/main/apps/pair-cli) — Full CLI reference including installation methods, architecture, and developer guide
+- [CLI Help Examples](/docs/reference/cli/examples): Copy-paste ready command examples
+- [KB Source Resolution Spec](/docs/reference/specs/kb-source-resolution): Technical specification for KB source resolution
+- [CLI Contracts Spec](/docs/reference/specs/cli-contracts): Technical contracts and validation rules
+- [pair-cli README](https://github.com/foomakers/pair/tree/main/apps/pair-cli): Full CLI reference including installation methods, architecture, and developer guide

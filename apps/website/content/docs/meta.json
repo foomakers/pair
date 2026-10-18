@@ -3,9 +3,11 @@
   "title": "Documentation",
   "pages": [
     "index",
+    "whats-new",
     "getting-started",
     "developer-journey",
     "tutorials",
+    "guides",
     "concepts",
     "customization",
     "integrations",

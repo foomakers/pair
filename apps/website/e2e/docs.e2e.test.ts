@@ -195,14 +195,14 @@ test('moved guides pages: render at their new locations', async ({ page }) => {
   await expect(main).toContainText('Common Workflows')
   await expect(main).toContainText('pair-cli install')
 
-  await page.goto('/docs/customization/install-from-url')
-  await expect(page.locator('main h1')).toContainText('Install from URL')
+  await page.goto('/docs/guides/external-kb')
+  await expect(page.locator('main h1')).toContainText('external or organization KB')
 
-  await page.goto('/docs/getting-started/checklist')
-  await expect(page.locator('main h1')).toContainText('Adopter Checklist')
+  await page.goto('/docs/guides/adoption-checklist')
+  await expect(page.locator('main h1')).toContainText('Adoption checklist')
 
-  await page.goto('/docs/reference/cli/update-link')
-  await expect(page.locator('main h1')).toContainText('Link Update')
+  await page.goto('/docs/guides/update-kb')
+  await expect(page.locator('main h1')).toContainText('Update the KB')
 })
 
 test('redirects: old FAQ/troubleshooting URLs land on support/troubleshooting', async ({
@@ -219,13 +219,17 @@ test('redirects: old FAQ/troubleshooting URLs land on support/troubleshooting', 
 
 test('redirects: dissolved guides URLs land on their new locations', async ({ page }) => {
   const redirects = [
-    { from: '/docs/guides/adopter-checklist', to: '/docs/getting-started/checklist' },
+    { from: '/docs/guides/adopter-checklist', to: '/docs/guides/adoption-checklist' },
     { from: '/docs/guides/cli-workflows', to: '/docs/reference/cli/workflows' },
     { from: '/docs/guides/customize-kb', to: '/docs/customization/team' },
-    { from: '/docs/guides/install-from-url', to: '/docs/customization/install-from-url' },
+    { from: '/docs/guides/install-from-url', to: '/docs/guides/external-kb' },
     { from: '/docs/guides/packaging', to: '/docs/customization/organization' },
-    { from: '/docs/guides/update-link', to: '/docs/reference/cli/update-link' },
-    { from: '/docs/guides', to: '/docs' },
+    { from: '/docs/guides/update-link', to: '/docs/guides/update-kb' },
+    { from: '/docs/reference/cli/update-link', to: '/docs/guides/update-kb' },
+    { from: '/docs/customization/install-from-url', to: '/docs/guides/external-kb' },
+    { from: '/docs/tutorials/managing-ai-artifacts', to: '/docs/guides/configure-harness' },
+    { from: '/docs/tutorials/release-testing', to: '/docs/guides/release-tests' },
+    { from: '/docs/getting-started/checklist', to: '/docs/guides/adoption-checklist' },
   ]
   for (const { from, to } of redirects) {
     await page.goto(from)
@@ -308,9 +312,9 @@ test('support section: navigate and verify content', async ({ page }) => {
 test('smoke: all guides/reference/support pages return 200', async ({ page }) => {
   const pages = [
     { url: '/docs/reference/cli/workflows', title: 'CLI Workflows' },
-    { url: '/docs/customization/install-from-url', title: 'Install from URL' },
-    { url: '/docs/getting-started/checklist', title: 'Adopter Checklist' },
-    { url: '/docs/reference/cli/update-link', title: 'Link Update' },
+    { url: '/docs/guides/external-kb', title: 'external or organization KB' },
+    { url: '/docs/guides/adoption-checklist', title: 'Adoption checklist' },
+    { url: '/docs/guides/update-kb', title: 'Update the KB' },
     { url: '/docs/reference/cli/commands', title: 'CLI Commands' },
     { url: '/docs/reference/cli/examples', title: 'CLI Help Examples' },
     { url: '/docs/reference/specs/cli-contracts', title: 'CLI Contracts' },
@@ -974,10 +978,10 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/pm-tools/filesystem',
     '/docs/pm-tools/github-projects',
     '/docs/pm-tools/linear',
-    '/docs/getting-started/checklist',
-    '/docs/customization/install-from-url',
+    '/docs/guides/adoption-checklist',
+    '/docs/guides/external-kb',
     '/docs/reference/cli/workflows',
-    '/docs/reference/cli/update-link',
+    '/docs/guides/update-kb',
     '/docs/reference/cli/commands',
     '/docs/reference/cli/examples',
     '/docs/reference/specs/cli-contracts',
@@ -1015,6 +1019,23 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/tutorials/brainstorming',
     '/docs/tutorials/refinement',
     '/docs/pm-tools/custom',
+    '/docs/whats-new',
+    '/docs/guides',
+    '/docs/guides/adopt-existing-repo',
+    '/docs/guides/assess-security-cost-coupling',
+    '/docs/guides/autonomy-and-profiles',
+    '/docs/guides/card-states',
+    '/docs/guides/classify-risk',
+    '/docs/guides/customize-templates',
+    '/docs/guides/deliver-a-card',
+    '/docs/guides/deliver-many-cards',
+    '/docs/guides/delivery-metrics',
+    '/docs/guides/hooks-and-severities',
+    '/docs/guides/install-via-marketplace',
+    '/docs/guides/monorepo-rules',
+    '/docs/guides/quality-gates',
+    '/docs/guides/review-identity',
+    '/docs/guides/tag-automation',
     '/docs/concepts',
     '/docs/concepts/canonical-states',
     '/docs/developer-journey/delivery-workflow',
@@ -1037,8 +1058,8 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/reference/pair-next',
     '/docs/reference/quality-gates-configuration',
     '/docs/reference/quality-model',
-    '/docs/tutorials/managing-ai-artifacts',
-    '/docs/tutorials/release-testing',
+    '/docs/guides/configure-harness',
+    '/docs/guides/release-tests',
   ]
 
   const circular: string[] = []
@@ -1096,4 +1117,17 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
   expect(footerLinksSeen).toBeGreaterThan(allPages.length)
 
   expect(circular, `Circular navigation links found:\n${circular.join('\n')}`).toHaveLength(0)
+})
+
+test('US-552 5b: guides index, what is new, absorbed page redirect', async ({ page }) => {
+  await page.goto('/docs/guides')
+  await expect(page.locator('main h1')).toContainText('Guides')
+  await expect(page.locator('main a[href="/docs/guides/deliver-a-card"]').first()).toBeVisible()
+
+  await page.goto('/docs/whats-new')
+  await expect(page.locator('main h1')).toContainText("What's new")
+  await expect(page.locator('main a[href="/docs/migrations/v0.4-to-v0.5"]').first()).toBeVisible()
+
+  await page.goto('/docs/getting-started/checklist')
+  await expect(page).toHaveURL('/docs/guides/adoption-checklist')
 })

@@ -1,0 +1,30 @@
+---
+title: Assess security, cost and coupling
+description: Run the output-only assessment skills on a diff or the whole codebase.
+---
+
+**Goal**: get a security, cost or coupling verdict without changing any file.
+
+## Prerequisites
+
+- pair skills installed
+
+## Steps
+
+1. **Security**
+   - With the CLI: `/pair-capability-assess-security $mode: review` on a PR, or `audit` for a one-shot OWASP scan.
+2. **Cost**
+   - With the CLI: `/pair-capability-assess-cost` gives a chromatic cost class for a change.
+3. **Coupling**
+   - With the CLI: `/pair-capability-assess-coupling $scope: diff` for a PR, or `full` for an audit.
+4. **Act on the findings**
+   - With the CLI: promote tolerable ones to tech debt; fix critical ones before merge.
+
+## Verify
+
+- Reports for audits land in `.pair/working/reports/`.
+
+## Related
+
+- [Skills catalog](/docs/reference/skills-catalog)
+- [Coupling model](/docs/reference/coupling-model)

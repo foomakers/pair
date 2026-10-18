@@ -1,0 +1,34 @@
+---
+title: Configure autonomy and per-stage engine and model
+description: Decide how far unattended runs go and which engine and model each stage uses.
+---
+
+**Goal**: set `until`, the merge gate and workflow profiles.
+
+## Prerequisites
+
+- `tech/automation.md`
+- The cycle scripts installed in `.claude/skills/pair-workflow-cycle/scripts/`
+
+## Steps
+
+1. **Set `## Autonomy`**
+   - With the CLI: edit `until`, `prepare`, `merge` and the filter in `tech/automation.md`.
+   - With `/pair-assistant` (optional, Claude Code): "let green cards go up to merge" shows the diff first.
+2. **Check the effective values**
+   - With the CLI: `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve`.
+   - With `/pair-assistant` (optional, Claude Code): it echoes the effective gates.
+3. **Set workflow profiles**
+   - With the CLI: add `workflowProfiles` to `pair.config.json`, then `node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve`.
+   - With `/pair-assistant` (optional, Claude Code): shown edit plus an ADL.
+
+## Verify
+
+- `resolve` prints each value with its source.
+- Defaults are `until: pr` and `merge: always`.
+
+## Related
+
+- [Lifecycle modes](/docs/developer-journey/lifecycle-modes)
+- [Automated development](/docs/tutorials/automated-development#autonomy-until-gates-escalation)
+- [Configuration](/docs/reference/configuration#workflow-profiles-workflowprofiles)

@@ -1,6 +1,6 @@
 ---
 title: Skill Management
-description: How pair resolves, transforms, and renames skills — path resolution, the transformation pipeline, and naming conventions.
+description: How pair resolves, transforms, and renames skills, path resolution, the transformation pipeline, and naming conventions.
 ---
 
 pair skills are SKILL.md files that live in the Knowledge Base and get distributed to AI tool directories. This page explains the three mechanisms that make this work: **resolution**, **transformation**, and **renaming**.
@@ -95,7 +95,7 @@ Composes /pair-capability-verify-quality and /pair-capability-record-decision.
 **Stage 5: Multi-target distribution**
 
 ```text
-.claude/skills/pair-capability-verify-quality/  (canonical — physical copy)
+.claude/skills/pair-capability-verify-quality/  (canonical - physical copy)
 .github/skills/pair-capability-verify-quality/  (symlink → .claude/skills/...)
 .cursor/skills/pair-capability-verify-quality/  (symlink → .claude/skills/...)
 ```
@@ -153,7 +153,7 @@ With the default config (`prefix: "pair"`, `flatten: true`):
 | `process/review/` | `pair-process-review/` | `/pair-process-review` |
 | `capability/verify-quality/` | `pair-capability-verify-quality/` | `/pair-capability-verify-quality` |
 | `capability/record-decision/` | `pair-capability-record-decision/` | `/pair-capability-record-decision` |
-| `process/review/references/` (sub-dir of a skill) | `pair-process-review/references/` | none — content, not a skill |
+| `process/review/references/` (sub-dir of a skill) | `pair-process-review/references/` | none, content, not a skill |
 
 ### Collision Detection
 
@@ -171,7 +171,7 @@ If two different source paths flatten to the same installed name (e.g. `a/b/` an
 
 The naming transform applies two functions in order:
 
-1. **Flatten**: Replace `/` with `-`, bounded to the registry's entry depth (`flattenDepth: 2` for skills — see [Configuration](/docs/reference/configuration))
+1. **Flatten**: Replace `/` with `-`, bounded to the registry's entry depth (`flattenDepth: 2` for skills: see [Configuration](/docs/reference/configuration))
    - `capability/verify-quality` → `capability-verify-quality`
    - `process/review/references` → `process-review/references` (a skill's own sub-directory is preserved, not flattened into a sibling)
 
@@ -216,7 +216,7 @@ Skill references (slash commands in markdown) are rewritten using boundary-aware
 
 ### Fenced Code Blocks Are Skipped
 
-Rewriting is applied line-by-line and tracks fenced code blocks (` ``` ` or `~~~`). Content inside a fence is left untouched — a skill name quoted as example text isn't a live invocation. Inline single-backtick code spans (`` `/next` ``) are still rewritten; only triple-backtick/tilde *blocks* are excluded.
+Rewriting is applied line-by-line and tracks fenced code blocks (` ``` ` or `~~~`). Content inside a fence is left untouched: a skill name quoted as example text isn't a live invocation. Inline single-backtick code spans (`` `/next` ``) are still rewritten; only triple-backtick/tilde *blocks* are excluded.
 
 ```text
 Run `/next` to start.                    <- rewritten (inline code span)
@@ -232,19 +232,19 @@ The relative-link rewriter (Stage 3) gets this for free: it walks a real markdow
 
 `pair-cli update` re-derives skill bodies from source on every run, so a rename (e.g. a prefix change in `pair.config.json`) always produces the correct *new* skill files. But two kinds of content are **not** re-derived from source every run:
 
-- Files copied with `add` behavior (e.g. adoption docs) — never overwritten once they exist, so a stale reference baked in during an earlier install (`/pair-next`) is never revisited by a plain copy-and-rewrite pass.
+- Files copied with `add` behavior (e.g. adoption docs): never overwritten once they exist, so a stale reference baked in during an earlier install (`/pair-next`) is never revisited by a plain copy-and-rewrite pass.
 - Anything a previous run wrote using the *old* prefix, where the current config only knows the *new* one.
 
-Guessing at the old prefix by string-matching (`"pair-"` → `"foo-"`) is explicitly avoided — it produces false positives on unrelated content that happens to start with the same string.
+Guessing at the old prefix by string-matching (`"pair-"` → `"foo-"`) is explicitly avoided: it produces false positives on unrelated content that happens to start with the same string.
 
 ### The Fix: A Recorded Mapping
 
-Each install/update writes a small manifest (`.pair/.skill-name-map.json`) recording this run's `{shortName: installedName}` map. The next run reads it back and computes an exact transition map (`oldInstalledName -> newInstalledName`) for every skill whose installed name changed — then applies that transition on top of the normal short-name rewrite when reconciling non-skill registries. The manifest is then rewritten with the current mapping.
+Each install/update writes a small manifest (`.pair/.skill-name-map.json`) recording this run's `{shortName: installedName}` map. The next run reads it back and computes an exact transition map (`oldInstalledName -> newInstalledName`) for every skill whose installed name changed, then applies that transition on top of the normal short-name rewrite when reconciling non-skill registries. The manifest is then rewritten with the current mapping.
 
 This is why `install -> update -> update` is byte-stable, and why changing `prefix` between two runs correctly:
 
 - removes the old flattened directory (e.g. `pair-catalog-next/`) instead of leaving it orphaned alongside the new one,
-- rewrites already-installed references — including ones living in `add`-behavior files — to the new name.
+- rewrites already-installed references (including ones living in `add`-behavior files) to the new name.
 
 ### Removed or Disabled Skills
 
@@ -252,7 +252,7 @@ If a skill disappears from the source registry between runs, its old installed n
 
 ### External KBs
 
-The same registry-build, rewrite, and manifest pipeline runs regardless of where the dataset comes from — the official KB, a project override, or an external KB installed via `--source`. No source-side restructuring is required or supported; the nested `.skills/<type>/<name>/` layout is flattened, prefixed, and rewritten identically either way.
+The same registry-build, rewrite, and manifest pipeline runs regardless of where the dataset comes from: the official KB, a project override, or an external KB installed via `--source`. No source-side restructuring is required or supported; the nested `.skills/<type>/<name>/` layout is flattened, prefixed, and rewritten identically either way.
 
 ## Windows Compatibility
 
@@ -268,13 +268,13 @@ Reclassified so they can be invoked scoped by any planning/refinement skill, not
 | --- | --- | --- |
 | Source path | `.skills/process/map-subdomains/`, `.skills/process/map-contexts/` | `.skills/capability/map-subdomains/`, `.skills/capability/map-contexts/` |
 | Installed command | `/pair-process-map-subdomains`, `/pair-process-map-contexts` | `/pair-capability-map-subdomains`, `/pair-capability-map-contexts` |
-| `$scope` | Optional (`all` default, or `single`) | Required — items/areas the caller touched; `all` is bootstrap-only |
-| No DDD artifacts | Prerequisite check HALTs | Falls back to "system areas" (services/modules) — no HALT |
+| `$scope` | Optional (`all` default, or `single`) | Required, items/areas the caller touched; `all` is bootstrap-only |
+| No DDD artifacts | Prerequisite check HALTs | Falls back to "system areas" (services/modules): no HALT |
 
-No code change is required in `apps/pair-cli` — the `skills` registry (`config.json`) is category-agnostic; moving a skill between `process/` and `capability/` in the dataset is picked up automatically by the flatten+prefix transform on the next `pair-cli install`/`pair-cli update`.
+No code change is required in `apps/pair-cli`: the `skills` registry (`config.json`) is category-agnostic; moving a skill between `process/` and `capability/` in the dataset is picked up automatically by the flatten+prefix transform on the next `pair-cli install`/`pair-cli update`.
 
 ## Related
 
-- [Skills Catalog](/docs/reference/skills-catalog) — All 51 pair skills
-- [Configuration Reference](/docs/reference/configuration) — config.json registry settings
-- [KB Structure Reference](/docs/reference/kb-structure) — Directory layout
+- [Skills Catalog](/docs/reference/skills-catalog): All 51 pair skills
+- [Configuration Reference](/docs/reference/configuration): config.json registry settings
+- [KB Structure Reference](/docs/reference/kb-structure): Directory layout

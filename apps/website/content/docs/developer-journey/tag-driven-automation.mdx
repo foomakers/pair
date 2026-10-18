@@ -5,7 +5,7 @@ description: "What gets tagged and when, how automation eligibility is a filter 
 
 import { Callout } from 'fumadocs-ui/components/callout'
 
-Tags are how the delivery process hands decisions to automation without a second source of truth: classification writes them once, and everything downstream — gates, review, the automation loop — only **reads** them. This page is the operational view; the model is in [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates) and the cycle in [Delivery Cycle](/docs/reference/delivery-cycle).
+Tags are how the delivery process hands decisions to automation without a second source of truth: classification writes them once, and everything downstream (gates, review, the automation loop) only **reads** them. This page is the operational view; the model is in [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates) and the cycle in [Delivery Cycle](/docs/reference/delivery-cycle).
 
 ## What gets tagged, and when
 
@@ -13,7 +13,7 @@ Tags are how the delivery process hands decisions to automation without a second
 | --- | --- | --- |
 | Story refinement | the classification matrix on the card, plus the `risk:*` tag when tag projection is on | `/pair-capability-classify` |
 | PR publish | the story's tags copied onto the one PR | `/pair-capability-publish-pr` |
-| Review | the PR's tier **raised** if the diff warrants it — never lowered; the PR state label | `/pair-process-review` |
+| Review | the PR's tier **raised** if the diff warrants it, never lowered; the PR state label | `/pair-process-review` |
 
 Only the tag families your project's tag projection lists are emitted (`risk` by default; `cost` opt-in). With projection off, the matrix is still written to the card, but nothing downstream can filter on it. Turning it on is a configuration step: [Enable Classification Tiers](/docs/customization/team#enable-classification-tiers).
 
@@ -22,10 +22,10 @@ Only the tag families your project's tag projection lists are emitted (`risk` by
 Which cards an unattended run may pick up is not a new tag. It is **one label** declared in `.pair/adoption/tech/automation.md` under `## Eligibility`, matched by plain string equality against the labels classification already put on the card.
 
 - Declare `risk:green` and only green cards are ever selected; yellow and red never match, by construction.
-- No file, or no `## Eligibility` section: the eligible set is empty and automation is off — it never widens itself.
+- No file, or no `## Eligibility` section: the eligible set is empty and automation is off: it never widens itself.
 - The tier→gate and tier→approval policy is not restated by eligibility; it stays in the [quality model](/docs/reference/quality-model).
 
-The selection query is `/pair-next` with that label as its filter — see [pair-next](/docs/reference/pair-next). The full schema (single label, validation rules, fail-safes) is the shipped automation-policy guideline.
+The selection query is `/pair-next` with that label as its filter, see [pair-next](/docs/reference/pair-next). The full schema (single label, validation rules, fail-safes) is the shipped automation-policy guideline.
 
 ## The supervised automation loop
 

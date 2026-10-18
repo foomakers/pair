@@ -3,7 +3,7 @@ title: Adopt a Knowledge Base
 description: Step-by-step guide to discovering, installing, and verifying a published Knowledge Base for your project.
 ---
 
-This guide walks you through adopting an existing Knowledge Base — from finding one to verifying it works in your project. By the end, your AI assistant will have structured context for every session.
+This guide walks you through adopting an existing Knowledge Base, from finding one to verifying it works in your project. By the end, your AI assistant will have structured context for every session.
 
 ## Prerequisites
 
@@ -25,7 +25,7 @@ npm search pair-kb
 
 Search for repositories with the `pair-kb` topic or containing a `.pair/knowledge/` directory structure.
 
-**The pair KB itself** is the canonical example — it ships with the CLI and covers the full software development lifecycle. If you're unsure which KB to start with, use the default.
+**The pair KB itself** is the canonical example: it ships with the CLI and covers the full software development lifecycle. If you're unsure which KB to start with, use the default.
 
 ## Install a KB
 
@@ -62,7 +62,7 @@ pair-cli install --source github --url https://github.com/org/my-kb/releases/lat
 pair-cli install --source local --url /path/to/kb
 ```
 
-See [CLI Commands](/docs/reference/cli/commands) for the full `install` reference and [Install from URL](/docs/customization/install-from-url) for advanced source options.
+See [CLI Commands](/docs/reference/cli/commands) for the full `install` reference and [Install from URL](/docs/guides/external-kb) for advanced source options.
 
 ## Verify the Installation
 
@@ -79,7 +79,7 @@ pair-cli kb-validate
 
 You should see the knowledge and adoption directories populated. The key indicator is `.pair/knowledge/guidelines/` containing guideline files.
 
-Check that your AI assistant can see the KB by starting a new session — if AGENTS.md or CLAUDE.md links to `.pair/`, the assistant will pick up the context automatically.
+Check that your AI assistant can see the KB by starting a new session: if AGENTS.md or CLAUDE.md links to `.pair/`, the assistant will pick up the context automatically.
 
 ## What You Get
 
@@ -87,17 +87,17 @@ An installed KB provides three layers of value:
 
 ### Guidelines
 
-Development standards covering code design, testing strategy, security, architecture, collaboration, and more. Your AI assistant reads these to produce code that follows your standards — not generic suggestions.
+Development standards covering code design, testing strategy, security, architecture, collaboration, and more. Your AI assistant reads these to produce code that follows your standards, not generic suggestions.
 
 ### Adoption Files
 
 Project-specific decisions: which tech stack, architecture pattern, methodology, and quality gates you chose. These files override guideline defaults and ensure every AI session stays aligned with your choices.
 
-You don't write adoption files manually. Run `/pair-next` and the AI walks you through the full process — from PRD to architecture to tech stack — generating each file along the way.
+You don't write adoption files manually. Run `/pair-next` and the AI walks you through the full process (from PRD to architecture to tech stack) generating each file along the way.
 
 ### Skills
 
-Structured instructions that AI assistants discover and execute, following the [Agent Skills](https://agentskills.io) open standard. Skills automate the product lifecycle — from PRD creation to code review — with composable process and capability skills.
+Structured instructions that AI assistants discover and execute, following the [Agent Skills](https://agentskills.io) open standard. Skills automate the product lifecycle (from PRD creation to code review) with composable process and capability skills.
 
 See [Skills](/docs/concepts/skills) for how skills work and [Skills Catalog](/docs/reference/skills-catalog) for the full list.
 
@@ -117,8 +117,8 @@ The update replaces `.pair/knowledge/` (upstream content) but preserves `.pair/a
 
 ## Next Steps
 
-- **First time with pair?** The [tutorials](/docs/tutorials) guide you through adoption with working examples — pick solo developer, team, or enterprise.
-- **Ready to customize?** [Customize for Your Team](/docs/customization/team) — adjust guidelines and quality gates for your team context.
-- **Adopting across several projects?** [External KB Repository](/docs/customization/external-kb) — keep the KB in its own versioned repository and install it everywhere, instead of adopting the same changes project by project.
-- **Need the full reference?** [KB Structure](/docs/reference/kb-structure) — directory layout and file purposes.
+- **First time with pair?** The [tutorials](/docs/tutorials) guide you through adoption with working examples, pick solo developer, team, or enterprise.
+- **Ready to customize?** [Customize for Your Team](/docs/customization/team), adjust guidelines and quality gates for your team context.
+- **Adopting across several projects?** [External KB Repository](/docs/customization/external-kb), keep the KB in its own versioned repository and install it everywhere, instead of adopting the same changes project by project.
+- **Need the full reference?** [KB Structure](/docs/reference/kb-structure), directory layout and file purposes.
 - **Want to start the process?** Run `/pair-next` in your AI assistant to begin the guided setup.

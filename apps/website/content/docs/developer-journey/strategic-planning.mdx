@@ -1,6 +1,6 @@
 ---
 title: "Strategic Planning: Epics"
-description: "Break initiatives into delivery-sized epics — the bridge between strategy and sprint work."
+description: "Break initiatives into delivery-sized epics, the bridge between strategy and sprint work."
 ---
 
 Strategic planning happens once per initiative. You take a high-level objective and decompose it into epics that can be delivered in 2-4 sprints each.
@@ -12,19 +12,19 @@ Decompose an initiative into manageable delivery chunks.
 | | |
 | --- | --- |
 | **Skill (recommended)** | `/pair-process-plan-epics` |
-| **How-to guide** | [06 — How to Break Down Epics](/docs/reference/guidelines-catalog) |
+| **How-to guide** | [06: How to Break Down Epics](/docs/reference/guidelines-catalog) |
 | **Input** | Initiative issue from your PM tool |
 | **Output** | Issues in your PM tool (type: epic) linked to the parent initiative |
 
 The AI analyzes the initiative scope and proposes epics sized for 2-4 sprints. Each epic is:
 
-- **Self-contained** — delivers a coherent set of features
-- **Independently releasable** — can go to production without waiting for other epics
-- **Sized for a team** — enough work for 2-4 sprints, not more
+- **Self-contained**: delivers a coherent set of features
+- **Independently releasable**: can go to production without waiting for other epics
+- **Sized for a team**: enough work for 2-4 sprints, not more
 
 ### Epic 0: Foundation Work
 
-For new projects, the skill includes an **Epic 0 assessment** — infrastructure, tooling, and foundation work that must happen before feature development:
+For new projects, the skill includes an **Epic 0 assessment**, infrastructure, tooling, and foundation work that must happen before feature development:
 
 - Repository setup, CI/CD pipeline
 - Core libraries and shared components
@@ -35,11 +35,11 @@ Epic 0 is created only when the assessment identifies essential setup work.
 
 ### Triage Against the Existing Backlog
 
-Before writing anything, each candidate epic is matched against epics already linked to the initiative — proposed as **EXTEND #ID** (substantial scope overlap) or **CREATE** (distinct), with the rationale shown before you confirm. A re-run with the same candidates never creates duplicates: an exact title/parent match is recognized as already-present, and a partial-overlap match is proposed as EXTEND again rather than a second CREATE.
+Before writing anything, each candidate epic is matched against epics already linked to the initiative, proposed as **EXTEND #ID** (substantial scope overlap) or **CREATE** (distinct), with the rationale shown before you confirm. A re-run with the same candidates never creates duplicates: an exact title/parent match is recognized as already-present, and a partial-overlap match is proposed as EXTEND again rather than a second CREATE.
 
 ## Optional: Domain Modeling (DDD)
 
-If your project benefits from domain-driven design, two capabilities place work into subdomains and bounded contexts. They are **scoped capabilities**, not standalone steps — invoked by `/pair-process-plan-initiatives`, `/pair-process-plan-epics`, `/pair-process-refine-story`, or `/pair-process-plan-tasks` with `$scope` set to what was just touched (see [Migration Notes](/docs/reference/skill-management#migration-notes)).
+If your project benefits from domain-driven design, two capabilities place work into subdomains and bounded contexts. They are **scoped capabilities**, not standalone steps, invoked by `/pair-process-plan-initiatives`, `/pair-process-plan-epics`, `/pair-process-refine-story`, or `/pair-process-plan-tasks` with `$scope` set to what was just touched (see [Migration Notes](/docs/reference/skill-management#migration-notes)).
 
 ### Define Subdomains
 
@@ -49,9 +49,9 @@ If your project benefits from domain-driven design, two capabilities place work 
 
 Classifies problem areas as:
 
-- **Core** — your competitive advantage, build in-house
-- **Supporting** — necessary but not differentiating, build or buy
-- **Generic** — commodity, buy or use open source
+- **Core**: your competitive advantage, build in-house
+- **Supporting**: necessary but not differentiating, build or buy
+- **Generic**: commodity, buy or use open source
 
 Each subdomain also gets a **Volatility** rating (High/Medium/Low), defaulted from the classification with a human override.
 
@@ -61,9 +61,9 @@ Each subdomain also gets a **Volatility** rating (High/Medium/Low), defaulted fr
 | --- | --- |
 | **Skill** | `/pair-capability-map-contexts` |
 
-Establishes service boundaries and integration patterns between contexts (synchronous, asynchronous, shared kernel, contract). Each relationship is assessed on integration strength, socio-technical distance, and volatility — an unbalanced and volatile relationship must be mitigated or explicitly accepted before it passes approval.
+Establishes service boundaries and integration patterns between contexts (synchronous, asynchronous, shared kernel, contract). Each relationship is assessed on integration strength, socio-technical distance, and volatility: an unbalanced and volatile relationship must be mitigated or explicitly accepted before it passes approval.
 
-Skip DDD if your project is a simple CRUD app or doesn't need service decomposition — both capabilities fall back to plain "system areas" (services/modules) when no DDD artifacts exist, without erroring.
+Skip DDD if your project is a simple CRUD app or doesn't need service decomposition, both capabilities fall back to plain "system areas" (services/modules) when no DDD artifacts exist, without erroring.
 
 ## What You Have After Strategic Planning
 
@@ -79,8 +79,8 @@ PM Tool:
     └── Epic 5: ...
 ```
 
-Each epic is ready for iteration — the next level breaks them into sprint-sized stories. Initiatives and epics are not classified: the risk tier enters at story refinement ([Iteration](/docs/developer-journey/iteration#classification-matrix)), as laid out in the [risk-driven flow](/docs/developer-journey#the-risk-driven-flow).
+Each epic is ready for iteration: the next level breaks them into sprint-sized stories. Initiatives and epics are not classified: the risk tier enters at story refinement ([Iteration](/docs/developer-journey/iteration#classification-matrix)), as laid out in the [risk-driven flow](/docs/developer-journey#the-risk-driven-flow).
 
 ## Next
 
-[Iteration](/docs/developer-journey/iteration) — break epics into stories, refine them, and create tasks.
+[Iteration](/docs/developer-journey/iteration): break epics into stories, refine them, and create tasks.

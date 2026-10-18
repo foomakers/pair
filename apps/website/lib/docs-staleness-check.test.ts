@@ -6,6 +6,7 @@ import {
   countDeclaredPluginSkills,
   findGuideCountMismatches,
   findDeadLinks,
+  findEmDashes,
   findDeadRepoCitations,
   githubHeadingSlugs,
   checkCatalogSync,
@@ -1582,5 +1583,12 @@ describe('checkViaLines (US-552 AC25)', () => {
         skill,
       ),
     ).toHaveLength(1)
+  })
+})
+
+describe('findEmDashes', () => {
+  it('flags each line with U+2014 and passes clean content', () => {
+    expect(findEmDashes('a\nb \u2014 c\nd', 'a.mdx')).toEqual(['a.mdx:2: em dash (U+2014)'])
+    expect(findEmDashes('a - b, c', 'a.mdx')).toEqual([])
   })
 })

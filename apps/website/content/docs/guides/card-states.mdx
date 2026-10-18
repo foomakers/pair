@@ -1,0 +1,38 @@
+---
+title: Configure card states, DoR/DoD and the process profile
+description: Map your board columns to pair macrostates, set readiness criteria and run a subset of the process.
+---
+
+**Goal**: make pair read your board correctly and run only the process steps you want.
+
+## Prerequisites
+
+- A PM tool set up ([PM tools](/docs/pm-tools))
+- Access to `.pair/adoption/tech/way-of-working.md`
+
+## Steps
+
+1. **Map your board states**
+   - With the CLI: add a `## State Mapping` table (`Board State | Macrostate`) to `way-of-working.md`.
+   - With `/pair-assistant` (optional, Claude Code): "map not-planned to Done"; routed through `/pair-capability-setup-pm`.
+2. **Review Definition of Ready and Done**
+   - With the CLI: read the criteria and add project tier requirements in the Review Tier Matrix.
+   - With `/pair-assistant` (optional, Claude Code): ask to show the current DoR/DoD and propose a diff.
+3. **Pick a process profile**
+   - With the CLI: set `## Process Profile` with `profile: default`, `poc` or `custom` plus a `whitelist` of step ids.
+   - With `/pair-assistant` (optional, Claude Code): "use the poc profile".
+4. **Start light**
+   - With the CLI: run `/pair-process-bootstrap` in quick mode.
+   - With `/pair-assistant` (optional, Claude Code): ask for a quick bootstrap.
+
+## Verify
+
+- `/pair-next` suggests steps consistent with your profile.
+- A card moved on the board changes the state `/pair-next` reports.
+
+## Related
+
+- [Canonical states](/docs/concepts/canonical-states)
+- [Definition of Ready and Done](/docs/concepts/definition-of-ready-and-done)
+- [Adoption settings](/docs/reference/adoption-settings)
+- [Bootstrap quick mode](/docs/getting-started/bootstrap-quick-mode)

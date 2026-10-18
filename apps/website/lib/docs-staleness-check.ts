@@ -118,6 +118,13 @@ export function countHowToGuides(howToDir: string): number | null {
 
 // --- Pure per-content checks (return error strings; no I/O) ---
 
+/** Check 0: no em dash (U+2014) in docs content; rewrite the sentence instead. */
+export function findEmDashes(content: string, rel: string): string[] {
+  return content
+    .split('\n')
+    .flatMap((line, i) => (line.includes('\u2014') ? [`${rel}:${i + 1}: em dash (U+2014)`] : []))
+}
+
 /** Check 1: every "N skills" phrasing in content matches the actual skill count. */
 export function findSkillCountMismatches(content: string, rel: string, actual: number): string[] {
   return countMismatches(content, rel, actual, { re: SKILL_COUNT_RE, label: 'Skill count' })
@@ -621,7 +628,8 @@ export function deriveCatalogDescription(
   frontmatterDescription: string,
   commandByName: Map<string, string>,
 ): string {
-  return transformCommandTokens(extractFirstSentence(frontmatterDescription), commandByName)
+  const lead = extractFirstSentence(frontmatterDescription).replaceAll(' \u2014 ', ', ')
+  return transformCommandTokens(lead, commandByName)
 }
 
 /** Derive the expected Command + Description for every dataset skill (name → row). */
@@ -1089,6 +1097,7 @@ function perFileErrors(params: {
   for (const file of docsFiles) {
     const content = readFileSync(file, 'utf-8')
     const rel = relative(docsDir, file)
+    errors.push(...findEmDashes(content, rel))
     errors.push(...findSkillCountMismatches(content, rel, skillCount))
     if (declaredPluginSkills !== null) {
       errors.push(...findPluginSkillCountMismatches(content, rel, declaredPluginSkills))
@@ -1284,7 +1293,7 @@ export function batchEngineErrors(paths: {
  * as a broken install, and the reader has no way to tell the two apart.
  */
 export const LIST_TARGETS_PAGES = [
-  'getting-started/checklist.mdx',
+  'guides/adoption-checklist.mdx',
   'getting-started/quickstart-solo.mdx',
   'reference/cli/examples.mdx',
 ]

@@ -1,6 +1,6 @@
 ---
 title: Quickstart
-description: Install pair-cli, set up the Knowledge Base, and start using AI-assisted development — for new and existing projects.
+description: Install pair-cli, set up the Knowledge Base, and start using AI-assisted development, for new and existing projects.
 ---
 
 Get up and running with pair on macOS or Linux. By the end of this guide, your project will have a Knowledge Base that gives your AI assistant full context about your development standards.
@@ -101,7 +101,7 @@ pair-cli install --list-targets
 
 ## Start Using pair
 
-Your AI assistant (Claude, Copilot, Cursor) now reads the `.pair/` folder automatically. The next step is creating your **adoption files** — the project-specific decisions that keep every AI session aligned.
+Your AI assistant (Claude, Copilot, Cursor) now reads the `.pair/` folder automatically. The next step is creating your **adoption files**: the project-specific decisions that keep every AI session aligned.
 
 You don't write these files manually. The AI generates them interactively, asking the right questions along the way.
 
@@ -109,26 +109,28 @@ You don't write these files manually. The AI generates them interactively, askin
 
 Run `/pair-next` in your AI assistant. It detects empty adoption files and walks you through:
 
-1. **PRD creation** — the AI asks about your product vision, users, pain points, and features, then generates `.pair/adoption/product/PRD.md`
-2. **Bootstrap** — the AI guides you through architecture, tech stack, infrastructure, and way-of-working decisions, generating adoption files in `.pair/adoption/tech/`
-3. **What comes next** — `/pair-next` continues to suggest the right next step as your project evolves
+1. **PRD creation**: the AI asks about your product vision, users, pain points, and features, then generates `.pair/adoption/product/PRD.md`
+2. **Bootstrap**: the AI guides you through architecture, tech stack, infrastructure, and way-of-working decisions, generating adoption files in `.pair/adoption/tech/`
+3. **What comes next**: `/pair-next` continues to suggest the right next step as your project evolves
 
 **With the CLI:** `/pair-next` and `/pair-process-bootstrap` are skills in your assistant; there is no CLI command for them. **With `/pair-assistant` (optional, Claude Code):** ask it to adopt the project; it installs pair, then hands off to `/pair-process-bootstrap` (`$mode: quick` for no confirmations).
 
-In a hurry, or setting up from a script? Bootstrap also runs one-shot from KB-sensible defaults instead of interviewing you — see **[Bootstrap Quick Mode](/docs/getting-started/bootstrap-quick-mode)**. The interview above stays the default.
+In a hurry, or setting up from a script? Bootstrap also runs one-shot from KB-sensible defaults instead of interviewing you, see **[Bootstrap Quick Mode](/docs/getting-started/bootstrap-quick-mode)**. The interview above stays the default.
 
 ### Existing Project
 
 ![Installing pair into a repository that already has files: refusal, keep or overwrite](/diagrams/existing-repo-install.svg)
 
+*Figure: installing pair into a repository that already has files: refusal, keep or overwrite.*
+
 `pair-cli install` is **all-or-nothing per registry target**. If any target already exists (`AGENTS.md`, `CLAUDE.md`, `.claude/skills`, `.pair/knowledge`, `.github`, …) it exits 1 with `Target '<path>' already exists` and writes nothing. For your own `AGENTS.md` or `CLAUDE.md` you choose, per both files together (they come from the same registry):
 
-- **Overwrite** — move yours aside, then install: `mv AGENTS.md AGENTS.md.bak` (and `mv CLAUDE.md CLAUDE.md.bak`), then `pair-cli install`. Use `mv`, not `cp`: a leftover original makes install refuse again.
-- **Keep** — `pair-cli install --skip-registries agents` installs everything else and leaves your files untouched. The choice is saved in `pair.config.json` as `"skipRegistries": ["agents"]`, and every later `pair-cli update` honours it (`skipping agents (from pair.config.json)`). pair is then **not reachable from your `AGENTS.md`**: add a pointer to `.pair/knowledge/` and `.pair/adoption/` yourself.
+- **Overwrite**: move yours aside, then install: `mv AGENTS.md AGENTS.md.bak` (and `mv CLAUDE.md CLAUDE.md.bak`), then `pair-cli install`. Use `mv`, not `cp`: a leftover original makes install refuse again.
+- **Keep**: `pair-cli install --skip-registries agents` installs everything else and leaves your files untouched. The choice is saved in `pair.config.json` as `"skipRegistries": ["agents"]`, and every later `pair-cli update` honours it (`skipping agents (from pair.config.json)`). pair is then **not reachable from your `AGENTS.md`**: add a pointer to `.pair/knowledge/` and `.pair/adoption/` yourself.
 
 Other existing targets (your own `.claude/skills`, `.github`) are kept the same way: `--skip-registries skills,github`.
 
-Then pick the depth: **1. install only** (adoption files still to fill in) or **2. install and adopt the project** (a bootstrap pass that describes your stack, architecture and way of working — see [Bootstrap Quick Mode](/docs/getting-started/bootstrap-quick-mode)).
+Then pick the depth: **1. install only** (adoption files still to fill in) or **2. install and adopt the project** (a bootstrap pass that describes your stack, architecture and way of working, see [Bootstrap Quick Mode](/docs/getting-started/bootstrap-quick-mode)).
 
 **With the CLI:** the commands above. **With `/pair-assistant` (optional, Claude Code):** ask for "pair in this project, first time"; it checks every target, asks keep or overwrite per file, runs the `mv` or the `--skip-registries` for you after you agree, and offers option 1 or 2.
 
@@ -142,7 +144,7 @@ When pair publishes new guidelines, templates, or how-to improvements:
 pair-cli update
 ```
 
-This refreshes the Knowledge Base content (guidelines, how-tos, templates) while **preserving your adoption files** — your decisions are never overwritten. A registry you chose to keep with `--skip-registries` stays untouched.
+This refreshes the Knowledge Base content (guidelines, how-tos, templates) while **preserving your adoption files**, your decisions are never overwritten. A registry you chose to keep with `--skip-registries` stays untouched.
 
 **With the CLI:** `pair-cli update` (the default path). **With `/pair-assistant` (optional, Claude Code):** ask for "the KB and skills refreshed"; it runs `update`, honours `skipRegistries` and prints the skip line ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
 
@@ -171,10 +173,10 @@ Each step has a **how-to guide** in `.pair/knowledge/how-to/` that the AI follow
 
 The steps above work for everyone. For environment-specific configuration:
 
-- **[Quickstart: Solo](/docs/getting-started/quickstart-solo)** — Working alone? Minimal setup, no team coordination needed.
-- **[Quickstart: Team](/docs/getting-started/quickstart-team)** — Shared standards, adoption files, and the agent bridge pattern for multi-developer teams.
-- **[Quickstart: Organization](/docs/getting-started/quickstart-org)** — Custom KB packaging, distribution, and governance across multiple teams.
+- **[Quickstart: Solo](/docs/getting-started/quickstart-solo)**: Working alone? Minimal setup, no team coordination needed.
+- **[Quickstart: Team](/docs/getting-started/quickstart-team)**: Shared standards, adoption files, and the agent bridge pattern for multi-developer teams.
+- **[Quickstart: Organization](/docs/getting-started/quickstart-org)**: Custom KB packaging, distribution, and governance across multiple teams.
 
-Want a guided, end-to-end walkthrough? Pick a [tutorial](/docs/tutorials) that matches your context — solo developer (~30 min), team lead (~45 min), or enterprise architect (~60 min).
+Want a guided, end-to-end walkthrough? Pick a [tutorial](/docs/tutorials) that matches your context, solo developer (~30 min), team lead (~45 min), or enterprise architect (~60 min).
 
-Feeling lost? Check the [FAQ](/docs/support/general-faq) — it covers the most common questions about process, languages, tools, and customization.
+Feeling lost? Check the [FAQ](/docs/support/general-faq): it covers the most common questions about process, languages, tools, and customization.

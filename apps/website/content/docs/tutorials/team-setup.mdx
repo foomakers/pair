@@ -33,7 +33,7 @@ By the end of this tutorial you'll have:
 ## Step-by-step instructions
 
 <Callout type="info">
-  **At any step**, you can run `/pair-next` instead of a specific skill. pair reads your project state and suggests the right action — so you never need to remember which skill comes next.
+  **At any step**, you can run `/pair-next` instead of a specific skill. pair reads your project state and suggests the right action, so you never need to remember which skill comes next.
 </Callout>
 
 ### 1. Install the Knowledge Base
@@ -102,7 +102,7 @@ Review `.pair/adoption/tech/` and add files for team conventions that differ fro
 - Authentication uses Bearer JWT tokens in the Authorization header.
 ```
 
-The AI reads every file in `.pair/adoption/` — custom files are treated the same as overrides.
+The AI reads every file in `.pair/adoption/`, custom files are treated the same as overrides.
 
 ### 5. Configure the PM tool integration
 
@@ -143,9 +143,13 @@ Edit `.pair/adoption/tech/way-of-working.md` to define your team's quality gate:
 
 Every developer and every AI assistant will run these checks before committing.
 
-Prefer automation over hand-editing: `/pair-capability-setup-gates` provisions shared lint/format config packages (per-type overrides for backend/frontend/shared-lib workspaces) plus pre-commit + pre-push hooks, defaulting to husky. See the [shared config packages guideline](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/code-design/quality-standards/shared-config-packages.md) for the pattern — pair's own `tools/*` is the reference implementation. Override the hook manager by recording your choice in `way-of-working.md` before running the skill.
+Prefer automation over hand-editing: `/pair-capability-setup-gates` provisions shared lint/format config packages (per-type overrides for backend/frontend/shared-lib workspaces) plus pre-commit + pre-push hooks, defaulting to husky. See the [shared config packages guideline](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/code-design/quality-standards/shared-config-packages.md) for the pattern, pair's own `tools/*` is the reference implementation. Override the hook manager by recording your choice in `way-of-working.md` before running the skill.
 
-The same skill also provisions a **deterministic secret-scanning CI job** — required, at every risk tier, no LLM involved. `gitleaks` is the KB default; the job is written as a required, fail-closed step in your CI pipeline alongside a starting `.gitleaks.toml` allowlist at the project root. This is a mechanical CI gate, not a skill judgment call — see the [secret-scanning guideline](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md) for the job template, the allowlist mechanism, and a reproducible verification. Security judgment (authn/authz, injection, OWASP Top 10) is a separate concern, handled per-PR by `/pair-capability-assess-security` — the two never overlap.
+The same skill also provisions a **deterministic secret-scanning CI job**, required, at every risk tier, no LLM involved. `gitleaks` is the KB default; the job is written as a required, fail-closed step in your CI pipeline alongside a starting `.gitleaks.toml` allowlist at the project root.
+
+This is a mechanical CI gate, not a skill judgment call, see the [secret-scanning guideline](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md) for the job template, the allowlist mechanism, and a reproducible verification.
+
+Security judgment (authn/authz, injection, OWASP Top 10) is a separate concern, handled per-PR by `/pair-capability-assess-security`: the two never overlap.
 
 ### More team options
 
@@ -162,7 +166,7 @@ Every option below is optional; the full catalog with defaults is [Adoption sett
 - **PM tool, code host, State Mapping** (incl. unmapped states and not-planned): [Canonical states](/docs/concepts/canonical-states#customizing-for-your-board), via `/pair-capability-setup-pm`. *"map Won't Do to not-planned"*
 - **Definition of Ready / Done tier requirements**: [Definition of Ready and Done](/docs/concepts/definition-of-ready-and-done). *"red cards need two reviewers"*
 - **Process Profile**: which steps run ([Adoption settings](/docs/reference/adoption-settings#techway-of-workingmd)). *"switch to the poc profile"*
-- **Risk matrix and Tag Projection**: [Quality model](/docs/reference/quality-model#project-overrides--techrisk-matrixmd). *"also emit cost tags"*
+- **Risk matrix and Tag Projection**: [Quality model](/docs/reference/quality-model#project-overrides-techrisk-matrixmd). *"also emit cost tags"*
 - **Harness and Model Policy**: `/pair-capability-setup-harness`. *"switch the harness to pi"*
 - **Gates and branch protection**: `/pair-capability-setup-gates`. *"set up the pre-push gate"*
 - **Package-local adoption, template overrides**: [Package-local adoption](/docs/customization/package-local-adoption), [Templates](/docs/customization/templates).
@@ -175,7 +179,7 @@ For significant decisions that need rationale, create Architecture Decision Reco
 /pair-capability-record-decision
 ```
 
-This is especially important for choices your team debated — "why TypeScript over Go?", "why PostgreSQL over MongoDB?". ADRs live in `.pair/adoption/tech/adr/` and give future team members (and AI assistants) the context behind each choice.
+This is especially important for choices your team debated, "why TypeScript over Go?", "why PostgreSQL over MongoDB?". ADRs live in `.pair/adoption/tech/adr/` and give future team members (and AI assistants) the context behind each choice.
 
 ### 8. Commit the pair setup
 
@@ -195,9 +199,9 @@ git push
 
 Have a teammate clone the repository and open it in their AI assistant. They should:
 
-1. **Open the project** — the bridge files are already committed, so their assistant finds `.pair/` automatically
-2. **Run `/pair-next`** — pair reads the adoption files and knows the project context
-3. **Start working** — the assistant uses your team's tech stack, architecture, and conventions
+1. **Open the project**: the bridge files are already committed, so their assistant finds `.pair/` automatically
+2. **Run `/pair-next`**: pair reads the adoption files and knows the project context
+3. **Start working**: the assistant uses your team's tech stack, architecture, and conventions
 
 No manual onboarding needed. The Knowledge Base and adoption files *are* the onboarding.
 
@@ -206,9 +210,9 @@ No manual onboarding needed. The Knowledge Base and adoption files *are* the onb
 Have the onboarded teammate create a small change and go through the full cycle:
 
 1. **Pick a story** from GitHub Projects
-2. **Run `/pair-process-implement`** — the assistant creates a branch, follows TDD, runs quality gates
-3. **Review the PR** — run `/pair-process-review` on the resulting pull request
-4. **Merge** — confirm the squash-merge follows your commit template
+2. **Run `/pair-process-implement`**: the assistant creates a branch, follows TDD, runs quality gates
+3. **Review the PR**: run `/pair-process-review` on the resulting pull request
+4. **Merge**: confirm the squash-merge follows your commit template
 
 If everything works end-to-end, your team setup is complete.
 
@@ -229,15 +233,15 @@ If everything works end-to-end, your team setup is complete.
 ## What you've learned
 
 - **Bootstrap** configures pair for your team's specific context in one step
-- **Adoption files** override KB defaults — your customizations survive upstream updates
+- **Adoption files** override KB defaults, your customizations survive upstream updates
 - **Quality gates** ensure consistent standards across every developer and AI session
 - **PM tool integration** connects pair's planning skills to your issue tracker
-- **Bridge files** make every AI assistant read the same context — no per-tool configuration
-- **Onboarding** is automatic — commit the `.pair/` directory and teammates are ready
+- **Bridge files** make every AI assistant read the same context: no per-tool configuration
+- **Onboarding** is automatic: commit the `.pair/` directory and teammates are ready
 
 ## Next steps
 
-- **[Customize for Your Team](/docs/customization/team)** — Deep dive into all customization options
-- **[Publish a Knowledge Base](/docs/customization/organization)** — Package your team's KB for distribution
-- **[Enterprise Adoption tutorial](/docs/tutorials/enterprise-adoption)** — Rolling out pair across an organization
-- **[Support](/docs/support)** — FAQ and troubleshooting when something doesn't work
+- **[Customize for Your Team](/docs/customization/team)**: Deep dive into all customization options
+- **[Publish a Knowledge Base](/docs/customization/organization)**: Package your team's KB for distribution
+- **[Enterprise Adoption tutorial](/docs/tutorials/enterprise-adoption)**: Rolling out pair across an organization
+- **[Support](/docs/support)**: FAQ and troubleshooting when something doesn't work

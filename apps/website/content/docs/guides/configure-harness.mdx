@@ -1,13 +1,33 @@
 ---
-title: Managing AI Artifacts for Your Team
-description: Create a Git-hosted artifact repository to distribute skills, AGENTS.md, and Knowledge Base content across your team with pair-cli.
+title: Configure another harness and manage AI artifacts
+description: Set up Codex, pi or opencode and distribute skills and AGENTS.md across a team.
 ---
 
-A walkthrough for teams who want to organize and distribute AI artifacts — skills, AGENTS.md, and KB content — via a Git repository, independent of your development workflow. This is not about adopting pair's full product lifecycle management; it's about using pair-cli to version and share artifacts across your team and multiple AI assistants. By the end, every teammate can install and update your organization's artifacts with a single command.
+**Goal**: make another AI harness (Codex, pi, opencode) read pair, and share skills and `AGENTS.md` through a Git repository.
 
 ## Prerequisites
 
-- **pair-cli** installed (`pair-cli --version`) — [Install pair-cli](/docs/getting-started/quickstart) if you haven't already
+- A pair-enabled project; the harness installed
+
+## Steps
+
+1. **Pick the harness**: see [Codex](/docs/integrations/codex), [pi](/docs/integrations/pi) or [opencode](/docs/integrations/opencode).
+   - With the CLI: `pair-cli install --list-targets`, then install with the targets you need.
+   - With `/pair-assistant` (optional, Claude Code): "switch the harness to pi" (runs `/pair-capability-setup-harness`).
+2. **Share artifacts**: follow the walkthrough below.
+
+## Verify
+
+- The harness lists the pair skills and reads `AGENTS.md`.
+
+## Managing AI artifacts for your team
+
+
+A walkthrough for teams who want to organize and distribute AI artifacts (skills, AGENTS.md, and KB content) via a Git repository, independent of your development workflow. This is not about adopting pair's full product lifecycle management; it's about using pair-cli to version and share artifacts across your team and multiple AI assistants. By the end, every teammate can install and update your organization's artifacts with a single command.
+
+## Prerequisites
+
+- **pair-cli** installed (`pair-cli --version`), [Install pair-cli](/docs/getting-started/quickstart) if you haven't already
 - **Git** installed (`git --version`)
 - A **Git hosting** account (GitHub, GitLab, Bitbucket, or self-hosted)
 
@@ -45,7 +65,7 @@ git init
 
 ### 3. Choose your layout
 
-**Flat layout** — all skill directories at the root:
+**Flat layout**: all skill directories at the root:
 
 ```text
 acme-ai-artifacts/
@@ -57,7 +77,7 @@ acme-ai-artifacts/
     SKILL.md
 ```
 
-**Folder-organized layout** — grouped by type, flattened on install:
+**Folder-organized layout**: grouped by type, flattened on install:
 
 ```text
 acme-ai-artifacts/
@@ -98,7 +118,7 @@ For the **folder-organized layout**, start with a single assistant:
 }
 ```
 
-`flattenDepth: 2` says an entry is `<category>/<name>` deep, so anything below it (a skill's `references/` progressive-disclosure directory) installs **inside** the skill instead of beside it. Set it whenever your skills own sub-directories — see [Bounded Flattening](/docs/reference/configuration#bounded-flattening-flattendepth).
+`flattenDepth: 2` says an entry is `<category>/<name>` deep, so anything below it (a skill's `references/` progressive-disclosure directory) installs **inside** the skill instead of beside it. Set it whenever your skills own sub-directories, see [Bounded Flattening](/docs/reference/configuration#bounded-flattening-flattendepth).
 
 This delivers all skills to Claude. When your team adopts other assistants (GitHub Copilot, Cursor, Windsurf), update `targets`:
 
@@ -142,8 +162,8 @@ This project uses Acme AI artifacts. Skills are installed to `.claude/skills/`, 
 
 ## Available Skills
 
-- `/acme-capability-deploy` — Deploy to staging/production
-- `/acme-process-onboard` — Onboard a new team member
+- `/acme-capability-deploy` - Deploy to staging/production
+- `/acme-process-onboard` - Onboard a new team member
 
 ## Setup
 
@@ -160,7 +180,7 @@ pair-cli install --source https://github.com/acme/ai-artifacts.git#v1.0.0 --conf
 \`\`\`
 ```
 
-**Customize per AI tool:** You can generate different AGENTS.md versions for Claude, GitHub Copilot, Cursor, etc. using the `transform` property in your config. See [AGENTS.md Customization](/docs/integrations/claude-code#claudemd--generated-from-agentsmd) to create tool-specific guidance and onboarding instructions for each assistant.
+**Customize per AI tool:** You can generate different AGENTS.md versions for Claude, GitHub Copilot, Cursor, etc. using the `transform` property in your config. See [AGENTS.md Customization](/docs/integrations/claude-code#claudemd-generated-from-agentsmd) to create tool-specific guidance and onboarding instructions for each assistant.
 
 ### 6. Create `manifest.json`
 
@@ -191,7 +211,7 @@ Pass the config file with `--config`:
 # HTTPS (public repo)
 pair-cli install --source https://github.com/acme/ai-artifacts.git#v1.0.0 --config ./pair-config.json
 
-# SSH (private repo — uses SSH keys)
+# SSH (private repo - uses SSH keys)
 pair-cli install --source git@github.com:acme/ai-artifacts.git#v1.0.0 --config ./pair-config.json
 ```
 
@@ -199,9 +219,9 @@ The CLI shallow-clones the repo, reads the config file you provide, and distribu
 
 ### 9. Private repos
 
-**SSH** (`git@…`) — works if the user has SSH keys configured. No extra configuration needed.
+**SSH** (`git@…`): works if the user has SSH keys configured. No extra configuration needed.
 
-**HTTPS + token** — for CI/CD or environments without SSH keys:
+**HTTPS + token**: for CI/CD or environments without SSH keys:
 
 ```bash
 export PAIR_GIT_TOKEN=ghp_your_token_here
@@ -266,7 +286,7 @@ pair-cli update --source https://github.com/acme/ai-artifacts.git#v1.1.0 --confi
 The new locations are populated automatically. Existing assistants' skill directories remain untouched.
 
 <Callout type="info">
-  You can also host the package as a ZIP on any HTTP server, network share, or artifact registry. See [Install from URL or Path](/docs/customization/install-from-url).
+  You can also host the package as a ZIP on any HTTP server, network share, or artifact registry. See [Install from URL or Path](/docs/guides/external-kb).
 </Callout>
 
 ## What you've learned
@@ -280,7 +300,7 @@ The new locations are populated automatically. Existing assistants' skill direct
 
 ## Next steps
 
-- [Team Setup](/docs/tutorials/team-setup) — Full team onboarding with pair
-- [Install from URL or Path](/docs/customization/install-from-url) — Alternative distribution methods
-- [Configuration Reference](/docs/reference/configuration) — Full `config.json` reference
-- [Skills Concept](/docs/concepts/skills) — How skills work
+- [Team Setup](/docs/tutorials/team-setup): Full team onboarding with pair
+- [Install from URL or Path](/docs/guides/external-kb): Alternative distribution methods
+- [Configuration Reference](/docs/reference/configuration): Full `config.json` reference
+- [Skills Concept](/docs/concepts/skills): How skills work

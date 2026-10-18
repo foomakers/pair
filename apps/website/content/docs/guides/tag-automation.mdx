@@ -1,0 +1,28 @@
+---
+title: Automate work via tags
+description: Route cards to workflows by label.
+---
+
+**Goal**: make a tag decide which workflow handles a card.
+
+## Prerequisites
+
+- `tech/automation.md`
+
+## Steps
+
+1. **Map tags to workflows**
+   - With the CLI: add `<tag> ⇒ <workflow>` lines under `## Workflows`.
+2. **Restrict eligibility**
+   - With the CLI: set the `filter` in `## Autonomy`.
+3. **Tag a card and run**
+   - With the CLI: `pair-cli run --root <id>` picks up tagged cards only.
+
+## Verify
+
+- Untagged cards are never dispatched.
+
+## Related
+
+- [Tag-driven automation](/docs/developer-journey/tag-driven-automation)
+- [Tag-driven gates](/docs/concepts/tag-driven-gates)

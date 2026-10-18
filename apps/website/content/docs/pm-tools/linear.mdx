@@ -1,9 +1,9 @@
 ---
 title: Linear
-description: Configure pair to manage work items with Linear — setup, the required code-host declaration, mapping model, and first-run walkthrough.
+description: Configure pair to manage work items with Linear, setup, the required code-host declaration, mapping model, and first-run walkthrough.
 ---
 
-**Linear hosts no code.** It has no repositories, branches or pull requests, so a Linear project always declares a separate **code host** (usually GitHub). This is pair's reference split setup — see [Code host vs PM tool](/docs/concepts/code-host) for the routing rule and cross-linking convention.
+**Linear hosts no code.** It has no repositories, branches or pull requests, so a Linear project always declares a separate **code host** (usually GitHub). This is pair's reference split setup, see [Code host vs PM tool](/docs/concepts/code-host) for the routing rule and cross-linking convention.
 
 ## Why Linear is the page that changed pair's design
 
@@ -14,8 +14,8 @@ The obvious fix was the wrong one. Linear ships an excellent GitHub app that wou
 What pair adopted instead is deliberately unglamorous, and it is why this page reads the way it does:
 
 - **One optional field.** Declare `code-host` in `## Git Workflow` and issue/state work routes to Linear while branch/PR/review work routes to GitHub. Projects already on a single tool declare nothing and behave exactly as before.
-- **The cross-link is plain text, both ways.** `Refs: <issue-id>` in the PR body; the PR URL posted back as a **comment** on the Linear issue — a comment, never a body edit, because writing the body would overwrite the story's acceptance criteria. Any tool with a comment field can play.
-- **PR state (draft / ready / approved / merged) is never mirrored onto the board.** Macrostate transitions still happen on Linear — the Status Transitions table below moves the issue to "In Review" when the PR opens, on teams that have that state (see the table). What never crosses is the pull request's own state: find the row whose Linear column says nothing happens — review. It happens entirely on the code host. That "nothing" is the decision, not an omission — each state lives in one place, so there is nothing to reconcile.
+- **The cross-link is plain text, both ways.** `Refs: <issue-id>` in the PR body; the PR URL posted back as a **comment** on the Linear issue: a comment, never a body edit, because writing the body would overwrite the story's acceptance criteria. Any tool with a comment field can play.
+- **PR state (draft / ready / approved / merged) is never mirrored onto the board.** Macrostate transitions still happen on Linear: the Status Transitions table below moves the issue to "In Review" when the PR opens, on teams that have that state (see the table). What never crosses is the pull request's own state: find the row whose Linear column says nothing happens, review. It happens entirely on the code host. That "nothing" is the decision, not an omission: each state lives in one place, so there is nothing to reconcile.
 - **What Linear does not have, pair reports rather than invents.** Linear's default teams ship no "In Review" state; a skill asked to write one says so instead of guessing a nearby column.
 
 The rest of this page is the configuration that model implies, including the one section a single-tool guide has no need for: `## Git Workflow`, where the `code-host` is declared.
@@ -32,11 +32,11 @@ Add these lines to `.pair/adoption/tech/way-of-working.md`:
 
 ## Git Workflow
 
-- `code-host`: `github` — repository `<org>/<repo>`.
+- `code-host`: `github` - repository `<org>/<repo>`.
 - `base-branch`: `main`.
 ```
 
-Issue and state operations go to Linear; branch, PR, review and merge operations go to the code host. The two are linked by `Refs: <issue-id>` in the PR body plus the PR URL commented back on the Linear issue — no native integration required.
+Issue and state operations go to Linear; branch, PR, review and merge operations go to the code host. The two are linked by `Refs: <issue-id>` in the PR body plus the PR URL commented back on the Linear issue: no native integration required.
 
 ### Prerequisites
 
@@ -69,7 +69,7 @@ Task                →   Checklist item in story issue body
 - **Initiatives** map to Linear Projects or are tracked via labels, depending on team preference
 - **Epics** are top-level Linear Issues
 - **User Stories** are sub-issues under their parent epic
-- **Tasks** are checkbox items in the story issue description — not separate issues
+- **Tasks** are checkbox items in the story issue description, not separate issues
 - **Status tracking** uses Linear's workflow states (Backlog, Todo, In Progress, Done)
 
 ### Status Transitions
@@ -78,10 +78,10 @@ Task                →   Checklist item in story issue body
 |------------|--------------|------------------|
 | Start implementing a story | Issue status → "In Progress" | Feature branch created |
 | Complete a task | Checkbox marked in issue description | Commit on the branch |
-| Create PR | PR URL commented on the issue; status → "In Review" _(only if the team has an In Review state — Linear's default teams don't, and skills report the gap instead of guessing)_ | PR opened with `Refs: <issue-id>` |
-| Review | _(nothing — review state is never mirrored)_ | Review submitted; merge gated here |
+| Create PR | PR URL commented on the issue; status → "In Review" _(only if the team has an In Review state: Linear's default teams don't, and skills report the gap instead of guessing)_ | PR opened with `Refs: <issue-id>` |
+| Review | _(nothing: review state is never mirrored)_ | Review submitted; merge gated here |
 | Merge PR | Issue status → "Done" | PR merged, branch deleted |
-| All stories in epic done | Parent issue status → "Done" | — |
+| All stories in epic done | Parent issue status → "Done" | n/a |
 
 State transitions always happen on Linear. PR states (draft / ready / approved / merged) live on the code host and are never mirrored onto Linear, so no state is duplicated.
 
@@ -125,8 +125,8 @@ pair creates Linear sub-issues under the epic, sets priority, and assigns them t
 
 ## Related
 
-- [Code host vs PM tool](/docs/concepts/code-host) — the split setup, routing rule and cross-linking convention
-- [Canonical states](/docs/concepts/canonical-states) — mapping Linear workflow states to macrostates
-- [PM Tools overview](/docs/pm-tools) — choosing the right tool
-- [Filesystem](/docs/pm-tools/filesystem) — zero-PM-dependency alternative (backlog in your repo; still declares a `code-host`)
-- [GitHub Projects](/docs/pm-tools/github-projects) — GitHub-native option
+- [Code host vs PM tool](/docs/concepts/code-host): the split setup, routing rule and cross-linking convention
+- [Canonical states](/docs/concepts/canonical-states): mapping Linear workflow states to macrostates
+- [PM Tools overview](/docs/pm-tools): choosing the right tool
+- [Filesystem](/docs/pm-tools/filesystem): zero-PM-dependency alternative (backlog in your repo; still declares a `code-host`)
+- [GitHub Projects](/docs/pm-tools/github-projects): GitHub-native option

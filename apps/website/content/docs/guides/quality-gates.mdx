@@ -1,0 +1,33 @@
+---
+title: Set up quality gates and the coverage ratchet
+description: Enable CI gates, tiered pre-merge checks and the coverage guardrail.
+---
+
+**Goal**: make CI enforce your tier checks and block coverage regressions.
+
+## Prerequisites
+
+- CI on your code host
+- The `risk` tag family enabled ([classify guide](/docs/guides/classify-risk))
+
+## Steps
+
+1. **Run the setup skill**
+   - With the CLI: run `/pair-capability-setup-gates`.
+   - With `/pair-assistant` (optional, Claude Code): "set up quality gates and branch protection".
+2. **Enable tiering**
+   - With the CLI: set pre-merge tiering to `enabled` in `way-of-working.md`.
+3. **Enable the coverage ratchet**
+   - With the CLI: set the coverage guardrail to `enabled`.
+4. **Add custom gates (optional)**
+   - With the CLI: add rows to the Custom Gate Registry.
+
+## Verify
+
+- A test PR shows the tier checks and the required `pair-review` check.
+- Lowering coverage fails the guardrail.
+
+## Related
+
+- [Quality gates configuration](/docs/reference/quality-gates-configuration)
+- [Tag-driven gates](/docs/concepts/tag-driven-gates)

@@ -3,7 +3,7 @@ title: Customize Templates
 description: Override pair's built-in templates for commits, PRs, stories, epics, and other workflow artifacts.
 ---
 
-pair ships with 19 templates that control the structure of workflow artifacts — from commit messages to user stories. This guide shows how to customize them for your team.
+pair ships with 19 templates that control the structure of workflow artifacts, from commit messages to user stories. This guide shows how to customize them for your team.
 
 ## Where Templates Live
 
@@ -32,7 +32,7 @@ Templates are part of the Knowledge Base:
 └── user-story-template.md         # User story issue structure
 ```
 
-The AI reads these templates when creating the corresponding artifacts — but it always resolves an [adoption override](#how-to-customize-a-template) first, falling back to the KB copy above only when no override exists. When you run `/pair-process-implement`, it uses the commit and PR templates. When you run `/pair-process-plan-stories`, it uses the user story template. And so on.
+The AI reads these templates when creating the corresponding artifacts, but it always resolves an [adoption override](#how-to-customize-a-template) first, falling back to the KB copy above only when no override exists. When you run `/pair-process-implement`, it uses the commit and PR templates. When you run `/pair-process-plan-stories`, it uses the user story template. And so on.
 
 ## Template Categories
 
@@ -82,9 +82,9 @@ The AI reads these templates when creating the corresponding artifacts — but i
 
 ## How to Customize a Template
 
-Templates live in `.pair/knowledge/` — the upstream layer that gets overwritten on `pair-cli update`. To customize safely, create an override in the adoption layer.
+Templates live in `.pair/knowledge/`: the upstream layer that gets overwritten on `pair-cli update`. To customize safely, create an override in the adoption layer.
 
-**How resolution works:** every skill that uses a template resolves it **override-first** by a plain file-existence check — if `.pair/adoption/tech/templates/<name>-template.md` exists (where `<name>-template.md` matches a shipped KB filename above), the skill uses your copy whole; otherwise it uses the KB default. There is no partial merge and no prose to keep in sync — dropping the file in place is the entire mechanism. (Skill-side contract: `.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md`.)
+**How resolution works:** every skill that uses a template resolves it **override-first** by a plain file-existence check: if `.pair/adoption/tech/templates/<name>-template.md` exists (where `<name>-template.md` matches a shipped KB filename above), the skill uses your copy whole; otherwise it uses the KB default. There is no partial merge and no prose to keep in sync, dropping the file in place is the entire mechanism. (Skill-side contract: `.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md`.)
 
 **With the CLI:** copy the file by hand (steps below). **With `/pair-assistant` (optional, Claude Code):** ask it to "override the PR template"; it shows the diff and writes the override through `/pair-capability-record-decision` ([template overrides](/docs/reference/pair-assistant#capability-menu)).
 
@@ -115,11 +115,11 @@ body explaining the change
 Refs: JIRA-XXX
 ```
 
-That's it — the file is now live. The next time a skill needs that template it finds your override and uses it; no restart, no config, no announcement needed.
+That's it: the file is now live. The next time a skill needs that template it finds your override and uses it; no restart, no config, no announcement needed.
 
 ### Step 3 (optional): Record the Override for Your Team
 
-The override already works from Step 2. This step is purely a **human-readable audit trail** — a record of intent so teammates can see, at a glance, which templates you've customized. It is **not** what triggers resolution (the file existing on disk is), so it can never fall out of sync with the actual behavior:
+The override already works from Step 2. This step is purely a **human-readable audit trail**: a record of intent so teammates can see, at a glance, which templates you've customized. It is **not** what triggers resolution (the file existing on disk is), so it can never fall out of sync with the actual behavior:
 
 ```markdown
 <!-- .pair/adoption/tech/way-of-working.md -->
@@ -153,11 +153,11 @@ Add fields for your workflow (e.g., design mockup links, dependency tracking), c
 | `.pair/knowledge/guidelines/collaboration/templates/` | Overwritten | No |
 | `.pair/adoption/tech/templates/` | Preserved | Yes |
 
-Never edit templates in `.pair/knowledge/` — your changes will be lost on the next update. Always customize via `.pair/adoption/`.
+Never edit templates in `.pair/knowledge/`, your changes will be lost on the next update. Always customize via `.pair/adoption/`.
 
 ## Related
 
-- [Quality Gates & Configuration](/docs/reference/quality-gates-configuration) — the catalog of opt-in quality knobs, where the template override mechanism is indexed alongside the others
-- [Customize for Your Team](/docs/customization/team) — override guidelines and quality gates
-- [Guidelines & How-To Catalog](/docs/reference/guidelines-catalog) — all guideline categories including templates
-- [KB Structure Reference](/docs/reference/kb-structure) — directory layout and file purposes
+- [Quality Gates & Configuration](/docs/reference/quality-gates-configuration): the catalog of opt-in quality knobs, where the template override mechanism is indexed alongside the others
+- [Customize for Your Team](/docs/customization/team): override guidelines and quality gates
+- [Guidelines & How-To Catalog](/docs/reference/guidelines-catalog): all guideline categories including templates
+- [KB Structure Reference](/docs/reference/kb-structure): directory layout and file purposes

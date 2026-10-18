@@ -1,6 +1,6 @@
 ---
 title: GitHub Copilot
-description: Set up pair with GitHub Copilot — configure .github/agents, copilot-instructions.md, and follow the bridge pattern.
+description: Set up pair with GitHub Copilot, configure .github/agents, copilot-instructions.md, and follow the bridge pattern.
 ---
 
 ## Prerequisites
@@ -41,11 +41,11 @@ Each agent file includes:
 
 ### copilot-instructions.md
 
-General project instructions that Copilot reads for all interactions. Contains the same quick-start context as `AGENTS.md` — essential commands, key references, and coding conventions.
+General project instructions that Copilot reads for all interactions. Contains the same quick-start context as `AGENTS.md`, essential commands, key references, and coding conventions.
 
 ### The Bridge Pattern
 
-`.github/agents/` and `copilot-instructions.md` point to `.pair/` — the single source of truth:
+`.github/agents/` and `copilot-instructions.md` point to `.pair/`: the single source of truth:
 
 ```text
 .github/agents/          ──→ .pair/knowledge/how-to/  (process guides)

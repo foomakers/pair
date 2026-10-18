@@ -1,20 +1,20 @@
 ---
 title: Skills
-description: How Agent Skills work in pair — the open standard for structured AI assistant instructions, skill categories, and composition.
+description: How Agent Skills work in pair, the open standard for structured AI assistant instructions, skill categories, and composition.
 ---
 
 Skills are structured instructions that AI assistants discover and execute. They follow the [Agent Skills](https://agentskills.io) open standard, supported by Claude Code, Cursor, VS Code Copilot, and OpenAI Codex.
 
-Where the [Knowledge Base](/docs/concepts/knowledge-base) provides context, skills provide **actions**. A skill tells the AI exactly how to perform a specific task — from creating a PRD to reviewing a pull request.
+Where the [Knowledge Base](/docs/concepts/knowledge-base) provides context, skills provide **actions**. A skill tells the AI exactly how to perform a specific task, from creating a PRD to reviewing a pull request.
 
 ## How Skills Work
 
 Each skill is a `SKILL.md` file that defines:
 
-- **What the skill does** — purpose and scope
-- **When to use it** — trigger conditions
-- **How to execute it** — step-by-step instructions the AI follows
-- **What it composes** — other skills it calls during execution
+- **What the skill does**: purpose and scope
+- **When to use it**: trigger conditions
+- **How to execute it**: step-by-step instructions the AI follows
+- **What it composes**: other skills it calls during execution
 
 When a developer invokes a skill (e.g., `/implement`), the AI reads the `SKILL.md` file and follows its instructions precisely. The skill references adoption files, guidelines, and templates from the Knowledge Base, ensuring consistent execution.
 
@@ -28,7 +28,7 @@ Process skills guide the AI through lifecycle phases. They follow a defined sequ
 
 | Skill | Purpose |
 |-------|---------|
-| `/brainstorm` | Discovery — structured discovery into a Draft backlog tree |
+| `/brainstorm` | Discovery: structured discovery into a Draft backlog tree |
 | `/specify-prd` | Create or update a Product Requirements Document |
 | `/bootstrap` | Orchestrate full project setup |
 | `/plan-initiatives` | Create prioritized strategic initiatives |
@@ -89,21 +89,23 @@ See [Batch engine](/docs/reference/batch-engine).
 
 ![Skill families and how they compose](/diagrams/skill-families.svg)
 
+*Figure: skill families and how they compose.*
+
 ## Composition
 
 Skills compose other skills to build complex workflows. For example, `/implement` composes:
 
-- `/verify-quality` — after each task, to check quality gates
-- `/record-decision` — when a new architectural decision is made
-- `/assess-stack` — when a new dependency is introduced
-- `/verify-adoption` — before committing, to check compliance
+- `/verify-quality`: after each task, to check quality gates
+- `/record-decision`: when a new architectural decision is made
+- `/assess-stack`: when a new dependency is introduced
+- `/verify-adoption`: before committing, to check compliance
 
 And `/review` composes:
 
-- `/verify-quality` — to check quality gates on the PR
-- `/verify-done` — to check Definition of Done criteria
-- `/analyze-debt` — to analyze and report technical debt
-- `/record-decision` — if a decision needs recording
+- `/verify-quality`: to check quality gates on the PR
+- `/verify-done`: to check Definition of Done criteria
+- `/analyze-debt`: to analyze and report technical debt
+- `/record-decision`: if a decision needs recording
 
 Across families: process skills compose capability skills; `/pair-workflow-cycle` composes the stage skills (which in turn compose `/pair-process-implement`, `/pair-process-review` and the capability skills); `/pair-loop` composes the batch workflows; `/pair-assistant` delegates to the project's own skills.
 

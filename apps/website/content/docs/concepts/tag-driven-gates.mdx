@@ -1,13 +1,13 @@
 ---
 title: Tag-Driven Quality Gates
-description: An opt-in pre-merge optimization that scales CI effort to each PR's risk tier by reading classification tags only — never by classifying in CI. Off by default; the default runs the full suite on every PR.
+description: An opt-in pre-merge optimization that scales CI effort to each PR's risk tier by reading classification tags only, never by classifying in CI. Off by default; the default runs the full suite on every PR.
 ---
 
-By default, pair's pre-merge quality gate runs the **full check suite on every PR** — base, unit, integration/E2E, and coverage, plus an unconditional secret scan. That is the safe default: every change earns the same, complete verification.
+By default, pair's pre-merge quality gate runs the **full check suite on every PR**, base, unit, integration/E2E, and coverage, plus an unconditional secret scan. That is the safe default: every change earns the same, complete verification.
 
-**Tag-driven (tier-aware) gating is an opt-in optimization on top of that.** When enabled, the gate runs more checks on riskier changes and fewer on safe ones — *reducing* the checks on low-risk PRs to trade some verification for speed. Because it narrows coverage, it is off unless a project turns it on by setting `Pre-merge tiering: enabled` in its `way-of-working.md`. Without that flag, `setup-gates` generates the full-suite pipeline and none of the matrix below applies.
+**Tag-driven (tier-aware) gating is an opt-in optimization on top of that.** When enabled, the gate runs more checks on riskier changes and fewer on safe ones, *reducing* the checks on low-risk PRs to trade some verification for speed. Because it narrows coverage, it is off unless a project turns it on by setting `Pre-merge tiering: enabled` in its `way-of-working.md`. Without that flag, `setup-gates` generates the full-suite pipeline and none of the matrix below applies.
 
-When tiering **is** enabled, the gate does **not** decide the risk itself — it reads the `risk:*` tag already on the pull request and applies a fixed matrix. Classification happens once, upstream; CI just consumes the result.
+When tiering **is** enabled, the gate does **not** decide the risk itself: it reads the `risk:*` tag already on the pull request and applies a fixed matrix. Classification happens once, upstream; CI just consumes the result.
 
 ## The matrix (when tiering is enabled)
 
@@ -19,18 +19,18 @@ When tiering **is** enabled, the gate does **not** decide the risk itself — it
 
 Two things run at **every** tier regardless of the matrix:
 
-- **install + lint + type + build** — the base always runs.
-- **Deterministic secret scanning** (gitleaks by default) — a secret is a secret no matter how small the change. It is never tier-scoped and never skipped.
+- **install + lint + type + build**: the base always runs.
+- **Deterministic secret scanning** (gitleaks by default): a secret is a secret no matter how small the change. It is never tier-scoped and never skipped.
 
 ## Where the tier comes from
 
-The tier is set by classification during refinement and confirmed (or raised) at review, then written onto the PR as a `risk:green|yellow|red` label. The pipeline reads that label and nothing else — it never inspects the diff, file paths, or change size. This keeps CI simple and auditable: you can grep the generated pipeline config and find zero classification logic in it.
+The tier is set by classification during refinement and confirmed (or raised) at review, then written onto the PR as a `risk:green|yellow|red` label. The pipeline reads that label and nothing else: it never inspects the diff, file paths, or change size. This keeps CI simple and auditable: you can grep the generated pipeline config and find zero classification logic in it.
 
 See [Canonical States](/docs/concepts/canonical-states) for how work-item state is resolved, and [Definition of Ready & Done](/docs/concepts/definition-of-ready-and-done) for where classification fits in the flow.
 
 ## Fail-safe: no tag means red
 
-If a PR has **no** `risk:*` tag — or the tag is unknown or malformed — the gate treats it as 🔴 and runs the full matrix. Missing classification never means "skip the checks"; it means "run everything," with a warning on the PR. Tags are re-read at the start of every run, so re-classifying a PR (for example, review raising the tier) only ever **widens** the matrix — it never narrows it against a previous run.
+If a PR has **no** `risk:*` tag (or the tag is unknown or malformed) the gate treats it as 🔴 and runs the full matrix. Missing classification never means "skip the checks"; it means "run everything," with a warning on the PR. Tags are re-read at the start of every run, so re-classifying a PR (for example, review raising the tier) only ever **widens** the matrix: it never narrows it against a previous run.
 
 ## Missing a required suite fails loudly
 
@@ -38,33 +38,33 @@ If a tier requires a suite the repository does not have (for example, a 🔴 PR 
 
 ## Checking locally before you push (local = CI)
 
-The `verify-quality` capability runs the **same check set the gate would run for this item's tier**, on your machine, before you push. It resolves the `risk:*` tag — from the pull request, or pre-publish from the story card — and applies the exact same matrix through the same shipped resolver the CI gate uses. So a 🟢 green change runs only lint + type + build locally (no over-checking), and a 🔴 red change runs the full set locally (no surprise red at the gate).
+The `verify-quality` capability runs the **same check set the gate would run for this item's tier**, on your machine, before you push. It resolves the `risk:*` tag (from the pull request, or pre-publish from the story card) and applies the exact same matrix through the same shipped resolver the CI gate uses. So a 🟢 green change runs only lint + type + build locally (no over-checking), and a 🔴 red change runs the full set locally (no surprise red at the gate).
 
 It never classifies: like the pipeline, it reads the tag and the matrix only. The three parity guarantees carry over unchanged:
 
-- **Fail-safe red** — no resolvable `risk:*` tag ⇒ the full set runs locally too, stated explicitly in the report.
-- **Missing suite is loud** — a suite the tier requires but the repo lacks is reported as `suite missing — CI will fail`, never a silent local pass.
-- **Opt-in preserved** — with tiering off (the default), `verify-quality` runs the full suite, exactly as CI does.
+- **Fail-safe red**: no resolvable `risk:*` tag ⇒ the full set runs locally too, stated explicitly in the report.
+- **Missing suite is loud**: a suite the tier requires but the repo lacks is reported as `suite missing: CI will fail`, never a silent local pass.
+- **Opt-in preserved**: with tiering off (the default), `verify-quality` runs the full suite, exactly as CI does.
 
 ## Coverage guardrail (opt-in, off by default)
 
-Coverage can be protected by a **baseline regression guardrail** — a job inside the same pipeline, not a separate CI mechanism. It is **opt-in and off by default** (the twin of tiering): a project turns it on by setting `Coverage guardrail: enabled` in its `way-of-working.md`, and `setup-gates` offers it as a guided-setup question (default **No**). Absent the flag, no coverage job is generated. When enabled, a PR that drops coverage **below a committed baseline** fails the gate; a PR that maintains or improves it passes. It is a guardrail against regression, not a wall demanding a fixed percentage on every PR, so a legacy codebase is never failed at 0 on day one.
+Coverage can be protected by a **baseline regression guardrail**: a job inside the same pipeline, not a separate CI mechanism. It is **opt-in and off by default** (the twin of tiering): a project turns it on by setting `Coverage guardrail: enabled` in its `way-of-working.md`, and `setup-gates` offers it as a guided-setup question (default **No**). Absent the flag, no coverage job is generated. When enabled, a PR that drops coverage **below a committed baseline** fails the gate; a PR that maintains or improves it passes. It is a guardrail against regression, not a wall demanding a fixed percentage on every PR, so a legacy codebase is never failed at 0 on day one.
 
-- **Baseline and per-type targets live in adoption** (`tech/coverage-baseline.md`, created when the guardrail is enabled), with sensible defaults — different goals for backend, frontend, and shared libraries. No specific coverage tool is required: the gate reads whatever percentage the adopted test tooling emits.
-- **The baseline is human-committed.** The guardrail is live only once a `baseline.<type>` line is committed to the config. With none committed (or a missing/corrupt one) the gate runs in **bootstrap-only mode**: it prints a suggested baseline to the CI log and passes, without persisting it — a CI checkout is ephemeral, so it never writes the value itself. A human copies the suggested line into the committed config to activate the guardrail. (Automated commit-back is tracked separately.)
-- **The `exclude` config is applied by the adopter** to their own coverage tool — the gate does not read it; it only documents the exclusion intent for genuinely untestable surface.
-- **No coverage measured** fails safe: it blocks at 🔴 red and warns at lower tiers — never a silent pass.
+- **Baseline and per-type targets live in adoption** (`tech/coverage-baseline.md`, created when the guardrail is enabled), with sensible defaults, different goals for backend, frontend, and shared libraries. No specific coverage tool is required: the gate reads whatever percentage the adopted test tooling emits.
+- **The baseline is human-committed.** The guardrail is live only once a `baseline.<type>` line is committed to the config. With none committed (or a missing/corrupt one) the gate runs in **bootstrap-only mode**: it prints a suggested baseline to the CI log and passes, without persisting it: a CI checkout is ephemeral, so it never writes the value itself. A human copies the suggested line into the committed config to activate the guardrail. (Automated commit-back is tracked separately.)
+- **The `exclude` config is applied by the adopter** to their own coverage tool: the gate does not read it; it only documents the exclusion intent for genuinely untestable surface.
+- **No coverage measured** fails safe: it blocks at 🔴 red and warns at lower tiers, never a silent pass.
 
 ## Post-merge is build + deploy only
 
-Once a PR merges to the main branch, the gate does not run again — it already passed. The post-merge staging pipeline performs **build + deploy only**. The gate is the deterministic first filter before merge; review starts only once the gate is green — see [PR State Flow](/docs/concepts/pr-state-flow) for what happens after that (the review as a required check, and the synthesis that decides whether the PR is mergeable).
+Once a PR merges to the main branch, the gate does not run again: it already passed. The post-merge staging pipeline performs **build + deploy only**. The gate is the deterministic first filter before merge; review starts only once the gate is green, see [PR State Flow](/docs/concepts/pr-state-flow) for what happens after that (the review as a required check, and the synthesis that decides whether the PR is mergeable).
 
 ## Setting it up (opt-in)
 
-Tier-aware gating is **off by default**. To turn it on, set `Pre-merge tiering: enabled` in your project's `way-of-working.md` — `setup-gates` also offers this as a guided-setup question (default **No**). With the flag enabled, `pair`'s `setup-gates` capability generates the tier-aware pipeline for your stack and wires the required status checks so a red gate blocks merge; you do not hand-write the tier logic — it is generated from the quality model's matrix, with the tag-reading step and the unconditional secret-scan job included. Leave the flag off (the default) and `setup-gates` generates the full-suite pipeline where every PR runs every suite.
+Tier-aware gating is **off by default**. To turn it on, set `Pre-merge tiering: enabled` in your project's `way-of-working.md`, `setup-gates` also offers this as a guided-setup question (default **No**). With the flag enabled, `pair`'s `setup-gates` capability generates the tier-aware pipeline for your stack and wires the required status checks so a red gate blocks merge; you do not hand-write the tier logic: it is generated from the quality model's matrix, with the tag-reading step and the unconditional secret-scan job included. Leave the flag off (the default) and `setup-gates` generates the full-suite pipeline where every PR runs every suite.
 
 ## Related
 
-- [The risk-driven flow](/docs/developer-journey#the-risk-driven-flow) — where classification, gates and review show up in the day-to-day process
-- [Quality Gates & Configuration](/docs/reference/quality-gates-configuration) — the unifying catalog that indexes tiering and the coverage guardrail alongside every other opt-in knob, and lists what is always-on (secret scanning)
-- [Quality Model](/docs/reference/quality-model) — how classification produces the `risk:*` tier this gate reads
+- [The risk-driven flow](/docs/developer-journey#the-risk-driven-flow): where classification, gates and review show up in the day-to-day process
+- [Quality Gates & Configuration](/docs/reference/quality-gates-configuration): the unifying catalog that indexes tiering and the coverage guardrail alongside every other opt-in knob, and lists what is always-on (secret scanning)
+- [Quality Model](/docs/reference/quality-model): how classification produces the `risk:*` tier this gate reads

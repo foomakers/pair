@@ -1,0 +1,31 @@
+---
+title: Package-local rules in a monorepo
+description: Keep per-package adoption rules next to the package while the central files stay the router.
+---
+
+**Goal**: let each package carry its own architecture or way-of-working rules.
+
+## Prerequisites
+
+- A monorepo with pair installed
+- The central adoption files in `.pair/adoption/tech/`
+
+## Steps
+
+1. **Declare the router**
+   - With the CLI: add a `## Package-Local Adoption` section to the central `tech/*.md` listing the packages.
+   - With `/pair-assistant` (optional, Claude Code): ask to propose it; skills never activate it on their own.
+2. **Create the package files**
+   - With the CLI: write `<pkg>/.pair/<area>.md` for each listed package.
+   - With `/pair-assistant` (optional, Claude Code): shows each file before writing.
+3. **Check precedence**
+   - With the CLI: package rules win inside the package, central rules elsewhere.
+
+## Verify
+
+- A skill run in the package loads its local rules and only those of touched packages.
+
+## Related
+
+- [Package-local adoption](/docs/customization/package-local-adoption)
+- [Adoption files](/docs/concepts/adoption-files)

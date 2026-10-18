@@ -39,13 +39,13 @@ The central file gains one section listing packages that have local context:
 
 - **Local wins for its package** when a central and a local rule cover the same subject.
 - Global rules always load; only package-locals are scoped.
-- A rule that exists both centrally and locally is reported as a conflict by `review` and `assess-*` — never resolved silently.
+- A rule that exists both centrally and locally is reported as a conflict by `review` and `assess-*`, never resolved silently.
 
 **With the CLI:** create `<pkg>/.pair/<area>.md` and the router by hand. **With `/pair-assistant` (optional, Claude Code):** ask it to "add package-local rules for apps/web"; it shows the diff and routes the write ([package-local adoption](/docs/reference/pair-assistant#capability-menu), settings: [Adoption settings](/docs/reference/adoption-settings#package-local-adoption-and-templates)).
 
 ## Activation Proposal
 
-Skills never activate the override. When `review`, `assess-*` or `refine-story` detect complexity, they **propose** it — a scaffold plan (which packages, which rules move, the router that would be added) — and wait for approval.
+Skills never activate the override. When `review`, `assess-*` or `refine-story` detect complexity, they **propose** it, a scaffold plan (which packages, which rules move, the router that would be added), and wait for approval.
 
 | Signal | Default threshold |
 | ------ | ----------------- |
@@ -66,7 +66,7 @@ Edge cases: a touched package without local `.pair` → globals only, no warning
 
 ## Registry Exclusion
 
-Local `.pair` dirs are project content. `pair-cli install` / `pair-cli update` never touch them, and `pair-cli validate-config` rejects any registry `target` at or inside a `<pkg>/.pair` directory — the same protection as the [working area](/docs/reference/configuration#working-area-override).
+Local `.pair` dirs are project content. `pair-cli install` / `pair-cli update` never touch them, and `pair-cli validate-config` rejects any registry `target` at or inside a `<pkg>/.pair` directory: the same protection as the [working area](/docs/reference/configuration#working-area-override).
 
 ## Reference
 

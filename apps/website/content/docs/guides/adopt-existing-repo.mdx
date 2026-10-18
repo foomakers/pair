@@ -1,0 +1,37 @@
+---
+title: Adopt pair in an existing repository
+description: Install pair next to existing code and your own AGENTS.md or CLAUDE.md without losing them.
+---
+
+**Goal**: add pair to a repo that already has code and agent instruction files.
+
+## Prerequisites
+
+- A clean git working tree
+- Node.js 18+ and `pair-cli` installed
+
+## Steps
+
+1. **Decide what happens to your agent files**
+   - With the CLI: keep them: `pair-cli install --skip-registries agents`. Overwrite them: plain `pair-cli install` (it stops if a target exists).
+   - With `/pair-assistant` (optional, Claude Code): "keep my own AGENTS.md" routes to `update --skip-registries`.
+2. **Install**
+   - With the CLI: `pair-cli install`. The choice is saved in `pair.config.json` as `skipRegistries`.
+   - With `/pair-assistant` (optional, Claude Code): "install pair, keep my files".
+3. **Describe the project**
+   - With the CLI: run `/pair-process-bootstrap` (quick mode is enough to start).
+   - With `/pair-assistant` (optional, Claude Code): ask for "a full adoption pass".
+4. **Wire your agent file to pair**
+   - With the CLI: add a line in your `AGENTS.md` pointing at `.pair/`.
+   - With `/pair-assistant` (optional, Claude Code): ask it to draft the line and show the diff.
+
+## Verify
+
+- `pair-cli kb-validate` passes.
+- Your own `AGENTS.md`/`CLAUDE.md` are unchanged (`git diff`).
+
+## Related
+
+- [Existing project tutorial](/docs/tutorials/existing-project)
+- [Quickstart](/docs/getting-started/quickstart)
+- [Bootstrap quick mode](/docs/getting-started/bootstrap-quick-mode)
