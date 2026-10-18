@@ -15,7 +15,7 @@ content/docs/
 ├── customization/      # Customization and extensibility
 ├── integrations/       # AI tool and PM tool integrations
 ├── pm-tools/           # Project management tool guides
-├── developer-journey/  # Progressive adoption paths
+├── process-lifecycle/  # Process lifecycle and adoption paths
 ├── support/            # FAQ, troubleshooting, resources
 └── meta.json           # Fumadocs navigation config
 ```
