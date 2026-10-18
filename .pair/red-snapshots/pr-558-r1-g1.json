@@ -1,0 +1,104 @@
+{
+  "$meta": {
+    "pr": "558",
+    "phase": "r1-g1",
+    "base": "ddbf90901439285543550e54c88c93a6464569ad",
+    "trailer": "Pair-RED-Snapshot: pr=558; phase=r1-g1; base=ddbf90901439285543550e54c88c93a6464569ad; manifest=.pair/red-snapshots/pr-558-r1-g1.json",
+    "artifacts": [
+      "apps/website/lib/docs-diagram-captions.test.ts"
+    ]
+  },
+  "mode": "remediation",
+  "inputHead": "ddbf90901439285543550e54c88c93a6464569ad",
+  "sourceOfTruth": "apps/website/lib/docs-staleness-check.ts perFileErrors (per-file content checks)",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "perFileErrors/findUncaptionedDiagrams in apps/website/lib/docs-staleness-check.ts",
+      "inputs": [
+        "mdx content of each docs page"
+      ],
+      "representations": [
+        "content/docs/**/*.mdx image lines ![..](/diagrams/*.svg) followed by *Figure: ...* italic line"
+      ],
+      "consumers": [
+        "docs:staleness CLI",
+        "runAllChecks"
+      ],
+      "classes": [
+        "diagram image followed (after blanks) by italic line: ok",
+        "diagram image with no italic line next: error",
+        "non-diagram image: ignored",
+        "image at EOF: error"
+      ],
+      "interactions": [
+        "perFileErrors wiring: stripped captions in real tree surface in runAllChecks errors"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "apps/website/lib/docs-staleness-check.ts",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/website/lib/docs-staleness-check.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "image with no caption",
+      "oracle": "pnpm --dir apps/website exec vitest run lib/docs-diagram-captions.test.ts (findUncaptionedDiagrams flags an image not followed by an italic line) file apps/website/lib/docs-diagram-captions.test.ts",
+      "expected": "1 error per uncaptioned image",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c1",
+      "kind": "control",
+      "baseline": "red",
+      "condition": "captioned and non-diagram images",
+      "oracle": "pnpm --dir apps/website exec vitest run lib/docs-diagram-captions.test.ts (passes a captioned image and non-diagram images) file apps/website/lib/docs-diagram-captions.test.ts",
+      "expected": "[]",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "fails at base only because the export is missing"
+    },
+    {
+      "id": "r0-1-i1",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "captions stripped from real docs tree",
+      "oracle": "pnpm --dir apps/website exec vitest run lib/docs-diagram-captions.test.ts (witness: removing captions makes runAllChecks report them) file apps/website/lib/docs-diagram-captions.test.ts",
+      "expected": "runAllChecks errors mention caption",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "current real docs tree",
+      "oracle": "pnpm --dir apps/website exec vitest run lib/docs-diagram-captions.test.ts (control: current docs have no uncaptioned diagram) file apps/website/lib/docs-diagram-captions.test.ts",
+      "expected": "no caption error",
+      "covers": [
+        "r0-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/website/lib/docs-diagram-captions.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:097f28aead40a099fc9937b45696e1f22e387f68b69fa5b653e2a66abad16c51",
+      "command": "pnpm --dir apps/website exec vitest run lib/docs-diagram-captions.test.ts",
+      "observed": "3 failed | 1 passed: findUncaptionedDiagrams is not a function; runAllChecks reports 0 caption errors"
+    }
+  ],
+  "testExempt": false
+}
