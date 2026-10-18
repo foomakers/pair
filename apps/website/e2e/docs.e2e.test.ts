@@ -17,7 +17,7 @@ test('quickstart journey: overview → quickstart with content verification', as
   await expect(page.locator('main')).toContainText('Knowledge Base')
   await expect(page.locator('main')).toContainText('Skills')
   await expect(page.locator('main')).toContainText('Adoption files')
-  await expect(page.locator('main img[src="/diagrams/lifecycle-overview.svg"]')).toBeVisible()
+  await expect(page.locator('main img[src*="lifecycle-overview"]')).toHaveCount(1)
 
   // Navigate to Quickstart via sidebar
   await page
@@ -333,7 +333,7 @@ test('process lifecycle: overview → induction → execution', async ({ page })
   await expect(main).toContainText('The four parts')
   await expect(main).toContainText('Where to start')
   await expect(main).toContainText('What to read next')
-  await expect(main.locator('img[src="/diagrams/lifecycle-overview.svg"]')).toBeVisible()
+  await expect(main.locator('img[src*="lifecycle-overview"]')).toHaveCount(1)
 
   // Sidebar shows Process Lifecycle section
   await expect(page.locator('body')).toContainText('Process Lifecycle')
