@@ -1,26 +1,39 @@
 ---
 title: Concepts
-description: How pair works under the hood, the Knowledge Base, skills, adoption files, and the ideas that connect them.
+description: How pair works under the hood, the Knowledge Base, skills, adoption files, work-item states, quality tiers, the PR flow, package-local rules, agent integration and llms.txt, with a glossary.
 ---
 
-These pages explain **how pair works**, read them when you want understanding, not step-by-step instructions.
+These pages explain **how pair works**. Read them when you want understanding, not steps; the steps are in [Guides](/docs/guides) and the flow in the [Process Lifecycle](/docs/process-lifecycle). Every page ends with a Next link, so the whole section reads top to bottom.
 
-## Recommended reading order
+## Core
 
-The core pages build on each other: if you're new to pair, read them top to bottom:
+Start here if you are new to pair.
 
-1. **[AI-Assisted SDLC](/docs/concepts/ai-assisted-sdlc)**: Start here: the problem pair solves and how structured context changes AI collaboration end-to-end.
-2. **[Knowledge Base](/docs/concepts/knowledge-base)**: The core artifact: the documents installed into `.pair/` that give your AI assistant persistent context.
-3. **[Skills](/docs/concepts/skills)**: The actions layered on top: structured instructions your assistant discovers and executes.
-4. **[Adoption Files](/docs/concepts/adoption-files)**: Your project-specific decisions, recorded so they never drift.
+1. **[AI-assisted SDLC](/docs/concepts/ai-assisted-sdlc)**: the problem pair solves and how structured context changes AI collaboration end to end.
+2. **[Knowledge Base](/docs/concepts/knowledge-base)**: the documents installed into `.pair/` that give your assistant persistent context.
+3. **[Skills](/docs/concepts/skills)**: the actions on top, structured instructions your assistant discovers and runs.
+4. **[Adoption files](/docs/concepts/adoption-files)**: your project's decisions, recorded so they never drift.
 
-## Deeper mechanics
+## Work and state
 
-Read these when the topic comes up: they explain specific mechanisms rather than the big picture:
+- **[Canonical states](/docs/concepts/canonical-states)**: how skills reason about work-item state across any board vocabulary.
+- **[Definition of Ready and Done](/docs/concepts/definition-of-ready-and-done)**: the criteria that make a card Ready and a story Done.
+- **[Code host and PM tool](/docs/concepts/code-host)**: why cards and pull requests may live in different tools, and how pair routes between them.
 
-- **[Delivery Workflow](/docs/process-lifecycle/delivery-workflow)**: How one card goes from refined to review-approved: one state machine, independent roles, durable handoffs, autonomy gates.
-- **[Canonical States](/docs/concepts/canonical-states)**: How skills reason about work-item state across any board vocabulary.
-- **[Agent Integration](/docs/concepts/agent-integration)**: The bridge pattern that connects any AI coding tool to the single source of truth.
-- **[llms.txt](/docs/concepts/llms-txt)**: The standard pair uses to make documentation and project context natively consumable by AI assistants.
+## Quality and review
 
-Ready to apply the concepts? The [Process Lifecycle](/docs/process-lifecycle) shows the nine-step workflow they enable, and the [tutorials](/docs/tutorials) walk it through hands-on.
+- **[Tag-driven quality gates](/docs/concepts/tag-driven-gates)**: the risk tier, the tag it projects and the gate matrix it scales.
+- **[PR state flow](/docs/concepts/pr-state-flow)**: the three PR states, the required checks and why a label is a view, not the authority.
+- **[Review identity](/docs/concepts/review-identity)**: running reviews under a dedicated identity, and light auto-approval.
+
+## Tooling
+
+- **[Package-local adoption](/docs/concepts/package-local-adoption)**: rules next to the code in a monorepo, loaded by scope.
+- **[Agent integration](/docs/concepts/agent-integration)**: the bridge pattern that connects any AI coding tool to the single source of truth.
+- **[llms.txt](/docs/concepts/llms-txt)**: the standard pair uses to make documentation and project context consumable by assistants.
+
+## Glossary
+
+- **[Glossary](/docs/concepts/glossary)**: card, macrostate, tier, harness, engine, seal, handoff and the rest, defined once.
+
+The mechanics of delivery (stages, realizations, hooks, the merge stage) live with the flow they belong to: [The delivery cycle in depth](/docs/process-lifecycle/delivery-cycle).

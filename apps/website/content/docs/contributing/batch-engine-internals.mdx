@@ -1,6 +1,6 @@
 ---
-title: Batch engine
-description: The workflow that drives a batch of cards to review-approved PRs, what installs, what runs it, and what happens under other tools.
+title: Batch engine internals
+description: Contributor notes on the Claude Code workflows that drive a batch of cards, what installs, what runs it, the four judgment stages, resume and recovery, and what happens under other tools.
 ---
 
 `pair-cli install` writes two directories that carry the batch engine:
@@ -112,7 +112,7 @@ reporting success.
 
 ### Four judgment stages, one transition authority
 
-From engine `4.0.0` (US-479, ADR-024 amendments b and the 2026-09-10 amendment) a story's cycle is four judgment dispatches,
+A story's cycle is four judgment dispatches ([ADR-024](https://github.com/foomakers/pair/blob/main/.pair/adoption/tech/adr/adr-024-delivery-phases-are-skills.md)),
 each a skill invoked by name with typed arguments; the workflow file carries no phase policy of
 its own and dispatches nothing mechanical:
 
@@ -123,7 +123,7 @@ its own and dispatches nothing mechanical:
 | 3 implementation | `/pair-workflow-implement-phase` · `/pair-workflow-green-fix` | `pair-implementer` | GREEN above the seal, inside `fixScope`, never touching a sealed test byte; the initial stage publishes the story's one PR through the configured publish-pr skill, the remediation stage updates it; an approved test that still fails returns here once on the same seal |
 | 4 final verification | `/pair-workflow-review-phase` | `pair-reviewer` | `red-snapshot.mjs verify-chain` first (a breach is terminal), then the fixers' evidence re-run, the witnesses and controls, every prior finding with an explicit transition, the delta and its consumers, cross-group interactions, the adopted risk-tier passes (general via `/pair-process-review`; security and boundary on `risk:yellow`; architecture and an adversarial second pass on `risk:red`); one verdict, the head reviewed, readiness only when the remote head equals it; as the last non-partial reviewer it concludes the required `pair-review` commit status and the ONE `pr-state:*` label (`pr-state.mjs conclude`, the KB mapping), merge stays a human's |
 
-**A fresh card has no up-front contract** (US-506, ADR-024 amendment 2026-09-23). Its first stage is
+**A fresh card has no up-front contract** (ADR-024, amendment of 2026-09-23). Its first stage is
 implementation (stage 3): tests and code are written together, test-first, above the base, and an informal self-review is fixed but never recorded. Its first final verification (stage 4) names, per acceptance criterion, the test that proves it. A weak or missing test is an ordinary finding, and every finding carries a reproducer or a concrete failure scenario.
 
 Stages 1 and 2 run for **review findings**, where the failing test is still written by someone other than the fixer. A run directory that already holds `a0` contract handoffs finishes on the old path. Cold path: 2 dispatches (implement, verify); one fix round adds 4.
@@ -179,7 +179,7 @@ The cycle's scripts do not spawn `gh` or `az` themselves. Every write to a card 
 - **Azure DevOps.** The adapter supports `squash` and `merge` only, with no `rebase`. New cards are created as `User Story`. The `pair-review` check is a PR status bound to the reviewed head's iteration.
 - **Adding a host.** Write one new `scripts/host/<id>.mjs` file and add one `way-of-working.md` line. The steps are in the KB's `host-adapter-extension-guide.md`: the eight methods, how an adapter registers, and a worked filesystem stub.
 
-### Scope proposals are never defects (`4.0.0`)
+### Scope proposals are never defects
 
 A finding that violates an accepted obligation (an AC, an adoption rule, a supported boundary) is a defect and is fixed or absorbed into the story like before.
 
@@ -205,9 +205,9 @@ An id matched exactly is rewritten in place, its bullet, checkbox state and titl
 
 A parser miss is never taken as proof the AC is new: an id a recognized card cannot match is `ac-id-unresolvable`, and a card speaking **none** of these formats is refused outright as `unsupported-card-format` (no edit, no `extended`, no `scopeEpoch` bump) whether or not the id appears in its text. Restate the AC section in an adopted format, or use `new-card`.
 
-### Metrics, host runtime and the final PR summary (`4.0.0`)
+### Metrics, host runtime and the final PR summary
 
-Two scripts new in `4.0.0`, shipped beside `cycle-state.mjs` in `review-phase`'s (and, where
+Two scripts, shipped beside `cycle-state.mjs` in `review-phase`'s (and, where
 imported, other phases') scripts folder:
 
 - **`cycle-metrics.mjs`**: a pure, schema-1 reducer over the durable handoffs plus optional
@@ -238,7 +238,7 @@ Delta-usage dedup (`(executionId, eventId)`) survives a checkpoint/restart round
 
 A supplied `entryCapsules` map (per story id) is accepted and schema-validated (workflow major, schema version, story, PR, the 40-hex reviewed head), but it is a cache hint, NEVER approval: the sandbox has no filesystem/network access to confirm a capsule's claim itself, so it can never skip a dispatch.
 
-Readiness always comes from the dispatched phase's own `cycle-state.mjs` `resolve()` call against the real durable state; a mismatched OR a fully matching capsule changes nothing about what gets dispatched (US-479 remediation, Finding 1).
+Readiness always comes from the dispatched phase's own `cycle-state.mjs` `resolve()` call against the real durable state; a mismatched OR a fully matching capsule changes nothing about what gets dispatched (a cache hint is never a readiness proof).
 
 `model` remains a legacy global override. For a measured trial use `models`, for example `{ models: { green: "fable" } }`: that changes only GREEN, leaving the independent verifier, the preparation author and the validator on their declared models. Roles: `implementation`, `reviewer`, `red`, `redVerifier`, `green`.
 
@@ -274,7 +274,7 @@ that is not an ancestor) and the trusted snapshot is preserved, never reset. The
 card-level reset, no `supersedes` field and no SHA-scoped waiver to carry across runs; unknown
 dirty state in a worktree is reported (`dirty`), never cleaned.
 
-## Regression-risk rewind (US-479 S11)
+## Regression-risk rewind
 
 A defect the independent review proves was **introduced by a remediation** does more than reopen: it
 invalidates that remediation and sends the cycle back to the same batch's preparation.
@@ -305,7 +305,7 @@ and a scope decision can neither waive nor discharge one. Four derived counters 
 invalidated remediation is an *attempted* batch; its round becomes a completed cycle only once a
 review closes the original findings and leaves no active risk. `maxFixRounds` is reused as it stands.
 
-## Illegal transitions are contracted, not discovered late (US-479 S12)
+## Illegal transitions are contracted, not discovered late
 
 A change to a persisted state, a ledger transition, a terminal gate or an evidence identity is contracted with its **whole finite matrix** before any production edit: the positive path plus every applicable negative family.
 
@@ -331,3 +331,10 @@ interactions. One green end-to-end chain is necessary and never sufficient.
 For the regression-risk ledger specifically, one authority validates every transition against the persisted ledger: a discharge needs its active predecessor, a matching repair whose fix produced the exact reviewed head, byte-equal immutable evidence and the batch's own obligations closed in that same review, and the risk state, finding transition and blocking flag must describe one transition.
 
 The repaired group is derived from the group that produced the failing head (never assumed to be `-g1`) and ambiguous provenance is a typed refusal.
+
+## Related
+
+- [The delivery cycle in depth](/docs/process-lifecycle/delivery-cycle): the state machine these workflows drive, and the two other realizations
+- [Lifecycle modes, by assistant](/docs/process-lifecycle/lifecycle-modes#modes-by-assistant): where the batch workflows run and where they are inert
+- [Architecture](/docs/contributing/architecture): where the workflows and agent definitions live in the monorepo
+- [Adoption settings](/docs/reference/adoption-settings#techautomationmd): the `## Autonomy` keys the batch honours
