@@ -19,7 +19,13 @@ const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/
 // The automation.md sections the page documents with a fenced example, each opening with its heading.
 // #552 increment 6: `## Eligibility` and `## Auto-Advance` are legacy, named in prose only, so they
 // have no fenced example any more; they must still never leak out as a page heading (H below).
-const AUTOMATION_SECTIONS = ['Autonomy', 'Stop Predicate', 'Max Parallelism', 'Audit Location', 'Workflows']
+const AUTOMATION_SECTIONS = [
+  'Autonomy',
+  'Stop Predicate',
+  'Max Parallelism',
+  'Audit Location',
+  'Workflows',
+]
 const LEGACY_SECTIONS = ['Eligibility', 'Auto-Advance']
 
 const source = readFileSync(PAGE, 'utf8')
@@ -87,13 +93,16 @@ describe('adoption-files.mdx — the automation.md examples render as code', () 
     },
   )
 
-  it.each([...AUTOMATION_SECTIONS, ...LEGACY_SECTIONS])('H: `## %s` never leaks out as a page heading', name => {
-    expect(
-      headings
-        .filter(h => mdastToString(h).trim() === name)
-        .map(h => `h${h.depth} L${h.position?.start.line}`),
-    ).toEqual([])
-  })
+  it.each([...AUTOMATION_SECTIONS, ...LEGACY_SECTIONS])(
+    'H: `## %s` never leaks out as a page heading',
+    name => {
+      expect(
+        headings
+          .filter(h => mdastToString(h).trim() === name)
+          .map(h => `h${h.depth} L${h.position?.start.line}`),
+      ).toEqual([])
+    },
+  )
 
   it('C: control — the page headings around the examples are still the expected ones', () => {
     const h3 = headings.filter(h => h.depth === 3).map(h => mdastToString(h))

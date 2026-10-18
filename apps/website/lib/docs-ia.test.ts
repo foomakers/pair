@@ -71,7 +71,7 @@ const SPINE = [
 ]
 
 describe('AC53: Process Lifecycle is a 5-part spine under the process-lifecycle slug', () => {
-  it('root nav matches the target structure, Customization dissolved, What\'s new after Welcome', () => {
+  it("root nav matches the target structure, Customization dissolved, What's new after Welcome", () => {
     expect(meta('meta.json')).toEqual([
       'index',
       'whats-new',
@@ -134,9 +134,19 @@ describe('AC53: Process Lifecycle is a 5-part spine under the process-lifecycle 
   it('lifecycle modes carry the mode x harness matrix', () => {
     const modes = read('process-lifecycle/lifecycle-modes.mdx')
     expect(modes).toMatch(/^## Modes by assistant/m)
-    const header = modes.split('\n').find(l => l.startsWith('| Mode |') && l.includes('Claude Code'))
+    const header = modes
+      .split('\n')
+      .find(l => l.startsWith('| Mode |') && l.includes('Claude Code'))
     expect(header, 'matrix header row').toBeDefined()
-    for (const h of ['Claude Code', 'Codex', 'pi', 'opencode', 'Cursor', 'GitHub Copilot', 'Windsurf'])
+    for (const h of [
+      'Claude Code',
+      'Codex',
+      'pi',
+      'opencode',
+      'Cursor',
+      'GitHub Copilot',
+      'Windsurf',
+    ])
       expect(header).toContain(h)
     expect(modes).toContain('/docs/tutorials/automated-development#safety')
   })
@@ -204,7 +214,10 @@ describe('AC55: the five stapled guides are recipes; their tails moved', () => {
     for (const page of allPages()) {
       const text = read(page)
       const prereqs = text.match(/^## Prerequisites\s*$/gm) ?? []
-      expect(prereqs.length, `${page} has ${prereqs.length} "## Prerequisites"`).toBeLessThanOrEqual(1)
+      expect(
+        prereqs.length,
+        `${page} has ${prereqs.length} "## Prerequisites"`,
+      ).toBeLessThanOrEqual(1)
       expect(text, `${page} references verify.sh`).not.toContain('verify.sh')
       expect(text, `${page} carries the paper form`).not.toContain('Validation Summary')
     }
@@ -272,7 +285,17 @@ describe('AC57: Concepts lists itself; glossary; reference moves', () => {
 
   it('glossary exists and the spine links it at first use', () => {
     const glossary = read('concepts/glossary.mdx')
-    for (const term of ['card', 'macrostate', 'harness', 'engine', 'seal', 'handoff', 'ADL', 'realization', 'escalation'])
+    for (const term of [
+      'card',
+      'macrostate',
+      'harness',
+      'engine',
+      'seal',
+      'handoff',
+      'ADL',
+      'realization',
+      'escalation',
+    ])
       expect(glossary, `glossary lacks "${term}"`).toMatch(new RegExp(`^##+ .*\\b${term}\\b`, 'mi'))
     for (const page of [
       'process-lifecycle/index.mdx',
@@ -365,9 +388,14 @@ describe('AC59: captions say what to notice; the lifecycle diagram greets newcom
 
 describe('AC60: every redirect lands on a page that exists', () => {
   const config = readFileSync(join(WEBSITE, 'next.config.mjs'), 'utf-8')
-  const pairs = [...config.matchAll(/\['(\/docs[^']*)',\s*'(\/docs[^']*)'\]/g)].map(m => [m[1], m[2]])
+  const pairs = [...config.matchAll(/\['(\/docs[^']*)',\s*'(\/docs[^']*)'\]/g)].map(m => [
+    m[1],
+    m[2],
+  ])
   const onDisk = new Set(
-    allPages().map(f => `/docs/${f.replace(/\.mdx$/, '').replace(/(^|\/)index$/, '')}`.replace(/\/$/, '')),
+    allPages().map(f =>
+      `/docs/${f.replace(/\.mdx$/, '').replace(/(^|\/)index$/, '')}`.replace(/\/$/, ''),
+    ),
   )
 
   it('lists the moved and renamed pages', () => {

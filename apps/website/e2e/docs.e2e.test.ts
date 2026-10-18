@@ -50,7 +50,9 @@ test('quickstart journey: overview → quickstart with content verification', as
   expect(hrefs.filter(h => h && h.endsWith('.md'))).toHaveLength(0)
 })
 
-test('choose-your-path and verify: one page per audience, one checklist (#552)', async ({ page }) => {
+test('choose-your-path and verify: one page per audience, one checklist (#552)', async ({
+  page,
+}) => {
   await page.goto('/docs/getting-started/choose-your-path')
   const main = page.locator('main')
   await expect(page.locator('main h1')).toContainText('Solo, team or organization')
@@ -181,7 +183,10 @@ test('redirects: moved and dissolved URLs land on live pages, one hop', async ({
     // #552 increment 6
     { from: '/docs/developer-journey', to: '/docs/process-lifecycle' },
     { from: '/docs/developer-journey/iteration', to: '/docs/process-lifecycle/phases/iteration' },
-    { from: '/docs/developer-journey/lifecycle-modes', to: '/docs/process-lifecycle/lifecycle-modes' },
+    {
+      from: '/docs/developer-journey/lifecycle-modes',
+      to: '/docs/process-lifecycle/lifecycle-modes',
+    },
     { from: '/docs/reference/delivery-cycle', to: '/docs/process-lifecycle/delivery-cycle' },
     { from: '/docs/reference/batch-engine', to: '/docs/contributing/batch-engine-internals' },
     { from: '/docs/reference/cli/workflows', to: '/docs/reference/cli/examples' },
@@ -191,7 +196,10 @@ test('redirects: moved and dissolved URLs land on live pages, one hop', async ({
     { from: '/docs/customization/templates', to: '/docs/guides/customize-templates' },
     { from: '/docs/customization/organization', to: '/docs/guides/external-kb' },
     { from: '/docs/customization/external-kb', to: '/docs/guides/external-kb' },
-    { from: '/docs/customization/package-local-adoption', to: '/docs/concepts/package-local-adoption' },
+    {
+      from: '/docs/customization/package-local-adoption',
+      to: '/docs/concepts/package-local-adoption',
+    },
     { from: '/docs/getting-started/quickstart-solo', to: '/docs/getting-started/choose-your-path' },
     { from: '/docs/getting-started/quickstart-team', to: '/docs/getting-started/choose-your-path' },
     { from: '/docs/getting-started/quickstart-org', to: '/docs/getting-started/choose-your-path' },
@@ -407,7 +415,9 @@ test('guidelines catalog: categories and how-to listing', async ({ page }) => {
 // E2E: Docs — Guides section, Knowledge Base group (#125, #552)
 // ============================================================
 
-test('guides journey: index defines the three paths → team KB guide → org KB guide', async ({ page }) => {
+test('guides journey: index defines the three paths → team KB guide → org KB guide', async ({
+  page,
+}) => {
   await page.goto('/docs/guides')
   const main = page.locator('main')
   await expect(page.locator('main h1')).toContainText('Guides')
@@ -431,7 +441,10 @@ test('smoke: knowledge-base guides and their reference and concept pages return 
   page,
 }) => {
   const pages = [
-    { url: '/docs/guides/customize-for-your-team', title: 'Customize the Knowledge Base for your team' },
+    {
+      url: '/docs/guides/customize-for-your-team',
+      title: 'Customize the Knowledge Base for your team',
+    },
     { url: '/docs/guides/customize-templates', title: 'Customize templates' },
     { url: '/docs/guides/monorepo-rules', title: 'Package-local rules in a monorepo' },
     { url: '/docs/guides/join-a-pair-project', title: 'Join a project that already uses pair' },
