@@ -3,9 +3,12 @@
   "pages": [
     "induction",
     "lifecycle-modes",
+    "skill-layers",
+    "refinement-workflow",
     "strategic-planning",
     "iteration",
     "execution",
+    "delivery-workflow",
     "tag-driven-automation"
   ]
 }

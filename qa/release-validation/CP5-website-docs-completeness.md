@@ -31,13 +31,12 @@
 - `$BASE_URL/docs/getting-started/bootstrap-quick-mode`
 - `$BASE_URL/docs/getting-started/checklist`
 
-**Concepts** (14 pages):
+**Concepts** (13 pages):
 
 - `$BASE_URL/docs/concepts`
 - `$BASE_URL/docs/concepts/ai-assisted-sdlc`
 - `$BASE_URL/docs/concepts/knowledge-base`
 - `$BASE_URL/docs/concepts/skills`
-- `$BASE_URL/docs/concepts/delivery-workflow`
 - `$BASE_URL/docs/concepts/adoption-files`
 - `$BASE_URL/docs/concepts/agent-integration`
 - `$BASE_URL/docs/concepts/llms-txt`
@@ -48,11 +47,14 @@
 - `$BASE_URL/docs/concepts/review-identity`
 - `$BASE_URL/docs/concepts/tag-driven-gates`
 
-**Process Lifecycle** (7 pages):
+**Process Lifecycle** (10 pages):
 
 - `$BASE_URL/docs/developer-journey`
 - `$BASE_URL/docs/developer-journey/induction`
 - `$BASE_URL/docs/developer-journey/lifecycle-modes`
+- `$BASE_URL/docs/developer-journey/skill-layers`
+- `$BASE_URL/docs/developer-journey/refinement-workflow`
+- `$BASE_URL/docs/developer-journey/delivery-workflow`
 - `$BASE_URL/docs/developer-journey/strategic-planning`
 - `$BASE_URL/docs/developer-journey/iteration`
 - `$BASE_URL/docs/developer-journey/execution`
@@ -82,13 +84,14 @@
 - `$BASE_URL/docs/integrations/adding-a-harness`
 - `$BASE_URL/docs/integrations/web-cloud-environments`
 
-**PM Tools** (5 pages):
+**PM Tools** (6 pages):
 
 - `$BASE_URL/docs/pm-tools`
 - `$BASE_URL/docs/pm-tools/github-projects`
 - `$BASE_URL/docs/pm-tools/filesystem`
 - `$BASE_URL/docs/pm-tools/linear`
 - `$BASE_URL/docs/pm-tools/azure-devops`
+- `$BASE_URL/docs/pm-tools/custom`
 
 **Reference** (20 pages):
 
@@ -124,14 +127,16 @@
 - `$BASE_URL/docs/support/general-faq`
 - `$BASE_URL/docs/support/troubleshooting`
 
-**Tutorials** (8 pages):
+**Tutorials** (10 pages):
 
 - `$BASE_URL/docs/tutorials`
 - `$BASE_URL/docs/tutorials/first-project`
 - `$BASE_URL/docs/tutorials/existing-project`
 - `$BASE_URL/docs/tutorials/team-setup`
+- `$BASE_URL/docs/tutorials/brainstorming`
+- `$BASE_URL/docs/tutorials/refinement`
 - `$BASE_URL/docs/tutorials/enterprise-adoption`
-- `$BASE_URL/docs/tutorials/unattended-delivery`
+- `$BASE_URL/docs/tutorials/automated-development`
 - `$BASE_URL/docs/tutorials/managing-ai-artifacts`
 - `$BASE_URL/docs/tutorials/release-testing`
 
@@ -147,13 +152,13 @@
 
 ### Expected Result
 
-- All 92 URLs return HTTP 200
+- All 97 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 92 pages
+- Total: 97 pages
 
 ---
 
@@ -200,8 +205,9 @@
 - #225 (web/cloud environments): MT-CP501 page count 61 → 62, Integrations 6 → 7 — added `/docs/integrations/web-cloud-environments`.
 - #225 (review): MT-CP501 page count 62 → 80 — backfilled the 18 live pages the sweep had drifted past (`/docs`, 5 Concepts, `contributing/writing-migration-pages`, `customization/external-kb`, 2 Migrations, `pm-tools/azure-devops`, 5 Reference, 2 Tutorials). The list is now asserted against the filesystem by `packages/knowledge-hub/src/conformance/docs-page-coverage.test.ts`, so a new page that is not listed here fails CI rather than silently escaping the sweep.
 - #451 (pair-cli execution adapter): MT-CP501 page count 80 → 83, Integrations 7 → 10 — added `/docs/integrations/pi`, `/docs/integrations/opencode` and `/docs/integrations/adding-a-harness` (the harness-execution layer the #450 coordination note left for this story).
-- #464 (approval signal threaded into composed skills): MT-CP501 page count 83 → 84, Tutorials 7 → 8 — added `/docs/tutorials/unattended-delivery` (configuring `tech/automation.md` and daemonizing `pair-cli run` on a dedicated box).
+- #464 (approval signal threaded into composed skills): MT-CP501 page count 83 → 84, Tutorials 7 → 8 — added `/docs/tutorials/automated-development` (configuring `tech/automation.md` and daemonizing `pair-cli run` on a dedicated box).
 - #493 (consolidated delivery-cycle page): MT-CP501 page count 85 → 86, Reference 17 → 18 — added `/docs/reference/delivery-cycle`.
 - #353 (operational docs): MT-CP501 page count 86 → 87, Process Lifecycle 5 → 6 — added `/docs/developer-journey/tag-driven-automation`.
 - #237 (package-local adoption override): MT-CP501 page count 87 → 88, Customization 7 → 8 — added `/docs/customization/package-local-adoption`.
+- #552 (increment 5a): added `developer-journey/skill-layers`, `refinement-workflow` and `delivery-workflow` (moved from Concepts), `tutorials/brainstorming` and `refinement`, `pm-tools/custom`; Concepts 14 → 13, Process Lifecycle +3, Tutorials +2, PM Tools 5 → 6.
 - #543: channel note (final-only / PR preview); MT-CP502 scoped to install/version snippets.

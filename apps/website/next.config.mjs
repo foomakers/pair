@@ -2,59 +2,26 @@ import { createMDX } from 'fumadocs-mdx/next'
 
 const withMDX = createMDX()
 
+// Permanent redirects for docs IA restructuring (#312, #552)
+const docsRedirects = [
+  ['/docs/support/faq', '/docs/support/troubleshooting'],
+  ['/docs/guides/troubleshooting', '/docs/support/troubleshooting'],
+  ['/docs/guides/adopter-checklist', '/docs/getting-started/checklist'],
+  ['/docs/guides/cli-workflows', '/docs/reference/cli/workflows'],
+  ['/docs/guides/customize-kb', '/docs/customization/team'],
+  ['/docs/guides/install-from-url', '/docs/customization/install-from-url'],
+  ['/docs/guides/packaging', '/docs/customization/organization'],
+  ['/docs/guides/update-link', '/docs/reference/cli/update-link'],
+  ['/docs/concepts/delivery-workflow', '/docs/developer-journey/delivery-workflow'],
+  ['/docs/tutorials/unattended-delivery', '/docs/tutorials/automated-development'],
+  ['/docs/guides', '/docs'],
+]
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['@pair/brand'],
-  async redirects() {
-    // Permanent redirects for docs IA restructuring (#312)
-    return [
-      {
-        source: '/docs/support/faq',
-        destination: '/docs/support/troubleshooting',
-        permanent: true,
-      },
-      {
-        source: '/docs/guides/troubleshooting',
-        destination: '/docs/support/troubleshooting',
-        permanent: true,
-      },
-      {
-        source: '/docs/guides/adopter-checklist',
-        destination: '/docs/getting-started/checklist',
-        permanent: true,
-      },
-      {
-        source: '/docs/guides/cli-workflows',
-        destination: '/docs/reference/cli/workflows',
-        permanent: true,
-      },
-      {
-        source: '/docs/guides/customize-kb',
-        destination: '/docs/customization/team',
-        permanent: true,
-      },
-      {
-        source: '/docs/guides/install-from-url',
-        destination: '/docs/customization/install-from-url',
-        permanent: true,
-      },
-      {
-        source: '/docs/guides/packaging',
-        destination: '/docs/customization/organization',
-        permanent: true,
-      },
-      {
-        source: '/docs/guides/update-link',
-        destination: '/docs/reference/cli/update-link',
-        permanent: true,
-      },
-      {
-        source: '/docs/guides',
-        destination: '/docs',
-        permanent: true,
-      },
-    ]
-  },
+  redirects: async () =>
+    docsRedirects.map(([source, destination]) => ({ source, destination, permanent: true })),
 }
 
 export default withMDX(nextConfig)

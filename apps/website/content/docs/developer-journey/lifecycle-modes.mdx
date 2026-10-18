@@ -1,11 +1,13 @@
 ---
 title: Lifecycle Modes
-description: Three ways to run the pair lifecycle — Assisted, Semi-automatic and Automatic — what each consists of and when to use which.
+description: Three ways to run the pair lifecycle, Assisted, Semi-automatic and Automatic, across the refinement and delivery workflows, and when to use which.
 ---
 
-The nine-step lifecycle is the same in every mode. What changes is **who drives it**: you, step by step; a delivery workflow you trigger per card; or a loop that runs unattended. Pick per project, or per card.
+The nine-step lifecycle and its two workflows ([analysis and refinement](/docs/developer-journey/refinement-workflow), [delivery](/docs/developer-journey/delivery-workflow)) are the same in every mode. What changes is **who drives it**: you, step by step; a delivery workflow you trigger per card; or a loop that runs unattended. Pick per project, or per card.
 
-![Three lifecycle modes compared: Assisted, Semi-automatic, Automatic](/diagrams/lifecycle-modes.svg)
+![Three lifecycle modes compared across the refinement and delivery workflows](/diagrams/lifecycle-modes.svg)
+
+*Figure: rows are the two workflows, columns the three modes.*
 
 ## Assisted
 
@@ -25,7 +27,7 @@ The classic mode: **you run every phase explicitly and the AI assists at each st
 
 - **Bootstrap**: `/pair-process-bootstrap`, optionally in [quick mode](/docs/getting-started/bootstrap-quick-mode), which reads your project instead of asking.
 - **Refinement**: by grilling and triage: `/pair-capability-grill` interviews you one question at a time, `/pair-process-brainstorm` turns a theme into a Draft backlog tree.
-- **Implementation**: through the [delivery workflow](/docs/concepts/delivery-workflow): you trigger `/pair-workflow-cycle` per card, or `/pair-implement-batch` for a batch. The workflow orchestrates implement, independent verify and remediation, and stops at checkpoints (the review-approved PR, any escalation) for you.
+- **Implementation**: through the [delivery workflow](/docs/developer-journey/delivery-workflow): you trigger `/pair-workflow-cycle` per card, or `/pair-implement-batch` for a batch. The workflow orchestrates implement, independent verify and remediation, and stops at checkpoints (the review-approved PR, any escalation) for you.
 
 **Use it when** the project is set up, the backlog is known, and you want independent verification without running each stage by hand. Details: [Delivery cycle](/docs/reference/delivery-cycle#3-three-realizations-and-which-to-use).
 
@@ -37,7 +39,20 @@ The classic mode: **you run every phase explicitly and the AI assists at each st
 - **Gates**: `until` (`ready`, `pr`, `merged`), `prepare` and `merge` decide how far a card goes; an `escalation` hands a card back to a human.
 - **Safe defaults**: nothing merges and no Draft card is prepared unattended until you declare it.
 
-**Use it when** classification and gates are trusted and the backlog is mostly low-risk. Walkthrough: [Unattended delivery](/docs/tutorials/unattended-delivery#autonomy-until-gates-escalation); every key: [Adoption settings](/docs/reference/adoption-settings#techautomationmd).
+**Use it when** classification and gates are trusted and the backlog is mostly low-risk. Walkthrough: [Automated development](/docs/tutorials/automated-development#autonomy-until-gates-escalation); every key: [Adoption settings](/docs/reference/adoption-settings#techautomationmd).
+
+## Modes by workflow
+
+| Mode | Workflow | Who triggers | What runs | Where it stops | Config |
+| --- | --- | --- | --- | --- | --- |
+| Assisted | Refinement | you, per skill | `/pair-process-brainstorm`, `-plan-stories`, `-refine-story`, `-plan-tasks` | after each skill | none |
+| Assisted | Delivery | you, per skill | `/pair-process-implement`, `/pair-process-review` | after each skill | none |
+| Semi-automatic | Refinement | you, per batch | `/pair-refine-batch`, `pair-cli run --until ready` | Ready, or a grill question | `prepare` |
+| Semi-automatic | Delivery | you, per card or batch | `/pair-workflow-cycle`, `/pair-implement-batch` | review-approved PR, escalation | `until`, Blocking Severities |
+| Automatic | Refinement | the loop | `prepare` gate `never` or `when` | escalation (`needs-review`) | `prepare` |
+| Automatic | Delivery | the loop or daemon | `/pair-loop`, `pair-cli run --root --parallel --watch` | gates `until` and `merge`, escalation | `## Autonomy` |
+
+Every key: [Adoption settings](/docs/reference/adoption-settings#techautomationmd).
 
 ## Which to use
 

@@ -55,11 +55,33 @@ Capability skills perform specific, reusable operations. They are invoked indepe
 
 ### Workflow Skills
 
-Workflow skills are the **stages of the [delivery workflow](/docs/concepts/delivery-workflow)**: `/pair-workflow-cycle` is the coordinator; `/pair-workflow-contract-phase`, `/pair-workflow-implement-phase`, `/pair-workflow-red-spec`, `/pair-workflow-red-verify`, `/pair-workflow-green-fix` and `/pair-workflow-review-phase` are **stage skills**. A stage skill does one stage of one card (one role, one handoff) and is dispatched by the coordinator or the batch engine, never suggested by `/pair-next`. You normally invoke only the coordinator. Detail: [Delivery cycle](/docs/reference/delivery-cycle#2-the-stages-one-by-one), [Skills Catalog](/docs/reference/skills-catalog#workflow-skills).
+Workflow skills are the **stages of the [delivery workflow](/docs/developer-journey/delivery-workflow)**. A stage skill does one stage of one card (one role, one handoff) and is dispatched by the coordinator or the batch engine, never suggested by `/pair-next`. You normally invoke only the coordinator.
+
+| Skill | Role |
+|-------|------|
+| `/pair-workflow-cycle` | coordinator: drives one card through the stages |
+| `/pair-workflow-contract-phase` | stage: fresh acceptance contract |
+| `/pair-workflow-implement-phase` | stage: implement and open the PR |
+| `/pair-workflow-red-spec` | stage: write the failing test of a finding |
+| `/pair-workflow-red-verify` | stage: validate and seal that test |
+| `/pair-workflow-green-fix` | stage: fix above the seal |
+| `/pair-workflow-review-phase` | stage: independent verification of the PR head |
+
+Detail: [Delivery cycle](/docs/reference/delivery-cycle#2-the-stages-one-by-one), [Skills Catalog](/docs/reference/skills-catalog#workflow-skills). How the layers stack: [Skill layers](/docs/developer-journey/skill-layers).
 
 ### Loop and Batch Entry Points
 
-`/pair-loop` selects eligible cards and repeats under the [autonomy gates](/docs/tutorials/unattended-delivery#autonomy-until-gates-escalation). It composes the batch workflows `pair-implement-batch` and `pair-refine-batch` (installed in `.claude/workflows/`), which dispatch the five subagents in `.claude/agents/` (`pair-implementer`, `pair-fix-test-author`, `pair-contract-generator`, `pair-red-contract-verifier`, `pair-reviewer`). See [Batch engine](/docs/reference/batch-engine).
+`/pair-loop` selects eligible cards and repeats under the [autonomy gates](/docs/tutorials/automated-development#autonomy-until-gates-escalation). It composes the batch workflows `pair-implement-batch` and `pair-refine-batch` (installed in `.claude/workflows/`), which dispatch five subagents installed in `.claude/agents/`:
+
+| Subagent | Role |
+|----------|------|
+| `pair-implementer` | implements and publishes |
+| `pair-fix-test-author` | writes a finding's failing test |
+| `pair-contract-generator` | prepares the acceptance contract |
+| `pair-red-contract-verifier` | validates and seals it |
+| `pair-reviewer` | verifies the PR head |
+
+See [Batch engine](/docs/reference/batch-engine).
 
 ### Plugin Skill
 

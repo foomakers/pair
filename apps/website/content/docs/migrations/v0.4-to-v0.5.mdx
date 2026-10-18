@@ -3,7 +3,7 @@ title: "v0.4 → v0.5: Canonical States + Domain Modeling"
 description: Migration prompt for pair's canonical backlog states, n-m state-mapping schema, the map-subdomains/map-contexts process-to-capability rename, the classification / risk-matrix capability, and mirror cleanup on pair-cli update.
 ---
 
-This page grows incrementally as the stories driving the v0.4 → v0.5 jump land — it currently covers canonical states (including the legacy `Refined` state case), the domain context map and `.pair/working/` area, the domain-modeling capability rename, the classification / risk-matrix capability, and the one change in this jump that **deletes files**: mirror cleanup on `pair-cli update`.
+This page covers every adoption and config change in the v0.4 → v0.5 jump that needs your action or offers an option: canonical states, the domain context map and `.pair/working/`, the domain-modeling rename, classification, mirror cleanup on `pair-cli update`, the delivery cycle's policy sections, and `pair.config.json` keys. Each change below says whether it is required or optional.
 
 Structural background: [Canonical states (#202)](https://github.com/foomakers/pair/issues/202) · [map-subdomains/map-contexts reclassification (#246)](https://github.com/foomakers/pair/issues/246) · [Versioning & migration epic (#214)](https://github.com/foomakers/pair/issues/214) · [Migration note: legacy `Refined` boards (#243)](https://github.com/foomakers/pair/issues/243) · [Classification & risk matrix (#233)](https://github.com/foomakers/pair/issues/233) · [Mirror cleanup on the CLI path (#393)](https://github.com/foomakers/pair/issues/393)
 
@@ -68,6 +68,32 @@ pair now builds a **classification matrix** on every story and every PR: `/refin
 To turn the matrix into **chromatic tags** on your cards and PRs (`risk:green|yellow|red`), add an optional `.pair/adoption/tech/risk-matrix.md` with a `## Tag Projection` section. You don't have to write it by hand: the first time `/classify` runs it **proposes** this declaration and writes it once you confirm. The same file optionally holds a service/domain **criticality table** and **overrides** (threshold tweaks, per-tier reviewer count / SLA). `risk` is the only tag family enabled by default; cost, security, business impact and coupling are computed too but projected as tags only if you add them.
 
 Full model — dimensions, tiers, tag projection, and the `tech/risk-matrix.md` schema — in [Quality Model](/docs/reference/quality-model).
+
+### Delivery policy sections (optional)
+
+All in `.pair/adoption/tech/automation.md`; every one is optional and absent means the default ([Adoption settings](/docs/reference/adoption-settings#techautomationmd)).
+
+- **`## Autonomy`**: `until`, `prepare`, `merge` and the card filter. Defaults keep a human in the loop (`until: pr`, gates `always`).
+- **Legacy `## Eligibility` and `## Auto-Advance`**: still honoured. They are translated to `filter:` and `merge:` at read time; you may rewrite them as `## Autonomy` but nothing breaks if you do not.
+- **`## Cycle Hooks`**: shell commands at stage boundaries (`pre-<stage>`, `post-<stage>`, `on-halt`).
+- **`## Blocking Severities`** and `max-dispatches`: the severity floor (default `Minor`) and a ceiling on handoffs per run.
+
+### `pair.config.json` keys (optional)
+
+- **`workflowProfiles`**: engine, model and effort per stage ([Configuration](/docs/reference/configuration#workflow-profiles-workflowprofiles)).
+- **`skipRegistries`**: registries `install` and `update` leave alone, for example `agents` to keep your own `AGENTS.md` and `CLAUDE.md`. `update --skip-registries` writes it; removing the entry opts back in. See [Quickstart](/docs/getting-started/quickstart#existing-project).
+
+### Process Profile, code host, review identity (optional)
+
+In `tech/way-of-working.md`: `## Process Profile` (`default`, `poc` or `custom`, which steps the project runs), the `code-host` override under `## Git Workflow`, and [review identity](/docs/concepts/review-identity) (`none`, `app`, `bot-user`; default `none`).
+
+### State Mapping gains n-m, unmapped and Control states
+
+`## State Mapping` is n-to-m (several board states to one macrostate). A board state you leave out is ignored, and a closure without completion (Not planned) is never `Done`. If your board has a state that is a gate rather than work, it stays unmapped. See [Canonical states](/docs/concepts/canonical-states#customizing-for-your-board).
+
+### Package-local adoption and template overrides (optional)
+
+A `## Package-Local Adoption` router in a central `tech/*.md` points to per-package rules ([Package-local adoption](/docs/customization/package-local-adoption)); `.pair/adoption/tech/templates/<name>-template.md` overrides a KB template whole ([Templates](/docs/customization/templates)).
 
 ### `pair-cli update` now deletes what the Knowledge Base no longer ships
 
@@ -186,7 +212,32 @@ only if not already done, and report what you skipped.
    "Unknown installed version" is expected until the operator has run
    `pair-cli update` once; record whatever it reports and skip if already done.
 
-8. Summarize what you created or changed versus what was already in place, and
+9. (Optional, delivery policy) Ask the operator whether the project wants
+   unattended delivery. If not, skip. If yes, and `tech/automation.md` has no
+   `## Autonomy`, propose one from the KB template (`until`, `prepare`, `merge`),
+   show it, and write it only on a yes. If it still has legacy `## Eligibility` or
+   `## Auto-Advance`, leave them: they are translated at read time.
+
+10. (Optional, cycle hooks and severities) Only if the operator asks for hooks or
+    a blocking floor, add `## Cycle Hooks` or `## Blocking Severities` to
+    `tech/automation.md`. Skip if the section exists or nothing was asked.
+
+11. (Optional, `pair.config.json`) Leave `workflowProfiles`, `skipRegistries` and
+    `engine` as they are. If the project has its own `AGENTS.md` or `CLAUDE.md`
+    and wants to keep it, tell the operator to run
+    `pair-cli update --skip-registries agents`; never edit the file yourself.
+
+12. (Optional, other adoption) If `tech/way-of-working.md` lacks a
+    `## Process Profile`, a `code-host`, or a review identity, ask whether the
+    project needs one; skip when none is wanted or the entry exists. If the board
+    has a state with no macrostate (a gate, Removed, Not planned), leave it
+    unmapped in `## State Mapping`; do not invent a mapping.
+
+13. (Optional, package-local adoption and templates) Skip unless the project is a
+    monorepo that wants per-package rules or custom templates; then add the router
+    or the override file the operator names, and skip any that exists.
+
+14. Summarize what you created or changed versus what was already in place, and
    confirm with `git status` (or equivalent) that only files under
    `.pair/adoption/`, `.pair/working/` and `.gitignore` were touched.
 ```
@@ -202,6 +253,10 @@ only if not already done, and report what you skipped.
 - [ ] Nothing this project authored is left under `.pair/knowledge/` — project standards live in `.pair/adoption/`, organization standards in your central KB repository
 - [ ] `.pair/working/` is ignored by version control and was not added to any registry; `context-map.md` exists only if you chose to create it
 - [ ] `pair-cli kb-info` reports clean (no drift), or its drift/unknown output was acted on
+- [ ] If you opted into unattended delivery, `tech/automation.md` has an `## Autonomy` section and `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve` prints the effective gates; legacy `## Eligibility`/`## Auto-Advance` left as they were are fine
+- [ ] Any `## Cycle Hooks` or `## Blocking Severities` you added load without a HALT (`cycle-hooks.mjs load`, `blocking-severities.mjs read`)
+- [ ] `pair.config.json` keeps its `workflowProfiles`, `skipRegistries` and `engine` entries untouched, and an own `AGENTS.md`/`CLAUDE.md` you wanted to keep is still yours
+- [ ] Unmapped board states stay unmapped in `## State Mapping`
 - [ ] `git status` (or equivalent) shows changes only under `.pair/adoption/`, `.pair/working/` and `.gitignore`
 - [ ] Re-running the prompt makes no further changes — a second run reports each step as skipped
 

@@ -1218,7 +1218,7 @@ describe('automation README — indexes the mapping next to the eligibility filt
 describe('docs site — tag-driven dispatch is documented where an operator looks (story #217 T4)', () => {
   const adoptionDocs = read(join(DOCS, 'concepts/adoption-files.mdx'))
   const cliDocs = read(join(DOCS, 'reference/cli/commands.mdx'))
-  const tutorial = read(join(DOCS, 'tutorials/unattended-delivery.mdx'))
+  const tutorial = read(join(DOCS, 'tutorials/automated-development.mdx'))
 
   it('adoption-files.mdx documents the `## Workflows` section and its opt-in boundary', () => {
     expect(adoptionDocs).toContain('## Workflows')

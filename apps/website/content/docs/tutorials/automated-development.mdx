@@ -1,17 +1,15 @@
 ---
-title: Unattended Delivery
-description: Configure pair to develop and merge low-risk cards on its own — from a single manual run to a daemon on a dedicated VPS that watches your backlog.
+title: Automated development
+description: Let pair deliver cards for you, semi-automatically (you trigger each card or batch) or automatically (a daemon that watches your backlog), from one manual run to a systemd service.
 ---
 
-A walkthrough for turning `pair-cli run` from "something I invoke by hand" into "something that watches
-the backlog and ships `risk:green` cards without me." You'll go from a manual dry-run to a
-systemd-managed daemon on a dedicated box in about 30 minutes.
+This tutorial shows how to let pair deliver cards without you writing the code or driving every stage. **Semi-automatic**: you start one card (`pair-cli run --card`, `/pair-workflow-cycle`) or one batch and review the result. **Automatic**: a daemon (`pair-cli run --root --parallel --watch`, or `/pair-loop`) picks cards from your backlog and ships those your gates allow. You will go from a manual dry-run to a systemd-managed daemon on a dedicated box in about 30 minutes.
 
 ## Orientation
 
-Unattended delivery is **one delivery cycle** (a state machine that takes one card to a review-approved pull request, optionally to a merge), **three ways to drive it**, and **one set of autonomy gates** that decides how far it may go without you. Read those four parts first; the walkthrough from [Prerequisites](#prerequisites) on then builds a working daemon.
+Automated development is **one delivery cycle** (a state machine that takes one card to a review-approved pull request, optionally to a merge), **three ways to drive it**, and **one set of autonomy gates** that decides how far it may go without you. Read those four parts first; the walkthrough from [Prerequisites](#prerequisites) on then builds a working daemon.
 
-It is the third of the [lifecycle modes](/docs/developer-journey/lifecycle-modes#automatic): Automatic. Concepts: [Delivery workflow](/docs/concepts/delivery-workflow). Reference: [Delivery cycle](/docs/reference/delivery-cycle). Tag-driven triggers: [Tag-driven automation](/docs/developer-journey/tag-driven-automation). Knowledge base: [`delivery-cycle.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md).
+It is the third of the [lifecycle modes](/docs/developer-journey/lifecycle-modes#automatic): Automatic. Concepts: [Delivery workflow](/docs/developer-journey/delivery-workflow). Reference: [Delivery cycle](/docs/reference/delivery-cycle). Tag-driven triggers: [Tag-driven automation](/docs/developer-journey/tag-driven-automation). Knowledge base: [`delivery-cycle.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md).
 
 **With the CLI:** `pair-cli run --card 217` drives one card; `pair-cli run --root 212 --parallel 3 --watch` drives a backlog. **With `/pair-assistant` (optional, Claude Code):** CLI only for the run itself; ask [`/pair-assistant`](/docs/reference/pair-assistant#how-to-ask) to configure the policy ("let green cards go up to merge") and use `/pair-workflow-cycle` for one card or `/pair-loop` for a backlog.
 

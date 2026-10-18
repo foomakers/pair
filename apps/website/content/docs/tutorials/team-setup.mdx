@@ -151,7 +151,7 @@ The same skill also provisions a **deterministic secret-scanning CI job** — re
 
 Every option below is optional; the full catalog with defaults is [Adoption settings](/docs/reference/adoption-settings), and [Team customization](/docs/customization/team#all-team-options) has the table. Each: hand edit, or ask `/pair-assistant` (optional, Claude Code; it shows the diff, validates, writes through record-decision).
 
-- **Autonomy** (`until`, `prepare`, `merge`): how far cards go unattended ([Unattended delivery](/docs/tutorials/unattended-delivery#autonomy-until-gates-escalation)). *"let green cards go up to merge"*
+- **Autonomy** (`until`, `prepare`, `merge`): how far cards go unattended ([Automated development](/docs/tutorials/automated-development#autonomy-until-gates-escalation)). *"let green cards go up to merge"*
 - **Cycle Hooks**: commands at stage boundaries ([Delivery cycle](/docs/reference/delivery-cycle#5-cycle-hooks)). *"add a pre-verify hook that runs the tests"*
 - **Blocking Severities and `max-dispatches`**: which review findings block ([Adoption settings](/docs/reference/adoption-settings#techautomationmd)). *"only Major and above should block"*
 - **Publish-PR Hooks**: commands around PR publication ([Adoption settings](/docs/reference/adoption-settings#techautomationmd)). *"regenerate mirrors before publishing"*

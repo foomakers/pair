@@ -53,7 +53,7 @@ test('quickstart journey: overview → quickstart with content verification', as
   await expect(main).toContainText('Development Process')
   await expect(main).toContainText('Choose Your Setup')
   // US-552: optional marketplace path, CLI stays default
-  await expect(main).toContainText('Optional: install via the Claude Code marketplace')
+  await expect(main).toContainText('With the Claude Code plugin (optional)')
   await expect(main).toContainText('/pair-assistant')
   await expect(main).toContainText('--skip-registries agents')
 })
@@ -816,7 +816,9 @@ test('smoke: all tutorials pages return 200 with correct titles', async ({ page 
     { url: '/docs/tutorials/existing-project', title: 'Adopting pair on an Existing Project' },
     { url: '/docs/tutorials/team-setup', title: 'Team Setup' },
     { url: '/docs/tutorials/enterprise-adoption', title: 'Enterprise Adoption' },
-    { url: '/docs/tutorials/unattended-delivery', title: 'Unattended Delivery' },
+    { url: '/docs/tutorials/automated-development', title: 'Automated development' },
+    { url: '/docs/tutorials/brainstorming', title: 'Brainstorming' },
+    { url: '/docs/tutorials/refinement', title: 'Refinement' },
   ]
   for (const { url, title } of pages) {
     const response = await page.goto(url)
@@ -993,7 +995,7 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/tutorials/existing-project',
     '/docs/tutorials/team-setup',
     '/docs/tutorials/enterprise-adoption',
-    '/docs/tutorials/unattended-delivery',
+    '/docs/tutorials/automated-development',
     '/docs/contributing',
     '/docs/contributing/development-setup',
     '/docs/contributing/architecture',
@@ -1008,9 +1010,14 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     // there instead of silently passing. The per-section smoke arrays below (integrations,
     // guides, tutorials, …) are a different list and remain hand-maintained and unguarded.
     '/docs/developer-journey/lifecycle-modes',
+    '/docs/developer-journey/refinement-workflow',
+    '/docs/developer-journey/skill-layers',
+    '/docs/tutorials/brainstorming',
+    '/docs/tutorials/refinement',
+    '/docs/pm-tools/custom',
     '/docs/concepts',
     '/docs/concepts/canonical-states',
-    '/docs/concepts/delivery-workflow',
+    '/docs/developer-journey/delivery-workflow',
     '/docs/concepts/code-host',
     '/docs/concepts/definition-of-ready-and-done',
     '/docs/concepts/pr-state-flow',

@@ -215,7 +215,7 @@ The CLI way is the hand edit in the file; the optional `/pair-assistant` way (Cl
 
 | Option | File and key | Default | Effect | Learn more | With `/pair-assistant` |
 | --- | --- | --- | --- | --- | --- |
-| Autonomy | `tech/automation.md` `## Autonomy` (`until`, `prepare`, `merge`, `filter`) | `until: pr`, gates `always` | how far a card goes unattended | [Unattended delivery](/docs/tutorials/unattended-delivery#autonomy-until-gates-escalation) | "let green cards go up to merge" |
+| Autonomy | `tech/automation.md` `## Autonomy` (`until`, `prepare`, `merge`, `filter`) | `until: pr`, gates `always` | how far a card goes unattended | [Automated development](/docs/tutorials/automated-development#autonomy-until-gates-escalation) | "let green cards go up to merge" |
 | Cycle Hooks | `tech/automation.md` `## Cycle Hooks` | none | commands at stage boundaries | [Delivery cycle](/docs/reference/delivery-cycle#5-cycle-hooks) | "add a pre-verify hook that runs the tests" |
 | Blocking Severities | `tech/automation.md` `## Blocking Severities` | floor `Minor` | review findings at or above the floor block a card | [Adoption settings](/docs/reference/adoption-settings#techautomationmd) | "only Major and above should block" |
 | `max-dispatches` | same section, second line `max-dispatches: N [warn\|block]` | no ceiling | caps a run's published handoffs; `block` stops the run | [Adoption settings](/docs/reference/adoption-settings#techautomationmd) | "stop a run after 40 dispatches" |

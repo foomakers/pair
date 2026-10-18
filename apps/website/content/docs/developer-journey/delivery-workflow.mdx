@@ -1,11 +1,11 @@
 ---
 title: Delivery workflow
-description: What the delivery workflow is and why it exists — one state machine per card, independent roles, durable handoffs, autonomy gates, and where it sits in the three lifecycle modes.
+description: What the delivery workflow is and why it exists — one state machine per card, independent roles, durable handoffs, autonomy gates, and how it runs in the three lifecycle modes.
 ---
 
-The **delivery workflow** is how pair takes one refined card to a review-approved pull request, and optionally to a merge, without relying on one long conversation. It is a set of [workflow skills](/docs/concepts/skills#workflow-skills) driven by a single state machine.
+The **delivery workflow** is the second of the [lifecycle](/docs/developer-journey) workflows, after [analysis and refinement](/docs/developer-journey/refinement-workflow). It is how pair takes one refined card to a review-approved pull request, and optionally to a merge, without relying on one long conversation. It is a set of [workflow skills](/docs/concepts/skills#workflow-skills) driven by a single state machine.
 
-> Reference for the mechanics: [Delivery cycle](/docs/reference/delivery-cycle). Hands-on: [Unattended delivery](/docs/tutorials/unattended-delivery).
+> Reference for the mechanics: [Delivery cycle](/docs/reference/delivery-cycle). Hands-on: [Automated development](/docs/tutorials/automated-development).
 
 ## Why it exists
 
@@ -29,17 +29,25 @@ Every stage publishes a handoff file under the run directory. State is files, no
 
 ## Autonomy gates and escalation
 
-Three gates decide how far a card goes without you: `until` (`ready`, `pr`, `merged`), `prepare` (who refines a Draft card) and `merge` (whether a review-approved card merges). A `when` condition that fires **escalates** the card to a human. Defaults keep a human in the loop. Every key: [Adoption settings](/docs/reference/adoption-settings#techautomationmd); walkthrough: [Autonomy](/docs/tutorials/unattended-delivery#autonomy-until-gates-escalation).
+Three gates decide how far a card goes without you: `until` (`ready`, `pr`, `merged`), `prepare` (who refines a Draft card) and `merge` (whether a review-approved card merges). A `when` condition that fires **escalates** the card to a human. Defaults keep a human in the loop. Every key: [Adoption settings](/docs/reference/adoption-settings#techautomationmd); walkthrough: [Autonomy](/docs/tutorials/automated-development#autonomy-until-gates-escalation).
 
 ![Three drivers, one set of autonomy gates, escalation](/diagrams/drive-and-gates.svg)
 
-## Where it sits in the three lifecycle modes
+## Per mode
 
-| Mode | Role of the workflow |
-| --- | --- |
-| [Assisted](/docs/developer-journey/lifecycle-modes#assisted) | not used: you run `/pair-process-implement` and `/pair-process-review` yourself |
-| [Semi-automatic](/docs/developer-journey/lifecycle-modes#semi-automatic) | you trigger it per card (`/pair-workflow-cycle`) or per batch (`/pair-implement-batch`); it stops at checkpoints for you |
-| [Automatic](/docs/developer-journey/lifecycle-modes#automatic) | it is the engine: `/pair-loop` or `pair-cli run --root --parallel --watch` re-select cards and run it under the gates |
+Same three modes as the [refinement workflow](/docs/developer-journey/refinement-workflow#per-mode); see [Lifecycle modes](/docs/developer-journey/lifecycle-modes).
+
+### Assisted
+
+Not the workflow: you run `/pair-process-implement` and `/pair-process-review` yourself, task by task.
+
+### Semi-automatic
+
+You trigger it per card (`/pair-workflow-cycle`, `pair-cli run --card`) or per batch (`/pair-implement-batch`). It runs implement, independent verify and remediation, then stops at a checkpoint for you: the review-approved PR, or an escalation.
+
+### Automatic
+
+It is the engine: `/pair-loop` or `pair-cli run --root --parallel --watch` re-select cards and run the cycle under the [autonomy gates](/docs/tutorials/automated-development#autonomy-until-gates-escalation). A card merges only when the `merge` gate allows it.
 
 ## Realizations
 
