@@ -1,0 +1,172 @@
+---
+title: Share AI artifacts with your team
+description: Version skills, AGENTS.md and a config.json in a Git repository and let every teammate install them with one pair-cli command, for one or several AI assistants.
+---
+
+A walkthrough for teams who want to organize and distribute AI artifacts (skills, `AGENTS.md`, KB content) through a Git repository, independent of pair's product lifecycle. By the end, every teammate installs and updates your organization's artifacts with a single command.
+
+## Prerequisites
+
+- `pair-cli` installed (`pair-cli --version`); see the [Quickstart](/docs/getting-started/quickstart)
+- Git, and a Git hosting account (GitHub, GitLab, Bitbucket or self-hosted)
+
+## What you'll build
+
+- An artifact repository with skills, `AGENTS.md` and a manifest
+- A versioned distribution workflow using Git tags
+- A team `config.json` for consistent installs
+- A one-command install: `pair-cli install --source <git-url>#v1.0.0 --config <config>`
+- Private-repo auth for CI
+
+Estimated time: 30 minutes.
+
+## 1. Choose a prefix
+
+Pick a short, unique prefix for your organization (for example `acme`). It prevents name clashes when skills from several sources land in one project: `acme-capability-deploy`, `acme-process-onboard`.
+
+## 2. Create the repository and choose a layout
+
+```bash
+mkdir acme-ai-artifacts && cd acme-ai-artifacts
+git init
+```
+
+**Flat**: every skill directory at the root, names already prefixed.
+
+```text
+acme-ai-artifacts/
+  AGENTS.md
+  manifest.json
+  acme-capability-deploy/SKILL.md
+  acme-process-onboard/SKILL.md
+```
+
+**Folder-organized**: grouped by type, flattened and prefixed on install. Easier to maintain at scale.
+
+```text
+acme-ai-artifacts/
+  AGENTS.md
+  manifest.json
+  .skills/
+    capability/deploy/SKILL.md
+    process/onboard/SKILL.md
+```
+
+## 3. Write the team config.json
+
+The config tells `pair-cli` how to distribute the artifacts. For the folder layout, start with one assistant:
+
+```json
+{
+  "asset_registries": {
+    "skills": {
+      "source": ".skills",
+      "behavior": "mirror",
+      "flatten": true,
+      "flattenDepth": 2,
+      "prefix": "acme",
+      "description": "Acme team skills",
+      "targets": [{ "path": ".claude/skills/", "mode": "canonical" }]
+    }
+  }
+}
+```
+
+`flattenDepth: 2` says an entry is `<category>/<name>` deep, so a skill's own sub-directories (a `references/` folder) install inside the skill, not beside it ([bounded flattening](/docs/reference/configuration#bounded-flattening-flattendepth)). For the flat layout, omit `flatten` and `prefix`.
+
+Store the file in the project root (versioned with the code) or in a shared location passed with `--config` at install time.
+
+## 4. Write AGENTS.md and manifest.json
+
+`AGENTS.md` documents the skills and how to install them:
+
+```markdown
+# AGENTS.md
+
+This project uses Acme AI artifacts. Skills install to `.claude/skills/`.
+
+## Available skills
+
+- `/acme-capability-deploy`: deploy to staging or production
+- `/acme-process-onboard`: onboard a new team member
+
+## Setup
+
+pair-cli install --source https://github.com/acme/ai-artifacts.git#v1.0.0 --config acme-config.json
+```
+
+Tool-specific variants of `AGENTS.md` (a `CLAUDE.md` generated from it, say) use the `transform` property: [CLAUDE.md generated from AGENTS.md](/docs/integrations/claude-code#claudemd-generated-from-agentsmd).
+
+```json
+{
+  "name": "acme-ai-artifacts",
+  "version": "1.0.0",
+  "description": "Acme team AI artifacts",
+  "author": "Acme Engineering"
+}
+```
+
+## 5. Commit, tag, push
+
+```bash
+git add .
+git commit -m "feat: initial artifact package v1.0.0"
+git tag v1.0.0
+git remote add origin git@github.com:acme/ai-artifacts.git
+git push -u origin main --tags
+```
+
+## 6. Install on a teammate's machine
+
+```bash
+# HTTPS (public repo)
+pair-cli install --source https://github.com/acme/ai-artifacts.git#v1.0.0 --config ./pair-config.json
+
+# SSH (private repo, uses your SSH keys)
+pair-cli install --source git@github.com:acme/ai-artifacts.git#v1.0.0 --config ./pair-config.json
+```
+
+The CLI shallow-clones the repository at the tag, reads the config you pass, and distributes the content to the configured targets.
+
+**Private repos over HTTPS** (CI, no SSH keys): set `PAIR_GIT_TOKEN`.
+
+```yaml
+- name: Install AI artifacts
+  env:
+    PAIR_GIT_TOKEN: ${{ secrets.ARTIFACTS_TOKEN }}
+  run: pair-cli install --source https://github.com/acme/ai-artifacts.git#v1.0.0 --config ./pair-config.json
+```
+
+## 7. Ship an update
+
+1. Change the artifacts, bump `version` in `manifest.json`.
+2. `git commit -am "feat: add deployment skill v1.1.0" && git tag v1.1.0 && git push origin main --tags`
+3. Teammates run `pair-cli update --source https://github.com/acme/ai-artifacts.git#v1.1.0 --config ./pair-config.json`.
+
+## 8. Scale to more assistants
+
+Add symlink targets to the same registry; the skills do not change:
+
+```json
+"targets": [
+  { "path": ".claude/skills/", "mode": "canonical" },
+  { "path": ".github/skills/", "mode": "symlink" },
+  { "path": ".cursor/skills/", "mode": "symlink" },
+  { "path": ".windsurf/skills/", "mode": "symlink" }
+]
+```
+
+After the next `pair-cli update`, the new locations are populated; existing ones are untouched. A ZIP on an HTTP server, a network share or an artifact registry works as a source too: [install sources](/docs/reference/cli/install-sources).
+
+## What you've learned
+
+- How to structure an artifact repository: skills, `AGENTS.md`, manifest
+- How a team `config.json` makes installs consistent, with `flatten` and `prefix`
+- How Git tags version the artifacts and `PAIR_GIT_TOKEN` handles private repos
+- How one install reaches several AI assistants
+
+## Next steps
+
+- [Team setup](/docs/tutorials/team-setup): full team onboarding with pair
+- [Own and publish a Knowledge Base](/docs/guides/external-kb): when the artifacts are a whole Knowledge Base
+- [Configuration](/docs/reference/configuration): every `config.json` key

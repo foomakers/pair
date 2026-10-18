@@ -1,25 +1,29 @@
 {
   "title": "Guides",
   "pages": [
+    "---Set up---",
     "install-via-marketplace",
     "adopt-existing-repo",
+    "join-a-pair-project",
     "update-kb",
-    "external-kb",
     "configure-harness",
-    "adoption-checklist",
-    "card-states",
+    "---Knowledge Base---",
+    "customize-for-your-team",
     "customize-templates",
     "monorepo-rules",
+    "external-kb",
+    "---Configure---",
+    "card-states",
     "classify-risk",
     "quality-gates",
     "review-identity",
     "assess-security-cost-coupling",
+    "---Deliver---",
     "deliver-a-card",
     "autonomy-and-profiles",
     "hooks-and-severities",
     "deliver-many-cards",
     "tag-automation",
-    "release-tests",
     "delivery-metrics"
   ]
 }

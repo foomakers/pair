@@ -1,0 +1,79 @@
+---
+title: update-link
+description: Validate, repair and normalize the Markdown links inside the installed Knowledge Base, options, output and what each pass does.
+---
+
+`pair-cli update-link` validates the links inside `.pair/` against the file system, repairs the ones it can, and normalizes them to relative (default) or absolute paths. Run it after `pair-cli update`, after moving the project, or whenever a link check fails.
+
+## Syntax
+
+```bash
+pair-cli update-link [options]
+```
+
+| Option | Effect | Default |
+| --- | --- | --- |
+| `--relative` | convert every link to a relative path | implicit |
+| `--absolute` | convert every link to an absolute path | off |
+| `--dry-run` | report what would change, modify nothing | `false` |
+| `--log-level <level>` | `trace`, `debug`, `info`, `warn`, `error` | `info` |
+
+`--dry-run` combines with either path mode: `pair-cli update-link --absolute --dry-run`.
+
+## What a run does
+
+1. **Detect**: locates the installed KB under `.pair/`.
+2. **Validate**: checks every Markdown link against the current file system.
+3. **Fix**: repairs broken links where a target can be found.
+4. **Adjust**: rewrites paths for a project that moved.
+5. **Convert**: applies the relative or absolute mode.
+6. **Report**: prints the summary below.
+
+Link types: relative (`./docs/file.md`), absolute (`/path/to/file.md`), anchors (`#section`, preserved). External URLs and `mailto:` links are skipped.
+
+Safety: a backup is written to `.pair/backups/` before any modification, writes are atomic, and a critical error restores the backup. `--dry-run` is the way to look first.
+
+## Output
+
+```text
+Link Update Summary:
+
+Total links processed: 127
+Files modified: 23
+
+Links by category:
+  broken to fixed: 5
+  relative to absolute: 45
+  absolute to relative: 67
+  path adjusted: 10
+
+Remaining issues:
+  File: docs/guide.md (line 42)
+  Error: Target file not found: /missing/file.md
+```
+
+A dry run prints the same summary under a `DRY RUN MODE - No files will be modified` banner. Remaining issues are links the command could not resolve; fix them by hand and re-run.
+
+## Common failures
+
+| Message | Cause | Fix |
+| --- | --- | --- |
+| `No KB installed` | no `.pair/` in the project | `pair-cli install` first |
+| permission errors | files not writable | `chmod -R u+w .pair/` |
+| root detection fails | not in a git repository, no `package.json`, no `.pair/` | run from the project root |
+| links still broken | target does not exist anywhere | `--log-level debug` to see each one, then fix by hand |
+
+## In CI
+
+```yaml
+- run: npm install -g @foomakers/pair-cli
+- run: pair-cli install
+- run: pair-cli update-link --dry-run
+```
+
+A non-empty "Remaining issues" list is the signal to act on; the dry run itself never fails the job.
+
+## Related
+
+- [Update the Knowledge Base](/docs/guides/update-kb): the recipe this command belongs to
+- [CLI commands](/docs/reference/cli/commands): every command and option
