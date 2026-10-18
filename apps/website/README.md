@@ -8,15 +8,19 @@ Content follows the [Diataxis](https://diataxis.fr/) model under `content/docs/`
 
 ```text
 content/docs/
-├── getting-started/    # Tutorials — learning-oriented
-├── guides/             # How-to guides — task-oriented
-├── concepts/           # Explanation — understanding-oriented
-├── reference/          # Reference — information-oriented
-├── customization/      # Customization and extensibility
-├── integrations/       # AI tool and PM tool integrations
-├── pm-tools/           # Project management tool guides
-├── process-lifecycle/  # Process lifecycle and adoption paths
-├── support/            # FAQ, troubleshooting, resources
+├── index.mdx           # Welcome hub
+├── whats-new.mdx       # What's new in the current release
+├── getting-started/    # Install, first run, choose your path
+├── process-lifecycle/  # The founding concept: phases, workflows, modes, skill layers
+├── tutorials/          # Learning-oriented walkthroughs
+├── guides/             # Task-oriented how-to recipes
+├── concepts/           # Explanation and glossary
+├── integrations/       # AI coding tools (harnesses)
+├── pm-tools/           # Project management tools
+├── reference/          # CLI, skills, settings, catalogs
+├── migrations/         # Version-jump migration prompts
+├── support/            # FAQ and troubleshooting
+├── contributing/       # Contributor docs
 └── meta.json           # Fumadocs navigation config
 ```
 
