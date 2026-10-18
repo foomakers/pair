@@ -1,0 +1,97 @@
+---
+title: Adoption settings
+description: Catalog of every user-configurable section and key in .pair/adoption and the pair.config.json keys outside registries — file, allowed values, default, reader, effect, and how to configure each.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+One page listing **every setting you can put in your adoption files**. `reference/configuration` covers the registry part of `pair.config.json` ([Configuration](/docs/reference/configuration)); this page covers everything else. Every section is **optional**: absent means the default in the table, never an error. A malformed section is a **HALT** naming the file and line, not a silent fallback.
+
+<Callout type="info">
+  **With the CLI / With `/pair-assistant` (optional, Claude Code).** CLI first: edit the file by
+  hand, then validate. Optional: ask [`/pair-assistant`](/docs/reference/pair-assistant#how-to-ask) ("let green cards go
+  up to merge"); it shows the diff, validates with the same scripts, and writes through
+  `/pair-capability-record-decision`. Rows marked **assistant** are supported by its
+  [capability menu](/docs/reference/pair-assistant#capability-menu).
+</Callout>
+
+## `tech/automation.md`
+
+Read by the delivery cycle ([`/pair-workflow-cycle`, `pair-cli run`](/docs/reference/delivery-cycle)), `/pair-loop`, `/pair-implement-batch`, `/pair-next` and `publish-pr`. Explained in [Automated development](/docs/tutorials/automated-development#autonomy-until-gates-escalation).
+
+| Section / key | Allowed values | Default when absent | Read by | Effect | Assistant |
+| --- | --- | --- | --- | --- | --- |
+| `## Autonomy` `filter` | labels, any-of | all cards | `autonomy-policy.mjs` | which cards unattended runs pick | yes |
+| `## Autonomy` `assignee`, `status`, `root` | `@me` or login; canonical macrostates; issue id | all open | `autonomy-policy.mjs` | narrows the selection | yes |
+| `## Autonomy` `until` | `ready`, `pr`, `merged` | `pr` | `autonomy-policy.mjs` | how far a card goes; only `merged` evaluates the merge gate | yes |
+| `## Autonomy` `prepare` | `always`, `never`, `when; has: …; lacks: …` | `always` | `cycle-prepare.mjs` | who refines and breaks down a Draft card (`always` keeps a human) | yes |
+| `## Autonomy` `merge` | `always`, `never`, `when; has: …; lacks: …` | `always` | `autonomy-policy.mjs`, `cycle-merge.mjs` | whether a review-approved card merges; a `when` condition escalates | yes |
+| `## Eligibility` (legacy) | one label | none | `autonomy-policy.mjs` | translated to `filter:`; still honoured | yes |
+| `## Auto-Advance` (legacy) | `(none)` or the eligibility tier | `(none)` | `autonomy-policy.mjs` | translated to `merge:`; still honoured | yes |
+| `## Stop Predicate` | `<selector> ⇒ <condition>`, `max-iterations: N` | `max-iterations: 1` | `pair-cli run`, `/pair-loop` | when an unattended run stops | no |
+| `## Max Parallelism` | positive integer, optional `<tier>: N` | `1` | `pair-cli run --parallel`, `/pair-loop` | parallel batch ceiling | no |
+| `## Audit Location` | project-relative path | `automation/loop-audit.md` under `working_path` | `/pair-loop`, `pair-cli run` | where the unattended trail is appended | no |
+| `## Workflows` | `<tag> ⇒ <workflow>`, `Precedence:` | none (no tag routing) | dispatcher | opt-in per card: tag to workflow | no |
+| `## Blocking Severities` | floor `Critical`, `Major` or `Minor` | `Minor` | `blocking-severities.mjs` | findings at or above the floor block | yes |
+| `## Blocking Severities` `max-dispatches` | `<N> [warn\|block]` | no ceiling | `blocking-severities.mjs` | ceiling on a run's published handoffs | yes |
+| `## Cycle Hooks` | `pre-<stage>`, `post-<stage>`, `pre-cycle`, `post-cycle`, `on-halt`; `timeout` (default 600, `0` off) | no hooks | `cycle-hooks.mjs` | shell commands at stage boundaries | yes |
+| `## Publish-PR Hooks` | `pre-publish`, `post-publish` | no hooks | `/pair-capability-publish-pr` | commands around PR publication | yes |
+| `## Harness` | harness names, `Requires: mcp` | all harnesses supported | `/pair-capability-setup-harness` | which harnesses the project supports | yes (delegated) |
+| `## Model Policy` | `<risk tier>: cheap\|balanced\|frontier` | no class | `/pair-capability-setup-harness` | model class per tier | yes (delegated) |
+
+Validate before committing: `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve`, `cycle-hooks.mjs load <file>`, `blocking-severities.mjs read <file>`. Section grammars: [Automation Policy](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md).
+
+## `tech/way-of-working.md`
+
+| Section / key | Allowed values | Default when absent | Read by | Effect | Assistant |
+| --- | --- | --- | --- | --- | --- |
+| PM tool | `github-projects`, `linear`, `azure-devops`, `filesystem`, … | none (setup HALTs) | every PM skill | which tracker is the backlog | yes (`/pair-capability-setup-pm`) |
+| `code-host`, `base-branch` | tool name; branch | the PM tool; `main` | `publish-pr`, host adapters | where PRs live and target | yes (`/pair-capability-setup-pm`) |
+| `## State Mapping` | `Board State → Macrostate` table; an unmapped state (e.g. `Removed`) is ignored; closure without completion (Not planned) is never `Done` | canonical names | `/pair-capability-write-issue`, `/pair-next` | maps your board to the five [macrostates](/docs/concepts/canonical-states#customizing-for-your-board) | yes (`/pair-capability-setup-pm`) |
+| `## Assignment` `default-assignee`, `code-host-assignee` | login | none (items unassigned, with a warning) | `write-issue`, `publish-pr` | who items and PRs are assigned to | no |
+| Review enforcement | `disabled`, `enabled` | `disabled` | `/pair-capability-setup-gates` | whether `pair-review` blocks merge ([PR states](/docs/concepts/pr-state-flow)) | yes |
+| Review identity | `none`, `app`, `bot-user` | `none` | publish and review skills | who executes review writes ([Review identity](/docs/concepts/review-identity)) | yes |
+| Coverage guardrail | `disabled`, `enabled` | `disabled` | `/pair-capability-setup-gates` | blocks coverage regressions ([Tag-driven gates](/docs/concepts/tag-driven-gates#coverage-guardrail-opt-in-off-by-default)) | yes |
+| Pre-merge tiering, hook manager | `disabled`/`enabled`; `husky` or other | `disabled`; `husky` | `/pair-capability-setup-gates` | tier-scoped pre-merge checks; hook tooling | yes (delegated) |
+| `format-check-command` | shell command | none | `publish-pr`, implement phase | formatting gate run before publishing | yes |
+| `worktree-setup-command` | shell command | none | implement and review phases | run once in a fresh worktree before any gate | yes |
+| Review Tier Matrix | `tier.<tier>.reviewers`, `tier.<tier>.sla_days`, … | KB defaults ([Quality model](/docs/reference/quality-model)) | review skills | per-tier reviewers, SLA, checklist depth (Definition of Ready/Done tier requirements) | yes |
+| Custom Gate Registry | table: order, gate, command, scope key, required | standard gates | `/pair-capability-verify-quality` | extra gates after lint, types, tests | no |
+| Merge Strategy | `squash`; commit format; branch cleanup; `prompt`/`silent` confirmation | `squash`, `prompt` | `/pair-process-review` | how a PR ends | no |
+| `## Process Profile` `profile`, `whitelist` | `default`, `poc`, `custom` + step ids | `default` | `/pair-next` and every skill (process-profile gate) | which process steps the project runs | yes |
+| `## Manual Testing` | free text (paths, templates) | none | review skills | where manual test suites live | no |
+
+More: [Quality gates configuration](/docs/reference/quality-gates-configuration), [Definition of Ready and Done](/docs/concepts/definition-of-ready-and-done).
+
+## `tech/risk-matrix.md`
+
+| Section | Allowed values | Default when absent | Read by | Effect | Assistant |
+| --- | --- | --- | --- | --- | --- |
+| `## Tag Projection` | `Active:` families (`risk`, `cost`, renamed family) | `risk` | `/pair-capability-classify` | which classification tags are written to cards and PRs | yes |
+| `## Criticality Table` | service or domain to `Low`, `Medium`, `High` | derived from the KB model | `/pair-capability-classify` | service-criticality dimension of the tier | yes |
+| `## Overrides` | `<dimension>.<rule>: <value>` | KB rules | `/pair-capability-classify` | project deltas to the matrix | yes |
+
+Model: [Quality model](/docs/reference/quality-model#project-overrides--techrisk-matrixmd).
+
+## Package-local adoption and templates
+
+| Setting | File | Default | Effect | Assistant |
+| --- | --- | --- | --- | --- |
+| `## Package-Local Adoption` router | central `tech/*.md` | off | lists packages whose rules live in `<pkg>/.pair/<area>.md`; skills load only touched packages ([Package-local adoption](/docs/customization/package-local-adoption)) | yes |
+| Template overrides | `.pair/adoption/tech/templates/<name>-template.md` | KB template | override-first resolution, file used whole ([Templates](/docs/customization/templates)) | yes |
+
+## `pair.config.json`
+
+Outside the registries ([Configuration](/docs/reference/configuration)):
+
+| Key | Allowed values | Default | Read by | Effect | Assistant |
+| --- | --- | --- | --- | --- | --- |
+| `skipRegistries` | registry names | none | `install`, `update` | registries left untouched, e.g. `agents` keeps your `AGENTS.md`/`CLAUDE.md` ([Quickstart](/docs/getting-started/quickstart)) | yes (`update --skip-registries`) |
+| `workflowProfiles` | named JSON profiles per stage | built-in profile | `workflow-profile.mjs` | engine, model, effort per stage ([Workflow profiles](/docs/reference/configuration#workflow-profiles-workflowprofiles)) | yes |
+| `engine` | `id`, `bin`, `model` maps | `pi` | `pair-cli run` | which agent engine runs ([Execution engine](/docs/reference/configuration#execution-engine-engine)) | no |
+
+## Related
+
+- [Claude Code plugin & /pair-assistant](/docs/reference/pair-assistant)
+- [Team customization](/docs/customization/team)
+- [Delivery cycle](/docs/reference/delivery-cycle)

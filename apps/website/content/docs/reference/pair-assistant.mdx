@@ -1,0 +1,71 @@
+---
+title: Claude Code plugin & /pair-assistant
+description: What the pair marketplace plugin installs, how to add, update and remove it, and what /pair-assistant can do — install, update, run CLI jobs and configure pair — and how it writes.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+The pair Claude Code plugin is an **optional** alternative to typing `pair-cli` yourself. The CLI stays the default path ([Quickstart](/docs/getting-started/quickstart)); the plugin gives Claude Code users one skill, `/pair-assistant`, that runs the CLI for you and helps you configure pair.
+
+> **Source:** `packages/knowledge-hub/dataset/plugin/skills/pair-assistant/SKILL.md`
+
+## What the plugin installs
+
+One skill: `/pair-assistant`. `claude plugin details pair@pair` reports `Skills (1)`, `Agents (0)`, `Hooks (0)`, `MCP servers (0)`, `LSP servers (0)`. The full skill catalog never ships in the plugin: the CLI writes it into **your** repository (`.claude/skills/`), so no skill name resolves from two sources and the plugin can stay installed next to a CLI install. The [channel overview](/docs/integrations/claude-code#install-channels) shows where it sits among the install channels.
+
+## Add, update, remove
+
+```bash
+/plugin marketplace add foomakers/pair      # register the marketplace
+/plugin install pair@pair                   # install the plugin
+/plugin marketplace update pair             # refresh the marketplace
+/plugin update pair@pair                    # update the plugin
+/plugin uninstall pair@pair                 # remove it
+```
+
+- **Smaller clone**: `/plugin marketplace add foomakers/pair --sparse .claude-plugin packages/knowledge-hub/dataset/plugin` limits the checkout to the two directories that matter.
+- **The cache is disposable**: Claude Code copies the plugin into `~/.claude/plugins/cache` and `/plugin update` replaces it wholesale. Nothing you own lives there; the skill writes into your repository.
+- No version is pinned, so an update always fetches the current skill.
+
+## Capability menu
+
+Ask `/pair-assistant` what it can do and it lists two things.
+
+**CLI jobs** (options always read from `pair-cli --help`, never from a list in the skill): `install`, `update`, `kb-info`, `kb-validate`, `kb-verify`, `package`, `scaffold-kb`, `update-link`, `validate-config`, `kb-cache`, `tokens`. Each [CLI command](/docs/reference/cli/commands) names its request in a "Via" line.
+
+**Configuration areas**: autonomy, cycle hooks, blocking severities, Publish-PR hooks, workflow profiles, kept registries (`skipRegistries`), `format-check-command`, `worktree-setup-command`, review enforcement and identity, coverage guardrail, PR states, PM tool and State Mapping, Definition of Ready/Done, process profile, risk matrix and tag projection, harness and model policy, quality gates and branch protection, package-local adoption, template overrides, and a full adoption pass.
+
+![Configuration areas: area, file, owner and validator for each thing /pair-assistant configures](/diagrams/assistant-config-areas.svg)
+
+## How to ask
+
+| You say | It routes to |
+| --- | --- |
+| "let green cards go up to merge" | `## Autonomy` in `tech/automation.md` (`merge`), see [autonomy gates](/docs/tutorials/automated-development#autonomy-until-gates-escalation) |
+| "add a pre-verify hook that runs the tests" | `## Cycle Hooks` in `tech/automation.md` |
+| "use profile X for the review" | `workflowProfiles` in `pair.config.json` |
+| "keep my own AGENTS.md" | `update --skip-registries agents`, persisted as `skipRegistries` |
+| "map not-planned to Done" | `## State Mapping`, through `/pair-capability-setup-pm` |
+| "switch the harness to pi" | `/pair-capability-setup-harness` |
+| "update pair" | `pair-cli update` (honours `skipRegistries`, prints the skip line) |
+| "how many tokens are my pair files" | `pair-cli tokens` |
+
+## How it writes
+
+1. **It shows the diff** (file, section, before, after) and asks. It writes only after an explicit yes.
+2. **It validates first**, on a temporary copy, with the cycle scripts the CLI installed in `.claude/skills/pair-workflow-cycle/scripts/`: `autonomy-policy.mjs resolve`, `cycle-hooks.mjs load`, `blocking-severities.mjs read`, `workflow-profile.mjs resolve`. A non-zero result or HALT stops with the script output; nothing is written. Scripts missing: it offers `update` first.
+3. **It writes through the owner**: `/pair-capability-record-decision` for adoption files, or the section-owning skill (`/pair-capability-setup-pm`, `-setup-harness`, `-setup-gates`, `/pair-process-bootstrap`). It never edits adoption files itself. `pair.config.json` is not an adoption file: `workflowProfiles` is a shown edit plus an ADL via record-decision.
+4. **A malformed config stops it**: it shows the script output and offers a fix; it never writes over a broken file. An area outside the menu is reported as such, never invented.
+
+<Callout type="info">
+  Requests the skill cannot map to a command or area are answered from your own `.pair/llms.txt`,
+  naming the file used. It never runs a bare `npx pair-cli` (an unrelated package of that name exists on npm).
+</Callout>
+
+## Related
+
+- [Quickstart: optional marketplace install](/docs/getting-started/quickstart#with-the-claude-code-plugin-optional)
+- [Claude Code integration](/docs/integrations/claude-code#install-channels)
+- [CLI commands](/docs/reference/cli/commands)
+- [Team customization](/docs/customization/team)
+- [Release process](/docs/contributing/release-process)

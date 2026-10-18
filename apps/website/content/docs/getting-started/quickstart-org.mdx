@@ -40,6 +40,10 @@ Once your KB is ready, package it for distribution:
 pair-cli package
 ```
 
+**With the CLI:** `pair-cli package`.
+
+**With `/pair-assistant` (optional, Claude Code):** ask for "to publish or share a KB" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
+
 This creates a distributable ZIP with a `manifest.json` containing version, checksums, and a file list. The package includes everything in `.pair/` — your customized guidelines, templates, and adoption defaults.
 
 ## Distribute via GitHub Releases
@@ -55,6 +59,10 @@ Teams install your custom KB by pointing pair-cli to your release:
 ```bash
 pair-cli install --source https://github.com/your-org/your-kb/releases/latest/download/kb.zip
 ```
+
+**With the CLI:** `pair-cli install --source <your-kb-url>`.
+
+**With `/pair-assistant` (optional, Claude Code):** ask for "pair in this project, first time" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
 
 ## Team Onboarding
 

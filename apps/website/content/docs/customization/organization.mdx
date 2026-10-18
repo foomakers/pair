@@ -50,6 +50,10 @@ README, `.gitignore`, and a release script):
 pair-cli scaffold-kb ../acme-kb --name "Acme KB"
 ```
 
+**With the CLI:** `pair-cli scaffold-kb`.
+
+**With `/pair-assistant` (optional, Claude Code):** ask for "their own knowledge base repository" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
+
 See [Scaffold an External KB](/docs/customization/external-kb).
 
 Or create the directory structure manually:
@@ -136,6 +140,10 @@ Packages from the **source directory** defined in each registry's `source` field
 ```bash
 pair-cli package --layout source
 ```
+
+**With the CLI:** `pair-cli package` (the layout flags above).
+
+**With `/pair-assistant` (optional, Claude Code):** ask for "to publish or share a KB" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
 
 Use source layout when:
 
@@ -235,6 +243,10 @@ pair-cli kb-validate
 # Inspect package metadata
 pair-cli kb-info
 ```
+
+**With the CLI:** `pair-cli kb-validate`, `pair-cli kb-info`.
+
+**With `/pair-assistant` (optional, Claude Code):** ask for "the KB checked for structural soundness" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
 
 Validation checks:
 

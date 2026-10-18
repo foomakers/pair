@@ -44,6 +44,10 @@ If you haven't already, install pair in your project:
 pair-cli install
 ```
 
+**With the CLI:** `pair-cli install`.
+
+**With `/pair-assistant` (optional, Claude Code):** ask for "pair in this project, first time" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
+
 <Callout type="info">
   If you installed pair-cli as a dev dependency instead of globally, use `npx pair-cli install` (or `pnpm pair-cli install`). See [installation options](/docs/tutorials/first-project#1-install-pair-cli) for details.
 </Callout>
@@ -57,6 +61,8 @@ Start your AI assistant and run (`/pair-next` would suggest this on a fresh proj
 ```text
 /pair-process-bootstrap
 ```
+
+**With the CLI:** bootstrap is a skill, not a command. **With `/pair-assistant` (optional, Claude Code):** ask it to adopt the project; it hands off to `/pair-process-bootstrap` ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
 
 During bootstrap, make team-relevant choices:
 
@@ -140,6 +146,26 @@ Every developer and every AI assistant will run these checks before committing.
 Prefer automation over hand-editing: `/pair-capability-setup-gates` provisions shared lint/format config packages (per-type overrides for backend/frontend/shared-lib workspaces) plus pre-commit + pre-push hooks, defaulting to husky. See the [shared config packages guideline](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/code-design/quality-standards/shared-config-packages.md) for the pattern — pair's own `tools/*` is the reference implementation. Override the hook manager by recording your choice in `way-of-working.md` before running the skill.
 
 The same skill also provisions a **deterministic secret-scanning CI job** — required, at every risk tier, no LLM involved. `gitleaks` is the KB default; the job is written as a required, fail-closed step in your CI pipeline alongside a starting `.gitleaks.toml` allowlist at the project root. This is a mechanical CI gate, not a skill judgment call — see the [secret-scanning guideline](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md) for the job template, the allowlist mechanism, and a reproducible verification. Security judgment (authn/authz, injection, OWASP Top 10) is a separate concern, handled per-PR by `/pair-capability-assess-security` — the two never overlap.
+
+### More team options
+
+Every option below is optional; the full catalog with defaults is [Adoption settings](/docs/reference/adoption-settings), and [Team customization](/docs/customization/team#all-team-options) has the table. Each: hand edit, or ask `/pair-assistant` (optional, Claude Code; it shows the diff, validates, writes through record-decision).
+
+- **Autonomy** (`until`, `prepare`, `merge`): how far cards go unattended ([Automated development](/docs/tutorials/automated-development#autonomy-until-gates-escalation)). *"let green cards go up to merge"*
+- **Cycle Hooks**: commands at stage boundaries ([Delivery cycle](/docs/reference/delivery-cycle#5-cycle-hooks)). *"add a pre-verify hook that runs the tests"*
+- **Blocking Severities and `max-dispatches`**: which review findings block ([Adoption settings](/docs/reference/adoption-settings#techautomationmd)). *"only Major and above should block"*
+- **Publish-PR Hooks**: commands around PR publication ([Adoption settings](/docs/reference/adoption-settings#techautomationmd)). *"regenerate mirrors before publishing"*
+- **Workflow profiles** (`workflowProfiles`): engine and model per stage ([Configuration](/docs/reference/configuration#workflow-profiles-workflowprofiles)). *"use profile cheap-green for the review"*
+- **`skipRegistries`**: registries pair leaves alone ([Quickstart](/docs/getting-started/quickstart#existing-project)). *"keep my own AGENTS.md"*
+- **`format-check-command`, `worktree-setup-command`**: formatting gate; setup run in a fresh worktree ([Adoption settings](/docs/reference/adoption-settings#techway-of-workingmd)). *"run pnpm install in new worktrees"*
+- **Review enforcement, Review identity, Coverage guardrail, PR states**: [PR state flow](/docs/concepts/pr-state-flow), [Review identity](/docs/concepts/review-identity), [Tag-driven gates](/docs/concepts/tag-driven-gates). *"make the review a required check"*
+- **PM tool, code host, State Mapping** (incl. unmapped states and not-planned): [Canonical states](/docs/concepts/canonical-states#customizing-for-your-board), via `/pair-capability-setup-pm`. *"map Won't Do to not-planned"*
+- **Definition of Ready / Done tier requirements**: [Definition of Ready and Done](/docs/concepts/definition-of-ready-and-done). *"red cards need two reviewers"*
+- **Process Profile**: which steps run ([Adoption settings](/docs/reference/adoption-settings#techway-of-workingmd)). *"switch to the poc profile"*
+- **Risk matrix and Tag Projection**: [Quality model](/docs/reference/quality-model#project-overrides--techrisk-matrixmd). *"also emit cost tags"*
+- **Harness and Model Policy**: `/pair-capability-setup-harness`. *"switch the harness to pi"*
+- **Gates and branch protection**: `/pair-capability-setup-gates`. *"set up the pre-push gate"*
+- **Package-local adoption, template overrides**: [Package-local adoption](/docs/customization/package-local-adoption), [Templates](/docs/customization/templates).
 
 ### 7. Record key decisions
 

@@ -1,7 +1,7 @@
 ---
 name: pair-assistant
-description: "Your assistant for pair. Sets pair up when it is missing — installs pair-cli (locally when a package.json exists, otherwise npx), creates the git repository if absent, runs the install — and once pair is in place, turns a request into the right CLI command or the right knowledge-base answer: install, update, version check, KB validation, packaging, scaffolding an external KB. Discovers the CLI surface from the CLI itself and the project's standards from its own .pair/llms.txt, so neither can go stale. Idempotent; the entry point on the Claude Code marketplace channel."
-version: 0.1.0
+description: "Your assistant for pair. Sets pair up when it is missing — installs pair-cli (locally when a package.json exists, otherwise npx), creates the git repository if absent, runs the install — and once pair is in place, turns a request into the right CLI command or the right knowledge-base answer: install, update, version check, KB validation, packaging, scaffolding an external KB — and guides configuring pair (autonomy, hooks, blocking severities, workflow profiles, adoption files). Discovers the CLI surface from the CLI itself and the project's standards from its own .pair/llms.txt, so neither can go stale. Idempotent; the entry point on the Claude Code marketplace channel."
+version: 0.2.0
 author: Foomakers
 ---
 
@@ -41,20 +41,34 @@ Detect the CLI by looking for the binary (above), never by invoking it.
 
 Adopting pair into a project that already exists is not the same as starting one with it. The project already has a stack, conventions and a way of working; pair's value there is that its adoption files **describe that reality**, not that they arrive as blank templates. So do not decide for the user.
 
-First, tell them exactly what install touches, because one part of it **does** overwrite and they must know before they answer:
+First, check which of the user's own agent files exist: `ls AGENTS.md CLAUDE.md 2>/dev/null`. Install **refuses** to overwrite them (exit 1, "already exists", nothing written) — so you ask, per file, before running it:
 
-- **Your adoption decisions are safe.** `.pair/adoption/**` installs with `add` behaviour — new files only, existing ones untouched.
-- **`CLAUDE.md` and `AGENTS.md` are REPLACED.** They are targets of a mirrored registry and the copy is unconditional. If this project has its own — very likely — it will be overwritten. Say so, and offer to save a copy first (`cp CLAUDE.md CLAUDE.md.bak`) or to stop.
-- **`.pair/knowledge/**` and `.github/**` are mirrored** — replaced, and files no longer in the source are deleted.
-- `.claude/skills/**` is overwritten in place, without deleting.
+> `AGENTS.md` exists. **Keep** it (pair installs around it) or **overwrite** it (I move yours to `AGENTS.md.bak`, then install pair's)? Same question for `CLAUDE.md`.
 
-Do not compress this into "nothing you have is overwritten". That sentence was in an earlier draft of this skill and it was false.
+- **Overwrite** → offer `mv AGENTS.md AGENTS.md.bak` (and/or `mv CLAUDE.md CLAUDE.md.bak`), run it only after the user agrees, then install normally. Use `mv`, never `cp`: a leftover original makes install refuse. `CLAUDE.md` is never overwritten silently.
+- **Keep** → install with `--skip-registries agents` (plus every other existing registry, per the table below). Then tell the user: pair is **not reachable from their `AGENTS.md`** — they should add a pointer to `.pair/knowledge/` and `.pair/adoption/` themselves. Do not edit their file. The choice is **remembered**: install writes `"skipRegistries": ["agents"]` into the project's `pair.config.json`, and every later `update` honours it (`skipping agents (from pair.config.json)`).
+- `AGENTS.md` and `CLAUDE.md` come from the same registry (`agents`), so a mix (keep one, overwrite the other) is not installable: re-ask keep-both or overwrite-both.
+- A lone own `CLAUDE.md` (no `AGENTS.md`) is the same question, for that one file.
+
+Install is **all-or-nothing per registry target**: if ANY target below already exists it exits 1 (`Target '<path>' already exists`, nothing written). So before installing, check every target and build `--skip-registries` from the registry name of each one that exists, comma-joined:
+
+| Existing target | Registry name |
+| --- | --- |
+| `.github` | `github` |
+| `.pair/knowledge` | `knowledge` |
+| `.pair/adoption` | `adoption` |
+| `AGENTS.md`, `CLAUDE.md` | `agents` |
+| `.claude/skills` | `skills` |
+| `.claude/workflows` | `workflows` |
+| `.claude/agents` | `agent-definitions` |
+
+Example: own `.claude/skills` and `.github` → `--skip-registries skills,github`. A skipped registry is left untouched, so your own files are safe; a registry that is not skipped installs as usual (`.pair/knowledge` and `.github` mirror; `.pair/adoption` adds new files only).
 
 Then ask, presenting both outcomes concretely:
 
 > This project already has code. I can do either of these:
 >
-> 1. **Install pair only** — adds `.pair/` (knowledge base, adoption templates) and `.claude/skills/` (the skill catalog), and replaces `CLAUDE.md`/`AGENTS.md` as noted above. You end up with pair's standards available, and adoption files still to fill in.
+> 1. **Install pair only** — adds `.pair/` (knowledge base, adoption templates) and `.claude/skills/` (the skill catalog), and keeps or backs up your `CLAUDE.md`/`AGENTS.md` per your answers above. You end up with pair's standards available, and adoption files still to fill in.
 > 2. **Install pair and adopt this project into it** — the same install, then a pass that describes this project in pair's terms: its tech stack, its architecture, its way of working, its quality gates. That is the difference between having pair's defaults and having *your* project on record — which is what every process skill then reads.
 >
 >    One thing to know, because it decides whether option 2 does anything: install writes the adoption files **already populated with pair's own choices**, and the adoption pass skips a section whose file is already populated. So it will not silently rewrite them — where a section already says something, you and I have to change it deliberately. I will show you which sections those are before touching any.
@@ -207,7 +221,7 @@ This map is judgment rather than syntax, which is why it is worth stating. Confi
 | The user wants | Source | Notes |
 | --- | --- | --- |
 | pair in this project, first time | `install` | the Setup branch above already does this |
-| the KB and skills refreshed | `update` | not `install` — update is the in-place refresh |
+| the KB and skills refreshed | `update` | not `install` — update is the in-place refresh. It honours `skipRegistries` in `pair.config.json` (e.g. a kept own `AGENTS.md`/`CLAUDE.md`); to opt back in, remove the name there — the next `update` then overwrites, so `mv AGENTS.md AGENTS.md.bak` first (and `CLAUDE.md`) or pass `--persist-backup` |
 | the installed KB version, or whether it is behind | `kb-info` | also reads a packaged KB's metadata |
 | the KB checked for structural soundness | `kb-validate` | structure + manifest |
 | a KB **package** checked for integrity | `kb-verify` | checksum + structure + manifest, on a package path |
@@ -215,6 +229,9 @@ This map is judgment rather than syntax, which is why it is worth stating. Confi
 | their own knowledge base repository | `scaffold-kb` | a pure external KB + release script |
 | broken links in installed KB content fixed | `update-link` | validates and updates links |
 | their registry config validated | `validate-config` | asset registries + KB structure |
+| the shared KB cache inspected or reclaimed | `kb-cache` | list or prune; options from `--help` |
+| words or estimated tokens of their pair files counted | `tokens` | per area; options from `--help` |
+| to change how pair behaves in this project | **Configure** (below) | autonomy, hooks, profiles, adoption files |
 | to know this project's standards, process or decisions | `.pair/llms.txt` → the file it points to | never answer from memory when the project has its own record |
 | to know what to work on next | `/pair-next` | invoke it — it reads adoption files and PM state; never reimplement it here |
 | anything a catalogue skill owns (refine, plan, implement, review, gates) | that skill, by bare name | see step 6, including the adoption precondition |
@@ -229,6 +246,64 @@ If a request matches nothing here, go back to `--help` and to `llms.txt` and rea
 3. **Report what the CLI printed**, including warnings. Never restate a failure as a success, and never summarise away a message that names a path.
 4. **Stop on the first failure** and show its output. Do not retry with different flags hoping one works.
 5. **Quote the project's own words** when answering from `llms.txt`, and name the file — so the user can check you, and correct the source rather than you.
+
+## Capability menu
+
+When asked what you can do, list this — and nothing outside it. Say so for an area not listed; never invent a key.
+
+**CLI jobs** (run through the project's `pair-cli`, options from `--help`): `install`, `update`, `kb-info` (version / behind?), `kb-validate`, `kb-verify`, `package`, `scaffold-kb`, `update-link`, `validate-config`, `kb-cache`, `tokens`.
+
+**Configuration areas** (see **Configure**): `## Autonomy`, `## Cycle Hooks`, `## Blocking Severities`, Publish-PR Hooks, `workflowProfiles`, `skipRegistries`, `format-check-command`, `worktree-setup-command`, Review enforcement and identity, Coverage guardrail, PR states, PM tool / code host / `## State Mapping`, Definition of Ready / Done, `## Process Profile`, risk matrix and `## Tag Projection`, Harness / Model Policy, quality gates and branch protection, package-local adoption, template overrides, a full adoption pass.
+
+**Delegated skills**: anything a catalogue skill owns (`/pair-next`, refine, plan, implement, review).
+
+## Configure
+
+A request to change how pair behaves ("let green cards go up to merge", "add a pre-verify hook that runs the tests", "use profile X for the review"). Never from memory of a schema: read the owning file and the KB guideline named by `.pair/llms.txt` (automation policy, canonical states, quality model) at runtime.
+
+### Area → file and section → owner
+
+| Area | File and section | Owner |
+| --- | --- | --- |
+| Autonomy: `until`, `prepare`, `merge`, filter | `.pair/adoption/tech/automation.md` `## Autonomy` | `/pair-capability-record-decision` |
+| Cycle hooks | `tech/automation.md` `## Cycle Hooks` | `/pair-capability-record-decision` |
+| Blocking severities and `max-dispatches` | `tech/automation.md` `## Blocking Severities` | `/pair-capability-record-decision` |
+| Publish-PR Hooks | `tech/automation.md` Publish-PR Hooks | `/pair-capability-record-decision` |
+| Workflow profiles | `pair.config.json` `workflowProfiles` | shown edit + ADL via `/pair-capability-record-decision` |
+| Kept registries | `pair.config.json` `skipRegistries` | `update --skip-registries`; removal is a shown edit |
+| `format-check-command`, `worktree-setup-command`, Review enforcement, Review identity, Coverage guardrail, PR states | `tech/way-of-working.md` | `/pair-capability-record-decision` |
+| PM tool, code host, `## State Mapping` (incl. unmapped states and not-planned) | `tech/way-of-working.md` | `/pair-capability-setup-pm` |
+| Definition of Ready / Definition of Done tier requirements | `tech/way-of-working.md` Review Tier Matrix (the criteria themselves are in the KB) | `/pair-capability-record-decision` |
+| `## Process Profile` | `tech/way-of-working.md` | `/pair-capability-record-decision` |
+| risk matrix, `## Tag Projection` | `tech/risk-matrix.md` | `/pair-capability-record-decision` |
+| Harness, Model Policy | harness adoption | `/pair-capability-setup-harness` |
+| Gates, branch protection | CI and repository settings | `/pair-capability-setup-gates` |
+| A full adoption pass | all of `.pair/adoption/` | `/pair-process-bootstrap` |
+| package-local adoption | a package's own `.pair/adoption/` | `/pair-capability-record-decision` |
+| template overrides | project templates | `/pair-capability-record-decision` |
+
+Delegate to the owner when it is a skill; do not do its job here.
+
+### How to write
+
+1. **Show the diff** (file, section, before, after) and ask. Write only after an explicit yes.
+2. **Validate before writing** (below). A non-zero result or HALT stops: show the script output, nothing is written.
+3. **Write through `/pair-capability-record-decision`** (or the section-owning skill above). This skill never edits adoption files itself.
+4. `pair.config.json` is not an adoption file: `skipRegistries` via `update --skip-registries` (removal is a shown edit); `workflowProfiles` is a shown edit plus an ADL via record-decision.
+5. After writing, re-run the validator and echo the effective result (for autonomy: the effective gates).
+
+### Validate with the installed cycle scripts
+
+Run from the project, on a temporary copy holding the proposed value, never on the real file:
+
+```bash
+node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve ...   # autonomy
+node .claude/skills/pair-workflow-cycle/scripts/cycle-hooks.mjs load <file>       # hooks
+node .claude/skills/pair-workflow-cycle/scripts/blocking-severities.mjs read <file>  # severities
+node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve ...  # profiles
+```
+
+Arguments exactly as each script's header documents. Scripts absent (`.claude/skills/pair-workflow-cycle/scripts/` missing) → offer `update` first. A malformed existing file → stop, show the script output, offer a fix; never write over it.
 
 ## Step 6 — Run the CLI, and invoke the installed skills
 
@@ -262,8 +337,8 @@ Skills that only read the knowledge base — the guidelines, the how-to guides �
 
 ### What this skill does not do
 
-- It does not configure a PM tool, quality gates, or any adoption decision — those are their own skills, and they need the knowledge base this one installs.
-- It does not write the knowledge base or adoption files. The CLI writes the KB; other skills own their content.
+- It does not configure a PM tool or quality gates itself — it routes to the owning skill (see **Configure**).
+- It does not write the knowledge base or adoption files. The CLI writes the KB; adoption writes go through `/pair-capability-record-decision` or the owning skill, after a shown diff and a yes.
 - It does not replace the catalogue. Once pair is installed the process skills are there — this assistant **invokes** them (step 6) rather than reimplementing their steps.
 - It does not uninstall the plugin for you. Removing a plugin from the user's Claude Code installation is theirs to run, not a side effect of a setup step.
 

@@ -116,6 +116,10 @@ git init
 pair-cli install
 ```
 
+**With the CLI:** `pair-cli install`.
+
+**With `/pair-assistant` (optional, Claude Code):** ask for "pair in this project, first time" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
+
 This downloads the Knowledge Base and creates the `.pair/` directory with:
 
 - `knowledge/` — guidelines, how-tos, templates (reference material)
@@ -126,6 +130,8 @@ It also installs bridge files (`AGENTS.md`, `.claude/`, `.github/copilot/`, `.cu
 <Callout type="info">
   The `.pair/knowledge/` directory is managed by pair-cli. Don't edit files there — your changes would be overwritten on the next update. Your decisions go in `.pair/adoption/`.
 </Callout>
+
+**Optional, Claude Code only:** instead of steps 1 and 3 you can add the marketplace plugin (`/plugin marketplace add foomakers/pair`, `/plugin install pair@pair`) and run `/pair-assistant`, which installs and runs the CLI for you. The CLI stays the default path: see the [Quickstart](/docs/getting-started/quickstart#with-the-claude-code-plugin-optional).
 
 ### 4. Start your AI assistant
 
@@ -176,6 +182,8 @@ Run the full bootstrap (or `/pair-next` — it knows PRD is done and bootstrap i
 ```text
 /pair-process-bootstrap
 ```
+
+**With the CLI:** bootstrap is a skill, not a command. **With `/pair-assistant` (optional, Claude Code):** ask it to adopt the project; it hands off to `/pair-process-bootstrap` ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
 
 Bootstrap walks you through:
 

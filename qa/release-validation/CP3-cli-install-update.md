@@ -210,7 +210,7 @@
 
 ### Step: dropped files are removed (#421)
 
-1. Remove one file from `$WORKDIR/kb-source/.pair/knowledge/` and add a marker line to an installed `.pair/adoption/*.md`
+1. Remove one file from `$WORKDIR/kb-source/.pair/knowledge/` and add a marker line to an installed `.pair/adoption/tech/*.md`
 2. `$CLI update --source $WORKDIR/kb-source` again
 3. Expected: the removed file is gone from `project-auto/.pair/knowledge/` (mirror registry); the `.pair/adoption` edit survives (add registry)
 4. Offline equivalent: `scripts/smoke-tests/scenarios/update-removes-files.sh`
@@ -503,6 +503,52 @@
 
 ---
 
+## MT-CP322: Keep choice persisted, update preserves own files (#552)
+
+**Priority**: P1
+**Preconditions**: `$CLI` functional
+**Category**: CLI Functional
+
+### Steps
+
+1. `mkdir $WORKDIR/project-keep && cd $WORKDIR/project-keep && echo own > AGENTS.md && echo own > CLAUDE.md`
+2. `$CLI install --skip-registries agents`; `cat pair.config.json`
+3. `$CLI update`
+4. `$CLI update --skip-registries agents,nope`
+
+### Expected Result
+
+- Step 2: exit 0; `pair.config.json` is `{ "skipRegistries": ["agents"] }`; own files unchanged
+- Step 3: exit 0; prints `skipping agents (from pair.config.json)`; `AGENTS.md`/`CLAUDE.md` byte-identical
+- Step 4: exit 1, `Unknown registry 'nope'`, nothing written
+- Offline equivalent: `scripts/smoke-tests/scenarios/install-preconditions.sh` Test 7
+
+---
+
+## MT-CP323: Opt back in by removing the exclusion (#552)
+
+**Priority**: P1
+**Preconditions**: MT-CP322 passes (`$WORKDIR/project-keep`)
+**Category**: CLI Functional
+
+### Steps
+
+1. `cd $WORKDIR/project-keep && cp AGENTS.md AGENTS.md.bak && echo '{"skipRegistries": []}' > pair.config.json`
+2. `$CLI update`
+3. `$CLI update --help | grep skip-registries`
+4. Repeat 1-2 on a fresh copy without `cp`, with `$CLI update --persist-backup`
+
+### Expected Result
+
+- Step 2: exit 0; `AGENTS.md`/`CLAUDE.md` are pair's; no skip line; `AGENTS.md.bak` holds your original
+- Step 3: option documented
+- Step 4: backup kept only with `--persist-backup`, and then holds both originals: `.pair/backups/<session>/AGENTS.md` and `.../CLAUDE.md`
+- Offline equivalent: `install-preconditions.sh` Test 8
+
+---
+
 ## Changelog
 
 - #543: channel-aware MT-CP320 (`$CHANNEL`); MT-CP302 adds workflows/agents/skills paths; MT-CP307 lists 7 registries; MT-CP308 dropped-file step; MT-CP319 `external/git-<hash>` cache path, default config (no stale `.claude/skills` remap), skipped skills/workflows OK; new MT-CP321 error paths.
+- #552: new MT-CP322 (keep persisted in `pair.config.json`, update preserves), MT-CP323 (opt back in).
+- #552 (3rd): MT-CP323 step 4 asserts `CLAUDE.md` in the backup.
