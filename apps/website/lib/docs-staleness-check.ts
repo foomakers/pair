@@ -659,7 +659,8 @@ export function parseCatalogRow(
     const cells = line.split('|').map(c => c.trim())
     return {
       command: (cells[2] ?? '').replace(/^`|`$/g, ''),
-      description: cells[3] ?? '',
+      // an older catalog (pre em dash removal) compares equal to the derived row
+      description: (cells[3] ?? '').replaceAll(' \u2014 ', ', '),
     }
   }
   return null
