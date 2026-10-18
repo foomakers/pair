@@ -1254,7 +1254,9 @@ describe('docs site — tag-driven dispatch is documented where an operator look
     // keeps them consistent is that both say which sections they omit and where those live:
     // `## Harness` / `## Model Policy` in the guideline, `## Workflows` where Option D adds it.
     for (const surface of [tutorial, adoptionDocs]) {
-      expect(surface).toMatch(/`## Harness` and `## Model Policy`|`## Harness` \/ `## Model Policy`/)
+      expect(surface).toMatch(
+        /`## Harness` and `## Model Policy`|`## Harness` \/ `## Model Policy`/,
+      )
       expect(surface).toContain('## Workflows')
     }
     expect(tutorial).toMatch(/Option D/)
