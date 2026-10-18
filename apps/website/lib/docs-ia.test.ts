@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join } from 'node:path'
 
 const WEBSITE = join(__dirname, '..')
 const DOCS = join(WEBSITE, 'content', 'docs')
@@ -163,16 +163,25 @@ describe('AC54: three labels for the skill / CLI / plugin paths', () => {
     expect(offenders.map(o => `${o.page}: ${o.line.trim()}`)).toEqual([])
   })
 
+  /** The text a label governs: from the label to the next label on the same line, or the end. */
+  const segment = (line: string, label: string): string | null => {
+    const i = line.indexOf(label)
+    if (i < 0) return null
+    const rest = line.slice(i + label.length)
+    const j = rest.search(/\*\*(With |In your assistant)/)
+    return j < 0 ? rest : rest.slice(0, j)
+  }
+
   it('no slash skill under "With pair-cli"; no cycle/loop/batch skill under "With /pair-assistant"', () => {
-    const cliWithSkill = lines().filter(
-      ({ line }) => /With pair-cli\b/.test(line) && /`\/pair-[a-z-]+/.test(line),
-    )
+    const cliWithSkill = lines().filter(({ line }) => {
+      const seg = segment(line, 'With pair-cli')
+      return seg !== null && /`\/pair-[a-z-]+/.test(seg)
+    })
     expect(cliWithSkill.map(o => `${o.page}: ${o.line.trim()}`)).toEqual([])
-    const pluginWithDriver = lines().filter(
-      ({ line }) =>
-        /With `\/pair-assistant`/.test(line) &&
-        /\/pair-(workflow-cycle|loop|implement-batch|refine-batch)/.test(line),
-    )
+    const pluginWithDriver = lines().filter(({ line }) => {
+      const seg = segment(line, 'With `/pair-assistant`')
+      return seg !== null && /\/pair-(workflow-cycle|loop|implement-batch|refine-batch)/.test(seg)
+    })
     expect(pluginWithDriver.map(o => `${o.page}: ${o.line.trim()}`)).toEqual([])
   })
 })
@@ -264,7 +273,7 @@ describe('AC57: Concepts lists itself; glossary; reference moves', () => {
   it('glossary exists and the spine links it at first use', () => {
     const glossary = read('concepts/glossary.mdx')
     for (const term of ['card', 'macrostate', 'harness', 'engine', 'seal', 'handoff', 'ADL', 'realization', 'escalation'])
-      expect(glossary, `glossary lacks "${term}"`).toMatch(new RegExp(`^## .*\\b${term}\\b`, 'mi'))
+      expect(glossary, `glossary lacks "${term}"`).toMatch(new RegExp(`^##+ .*\\b${term}\\b`, 'mi'))
     for (const page of [
       'process-lifecycle/index.mdx',
       'process-lifecycle/refinement-workflow.mdx',
