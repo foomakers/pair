@@ -55,6 +55,10 @@ Navigate to your project root and run:
 pair-cli install
 ```
 
+**With the CLI:** `pair-cli install` (above).
+
+**With `/pair-assistant` (optional, Claude Code):** ask for "pair in this project, first time" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
+
 This creates the `.pair/` folder with documentation, guidelines, how-to guides, and adoption templates. It also sets up `.github/` workflows and the agent bridge pattern (`AGENTS.md`).
 
 Your project now has:
@@ -76,6 +80,19 @@ See what pair can install in your project:
 pair-cli install --list-targets
 ```
 
+## Optional: install via the Claude Code marketplace
+
+The CLI above is the default path. If you use **Claude Code**, you can instead let a skill install and run the CLI for you (optional, Claude Code only):
+
+```bash
+/plugin marketplace add foomakers/pair
+/plugin install pair@pair
+/pair-assistant
+/pair-next
+```
+
+`/pair-assistant` installs `pair-cli` (locally when a `package.json` exists, otherwise via `npx`), runs the install, then `/pair-next` takes over. For an existing project it asks first (see [Existing Project](#existing-project)). What the plugin installs, how to update or remove it, and what else `/pair-assistant` can do: [Claude Code plugin & /pair-assistant](/docs/reference/pair-assistant).
+
 ## Start Using pair
 
 Your AI assistant (Claude, Copilot, Cursor) now reads the `.pair/` folder automatically. The next step is creating your **adoption files** — the project-specific decisions that keep every AI session aligned.
@@ -90,15 +107,26 @@ Run `/pair-next` in your AI assistant. It detects empty adoption files and walks
 2. **Bootstrap** — the AI guides you through architecture, tech stack, infrastructure, and way-of-working decisions, generating adoption files in `.pair/adoption/tech/`
 3. **What comes next** — `/pair-next` continues to suggest the right next step as your project evolves
 
+**With the CLI:** `/pair-next` and `/pair-process-bootstrap` are skills in your assistant; there is no CLI command for them. **With `/pair-assistant` (optional, Claude Code):** ask it to adopt the project; it installs pair, then hands off to `/pair-process-bootstrap` (`$mode: quick` for no confirmations).
+
 In a hurry, or setting up from a script? Bootstrap also runs one-shot from KB-sensible defaults instead of interviewing you — see **[Bootstrap Quick Mode](/docs/getting-started/bootstrap-quick-mode)**. The interview above stays the default.
 
 ### Existing Project
 
-For projects with an existing codebase, the AI reverse-engineers your project context — reading dependencies, config files, Git history, and code structure — then proposes adoption files for you to review and refine.
+![Installing pair into a repository that already has files: refusal, keep or overwrite](/diagrams/existing-repo-install.svg)
 
-The quick version: run `pair-cli install`, then paste a reverse-engineering prompt into your AI assistant. It analyzes the codebase, presents findings, and asks you to confirm before generating any files.
+`pair-cli install` is **all-or-nothing per registry target**. If any target already exists (`AGENTS.md`, `CLAUDE.md`, `.claude/skills`, `.pair/knowledge`, `.github`, …) it exits 1 with `Target '<path>' already exists` and writes nothing. For your own `AGENTS.md` or `CLAUDE.md` you choose, per both files together (they come from the same registry):
 
-For the full guided walkthrough with the complete prompt and step-by-step refinement process, see the **[Existing Project tutorial](/docs/tutorials/existing-project)** (~30 min).
+- **Overwrite** — move yours aside, then install: `mv AGENTS.md AGENTS.md.bak` (and `mv CLAUDE.md CLAUDE.md.bak`), then `pair-cli install`. Use `mv`, not `cp`: a leftover original makes install refuse again.
+- **Keep** — `pair-cli install --skip-registries agents` installs everything else and leaves your files untouched. The choice is saved in `pair.config.json` as `"skipRegistries": ["agents"]`, and every later `pair-cli update` honours it (`skipping agents (from pair.config.json)`). pair is then **not reachable from your `AGENTS.md`**: add a pointer to `.pair/knowledge/` and `.pair/adoption/` yourself.
+
+Other existing targets (your own `.claude/skills`, `.github`) are kept the same way: `--skip-registries skills,github`.
+
+Then pick the depth: **1. install only** (adoption files still to fill in) or **2. install and adopt the project** (a bootstrap pass that describes your stack, architecture and way of working — see [Bootstrap Quick Mode](/docs/getting-started/bootstrap-quick-mode)).
+
+**With the CLI:** the commands above. **With `/pair-assistant` (optional, Claude Code):** ask for "pair in this project, first time"; it checks every target, asks keep or overwrite per file, runs the `mv` or the `--skip-registries` for you after you agree, and offers option 1 or 2.
+
+For the full guided walkthrough with the reverse-engineering prompt, see the **[Existing Project tutorial](/docs/tutorials/existing-project)** (~30 min).
 
 ## Keep Your KB Up to Date
 
@@ -108,7 +136,15 @@ When pair publishes new guidelines, templates, or how-to improvements:
 pair-cli update
 ```
 
-This refreshes the Knowledge Base content (guidelines, how-tos, templates) while **preserving your adoption files** — your decisions are never overwritten.
+This refreshes the Knowledge Base content (guidelines, how-tos, templates) while **preserving your adoption files** — your decisions are never overwritten. A registry you chose to keep with `--skip-registries` stays untouched.
+
+**With the CLI:** `pair-cli update` (the default path). **With `/pair-assistant` (optional, Claude Code):** ask for "the KB and skills refreshed"; it runs `update`, honours `skipRegistries` and prints the skip line ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
+
+To **opt back in** to a registry you kept, remove its name from `skipRegistries` in `pair.config.json`. The next `update` then overwrites it, so first `mv AGENTS.md AGENTS.md.bak` (and `CLAUDE.md`) or pass `--persist-backup`.
+
+## Configure pair
+
+Behaviour such as how far cards go unattended, cycle hooks, workflow profiles or review enforcement lives in a few adoption files: see [Adoption settings](/docs/reference/adoption-settings). **With the CLI:** edit the file and validate it. **With `/pair-assistant` (optional, Claude Code):** ask, for example, "let green cards go up to merge"; it shows the diff, validates it and writes through `/pair-capability-record-decision` ([how it writes](/docs/reference/pair-assistant#how-it-writes)). Autonomy in depth: [Unattended delivery](/docs/tutorials/unattended-delivery#autonomy-until-gates-escalation).
 
 ## The Development Process
 
@@ -123,7 +159,7 @@ pair defines a 9-step development lifecycle organized in four levels:
 
 Each step has a **how-to guide** in `.pair/knowledge/how-to/` that the AI follows, and a matching **skill** (e.g., `/pair-process-implement`) that automates it. Run `/pair-next` at any point to find out which step comes next.
 
-[Learn more about the Process Lifecycle](/docs/developer-journey)
+[Learn more about the Process Lifecycle](/docs/developer-journey), or choose how much to run yourself in [Lifecycle Modes](/docs/developer-journey/lifecycle-modes).
 
 ## Choose Your Setup
 

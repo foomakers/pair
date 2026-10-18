@@ -35,6 +35,10 @@ Navigate to your project directory and run:
 pair-cli install
 ```
 
+**With the CLI:** `pair-cli install`.
+
+**With `/pair-assistant` (optional, Claude Code):** ask for "pair in this project, first time" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
+
 This downloads the default pair KB and installs it into your project's `.pair/` directory. The CLI creates the full directory structure:
 
 ```text
@@ -69,6 +73,10 @@ After installation, check that the KB is active:
 pair-cli kb-validate
 ```
 
+**With the CLI:** `pair-cli kb-validate`.
+
+**With `/pair-assistant` (optional, Claude Code):** ask for "the KB checked for structural soundness" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
+
 You should see the knowledge and adoption directories populated. The key indicator is `.pair/knowledge/guidelines/` containing guideline files.
 
 Check that your AI assistant can see the KB by starting a new session — if AGENTS.md or CLAUDE.md links to `.pair/`, the assistant will pick up the context automatically.
@@ -100,6 +108,10 @@ As the upstream KB evolves, pull updates without losing your project-specific de
 ```bash
 pair-cli update
 ```
+
+**With the CLI:** `pair-cli update`.
+
+**With `/pair-assistant` (optional, Claude Code):** ask for "the KB and skills refreshed" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
 
 The update replaces `.pair/knowledge/` (upstream content) but preserves `.pair/adoption/` (your decisions). See [Customize the Knowledge Base](/docs/customization/team) for details on how the layered architecture protects your customizations.
 

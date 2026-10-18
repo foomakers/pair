@@ -31,12 +31,13 @@
 - `$BASE_URL/docs/getting-started/bootstrap-quick-mode`
 - `$BASE_URL/docs/getting-started/checklist`
 
-**Concepts** (13 pages):
+**Concepts** (14 pages):
 
 - `$BASE_URL/docs/concepts`
 - `$BASE_URL/docs/concepts/ai-assisted-sdlc`
 - `$BASE_URL/docs/concepts/knowledge-base`
 - `$BASE_URL/docs/concepts/skills`
+- `$BASE_URL/docs/concepts/delivery-workflow`
 - `$BASE_URL/docs/concepts/adoption-files`
 - `$BASE_URL/docs/concepts/agent-integration`
 - `$BASE_URL/docs/concepts/llms-txt`
@@ -47,10 +48,11 @@
 - `$BASE_URL/docs/concepts/review-identity`
 - `$BASE_URL/docs/concepts/tag-driven-gates`
 
-**Process Lifecycle** (6 pages):
+**Process Lifecycle** (7 pages):
 
 - `$BASE_URL/docs/developer-journey`
 - `$BASE_URL/docs/developer-journey/induction`
+- `$BASE_URL/docs/developer-journey/lifecycle-modes`
 - `$BASE_URL/docs/developer-journey/strategic-planning`
 - `$BASE_URL/docs/developer-journey/iteration`
 - `$BASE_URL/docs/developer-journey/execution`
@@ -88,7 +90,7 @@
 - `$BASE_URL/docs/pm-tools/linear`
 - `$BASE_URL/docs/pm-tools/azure-devops`
 
-**Reference** (18 pages):
+**Reference** (20 pages):
 
 - `$BASE_URL/docs/reference`
 - `$BASE_URL/docs/reference/cli/commands`
@@ -108,6 +110,8 @@
 - `$BASE_URL/docs/reference/quality-model`
 - `$BASE_URL/docs/reference/quality-gates-configuration`
 - `$BASE_URL/docs/reference/pair-next`
+- `$BASE_URL/docs/reference/pair-assistant`
+- `$BASE_URL/docs/reference/adoption-settings`
 
 **Migrations** (2 pages):
 
@@ -143,13 +147,13 @@
 
 ### Expected Result
 
-- All 88 URLs return HTTP 200
+- All 92 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 88 pages
+- Total: 92 pages
 
 ---
 

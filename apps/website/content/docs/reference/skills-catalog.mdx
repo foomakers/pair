@@ -167,3 +167,7 @@ For details on how skills are resolved and transformed, see the [Skill Managemen
 ## Package-Local Scoping
 
 `review` (PR diff), `assess-*` (diff) and `refine-story` (packages the story references) load only the touched packages' `<pkg>/.pair/` when the opt-in [package-local adoption override](/docs/customization/package-local-adoption) is active, and may PROPOSE activating it — never activating it. Without the override nothing changes.
+
+## Plugin Skill
+
+`/pair-assistant` is not part of the catalog above: it ships only in the optional Claude Code plugin, and the CLI never installs it into a project. See [Claude Code plugin & /pair-assistant](/docs/reference/pair-assistant).

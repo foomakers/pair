@@ -20,7 +20,7 @@ When a developer invokes a skill (e.g., `/implement`), the AI reads the `SKILL.m
 
 ## Skill Categories
 
-pair organizes skills into two categories:
+pair organizes skills into families: [process](#process-skills) and [capability](#capability-skills) skills, [workflow](#workflow-skills) skills, [loop and batch entry points](#loop-and-batch-entry-points), and one [plugin skill](#plugin-skill).
 
 ### Process Skills
 
@@ -53,6 +53,20 @@ Capability skills perform specific, reusable operations. They are invoked indepe
 | `/write-issue` | Create or update issues in the PM tool |
 | `/estimate` | Estimate story size |
 
+### Workflow Skills
+
+Workflow skills are the **stages of the [delivery workflow](/docs/concepts/delivery-workflow)**: `/pair-workflow-cycle` is the coordinator; `/pair-workflow-contract-phase`, `/pair-workflow-implement-phase`, `/pair-workflow-red-spec`, `/pair-workflow-red-verify`, `/pair-workflow-green-fix` and `/pair-workflow-review-phase` are **stage skills**. A stage skill does one stage of one card (one role, one handoff) and is dispatched by the coordinator or the batch engine, never suggested by `/pair-next`. You normally invoke only the coordinator. Detail: [Delivery cycle](/docs/reference/delivery-cycle#2-the-stages-one-by-one), [Skills Catalog](/docs/reference/skills-catalog#workflow-skills).
+
+### Loop and Batch Entry Points
+
+`/pair-loop` selects eligible cards and repeats under the [autonomy gates](/docs/tutorials/unattended-delivery#autonomy-until-gates-escalation). It composes the batch workflows `pair-implement-batch` and `pair-refine-batch` (installed in `.claude/workflows/`), which dispatch the five subagents in `.claude/agents/` (`pair-implementer`, `pair-fix-test-author`, `pair-contract-generator`, `pair-red-contract-verifier`, `pair-reviewer`). See [Batch engine](/docs/reference/batch-engine).
+
+### Plugin Skill
+
+`/pair-assistant` is the single bootstrap skill the optional Claude Code plugin ships. The CLI never installs it into your project; it installs pair and configures it. See [Claude Code plugin & /pair-assistant](/docs/reference/pair-assistant).
+
+![Skill families and how they compose](/diagrams/skill-families.svg)
+
 ## Composition
 
 Skills compose other skills to build complex workflows. For example, `/implement` composes:
@@ -68,6 +82,8 @@ And `/review` composes:
 - `/verify-done` — to check Definition of Done criteria
 - `/analyze-debt` — to analyze and report technical debt
 - `/record-decision` — if a decision needs recording
+
+Across families: process skills compose capability skills; `/pair-workflow-cycle` composes the stage skills (which in turn compose `/pair-process-implement`, `/pair-process-review` and the capability skills); `/pair-loop` composes the batch workflows; `/pair-assistant` delegates to the project's own skills.
 
 This composition means complex processes are built from simple, tested parts. Each capability skill works the same whether invoked directly or composed by a process skill.
 
@@ -86,3 +102,5 @@ Skills are stored in `.skills/` within the KB and distributed to AI tool directo
 ```
 
 The canonical copy goes to `.claude/skills/`. Secondary targets receive symlinks, so all AI tools share the same skill definitions. The directory structure uses a flatten/prefix naming convention: `process/implement` becomes `pair-process-implement`.
+
+**What ships where.** `pair-cli install` and `update` write the process, capability, workflow and loop skills into `.claude/skills/`, the batch workflows into `.claude/workflows/` and the subagents into `.claude/agents/`. The [marketplace plugin](/docs/reference/pair-assistant#what-the-plugin-installs) ships only `/pair-assistant`.
