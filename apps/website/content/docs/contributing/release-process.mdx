@@ -110,6 +110,23 @@ If no test suite exists yet, create one first:
 
 See the [Release testing tutorial](/docs/tutorials/release-testing) for a full walkthrough.
 
+## Release validation checkpoints
+
+Pair's own critical paths live in [`qa/release-validation/`](https://github.com/foomakers/pair/blob/main/qa/release-validation/README.md); the README has the per-channel (`$CHANNEL`) rules.
+
+- **CP1**: website landing page, core navigation, responsive, meta tags.
+- **CP2**: CLI artifacts: ZIP + TGZ download, checksum, `--version`, `--help`.
+- **CP3**: `install` and `update`, idempotency, persisted keep choice.
+- **CP4**: KB dataset ZIP, manifest, verify, info.
+- **CP5**: every docs page returns 200, version consistency, internal links.
+- **CP6**: Orama search, sidebar, prev/next, `llms.txt`, privacy.
+- **CP7**: npmjs.org visibility and install from the public registry.
+- **CP8**: `pair-cli package` layouts, metadata, validation.
+- **CP9**: timed quickstart onboarding (`$mode: quick` under 10 minutes).
+- **CP10**: pair from Claude Code Web (manual, inside the web session).
+- **CP11**: release pipeline: dry-run, duplicate refusal, dispatch-only workflows, cleanup (inspection only).
+- **CP12**: Claude Code marketplace: add, install `pair@pair`, `/pair-assistant` (manual, inside Claude Code).
+
 ## Rollback
 
 If a release needs to be reverted:

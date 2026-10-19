@@ -435,3 +435,19 @@ describe('AC60: every redirect lands on a page that exists', () => {
     }
   })
 })
+
+describe('release validation CP list lives in Contributing (#543 AC11)', () => {
+  const page = read('contributing/release-process.mdx')
+
+  it('release-process lists CP1..CP12 and links the suite README', () => {
+    for (let n = 1; n <= 12; n++)
+      expect(page, `CP${n} missing`).toMatch(new RegExp(`^- \\*\\*CP${n}\\*\\*:`, 'm'))
+    expect(page).toContain('/blob/main/qa/release-validation/README.md')
+  })
+
+  it('release-testing tutorial stays general: no pair-internal CP11/CP12 or suite link', () => {
+    const tutorial = read('tutorials/release-testing.mdx')
+    expect(tutorial).not.toMatch(/\bCP1[0-2]\b/)
+    expect(tutorial).not.toContain('foomakers/pair/blob/main/qa/release-validation')
+  })
+})

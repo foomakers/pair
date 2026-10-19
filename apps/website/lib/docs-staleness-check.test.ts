@@ -46,6 +46,15 @@ import { readFileSync } from 'node:fs'
 
 const REPO_ROOT = resolve(__dirname, '../../..')
 
+describe('githubHeadingSlugs memo (#543 AC12)', () => {
+  it('returns an independent set per call, so a caller mutation never poisons the cache', () => {
+    const md = '# Memo probe heading\n'
+    const first = githubHeadingSlugs(md)
+    first.add('poison')
+    expect(githubHeadingSlugs(md)).toEqual(new Set(['memo-probe-heading']))
+  })
+})
+
 describe('findSkillCountMismatches', () => {
   it('flags a wrong bare "N skills"', () => {
     expect(findSkillCountMismatches('has 5 skills', 'a.mdx', 35)).toHaveLength(1)
