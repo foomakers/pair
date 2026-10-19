@@ -15,7 +15,8 @@
 ## Quick Start
 
 ```bash
-npx @foomakers/pair-cli install
+npm install -g @foomakers/pair-cli
+pair-cli install
 ```
 
 This installs the pair Knowledge Base into your project. Your AI assistant reads `.pair/` and `.claude/skills/` to follow your team's standards, process, and architecture decisions.
