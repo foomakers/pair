@@ -105,6 +105,20 @@ test('renders the three modes with the driving analogy and the safe default', as
   await expect(section.locator('a[href="/docs/process-lifecycle/lifecycle-modes"]')).toBeVisible()
 })
 
+// AC-6: Three modes pictograms (scope + human cue, at a glance)
+test('renders one labelled pictogram per mode with the human cue', async ({ mount }) => {
+  const component = await mount(<HomePage />)
+  const section = component.locator('section[aria-label="Three modes"]')
+  const pictograms = section.locator('svg[role="img"]')
+  await expect(pictograms).toHaveCount(3)
+  for (const mode of ['Assisted', 'Supervised', 'Autonomous']) {
+    await expect(section.getByRole('img', { name: new RegExp(`^${mode}:`) })).toBeVisible()
+  }
+  await expect(section).toContainText('You: every step')
+  await expect(section).toContainText('You: at checkpoints and escalations')
+  await expect(section).toContainText('You: only on escalation')
+})
+
 // AC-7: Delivery workflow
 test('renders the delivery workflow with independent review, seals and resumable state', async ({
   mount,
