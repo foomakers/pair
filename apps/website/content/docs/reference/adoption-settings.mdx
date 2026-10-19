@@ -37,7 +37,7 @@ Read by the delivery cycle ([`/pair-workflow-cycle`, `pair-cli run`](/docs/proce
 | `## Cycle Hooks` | `pre-<stage>`, `post-<stage>`, `pre-cycle`, `post-cycle`, `on-halt`; `timeout` (default 600, `0` off) | no hooks | `cycle-hooks.mjs` | shell commands at stage boundaries | yes |
 | `## Publish-PR Hooks` | `pre-publish`, `post-publish` | no hooks | `/pair-capability-publish-pr` | commands around PR publication | yes |
 | `## Harness` | harness names, `Requires: mcp` | all harnesses supported | `/pair-capability-setup-harness` | which harnesses the project supports | yes (delegated) |
-| `## Model Policy` | `<risk tier>: cheap\|balanced\|frontier` | no class | `/pair-capability-setup-harness` | model class per tier | yes (delegated) |
+| `## Model Policy` | `<risk tier>: cheap\|balanced\|frontier` | no class | `/pair-capability-setup-harness`, `workflow-profile.mjs` | model class per tier; what a profile's `model: by-tier` reads | yes (delegated) |
 
 Validate before committing: `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve`, `cycle-hooks.mjs load <file>`, `blocking-severities.mjs read <file>`. Section grammars: [Automation Policy](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md).
 
@@ -87,8 +87,8 @@ Outside the registries ([Configuration](/docs/reference/configuration)):
 | Key | Allowed values | Default | Read by | Effect | Assistant |
 | --- | --- | --- | --- | --- | --- |
 | `skipRegistries` | registry names | none | `install`, `update` | registries left untouched, e.g. `agents` keeps your `AGENTS.md`/`CLAUDE.md` ([Quickstart](/docs/getting-started/quickstart)) | yes (`update --skip-registries`) |
-| `workflowProfiles` | named JSON profiles per stage | built-in profile | `workflow-profile.mjs` | engine, model, effort per stage ([Workflow profiles](/docs/reference/configuration#workflow-profiles-workflowprofiles)) | yes |
-| `engine` | `id`, `bin`, `model` maps | `pi` | `pair-cli run` | which agent engine runs ([Execution engine](/docs/reference/configuration#execution-engine-engine)) | no |
+| `workflowProfiles` | `default`, `files`, `inline`: named JSON profiles with `engine`, `model`, `effort`, `context` per stage | KB default: the run's engine, its default model, default effort, fresh context | `workflow-profile.mjs` | engine, model, effort and context per stage; `--profile` / `--workflow-config` override per run ([Workflow profiles](/docs/reference/configuration#workflow-profiles-workflowprofiles)) | yes |
+| `engine` | `id`, `bin`, `model` maps | `claude` | `pair-cli run` | which agent engine runs ([Execution engine](/docs/reference/configuration#execution-engine-engine)) | no |
 
 ## Related
 

@@ -3,6 +3,12 @@ title: The delivery cycle in depth
 description: The delivery mechanism stage by stage, the cycle and its authority, the three realizations, profiles, Cycle Hooks, the merge stage, host adapters, timeouts and how unattended work flows end to end.
 ---
 
+<Callout type="info" title="You do not need all of this at once">
+  This page is dense on purpose: every stage, realization and setting of the cycle is here so that, when you need to, you can configure one piece selectively and leave the rest alone.
+
+  If you want guidance through the options, [`/pair-assistant`](/docs/reference/pair-assistant) (optional, Claude Code) walks you through them and writes the configuration for you. Otherwise the default configuration is fine: the high-level skills (`/pair-workflow-cycle`, `/pair-loop`, or `pair-cli run`) automate delivery without you touching any of it.
+</Callout>
+
 The in-depth companion of the [delivery workflow](/docs/process-lifecycle/delivery-workflow): what the cycle is, how each stage works, which realization runs it, how it is configured, and how unattended work flows through it.
 
 **This page is a map, not a second copy of the territory.** Exact argument names, refusal identifiers, schema fields and script paths live in the owning skill, script or guideline and are linked from here, so a change there cannot leave this page stale on that fact. Where this page and an owner disagree, the owner wins and this page is the bug.

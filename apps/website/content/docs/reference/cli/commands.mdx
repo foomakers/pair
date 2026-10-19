@@ -868,7 +868,7 @@ Review findings still go through `prepare → validate → green`, their failing
      boundary leaves it Draft with `needs-review` (exit `1`).
    - **`## Eligibility` bounds `--autonomous` runs** here too, even with no `## Workflows` declared: a
      card without the label is skipped `ineligible` before it is read. `--approve-ineligible` lets
-     that one run through, says so, and writes nothing. A supervised run is not held back by it.
+     that one run through, says so, and writes nothing. A run without `--autonomous` is not held back by it.
      With **no `## Eligibility` declared** there is no label to require: an explicit `--card` names
      its card rather than selecting from the board, so the run proceeds (also under `--autonomous`) and the output says exactly that instead of "automation is off".
    - **`--pr <n>`** goes straight to fix-and-review in the cycle, even on a card whose tag maps a

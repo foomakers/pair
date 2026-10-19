@@ -1,9 +1,9 @@
 ---
 title: Automated development
-description: Let pair deliver cards for you, semi-automatically (you trigger each card or batch) or automatically (a daemon that watches your backlog), from one manual run to a systemd service.
+description: Let pair deliver cards for you, Supervised (you trigger one card at a time) or Autonomous (a daemon that watches your backlog), from one manual run to a systemd service, with the engine, model and effort of every stage under your control.
 ---
 
-This tutorial shows how to let pair deliver cards without you writing the code or driving every stage. **Semi-automatic**: you start one card (`pair-cli run --card`, `/pair-workflow-cycle`) or one batch and review the result. **Automatic**: a daemon (`pair-cli run --root --parallel --watch`, or `/pair-loop`) picks cards from your backlog and ships those your gates allow. You will go from a manual dry-run to a systemd-managed daemon on a dedicated box in about 30 minutes.
+This tutorial shows how to let pair deliver cards without you writing the code or driving every stage. **Supervised**: you start one card (`pair-cli run --card`, `/pair-workflow-cycle`) or one batch and review the result. **Autonomous**: a daemon (`pair-cli run --root --parallel --watch`, or `/pair-loop`) picks cards from your backlog and ships those your gates allow. You will go from a manual dry-run to a systemd-managed daemon on a dedicated box in about 30 minutes.
 
 ## Before you start
 
@@ -29,6 +29,95 @@ Declared once in `## Autonomy` of `tech/automation.md` (or passed as `--until`, 
 
 **In your assistant:** edit `tech/automation.md`, then `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve`. **With `/pair-assistant` (optional, Claude Code):** "let green cards go up to merge" shows the `## Autonomy` diff, validates it and writes it through record-decision ([how it writes](/docs/reference/pair-assistant#how-it-writes)).
 
+## Per-stage engine, model and effort: workflow profiles
+
+A **workflow profile** chooses, for each stage of the cycle (`implement`, `verify`, `prepare`, `validate`, `green`, `contract`, `merge`), which engine runs it, which model, at which effort, and whether the stage starts a fresh agent or resumes the previous one of the same role. It lives in `pair.config.json` under `workflowProfiles` and is resolved once per run by one script, `workflow-profile.mjs`, for both `pair-cli run --card` and `/pair-workflow-cycle`. With no profile nothing changes: the run's engine, its default model, default effort, a fresh context on every stage.
+
+A realistic profile: cheap where the work is bounded by sealed tests, frontier where an independent judgment is the gate, and a second vendor for the final review.
+
+```json title="pair.config.json"
+{
+  "engine": { "id": "claude" },
+  "workflowProfiles": {
+    "default": "mixed",
+    "files": ".pair/adoption/tech/workflow-profiles/*.json",
+    "inline": {
+      "mixed": {
+        "description": "cheap where bounded, frontier where independent",
+        "defaults": { "engine": "default", "model": "balanced", "effort": "medium", "context": "fresh" },
+        "modelClasses": {
+          "cheap": "claude-haiku-5-5",
+          "balanced": "claude-sonnet-5-5",
+          "frontier": "claude-opus-5-5"
+        },
+        "stages": {
+          "contract": { "model": "cheap", "effort": "low" },
+          "implement": { "model": "balanced" },
+          "prepare": { "model": "cheap", "context": "reuse" },
+          "validate": { "model": "frontier", "effort": "high" },
+          "green": { "model": "cheap", "context": "reuse" },
+          "verify": { "engine": "codex", "model": "gpt-5.5", "effort": "high" },
+          "merge": { "model": "balanced" }
+        }
+      }
+    }
+  }
+}
+```
+
+- **`default`**: the profile a run uses when no flag names one. **`files`**: a glob (or list) of profile files, each indexed by its own `name`. **`inline`**: profiles written here, keyed by name (the key is the name). Anything else under `workflowProfiles` is refused.
+- A stage entry overrides only the fields it declares; the rest come from `defaults`, then from the KB default.
+
+| Field | Values | Notes |
+| --- | --- | --- |
+| `engine` | `default` (the run's engine), `pi`, `opencode`, `claude`, `codex` | `pair-cli` spawns that engine for the stage and checks it is installed before the first dispatch; in a session the session is the engine, so a stage engine is only reported |
+| `model` | `default` (the engine's own), an explicit id, a class (`cheap`, `balanced`, `frontier`), `by-tier` | a class resolves through `modelClasses`; a near-miss of a keyword (`Cheap`, `by_tier`) is refused as a typo |
+| `effort` | `default`, `low`, `medium`, `high`, `xhigh`, `max` | in a session: enforced on Codex, a prompt request on Claude; `pair-cli` records and prints it but sends it to no engine yet |
+| `context` | `fresh`, `reuse` | `reuse` resumes the previous agent of the same role, and only where the cycle allows it (`prepare`, `green`); on `validate` or `verify` it is refused at load |
+
+**Choosing the profile.** Resolved once per run, highest first: `--workflow-config <path>` (an external profile file, used verbatim) > `--profile <name>` (looked up in `files` and `inline`) > `workflowProfiles.default` > the KB default. A name no source has halts `profile-unresolved`, a bad value halts `profile-invalid`, two files with the same `name` halt `profile-name-collision`: never a silent fall back to the KB default, so a typo cannot run the whole cycle on the wrong model.
+
+```bash
+pair-cli run --card 217 --profile mixed                      # a named profile
+pair-cli run --card 217 --workflow-config ./review-only.json # an external file, verbatim
+pair-cli run --card 217                                      # workflowProfiles.default, else the KB default
+```
+
+In your assistant, `/pair-workflow-cycle` takes the same two as its `$profile` and `$workflowConfig` arguments. Both flags need `--card`: the `--parallel` and `--watch` loop does not forward them to the cards it spawns, so an Autonomous run takes its profile from `workflowProfiles.default`.
+
+**Printing the resolved table.** Every run prints the profile, its source, its hash and one line per stage (engine, model, effort, context, each with the level that decided it) before the first dispatch. To see it without running anything:
+
+```bash
+node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . --profile mixed --tier risk:green | jq -r '.table[]'
+```
+
+The first line names the profile, its source and its hash; then one line per stage:
+
+```text
+  Card tier: risk:green
+  prepare   | engine default (defaults) | model cheap (risk:green) → claude-haiku-5-5 (stage) | effort medium (defaults) | context reuse (stage)
+  validate  | engine default (defaults) | model frontier (risk:green) → claude-opus-5-5 (stage) | effort high (stage) | context fresh (defaults)
+  implement | engine default (defaults) | model balanced (risk:green) → claude-sonnet-5-5 (stage) | effort medium (defaults) | context fresh (defaults)
+  green     | engine default (defaults) | model cheap (risk:green) → claude-haiku-5-5 (stage) | effort medium (defaults) | context reuse (stage)
+  verify    | engine codex (stage) | model gpt-5.5 (stage) | effort high (stage) | context fresh (defaults)
+  contract  | engine default (defaults) | model cheap (risk:green) → claude-haiku-5-5 (stage) | effort low (stage) | context fresh (defaults)
+  merge     | engine default (defaults) | model balanced (risk:green) → claude-sonnet-5-5 (stage) | effort medium (defaults) | context fresh (defaults)
+```
+
+**Variant: let the model follow the card's risk tier.** Write `"model": "by-tier"` on `defaults` (for the stages that declare no model of their own) or on a stage, and map tiers to classes in `## Model Policy` of `tech/automation.md`:
+
+```markdown
+## Model Policy
+
+risk:green: cheap
+risk:yellow: balanced
+risk:red: frontier
+```
+
+The tier is the card's `risk:*` label (from `--card-tags`, or read from the tracker under `--autonomous`; the loop passes each child card its labels). An untagged card, a tier the policy omits, a missing policy or a class with no id in `modelClasses` resolve to the engine's default model, never a halt. The resolved line names the class and the tier it came from: `cheap (risk:green) → claude-haiku-5-5`.
+
+The profile's name and hash are stamped in every handoff for audit, but they are not an input of the cycle: changing the profile between runs invalidates no evidence. Full schema and refusals: [Configuration](/docs/reference/configuration#workflow-profiles-workflowprofiles); the recipe: [Autonomy and per-stage engine and model](/docs/guides/autonomy-and-profiles).
+
 ## Walkthrough: your first unattended run
 
 ## Prerequisites
@@ -47,7 +136,7 @@ Declared once in `## Autonomy` of `tech/automation.md` (or passed as `--until`, 
 
 - A `tech/automation.md` policy declaring which cards run unattended, whether they can merge on
   their own, and where the trail is written
-- One manual, supervised run to prove the config before anything runs unattended
+- One manual run you watch, to prove the config before anything runs unattended
 - A daemon, systemd timer (or a scheduled task, or a supervisor loop), that re-invokes `pair-cli run`
   on a schedule, so new eligible cards get picked up without you starting anything by hand
 - A working understanding of what "eligible" means, who can change it, and what stops the whole
@@ -132,7 +221,7 @@ Pin the engine so every invocation (yours, a teammate's, the daemon's) agrees wi
 { "engine": { "id": "pi" } }
 ```
 
-## Step 3: One supervised run, before anything is unattended
+## Step 3: One run you watch, before anything is unattended
 
 Resolve everything and print it: nothing spawns:
 

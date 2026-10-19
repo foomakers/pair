@@ -40,8 +40,8 @@ Three gates decide how far a card goes without you: `until` (`ready`, `pr`, `mer
 Same three modes as the [refinement workflow](/docs/process-lifecycle/refinement-workflow#per-mode); which assistants support each is in [Lifecycle modes](/docs/process-lifecycle/lifecycle-modes#modes-by-assistant).
 
 - **Assisted**: not the workflow. You run `/pair-process-implement` and `/pair-process-review` yourself, task by task.
-- **Semi-automatic**: you trigger it per card (`/pair-workflow-cycle`, `pair-cli run --card`) or per batch (`/pair-implement-batch`). It runs implement, independent verify and remediation, then stops for you at the review-approved PR or at an escalation.
-- **Automatic**: `/pair-loop` or `pair-cli run --root --parallel --watch` re-select cards and run the cycle under the gates. A card merges only when the `merge` gate allows it.
+- **Supervised**: you trigger it on one card (`/pair-workflow-cycle`, `pair-cli run --card`), or on a set of cards you name (`/pair-implement-batch`). It runs implement, independent verify and remediation, then stops for you at the review-approved PR or at an escalation.
+- **Autonomous**: `/pair-loop` or `pair-cli run --root --parallel --watch` re-select cards and run the cycle under the gates. A card merges only when the `merge` gate allows it.
 
 ## Realizations
 

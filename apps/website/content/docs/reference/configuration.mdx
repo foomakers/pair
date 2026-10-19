@@ -353,19 +353,25 @@ skill, through one shared resolver.
 - **`files`**: a glob or array of globs; each file is one profile, indexed by its own `name`.
 - **`inline`**: profiles declared directly, keyed by name. Wins over a file of the same name.
 
-A profile is `{ name, defaults, stages, modelClasses }`; a stage entry overrides only the fields it
-declares (`engine`, `model`, `effort`, `context`), falling back to `defaults`, then to the KB default
-(schema-default engine and model, default effort, `fresh` context). `model` is an id, a class
-(`cheap`, `balanced`, `frontier`) or `by-tier`, resolved against the card's `risk:*` label through
-`## Model Policy`.
+A profile is `{ name, description, defaults, stages, modelClasses }` (`name` required; an inline
+profile takes its key as name). A stage entry overrides only the fields it declares, falling back to
+`defaults`, then to the KB default (the run's engine, its default model, default effort, `fresh`
+context).
 
-Resolution is once per run, in this order: `--workflow-config` (verbatim), then `--profile`, then `workflowProfiles.default`, then the KB default. The coordinator prints the resolved profile, its source and the per-stage table before the first dispatch.
+| Field | Values |
+| --- | --- |
+| `engine` | `default` (the run's engine), `pi`, `opencode`, `claude`, `codex`. Spawned per stage by `pair-cli`; in a session only reported |
+| `model` | `default` (the engine's own), an explicit id, a class (`cheap`, `balanced`, `frontier`) mapped to an id by `modelClasses`, or `by-tier` (the card's `risk:*` label through `## Model Policy`). A near-miss of a keyword is refused as a typo |
+| `effort` | `default`, `low`, `medium`, `high`, `xhigh`, `max`. In a session enforced on Codex, a prompt request on Claude; `pair-cli` records it and sends it to no engine yet |
+| `context` | `fresh`, `reuse`. `reuse` only into `prepare` and `green` |
+
+Resolution is once per run, in this order: `--workflow-config` (verbatim), then `--profile`, then `workflowProfiles.default`, then the KB default. Both flags need `--card`; the `--parallel` loop does not forward them, so unattended runs use `workflowProfiles.default`. The coordinator prints the resolved profile, its source and the per-stage table before the first dispatch; `node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . [--profile <name>] [--tier risk:<tier>]` prints the same table (`table` in its JSON) without running anything.
 
 An unknown name is `profile-unresolved`; `context: "reuse"` on a stage the cycle's transition table forbids (`validate`, `verify`, …), an unknown stage or key, or a name collision is refused at load, never a silent fallback. The profile's name and hash are recorded in every handoff but are not part of what invalidates prior evidence.
 
 No `workflowProfiles` field and no flag: nothing changes.
 
-Full reference: the KB's `workflow-profiles.md` (automation guidelines).
+Worked example and recipe: [Automated development](/docs/tutorials/automated-development#per-stage-engine-model-and-effort-workflow-profiles), [Autonomy and per-stage engine and model](/docs/guides/autonomy-and-profiles). Full reference: the KB's `workflow-profiles.md` (automation guidelines).
 
 ## Validation
 
