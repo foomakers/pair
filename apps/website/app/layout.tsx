@@ -6,7 +6,7 @@ import { PostHogProvider } from '@/components/posthog-provider'
 import './global.css'
 
 export const metadata: Metadata = {
-  title: 'pair — Code is the easy part.',
+  title: 'pair: Code is the easy part.',
   description: 'AI-assisted development toolkit for solo devs, teams, and organizations.',
   icons: {
     icon: [
@@ -17,14 +17,14 @@ export const metadata: Metadata = {
   },
   manifest: '/site.webmanifest',
   openGraph: {
-    title: 'pair — Code is the easy part.',
+    title: 'pair: Code is the easy part.',
     description: 'AI-assisted development toolkit for solo devs, teams, and organizations.',
     images: [{ url: '/social-preview.png', width: 1280, height: 640 }],
     siteName: 'pair',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'pair — Code is the easy part.',
+    title: 'pair: Code is the easy part.',
     description: 'AI-assisted development toolkit for solo devs, teams, and organizations.',
     images: ['/social-preview.png'],
   },

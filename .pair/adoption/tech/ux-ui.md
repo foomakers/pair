@@ -26,6 +26,7 @@
 - **Component style**: Rounded corners (rounded-2xl), 1px borders, soft shadows, elastic transitions
 - **Tone of voice**: Pragmatic, direct, senior partner ("Code is the easy part")
 - **Zero ad-hoc styling rule**: All components reference brand tokens exclusively
+- **Landing page conventions** (ADL [2026-10-19-landing-positioning-v050-single-install-command.md](../decision-log/2026-10-19-landing-positioning-v050-single-install-command.md)): H1 "Code is the easy part." kept; the sub-head states the lifecycle and the three modes; one first install command everywhere (`npm install -g @foomakers/pair-cli`, the Claude Code plugin optional); any autonomy claim next to a tool list carries the two-tier harness line; no unverifiable number, no em dash in copy or metadata; every region is a `section` with an `aria-label` and a heading; diagrams are light-only and sit on a white card
 
 See `packages/brand/BRAND.md` for comprehensive brand guide and usage rules.
 

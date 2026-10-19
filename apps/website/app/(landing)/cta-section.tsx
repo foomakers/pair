@@ -12,17 +12,15 @@ export function CTASection() {
           Ready to <span className='gradient-text'>start?</span>
         </h2>
         <p className='mb-10 text-pair-text-muted-light dark:text-pair-text-muted-dark'>
-          Add pair to your project in under a minute.
+          Install pair-cli, run <code className='font-mono'>/pair-next</code>.
         </p>
         <div className='flex flex-col items-center gap-4 sm:flex-row sm:justify-center'>
           <Button
             as='a'
             variant='primary'
-            href={URLS.GITHUB_RELEASES}
-            target='_blank'
-            rel='noopener noreferrer'
+            href={URLS.QUICKSTART}
             className='inline-flex min-h-[48px] items-center justify-center rounded-xl px-8 py-3 text-base shadow-lg shadow-pair-blue/25 hover:shadow-xl hover:shadow-pair-blue/30 hover:-translate-y-0.5'>
-            Get pair
+            Get started
           </Button>
           <Button
             as='a'

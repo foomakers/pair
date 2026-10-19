@@ -11,7 +11,8 @@ interface Feature {
 const FEATURES: Feature[] = [
   {
     name: 'Skills',
-    description: 'Reusable, composable process skills that any AI assistant can execute.',
+    description:
+      'Composable process skills on the Agent Skills open standard, run by any assistant that reads them.',
     accent: 'from-pair-blue to-pair-teal',
     icon: <BoltIcon className='h-6 w-6' />,
   },
@@ -23,13 +24,14 @@ const FEATURES: Feature[] = [
   },
   {
     name: 'Adoption Files',
-    description: 'Tech decisions, architecture, and way-of-working — versioned and enforced.',
+    description: 'Tech decisions, architecture and way of working, versioned and enforced.',
     accent: 'from-pair-blue to-pair-teal',
     icon: <SlidersIcon className='h-6 w-6' />,
   },
   {
-    name: 'Agent Integration',
-    description: 'Works with Claude Code, Cursor, Copilot, Windsurf, and Codex.',
+    name: 'Workflows',
+    description:
+      '/pair-workflow-cycle, /pair-loop and pair-cli run chain the skills and stop where you tell them.',
     accent: 'from-pair-blue to-pair-teal',
     icon: <LinkIcon className='h-6 w-6' />,
   },
@@ -43,7 +45,7 @@ export function FeaturesSection() {
           What you get
         </h2>
         <p className='mx-auto mb-16 max-w-xl text-center text-pair-text-muted-light dark:text-pair-text-muted-dark'>
-          Everything your AI assistant needs to follow your standards.
+          Everything your AI assistant needs to follow your process and your standards.
         </p>
         <div className='grid gap-8 sm:grid-cols-2'>
           {FEATURES.map(feature => (

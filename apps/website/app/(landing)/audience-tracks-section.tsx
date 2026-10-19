@@ -16,18 +16,17 @@ const AUDIENCE_TRACKS: AudienceTrack[] = [
     audience: 'Solo Dev',
     icon: <TerminalIcon className='h-7 w-7' />,
     pain: 'AI writes code fast, but your project has no structure, no tests, no process.',
-    solution:
-      'pair bootstraps your project with guidelines, skills, and quality gates — so AI follows your standards from day one.',
+    solution: 'Start Assisted today. Hand your green cards to Autonomous when you trust the gates.',
     cta: 'Get started',
-    href: URLS.DOCS,
+    href: URLS.QUICKSTART,
   },
   {
     audience: 'Team',
     icon: <TeamIcon className='h-7 w-7' />,
     pain: 'Every team member uses AI differently. No shared conventions, inconsistent output.',
     solution:
-      'pair provides a shared knowledge base that every AI assistant reads — same guidelines, same quality, regardless of the tool.',
-    cta: 'Set up for your team',
+      'One .pair/ folder, every assistant, the same decisions. Supervised runs for the known backlog.',
+    cta: 'Set up your team',
     href: URLS.DOCS_TEAM,
   },
   {
@@ -35,8 +34,8 @@ const AUDIENCE_TRACKS: AudienceTrack[] = [
     icon: <BuildingIcon className='h-7 w-7' />,
     pain: 'Scaling AI adoption across teams without governance is a recipe for technical debt.',
     solution:
-      'pair lets you publish and distribute organizational standards as a knowledge base — version, govern, and evolve.',
-    cta: 'Enterprise rollout',
+      'Own the Knowledge Base, publish versions, every project installs from a tag. GitHub or Azure DevOps.',
+    cta: 'Roll out across teams',
     href: URLS.DOCS_ORG,
   },
 ]
@@ -49,8 +48,7 @@ export function AudienceTracksSection() {
           Built for <span className='gradient-text'>every scale</span>
         </h2>
         <p className='mx-auto mb-16 max-w-xl text-center text-pair-text-muted-light dark:text-pair-text-muted-dark'>
-          Whether you work alone, with a team, or across an organization — pair adapts to your
-          workflow.
+          Alone, with a team, or across an organization: pair adapts to your workflow.
         </p>
         <div className='grid gap-8 md:grid-cols-3'>
           {AUDIENCE_TRACKS.map(track => (
