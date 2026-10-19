@@ -106,10 +106,16 @@ test('renders the three modes with the driving analogy and the safe default', as
 })
 
 // AC-6: Three modes automation bars (level, scope and human cue, at a glance)
-test('renders one automation level, scope and human cue per mode', async ({ mount }) => {
+test('renders one steering-wheel icon, automation level, scope and human cue per mode', async ({
+  mount,
+}) => {
   const component = await mount(<HomePage />)
   const section = component.locator('section[aria-label="Three modes"]')
-  await expect(section.locator('svg')).toHaveCount(0)
+  await expect(section.locator('svg[role="img"]')).toHaveCount(3)
+  for (const name of ['Assisted: hands on', 'Supervised: hands ready', 'Autonomous: hands off']) {
+    await expect(section.getByRole('img', { name: new RegExp(`^${name}`) })).toBeVisible()
+  }
+  await expect(section.getByText('automation', { exact: true })).toHaveCount(0)
   for (const level of [1, 2, 3]) {
     await expect(section.getByText(`Automation level ${level} of 3`)).toBeAttached()
   }

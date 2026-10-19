@@ -8,11 +8,44 @@ interface Mode {
   human: string
   scope: string
   level: number
+  hands: 'on' | 'ready' | 'off'
+  icon: string
+}
+
+/** Steering wheel with the human's hands: on the rim, hovering just off it, or absent. */
+function Wheel({ hands, level }: { hands: Mode['hands']; level: number }) {
+  const hx = hands === 'on' ? 10 : 0
+  const rim = level > 1 ? 'text-pair-teal' : ''
+  return (
+    <>
+      <g className={rim} fill='none' stroke='currentColor' strokeWidth={3}>
+        <circle cx={48} cy={40} r={26} />
+        <circle cx={48} cy={40} r={6} />
+        <path d='M22 40h20M54 40h20M48 46v20' />
+      </g>
+      {hands !== 'off' && (
+        <g className='text-pair-blue' fill='currentColor'>
+          <rect x={6 + hx} y={28} width={12} height={24} rx={6} />
+          <rect x={78 - hx} y={28} width={12} height={24} rx={6} />
+          {hands === 'ready' && (
+            <path
+              d='M20 40h4M72 40h4'
+              stroke='currentColor'
+              strokeWidth={2}
+              strokeDasharray='2 2'
+            />
+          )}
+        </g>
+      )}
+    </>
+  )
 }
 
 const MODES: Mode[] = [
   {
     name: 'Assisted',
+    hands: 'on',
+    icon: 'Assisted: hands on the wheel',
     analogy: 'You drive, pair helps.',
     description: 'pair guides every phase with AI. You run each skill and approve each step.',
     scope: 'each step',
@@ -21,6 +54,8 @@ const MODES: Mode[] = [
   },
   {
     name: 'Supervised',
+    hands: 'ready',
+    icon: 'Supervised: hands ready, just off the wheel',
     analogy: 'pair drives one stretch, you take over when asked.',
     description:
       'pair automates one card end to end, from Ready to a review-approved PR, and stops at a checkpoint or an escalation.',
@@ -30,6 +65,8 @@ const MODES: Mode[] = [
   },
   {
     name: 'Autonomous',
+    hands: 'off',
+    icon: 'Autonomous: hands off, the wheel drives',
     analogy: 'pair drives inside the area you define.',
     description:
       'pair watches the backlog and processes every card matching a criterion you set, for example risk:green, and hands a card back when a human is needed.',
@@ -55,6 +92,14 @@ export function ModesSection() {
             <div
               key={mode.name}
               className='card-glow flex flex-col rounded-2xl border border-pair-border-light bg-pair-bg-light p-8 dark:border-pair-border-dark dark:bg-pair-bg-dark'>
+              <svg
+                role='img'
+                aria-label={mode.icon}
+                viewBox='0 0 96 80'
+                className='mx-auto mb-5 h-20 w-24'>
+                <title>{mode.icon}</title>
+                <Wheel hands={mode.hands} level={mode.level} />
+              </svg>
               <div className='mb-6'>
                 <div className='flex items-center gap-2' aria-hidden='true'>
                   {[1, 2, 3].map(i => (
@@ -65,13 +110,6 @@ export function ModesSection() {
                   ))}
                 </div>
                 <span className='sr-only'>Automation level {mode.level} of 3</span>
-                {mode.level === 1 && (
-                  <span
-                    aria-hidden='true'
-                    className='mt-2 block text-xs text-pair-text-muted-light dark:text-pair-text-muted-dark'>
-                    automation
-                  </span>
-                )}
               </div>
               <h3 className='mb-1 font-sans text-xl font-bold'>{mode.name}</h3>
               <p className='mb-1 text-sm font-medium'>{mode.analogy}</p>
