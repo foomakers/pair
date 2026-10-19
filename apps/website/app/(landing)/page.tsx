@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { ThemeToggle } from '@pair/brand'
 import { HeroSection } from './hero-section'
+import { WhatsNewBanner } from './whats-new-banner'
 import { PainPointsSection } from './pain-points-section'
 import { WorksWithSection } from './works-with-section'
 import { DemoSection } from './demo-section'
@@ -11,12 +12,13 @@ import { OpenSourceSection } from './open-source-section'
 import { CTASection } from './cta-section'
 
 export const metadata: Metadata = {
-  title: 'pair — Code is the easy part.',
+  title: 'pair: Code is the easy part.',
   description:
-    'pair enables seamless dev-AI collaboration throughout the product lifecycle. Process layer for AI coding tools.',
+    'pair runs your development process with AI, from PRD to merged PR, in assisted, supervised or autonomous mode. Open source. Works with Claude Code, Codex, pi, opencode, Cursor, Copilot and Windsurf.',
   openGraph: {
-    title: 'pair — Code is the easy part.',
-    description: 'pair enables seamless dev-AI collaboration throughout the product lifecycle.',
+    title: 'pair: Code is the easy part.',
+    description:
+      'pair runs your development process with AI, from PRD to merged PR, in assisted, supervised or autonomous mode.',
     type: 'website',
     images: [{ url: '/social-preview.png', width: 1280, height: 640 }],
     siteName: 'pair',
@@ -29,6 +31,7 @@ export default function HomePage() {
       <ThemeToggle />
       <HeroSection />
       <div className='gradient-line mx-auto max-w-4xl' />
+      <WhatsNewBanner />
       <PainPointsSection />
       <WorksWithSection />
       <DemoSection />

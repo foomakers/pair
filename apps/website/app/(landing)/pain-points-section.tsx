@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Card, GridPlusIcon, ShieldCheckIcon, FolderIcon, UsersIcon } from '@pair/brand'
+import { Card, GridPlusIcon, ShieldCheckIcon, FolderIcon, SlidersIcon } from '@pair/brand'
 
 interface PainPoint {
   question: string
@@ -10,23 +10,23 @@ interface PainPoint {
 const PAIN_POINTS: PainPoint[] = [
   {
     question: 'Who owns the process when AI writes the code?',
-    detail: 'AI generates code fast — but without process, you ship debt faster.',
+    detail: 'Fast code without a process is fast debt.',
     icon: <GridPlusIcon className='h-6 w-6' />,
   },
   {
-    question: 'How do you keep quality consistent across AI-assisted sprints?',
-    detail: 'Different prompts, different outputs. No shared standards, no consistency.',
+    question: "Who checks the AI's work?",
+    detail: 'An agent that writes, judges and merges its own PR grades its own homework.',
     icon: <ShieldCheckIcon className='h-6 w-6' />,
   },
   {
-    question: 'Where do architectural decisions live when agents switch context?',
-    detail: 'Decisions are lost between sessions. Every new prompt starts from zero.',
+    question: 'Where do decisions live between sessions?',
+    detail: 'Every new prompt starts from zero unless decisions are files.',
     icon: <FolderIcon className='h-6 w-6' />,
   },
   {
-    question: 'How does your team scale AI collaboration without chaos?',
-    detail: 'One dev uses Cursor, another uses Copilot. No shared conventions.',
-    icon: <UsersIcon className='h-6 w-6' />,
+    question: 'How far do you let it run?',
+    detail: 'All or nothing is not a policy. You need gates, tiers and a way to take the wheel.',
+    icon: <SlidersIcon className='h-6 w-6' />,
   },
 ]
 
