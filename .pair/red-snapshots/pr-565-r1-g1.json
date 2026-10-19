@@ -1,0 +1,50 @@
+{
+  "$meta": {
+    "pr": "565",
+    "phase": "r1-g1",
+    "base": "4b0e5c45bce596071161f4be10f92e053738bdcd",
+    "trailer": "Pair-RED-Snapshot: pr=565; phase=r1-g1; base=4b0e5c45bce596071161f4be10f92e053738bdcd; manifest=.pair/red-snapshots/pr-565-r1-g1.json",
+    "artifacts": []
+  },
+  "mode": "remediation",
+  "inputHead": "4b0e5c45bce596071161f4be10f92e053738bdcd",
+  "sourceOfTruth": "apps/website/app/(landing)/works-with-section.tsx TOOLS array",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "apps/website/app/(landing)/works-with-section.tsx TOOLS[] (7 entries)",
+      "inputs": [
+        "TOOLS array"
+      ],
+      "representations": [
+        "qa/release-validation/CP1-website-critical-path.md MT-CP103 Expected Result"
+      ],
+      "consumers": [
+        "manual release validation executors"
+      ],
+      "classes": [
+        "listed names == TOOLS names (7)"
+      ],
+      "interactions": []
+    }
+  ],
+  "fixScope": {
+    "owner": "qa-release-validation",
+    "mode": "doc",
+    "allowedPaths": [
+      "qa/release-validation/CP1-website-critical-path.md"
+    ]
+  },
+  "checklist": [
+    {
+      "id": "CL-r0-1",
+      "finding": "r0-1",
+      "requirement": "MT-CP103 Expected Result states '7 tool names visible' and lists exactly: Claude Code, Codex, pi, opencode, Cursor, VS Code Copilot, Windsurf",
+      "authority": "apps/website/app/(landing)/works-with-section.tsx:10-18 TOOLS array"
+    }
+  ],
+  "matrix": [],
+  "redTests": [],
+  "testExempt": true,
+  "exemptionRationale": "doc group: prose-only fix, checklist replaces tests"
+}
