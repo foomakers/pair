@@ -307,6 +307,19 @@ const REPO_CITATION_RE =
   /href: "https:\/\/github\.com\/foomakers\/pair\/(blob|tree|raw)\/([^/"]+)\/([^"#?]+)(\?[^"#]*)?(?:#([^"]*))?/g
 const FRONTMATTER_RE = /^---\r?\n[\s\S]*?\r?\n---\r?\n/
 
+// The MDX compile and the heading parse are pure in the page content and dominate runAllChecks
+// (every docs page, every call). Memoized per content string so repeated runs in one worker parse
+// each distinct page once. ponytail: unbounded, fine for ~200 pages in a test/CLI process.
+const compileMemo = new Map<string, string>()
+function compileCached(content: string): string {
+  let out = compileMemo.get(content)
+  if (out === undefined) {
+    out = String(compileSync(content.replace(FRONTMATTER_RE, ''), { remarkPlugins: [remarkGfm] }))
+    compileMemo.set(content, out)
+  }
+  return out
+}
+
 /** Reads a git-tracked path's content, or `undefined` when it cannot be read. */
 export type TargetSource = (path: string) => string | undefined
 
@@ -319,9 +332,7 @@ export function findDeadRepoCitations(
   const errors: string[] = []
   let compiled: string
   try {
-    compiled = String(
-      compileSync(content.replace(FRONTMATTER_RE, ''), { remarkPlugins: [remarkGfm] }),
-    )
+    compiled = compileCached(content)
   } catch {
     // A page the site cannot build is not this check's finding — next build reports it, loudly.
     return errors
@@ -478,7 +489,16 @@ function headingAnchorProblem(fragment: string, source: string, view: View): str
  * over each heading's text (duplicates suffixed `-1`, `-2`…), plus any `id`/`name` written in raw
  * HTML. Frontmatter is a table on github.com, not headings, so it is stripped first.
  */
+const slugMemo = new Map<string, Set<string>>()
 export function githubHeadingSlugs(markdown: string): Set<string> {
+  const hit = slugMemo.get(markdown)
+  if (hit) return new Set(hit)
+  const ids = parseHeadingSlugs(markdown)
+  slugMemo.set(markdown, ids)
+  return new Set(ids)
+}
+
+function parseHeadingSlugs(markdown: string): Set<string> {
   const tree = unified().use(remarkParse).use(remarkGfm).parse(markdown.replace(FRONTMATTER_RE, ''))
   const slugger = new GitHubSlugger()
   const ids = new Set<string>()
