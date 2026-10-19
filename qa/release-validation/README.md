@@ -32,6 +32,7 @@ All test cases use these variables — resolve them before execution:
 | Registry | npmjs.org, no auth | GitHub Packages `https://npm.pkg.github.com`, `read:packages` token |
 | Website (CP1, CP5, CP6) | production `$BASE_URL` | not deployed: final-only, or a PR preview `$BASE_URL` |
 | npmjs-only cases (CP7 npmjs.org, MT-CP320 npmjs path) | run | SKIP (final-only); use the GitHub Packages variant |
+| Package visibility | public | private to the `foomakers` org by design (release testing, short window): testers need org membership + `read:packages` |
 | MT-CP211 `publishConfig` | npmjs | npmjs `publishConfig` is expected |
 
 Token rules: supplied by the operator via a project `.npmrc` or env var, deleted after the run, **never recorded** in the suite or a report. No token on pre/rc ⇒ the install cases are **BLOCKED**, not FAILED.
@@ -46,7 +47,7 @@ Execute in order. P0 blocks release sign-off.
 |----|------|----------|-------------|
 | CP1 | [CP1-website-critical-path.md](CP1-website-critical-path.md) | P0 | Landing page, core navigation, responsive, meta tags |
 | CP2 | [CP2-cli-artifact-critical-path.md](CP2-cli-artifact-critical-path.md) | P0 | ZIP + TGZ download, checksum, --version, --help |
-| CP3 | [CP3-cli-install-update.md](CP3-cli-install-update.md) | P0 | install (auto-download KB + explicit source), update, idempotency |
+| CP3 | [CP3-cli-install-update.md](CP3-cli-install-update.md) | P0 | install (auto-download KB + explicit source), update, idempotency, keep choice persisted (`skipRegistries`) |
 | CP4 | [CP4-kb-dataset.md](CP4-kb-dataset.md) | P1 | KB ZIP artifact, manifest, verify, info |
 | CP5 | [CP5-website-docs-completeness.md](CP5-website-docs-completeness.md) | P1 | All doc pages return 200, version consistency, internal links |
 | CP6 | [CP6-website-search-navigation.md](CP6-website-search-navigation.md) | P1 | Orama search, sidebar, prev/next, llms.txt, privacy |
@@ -55,7 +56,7 @@ Execute in order. P0 blocks release sign-off.
 | CP9 | [CP9-quickstart-onboarding.md](CP9-quickstart-onboarding.md) | P1 | Timed quickstart onboarding: bootstrap `$mode: quick` under 10 min, guided regression |
 | CP10 | [CP10-web-cloud-environment.md](CP10-web-cloud-environment.md) | P1 | pair from Claude Code Web: skills executable, story end-to-end to a PR, dev-server limit as expected result. **Manual, run inside the web session** |
 | CP11 | [CP11-release-pipeline.md](CP11-release-pipeline.md) | P0 | `pnpm release --dry-run`, duplicate refusal, dispatch-only workflows, same-channel cleanup, `--source` after cleanup. **Inspection only, no real dispatch** |
-| CP12 | [CP12-plugin-marketplace.md](CP12-plugin-marketplace.md) | P1 | Claude Code marketplace: add, install `pair@pair`, `/pair-assistant`. **Manual, run inside Claude Code** |
+| CP12 | [CP12-plugin-marketplace.md](CP12-plugin-marketplace.md) | P1 | Claude Code marketplace: add, install `pair@pair`, `/pair-assistant`, existing-repo keep/overwrite, keep persisted across `update`. **Manual, run inside Claude Code** |
 
 ## Execution by AI Assistant
 

@@ -18,16 +18,28 @@ import {
 const CHANNELS: Channel[] = ['pre', 'rc', 'final']
 const sh = (cmd: string, args: string[]) => execFileSync(cmd, args, { encoding: 'utf8' }).trim()
 
+/** Local v* tags that exist on origin: deleted-on-origin tags are ignored, local-only ones left alone. */
+function originTags(): string[] {
+  const local = () => sh('git', ['tag', '-l', 'v*']).split('\n').filter(Boolean)
+  if (!sh('git', ['remote']).split('\n').includes('origin')) return local() // no origin (local repo)
+  sh('git', ['fetch', '--tags', '--force', 'origin'])
+  const remote = new Set(
+    sh('git', ['ls-remote', '--tags', '--refs', 'origin', 'v*'])
+      .split('\n')
+      .map(l => l.split('refs/tags/')[1]),
+  )
+  return local().filter(t => remote.has(t))
+}
+
 export function readTags(): Record<string, string> {
   const tags: Record<string, string> = {}
-  for (const t of sh('git', ['tag', '-l', 'v*']).split('\n').filter(Boolean))
-    tags[t] = sh('git', ['rev-list', '-n1', t])
+  for (const t of originTags()) tags[t] = sh('git', ['rev-list', '-n1', t])
   return tags
 }
 
 export function readTagParents(): Record<string, string> {
   const parents: Record<string, string> = {}
-  for (const t of sh('git', ['tag', '-l', 'v*']).split('\n').filter(Boolean)) {
+  for (const t of originTags()) {
     const parent = sh('git', ['rev-list', '-n1', '--parents', t]).split(' ')[1]
     if (parent) parents[t] = parent
   }

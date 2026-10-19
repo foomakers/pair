@@ -1,9 +1,9 @@
 ---
 title: Troubleshooting
-description: One page for install and setup problems — quick diagnostics, common issues, and step-by-step fixes for pair-cli.
+description: One page for install and setup problems, quick diagnostics, common issues, and step-by-step fixes for pair-cli.
 ---
 
-Install or setup problem? This page collects every known issue and its fix — from permission errors to corrupted installs.
+Install or setup problem? This page collects every known issue and its fix, from permission errors to corrupted installs.
 
 ## Quick Diagnostics
 
@@ -34,7 +34,7 @@ npm list -g @foomakers/pair-cli  # Global npm installation check
 
 ### Problem: `EACCES` or permission denied errors during installation
 
-**Recommended fix — use a Node version manager (nvm).** It installs Node in your home directory, so global installs never need elevated permissions (and it fixes Node-version problems at the same time):
+**Recommended fix: use a Node version manager (nvm).** It installs Node in your home directory, so global installs never need elevated permissions (and it fixes Node-version problems at the same time):
 
 ```bash
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
@@ -62,7 +62,7 @@ pnpm add -D @foomakers/pair-cli
 # Use with: pnpm dlx pair-cli
 ```
 
-Avoid `sudo npm install -g` — it hides the underlying problem and creates root-owned files that break later installs.
+Avoid `sudo npm install -g`: it hides the underlying problem and creates root-owned files that break later installs.
 
 **On Windows:**
 
@@ -439,3 +439,9 @@ npm config list           # npm configuration
 - Install globally with nvm-managed Node, or locally with `pnpm dlx`
 - Test in a clean directory first
 - Keep pair-cli updated: `npm update -g @foomakers/pair-cli`
+
+## Related
+
+- [FAQ](/docs/support/general-faq): questions about the process, languages, tools and customization
+- [Quickstart](/docs/getting-started/quickstart): the install steps these fixes refer to
+- [Verify your setup](/docs/getting-started/verify): the checklist to run after a fix

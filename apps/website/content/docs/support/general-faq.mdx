@@ -1,13 +1,13 @@
 ---
 title: FAQ
-description: Frequently asked questions about pair — getting started, process, customization, languages, and project management tools.
+description: Frequently asked questions about pair, getting started, process, customization, languages, and project management tools.
 ---
 
 ## Getting Started
 
 ### What is pair and how is it different from a regular AI assistant?
 
-pair gives your AI coding assistant structured context — guidelines, adoption files, and skills — so it produces code aligned with your project's architecture, standards, and decisions. Without pair, every AI session starts from scratch. With pair, the AI reads your `.pair/` folder and stays consistent across sessions.
+pair gives your AI coding assistant structured context (guidelines, adoption files, and skills) so it produces code aligned with your project's architecture, standards, and decisions. Without pair, every AI session starts from scratch. With pair, the AI reads your `.pair/` folder and stays consistent across sessions.
 
 [Learn more about pair](/docs/getting-started)
 
@@ -19,9 +19,9 @@ Node.js 18+ and pair-cli. That's it. pnpm is recommended but npm works too.
 
 ### Can I use pair on an existing project or only new ones?
 
-Both. For existing projects, start at Step 2 (Bootstrap) — ask the AI to analyze your codebase and generate adoption files from what it finds, rather than building from scratch.
+Both. For existing projects, start at Step 2 (Bootstrap), ask the AI to analyze your codebase and generate adoption files from what it finds, rather than building from scratch.
 
-[Induction: Project Setup](/docs/developer-journey/induction)
+[Induction: Project Setup](/docs/process-lifecycle/phases/induction)
 
 ### Which AI coding assistants work with pair?
 
@@ -33,7 +33,7 @@ pair works with any AI assistant that reads project files. The Knowledge Base an
 
 ### What's the difference between knowledge files and adoption files?
 
-**Knowledge** (`.pair/knowledge/`) = upstream guidelines from the KB. Updated by `pair-cli update`. Don't edit — your changes will be overwritten.
+**Knowledge** (`.pair/knowledge/`) = upstream guidelines from the KB. Updated by `pair-cli update`. Don't edit: your changes will be overwritten.
 
 **Adoption** (`.pair/adoption/`) = your project-specific decisions. Never overwritten. Always takes precedence over knowledge files.
 
@@ -41,33 +41,33 @@ pair works with any AI assistant that reads project files. The Knowledge Base an
 
 ### Will `pair-cli update` overwrite my customizations?
 
-No. Updates replace `.pair/knowledge/` (upstream content) but never touch `.pair/adoption/` (your decisions). This is the layered architecture — adoption always wins.
+No. Updates replace `.pair/knowledge/` (upstream content) but never touch `.pair/adoption/` (your decisions). This is the layered architecture, adoption always wins.
 
-[Customize for Your Team](/docs/customization/team)
+[Customize the Knowledge Base for your team](/docs/guides/customize-for-your-team)
 
 ### Do I have to write adoption files manually?
 
-No. Run `/pair-next` and the AI walks you through the full process — from PRD to architecture to tech stack — generating each adoption file along the way. You answer questions, the AI writes the files.
+No. Run `/pair-next` and the AI walks you through the full process (from PRD to architecture to tech stack) generating each adoption file along the way. You answer questions, the AI writes the files.
 
 [Adoption Files concept](/docs/concepts/adoption-files)
 
 ## Process & Skills
 
-### I don't have a development process — where do I start?
+### I don't have a development process: where do I start?
 
-Use pair's default process. It's a structured 9-step lifecycle from product requirements to code review, and it works out of the box. Run `/pair-next` in your AI assistant — it reads your project state and tells you exactly what to do next, step by step. You don't need to plan anything in advance.
+Use pair's default process. It's a structured 9-step lifecycle from product requirements to code review, and it works out of the box. Run `/pair-next` in your AI assistant: it reads your project state and tells you exactly what to do next, step by step. You don't need to plan anything in advance.
 
-[Process Lifecycle](/docs/developer-journey)
+[Process Lifecycle](/docs/process-lifecycle)
 
-### I already have my own process — do I need to change it?
+### I already have my own process: do I need to change it?
 
 No. pair's process is a default, not a requirement. You can customize the methodology (Scrum, Kanban, your own hybrid), adjust quality gates, change templates, and override any guideline via adoption files. The AI adapts to your recorded decisions. Use what works for your team and override the rest.
 
-[Customize for Your Team](/docs/customization/team) · [Customize Templates](/docs/customization/templates)
+[Customize the Knowledge Base for your team](/docs/guides/customize-for-your-team) · [Customize templates](/docs/guides/customize-templates)
 
 ### What are skills and how do I use them?
 
-Skills are structured instructions that AI assistants discover and execute — invoked as slash commands like `/pair-process-implement`. They automate the development process: creating PRDs, planning stories, implementing tasks, reviewing code. You invoke a skill, the AI follows the structured process.
+Skills are structured instructions that AI assistants discover and execute, invoked as slash commands like `/pair-process-implement`. They automate the development process: creating PRDs, planning stories, implementing tasks, reviewing code. You invoke a skill, the AI follows the structured process.
 
 [Skills concept](/docs/concepts/skills)
 
@@ -75,13 +75,13 @@ Skills are structured instructions that AI assistants discover and execute — i
 
 No. Enter at whatever step matches your situation. Starting an existing project? Skip to Step 2. Picking up a story? Jump to Step 8. The entry points table shows where to start.
 
-[Process Lifecycle — Entry Points](/docs/developer-journey)
+[Process Lifecycle: Entry Points](/docs/process-lifecycle)
 
 ### What does `/pair-next` do exactly?
 
-It reads your adoption files and PM tool state — open issues, story statuses, task progress — and recommends the most relevant action. It tells you which skill to invoke and why. Use it at the start of every session.
+It reads your adoption files and PM tool state (open issues, story statuses, task progress) and recommends the most relevant action. It tells you which skill to invoke and why. Use it at the start of every session.
 
-[Process Lifecycle](/docs/developer-journey)
+[Process Lifecycle](/docs/process-lifecycle)
 
 ### Can I use the how-to guides without skills?
 
@@ -99,33 +99,33 @@ Yes. Every step has both a skill (automated) and a how-to guide (manual). Skills
 
 ### Which programming language do I need to use?
 
-Any language you want. pair's guidelines and adoption files are language-agnostic Markdown. During bootstrap, you record your language and framework choices in `tech-stack.md`, and the AI follows those decisions. TypeScript, Python, Go, Rust, Java — pair adapts to your stack.
+Any language you want. pair's guidelines and adoption files are language-agnostic Markdown. During bootstrap, you record your language and framework choices in `tech-stack.md`, and the AI follows those decisions. TypeScript, Python, Go, Rust, Java, pair adapts to your stack.
 
-[Induction: Project Setup](/docs/developer-journey/induction)
+[Induction: Project Setup](/docs/process-lifecycle/phases/induction)
 
 ### Can I use multiple programming languages in the same project?
 
 Yes. Record each language in your `tech-stack.md` adoption file with its purpose (e.g., "TypeScript for backend, Python for data pipeline"). The AI reads these decisions and uses the right language for each context.
 
-[Customize for Your Team](/docs/customization/team)
+[Customize the Knowledge Base for your team](/docs/guides/customize-for-your-team)
 
 ## Project Management
 
 ### Do I need a project management tool to use pair?
 
-No. pair works without any external PM tool — use the [Filesystem](/docs/pm-tools/filesystem) option and stories, tasks, and initiatives live as Markdown files in your repository. During bootstrap, you choose your PM tool. The AI adapts to whatever you pick.
+No. pair works without any external PM tool, use the [Filesystem](/docs/pm-tools/filesystem) option and stories, tasks, and initiatives live as Markdown files in your repository. During bootstrap, you choose your PM tool. The AI adapts to whatever you pick.
 
 [PM Tools](/docs/pm-tools)
 
 ### Which PM tools does pair support?
 
-pair supports four options: [Filesystem](/docs/pm-tools/filesystem) (no PM tool account — backlog in your repo; a `code-host` is still declared), [GitHub Projects](/docs/pm-tools/github-projects) (free, great for teams on GitHub), [Linear](/docs/pm-tools/linear) (dedicated PM tool with a polished UI), and [Azure DevOps](/docs/pm-tools/azure-devops) (Microsoft ecosystem; hosts the code too, so no separate `code-host`). You can switch between them at any time by updating `way-of-working.md`.
+pair supports four options: [Filesystem](/docs/pm-tools/filesystem) (no PM tool account, backlog in your repo; a `code-host` is still declared), [GitHub Projects](/docs/pm-tools/github-projects) (free, great for teams on GitHub), [Linear](/docs/pm-tools/linear) (dedicated PM tool with a polished UI), and [Azure DevOps](/docs/pm-tools/azure-devops) (Microsoft ecosystem; hosts the code too, so no separate `code-host`). You can switch between them at any time by updating `way-of-working.md`.
 
 [PM Tools](/docs/pm-tools)
 
 ### What do I do if pair doesn't support my PM tool?
 
-Use the [Filesystem](/docs/pm-tools/filesystem) option — stories and tasks are tracked as Markdown files in your repository instead of external issues. You still get the full process (planning, implementation, review), just without PM tool synchronization. As new integrations ship, you can switch without losing your adoption files.
+Use the [Filesystem](/docs/pm-tools/filesystem) option: stories and tasks are tracked as Markdown files in your repository instead of external issues. You still get the full process (planning, implementation, review), just without PM tool synchronization. As new integrations ship, you can switch without losing your adoption files.
 
 [PM Tools](/docs/pm-tools)
 
@@ -135,39 +135,39 @@ Use the [Filesystem](/docs/pm-tools/filesystem) option — stories and tasks are
 
 Edit `.pair/adoption/tech/tech-stack.md` and declare your choices. The AI reads adoption files first, so your decisions override the KB defaults.
 
-[Customize for Your Team](/docs/customization/team)
+[Customize the Knowledge Base for your team](/docs/guides/customize-for-your-team)
 
 ### How do I customize commit message or PR formats?
 
 Copy the template from `.pair/knowledge/guidelines/collaboration/templates/` to `.pair/adoption/tech/templates/`, edit your copy, and record the override in `way-of-working.md`.
 
-[Customize Templates](/docs/customization/templates)
+[Customize templates](/docs/guides/customize-templates)
 
-### Can I use pair-cli just to manage skills and assistant files — without the full Knowledge Base?
+### Can I use pair-cli just to manage skills and assistant files: without the full Knowledge Base?
 
 Yes. pair-cli works with any directory containing AGENTS.md and a `config.json`. Create a Git repository with your skills, write a config.json that defines the registries and targets, and distribute it with `pair-cli install --source <git-url>`. No Knowledge Base required.
 
-[Managing AI Artifacts tutorial](/docs/tutorials/managing-ai-artifacts)
+[Managing AI Artifacts tutorial](/docs/guides/configure-harness)
 
 ### Can I create and distribute my own Knowledge Base?
 
 Yes. Create a KB from scratch or fork an existing one, structure it following the `.pair/` convention, package it with `pair-cli package`, and distribute via npm or GitHub.
 
-[Publish a Knowledge Base](/docs/customization/organization)
+[Own and publish a Knowledge Base](/docs/guides/external-kb)
 
 ## Troubleshooting
 
-### pair-cli won't install — what do I check?
+### pair-cli won't install: what do I check?
 
 Check Node.js version (18+), permissions, and PATH. The Installation FAQ covers all common issues step by step.
 
 [Troubleshooting](/docs/support/troubleshooting)
 
-### The AI ignores my adoption files — what's wrong?
+### The AI ignores my adoption files: what's wrong?
 
 Verify your AI assistant can see the `.pair/` directory. Check that AGENTS.md or CLAUDE.md links to `.pair/`. Run `pair-cli kb-validate` to verify structure. If using a bridge pattern, ensure the bridge files are in place.
 
-[Agent Integration](/docs/concepts/agent-integration) · [Adopter Checklist](/docs/getting-started/checklist)
+[Agent Integration](/docs/concepts/agent-integration) · [Verify your setup](/docs/getting-started/verify)
 
 ### Where do I report bugs or request features?
 

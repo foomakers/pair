@@ -1,0 +1,57 @@
+---
+title: Own and publish a Knowledge Base
+description: Scaffold your organization's Knowledge Base repository, author its guidelines and skills, release it with the generated script, and install it in every project. npm and a GitHub Release ZIP as alternatives.
+---
+
+**Goal**: one Knowledge Base your organization owns, released as versions, installed by every team with one command. Teams keep customizing through their own adoption files; your standards reach them through releases, never through hand edits on their side.
+
+## Prerequisites
+
+- `pair-cli` installed; a git host for the KB repository
+- A decision on scope: the full SDLC, or one concern (security standards, API design)
+
+## Steps
+
+1. **Scaffold the repository**
+   - With pair-cli: `pair-cli scaffold-kb ../acme-kb --name "Acme KB"` creates a repository whose only job is to hold knowledge and skills, package them and publish them: `.pair/knowledge/`, `.skills/`, `pair.config.json` (the registries this KB ships), `scripts/release.sh`, a `release.yml` workflow for the `github` host, `README.md`, `.gitignore`. There is deliberately no `.pair/adoption/`: adoption describes a configured project; a KB is knowledge. Options (`--host`, `--force`): [CLI reference](/docs/reference/cli/commands#scaffold-kb).
+   - With `/pair-assistant` (optional, Claude Code): ask for "their own knowledge base repository".
+2. **Author the content**
+   - Guidelines and how-tos under `.pair/knowledge/`, one topic per file, written as adopted decisions: `vitest is adopted as the testing framework (vitest v3.x).` tells an assistant this is a rule, not a suggestion. Forking pair's own KB (`pair-cli install`, then edit) is a valid starting point.
+   - Skills as `.skills/<name>/SKILL.md` with `name` and `description` frontmatter. The `prefix` in `pair.config.json` (`acme-kb`) namespaces them on install, so two KBs never collide.
+   - Nothing else to wire: the scaffolded registries already cover both paths.
+3. **Validate**
+   - With pair-cli: `pair-cli kb-validate --layout source`, then `pair-cli kb-info`.
+   - With `/pair-assistant` (optional, Claude Code): ask for "the KB checked for structural soundness".
+4. **Cut a release** (the default channel)
+   - With pair-cli: `bash scripts/release.sh 1.0.0`. The script wraps `pair-cli package`, writes `dist/acme-kb-1.0.0.zip` and, on the `github` host, tags `v1.0.0` and attaches the ZIP to a GitHub release; pushing a `v*` tag runs the same script in CI. It pins the pair-cli version that scaffolded the repo, so a release cut in six months packages identically (`PAIR_CLI="npx --yes @foomakers/pair-cli@latest" bash scripts/release.sh 1.0.0` moves deliberately). With no `gh`, outside the repository root or with `--host generic`, it stops after packaging and tells you where the ZIP is.
+5. **Install it in a project**
+   - With pair-cli: `pair-cli install --source https://github.com/acme/acme-kb.git#v1.0.0` (or a local clone with `--offline`, or the release ZIP). The CLI reads the KB's own `pair.config.json`; nothing is copied into the consuming project. Registries the KB does not ship (`adoption`, `github`) are skipped and named, not failed. Later: `pair-cli update --source <the same>`.
+   - With `/pair-assistant` (optional, Claude Code): "install the KB from this URL".
+6. **Version it**
+   - Semantic versions: patch for clarifications, minor for new guidelines or skills, major for a changed layout or removed files. Keep a changelog in the repository; teams decide when to update, and `pair-cli update` replaces `.pair/knowledge/` while leaving their `.pair/adoption/` untouched.
+
+## Alternative channels
+
+| Channel | When | Consumers install with |
+| --- | --- | --- |
+| **Generated release script** (default) | you host the KB on GitHub, or any git host with the ZIP attached to a release | `pair-cli install --source <git-url>#<tag>` |
+| **npm package** | your teams already pull from a private npm registry and want `npm`-style version ranges | `pair-cli package --layout source`, `npm publish`, then `pair-cli install --source npm --url @acme/pair-kb` |
+| **GitHub Release ZIP or internal mirror** | air-gapped or mirror-only environments | `pair-cli install --source https://mirror.acme.com/acme-kb-1.0.0.zip`, or `--offline` from a copied ZIP |
+
+Every `--source` form and the offline constraints: [Install sources](/docs/reference/cli/install-sources). Organizational metadata for a package (`--org`, `--compliance`, `--distribution`): [`pair-cli package`](/docs/reference/cli/commands#package).
+
+## Verify
+
+- `pair-cli kb-info` in a consuming project shows your KB name and version.
+- `pair-cli install --source <kb>` in a scratch project reports the knowledge and skills registries installed and the others skipped.
+- A consuming project's `.pair/adoption/` is unchanged after `pair-cli update`.
+
+## Known limitation
+
+Changing `prefix` on the `skills` registry leaves the old directories installed: `overwrite` registries are not cleaned like `mirror` ones. After a prefix change, delete `<old-prefix>-*` under `.claude/skills/` by hand in each consuming project.
+
+## Related
+
+- [Enterprise adoption](/docs/tutorials/enterprise-adoption): the walkthrough, with governance and the first team onboarded
+- [Customize the Knowledge Base for your team](/docs/guides/customize-for-your-team): what consuming teams do on their side
+- [KB structure](/docs/reference/kb-structure): the directory layout in full

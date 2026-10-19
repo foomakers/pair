@@ -1,0 +1,34 @@
+---
+title: Install via the Claude Code marketplace
+description: Optional Claude Code path that installs the pair plugin and lets /pair-assistant run the install.
+---
+
+**Goal**: install pair from the Claude Code marketplace instead of typing CLI commands. pair-cli stays the default path.
+
+## Prerequisites
+
+- Claude Code with plugin support
+- Node.js 18+ (the skill runs `pair-cli` for you)
+
+## Steps
+
+1. **Register the marketplace and install the plugin**
+   - With `/pair-assistant` (optional, Claude Code): `/plugin marketplace add foomakers/pair`, then `/plugin install pair@pair`.
+   - With pair-cli: not needed; the CLI path is the [Quickstart](/docs/getting-started/quickstart).
+2. **Ask for the install**
+   - With `/pair-assistant` (optional, Claude Code): "install pair here". It shows the command, asks, runs it and reports the result; in a repo with its own `AGENTS.md` it asks keep or overwrite per file.
+   - With pair-cli: `pair-cli install` (add `--skip-registries agents` to keep your own `AGENTS.md`/`CLAUDE.md`).
+3. **Fill in the adoption files**
+   - In your assistant: `/pair-next` and follow the suggestion.
+   - With `/pair-assistant` (optional, Claude Code): ask for "a full adoption pass"; it hands off to `/pair-process-bootstrap`.
+
+## Verify
+
+- `.pair/` and `.claude/skills/` exist in the repository.
+- `/plugin` lists `pair@pair` as installed.
+
+## Related
+
+- [Quickstart](/docs/getting-started/quickstart)
+- [`/pair-assistant` reference](/docs/reference/pair-assistant)
+- [Claude Code integration](/docs/integrations/claude-code)

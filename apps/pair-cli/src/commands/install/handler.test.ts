@@ -2047,3 +2047,84 @@ describe('US-396: --list-targets reflects the project it describes', () => {
     expect(lines.join('\n')).toContain('docs/kb')
   })
 })
+
+describe.each(['darwin', 'linux'] as const)(
+  'US-552: existing repo install (platform %s)',
+  platform => {
+    const cwd = '/test-project'
+    const registryConfig = {
+      asset_registries: {
+        agents: {
+          source: 'AGENTS.md',
+          behavior: 'mirror',
+          description: 'agents',
+          targets: [
+            { path: 'AGENTS.md', mode: 'canonical' },
+            { path: 'CLAUDE.md', mode: 'copy', transform: { prefix: 'claude' } },
+          ],
+        },
+        adoption: {
+          source: 'adoption',
+          behavior: 'add',
+          description: 'adoption',
+          targets: [{ path: '.pair/adoption', mode: 'canonical' }],
+        },
+      },
+    }
+    const makeFs = (own: Record<string, string>) =>
+      new InMemoryFileSystemService(
+        {
+          [`${cwd}/config.json`]: JSON.stringify(registryConfig),
+          [`${cwd}/package.json`]: JSON.stringify({ name: 'test-pkg', version: '0.1.0' }),
+          [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+            name: '@pair/knowledge-hub',
+          }),
+          [`${cwd}/packages/knowledge-hub/dataset/AGENTS.md`]: '# pair agents',
+          [`${cwd}/packages/knowledge-hub/dataset/adoption/a.md`]: 'adopt',
+          ...Object.fromEntries(Object.entries(own).map(([k, v]) => [`${cwd}/${k}`, v])),
+        },
+        cwd,
+        cwd,
+      )
+    const run = async (fs: InMemoryFileSystemService, skipRegistries?: string[]) => {
+      const orig = process.platform
+      Object.defineProperty(process, 'platform', { value: platform })
+      try {
+        return await handleInstallCommand(
+          {
+            command: 'install',
+            resolution: 'default',
+            kb: true,
+            offline: false,
+            ...(skipRegistries && { skipRegistries }),
+          },
+          fs,
+        )
+      } finally {
+        Object.defineProperty(process, 'platform', { value: orig })
+      }
+    }
+
+    test('lone own CLAUDE.md refuses without flags, nothing written', async () => {
+      const fs = makeFs({ 'CLAUDE.md': 'mine' })
+      await expect(run(fs)).rejects.toThrow(/CLAUDE\.md.*already exists/)
+      expect(fs.existsSync(`${cwd}/.pair/adoption/a.md`)).toBe(false)
+      expect(fs.readFileSync(`${cwd}/CLAUDE.md`)).toBe('mine')
+    })
+
+    test('--skip-registries agents keeps own files and installs the rest', async () => {
+      const fs = makeFs({ 'AGENTS.md': 'mine', 'CLAUDE.md': 'mine2' })
+      await expect(run(fs)).rejects.toThrow(/already exists/)
+      expect(await run(fs, ['agents'])).toBe(0)
+      expect(fs.readFileSync(`${cwd}/AGENTS.md`)).toBe('mine')
+      expect(fs.readFileSync(`${cwd}/CLAUDE.md`)).toBe('mine2')
+      expect(fs.existsSync(`${cwd}/.pair/adoption/a.md`)).toBe(true)
+    })
+
+    test('unknown registry name errors listing valid names', async () => {
+      await expect(run(makeFs({}), ['nope'])).rejects.toThrow(
+        /Unknown registry 'nope'.*agents, adoption/,
+      )
+    })
+  },
+)

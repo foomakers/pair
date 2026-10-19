@@ -11,12 +11,13 @@ test('quickstart journey: overview → quickstart with content verification', as
   await expect(page.locator('body')).toContainText('Getting Started')
   await expect(page.locator('body')).toContainText('Concepts')
 
-  // AC-1: overview page
+  // AC-1: overview page: the three components, then the lifecycle diagram, before any install step
   await expect(page.locator('h1')).toContainText('What is pair?')
   await expect(page).toHaveTitle(/What is pair/)
   await expect(page.locator('main')).toContainText('Knowledge Base')
   await expect(page.locator('main')).toContainText('Skills')
-  await expect(page.locator('main')).toContainText('Adoption Files')
+  await expect(page.locator('main')).toContainText('Adoption files')
+  await expect(page.locator('main img[src*="lifecycle-overview"]')).toHaveCount(1)
 
   // Navigate to Quickstart via sidebar
   await page
@@ -25,98 +26,48 @@ test('quickstart journey: overview → quickstart with content verification', as
     .click()
   await expect(page).toHaveURL('/docs/getting-started/quickstart')
 
-  // AC-2: install + verify + first command steps
+  // AC-2: install + verify + first command steps (#552 increment 6: install and first run only)
   const main = page.locator('main')
   await expect(main).toContainText('Prerequisites')
   await expect(main).toContainText('Node.js 18')
   await expect(main).toContainText('npm install -g @foomakers/pair-cli')
   await expect(main).toContainText('pnpm add -g @foomakers/pair-cli')
-  await expect(main).toContainText('Verify Installation')
   await expect(main).toContainText('pair-cli --version')
   await expect(main).toContainText('pair-cli install')
-
-  // AC-3: migrated content preserved, no broken .md links
-  await expect(main).toContainText('Manual Install')
   await expect(main).toContainText('GitHub Releases')
+  await expect(main).toContainText('Run your first skill')
+  await expect(main).toContainText('/pair-next')
+  await expect(main).toContainText('pair-cli update')
+  // US-552: optional marketplace path, CLI stays default
+  await expect(main).toContainText('With the Claude Code plugin (optional)')
+  await expect(main).toContainText('/pair-assistant')
+  await expect(main).toContainText('--skip-registries agents')
+
+  // AC-3: no broken .md links
   const hrefs = await main
     .locator('a')
     .evaluateAll(els => els.map(el => el.getAttribute('href')).filter(Boolean))
-  const brokenLinks = hrefs.filter(
-    h => h && (h.includes('../how-pair-works.md') || h.includes('./02-cli-workflows.md')),
-  )
-  expect(brokenLinks).toHaveLength(0)
-
-  // New quickstart: general content (new project, existing project, update, process)
-  await expect(main).toContainText('New Project')
-  await expect(main).toContainText('Existing Project')
-  await expect(main).toContainText('pair-cli update')
-  await expect(main).toContainText('Development Process')
-  await expect(main).toContainText('Choose Your Setup')
+  expect(hrefs.filter(h => h && h.endsWith('.md'))).toHaveLength(0)
 })
 
-test('solo setup journey: quickstart → solo setup with content verification', async ({ page }) => {
-  await page.goto('/docs/getting-started/quickstart-solo')
-
-  // Solo setup page renders with expected content
+test('choose-your-path and verify: one page per audience, one checklist (#552)', async ({
+  page,
+}) => {
+  await page.goto('/docs/getting-started/choose-your-path')
   const main = page.locator('main')
-  await expect(page.locator('main h1')).toContainText('Quickstart: Solo')
-  await expect(main).toContainText('Solo Workflow')
-  await expect(main).toContainText('/pair-next')
-  await expect(main).toContainText('pair-cli install --list-targets')
-
-  // Links back to general quickstart
+  await expect(page.locator('main h1')).toContainText('Solo, team or organization')
+  await expect(main).toContainText('Solo')
+  await expect(main).toContainText('Team')
+  await expect(main).toContainText('Organization')
+  await expect(main.locator('a[href="/docs/guides/customize-for-your-team"]').first()).toBeVisible()
+  await expect(main.locator('a[href="/docs/guides/external-kb"]').first()).toBeVisible()
   await expect(main.locator('a[href="/docs/getting-started/quickstart"]').first()).toBeVisible()
 
-  // AC-6 (partial): no cross-audience refs in solo setup
-  const contentLinks = await page.locator('article a').evaluateAll(els =>
-    els
-      .filter(el => !el.classList.toString().includes('bg-fd-card'))
-      .map(el => el.getAttribute('href'))
-      .filter(Boolean),
-  )
-  expect(
-    contentLinks.filter(h => h && (h.includes('quickstart-team') || h.includes('quickstart-org'))),
-  ).toHaveLength(0)
-})
-
-test('team journey: overview → team setup with content verification', async ({ page }) => {
-  await page.goto('/docs/getting-started')
-
-  // Navigate to Team Setup via sidebar
-  await page.locator('a', { hasText: 'Quickstart: Team' }).first().click()
-  await expect(page).toHaveURL('/docs/getting-started/quickstart-team')
-
-  // AC-4: shared KB, adoption files, bridge pattern
-  const main = page.locator('main')
-  await expect(main).toContainText('adoption')
-  await expect(main).toContainText('Bridge Pattern')
-  await expect(main).toContainText('AGENTS.md')
-  await expect(main).toContainText('architecture.md')
-  await expect(main).toContainText('tech-stack.md')
-  await expect(main).toContainText('way-of-working.md')
-
-  // Links to general quickstart instead of duplicating install
-  await expect(main.locator('a[href="/docs/getting-started/quickstart"]').first()).toBeVisible()
-})
-
-test('org journey: overview → org setup with content verification', async ({ page }) => {
-  await page.goto('/docs/getting-started')
-
-  // Navigate to Org Setup via sidebar
-  await page.locator('a', { hasText: 'Quickstart: Organization' }).first().click()
-  await expect(page).toHaveURL('/docs/getting-started/quickstart-org')
-
-  // AC-5: KB packaging, distribution, compliance
-  const main = page.locator('main')
-  await expect(main).toContainText('pair-cli package')
-  await expect(main).toContainText('pair-cli install --source')
-  await expect(main).toContainText('pair-cli update')
-  await expect(main).toContainText('Distribute via GitHub Releases')
-  await expect(main).toContainText('Compliance')
-  await expect(main).toContainText('Asset Registries')
-
-  // Links to general quickstart instead of duplicating install
-  await expect(main.locator('a[href="/docs/getting-started/quickstart"]').first()).toBeVisible()
+  await page.goto('/docs/getting-started/verify')
+  await expect(page.locator('main h1')).toContainText('Verify your setup')
+  await expect(main).toContainText('pair-cli --version')
+  await expect(main).toContainText('pair-cli kb-validate')
+  await expect(main).not.toContainText('verify.sh')
 })
 
 test('concepts journey: navigate through concept pages via sidebar', async ({ page }) => {
@@ -160,10 +111,9 @@ test('smoke: all docs pages return 200 with correct titles', async ({ page }) =>
   const pages = [
     { url: '/docs/getting-started', title: 'What is pair?' },
     { url: '/docs/getting-started/quickstart', title: 'Quickstart' },
-    { url: '/docs/getting-started/quickstart-solo', title: 'Quickstart: Solo' },
-    { url: '/docs/getting-started/quickstart-team', title: 'Quickstart: Team' },
-    { url: '/docs/getting-started/quickstart-org', title: 'Quickstart: Organization' },
-    { url: '/docs/getting-started/bootstrap-quick-mode', title: 'Bootstrap Quick Mode' },
+    { url: '/docs/getting-started/bootstrap-quick-mode', title: 'Bootstrap: guided or quick' },
+    { url: '/docs/getting-started/choose-your-path', title: 'Solo, team or organization' },
+    { url: '/docs/getting-started/verify', title: 'Verify your setup' },
     { url: '/docs/concepts/ai-assisted-sdlc', title: 'AI-Assisted SDLC' },
     { url: '/docs/concepts/knowledge-base', title: 'Knowledge Base' },
     { url: '/docs/concepts/skills', title: 'Skills' },
@@ -182,23 +132,29 @@ test('smoke: all docs pages return 200 with correct titles', async ({ page }) =>
 // E2E: Docs — Guides, Reference, and Support sections (#124)
 // ============================================================
 
-test('moved guides pages: render at their new locations', async ({ page }) => {
-  await page.goto('/docs/reference/cli/workflows')
+test('moved pages: render at their new locations', async ({ page }) => {
   const main = page.locator('main')
 
-  // CLI Workflows now lives under Reference > CLI
-  await expect(page.locator('main h1')).toContainText('CLI Workflows')
-  await expect(main).toContainText('Common Workflows')
-  await expect(main).toContainText('pair-cli install')
-
-  await page.goto('/docs/customization/install-from-url')
-  await expect(page.locator('main h1')).toContainText('Install from URL')
-
-  await page.goto('/docs/getting-started/checklist')
-  await expect(page.locator('main h1')).toContainText('Adopter Checklist')
+  await page.goto('/docs/reference/cli/install-sources')
+  await expect(page.locator('main h1')).toContainText('Install sources')
+  await expect(main).toContainText('--offline')
 
   await page.goto('/docs/reference/cli/update-link')
-  await expect(page.locator('main h1')).toContainText('Link Update')
+  await expect(page.locator('main h1')).toContainText('update-link')
+  await expect(main).toContainText('--dry-run')
+
+  await page.goto('/docs/guides/external-kb')
+  await expect(page.locator('main h1')).toContainText('Own and publish a Knowledge Base')
+  await expect(main).toContainText('scaffold-kb')
+
+  await page.goto('/docs/guides/update-kb')
+  await expect(page.locator('main h1')).toContainText('Update the Knowledge Base')
+
+  await page.goto('/docs/process-lifecycle/delivery-cycle')
+  await expect(page.locator('main h1')).toContainText('The delivery cycle in depth')
+
+  await page.goto('/docs/contributing/batch-engine-internals')
+  await expect(page.locator('main h1')).toContainText('Batch engine internals')
 })
 
 test('redirects: old FAQ/troubleshooting URLs land on support/troubleshooting', async ({
@@ -213,15 +169,42 @@ test('redirects: old FAQ/troubleshooting URLs land on support/troubleshooting', 
   await expect(page.locator('main h1')).toContainText('Troubleshooting')
 })
 
-test('redirects: dissolved guides URLs land on their new locations', async ({ page }) => {
+test('redirects: moved and dissolved URLs land on live pages, one hop', async ({ page }) => {
   const redirects = [
-    { from: '/docs/guides/adopter-checklist', to: '/docs/getting-started/checklist' },
-    { from: '/docs/guides/cli-workflows', to: '/docs/reference/cli/workflows' },
-    { from: '/docs/guides/customize-kb', to: '/docs/customization/team' },
-    { from: '/docs/guides/install-from-url', to: '/docs/customization/install-from-url' },
-    { from: '/docs/guides/packaging', to: '/docs/customization/organization' },
+    { from: '/docs/guides/adopter-checklist', to: '/docs/getting-started/verify' },
+    { from: '/docs/guides/cli-workflows', to: '/docs/reference/cli/examples' },
+    { from: '/docs/guides/customize-kb', to: '/docs/guides/customize-for-your-team' },
+    { from: '/docs/guides/install-from-url', to: '/docs/reference/cli/install-sources' },
+    { from: '/docs/guides/packaging', to: '/docs/guides/external-kb' },
     { from: '/docs/guides/update-link', to: '/docs/reference/cli/update-link' },
-    { from: '/docs/guides', to: '/docs' },
+    { from: '/docs/customization/install-from-url', to: '/docs/reference/cli/install-sources' },
+    { from: '/docs/tutorials/managing-ai-artifacts', to: '/docs/tutorials/share-ai-artifacts' },
+    { from: '/docs/getting-started/checklist', to: '/docs/getting-started/verify' },
+    // #552 increment 6
+    { from: '/docs/developer-journey', to: '/docs/process-lifecycle' },
+    { from: '/docs/developer-journey/iteration', to: '/docs/process-lifecycle/phases/iteration' },
+    {
+      from: '/docs/developer-journey/lifecycle-modes',
+      to: '/docs/process-lifecycle/lifecycle-modes',
+    },
+    { from: '/docs/reference/delivery-cycle', to: '/docs/process-lifecycle/delivery-cycle' },
+    { from: '/docs/reference/batch-engine', to: '/docs/contributing/batch-engine-internals' },
+    { from: '/docs/reference/cli/workflows', to: '/docs/reference/cli/examples' },
+    { from: '/docs/customization', to: '/docs/guides' },
+    { from: '/docs/customization/adopt', to: '/docs/getting-started/quickstart' },
+    { from: '/docs/customization/team', to: '/docs/guides/customize-for-your-team' },
+    { from: '/docs/customization/templates', to: '/docs/guides/customize-templates' },
+    { from: '/docs/customization/organization', to: '/docs/guides/external-kb' },
+    { from: '/docs/customization/external-kb', to: '/docs/guides/external-kb' },
+    {
+      from: '/docs/customization/package-local-adoption',
+      to: '/docs/concepts/package-local-adoption',
+    },
+    { from: '/docs/getting-started/quickstart-solo', to: '/docs/getting-started/choose-your-path' },
+    { from: '/docs/getting-started/quickstart-team', to: '/docs/getting-started/choose-your-path' },
+    { from: '/docs/getting-started/quickstart-org', to: '/docs/getting-started/choose-your-path' },
+    { from: '/docs/guides/adoption-checklist', to: '/docs/getting-started/verify' },
+    { from: '/docs/guides/release-tests', to: '/docs/tutorials/release-testing' },
   ]
   for (const { from, to } of redirects) {
     await page.goto(from)
@@ -303,10 +286,10 @@ test('support section: navigate and verify content', async ({ page }) => {
 
 test('smoke: all guides/reference/support pages return 200', async ({ page }) => {
   const pages = [
-    { url: '/docs/reference/cli/workflows', title: 'CLI Workflows' },
-    { url: '/docs/customization/install-from-url', title: 'Install from URL' },
-    { url: '/docs/getting-started/checklist', title: 'Adopter Checklist' },
-    { url: '/docs/reference/cli/update-link', title: 'Link Update' },
+    { url: '/docs/reference/cli/install-sources', title: 'Install sources' },
+    { url: '/docs/reference/cli/update-link', title: 'update-link' },
+    { url: '/docs/guides/external-kb', title: 'Own and publish a Knowledge Base' },
+    { url: '/docs/guides/update-kb', title: 'Update the Knowledge Base' },
     { url: '/docs/reference/cli/commands', title: 'CLI Commands' },
     { url: '/docs/reference/cli/examples', title: 'CLI Help Examples' },
     { url: '/docs/reference/specs/cli-contracts', title: 'CLI Contracts' },
@@ -330,7 +313,7 @@ test('smoke: all guides/reference/support pages return 200', async ({ page }) =>
 
 test('no broken .md links in guides/reference/support sections', async ({ page }) => {
   const sections = [
-    '/docs/reference/cli/workflows',
+    '/docs/reference/cli/examples',
     '/docs/reference/cli/commands',
     '/docs/reference/skills-catalog',
     '/docs/support',
@@ -349,36 +332,29 @@ test('no broken .md links in guides/reference/support sections', async ({ page }
 // E2E: Docs — Developer Journey section + Guidelines Catalog (#125)
 // ============================================================
 
-test('developer journey: navigate through section pages', async ({ page }) => {
-  // Index page (Process Lifecycle, moved from concepts)
-  await page.goto('/docs/developer-journey')
+test('process lifecycle: overview → induction → execution', async ({ page }) => {
+  // Overview: the four parts, /pair-next, where to start, one next table
+  await page.goto('/docs/process-lifecycle')
   const main = page.locator('main')
   await expect(page.locator('main h1')).toContainText('Process Lifecycle')
   await expect(main).toContainText('/pair-next')
-  await expect(main).toContainText('Process Skills (recommended)')
-  await expect(main).toContainText('How-to Guides')
-  await expect(main).toContainText('The Four Levels')
-  await expect(main).toContainText('Entry Points')
+  await expect(main).toContainText('The four parts')
+  await expect(main).toContainText('Where to start')
+  await expect(main).toContainText('What to read next')
+  await expect(main.locator('img[src*="lifecycle-overview"]')).toHaveCount(1)
 
-  // Sidebar shows Process Lifecycle section (label unified with index title)
+  // Sidebar shows Process Lifecycle section
   await expect(page.locator('body')).toContainText('Process Lifecycle')
 
-  // Navigate to Induction
-  await page
-    .locator('a', { hasText: /^Induction: Project Setup$/ })
-    .first()
-    .click()
-  await expect(page).toHaveURL('/docs/developer-journey/induction')
+  // Induction, reached from the overview's own table
+  await main.locator('a[href="/docs/process-lifecycle/phases/induction"]').first().click()
+  await expect(page).toHaveURL('/docs/process-lifecycle/phases/induction')
   await expect(main).toContainText('/pair-process-specify-prd')
   await expect(main).toContainText('/pair-process-bootstrap')
   await expect(main).toContainText('/pair-process-plan-initiatives')
 
-  // Navigate to Execution
-  await page
-    .locator('a', { hasText: /^Execution/ })
-    .first()
-    .click()
-  await expect(page).toHaveURL('/docs/developer-journey/execution')
+  // Execution
+  await page.goto('/docs/process-lifecycle/phases/execution')
   await expect(main).toContainText('/pair-process-implement')
   await expect(main).toContainText('/pair-process-review')
   await expect(main).toContainText('TDD Discipline')
@@ -390,12 +366,15 @@ test('developer journey: navigate through section pages', async ({ page }) => {
 
 test('smoke: all developer journey pages return 200', async ({ page }) => {
   const pages = [
-    { url: '/docs/developer-journey', title: 'Process Lifecycle' },
-    { url: '/docs/developer-journey/induction', title: 'Induction' },
-    { url: '/docs/developer-journey/strategic-planning', title: 'Strategic Planning' },
-    { url: '/docs/developer-journey/iteration', title: 'Iteration' },
-    { url: '/docs/developer-journey/execution', title: 'Execution' },
-    { url: '/docs/developer-journey/tag-driven-automation', title: 'Tag-Driven Automation' },
+    { url: '/docs/process-lifecycle', title: 'Process Lifecycle' },
+    { url: '/docs/process-lifecycle/phases/induction', title: 'Induction' },
+    { url: '/docs/process-lifecycle/phases/strategic-planning', title: 'Strategic Planning' },
+    { url: '/docs/process-lifecycle/phases/iteration', title: 'Iteration' },
+    { url: '/docs/process-lifecycle/phases/execution', title: 'Execution' },
+    { url: '/docs/process-lifecycle/phases', title: 'Phases' },
+    { url: '/docs/process-lifecycle/delivery-cycle', title: 'The delivery cycle in depth' },
+    { url: '/docs/process-lifecycle/lifecycle-modes', title: 'Lifecycle modes' },
+    { url: '/docs/process-lifecycle/tag-driven-automation', title: 'Tag-driven automation' },
   ]
   for (const { url, title } of pages) {
     const response = await page.goto(url)
@@ -433,69 +412,45 @@ test('guidelines catalog: categories and how-to listing', async ({ page }) => {
 })
 
 // ============================================================
-// E2E: Docs — Customization section (#125)
+// E2E: Docs — Guides section, Knowledge Base group (#125, #552)
 // ============================================================
 
-test('customization journey: index → adopt → team → organization', async ({ page }) => {
-  // AC-1: index page with adopt→customize→publish progression
-  await page.goto('/docs/customization')
+test('guides journey: index defines the three paths → team KB guide → org KB guide', async ({
+  page,
+}) => {
+  await page.goto('/docs/guides')
   const main = page.locator('main')
-  await expect(page.locator('main h1')).toContainText('Adapt pair to Your Context')
-  await expect(main).toContainText('Adopt')
-  await expect(main).toContainText('Customize')
-  await expect(main).toContainText('Publish')
+  await expect(page.locator('main h1')).toContainText('Guides')
+  await expect(main).toContainText('In your assistant')
+  await expect(main).toContainText('With pair-cli')
+  await expect(main).toContainText('/pair-assistant')
 
-  // AC-5: sidebar shows customization section with correct ordering
-  await expect(page.locator('body')).toContainText('Customization')
-
-  // Navigate to Adopt via content link
-  await main.locator('a[href="/docs/customization/adopt"]').first().click()
-  await expect(page).toHaveURL('/docs/customization/adopt')
-
-  // AC-2: adopt page — solo dev consumer guide
-  await expect(page.locator('main h1')).toContainText('Adopt a Knowledge Base')
-  await expect(main).toContainText('Browse Available Knowledge Bases')
-  await expect(main).toContainText('pair-cli install')
-  await expect(main).toContainText('Verify the Installation')
-  await expect(main).toContainText('What You Get')
-
-  // Navigate to Team via sidebar
-  await page
-    .locator('a', { hasText: /^Customize for Your Team$/ })
-    .first()
-    .click()
-  await expect(page).toHaveURL('/docs/customization/team')
-
-  // AC-3: team page — team lead adapter guide
-  await expect(page.locator('main h1')).toContainText('Customize for Your Team')
-  await expect(main).toContainText('Layered Architecture')
-  await expect(main).toContainText('Override the Tech Stack')
-  await expect(main).toContainText('Stay Updated')
+  await main.locator('a[href="/docs/guides/customize-for-your-team"]').first().click()
+  await expect(page).toHaveURL('/docs/guides/customize-for-your-team')
+  await expect(page.locator('main h1')).toContainText('Customize the Knowledge Base for your team')
+  await expect(main).toContainText('Adoption always wins')
   await expect(main).toContainText('pair-cli update')
 
-  // Navigate to Organization via sidebar
-  await page
-    .locator('a', { hasText: /^Publish a Knowledge Base$/ })
-    .first()
-    .click()
-  await expect(page).toHaveURL('/docs/customization/organization')
-
-  // AC-4: organization page — org architect producer guide
-  await expect(page.locator('main h1')).toContainText('Publish a Knowledge Base')
-  await expect(main).toContainText('Create the KB Structure')
-  await expect(main).toContainText('pair-cli package')
-  await expect(main).toContainText('Distribute')
-  await expect(main).toContainText('Version and Maintain')
+  await page.goto('/docs/guides/external-kb')
+  await expect(page.locator('main h1')).toContainText('Own and publish a Knowledge Base')
+  await expect(main).toContainText('scripts/release.sh')
+  await expect(main).toContainText('npm')
 })
 
-test('smoke: all customization pages return 200 with correct titles', async ({ page }) => {
+test('smoke: knowledge-base guides and their reference and concept pages return 200 with correct titles', async ({
+  page,
+}) => {
   const pages = [
-    { url: '/docs/customization', title: 'Adapt pair to Your Context' },
-    { url: '/docs/customization/adopt', title: 'Adopt a Knowledge Base' },
-    { url: '/docs/customization/team', title: 'Customize for Your Team' },
-    { url: '/docs/customization/templates', title: 'Customize Templates' },
-    { url: '/docs/customization/package-local-adoption', title: 'Package-Local Adoption' },
-    { url: '/docs/customization/organization', title: 'Publish a Knowledge Base' },
+    {
+      url: '/docs/guides/customize-for-your-team',
+      title: 'Customize the Knowledge Base for your team',
+    },
+    { url: '/docs/guides/customize-templates', title: 'Customize templates' },
+    { url: '/docs/guides/monorepo-rules', title: 'Package-local rules in a monorepo' },
+    { url: '/docs/guides/join-a-pair-project', title: 'Join a project that already uses pair' },
+    { url: '/docs/reference/templates-catalog', title: 'Templates catalog' },
+    { url: '/docs/concepts/package-local-adoption', title: 'Package-local adoption' },
+    { url: '/docs/concepts/glossary', title: 'Glossary' },
   ]
   for (const { url, title } of pages) {
     const response = await page.goto(url)
@@ -505,6 +460,7 @@ test('smoke: all customization pages return 200 with correct titles', async ({ p
   }
 })
 
+// ============================================================
 // ============================================================
 // E2E: Docs — Integrations + PM Tools sections (#126)
 // ============================================================
@@ -749,6 +705,7 @@ test('smoke: all contributing pages return 200 with correct titles', async ({ pa
     { url: '/docs/contributing/writing-skills', title: 'Writing Skills' },
     { url: '/docs/contributing/writing-guidelines', title: 'Writing Guidelines' },
     { url: '/docs/contributing/release-process', title: 'Release Process' },
+    { url: '/docs/contributing/batch-engine-internals', title: 'Batch engine internals' },
   ]
   for (const { url, title } of pages) {
     const response = await page.goto(url)
@@ -812,7 +769,11 @@ test('smoke: all tutorials pages return 200 with correct titles', async ({ page 
     { url: '/docs/tutorials/existing-project', title: 'Adopting pair on an Existing Project' },
     { url: '/docs/tutorials/team-setup', title: 'Team Setup' },
     { url: '/docs/tutorials/enterprise-adoption', title: 'Enterprise Adoption' },
-    { url: '/docs/tutorials/unattended-delivery', title: 'Unattended Delivery' },
+    { url: '/docs/tutorials/automated-development', title: 'Automated development' },
+    { url: '/docs/tutorials/brainstorming', title: 'Brainstorming' },
+    { url: '/docs/tutorials/refinement', title: 'Refinement' },
+    { url: '/docs/tutorials/release-testing', title: 'Release testing' },
+    { url: '/docs/tutorials/share-ai-artifacts', title: 'Share AI artifacts' },
   ]
   for (const { url, title } of pages) {
     const response = await page.goto(url)
@@ -929,101 +890,121 @@ test('search: empty query shows no results', async ({ page }) => {
 
 test('no circular prev/next footer links on any docs page', async ({ page }) => {
   const allPages = [
+    // Every routable page on disk; `docs-page-coverage.test.ts` asserts this list equals the
+    // filesystem, so a page added without a line here fails red there.
     '/docs',
-    '/docs/getting-started',
-    '/docs/getting-started/quickstart',
-    '/docs/getting-started/quickstart-solo',
-    '/docs/getting-started/quickstart-team',
-    '/docs/getting-started/quickstart-org',
-    '/docs/getting-started/bootstrap-quick-mode',
-    '/docs/developer-journey',
-    '/docs/developer-journey/induction',
-    '/docs/developer-journey/strategic-planning',
-    '/docs/developer-journey/iteration',
-    '/docs/developer-journey/execution',
-    '/docs/developer-journey/tag-driven-automation',
-    '/docs/concepts/ai-assisted-sdlc',
-    '/docs/concepts/knowledge-base',
-    '/docs/concepts/skills',
+    '/docs/concepts',
     '/docs/concepts/adoption-files',
     '/docs/concepts/agent-integration',
+    '/docs/concepts/ai-assisted-sdlc',
+    '/docs/concepts/canonical-states',
+    '/docs/concepts/code-host',
+    '/docs/concepts/definition-of-ready-and-done',
+    '/docs/concepts/glossary',
+    '/docs/concepts/knowledge-base',
     '/docs/concepts/llms-txt',
-    '/docs/customization',
-    '/docs/customization/adopt',
-    '/docs/customization/team',
-    '/docs/customization/templates',
-    '/docs/customization/package-local-adoption',
-    '/docs/customization/organization',
+    '/docs/concepts/package-local-adoption',
+    '/docs/concepts/pr-state-flow',
+    '/docs/concepts/review-identity',
+    '/docs/concepts/skills',
+    '/docs/concepts/tag-driven-gates',
+    '/docs/contributing',
+    '/docs/contributing/architecture',
+    '/docs/contributing/batch-engine-internals',
+    '/docs/contributing/development-setup',
+    '/docs/contributing/release-process',
+    '/docs/contributing/writing-guidelines',
+    '/docs/contributing/writing-migration-pages',
+    '/docs/contributing/writing-skills',
+    '/docs/getting-started',
+    '/docs/getting-started/bootstrap-quick-mode',
+    '/docs/getting-started/choose-your-path',
+    '/docs/getting-started/quickstart',
+    '/docs/getting-started/verify',
+    '/docs/guides',
+    '/docs/guides/adopt-existing-repo',
+    '/docs/guides/assess-security-cost-coupling',
+    '/docs/guides/autonomy-and-profiles',
+    '/docs/guides/card-states',
+    '/docs/guides/classify-risk',
+    '/docs/guides/configure-harness',
+    '/docs/guides/customize-for-your-team',
+    '/docs/guides/customize-templates',
+    '/docs/guides/deliver-a-card',
+    '/docs/guides/deliver-many-cards',
+    '/docs/guides/delivery-metrics',
+    '/docs/guides/external-kb',
+    '/docs/guides/hooks-and-severities',
+    '/docs/guides/install-via-marketplace',
+    '/docs/guides/join-a-pair-project',
+    '/docs/guides/monorepo-rules',
+    '/docs/guides/quality-gates',
+    '/docs/guides/review-identity',
+    '/docs/guides/tag-automation',
+    '/docs/guides/update-kb',
     '/docs/integrations',
+    '/docs/integrations/adding-a-harness',
     '/docs/integrations/claude-code',
     '/docs/integrations/codex',
     '/docs/integrations/cursor',
     '/docs/integrations/github-copilot',
     '/docs/integrations/opencode',
     '/docs/integrations/pi',
-    '/docs/integrations/adding-a-harness',
     '/docs/integrations/web-cloud-environments',
     '/docs/integrations/windsurf',
+    '/docs/migrations',
+    '/docs/migrations/v0.4-to-v0.5',
     '/docs/pm-tools',
+    '/docs/pm-tools/azure-devops',
+    '/docs/pm-tools/custom',
     '/docs/pm-tools/filesystem',
     '/docs/pm-tools/github-projects',
     '/docs/pm-tools/linear',
-    '/docs/getting-started/checklist',
-    '/docs/customization/install-from-url',
-    '/docs/reference/cli/workflows',
-    '/docs/reference/cli/update-link',
+    '/docs/process-lifecycle',
+    '/docs/process-lifecycle/delivery-cycle',
+    '/docs/process-lifecycle/delivery-workflow',
+    '/docs/process-lifecycle/lifecycle-modes',
+    '/docs/process-lifecycle/phases',
+    '/docs/process-lifecycle/phases/execution',
+    '/docs/process-lifecycle/phases/induction',
+    '/docs/process-lifecycle/phases/iteration',
+    '/docs/process-lifecycle/phases/strategic-planning',
+    '/docs/process-lifecycle/refinement-workflow',
+    '/docs/process-lifecycle/skill-layers',
+    '/docs/process-lifecycle/tag-driven-automation',
+    '/docs/reference',
+    '/docs/reference/adoption-settings',
     '/docs/reference/cli/commands',
     '/docs/reference/cli/examples',
+    '/docs/reference/cli/install-sources',
+    '/docs/reference/cli/update-link',
+    '/docs/reference/configuration',
+    '/docs/reference/coupling-model',
+    '/docs/reference/guidelines-catalog',
+    '/docs/reference/kb-structure',
+    '/docs/reference/pair-assistant',
+    '/docs/reference/pair-next',
+    '/docs/reference/quality-gates-configuration',
+    '/docs/reference/quality-model',
+    '/docs/reference/skill-management',
+    '/docs/reference/skills-catalog',
     '/docs/reference/specs/cli-contracts',
     '/docs/reference/specs/kb-source-resolution',
-    '/docs/reference/skills-catalog',
-    '/docs/reference/guidelines-catalog',
-    '/docs/reference/skill-management',
-    '/docs/reference/kb-structure',
-    '/docs/reference/configuration',
+    '/docs/reference/templates-catalog',
     '/docs/support',
     '/docs/support/general-faq',
     '/docs/support/troubleshooting',
     '/docs/tutorials',
-    '/docs/tutorials/first-project',
-    '/docs/tutorials/existing-project',
-    '/docs/tutorials/team-setup',
+    '/docs/tutorials/automated-development',
+    '/docs/tutorials/brainstorming',
     '/docs/tutorials/enterprise-adoption',
-    '/docs/tutorials/unattended-delivery',
-    '/docs/contributing',
-    '/docs/contributing/development-setup',
-    '/docs/contributing/architecture',
-    '/docs/contributing/writing-skills',
-    '/docs/contributing/writing-guidelines',
-    '/docs/contributing/release-process',
-    // Backfill: these pages existed on disk but were in neither e2e list, so a broken meta.json
-    // entry or a self-referential prev/next on any of them passed the whole suite.
-    // `docs-page-coverage.test.ts` machine-asserts CP5's own bullets against
-    // `content/docs/**/*.mdx`, AND (separately) asserts THIS `allPages` array equals that same
-    // set — so a new page must still be added here manually, but forgetting to now fails red
-    // there instead of silently passing. The per-section smoke arrays below (integrations,
-    // guides, tutorials, …) are a different list and remain hand-maintained and unguarded.
-    '/docs/concepts',
-    '/docs/concepts/canonical-states',
-    '/docs/concepts/code-host',
-    '/docs/concepts/definition-of-ready-and-done',
-    '/docs/concepts/pr-state-flow',
-    '/docs/concepts/review-identity',
-    '/docs/concepts/tag-driven-gates',
-    '/docs/contributing/writing-migration-pages',
-    '/docs/customization/external-kb',
-    '/docs/migrations',
-    '/docs/migrations/v0.4-to-v0.5',
-    '/docs/pm-tools/azure-devops',
-    '/docs/reference',
-    '/docs/reference/batch-engine',
-    '/docs/reference/delivery-cycle',
-    '/docs/reference/coupling-model',
-    '/docs/reference/pair-next',
-    '/docs/reference/quality-gates-configuration',
-    '/docs/reference/quality-model',
-    '/docs/tutorials/managing-ai-artifacts',
+    '/docs/tutorials/existing-project',
+    '/docs/tutorials/first-project',
+    '/docs/tutorials/refinement',
     '/docs/tutorials/release-testing',
+    '/docs/tutorials/share-ai-artifacts',
+    '/docs/tutorials/team-setup',
+    '/docs/whats-new',
   ]
 
   const circular: string[] = []
@@ -1081,4 +1062,17 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
   expect(footerLinksSeen).toBeGreaterThan(allPages.length)
 
   expect(circular, `Circular navigation links found:\n${circular.join('\n')}`).toHaveLength(0)
+})
+
+test('US-552 5b: guides index, what is new, absorbed page redirect', async ({ page }) => {
+  await page.goto('/docs/guides')
+  await expect(page.locator('main h1')).toContainText('Guides')
+  await expect(page.locator('main a[href="/docs/guides/deliver-a-card"]').first()).toBeVisible()
+
+  await page.goto('/docs/whats-new')
+  await expect(page.locator('main h1')).toContainText("What's new")
+  await expect(page.locator('main a[href="/docs/migrations/v0.4-to-v0.5"]').first()).toBeVisible()
+
+  await page.goto('/docs/getting-started/checklist')
+  await expect(page).toHaveURL('/docs/getting-started/verify')
 })

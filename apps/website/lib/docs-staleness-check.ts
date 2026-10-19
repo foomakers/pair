@@ -118,6 +118,25 @@ export function countHowToGuides(howToDir: string): number | null {
 
 // --- Pure per-content checks (return error strings; no I/O) ---
 
+/** Check 0: no em dash (U+2014) in docs content; rewrite the sentence instead. */
+export function findEmDashes(content: string, rel: string): string[] {
+  return content
+    .split('\n')
+    .flatMap((line, i) => (line.includes('\u2014') ? [`${rel}:${i + 1}: em dash (U+2014)`] : []))
+}
+
+/** Every /diagrams image is followed (after blank lines) by an italic caption line. */
+export function findUncaptionedDiagrams(content: string, rel: string): string[] {
+  const lines = content.split('\n')
+  return lines.flatMap((line, i) => {
+    if (!/!\[[^\]]*\]\(\/diagrams\/[^)]*\)/.test(line)) return []
+    const next = lines.slice(i + 1).find(l => l.trim() !== '')
+    return next && /^\*[^*].*\*$/.test(next.trim())
+      ? []
+      : [`${rel}:${i + 1}: diagram without figure caption`]
+  })
+}
+
 /** Check 1: every "N skills" phrasing in content matches the actual skill count. */
 export function findSkillCountMismatches(content: string, rel: string, actual: number): string[] {
   return countMismatches(content, rel, actual, { re: SKILL_COUNT_RE, label: 'Skill count' })
@@ -182,6 +201,86 @@ export function findDeadLinks(content: string, rel: string, validRoutes: Set<str
         errors.push(`Dead internal link in ${rel}: ${raw} does not resolve to a docs page`)
       }
     }
+  }
+  return errors
+}
+
+/** Heading slugs per docs route (github-slugger, as check 5c). */
+export function buildDocSlugs(contents: Map<string, string>): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>()
+  for (const [route, md] of contents) out.set(route, githubHeadingSlugs(md))
+  return out
+}
+
+/** Route and decoded fragment of an internal `/docs/...#anchor` link, or null without a fragment. */
+function splitAnchor(raw: string): { route: string; frag: string } | null {
+  const hash = raw.indexOf('#')
+  if (hash < 0) return null
+  const route = (raw.slice(0, hash).split('?')[0] ?? '').replace(/\/$/, '') || '/docs'
+  return { route, frag: safeDecode(raw.slice(hash + 1)) }
+}
+
+/** Check 5d: every internal `/docs/...#anchor` resolves to a heading slug of the target page. */
+export function findDeadAnchors(
+  content: string,
+  rel: string,
+  slugs: Map<string, Set<string>>,
+): string[] {
+  const errors: string[] = []
+  for (const re of [LINK_RE, HREF_RE]) {
+    for (const m of content.matchAll(re)) {
+      const raw = m[1] ?? ''
+      const a = splitAnchor(raw)
+      const known = a && slugs.get(a.route)
+      if (a && known && a.frag && !known.has(a.frag)) {
+        errors.push(`Dead anchor in ${rel}: ${raw} — no heading "#${a.frag}" on ${a.route}`)
+      }
+    }
+  }
+  return errors
+}
+
+/** The `/pair-assistant` intent table: command -> the "user wants" cells that map to it. */
+export function parseIntentRequests(skillMd: string): Map<string, string[]> {
+  const out = new Map<string, string[]>()
+  for (const line of skillMd.split('\n')) {
+    const cells = line.split('|').map(c => c.trim())
+    const cmd = /^`([a-z][a-z-]*)`$/.exec(cells[2] ?? '')?.[1]
+    if (cells.length < 4 || !cmd || !cells[1]) continue
+    out.set(cmd, [...(out.get(cmd) ?? []), cells[1].replaceAll('**', '')])
+  }
+  return out
+}
+
+/** The text of `## <cmd>` up to the next `## ` heading, or undefined when the section is absent. */
+function commandSection(doc: string, cmd: string): string | undefined {
+  const start = doc.search(new RegExp(`^## ${cmd}$`, 'm'))
+  if (start < 0) return undefined
+  const rest = doc.slice(start + 1)
+  const next = rest.search(/^## /m)
+  return next < 0 ? rest : rest.slice(0, next)
+}
+
+/** One command's "Via" line problem, if any. */
+function viaProblem(cmd: string, body: string, intents: Map<string, string[]>): string | null {
+  const via = body.split('\n').filter(l => l.startsWith('**Via'))
+  if (via.length !== 1)
+    return `commands.mdx: ## ${cmd} needs exactly one "**Via" line (found ${via.length})`
+  const line = via[0] ?? ''
+  if (/CLI only/.test(line) || !line.includes('/pair-assistant')) return null
+  const asked = /"([^"]+)"/.exec(line)?.[1]
+  if (asked && (intents.get(cmd) ?? []).includes(asked)) return null
+  return `commands.mdx: ## ${cmd} Via line asks for "${asked ?? ''}", not a /pair-assistant intent-table request for \`${cmd}\``
+}
+
+/** Check 5e: each `## <command>` in commands.mdx has one "Via" line naming a real intent request, or CLI only. */
+export function checkViaLines(commands: string[], commandsDoc: string, skillMd: string): string[] {
+  const intents = parseIntentRequests(skillMd)
+  const errors: string[] = []
+  for (const cmd of commands) {
+    const body = commandSection(commandsDoc, cmd)
+    const problem = body === undefined ? null : viaProblem(cmd, body, intents)
+    if (problem) errors.push(problem)
   }
   return errors
 }
@@ -541,7 +640,8 @@ export function deriveCatalogDescription(
   frontmatterDescription: string,
   commandByName: Map<string, string>,
 ): string {
-  return transformCommandTokens(extractFirstSentence(frontmatterDescription), commandByName)
+  const lead = extractFirstSentence(frontmatterDescription).replaceAll(' \u2014 ', ', ')
+  return transformCommandTokens(lead, commandByName)
 }
 
 /** Derive the expected Command + Description for every dataset skill (name → row). */
@@ -571,7 +671,8 @@ export function parseCatalogRow(
     const cells = line.split('|').map(c => c.trim())
     return {
       command: (cells[2] ?? '').replace(/^`|`$/g, ''),
-      description: cells[3] ?? '',
+      // an older catalog (pre em dash removal) compares equal to the derived row
+      description: (cells[3] ?? '').replaceAll(' \u2014 ', ', '),
     }
   }
   return null
@@ -991,6 +1092,7 @@ function perFileErrors(params: {
   howToCount: number | null
   validRoutes: Set<string>
   repoRoot: string
+  slugs: Map<string, Set<string>>
 }): string[] {
   const {
     docsFiles,
@@ -1000,6 +1102,7 @@ function perFileErrors(params: {
     howToCount,
     validRoutes,
     repoRoot,
+    slugs,
   } = params
   const tracked = trackedFiles(repoRoot)
   const targetSource = readTracked(repoRoot)
@@ -1007,12 +1110,15 @@ function perFileErrors(params: {
   for (const file of docsFiles) {
     const content = readFileSync(file, 'utf-8')
     const rel = relative(docsDir, file)
+    errors.push(...findEmDashes(content, rel))
+    errors.push(...findUncaptionedDiagrams(content, rel))
     errors.push(...findSkillCountMismatches(content, rel, skillCount))
     if (declaredPluginSkills !== null) {
       errors.push(...findPluginSkillCountMismatches(content, rel, declaredPluginSkills))
     }
     if (howToCount !== null) errors.push(...findGuideCountMismatches(content, rel, howToCount))
     errors.push(...findDeadLinks(content, rel, validRoutes))
+    errors.push(...findDeadAnchors(content, rel, slugs))
     errors.push(...findDeadRepoCitations(content, rel, tracked, targetSource))
   }
   return errors
@@ -1064,8 +1170,12 @@ function checkPaths(root: string) {
     HOW_TO_DIR: join(root, 'packages/knowledge-hub/dataset/.pair/knowledge/how-to'),
     // The plugin manifest lives at the PLUGIN root (the bootstrap corpus), not at the
     // repo root: the marketplace entry's `source` points there.
+    ASSISTANT_SKILL: join(
+      root,
+      'packages/knowledge-hub/dataset/plugin/skills/pair-assistant/SKILL.md',
+    ),
     PLUGIN_MANIFEST: join(root, 'packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json'),
-    BATCH_ENGINE_FILE: join(DOCS_DIR, 'reference/batch-engine.mdx'),
+    BATCH_ENGINE_FILE: join(DOCS_DIR, 'contributing/batch-engine-internals.mdx'),
     CLI_CONFIG: join(root, 'apps/pair-cli/config.json'),
     AGENTS_DIR: join(root, 'packages/knowledge-hub/dataset/.agents'),
     WORKFLOWS_DIR: join(root, 'packages/knowledge-hub/dataset/.workflows'),
@@ -1191,21 +1301,17 @@ export function batchEngineErrors(paths: {
 }
 
 /**
- * The docs pages whose fenced sample block claims to BE the output of
- * `pair-cli install --list-targets`. These are transcripts a reader compares their own
+ * The docs page whose fenced sample block claims to BE the output of
+ * `pair-cli install --list-targets`. This is a transcript a reader compares their own
  * terminal against line for line, so drift here does not read as a stale doc — it reads
  * as a broken install, and the reader has no way to tell the two apart.
  */
-export const LIST_TARGETS_PAGES = [
-  'getting-started/checklist.mdx',
-  'getting-started/quickstart-solo.mdx',
-  'reference/cli/examples.mdx',
-]
+export const LIST_TARGETS_PAGES = ['reference/cli/examples.mdx']
 
 /** The header `listTargets` (apps/pair-cli/src/commands/install/handler.ts) prints, uncoloured. */
 export const LIST_TARGETS_HEADER = 'Asset Registries'
 
-/** The header three pages invented for it, and which the CLI has never emitted. */
+/** The header the docs once invented for it, and which the CLI has never emitted. */
 const LIST_TARGETS_INVENTED_HEADER = 'Available asset registries:'
 
 type ListTargetsRegistry = { behavior?: string; targets?: { path: string }[] }
@@ -1221,7 +1327,7 @@ function listTargetsEntry(name: string, reg: ListTargetsRegistry): string {
  * handler's header, and one `name` / `target:` / `behavior:` entry per SHIPPED registry.
  *
  * The batch-engine check above reads `asset_registries` too, but only for two registries and
- * only against `batch-engine.mdx`; these three transcripts were covered by nothing. They drifted
+ * only against the batch-engine page; the transcripts were covered by nothing. They drifted
  * into a columnar table under a header the CLI never printed, gave `knowledge` the target `.pair`
  * instead of `.pair/knowledge`, and omitted 4 of the 7 registries — for as long as it took someone
  * to read them side by side with a terminal. Deriving both directions from `config.json` means
@@ -1374,6 +1480,23 @@ function liveMarkerErrors(
   })
 }
 
+function docSlugs(docsFiles: string[], docsDir: string): Map<string, Set<string>> {
+  const contents = new Map<string, string>()
+  for (const f of docsFiles) {
+    const route = [...buildValidRoutes([f], docsDir)][0] as string
+    contents.set(route, readFileSync(f, 'utf-8'))
+  }
+  return buildDocSlugs(contents)
+}
+
+function viaErrors(paths: ReturnType<typeof checkPaths>): string[] {
+  const commands = readdirSync(paths.COMMANDS_DIR, { withFileTypes: true })
+    .filter(d => d.isDirectory())
+    .map(d => d.name)
+  const doc = readFileSync(paths.COMMANDS_FILE, 'utf-8')
+  return checkViaLines(commands, doc, readFileSync(paths.ASSISTANT_SKILL, 'utf-8'))
+}
+
 export function runAllChecks(
   root: string,
   issueState: IssueStateLookup = queryIssueState,
@@ -1402,6 +1525,7 @@ export function runAllChecks(
       howToCount,
       validRoutes,
       repoRoot: repoRootOf(root),
+      slugs: docSlugs(docsFiles, DOCS_DIR),
     }),
   )
 
@@ -1410,8 +1534,7 @@ export function runAllChecks(
   // header's own date was not also bumped in the same commit, which the content checks above
   // already catch independently)
   const catalog = readFileSync(paths.CATALOG_FILE, 'utf-8')
-  errors.push(...cliConfigDerivedErrors(paths))
-  errors.push(...catalogErrors(catalog, allSkills, SKILLS_DIR))
+  errors.push(...cliConfigDerivedErrors(paths), ...catalogErrors(catalog, allSkills, SKILLS_DIR))
 
   // Checks 3 & 4: CLI command anchors + tutorial references; 6: planned-capability markers
   const docs = docsFiles.map(file => ({
@@ -1419,7 +1542,7 @@ export function runAllChecks(
     content: readFileSync(file, 'utf-8'),
   }))
   const cli = checkCliCommands(paths.COMMANDS_DIR, paths.COMMANDS_FILE, docs)
-  errors.push(...cli.errors, ...liveMarkerErrors(docs, issueState))
+  errors.push(...cli.errors, ...liveMarkerErrors(docs, issueState), ...viaErrors(paths))
   errors.push(...readmeErrors(join(root, 'README.md'), skillCount, howToCount))
 
   return { errors, skillCount, commandCount: cli.commandCount }

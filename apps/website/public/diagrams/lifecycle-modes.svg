@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 370" width="1080" height="370" role="img" aria-labelledby="t d" font-family="Helvetica, Arial, sans-serif" font-size="12">
+<title id="t">Three lifecycle modes across both workflows</title>
+<desc id="d">Assisted, Supervised and Autonomous compared across the refinement workflow and the delivery workflow. Assisted runs process skills by hand. Supervised uses the refine and implement batches or workflow cycle per card. Autonomous uses the prepare gate with escalation for refinement, and pair-loop or pair-cli run for delivery.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#444"/></marker></defs>
+<rect width="1080" height="370" fill="#ffffff"/>
+<text x="30" y="24" font-size="14" font-weight="bold" fill="#222">Three lifecycle modes across both workflows</text>
+<rect x="30" y="50" width="150" height="40" rx="6" fill="#ffffff" stroke="#555555" stroke-width="1.3"/>
+<text x="105.0" y="74.0" text-anchor="middle" fill="#222">Workflow</text>
+<rect x="200" y="50" width="270" height="40" rx="6" fill="#eef3fb" stroke="#3b5b92" stroke-width="1.3"/>
+<text x="335.0" y="74.0" text-anchor="middle" fill="#222">Assisted</text>
+<rect x="490" y="50" width="270" height="40" rx="6" fill="#fff6df" stroke="#a06a00" stroke-width="1.3"/>
+<text x="625.0" y="74.0" text-anchor="middle" fill="#222">Supervised</text>
+<rect x="780" y="50" width="270" height="40" rx="6" fill="#e9f6ec" stroke="#2f7d46" stroke-width="1.3"/>
+<text x="915.0" y="74.0" text-anchor="middle" fill="#222">Autonomous</text>
+<rect x="30" y="110" width="150" height="70" rx="6" fill="#ffffff" stroke="#555555" stroke-width="1.3"/>
+<text x="105.0" y="149.0" text-anchor="middle" fill="#222">Refinement</text>
+<rect x="200" y="110" width="270" height="70" rx="6" fill="#eef3fb" stroke="#3b5b92" stroke-width="1.3"/>
+<text x="335.0" y="149.0" text-anchor="middle" fill="#222">process skills by hand</text>
+<rect x="490" y="110" width="270" height="70" rx="6" fill="#fff6df" stroke="#a06a00" stroke-width="1.3"/>
+<text x="625.0" y="141.0" text-anchor="middle" fill="#222" font-weight="bold">/pair-refine-batch</text>
+<text x="625.0" y="157.0" text-anchor="middle" fill="#222">run --until ready</text>
+<rect x="780" y="110" width="270" height="70" rx="6" fill="#e9f6ec" stroke="#2f7d46" stroke-width="1.3"/>
+<text x="915.0" y="149.0" text-anchor="middle" fill="#222">prepare gate, escalation</text>
+<rect x="30" y="200" width="150" height="70" rx="6" fill="#ffffff" stroke="#555555" stroke-width="1.3"/>
+<text x="105.0" y="239.0" text-anchor="middle" fill="#222">Delivery</text>
+<rect x="200" y="200" width="270" height="70" rx="6" fill="#eef3fb" stroke="#3b5b92" stroke-width="1.3"/>
+<text x="335.0" y="231.0" text-anchor="middle" fill="#222" font-weight="bold">/pair-process-implement</text>
+<text x="335.0" y="247.0" text-anchor="middle" fill="#222">/pair-process-review</text>
+<rect x="490" y="200" width="270" height="70" rx="6" fill="#fff6df" stroke="#a06a00" stroke-width="1.3"/>
+<text x="625.0" y="231.0" text-anchor="middle" fill="#222" font-weight="bold">/pair-workflow-cycle</text>
+<text x="625.0" y="247.0" text-anchor="middle" fill="#222">/pair-implement-batch</text>
+<rect x="780" y="200" width="270" height="70" rx="6" fill="#e9f6ec" stroke="#2f7d46" stroke-width="1.3"/>
+<text x="915.0" y="231.0" text-anchor="middle" fill="#222" font-weight="bold">/pair-loop</text>
+<text x="915.0" y="247.0" text-anchor="middle" fill="#222">run --root --parallel --watch</text>
+<rect x="30" y="300" width="1020" height="40" rx="6" fill="#ffffff" stroke="#555555" stroke-width="1.3"/>
+<text x="540.0" y="324.0" text-anchor="middle" fill="#222">Use when: learning or high risk, Assisted; known backlog, Supervised; mature gates, Autonomous</text>
+</svg>

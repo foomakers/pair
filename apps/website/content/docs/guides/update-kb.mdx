@@ -1,0 +1,45 @@
+---
+title: Update the Knowledge Base
+description: Refresh the installed Knowledge Base and skills to the current release without losing your adoption files, and know which of the three update commands you need.
+---
+
+**Goal**: bring `.pair/` and the skills to the current release; your adoption files stay as they are.
+
+## Prerequisites
+
+- A pair-enabled project with a clean git tree
+- `pair-cli` at the target version (`pair-cli --version`)
+
+## Which update?
+
+| You want to update | Run |
+| --- | --- |
+| the CLI itself | `npm update -g @foomakers/pair-cli` (or `pnpm update -g`) |
+| the Knowledge Base and skills in a project | `pair-cli update` |
+| the Claude Code plugin (optional path only) | `/plugin update pair@pair` in Claude Code |
+
+A new pair release usually needs the first two, in that order. The plugin only ships `/pair-assistant`; updating it never touches `.pair/`.
+
+## Steps
+
+1. **Update the CLI**
+   - With pair-cli: `npm update -g @foomakers/pair-cli`, then `pair-cli --version`.
+2. **Update the project**
+   - With pair-cli: `pair-cli update`. Add `--skip-registries agents` to keep your own `AGENTS.md`/`CLAUDE.md`; a choice saved in `pair.config.json` is honoured without the flag.
+   - With `/pair-assistant` (optional, Claude Code): "update pair".
+3. **Follow the migration page, if the release has one**
+   - In your assistant: open [Migrations](/docs/migrations) and run the prompts for your version jump step by step.
+4. **Repair links**
+   - With pair-cli: `pair-cli update-link --dry-run`, then without the flag ([reference](/docs/reference/cli/update-link)).
+
+## Verify
+
+- `pair-cli kb-validate` passes.
+- `pair-cli update-link --dry-run` reports no broken links.
+- `git diff .pair/adoption/` is empty: nothing of yours changed.
+
+## Related
+
+- [CLI commands: update](/docs/reference/cli/commands#update)
+- [update-link reference](/docs/reference/cli/update-link)
+- [Migrations](/docs/migrations)

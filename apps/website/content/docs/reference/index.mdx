@@ -1,31 +1,37 @@
 ---
 title: Reference
-description: Complete specifications — CLI commands, catalogs of skills and guidelines, KB structure, and configuration.
+description: Complete specifications, CLI commands, catalogs of skills, guidelines and templates, KB structure, and configuration.
 ---
 
 Look-up material: complete, factual, no narrative. Come here when you know what you need and want the details.
 
 ## CLI
 
-- [CLI Commands](/docs/reference/cli/commands) — Full syntax and options for every pair-cli command
-- [CLI Help Examples](/docs/reference/cli/examples) — Copy-paste ready examples
+- [CLI commands](/docs/reference/cli/commands): full syntax and options for every pair-cli command
+- [CLI examples](/docs/reference/cli/examples): copy-paste examples and common workflows
+- [Install sources](/docs/reference/cli/install-sources): every `--source` form and the offline mode
+- [update-link](/docs/reference/cli/update-link): link validation and repair inside `.pair/`
 
 ## Catalogs
 
-- [Skills Catalog](/docs/reference/skills-catalog) — Every pair skill with its command and composition
-- [Guidelines & How-To Catalog](/docs/reference/guidelines-catalog) — Guideline categories and how-to guides
+- [Skills catalog](/docs/reference/skills-catalog): every pair skill with its command and composition
+- [Guidelines and how-to catalog](/docs/reference/guidelines-catalog): guideline categories and how-to guides
+- [Templates catalog](/docs/reference/templates-catalog): the 19 shipped templates and which skill reads each
+- [pair-next](/docs/reference/pair-next) and [Claude Code plugin and /pair-assistant](/docs/reference/pair-assistant)
 
-## Structure & configuration
+## Structure and configuration
 
-- [KB Structure](/docs/reference/kb-structure) — Directory layout and file purposes of `.pair/`
-- [Configuration](/docs/reference/configuration) — `config.json` options
-- [The Delivery Cycle](/docs/reference/delivery-cycle) — The cycle, its stages, realizations, profiles, hooks, merge stage, adapters and the unattended flow on one page
-- [Quality Model](/docs/reference/quality-model) — Default quality rules, tiers, and tags
-- [Coupling Model](/docs/reference/coupling-model) — The three dimensions and the balance rule behind the coupling dimension
-- [Quality Gates & Configuration](/docs/reference/quality-gates-configuration) — Catalog of every opt-in quality knob (default, flag, how to enable) plus what is always-on
-- [Skill Management](/docs/reference/skill-management) — How skills are resolved, transformed, and installed
+- [KB structure](/docs/reference/kb-structure): directory layout and file purposes of `.pair/`
+- [Configuration](/docs/reference/configuration): `pair.config.json` registries and options
+- [Adoption settings](/docs/reference/adoption-settings): every section and key you can set in `.pair/adoption/`
+- [Quality model](/docs/reference/quality-model): default quality rules, tiers and tags
+- [Coupling model](/docs/reference/coupling-model): the three dimensions and the balance rule behind the coupling dimension
+- [Quality gates configuration](/docs/reference/quality-gates-configuration): every opt-in quality knob, and what is always on
+- [Skill management](/docs/reference/skill-management): how skills are resolved, transformed and installed
 
 ## Specs
 
-- [CLI Contracts](/docs/reference/specs/cli-contracts) — Machine-readable CLI behavior contracts
-- [KB Source Resolution](/docs/reference/specs/kb-source-resolution) — How KB sources are resolved
+- [CLI contracts](/docs/reference/specs/cli-contracts): machine-readable CLI behaviour contracts
+- [KB source resolution](/docs/reference/specs/kb-source-resolution): how KB sources are resolved
+
+Explanations that used to live here moved next to the flow they describe: [The delivery cycle in depth](/docs/process-lifecycle/delivery-cycle) and, for contributors, [Batch engine internals](/docs/contributing/batch-engine-internals).

@@ -11,11 +11,11 @@ The result is inconsistent code, hallucinated libraries, drifting decisions, and
 
 pair solves this by providing **structured, persistent context** that AI assistants read at the start of every session. Instead of treating AI as a code autocomplete tool, pair treats it as a **team member that needs onboarding**.
 
-This onboarding takes the form of a [Knowledge Base](/docs/concepts/knowledge-base) — a set of documents installed in your project that cover:
+This onboarding takes the form of a [Knowledge Base](/docs/concepts/knowledge-base): a set of documents installed in your project that cover:
 
-- **How to work** — 9 how-to guides defining every step from product requirements to code review
-- **What standards to follow** — guidelines for architecture, testing, code design, security
-- **What the team decided** — adoption files recording the chosen tech stack, architecture, and way of working
+- **How to work**: 9 how-to guides defining every step from product requirements to code review
+- **What standards to follow**: guidelines for architecture, testing, code design, security
+- **What the team decided**: adoption files recording the chosen tech stack, architecture, and way of working
 
 The AI reads these documents and follows them consistently.
 
@@ -23,12 +23,12 @@ The AI reads these documents and follows them consistently.
 
 Traditional AI-assisted development is ad hoc: you prompt, the AI responds, and you hope the output aligns with your standards. pair replaces this with a structured lifecycle:
 
-1. **Induction** — one-time project setup: create a PRD, complete the bootstrap checklist, prioritize initiatives
-2. **Strategic Planning** — break initiatives into epics, define the architecture
-3. **Iteration** — break epics into user stories, refine acceptance criteria, create tasks
-4. **Execution** — implement tasks with TDD, review code against standards
+1. **Induction**: one-time project setup: create a PRD, complete the bootstrap checklist, prioritize initiatives
+2. **Strategic Planning**: break initiatives into epics, define the architecture
+3. **Iteration**: break epics into user stories, refine acceptance criteria, create tasks
+4. **Execution**: implement tasks with TDD, review code against standards
 
-Each level has specific [process guides](/docs/developer-journey) that the AI follows. The guides reference your [adoption files](/docs/concepts/adoption-files), so the AI's output is always aligned with your decisions.
+Each level has specific [process guides](/docs/process-lifecycle) that the AI follows. The guides reference your [adoption files](/docs/concepts/adoption-files), so the AI's output is always aligned with your decisions.
 
 ## Why It Matters
 
@@ -54,3 +54,7 @@ The AI reads `.pair/` and knows:
 It creates a feature branch, writes tests first, implements the minimum code to pass them, runs quality gates, and creates a PR following the team's template. Every step follows the documented process.
 
 The next day, a different developer (or the same developer in a new session) picks up where things left off. The AI reads the same files and maintains the same standards.
+
+When you want that whole loop run for you, implement, independent verification, remediation, optional merge, the [Delivery workflow](/docs/process-lifecycle/delivery-workflow) does it card by card, in the mode you choose ([lifecycle modes](/docs/process-lifecycle/lifecycle-modes)).
+
+**Next:** [Knowledge Base](/docs/concepts/knowledge-base), the documents that carry the context.

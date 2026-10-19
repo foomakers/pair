@@ -1,0 +1,53 @@
+---
+title: Package-local adoption
+description: The opt-in override that co-locates adoption rules in <pkg>/.pair/, turns the central adoption file into a router, and scopes skill context to the packages a diff or story touches.
+---
+
+On a large monorepo one central adoption file grows noisy and every skill loads all of it. The **package-local adoption override** keeps rules next to their code and lets skills load only the packages they touch. It is opt-in: without it every rule loads from `.pair/adoption/`, and nothing is created until a human approves activation. The recipe is [Package-local rules in a monorepo](/docs/guides/monorepo-rules); this page explains the model.
+
+## Layout
+
+```text
+.pair/adoption/tech/architecture.md   # global rules + router section
+apps/web/.pair/architecture.md        # rules for apps/web only
+apps/web/.pair/testing.md
+packages/ui/.pair/code-design.md
+```
+
+Local files follow `<pkg>/.pair/<area>.md`, where `<area>` is a central adoption area name. They hold only package-specific rules; global rules stay central. The central file gains one `## Package-Local Adoption` table listing the packages that have local context and their areas.
+
+## Precedence
+
+- **Local wins for its package** when a central and a local rule cover the same subject.
+- Global rules always load; only package-locals are scoped.
+- A rule that exists both centrally and locally is reported as a conflict by `review` and `assess-*`, never resolved silently.
+
+## Scoped loading
+
+| Skill | Scope | Loads |
+| --- | --- | --- |
+| `review` | the PR diff (`git diff --name-only`) | globals + `<pkg>/.pair/` of the touched packages |
+| `assess-*` | the diff | the same |
+| `refine-story` | the packages the story references | globals + `<pkg>/.pair/` of the referenced packages |
+
+Edge cases: a touched package without a local `.pair/` loads globals only, with no warning; a story that references no package loads the central files only; a router row whose directory is missing is reported as dangling, and globals still load.
+
+## Activation is proposed, never automatic
+
+When `review`, `assess-*` or `refine-story` detect complexity they **propose** the override as a scaffold plan (which packages, which rules move, the router that would be added) and wait for approval. The thresholds live in the Knowledge Base guideline, not in the skills.
+
+| Signal | Default threshold |
+| --- | --- |
+| packages touched with recurring package-specific rules in the central file | 3 or more |
+| central adoption file size | more than 400 lines |
+
+## Registry exclusion
+
+Local `.pair/` directories are project content. `pair-cli install` and `update` never touch them, and `pair-cli validate-config` rejects any registry `target` at or inside a `<pkg>/.pair` directory, the same protection the [working area](/docs/reference/configuration#working-area-override) has.
+
+## Reference
+
+- KB guideline: [package-local adoption](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/package-local-adoption.md)
+- Skills convention: [scoped context resolution](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/scoped-context-resolution.md)
+
+**Next:** [Agent integration](/docs/concepts/agent-integration), how every AI tool finds the same `.pair/`.

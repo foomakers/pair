@@ -1,0 +1,94 @@
+---
+title: Configure autonomy and per-stage engine and model
+description: Decide how far unattended runs go, and which engine, model and effort each stage of the delivery cycle uses.
+---
+
+**Goal**: set `until` and the gates in `## Autonomy`, then give every stage of the cycle its own engine, model and effort with a workflow profile.
+
+## Prerequisites
+
+- `tech/automation.md` ([every key](/docs/reference/adoption-settings#techautomationmd))
+- The cycle scripts installed in `.claude/skills/pair-workflow-cycle/scripts/`
+- For a profile: the engines it names installed, and `pair.config.json` at the project root
+
+## Steps
+
+### How far a run goes
+
+1. **Set `## Autonomy`**
+   - In your assistant: edit `until`, `prepare`, `merge` and `filter` in `tech/automation.md`.
+
+     ```markdown
+     ## Autonomy
+
+     filter: risk:green
+     until: pr
+     prepare: always
+     merge: always
+     ```
+
+   - With `/pair-assistant` (optional, Claude Code): "let green cards go up to merge" shows the diff first, then writes it through record-decision.
+2. **Check the effective values**
+   - With pair-cli: `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve` prints each value with its source (argument, adoption, KB default).
+   - With `/pair-assistant` (optional, Claude Code): it echoes the effective gates.
+3. **Override per run when needed**
+   - With pair-cli: `--until`, `--prepare`, `--merge` on `pair-cli run --card` (forwarded to every child card under `--parallel`).
+
+### Engine, model and effort per stage
+
+1. **Write the profile** in `pair.config.json`, inline or as a file under a glob.
+   - In your assistant:
+
+     ```json title="pair.config.json"
+     {
+       "workflowProfiles": {
+         "default": "mixed",
+         "inline": {
+           "mixed": {
+             "defaults": { "model": "balanced", "effort": "medium" },
+             "modelClasses": { "cheap": "claude-haiku-5-5", "balanced": "claude-sonnet-5-5", "frontier": "claude-opus-5-5" },
+             "stages": {
+               "prepare": { "model": "cheap", "context": "reuse" },
+               "green": { "model": "cheap", "context": "reuse" },
+               "validate": { "model": "frontier", "effort": "high" },
+               "verify": { "model": "frontier", "effort": "high" }
+             }
+           }
+         }
+       }
+     }
+     ```
+
+     Per stage, `engine` (`default`, `pi`, `opencode`, `claude`, `codex`), `model` (`default`, an id, `cheap` / `balanced` / `frontier`, `by-tier`), `effort` (`default`, `low`, `medium`, `high`, `xhigh`, `max`) and `context` (`fresh`, `reuse`; `reuse` only into `prepare` and `green`). A stage declares only what differs from `defaults`.
+   - With `/pair-assistant` (optional, Claude Code): "use profile mixed for the review" shows the edit, then records it as an ADL.
+2. **Let the model follow the risk tier (optional)**: set `"model": "by-tier"` and add to `tech/automation.md`:
+
+   ```markdown
+   ## Model Policy
+
+   risk:green: cheap
+   risk:yellow: balanced
+   risk:red: frontier
+   ```
+
+   An untagged card or a tier the policy omits runs on the engine's default model, never a halt.
+3. **Print the resolved table**
+   - With pair-cli: `node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . --profile mixed --tier risk:green`. The JSON's `table` has one line per stage with engine, model, effort and context, each with the level that decided it. A run prints the same table before its first dispatch.
+4. **Pick the profile per run**
+   - With pair-cli: `pair-cli run --card 217 --profile mixed`, or `--workflow-config ./file.json` for an external file used verbatim. Both need `--card`; the `--parallel` and `--watch` loop uses `workflowProfiles.default`.
+   - In your assistant: `/pair-workflow-cycle` takes the same as `$profile` and `$workflowConfig`.
+
+Cascade, highest first: `--workflow-config` > `--profile` > `workflowProfiles.default` > KB default (the run's engine, its default model, default effort, fresh context). An unknown name or a bad value halts (`profile-unresolved`, `profile-invalid`, `profile-name-collision`), never a silent fallback.
+
+## Verify
+
+- `autonomy-policy.mjs resolve` prints each gate with its source; defaults are `until: pr`, `prepare: always`, `merge: always`: nothing merges and no Draft card is prepared unattended until you change them.
+- `workflow-profile.mjs resolve` prints `Profile: mixed`, its source and hash, then a line per stage; with no profile it prints `Profile: KB default`.
+- A stage asking `context: reuse` into `validate` or `verify` is refused at load, so the independent checks always run fresh.
+
+## Related
+
+- [Lifecycle modes](/docs/process-lifecycle/lifecycle-modes)
+- [Automated development](/docs/tutorials/automated-development#per-stage-engine-model-and-effort-workflow-profiles)
+- [Configuration](/docs/reference/configuration#workflow-profiles-workflowprofiles)
+- [The delivery cycle in depth](/docs/process-lifecycle/delivery-cycle#4-profiles-engine-model-effort-context-per-stage)

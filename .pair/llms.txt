@@ -197,6 +197,7 @@
 - [Decision: closed-not-planned items move to an unmapped `Not planned` board column, never `Done`](.pair/adoption/decision-log/2026-10-14-not-planned-board-column.md)
 - [Decision: every PR carries its changeset; releases are dispatched, never merge-triggered](.pair/adoption/decision-log/2026-10-14-release-is-dispatched-with-a-changeset-per-pr.md)
 - [Decision: Fresh Worktrees Run `worktree-setup-command` Before Any Gate](.pair/adoption/decision-log/2026-10-14-worktree-setup-command.md)
+- [Decision: Docs IA, Process Lifecycle Spine, Three Path Labels, Customization Dissolved](.pair/adoption/decision-log/2026-10-18-docs-ia-process-lifecycle-spine.md)
 
 ## How-To Guides
 

@@ -1,6 +1,6 @@
 ---
 title: AI Coding Tools
-description: Set up pair to work with your AI coding assistant — Claude Code, Cursor, GitHub Copilot, Windsurf, or Codex.
+description: Set up pair to work with your AI coding assistant, Claude Code, Cursor, GitHub Copilot, Windsurf, or Codex.
 ---
 
 pair works with any AI coding assistant that can read project files. Each tool has its own configuration format, but they all connect to the same source of truth: your `.pair/` directory.
@@ -23,11 +23,11 @@ All bridge files point to `.pair/`. One source of truth, multiple entry points. 
 
 ## Agent Skills Open Standard
 
-pair skills follow the [Agent Skills](https://agentskills.io) open standard — not a proprietary format. Any AI tool that supports Agent Skills can discover and invoke pair's process and capability skills. This means you're not locked into a single assistant: your team can use different tools while following the same standards.
+pair skills follow the [Agent Skills](https://agentskills.io) open standard, not a proprietary format. Any AI tool that supports Agent Skills can discover and invoke pair's process and capability skills. This means you're not locked into a single assistant: your team can use different tools while following the same standards.
 
 ### Coexistence with Other Skills
 
-pair skills coexist with custom skills or skills from other tools. The `prefix` in `config.json` (default: `"pair"`) namespaces all installed skills — e.g., `pair-process-implement`, `pair-capability-verify-quality`. Your own skills or skills from other sources use different prefixes (or no prefix), so there are no naming clashes:
+pair skills coexist with custom skills or skills from other tools. The `prefix` in `config.json` (default: `"pair"`) namespaces all installed skills, e.g., `pair-process-implement`, `pair-capability-verify-quality`. Your own skills or skills from other sources use different prefixes (or no prefix), so there are no naming clashes:
 
 ```text
 .claude/skills/
@@ -51,21 +51,19 @@ pair skills coexist with custom skills or skills from other tools. The `prefix` 
 
 Pick your tool and follow the setup guide. The process takes a few minutes.
 
-Running from a cloud coding environment rather than a local terminal? See [Web and Cloud Environments](/docs/integrations/web-cloud-environments) — what holds there, and the one thing that does not.
+Running from a cloud coding environment rather than a local terminal? See [Web and Cloud Environments](/docs/integrations/web-cloud-environments), what holds there, and the one thing that does not.
 
 ### Bridges vs. Harnesses
 
-The table above is about **skill-bridge discovery** — which file a tool reads to find your `.pair/`
-directory. There is a second, separate layer: a **harness** is a tool configured to *execute* pair's
-process (config locations, authentication, model provider, headless mode), and an **engine** is a
-process [`pair-cli run`](/docs/reference/cli/commands#run) can drive one iteration at a time for
-unattended delivery. If you are setting up automation rather than an editor, start at
-[Adding a Harness](/docs/integrations/adding-a-harness) — it explains the three realizations of
-fan-out and what supporting a new engine involves.
+The table above is about **skill-bridge discovery**, which file a tool reads to find your `.pair/` directory.
+
+There is a second, separate layer: a **harness** is a tool configured to *execute* pair's process (config locations, authentication, model provider, headless mode), and an **engine** is a process [`pair-cli run`](/docs/reference/cli/commands#run) can drive one iteration at a time for unattended delivery.
+
+If you are setting up automation rather than an editor, start at [Adding a Harness](/docs/integrations/adding-a-harness): it explains the three realizations of fan-out and what supporting a new engine involves.
 
 ### Other AGENTS.md-Compatible Tools
 
-`AGENTS.md` is a convention adopted by a growing number of AI tools. Any tool that reads `AGENTS.md` at the repository root works with pair out of the box — no dedicated bridge needed. pair also distributes skills to `.agent/skills/` as a generic discovery path. If your tool supports the [Agent Skills](https://agentskills.io) standard and reads from this location, it will find pair's skills automatically.
+`AGENTS.md` is a convention adopted by a growing number of AI tools. Any tool that reads `AGENTS.md` at the repository root works with pair out of the box: no dedicated bridge needed. pair also distributes skills to `.agent/skills/` as a generic discovery path. If your tool supports the [Agent Skills](https://agentskills.io) standard and reads from this location, it will find pair's skills automatically.
 
 ## Skill Distribution & config.json
 
@@ -76,7 +74,7 @@ pair distributes skills to **all AI tools simultaneously** from a single source.
 ```text
 KB source (.skills/)
     ↓ flatten + prefix transforms
-.claude/skills/              (canonical — physical copies)
+.claude/skills/              (canonical - physical copies)
     ↓ symlinks
 .github/skills/              → .claude/skills/
 .cursor/skills/              → .claude/skills/
@@ -109,7 +107,7 @@ Installed:   .claude/skills/pair-process-implement/SKILL.md
 Symlinked:   .github/skills/pair-process-implement/ → .claude/...
 ```
 
-The transform also rewrites internal references — skill-to-skill links and slash command names are updated to match the flattened/prefixed names.
+The transform also rewrites internal references, skill-to-skill links and slash command names are updated to match the flattened/prefixed names.
 
 ### Customizing Distribution
 
@@ -129,11 +127,11 @@ The `config.json` `skills` registry controls everything:
 }
 ```
 
-By default, pair distributes skills to all major AI tools (Claude Code, Cursor, GitHub Copilot, Windsurf, Codex). To support only specific tools in your project, add or remove targets from the `skills.targets` array. The same applies to the `agents` registry for bridge files. This keeps your repository clean — only the tool directories your team actually uses.
+By default, pair distributes skills to all major AI tools (Claude Code, Cursor, GitHub Copilot, Windsurf, Codex). To support only specific tools in your project, add or remove targets from the `skills.targets` array. The same applies to the `agents` registry for bridge files. This keeps your repository clean: only the tool directories your team actually uses.
 
 ## Related
 
-- [Agent Integration concept](/docs/concepts/agent-integration) — how the bridge pattern works in depth
-- [Skills concept](/docs/concepts/skills) — what skills are and how they work
-- [Web and Cloud Environments](/docs/integrations/web-cloud-environments) — running pair from Claude Code Web and similar cloud sessions
-- [PM Tools](/docs/pm-tools) — project management tool integrations
+- [Agent Integration concept](/docs/concepts/agent-integration): how the bridge pattern works in depth
+- [Skills concept](/docs/concepts/skills): what skills are and how they work
+- [Web and Cloud Environments](/docs/integrations/web-cloud-environments): running pair from Claude Code Web and similar cloud sessions
+- [PM Tools](/docs/pm-tools): project management tool integrations

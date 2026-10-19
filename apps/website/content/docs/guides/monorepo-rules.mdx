@@ -1,0 +1,34 @@
+---
+title: Package-local rules in a monorepo
+description: Keep per-package adoption rules next to the package while the central files stay the router.
+---
+
+**Goal**: let each package carry its own architecture, testing or code-design rules, and let skills load only the packages a diff or story touches.
+
+## Prerequisites
+
+- A monorepo with pair installed
+- The central adoption files in `.pair/adoption/tech/`
+
+## Steps
+
+1. **Wait for, or request, the proposal**
+   - In your assistant: skills never activate the override on their own. When `review`, `assess-*` or `refine-story` see three or more packages with recurring package-specific rules, or a central file past 400 lines, they propose a scaffold plan (which packages, which rules move, the router to add) and wait for your approval. You can also ask for the plan directly.
+   - With `/pair-assistant` (optional, Claude Code): "add package-local rules for apps/web".
+2. **Declare the router**
+   - In your assistant: add a `## Package-Local Adoption` table to the central `tech/<area>.md` with one row per package: `Package | Local context | Areas`, for example `apps/web | apps/web/.pair/ | architecture, testing`.
+3. **Create the package files**
+   - In your assistant: write `<pkg>/.pair/<area>.md` for each listed package and area, holding only the package-specific rules. Global rules stay central.
+   - With `/pair-assistant` (optional, Claude Code): shows each file before writing.
+4. **Move, do not duplicate**
+   - A rule present both centrally and locally is reported as a conflict by `review` and `assess-*`, never resolved silently. Delete the central copy when a rule becomes local.
+
+## Verify
+
+- A review of a diff in `apps/web` loads the global rules plus `apps/web/.pair/`, and nothing from other packages.
+- `pair-cli validate-config` still passes: local `.pair/` directories are project content, never a registry target.
+
+## Related
+
+- [Package-local adoption](/docs/concepts/package-local-adoption): precedence, scoped loading and the thresholds
+- [Adoption files](/docs/concepts/adoption-files)

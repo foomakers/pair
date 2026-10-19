@@ -4,9 +4,11 @@
     "first-project",
     "existing-project",
     "team-setup",
+    "brainstorming",
+    "refinement",
+    "automated-development",
     "enterprise-adoption",
-    "unattended-delivery",
-    "managing-ai-artifacts",
-    "release-testing"
+    "release-testing",
+    "share-ai-artifacts"
   ]
 }

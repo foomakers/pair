@@ -52,8 +52,8 @@ test('renders 3 audience tracks with CTAs', async ({ mount }) => {
   await expect(section).toContainText('Team')
   await expect(section).toContainText('Organization')
   await expect(section.locator('a[href="/docs"]')).toBeVisible()
-  await expect(section.locator('a[href="/docs/customization/team"]')).toBeVisible()
-  await expect(section.locator('a[href="/docs/customization/organization"]')).toBeVisible()
+  await expect(section.locator('a[href="/docs/guides/customize-for-your-team"]')).toBeVisible()
+  await expect(section.locator('a[href="/docs/guides/external-kb"]')).toBeVisible()
 })
 
 // AC-6: "How it works" 4 phases

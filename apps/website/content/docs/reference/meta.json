@@ -5,14 +5,15 @@
     "specs",
     "skills-catalog",
     "pair-next",
-    "batch-engine",
-    "delivery-cycle",
+    "pair-assistant",
     "guidelines-catalog",
+    "templates-catalog",
     "quality-model",
     "coupling-model",
     "quality-gates-configuration",
     "skill-management",
     "kb-structure",
+    "adoption-settings",
     "configuration"
   ]
 }

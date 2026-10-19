@@ -1,0 +1,29 @@
+---
+title: Skill layers
+description: How pair skills stack, capability skills at the bottom, process skills in the middle, workflow, brainstorm, loop and batch skills on top, and which skill drives which.
+---
+
+pair's skills sit in three layers. A skill only calls down, never up, so every layer stays testable on its own.
+
+![Skill layers: capability, process, workflow and loop](/diagrams/skill-layers.svg)
+
+*Figure: arrows only point down. Start at the layer whose granularity matches the control you want; everything below it is called for you.*
+
+1. **Capability skills** do one reusable operation: verify quality, record a decision, write an issue, grill, classify. See [capability skills](/docs/concepts/skills#capability-skills).
+2. **Process skills** run one lifecycle step and compose capabilities. See [process skills](/docs/concepts/skills#process-skills).
+3. **Workflow, brainstorm, loop and batch skills** orchestrate many steps. See [workflow skills](/docs/concepts/skills#workflow-skills) and [loop and batch entry points](/docs/concepts/skills#loop-and-batch-entry-points).
+
+## What each upper-layer skill drives
+
+| Skill | Drives |
+| --- | --- |
+| `/pair-workflow-cycle` | the stage skills, which run `/pair-process-implement`, `/pair-process-review`, `/pair-capability-verify-quality`, `/pair-capability-publish-pr` |
+| `/pair-refine-batch` | `/pair-process-refine-story`, `/pair-process-plan-tasks` |
+| `/pair-implement-batch` | `/pair-workflow-cycle` stages for many cards |
+| `/pair-process-brainstorm` | `/pair-capability-grill`, `/pair-process-plan-epics`, `/pair-process-plan-stories` |
+| `/pair-loop` | the batch workflows, which run the cycle |
+| `/pair-next` | suggests a process skill; runs none |
+
+You normally start at the top (`/pair-next`, `/pair-workflow-cycle`) and let it call down. Drop a layer when you want control: run a process skill by hand, or a capability on its own. Every skill, with its command and what it composes: [Skills catalog](/docs/reference/skills-catalog).
+
+**Next:** [Tag-driven automation](/docs/process-lifecycle/tag-driven-automation), what tags let automation do.

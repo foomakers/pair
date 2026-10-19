@@ -1,0 +1,50 @@
+---
+title: Add a custom PM tool
+description: How to make pair work with a PM tool or code host it does not support yet, what an adapter must provide, the steps, and a minimal example.
+---
+
+pair ships adapters for [GitHub Projects](/docs/pm-tools/github-projects), [Linear](/docs/pm-tools/linear), [Azure DevOps](/docs/pm-tools/azure-devops) and the [filesystem](/docs/pm-tools/filesystem). For another tool you declare it in your adoption files and, for the delivery cycle, add one adapter file.
+
+## What an adapter must provide
+
+- **State mapping**: your board's states mapped to the five canonical macrostates in `## State Mapping` ([canonical states](/docs/concepts/canonical-states), [Adoption settings](/docs/reference/adoption-settings#techway-of-workingmd)). A state you leave out is ignored; closure without completion is never `Done`.
+- **Write-issue and read contract**: skills create and update cards through `/pair-capability-write-issue` and read them back. The tool needs a CLI or API that can create, read, update and comment on a card.
+- **Code host split**: a tracker that hosts no repositories declares a separate `code-host` ([Code host vs PM tool](/docs/concepts/code-host)).
+- **The cycle's PM and code-host adapter**: the delivery cycle ([`/pair-workflow-cycle`, `pair-cli run`](/docs/process-lifecycle/delivery-cycle)) talks to the tool through eight methods: `readCard`, `prHead`, `upsertComment`, `concludeCheck`, `setPrState`, `merge`, `closeAndCascade`, and the derived `cardHash`. The contract is the [adapter extension guide](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/project-management-tool/host-adapter-extension-guide.md) in the Knowledge Base.
+
+## Steps
+
+1. **Declare the tool** in `.pair/adoption/tech/way-of-working.md`, and the `code-host` under `## Git Workflow` if the tool hosts no code.
+2. **Map your states** in `## State Mapping`.
+3. **Document the tool** in a `<id>-implementation.md` guide beside the shipped ones: CLI setup and how authentication works (the adapter never stores credentials).
+4. **For the delivery cycle**, add `scripts/host/<id>.mjs` to every workflow skill, with the eight methods, tests against a stub CLI, then regenerate the mirrors. Registration is the file itself.
+
+Without step 4 the skills still work through the guide; the cycle stops with `host-unsupported` naming the missing adapter, and never falls back to GitHub.
+
+## Minimal example
+
+```markdown
+- `pm-tool`: `acme-tracker`
+
+## Git Workflow
+
+- `code-host`: `github`
+
+## State Mapping
+
+| Board State | Macrostate  |
+| ----------- | ----------- |
+| Backlog     | Draft       |
+| Ready       | Ready       |
+| Doing       | In Progress |
+| In QA       | Review      |
+| Shipped     | Done        |
+```
+
+**In your assistant:** edit the file as above, or `/pair-capability-setup-pm`. **With `/pair-assistant` (optional, Claude Code):** ask it to set the PM tool or the state mapping; it delegates to `/pair-capability-setup-pm` ([how it writes](/docs/reference/pair-assistant#how-it-writes)).
+
+## Related
+
+- [Canonical states](/docs/concepts/canonical-states)
+- [Adoption settings](/docs/reference/adoption-settings)
+- [PM tools overview](/docs/pm-tools)

@@ -544,16 +544,17 @@ describe('timed onboarding scenario + docs (AC1, DoD)', () => {
   })
 
   // landing.e2e.test.ts walks Quickstart's footer `next` link and asserts it
-  // lands on Quickstart: Solo. Inserting a page BETWEEN them would still pass
-  // that test (its locator resolves the sidebar link) while silently voiding
-  // the prev/next guarantee it exists to check — so pin the order here, in the
-  // local gate, where e2e ordering is not otherwise observable.
-  it('sits after the quickstart-{solo,team,org} trio in nav order', () => {
+  // lands on Bootstrap. Inserting a page BETWEEN them would still pass that
+  // test (its locator resolves the sidebar link) while silently voiding the
+  // prev/next guarantee it exists to check — so pin the order here, in the
+  // local gate, where e2e ordering is not otherwise observable. (#552: the
+  // role quickstarts merged into choose-your-path, which now follows bootstrap.)
+  it('sits right after the quickstart in nav order', () => {
     const pages: string[] = JSON.parse(
       read(join(ROOT, 'apps/website/content/docs/getting-started/meta.json')),
     ).pages
-    expect(pages[pages.indexOf('quickstart') + 1]).toBe('quickstart-solo')
-    expect(pages.indexOf('bootstrap-quick-mode')).toBeGreaterThan(pages.indexOf('quickstart-org'))
+    expect(pages[pages.indexOf('quickstart') + 1]).toBe('bootstrap-quick-mode')
+    expect(pages.indexOf('choose-your-path')).toBeGreaterThan(pages.indexOf('bootstrap-quick-mode'))
   })
 
   it('is cross-linked from the Getting Started index (DoD)', () => {

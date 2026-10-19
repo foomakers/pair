@@ -1,26 +1,26 @@
 ---
 title: Skills
-description: How Agent Skills work in pair — the open standard for structured AI assistant instructions, skill categories, and composition.
+description: How Agent Skills work in pair, the open standard for structured AI assistant instructions, skill categories, and composition.
 ---
 
 Skills are structured instructions that AI assistants discover and execute. They follow the [Agent Skills](https://agentskills.io) open standard, supported by Claude Code, Cursor, VS Code Copilot, and OpenAI Codex.
 
-Where the [Knowledge Base](/docs/concepts/knowledge-base) provides context, skills provide **actions**. A skill tells the AI exactly how to perform a specific task — from creating a PRD to reviewing a pull request.
+Where the [Knowledge Base](/docs/concepts/knowledge-base) provides context, skills provide **actions**. A skill tells the AI exactly how to perform a specific task, from creating a PRD to reviewing a pull request.
 
 ## How Skills Work
 
 Each skill is a `SKILL.md` file that defines:
 
-- **What the skill does** — purpose and scope
-- **When to use it** — trigger conditions
-- **How to execute it** — step-by-step instructions the AI follows
-- **What it composes** — other skills it calls during execution
+- **What the skill does**: purpose and scope
+- **When to use it**: trigger conditions
+- **How to execute it**: step-by-step instructions the AI follows
+- **What it composes**: other skills it calls during execution
 
-When a developer invokes a skill (e.g., `/implement`), the AI reads the `SKILL.md` file and follows its instructions precisely. The skill references adoption files, guidelines, and templates from the Knowledge Base, ensuring consistent execution.
+When a developer invokes a skill (for example `/pair-process-implement`), the AI reads the `SKILL.md` file and follows its instructions precisely. The skill references adoption files, guidelines, and templates from the Knowledge Base, ensuring consistent execution.
 
 ## Skill Categories
 
-pair organizes skills into two categories:
+pair organizes skills into families: [process](#process-skills) and [capability](#capability-skills) skills, [workflow](#workflow-skills) skills, [loop and batch entry points](#loop-and-batch-entry-points), and one [plugin skill](#plugin-skill).
 
 ### Process Skills
 
@@ -28,7 +28,7 @@ Process skills guide the AI through lifecycle phases. They follow a defined sequ
 
 | Skill | Purpose |
 |-------|---------|
-| `/brainstorm` | Discovery — structured discovery into a Draft backlog tree |
+| `/brainstorm` | Discovery: structured discovery into a Draft backlog tree |
 | `/specify-prd` | Create or update a Product Requirements Document |
 | `/bootstrap` | Orchestrate full project setup |
 | `/plan-initiatives` | Create prioritized strategic initiatives |
@@ -53,21 +53,61 @@ Capability skills perform specific, reusable operations. They are invoked indepe
 | `/write-issue` | Create or update issues in the PM tool |
 | `/estimate` | Estimate story size |
 
+### Workflow Skills
+
+Workflow skills are the **stages of the [delivery workflow](/docs/process-lifecycle/delivery-workflow)**. A stage skill does one stage of one card (one role, one handoff) and is dispatched by the coordinator or the batch engine, never suggested by `/pair-next`. You normally invoke only the coordinator.
+
+| Skill | Role |
+|-------|------|
+| `/pair-workflow-cycle` | coordinator: drives one card through the stages |
+| `/pair-workflow-contract-phase` | stage: fresh acceptance contract |
+| `/pair-workflow-implement-phase` | stage: implement and open the PR |
+| `/pair-workflow-red-spec` | stage: write the failing test of a finding |
+| `/pair-workflow-red-verify` | stage: validate and seal that test |
+| `/pair-workflow-green-fix` | stage: fix above the seal |
+| `/pair-workflow-review-phase` | stage: independent verification of the PR head |
+
+Detail: [Delivery cycle](/docs/process-lifecycle/delivery-cycle#2-the-stages-one-by-one), [Skills Catalog](/docs/reference/skills-catalog#workflow-skills). How the layers stack: [Skill layers](/docs/process-lifecycle/skill-layers).
+
+### Loop and Batch Entry Points
+
+`/pair-loop` selects eligible cards and repeats under the [autonomy gates](/docs/tutorials/automated-development#autonomy-until-gates-escalation). It composes the batch workflows `pair-implement-batch` and `pair-refine-batch` (installed in `.claude/workflows/`), which dispatch five subagents installed in `.claude/agents/`:
+
+| Subagent | Role |
+|----------|------|
+| `pair-implementer` | implements and publishes |
+| `pair-fix-test-author` | writes a finding's failing test |
+| `pair-contract-generator` | prepares the acceptance contract |
+| `pair-red-contract-verifier` | validates and seals it |
+| `pair-reviewer` | verifies the PR head |
+
+See [Batch engine](/docs/contributing/batch-engine-internals).
+
+### Plugin Skill
+
+`/pair-assistant` is the single bootstrap skill the optional Claude Code plugin ships. The CLI never installs it into your project; it installs pair and configures it. See [Claude Code plugin & /pair-assistant](/docs/reference/pair-assistant).
+
+![Skill families and how they compose](/diagrams/skill-families.svg)
+
+*Figure: process skills compose capability skills, never the other way round; the workflow row on top only orchestrates.*
+
 ## Composition
 
 Skills compose other skills to build complex workflows. For example, `/implement` composes:
 
-- `/verify-quality` — after each task, to check quality gates
-- `/record-decision` — when a new architectural decision is made
-- `/assess-stack` — when a new dependency is introduced
-- `/verify-adoption` — before committing, to check compliance
+- `/verify-quality`: after each task, to check quality gates
+- `/record-decision`: when a new architectural decision is made
+- `/assess-stack`: when a new dependency is introduced
+- `/verify-adoption`: before committing, to check compliance
 
 And `/review` composes:
 
-- `/verify-quality` — to check quality gates on the PR
-- `/verify-done` — to check Definition of Done criteria
-- `/analyze-debt` — to analyze and report technical debt
-- `/record-decision` — if a decision needs recording
+- `/verify-quality`: to check quality gates on the PR
+- `/verify-done`: to check Definition of Done criteria
+- `/analyze-debt`: to analyze and report technical debt
+- `/record-decision`: if a decision needs recording
+
+Across families: process skills compose capability skills; `/pair-workflow-cycle` composes the stage skills (which in turn compose `/pair-process-implement`, `/pair-process-review` and the capability skills); `/pair-loop` composes the batch workflows; `/pair-assistant` delegates to the project's own skills.
 
 This composition means complex processes are built from simple, tested parts. Each capability skill works the same whether invoked directly or composed by a process skill.
 
@@ -86,3 +126,7 @@ Skills are stored in `.skills/` within the KB and distributed to AI tool directo
 ```
 
 The canonical copy goes to `.claude/skills/`. Secondary targets receive symlinks, so all AI tools share the same skill definitions. The directory structure uses a flatten/prefix naming convention: `process/implement` becomes `pair-process-implement`.
+
+**What ships where.** `pair-cli install` and `update` write the process, capability, workflow and loop skills into `.claude/skills/`, the batch workflows into `.claude/workflows/` and the subagents into `.claude/agents/`. The [marketplace plugin](/docs/reference/pair-assistant#what-the-plugin-installs) ships only `/pair-assistant`.
+
+**Next:** [Adoption files](/docs/concepts/adoption-files), the decisions every skill reads first.

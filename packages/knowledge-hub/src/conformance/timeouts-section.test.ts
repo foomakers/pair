@@ -41,7 +41,7 @@ describe('"Timeouts, stalls and retries by surface" — one owner, referenced ev
   })
 
   it.each([
-    'apps/website/content/docs/reference/delivery-cycle.mdx',
+    'apps/website/content/docs/process-lifecycle/delivery-cycle.mdx',
     'apps/website/content/docs/reference/cli/commands.mdx',
   ])('%s references the owner section instead of duplicating it', file => {
     expect(read(join(REPO, file))).toContain(ANCHOR)

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 330" width="1080" height="330" role="img" aria-labelledby="t d" font-family="Helvetica, Arial, sans-serif" font-size="12">
+<title id="t">Analysis and refinement workflow</title>
+<desc id="d">A raw idea goes through brainstorm, story planning, refinement and task breakdown to reach Ready. A grill interview runs in refinement and records Assumptions and Open Questions. Three modes drive it: Assisted skill by skill, Supervised with the refine batch or run until ready, Autonomous with the prepare gate and escalation through needs-review.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#444"/></marker></defs>
+<rect width="1080" height="330" fill="#ffffff"/>
+<text x="30" y="24" font-size="14" font-weight="bold" fill="#222">Analysis and refinement workflow</text>
+<rect x="30" y="50" width="200" height="56" rx="6" fill="#eef3fb" stroke="#3b5b92" stroke-width="1.3"/>
+<text x="130.0" y="74.0" text-anchor="middle" fill="#222" font-weight="bold">Brainstorm</text>
+<text x="130.0" y="90.0" text-anchor="middle" fill="#222">/pair-process-brainstorm</text>
+<rect x="270" y="50" width="200" height="56" rx="6" fill="#eef3fb" stroke="#3b5b92" stroke-width="1.3"/>
+<text x="370.0" y="74.0" text-anchor="middle" fill="#222" font-weight="bold">Stories</text>
+<text x="370.0" y="90.0" text-anchor="middle" fill="#222">/pair-process-plan-stories</text>
+<polyline points="230,78.0 270,78.0" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="510" y="50" width="200" height="56" rx="6" fill="#eef3fb" stroke="#3b5b92" stroke-width="1.3"/>
+<text x="610.0" y="74.0" text-anchor="middle" fill="#222" font-weight="bold">Refine</text>
+<text x="610.0" y="90.0" text-anchor="middle" fill="#222">/pair-process-refine-story</text>
+<polyline points="470,78.0 510,78.0" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="750" y="50" width="200" height="56" rx="6" fill="#eef3fb" stroke="#3b5b92" stroke-width="1.3"/>
+<text x="850.0" y="74.0" text-anchor="middle" fill="#222" font-weight="bold">Breakdown</text>
+<text x="850.0" y="90.0" text-anchor="middle" fill="#222">/pair-process-plan-tasks</text>
+<polyline points="710,78.0 750,78.0" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="910" y="50" width="140" height="56" rx="6" fill="#e9f6ec" stroke="#2f7d46" stroke-width="1.3"/>
+<text x="980.0" y="82.0" text-anchor="middle" fill="#222">Ready</text>
+<polyline points="870,78 910,78" fill="none" stroke="#444" stroke-width="1.4" marker-end="url(#a)"/>
+<rect x="30" y="140" width="1020" height="40" rx="6" fill="#ffffff" stroke="#555555" stroke-width="1.3"/>
+<text x="540.0" y="164.0" text-anchor="middle" fill="#222">Grill interview (/pair-capability-grill): sync phase 0 in refine, Assumptions and Open Questions written to the card</text>
+<rect x="30" y="210" width="320" height="90" rx="6" fill="#eef3fb" stroke="#3b5b92" stroke-width="1.3"/>
+<text x="190.0" y="251.0" text-anchor="middle" fill="#222" font-weight="bold">Assisted</text>
+<text x="190.0" y="267.0" text-anchor="middle" fill="#222">you run each skill, one by one</text>
+<rect x="380" y="210" width="320" height="90" rx="6" fill="#fff6df" stroke="#a06a00" stroke-width="1.3"/>
+<text x="540.0" y="243.0" text-anchor="middle" fill="#222" font-weight="bold">Supervised</text>
+<text x="540.0" y="259.0" text-anchor="middle" fill="#222">/pair-refine-batch</text>
+<text x="540.0" y="275.0" text-anchor="middle" fill="#222">pair-cli run --until ready</text>
+<rect x="730" y="210" width="320" height="90" rx="6" fill="#e9f6ec" stroke="#2f7d46" stroke-width="1.3"/>
+<text x="890.0" y="243.0" text-anchor="middle" fill="#222" font-weight="bold">Autonomous</text>
+<text x="890.0" y="259.0" text-anchor="middle" fill="#222">prepare gate never or when</text>
+<text x="890.0" y="275.0" text-anchor="middle" fill="#222">escalation via needs-review</text>
+</svg>

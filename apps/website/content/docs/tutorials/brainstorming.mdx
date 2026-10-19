@@ -1,0 +1,55 @@
+---
+title: Brainstorming
+description: Turn a raw idea into a Draft backlog of epics and stories with /pair-process-brainstorm, step by step with a worked example.
+---
+
+**Goal:** go from one sentence ("let customers pause a subscription") to a Draft epic and story tree in your PM tool. About 20 minutes. This is the first step of the [analysis and refinement workflow](/docs/process-lifecycle/refinement-workflow).
+
+## Prerequisites
+
+- pair installed and bootstrapped ([Quickstart](/docs/getting-started/quickstart))
+- a PM tool configured ([PM tools](/docs/pm-tools))
+- a PRD in `.pair/adoption/product/` (brainstorm reads it, never edits it)
+
+## 1. Start the session
+
+```text
+/pair-process-brainstorm let customers pause a subscription
+```
+
+The skill explores your PRD, adoption files and existing backlog first, so it asks only what it cannot read.
+
+**In your assistant:** the command above; brainstorming is interactive and has no unattended form.
+
+## 2. Answer the interview
+
+`/pair-capability-grill` asks **one question at a time**, each with a recommendation. Accept it or answer differently.
+
+```text
+Q3. Does a paused subscription keep its renewal date?
+Recommendation: no, the period is extended by the pause length.
+> yes, keep the date, we bill on pause end
+```
+
+Terms you sharpen (here, "pause") are recorded in the domain context map.
+
+## 3. Review the triage
+
+Brainstorm proposes a tree. Each candidate is checked against the backlog and marked **EXTEND #ID** (fold into an existing card) or **CREATE**.
+
+```text
+Epic: Subscription pause           CREATE
+  Story: Pause from account page   CREATE
+  Story: Resume automatically      CREATE
+  Story: Email on pause            EXTEND #88
+```
+
+Edit the proposal until it matches your intent. Nothing is written yet.
+
+## 4. Confirm
+
+On your yes, the cards are created as **Draft** in the PM tool. The PRD is untouched.
+
+## What you have
+
+A Draft epic with Draft stories. Next: [Refinement](/docs/tutorials/refinement) takes one story to Ready. Background: [Analysis & refinement workflow](/docs/process-lifecycle/refinement-workflow).

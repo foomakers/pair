@@ -1,153 +1,39 @@
 ---
-title: Link Update and Validation
-description: How to validate, fix, and update links in your installed Knowledge Base content.
+title: update-link
+description: Validate, repair and normalize the Markdown links inside the installed Knowledge Base, options, output and what each pass does.
 ---
 
-Automatically validate, fix, and update links in your installed Knowledge Base content when your project structure changes or links become broken.
+`pair-cli update-link` validates the links inside `.pair/` against the file system, repairs the ones it can, and normalizes them to relative (default) or absolute paths. Run it after `pair-cli update`, after moving the project, or whenever a link check fails.
 
-## Quick Start
-
-```bash
-# Validate and convert all links to relative paths (default)
-pair-cli update-link
-
-# Preview changes without modifying files
-pair-cli update-link --dry-run
-
-# Convert all links to absolute paths
-pair-cli update-link --absolute
-
-# Get detailed logging
-pair-cli update-link --log-level debug
-```
-
-## Use Cases
-
-### 1. Project Structure Changes
-
-When you move or rename directories:
-
-```bash
-# Update KB links after restructuring project
-pair-cli update-link
-
-# Check what would change first
-pair-cli update-link --dry-run
-```
-
-### 2. Repository Migration
-
-After moving your project to a different location:
-
-```bash
-# Convert to absolute paths for new location
-pair-cli update-link --absolute
-
-# Or normalize to relative paths
-pair-cli update-link --relative
-```
-
-### 3. Link Validation
-
-Check for broken links in installed KB:
-
-```bash
-# Validate and fix broken links
-pair-cli update-link --verbose
-```
-
-### 4. Path Normalization
-
-Standardize link formats across KB:
-
-```bash
-# Convert all to relative paths (default)
-pair-cli update-link
-
-# Convert all to absolute paths
-pair-cli update-link --absolute
-```
-
-## Command Reference
-
-### Basic Syntax
+## Syntax
 
 ```bash
 pair-cli update-link [options]
 ```
 
-### Options
+| Option | Effect | Default |
+| --- | --- | --- |
+| `--relative` | convert every link to a relative path | implicit |
+| `--absolute` | convert every link to an absolute path | off |
+| `--dry-run` | report what would change, modify nothing | `false` |
+| `--log-level <level>` | `trace`, `debug`, `info`, `warn`, `error` | `info` |
 
-| Option                | Description                                                                                    | Default          |
-| --------------------- | ---------------------------------------------------------------------------------------------- | ---------------- |
-| `--relative`          | Convert all links to relative paths                                                            | Implicit default |
-| `--absolute`          | Convert all links to absolute paths                                                            | -                |
-| `--dry-run`           | Preview changes without modifying files                                                        | `false`          |
-| `--log-level <level>` | Set logging level (trace, debug, info, warn, error). Use `--log-level debug` for detailed logs | `info`           |
+`--dry-run` combines with either path mode: `pair-cli update-link --absolute --dry-run`.
 
-### Examples
+## What a run does
 
-**Default behavior (relative paths):**
+1. **Detect**: locates the installed KB under `.pair/`.
+2. **Validate**: checks every Markdown link against the current file system.
+3. **Fix**: repairs broken links where a target can be found.
+4. **Adjust**: rewrites paths for a project that moved.
+5. **Convert**: applies the relative or absolute mode.
+6. **Report**: prints the summary below.
 
-```bash
-pair-cli update-link
-```
+Link types: relative (`./docs/file.md`), absolute (`/path/to/file.md`), anchors (`#section`, preserved). External URLs and `mailto:` links are skipped.
 
-**Explicit relative conversion:**
+Safety: a backup is written to `.pair/backups/` before any modification, writes are atomic, and a critical error restores the backup. `--dry-run` is the way to look first.
 
-```bash
-pair-cli update-link --relative
-```
-
-**Convert to absolute paths:**
-
-```bash
-pair-cli update-link --absolute
-```
-
-**Preview without changes:**
-
-```bash
-pair-cli update-link --dry-run
-# or combine with path mode
-pair-cli update-link --absolute --dry-run
-```
-
-**Detailed logging:**
-
-```bash
-pair-cli update-link --verbose
-```
-
-## How It Works
-
-### Processing Workflow
-
-1. **Detection**: Locates installed KB content in `.pair/` directory
-2. **Validation**: Checks all markdown links against current file system
-3. **Fixing**: Repairs broken links where possible
-4. **Adjustment**: Updates paths for moved projects
-5. **Conversion**: Applies relative/absolute path transformation
-6. **Summary**: Reports all changes and remaining issues
-
-### Link Types Supported
-
-- **Relative paths**: `./docs/file.md`, `../guide.md`
-- **Absolute paths**: `/absolute/path/to/file.md`
-- **External URLs**: `https://example.com` (skipped)
-- **Mailto links**: `mailto:email@example.com` (skipped)
-- **Anchors**: `#section-title` (preserved)
-
-### File Safety
-
-- **Backup**: Automatic backup before modifications (`.pair/backups/`)
-- **Atomic writes**: Prevents partial updates
-- **Rollback**: Automatic restore on critical errors
-- **Dry-run**: Preview changes safely
-
-## Output Format
-
-### Summary Report
+## Output
 
 ```text
 Link Update Summary:
@@ -166,173 +52,28 @@ Remaining issues:
   Error: Target file not found: /missing/file.md
 ```
 
-### Dry-Run Output
+A dry run prints the same summary under a `DRY RUN MODE - No files will be modified` banner. Remaining issues are links the command could not resolve; fix them by hand and re-run.
 
-```text
-DRY RUN MODE - No files will be modified
+## Common failures
 
-[... processing summary ...]
+| Message | Cause | Fix |
+| --- | --- | --- |
+| `No KB installed` | no `.pair/` in the project | `pair-cli install` first |
+| permission errors | files not writable | `chmod -R u+w .pair/` |
+| root detection fails | not in a git repository, no `package.json`, no `.pair/` | run from the project root |
+| links still broken | target does not exist anywhere | `--log-level debug` to see each one, then fix by hand |
 
-Tip: Remove --dry-run to apply changes
-```
-
-## Common Scenarios
-
-### After Installing KB Content
-
-```bash
-# Install KB first
-pair-cli install
-
-# Then update links for your project structure
-pair-cli update-link
-```
-
-### Moving Project Directory
-
-```bash
-# Project moved from /old/path to /new/path
-cd /new/path/to/project
-
-# Update links for new location
-pair-cli update-link
-```
-
-### Checking Link Health
-
-```bash
-# Run dry-run with debug-level logging
-pair-cli update-link --dry-run --log-level debug
-
-# Review output for broken links
-# Fix issues manually if needed
-# Run actual update
-pair-cli update-link
-```
-
-### Standardizing Link Format
-
-```bash
-# Convert mixed link formats to relative
-pair-cli update-link --relative
-
-# Or convert to absolute for portability
-pair-cli update-link --absolute
-```
-
-## Troubleshooting
-
-### "No KB installed" Error
-
-**Problem**: Command reports no Knowledge Base found.
-
-**Solution**:
-
-```bash
-# Install KB first
-pair-cli install
-
-# Then run update-link
-pair-cli update-link
-```
-
-### Permission Errors
-
-**Problem**: Cannot write to files.
-
-**Solution**:
-
-```bash
-# Check file permissions
-ls -la .pair/
-
-# Fix permissions if needed
-chmod -R u+w .pair/
-
-# Run command again
-pair-cli update-link
-```
-
-### Broken Links Remain
-
-**Problem**: Some links still broken after update.
-
-**Solution**:
-
-```bash
-# Use verbose mode to see details
-pair-cli update-link --verbose
-
-# Check reported errors in output
-# Manually fix links that cannot be auto-resolved
-# Re-run command
-pair-cli update-link
-```
-
-### Root Detection Fails
-
-**Problem**: Cannot determine project root.
-
-**Solution**:
-
-```bash
-# Ensure you're in a git repository
-git rev-parse --show-toplevel
-
-# Or have package.json in root
-ls -la package.json
-
-# Or have .pair directory
-ls -la .pair/
-
-# Run from project root
-cd /path/to/project-root
-pair-cli update-link
-```
-
-## Integration with Other Commands
-
-### Complete Workflow
-
-```bash
-# 1. Install KB content
-pair-cli install
-
-# 2. Validate and update links
-pair-cli update-link --dry-run
-
-# 3. Apply link updates
-pair-cli update-link
-
-# 4. Update KB content to latest version
-pair-cli update
-
-# 5. Re-validate links after update
-pair-cli update-link
-```
-
-### CI/CD Integration
+## In CI
 
 ```yaml
-# Example GitHub Actions workflow
-- name: Install pair CLI
-  run: npm install -g @foomakers/pair-cli
-
-- name: Install KB
-  run: pair-cli install
-
-- name: Validate links
-  run: pair-cli update-link --dry-run
-
-- name: Update links
-  run: pair-cli update-link
+- run: npm install -g @foomakers/pair-cli
+- run: pair-cli install
+- run: pair-cli update-link --dry-run
 ```
 
-## Best Practices
+A non-empty "Remaining issues" list is the signal to act on; the dry run itself never fails the job.
 
-1. **Use dry-run first**: Always preview changes with `--dry-run`
-2. **Commit before updating**: Create a checkpoint before running
-3. **Choose consistent format**: Stick to relative or absolute across project
-4. **Run after structural changes**: Update links when moving files/folders
-5. **Check verbose output**: Use `--verbose` to understand changes
-6. **Validate in CI**: Add link validation to your CI pipeline
+## Related
+
+- [Update the Knowledge Base](/docs/guides/update-kb): the recipe this command belongs to
+- [CLI commands](/docs/reference/cli/commands): every command and option

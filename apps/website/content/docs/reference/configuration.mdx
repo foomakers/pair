@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: Reference for pair-cli's config.json — registry definitions, behavior modes, and target configuration.
+description: Reference for pair-cli's config.json, registry definitions, behavior modes, and target configuration.
 ---
 
 pair-cli uses a `config.json` file to define how Knowledge Base content is distributed to your project. This file controls which registries exist, where they install, and how files are synchronized.
@@ -18,23 +18,23 @@ Override with `--config <path>` on any command.
 
 ## Resolution Order
 
-More than one configuration can be in play at once — the CLI's own defaults, the KB you
+More than one configuration can be in play at once: the CLI's own defaults, the KB you
 are installing, and your project. They are merged per registry, weakest first:
 
 | Layer | Source | Wins over |
 | ----- | ------ | --------- |
-| 1. CLI defaults | `config.json` shipped with pair-cli | — |
+| 1. CLI defaults | `config.json` shipped with pair-cli | n/a |
 | 2. Source KB declaration | `pair.config.json` at the root of the KB named by `install --source` | CLI defaults |
 | 3. Project configuration | `pair.config.json` in the project being installed into | the source KB |
 | 4. Explicit `--config <path>` | the file you name | everything |
 
 **The source declares, the consumer overrides.** An external KB that declares
 `skills.prefix: "acme-kb"` installs its skills under that prefix with nothing to copy
-into your project — and if your project declares a `skills.prefix` of its own, yours
+into your project, and if your project declares a `skills.prefix` of its own, yours
 wins. Only the fields a layer actually states are overridden; the rest fall through.
 
 Layer 3 is your project's `pair.config.json` only. A `config.json` in your project root is
-not read as a Pair configuration — the name is too common to claim.
+not read as a Pair configuration: the name is too common to claim.
 
 ### What layer 2 may say
 
@@ -44,7 +44,7 @@ Exactly these registry fields are honoured:
 
 | Field | What a source KB may state | Checked as |
 | ----- | -------------------------- | ---------- |
-| `source` | a **KB-relative path that stays inside the KB** | absolute, `..`-escaping, Windows-drive and control-character values are dropped — and so is a path that only *resolves* outside the KB, through a symlink |
+| `source` | a **KB-relative path that stays inside the KB** | absolute, `..`-escaping, Windows-drive and control-character values are dropped, and so is a path that only *resolves* outside the KB, through a symlink |
 | `exclude` | which of its own files are narrowed out | array of strings |
 | `flatten` | whether its own directories collapse | boolean |
 | `flattenDepth` | how far they collapse | positive integer |
@@ -52,22 +52,21 @@ Exactly these registry fields are honoured:
 | `prefix` | a **single path segment** | one containing `/`, `\`, `..`, or a control character is dropped |
 
 `include` is **not** honoured, even though it looks like a content field: for a `mirror`
-registry it controls which target folders are cleaned up when absent from the source —
-a WRITE decision, not a content one — so a declared `include` is dropped like `targets`.
+registry it controls which target folders are cleaned up when absent from the source (a WRITE decision, not a content one) so a declared `include` is dropped like `targets`.
 
-Everything else in a source `pair.config.json` is ignored, not merged — `targets`,
+Everything else in a source `pair.config.json` is ignored, not merged, `targets`,
 `target_path`, `behavior`, `working_path` and any top-level key. **A KB can never decide
 where the install writes**; that stays with the CLI defaults, your project, and `--config`.
 
 Nor can it decide where the install **reads**. The bound is physical, not just on the
-name — each half is checked after every symlink on the path is followed:
+name: each half is checked after every symlink on the path is followed:
 
 - a declared `source` must resolve inside the **KB**;
 - every symlink met while copying must resolve inside **that registry's own source
-  directory** — the narrower bound. One resolving anywhere else is skipped, with a warning
+  directory**: the narrower bound. One resolving anywhere else is skipped, with a warning
   naming it. One resolving back inside it is followed only when it points at a **file**: a
   symlink to a *directory* is skipped too (also at a warning), because following one would
-  need a cycle guard — `self -> .` is contained as well. Ship a directory of content as a
+  need a cycle guard, `self -> .` is contained as well. Ship a directory of content as a
   real directory, not as a link to one.
 
 So a KB cannot make `pair-cli install` copy files from elsewhere on your machine into your
@@ -76,7 +75,7 @@ repository, and a registry ships only what physically lives under it. A link lik
 target is inside the KB: the target is outside the `knowledge` registry's source. Put
 shared content under the registry's own source directory instead.
 
-**A field failing its check is dropped on its own** — the layer beneath supplies the value
+**A field failing its check is dropped on its own**: the layer beneath supplies the value
 and the rest of the declaration still applies. If what remains is well-formed but still
 does not add up (`flatten: false` over a registry that sets `flattenDepth`, say), the whole
 declaration is dropped with a warning and your own resolution stands: a source's config
@@ -85,7 +84,7 @@ never aborts your install, and is never half-applied.
 Four further guards apply to layer 2, and only to it:
 
 - A **malformed** source `pair.config.json` is ignored with a warning printed to the
-  console — never partially applied — and installation continues on your project's
+  console (never partially applied) and installation continues on your project's
   resolution. "Malformed" also covers valid JSON that is not an object, or whose
   `asset_registries` is not an object.
 - A declaration whose fields are **all dropped** does not report itself as applied: the
@@ -100,12 +99,9 @@ Four further guards apply to layer 2, and only to it:
   `targets`, …): a partial entry relying on the source for the rest fails validation,
   because the source's version of that registry was never merged beneath yours.
 
-Layer 2 applies only to a **named** source (`--source`, `--git`, `--url`), and it applies
-to `pair-cli install` and `pair-cli update` alike — an update that did not read the declaration
-would re-install the same content under the CLI's default names, leaving both copies
-behind. The default KB path resolves exactly as before. `pair-cli package` ships the KB's `pair.config.json` in
-the release ZIP, so a KB installed from its published artifact declares exactly what the
-same KB installed from a directory or a git clone declares.
+Layer 2 applies only to a **named** source (`--source`, `--git`, `--url`), and it applies to `pair-cli install` and `pair-cli update` alike: an update that did not read the declaration would re-install the same content under the CLI's default names, leaving both copies behind. The default KB path resolves exactly as before.
+
+`pair-cli package` ships the KB's `pair.config.json` in the release ZIP, so a KB installed from its published artifact declares exactly what the same KB installed from a directory or a git clone declares.
 
 ## Structure
 
@@ -133,18 +129,15 @@ same KB installed from a directory or a git clone declares.
 | `behavior` | `string` | Yes | Sync behavior: `mirror`, `add`, `overwrite`, `skip` |
 | `description` | `string` | Yes | Human-readable description shown by `--list-targets` |
 | `include` | `string[]` | No | Source-relative folder entries to mirror, matched by **path segment**, not globs (default: the whole source) |
-| `exclude` | `string[]` | No | Source-relative entries never installed — the whole subtree is skipped |
+| `exclude` | `string[]` | No | Source-relative entries never installed: the whole subtree is skipped |
 | `flatten` | `boolean` | No | Flatten directory hierarchy into dash-separated names |
-| `flattenDepth` | `number` | No | Bound flattening to the registry's entry depth — the first N source segments are joined, anything deeper is preserved as a real sub-path. Requires `flatten: true`; must be a positive integer. Omitted = every separator is flattened |
+| `flattenDepth` | `number` | No | Bound flattening to the registry's entry depth: the first N source segments are joined, anything deeper is preserved as a real sub-path. Requires `flatten: true`; must be a positive integer. Omitted = every separator is flattened |
 | `prefix` | `string` | No | Prefix to prepend to flattened directory names |
 | `targets` | `Target[]` | No | Multi-target distribution configuration |
 
-`exclude` matches **path segments**, not string prefixes: `"process/setup"` skips
-`process/setup` and everything under it, and leaves a sibling `process/setup-helper`
-alone. It means *never install*, not *uninstall* — `behavior: overwrite` performs no
-cleanup, so an entry already present in the target from an earlier run stays there when
-it later becomes excluded. Remove it by hand, or use `behavior: mirror` for a registry
-whose target should track the source exactly.
+`exclude` matches **path segments**, not string prefixes: `"process/setup"` skips `process/setup` and everything under it, and leaves a sibling `process/setup-helper` alone. It means *never install*, not *uninstall*, `behavior: overwrite` performs no cleanup, so an entry already present in the target from an earlier run stays there when it later becomes excluded.
+
+Remove it by hand, or use `behavior: mirror` for a registry whose target should track the source exactly.
 
 ## Behavior Modes
 
@@ -207,7 +200,7 @@ The transform also updates:
 
 ### Bounded Flattening (`flattenDepth`)
 
-Without `flattenDepth`, **every** separator is flattened — so a sub-directory of an entry becomes a sibling entry of its own. Set `flattenDepth` to the number of source segments an entry occupies and only those are joined; anything deeper stays a real sub-path inside the entry:
+Without `flattenDepth`, **every** separator is flattened, so a sub-directory of an entry becomes a sibling entry of its own. Set `flattenDepth` to the number of source segments an entry occupies and only those are joined; anything deeper stays a real sub-path inside the entry:
 
 ```text
 Source:  .skills/process/review/references/deep.md
@@ -216,7 +209,7 @@ Prefix:  process-review/references → pair-process-review/references
 Target:  .claude/skills/pair-process-review/references/deep.md
 ```
 
-Compare with the unbounded result for the same source: `.claude/skills/pair-process-review-references/deep.md` — a sibling directory outside the skill, with the skill's own `./references/deep.md` link pointing at nothing.
+Compare with the unbounded result for the same source: `.claude/skills/pair-process-review-references/deep.md`: a sibling directory outside the skill, with the skill's own `./references/deep.md` link pointing at nothing.
 
 Notes:
 - Set it when your registry's entries own sub-directories (e.g. an Agent Skills `references/` progressive-disclosure directory).
@@ -248,9 +241,9 @@ Notes:
 
 ## Working Area Override
 
-`.pair/working/` (checkpoints, reports) is operational data, not knowledge. It is protected simply by **never being a registry target**: `pair-cli install`/`pair-cli update` only touch paths inside a configured registry, so a directory that is not a registry `source` or `target` is never created, modified, or deleted (D14). There is no runtime carve-out — instead, `pair-cli validate-config` **rejects** any config whose registry `target` would overlap the working area. See the [KB Structure Reference](/docs/reference/kb-structure) for the full convention.
+`.pair/working/` (checkpoints, reports) is operational data, not knowledge. It is protected simply by **never being a registry target**: `pair-cli install`/`pair-cli update` only touch paths inside a configured registry, so a directory that is not a registry `source` or `target` is never created, modified, or deleted (D14). There is no runtime carve-out, instead, `pair-cli validate-config` **rejects** any config whose registry `target` would overlap the working area. See the [KB Structure Reference](/docs/reference/kb-structure) for the full convention.
 
-Override the default path with a top-level `working_path` field, a sibling of `asset_registries` — not nested inside it. The value must be a **project-relative** path (relative to the project root, like `asset_registries` targets); an absolute `working_path` is rejected by `pair-cli validate-config`:
+Override the default path with a top-level `working_path` field, a sibling of `asset_registries`, not nested inside it. The value must be a **project-relative** path (relative to the project root, like `asset_registries` targets); an absolute `working_path` is rejected by `pair-cli validate-config`:
 
 ```json
 {
@@ -259,7 +252,7 @@ Override the default path with a top-level `working_path` field, a sibling of `a
 }
 ```
 
-When set, the override path — not `.pair/working` — is the reserved path that no registry `target` may overlap, checked by `pair-cli validate-config`.
+When set, the override path (not `.pair/working`) is the reserved path that no registry `target` may overlap, checked by `pair-cli validate-config`.
 
 ## Link Validation
 
@@ -274,14 +267,9 @@ A top-level `link_validation` field, a sibling of `asset_registries`, tunes how
 }
 ```
 
-`optional_link_patterns` marks matched-but-missing targets as warnings instead of
-errors, so a KB can be validated in isolation without disabling whole registries.
-Patterns merge (union, trimmed and deduplicated) with `--optional-link-patterns`, and `--strict` overrides
-them back to errors. A pattern is matched against the target resolved relative to the
-KB root, and — only where the link as written is a genuine spelling of that same target (its
-`../` climb lands on the KB root) or the target leaves the KB tree — against the link as
-written; only the documented glob syntax is supported, anything else (brace
-expansion, extglob, leading `!`) is matched literally and therefore never matches.
+`optional_link_patterns` marks matched-but-missing targets as warnings instead of errors, so a KB can be validated in isolation without disabling whole registries. Patterns merge (union, trimmed and deduplicated) with `--optional-link-patterns`, and `--strict` overrides them back to errors.
+
+A pattern is matched against the target resolved relative to the KB root, and, only where the link as written is a genuine spelling of that same target (its `../` climb lands on the KB root) or the target leaves the KB tree, against the link as written; only the documented glob syntax is supported, anything else (brace expansion, extglob, leading `!`) is matched literally and therefore never matches.
 
 Write patterns in the **resolved** form, as above: it is the same string whatever the depth of
 the file the link is written in. A target that is a true sibling of the KB root resolves one
@@ -289,14 +277,14 @@ level up (`../apps/**`), and `**/apps/**` covers both anchorings. The written fo
 (`../../apps/**`) matches only links whose `../` climb lands exactly on the KB root, so it stops
 matching the same target as soon as it is linked from a deeper file.
 
-The section is read from the config of the **KB being validated** — `<--path>/pair.config.json`,
+The section is read from the config of the **KB being validated** (`<--path>/pair.config.json`,
 falling back to `<--path>/config.json` when there is no `pair.config.json`, the same config the
-registries are resolved from — so validating `pair-cli kb-validate --path ./my-kb` uses
+registries are resolved from) so validating `pair-cli kb-validate --path ./my-kb` uses
 `./my-kb/pair.config.json` (or `./my-kb/config.json`), not the config of the directory you run the
 command in.
 
 Full semantics and glob syntax:
-[kb-validate — Optional link patterns](/docs/reference/cli/commands#optional-link-patterns).
+[kb-validate: Optional link patterns](/docs/reference/cli/commands#optional-link-patterns).
 
 ## Execution Engine (`engine`)
 
@@ -310,12 +298,12 @@ A top-level `engine` field, a sibling of `asset_registries`, names the agent pro
 }
 ```
 
-`id` names the engine — `pi`, `opencode`, `claude` or `codex`. Two optional maps, keyed by engine
+`id` names the engine: `pi`, `opencode`, `claude` or `codex`. Two optional maps, keyed by engine
 id, sit beside it:
 
-- **`bin`** — where THIS machine keeps an engine's executable, when PATH cannot find it
+- **`bin`**: where THIS machine keeps an engine's executable, when PATH cannot find it
   (`{"bin": {"pi": "/opt/pi/bin/pi"}}`). Consulted first when the engine is resolved.
-- **`model`** — the model an engine drives, run-wide (`{"model": {"codex": "gpt-5.5"}}`). Per-stage
+- **`model`**: the model an engine drives, run-wide (`{"model": {"codex": "gpt-5.5"}}`). Per-stage
   selection is the [workflow profile](#workflow-profiles-workflowprofiles)'s.
 
 ```json
@@ -332,14 +320,14 @@ The block is **optional and delta-only**. Precedence, strongest first:
 | ----- | --------- | ----- |
 | `--engine <id>` | everything | Per-invocation choice |
 | `engine.id` in `pair.config.json` | the schema default | Committed project preference |
-| Schema default (`claude`) | — | A repository with **no** `pair.config.json` runs from this |
+| Schema default (`claude`) | n/a | A repository with **no** `pair.config.json` runs from this |
 
 `pair-cli run` prints the resolved engine, the exact command line and the level it came from before
 it executes anything.
 
 <Callout type="warn">
   Autonomy and project-trust approval are deliberately **not** configurable here. They are
-  per-invocation flags only (`--autonomous`, `--approve-project-trust`) — a committed file must
+  per-invocation flags only (`--autonomous`, `--approve-project-trust`): a committed file must
   never be able to grant an unattended run permission to skip confirmations or to execute code
   from a repository the engine does not trust.
 </Callout>
@@ -348,7 +336,7 @@ it executes anything.
 
 An optional top-level `workflowProfiles` field declares which engine, model, effort level and
 context policy each delivery-cycle stage (`prepare`, `validate`, `implement`, `green`, `verify`,
-`contract`, `merge`) uses — for both `pair-cli run --card` and the in-session `pair-workflow-cycle`
+`contract`, `merge`) uses, for both `pair-cli run --card` and the in-session `pair-workflow-cycle`
 skill, through one shared resolver.
 
 ```json
@@ -361,25 +349,29 @@ skill, through one shared resolver.
 }
 ```
 
-- **`default`** — the profile used when no `--profile` / `--workflow-config` is passed.
-- **`files`** — a glob or array of globs; each file is one profile, indexed by its own `name`.
-- **`inline`** — profiles declared directly, keyed by name. Wins over a file of the same name.
+- **`default`**: the profile used when no `--profile` / `--workflow-config` is passed.
+- **`files`**: a glob or array of globs; each file is one profile, indexed by its own `name`.
+- **`inline`**: profiles declared directly, keyed by name. Wins over a file of the same name.
 
-A profile is `{ name, defaults, stages, modelClasses }`; a stage entry overrides only the fields it
-declares (`engine`, `model`, `effort`, `context`), falling back to `defaults`, then to the KB default
-(schema-default engine and model, default effort, `fresh` context). `model` is an id, a class
-(`cheap`, `balanced`, `frontier`) or `by-tier`, resolved against the card's `risk:*` label through
-`## Model Policy`.
+A profile is `{ name, description, defaults, stages, modelClasses }` (`name` required; an inline
+profile takes its key as name). A stage entry overrides only the fields it declares, falling back to
+`defaults`, then to the KB default (the run's engine, its default model, default effort, `fresh`
+context).
 
-Resolution is once per run, in this order: `--workflow-config` (verbatim), then `--profile`, then
-`workflowProfiles.default`, then the KB default. The coordinator prints the resolved profile, its source and the per-stage table
-before the first dispatch. An unknown name is `profile-unresolved`; `context: "reuse"` on a stage the
-cycle's transition table forbids (`validate`, `verify`, …), an unknown stage or key, or a name
-collision is refused at load — never a silent fallback. The profile's name and hash are recorded in
-every handoff but are not part of what invalidates prior evidence. No `workflowProfiles` field and no
-flag: nothing changes.
+| Field | Values |
+| --- | --- |
+| `engine` | `default` (the run's engine), `pi`, `opencode`, `claude`, `codex`. Spawned per stage by `pair-cli`; in a session only reported |
+| `model` | `default` (the engine's own), an explicit id, a class (`cheap`, `balanced`, `frontier`) mapped to an id by `modelClasses`, or `by-tier` (the card's `risk:*` label through `## Model Policy`). A near-miss of a keyword is refused as a typo |
+| `effort` | `default`, `low`, `medium`, `high`, `xhigh`, `max`. In a session enforced on Codex, a prompt request on Claude; `pair-cli` records it and sends it to no engine yet |
+| `context` | `fresh`, `reuse`. `reuse` only into `prepare` and `green` |
 
-Full reference: the KB's `workflow-profiles.md` (automation guidelines).
+Resolution is once per run, in this order: `--workflow-config` (verbatim), then `--profile`, then `workflowProfiles.default`, then the KB default. Both flags need `--card`; the `--parallel` loop does not forward them, so unattended runs use `workflowProfiles.default`. The coordinator prints the resolved profile, its source and the per-stage table before the first dispatch; `node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . [--profile <name>] [--tier risk:<tier>]` prints the same table (`table` in its JSON) without running anything.
+
+An unknown name is `profile-unresolved`; `context: "reuse"` on a stage the cycle's transition table forbids (`validate`, `verify`, …), an unknown stage or key, or a name collision is refused at load, never a silent fallback. The profile's name and hash are recorded in every handoff but are not part of what invalidates prior evidence.
+
+No `workflowProfiles` field and no flag: nothing changes.
+
+Worked example and recipe: [Automated development](/docs/tutorials/automated-development#per-stage-engine-model-and-effort-workflow-profiles), [Autonomy and per-stage engine and model](/docs/guides/autonomy-and-profiles). Full reference: the KB's `workflow-profiles.md` (automation guidelines).
 
 ## Validation
 
@@ -398,19 +390,19 @@ pair-cli validate-config --config ./custom-config.json
 - Transform config is valid (non-empty prefix, not combined with symlink mode; `flattenDepth` a positive integer, and only alongside `flatten: true`)
 - Source paths exist (if specified)
 - Include patterns are valid arrays
-- No registry's `target` overlaps a reserved path — the working area (default or overridden `working_path`) — and `working_path` is project-relative; see [Working Area Override](#working-area-override)
+- No registry's `target` overlaps a reserved path, the working area (default or overridden `working_path`), and `working_path` is project-relative; see [Working Area Override](#working-area-override)
 
 ## Environment Variables
 
 | Variable | Description | Default |
 | -------- | ----------- | ------- |
-| `PAIR_KB_CACHE_DIR` | Override the KB cache root; slots are created under it. Must be an ABSOLUTE path with no `..` segments — the CLI rejects anything else, because slots are deleted recursively | `~/.pair/kb` |
+| `PAIR_KB_CACHE_DIR` | Override the KB cache root; slots are created under it. Must be an ABSOLUTE path with no `..` segments: the CLI rejects anything else, because slots are deleted recursively | `~/.pair/kb` |
 | `PAIR_KB_DEFAULT_URL` | Override default GitHub release URL | GitHub latest release |
-| `PAIR_GIT_TOKEN` | Sets an origin-scoped `http.extraheader` (git >= 2.31) for `https://` git clones of private repos — never `http://`, never in the URL. Also refuses any redirect while attached. | Not set |
+| `PAIR_GIT_TOKEN` | Sets an origin-scoped `http.extraheader` (git >= 2.31) for `https://` git clones of private repos, never `http://`, never in the URL. Also refuses any redirect while attached. | Not set |
 | `PAIR_DIAG` | Enable diagnostic logging (`1` to enable) | `0` |
 
 ## Related
 
-- [KB Structure Reference](/docs/reference/kb-structure) — Directory layout
-- [CLI Commands Reference](/docs/reference/cli/commands) — `validate-config` command
-- [Skill Management](/docs/reference/skill-management) — How transforms affect skills
+- [KB Structure Reference](/docs/reference/kb-structure): Directory layout
+- [CLI Commands Reference](/docs/reference/cli/commands): `validate-config` command
+- [Skill Management](/docs/reference/skill-management): How transforms affect skills

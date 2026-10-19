@@ -6,6 +6,7 @@ import {
   countDeclaredPluginSkills,
   findGuideCountMismatches,
   findDeadLinks,
+  findEmDashes,
   findDeadRepoCitations,
   githubHeadingSlugs,
   checkCatalogSync,
@@ -30,6 +31,10 @@ import {
   findStalePlannedMarkers,
   plannedMarkerErrors,
   queryIssueState,
+  findDeadAnchors,
+  buildDocSlugs,
+  parseIntentRequests,
+  checkViaLines,
 } from './docs-staleness-check'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
@@ -1531,5 +1536,59 @@ describe('planned-capability marker (US-353 AC7/AC8)', () => {
       ).toEqual([])
       expect(lookup).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe('findDeadAnchors (US-552 AC30)', () => {
+  const slugs = buildDocSlugs(new Map([['/docs/a', '# A\n\n## Hello World\n\n## Hello World\n']]))
+  it('passes a live anchor, incl. duplicate suffix', () => {
+    expect(
+      findDeadAnchors('[x](/docs/a#hello-world) [y](/docs/a#hello-world-1)', 'p.mdx', slugs),
+    ).toEqual([])
+  })
+  it('flags a dead anchor', () => {
+    const e = findDeadAnchors('[x](/docs/a#nope)', 'p.mdx', slugs)
+    expect(e).toHaveLength(1)
+    expect(e[0]).toContain('/docs/a#nope')
+  })
+  it('ignores links without fragment and unknown routes (check 5 owns those)', () => {
+    expect(findDeadAnchors('[x](/docs/a) [y](/docs/zzz#q)', 'p.mdx', slugs)).toEqual([])
+  })
+})
+
+describe('checkViaLines (US-552 AC25)', () => {
+  const skill =
+    '| The user wants | Source | Notes |\n| --- | --- | --- |\n| the KB and skills refreshed | `update` | n |\n| pair in this project | `install` | n |\n'
+  const doc = (u: string, i: string) =>
+    `## install\n\n${i}\n\n## update\n\n${u}\n\n## Global Options\n`
+  const ok = '**Via `/pair-assistant`:** ask for "the KB and skills refreshed"'
+  const okI = '**Via `/pair-assistant`:** ask for "pair in this project"'
+  it('parses intent rows', () => {
+    expect(parseIntentRequests(skill).get('update')).toEqual(['the KB and skills refreshed'])
+  })
+  it('passes complete lines', () => {
+    expect(checkViaLines(['install', 'update'], doc(ok, okI), skill)).toEqual([])
+  })
+  it('passes CLI only', () => {
+    expect(checkViaLines(['install', 'update'], doc('**Via:** CLI only', okI), skill)).toEqual([])
+  })
+  it('flags a missing Via line', () => {
+    expect(checkViaLines(['install', 'update'], doc('text', okI), skill)).toHaveLength(1)
+  })
+  it('flags a request absent from the intent table', () => {
+    expect(
+      checkViaLines(
+        ['install', 'update'],
+        doc('**Via `/pair-assistant`:** ask for "bogus"', okI),
+        skill,
+      ),
+    ).toHaveLength(1)
+  })
+})
+
+describe('findEmDashes', () => {
+  it('flags each line with U+2014 and passes clean content', () => {
+    expect(findEmDashes('a\nb \u2014 c\nd', 'a.mdx')).toEqual(['a.mdx:2: em dash (U+2014)'])
+    expect(findEmDashes('a - b, c', 'a.mdx')).toEqual([])
   })
 })

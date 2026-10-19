@@ -1,0 +1,33 @@
+---
+title: Configure another harness
+description: Make Codex, pi or opencode read pair and run it headless, and declare which harnesses the project supports.
+---
+
+**Goal**: make another AI harness (Codex, pi, opencode) read pair, interactively and as an engine for unattended runs.
+
+## Prerequisites
+
+- A pair-enabled project
+- The harness installed and authenticated
+
+## Steps
+
+1. **Pick the harness**: read its page, [Codex](/docs/integrations/codex), [pi](/docs/integrations/pi) or [opencode](/docs/integrations/opencode). Which modes each one supports: [Modes by assistant](/docs/process-lifecycle/lifecycle-modes#modes-by-assistant).
+2. **Install the targets it reads**
+   - With pair-cli: `pair-cli install --list-targets` shows the registries; `pair-cli install` writes the bridge files and skill directories every supported harness discovers.
+3. **Declare it**
+   - In your assistant: `/pair-capability-setup-harness` writes `## Harness` (and optionally `## Model Policy`) in `tech/automation.md`.
+   - With `/pair-assistant` (optional, Claude Code): "switch the harness to pi".
+4. **Try it headless (optional)**
+   - With pair-cli: `pair-cli run --card <id> --engine <pi|opencode|codex|claude> --dry-run`.
+
+## Verify
+
+- The harness lists the pair skills and reads `AGENTS.md`.
+- `pair-cli run --dry-run` names the engine you declared.
+
+## Related
+
+- [Harnesses and engines](/docs/integrations/adding-a-harness)
+- [Share AI artifacts with your team](/docs/tutorials/share-ai-artifacts): distribute skills and `AGENTS.md` through a Git repository
+- [Adoption settings](/docs/reference/adoption-settings#techautomationmd)

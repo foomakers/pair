@@ -1,0 +1,37 @@
+---
+title: Customize templates
+description: Override a shipped template such as the commit or PR template with your own copy, override-first, preserved across updates.
+---
+
+**Goal**: change what pair writes for commits, PRs, stories and other artifacts without forking the KB.
+
+## Prerequisites
+
+- A pair-enabled project
+
+## How it works
+
+Every skill that uses a template resolves it **override-first** by a plain file-existence check: if `.pair/adoption/tech/templates/<name>-template.md` exists, the skill uses your copy whole; otherwise it uses the KB copy in `.pair/knowledge/guidelines/collaboration/templates/`. No partial merge, no registration: the file being there is the whole mechanism, and `pair-cli update` never touches `.pair/adoption/`. The 19 shipped templates and which skill reads each: [Templates catalog](/docs/reference/templates-catalog).
+
+## Steps
+
+1. **Copy the template**
+   - In your assistant: `mkdir -p .pair/adoption/tech/templates && cp .pair/knowledge/guidelines/collaboration/templates/commit-template.md .pair/adoption/tech/templates/`.
+   - With `/pair-assistant` (optional, Claude Code): "override the PR template".
+2. **Edit your copy**
+   - In your assistant: change the format, for example `[JIRA-XXX] type(scope): description` for commits. The next skill run picks it up; no restart, no config.
+   - With `/pair-assistant` (optional, Claude Code): it shows the diff before writing.
+3. **Record it for your team (optional)**
+   - In your assistant: list the overrides under a `## Templates` heading in `way-of-working.md`, or add an ADL. This is an audit trail only; it never activates or deactivates an override.
+   - With `/pair-assistant` (optional, Claude Code): done through `/pair-capability-record-decision`.
+
+## Verify
+
+- Create a commit or a PR with the relevant skill and check the new shape is used.
+- `ls .pair/adoption/tech/templates/` lists exactly the templates you changed.
+
+## Related
+
+- [Templates catalog](/docs/reference/templates-catalog)
+- [Quality gates configuration](/docs/reference/quality-gates-configuration): the catalog of opt-in knobs, template overrides included
+- [Adoption settings](/docs/reference/adoption-settings#package-local-adoption-and-templates)

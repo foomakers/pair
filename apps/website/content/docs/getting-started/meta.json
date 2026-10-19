@@ -1,11 +1,4 @@
 {
   "title": "Getting Started",
-  "pages": [
-    "quickstart",
-    "quickstart-solo",
-    "quickstart-team",
-    "quickstart-org",
-    "bootstrap-quick-mode",
-    "checklist"
-  ]
+  "pages": ["quickstart", "bootstrap-quick-mode", "choose-your-path", "verify"]
 }

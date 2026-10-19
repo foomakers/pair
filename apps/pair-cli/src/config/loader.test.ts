@@ -739,3 +739,35 @@ describe('config loader - applied means honoured, not merely parseable', () => {
     expect(sourceDeclaration!.unknownRegistries).toEqual(['acme-prompts'])
   })
 })
+
+describe('US-552 project skipRegistries', () => {
+  const load = (project: string, extra: Record<string, unknown> = {}) =>
+    loadConfigWithOverrides(
+      new InMemoryFileSystemService(
+        {
+          '/opt/pair-cli/config.json': REAL_CONFIG,
+          '/consumer/pair.config.json': project,
+          '/kb/pair.config.json': JSON.stringify({ skipRegistries: ['agents'] }),
+        },
+        '/opt/pair-cli',
+        '/consumer',
+      ),
+      { projectRoot: '/consumer', projectConfigOnly: true, ...extra },
+    )
+
+  it('returns the validated list', () => {
+    expect(load('{"skipRegistries":["agents"]}').skipRegistries).toEqual(['agents'])
+    expect(load('{}').skipRegistries).toBeUndefined()
+  })
+
+  it('a source KB declaration cannot set it', () => {
+    expect(load('{}', { sourceRoot: '/kb' }).skipRegistries).toBeUndefined()
+  })
+
+  it.each(['{ nope', '{"skipRegistries":"agents"}', '{"skipRegistries":[1]}'])(
+    'throws naming the file for %s under projectConfigOnly',
+    raw => {
+      expect(() => load(raw)).toThrow(/\/consumer\/pair\.config\.json/)
+    },
+  )
+})

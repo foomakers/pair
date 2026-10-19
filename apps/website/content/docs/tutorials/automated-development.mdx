@@ -1,0 +1,406 @@
+---
+title: Automated development
+description: Let pair deliver cards for you, Supervised (you trigger one card at a time) or Autonomous (a daemon that watches your backlog), from one manual run to a systemd service, with the engine, model and effort of every stage under your control.
+---
+
+This tutorial shows how to let pair deliver cards without you writing the code or driving every stage. **Supervised**: you start one card (`pair-cli run --card`, `/pair-workflow-cycle`) or one batch and review the result. **Autonomous**: a daemon (`pair-cli run --root --parallel --watch`, or `/pair-loop`) picks cards from your backlog and ships those your gates allow. You will go from a manual dry-run to a systemd-managed daemon on a dedicated box in about 30 minutes.
+
+## Before you start
+
+Automated development is **one delivery cycle** (a state machine that takes one card to a review-approved pull request, optionally to a merge), **three ways to drive it**, and **one set of autonomy gates** that decides how far it may go without you. The model is on two pages you should have read once: [Delivery workflow](/docs/process-lifecycle/delivery-workflow) (why, roles, handoffs, gates) and [The delivery cycle in depth](/docs/process-lifecycle/delivery-cycle) (every stage, every realization). This tutorial only drives it.
+
+| Driver | Use it for |
+| --- | --- |
+| `/pair-workflow-cycle <id>` | one card in a Claude Code, Codex or pi session, you nearby |
+| `pair-cli run --card <id>` | one card from a shell, cron or CI, on any engine |
+| `/pair-loop`, or `pair-cli run --root --parallel --watch` | a whole backlog, repeatedly |
+
+All three read the same state machine and the same gates. Which assistants support which: [Modes by assistant](/docs/process-lifecycle/lifecycle-modes#modes-by-assistant).
+
+## Autonomy: until, gates, escalation
+
+Declared once in `## Autonomy` of `tech/automation.md` (or passed as `--until`, `--prepare`, `--merge`); precedence is argument, then adoption, then KB default, and the run prints every effective value with its source. Every key is in [Adoption settings](/docs/reference/adoption-settings#techautomationmd).
+
+- **`until`**: `ready` stops before implementation; `pr` (default) stops at the review-approved PR; `merged` is the only value under which the merge gate is evaluated.
+- **`prepare` gate**: who refines and breaks down a Draft card. `always` (default) keeps a human.
+- **`merge` gate**: `always` (default) parks every card for a human; `never` and `when; has: …; lacks: …` enter the merge stage.
+- **Escalation**: a `when` condition that fires stops the card as `escalated` with one comment on it naming the condition; the PR stays open, the rest of the backlog continues.
+- **Blocking Severities**: `## Blocking Severities` sets the floor (`Critical`, `Major`, `Minor`; default `Minor`) at or above which a review finding blocks, plus an optional `max-dispatches` ceiling on a run's handoffs.
+
+**In your assistant:** edit `tech/automation.md`, then `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve`. **With `/pair-assistant` (optional, Claude Code):** "let green cards go up to merge" shows the `## Autonomy` diff, validates it and writes it through record-decision ([how it writes](/docs/reference/pair-assistant#how-it-writes)).
+
+## Per-stage engine, model and effort: workflow profiles
+
+A **workflow profile** chooses, for each stage of the cycle (`implement`, `verify`, `prepare`, `validate`, `green`, `contract`, `merge`), which engine runs it, which model, at which effort, and whether the stage starts a fresh agent or resumes the previous one of the same role. It lives in `pair.config.json` under `workflowProfiles` and is resolved once per run by one script, `workflow-profile.mjs`, for both `pair-cli run --card` and `/pair-workflow-cycle`. With no profile nothing changes: the run's engine, its default model, default effort, a fresh context on every stage.
+
+A realistic profile: cheap where the work is bounded by sealed tests, frontier where an independent judgment is the gate, and a second vendor for the final review.
+
+```json title="pair.config.json"
+{
+  "engine": { "id": "claude" },
+  "workflowProfiles": {
+    "default": "mixed",
+    "files": ".pair/adoption/tech/workflow-profiles/*.json",
+    "inline": {
+      "mixed": {
+        "description": "cheap where bounded, frontier where independent",
+        "defaults": { "engine": "default", "model": "balanced", "effort": "medium", "context": "fresh" },
+        "modelClasses": {
+          "cheap": "claude-haiku-5-5",
+          "balanced": "claude-sonnet-5-5",
+          "frontier": "claude-opus-5-5"
+        },
+        "stages": {
+          "contract": { "model": "cheap", "effort": "low" },
+          "implement": { "model": "balanced" },
+          "prepare": { "model": "cheap", "context": "reuse" },
+          "validate": { "model": "frontier", "effort": "high" },
+          "green": { "model": "cheap", "context": "reuse" },
+          "verify": { "engine": "codex", "model": "gpt-5.5", "effort": "high" },
+          "merge": { "model": "balanced" }
+        }
+      }
+    }
+  }
+}
+```
+
+- **`default`**: the profile a run uses when no flag names one. **`files`**: a glob (or list) of profile files, each indexed by its own `name`. **`inline`**: profiles written here, keyed by name (the key is the name). Anything else under `workflowProfiles` is refused.
+- A stage entry overrides only the fields it declares; the rest come from `defaults`, then from the KB default.
+
+| Field | Values | Notes |
+| --- | --- | --- |
+| `engine` | `default` (the run's engine), `pi`, `opencode`, `claude`, `codex` | `pair-cli` spawns that engine for the stage and checks it is installed before the first dispatch; in a session the session is the engine, so a stage engine is only reported |
+| `model` | `default` (the engine's own), an explicit id, a class (`cheap`, `balanced`, `frontier`), `by-tier` | a class resolves through `modelClasses`; a near-miss of a keyword (`Cheap`, `by_tier`) is refused as a typo |
+| `effort` | `default`, `low`, `medium`, `high`, `xhigh`, `max` | in a session: enforced on Codex, a prompt request on Claude; `pair-cli` records and prints it but sends it to no engine yet |
+| `context` | `fresh`, `reuse` | `reuse` resumes the previous agent of the same role, and only where the cycle allows it (`prepare`, `green`); on `validate` or `verify` it is refused at load |
+
+**Choosing the profile.** Resolved once per run, highest first: `--workflow-config <path>` (an external profile file, used verbatim) > `--profile <name>` (looked up in `files` and `inline`) > `workflowProfiles.default` > the KB default. A name no source has halts `profile-unresolved`, a bad value halts `profile-invalid`, two files with the same `name` halt `profile-name-collision`: never a silent fall back to the KB default, so a typo cannot run the whole cycle on the wrong model.
+
+```bash
+pair-cli run --card 217 --profile mixed                      # a named profile
+pair-cli run --card 217 --workflow-config ./review-only.json # an external file, verbatim
+pair-cli run --card 217                                      # workflowProfiles.default, else the KB default
+```
+
+In your assistant, `/pair-workflow-cycle` takes the same two as its `$profile` and `$workflowConfig` arguments. Both flags need `--card`: the `--parallel` and `--watch` loop does not forward them to the cards it spawns, so an Autonomous run takes its profile from `workflowProfiles.default`.
+
+**Printing the resolved table.** Every run prints the profile, its source, its hash and one line per stage (engine, model, effort, context, each with the level that decided it) before the first dispatch. To see it without running anything:
+
+```bash
+node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . --profile mixed --tier risk:green | jq -r '.table[]'
+```
+
+The first line names the profile, its source and its hash; then one line per stage:
+
+```text
+  Card tier: risk:green
+  prepare   | engine default (defaults) | model cheap (risk:green) → claude-haiku-5-5 (stage) | effort medium (defaults) | context reuse (stage)
+  validate  | engine default (defaults) | model frontier (risk:green) → claude-opus-5-5 (stage) | effort high (stage) | context fresh (defaults)
+  implement | engine default (defaults) | model balanced (risk:green) → claude-sonnet-5-5 (stage) | effort medium (defaults) | context fresh (defaults)
+  green     | engine default (defaults) | model cheap (risk:green) → claude-haiku-5-5 (stage) | effort medium (defaults) | context reuse (stage)
+  verify    | engine codex (stage) | model gpt-5.5 (stage) | effort high (stage) | context fresh (defaults)
+  contract  | engine default (defaults) | model cheap (risk:green) → claude-haiku-5-5 (stage) | effort low (stage) | context fresh (defaults)
+  merge     | engine default (defaults) | model balanced (risk:green) → claude-sonnet-5-5 (stage) | effort medium (defaults) | context fresh (defaults)
+```
+
+**Variant: let the model follow the card's risk tier.** Write `"model": "by-tier"` on `defaults` (for the stages that declare no model of their own) or on a stage, and map tiers to classes in `## Model Policy` of `tech/automation.md`:
+
+```markdown
+## Model Policy
+
+risk:green: cheap
+risk:yellow: balanced
+risk:red: frontier
+```
+
+The tier is the card's `risk:*` label (from `--card-tags`, or read from the tracker under `--autonomous`; the loop passes each child card its labels). An untagged card, a tier the policy omits, a missing policy or a class with no id in `modelClasses` resolve to the engine's default model, never a halt. The resolved line names the class and the tier it came from: `cheap (risk:green) → claude-haiku-5-5`.
+
+The profile's name and hash are stamped in every handoff for audit, but they are not an input of the cycle: changing the profile between runs invalidates no evidence. Full schema and refusals: [Configuration](/docs/reference/configuration#workflow-profiles-workflowprofiles); the recipe: [Autonomy and per-stage engine and model](/docs/guides/autonomy-and-profiles).
+
+## Walkthrough: your first unattended run
+
+## Prerequisites
+
+- **pair-cli** installed in the project (`pair-cli install` completed)
+- A **classification model** in place, `classify` already emitting `risk:*` tags on your cards (see
+  [Quality Model](/docs/reference/quality-model)). Unattended delivery filters on this; without it,
+  there is nothing to filter on.
+- At least one **execution engine** installed and authenticated, [pi](/docs/integrations/pi),
+  [opencode](/docs/integrations/opencode), or Claude Code itself run headlessly (`claude -p`). See
+  [Adding a Harness](/docs/integrations/adding-a-harness) if you're weighing which one.
+- Comfort with the idea that **this genuinely pushes and merges code without a human clicking
+  anything**: that's the feature, not a side effect. Read the [Safety](#safety-what-this-does-and-does-not-protect-you-from) section before pointing it at a real repository.
+
+## What you'll build
+
+- A `tech/automation.md` policy declaring which cards run unattended, whether they can merge on
+  their own, and where the trail is written
+- One manual run you watch, to prove the config before anything runs unattended
+- A daemon, systemd timer (or a scheduled task, or a supervisor loop), that re-invokes `pair-cli run`
+  on a schedule, so new eligible cards get picked up without you starting anything by hand
+- A working understanding of what "eligible" means, who can change it, and what stops the whole
+  thing cold if anything looks wrong
+
+## Step 1: Declare the automation policy
+
+Everything here lives in one adoption file: `.pair/adoption/tech/automation.md`. It is optional: absent, it means "automation is off", never "automation runs on everything". Each section has its own fail-closed default. `## Workflows` is what Option D in Step 4 adds; `## Harness` and `## Model Policy` (supported engines, per-tier model class) are in the guideline.
+
+```markdown
+## Autonomy
+
+filter: risk:green
+until: pr
+
+## Stop Predicate
+
+tag:risk:red ⇒ Done
+max-iterations: 20
+
+## Max Parallelism
+
+3
+
+## Audit Location
+
+automation/loop-audit.md
+```
+
+<Callout type="info">
+  **The filter is a list of tags `classify` already emits, never a new tag of its own.** Nothing is
+  written onto a card to make it selectable; `risk:green` here is exactly the `risk:green` your
+  review process assigns. If your project renamed the family in `tech/risk-matrix.md`'s Tag
+  Projection (`priority` instead of `risk`, say), write the renamed label here. Matching is plain
+  string equality, any-of, no tier arithmetic.
+</Callout>
+
+**The `merge` gate is the one line that turns on unattended merging.** The shipped default is `merge: always`, and `always` parks every review-approved card for a human, whatever its tier. To let the loop merge the cards it selected once the PR is review-approved and the gates are green, write both lines:
+
+```markdown
+## Autonomy
+
+filter: risk:green
+until: merged
+merge: never
+```
+
+`merge: when; has: cost:red; lacks: risk:green` enters the merge stage too, but escalates any card matching the condition instead of merging it. The gate is a switch, not a second risk model: the per-tier gate table lives in the [quality model](/docs/reference/quality-model) (lint, type, build for green; unit tests from yellow; integration and E2E on red), and the merge stage enacts it.
+
+**Using a team-specific tag instead of `risk:green`.** Nothing ties the filter to the `risk` family. If a maintainer adds `automate` to specific cards rather than trusting the whole green set, declare `filter: automate`; the label only has to exist on the card.
+
+**Projects written for v0.4** may still carry `## Eligibility` (one label) and `## Auto-Advance` (`(none)` or a tier). They are legacy: `autonomy-policy.mjs` translates them to `filter` and to the `merge` gate, and a `## Autonomy` section that disagrees with them is refused. Write `## Autonomy` only in a new project.
+
+## Step 2: Prepare the engine for headless, unattended runs
+
+`pair-cli run` drives one of three engines, [pi](/docs/integrations/pi),
+[opencode](/docs/integrations/opencode), or Claude Code (`claude -p`), chosen with `--engine`, a
+project default in `pair.config.json`, or (Claude Code) the schema default. Each has its own
+headless posture:
+
+| Engine | Confirmations | Project trust | What to set up before an unattended run |
+| --- | --- | --- | --- |
+| `pi` | None at all: no permission prompts exist | Per-directory, `~/.pi/agent/trust.json` | Trust the project explicitly (`pi`'s own `/trust`, or `/pair-capability-setup-harness`): a headless run **silently ignores** an untrusted project's local resources rather than asking |
+| `opencode` | On by default, opt out with `--auto` | None: no trust gate | Nothing beyond authentication (`opencode auth list`) |
+| `claude` (`claude -p`) | On by default, opt out with `--permission-mode bypassPermissions` | Skipped automatically in `-p` mode | Nothing beyond `claude` being on `PATH` and authenticated |
+
+`--autonomous` on `pair-cli run` is the one switch that maps to whichever of these each engine actually
+has, pi requires it outright (it has no other posture to run headless with), opencode and Claude
+Code accept it as an explicit opt-out of their default confirmations.
+
+<Callout type="warn">
+  **`defaultProjectTrust: "always"` in pi's global config trusts every project pi ever opens on that
+  machine.** That's the right call on a dedicated automation box running nothing else: it's the
+  wrong call on your laptop. Prefer the per-directory trust decision unless the machine's whole job
+  is running unattended loops.
+</Callout>
+
+Pin the engine so every invocation (yours, a teammate's, the daemon's) agrees without repeating
+`--engine` everywhere:
+
+```json title="pair.config.json"
+{ "engine": { "id": "pi" } }
+```
+
+## Step 3: One run you watch, before anything is unattended
+
+Resolve everything and print it: nothing spawns:
+
+```bash
+pair-cli run --root 212 --dry-run
+```
+
+This prints which engine won and from where (flag > config > schema default), the work perimeter
+(scope + cap), and the autonomy/trust posture that would apply. If anything here surprises you,
+stop: an unattended run should never be the first time you see this output.
+
+Then run it for real, still narrow, still watched:
+
+```bash
+pair-cli run --root 212 --autonomous --max-iterations 3
+```
+
+`--autonomous` accepts the engine's own confirmations away; it does **not** turn off the
+[work-perimeter requirement](/docs/reference/cli/commands#run): a scope and a cap are mandatory on
+every run, autonomous or not. `--max-iterations` here narrows (never widens) whatever
+`## Stop Predicate` in your policy already declares, keep it small for this first run regardless of
+what the policy says.
+
+<Callout type="info">
+If the loop composes a skill with an internal approval round (one of the `assess-*`/`map-*` family) under `--autonomous` it now passes `--approval auto` to any of them that declare it, so the round resolves from project state or reports itself unresolved instead of asking a question nobody is there to answer.
+
+This is what closed the gap between `pair-cli run` shipping and those skills gaining a non-interactive mode in the first place: if you're on an older `pair-cli`, update it before relying on this.
+</Callout>
+
+## Step 4: Turn it into a daemon
+
+`pair-cli run` and the in-harness `pair-loop` workflow both **stop** when nothing is eligible: they
+don't block waiting for new cards to appear. "Watching the backlog" is therefore an external
+scheduler re-invoking the command periodically, not a single long-lived process holding a socket
+open. Three ways to get there, in order of what most teams should actually use:
+
+### Option A: systemd timer (recommended on a Linux VPS)
+
+```ini title="/etc/systemd/system/pair-automation.service"
+[Unit]
+Description=pair unattended delivery run
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=pair-automation
+WorkingDirectory=/srv/your-project
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/local/bin/pair-cli run --root 212 --autonomous --max-iterations 20
+# Secrets (engine API keys, git credentials) belong in an EnvironmentFile the service
+# user can read and nobody else - never in this unit file, never in the repo.
+EnvironmentFile=/etc/pair-automation/env
+```
+
+```ini title="/etc/systemd/system/pair-automation.timer"
+[Unit]
+Description=Run pair-automation.service every 10 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now pair-automation.timer
+journalctl -u pair-automation.service -f   # watch it run
+```
+
+Each firing is a fresh, bounded run: if nothing is eligible it exits in a couple of seconds; if
+something is, it drives it to the stop predicate or the iteration cap, then exits: the next timer
+firing picks up from wherever the backlog is at that point. A crash mid-run leaves the audit trail
+intact (every iteration is appended, never overwritten, see [Step 5](#step-5-watch-it-audit-trail-and-recovery)), so the next firing continues cleanly rather than
+repeating finished cards.
+
+### Option B: cron, if you don't have systemd
+
+```cron
+*/10 * * * * cd /srv/your-project && /usr/local/bin/pair-cli run --root 212 --autonomous --max-iterations 20 >> /var/log/pair-automation.log 2>&1
+```
+
+Same idea, no unit files. You lose systemd's structured logging and the `After=network-online.target`
+ordering guarantee, fine for a low-stakes setup, worth moving to Option A once this matters.
+
+### Option C: a long-running supervisor loop
+
+If you want one persistent process instead of periodic re-invocation (useful if you're already
+running something like `opencode serve` as the engine and want to keep its process warm):
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+while true; do
+  pair-cli run --root 212 --autonomous --max-iterations 20 || echo "run exited non-zero, continuing"
+  sleep 600
+done
+```
+
+Run this under systemd too (`Type=simple`, `Restart=always`) rather than a bare `nohup`: you want
+the same crash-recovery guarantee Option A gets for free.
+
+<Callout type="warn">
+  A daemon is a **dedicated automation box**, not a shared dev machine. It holds engine
+  credentials capable of pushing to your default branch unattended, scope its git credentials to
+  what it actually needs (a machine user or a fine-grained token, not your personal one), and don't
+  run anything else on it you wouldn't want that same credential set exposed to.
+</Callout>
+
+### Option D: no schedule at all: let a tag start the run
+
+The three options above are **pull**: something wakes up on a timer and asks what is eligible. The
+alternative is **push**: a run starts when *you* tag a card, and never otherwise. Add the one
+section Step 1 left out (`## Workflows`, the seventh) to the same policy file:
+
+```text
+## Workflows
+
+auto-plan ⇒ pair-process-plan-tasks
+auto-dev ⇒ pair-loop
+Precedence: auto-plan, auto-dev
+```
+
+…then have your code host call the entry point when a label changes, passing the card and the labels
+it just observed:
+
+```bash
+pair-cli run --card 217 --card-tags "auto-dev,risk:green" --autonomous
+```
+
+The mapping decides which workflow runs; a card carrying **no mapped tag runs nothing**, and with no `## Workflows` section at all the command reports `no mapping declared` and exits cleanly.
+
+Map a tag only to a workflow from the guideline's catalog (`pair-loop`, `pair-process-plan-tasks`): the card is handed over as the argument that workflow declares (`--root 217`, or `--story 217` for `pair-process-plan-tasks`) and a mapping naming anything else HALTs rather than start a run that would pick its own card.
+
+**Refinement is deliberately not in that catalog**: `pair-process-refine-story` ends only on an explicit human approval, so unattended it would either stall until the timeout or approve its own work past the gate, refine by hand, and map tags for what follows. Only a run
+*start* is printed as a `DISPATCH-RECORD:` line for your trigger to post back on the card, skips and
+endings stay in the audit file, so a label edit that routes nothing never comments. The ready-made
+GitHub Actions job, fires on `issues: [labeled]`, installs the CLI (a runner does not ship it) and
+dispatches, is in `collaboration/automation/github-automation.md` in the knowledge base; the flags
+are documented in [`pair-cli run`](/docs/reference/cli/commands#run).
+
+The dispatch takes a **per-card lock** so a burst of label edits cannot start two runs on one card,
+but that lock is scoped to one working area. On a daemon box (Options A–C) that is the guard. On
+ephemeral CI runners each job checks out its own workspace, so there the *host's* concurrency group
+is the guard, and every path that can dispatch a card belongs in it: the shipped job declares
+`concurrency: pair-dispatch-<issue>` for exactly that reason.
+
+Pull and push compose: the timer keeps the eligible backlog moving, the tag starts a specific card
+now. Both read the same policy file, and both stop at the same human merge gate.
+
+## Step 5: Watch it: audit trail and recovery
+
+Every iteration is appended to `## Audit Location`'s path (default
+`.pair/working/automation/loop-audit.md`), never overwritten, so a killed-and-restarted run's
+history stays intact. This is what you `tail -f` from the daemon box, and what you read after the
+fact to see exactly which cards ran, in what order, and why the loop stopped when it did.
+
+A killed run resumes from its own audit file (not a separate checkpoint) on the fan-out path, so
+restarting the daemon after a crash or a reboot never re-runs a card the audit already recorded as
+done.
+
+## Safety: what this does and does not protect you from
+
+- **The loop itself never merges; the merge gate decides.** Nothing merges unless the gate allows it
+  (`merge: always`, the default, parks every card for a human; `merge: never` and `when` enter the
+  merge stage under `until: merged`). Keep it at `always`, or leave `until` at `pr`, to get unattended
+  *development*: every card still stops at a review-approved, gate-green PR for a human to merge.
+- **An untagged card is treated as the highest risk tier.** The loop no longer filters by tier
+  itself (the selection filter does), so an untagged card can be selected, but it is handed over as
+  `risk:red` and never auto-advanced.
+- **The filter is an any-of list of labels, each matched exactly.** A card
+  carrying any one of the listed labels is selected, but there is no boolean grammar: no AND, no "not red". If you
+  want a different set of cards automated, name the labels explicitly or add a classification tag.
+- **This is not a security boundary on its own.** The engine you point at a live repository can push
+  and (if you enabled it) merge. Everything in [Step 4](#step-4-turn-it-into-a-daemon)'s warning about
+  credential scope is the actual control: the policy file controls *what* runs, not *what the
+  process is capable of* if something goes wrong upstream of it.
+- **Start narrower than you think you need**, watch the audit trail for a few cycles, then widen the
+  perimeter or the auto-advance tier once you trust what you're seeing.

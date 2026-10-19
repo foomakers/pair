@@ -37,15 +37,15 @@ When you run `pair-cli install`, the CLI creates a `.pair/` folder with two main
 
 This two-part structure is intentional:
 
-**Knowledge** (`knowledge/`) contains reference material that applies broadly — process guides, technical standards, templates. This content is maintained centrally and updates when you upgrade pair. It tells the AI *how* to work.
+**Knowledge** (`knowledge/`) contains reference material that applies broadly, process guides, technical standards, templates. This content is maintained centrally and updates when you upgrade pair. It tells the AI *how* to work.
 
-**Adoption** (`adoption/`) contains your project-specific decisions — which tech stack you chose, what architecture pattern you follow, what your way of working is. This content is yours. pair never overwrites it. It tells the AI *what you decided*.
+**Adoption** (`adoption/`) contains your project-specific decisions, which tech stack you chose, what architecture pattern you follow, what your way of working is. This content is yours. pair never overwrites it. It tells the AI *what you decided*.
 
 When the AI generates code, it reads both: the guidelines tell it the standards, and the adoption files tell it your specific choices within those standards.
 
 ### A Third Area: Working (Operational, Not Knowledge)
 
-`.pair/working/` holds state produced *during* execution — checkpoints and reports — not knowledge or decisions. It is excluded from both registries above by design: `pair-cli install` never creates it and `pair-cli update` never touches it. Skills create `checkpoints/` and `reports/<category>/` on demand the first time they need them. See the [KB Structure Reference](/docs/reference/kb-structure) for details.
+`.pair/working/` holds state produced *during* execution (checkpoints and reports) not knowledge or decisions. It is excluded from both registries above by design: `pair-cli install` never creates it and `pair-cli update` never touches it. Skills create `checkpoints/` and `reports/<category>/` on demand the first time they need them. See the [KB Structure Reference](/docs/reference/kb-structure) for details.
 
 ## How It Provides Context
 
@@ -69,17 +69,17 @@ This means the AI has full context about:
 
 The Knowledge Base follows a managed lifecycle:
 
-1. **Install** — `pair-cli install` downloads the KB and installs it into your project
-2. **Customize** — you fill in adoption files with your project decisions
-3. **Update** — `pair-cli update` refreshes the KB when a new version is available
-4. **Package** — `pair-cli package` creates a distributable ZIP for organization-wide distribution
-5. **Scaffold** — `pair-cli scaffold-kb` creates the KB as its **own repository**, versioned and released independently, so steps 1 and 3 pull from it instead of from pair's default KB. See [External KB Repository](/docs/customization/external-kb).
+1. **Install**: `pair-cli install` downloads the KB and installs it into your project
+2. **Customize**: you fill in adoption files with your project decisions
+3. **Update**: `pair-cli update` refreshes the KB when a new version is available
+4. **Package**: `pair-cli package` creates a distributable ZIP for organization-wide distribution
+5. **Scaffold**: `pair-cli scaffold-kb` creates the KB as its **own repository**, versioned and released independently, so steps 1 and 3 pull from it instead of from pair's default KB. See [External KB Repository](/docs/guides/external-kb).
 
 ### What Updates and What Stays
 
 When you run `pair-cli update`:
-- **Knowledge files update** — process guides, guidelines, and templates refresh to the latest version
-- **Adoption files are preserved** — your decisions are never overwritten
+- **Knowledge files update**: process guides, guidelines, and templates refresh to the latest version
+- **Adoption files are preserved**: your decisions are never overwritten
 
 This is enforced by the asset registry system: the `knowledge` registry uses **mirror** behavior (sync everything), while the `adoption` registry uses **add** behavior (only add files that don't exist yet).
 
@@ -87,8 +87,10 @@ This is enforced by the asset registry system: the `knowledge` registry uses **m
 
 pair uses plain Markdown files rather than a database or API because:
 
-- **Version controlled** — your KB is committed to Git alongside your code
-- **Transparent** — every guideline and decision is readable by humans and AI alike
-- **Portable** — works with any AI tool that can read project files
-- **Diffable** — changes to standards or decisions show up in code review
-- **Offline** — no external service required
+- **Version controlled**: your KB is committed to Git alongside your code
+- **Transparent**: every guideline and decision is readable by humans and AI alike
+- **Portable**: works with any AI tool that can read project files
+- **Diffable**: changes to standards or decisions show up in code review
+- **Offline**: no external service required
+
+**Next:** [Skills](/docs/concepts/skills), the actions that run on top of it.

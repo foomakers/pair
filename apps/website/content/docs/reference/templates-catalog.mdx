@@ -1,0 +1,56 @@
+---
+title: Templates catalog
+description: The 19 templates pair ships in .pair/knowledge/guidelines/collaboration/templates/, which skill reads each one, and what it controls.
+---
+
+pair ships 19 templates that give workflow artifacts their shape, from commit messages to user stories. Every skill resolves a template override-first: `.pair/adoption/tech/templates/<name>-template.md` when it exists, else the KB copy listed here. Changing one is a recipe: [Customize templates](/docs/guides/customize-templates).
+
+## Development workflow
+
+| Template | Read by | Controls |
+| --- | --- | --- |
+| `commit-template.md` | `/pair-process-implement` | commit message format: `[#story-id] type: description` |
+| `pr-template.md` | `/pair-process-implement`, `/pair-capability-publish-pr` | PR description: summary, changes, testing, risks |
+| `branch-template.md` | `/pair-capability-publish-pr` (parses `branch-format`) | branch naming: `feature/#story-id-description` |
+| `code-review-template.md` | `/pair-process-review` | review checklist: technical, adoption, completeness, decision; the severities |
+
+## Planning artifacts
+
+| Template | Read by | Controls |
+| --- | --- | --- |
+| `initiative-template.md` | `/pair-process-plan-initiatives` | initiative body: objectives, success metrics, priority |
+| `epic-template.md` | `/pair-process-plan-epics` | epic body: scope, stories, acceptance criteria |
+| `user-story-template.md` | `/pair-process-plan-stories`, `/pair-process-refine-story` | story body: statement, Given-When-Then AC, technical analysis, tasks |
+| `task-template.md` | `/pair-process-plan-tasks` | task structure: approach, AC mapping, implementation steps |
+
+## Decision records
+
+| Template | Read by | Controls |
+| --- | --- | --- |
+| `adr-template.md` | `/pair-capability-record-decision` | ADR: context, decision, consequences |
+| `adl-template.md` | `/pair-capability-record-decision` | decision-log entry: date, topic, outcome |
+| `ddr-template.md` | `/pair-capability-record-decision` | DDR: domain context, 3-criteria gate evidence, decision, context-map impact |
+| `analysis-log-template.md` | `/pair-capability-record-decision` | analysis-log entry: date, category `Analysis`, findings, recommendation |
+
+## Domain modeling
+
+| Template | Read by | Controls |
+| --- | --- | --- |
+| `subdomain-template.md` | `/pair-capability-map-subdomains`, `/pair-capability-map-contexts` | subdomain definition: classification, volatility, boundaries |
+| `bounded-context-template.md` | `/pair-capability-map-contexts` | context definition: responsibilities, per-relationship strength, distance and volatility |
+| `context-map-template.md` | the context-map maintenance guideline | context map: ubiquitous language, entities, common rules |
+| `subdomain-context-template.md` | the context-map maintenance guideline | per-subdomain slice of the context map |
+
+## Quality and operations
+
+| Template | Read by | Controls |
+| --- | --- | --- |
+| `manual-test-case-template.md` | `/pair-capability-design-manual-tests`, `/pair-capability-execute-manual-tests` | manual test case: version-agnostic variables, priority |
+| `manual-test-report-template.md` | `/pair-capability-execute-manual-tests` | execution report with sign-off criteria |
+| `checkpoint-template.md` | `/pair-capability-checkpoint` | resumable progress state: story, branch, tasks done, decisions, remaining todos |
+
+## Related
+
+- [Customize templates](/docs/guides/customize-templates)
+- [Guidelines and how-to catalog](/docs/reference/guidelines-catalog)
+- [KB structure](/docs/reference/kb-structure)

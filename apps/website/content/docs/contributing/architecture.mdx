@@ -35,18 +35,18 @@ pair/
 |---------|-------|-------------|
 | `@pair/pair-cli` | `apps/pair-cli` | CLI tool for KB installation, update, packaging, and validation. Entry point for developers using pair. |
 | `@pair/website` | `apps/website` | Documentation site built with Fumadocs (Next.js 15) + Orama search. Hosted on Vercel. |
-| `@pair/knowledge-hub` | `packages/knowledge-hub` | The Knowledge Base dataset — guidelines, how-tos, templates, and skills. Distributed as a GitHub release artifact. |
+| `@pair/knowledge-hub` | `packages/knowledge-hub` | The Knowledge Base dataset, guidelines, how-tos, templates, and skills. Distributed as a GitHub release artifact. |
 | `@pair/content-ops` | `packages/content-ops` | File operations and markdown link processing library. Used by the CLI for KB manipulation. |
-| `@pair/brand` | `packages/brand` | Brand identity — design tokens, React components, and Tailwind preset. |
+| `@pair/brand` | `packages/brand` | Brand identity, design tokens, React components, and Tailwind preset. |
 
 ### Shared tooling
 
 The `tools/` directory contains workspace-internal configuration packages:
 
-- **eslint-config** — Shared ESLint rules for all packages.
-- **prettier-config** — Shared Prettier formatting.
-- **markdownlint-config** — Shared markdown linting for KB content.
-- **ts-config** — Shared TypeScript presets (base, library, app).
+- **eslint-config**: Shared ESLint rules for all packages.
+- **prettier-config**: Shared Prettier formatting.
+- **markdownlint-config**: Shared markdown linting for KB content.
+- **ts-config**: Shared TypeScript presets (base, library, app).
 
 ## Data flow
 
@@ -70,15 +70,15 @@ Contributor                 CI / Release                 Developer
 
 1. **Contributors** add or update KB content in `packages/knowledge-hub/dataset/`.
 2. **CI** packages the KB into a versioned ZIP and publishes it as a GitHub Release artifact.
-3. **Developers** run `pair-cli install` — the CLI downloads the KB and creates the `.pair/` directory.
+3. **Developers** run `pair-cli install`: the CLI downloads the KB and creates the `.pair/` directory.
 4. **AI agents** read `.pair/` for guidelines, adoption files, and how-tos. Skills are distributed to `.claude/skills/` (and other tool directories).
 
 ## The .pair/ directory
 
 The `.pair/` directory is the interface between pair and AI assistants. It contains two top-level areas:
 
-- **`adoption/`** — Project-specific decisions (architecture, tech stack, way of working). These are generated through the pair workflow and reflect your team's choices.
-- **`knowledge/`** — Universal content (guidelines, how-tos, templates, skills guide). This comes from the Knowledge Base and is shared across all projects.
+- **`adoption/`**: Project-specific decisions (architecture, tech stack, way of working). These are generated through the pair workflow and reflect your team's choices.
+- **`knowledge/`**: Universal content (guidelines, how-tos, templates, skills guide). This comes from the Knowledge Base and is shared across all projects.
 
 For the full `.pair/` structure and file descriptions, see the [KB Structure Reference](/docs/reference/kb-structure).
 
@@ -87,7 +87,7 @@ For the full `.pair/` structure and file descriptions, see the [KB Structure Ref
 **Turborepo** manages the build pipeline:
 
 - Tasks are defined in `turbo.json` with dependency relationships.
-- Build results are cached — unchanged packages skip rebuilding.
+- Build results are cached, unchanged packages skip rebuilding.
 - `pnpm quality-gate` runs the full validation pipeline (type check → test → lint → format → markdown lint).
 
 Key Turbo tasks: `build`, `test`, `lint`, `ts:check`, `dev`.

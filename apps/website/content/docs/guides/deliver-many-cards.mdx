@@ -1,0 +1,32 @@
+---
+title: Deliver multiple cards automatically
+description: Run a backlog or a batch of cards with the console driver or the loop.
+---
+
+**Goal**: deliver several cards in parallel, safely.
+
+## Prerequisites
+
+- A policy in `tech/automation.md` ([Autonomy and profiles](/docs/guides/autonomy-and-profiles))
+- An engine configured for headless runs ([Harnesses and engines](/docs/integrations/adding-a-harness))
+
+## Steps
+
+1. **Dry run**
+   - With pair-cli: `pair-cli run --root <id> --dry-run` lists the cards the filter and the dependency analysis would allow.
+2. **Run one pass while you watch**
+   - With pair-cli: `pair-cli run --root <id> --parallel 3`.
+   - In your assistant (Claude Code): `/pair-loop`, or `/pair-implement-batch` for an explicit set of cards.
+3. **Keep it going (optional)**
+   - With pair-cli: add `--watch`, or schedule the command ([daemon options](/docs/tutorials/automated-development#step-4-turn-it-into-a-daemon)).
+
+## Verify
+
+- The audit trail records each iteration.
+- No card merges unless the merge gate allows it.
+
+## Related
+
+- [Automated development](/docs/tutorials/automated-development)
+- [Lifecycle modes, by assistant](/docs/process-lifecycle/lifecycle-modes#modes-by-assistant)
+- [Batch engine internals](/docs/contributing/batch-engine-internals)

@@ -810,6 +810,80 @@ describe('BUG #04: --persist-backup captures actual file content', () => {
   })
 })
 
+describe('update backup covers copy targets (#552 AC9/AC10)', () => {
+  const cwd = '/project'
+  const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+  const mkFs = () =>
+    new InMemoryFileSystemService(
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            agents: {
+              source: 'AGENTS.md',
+              behavior: 'mirror',
+              targets: [
+                { path: 'AGENTS.md', mode: 'canonical' },
+                { path: 'CLAUDE.md', mode: 'copy' },
+              ],
+              description: 'Agents',
+            },
+          },
+        }),
+        [`${datasetSrc}/AGENTS.md`]: '# New Agents',
+        [`${cwd}/AGENTS.md`]: '# Own Agents',
+        [`${cwd}/CLAUDE.md`]: '# Own Claude',
+      },
+      cwd,
+      cwd,
+    )
+  const cfg: UpdateCommandConfig = {
+    command: 'update',
+    resolution: 'default',
+    kb: true,
+    offline: false,
+  }
+
+  // platform injected: darwin, linux
+  test.each(['darwin', 'linux'])(
+    'platform %s: --persist-backup keeps CLAUDE.md too',
+    async plat => {
+      const orig = process.platform
+      Object.defineProperty(process, 'platform', { value: plat })
+      try {
+        const fs = mkFs()
+        await handleUpdateCommand(cfg, fs, {
+          httpClient: new MockHttpClientService(),
+          persistBackup: true,
+        })
+        const dir = `${cwd}/.pair/backups/${(await fs.readdir(`${cwd}/.pair/backups`))[0]!.name}`
+        expect(await fs.readFile(`${dir}/AGENTS.md`)).toBe('# Own Agents')
+        expect(await fs.readFile(`${dir}/CLAUDE.md`)).toBe('# Own Claude')
+      } finally {
+        Object.defineProperty(process, 'platform', { value: orig })
+      }
+    },
+  )
+
+  test('rollback restores CLAUDE.md and AGENTS.md', async () => {
+    vi.restoreAllMocks()
+    const fs = mkFs()
+    const c = fs.copy.bind(fs)
+    vi.spyOn(fs, 'copy').mockImplementation(async (from, to, ...rest) => {
+      if (to.includes('CLAUDE.md')) throw new Error('Simulated write failure')
+      return c(from, to, ...rest)
+    })
+    await expect(
+      handleUpdateCommand(cfg, fs, { httpClient: new MockHttpClientService() }),
+    ).rejects.toThrow('Simulated write failure')
+    expect(await fs.readFile(`${cwd}/AGENTS.md`)).toBe('# Own Agents')
+    expect(await fs.readFile(`${cwd}/CLAUDE.md`)).toBe('# Own Claude')
+  })
+})
+
 describe('update — llms.txt generation', () => {
   test('generates .pair/llms.txt after update with adopted content', async () => {
     const cwd = '/project'

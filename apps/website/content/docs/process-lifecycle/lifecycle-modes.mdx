@@ -1,0 +1,86 @@
+---
+title: Lifecycle modes
+description: Three ways to run the pair lifecycle, Assisted, Supervised and Autonomous, which assistants support each, and when to use which.
+---
+
+The phases and the two workflows ([analysis and refinement](/docs/process-lifecycle/refinement-workflow), [delivery](/docs/process-lifecycle/delivery-workflow)) are the same in every mode. What changes is **who drives**:
+
+- **Assisted**: pair guides you through every phase of the process with AI, one skill at a time.
+- **Supervised**: pair automates the work on a single card, from start to finish.
+- **Autonomous**: pair watches the backlog and applies the whole process, on its own, to every card that matches a criterion you set (for example all `risk:green` cards, or all UI cards).
+
+Pick per project, or per card.
+
+<Callout type="info" title="Think of driving automation">
+  The three modes follow the levels of driving automation in cars.
+
+  - **Assisted** is driver assistance (level 2): you drive, the car helps with lane keeping and distance. In pair you run each skill, the AI does the work inside it.
+  - **Supervised** is conditional automation (level 3): the car drives a stretch of road on its own and asks you to take the wheel when it meets something it cannot handle. In pair a workflow takes one card all the way and stops at a checkpoint or an [escalation](/docs/concepts/glossary#escalation).
+  - **Autonomous** is high automation (level 4): the car drives by itself, but only inside a defined area, and pulls over when it leaves it. In pair the loop delivers every card inside the area you define (your selection criterion, risk tier and [autonomy gates](/docs/concepts/glossary#autonomy-gates)) and hands a card back to you when classification says a human is needed.
+
+  As with cars, you raise the level as trust grows: start Assisted, move to Supervised, and let the low-risk cards run Autonomous.
+</Callout>
+
+![Three lifecycle modes compared across the refinement and delivery workflows](/diagrams/lifecycle-modes.svg)
+
+*Figure: move right along a row and the human disappears from the loop; move down and the same mode applies to delivery instead of refinement.*
+
+## Assisted
+
+**pair guides you through every phase with AI; you run each step.** PRD, bootstrap, planning, refinement, implementation and review are each one skill you invoke, in the order the [phases](/docs/process-lifecycle/phases) give. Use it while learning pair, on a new or high-risk project, or when you want to read and approve every decision.
+
+## Supervised
+
+**pair automates the work on a single card, from start to finish; you trigger it and review the result.** A hand-picked batch is the same thing on several cards you name.
+
+- **Refinement**: `pair-cli run --card <id> --until ready` stops the card right after refinement; `/pair-refine-batch` does it for a set of Draft cards you name. Grill questions still reach you.
+- **Delivery**: `/pair-workflow-cycle <id>` in your assistant, or `pair-cli run --card <id>` from a shell; `/pair-implement-batch` for a set of cards you name. The workflow runs implement, independent verify and remediation, then stops at the review-approved PR or at an [escalation](/docs/concepts/glossary#escalation).
+
+Use it when the project is set up, the backlog is known, and you want independent verification without running each stage by hand. Recipe: [Deliver a card](/docs/guides/deliver-a-card).
+
+## Autonomous
+
+**pair watches the backlog and applies the whole process to every card that matches your criterion, inside the gates you set.**
+
+- **Selection**: the criterion is a label filter in `## Autonomy` of `tech/automation.md` (`filter: risk:green`, or a team label such as `ui`), applied to the cards under a root card.
+- **Drivers**: `/pair-loop` in a Claude Code session, or `pair-cli run --root <id> --parallel <n> --watch` as a daemon on any [engine](/docs/concepts/glossary#engine).
+- **Gates**: `until` (`ready`, `pr`, `merged`), `prepare` and `merge` decide how far a card goes; an escalation hands a card back to a human.
+- **Safe defaults**: nothing merges and no Draft card is prepared unattended until you declare it.
+
+Use it when classification and gates are trusted and the backlog is mostly low-risk. Read [what it does and does not protect you from](/docs/tutorials/automated-development#safety-what-this-does-and-does-not-protect-you-from) before the first unattended run. Walkthrough: [Automated development](/docs/tutorials/automated-development); every key: [Adoption settings](/docs/reference/adoption-settings#techautomationmd).
+
+## Modes by assistant
+
+Assisted needs only a tool that reads skills. Supervised in-session needs a [harness](/docs/concepts/glossary#harness) with subagents; from a shell, `pair-cli run` needs an engine. Autonomous needs an engine.
+
+| Mode | Claude Code | Codex | pi | opencode | Cursor | GitHub Copilot | Windsurf |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Assisted | yes | yes | yes | yes | yes | yes | yes |
+| Supervised, in session (`/pair-workflow-cycle`) | yes | yes | yes, with pi-subagents | no | no | no | no |
+| Supervised and Autonomous, from a shell (`pair-cli run`) | yes (`claude -p`) | yes | yes | yes | no | no | no |
+| Autonomous, in session (`/pair-loop` with the batch workflows) | yes | degraded, one card per run | degraded, one card per run | no | no | no | no |
+
+"Degraded" means the skill runs one card and prints a continue-token for the next invocation. The harness and engine layer is explained in [Harnesses and engines](/docs/integrations/adding-a-harness); per-tool setup in [AI coding tools](/docs/integrations).
+
+## Modes by workflow
+
+| Mode | Workflow | Who triggers | What runs | Where it stops | Config |
+| --- | --- | --- | --- | --- | --- |
+| Assisted | Refinement | you, per skill | `/pair-process-brainstorm`, `-plan-stories`, `-refine-story`, `-plan-tasks` | after each skill | none |
+| Assisted | Delivery | you, per skill | `/pair-process-implement`, `/pair-process-review` | after each skill | none |
+| Supervised | Refinement | you, per card or batch | `pair-cli run --card --until ready`, `/pair-refine-batch` | Ready, or a grill question | `prepare` |
+| Supervised | Delivery | you, per card or batch | `/pair-workflow-cycle`, `/pair-implement-batch`, `pair-cli run --card` | review-approved PR, escalation | `until`, Blocking Severities |
+| Autonomous | Refinement | the loop | `prepare` gate `never` or `when` | escalation (`needs-review`) | `prepare` |
+| Autonomous | Delivery | the loop or daemon | `/pair-loop`, `pair-cli run --root --parallel --watch` | gates `until` and `merge`, escalation | `## Autonomy` |
+
+## Which to use
+
+| Situation | Mode |
+| --- | --- |
+| New to pair, new project, high-risk work | Assisted |
+| Known backlog, you want one card done end to end and review the result | Supervised |
+| Mature gates; a class of cards (green risk, UI, ...) can run without anyone watching | Autonomous |
+
+Modes mix: plan Assisted, deliver Supervised, and hand the green cards to Autonomous. Configuring the gates is a guide: [Autonomy and per-stage engine and model](/docs/guides/autonomy-and-profiles).
+
+**Next:** [Skill layers](/docs/process-lifecycle/skill-layers), which skill drives which.
