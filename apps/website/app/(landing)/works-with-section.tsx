@@ -31,11 +31,7 @@ export function WorksWithSection() {
       <div className='flex flex-wrap items-center justify-center gap-10 md:gap-14'>
         {TOOLS.map(tool =>
           tool.logo ? (
-            <span
-              key={tool.name}
-              className={chipClass}
-              role='img'
-              aria-label={`${tool.name} logo`}>
+            <span key={tool.name} className={chipClass} role='img' aria-label={`${tool.name} logo`}>
               {tool.logo}
               <span className='font-mono text-sm font-medium'>{tool.name}</span>
             </span>

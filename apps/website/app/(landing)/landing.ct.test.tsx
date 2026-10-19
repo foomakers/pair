@@ -20,7 +20,9 @@ test('renders hero with claim, sub-head and Quickstart CTA', async ({ mount }) =
 test('hero shows the install command and the optional plugin', async ({ mount }) => {
   const component = await mount(<HomePage />)
   const hero = component.locator('section[aria-label="Hero"]')
-  await expect(hero.locator('code', { hasText: 'npm install -g @foomakers/pair-cli' })).toBeVisible()
+  await expect(
+    hero.locator('code', { hasText: 'npm install -g @foomakers/pair-cli' }),
+  ).toBeVisible()
   await expect(hero).toContainText('/plugin install pair@pair')
   await expect(hero).toContainText('optional')
 })
@@ -87,9 +89,7 @@ test('renders the process lifecycle with the four phases and the diagram', async
 })
 
 // AC-6: Three modes
-test('renders the three modes with the driving analogy and the safe default', async ({
-  mount,
-}) => {
+test('renders the three modes with the driving analogy and the safe default', async ({ mount }) => {
   const component = await mount(<HomePage />)
   const section = component.locator('section[aria-label="Three modes"]')
   await expect(section).toBeVisible()
@@ -116,9 +116,7 @@ test('renders the delivery workflow with independent review, seals and resumable
   await expect(section).toContainText('independent reviewer')
   await expect(section).toContainText('sealed')
   await expect(section).toContainText('files')
-  await expect(
-    section.locator('a[href="/docs/process-lifecycle/delivery-workflow"]'),
-  ).toBeVisible()
+  await expect(section.locator('a[href="/docs/process-lifecycle/delivery-workflow"]')).toBeVisible()
 })
 
 // AC-8: Risk tiers and gates
@@ -142,7 +140,9 @@ test('renders 3 audience tracks with the rerouted CTAs', async ({ mount }) => {
   await expect(section).toContainText('Team')
   await expect(section).toContainText('Organization')
   await expect(section.locator(`a[href="${QUICKSTART}"]`)).toBeVisible()
-  await expect(section.locator('a[href="/docs/getting-started/choose-your-path#team"]')).toBeVisible()
+  await expect(
+    section.locator('a[href="/docs/getting-started/choose-your-path#team"]'),
+  ).toBeVisible()
   await expect(section.locator('a[href="/docs/guides/external-kb"]')).toBeVisible()
 })
 
@@ -186,9 +186,9 @@ test('renders primary and secondary CTAs with correct links', async ({ mount }) 
 test('rendered copy contains no em dash', async ({ mount }) => {
   const component = await mount(<HomePage />)
   await expect(component).not.toContainText('—')
-  const labels = await component.locator('[aria-label]').evaluateAll(nodes =>
-    nodes.map(n => n.getAttribute('aria-label') ?? ''),
-  )
+  const labels = await component
+    .locator('[aria-label]')
+    .evaluateAll(nodes => nodes.map(n => n.getAttribute('aria-label') ?? ''))
   expect(labels.filter(l => l.includes('—'))).toEqual([])
 })
 
