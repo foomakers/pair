@@ -55,9 +55,9 @@ Tags are a **chromatic projection** of the matrix. `risk:green|yellow|red` is th
 
 Every other parameter the model computes (cost class, security relevance, business impact, coupling balance) is available to expose as its own tag, but the KB doesn't pre-select which, if any: that's entirely your call, added to the declaration when you want it.
 
-There is no dedicated "eligibility" tag: automation eligibility is a **filter you declare over classification tags**, consumed generically by `pair-next`. That filter lives in the optional `tech/automation.md`, under an `## Eligibility` heading, and holds **a single literal label**, recommended `risk:green`.
+There is no dedicated "eligibility" tag: which cards an unattended run may pick is a **filter you declare over classification tags**, consumed generically by `pair-next`. That filter is the `filter` key of `## Autonomy` in the optional `tech/automation.md`, an any-of list of labels, typically `risk:green`. (The v0.4 `## Eligibility` section, one label, is translated to the same `filter` and still honoured; it is legacy.)
 
-It is matched by plain string equality against each card's labels (no AND/OR/NOT grammar: the same rule `pair-next --filter` applies), so `risk:yellow` and `risk:red` work is never developed unattended. The file or the section being absent means **nothing** is eligible rather than everything, and a value that is not exactly one label halts instead of widening.
+Each label is matched by plain string equality against the card's labels (no AND/OR/NOT grammar: the same rule `pair-next --filter` applies), so with `filter: risk:green` no `risk:yellow` or `risk:red` work is ever developed unattended. A malformed value halts instead of widening.
 
 ## Project Overrides: `tech/risk-matrix.md`
 
@@ -81,5 +81,5 @@ See the full schema in [`quality-model.md` §5–§6](https://github.com/foomake
 
 - [Quality Gates & Configuration](/docs/reference/quality-gates-configuration): the unifying catalog of every opt-in knob (tag projection, criticality overrides, tiering, coverage) and what is always-on
 - [Guidelines Catalog](/docs/reference/guidelines-catalog): where the Quality Model sits among the other 9 guideline categories
-- [Customize for Your Team](/docs/customization/team): how to override guidelines via adoption files
+- [Customize the Knowledge Base for your team](/docs/guides/customize-for-your-team): how to override guidelines via adoption files
 - [KB Structure](/docs/reference/kb-structure): directory layout, `knowledge/` vs `adoption/`

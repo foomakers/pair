@@ -7,7 +7,7 @@ pair's skills sit in three layers. A skill only calls down, never up, so every l
 
 ![Skill layers: capability, process, workflow and loop](/diagrams/skill-layers.svg)
 
-*Figure: each layer calls only the layer below it.*
+*Figure: arrows only point down. Start at the layer whose granularity matches the control you want; everything below it is called for you.*
 
 1. **Capability skills** do one reusable operation: verify quality, record a decision, write an issue, grill, classify. See [capability skills](/docs/concepts/skills#capability-skills).
 2. **Process skills** run one lifecycle step and compose capabilities. See [process skills](/docs/concepts/skills#process-skills).
@@ -24,6 +24,6 @@ pair's skills sit in three layers. A skill only calls down, never up, so every l
 | `/pair-loop` | the batch workflows, which run the cycle |
 | `/pair-next` | suggests a process skill; runs none |
 
-You normally start at the top (`/pair-next`, `/pair-workflow-cycle`) and let it call down. Drop a layer when you want control: run a process skill by hand, or a capability on its own.
+You normally start at the top (`/pair-next`, `/pair-workflow-cycle`) and let it call down. Drop a layer when you want control: run a process skill by hand, or a capability on its own. Every skill, with its command and what it composes: [Skills catalog](/docs/reference/skills-catalog).
 
-Related: [Lifecycle modes](/docs/developer-journey/lifecycle-modes), [Skills Catalog](/docs/reference/skills-catalog).
+**Next:** [Tag-driven automation](/docs/process-lifecycle/tag-driven-automation), what tags let automation do.

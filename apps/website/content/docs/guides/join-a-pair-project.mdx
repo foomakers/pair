@@ -1,0 +1,33 @@
+---
+title: Join a project that already uses pair
+description: What a new team member does on day one in a repository that already has .pair/, adoption files and skills.
+---
+
+**Goal**: be productive in a pair-enabled repository without installing or configuring anything that is already there.
+
+## Prerequisites
+
+- Node.js 18+
+- An AI coding assistant that reads Agent Skills ([supported tools](/docs/integrations))
+
+## Steps
+
+1. **Pull the repository**
+   - `.pair/adoption/`, the bridge files (`AGENTS.md`, `CLAUDE.md`, `.cursor/rules/`) and usually `.pair/knowledge/` and `.claude/skills/` are committed. Nothing to install into the project.
+2. **Install the CLI, if the project's skills call it**
+   - With pair-cli: `npm install -g @foomakers/pair-cli` (or `pnpm add -g`), then `pair-cli --version`. Match the version your team pinned, if `package.json` lists `@foomakers/pair-cli` use that one with `npx pair-cli`.
+3. **Start your assistant in the repository**
+   - It reads the bridge file for your tool, which points at `.pair/`. Ask it to describe the project's architecture and way of working: the answer should come from `.pair/adoption/`.
+4. **Ask what to do**
+   - In your assistant: `/pair-next`. It reads the board and suggests the next step; `/pair-process-implement <id>` picks up a Ready story.
+
+## Verify
+
+- A new session knows the tech stack and the quality gate command without being told.
+- `/pair-next` proposes a step that matches the board.
+
+## Related
+
+- [Verify your setup](/docs/getting-started/verify): the full checklist
+- [Process Lifecycle](/docs/process-lifecycle): the flow your team follows
+- [Update the Knowledge Base](/docs/guides/update-kb): when the team moves to a new pair release

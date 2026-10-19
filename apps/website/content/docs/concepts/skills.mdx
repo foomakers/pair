@@ -16,7 +16,7 @@ Each skill is a `SKILL.md` file that defines:
 - **How to execute it**: step-by-step instructions the AI follows
 - **What it composes**: other skills it calls during execution
 
-When a developer invokes a skill (e.g., `/implement`), the AI reads the `SKILL.md` file and follows its instructions precisely. The skill references adoption files, guidelines, and templates from the Knowledge Base, ensuring consistent execution.
+When a developer invokes a skill (for example `/pair-process-implement`), the AI reads the `SKILL.md` file and follows its instructions precisely. The skill references adoption files, guidelines, and templates from the Knowledge Base, ensuring consistent execution.
 
 ## Skill Categories
 
@@ -55,7 +55,7 @@ Capability skills perform specific, reusable operations. They are invoked indepe
 
 ### Workflow Skills
 
-Workflow skills are the **stages of the [delivery workflow](/docs/developer-journey/delivery-workflow)**. A stage skill does one stage of one card (one role, one handoff) and is dispatched by the coordinator or the batch engine, never suggested by `/pair-next`. You normally invoke only the coordinator.
+Workflow skills are the **stages of the [delivery workflow](/docs/process-lifecycle/delivery-workflow)**. A stage skill does one stage of one card (one role, one handoff) and is dispatched by the coordinator or the batch engine, never suggested by `/pair-next`. You normally invoke only the coordinator.
 
 | Skill | Role |
 |-------|------|
@@ -67,7 +67,7 @@ Workflow skills are the **stages of the [delivery workflow](/docs/developer-jour
 | `/pair-workflow-green-fix` | stage: fix above the seal |
 | `/pair-workflow-review-phase` | stage: independent verification of the PR head |
 
-Detail: [Delivery cycle](/docs/reference/delivery-cycle#2-the-stages-one-by-one), [Skills Catalog](/docs/reference/skills-catalog#workflow-skills). How the layers stack: [Skill layers](/docs/developer-journey/skill-layers).
+Detail: [Delivery cycle](/docs/process-lifecycle/delivery-cycle#2-the-stages-one-by-one), [Skills Catalog](/docs/reference/skills-catalog#workflow-skills). How the layers stack: [Skill layers](/docs/process-lifecycle/skill-layers).
 
 ### Loop and Batch Entry Points
 
@@ -81,7 +81,7 @@ Detail: [Delivery cycle](/docs/reference/delivery-cycle#2-the-stages-one-by-one)
 | `pair-red-contract-verifier` | validates and seals it |
 | `pair-reviewer` | verifies the PR head |
 
-See [Batch engine](/docs/reference/batch-engine).
+See [Batch engine](/docs/contributing/batch-engine-internals).
 
 ### Plugin Skill
 
@@ -89,7 +89,7 @@ See [Batch engine](/docs/reference/batch-engine).
 
 ![Skill families and how they compose](/diagrams/skill-families.svg)
 
-*Figure: skill families and how they compose.*
+*Figure: process skills compose capability skills, never the other way round; the workflow row on top only orchestrates.*
 
 ## Composition
 
@@ -128,3 +128,5 @@ Skills are stored in `.skills/` within the KB and distributed to AI tool directo
 The canonical copy goes to `.claude/skills/`. Secondary targets receive symlinks, so all AI tools share the same skill definitions. The directory structure uses a flatten/prefix naming convention: `process/implement` becomes `pair-process-implement`.
 
 **What ships where.** `pair-cli install` and `update` write the process, capability, workflow and loop skills into `.claude/skills/`, the batch workflows into `.claude/workflows/` and the subagents into `.claude/agents/`. The [marketplace plugin](/docs/reference/pair-assistant#what-the-plugin-installs) ships only `/pair-assistant`.
+
+**Next:** [Adoption files](/docs/concepts/adoption-files), the decisions every skill reads first.

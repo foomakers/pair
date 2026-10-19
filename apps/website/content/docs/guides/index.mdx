@@ -1,26 +1,38 @@
 ---
 title: Guides
-description: Task-oriented guides, each with goal, prerequisites, steps, verification and links.
+description: Task-oriented recipes, each with goal, prerequisites, steps, verification and links. Skills run in your assistant; pair-cli covers install, update and unattended runs; the Claude Code plugin is optional.
 ---
 
-Each guide gives the CLI path first and, where supported, the optional `/pair-assistant` path (Claude Code).
+Each guide is one task: goal, prerequisites, numbered steps, how to verify, where to read more. For the flow these tasks belong to, read the [Process Lifecycle](/docs/process-lifecycle) first.
+
+## The three paths
+
+Every step names the path that applies, with the same three labels everywhere in the docs:
+
+- **In your assistant**: a skill you invoke as a slash command in Claude Code, Codex, Cursor, pi, opencode or any tool that reads Agent Skills. This is the default path for everything after install: bootstrap, planning, refinement, implementation, review.
+- **With pair-cli**: a real `pair-cli` command in a shell: `install`, `update`, `run`, `package`, `scaffold-kb`, `kb-*`. Install, update and unattended runs live here; there is no CLI command for a skill.
+- **With `/pair-assistant` (optional, Claude Code)**: the one skill the Claude Code marketplace plugin ships. It runs the CLI for you and writes adoption files after showing the diff. Only listed where asking it is the thing to do; the other two paths never depend on it.
 
 ## Set up
 
 - [Install via the Claude Code marketplace](/docs/guides/install-via-marketplace)
 - [Adopt pair in an existing repository](/docs/guides/adopt-existing-repo)
-- [Update the KB and migrate 0.4 to 0.5](/docs/guides/update-kb)
-- [Use an external or organization KB](/docs/guides/external-kb)
+- [Join a project that already uses pair](/docs/guides/join-a-pair-project)
+- [Update the Knowledge Base](/docs/guides/update-kb)
 - [Configure another harness](/docs/guides/configure-harness)
-- [Adoption checklist](/docs/guides/adoption-checklist)
+
+## Knowledge Base
+
+- [Customize the Knowledge Base for your team](/docs/guides/customize-for-your-team)
+- [Customize templates](/docs/guides/customize-templates)
+- [Package-local rules in a monorepo](/docs/guides/monorepo-rules)
+- [Own and publish a Knowledge Base](/docs/guides/external-kb)
 
 ## Configure
 
-- [Card states, DoR/DoD and process profile](/docs/guides/card-states)
-- [Customize templates](/docs/guides/customize-templates)
-- [Package-local rules in a monorepo](/docs/guides/monorepo-rules)
+- [Card states, DoR/DoD and the process profile](/docs/guides/card-states)
 - [Classify stories and use risk tags](/docs/guides/classify-risk)
-- [Quality gates and coverage ratchet](/docs/guides/quality-gates)
+- [Quality gates and the coverage ratchet](/docs/guides/quality-gates)
 - [Review identity and light auto-approval](/docs/guides/review-identity)
 - [Assess security, cost and coupling](/docs/guides/assess-security-cost-coupling)
 
@@ -31,5 +43,6 @@ Each guide gives the CLI path first and, where supported, the optional `/pair-as
 - [Cycle Hooks and Blocking Severities](/docs/guides/hooks-and-severities)
 - [Deliver multiple cards](/docs/guides/deliver-many-cards)
 - [Automate work via tags](/docs/guides/tag-automation)
-- [Create and run release tests](/docs/guides/release-tests)
 - [Measure delivery](/docs/guides/delivery-metrics)
+
+Longer, learning-oriented walkthroughs are in [Tutorials](/docs/tutorials); every setting is in [Adoption settings](/docs/reference/adoption-settings).

@@ -14,7 +14,7 @@ Releases are **dispatched, never merge-triggered**. Two runs per release:
 
 ![Release channels: pre, rc, final and cleanup of earlier pre-releases](/diagrams/release-channels.svg)
 
-*Figure: release channels: pre, rc, final and cleanup of earlier pre-releases.*
+*Figure: every channel ends in the same final release; what differs is how many pre-releases get cleaned up on the way there.*
 
 **Build once, verify, publish.** Changesets manages versions, CI builds artifacts from the tag, GitHub Releases distributes them.
 
@@ -108,7 +108,7 @@ If no test suite exists yet, create one first:
 /pair-capability-design-manual-tests
 ```
 
-See the [Release Testing tutorial](/docs/guides/release-tests) for a full walkthrough.
+See the [Release testing tutorial](/docs/tutorials/release-testing) for a full walkthrough.
 
 ## Rollback
 

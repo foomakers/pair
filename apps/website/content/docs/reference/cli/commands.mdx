@@ -36,7 +36,7 @@ There is no lock: a second run is never blocked, and when two runs overlap the l
 
 `behavior: add` registries (`.pair/adoption`) are never staged. The target is transiently duplicated on disk while a run is in flight. On Windows, `rename` over an existing directory is not atomic, so these guarantees hold on POSIX platforms only.
 
-- **Package-local `.pair` dirs are never touched.** `<pkg>/.pair/` directories (the opt-in [package-local adoption override](/docs/customization/package-local-adoption)) are project content: `install`/`update` leave them alone, and `validate-config` rejects a registry `target` at or inside one.
+- **Package-local `.pair` dirs are never touched.** `<pkg>/.pair/` directories (the opt-in [package-local adoption override](/docs/concepts/package-local-adoption)) are project content: `install`/`update` leave them alone, and `validate-config` rejects a registry `target` at or inside one.
 
 ---
 
@@ -694,7 +694,7 @@ cd ../acme-kb && bash scripts/release.sh 1.0.0
 pair-cli install --source https://github.com/acme/acme-kb.git
 ```
 
-See [Scaffold an External KB](/docs/customization/external-kb) for the full workflow.
+See [Own and publish a Knowledge Base](/docs/guides/external-kb) for the full workflow.
 
 ---
 
@@ -868,7 +868,7 @@ Review findings still go through `prepare → validate → green`, their failing
      boundary leaves it Draft with `needs-review` (exit `1`).
    - **`## Eligibility` bounds `--autonomous` runs** here too, even with no `## Workflows` declared: a
      card without the label is skipped `ineligible` before it is read. `--approve-ineligible` lets
-     that one run through, says so, and writes nothing. A supervised run is not held back by it.
+     that one run through, says so, and writes nothing. A run without `--autonomous` is not held back by it.
      With **no `## Eligibility` declared** there is no label to require: an explicit `--card` names
      its card rather than selecting from the board, so the run proceeds (also under `--autonomous`) and the output says exactly that instead of "automation is off".
    - **`--pr <n>`** goes straight to fix-and-review in the cycle, even on a card whose tag maps a

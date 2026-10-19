@@ -12,14 +12,14 @@ description: Run commands at stage boundaries and choose which findings block.
 ## Steps
 
 1. **Add hooks**
-   - With the CLI: under `## Cycle Hooks` use `pre-<stage>`, `post-<stage>`, `pre-cycle`, `post-cycle` or `on-halt`.
+   - In your assistant: under `## Cycle Hooks` add `pre-<stage>`, `post-<stage>`, `pre-cycle`, `post-cycle` or `on-halt` bullets.
    - With `/pair-assistant` (optional, Claude Code): "add a pre-verify hook that runs the tests".
 2. **Check them**
-   - With the CLI: `node .claude/skills/pair-workflow-cycle/scripts/cycle-hooks.mjs load <file>`.
+   - With pair-cli: `node .claude/skills/pair-workflow-cycle/scripts/cycle-hooks.mjs load <file>`.
 3. **Set the floor**
-   - With the CLI: `## Blocking Severities`: `Critical`, `Major` or `Minor` (default `Minor`), optional `max-dispatches`.
+   - In your assistant: `## Blocking Severities`: `Critical`, `Major` or `Minor` (default `Minor`), optional `max-dispatches`.
 4. **Validate**
-   - With the CLI: `node .claude/skills/pair-workflow-cycle/scripts/blocking-severities.mjs read <file>`.
+   - With pair-cli: `node .claude/skills/pair-workflow-cycle/scripts/blocking-severities.mjs read <file>`.
 
 ## Verify
 
@@ -27,5 +27,5 @@ description: Run commands at stage boundaries and choose which findings block.
 
 ## Related
 
-- [The delivery cycle](/docs/reference/delivery-cycle)
+- [The delivery cycle in depth](/docs/process-lifecycle/delivery-cycle#5-cycle-hooks)
 - [Adoption settings](/docs/reference/adoption-settings#techautomationmd)

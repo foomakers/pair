@@ -48,7 +48,7 @@ Reclassified from process skills: see [Migration Notes](/docs/reference/skill-ma
 
 All `assess-*` skills are **output-only**: they produce a proposal (rendered adoption content + target) plus a human-facing report and write **no adoption files**. Persistence of a proposal is delegated to `/pair-capability-record-decision`, the **sole adoption writer**, composed by the caller (a process skill or a human/agent). See ADR-009 (`adr-009-assess-output-only`) in the project adoption records.
 
-When the opt-in [package-local adoption override](/docs/customization/package-local-adoption) is active, `assess-*` load global rules plus the `<pkg>/.pair/` of the packages the diff touches, report central↔local conflicts, and may PROPOSE activating the override, never activating it.
+When the opt-in [package-local adoption override](/docs/concepts/package-local-adoption) is active, `assess-*` load global rules plus the `<pkg>/.pair/` of the packages the diff touches, report central↔local conflicts, and may PROPOSE activating the override, never activating it.
 
 The only writes any of them perform are **operational reports** under `.pair/working/reports/` (D14), `assess-security`'s audit, `assess-coupling`'s full-scope audit, and `assess-cost`'s report-mode panel. Never adoption, never backlog items.
 
@@ -131,7 +131,7 @@ All `analyze-*` skills **analyze and report**: they propose no adoption decision
 
 ## Workflow Skills
 
-Workflow skills are the delivery phases of the [batch engine](/docs/reference/batch-engine), one mutation boundary each, invoked by the engine (or by the in-session coordinator `/pair-workflow-cycle`) during a review ↔ remediation cycle, never cascade-suggested by `/pair-next`. Each writes one handoff under `.pair/working/runs/<run>/<story>/`.
+Workflow skills are the delivery phases of the [batch engine](/docs/contributing/batch-engine-internals), one mutation boundary each, invoked by the engine (or by the in-session coordinator `/pair-workflow-cycle`) during a review ↔ remediation cycle, never cascade-suggested by `/pair-next`. Each writes one handoff under `.pair/working/runs/<run>/<story>/`.
 
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
@@ -166,7 +166,7 @@ For details on how skills are resolved and transformed, see the [Skill Managemen
 
 ## Package-Local Scoping
 
-`review` (PR diff), `assess-*` (diff) and `refine-story` (packages the story references) load only the touched packages' `<pkg>/.pair/` when the opt-in [package-local adoption override](/docs/customization/package-local-adoption) is active, and may PROPOSE activating it, never activating it. Without the override nothing changes.
+`review` (PR diff), `assess-*` (diff) and `refine-story` (packages the story references) load only the touched packages' `<pkg>/.pair/` when the opt-in [package-local adoption override](/docs/concepts/package-local-adoption) is active, and may PROPOSE activating it, never activating it. Without the override nothing changes.
 
 ## Plugin Skill
 

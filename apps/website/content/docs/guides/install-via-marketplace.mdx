@@ -3,7 +3,7 @@ title: Install via the Claude Code marketplace
 description: Optional Claude Code path that installs the pair plugin and lets /pair-assistant run the install.
 ---
 
-**Goal**: install pair from the Claude Code marketplace instead of typing CLI commands. The CLI stays the default path.
+**Goal**: install pair from the Claude Code marketplace instead of typing CLI commands. pair-cli stays the default path.
 
 ## Prerequisites
 
@@ -13,13 +13,13 @@ description: Optional Claude Code path that installs the pair plugin and lets /p
 ## Steps
 
 1. **Register the marketplace and install the plugin**
-   - With the CLI: not needed: the CLI path is in the [Quickstart](/docs/getting-started/quickstart).
    - With `/pair-assistant` (optional, Claude Code): `/plugin marketplace add foomakers/pair`, then `/plugin install pair@pair`.
+   - With pair-cli: not needed; the CLI path is the [Quickstart](/docs/getting-started/quickstart).
 2. **Ask for the install**
-   - With the CLI: `pair-cli install` (add `--skip-registries agents` to keep your own `AGENTS.md`/`CLAUDE.md`).
-   - With `/pair-assistant` (optional, Claude Code): "install pair here". It shows the command, asks, runs it and reports the result.
+   - With `/pair-assistant` (optional, Claude Code): "install pair here". It shows the command, asks, runs it and reports the result; in a repo with its own `AGENTS.md` it asks keep or overwrite per file.
+   - With pair-cli: `pair-cli install` (add `--skip-registries agents` to keep your own `AGENTS.md`/`CLAUDE.md`).
 3. **Fill in the adoption files**
-   - With the CLI: run `/pair-next` and follow the suggestion.
+   - In your assistant: `/pair-next` and follow the suggestion.
    - With `/pair-assistant` (optional, Claude Code): ask for "a full adoption pass"; it hands off to `/pair-process-bootstrap`.
 
 ## Verify

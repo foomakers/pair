@@ -1,61 +1,33 @@
 ---
 title: What is pair?
-description: An overview of pair, the AI-assisted development toolkit that provides structured context for your AI coding assistant.
+description: pair gives your AI coding assistant a Knowledge Base, skills and adoption files, so it works your way in every session, from PRD to code review.
 ---
 
-**Code is the easy part.** The hard part is getting your AI assistant to understand your project's architecture, standards, and decisions, and keep that understanding consistent across every session.
+**Code is the easy part.** The hard part is getting an AI assistant to understand your project's architecture, standards and decisions, and to keep that understanding from one session to the next. Without it you re-explain the project every morning and review code that ignores last week's decision.
 
-## Install pair
+## The three components
 
-### With the CLI (default)
+pair installs three things into your repository, in a `.pair/` folder every assistant reads:
 
-`pair-cli install` in your project. [Quickstart](/docs/getting-started/quickstart#with-the-cli-default).
+- **Knowledge Base**: guidelines, how-to guides and templates for the whole development lifecycle. Onboarding documentation for your AI teammate, refreshed by `pair-cli update`. [Knowledge Base](/docs/concepts/knowledge-base)
+- **Skills**: slash commands your assistant discovers and runs, following the [Agent Skills](https://agentskills.io) open standard. One skill per step of the process, from writing the PRD to reviewing the PR. [Skills](/docs/concepts/skills)
+- **Adoption files**: your decisions, architecture, tech stack, way of working, recorded once and read before every generation. You do not write them by hand: bootstrap interviews you, or reads an existing codebase. [Adoption files](/docs/concepts/adoption-files)
 
-### With the Claude Code plugin (optional)
+## A day with pair
 
-Claude Code only: `/plugin install pair@pair`, then `/pair-assistant`. [Quickstart](/docs/getting-started/quickstart#with-the-claude-code-plugin-optional).
+1. You open the project and run `/pair-next`. It reads the board and says: story #42 is Ready, implement it.
+2. `/pair-process-implement 42` works task by task, tests first, following your adoption files, and opens one pull request.
+3. `/pair-process-review 123` reviews the PR against the same files and the risk tier of the story; approved, it merges and closes the story.
+4. `/pair-next` again. Tomorrow, a different teammate or a different assistant starts from the same files.
 
-## How pair solves it
+That loop is the last phase of a longer flow: PRD, bootstrap, initiatives, epics, stories, refinement, implementation, review. The flow, the two workflows that run on it and the three ways to drive them are the [Process Lifecycle](/docs/process-lifecycle).
 
-pair solves this with three core components:
+![The process lifecycle: four phases, two workflows, three modes](/diagrams/lifecycle-overview.svg)
 
-## Knowledge Base
+*Figure: the ground is four phases; the last two carry the refinement and delivery workflows; the three modes decide how much of it you run by hand.*
 
-A structured set of documents (guidelines, how-tos, architecture decisions, templates) that gets installed into your project's `.pair/` folder. Think of it as onboarding documentation for your AI teammate: instead of explaining everything from scratch every session, you give it a comprehensive manual.
+## Install
 
-[Learn more about the Knowledge Base](/docs/concepts/knowledge-base)
+Five minutes, with pair-cli (default) or the optional Claude Code plugin: [Quickstart](/docs/getting-started/quickstart). Then [bootstrap](/docs/getting-started/bootstrap-quick-mode), pick your path ([solo, team or organization](/docs/getting-started/choose-your-path)) and [verify the setup](/docs/getting-started/verify).
 
-## Skills
-
-Structured instructions that AI assistants discover and execute, following the [Agent Skills](https://agentskills.io) open standard. Skills automate the full product lifecycle (from PRD creation to code review) with 51 composable skills covering process and capability concerns.
-
-[Learn more about Skills](/docs/concepts/skills)
-
-## Adoption Files
-
-Your project-specific decisions: which tech stack, architecture pattern, and way of working you chose. Every time the AI generates code, it reads these files and stays aligned with your choices. Decisions never drift.
-
-You don't write these files manually. Run `/pair-next` and the AI walks you through the full process (from PRD to architecture to tech stack) generating each adoption file along the way. Applying pair to an existing project? Ask your AI assistant to analyze the codebase and produce the adoption files from what it finds.
-
-[Learn more about Adoption Files](/docs/concepts/adoption-files)
-
-## Choose your path
-
-- **[Quickstart, with the CLI (default)](/docs/getting-started/quickstart#with-the-cli-default)**: Install pair-cli, set up the Knowledge Base, and start using it.
-- **[Quickstart, with the Claude Code plugin (optional)](/docs/getting-started/quickstart#with-the-claude-code-plugin-optional)**: Claude Code user? `/plugin install pair@pair` then `/pair-assistant` sets pair up for you. The CLI stays the default path.
-- **[Quickstart: Solo](/docs/getting-started/quickstart-solo)**: Working alone? Minimal configuration, no team coordination.
-- **[Quickstart: Team](/docs/getting-started/quickstart-team)**: Shared standards and the agent bridge pattern for multi-developer teams.
-- **[Quickstart: Organization](/docs/getting-started/quickstart-org)**: Custom KB packaging, distribution, and governance across multiple teams.
-- **[Bootstrap Quick Mode](/docs/getting-started/bootstrap-quick-mode)**: In a hurry? Generate the adoption files from KB defaults instead of answering the full interview.
-
-## Next: the process lifecycle
-
-Once installed, read the [Process Lifecycle](/docs/developer-journey): the phases, the two workflows, the three modes and the skills that drive them.
-
-## Go deeper with tutorials
-
-Once you're set up, pick a [tutorial](/docs/tutorials) that matches your context for a guided, end-to-end walkthrough (30–60 min):
-
-- **[Your First Project](/docs/tutorials/first-project)**: Solo developer · ~30 min
-- **[Team Setup](/docs/tutorials/team-setup)**: Team lead · ~45 min
-- **[Enterprise Adoption](/docs/tutorials/enterprise-adoption)**: Enterprise architect · ~60 min
+**Next:** [Quickstart](/docs/getting-started/quickstart).

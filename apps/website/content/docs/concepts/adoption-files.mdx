@@ -149,23 +149,7 @@ If the file doesn't exist, AI assistants skip the domain check entirely: this is
 
 ### automation.md
 
-Optional. `tech/automation.md` declares how much of the delivery flow may run **unattended**, in seven independent sections `pair-loop` and `pair-cli run` read. Each has its own fail-closed default, absent file or absent section never widens automation, only a project that writes the section opts in. Six of them are below; the seventh, `## Harness` / `## Model Policy` (supported engines, per-tier model class), lives in the [guideline](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md).
-
-```text
-## Eligibility
-
-risk:green
-```
-
-**`## Eligibility`**: which cards an automated run may pick up at all. The value is **a single literal label** on a bare line (recommended `risk:green`; the fence above is display only, never write the declaration as a list item, inside a code fence, or as two labels on one line), matched by plain string equality against each card's labels, there is no AND/OR/NOT grammar, so `risk:yellow` and `risk:red` work is never developed unattended, and a card carrying no risk label matches nothing. If the file or the section is absent, the eligibility set is **empty**: nothing is eligible and automation stays off. That's the expected state for most projects, not an error. See [Quality Model: Tag Projection & Eligibility](/docs/reference/quality-model#tag-projection--eligibility).
-
-```text
-## Auto-Advance
-
-(none)
-```
-
-**`## Auto-Advance`**: which tier, once its PR is review-approved, `pair-loop` may push and merge to the default branch with no human. A comma-separated list, or the literal `(none)`. Only the one tier the quality model already lets a machine self-merge (typically `risk:green`) may ever appear here, `risk:yellow`/`risk:red` is a malformed value. **Absent, or `(none)`, is the shipped default: auto-merge is off** until a project explicitly writes the tier here.
+Optional. `tech/automation.md` declares how much of the delivery flow may run **unattended**. Every section has its own fail-closed default: an absent file or section never widens automation; only a project that writes the section opts in. The sections below are the ones you write by hand; `## Harness` and `## Model Policy` (supported engines, per-tier model class) are written by `/pair-capability-setup-harness` and documented in the [guideline](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md).
 
 ```markdown
 ## Autonomy
@@ -177,13 +161,13 @@ until: merged
 merge: when; has: cost:red; lacks: risk:green
 ```
 
-**`## Autonomy`**: one declaration for which cards an automated run works on, how far it takes them and when a human takes over. Keys: `filter` (any-of labels), `assignee` (`@me` or a login), `status` (macrostates), `root`, `until` (`ready` \| `pr` \| `merged`, default `pr`) and two gates, `prepare` and `merge`: `<always|never|when>[; has: <labels>][; lacks: <labels>]` (`has`/`lacks` only with `when`). Labels are opaque strings matched by equality, lists are any-of, there is no boolean grammar. Under `until: merged`, `merge: always` parks the card for a human (the default), `never`/`when` enter the merge stage, and a `when` card carrying a `has` label or lacking a `lacks` label **escalates** instead (status `escalated`, exit 1, `on-halt`, one comment on the card; the PR stays open). #490's checks (reviewed head, `pair-review`, explicit approval, green gate set) always stay mandatory.
+**`## Autonomy`**: one declaration for which cards an unattended run works on, how far it takes them and when a human takes over. Keys: `filter` (any-of labels, matched by plain string equality against the labels classification already put on the card, no AND/OR/NOT grammar), `assignee` (`@me` or a login), `status` (macrostates), `root`, `until` (`ready` | `pr` | `merged`, default `pr`) and two gates, `prepare` and `merge`: `<always|never|when>[; has: <labels>][; lacks: <labels>]` (`has`/`lacks` only with `when`). Under `until: merged`, `merge: always` parks the card for a human (the default), `never` and `when` enter the merge stage, and a `when` card carrying a `has` label or lacking a `lacks` label **escalates** instead (status `escalated`, exit 1, `on-halt`, one comment on the card; the PR stays open). The merge stage's own checks (reviewed head, `pair-review`, explicit approval, green gate set) always stay mandatory. No `filter`: every open card is a candidate for a driver given an explicit root; nothing runs unattended until the section exists.
 
-Precedence is argument > `## Autonomy` > KB default, and every run prints each effective value with its source. A legacy `## Eligibility` reads as `filter`, `## Auto-Advance` as `merge` (`(none)` = `always`, a tier = `when; lacks: <tier>`); a differing `## Autonomy` alongside them is refused.
+The `prepare` gate says who prepares a Draft card: `always` (default) keeps the human alignment gate; `never` proceeds alone, recording every self-answer under `## Assumptions`; `when` proceeds alone unless a stage boundary (before refinement, after it, after the task breakdown) escalates: the card then stays Draft with a `needs-review` label and one comment, and is not re-picked until a human acts.
 
-The `prepare` gate says who prepares a Draft card: `always` (default) keeps the human alignment gate; `never` proceeds alone, recording every self-answer under `## Assumptions`; `when` proceeds alone unless a stage boundary (before refinement, after it, after the task breakdown) escalates: the card then stays Draft with a `needs-review` label and one comment, and is not re-picked until a human acts (ADR-028).
+Precedence is argument > `## Autonomy` > KB default, and every run prints each effective value with its source. `pair-implement-batch` honours the same keys and, under `until: merged`, merges a card only when the merge gate allows it; `pair-loop` selects, hands the gates to the batch and owns no merge call.
 
-`pair-implement-batch` is the delivery cycle on N cards: it honours `## Autonomy` and `until` / `prepare` / `merge`, and under `until: merged` merges a card only when the merge gate allows it (default: nothing merges); `pair-loop` selects, hands the gates to the batch and owns no merge. An empty `## Autonomy` section is off everywhere.
+**Legacy sections** (projects written for v0.4): `## Eligibility` (one label) reads as `filter`, `## Auto-Advance` as the `merge` gate (`(none)` is `always`, a tier is `when; lacks: <tier>`). Both keep working; a `## Autonomy` section that contradicts them is refused. Write `## Autonomy` only in a new project. See [Tag-driven automation](/docs/process-lifecycle/tag-driven-automation).
 
 ```text
 ## Stop Predicate
@@ -218,7 +202,7 @@ auto-plan ⇒ pair-process-plan-tasks
 Precedence: auto-dev, auto-plan
 ```
 
-**`## Workflows`**: the **tag→workflow mapping**, and the declaration that makes automation opt-in *per card*. One entry per line, `<tag> ⇒ <workflow>`: the tag is a plain label a card may carry (matched by string equality, exactly like `## Eligibility`), and the workflow is the **skill** that runs on it. An optional `Precedence:` line resolves a card carrying two mapped tags, first listed wins.
+**`## Workflows`**: the **tag→workflow mapping**, and the declaration that makes automation opt-in *per card*. One entry per line, `<tag> ⇒ <workflow>`: the tag is a plain label a card may carry (matched by string equality, exactly like the `filter`), and the workflow is the **skill** that runs on it. An optional `Precedence:` line resolves a card carrying two mapped tags, first listed wins.
 
 Five properties are worth knowing before you write one:
 
@@ -228,7 +212,7 @@ Five properties are worth knowing before you write one:
 - **The card travels as the workflow's own argument.** `pair-loop` takes it as `--root <card>` and `pair-process-plan-tasks` as `--story <card>`, and the latter selects the highest-priority story on the board when it gets no story at all, so a workflow the dispatcher cannot scope to the card is refused rather than run on a card nobody tagged. Those two *are* the mappable set: a skill outside it is refused even when installed, because a dispatch takes the card's lock and posts a record on it, and doing that for a skill that only reports leaves a card claiming work nothing did.
 - **A workflow that needs a human in the room is not mappable.** A dispatch runs unattended, so `auto-refine ⇒ pair-process-refine-story` is refused even though the dispatcher knows how to scope it: refinement's alignment gate ends only on an explicit human approval, and unattended that means either a stall until the timeout (holding the card's lock, on a card publicly commented as started) or an agent approving its own work past the gate. Refine by hand, or declare the `prepare` gate (`never` / `when`) to take the human out deliberately: the only autonomous route, with every self-answer recorded as an assumption; map the tags for what follows.
 
-Eligibility is applied **before** routing, so a mapped card that does not carry the eligibility label is skipped and logged without ever being routed. A trigger passes the card and its labels to the entry point, [`pair-cli run --card <id> --card-tags <list>`](/docs/reference/cli/commands#run), which is where the routing happens.
+The `filter` is applied **before** routing, so a mapped card that carries none of its labels is skipped and logged without ever being routed. A trigger passes the card and its labels to the entry point, [`pair-cli run --card <id> --card-tags <list>`](/docs/reference/cli/commands#run), which is where the routing happens.
 
 **`## Cycle Hooks`**: deterministic shell commands the delivery cycle's coordinator runs around its stages, the same semantics as `## Publish-PR Hooks` generalized to every stage. One bullet per command: ``- `pre-verify`: `pnpm build` ``.
 
@@ -345,7 +329,7 @@ Like DDR↔context-map, this follows a history↔state split: the record is hist
 
 ## Package-Local Override
 
-On large monorepos an opt-in override co-locates rules in `<pkg>/.pair/` and turns the central file into a router; skills then load only the packages a diff or story touches. See [Package-Local Adoption](/docs/customization/package-local-adoption).
+On large monorepos an opt-in override co-locates rules in `<pkg>/.pair/` and turns the central file into a router; skills then load only the packages a diff or story touches. See [Package-Local Adoption](/docs/concepts/package-local-adoption).
 
 ## Protection
 
@@ -355,3 +339,5 @@ Adoption files are protected by design. When pair updates the Knowledge Base (`p
 - **Adoption files stay**: your decisions are never overwritten
 
 This is enforced by the asset registry system: the `adoption` registry uses **add** behavior, meaning it only creates files that don't already exist. Your team's decisions are permanent until you explicitly change them.
+
+**Next:** [Canonical states](/docs/concepts/canonical-states), how skills read your board.

@@ -8,8 +8,8 @@ import { Callout } from 'fumadocs-ui/components/callout'
 One page listing **every setting you can put in your adoption files**. `reference/configuration` covers the registry part of `pair.config.json` ([Configuration](/docs/reference/configuration)); this page covers everything else. Every section is **optional**: absent means the default in the table, never an error. A malformed section is a **HALT** naming the file and line, not a silent fallback.
 
 <Callout type="info">
-  **With the CLI / With `/pair-assistant` (optional, Claude Code).** CLI first: edit the file by
-  hand, then validate. Optional: ask [`/pair-assistant`](/docs/reference/pair-assistant#how-to-ask) ("let green cards go
+  **In your assistant, or with `/pair-assistant` (optional, Claude Code).** Default: edit the file by
+  hand in your editor or assistant, then validate with the scripts below. Optional: ask [`/pair-assistant`](/docs/reference/pair-assistant#how-to-ask) ("let green cards go
   up to merge"); it shows the diff, validates with the same scripts, and writes through
   `/pair-capability-record-decision`. Rows marked **assistant** are supported by its
   [capability menu](/docs/reference/pair-assistant#capability-menu).
@@ -17,7 +17,7 @@ One page listing **every setting you can put in your adoption files**. `referenc
 
 ## `tech/automation.md`
 
-Read by the delivery cycle ([`/pair-workflow-cycle`, `pair-cli run`](/docs/reference/delivery-cycle)), `/pair-loop`, `/pair-implement-batch`, `/pair-next` and `publish-pr`. Explained in [Automated development](/docs/tutorials/automated-development#autonomy-until-gates-escalation).
+Read by the delivery cycle ([`/pair-workflow-cycle`, `pair-cli run`](/docs/process-lifecycle/delivery-cycle)), `/pair-loop`, `/pair-implement-batch`, `/pair-next` and `publish-pr`. Explained in [Automated development](/docs/tutorials/automated-development#autonomy-until-gates-escalation).
 
 | Section / key | Allowed values | Default when absent | Read by | Effect | Assistant |
 | --- | --- | --- | --- | --- | --- |
@@ -37,7 +37,7 @@ Read by the delivery cycle ([`/pair-workflow-cycle`, `pair-cli run`](/docs/refer
 | `## Cycle Hooks` | `pre-<stage>`, `post-<stage>`, `pre-cycle`, `post-cycle`, `on-halt`; `timeout` (default 600, `0` off) | no hooks | `cycle-hooks.mjs` | shell commands at stage boundaries | yes |
 | `## Publish-PR Hooks` | `pre-publish`, `post-publish` | no hooks | `/pair-capability-publish-pr` | commands around PR publication | yes |
 | `## Harness` | harness names, `Requires: mcp` | all harnesses supported | `/pair-capability-setup-harness` | which harnesses the project supports | yes (delegated) |
-| `## Model Policy` | `<risk tier>: cheap\|balanced\|frontier` | no class | `/pair-capability-setup-harness` | model class per tier | yes (delegated) |
+| `## Model Policy` | `<risk tier>: cheap\|balanced\|frontier` | no class | `/pair-capability-setup-harness`, `workflow-profile.mjs` | model class per tier; what a profile's `model: by-tier` reads | yes (delegated) |
 
 Validate before committing: `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve`, `cycle-hooks.mjs load <file>`, `blocking-severities.mjs read <file>`. Section grammars: [Automation Policy](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md).
 
@@ -77,8 +77,8 @@ Model: [Quality model](/docs/reference/quality-model#project-overrides-techrisk-
 
 | Setting | File | Default | Effect | Assistant |
 | --- | --- | --- | --- | --- |
-| `## Package-Local Adoption` router | central `tech/*.md` | off | lists packages whose rules live in `<pkg>/.pair/<area>.md`; skills load only touched packages ([Package-local adoption](/docs/customization/package-local-adoption)) | yes |
-| Template overrides | `.pair/adoption/tech/templates/<name>-template.md` | KB template | override-first resolution, file used whole ([Templates](/docs/customization/templates)) | yes |
+| `## Package-Local Adoption` router | central `tech/*.md` | off | lists packages whose rules live in `<pkg>/.pair/<area>.md`; skills load only touched packages ([Package-local adoption](/docs/concepts/package-local-adoption)) | yes |
+| Template overrides | `.pair/adoption/tech/templates/<name>-template.md` | KB template | override-first resolution, file used whole ([Customize templates](/docs/guides/customize-templates)) | yes |
 
 ## `pair.config.json`
 
@@ -87,11 +87,11 @@ Outside the registries ([Configuration](/docs/reference/configuration)):
 | Key | Allowed values | Default | Read by | Effect | Assistant |
 | --- | --- | --- | --- | --- | --- |
 | `skipRegistries` | registry names | none | `install`, `update` | registries left untouched, e.g. `agents` keeps your `AGENTS.md`/`CLAUDE.md` ([Quickstart](/docs/getting-started/quickstart)) | yes (`update --skip-registries`) |
-| `workflowProfiles` | named JSON profiles per stage | built-in profile | `workflow-profile.mjs` | engine, model, effort per stage ([Workflow profiles](/docs/reference/configuration#workflow-profiles-workflowprofiles)) | yes |
-| `engine` | `id`, `bin`, `model` maps | `pi` | `pair-cli run` | which agent engine runs ([Execution engine](/docs/reference/configuration#execution-engine-engine)) | no |
+| `workflowProfiles` | `default`, `files`, `inline`: named JSON profiles with `engine`, `model`, `effort`, `context` per stage | KB default: the run's engine, its default model, default effort, fresh context | `workflow-profile.mjs` | engine, model, effort and context per stage; `--profile` / `--workflow-config` override per run ([Workflow profiles](/docs/reference/configuration#workflow-profiles-workflowprofiles)) | yes |
+| `engine` | `id`, `bin`, `model` maps | `claude` | `pair-cli run` | which agent engine runs ([Execution engine](/docs/reference/configuration#execution-engine-engine)) | no |
 
 ## Related
 
 - [Claude Code plugin & /pair-assistant](/docs/reference/pair-assistant)
-- [Team customization](/docs/customization/team)
-- [Delivery cycle](/docs/reference/delivery-cycle)
+- [Customize the Knowledge Base for your team](/docs/guides/customize-for-your-team)
+- [Delivery cycle](/docs/process-lifecycle/delivery-cycle)

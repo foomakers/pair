@@ -48,9 +48,9 @@ Each decision produces an adoption file. Bootstrap composes several capability s
 
 ### Where Classification Is Switched On
 
-Risk classification is configured at bootstrap, in `.pair/adoption/tech/risk-matrix.md` (the tag projection, an optional criticality table, optional per-tier overrides) and, for tier-aware gates, in `way-of-working.md`. Without the file, KB defaults apply and no tags are emitted: nothing fails. How to set each up is in [Customize for Your Team](/docs/customization/team#enable-classification-tiers); the process it feeds is in the [Process Lifecycle](/docs/developer-journey#the-risk-driven-flow).
+Risk classification is configured at bootstrap, in `.pair/adoption/tech/risk-matrix.md` (the tag projection, an optional criticality table, optional per-tier overrides) and, for tier-aware gates, in `way-of-working.md`. Without the file, KB defaults apply and no tags are emitted: nothing fails. How to set it up: [Classify stories and use risk tags](/docs/guides/classify-risk); the process it feeds: [the risk-driven thread](/docs/process-lifecycle#the-risk-driven-thread).
 
-**For existing projects**: Start here instead of Step 1. Ask the AI assistant to analyze your codebase and produce adoption files from what it finds, rather than writing them from scratch.
+**For existing projects**: start here instead of Step 1. Bootstrap reads your codebase and proposes adoption files from what it finds ([Adopt pair in an existing repository](/docs/guides/adopt-existing-repo)).
 
 ## Step 3: Plan Initiatives
 
@@ -93,6 +93,4 @@ PM Tool:
 
 Every AI session from this point forward reads these files. Decisions never drift.
 
-## Next
-
-[Strategic Planning](/docs/developer-journey/strategic-planning): break initiatives into epics.
+**Next:** [Strategic planning](/docs/process-lifecycle/phases/strategic-planning), break initiatives into epics.

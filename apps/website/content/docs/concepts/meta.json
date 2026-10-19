@@ -1,17 +1,23 @@
 {
   "title": "Concepts",
   "pages": [
+    "---Core---",
     "ai-assisted-sdlc",
     "knowledge-base",
     "skills",
     "adoption-files",
+    "---Work and state---",
     "canonical-states",
-    "code-host",
     "definition-of-ready-and-done",
+    "code-host",
+    "---Quality and review---",
     "tag-driven-gates",
     "pr-state-flow",
     "review-identity",
+    "---Tooling---",
+    "package-local-adoption",
     "agent-integration",
-    "llms-txt"
+    "llms-txt",
+    "glossary"
   ]
 }

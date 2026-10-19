@@ -1,0 +1,43 @@
+---
+title: Tag-driven automation
+description: What gets tagged and when, how the Autonomy filter selects cards over those tags, and how unattended runs use them.
+---
+
+Tags are how the delivery process hands decisions to automation without a second source of truth: classification writes them once, and everything downstream (gates, review, the unattended loop) only **reads** them. This page is the operational view; the model is in [Tag-driven quality gates](/docs/concepts/tag-driven-gates) and the mechanics in [The delivery cycle in depth](/docs/process-lifecycle/delivery-cycle).
+
+## What gets tagged, and when
+
+| When | What is written | By |
+| --- | --- | --- |
+| Story refinement | the classification matrix on the card, plus the `risk:*` tag when tag projection is on | `/pair-capability-classify` |
+| PR publish | the story's tags copied onto the one PR | `/pair-capability-publish-pr` |
+| Review | the PR's tier **raised** if the diff warrants it, never lowered; the PR state label | `/pair-process-review` |
+
+Only the tag families your project's tag projection lists are emitted (`risk` by default; `cost` opt-in). With projection off, the matrix is still written to the card, but nothing downstream can filter on it. Turning it on: [Classify stories and use risk tags](/docs/guides/classify-risk).
+
+## Selection is a filter over tags
+
+Which cards an unattended run may pick up is not a new tag. It is the `filter` key of `## Autonomy` in `.pair/adoption/tech/automation.md`: an any-of list of labels, each matched by plain string equality against the labels classification already put on the card.
+
+```markdown
+## Autonomy
+
+filter: risk:green
+until: pr
+```
+
+- `filter: risk:green` selects only green cards; yellow and red never match, by construction. There is no AND, OR or NOT grammar.
+- No file, or no filter: every open card is a candidate for the drivers that take an explicit root; nothing runs unattended until a project declares `## Autonomy`.
+- The tier-to-gate and tier-to-review policy is not restated here; it stays in the [quality model](/docs/reference/quality-model).
+
+**Legacy sections.** Projects written for v0.4 may still carry `## Eligibility` (one label) and `## Auto-Advance` (`(none)` or a tier). `autonomy-policy.mjs` translates them: `## Eligibility` becomes `filter`, `## Auto-Advance` becomes the `merge` gate (`(none)` is `always`, a tier is `when; lacks: <tier>`). They keep working; a `## Autonomy` section that contradicts them is refused. New projects write `## Autonomy` only. Every key: [Adoption settings](/docs/reference/adoption-settings#techautomationmd).
+
+## Tags route cards to workflows
+
+`## Workflows` maps a label to the workflow that runs on a card carrying it (`auto-dev ⇒ pair-loop`). A card with no mapped tag runs nothing: the absence of a route is the opt-in boundary. The filter is applied before routing. Recipe: [Automate work via tags](/docs/guides/tag-automation).
+
+## The unattended loop
+
+`/pair-loop` and `pair-cli run` select cards through the filter, drive each through the delivery cycle (`implement → verify`, remediation rounds as needed), and stop on the project's `## Stop Predicate` or iteration cap. A card that clears review stops at ready-for-merge unless the `merge` gate allows the merge stage under `until: merged`. Walkthrough: [Automated development](/docs/tutorials/automated-development).
+
+**Next:** [Deliver a card](/docs/guides/deliver-a-card), the recipe that puts all of this to work.

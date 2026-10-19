@@ -521,8 +521,13 @@ describe('quality-model.md §5 — reconciled with the single-label filter (AC6)
 })
 
 describe('docs site — the same rule from every surface (AC6)', () => {
-  it.each(docsSources)('%s states the single-label rule', (_, content) => {
-    expect(content.toLowerCase()).toMatch(/single literal label|exactly one label/)
+  // #552 increment 6: the docs site documents `## Autonomy` `filter` (any-of labels) as the
+  // canonical declaration and `## Eligibility` (one label) as the legacy section it translates to.
+  // What every surface must still state is the matching rule both grammars share: plain string
+  // equality against the card's labels, no boolean grammar.
+  it.each(docsSources)('%s states the equality-match rule', (_, content) => {
+    expect(content.toLowerCase()).toMatch(/plain string equality/)
+    expect(content.toLowerCase()).toMatch(/no and\/or\/not grammar|no boolean grammar/)
   })
 
   it.each(docsSources)('%s names the adoption file that holds it', (_, content) => {
@@ -1242,26 +1247,19 @@ describe('docs site — tag-driven dispatch is documented where an operator look
     expect(tutorial).toMatch(/pair-cli run --card/)
   })
 
-  it('every surface counts the policy file the way the guideline does', () => {
-    // A reader who completed Step 1 believing they have six sections, then told to add "a sixth",
-    // cannot tell whether they are adding one or editing one — in the tutorial whose whole subject
-    // is a fail-closed policy file where a mis-declared section HALTs the run. The concepts page is
-    // the OTHER end of the same path (Option D links to it for the mapping), so a reader told seven
-    // on one page and six on the other cannot tell which surface is incomplete.
-    const [policy] = policySources.map(([, content]) => content)
-    const declared = /It specifies (\w+) sections/.exec(policy!)![1]!
-    const capitalised = `${declared[0]!.toUpperCase()}${declared.slice(1)}`
-
-    expect(tutorial).toContain(`${capitalised} independent`)
-    // ...and the section Option D adds is numbered off that same count, not off Step 1's listing.
-    expect(tutorial).toContain(`the ${declared}th`)
-
-    expect(adoptionDocs).toContain(`${declared} independent sections`)
-    // Both surfaces omit the same section, so both must say which one and where it is documented —
-    // otherwise the count and the listing disagree with no way to tell why.
+  it('every surface names the sections it leaves to the guideline and to Option D', () => {
+    // The tutorial's Step 1 and the concepts page are the two ends of the same path (Option D links
+    // to the concepts page for the mapping). Neither restates the guideline's section count any
+    // more (#552 increment 6: `## Autonomy` replaced the legacy pair in both listings), so what
+    // keeps them consistent is that both say which sections they omit and where those live:
+    // `## Harness` / `## Model Policy` in the guideline, `## Workflows` where Option D adds it.
     for (const surface of [tutorial, adoptionDocs]) {
-      expect(surface).toMatch(/`## Harness` \/ `## Model Policy`/)
+      expect(surface).toMatch(
+        /`## Harness` and `## Model Policy`|`## Harness` \/ `## Model Policy`/,
+      )
+      expect(surface).toContain('## Workflows')
     }
+    expect(tutorial).toMatch(/Option D/)
   })
 
   it('the tutorial does not sell the per-card lock as the guard on ephemeral runners', () => {

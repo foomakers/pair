@@ -44,9 +44,7 @@ If you haven't already, install pair in your project:
 pair-cli install
 ```
 
-**With the CLI:** `pair-cli install`.
-
-**With `/pair-assistant` (optional, Claude Code):** ask for "pair in this project, first time" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
+**With pair-cli:** `pair-cli install`. **With `/pair-assistant` (optional, Claude Code):** ask for "pair in this project, first time" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
 
 <Callout type="info">
   If you installed pair-cli as a dev dependency instead of globally, use `npx pair-cli install` (or `pnpm pair-cli install`). See [installation options](/docs/tutorials/first-project#1-install-pair-cli) for details.
@@ -62,7 +60,7 @@ Start your AI assistant and run (`/pair-next` would suggest this on a fresh proj
 /pair-process-bootstrap
 ```
 
-**With the CLI:** bootstrap is a skill, not a command. **With `/pair-assistant` (optional, Claude Code):** ask it to adopt the project; it hands off to `/pair-process-bootstrap` ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
+**In your assistant:** the command above. **With `/pair-assistant` (optional, Claude Code):** ask it to adopt the project; it hands off to `/pair-process-bootstrap` ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
 
 During bootstrap, make team-relevant choices:
 
@@ -86,7 +84,7 @@ Edit `.pair/adoption/tech/tech-stack.md` to match your team's actual technology 
 
 The adoption declaration pattern (`[tool] is adopted for [purpose]`) tells every AI assistant this is a decision, not a suggestion.
 
-See [Customize for Your Team](/docs/customization/team) for the full customization guide.
+See [Customize the Knowledge Base for your team](/docs/guides/customize-for-your-team) for the full customization guide.
 
 ### 4. Customize code design guidelines
 
@@ -115,7 +113,7 @@ If you chose GitHub Projects during bootstrap, verify the setup (`/pair-next` ma
 This skill:
 
 1. Creates a GitHub Project board (or connects to an existing one)
-2. Configures status fields (Todo → Refined → In Progress → Done)
+2. Configures status fields (Todo → Ready → In Progress → Done)
 3. Sets up labels for story types, priorities, and epics
 4. Records the PM tool configuration in your way-of-working
 
@@ -153,14 +151,14 @@ Security judgment (authn/authz, injection, OWASP Top 10) is a separate concern, 
 
 ### More team options
 
-Every option below is optional; the full catalog with defaults is [Adoption settings](/docs/reference/adoption-settings), and [Team customization](/docs/customization/team#all-team-options) has the table. Each: hand edit, or ask `/pair-assistant` (optional, Claude Code; it shows the diff, validates, writes through record-decision).
+Every option below is optional; the full catalog with defaults is [Adoption settings](/docs/reference/adoption-settings); the recipe is [Customize the Knowledge Base for your team](/docs/guides/customize-for-your-team). Each: hand edit, or ask `/pair-assistant` (optional, Claude Code; it shows the diff, validates, writes through record-decision).
 
 - **Autonomy** (`until`, `prepare`, `merge`): how far cards go unattended ([Automated development](/docs/tutorials/automated-development#autonomy-until-gates-escalation)). *"let green cards go up to merge"*
-- **Cycle Hooks**: commands at stage boundaries ([Delivery cycle](/docs/reference/delivery-cycle#5-cycle-hooks)). *"add a pre-verify hook that runs the tests"*
+- **Cycle Hooks**: commands at stage boundaries ([Delivery cycle](/docs/process-lifecycle/delivery-cycle#5-cycle-hooks)). *"add a pre-verify hook that runs the tests"*
 - **Blocking Severities and `max-dispatches`**: which review findings block ([Adoption settings](/docs/reference/adoption-settings#techautomationmd)). *"only Major and above should block"*
 - **Publish-PR Hooks**: commands around PR publication ([Adoption settings](/docs/reference/adoption-settings#techautomationmd)). *"regenerate mirrors before publishing"*
 - **Workflow profiles** (`workflowProfiles`): engine and model per stage ([Configuration](/docs/reference/configuration#workflow-profiles-workflowprofiles)). *"use profile cheap-green for the review"*
-- **`skipRegistries`**: registries pair leaves alone ([Quickstart](/docs/getting-started/quickstart#existing-project)). *"keep my own AGENTS.md"*
+- **`skipRegistries`**: registries pair leaves alone ([Quickstart](/docs/guides/adopt-existing-repo)). *"keep my own AGENTS.md"*
 - **`format-check-command`, `worktree-setup-command`**: formatting gate; setup run in a fresh worktree ([Adoption settings](/docs/reference/adoption-settings#techway-of-workingmd)). *"run pnpm install in new worktrees"*
 - **Review enforcement, Review identity, Coverage guardrail, PR states**: [PR state flow](/docs/concepts/pr-state-flow), [Review identity](/docs/concepts/review-identity), [Tag-driven gates](/docs/concepts/tag-driven-gates). *"make the review a required check"*
 - **PM tool, code host, State Mapping** (incl. unmapped states and not-planned): [Canonical states](/docs/concepts/canonical-states#customizing-for-your-board), via `/pair-capability-setup-pm`. *"map Won't Do to not-planned"*
@@ -169,7 +167,7 @@ Every option below is optional; the full catalog with defaults is [Adoption sett
 - **Risk matrix and Tag Projection**: [Quality model](/docs/reference/quality-model#project-overrides-techrisk-matrixmd). *"also emit cost tags"*
 - **Harness and Model Policy**: `/pair-capability-setup-harness`. *"switch the harness to pi"*
 - **Gates and branch protection**: `/pair-capability-setup-gates`. *"set up the pre-push gate"*
-- **Package-local adoption, template overrides**: [Package-local adoption](/docs/customization/package-local-adoption), [Templates](/docs/customization/templates).
+- **Package-local adoption, template overrides**: [Package-local adoption](/docs/concepts/package-local-adoption), [Customize templates](/docs/guides/customize-templates).
 
 ### 7. Record key decisions
 
@@ -241,7 +239,7 @@ If everything works end-to-end, your team setup is complete.
 
 ## Next steps
 
-- **[Customize for Your Team](/docs/customization/team)**: Deep dive into all customization options
-- **[Publish a Knowledge Base](/docs/customization/organization)**: Package your team's KB for distribution
+- **[Customize the Knowledge Base for your team](/docs/guides/customize-for-your-team)**: Deep dive into all customization options
+- **[Own and publish a Knowledge Base](/docs/guides/external-kb)**: Package your team's KB for distribution
 - **[Enterprise Adoption tutorial](/docs/tutorials/enterprise-adoption)**: Rolling out pair across an organization
 - **[Support](/docs/support)**: FAQ and troubleshooting when something doesn't work

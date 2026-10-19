@@ -1,0 +1,87 @@
+---
+title: Install sources
+description: Every form pair-cli install and update accept for --source, a remote URL, a git repository, a local path or ZIP, and the offline mode, with the constraints between them.
+---
+
+By default `pair-cli install` downloads the Knowledge Base from the latest GitHub release. `--source` points it somewhere else: an internal mirror, your own KB repository, a local directory, or a ZIP carried into an air-gapped machine. `pair-cli update` accepts the same flags.
+
+## Remote URL
+
+Any HTTP or HTTPS URL to a KB ZIP package. The CLI downloads it, checks the SHA-256 checksum and installs every registry it ships.
+
+```bash
+pair-cli install --source https://internal-mirror.company.com/kb-v1.2.0.zip
+
+# make a mirror the default
+export PAIR_KB_DEFAULT_URL=https://artifacts.company.com/pair/kb-latest.zip
+pair-cli install
+```
+
+## Git repository
+
+Any git URL; the CLI shallow-clones it (depth 1) and installs from the clone. Pin a tag or branch with `#ref`.
+
+```bash
+pair-cli install --source https://github.com/acme/kb-artifacts.git
+pair-cli install --source git@github.com:acme/kb-artifacts.git#v1.0.0
+```
+
+SSH URLs use your SSH keys. HTTPS URLs to a private repository need `PAIR_GIT_TOKEN`:
+
+```bash
+export PAIR_GIT_TOKEN=ghp_your_personal_access_token
+pair-cli install --source https://github.com/acme/private-kb.git#v2.0.0
+```
+
+In CI, inject it as a secret (`env: PAIR_GIT_TOKEN: ${{ secrets.GIT_TOKEN }}`).
+
+## Local path or ZIP
+
+```bash
+pair-cli install --source /path/to/kb-content
+pair-cli install --source ./local-kb
+pair-cli install --source ./downloads/kb-v1.0.0.zip
+```
+
+A local directory is installed from in place and never cached, so editing it changes what the next install produces. Use it while developing a KB, to validate a package before publishing, or to install from a shared folder.
+
+## Offline
+
+`--offline` forbids every network request and requires a local `--source`:
+
+```bash
+pair-cli install --offline --source ./kb-content
+```
+
+Air-gapped workflow: download `kb.zip` from the release on a connected machine, transfer it, `unzip kb.zip -d ./kb-content`, install with `--offline`.
+
+## Constraints
+
+| `--source` | `--offline` | Result |
+| --- | --- | --- |
+| absent | no | download from the GitHub release |
+| absent | yes | error: `--offline` requires `--source` |
+| `https://...` | no | download from the URL |
+| `https://...` | yes | error: a URL needs the network |
+| `*.git`, `git@...` | no | clone the repository |
+| `*.git`, `git@...` | yes | error: a clone needs the network |
+| `./local-path` | no | use the local path |
+| `./local-path` | yes | use the local path |
+
+## Verify before installing
+
+```bash
+pair-cli kb-verify ./kb-package.zip && pair-cli install --source ./kb-package.zip
+```
+
+`kb-verify` checks the checksum, the package structure and the manifest.
+
+## Caching and isolation
+
+An external source that has to be materialized (a ZIP, a remote ZIP, a git clone) is cached under `~/.pair/kb/external/<kind>-<hash>/`, never in the official KB's slot (`~/.pair/kb/<cli-version>/`), so installing an external KB in one project cannot change what another project resolves. Registries the source does not ship are skipped and named in the summary, not failed; the exit code follows real failures only. `update --source` reads the KB's own `pair.config.json`, so a declared `prefix` survives the round trip.
+
+## Related
+
+- [Own and publish a Knowledge Base](/docs/guides/external-kb): the repository these sources install from
+- [CLI commands](/docs/reference/cli/commands): full `install` and `update` syntax
+- [KB source resolution](/docs/reference/specs/kb-source-resolution): the resolution algorithm

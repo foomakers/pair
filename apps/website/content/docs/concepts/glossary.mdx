@@ -1,0 +1,110 @@
+---
+title: Glossary
+description: The words pair uses, defined once, card, macrostate, tier, gate, harness, engine, realization, stage, handoff, seal, escalation, ADR, ADL, DDR, bridge file, registry, adoption file, Knowledge Base.
+---
+
+Every term is defined here once and linked from its first use in the [Process Lifecycle](/docs/process-lifecycle). Terms are grouped by what they describe.
+
+## Work items
+
+### Card
+
+Any work item on your board: an initiative, an epic, a story or a task. pair says "card" when the kind does not matter, for example "the delivery cycle drives one card".
+
+### Initiative, epic, story, task
+
+The four kinds of card, from largest to smallest. An initiative is a strategic objective; an epic a feature set delivered in a few sprints; a story one slice of user value; a task one step inside a story, written inline in the story body. See [Phases](/docs/process-lifecycle/phases).
+
+### Macrostate
+
+One of pair's canonical work-item states (`Draft`, `Ready`, `In Progress`, `In Review`, `Done`, `Not planned`), independent of your board's column names. A `## State Mapping` table maps your columns to them. See [Canonical states](/docs/concepts/canonical-states).
+
+### Draft, Ready, Done
+
+The three macrostates the lifecycle pivots on. A card is Draft until refinement and task breakdown make it Ready; the delivery workflow takes a Ready card to Done. See [Definition of Ready and Done](/docs/concepts/definition-of-ready-and-done).
+
+### Grill
+
+A `/pair-capability-grill` interview: one question at a time, always with a recommendation, until you and the AI confirm a shared understanding. Refinement opens with one.
+
+## Quality and risk
+
+### Risk tier
+
+The green, yellow or red level the quality model derives from a story's classification matrix. It decides which gates run, how much review a PR needs and what automation may pick up. See [Tag-driven quality gates](/docs/concepts/tag-driven-gates).
+
+### Risk tag
+
+The `risk:green`, `risk:yellow` or `risk:red` label written onto a card and its PR when the project's tag projection is on. "Chromatic" means the same thing: the tier shown as a colour.
+
+### Gate
+
+A check that must pass before a PR moves on: lint, type check, build, unit tests and so on, scaled by tier. Also the three autonomy gates below.
+
+### Autonomy gates
+
+`until`, `prepare` and `merge` in `## Autonomy` of `tech/automation.md`. They decide how far a card goes without a human: how far the cycle runs, who refines a Draft card, whether a review-approved card merges. See [Adoption settings](/docs/reference/adoption-settings#techautomationmd).
+
+### Escalation
+
+What happens when a `when` gate condition fires or a budget is spent: the card stops as `escalated`, one comment on it names the reason, and a human takes over. The PR stays open.
+
+## Delivery mechanics
+
+### Lifecycle modes
+
+Who drives the process. **Assisted**: pair guides you through every phase with AI, one skill at a time. **Supervised**: pair automates one card from start to finish. **Autonomous**: pair watches the backlog and applies the whole process to every card matching a criterion you set (for example all `risk:green` or all UI cards). They mirror driving automation levels 2, 3 and 4. See [Lifecycle modes](/docs/process-lifecycle/lifecycle-modes).
+
+### Stage
+
+One judgment inside the delivery cycle: `implement`, `verify`, `prepare`, `validate`, `green` or `merge`. Each is a skill dispatched to a fresh agent. See [The delivery cycle in depth](/docs/process-lifecycle/delivery-cycle#2-the-stages-one-by-one).
+
+### Handoff
+
+The file a stage writes under the run directory when it finishes. The next stage reads it; a cycle resumes from its first incomplete handoff. State is files, not conversation memory.
+
+### Seal
+
+The commit that fixes a remediation round's failing tests as a contract. After the seal, the fixer may change production code but not a byte of the sealed tests; verification checks the bytes.
+
+### Realization
+
+One of the three ways to drive the cycle: the in-session coordinator (`/pair-workflow-cycle`), the console driver (`pair-cli run`) or the Claude Code parallel batch. Same rules, different dispatcher. See [realizations](/docs/process-lifecycle/delivery-cycle#3-three-realizations-and-which-to-use).
+
+### Run directory
+
+`.pair/working/runs/<run>/<card>/`, where a cycle keeps its handoffs and log. Never loaded as context unless a skill asks for it.
+
+## Tools
+
+### Harness
+
+An AI coding tool configured to execute pair's process: skill paths, auth, model provider, headless mode. Claude Code, Codex, pi and opencode are harnesses. See [Harnesses and engines](/docs/integrations/adding-a-harness).
+
+### Engine
+
+A process `pair-cli run` can drive one iteration at a time without a human: `claude -p`, `codex`, `pi`, `opencode`. A harness is usually also an engine; the roles are independent.
+
+### Bridge file
+
+The file a tool reads to discover `.pair/`: `AGENTS.md`, `CLAUDE.md`, `.cursor/rules/`, `.github/agents/`. All of them point at the same Knowledge Base. See [Agent integration](/docs/concepts/agent-integration).
+
+### Registry
+
+One named set of files `pair-cli install` and `update` manage, with a source, a target path and a behaviour (`mirror`, `add`, `overwrite`): `knowledge`, `adoption`, `skills`, `agents`, `github`, `workflows`, `agent-definitions`. See [Configuration](/docs/reference/configuration).
+
+## Knowledge
+
+### Knowledge Base
+
+The guidelines, how-tos and templates installed into `.pair/knowledge/`, refreshed by `pair-cli update`. Yours to read, never to edit in place. See [Knowledge Base](/docs/concepts/knowledge-base).
+
+### Adoption file
+
+A file under `.pair/adoption/` recording one of your project's decisions: `architecture.md`, `tech-stack.md`, `way-of-working.md`, `automation.md`, `risk-matrix.md`. Adoption wins over the Knowledge Base and is never overwritten. See [Adoption files](/docs/concepts/adoption-files).
+
+### ADR, ADL, DDR
+
+The three kinds of recorded decision. An **ADR** (Architecture Decision Record, `tech/adr/`) records an architectural choice with context and consequences. An **ADL** entry (decision log, `decision-log/`) records a non-architectural project decision. A **DDR** (Domain Decision Record) records a domain-model decision. All three are written by `/pair-capability-record-decision`.
+
+**Next:** [AI-assisted SDLC](/docs/concepts/ai-assisted-sdlc), where the concepts start.

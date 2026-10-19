@@ -1175,7 +1175,7 @@ function checkPaths(root: string) {
       'packages/knowledge-hub/dataset/plugin/skills/pair-assistant/SKILL.md',
     ),
     PLUGIN_MANIFEST: join(root, 'packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json'),
-    BATCH_ENGINE_FILE: join(DOCS_DIR, 'reference/batch-engine.mdx'),
+    BATCH_ENGINE_FILE: join(DOCS_DIR, 'contributing/batch-engine-internals.mdx'),
     CLI_CONFIG: join(root, 'apps/pair-cli/config.json'),
     AGENTS_DIR: join(root, 'packages/knowledge-hub/dataset/.agents'),
     WORKFLOWS_DIR: join(root, 'packages/knowledge-hub/dataset/.workflows'),
@@ -1301,21 +1301,17 @@ export function batchEngineErrors(paths: {
 }
 
 /**
- * The docs pages whose fenced sample block claims to BE the output of
- * `pair-cli install --list-targets`. These are transcripts a reader compares their own
+ * The docs page whose fenced sample block claims to BE the output of
+ * `pair-cli install --list-targets`. This is a transcript a reader compares their own
  * terminal against line for line, so drift here does not read as a stale doc — it reads
  * as a broken install, and the reader has no way to tell the two apart.
  */
-export const LIST_TARGETS_PAGES = [
-  'guides/adoption-checklist.mdx',
-  'getting-started/quickstart-solo.mdx',
-  'reference/cli/examples.mdx',
-]
+export const LIST_TARGETS_PAGES = ['reference/cli/examples.mdx']
 
 /** The header `listTargets` (apps/pair-cli/src/commands/install/handler.ts) prints, uncoloured. */
 export const LIST_TARGETS_HEADER = 'Asset Registries'
 
-/** The header three pages invented for it, and which the CLI has never emitted. */
+/** The header the docs once invented for it, and which the CLI has never emitted. */
 const LIST_TARGETS_INVENTED_HEADER = 'Available asset registries:'
 
 type ListTargetsRegistry = { behavior?: string; targets?: { path: string }[] }
@@ -1331,7 +1327,7 @@ function listTargetsEntry(name: string, reg: ListTargetsRegistry): string {
  * handler's header, and one `name` / `target:` / `behavior:` entry per SHIPPED registry.
  *
  * The batch-engine check above reads `asset_registries` too, but only for two registries and
- * only against `batch-engine.mdx`; these three transcripts were covered by nothing. They drifted
+ * only against the batch-engine page; the transcripts were covered by nothing. They drifted
  * into a columnar table under a header the CLI never printed, gave `knowledge` the target `.pair`
  * instead of `.pair/knowledge`, and omitted 4 of the 7 registries — for as long as it took someone
  * to read them side by side with a terminal. Deriving both directions from `config.json` means

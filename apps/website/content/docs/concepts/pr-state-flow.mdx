@@ -15,7 +15,7 @@ to-be-reviewed → ready-to-merge
 | PR state | Meaning | Mergeable |
 | --- | --- | --- |
 | **to-be-reviewed** | Gates not green, review not submitted (or crashed), or a 🔴 PR still waiting for explicit human approval | No |
-| **ready-to-merge** | Gates green, review approved, and (at 🔴) a human approval on the current head | Yes: a human performs the merge, unless the project's `## Auto-Advance` names the tier and `pair-loop` executes it unattended on freshly re-verified signals (same synthesis, no looser rule) |
+| **ready-to-merge** | Gates green, review approved, and (at 🔴) a human approval on the current head | Yes: a human performs the merge, unless the project's `merge` gate (`## Autonomy`, under `until: merged`) lets the merge stage execute it unattended on freshly re-verified signals (same synthesis, no looser rule) |
 | **not-approved** | The review asked for changes; the findings go back to the author | No |
 
 ## Two enforcers that never blur
@@ -99,9 +99,11 @@ Reviewer count, SLA, checklist depth, and the 🔴 explicit-approval rule come f
 
 ## Related
 
-- [The risk-driven flow](/docs/developer-journey#the-risk-driven-flow): what the PR states mean for the developer, phase by phase
+- [The risk-driven thread](/docs/process-lifecycle#the-risk-driven-thread): what the PR states mean for the developer, phase by phase
 - [Dedicated Review Identity](/docs/concepts/review-identity): who executes the flow's code-host writes, and the adoption-gated light auto-approval row
 - [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates): the gate side of the flow (the first filter)
 - [Canonical States](/docs/concepts/canonical-states): the work-item macrostates a PR lives under (`Review`)
 - [Quality Model](/docs/reference/quality-model): the per-tier requirements this flow reads
 - [Quality Gates & Configuration](/docs/reference/quality-gates-configuration): what is always on, and what is opt-in
+
+**Next:** [Review identity](/docs/concepts/review-identity), who signs the review.

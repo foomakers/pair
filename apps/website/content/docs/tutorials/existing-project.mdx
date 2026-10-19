@@ -42,32 +42,9 @@ From your project root:
 pair-cli install
 ```
 
-**With the CLI:** `pair-cli install`.
+Install refuses if a target already exists (`AGENTS.md`, `CLAUDE.md`, `.claude/skills`, `.pair/knowledge`): exit 1, `Target '<path>' already exists`, nothing written. Decide per file first with the recipe [Adopt pair in an existing repository](/docs/guides/adopt-existing-repo): keep your own `AGENTS.md` with `--skip-registries agents` (saved in `pair.config.json`, honoured by every update) or move it aside and let pair write its own. **With `/pair-assistant` (optional, Claude Code):** it asks keep or overwrite per file and runs the right command after you agree.
 
-**With `/pair-assistant` (optional, Claude Code):** ask for "pair in this project, first time" ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
-
-This creates the `.pair/` directory with guidelines, how-tos, templates, and empty adoption files. It also installs bridge files (`AGENTS.md`, `.claude/`, `.github/copilot/`, `.cursor/`) so every AI assistant finds the same context.
-
-<Callout type="warn">
-  **Install refuses if any target already exists** (`AGENTS.md`, `CLAUDE.md`, `.claude/skills`, `.pair/knowledge`, …): exit 1, `Target '<path>' already exists`, nothing written. Decide per file first, below.
-</Callout>
-
-![Installing pair into a repository that already has files: refusal, keep or overwrite](/diagrams/existing-repo-install.svg)
-
-*Figure: installing pair into a repository that already has files: refusal, keep or overwrite.*
-
-**Your own `AGENTS.md` / `CLAUDE.md`** (both are handled the same way, together):
-
-- **Overwrite**: `mv AGENTS.md AGENTS.md.bak` (and `mv CLAUDE.md CLAUDE.md.bak`), then `pair-cli install`. Use `mv`, not `cp`.
-- **Keep**: `pair-cli install --skip-registries agents`. The choice is persisted in `pair.config.json` (`"skipRegistries": ["agents"]`) and honoured by every `pair-cli update`. Add a pointer to `.pair/knowledge/` and `.pair/adoption/` in your own file yourself; pair never edits it.
-
-Then pick **1. install only** or **2. install and adopt the project** (continue with step 3 onward, and step 6 bootstrap). **With `/pair-assistant` (optional, Claude Code):** it asks keep or overwrite per file and runs the `mv` or `--skip-registries` after you agree.
-
-To update later: `pair-cli update` (default), or ask `/pair-assistant` for "the KB and skills refreshed". To opt a kept registry back in, remove its name from `skipRegistries`, `mv` your file to `.bak`, then update ([Quickstart](/docs/getting-started/quickstart#keep-your-kb-up-to-date)).
-
-<Callout type="info">
-  If you installed pair-cli as a dev dependency instead of globally, use `npx pair-cli install`. See [installation options](/docs/tutorials/first-project#1-install-pair-cli) for details.
-</Callout>
+Then pick **install only** or **install and adopt the project**: adopting is steps 3 to 7 below.
 
 ### 2. Start your AI assistant
 
@@ -174,7 +151,7 @@ Now run bootstrap (`/pair-next` knows PRD is done and suggests this):
 /pair-process-bootstrap
 ```
 
-**With the CLI:** bootstrap is a skill, not a command. **With `/pair-assistant` (optional, Claude Code):** ask it to adopt the project; it hands off to `/pair-process-bootstrap` with the evidence it found ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
+**In your assistant:** the command above. **With `/pair-assistant` (optional, Claude Code):** ask it to adopt the project; it hands off to `/pair-process-bootstrap` with the evidence it found ([how to ask](/docs/reference/pair-assistant#how-to-ask)).
 
 Bootstrap reads the analysis from step 3-4 and the PRD from step 5. For each adoption area, it **proposes decisions based on what it found** and asks you to confirm:
 
@@ -268,6 +245,6 @@ For installing pair-cli on non-JS projects, see [installation Option C](/docs/tu
 ## Next steps
 
 - **[Concepts](/docs/concepts)**: Understand how the Knowledge Base, Skills, and Adoption Files work together
-- **[Customization](/docs/customization)**: Adjust guidelines and quality gates for your specific needs
+- **[Guides](/docs/guides)**: configure card states, quality gates, templates and the Knowledge Base for your team
 - **[Your First Project tutorial](/docs/tutorials/first-project)**: Starting a new project from scratch? Follow this tutorial instead
 - **[Team Setup tutorial](/docs/tutorials/team-setup)**: Ready to share pair with your team?

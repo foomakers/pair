@@ -1,0 +1,37 @@
+---
+title: Verify your setup
+description: Fifteen checks that confirm pair-cli, the Knowledge Base, the bridge files and your assistant work together.
+---
+
+Run through this once after the [Quickstart](/docs/getting-started/quickstart) and [bootstrap](/docs/getting-started/bootstrap-quick-mode). Ten minutes.
+
+## The CLI
+
+- [ ] `node --version` prints 18 or higher
+- [ ] `pair-cli --version` prints a version (manual download: `./pair-cli --version` from the extracted folder; on Windows use WSL2 or Git Bash)
+- [ ] `pair-cli --help` lists `install`, `update`, `run`, `package`
+- [ ] `pair-cli install --list-targets` prints the `Asset Registries` block ([expected output](/docs/reference/cli/examples#1-first-time-setup))
+
+## The project
+
+- [ ] `.pair/knowledge/guidelines/` and `.pair/knowledge/how-to/` exist and are not empty
+- [ ] `.pair/adoption/tech/` holds `architecture.md`, `tech-stack.md`, `way-of-working.md` with your decisions, not the templates
+- [ ] `AGENTS.md` exists and points at `.pair/` (your own file with a pointer counts, if you kept it with `--skip-registries agents`)
+- [ ] `.claude/skills/` holds the `pair-*` skill directories
+- [ ] `pair-cli kb-validate` passes
+- [ ] `pair-cli update-link --dry-run` reports no broken links
+
+## Your assistant
+
+- [ ] A new session in your assistant describes the project from `.pair/adoption/` when asked
+- [ ] `/pair-next` answers with a next step, not with "no project found"
+- [ ] `/pair-process-bootstrap` reports an already-configured project as confirmed, not re-asked
+
+## Your tools
+
+- [ ] The PM tool in `way-of-working.md` is the one you use, and a card moved on the board changes what `/pair-next` reports
+- [ ] `git status` shows `.pair/adoption/` committed and `.pair/knowledge/` either committed or ignored, deliberately
+
+Anything unchecked: [Troubleshooting](/docs/support/troubleshooting) covers install and permission problems; [Adopt pair in an existing repository](/docs/guides/adopt-existing-repo) covers a repository that already had agent files.
+
+**Next:** the [Process Lifecycle](/docs/process-lifecycle), how a day with pair runs.

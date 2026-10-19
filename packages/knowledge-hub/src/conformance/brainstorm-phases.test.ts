@@ -684,7 +684,7 @@ describe('brainstorm — present in the narrative process flow, not only the cat
   // shipped entry point reachable in prose only through the raw catalog table.
   const DOCS_LADDER = join(
     __dirname,
-    '../../../../apps/website/content/docs/developer-journey/index.mdx',
+    '../../../../apps/website/content/docs/process-lifecycle/index.mdx',
   )
 
   for (const [label, wow, command] of [

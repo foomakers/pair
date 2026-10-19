@@ -3,7 +3,7 @@ title: Refinement
 description: Take one user story from Draft to Ready, grill sync, refine, plan tasks, and read the Assumptions and Open Questions it leaves on the card.
 ---
 
-**Goal:** one Draft story becomes Ready: acceptance criteria, analysis, classification, sizing and tasks. About 30 minutes. Second step of the [analysis and refinement workflow](/docs/developer-journey/refinement-workflow); the story can come from [Brainstorming](/docs/tutorials/brainstorming).
+**Goal:** one Draft story becomes Ready: acceptance criteria, analysis, classification, sizing and tasks. About 30 minutes. Second step of the [analysis and refinement workflow](/docs/process-lifecycle/refinement-workflow); the story can come from [Brainstorming](/docs/tutorials/brainstorming).
 
 ## 1. Refine
 
@@ -13,9 +13,9 @@ description: Take one user story from Draft to Ready, grill sync, refine, plan t
 
 **Phase 0, sync.** `/pair-capability-grill` interviews you one question at a time (goal, edge cases, dependencies, risks). No section is written until you and the AI agree. This is a blocking gate.
 
-Then the skill writes Given-When-Then acceptance criteria, the technical analysis, a [classification](/docs/reference/quality-model) and a size, and moves the card toward Ready. Detail: [Iteration](/docs/developer-journey/iteration#step-6-refine-a-user-story).
+Then the skill writes Given-When-Then acceptance criteria, the technical analysis, a [classification](/docs/reference/quality-model) and a size, and moves the card toward Ready. Detail: [Iteration](/docs/process-lifecycle/phases/iteration#step-6-refine-a-user-story).
 
-**With the CLI:** `pair-cli run --card 88 --prepare never --until ready` refines alone and stops before implementation. **With `/pair-assistant` (optional, Claude Code):** CLI only for the run; ask [`/pair-assistant`](/docs/reference/pair-assistant#how-to-ask) to set the `prepare` gate.
+**With pair-cli:** `pair-cli run --card 88 --prepare never --until ready` refines alone and stops before implementation. **With `/pair-assistant` (optional, Claude Code):** ask it to set the `prepare` gate ([how to ask](/docs/reference/pair-assistant#how-to-ask)); the run itself is pair-cli.
 
 ## 2. Plan tasks
 
@@ -36,4 +36,4 @@ When the `prepare` gate lets pair refine alone ([autonomy](/docs/tutorials/autom
 
 ## What you have
 
-A Ready story. Next: [Automated development](/docs/tutorials/automated-development), or `/pair-process-implement` by hand ([Execution](/docs/developer-journey/execution)).
+A Ready story. Next: [Automated development](/docs/tutorials/automated-development), or `/pair-process-implement` by hand ([Execution](/docs/process-lifecycle/phases/execution)).
