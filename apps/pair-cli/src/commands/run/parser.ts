@@ -476,7 +476,7 @@ function resolveProfileSelection(options: ParseRunOptions): {
   ) {
     const flag = profile !== undefined ? '--profile' : '--workflow-config'
     throw new Error(
-      `${flag} selects the delivery-cycle workflow profile and is only meaningful with --card ` +
+      `${flag} selects the delivery-cycle workflow profile and is only meaningful with --card, --root or --parallel ` +
         '(the cycle coordinator entry)',
     )
   }
