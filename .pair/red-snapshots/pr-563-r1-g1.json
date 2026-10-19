@@ -1,0 +1,66 @@
+{
+  "$meta": {
+    "pr": "563",
+    "phase": "r1-g1",
+    "base": "8d2b5a79331f1f3b90b10820c4edade97798487a",
+    "trailer": "Pair-RED-Snapshot: pr=563; phase=r1-g1; base=8d2b5a79331f1f3b90b10820c4edade97798487a; manifest=.pair/red-snapshots/pr-563-r1-g1.json",
+    "artifacts": [
+      "apps/website/app/(landing)/landing.ct.test.tsx"
+    ]
+  },
+  "mode": "remediation",
+  "inputHead": "8d2b5a79331f1f3b90b10820c4edade97798487a",
+  "sourceOfTruth": "apps/website/app/(landing)/cta-section.tsx rendered copy (AC-10)",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "cta-section.tsx copy",
+      "inputs": [
+        "render HomePage"
+      ],
+      "representations": [
+        "rendered section[aria-label=Call to action]"
+      ],
+      "consumers": [
+        "landing visitors"
+      ],
+      "classes": [
+        "CTA copy with duration (defect)",
+        "CTA copy without duration"
+      ],
+      "interactions": []
+    }
+  ],
+  "fixScope": {
+    "owner": "website-landing",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/website/app/(landing)/cta-section.tsx"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "CTA section rendered",
+      "oracle": "apps/website/app/(landing)/landing.ct.test.tsx primary and secondary CTAs test",
+      "file": "apps/website/app/(landing)/landing.ct.test.tsx",
+      "expected": "section does not contain 'minutes'",
+      "covers": [
+        "r0-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/website/app/(landing)/landing.ct.test.tsx",
+      "kind": "test",
+      "baseline": "red",
+      "command": "pnpm --dir apps/website ct --grep primary",
+      "observed": "1 failed: expect(section).not.toContainText('minutes') at landing.ct.test.tsx:176, CTA text has 'five minutes'",
+      "sha256": "sha256:42fe7efb1256346b24a177668ad40ebf835b475ca0c41b550da7c52547f9b416"
+    }
+  ],
+  "testExempt": false
+}
