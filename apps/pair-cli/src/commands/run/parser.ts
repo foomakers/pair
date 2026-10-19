@@ -468,7 +468,12 @@ function resolveProfileSelection(options: ParseRunOptions): {
 } {
   const profile = optionalText(options.profile, '--profile')
   const workflowConfig = optionalText(options.workflowConfig, '--workflow-config')
-  if ((profile !== undefined || workflowConfig !== undefined) && options.card === undefined && options.parallel === undefined && options.root === undefined) {
+  if (
+    (profile !== undefined || workflowConfig !== undefined) &&
+    options.card === undefined &&
+    options.parallel === undefined &&
+    options.root === undefined
+  ) {
     const flag = profile !== undefined ? '--profile' : '--workflow-config'
     throw new Error(
       `${flag} selects the delivery-cycle workflow profile and is only meaningful with --card ` +

@@ -218,7 +218,10 @@ const CODEX: EngineDefinition = {
   modelFlag: '--model',
   // `-c model_reasoning_effort=<level>` (codex config override), verified 2026-10-19. Codex's vocabulary
   // stops at `high`: pair's `xhigh` / `max` map to it.
-  effortArgs: level => ['-c', `model_reasoning_effort=${level === 'xhigh' || level === 'max' ? 'high' : level}`],
+  effortArgs: level => [
+    '-c',
+    `model_reasoning_effort=${level === 'xhigh' || level === 'max' ? 'high' : level}`,
+  ],
   command: 'codex',
   headlessArgs: ['exec', '--json'],
   skillInvocationStyle: 'instruction',

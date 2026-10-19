@@ -196,9 +196,7 @@ process.stdout.write(JSON.stringify({ type: 'agent_settled' }) + '\\n')
     const args = (engine: EngineDefinition, effort: string | undefined) =>
       buildEngineArgs({ engine, promptText: 'p', cwd: '/w', autonomyArgs: [], effort })
 
-    expect(args(ENGINES.claude, 'high')).toEqual(
-      expect.arrayContaining(['--effort', 'high']),
-    )
+    expect(args(ENGINES.claude, 'high')).toEqual(expect.arrayContaining(['--effort', 'high']))
     expect(args(ENGINES.claude, undefined)).not.toContain('--effort')
     expect(args(ENGINES.pi, 'high')).not.toContain('high')
   })
