@@ -57,7 +57,7 @@
 
 ### Expected Result
 
-- 5 tool names visible: Claude Code, Cursor, VS Code Copilot, Windsurf, Codex
+- 7 tool names visible: Claude Code, Codex, pi, opencode, Cursor, VS Code Copilot, Windsurf
 
 ---
 
