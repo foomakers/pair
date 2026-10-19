@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 // ============================================================
-// E2E: Landing page → Docs navigation flows
+// E2E: Landing page to Docs navigation flows
 // Verifies real user journeys from the landing page into docs.
 // ============================================================
 
@@ -22,13 +22,29 @@ test('click "Read the docs" navigates to docs', async ({ page }) => {
   await expect(page.locator('main')).toContainText('Welcome')
 })
 
-test('click "Get started" (Solo Dev) navigates to docs', async ({ page }) => {
+test('click "Get started" (Solo Dev) navigates to Quickstart', async ({ page }) => {
   await page.goto('/')
   await page
     .locator('section[aria-label="Audience tracks"] a')
     .filter({ hasText: 'Get started' })
     .click()
-  await expect(page).toHaveURL('/docs')
+  await expect(page).toHaveURL('/docs/getting-started/quickstart')
+  await expect(page.locator('h1')).toContainText('Quickstart')
+})
+
+test('hero "Get started" navigates to Quickstart', async ({ page }) => {
+  await page.goto('/')
+  await page.locator('section[aria-label="Hero"] a').filter({ hasText: 'Get started' }).click()
+  await expect(page).toHaveURL('/docs/getting-started/quickstart')
+})
+
+test('landing routes to Lifecycle modes and Delivery workflow', async ({ page }) => {
+  await page.goto('/')
+  await page.locator('section[aria-label="Three modes"] a').click()
+  await expect(page).toHaveURL('/docs/process-lifecycle/lifecycle-modes')
+  await page.goto('/')
+  await page.locator('section[aria-label="Delivery workflow"] a').click()
+  await expect(page).toHaveURL('/docs/process-lifecycle/delivery-workflow')
 })
 
 test('docs sidebar navigates to Getting Started', async ({ page }) => {

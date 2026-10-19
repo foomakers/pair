@@ -44,7 +44,7 @@ export function ModesSection() {
               key={mode.name}
               className='card-glow flex flex-col rounded-2xl border border-pair-border-light bg-pair-bg-light p-8 dark:border-pair-border-dark dark:bg-pair-bg-dark'>
               <h3 className='mb-1 font-sans text-xl font-bold'>{mode.name}</h3>
-              <p className='mb-4 text-sm font-medium text-pair-teal'>{mode.analogy}</p>
+              <p className='mb-4 text-sm font-medium'>{mode.analogy}</p>
               <p className='text-sm text-pair-text-muted-light dark:text-pair-text-muted-dark'>
                 {mode.description}
               </p>

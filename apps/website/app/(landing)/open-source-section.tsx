@@ -8,7 +8,7 @@ export function OpenSourceSection() {
       className='border-t border-pair-border-light px-6 py-20 text-center dark:border-pair-border-dark'>
       <h2 className='mb-4 font-sans text-3xl font-extrabold md:text-4xl'>Open Source</h2>
       <p className='mb-8 text-pair-text-muted-light dark:text-pair-text-muted-dark'>
-        pair is free, open source, and community-driven.
+        pair is free and open source, MIT licensed.
       </p>
       <Button
         as='a'
@@ -21,6 +21,17 @@ export function OpenSourceSection() {
         <GitHubIcon width={22} height={22} />
         foomakers/pair
       </Button>
+      <p className='mt-6 text-sm text-pair-text-muted-light dark:text-pair-text-muted-dark'>
+        Air-gapped?{' '}
+        <a
+          href={URLS.GITHUB_RELEASES}
+          target='_blank'
+          rel='noopener noreferrer'
+          className='underline underline-offset-4'>
+          Download the manual zip from GitHub Releases
+        </a>
+        .
+      </p>
     </section>
   )
 }
