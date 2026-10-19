@@ -158,7 +158,7 @@ interface ParseRunOptions {
   watch?: boolean
   /** US-522: `--interval <n>s|m|h`. */
   interval?: string
-  /** US-488: `--profile <name>` — the workflow profile (per-stage engine/model/effort/context); needs `--card`. */
+  /** US-488: `--profile <name>` — the workflow profile (per-stage engine/model/effort/context); needs `--card` or `--parallel`. */
   profile?: string
   /** US-488: `--workflow-config <path>` — an external profile file, wins over every other source; needs `--card`. */
   workflowConfig?: string
@@ -459,7 +459,7 @@ function resolveParallel(options: ParseRunOptions): { parallel?: number } {
 
 /**
  * US-488: `--profile` / `--workflow-config` select the DELIVERY-CYCLE profile, so they mean something
- * only on a `--card` entry — anywhere else they would be accepted and silently ignored, which is the
+ * only on a `--card` entry or a `--root`/`--parallel` fan-out (forwarded to each child) — anywhere else they would be accepted and silently ignored, which is the
  * one thing a profile flag must never be (a typo'd model class quietly not applying).
  */
 function resolveProfileSelection(options: ParseRunOptions): {
@@ -468,10 +468,15 @@ function resolveProfileSelection(options: ParseRunOptions): {
 } {
   const profile = optionalText(options.profile, '--profile')
   const workflowConfig = optionalText(options.workflowConfig, '--workflow-config')
-  if ((profile !== undefined || workflowConfig !== undefined) && options.card === undefined) {
+  if (
+    (profile !== undefined || workflowConfig !== undefined) &&
+    options.card === undefined &&
+    options.parallel === undefined &&
+    options.root === undefined
+  ) {
     const flag = profile !== undefined ? '--profile' : '--workflow-config'
     throw new Error(
-      `${flag} selects the delivery-cycle workflow profile and is only meaningful with --card ` +
+      `${flag} selects the delivery-cycle workflow profile and is only meaningful with --card, --root or --parallel ` +
         '(the cycle coordinator entry)',
     )
   }

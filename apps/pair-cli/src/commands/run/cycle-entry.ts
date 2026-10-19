@@ -22,8 +22,10 @@ import type { AutonomyResolution } from './cycle-scripts'
 import { resolveBlockingSeverities, describeMaxDispatches } from './blocking-severities'
 import { ENGINE_IDS, type EngineId } from './engines'
 import {
+  markIgnoredEffort,
   resolveWorkflowProfile,
   stageEngineIds,
+  stageSettings,
   workflowProfileRequested,
   type ResolvedWorkflowProfile,
 } from './workflow-profile'
@@ -128,6 +130,7 @@ function reportCycleEntry(input: {
   runDir: string
   shown: ShownDefaults
   profile: ResolvedWorkflowProfile | undefined
+  effortWarning?: string | undefined
   autonomy: AutonomyResolution | undefined
 }): void {
   console.log(chalk.bold('pair-cli run'))
@@ -138,6 +141,7 @@ function reportCycleEntry(input: {
     console.log('  Profile: KB default (source: KB default)')
   } else {
     for (const line of input.profile.table) console.log(`  ${line}`)
+    if (input.effortWarning !== undefined) console.log(chalk.yellow(`  ! ${input.effortWarning}`))
   }
   console.log(`  Delivery cycle: runId=${input.dispatch.runId} card=${input.card}`)
   console.log(`  Scripts: ${input.scriptsDir ?? '(resolved by the cycle driver)'}`)
@@ -309,8 +313,20 @@ function resolveProfileSetup(
   location: CycleScriptsLocation,
   engineDef: EngineDefinition,
 ) {
-  const profile = resolveRunProfile(input, deps, location)
-  return { profile, stageEngineDefs: stageEnginesOf(profile, engineDef, input) }
+  const resolved = resolveRunProfile(input, deps, location)
+  const stageEngineDefs = stageEnginesOf(resolved, engineDef, input)
+  if (resolved === undefined)
+    return { profile: resolved, stageEngineDefs, effortWarning: undefined }
+  // US-560 AC3: an effort no verified flag carries is marked in the table and warned once.
+  const { table, warning } = markIgnoredEffort(resolved, stage => {
+    const id = stageSettings(resolved, stage).engine
+    return (id === undefined ? undefined : stageEngineDefs[id]) ?? engineDef
+  })
+  return {
+    profile: { ...resolved, table },
+    stageEngineDefs,
+    effortWarning: warning,
+  }
 }
 
 /** The engines a profile names beyond the run's own, each proven installed before the first print. */
@@ -369,6 +385,7 @@ export function prepareCycleCoordinator(
     runDir: `.pair/working/runs/${dispatch.runId}/${card}`,
     shown,
     profile: setup.profile,
+    effortWarning: setup.effortWarning,
     autonomy,
   })
 

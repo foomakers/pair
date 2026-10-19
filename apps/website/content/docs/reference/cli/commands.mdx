@@ -814,8 +814,8 @@ pair-cli run [options]
 | `--approve-ineligible`          | Let THIS `--autonomous` run through `## Eligibility` on a card that does not carry the label. Announced, never persisted |
 | `--predicate '<selector> ⇒ <condition>'` | With `--parallel`: the loop stop predicate (grammar of `## Stop Predicate`), argument > adoption, printed with its source. Checked at each iteration boundary before work; an empty or incomplete board snapshot never counts as satisfied |
 | `--eligibility-filter <labels>` | Internal, set by the `--parallel` loop on each child `--card` run: the loop's effective filter (argument or `## Autonomy`) as THIS card's eligibility, replacing the legacy `## Eligibility` label. Needs `--card`; not a selector, so the coordinator's `--filter` refusal does not apply |
-| `--profile <name>`              | With `--card`: the named workflow profile (per-stage engine/model/effort/context) from `pair.config.json`'s `workflowProfiles`. An unknown name halts `profile-unresolved`, never the KB default |
-| `--workflow-config <path>`      | With `--card`: an external profile file, used verbatim, wins over `--profile` and `pair.config.json`  |
+| `--profile <name>`              | With `--card`, `--root` or `--parallel` (forwarded to every child card): the named workflow profile (per-stage engine/model/effort/context) from `pair.config.json`'s `workflowProfiles`. An unknown name halts `profile-unresolved`, never the KB default |
+| `--workflow-config <path>`      | With `--card`, `--root` or `--parallel` (forwarded to every child card): an external profile file, used verbatim, wins over `--profile` and `pair.config.json`  |
 | `--iteration-timeout <seconds>` | Per-iteration wall-clock bound (hang guard, default `1800`)                                           |
 | `--dry-run`                     | Resolve engine, skill, perimeter and policy, print them, spawn nothing                               |
 
