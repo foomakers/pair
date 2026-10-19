@@ -1,0 +1,93 @@
+{
+  "$meta": {
+    "pr": "561",
+    "phase": "r1-g1",
+    "base": "0978bb73d8a0284fbdfbeef2c2fd7f3068fc2a2e",
+    "trailer": "Pair-RED-Snapshot: pr=561; phase=r1-g1; base=0978bb73d8a0284fbdfbeef2c2fd7f3068fc2a2e; manifest=.pair/red-snapshots/pr-561-r1-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/profile-refusal-message.test.ts"
+    ]
+  },
+  "mode": "remediation",
+  "inputHead": "0978bb73d8a0284fbdfbeef2c2fd7f3068fc2a2e",
+  "sourceOfTruth": "apps/pair-cli/src/commands/run/parser.ts resolveProfileSelection",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "resolveProfileSelection (parser.ts:465)",
+      "inputs": [
+        "--profile",
+        "--workflow-config",
+        "--card",
+        "--root",
+        "--parallel"
+      ],
+      "representations": [
+        "thrown Error message"
+      ],
+      "consumers": [
+        "parseRunCommand",
+        "CLI user"
+      ],
+      "classes": [
+        "profile alone refused",
+        "workflow-config alone refused",
+        "profile with root+parallel accepted"
+      ],
+      "interactions": []
+    }
+  ],
+  "fixScope": {
+    "owner": "apps/pair-cli run parser",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/parser.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "parseRunCommand({skill:'pair-next',profile:'x'})",
+      "oracle": "apps/pair-cli/src/commands/run/profile-refusal-message.test.ts: --profile alone names --parallel",
+      "expected": "throws /--parallel/",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "parseRunCommand({skill:'pair-next',workflowConfig:'x.json'})",
+      "oracle": "apps/pair-cli/src/commands/run/profile-refusal-message.test.ts: --workflow-config alone names --root and --parallel",
+      "expected": "throws naming --root and --parallel",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "parseRunCommand({root:'66',parallel:'2',autonomous:true,profile:'x'})",
+      "oracle": "apps/pair-cli/src/commands/run/profile-refusal-message.test.ts: control --profile with --root --parallel does not throw",
+      "expected": "no throw",
+      "covers": [
+        "r0-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/profile-refusal-message.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:018caea77be051c3fb0d0dde8cef9d04616e8f8f6df89ddf6cb4067369e5c13f",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/profile-refusal-message.test.ts",
+      "observed": "FAIL 2 failed | 1 passed (3): AssertionError: expected [Function] to throw error matching /--parallel/ but got --profile selects the delivery-cycle ..."
+    }
+  ],
+  "testExempt": false
+}
