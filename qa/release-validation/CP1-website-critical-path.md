@@ -39,7 +39,9 @@
 
 - Pair logo visible
 - Claim text "Code is the easy part." present
-- "Get pair" CTA button visible and clickable, linking to `https://github.com/foomakers/pair/releases/latest`
+- "Get started" CTA button visible and clickable, linking to `$BASE_URL/docs/getting-started/quickstart`
+- Inline `npm install -g @foomakers/pair-cli` shown under the CTA
+- Optional plugin line shown: `/plugin install pair@pair`
 
 ---
 
@@ -91,14 +93,14 @@
 ### Expected Result
 
 - Each CTA navigates to a distinct docs page:
-  - Solo Dev → `$BASE_URL/docs`
-  - Team → `$BASE_URL/docs/guides/customize-for-your-team`
+  - Solo Dev → `$BASE_URL/docs/getting-started/quickstart`
+  - Team → `$BASE_URL/docs/getting-started/choose-your-path#team`
   - Organization → `$BASE_URL/docs/guides/external-kb`
-- Each destination returns HTTP 200
+- Each destination returns HTTP 200 (Team: the page, the `#team` anchor scrolls to the Team section)
 
 ---
 
-## MT-CP106: Main CTA navigates to releases
+## MT-CP106: Main CTA and Releases link
 
 **Priority**: P0
 **Preconditions**: MT-CP101 passes
@@ -106,12 +108,13 @@
 
 ### Steps
 
-1. Click the primary "Get pair" button in the hero
+1. Click the primary "Get started" button in the hero
+2. Navigate back, scroll to the Open Source section, click the GitHub Releases link
 
 ### Expected Result
 
-- Navigates to `https://github.com/foomakers/pair/releases/latest`
-- Destination returns HTTP 200 (or 302 redirect to latest release)
+- Hero CTA navigates to `$BASE_URL/docs/getting-started/quickstart` (HTTP 200)
+- Open Source section link navigates to `https://github.com/foomakers/pair/releases/latest` (HTTP 200, or 302 redirect to latest release)
 
 ---
 
@@ -244,6 +247,29 @@
 
 ---
 
+## MT-CP114: v0.5.0 landing sections
+
+**Priority**: P1
+**Preconditions**: MT-CP101 passes
+**Category**: Website
+
+### Steps
+
+1. On `$BASE_URL`, scroll through the page below the hero
+2. Click the "What's new" banner link, then navigate back
+
+### Expected Result
+
+- "New in v0.5.0:" banner present, link goes to `$BASE_URL/docs/whats-new` (HTTP 200)
+- Process lifecycle section: 4 phases (Induction, Strategic planning, Iteration, Execution), link to `/docs/process-lifecycle`
+- Three modes section: Assisted, Supervised, Autonomous, each with a steering wheel icon and an automation-level bar (1, 2, 3 of 3 filled); "Choose your mode" link to `/docs/process-lifecycle/lifecycle-modes`
+- Delivery section: Implement, Verify, Fix inside a seal, Resume anywhere; link to `/docs/process-lifecycle/delivery-workflow`
+- Risk tiers section present, link to `/docs/process-lifecycle/tag-driven-automation`
+- All links return HTTP 200
+
+---
+
 ## Changelog
 
 - #543: channel note (final-only / PR preview).
+- #543 inc. 2: MT-CP102/105/106 aligned with the v0.5.0 landing (Get started CTA, Solo/Team targets, Releases link in Open Source); new MT-CP114 for the new landing sections.
