@@ -5,6 +5,14 @@ description: The four phases and nine steps of the pair lifecycle, which skill r
 
 Four phases, nine steps. Each step has a how-to guide in the Knowledge Base and a skill that runs it. You enter at whatever phase matches your project; `/pair-next` tells you which.
 
+<Callout type="info" title="The building blocks, not a manual checklist">
+  This section describes every building block of the pair process. You do not need to know them all, nor run each step by hand, unless you want maximum control.
+
+  pair ships **workflow and loop skills** that chain these steps for you: the [refinement workflow](/docs/process-lifecycle/refinement-workflow) takes a card from idea to Ready, the [delivery workflow](/docs/process-lifecycle/delivery-workflow) takes it from Ready to a reviewed pull request. Together with [classification and tag-driven automation](/docs/process-lifecycle/tag-driven-automation), they automate most of the process and escalate to you only when your own rules say a human is needed.
+
+  **How to read on:** go through the phases to learn how pair works, then read the workflow pages to automate the process.
+</Callout>
+
 ```text
 Discovery (optional, before Phase 1) ─── /pair-process-brainstorm
 
@@ -35,4 +43,4 @@ Phase 4: Execution (per story)
 
 Two ways to follow the steps: **process skills** (recommended: one slash command, the AI runs the structured process, composes capability skills and updates your PM tool) or the **how-to guides** in `.pair/knowledge/how-to/` for the same process by hand. Both are listed in the [Skills catalog](/docs/reference/skills-catalog) and the [Guidelines and how-to catalog](/docs/reference/guidelines-catalog).
 
-**Next:** [Induction](/docs/process-lifecycle/phases/induction), the one-time setup.
+**Next:** [Induction](/docs/process-lifecycle/phases/induction), the one-time setup. After the four phases, continue with the [refinement workflow](/docs/process-lifecycle/refinement-workflow) and the [delivery workflow](/docs/process-lifecycle/delivery-workflow) to automate them.
