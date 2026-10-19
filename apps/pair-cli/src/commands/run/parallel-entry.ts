@@ -4,6 +4,8 @@ import { adoptionSelection } from './autonomy-policy'
 import chalk from 'chalk'
 import { acquireCardLock } from './card-lock'
 import { resolveEngineFor } from './cycle-entry'
+import { locateCycleScripts } from './cycle-scripts'
+import { resolveWorkflowProfile } from './workflow-profile'
 import { appendAuditLine } from './dispatch-audit'
 import {
   isInterrupted,
@@ -272,6 +274,13 @@ export async function handleParallelRun(
   assertScope(selection)
   const values = resolveLoopValues(config, context.policy)
   const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
+  // US-560 AC4: an unknown profile HALTs here, once, before the selection or any child spawns.
+  if (config.profile !== undefined || config.workflowConfig !== undefined) {
+    ;(deps.resolveWorkflowProfile ?? resolveWorkflowProfile)(
+      locateCycleScripts(fs, context.config, cwd).scriptsDir,
+      { root: cwd, profile: config.profile, workflowConfig: config.workflowConfig },
+    )
+  }
   // Refused here, before anything spawns: the selection process runs under the same posture.
   const autonomy = resolveAutonomyFor(engine.engine, config, cwd, fs)
   reportPreamble(input, describeEngineResolution(engine), {

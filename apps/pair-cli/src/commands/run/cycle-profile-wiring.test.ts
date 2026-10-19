@@ -192,15 +192,15 @@ process.stdout.write(JSON.stringify({ type: 'agent_settled' }) + '\\n')
     ).toThrow(/context-policy-invalid/)
   })
 
-  it('effort is sent only to an engine that declares an effort flag; none is invented for the others', () => {
+  it('effort is sent only to an engine that declares effort args; none is invented for the others', () => {
     const args = (engine: EngineDefinition, effort: string | undefined) =>
       buildEngineArgs({ engine, promptText: 'p', cwd: '/w', autonomyArgs: [], effort })
 
-    expect(args({ ...ENGINES.claude, effortFlag: '--effort' }, 'high')).toEqual(
+    expect(args(ENGINES.claude, 'high')).toEqual(
       expect.arrayContaining(['--effort', 'high']),
     )
-    expect(args({ ...ENGINES.claude, effortFlag: '--effort' }, undefined)).not.toContain('--effort')
-    expect(args(ENGINES.claude, 'high')).not.toContain('high')
+    expect(args(ENGINES.claude, undefined)).not.toContain('--effort')
+    expect(args(ENGINES.pi, 'high')).not.toContain('high')
   })
 
   // US-488 r1-g1 (r0-1): every handoff records the profile the run REALLY used — a binding left by an

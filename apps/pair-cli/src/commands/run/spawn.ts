@@ -22,7 +22,7 @@ export interface EngineArgsInput {
   readonly autonomyArgs: readonly string[]
   /** The model this project pinned for this engine, if any (`engine.model` in pair.config.json). */
   readonly model?: string | undefined
-  /** US-488: a profile's effort for this stage — sent only when the engine declares an `effortFlag`. */
+  /** US-488: a profile's effort for this stage — sent only when the engine declares `effortArgs`. */
   readonly effort?: string | undefined
 }
 
@@ -31,7 +31,7 @@ export function buildEngineArgs(input: EngineArgsInput): string[] {
   return [
     ...input.engine.headlessArgs,
     ...(input.engine.modelFlag && input.model ? [input.engine.modelFlag, input.model] : []),
-    ...(input.engine.effortFlag && input.effort ? [input.engine.effortFlag, input.effort] : []),
+    ...(input.engine.effortArgs && input.effort ? input.engine.effortArgs(input.effort) : []),
     ...(input.engine.cwdFlag ? [input.engine.cwdFlag, input.cwd] : []),
     ...input.autonomyArgs,
     input.promptText,

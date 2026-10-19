@@ -1,5 +1,6 @@
 import { spawnSync } from 'child_process'
 import { join } from 'path'
+import type { EngineDefinition } from './engines'
 
 /**
  * US-488 — the workflow profile, as `pair-cli run --card` consumes it.
@@ -155,4 +156,28 @@ export function workflowProfileRequested(
     flags.workflowConfig !== undefined ||
     config['workflowProfiles'] !== undefined
   )
+}
+
+/**
+ * US-560 AC3: an `effort` the stage's engine has no verified flag for is never sent — so it is marked
+ * `ignored` in the resolved table and named in ONE warning, instead of vanishing silently.
+ */
+export function markIgnoredEffort(
+  profile: ResolvedWorkflowProfile,
+  engineOf: (stage: string) => EngineDefinition,
+): { table: readonly string[]; warning?: string } {
+  const ignored = new Map<string, string>()
+  const table = [...profile.table]
+  for (const [stage, s] of Object.entries(profile.stages)) {
+    const engine = engineOf(stage)
+    if (s.effort.value === 'default' || engine.effortArgs) continue
+    ignored.set(`${engine.id} (${s.effort.value})`, stage)
+    const i = table.findIndex(line => line.trimStart().startsWith(`${stage} `))
+    if (i >= 0) table[i] = table[i]!.replace(/(\| effort [^|]*?) \|/, '$1 ignored |')
+  }
+  if (ignored.size === 0) return { table }
+  return {
+    table,
+    warning: `effort ignored: no verified effort flag for ${[...ignored.keys()].join(', ')} — sent to no engine`,
+  }
 }

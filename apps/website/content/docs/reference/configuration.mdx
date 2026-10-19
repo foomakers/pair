@@ -362,7 +362,7 @@ context).
 | --- | --- |
 | `engine` | `default` (the run's engine), `pi`, `opencode`, `claude`, `codex`. Spawned per stage by `pair-cli`; in a session only reported |
 | `model` | `default` (the engine's own), an explicit id, a class (`cheap`, `balanced`, `frontier`) mapped to an id by `modelClasses`, or `by-tier` (the card's `risk:*` label through `## Model Policy`). A near-miss of a keyword is refused as a typo |
-| `effort` | `default`, `low`, `medium`, `high`, `xhigh`, `max`. In a session enforced on Codex, a prompt request on Claude; `pair-cli` records it and sends it to no engine yet |
+| `effort` | `default`, `low`, `medium`, `high`, `xhigh`, `max`. In a session enforced on Codex, a prompt request on Claude; `pair-cli` sends it to `claude` (`--effort`) and `codex` (`-c model_reasoning_effort`; `xhigh`/`max` map to `high`); for `pi` and `opencode` it warns once and marks the stage `ignored` |
 | `context` | `fresh`, `reuse`. `reuse` only into `prepare` and `green` |
 
 Resolution is once per run, in this order: `--workflow-config` (verbatim), then `--profile`, then `workflowProfiles.default`, then the KB default. Both flags need `--card`; the `--parallel` loop does not forward them, so unattended runs use `workflowProfiles.default`. The coordinator prints the resolved profile, its source and the per-stage table before the first dispatch; `node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . [--profile <name>] [--tier risk:<tier>]` prints the same table (`table` in its JSON) without running anything.
