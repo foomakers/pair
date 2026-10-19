@@ -112,7 +112,8 @@
 
 ### Expected Result
 
-- All top-level sections visible, in `apps/website/content/docs/meta.json` order: Getting Started, Tutorials, Concepts, Process Lifecycle, Customization, Integrations, PM Tools, then (after the separator) Reference, Migrations, Support, Contributing
+- All top-level sections visible, in `apps/website/content/docs/meta.json` order: What's new, Getting Started, Process Lifecycle, Tutorials, Guides, Concepts, Integrations, PM Tools, then (after the separator) Reference, Migrations, Support, Contributing
+- No "Customization" section
 - Sections are collapsible/expandable
 
 ---
@@ -216,6 +217,32 @@
 
 ---
 
+## MT-CP612: Moved docs URLs redirect
+
+**Priority**: P1
+**Preconditions**: None
+**Category**: Website
+
+### Steps
+
+1. For each moved URL below, request it without following redirects (`curl -sI $BASE_URL<path>`), then follow the `Location`
+
+| Moved URL | Destination |
+| --- | --- |
+| `/docs/developer-journey/induction` | `/docs/process-lifecycle/phases/induction` |
+| `/docs/developer-journey/execution` | `/docs/process-lifecycle/phases/execution` |
+| `/docs/customization/team` | `/docs/guides/customize-for-your-team` |
+| `/docs/customization/external-kb` | `/docs/guides/external-kb` |
+| `/docs/tutorials/unattended-delivery` | `/docs/tutorials/automated-development` |
+
+### Expected Result
+
+- Each moved URL answers 308 with the destination in `Location`
+- Each destination returns HTTP 200 (no redirect chain)
+
+---
+
 ## Changelog
 
 - #543: channel note (final-only / PR preview); MT-CP606 sidebar matches current `meta.json` (no Guides; Migrations added).
+- #543 inc. 2: MT-CP606 lists the current `meta.json` sections (What's new added, Guides back, no Customization); new MT-CP612 checks moved URLs redirect (308).
