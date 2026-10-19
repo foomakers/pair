@@ -78,7 +78,7 @@ export interface RunCommandConfig {
   engine?: EngineId
   invocation: RunInvocationRequest
   scope: RunScopeOptions
-  /** US-521: `--until` / `--prepare` / `--merge` — present only when passed (with `--card`). */
+  /** US-521: `--until` / `--prepare` / `--merge` — present only when passed. */
   autonomy?: RunAutonomyArguments
   /** Present only when `--cwd` was passed; otherwise the process working directory. */
   cwd?: string
@@ -97,9 +97,9 @@ export interface RunCommandConfig {
   iterationTimeoutSeconds: number
   /** Present only when `--card` was passed: the run is a tag-driven dispatch (US-217). */
   dispatch?: RunDispatchRequest
-  /** US-488: `--profile <name>` — present only when passed (with `--card`). */
+  /** US-488: `--profile <name>` — present only when passed. */
   profile?: string
-  /** US-488: `--workflow-config <path>` — present only when passed (with `--card`). */
+  /** US-488: `--workflow-config <path>` — present only when passed. */
   workflowConfig?: string
   /** Resolve, print and exit without spawning anything. */
   dryRun: boolean
@@ -158,9 +158,9 @@ interface ParseRunOptions {
   watch?: boolean
   /** US-522: `--interval <n>s|m|h`. */
   interval?: string
-  /** US-488: `--profile <name>` — the workflow profile (per-stage engine/model/effort/context); needs `--card` or `--parallel`. */
+  /** US-488: `--profile <name>` — the workflow profile (per-stage engine/model/effort/context); needs `--card`, `--root` or `--parallel`. */
   profile?: string
-  /** US-488: `--workflow-config <path>` — an external profile file, wins over every other source; needs `--card`. */
+  /** US-488: `--workflow-config <path>` — an external profile file, wins over every other source; needs `--card`, `--root` or `--parallel`. */
   workflowConfig?: string
 }
 
