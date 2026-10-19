@@ -198,6 +198,7 @@
 - [Decision: every PR carries its changeset; releases are dispatched, never merge-triggered](.pair/adoption/decision-log/2026-10-14-release-is-dispatched-with-a-changeset-per-pr.md)
 - [Decision: Fresh Worktrees Run `worktree-setup-command` Before Any Gate](.pair/adoption/decision-log/2026-10-14-worktree-setup-command.md)
 - [Decision: Docs IA, Process Lifecycle Spine, Three Path Labels, Customization Dissolved](.pair/adoption/decision-log/2026-10-18-docs-ia-process-lifecycle-spine.md)
+- [Decision: Landing Positioning for v0.5.0 and the Single Install Command](.pair/adoption/decision-log/2026-10-19-landing-positioning-v050-single-install-command.md)
 
 ## How-To Guides
 
