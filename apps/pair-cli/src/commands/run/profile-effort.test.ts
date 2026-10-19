@@ -140,3 +140,19 @@ describe('AC4: --profile / --workflow-config with --root/--parallel/--watch', ()
     expect(runCardProcess).not.toHaveBeenCalled()
   })
 })
+
+describe('effort argv is platform-independent', () => {
+  for (const platform of ['darwin', 'linux'] as const) {
+    it(`same argv on platform ${platform}`, () => {
+      const original = process.platform
+      Object.defineProperty(process, 'platform', { value: platform })
+      try {
+        expect(argsFor('codex', 'max')).toEqual(
+          expect.arrayContaining(['-c', 'model_reasoning_effort=high']),
+        )
+      } finally {
+        Object.defineProperty(process, 'platform', { value: original })
+      }
+    })
+  }
+})
