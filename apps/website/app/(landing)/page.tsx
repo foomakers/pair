@@ -6,7 +6,10 @@ import { PainPointsSection } from './pain-points-section'
 import { WorksWithSection } from './works-with-section'
 import { DemoSection } from './demo-section'
 import { AudienceTracksSection } from './audience-tracks-section'
-import { HowItWorksSection } from './how-it-works-section'
+import { LifecycleSection } from './lifecycle-section'
+import { ModesSection } from './modes-section'
+import { DeliverySection } from './delivery-section'
+import { RiskTiersSection } from './risk-tiers-section'
 import { FeaturesSection } from './features-section'
 import { OpenSourceSection } from './open-source-section'
 import { CTASection } from './cta-section'
@@ -34,9 +37,12 @@ export default function HomePage() {
       <WhatsNewBanner />
       <PainPointsSection />
       <WorksWithSection />
+      <LifecycleSection />
+      <ModesSection />
+      <DeliverySection />
       <DemoSection />
+      <RiskTiersSection />
       <AudienceTracksSection />
-      <HowItWorksSection />
       <FeaturesSection />
       <OpenSourceSection />
       <CTASection />
