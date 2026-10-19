@@ -208,6 +208,8 @@ export function buildCardProcessArgs(
     ...(config.approveProjectTrust ? ['--approve-project-trust'] : []),
     ...(config.approveIneligible ? ['--approve-ineligible'] : []),
     ...autonomyArgv(config),
+    ...(config.profile !== undefined ? ['--profile', config.profile] : []),
+    ...(config.workflowConfig !== undefined ? ['--workflow-config', config.workflowConfig] : []),
     '--iteration-timeout',
     String(config.iterationTimeoutSeconds),
   ]

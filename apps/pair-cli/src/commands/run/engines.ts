@@ -94,11 +94,11 @@ export interface EngineDefinition {
    */
   readonly modelFlag?: string
   /**
-   * The flag this engine takes a reasoning-effort level under (US-488). ABSENT on every engine
-   * today: no engine's effort flag has been verified against its real CLI, so a profile's `effort`
-   * is recorded and printed but NEVER sent to an engine that does not declare a verified flag.
+   * The argv that sets a reasoning-effort level (US-488, US-560). Declared ONLY where verified against
+   * the engine's real CLI (claude, codex); ABSENT elsewhere, so a profile's `effort` is never sent to
+   * an engine without a verified flag — the run warns and the table marks it `ignored` instead.
    */
-  readonly effortFlag?: string
+  readonly effortArgs?: (level: string) => readonly string[]
   /** Flag carrying the working directory, when the engine has one (`undefined` ⇒ spawn cwd). */
   readonly cwdFlag?: string
   readonly skillInvocationStyle: SkillInvocationStyle
@@ -183,6 +183,8 @@ const OPENCODE: EngineDefinition = {
 const CLAUDE: EngineDefinition = {
   id: 'claude',
   modelFlag: '--model',
+  // `claude --help`: `--effort <level>` (low, medium, high, xhigh, max), verified 2026-10-19.
+  effortArgs: level => ['--effort', level],
   command: 'claude',
   headlessArgs: ['-p', '--output-format', 'stream-json', '--verbose'],
   skillInvocationStyle: 'slash',
@@ -214,6 +216,12 @@ const CLAUDE: EngineDefinition = {
 const CODEX: EngineDefinition = {
   id: 'codex',
   modelFlag: '--model',
+  // `-c model_reasoning_effort=<level>` (codex config override), verified 2026-10-19. Codex's vocabulary
+  // stops at `high`: pair's `xhigh` / `max` map to it.
+  effortArgs: level => [
+    '-c',
+    `model_reasoning_effort=${level === 'xhigh' || level === 'max' ? 'high' : level}`,
+  ],
   command: 'codex',
   headlessArgs: ['exec', '--json'],
   skillInvocationStyle: 'instruction',

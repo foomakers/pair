@@ -59,7 +59,7 @@ description: Decide how far unattended runs go, and which engine, model and effo
      }
      ```
 
-     Per stage, `engine` (`default`, `pi`, `opencode`, `claude`, `codex`), `model` (`default`, an id, `cheap` / `balanced` / `frontier`, `by-tier`), `effort` (`default`, `low`, `medium`, `high`, `xhigh`, `max`) and `context` (`fresh`, `reuse`; `reuse` only into `prepare` and `green`). A stage declares only what differs from `defaults`.
+     Per stage, `engine` (`default`, `pi`, `opencode`, `claude`, `codex`), `model` (`default`, an id, `cheap` / `balanced` / `frontier`, `by-tier`), `effort` (`default`, `low`, `medium`, `high`, `xhigh`, `max`) and `context` (`fresh`, `reuse`; `reuse` only into `prepare` and `green`). A stage declares only what differs from `defaults`. With pair-cli, `effort` reaches `claude` and `codex`; for other engines the run warns and marks it `ignored` in the table.
    - With `/pair-assistant` (optional, Claude Code): "use profile mixed for the review" shows the edit, then records it as an ADL.
 2. **Let the model follow the risk tier (optional)**: set `"model": "by-tier"` and add to `tech/automation.md`:
 
@@ -75,7 +75,7 @@ description: Decide how far unattended runs go, and which engine, model and effo
 3. **Print the resolved table**
    - With pair-cli: `node .claude/skills/pair-workflow-cycle/scripts/workflow-profile.mjs resolve --root . --profile mixed --tier risk:green`. The JSON's `table` has one line per stage with engine, model, effort and context, each with the level that decided it. A run prints the same table before its first dispatch.
 4. **Pick the profile per run**
-   - With pair-cli: `pair-cli run --card 217 --profile mixed`, or `--workflow-config ./file.json` for an external file used verbatim. Both need `--card`; the `--parallel` and `--watch` loop uses `workflowProfiles.default`.
+   - With pair-cli: `pair-cli run --card 217 --profile mixed`, or `--workflow-config ./file.json` for an external file used verbatim. Both also work with `--root`, `--parallel` and `--watch`: every child card gets the same flag.
    - In your assistant: `/pair-workflow-cycle` takes the same as `$profile` and `$workflowConfig`.
 
 Cascade, highest first: `--workflow-config` > `--profile` > `workflowProfiles.default` > KB default (the run's engine, its default model, default effort, fresh context). An unknown name or a bad value halts (`profile-unresolved`, `profile-invalid`, `profile-name-collision`), never a silent fallback.
