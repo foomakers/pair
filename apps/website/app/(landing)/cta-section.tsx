@@ -12,7 +12,7 @@ export function CTASection() {
           Ready to <span className='gradient-text'>start?</span>
         </h2>
         <p className='mb-10 text-pair-text-muted-light dark:text-pair-text-muted-dark'>
-          Install pair-cli, run <code className='font-mono'>/pair-next</code>, five minutes.
+          Install pair-cli, run <code className='font-mono'>/pair-next</code>.
         </p>
         <div className='flex flex-col items-center gap-4 sm:flex-row sm:justify-center'>
           <Button
