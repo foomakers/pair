@@ -105,15 +105,17 @@ test('renders the three modes with the driving analogy and the safe default', as
   await expect(section.locator('a[href="/docs/process-lifecycle/lifecycle-modes"]')).toBeVisible()
 })
 
-// AC-6: Three modes pictograms (scope + human cue, at a glance)
-test('renders one labelled pictogram per mode with the human cue', async ({ mount }) => {
+// AC-6: Three modes automation bars (level, scope and human cue, at a glance)
+test('renders one automation level, scope and human cue per mode', async ({ mount }) => {
   const component = await mount(<HomePage />)
   const section = component.locator('section[aria-label="Three modes"]')
-  const pictograms = section.locator('svg[role="img"]')
-  await expect(pictograms).toHaveCount(3)
-  for (const mode of ['Assisted', 'Supervised', 'Autonomous']) {
-    await expect(section.getByRole('img', { name: new RegExp(`^${mode}:`) })).toBeVisible()
+  await expect(section.locator('svg')).toHaveCount(0)
+  for (const level of [1, 2, 3]) {
+    await expect(section.getByText(`Automation level ${level} of 3`)).toBeAttached()
   }
+  await expect(section).toContainText('Scope: each step')
+  await expect(section).toContainText('Scope: one card, end to end')
+  await expect(section).toContainText('Scope: the backlog, filtered by your criterion')
   await expect(section).toContainText('You: every step')
   await expect(section).toContainText('You: at checkpoints and escalations')
   await expect(section).toContainText('You: only on escalation')

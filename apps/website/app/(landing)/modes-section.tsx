@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react'
 import { Button } from '@pair/brand'
 import { URLS } from './constants'
 
@@ -7,18 +6,8 @@ interface Mode {
   analogy: string
   description: string
   human: string
+  scope: string
   level: number
-  pictogram: { title: string; shape: ReactNode }
-}
-
-/** Small person glyph: head + shoulders. The human cue, always pair-blue. */
-function Person({ x, y }: { x: number; y: number }) {
-  return (
-    <g className='text-pair-blue' fill='currentColor'>
-      <circle cx={x} cy={y} r={3} />
-      <path d={`M${x - 5} ${y + 10} a5 5 0 0 1 10 0 z`} />
-    </g>
-  )
 }
 
 const MODES: Mode[] = [
@@ -26,117 +15,27 @@ const MODES: Mode[] = [
     name: 'Assisted',
     analogy: 'You drive, pair helps.',
     description: 'pair guides every phase with AI. You run each skill and approve each step.',
+    scope: 'each step',
     human: 'You: every step',
     level: 1,
-    pictogram: {
-      title: 'Assisted: four steps in a row, a person on each one',
-      shape: (
-        <>
-          <path d='M8 42h144' className='opacity-30' stroke='currentColor' strokeWidth={2} />
-          {[12, 52, 92, 132].map(x => (
-            <g key={x}>
-              <rect
-                x={x}
-                y={34}
-                width={24}
-                height={16}
-                rx={3}
-                fill='none'
-                stroke='currentColor'
-                strokeWidth={2}
-              />
-              <Person x={x + 12} y={14} />
-            </g>
-          ))}
-        </>
-      ),
-    },
   },
   {
     name: 'Supervised',
     analogy: 'pair drives one stretch, you take over when asked.',
     description:
       'pair automates one card end to end, from Ready to a review-approved PR, and stops at a checkpoint or an escalation.',
+    scope: 'one card, end to end',
     human: 'You: at checkpoints and escalations',
     level: 2,
-    pictogram: {
-      title: 'Supervised: one card moves through three stages, a person waits at the checkpoint',
-      shape: (
-        <>
-          <path d='M38 42h92' className='text-pair-teal' stroke='currentColor' strokeWidth={3} />
-          <rect
-            x={8}
-            y={30}
-            width={28}
-            height={24}
-            rx={3}
-            fill='none'
-            stroke='currentColor'
-            strokeWidth={2}
-          />
-          {[60, 84, 108].map(x => (
-            <circle key={x} cx={x} cy={42} r={5} className='text-pair-teal' fill='currentColor' />
-          ))}
-          <path d='M134 32v20' stroke='currentColor' strokeWidth={2} strokeDasharray='3 3' />
-          <Person x={146} y={14} />
-        </>
-      ),
-    },
   },
   {
     name: 'Autonomous',
     analogy: 'pair drives inside the area you define.',
     description:
       'pair watches the backlog and processes every card matching a criterion you set, for example risk:green, and hands a card back when a human is needed.',
+    scope: 'the backlog, filtered by your criterion',
     human: 'You: only on escalation',
     level: 3,
-    pictogram: {
-      title:
-        'Autonomous: a backlog passes a filter into an automated lane, an arrow escalates back to a person',
-      shape: (
-        <>
-          {[8, 14, 20].map((y, i) => (
-            <rect
-              key={y}
-              x={8 + i * 3}
-              y={y + i * 2}
-              width={28}
-              height={18}
-              rx={3}
-              fill='none'
-              stroke='currentColor'
-              strokeWidth={2}
-              className={i < 2 ? 'opacity-40' : ''}
-            />
-          ))}
-          <path
-            d='M48 20h28l-8 14v14l-12 0v-14z'
-            fill='none'
-            stroke='currentColor'
-            strokeWidth={2}
-          />
-          <path d='M80 42h44' className='text-pair-teal' stroke='currentColor' strokeWidth={3} />
-          <rect
-            x={90}
-            y={34}
-            width={18}
-            height={16}
-            rx={3}
-            className='text-pair-teal'
-            fill='currentColor'
-          />
-          <path
-            d='M112 34q18-26 32-10'
-            fill='none'
-            className='text-pair-blue'
-            stroke='currentColor'
-            strokeWidth={2}
-            strokeDasharray='3 3'
-          />
-          <Person x={146} y={12} />
-        </>
-      ),
-    },
   },
 ]
 
@@ -156,24 +55,27 @@ export function ModesSection() {
             <div
               key={mode.name}
               className='card-glow flex flex-col rounded-2xl border border-pair-border-light bg-pair-bg-light p-8 dark:border-pair-border-dark dark:bg-pair-bg-dark'>
-              <svg
-                role='img'
-                aria-label={mode.pictogram.title}
-                viewBox='0 0 160 56'
-                className='mb-5 h-14 w-full max-w-[200px]'>
-                <title>{mode.pictogram.title}</title>
-                {mode.pictogram.shape}
-              </svg>
-              <div className='mb-4 flex items-center gap-2' aria-hidden='true'>
-                {[1, 2, 3].map(i => (
+              <div className='mb-6'>
+                <div className='flex items-center gap-2' aria-hidden='true'>
+                  {[1, 2, 3].map(i => (
+                    <span
+                      key={i}
+                      className={`h-3 flex-1 rounded-full ${i <= mode.level ? 'bg-pair-teal' : 'bg-pair-border-light dark:bg-pair-border-dark'}`}
+                    />
+                  ))}
+                </div>
+                <span className='sr-only'>Automation level {mode.level} of 3</span>
+                {mode.level === 1 && (
                   <span
-                    key={i}
-                    className={`h-1.5 flex-1 rounded-full ${i <= mode.level ? 'bg-pair-teal' : 'bg-pair-border-light dark:bg-pair-border-dark'}`}
-                  />
-                ))}
+                    aria-hidden='true'
+                    className='mt-2 block text-xs text-pair-text-muted-light dark:text-pair-text-muted-dark'>
+                    automation
+                  </span>
+                )}
               </div>
               <h3 className='mb-1 font-sans text-xl font-bold'>{mode.name}</h3>
               <p className='mb-1 text-sm font-medium'>{mode.analogy}</p>
+              <p className='text-xs font-semibold uppercase tracking-wide'>Scope: {mode.scope}</p>
               <p className='mb-4 text-xs font-semibold uppercase tracking-wide'>{mode.human}</p>
               <p className='text-sm text-pair-text-muted-light dark:text-pair-text-muted-dark'>
                 {mode.description}
