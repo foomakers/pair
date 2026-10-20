@@ -17,7 +17,8 @@ import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
 import { adoptionSelection, resolveRunAutonomy, spawnAutonomyResolver } from './autonomy-policy'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
-import { refuseProfileOffCycle } from './workflow-profile'
+import { locateCycleScripts } from './cycle-scripts'
+import { refuseProfileOffCycle, resolveWorkflowProfile } from './workflow-profile'
 import { handleParallelRun } from './parallel-entry'
 import {
   declaredEngine,
@@ -226,6 +227,18 @@ export async function handleRunCommand(
   // comparable against an absolute trust-store key.
   const cwd = resolve(rawConfig.cwd ?? fs.currentWorkingDirectory())
   const { config, context, deps } = resolveEntry(rawConfig, fs, cwd, callerDeps)
+
+  // #568 B3: a dry run validates the profile too — the unknown name must not surface only at dispatch.
+  if (
+    config.dryRun &&
+    config.parallel === undefined &&
+    (config.profile !== undefined || config.workflowConfig !== undefined)
+  ) {
+    ;(deps.resolveWorkflowProfile ?? resolveWorkflowProfile)(
+      locateCycleScripts(fs, context.config, cwd).scriptsDir,
+      { root: cwd, profile: config.profile, workflowConfig: config.workflowConfig },
+    )
+  }
 
   // US-491: `--root --parallel N` — the fan-out mode, its own entry (the parser guarantees no card).
   if (config.parallel !== undefined) {

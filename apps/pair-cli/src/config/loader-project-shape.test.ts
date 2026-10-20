@@ -33,3 +33,9 @@ describe('US-552 r0-1 project pair.config.json must be an object', () => {
     expect(() => load('[1]', false)).not.toThrow()
   })
 })
+
+describe('#568 B5 the error prefix is printed once', () => {
+  it.each(['[1]', '{"skipRegistries":3}', '{bad'])('%s: no "Error:" inside the message', raw => {
+    expect(() => load(raw)).toThrow(/Failed to load \/consumer\/pair\.config\.json: (?!Error)/)
+  })
+})

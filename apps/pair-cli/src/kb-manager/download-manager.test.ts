@@ -43,6 +43,28 @@ describe('KB Download Manager', () => {
     ).rejects.toThrow(/KB v0\.5\.0-pre\.1 not found \(404\)/)
   })
 
+  it.each(['v0.5.0-rc.1-local', 'v0.5.0-rc.1-local-x'])(
+    '404 message keeps hyphens inside the prerelease id (%s)',
+    async v => {
+      const fs = new InMemoryFileSystemService({}, '/', '/')
+      const httpClient = new MockHttpClientService()
+      httpClient.setRequestResponses([
+        toIncomingMessage(buildTestResponse(200, { 'content-length': '0' })),
+      ])
+      httpClient.setGetResponses([toIncomingMessage(buildTestResponse(404, {}))])
+      await expect(
+        downloadFile(
+          `https://github.com/foomakers/pair/releases/download/${v}/kb.zip`,
+          '/tmp/kb.zip',
+          {
+            httpClient,
+            fs,
+          },
+        ),
+      ).rejects.toThrow(`KB ${v} not found (404)`)
+    },
+  )
+
   it('should throw KB-specific 403 error', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
     const httpClient = new MockHttpClientService()

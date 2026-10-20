@@ -125,6 +125,12 @@
       "outputs": ["coverage/**"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/**", "$TURBO_ROOT$/package.json"]
     },
+    // #568: `next build` regenerates apps/website/.source/index.ts (fumadocs-mdx); a parallel tsc read it
+    // half-written (TS2306). MEASURED: the file's mtime changes across `pnpm build`. Ordered after build.
+    "@pair/website#ts:check": {
+      "dependsOn": ["^build", "build"],
+      "outputs": []
+    },
     "ts:check": {
       "dependsOn": ["^build"],
       "outputs": []
