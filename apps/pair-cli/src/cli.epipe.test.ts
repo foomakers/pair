@@ -21,9 +21,12 @@ const earlyClosed = (...args: string[]) =>
 
 describe('pair-cli on an early-closed stdout (B6)', () => {
   vi.setConfig({ testTimeout: 60_000 })
-  it.each([['--help'], ['install', '--help']])('%s exits quietly, no EPIPE trace', async (...args) => {
-    const r = await earlyClosed(...args)
-    expect(r.stderr).not.toMatch(/EPIPE|node:events|at /)
-    expect(r.status).toBe(0)
-  })
+  it.each([['--help'], ['install', '--help']])(
+    '%s exits quietly, no EPIPE trace',
+    async (...args) => {
+      const r = await earlyClosed(...args)
+      expect(r.stderr).not.toMatch(/EPIPE|node:events|at /)
+      expect(r.status).toBe(0)
+    },
+  )
 })

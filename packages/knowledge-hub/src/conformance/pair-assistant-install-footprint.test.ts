@@ -9,7 +9,9 @@ const skill = readFileSync(
   join(__dirname, '../../dataset/plugin/skills/pair-assistant/SKILL.md'),
   'utf-8',
 )
-const config = JSON.parse(readFileSync(join(__dirname, '../../../../apps/pair-cli/config.json'), 'utf-8'))
+const config = JSON.parse(
+  readFileSync(join(__dirname, '../../../../apps/pair-cli/config.json'), 'utf-8'),
+)
 
 const section = (heading: string) => {
   const i = skill.indexOf(heading)
