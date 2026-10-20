@@ -278,6 +278,8 @@ export async function rewriteLinksInFile(params: RewriteLinksInFileParams): Prom
     params
 
   const content = await fileService.readFile(filePath)
+  // an inline link always contains `](`: skip the markdown parse (the packaging hot path) for the rest
+  if (!content.includes('](')) return
   const links = await extractLinks(content)
 
   if (links.length === 0) return
