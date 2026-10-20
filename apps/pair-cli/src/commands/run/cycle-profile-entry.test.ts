@@ -306,3 +306,24 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
     expect(events).toContain('drive')
   })
 })
+
+describe('#568 B3 --dry-run validates the profile before returning', () => {
+  const halt = () => {
+    throw new Error("profile-unresolved: profile 'nope' (argument) was not found")
+  }
+  it.each([
+    ['--card', { card: '12', cardTags: '' }],
+    ['--root', { root: '12' }],
+    ['--root --parallel', { root: '12', parallel: 2 }],
+  ])('%s: unknown profile HALTs, nothing dispatched', async (_n, argv) => {
+    capture()
+    await expect(
+      run(
+        { ...argv, profile: 'nope', dryRun: true } as Parameters<typeof parseRunCommand>[0],
+        files(),
+        baseDeps({ resolveWorkflowProfile: halt }),
+      ),
+    ).rejects.toThrow(/profile-unresolved/)
+    expect(events).not.toContain('drive')
+  })
+})

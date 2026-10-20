@@ -64,21 +64,28 @@ describe('pair-cli tokens --json on a piped stdout (r1-6)', () => {
     fill(big, 900) // > 64 KiB of JSON
     fill(small, 3) // well under one pipe chunk
     oracle = join(big, 'redirect.json')
-    expect(await redirected(oracle, ['--root', big, '--json'])).toBe(0)
   })
+
+  // the oracle spawns a cold ts-node CLI (~2s idle, ~12s under 12 parallel spawns, measured): it runs in a
+  // test (testTimeout 60s), never in a hook (hookTimeout 10s default) whose duration depends on machine load
+  let oracleReady: Promise<void> | undefined
+  const ensureOracle = () =>
+    (oracleReady ??= redirected(oracle, ['--root', big, '--json']).then(s => expect(s).toBe(0)))
 
   afterAll(() => {
     rmSync(big, { recursive: true, force: true })
     rmSync(small, { recursive: true, force: true })
   })
 
-  it('r2-g1-c1: the file-redirect oracle is complete JSON larger than one pipe chunk', () => {
+  it('r2-g1-c1: the file-redirect oracle is complete JSON larger than one pipe chunk', async () => {
+    await ensureOracle()
     const text = readFileSync(oracle, 'utf-8')
     expect(text.length).toBeGreaterThan(PIPE_CHUNK)
     expect(() => JSON.parse(text)).not.toThrow()
   })
 
   it('r2-g1-w1: piped output is byte-identical to the redirect oracle and parses', async () => {
+    await ensureOracle()
     const r = await piped('--root', big, '--json')
     expect(r.status).toBe(0)
     expect(r.stdout.length).toBe(readFileSync(oracle, 'utf-8').length)

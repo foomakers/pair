@@ -10,7 +10,7 @@
 ## MT-CP1101: `pnpm release <channel> --dry-run` prints a plan, dispatches nothing
 
 **Priority**: P0
-**Preconditions**: checkout of `main` with at least one commit newer than the last release of the target channel (otherwise MT-CP1102 applies)
+**Preconditions**: checkout of `main` with at least one commit newer than the last release of the target channel (otherwise MT-CP1102 applies). Right after a release no changeset is pending: run the dry-runs with `--version <next>` (an X.Y.Z greater than the last final) so a base exists
 **Category**: Release
 
 ### Steps
@@ -33,12 +33,15 @@
 
 ### Steps
 
-1. `pnpm release pre --dry-run` right after a pre
+1. Right after a pre: `pnpm release pre --dry-run --version <base of that pre>`
+2. Right after a final: `pnpm release final --dry-run` (no `--version`), then `pnpm release final --dry-run --version <last final>`
 
 ### Expected Result
 
-- Exit code != 0
-- `Refused: no new commits on main since the last pre of <base>` (same channel needs new `main` commits)
+- Exit code != 0 in every case
+- After a pre, same base: `Refused: no new commits on main since the last pre of <base>` (same channel needs new `main` commits)
+- After a final, no changeset pending: `Refused: nothing to release: no pending changeset and no --version`
+- After a final, `--version` not above it: `Refused: version <x> not greater than last final <last final>`
 
 ---
 

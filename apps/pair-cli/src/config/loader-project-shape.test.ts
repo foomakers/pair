@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { loadConfigWithOverrides } from './loader'
 import { readFileSync } from 'fs'
@@ -31,5 +31,16 @@ describe('US-552 r0-1 project pair.config.json must be an object', () => {
 
   it('control: non-object tolerated when not projectConfigOnly', () => {
     expect(() => load('[1]', false)).not.toThrow()
+  })
+})
+
+describe('#568 B5 the error prefix is printed once', () => {
+  const platform = process.platform
+  afterEach(() => Object.defineProperty(process, 'platform', { value: platform }))
+
+  it.each(['darwin', 'linux'])('platform %s: no "Error:" inside the message', os => {
+    Object.defineProperty(process, 'platform', { value: os })
+    for (const raw of ['[1]', '{"skipRegistries":3}', '{bad'])
+      expect(() => load(raw)).toThrow(/Failed to load \/consumer\/pair\.config\.json: (?!Error)/)
   })
 })

@@ -17,7 +17,8 @@ import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
 import { adoptionSelection, resolveRunAutonomy, spawnAutonomyResolver } from './autonomy-policy'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
-import { refuseProfileOffCycle } from './workflow-profile'
+import { locateCycleScripts } from './cycle-scripts'
+import { refuseProfileOffCycle, resolveWorkflowProfile } from './workflow-profile'
 import { handleParallelRun } from './parallel-entry'
 import {
   declaredEngine,
@@ -210,6 +211,25 @@ function resolveEntry(
   }
 }
 
+/** #568 B3: a dry run validates the profile too — the unknown name must not surface only at dispatch. */
+function haltOnUnresolvedProfileInDryRun(
+  {
+    config,
+    context,
+    fs,
+    cwd,
+  }: { config: RunCommandConfig; context: RunContext; fs: FileSystemService; cwd: string },
+  deps: RunHandlerDependencies,
+): void {
+  const flagged = config.profile !== undefined || config.workflowConfig !== undefined
+  // --parallel resolves its own profile (parallel-entry)
+  if (!config.dryRun || config.parallel !== undefined || !flagged) return
+  ;(deps.resolveWorkflowProfile ?? resolveWorkflowProfile)(
+    locateCycleScripts(fs, context.config, cwd).scriptsDir,
+    { root: cwd, profile: config.profile, workflowConfig: config.workflowConfig },
+  )
+}
+
 /**
  * Handles `pair-cli run` — the execution adapter (US-451).
  *
@@ -227,6 +247,7 @@ export async function handleRunCommand(
   const cwd = resolve(rawConfig.cwd ?? fs.currentWorkingDirectory())
   const { config, context, deps } = resolveEntry(rawConfig, fs, cwd, callerDeps)
 
+  haltOnUnresolvedProfileInDryRun({ config, context, fs, cwd }, deps)
   // US-491: `--root --parallel N` — the fan-out mode, its own entry (the parser guarantees no card).
   if (config.parallel !== undefined) {
     return await handleParallelRun({ config, context, fs, cwd }, deps)

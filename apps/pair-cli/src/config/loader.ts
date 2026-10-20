@@ -65,6 +65,9 @@ export interface LoadedConfig {
  * Layer 2 is trusted with a strictly bounded set of fields (`SOURCE_DECLARABLE_FIELDS`):
  * it is remote content, so it never decides where the install writes.
  */
+/** An Error's message without its `Error:` name prefix (`String(err)` would add it a second time). */
+const reasonOf = (err: unknown) => (err instanceof Error ? err.message : String(err))
+
 export function loadConfigWithOverrides(
   fsService: FileSystemService,
   options: LoadConfigOptions = {},
@@ -483,7 +486,7 @@ function loadBaseConfig(fsService: FileSystemService): { config: Config; source:
       throw new Error(`Config file not found in pair-cli. expected path: ${appConfigPath}`)
     }
   } catch (err) {
-    throw new Error(`Failed to load base config: ${String(err)}`)
+    throw new Error(`Failed to load base config: ${reasonOf(err)}`)
   }
 }
 
@@ -518,7 +521,7 @@ function applyPairConfigIfExists(
     } catch (err) {
       // install/update: an unreadable project config silently dropping `skipRegistries`
       // would overwrite the user's own files.
-      if (options.pairConfigOnly) throw new Error(`Failed to load ${configPath}: ${String(err)}`)
+      if (options.pairConfigOnly) throw new Error(`Failed to load ${configPath}: ${reasonOf(err)}`)
       console.warn(`Warning: Failed to load ${configPath}, continuing with base config`)
     }
   }
@@ -536,7 +539,7 @@ function mergeWithCustomConfig(
     assertSkipRegistries(customConfig, customConfigPath)
     return mergeConfigs(baseConfig, customConfig)
   } catch (err) {
-    throw new Error(`Failed to load custom config file ${customConfigPath}: ${String(err)}`)
+    throw new Error(`Failed to load custom config file ${customConfigPath}: ${reasonOf(err)}`)
   }
 }
 

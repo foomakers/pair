@@ -143,6 +143,11 @@ export async function runCli(
 }
 
 export async function main() {
+  // `pair-cli --help | head -1`: the reader closes the pipe early — quiet exit, like any Unix tool
+  process.stdout.on('error', (e: NodeJS.ErrnoException) => {
+    if (e.code === 'EPIPE') process.exit(0)
+    throw e
+  })
   try {
     await runCli(process.argv)
     // exitOverride() prevents Commander from calling process.exit() automatically.
