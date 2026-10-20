@@ -35,11 +35,11 @@ test('renders PairLogo in hero', async ({ mount }) => {
 })
 
 // AC-2: What's new banner
-test("renders the v0.5.0 banner linking to What's new", async ({ mount }) => {
+test("renders the v0.5.1 banner linking to What's new", async ({ mount }) => {
   const component = await mount(<HomePage />)
   const banner = component.locator('section[aria-label="What is new"]')
   await expect(banner).toBeVisible()
-  await expect(banner).toContainText('v0.5.0')
+  await expect(banner).toContainText('v0.5.1')
   await expect(banner.locator('a[href="/docs/whats-new"]')).toBeVisible()
 })
 
