@@ -82,7 +82,7 @@ describe('AC53: Process Lifecycle is a 5-part spine under the process-lifecycle 
       'concepts',
       'integrations',
       'pm-tools',
-      '---',
+      '------',
       'reference',
       'migrations',
       'support',
