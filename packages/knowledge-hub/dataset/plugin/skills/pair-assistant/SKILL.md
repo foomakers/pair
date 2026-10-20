@@ -247,6 +247,23 @@ If a request matches nothing here, go back to `--help` and to `llms.txt` and rea
 4. **Stop on the first failure** and show its output. Do not retry with different flags hoping one works.
 5. **Quote the project's own words** when answering from `llms.txt`, and name the file — so the user can check you, and correct the source rather than you.
 
+### After an update that skipped a registry
+
+When `update` (or `install`) prints `skipping agents (from pair.config.json)` (or any `skipping <registry>`), say in the same reply, right after the output, how to opt back in; never leave the user to discover it:
+
+> `agents` was kept as yours, so `AGENTS.md`/`CLAUDE.md` were not refreshed. To take pair's version: remove `agents` from `skipRegistries` in `pair.config.json`, and first back up your own files: `mv AGENTS.md AGENTS.md.bak` (and `CLAUDE.md`), or run the update with `--persist-backup`. The next `update` then overwrites them.
+
+Name the skipped registry actually printed. Removal of the entry is a shown edit, never silent.
+
+### What pair installs
+
+These paths are pair's own, written by `install`/`update` from the registries config (`pair-cli validate-config` shows the effective list). **Never flag them as unexpected files** in an audit or a diff review; a path outside this list is the user's:
+
+- `.pair/` (`.pair/knowledge`, `.pair/adoption`) and `.github/`
+- `AGENTS.md` and `CLAUDE.md`
+- `.claude/skills/` (canonical), `.claude/workflows/`, `.claude/agents/`
+- skill symlinks: `.github/skills/`, `.cursor/skills/`, `.agent/skills/`, `.agents/skills/`, `.windsurf/skills/`
+
 ## Capability menu
 
 When asked what you can do, list this — and nothing outside it. Say so for an area not listed; never invent a key.
