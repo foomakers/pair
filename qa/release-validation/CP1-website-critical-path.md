@@ -247,7 +247,7 @@
 
 ---
 
-## MT-CP114: v0.5.0 landing sections
+## MT-CP114: v0.5.1 landing sections
 
 **Priority**: P1
 **Preconditions**: MT-CP101 passes
@@ -260,7 +260,7 @@
 
 ### Expected Result
 
-- "New in v0.5.0:" banner present, link goes to `$BASE_URL/docs/whats-new` (HTTP 200)
+- "New in v0.5.1:" banner present, link goes to `$BASE_URL/docs/whats-new` (HTTP 200)
 - Process lifecycle section: 4 phases (Induction, Strategic planning, Iteration, Execution), link to `/docs/process-lifecycle`
 - Three modes section: Assisted, Supervised, Autonomous, each with a steering wheel icon and an automation-level bar (1, 2, 3 of 3 filled); "Choose your mode" link to `/docs/process-lifecycle/lifecycle-modes`
 - Delivery section: Implement, Verify, Fix inside a seal, Resume anywhere; link to `/docs/process-lifecycle/delivery-workflow`
