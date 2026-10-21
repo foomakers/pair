@@ -1,0 +1,184 @@
+{
+  "$meta": {
+    "pr": "571",
+    "phase": "r1-g1",
+    "base": "ff1bab042c04277ebf00c309adbfa764427aa69f",
+    "trailer": "Pair-RED-Snapshot: pr=571; phase=r1-g1; base=ff1bab042c04277ebf00c309adbfa764427aa69f; manifest=.pair/red-snapshots/pr-571-r1-g1.json",
+    "artifacts": [
+      "packages/dev-tools/src/release/deploy-website-workflow.test.ts"
+    ]
+  },
+  "mode": "remediation",
+  "inputHead": "ff1bab042c04277ebf00c309adbfa764427aa69f",
+  "sourceOfTruth": ".github/workflows/deploy-website.yml (GitHub Actions workflow YAML); oracles website-preview-deploy.yml, release.yml",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": ".github/workflows/deploy-website.yml",
+      "inputs": [
+        "workflow_dispatch on main"
+      ],
+      "representations": [
+        "workflow yaml"
+      ],
+      "consumers": [
+        "GitHub deployments API"
+      ],
+      "classes": [
+        "permissions",
+        "create+in_progress",
+        "terminal success",
+        "terminal failure",
+        "main guard preserved"
+      ],
+      "interactions": [
+        "guard before deployment creation"
+      ]
+    },
+    {
+      "id": "r0-3",
+      "producer": ".github/workflows/deploy-website.yml",
+      "inputs": [
+        "two dispatches"
+      ],
+      "representations": [
+        "workflow yaml"
+      ],
+      "consumers": [
+        "GitHub concurrency"
+      ],
+      "classes": [
+        "group set",
+        "cancel-in-progress false"
+      ],
+      "interactions": []
+    }
+  ],
+  "fixScope": {
+    "owner": "deploy-website-workflow",
+    "mode": "behavioral",
+    "allowedPaths": [
+      ".github/workflows/deploy-website.yml"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r0-1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "permissions",
+      "oracle": "packages/dev-tools/src/release/deploy-website-workflow.test.ts",
+      "expected": "deployments: write",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "order guard<create<=in_progress<Vercel; create is POST deployments distinct from statuses",
+      "oracle": "packages/dev-tools/src/release/deploy-website-workflow.test.ts",
+      "expected": "step indexes ordered",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-w3",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "terminal statuses conditional, after Vercel",
+      "oracle": "packages/dev-tools/src/release/deploy-website-workflow.test.ts",
+      "expected": "state=success step if success(), state=failure step if failure(), both after deploy step",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "main guard first step exits non-zero",
+      "oracle": "packages/dev-tools/src/release/deploy-website-workflow.test.ts",
+      "expected": "first step names refs/heads/main and contains exit 1",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-3-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "concurrency",
+      "oracle": "packages/dev-tools/src/release/deploy-website-workflow.test.ts",
+      "expected": "group is non-empty string",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "r0-3-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "no cancel",
+      "oracle": "packages/dev-tools/src/release/deploy-website-workflow.test.ts",
+      "expected": "cancel-in-progress false",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "r0-3-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "release.yml oracle",
+      "oracle": "packages/dev-tools/src/release/deploy-website-workflow.test.ts",
+      "expected": "release.yml has concurrency",
+      "covers": [
+        "r0-3"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/dev-tools/src/release/deploy-website-workflow.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:e01a035f17e6d27b8743bc8278eeaf3ec14d1120295bc35f3ab4bb5c8da0e5d8",
+      "command": "pnpm --dir packages/dev-tools exec vitest run src/release/deploy-website-workflow.test.ts",
+      "observed": "5 failed | 2 passed (7): r0-1-w1,w2,w3 r0-3-w1,w2 fail; c1 controls pass"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1",
+          "r0-3"
+        ],
+        "owner": "deploy-website-workflow",
+        "mode": "behavioral",
+        "allowedPaths": [
+          ".github/workflows/deploy-website.yml"
+        ],
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g2",
+        "findings": [
+          "r0-2"
+        ],
+        "owner": "release-process-docs",
+        "mode": "doc",
+        "allowedPaths": [
+          "apps/website/content/docs/contributing/release-process.mdx"
+        ],
+        "dependsOn": []
+      }
+    ],
+    "carried": []
+  }
+}
