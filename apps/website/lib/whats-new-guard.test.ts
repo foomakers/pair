@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 
 const root = resolve(__dirname, '../../..')
 
-describe('#562 What\'s new + CHANGELOG guards', () => {
+describe("#562 What's new + CHANGELOG guards", () => {
   it('whats-new has exactly one link per list item', () => {
     const src = readFileSync(resolve(root, 'apps/website/content/docs/whats-new.mdx'), 'utf8')
     const body = src.split(/\nNext: /)[0]
