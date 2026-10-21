@@ -63,6 +63,11 @@ Both checklist lines have an automatic backstop.
 |----------|------|---------|---------|
 | Version | `version.yml` | Dispatch (`channel`, `version`) | Validate, version, tag, dispatch release |
 | Release | `release.yml` | Dispatch (tag) | Build from tag, publish, cleanup |
+| Deploy Website (production) | `deploy-website.yml` | Dispatch | Publish website changes without a release |
+
+### Deploying the website without a release
+
+To publish website changes without cutting a release, run `gh workflow run deploy-website.yml` (workflow `Deploy Website (production)`). It deploys only from `main`, refuses any other ref, and creates no tag, release or package.
 
 ## Release artifacts
 
