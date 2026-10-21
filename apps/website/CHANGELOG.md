@@ -1,6 +1,6 @@
 # @pair/website
 
-## 0.5.0
+## 0.5.1
 
 ### Patch Changes
 
@@ -30,12 +30,12 @@
 
 - [`aa2b884`](https://github.com/foomakers/pair/commit/aa2b88418ec1355bda7e5121b02cf578bc84f4b1) Thanks [@rucka](https://github.com/rucka)! - Release validation CP1-CP12 listed in `contributing/release-process` (pair repo docs; `tutorials/release-testing` stays framework-level). `docs-staleness-check` memoizes the MDX compile and heading parse per page content, so repeated `runAllChecks` calls in one vitest worker no longer re-parse the whole docs tree (cold ~1.4 s, warm ~0.2 s): fixes the `[vitest-worker]: Timeout calling "onTaskUpdate"` caused by multi-second synchronous blocks.
 
-- [`f664ffa`](https://github.com/foomakers/pair/commit/f664ffa3a6bd4b8354c3465ddea1b58936881d75) Thanks [@rucka](https://github.com/rucka)! - Landing page restructured for v0.5.0: hero sub-head on the lifecycle and the three modes with the install command inline, What's new banner, pain points reworded around process ownership and independent verification, Works with lists pi and opencode with the two-tier harness line, How it works replaced by the process lifecycle (four phases, `lifecycle-overview.svg`), new Three modes, Delivery workflow and Risk tiers sections, audience tracks rerouted to Quickstart, Team path and External KB, demo poster re-cut from a terminal frame, no em dashes in copy or metadata. README first install command aligned to `npm install -g @foomakers/pair-cli`.
+- [`f664ffa`](https://github.com/foomakers/pair/commit/f664ffa3a6bd4b8354c3465ddea1b58936881d75) Thanks [@rucka](https://github.com/rucka)! - Landing page restructured for v0.5: hero sub-head on the lifecycle and the three modes with the install command inline, What's new banner, pain points reworded around process ownership and independent verification, Works with lists pi and opencode with the two-tier harness line, How it works replaced by the process lifecycle (four phases, `lifecycle-overview.svg`), new Three modes, Delivery workflow and Risk tiers sections, audience tracks rerouted to Quickstart, Team path and External KB, demo poster re-cut from a terminal frame, no em dashes in copy or metadata. README first install command aligned to `npm install -g @foomakers/pair-cli`.
 
-- [#567](https://github.com/foomakers/pair/pull/567) [`539f8a1`](https://github.com/foomakers/pair/commit/539f8a1b90b906f39011bc384d73c57f39020a68) Thanks [@rucka](https://github.com/rucka)! - Release references v0.5.0 -> v0.5.1 (npm cannot reuse an unpublished version): landing banner, `docs/whats-new`, `docs/index`, CP1 MT-CP114 ([#562](https://github.com/foomakers/pair/issues/562)).
+- [#567](https://github.com/foomakers/pair/pull/567) [`539f8a1`](https://github.com/foomakers/pair/commit/539f8a1b90b906f39011bc384d73c57f39020a68) Thanks [@rucka](https://github.com/rucka)! - Release references set to v0.5.1: landing banner, `docs/whats-new`, `docs/index`, CP1 MT-CP114 ([#562](https://github.com/foomakers/pair/issues/562)).
 
 - Updated dependencies []:
-  - @pair/brand@0.5.0
+  - @pair/brand@0.5.1
 
 ## 0.4.3
 

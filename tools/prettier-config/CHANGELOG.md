@@ -1,6 +1,6 @@
 # @pair/prettier-config
 
-## 0.5.0
+## 0.5.1
 
 ## 0.4.3
 

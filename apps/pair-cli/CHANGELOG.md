@@ -1,6 +1,6 @@
 # @pair/pair-cli
 
-## 0.5.0
+## 0.5.1
 
 ### Minor Changes
 
@@ -131,7 +131,7 @@
   - `cycle-state.mjs publish` refuses a red-spec contract that the validator would reject one round later: a witness/control command it refuses as unsafe (for example a leading `bash`), `command-unsafe:<row>`, and a witness/control row with no runnable command, `row-not-runnable:<row>`. The red-spec skill now states the command shape.
   - Implement-phase and review-phase run the adopted `worktree-setup-command` (new `way-of-working.md` key) in a fresh worktree before any gate, and never symlink another checkout's `node_modules`/`dist`.
 
-- [#544](https://github.com/foomakers/pair/pull/544) [`f965e52`](https://github.com/foomakers/pair/commit/f965e525e1e44dd898279c988cf4ba710ad689d5) Thanks [@rucka](https://github.com/rucka)! - Release validation suite aligned with v0.5.0: channel-aware CPs (`$CHANNEL` pre/rc/final), refreshed CLI/KB assertions, new CP11 (release pipeline) and CP12 (plugin marketplace), new smoke scenarios (`update-removes-files`, `inspect-commands`, run flags); release artifact smokes now test the artifact past install (`run-all.sh --binary` no longer replaced by the packaging preflight) ([#543](https://github.com/foomakers/pair/issues/543)). Increment 2: CP1/CP6 cases follow the v0.5.0 landing and docs IA (MT-CP102/105/106, new MT-CP114, MT-CP606, new MT-CP612).
+- [#544](https://github.com/foomakers/pair/pull/544) [`f965e52`](https://github.com/foomakers/pair/commit/f965e525e1e44dd898279c988cf4ba710ad689d5) Thanks [@rucka](https://github.com/rucka)! - Release validation suite aligned with v0.5: channel-aware CPs (`$CHANNEL` pre/rc/final), refreshed CLI/KB assertions, new CP11 (release pipeline) and CP12 (plugin marketplace), new smoke scenarios (`update-removes-files`, `inspect-commands`, run flags); release artifact smokes now test the artifact past install (`run-all.sh --binary` no longer replaced by the packaging preflight) ([#543](https://github.com/foomakers/pair/issues/543)). Increment 2: CP1/CP6 cases follow the v0.5 landing and docs IA (MT-CP102/105/106, new MT-CP114, MT-CP606, new MT-CP612).
 
 - [#551](https://github.com/foomakers/pair/pull/551) [`9249ccf`](https://github.com/foomakers/pair/commit/9249ccf8290df2ecc3aca1ce017ab3feb2b4fa28) Thanks [@rucka](https://github.com/rucka)! - Smoke + release-validation coverage for the [#549](https://github.com/foomakers/pair/issues/549) fixes: scenarios for the adoption-free install, the package round-trip, `update --persist-backup`, `update-link --dry-run` and the `kb-info` corrupt-ZIP message; CP edits match shipped CLI behaviour ([#550](https://github.com/foomakers/pair/issues/550)).
 
@@ -139,7 +139,7 @@
 
 - [`43d2f28`](https://github.com/foomakers/pair/commit/43d2f28c499d8ccc7c82980076a0abe681246aab) Thanks [@rucka](https://github.com/rucka)! - `pair-cli run`: a profile stage's `effort` now reaches `claude` (`--effort`) and `codex` (`-c model_reasoning_effort`, `xhigh`/`max` mapped to `high`); engines without a verified flag warn once and the table marks the stage `ignored`. `--profile` / `--workflow-config` now work with `--root` / `--parallel` / `--watch` and are forwarded to every child card; an unknown profile halts `profile-unresolved` before any child spawns.
 
-- [#549](https://github.com/foomakers/pair/pull/549) [`fcbe1be`](https://github.com/foomakers/pair/commit/fcbe1be4976bea3232951c6ed7a13af15a2d46cc) Thanks [@rucka](https://github.com/rucka)! - v0.5.0 blockers from pre.1 validation ([#548](https://github.com/foomakers/pair/issues/548)):
+- [#549](https://github.com/foomakers/pair/pull/549) [`fcbe1be`](https://github.com/foomakers/pair/commit/fcbe1be4976bea3232951c6ed7a13af15a2d46cc) Thanks [@rucka](https://github.com/rucka)! - v0.5 blockers from pre.1 validation ([#548](https://github.com/foomakers/pair/issues/548)):
   - A fresh install no longer ships pair's own `tech/automation.md` or decision logs, and no `mirrors:regenerate` hook (a conformance test guards the dataset adoption).
   - `package` without `--layout` validates and packs the same layout (default `target`), packages the canonical copy only, and unflattens skills to `<category>/<name>` with links rewritten, so `kb-verify`, `kb-validate --layout source` and `install --source` round-trip. `kb-verify` finds file registries (`AGENTS.md`).
   - `package --help` and docs show `--pkg-version`, never `--version`.
@@ -154,8 +154,8 @@
   - New pages: delivery-cycle reference with diagrams ([#530](https://github.com/foomakers/pair/issues/530)), risk-driven delivery operations ([#533](https://github.com/foomakers/pair/issues/533)), quality-gates configuration reference ([#375](https://github.com/foomakers/pair/issues/375)), unattended-delivery tutorial, Claude Code Web guide ([#442](https://github.com/foomakers/pair/issues/442)), Codex harness guide ([#516](https://github.com/foomakers/pair/issues/516)). PM-tools pages rewritten problem-first ([#478](https://github.com/foomakers/pair/issues/478)).
 
 - Updated dependencies []:
-  - @pair/content-ops@0.5.0
-  - @pair/knowledge-hub@0.5.0
+  - @pair/content-ops@0.5.1
+  - @pair/knowledge-hub@0.5.1
 
 ## 0.4.3
 
