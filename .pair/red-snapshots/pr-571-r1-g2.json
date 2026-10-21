@@ -1,0 +1,92 @@
+{
+  "$meta": {
+    "pr": "571",
+    "phase": "r1-g2",
+    "base": "cf40ce7964cdcc4b2f8681c5bb75e9262c6ac521",
+    "trailer": "Pair-RED-Snapshot: pr=571; phase=r1-g2; base=cf40ce7964cdcc4b2f8681c5bb75e9262c6ac521; manifest=.pair/red-snapshots/pr-571-r1-g2.json",
+    "artifacts": []
+  },
+  "mode": "remediation",
+  "inputHead": "cf40ce7964cdcc4b2f8681c5bb75e9262c6ac521",
+  "sourceOfTruth": ".github/workflows/deploy-website.yml (workflow_dispatch, main-only, Vercel production); card #366 AC-11",
+  "inventory": [
+    {
+      "id": "r0-2",
+      "producer": "apps/website/content/docs/contributing/release-process.mdx prose, authored per AC-11 and .github/workflows/deploy-website.yml",
+      "inputs": [
+        "deploy-website.yml workflow name/file, trigger, ref guard"
+      ],
+      "representations": [
+        "apps/website/content/docs/contributing/release-process.mdx"
+      ],
+      "consumers": [
+        "contributors reading the release-process docs page"
+      ],
+      "classes": [
+        "doc names the workflow",
+        "doc states when to use it (publish website changes without a release)",
+        "doc states main-only and no tag/release/package side effects"
+      ],
+      "interactions": []
+    }
+  ],
+  "fixScope": {
+    "owner": "release-process-docs",
+    "mode": "doc",
+    "allowedPaths": [
+      "apps/website/content/docs/contributing/release-process.mdx"
+    ]
+  },
+  "checklist": [
+    {
+      "id": "CL-1",
+      "finding": "r0-2",
+      "requirement": "release-process.mdx names the manual workflow: `Deploy Website (production)` / file `deploy-website.yml`, dispatched via workflow_dispatch (e.g. `gh workflow run deploy-website.yml`)",
+      "authority": ".github/workflows/deploy-website.yml (name:, on: workflow_dispatch); AC-11"
+    },
+    {
+      "id": "CL-2",
+      "finding": "r0-2",
+      "requirement": "release-process.mdx states the use case: publish website changes to production without cutting a release",
+      "authority": "AC-11 'publish website changes without a release; documents when to use it'"
+    },
+    {
+      "id": "CL-3",
+      "finding": "r0-2",
+      "requirement": "release-process.mdx states it deploys only from main and creates no tag, release or package",
+      "authority": "AC-11 'only main, refusing any other ref ... touches no tag, release or package'; deploy-website.yml 'Refuse non-main ref' step"
+    }
+  ],
+  "redTests": [],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1",
+          "r0-3"
+        ],
+        "owner": "deploy-website-workflow",
+        "mode": "behavioral",
+        "allowedPaths": [
+          ".github/workflows/deploy-website.yml"
+        ],
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g2",
+        "findings": [
+          "r0-2"
+        ],
+        "owner": "release-process-docs",
+        "mode": "doc",
+        "allowedPaths": [
+          "apps/website/content/docs/contributing/release-process.mdx"
+        ],
+        "dependsOn": []
+      }
+    ],
+    "carried": []
+  }
+}
