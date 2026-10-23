@@ -302,3 +302,30 @@ describe('resolveIdleTimeout — precedence flag > ## Stop Predicate > pair.conf
     expect(DEFAULT_IDLE_TIMEOUT_SECONDS).toBe(1800)
   })
 })
+
+describe('spawnIteration — the run max fix rounds reaches the claude live stages (r2-6, fix-max-wiring)', () => {
+  it('r2-6-w5: a stub claude streaming the recorded fixture with maxFixRounds 10 renders fix 1/10', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pair-run-'))
+    const file = join(dir, 'engine.js')
+    const fixture = join(__dirname, '__fixtures__', 'claude-live-workflow-progress.jsonl')
+    writeFileSync(
+      file,
+      `process.stdout.write(require('fs').readFileSync(${JSON.stringify(fixture)}, 'utf-8'))`,
+    )
+    const stages: string[] = []
+    const input = {
+      engine: { ...ENGINES.claude, command: process.execPath, headlessArgs: [file] },
+      promptText: 'go',
+      cwd: dir,
+      autonomyArgs: [],
+      timeoutSeconds: 30,
+      maxFixRounds: 10,
+      onRunEvent: (e: { card?: string; event: string; stage?: string }) => {
+        if (e.card === '573' && e.event === 'stage') stages.push(e.stage!)
+      },
+    }
+    await spawnIteration(input)
+    expect(stages).toContain('fix 1/10')
+    expect(stages).not.toContain('fix 1/?')
+  })
+})

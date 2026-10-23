@@ -138,3 +138,29 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
     expect(out()).toMatch(/iteration 1 success — terminal event: success\n/)
   })
 })
+
+describe('pair run — the loop path hands the engine a max fix rounds (r2-6, fix-max-wiring)', () => {
+  beforeEach(() => vi.stubEnv('PATH', '/bin'))
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  it('r2-6-w6: every iteration input carries an integer maxFixRounds >= 1', async () => {
+    const seen: unknown[] = []
+    const runIteration: IterationRunner = input => {
+      seen.push((input as { maxFixRounds?: unknown }).maxFixRounds)
+      return replay('claude-workflow-events.jsonl')(input)
+    }
+    capture()
+    await handleRunCommand(parseRunCommand({ root: '212' }), projectFs(), {
+      runIteration,
+      runAudit: () => undefined,
+    })
+    expect(seen.length).toBeGreaterThan(0)
+    for (const max of seen) {
+      expect(Number.isInteger(max)).toBe(true)
+      expect(max as number).toBeGreaterThanOrEqual(1)
+    }
+  })
+})

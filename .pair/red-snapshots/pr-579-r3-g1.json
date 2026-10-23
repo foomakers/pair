@@ -1,0 +1,472 @@
+{
+  "$meta": {
+    "pr": "579",
+    "phase": "r3-g1",
+    "base": "2f8a005f2a3b44f3ce7a112b34c6242b10178ad2",
+    "trailer": "Pair-RED-Snapshot: pr=579; phase=r3-g1; base=2f8a005f2a3b44f3ce7a112b34c6242b10178ad2; manifest=.pair/red-snapshots/pr-579-r3-g1.json",
+    "artifacts": [
+      "apps/pair-cli/src/commands/run/run-events-progress-labels.test.ts",
+      "apps/pair-cli/src/commands/run/run-events-claude-live.test.ts",
+      "apps/pair-cli/src/commands/run/spawn.test.ts",
+      "apps/pair-cli/src/commands/run/loop-driver.test.ts"
+    ]
+  },
+  "run": "story-573",
+  "story": "573",
+  "phase": "r3-g1",
+  "mode": "repair",
+  "attempt": 3,
+  "inputHead": "2f8a005f2a3b44f3ce7a112b34c6242b10178ad2",
+  "sourceOfTruth": "findings r2-5/r2-6/r2-7 (r2-review-phase); label grammar packages/knowledge-hub/dataset/.workflows/pair-implement-batch.js (dispatch labels 1822-1849, 2218; stageLabel 1729); cycle-wiring.ts stageLabel",
+  "inventory": [
+    {
+      "id": "r2-5",
+      "producer": "progressRunEvents / STAGE_LABEL (apps/pair-cli/src/commands/run/run-events.ts)",
+      "inputs": [
+        "task_progress.workflow_progress agent labels from pair-implement-batch.js dispatch opts.label (lines 1822-1849, 2218-2319)"
+      ],
+      "representations": [
+        "run-events.ts (canonical)",
+        "pair-implement-batch.js label grammar (authority, dataset + .claude mirror)"
+      ],
+      "consumers": [
+        "readIterationOutcome onRunEvent → console renderer, run audit, --json"
+      ],
+      "classes": [
+        "prepare:phase #<id> (card-prepare phase, label with a word before #)",
+        "relay labels tier:/decide:/pr-lookup:/escalate:/pr-state:/cascade:/merge-check:/autonomy:resolve (no card stage)",
+        "retry-suffixed labels (agentRetry `${label} retry`, pair-implement-batch.js:1547) map like their unsuffixed form"
+      ],
+      "interactions": [
+        "prepare:phase card-prepare stage followed by cycle stages for the same card"
+      ]
+    },
+    {
+      "id": "r2-6",
+      "producer": "progressRunEvents / STAGE_OF_STEP (apps/pair-cli/src/commands/run/run-events.ts) vs workflow stageLabel (pair-implement-batch.js:1729) and cycle-wiring.ts stageLabel",
+      "inputs": [
+        "agent labels <step>:#<id> <phase>[ repair| revision][ attempt k][ reviewer k]",
+        "run policy maxFixRounds (readIterationOutcome options { maxFixRounds })",
+        "loop path: driveRun → driveIteration → IterationRunner/spawnIteration input maxFixRounds (source: the cycle budget the run resolves — the workflow pipeline maxFixRounds, pair-implement-batch.js PIPELINE.maxFixRounds; the fixer records the chosen source in .pair/adoption/decision-log/)"
+      ],
+      "representations": [
+        "run-events.ts (canonical claude path)",
+        "pair-implement-batch.js stageLabel (PAIR_EVENT path authority)",
+        "cycle-wiring.ts stageLabel (fix n/max, ? when max unknown)"
+      ],
+      "consumers": [
+        "onRunEvent stage events → live row, audit, --json",
+        "spawnIteration (spawn.ts) → readIterationOutcome 5th arg",
+        "driveIteration (loop-driver.ts) → runIteration input"
+      ],
+      "classes": [
+        "round-tagged prepare/validate/green r<n>-g<k>[-rev<m>] (round n>=1) → fix n/<max>",
+        "unround a0 / a0-rev<m> prepare/validate → implement (stageLabel round 0)",
+        "implement / implement attempt k → implement",
+        "verify r<n> [reviewer k] → review",
+        "merge → merge",
+        "retry-suffixed round/implement/verify labels → same stage as unsuffixed",
+        "max from the run policy (readIterationOutcome 5th arg { maxFixRounds }) → fix n/<maxFixRounds>; no policy → fix n/?",
+        "spawnIteration input maxFixRounds 10 → claude stages fix 1/10, never fix 1/?",
+        "every loop iteration input carries an integer maxFixRounds >= 1 (no loop-path iteration runs with an unknown max)"
+      ],
+      "interactions": [
+        "recorded live fixture: implement → verify r0 → prepare r1-g1 → green r1-g1 → merge",
+        "recorded live fixture with policy maxFixRounds 10 → fix 1/10",
+        "handler → driveRun → spawnIteration → readIterationOutcome: max from the loop path reaches the claude stage label"
+      ]
+    },
+    {
+      "id": "r2-7",
+      "producer": "readIterationOutcome / tallyRunEvents (apps/pair-cli/src/commands/run/stream-reader.ts) + progressRunEvents card-start",
+      "inputs": [
+        "claude stream with task_progress agents then a result terminal event",
+        "result.result text: free prose | workflow return JSON | PAIR_EVENT lines; result is_error/subtype; stream end without terminal",
+        "pair-loop.js return { iterations, log: [{ iteration, id, status }] } (pair-loop.js:898/970, default pair run skill: metadata.ts:24, invocation.ts:65)"
+      ],
+      "representations": [
+        "stream-reader.ts (canonical)"
+      ],
+      "consumers": [
+        "onRunEvent card-end → renderer settle (AC2b), end summary (AC8), audit"
+      ],
+      "classes": [
+        "card opened from progress, unreadable result text (fixture: DONE) → exactly one card-end status `unknown` (workflow tally token `r.status ?? 'unknown'`), never merged/completed",
+        "readable workflow return (pair-implement-batch return { batch: [{ id, status }] } in result text) → card-end with that status",
+        "error terminal (is_error / non-success subtype) → exactly one card-end, status ∉ {merged, completed}",
+        "no terminal event (NO_TERMINAL_EVENT, engine killed / idle timeout) → exactly one card-end, status ∉ {merged, completed}",
+        "card already ended by a PAIR_EVENT card-end → not closed twice",
+        "readable pair-loop return (log[].{id,status}) in result text → card-end with that status",
+        "return JSON quoted inside prose (recorded live result text shape) → same status as the bare JSON"
+      ],
+      "interactions": [
+        "PAIR_EVENT card-end in the result text + progress-opened card",
+        "two progress-opened cards, PAIR_EVENT card-end for one → the other closed exactly once (unknown)"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "apps/pair-cli run command — claude workflow_progress → run events (run-events.ts progressRunEvents / stream-reader.ts readIterationOutcome)",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "apps/pair-cli/src/commands/run/run-events.ts",
+      "apps/pair-cli/src/commands/run/stream-reader.ts",
+      "apps/pair-cli/src/commands/run/spawn.ts",
+      "apps/pair-cli/src/commands/run/loop-driver.ts",
+      "apps/pair-cli/src/commands/run/cycle-wiring.ts",
+      "apps/pair-cli/src/commands/run/run-context.ts",
+      ".pair/adoption/decision-log/"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r2-5-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-progress-labels.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-progress-labels.test.ts -t r2-5-w1",
+      "condition": "progressRunEvents on agent label 'prepare:phase #573'",
+      "expected": "exactly [card-start 573, stage 573 prepare] (empty output fails; no card 'phase')",
+      "covers": [
+        "r2-5"
+      ]
+    },
+    {
+      "id": "r2-5-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/run-events-progress-labels.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-progress-labels.test.ts -t r2-5-c1",
+      "condition": "relay labels tier:#573, decide:#573 implement, pr-lookup:#573, escalate:#573, pr-state:#573, cascade:#573, merge-check:#573, autonomy:resolve",
+      "expected": "no events",
+      "covers": [
+        "r2-5"
+      ],
+      "rationale": "already correct; guards a widened label grammar from mapping relay agents"
+    },
+    {
+      "id": "r2-5-i1",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-progress-labels.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-progress-labels.test.ts -t r2-5-i1",
+      "condition": "one progress event with labels 'prepare:phase #573', 'implement:#573'",
+      "expected": "exactly [card-start 573, stage prepare, stage implement] — one card-start, no card phase",
+      "covers": [
+        "r2-5"
+      ]
+    },
+    {
+      "id": "r2-5-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-progress-labels.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-progress-labels.test.ts -t r2-5-w2",
+      "condition": "label 'prepare:phase #573 retry'",
+      "expected": "exactly [card-start 573, stage 573 prepare]",
+      "covers": [
+        "r2-5"
+      ]
+    },
+    {
+      "id": "r2-6-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-progress-labels.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-progress-labels.test.ts -t r2-6-w1",
+      "condition": "labels prepare:#573 r1-g1, validate:#573 r1-g1, green:#573 r1-g1, green:#573 r1-g1 attempt 2, prepare:#573 r1-g2 repair, prepare:#573 r1-g1-rev1 revision",
+      "expected": "stage matches /^fix 1\\/(\\d+|\\?)$/ (fix n/max; ? only when max is unknown, as cycle-wiring stageLabel)",
+      "covers": [
+        "r2-6"
+      ]
+    },
+    {
+      "id": "r2-6-b1",
+      "kind": "boundary",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-progress-labels.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-progress-labels.test.ts -t r2-6-b1",
+      "condition": "label validate:#573 r3-g2",
+      "expected": "stage matches /^fix 3\\/(\\d+|\\?)$/ — round n carried, not hard-coded 1",
+      "covers": [
+        "r2-6"
+      ]
+    },
+    {
+      "id": "r2-6-b2",
+      "kind": "boundary",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-progress-labels.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-progress-labels.test.ts -t r2-6-b2",
+      "condition": "labels prepare:#573 a0, validate:#573 a0-rev1 (sealed-a0 path, round 0)",
+      "expected": "stage 'implement' — stageLabel: !(round >= 1) → implement",
+      "covers": [
+        "r2-6"
+      ]
+    },
+    {
+      "id": "r2-6-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/run-events-progress-labels.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-progress-labels.test.ts -t r2-6-c1",
+      "condition": "implement:#573, implement:#573 attempt 2, verify:#573 r1, verify:#573 r0 reviewer 2, merge:#573",
+      "expected": "implement, implement, review, review, merge",
+      "covers": [
+        "r2-6"
+      ]
+    },
+    {
+      "id": "r2-6-w4",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-progress-labels.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-progress-labels.test.ts -t r2-6-w4",
+      "condition": "label 'green:#573 r1-g1 retry'",
+      "expected": "stage matches /^fix 1\\/(\\d+|\\?)$/ like the unsuffixed form",
+      "covers": [
+        "r2-6",
+        "r2-5"
+      ]
+    },
+    {
+      "id": "r2-6-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/run-events-progress-labels.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-progress-labels.test.ts -t r2-6-c2",
+      "condition": "labels 'implement:#573 retry', 'verify:#573 r1 retry'",
+      "expected": "implement, review",
+      "covers": [
+        "r2-6",
+        "r2-5"
+      ],
+      "rationale": "already correct at base (STAGE_LABEL ignores the tail); guards a tightened suffix grammar from dropping retry agents"
+    },
+    {
+      "id": "r2-6-w2",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-claude-live.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-claude-live.test.ts -t r2-6-w2",
+      "condition": "recorded live fixture __fixtures__/claude-live-workflow-progress.jsonl through readIterationOutcome(ENGINES.claude) with NO policy",
+      "expected": "first 573 event card-start; stages (consecutive repeats collapsed, no normalisation) = [implement, review, 'fix 1/?', merge]",
+      "covers": [
+        "r2-6"
+      ]
+    },
+    {
+      "id": "r2-6-w3",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-claude-live.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-claude-live.test.ts -t r2-6-w3",
+      "condition": "same fixture through readIterationOutcome(lines, ENGINES.claude, undefined, onRunEvent, { maxFixRounds: 10 })",
+      "expected": "stages = [implement, review, 'fix 1/10', merge] exactly",
+      "covers": [
+        "r2-6"
+      ]
+    },
+    {
+      "id": "r2-7-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-claude-live.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-claude-live.test.ts -t r2-7-w1",
+      "condition": "recorded live fixture: 573 opened from progress, result success text DONE (no readable status, no PAIR_EVENT)",
+      "expected": "last 573 event card-end; 573 card-end statuses exactly ['unknown']",
+      "covers": [
+        "r2-7"
+      ]
+    },
+    {
+      "id": "r2-7-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-claude-live.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-claude-live.test.ts -t r2-7-w2",
+      "condition": "progress implement:#573 then success result whose text is the workflow return JSON { workflowVersion, batch: [{ id: '573', status: 'ready-for-merge' }], note }",
+      "expected": "573 card-end statuses exactly ['ready-for-merge']",
+      "covers": [
+        "r2-7"
+      ]
+    },
+    {
+      "id": "r2-7-w3",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-claude-live.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-claude-live.test.ts -t r2-7-w3",
+      "condition": "progress implement:#573 then result subtype error_during_execution is_error true",
+      "expected": "exactly one 573 card-end, status ∉ {merged, completed}",
+      "covers": [
+        "r2-7"
+      ]
+    },
+    {
+      "id": "r2-7-w4",
+      "kind": "boundary",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-claude-live.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-claude-live.test.ts -t r2-7-w4",
+      "condition": "progress implement:#573 and the stream ends with no terminal event",
+      "expected": "exactly one 573 card-end, status ∉ {merged, completed}",
+      "covers": [
+        "r2-7"
+      ]
+    },
+    {
+      "id": "r2-7-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "apps/pair-cli/src/commands/run/run-events-claude-live.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-claude-live.test.ts -t r2-7-c1",
+      "condition": "progress implement:#573 then result whose text carries PAIR_EVENT card-end 573 merged",
+      "expected": "573 card-end statuses = ['merged'] (not closed a second time)",
+      "covers": [
+        "r2-7"
+      ],
+      "rationale": "already correct at base; guards the iteration-end close from duplicating a workflow card-end"
+    },
+    {
+      "id": "r2-7-i1",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-claude-live.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-claude-live.test.ts -t r2-7-i1",
+      "condition": "one progress event opens 573 and 574; result text carries PAIR_EVENT card-end 573 merged",
+      "expected": "573 card-end statuses ['merged']; 574 card-end statuses exactly ['unknown']",
+      "covers": [
+        "r2-7"
+      ]
+    },
+    {
+      "id": "r2-6-w5",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/spawn.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn.test.ts -t r2-6-w5",
+      "condition": "spawnIteration with a stub claude (node script, no real engine) streaming __fixtures__/claude-live-workflow-progress.jsonl and input maxFixRounds 10",
+      "expected": "573 stages include 'fix 1/10', never 'fix 1/?'",
+      "covers": [
+        "r2-6"
+      ],
+      "mechanismId": "fix-max-wiring",
+      "closes": "fix-max-wiring-1"
+    },
+    {
+      "id": "r2-6-w6",
+      "kind": "interaction",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/loop-driver.test.ts -t r2-6-w6",
+      "condition": "handleRunCommand (pair run --root 212) → driveRun → driveIteration with a capturing runIteration",
+      "expected": "every iteration input carries an integer maxFixRounds >= 1 — the loop-path max source (the run cycle budget / workflow pipeline maxFixRounds) is threaded, never absent",
+      "covers": [
+        "r2-6"
+      ],
+      "mechanismId": "fix-max-wiring",
+      "rationale": "value not pinned: the loop path has no cycle-state resolve; the fixer names its source in the decision log. With r2-6-w5 the chain handler → spawn → reader is forced end to end"
+    },
+    {
+      "id": "r2-7-w5",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-claude-live.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-claude-live.test.ts -t r2-7-w5",
+      "condition": "progress implement:#573 + result text {\"iterations\":1,\"log\":[{\"iteration\":0,\"id\":\"573\",\"status\":\"ready-for-merge\"}]}",
+      "expected": "573 card-end statuses exactly ['ready-for-merge']",
+      "covers": [
+        "r2-7"
+      ],
+      "mechanismId": "close-status-source",
+      "closes": "close-status-source-1"
+    },
+    {
+      "id": "r2-7-w6",
+      "kind": "witness",
+      "baseline": "red",
+      "file": "apps/pair-cli/src/commands/run/run-events-claude-live.test.ts",
+      "oracle": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-claude-live.test.ts -t r2-7-w6",
+      "condition": "progress implement:#573 + result text prose quoting the pair-loop return JSON in backticks (shape of the recorded live result)",
+      "expected": "573 card-end statuses exactly ['ready-for-merge'] — same as the bare JSON",
+      "covers": [
+        "r2-7"
+      ],
+      "mechanismId": "close-status-source",
+      "closes": "close-status-source-2"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "apps/pair-cli/src/commands/run/run-events-progress-labels.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:a66d986fdae7fa7a4c44d9cd705cc27744850a72350986daf8fbcd97199e88da",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-progress-labels.test.ts",
+      "observed": "FAIL r2-5-w1, r2-5-i1, r2-5-w2, r2-6-w1 x6, r2-6-b1, r2-6-w4, r2-6-b2 — Tests 12 failed | 15 passed (27)"
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/run-events-claude-live.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:f66f41c4f3dfe3d87ee456ed8ad7ecb806c34fa9f1a27767dcdf1d9190b78123",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/run-events-claude-live.test.ts",
+      "observed": "FAIL r2-6-w2, r2-6-w3, r2-7-w1, r2-7-w2, r2-7-w5, r2-7-w6, r2-7-w3, r2-7-w4, r2-7-i1 (no fix n/max, no card-end) — Tests 9 failed | 1 passed (10)"
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/spawn.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:2ec59e74a7a7bd71b21cc0270ef7eaf3953ad853b35722382c9f5d3edec1165a",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/spawn.test.ts",
+      "observed": "FAIL r2-6-w5: expected [ implement, review, …(3) ] to include fix 1/10 — Tests 1 failed | 23 passed (24)"
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/loop-driver.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:f52909e60d64f8504a1d4dedb3b10f398cbc47cbfb76b2498b389797efd59eeb",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/loop-driver.test.ts",
+      "observed": "FAIL r2-6-w6: maxFixRounds undefined, expected false to be true — Tests 1 failed | 7 passed (8)"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r3-g1",
+        "owner": "apps/pair-cli run command — claude workflow_progress → run events (run-events.ts progressRunEvents / stream-reader.ts readIterationOutcome)",
+        "mode": "behavioral",
+        "oracle": "vitest witnesses in apps/pair-cli (run-events-progress-labels.test.ts, run-events-claude-live.test.ts)",
+        "allowedPaths": [
+          "apps/pair-cli/src/commands/run/run-events.ts",
+          "apps/pair-cli/src/commands/run/stream-reader.ts",
+          "apps/pair-cli/src/commands/run/spawn.ts",
+          "apps/pair-cli/src/commands/run/loop-driver.ts",
+          "apps/pair-cli/src/commands/run/cycle-wiring.ts",
+          "apps/pair-cli/src/commands/run/run-context.ts",
+          ".pair/adoption/decision-log/"
+        ],
+        "dependsOn": [],
+        "findings": [
+          "r2-5",
+          "r2-6",
+          "r2-7"
+        ]
+      }
+    ],
+    "carried": []
+  },
+  "notes": "run-events-claude-live.test.ts was unsealed (custody override r1-g1); its old expectation [prepare, fix] is the r2-6 defect and is replaced. Max fix rounds reaches the claude path from the run policy; ? is accepted only where the reader has no policy (unit level), mirroring cycle-wiring stageLabel. Attempt 2 (repair): the run policy max reaches the claude path through readIterationOutcome's defaulted 5th parameter { maxFixRounds } (arity stays 2, AC7); `?` only with no policy (r2-6-w2). Threading it from spawnIteration/driveRun is the fixer's wiring inside fixScope; no row forces its source on the loop path. Unreadable close status is the token `unknown` (the workflow's own tally token, pair-implement-batch.js tally `r.status ?? 'unknown'`); a readable status is the workflow return `batch[].{id,status}`. Attempt 3 (repair of fix-max-wiring / close-status-source): r2-6-w5 forces spawnIteration to forward maxFixRounds to the reader (stub engine, recorded fixture); r2-6-w6 forces the loop path (handler → driveRun → driveIteration) to hand every iteration an integer max — its source (the run cycle budget, workflow pipeline maxFixRounds) is the fixer's to record in the decision log. r2-7-w5/w6 add the pair-loop return shape (default pair run skill) and the return JSON quoted in prose. run-events-claude-live.test.ts tsc TS2554 (5th arg) is the r2-6-w3 defect itself, red until the fix.",
+  "changedRows": [
+    "fix-max-wiring",
+    "close-status-source",
+    "r2-6-w3",
+    "r2-7-w2",
+    "r2-6-w5",
+    "r2-6-w6",
+    "r2-7-w5",
+    "r2-7-w6"
+  ]
+}
