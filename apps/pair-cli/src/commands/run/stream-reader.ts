@@ -447,7 +447,6 @@ function terminalResult(
  * seen before that point is carried into the result, because `pair-loop`'s degraded path prints
  * it just before finishing.
  */
-// eslint-disable-next-line max-params -- every slot past `engine` is DEFAULTED so the arity stays 2 (AC7)
 export async function readIterationOutcome(
   lines: AsyncIterable<string>,
   engine: EngineDefinition,
@@ -456,11 +455,17 @@ export async function readIterationOutcome(
    * A DEFAULTED parameter, so the reader's arity stays 2: no exit-code slot exists (AC7 test).
    */
   onEvent: ((payload: unknown) => void) | undefined = undefined,
-  /** US-573: sees every run event (`PAIR_EVENT` line) once, in stream order. */
-  onRunEvent: ((event: RunEvent) => void) | undefined = undefined,
-  /** r2-6: the run's max fix rounds, rendered in a claude progress `fix n/<max>` (`?` when absent). */
-  options: { readonly maxFixRounds?: number | undefined } = {},
+  /**
+   * US-573: `onRunEvent` sees every run event once, in stream order; r2-6: `options.maxFixRounds` is the
+   * run's budget a claude progress `fix n/<max>` renders (`?` when absent). A rest tuple, so the
+   * arity stays 2.
+   */
+  ...observers: [
+    onRunEvent?: ((event: RunEvent) => void) | undefined,
+    options?: { readonly maxFixRounds?: number | undefined },
+  ]
 ): Promise<IterationResult> {
+  const [onRunEvent, options = {}] = observers
   let continueToken: string | undefined
   const tally: EventTally = {
     count: 0,
