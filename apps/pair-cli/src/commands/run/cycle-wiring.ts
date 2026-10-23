@@ -1,4 +1,5 @@
 import { execFileSync } from 'child_process'
+import { RUN_EVENTS_ENV, runEventLine } from './run-events'
 import { existsSync, readFileSync, rmSync } from 'fs'
 import { dirname, join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
@@ -585,6 +586,27 @@ const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packe
   })) as CycleStageResult
 }
 
+/** The cycle step as the live line names it: implement → review → fix N/max (rounds ≥ 1). */
+export function stageLabel(next: { step: string; round?: number }, maxFixRounds: unknown): string {
+  if (next.step === 'verify') return 'review'
+  if (next.step === 'implement' || !(Number(next.round) >= 1)) return 'implement'
+  return `fix ${next.round}/${Number.isInteger(maxFixRounds) ? String(maxFixRounds) : '?'}`
+}
+
+/** US-573: under the `--parallel` pool (RUN_EVENTS_ENV) the parent renders one live line per card from these. */
+function stageEvents(
+  card: string,
+  policy: Record<string, unknown>,
+): { onDispatch?: (next: { step: string; round?: number }) => void } {
+  if (process.env[RUN_EVENTS_ENV] !== '1') return {}
+  return {
+    onDispatch: next =>
+      console.log(
+        runEventLine({ event: 'stage', card, stage: stageLabel(next, policy['maxFixRounds']) }),
+      ),
+  }
+}
+
 const GATE_SKILL = 'pair-capability-verify-quality'
 const GATE_PASS = 'RESULT: ALL GATES PASS'
 const GATE_FILE = 'merge-gate.json'
@@ -839,6 +861,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       policy,
       ...(input.rounds !== undefined && { rounds: input.rounds }),
       onNotice: note => console.log(`  ${note}`),
+      ...stageEvents(input.card, policy),
       // One line per stage, the moment the NEXT resolve reveals whether it advanced. Without it a
       // forty-dispatch unattended run prints a single terminal status and nothing else: the stage
       // that mattered is indistinguishable from the thirty-nine that did not, and a stage that

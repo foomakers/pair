@@ -56,6 +56,13 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/** US-573: `engine.idleTimeout` — absent, or a positive integer of seconds. */
+function readIdleTimeout(raw: unknown): { value: { idleTimeout?: number } } | { errors: string[] } {
+  if (raw === undefined) return { value: {} }
+  if (Number.isInteger(raw) && Number(raw) > 0) return { value: { idleTimeout: Number(raw) } }
+  return { errors: ['engine.idleTimeout: must be a positive integer of seconds'] }
+}
+
 /**
  * Reads and validates the optional `engine` block.
  *
@@ -92,23 +99,23 @@ export function readEngineDeclaration(
     }
   }
 
+  const fields = readOptionalFields(block, knownEngineIds)
+  if ('errors' in fields) return fields
+  return { engine: id, ...fields.value, errors: [] }
+}
+
+/** `bin`, `model` and `idleTimeout`, each validated; the first invalid one is the error. */
+function readOptionalFields(
+  block: Record<string, unknown>,
+  knownEngineIds: readonly string[],
+): { value: Pick<EngineBlockOutcome, 'bin' | 'model' | 'idleTimeout'> } | { errors: string[] } {
   const bin = readIdKeyedPaths(block['bin'], knownEngineIds, 'bin')
   if ('errors' in bin) return bin
   const model = readIdKeyedPaths(block['model'], knownEngineIds, 'model')
   if ('errors' in model) return model
-
-  const idleTimeout = block['idleTimeout']
-  if (idleTimeout !== undefined && !(Number.isInteger(idleTimeout) && Number(idleTimeout) > 0)) {
-    return { errors: ['engine.idleTimeout: must be a positive integer of seconds'] }
-  }
-
-  return {
-    engine: id,
-    bin: bin.value,
-    model: model.value,
-    ...(idleTimeout !== undefined && { idleTimeout: Number(idleTimeout) }),
-    errors: [],
-  }
+  const idle = readIdleTimeout(block['idleTimeout'])
+  if ('errors' in idle) return idle
+  return { value: { bin: bin.value, model: model.value, ...idle.value } }
 }
 
 /** `engine.bin` / `engine.model`: a map keyed by engine id. Absent is legal; a bad entry is not. */

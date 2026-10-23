@@ -73,6 +73,51 @@ export interface SpawnIterationInput extends EngineArgsInput {
 }
 
 /**
+ * The two bounds on one iteration (US-573 AC5): the idle timer, re-armed by every decoded event, and
+ * the opt-in total cap. Whichever fires first stops the engine; the first reason is kept, naming the
+ * last card/stage a run event reported.
+ */
+function createWatchdog(
+  input: Pick<SpawnIterationInput, 'idleTimeoutSeconds' | 'timeoutSeconds'>,
+  kill: () => void,
+) {
+  let stopped: string | undefined
+  let where = ''
+  const stop = (detail: () => string) => () => {
+    stopped ??= detail()
+    kill()
+  }
+  const idleSeconds = input.idleTimeoutSeconds ?? DEFAULT_IDLE_TIMEOUT_SECONDS
+  const onIdle = stop(() => `timed out (idle)${where} — no engine event for ${idleSeconds}s`)
+  let idle = setTimeout(onIdle, idleSeconds * 1000)
+  const cap =
+    input.timeoutSeconds === undefined
+      ? undefined
+      : setTimeout(
+          stop(
+            () =>
+              `stalled: no terminal event within ${input.timeoutSeconds}s — the engine was stopped`,
+          ),
+          input.timeoutSeconds * 1000,
+        )
+  return {
+    rearm: () => {
+      clearTimeout(idle)
+      idle = setTimeout(onIdle, idleSeconds * 1000)
+    },
+    saw: (event: RunEvent) => {
+      if (event.card !== undefined)
+        where = ` at ${event.card}${event.stage ? `/${event.stage}` : ''}`
+    },
+    stopped: () => stopped,
+    clear: () => {
+      clearTimeout(idle)
+      clearTimeout(cap)
+    },
+  }
+}
+
+/**
  * Runs one iteration and returns what its STREAM said.
  *
  * The child's exit code is deliberately never read (AC7): the outcome comes from the terminal
@@ -93,54 +138,35 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   // Tracked so a SIGTERM/SIGINT on the driver stops it instead of orphaning it (r1-2).
   trackEngine(child)
 
-  let stopped: string | undefined
-  let where = ''
-  const stop = (detail: string) => () => {
-    stopped ??= detail
-    child.kill('SIGTERM')
-  }
-  const idleSeconds = input.idleTimeoutSeconds ?? DEFAULT_IDLE_TIMEOUT_SECONDS
-  const idleDetail = () => `timed out (idle)${where} — no engine event for ${idleSeconds}s`
-  let idle = setTimeout(() => stop(idleDetail())(), idleSeconds * 1000)
-  const cap =
-    input.timeoutSeconds === undefined
-      ? undefined
-      : setTimeout(
-          stop(
-            `stalled: no terminal event within ${input.timeoutSeconds}s — the engine was stopped`,
-          ),
-          input.timeoutSeconds * 1000,
-        )
+  const watchdog = createWatchdog(input, () => child.kill('SIGTERM'))
   try {
     child.stdout.setEncoding('utf-8')
     const result = await readIterationOutcome(
       toLines(child.stdout),
       input.engine,
       payload => {
-        clearTimeout(idle)
-        idle = setTimeout(() => stop(idleDetail())(), idleSeconds * 1000)
+        watchdog.rearm()
         input.onEvent?.(payload)
       },
       event => {
-        if (event.card !== undefined)
-          where = ` at ${event.card}${event.stage ? `/${event.stage}` : ''}`
+        watchdog.saw(event)
         input.onRunEvent?.(event)
       },
     )
     // US-506 T-8 (AC12): stopped by a bound before any terminal event ⇒ a STALL, named as one.
-    if (stopped !== undefined && result.outcome !== 'success')
-      return {
-        outcome: 'failed',
-        cause: 'timed-out',
-        detail: stopped,
-        stalled: true,
-        ...(result.skippedLines !== undefined && { skippedLines: result.skippedLines }),
-        ...(result.runEvents !== undefined && { runEvents: result.runEvents }),
-      }
-    return result
+    const stopped = watchdog.stopped()
+    if (stopped === undefined || result.outcome === 'success') return result
+    const { skippedLines, runEvents } = result
+    return {
+      outcome: 'failed',
+      cause: 'timed-out',
+      detail: stopped,
+      stalled: true,
+      ...(skippedLines !== undefined && { skippedLines }),
+      ...(runEvents !== undefined && { runEvents }),
+    }
   } finally {
-    clearTimeout(idle)
-    clearTimeout(cap)
+    watchdog.clear()
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
   }
 }

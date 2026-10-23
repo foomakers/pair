@@ -276,9 +276,43 @@ const HALT_TEXT = /pair-loop: HALT — ([^\n]+)/
 
 interface EventTally {
   count: number
+  skipped: number
   loopStarted: boolean
   loopEnd?: RunEvent
+  /** Bodies already seen: a workflow line quoted again later (a summary, the final text) is ONE event. */
+  readonly seen: Set<string>
 }
+
+/** Counts and relays the run events ONE decoded stream event carries; a malformed body is skipped and counted. */
+function tallyRunEvents(
+  payload: unknown,
+  tally: EventTally,
+  onRunEvent?: (event: RunEvent) => void,
+): void {
+  for (const body of eventBodies(payload)) {
+    if (tally.seen.has(body)) continue
+    tally.seen.add(body)
+    const event = parseRunEvent(body)
+    if (event === undefined) {
+      tally.skipped++
+      continue
+    }
+    tally.count++
+    if (event.event === 'loop-start') tally.loopStarted = true
+    if (event.event === 'loop-end') tally.loopEnd = event
+    onRunEvent?.(event)
+  }
+}
+
+/** The counters the result carries (each only when non-zero) and the continue-token when one was seen. */
+const extrasOf = (
+  tally: EventTally,
+  continueToken: string | undefined,
+): Partial<IterationResult> => ({
+  ...(tally.skipped > 0 && { skippedLines: tally.skipped }),
+  ...(tally.count > 0 && { runEvents: tally.count }),
+  ...(continueToken !== undefined && { continueToken }),
+})
 
 /**
  * US-573 AC6: the engine turn's `subtype` only says the TURN ended; the workflow's own terminal status
@@ -329,13 +363,7 @@ export async function readIterationOutcome(
   onRunEvent: ((event: RunEvent) => void) | undefined = undefined,
 ): Promise<IterationResult> {
   let continueToken: string | undefined
-  let skipped = 0
-  const seen = new Set<string>()
-  const tally: EventTally = { count: 0, loopStarted: false }
-  const counters = (): Partial<IterationResult> => ({
-    ...(skipped > 0 && { skippedLines: skipped }),
-    ...(tally.count > 0 && { runEvents: tally.count }),
-  })
+  const tally: EventTally = { count: 0, skipped: 0, loopStarted: false, seen: new Set() }
 
   for await (const line of lines) {
     const trimmed = line.trim()
@@ -346,24 +374,10 @@ export async function readIterationOutcome(
       payload = JSON.parse(trimmed)
     } catch {
       // Untrusted input: an unparseable line is skipped, never evaluated — and counted (US-573).
-      skipped++
+      tally.skipped++
       continue
     }
-
-    // A workflow line quoted again later (a summary, the final text) is the SAME event: seen once.
-    for (const body of eventBodies(payload)) {
-      if (seen.has(body)) continue
-      seen.add(body)
-      const event = parseRunEvent(body)
-      if (event === undefined) {
-        skipped++
-        continue
-      }
-      tally.count++
-      if (event.event === 'loop-start') tally.loopStarted = true
-      if (event.event === 'loop-end') tally.loopEnd = event
-      onRunEvent?.(event)
-    }
+    tallyRunEvents(payload, tally, onRunEvent)
 
     // Searched in the DECODED event, not in the raw JSONL line: the newlines the anchor needs are
     // `\n` escapes on the wire, so a raw-line match could not be anchored at all (finding 5).
@@ -374,15 +388,11 @@ export async function readIterationOutcome(
     if (rule) {
       const finalText = rule.resultField ? fieldAt(payload, rule.resultField) : undefined
       const result = truthful(outcomeFor(rule, payload), tally, finalText)
-      return { ...result, ...counters(), ...(continueToken !== undefined && { continueToken }) }
+      return { ...result, ...extrasOf(tally, continueToken) }
     }
   }
 
-  return {
-    ...NO_TERMINAL_EVENT,
-    ...counters(),
-    ...(continueToken !== undefined && { continueToken }),
-  }
+  return { ...NO_TERMINAL_EVENT, ...extrasOf(tally, continueToken) }
 }
 
 /**

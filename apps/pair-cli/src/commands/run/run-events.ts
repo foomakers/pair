@@ -37,6 +37,13 @@ export interface RunEvent {
   readonly extra?: Readonly<Record<string, unknown>>
 }
 
+/** Set by the `--parallel` pool on each child `run --card`: the child then prints its stage events. */
+export const RUN_EVENTS_ENV = 'PAIR_RUN_EVENTS'
+
+/** The one-line wire form of an event — what the workflows print and a child process relays. */
+export const runEventLine = (event: Readonly<Record<string, unknown>>): string =>
+  `PAIR_EVENT ${JSON.stringify(event)}`
+
 const MARKER = /^[ \t]*PAIR_EVENT[ \t]+(.+?)[ \t]*$/gm
 const MAX_DEPTH = 6
 const STRING_FIELDS = ['title', 'stage', 'status', 'reason'] as const
@@ -45,15 +52,21 @@ const KNOWN = new Set(['event', 'card', 'pr', 'iteration', 'eligibleLeft', ...ST
 const isCount = (value: unknown): value is number => Number.isInteger(value) && Number(value) >= 0
 
 /** One `PAIR_EVENT` body → a typed event, or `undefined` when it does not validate. */
-export function parseRunEvent(body: string): RunEvent | undefined {
+function objectOf(body: string): Record<string, unknown> | undefined {
   let raw: unknown
   try {
     raw = JSON.parse(body)
   } catch {
     return undefined
   }
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined
-  const found = raw as Record<string, unknown>
+  return typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : undefined
+}
+
+export function parseRunEvent(body: string): RunEvent | undefined {
+  const found = objectOf(body)
+  if (found === undefined) return undefined
   if (!(RUN_EVENT_NAMES as readonly unknown[]).includes(found['event'])) return undefined
   const card = found['card']
   if (card !== undefined && typeof card !== 'string' && typeof card !== 'number') return undefined
@@ -61,14 +74,20 @@ export function parseRunEvent(body: string): RunEvent | undefined {
   return {
     event: found['event'] as RunEventName,
     ...(card !== undefined && { card: String(card) }),
-    ...Object.fromEntries(
-      STRING_FIELDS.filter(k => typeof found[k] === 'string').map(k => [k, found[k]]),
-    ),
-    ...(isCount(found['pr']) && found['pr'] > 0 && { pr: found['pr'] }),
-    ...(isCount(found['iteration']) && { iteration: found['iteration'] }),
-    ...(isCount(found['eligibleLeft']) && { eligibleLeft: found['eligibleLeft'] }),
+    ...pick(found, STRING_FIELDS, value => typeof value === 'string'),
+    ...pick(found, ['pr'], value => isCount(value) && value > 0),
+    ...pick(found, ['iteration', 'eligibleLeft'], isCount),
     ...(Object.keys(extra).length > 0 && { extra }),
   }
+}
+
+/** The `keys` of `found` whose value passes `valid` — an invalid optional field is dropped, never coerced. */
+function pick(
+  found: Record<string, unknown>,
+  keys: readonly string[],
+  valid: (value: unknown) => boolean,
+): Record<string, unknown> {
+  return Object.fromEntries(keys.filter(key => valid(found[key])).map(key => [key, found[key]]))
 }
 
 /** Every `PAIR_EVENT` body carried by ONE decoded stream event, in order. */

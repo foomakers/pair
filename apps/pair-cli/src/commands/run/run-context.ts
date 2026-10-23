@@ -83,6 +83,8 @@ export interface RunHandlerDependencies {
   acquireLock?: LockAcquirer
   /** The audit writer. Injected for the same reason — the trail is a real file, by design. */
   appendAudit?: AuditAppender
+  /** US-573: the live run-audit writer (JSONL); defaults to the real `O_APPEND` file writer. */
+  runAudit?: AuditAppender
   /** AC14: a card's readiness (via the adopted State Mapping); out-of-scope throws CardOutOfScopeError. */
   cardReadiness?: CardReadinessProbe
   /** AC1: drives the delivery-cycle coordinator for a Ready card with no mapped route. */

@@ -15,6 +15,7 @@ import { describeApprovalPosture, filterDeliveryFor, selectionDeliveredBy } from
 import { readCardLabels } from './cycle-wiring'
 import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
+import { whileInterruptible } from './interrupt'
 import { adoptionSelection, resolveRunAutonomy, spawnAutonomyResolver } from './autonomy-policy'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
 import { locateCycleScripts } from './cycle-scripts'
@@ -243,6 +244,22 @@ export async function handleRunCommand(
   fs: FileSystemService,
   callerDeps: RunHandlerDependencies = {},
 ): Promise<number> {
+  if (rawConfig.output !== 'json') return await runCommand(rawConfig, fs, callerDeps)
+  // US-573 AC3: under --json stdout carries ONLY the NDJSON run events; every human line goes to stderr.
+  const log = console.log
+  console.log = console.error
+  try {
+    return await runCommand(rawConfig, fs, callerDeps)
+  } finally {
+    console.log = log
+  }
+}
+
+async function runCommand(
+  rawConfig: RunCommandConfig,
+  fs: FileSystemService,
+  callerDeps: RunHandlerDependencies,
+): Promise<number> {
   // ABSOLUTE, always: the perimeter's directory is printed as the run's containment boundary and
   // probed against the engine's trust store, and `--cwd .` is neither legible as a boundary nor
   // comparable against an absolute trust-store key.
@@ -286,7 +303,19 @@ export async function handleRunCommand(
 
   return resolved.dispatch
     ? await driveDispatchedCard({ resolved, decision: resolved.dispatch, context, config }, deps)
-    : await driveRun(resolved, config, deps)
+    : await driveTrapped(resolved, config, deps)
+}
+
+/** US-573: a plain loop run, trapped so Ctrl+C finalizes the live lines and the audit's `loop-end interrupted`. */
+async function driveTrapped(
+  resolved: ResolvedRun,
+  config: RunCommandConfig,
+  deps: RunHandlerDependencies,
+): Promise<number> {
+  return await whileInterruptible(
+    () => {},
+    () => driveRun(resolved, config, deps),
+  )
 }
 
 /** The routed card, when the invocation ALSO names a `--pr` (AC2 wins over the mapped workflow). */
