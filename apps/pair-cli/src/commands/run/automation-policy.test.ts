@@ -465,3 +465,22 @@ describe('readAutomationPolicy — numeric and condition forms match tier 1 exac
     )
   })
 })
+
+describe('US-573 AC5: `## Stop Predicate` idle-timeout', () => {
+  it('reads `idle-timeout: <seconds>` next to the predicate and max-iterations', () => {
+    const policy = policyFrom(
+      '## Stop Predicate\n\nroot ⇒ Done\nmax-iterations: 3\nidle-timeout: 600\n',
+    ).read()
+    expect(policy.idleTimeoutSeconds).toBe(600)
+    expect(policy.maxIterations).toBe(3)
+  })
+
+  it('absent ⇒ undefined; a non-positive value HALTs', () => {
+    expect(
+      policyFrom('## Stop Predicate\n\nroot ⇒ Done\n').read().idleTimeoutSeconds,
+    ).toBeUndefined()
+    expect(() => policyFrom('## Stop Predicate\n\nidle-timeout: 0\n').read()).toThrow(
+      /idle-timeout/,
+    )
+  })
+})

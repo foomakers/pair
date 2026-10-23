@@ -479,6 +479,8 @@ function preparePrepSkill(
     policy: context.policy,
     autonomy,
     ...(extras !== undefined && { promptExtras: extras }),
+    auditPath: context.auditPath,
+    idleTimeout: context.idleTimeout,
   }
 
   console.log(chalk.bold('pair-cli run'))

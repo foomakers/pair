@@ -199,6 +199,7 @@ function selectionInput(fan: FanOut, loop?: SelectRootInput['loop']): SelectRoot
     autonomyArgs: fan.autonomyArgs,
     model: declaredEngineModel(input.context.config, engineDef.id),
     timeoutSeconds: input.config.iterationTimeoutSeconds,
+    idleTimeoutSeconds: input.context.idleTimeout.seconds,
     ...(loop !== undefined && { loop }),
     ...(deps.runIteration !== undefined && { runIteration: deps.runIteration }),
   }

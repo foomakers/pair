@@ -26,7 +26,7 @@ export interface EngineDeclaration {
   id: string
 }
 
-const DECLARABLE_FIELDS = ['id', 'bin', 'model'] as const
+const DECLARABLE_FIELDS = ['id', 'bin', 'model', 'idleTimeout'] as const
 
 export interface EngineBlockOutcome {
   /** The declared engine id, present only when the block is valid. */
@@ -46,6 +46,8 @@ export interface EngineBlockOutcome {
    * selection is #488's and is deliberately not this.
    */
   model?: Readonly<Record<string, string>>
+  /** US-573: `engine.idleTimeout` — seconds without an engine event before `pair run` stops an iteration. */
+  idleTimeout?: number
   /** Validation errors, in the same style as the registry ones (empty ⇒ valid or absent). */
   errors: string[]
 }
@@ -95,7 +97,18 @@ export function readEngineDeclaration(
   const model = readIdKeyedPaths(block['model'], knownEngineIds, 'model')
   if ('errors' in model) return model
 
-  return { engine: id, bin: bin.value, model: model.value, errors: [] }
+  const idleTimeout = block['idleTimeout']
+  if (idleTimeout !== undefined && !(Number.isInteger(idleTimeout) && Number(idleTimeout) > 0)) {
+    return { errors: ['engine.idleTimeout: must be a positive integer of seconds'] }
+  }
+
+  return {
+    engine: id,
+    bin: bin.value,
+    model: model.value,
+    ...(idleTimeout !== undefined && { idleTimeout: Number(idleTimeout) }),
+    errors: [],
+  }
 }
 
 /** `engine.bin` / `engine.model`: a map keyed by engine id. Absent is legal; a bad entry is not. */

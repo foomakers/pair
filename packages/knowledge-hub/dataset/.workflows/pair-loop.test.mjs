@@ -1476,3 +1476,9 @@ test('US-573 T-1: a HALT emits loop-end halted with its reason before the error 
   assert.equal(end.status, 'halted')
   assert.match(end.reason, /audit write/)
 })
+
+test('US-573 AC5: `## Stop Predicate` accepts `idle-timeout: <seconds>` (the driver\'s guard) and refuses a non-positive one', () => {
+  const { parseStopPredicate } = getHelpers()
+  assert.deepEqual(parseStopPredicate('## Stop Predicate\n\nroot ⇒ Done\nmax-iterations: 4\nidle-timeout: 900\n'), { predicate: { selector: 'root', condition: 'Done' }, maxIterations: 4 })
+  assert.throws(() => parseStopPredicate('## Stop Predicate\n\nidle-timeout: 0\n'), /idle-timeout must be a positive integer/)
+})

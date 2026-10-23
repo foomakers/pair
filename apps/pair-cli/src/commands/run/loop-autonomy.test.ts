@@ -73,8 +73,6 @@ describe('loop carries --until/--prepare/--merge to each child card', () => {
       gate,
       '--merge',
       gate,
-      '--iteration-timeout',
-      '1800',
     ])
   })
 
@@ -97,7 +95,7 @@ describe('loop carries --until/--prepare/--merge to each child card', () => {
 
   it('default path unchanged: none given adds none', () => {
     const args = buildCardProcessArgs(parseRunCommand({ root: '66', parallel: '2' }), cand, '/p')
-    expect(args).toEqual(['run', '--card', '9', '--cwd', '/p', '--iteration-timeout', '1800'])
+    expect(args).toEqual(['run', '--card', '9', '--cwd', '/p'])
   })
 
   it('an invalid gate is refused (precedence print shows argument) before anything spawns', async () => {

@@ -132,6 +132,8 @@ function resolveRun(
     policy,
     autonomy,
     ...(context.dispatch && { dispatch: context.dispatch }),
+    auditPath: context.auditPath,
+    idleTimeout: context.idleTimeout,
   }
 }
 

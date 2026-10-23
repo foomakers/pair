@@ -2,6 +2,7 @@ import { spawn } from 'child_process'
 import type { EngineDefinition } from './engines'
 import { HEADLESS_STDIN } from './autonomy'
 import { readIterationOutcome, toLines, type IterationResult } from './stream-reader'
+import type { RunEvent } from './run-events'
 import { isInterrupted, trackEngine } from './interrupt'
 
 /**
@@ -38,11 +39,37 @@ export function buildEngineArgs(input: EngineArgsInput): string[] {
   ]
 }
 
+/** US-573 AC5: an iteration is stopped after this long WITHOUT an engine event (30 min). */
+export const DEFAULT_IDLE_TIMEOUT_SECONDS = 1800
+
+export interface IdleTimeout {
+  readonly seconds: number
+  readonly source: string
+}
+
+/** Precedence: `--idle-timeout` > `## Stop Predicate` `idle-timeout:` > `pair.config.json` `engine.idleTimeout` > default. */
+export function resolveIdleTimeout(input: {
+  readonly flag?: number | undefined
+  readonly policy?: number | undefined
+  readonly declared?: number | undefined
+}): IdleTimeout {
+  if (input.flag !== undefined) return { seconds: input.flag, source: '--idle-timeout' }
+  if (input.policy !== undefined)
+    return { seconds: input.policy, source: '## Stop Predicate idle-timeout' }
+  if (input.declared !== undefined)
+    return { seconds: input.declared, source: 'pair.config.json engine.idleTimeout' }
+  return { seconds: DEFAULT_IDLE_TIMEOUT_SECONDS, source: 'default' }
+}
+
 export interface SpawnIterationInput extends EngineArgsInput {
-  /** Wall-clock bound per iteration — the hang guard, never a policy parameter. */
-  readonly timeoutSeconds: number
+  /** Opt-in total wall-clock cap per iteration (`--iteration-timeout`); absent ⇒ none (US-573). */
+  readonly timeoutSeconds?: number | undefined
+  /** The hang guard: seconds without an engine event before the engine is stopped (default 30 min). */
+  readonly idleTimeoutSeconds?: number | undefined
   /** US-491: observes every decoded stream event (see `readIterationOutcome`). */
   readonly onEvent?: (payload: unknown) => void
+  /** US-573: observes every run event (`PAIR_EVENT` line). */
+  readonly onRunEvent?: (event: RunEvent) => void
 }
 
 /**
@@ -50,8 +77,8 @@ export interface SpawnIterationInput extends EngineArgsInput {
  *
  * The child's exit code is deliberately never read (AC7): the outcome comes from the terminal
  * event alone. `stdin` is closed, so an engine that unexpectedly asks for input gets EOF instead
- * of hanging; the timeout kills a child that hangs for any other reason and the iteration then
- * fails fail-closed, because no terminal event will have been seen.
+ * of hanging; the idle watchdog (re-armed by every decoded event, US-573) kills a child that goes
+ * silent for any other reason, and the iteration then fails as `timed-out`.
  */
 export async function spawnIteration(input: SpawnIterationInput): Promise<IterationResult> {
   // r1-2: once the driver was signalled, the engine it is stopping must not be replaced by the next.
@@ -60,28 +87,60 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   const child = spawn(input.engine.command, buildEngineArgs(input), {
     cwd: input.cwd,
     stdio: [HEADLESS_STDIN, 'pipe', 'inherit'],
+    // US-573 AC7: an engine's own env (claude: no background-wait ceiling) over the driver's.
+    ...(input.engine.env !== undefined && { env: { ...process.env, ...input.engine.env } }),
   })
   // Tracked so a SIGTERM/SIGINT on the driver stops it instead of orphaning it (r1-2).
   trackEngine(child)
 
-  let stalled = false
-  const timer = setTimeout(() => {
-    stalled = true
+  let stopped: string | undefined
+  let where = ''
+  const stop = (detail: string) => () => {
+    stopped ??= detail
     child.kill('SIGTERM')
-  }, input.timeoutSeconds * 1000)
+  }
+  const idleSeconds = input.idleTimeoutSeconds ?? DEFAULT_IDLE_TIMEOUT_SECONDS
+  const idleDetail = () => `timed out (idle)${where} — no engine event for ${idleSeconds}s`
+  let idle = setTimeout(() => stop(idleDetail())(), idleSeconds * 1000)
+  const cap =
+    input.timeoutSeconds === undefined
+      ? undefined
+      : setTimeout(
+          stop(
+            `stalled: no terminal event within ${input.timeoutSeconds}s — the engine was stopped`,
+          ),
+          input.timeoutSeconds * 1000,
+        )
   try {
     child.stdout.setEncoding('utf-8')
-    const result = await readIterationOutcome(toLines(child.stdout), input.engine, input.onEvent)
-    // US-506 T-8 (AC12): stopped by the bound before any terminal event ⇒ a STALL, named as one.
-    if (stalled && result.outcome !== 'success')
+    const result = await readIterationOutcome(
+      toLines(child.stdout),
+      input.engine,
+      payload => {
+        clearTimeout(idle)
+        idle = setTimeout(() => stop(idleDetail())(), idleSeconds * 1000)
+        input.onEvent?.(payload)
+      },
+      event => {
+        if (event.card !== undefined)
+          where = ` at ${event.card}${event.stage ? `/${event.stage}` : ''}`
+        input.onRunEvent?.(event)
+      },
+    )
+    // US-506 T-8 (AC12): stopped by a bound before any terminal event ⇒ a STALL, named as one.
+    if (stopped !== undefined && result.outcome !== 'success')
       return {
         outcome: 'failed',
-        detail: `stalled: no terminal event within ${input.timeoutSeconds}s — the engine was stopped`,
+        cause: 'timed-out',
+        detail: stopped,
         stalled: true,
+        ...(result.skippedLines !== undefined && { skippedLines: result.skippedLines }),
+        ...(result.runEvents !== undefined && { runEvents: result.runEvents }),
       }
     return result
   } finally {
-    clearTimeout(timer)
+    clearTimeout(idle)
+    clearTimeout(cap)
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
   }
 }

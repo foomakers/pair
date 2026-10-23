@@ -210,7 +210,7 @@ describe('buildCardProcessArgs — each card is exactly #487’s run --card (AC2
       card('5'),
       '/p',
     )
-    expect(args).toEqual(['run', '--card', '5', '--cwd', '/p', '--iteration-timeout', '1800'])
+    expect(args).toEqual(['run', '--card', '5', '--cwd', '/p'])
     expect(args).not.toContain('--root')
     expect(args).not.toContain('--parallel')
   })
@@ -440,5 +440,16 @@ describe('spawnCardProcess — a genuinely separate OS process (a stub CLI, neve
       outcome: 'crashed',
       detail: 'killed by SIGKILL',
     })
+  })
+})
+
+describe('US-573 AC5: timeouts forwarded to each child card only when passed', () => {
+  it('--idle-timeout and --iteration-timeout travel verbatim', () => {
+    const args = buildCardProcessArgs(
+      parseRunCommand({ root: '66', parallel: '2', idleTimeout: '600', iterationTimeout: '7200' }),
+      card('5'),
+      '/p',
+    )
+    expect(args.slice(-4)).toEqual(['--iteration-timeout', '7200', '--idle-timeout', '600'])
   })
 })

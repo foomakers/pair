@@ -35,16 +35,6 @@ export type RunInvocationRequest =
   | { kind: 'prompt'; text: string }
 
 /**
- * The default per-iteration wall-clock bound, in seconds.
- *
- * A MECHANICAL hang guard, not a policy parameter (AC8): the edge-case table forbids an
- * unbounded wait when a headless engine asks for input it can never receive. Policy
- * (eligibility, stop predicate, parallelism, audit) is read from `tech/automation.md` and
- * nothing here duplicates it.
- */
-export const DEFAULT_ITERATION_TIMEOUT_SECONDS = 1800
-
-/**
  * What a trigger observed, and the whole of what the dispatcher (US-217) is told about the card.
  *
  * Two facts, both DATA: which card fired, and the labels it carried at that moment. The driver never
@@ -94,7 +84,14 @@ export interface RunCommandConfig {
   eligibilityFilter?: string
   /** `--predicate '<selector> ⇒ <condition>'`: the loop's stop predicate, overriding `## Stop Predicate` (needs `--parallel`). */
   predicate?: string
-  iterationTimeoutSeconds: number
+  /** US-573: `--iteration-timeout` — an opt-in TOTAL cap per iteration; absent ⇒ none (the idle timeout guards hangs). */
+  iterationTimeoutSeconds?: number
+  /** US-573: `--idle-timeout` — present only when passed; precedence over the policy/config lives in `resolveIdleTimeout`. */
+  idleTimeoutSeconds?: number
+  /** US-573: `--quiet` (today's plain output) or `--json` (NDJSON run events); absent ⇒ live progress. */
+  output?: 'quiet' | 'json'
+  /** US-573: `--no-color` (NO_COLOR is honoured too, by the renderer). */
+  noColor?: true
   /** Present only when `--card` was passed: the run is a tag-driven dispatch (US-217). */
   dispatch?: RunDispatchRequest
   /** US-488: `--profile <name>` — present only when passed. */
@@ -143,6 +140,11 @@ interface ParseRunOptions {
   eligibilityFilter?: string
   predicate?: string
   iterationTimeout?: string | number
+  idleTimeout?: string | number
+  quiet?: boolean
+  json?: boolean
+  /** commander's `--no-color` ⇒ `color: false`. */
+  color?: boolean
   card?: string
   cardTags?: string
   dryRun?: boolean
@@ -547,6 +549,17 @@ function eligibilityFilterOf(options: ParseRunOptions): { eligibilityFilter?: st
   return { eligibilityFilter: value }
 }
 
+/** US-573 AC3: one output mode — `--quiet` and `--json` contradict each other and are refused together. */
+function outputModeOf(options: ParseRunOptions): Pick<RunCommandConfig, 'output' | 'noColor'> {
+  if (options.quiet === true && options.json === true)
+    throw new Error('--quiet and --json are two output modes; pass at most one')
+  return {
+    ...(options.quiet === true && { output: 'quiet' as const }),
+    ...(options.json === true && { output: 'json' as const }),
+    ...(options.color === false && { noColor: true as const }),
+  }
+}
+
 /**
  * Parses `pair-cli run` options into a typed config. PURE — no filesystem, no PATH probe, no
  * spawn: every resolution (engine, skill, policy) happens later, in modules that take their
@@ -585,10 +598,16 @@ export function parseRunCommand(options: ParseRunOptions, args: string[] = []): 
     approveIneligible: options.approveIneligible === true,
     ...eligibilityFilterOf(options),
     ...predicateOf(options),
-    iterationTimeoutSeconds:
-      options.iterationTimeout === undefined
-        ? DEFAULT_ITERATION_TIMEOUT_SECONDS
-        : parsePositiveInteger('--iteration-timeout', options.iterationTimeout),
+    ...(options.iterationTimeout !== undefined && {
+      iterationTimeoutSeconds: parsePositiveInteger(
+        '--iteration-timeout',
+        options.iterationTimeout,
+      ),
+    }),
+    ...(options.idleTimeout !== undefined && {
+      idleTimeoutSeconds: parsePositiveInteger('--idle-timeout', options.idleTimeout),
+    }),
+    ...outputModeOf(options),
     dryRun: options.dryRun === true,
     ...parallel,
     ...watch,

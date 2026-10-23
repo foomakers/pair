@@ -206,6 +206,13 @@ function parseStopPredicate(policyText) {
       maxIterations = n
       continue
     }
+    // US-573: `idle-timeout: <seconds>` is the DRIVER's hang guard (`pair run`); validated here, never acted on.
+    const idleMatch = /^idle-timeout:\s*(-?\d+)\s*$/.exec(line)
+    if (idleMatch) {
+      if (!(Number(idleMatch[1]) > 0))
+        HALT(`\`## Stop Predicate\` — idle-timeout must be a positive integer of seconds, got \`${idleMatch[1]}\`.`)
+      continue
+    }
     const predMatch = /^(.+?)\s*⇒\s*(.+)$/.exec(line)
     if (predMatch) {
       const [, selectorRaw, conditionRaw] = predMatch

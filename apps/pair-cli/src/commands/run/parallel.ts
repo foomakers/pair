@@ -210,8 +210,12 @@ export function buildCardProcessArgs(
     ...autonomyArgv(config),
     ...(config.profile !== undefined ? ['--profile', config.profile] : []),
     ...(config.workflowConfig !== undefined ? ['--workflow-config', config.workflowConfig] : []),
-    '--iteration-timeout',
-    String(config.iterationTimeoutSeconds),
+    ...(config.iterationTimeoutSeconds !== undefined
+      ? ['--iteration-timeout', String(config.iterationTimeoutSeconds)]
+      : []),
+    ...(config.idleTimeoutSeconds !== undefined
+      ? ['--idle-timeout', String(config.idleTimeoutSeconds)]
+      : []),
   ]
 }
 

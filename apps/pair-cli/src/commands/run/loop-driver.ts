@@ -73,6 +73,7 @@ function driveIteration(
     cwd: resolved.perimeter.cwd,
     autonomyArgs: resolved.autonomy.args,
     timeoutSeconds: config.iterationTimeoutSeconds,
+    idleTimeoutSeconds: resolved.idleTimeout?.seconds,
   })
 }
 

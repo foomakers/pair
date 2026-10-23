@@ -305,7 +305,9 @@ export interface CycleDriverContext {
   readonly fs: FileSystemService
   readonly location: CycleScriptsLocation | undefined
   readonly autonomyArgs: readonly string[]
-  readonly timeoutSeconds: number
+  readonly timeoutSeconds?: number | undefined
+  /** US-573: seconds without an engine event before the stage is stopped (default 30 min). */
+  readonly idleTimeoutSeconds?: number | undefined
   readonly workflowVersion: string
   readonly baseBranch: string
   /** The model pinned for this engine, if the project declared one. */
@@ -578,6 +580,7 @@ const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packe
     ...(spawn.model !== undefined && { model: spawn.model }),
     ...(spawn.effort !== undefined && { effort: spawn.effort }),
     timeoutSeconds: ctx.timeoutSeconds,
+    idleTimeoutSeconds: ctx.idleTimeoutSeconds,
     runIteration: spawnIteration,
   })) as CycleStageResult
 }
