@@ -385,7 +385,7 @@ each stage, card end), flushed at once. This is what you `tail -f` from the daem
 read after the fact to see exactly which cards ran, in what order, and why the loop stopped when it did.
 
 On a terminal, each card owns one line rewritten in place (`⠋ #212 · title · review · PR #41 · 03:12`,
-then `✔ merged` / `⏸ awaiting-human` / `⚠ escalated` / `✖ failed`); in a log file (non-TTY) you get
+then `✔ merged` / `⏸ awaiting-human` / `⚠ escalated` / `✖ failed` / `? unknown` when the engine returned no readable card status); in a log file (non-TTY) you get
 one timestamped line per stage change; `--json` emits the events as NDJSON for a dashboard. The run
 exits non-zero on a workflow HALT, a cut background workflow or an idle timeout, so a daemon's
 restart policy sees the truth. A long stage is never killed while the engine keeps emitting events:

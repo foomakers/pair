@@ -1132,7 +1132,7 @@ from Claude Code's live `task_progress` events instead: each card still gets its
 
 | Output            | What you get |
 | ----------------- | ------------ |
-| TTY (default)     | One line per card, rewritten in place: status icon · card id · title (truncated to the terminal width, re-read on resize; dropped first when the id and stage do not fit) · stage (`prepare` → `implement` → `review` → `fix N/max` → `merge`) · PR when known · elapsed. The terminal outcome replaces the spinner: `✔ merged`, `⏸ awaiting-human`, `⚠ escalated`, `✖ failed` + short reason. With `--parallel` each card keeps its own cursor-addressed row; other output prints above the rows |
+| TTY (default)     | One line per card, rewritten in place: status icon · card id · title (truncated to the terminal width, re-read on resize; dropped first when the id and stage do not fit) · stage (`prepare` → `implement` → `review` → `fix N/max` → `merge`) · PR when known · elapsed. The terminal outcome replaces the spinner: `✔ merged`, `⏸ awaiting-human`, `⚠ escalated`, `✖ failed` + short reason, `? unknown` when the engine returned no readable card status. With `--parallel` each card keeps its own cursor-addressed row; other output prints above the rows |
 | non-TTY / unknown width | Append-only timestamped lines, one per event |
 | `--quiet`         | Today's plain output: one line per iteration |
 | `--json`          | NDJSON events on stdout, human text on stderr |
@@ -1140,7 +1140,7 @@ from Claude Code's live `task_progress` events instead: each card still gets its
 Non-numeric card ids (Linear, Filesystem) render unchanged; numeric ones as `#<id>`. An engine
 whose stream carries no intermediate event degrades to start/end lines per iteration, stated once.
 The banner prints the resolved **absolute** audit path and the idle timeout with its source; the end
-summary lists cards merged / parked / failed and `stopped: <reason>, N eligible card(s) left`, plus
+summary lists cards merged / parked / failed / unknown and `stopped: <reason>, N eligible card(s) left`, plus
 the count of unparseable stream lines skipped (never fatal). Ctrl+C writes `loop-end interrupted`,
 finalizes the lines and restores the cursor.
 
