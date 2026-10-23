@@ -68,6 +68,7 @@ jobs:
           set -euo pipefail
           OLD=$(node -p "require('./apps/pair-cli/package.json').version")
           pnpm changeset version
+          NEW=$(node -p "require('./apps/pair-cli/package.json').version")  # changesets' computed version
           # one version for the whole fixed group (+ root), incl. the -pre.N/-rc.N suffix
           node -e "
             const fs=require('fs');
@@ -77,6 +78,7 @@ jobs:
               if(f==='package.json'||group.includes(p.name)){p.version=process.env.VERSION;fs.writeFileSync(f,JSON.stringify(p,null,2)+'\n')}}
             const bad=group.filter(n=>{const f=files.find(x=>x!=='package.json'&&JSON.parse(fs.readFileSync(x,'utf8')).name===n);return f&&JSON.parse(fs.readFileSync(f,'utf8')).version!==process.env.VERSION});
             if(bad.length){console.error('fixed group out of sync: '+bad);process.exit(1)}"
+          pnpm changelog-version -- "$NEW" "$VERSION"   # CHANGELOG headings + dep lines follow the override
           pnpm sync-version -- "$OLD"
 
       - name: Commit and tag
