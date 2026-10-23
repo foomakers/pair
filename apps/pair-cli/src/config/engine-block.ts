@@ -62,13 +62,15 @@ export const MAX_TIMEOUT_SECONDS = 2147483
 /** US-573: `engine.idleTimeout` — absent, or a positive integer of seconds up to `MAX_TIMEOUT_SECONDS`. */
 function readIdleTimeout(raw: unknown): { value: { idleTimeout?: number } } | { errors: string[] } {
   if (raw === undefined) return { value: {} }
-  if (Number.isInteger(raw) && Number(raw) > 0 && Number(raw) <= MAX_TIMEOUT_SECONDS)
-    return { value: { idleTimeout: Number(raw) } }
-  return {
-    errors: [
-      `engine.idleTimeout: must be a positive integer of seconds, at most ${MAX_TIMEOUT_SECONDS} (received: ${String(raw)})`,
-    ],
-  }
+  if (!Number.isInteger(raw) || Number(raw) <= 0)
+    return { errors: ['engine.idleTimeout: must be a positive integer of seconds'] }
+  if (Number(raw) > MAX_TIMEOUT_SECONDS)
+    return {
+      errors: [
+        `engine.idleTimeout: must be at most ${MAX_TIMEOUT_SECONDS} seconds (received: ${String(raw)})`,
+      ],
+    }
+  return { value: { idleTimeout: Number(raw) } }
 }
 
 /**
