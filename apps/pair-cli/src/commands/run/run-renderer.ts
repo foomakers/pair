@@ -46,6 +46,7 @@ function icon(card: CardView, color: boolean, frame: number): string {
   if (DONE.has(card.status)) return paint(color, 32, '✔')
   if (PARKED.has(card.status)) return paint(color, 33, '⏸')
   if (card.status === 'escalated') return paint(color, 33, '⚠')
+  if (card.status === 'unknown') return paint(color, 90, '?')
   return paint(color, 31, '✖')
 }
 
@@ -58,7 +59,11 @@ function elapsed(ms: number): string {
 
 function stateText(card: CardView): string | undefined {
   if (card.status === undefined) return card.stage
-  const failed = !DONE.has(card.status) && !PARKED.has(card.status) && card.status !== 'escalated'
+  const failed =
+    !DONE.has(card.status) &&
+    !PARKED.has(card.status) &&
+    card.status !== 'escalated' &&
+    card.status !== 'unknown'
   return failed && card.reason ? `${card.status}: ${card.reason.slice(0, 60)}` : card.status
 }
 

@@ -245,12 +245,13 @@ function stopText(outcome: LoopOutcome): string {
 
 const PARKED = new Set(['awaiting-human', 'ready-for-merge', 'target-ready', 'escalated'])
 
-/** US-573 AC8: cards merged / parked / failed, why the run stopped and what it left eligible. */
+/** US-573 AC8: cards merged / parked / failed / unknown, why the run stopped and what it left eligible. */
 function reportOutcome(outcome: LoopOutcome, run: RunSinks): void {
   const statuses = [...run.cards.values()]
   const merged = statuses.filter(s => s === 'merged').length
   const parked = statuses.filter(s => PARKED.has(s)).length
-  const failed = statuses.length - merged - parked
+  const unknown = statuses.filter(s => s === 'unknown').length
+  const failed = statuses.length - merged - parked - unknown
   const left = run.lastLoopEnd?.eligibleLeft
   const failedRun = outcome.stopReason === 'iteration-failed'
   const paint = failedRun ? chalk.red : chalk.green
@@ -259,7 +260,9 @@ function reportOutcome(outcome: LoopOutcome, run: RunSinks): void {
       `  Stopped after ${outcome.iterations} iteration(s): ${STOP_REASONS[outcome.stopReason]}`,
     ),
   )
-  run.sink.log(`  Cards: ${merged} merged · ${parked} parked · ${failed} failed`)
+  run.sink.log(
+    `  Cards: ${merged} merged · ${parked} parked · ${failed} failed · ${unknown} unknown`,
+  )
   run.sink.log(
     paint(
       `  stopped: ${stopText(outcome)}, ${left === undefined ? 'eligible cards left unknown' : `${left} eligible card(s) left`}`,
