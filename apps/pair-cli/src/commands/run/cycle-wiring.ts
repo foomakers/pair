@@ -390,10 +390,9 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
     title: record.title,
     runDir,
     runsRoot,
-    // r0-3: the freshness evidence the in-session coordinator's Step 1 hands `resolve` — both
-    // produced by the scripts themselves, never computed here, so the two realizations agree.
+    // r0-3: the inputs digest the in-session coordinator's Step 1 hands `resolve` — produced by the
+    // script itself, never computed here, so the two realizations agree (the AC hash is read per resolve).
     inputs: bridge.inputs(card, ctx.workflowVersion),
-    acHash: bridge.acHash(input.card, runDir),
     // US-490: what lets `resolve` OFFER `merge` — read once, like the scripts' own inputs.
     tier: readCardTier(input.card, ctx.cwd),
     // An active autonomy policy replaces the tier list; otherwise the legacy read is unchanged (default off).
@@ -491,7 +490,9 @@ const resolveFor =
       story: input.card,
       runsRoot: co.runsRoot,
       inputs: co.inputs,
-      acHash: co.acHash,
+      // Re-read at every resolve, never the setup snapshot: a card edited mid-run would otherwise
+      // disagree with the hash the stage itself stamps, and verify would redirect forever (#573).
+      acHash: co.bridge.acHash(input.card, co.runDir),
       ...(head !== undefined && { head }),
       ...(input.pr !== undefined && { pr: input.pr }),
       // US-488: the profile's `reuse` stages, as `cycle-state`'s OWN policy (admissible transitions
