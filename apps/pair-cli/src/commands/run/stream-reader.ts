@@ -416,6 +416,16 @@ function truthful(result: IterationResult, tally: EventTally, finalText: unknown
   return result
 }
 
+const newTally = (maxFixRounds: number | undefined): EventTally => ({
+  count: 0,
+  skipped: 0,
+  loopStarted: false,
+  seen: [],
+  progress: new Set(),
+  ended: new Set(),
+  ...(maxFixRounds !== undefined && { maxFixRounds }),
+})
+
 /** One stream line decoded, or `undefined` (blank, or unparseable — untrusted input, skipped and counted). */
 function decode(line: string, tally: EventTally): unknown {
   const trimmed = line.trim()
@@ -467,15 +477,7 @@ export async function readIterationOutcome(
 ): Promise<IterationResult> {
   const [onRunEvent, options = {}] = observers
   let continueToken: string | undefined
-  const tally: EventTally = {
-    count: 0,
-    skipped: 0,
-    loopStarted: false,
-    seen: [],
-    progress: new Set(),
-    ended: new Set(),
-    ...(options.maxFixRounds !== undefined && { maxFixRounds: options.maxFixRounds }),
-  }
+  const tally = newTally(options.maxFixRounds)
 
   for await (const line of lines) {
     const payload = decode(line, tally)
