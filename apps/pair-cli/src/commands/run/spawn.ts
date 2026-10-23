@@ -70,6 +70,8 @@ export interface SpawnIterationInput extends EngineArgsInput {
   readonly onEvent?: (payload: unknown) => void
   /** US-573: observes every run event (`PAIR_EVENT` line). */
   readonly onRunEvent?: (event: RunEvent) => void
+  /** r2-6: the run's max fix rounds, for a claude progress `fix n/<max>`. */
+  readonly maxFixRounds?: number | undefined
 }
 
 /**
@@ -152,6 +154,7 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
         watchdog.saw(event)
         input.onRunEvent?.(event)
       },
+      { maxFixRounds: input.maxFixRounds },
     )
     // US-506 T-8 (AC12): stopped by a bound before any terminal event ⇒ a STALL, named as one.
     const stopped = watchdog.stopped()

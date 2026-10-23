@@ -283,6 +283,9 @@ interface EventTally {
   readonly seen: string[]
   /** Agents (and cards) already mapped from claude's `workflow_progress` (r0-3). */
   readonly progress: Set<string>
+  /** Cards a `PAIR_EVENT` card-end already closed — never closed again at iteration end (r2-7). */
+  readonly ended: Set<string>
+  readonly maxFixRounds?: number
 }
 
 /** The longest k such that the first k bodies of `next` repeat the last k of `seen`. */
@@ -322,12 +325,54 @@ function tallyRunEvents(
     }
     tally.count++
     if (event.event === 'loop-start') tally.loopStarted = true
+    if (event.event === 'card-end' && event.card !== undefined) tally.ended.add(event.card)
     if (event.event === 'loop-end') tally.loopEnd = event
     onRunEvent?.(event)
   }
-  for (const event of progressRunEvents(payload, tally.progress)) {
+  for (const event of progressRunEvents(payload, tally.progress, tally.maxFixRounds)) {
     tally.count++
     onRunEvent?.(event)
+  }
+}
+
+/** The card statuses a workflow return carries (`batch[]` of pair-implement-batch, `log[]` of pair-loop), last wins. */
+function returnedStatuses(text: unknown): Map<string, string> {
+  const statuses = new Map<string, string>()
+  if (typeof text !== 'string') return statuses
+  for (const span of topLevelObjects(text)) {
+    let raw: unknown
+    try {
+      raw = JSON.parse(span)
+    } catch {
+      continue
+    }
+    const found = raw as Record<string, unknown>
+    for (const entry of [found['batch'], found['log']].flatMap(v => (Array.isArray(v) ? v : []))) {
+      const { id, status } = (entry ?? {}) as Record<string, unknown>
+      if ((typeof id === 'string' || typeof id === 'number') && typeof status === 'string')
+        statuses.set(String(id), status)
+    }
+  }
+  return statuses
+}
+
+/**
+ * r2-7: a card opened from claude's progress labels has no `PAIR_EVENT` to close it, so the iteration's
+ * end does: with the status the workflow returned when readable, else the explicit `unknown` (the
+ * workflow's own tally token) — never a done status it did not report.
+ */
+function closeProgressCards(
+  tally: EventTally,
+  finalText: unknown,
+  onRunEvent?: (event: RunEvent) => void,
+): void {
+  const statuses = returnedStatuses(finalText)
+  for (const key of tally.progress) {
+    const card = key.startsWith('card:') ? key.slice(5) : undefined
+    if (card === undefined || tally.ended.has(card)) continue
+    tally.ended.add(card)
+    tally.count++
+    onRunEvent?.({ event: 'card-end', card, status: statuses.get(card) ?? 'unknown' })
   }
 }
 
@@ -371,6 +416,30 @@ function truthful(result: IterationResult, tally: EventTally, finalText: unknown
   return result
 }
 
+/** One stream line decoded, or `undefined` (blank, or unparseable — untrusted input, skipped and counted). */
+function decode(line: string, tally: EventTally): unknown {
+  const trimmed = line.trim()
+  if (trimmed.length === 0) return undefined
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    tally.skipped++
+    return undefined
+  }
+}
+
+/** The iteration's outcome from its terminal event; progress-opened cards are closed first (r2-7). */
+function terminalResult(
+  rule: TerminalEventRule,
+  payload: unknown,
+  tally: EventTally,
+  onRunEvent: ((event: RunEvent) => void) | undefined,
+): IterationResult {
+  const finalText = rule.resultField ? fieldAt(payload, rule.resultField) : undefined
+  closeProgressCards(tally, finalText, onRunEvent)
+  return truthful(outcomeFor(rule, payload), tally, finalText)
+}
+
 /**
  * Reads the engine's JSONL stream and returns exactly ONE outcome for the iteration.
  *
@@ -378,6 +447,7 @@ function truthful(result: IterationResult, tally: EventTally, finalText: unknown
  * seen before that point is carried into the result, because `pair-loop`'s degraded path prints
  * it just before finishing.
  */
+// eslint-disable-next-line max-params -- every slot past `engine` is DEFAULTED so the arity stays 2 (AC7)
 export async function readIterationOutcome(
   lines: AsyncIterable<string>,
   engine: EngineDefinition,
@@ -388,6 +458,8 @@ export async function readIterationOutcome(
   onEvent: ((payload: unknown) => void) | undefined = undefined,
   /** US-573: sees every run event (`PAIR_EVENT` line) once, in stream order. */
   onRunEvent: ((event: RunEvent) => void) | undefined = undefined,
+  /** r2-6: the run's max fix rounds, rendered in a claude progress `fix n/<max>` (`?` when absent). */
+  options: { readonly maxFixRounds?: number | undefined } = {},
 ): Promise<IterationResult> {
   let continueToken: string | undefined
   const tally: EventTally = {
@@ -396,20 +468,13 @@ export async function readIterationOutcome(
     loopStarted: false,
     seen: [],
     progress: new Set(),
+    ended: new Set(),
+    ...(options.maxFixRounds !== undefined && { maxFixRounds: options.maxFixRounds }),
   }
 
   for await (const line of lines) {
-    const trimmed = line.trim()
-    if (trimmed.length === 0) continue
-
-    let payload: unknown
-    try {
-      payload = JSON.parse(trimmed)
-    } catch {
-      // Untrusted input: an unparseable line is skipped, never evaluated — and counted (US-573).
-      tally.skipped++
-      continue
-    }
+    const payload = decode(line, tally)
+    if (payload === undefined) continue
     tallyRunEvents(payload, tally, onRunEvent)
 
     // Searched in the DECODED event, not in the raw JSONL line: the newlines the anchor needs are
@@ -418,16 +483,16 @@ export async function readIterationOutcome(
     onEvent?.(payload)
 
     const rule = engine.terminalEvents.find(candidate => matches(payload, candidate.match))
-    if (rule) {
-      const finalText = rule.resultField ? fieldAt(payload, rule.resultField) : undefined
-      const result = truthful(outcomeFor(rule, payload), tally, finalText)
-      return { ...result, ...extrasOf(tally, continueToken) }
-    }
+    if (rule)
+      return {
+        ...terminalResult(rule, payload, tally, onRunEvent),
+        ...extrasOf(tally, continueToken),
+      }
   }
 
+  closeProgressCards(tally, undefined, onRunEvent)
   return { ...NO_TERMINAL_EVENT, ...extrasOf(tally, continueToken) }
 }
-
 /**
  * Splits a byte stream into lines, incrementally — the whole stream is never held in memory.
  *

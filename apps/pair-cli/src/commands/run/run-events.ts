@@ -107,22 +107,25 @@ export function eventBodyRuns(payload: unknown, depth = 0): string[][] {
 /** Every `PAIR_EVENT` body carried by ONE decoded stream event, in order. */
 export const eventBodies = (payload: unknown): string[] => eventBodyRuns(payload).flat()
 
+/** The cycle step as the live line names it: implement → review → fix N/max (rounds ≥ 1). */
+export function stageLabel(next: { step: string; round?: number }, maxFixRounds: unknown): string {
+  if (next.step === 'verify') return 'review'
+  if (next.step === 'implement' || !(Number(next.round) >= 1)) return 'implement'
+  return `fix ${next.round}/${Number.isInteger(maxFixRounds) ? String(maxFixRounds) : '?'}`
+}
+
 /**
  * r0-3 (recorded live, claude 2.x): a background Workflow's `log()` never reaches `claude -p`
  * stream-json, so its `PAIR_EVENT` lines are mute there. Its agents' labels do stream, live, in
  * `system/task_progress.workflow_progress` — `pair-implement-batch` names each stage agent
- * `<step>:#<card> …` (`implement:#573`, `verify:#573 r1`). Every progress event repeats the whole
- * list, so an agent is mapped once (keyed by `agentId`); a card's first agent opens it.
+ * `<step>:#<card> <tag>…` (`implement:#573`, `verify:#573 r1`, `green:#573 r1-g1`), and its
+ * prepare-phase agent `prepare:phase #<card>`. Every progress event repeats the whole list, so an
+ * agent is mapped once (keyed by `agentId`); a card's first agent opens it. The stage is the
+ * workflow's own `stageLabel`: a round-tagged `r<n>-g…` contract/fix agent is `fix n/<max>`.
  */
-const STAGE_OF_STEP: Readonly<Record<string, string>> = {
-  prepare: 'prepare',
-  validate: 'prepare',
-  implement: 'implement',
-  verify: 'review',
-  green: 'fix',
-  merge: 'merge',
-}
-const STAGE_LABEL = /^([a-z]+):#?([A-Za-z0-9._-]+)(?:\s|$)/
+const STEPS = new Set(['prepare', 'validate', 'implement', 'verify', 'green', 'merge'])
+const STAGE_LABEL = /^([a-z]+):(phase\s+)?#([A-Za-z0-9._-]+)(?:\s+(\S+))?/
+const ROUND_TAG = /^r(\d+)-g/
 
 /** The `workflow_progress` list of a claude `task_progress` event, or `[]` for any other event. */
 function progressEntries(payload: unknown): ReadonlyArray<Record<string, unknown> | null> {
@@ -132,21 +135,35 @@ function progressEntries(payload: unknown): ReadonlyArray<Record<string, unknown
   return Array.isArray(p['workflow_progress']) ? (p['workflow_progress'] as []) : []
 }
 
+/** The stage an agent label names, as `stageLabel` renders it — `prepare:phase` is the prepare phase. */
+function stageOfLabel(match: RegExpExecArray, maxFixRounds: number | undefined): string {
+  const [, step, phase, , tag] = match as unknown as [string, string, string?, string?, string?]
+  if (step === 'merge') return 'merge'
+  if (phase !== undefined && step === 'prepare') return 'prepare'
+  const round = ROUND_TAG.exec(tag ?? '')?.[1]
+  return stageLabel({ step, ...(round !== undefined && { round: Number(round) }) }, maxFixRounds)
+}
+
 /** An agent entry's `{ card, stage }` from its label, or `undefined` when the label names no stage. */
 function stageOfAgent(
   entry: Record<string, unknown> | null,
+  maxFixRounds: number | undefined,
 ): { card: string; stage: string } | undefined {
   if (entry?.['type'] !== 'workflow_agent' || typeof entry['label'] !== 'string') return undefined
   const match = STAGE_LABEL.exec(entry['label'])
-  const stage = match ? STAGE_OF_STEP[match[1]!] : undefined
-  return match && stage !== undefined ? { card: match[2]!, stage } : undefined
+  if (!match || !STEPS.has(match[1]!)) return undefined
+  return { card: match[3]!, stage: stageOfLabel(match, maxFixRounds) }
 }
 
-export function progressRunEvents(payload: unknown, seen: Set<string>): RunEvent[] {
+export function progressRunEvents(
+  payload: unknown,
+  seen: Set<string>,
+  maxFixRounds?: number,
+): RunEvent[] {
   const events: RunEvent[] = []
   for (const entry of progressEntries(payload)) {
     const key = `agent:${String(entry?.['agentId'] ?? entry?.['index'])}`
-    const found = stageOfAgent(entry)
+    const found = stageOfAgent(entry, maxFixRounds)
     if (found === undefined || seen.has(key)) continue
     seen.add(key)
     if (!seen.has(`card:${found.card}`)) {

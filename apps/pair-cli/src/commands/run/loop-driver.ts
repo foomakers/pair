@@ -219,8 +219,15 @@ function driveIteration(
     timeoutSeconds: config.iterationTimeoutSeconds,
     idleTimeoutSeconds: wiring.idleTimeoutSeconds,
     onRunEvent: wiring.onRunEvent,
+    maxFixRounds: LOOP_MAX_FIX_ROUNDS,
   })
 }
+
+/**
+ * r2-6: the loop path's fix-round budget — `pair-loop` dispatches `pair-implement-batch` with no
+ * `pipeline`, so its rounds are the batch's `PIPELINE_DEFAULTS.maxFixRounds` (see the decision log).
+ */
+const LOOP_MAX_FIX_ROUNDS = 3
 
 const STOP_REASONS: Record<LoopOutcome['stopReason'], string> = {
   'skill-reported-complete':
