@@ -16,6 +16,7 @@ import {
 } from './interrupt'
 import type { RunEvent } from './run-events'
 import { createConsoleSink, routeConsoleTo } from './run-renderer'
+import { createRunAudit } from './run-audit'
 import { probeCardLock, probeResourceLocks } from './lock-probe'
 import {
   describeLoopEnd,
@@ -304,7 +305,7 @@ export async function handleParallelRun(
 
   const engineDef = resolveEngineFor(engine, context, cwd, fs)
   const fan: FanOut = { input, deps, selection, engineDef, autonomyArgs: autonomy.args }
-  return await withLiveCards(config, onEvent => {
+  return await withLiveCards(input, deps, onEvent => {
     const live: FanOut = { ...fan, input: { ...input, onEvent } }
     return values.loopMode ? runLoop(live, values) : runSingleBatch(live)
   })
@@ -312,7 +313,8 @@ export async function handleParallelRun(
 
 /** US-573 AC2: one live line per card while the pool runs (cursor-addressed rows on a TTY). */
 async function withLiveCards(
-  config: RunCommandConfig,
+  { config, context, cwd }: ParallelRunInput,
+  deps: RunHandlerDependencies,
   run: (onEvent: (event: RunEvent) => void) => Promise<number>,
 ): Promise<number> {
   const sink = createConsoleSink({
@@ -321,14 +323,36 @@ async function withLiveCards(
     mode: config.output ?? 'live',
     color: config.noColor !== true && process.env['NO_COLOR'] === undefined,
   })
+  // US-573 AC4: the pool's card events go to the same live JSONL audit as a loop run's.
+  const audit = createRunAudit({
+    path: context.auditPath,
+    runId: `run-${new Date().toISOString().replace(/[:.]/g, '')}-${process.pid}`,
+    root: cwd,
+    policy: {
+      source: context.policy.source,
+      parallel: config.parallel ?? null,
+      idleTimeout: context.idleTimeout,
+    },
+    ...(deps.runAudit !== undefined && { append: deps.runAudit }),
+    onWriteError: error =>
+      sink.log(`  ! live audit ${context.auditPath} is not writable (${String(error)})`),
+  })
   const restore = routeConsoleTo(sink)
   const close = () => {
     restore()
     sink.finish()
   }
-  const unsubscribe = onInterrupt(close)
+  const unsubscribe = onInterrupt(() => {
+    audit.end('interrupted', 'the driver received a signal')
+    close()
+  })
   try {
-    return await run(event => sink.event(event))
+    const code = await run(event => {
+      audit.record(event)
+      sink.event(event)
+    })
+    audit.end(code === 0 ? 'completed' : 'halted', `exit ${code}`)
+    return code
   } finally {
     unsubscribe()
     close()
