@@ -327,3 +327,34 @@ describe('run --root --parallel — AC5 no batch-level merge logic', () => {
     }
   })
 })
+
+describe('US-573: the pool writes its card events to the live JSONL audit', () => {
+  it('loop-start first, then card-start/card-end per card, then loop-end', async () => {
+    process.env['PATH'] = '/bin'
+    captureLog()
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const h = harness([card('1'), card('ENG-2')], {
+      'ENG-2': { exitCode: 1, signal: null, cycleStatus: 'failed-verify' },
+    })
+    const lines: Array<Record<string, unknown>> = []
+    await handleRunCommand(
+      parseRunCommand({ root: '66', parallel: '2', autonomous: true }),
+      projectFs(policy('2')),
+      {
+        ...h.deps,
+        runAudit: (_path, line) => void lines.push(JSON.parse(line) as Record<string, unknown>),
+      },
+    )
+    expect(lines[0]).toMatchObject({ event: 'loop-start', detail: { root: cwd } })
+    expect(
+      lines
+        .filter(l => l['event'] === 'card-end')
+        .map(l => [l['card'], (l['detail'] as { status: string }).status])
+        .sort(),
+    ).toEqual([
+      ['1', 'completed'],
+      ['ENG-2', 'failed-verify'],
+    ])
+    expect(lines.at(-1)).toMatchObject({ event: 'loop-end', detail: { status: 'halted' } })
+  })
+})

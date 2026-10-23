@@ -105,6 +105,8 @@ export interface EngineDefinition {
   readonly autonomy: AutonomyPosture
   readonly projectTrust: ProjectTrustPosture
   readonly terminalEvents: readonly TerminalEventRule[]
+  /** US-573 AC7: environment the engine's process needs on top of the driver's own (absent ⇒ none). */
+  readonly env?: Readonly<Record<string, string>>
   /** Where this entry's values were verified. Printed nowhere; read by the next maintainer. */
   readonly verifiedAgainst: string
   /**
@@ -201,6 +203,9 @@ const CLAUDE: EngineDefinition = {
       resultField: 'result',
     },
   ],
+  // US-573 AC7 (maintainer-observed, not re-measured here): without it `claude -p` stops a background
+  // workflow after its 10-minute background-wait ceiling.
+  env: { CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: '0' },
   verifiedAgainst: 'claude --help + live `claude -p --output-format stream-json` (2026-08-24)',
 }
 

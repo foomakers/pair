@@ -203,6 +203,7 @@ function productionCycleDriver(
     location: driver.location,
     autonomyArgs,
     timeoutSeconds: config.iterationTimeoutSeconds,
+    idleTimeoutSeconds: context.idleTimeout.seconds,
     workflowVersion: defaults.workflowVersion,
     baseBranch: defaults.baseBranch,
     model: declaredEngineModel(context.config, driver.engineDef.id),

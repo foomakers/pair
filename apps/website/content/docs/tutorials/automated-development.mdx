@@ -379,8 +379,17 @@ now. Both read the same policy file, and both stop at the same human merge gate.
 
 Every iteration is appended to `## Audit Location`'s path (default
 `.pair/working/automation/loop-audit.md`), never overwritten, so a killed-and-restarted run's
-history stays intact. This is what you `tail -f` from the daemon box, and what you read after the
-fact to see exactly which cards ran, in what order, and why the loop stopped when it did.
+history stays intact. `pair-cli run` prints the absolute path in its banner and writes the trail
+**live**: a `loop-start` line before the first selection, then one JSON line per event (card start,
+each stage, card end), flushed at once. This is what you `tail -f` from the daemon box, and what you
+read after the fact to see exactly which cards ran, in what order, and why the loop stopped when it did.
+
+On a terminal, each card owns one line rewritten in place (`⠋ #212 · title · review · PR #41 · 03:12`,
+then `✔ merged` / `⏸ awaiting-human` / `⚠ escalated` / `✖ failed` / `? unknown` when the engine returned no readable card status); in a log file (non-TTY) you get
+one timestamped line per stage change; `--json` emits the events as NDJSON for a dashboard. The run
+exits non-zero on a workflow HALT, a cut background workflow or an idle timeout, so a daemon's
+restart policy sees the truth. A long stage is never killed while the engine keeps emitting events:
+only silence for the idle timeout (default 30 min) stops it.
 
 A killed run resumes from its own audit file (not a separate checkpoint) on the fan-out path, so
 restarting the daemon after a crash or a reboot never re-runs a card the audit already recorded as

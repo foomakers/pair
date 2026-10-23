@@ -1,4 +1,5 @@
 import { execFileSync } from 'child_process'
+import { RUN_EVENTS_ENV, runEventLine, stageLabel } from './run-events'
 import { existsSync, readFileSync, rmSync } from 'fs'
 import { dirname, join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
@@ -305,7 +306,9 @@ export interface CycleDriverContext {
   readonly fs: FileSystemService
   readonly location: CycleScriptsLocation | undefined
   readonly autonomyArgs: readonly string[]
-  readonly timeoutSeconds: number
+  readonly timeoutSeconds?: number | undefined
+  /** US-573: seconds without an engine event before the stage is stopped (default 30 min). */
+  readonly idleTimeoutSeconds?: number | undefined
   readonly workflowVersion: string
   readonly baseBranch: string
   /** The model pinned for this engine, if the project declared one. */
@@ -387,10 +390,9 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
     title: record.title,
     runDir,
     runsRoot,
-    // r0-3: the freshness evidence the in-session coordinator's Step 1 hands `resolve` — both
-    // produced by the scripts themselves, never computed here, so the two realizations agree.
+    // r0-3: the inputs digest the in-session coordinator's Step 1 hands `resolve` — produced by the
+    // script itself, never computed here, so the two realizations agree (the AC hash is read per resolve).
     inputs: bridge.inputs(card, ctx.workflowVersion),
-    acHash: bridge.acHash(input.card, runDir),
     // US-490: what lets `resolve` OFFER `merge` — read once, like the scripts' own inputs.
     tier: readCardTier(input.card, ctx.cwd),
     // An active autonomy policy replaces the tier list; otherwise the legacy read is unchanged (default off).
@@ -446,12 +448,17 @@ const liveLabels = (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coor
   return prLabels === undefined ? { labels } : { labels, prLabels }
 }
 
+// ponytail: fixed budgets above the script defaults (1/1/3) so a converging contract or fix is not parked; configurable in #575.
+// Sent to the coordinator's resolve AND every stage packet: a stage's own Step 0 resolve must see the same budget.
+const CYCLE_BUDGETS = { maxFixRounds: 10, redRepairs: 3, greenRetries: 2 }
+
 /** The `policy` object `resolve` takes: blocking floor, ceiling, and exactly ONE merge-offer source. */
 function resolvePolicyFor(
   blocking: ReturnType<typeof resolveBlockingSeverities>,
   co: Coordinates,
 ): Record<string, unknown> {
   return {
+    ...CYCLE_BUDGETS,
     blockingFloor: blocking.blockingFloor,
     ...(blocking.maxDispatches !== undefined && { maxDispatches: blocking.maxDispatches }),
     ...(co.autoAdvanceTiers.length > 0 && { autoAdvance: { tiers: co.autoAdvanceTiers } }),
@@ -488,7 +495,9 @@ const resolveFor =
       story: input.card,
       runsRoot: co.runsRoot,
       inputs: co.inputs,
-      acHash: co.acHash,
+      // Re-read at every resolve, never the setup snapshot: a card edited mid-run would otherwise
+      // disagree with the hash the stage itself stamps, and verify would redirect forever (#573).
+      acHash: co.bridge.acHash(input.card, co.runDir),
       ...(head !== undefined && { head }),
       ...(input.pr !== undefined && { pr: input.pr }),
       // US-488: the profile's `reuse` stages, as `cycle-state`'s OWN policy (admissible transitions
@@ -540,6 +549,7 @@ const packetFor =
     return co.bridge.packet({
       next: next as never,
       policy: {
+        ...CYCLE_BUDGETS,
         blockingFloor: blocking.blockingFloor,
         ...(blocking.maxDispatches !== undefined && { maxDispatches: blocking.maxDispatches }),
       },
@@ -578,8 +588,25 @@ const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packe
     ...(spawn.model !== undefined && { model: spawn.model }),
     ...(spawn.effort !== undefined && { effort: spawn.effort }),
     timeoutSeconds: ctx.timeoutSeconds,
+    idleTimeoutSeconds: ctx.idleTimeoutSeconds,
     runIteration: spawnIteration,
   })) as CycleStageResult
+}
+
+export { stageLabel }
+
+/** US-573: under the `--parallel` pool (RUN_EVENTS_ENV) the parent renders one live line per card from these. */
+function stageEvents(
+  card: string,
+  policy: Record<string, unknown>,
+): { onDispatch?: (next: { step: string; round?: number }) => void } {
+  if (process.env[RUN_EVENTS_ENV] !== '1') return {}
+  return {
+    onDispatch: next =>
+      console.log(
+        runEventLine({ event: 'stage', card, stage: stageLabel(next, policy['maxFixRounds']) }),
+      ),
+  }
 }
 
 const GATE_SKILL = 'pair-capability-verify-quality'
@@ -836,6 +863,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       policy,
       ...(input.rounds !== undefined && { rounds: input.rounds }),
       onNotice: note => console.log(`  ${note}`),
+      ...stageEvents(input.card, policy),
       // One line per stage, the moment the NEXT resolve reveals whether it advanced. Without it a
       // forty-dispatch unattended run prints a single terminal status and nothing else: the stage
       // that mattered is indistinguishable from the thirty-nine that did not, and a stage that

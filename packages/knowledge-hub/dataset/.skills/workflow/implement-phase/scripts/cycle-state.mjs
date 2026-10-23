@@ -1926,6 +1926,12 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       findings: data.findings.map(f => (f?.regressionRisk ? { ...f, regressionRisk: { ...f.regressionRisk, riskId: riskIdOf({ story: data.story, pr: data.pr ?? pr, findingId: f.id, batchId: f.regressionRisk.introducedByRemediationBatchId }) } } : f)),
     }
   }
+  // #575: green-fix's `fixed` is a boolean. An agent that listed the ids it fixed meant exactly that:
+  // normalized here (fixed ⇔ every reported finding resolved), never read later as a failed fix.
+  if (skill === 'green-fix' && Array.isArray(data.fixed)) {
+    const resolved = Array.isArray(data.findings) && data.findings.length > 0 && data.findings.every(f => f?.transition === 'resolved')
+    data = { ...data, fixedIds: data.fixed, fixed: resolved }
+  }
   if (pr !== undefined) {
     if (!Number.isInteger(pr) || pr <= 0) return { published: false, reason: 'pr-invalid', pr }
     if (data.pr !== undefined && data.pr !== null && Number(data.pr) !== pr) return { published: false, reason: 'pr-mismatch', stated: data.pr, pr }
