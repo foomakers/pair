@@ -90,13 +90,19 @@ function pick(
   return Object.fromEntries(keys.filter(key => valid(found[key])).map(key => [key, found[key]]))
 }
 
-/** Every `PAIR_EVENT` body carried by ONE decoded stream event, in order. */
-export function eventBodies(payload: unknown, depth = 0): string[] {
+/** The `PAIR_EVENT` bodies of ONE decoded stream event, one run per string that carries any, in order. */
+export function eventBodyRuns(payload: unknown, depth = 0): string[][] {
   if (depth > MAX_DEPTH) return []
-  if (typeof payload === 'string') return [...payload.matchAll(MARKER)].map(m => m[1]!)
+  if (typeof payload === 'string') {
+    const bodies = [...payload.matchAll(MARKER)].map(m => m[1]!)
+    return bodies.length > 0 ? [bodies] : []
+  }
   if (typeof payload === 'object' && payload !== null) {
     const values = Array.isArray(payload) ? payload : Object.values(payload)
-    return values.flatMap(value => eventBodies(value, depth + 1))
+    return values.flatMap(value => eventBodyRuns(value, depth + 1))
   }
   return []
 }
+
+/** Every `PAIR_EVENT` body carried by ONE decoded stream event, in order. */
+export const eventBodies = (payload: unknown): string[] => eventBodyRuns(payload).flat()

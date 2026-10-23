@@ -1,5 +1,5 @@
 import type { EngineDefinition, TerminalEventRule } from './engines'
-import { eventBodies, parseRunEvent, type RunEvent } from './run-events'
+import { eventBodyRuns, parseRunEvent, type RunEvent } from './run-events'
 
 /**
  * The JSONL terminal-event reader (US-451 T-7) — the ONLY thing that decides an iteration's
@@ -279,8 +279,30 @@ interface EventTally {
   skipped: number
   loopStarted: boolean
   loopEnd?: RunEvent
-  /** Bodies already seen: a workflow line quoted again later (a summary, the final text) is ONE event. */
-  readonly seen: Set<string>
+  /** Bodies relayed so far, in stream order — the history a re-quote is matched against. */
+  readonly seen: string[]
+}
+
+/** The longest k such that the first k bodies of `next` repeat the last k of `seen`. */
+function overlap(seen: readonly string[], next: readonly string[]): number {
+  for (let k = Math.min(seen.length, next.length); k > 0; k--) {
+    if (next.slice(0, k).every((body, i) => body === seen[seen.length - k + i])) return k
+  }
+  return 0
+}
+
+/**
+ * The bodies ONE decoded event adds to the run. A re-quote repeats what the stream just said (the
+ * same line in two fields of one event, pi's `turn_end`/`agent_end`, the final result text), so the
+ * part of the event that overlaps the tail of the history is dropped; a body that comes back after
+ * something else happened (`review` after `fix 1/3`, a card-end in a later iteration) is new.
+ * Within one string nothing is dropped: its lines are the workflow's own sequence.
+ * ponytail: a body repeated back-to-back by the workflow itself reads as a re-quote; a per-line seq would fix it.
+ */
+function freshBodies(payload: unknown, seen: readonly string[]): string[] {
+  const merged: string[] = []
+  for (const run of eventBodyRuns(payload)) merged.push(...run.slice(overlap(merged, run)))
+  return merged.slice(overlap(seen, merged))
 }
 
 /** Counts and relays the run events ONE decoded stream event carries; a malformed body is skipped and counted. */
@@ -289,9 +311,8 @@ function tallyRunEvents(
   tally: EventTally,
   onRunEvent?: (event: RunEvent) => void,
 ): void {
-  for (const body of eventBodies(payload)) {
-    if (tally.seen.has(body)) continue
-    tally.seen.add(body)
+  for (const body of freshBodies(payload, tally.seen)) {
+    tally.seen.push(body)
     const event = parseRunEvent(body)
     if (event === undefined) {
       tally.skipped++
@@ -363,7 +384,7 @@ export async function readIterationOutcome(
   onRunEvent: ((event: RunEvent) => void) | undefined = undefined,
 ): Promise<IterationResult> {
   let continueToken: string | undefined
-  const tally: EventTally = { count: 0, skipped: 0, loopStarted: false, seen: new Set() }
+  const tally: EventTally = { count: 0, skipped: 0, loopStarted: false, seen: [] }
 
   for await (const line of lines) {
     const trimmed = line.trim()

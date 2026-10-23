@@ -1,3 +1,4 @@
+import { MAX_TIMEOUT_SECONDS } from '../../config/engine-block'
 import { validateStopPredicateLine } from './automation-policy'
 import { ENGINE_IDS, isEngineId, type EngineId } from './engines'
 import { idSafetyFailure, isSafeId, isSafePromptText, promptSafetyFailure } from './prompt-safety'
@@ -170,6 +171,17 @@ function parsePositiveInteger(flag: string, raw: string | number): number {
   const value = typeof raw === 'number' ? raw : Number(raw)
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`${flag} must be a positive integer (received: ${String(raw)})`)
+  }
+  return value
+}
+
+/** A timeout flag: a positive integer of seconds `setTimeout` can hold. */
+function parseTimeoutSeconds(flag: string, raw: string | number): number {
+  const value = parsePositiveInteger(flag, raw)
+  if (value > MAX_TIMEOUT_SECONDS) {
+    throw new Error(
+      `${flag} must be at most ${MAX_TIMEOUT_SECONDS} seconds (received: ${String(raw)})`,
+    )
   }
   return value
 }
@@ -599,13 +611,10 @@ export function parseRunCommand(options: ParseRunOptions, args: string[] = []): 
     ...eligibilityFilterOf(options),
     ...predicateOf(options),
     ...(options.iterationTimeout !== undefined && {
-      iterationTimeoutSeconds: parsePositiveInteger(
-        '--iteration-timeout',
-        options.iterationTimeout,
-      ),
+      iterationTimeoutSeconds: parseTimeoutSeconds('--iteration-timeout', options.iterationTimeout),
     }),
     ...(options.idleTimeout !== undefined && {
-      idleTimeoutSeconds: parsePositiveInteger('--idle-timeout', options.idleTimeout),
+      idleTimeoutSeconds: parseTimeoutSeconds('--idle-timeout', options.idleTimeout),
     }),
     ...outputModeOf(options),
     dryRun: options.dryRun === true,

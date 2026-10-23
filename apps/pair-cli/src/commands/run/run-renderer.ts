@@ -103,6 +103,7 @@ export interface Output {
   write(text: string): unknown
   readonly isTTY?: boolean
   readonly columns?: number | undefined
+  readonly rows?: number | undefined
   on?(event: 'resize', listener: () => void): unknown
   off?(event: 'resize', listener: () => void): unknown
 }
@@ -187,34 +188,45 @@ export function applyCardEvent(
     })
 }
 
-/** The cursor-addressed block of card rows: redrawn in place, with log lines inserted above it. */
+/**
+ * The cursor-addressed block of RUNNING card rows: redrawn in place, at most `rows - 1` tall (read on
+ * every draw, so a resize applies), with log lines and finished cards inserted above it (AC2b).
+ * ponytail: running cards past the cap are not shown until a row frees up; a "+N more" row if it matters.
+ */
 function rowBlock(input: ConsoleSinkInput, cards: Map<string, CardView>, now: () => number) {
   const { out } = input
   let drawn = 0
   let frame = 0
   let cursorHidden = false
+  const lineOf = (card: CardView) =>
+    cardLine(card, { columns: out.columns ?? 80, color: input.color, now: now(), frame })
   const render = () => {
-    if (cards.size === 0) return
-    const lines = [...cards.values()].map(card =>
-      cardLine(card, { columns: out.columns ?? 80, color: input.color, now: now(), frame }),
-    )
+    const cap = Math.max(1, (out.rows ?? Infinity) - 1)
+    const lines = [...cards.values()].slice(0, cap).map(lineOf)
+    if (lines.length === 0 && drawn === 0) return
     out.write(
-      `${cursorHidden ? '' : '\x1b[?25l'}${drawn > 0 ? `\x1b[${drawn}F` : ''}${lines.map(line => `\x1b[2K${line}`).join('\n')}\n`,
+      `${cursorHidden ? '' : '\x1b[?25l'}${drawn > 0 ? `\x1b[${drawn}F\x1b[J` : ''}${lines.map(line => `\x1b[2K${line}\n`).join('')}`,
     )
     cursorHidden = true
     drawn = lines.length
   }
+  const above = (line: string) => {
+    out.write(`${drawn > 0 ? `\x1b[${drawn}F\x1b[J` : ''}${line}\n`)
+    drawn = 0
+    render()
+  }
   return {
     render,
+    /** A finished card leaves the block: its final line is printed once, above the running rows. */
+    settle: (card: CardView) => {
+      cards.delete(card.id)
+      above(lineOf(card))
+    },
     tick: () => {
       frame++
       render()
     },
-    above: (line: string) => {
-      out.write(`${drawn > 0 ? `\x1b[${drawn}F\x1b[J` : ''}${line}\n`)
-      drawn = 0
-      render()
-    },
+    above,
     restoreCursor: () => {
       if (cursorHidden) out.write('\x1b[?25h')
     },
@@ -239,7 +251,8 @@ function liveTtySink(input: ConsoleSinkInput, now: () => number): ConsoleSink {
       if (event.card === undefined)
         return log(plainLine(event, new Date(now()).toISOString(), iteration))
       applyCardEvent(cards, { ...event, card: event.card }, now())
-      block.render()
+      if (event.event === 'card-end') block.settle(cards.get(event.card)!)
+      else block.render()
     },
     log,
     finish: () => {

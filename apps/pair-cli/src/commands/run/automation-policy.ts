@@ -1,4 +1,5 @@
 import { join } from 'path'
+import { MAX_TIMEOUT_SECONDS } from '../../config/engine-block'
 import type { FileSystemService } from '@pair/content-ops'
 import { isLabelShape, isSafePromptText, promptSafetyFailure } from './prompt-safety'
 import { assertLabelValue, policyHalt, POLICY_PATH, sectionLines } from './policy-sections'
@@ -324,6 +325,10 @@ function readStopPredicate(markdown: string): {
     const idle = /^idle-timeout:\s*(.+)$/.exec(line)
     if (idle) {
       idleTimeoutSeconds = positiveInteger(idle[1]!, '`## Stop Predicate` idle-timeout')
+      if (idleTimeoutSeconds > MAX_TIMEOUT_SECONDS)
+        policyHalt(
+          `\`## Stop Predicate\` idle-timeout declares \`${idleTimeoutSeconds}\`, above the ${MAX_TIMEOUT_SECONDS}-second maximum`,
+        )
       continue
     }
     const iterations = /^max-iterations:\s*(.+)$/.exec(line)

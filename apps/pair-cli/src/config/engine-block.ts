@@ -56,11 +56,19 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** US-573: `engine.idleTimeout` — absent, or a positive integer of seconds. */
+/** The largest timeout in whole seconds `setTimeout` can hold (its delay is a signed 32-bit ms count; above it fires at once). */
+export const MAX_TIMEOUT_SECONDS = 2147483
+
+/** US-573: `engine.idleTimeout` — absent, or a positive integer of seconds up to `MAX_TIMEOUT_SECONDS`. */
 function readIdleTimeout(raw: unknown): { value: { idleTimeout?: number } } | { errors: string[] } {
   if (raw === undefined) return { value: {} }
-  if (Number.isInteger(raw) && Number(raw) > 0) return { value: { idleTimeout: Number(raw) } }
-  return { errors: ['engine.idleTimeout: must be a positive integer of seconds'] }
+  if (Number.isInteger(raw) && Number(raw) > 0 && Number(raw) <= MAX_TIMEOUT_SECONDS)
+    return { value: { idleTimeout: Number(raw) } }
+  return {
+    errors: [
+      `engine.idleTimeout: must be a positive integer of seconds, at most ${MAX_TIMEOUT_SECONDS} (received: ${String(raw)})`,
+    ],
+  }
 }
 
 /**
