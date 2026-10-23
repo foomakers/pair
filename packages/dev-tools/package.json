@@ -18,6 +18,7 @@
     "sync-version": "ts-node src/quality-gates/sync-version-in-docs.ts",
     "benchmark-update-link": "ts-node src/quality-gates/benchmark-update-link.ts",
     "determine-version": "ts-node src/release/determine-version.ts",
+    "changelog-version": "ts-node src/release/changelog-version.ts",
     "release": "ts-node src/release/release-cli.ts",
     "changeset-check": "ts-node src/release/changeset-check.ts",
     "pre-push-gate:check": "ts-node src/quality-gates/pre-push-gate-composition.ts",
