@@ -1,4 +1,5 @@
 import type { EngineDefinition, TerminalEventRule } from './engines'
+import { eventBodies, parseRunEvent, type RunEvent } from './run-events'
 
 /**
  * The JSONL terminal-event reader (US-451 T-7) — the ONLY thing that decides an iteration's
@@ -14,6 +15,13 @@ import type { EngineDefinition, TerminalEventRule } from './engines'
  */
 
 export type IterationOutcome = 'success' | 'failed'
+
+/**
+ * US-573 AC6: why a `failed` iteration failed, when the engine turn itself may have ended cleanly —
+ * the workflow HALTed, the background workflow was cut before its `loop-end`, or the idle watchdog
+ * stopped the engine. Each is a failure: `pair run` exits non-zero on all three.
+ */
+export type FailureCause = 'halted' | 'cut' | 'timed-out'
 
 export interface IterationResult {
   readonly outcome: IterationOutcome
@@ -34,6 +42,12 @@ export interface IterationResult {
   readonly stalled?: true
   /** The stage's final JSON result from the terminal event's text, when the engine exposes it and it carries one. */
   readonly final?: StageFinalResult
+  /** US-573: set when the iteration failed for one of the truthful-outcome causes. */
+  readonly cause?: FailureCause
+  /** US-573: unparseable stream lines + malformed `PAIR_EVENT` bodies, skipped (present when > 0). */
+  readonly skippedLines?: number
+  /** US-573: run events the stream carried (present when > 0; absent ⇒ the engine degrades to start/end lines). */
+  readonly runEvents?: number
 }
 
 /**
@@ -257,6 +271,45 @@ function outcomeFor(rule: TerminalEventRule, payload: unknown): IterationResult 
   }
 }
 
+/** The workflow's own HALT message (`pair-loop: HALT — <reason>`) — the fallback when no `loop-end` reached the stream. */
+const HALT_TEXT = /pair-loop: HALT — ([^\n]+)/
+
+interface EventTally {
+  count: number
+  loopStarted: boolean
+  loopEnd?: RunEvent
+}
+
+/**
+ * US-573 AC6: the engine turn's `subtype` only says the TURN ended; the workflow's own terminal status
+ * decides the iteration. A non-`completed` `loop-end`, or a HALT message in the final text, is
+ * `halted`; a `loop-start` with no `loop-end` means the background workflow was cut.
+ */
+function truthful(result: IterationResult, tally: EventTally, finalText: unknown): IterationResult {
+  if (result.outcome !== 'success') return result
+  const end = tally.loopEnd
+  if (end !== undefined && end.status !== 'completed')
+    return {
+      ...result,
+      outcome: 'failed',
+      cause: 'halted',
+      detail: `${end.status ?? 'halted'}: ${end.reason ?? 'no reason given'}`,
+    }
+  if (end !== undefined) return result
+  const halt = typeof finalText === 'string' ? HALT_TEXT.exec(finalText) : null
+  if (halt)
+    return { ...result, outcome: 'failed', cause: 'halted', detail: `halted: ${halt[1]!.trim()}` }
+  if (tally.loopStarted)
+    return {
+      ...result,
+      outcome: 'failed',
+      cause: 'cut',
+      detail:
+        'cut: the engine turn ended before the workflow reported its loop-end (background workflow stopped)',
+    }
+  return result
+}
+
 /**
  * Reads the engine's JSONL stream and returns exactly ONE outcome for the iteration.
  *
@@ -272,8 +325,17 @@ export async function readIterationOutcome(
    * A DEFAULTED parameter, so the reader's arity stays 2: no exit-code slot exists (AC7 test).
    */
   onEvent: ((payload: unknown) => void) | undefined = undefined,
+  /** US-573: sees every run event (`PAIR_EVENT` line) once, in stream order. */
+  onRunEvent: ((event: RunEvent) => void) | undefined = undefined,
 ): Promise<IterationResult> {
   let continueToken: string | undefined
+  let skipped = 0
+  const seen = new Set<string>()
+  const tally: EventTally = { count: 0, loopStarted: false }
+  const counters = (): Partial<IterationResult> => ({
+    ...(skipped > 0 && { skippedLines: skipped }),
+    ...(tally.count > 0 && { runEvents: tally.count }),
+  })
 
   for await (const line of lines) {
     const trimmed = line.trim()
@@ -283,8 +345,24 @@ export async function readIterationOutcome(
     try {
       payload = JSON.parse(trimmed)
     } catch {
-      // Untrusted input: an unparseable line is skipped, never evaluated.
+      // Untrusted input: an unparseable line is skipped, never evaluated — and counted (US-573).
+      skipped++
       continue
+    }
+
+    // A workflow line quoted again later (a summary, the final text) is the SAME event: seen once.
+    for (const body of eventBodies(payload)) {
+      if (seen.has(body)) continue
+      seen.add(body)
+      const event = parseRunEvent(body)
+      if (event === undefined) {
+        skipped++
+        continue
+      }
+      tally.count++
+      if (event.event === 'loop-start') tally.loopStarted = true
+      if (event.event === 'loop-end') tally.loopEnd = event
+      onRunEvent?.(event)
     }
 
     // Searched in the DECODED event, not in the raw JSONL line: the newlines the anchor needs are
@@ -294,12 +372,17 @@ export async function readIterationOutcome(
 
     const rule = engine.terminalEvents.find(candidate => matches(payload, candidate.match))
     if (rule) {
-      const result = outcomeFor(rule, payload)
-      return { ...result, ...(continueToken !== undefined && { continueToken }) }
+      const finalText = rule.resultField ? fieldAt(payload, rule.resultField) : undefined
+      const result = truthful(outcomeFor(rule, payload), tally, finalText)
+      return { ...result, ...counters(), ...(continueToken !== undefined && { continueToken }) }
     }
   }
 
-  return { ...NO_TERMINAL_EVENT, ...(continueToken !== undefined && { continueToken }) }
+  return {
+    ...NO_TERMINAL_EVENT,
+    ...counters(),
+    ...(continueToken !== undefined && { continueToken }),
+  }
 }
 
 /**

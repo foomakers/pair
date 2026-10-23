@@ -354,3 +354,36 @@ describe('readIterationOutcome — onEvent (US-491)', () => {
     expect(seen.at(-1)).toEqual(JSON.parse(expected.at(-1)!))
   })
 })
+
+describe('truthful outcome — a HALT, a cut or a kill is never success (US-573 AC6)', () => {
+  it('a workflow loop-end HALT under a `result.subtype: success` turn is reported halted, not success', async () => {
+    const result = await readFixture('claude-workflow-halt.jsonl', 'claude')
+    expect(result.outcome).toBe('failed')
+    expect(result.cause).toBe('halted')
+    expect(result.detail).toMatch(/^halted: audit write/)
+  })
+
+  it('events seen but no loop-end when the engine turn ended ⇒ the background workflow was cut', async () => {
+    const result = await readFixture('claude-workflow-cut.jsonl', 'claude')
+    expect(result.outcome).toBe('failed')
+    expect(result.cause).toBe('cut')
+    expect(result.detail).toMatch(/cut/)
+  })
+
+  it('no event at all, but the final text carries the workflow HALT message ⇒ halted (fallback)', async () => {
+    const lines = (async function* () {
+      yield '{"type":"result","subtype":"success","result":"pair-loop: HALT — no `filter` resolved"}'
+    })()
+    const result = await readIterationOutcome(lines, ENGINES.claude)
+    expect(result.outcome).toBe('failed')
+    expect(result.cause).toBe('halted')
+    expect(result.detail).toContain('no `filter` resolved')
+  })
+
+  it('a completed workflow under a success turn stays success; legacy fixtures are unchanged', async () => {
+    expect((await readFixture('claude-workflow-events.jsonl', 'claude')).outcome).toBe('success')
+    const legacy = await readFixture('claude-success.jsonl', 'claude')
+    expect(legacy.outcome).toBe('success')
+    expect(legacy.cause).toBeUndefined()
+  })
+})
