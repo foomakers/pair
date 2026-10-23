@@ -1,0 +1,85 @@
+{
+  "$meta": {
+    "pr": "579",
+    "phase": "r5-g1",
+    "base": "531e148a5ca1ac708d2f1452259b8929844e0f52",
+    "trailer": "Pair-RED-Snapshot: pr=579; phase=r5-g1; base=531e148a5ca1ac708d2f1452259b8929844e0f52; manifest=.pair/red-snapshots/pr-579-r5-g1.json",
+    "artifacts": []
+  },
+  "run": "story-573",
+  "story": "573",
+  "phase": "r5-g1",
+  "mode": "remediation",
+  "inputHead": "531e148a5ca1ac708d2f1452259b8929844e0f52",
+  "sourceOfTruth": [
+    "apps/pair-cli/src/commands/run/run-renderer.ts:49 (icon: status 'unknown' -> grey '?')",
+    "apps/pair-cli/src/commands/run/loop-driver.ts:256-264 (summary 'Cards: N merged · N parked · N failed · N unknown')",
+    ".changeset/us-573-run-live-progress.md:7,9 (wording: '? unknown' when the engine returned no readable card status; summary 'merged / parked / failed / unknown')"
+  ],
+  "inventory": [
+    {
+      "id": "r4-9",
+      "producer": "pair-cli run console output: run-renderer.ts icon() (terminal card outcome icons) and loop-driver.ts end summary line; documented by the `pair-cli run` reference",
+      "inputs": [
+        "card terminal status (merged, parked statuses, escalated, unknown, failed)",
+        "end-of-run card status tally"
+      ],
+      "representations": [
+        "apps/website/content/docs/reference/cli/commands.mdx:1135 (TTY row of output-modes table)",
+        "apps/website/content/docs/reference/cli/commands.mdx:1142-1143 (end summary sentence)",
+        "apps/website/content/docs/tutorials/automated-development.mdx:388 (mirror of TTY outcome enumeration)",
+        ".changeset/us-573-run-live-progress.md (already correct)"
+      ],
+      "consumers": [
+        "users reading the CLI reference and the automated-development tutorial"
+      ],
+      "classes": [
+        "TTY terminal outcome enumeration lists `? unknown`",
+        "end summary enumerates the unknown bucket",
+        "mirror enumeration in tutorial lists `? unknown`",
+        "existing outcomes (merged/awaiting-human/escalated/failed) unchanged"
+      ],
+      "interactions": [
+        "reference and tutorial wording must agree with the changeset"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "website docs — pair-cli run output modes (commands.mdx reference + automated-development tutorial mirror)",
+    "mode": "doc",
+    "allowedPaths": [
+      "apps/website/content/docs/reference/cli/commands.mdx",
+      "apps/website/content/docs/tutorials/automated-development.mdx"
+    ]
+  },
+  "checklist": [
+    {
+      "id": "r4-9-c1",
+      "finding": "r4-9",
+      "requirement": "commands.mdx output-modes table, TTY row (line ~1135): the terminal outcome list names `? unknown` alongside `✔ merged`, `⏸ awaiting-human`, `⚠ escalated`, `✖ failed`, stating it means the engine returned no readable card status",
+      "authority": "run-renderer.ts:49 `if (card.status === 'unknown') return paint(color, 90, '?')`; changeset line 7 \"`? unknown` when the engine returned no readable card status\""
+    },
+    {
+      "id": "r4-9-c2",
+      "finding": "r4-9",
+      "requirement": "commands.mdx end-summary sentence (line ~1142-1143): lists cards merged / parked / failed / unknown (the unknown bucket named)",
+      "authority": "loop-driver.ts:264 \"Cards: ${merged} merged · ${parked} parked · ${failed} failed · ${unknown} unknown\"; changeset line 9 \"the end summary lists cards merged / parked / failed / unknown\""
+    },
+    {
+      "id": "r4-9-c3",
+      "finding": "r4-9",
+      "requirement": "automated-development.mdx:388 mirror enumeration of terminal outcomes adds `? unknown`, same wording as the reference",
+      "authority": "run-renderer.ts:49; changeset line 7"
+    },
+    {
+      "id": "r4-9-c4",
+      "finding": "r4-9",
+      "requirement": "existing outcomes `✔ merged`, `⏸ awaiting-human`, `⚠ escalated`, `✖ failed` and their order stay unchanged in both files; no other prose edited",
+      "authority": "run-renderer.ts:44-50 icon() branches unchanged by r4"
+    }
+  ],
+  "matrix": [],
+  "redTests": [],
+  "testExempt": true,
+  "exemptionRationale": "doc group: prose-only fix, executable witnesses cannot discriminate a text fix (doc-remediation-groups.md); acceptance is the checklist"
+}
