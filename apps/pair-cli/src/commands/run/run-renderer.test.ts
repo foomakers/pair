@@ -6,10 +6,11 @@ import {
   displayId,
   routeConsoleTo,
   type CardView,
+  ANSI_SEQUENCE,
 } from './run-renderer'
 
-/* eslint-disable no-control-regex */
-const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g
+const ANSI = ANSI_SEQUENCE
+const CURSOR_UP = new RegExp(`${String.fromCharCode(27)}\\[\\d+F`)
 const strip = (s: string) => s.replace(ANSI, '')
 
 class FakeOut extends EventEmitter {
@@ -29,9 +30,7 @@ class FakeOut extends EventEmitter {
   }
   /** What a terminal would show: the last frame's rows (after the last cursor-up + clear). */
   get screen() {
-    return strip(this.text.split(/\x1b\[\d+F/).at(-1)!)
-      .split('\n')
-      .filter(Boolean)
+    return strip(this.text.split(CURSOR_UP).at(-1)!).split('\n').filter(Boolean)
   }
 }
 

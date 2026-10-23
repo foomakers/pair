@@ -62,7 +62,9 @@ function stateText(card: CardView): string | undefined {
   return failed && card.reason ? `${card.status}: ${card.reason.slice(0, 60)}` : card.status
 }
 
-const visible = (text: string) => text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').length // eslint-disable-line no-control-regex
+/** An ANSI CSI sequence (built from the ESC code so no control character sits in a regex literal). */
+export const ANSI_SEQUENCE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[A-Za-z]`, 'g')
+const visible = (text: string) => text.replace(ANSI_SEQUENCE, '').length
 
 /** One card's line: icon · id · title · stage · PR · elapsed — the title shrinks first, then goes. */
 export function cardLine(card: CardView, options: LineOptions): string {
