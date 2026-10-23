@@ -1724,6 +1724,9 @@ async function driveStory(story) {
     return { story, status, reason: error.message, acceptedFindings: [], metrics: { dispatches: METRICS.dispatches.length, retries: METRICS.retries, redirects: METRICS.redirects, wallMs: 'unknown', tokens: 'unknown' }, durable: true }
   }
 }
+// US-573: one machine-readable `PAIR_EVENT` line per stage transition — `pair run` renders and audits it.
+const emitStage = (story, stage, pr) => log(`PAIR_EVENT ${JSON.stringify({ event: 'stage', card: String(story.id), stage, ...(Number.isInteger(pr) ? { pr } : {}) })}`)
+const stageLabel = next => (next.step === 'verify' ? 'review' : next.step === 'implement' || !(next.round >= 1) ? 'implement' : `fix ${next.round}/${MAX_FIX_ROUNDS}`)
 async function driveStoryInner(story) {
   const tag = `#${story.id}`
   const worktreePath = `${PIPELINE.worktreeRoot}/${story.id}`
@@ -1920,6 +1923,7 @@ async function driveStoryInner(story) {
   // exactly what `cycle-state.mjs`'s `deriveNext([], …, { entry: 'fresh' })` answers.
   // US-523: a Draft / refined-no-breakdown card is prepared (or parked) BEFORE the cycle's first stage; a PR entry never is.
   if (!resuming && AUTONOMY.preparing) {
+    emitStage(story, 'prepare', pr)
     const prep = await prepareStage(story, runDir())
     if (prep.outcome === 'escalated') return result('escalated', { stage: 'prepare', boundary: prep.boundary, conditions: prep.conditions ?? [], reason: prep.reason })
     if (prep.outcome === 'needs-human') return result('awaiting-human', { stage: 'prepare', reason: prep.reason ?? 'prepare-needs-human' })
@@ -1928,10 +1932,16 @@ async function driveStoryInner(story) {
   let next = resuming ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
   const seen = new Set()
   let redirectsInARow = 0
+  let shownStage
+  const showStage = label => {
+    if (label !== shownStage) emitStage(story, label, pr)
+    shownStage = label
+  }
   while (true) {
     if (next.step === 'done') {
       const ready = { reviewedHead: next.reviewedHead, verdict: next.verdict, round: next.round }
       if (!AUTONOMY.merging) return result('ready-for-merge', ready)
+      showStage('merge')
       return mergeStage({ story, runDirPath: runDir(), pr, tier: story.tier ?? cardTier, ready, result })
     }
     if (next.step === 'blocked') return blockedResult(next)
@@ -1962,6 +1972,7 @@ async function driveStoryInner(story) {
     // Silence is what kept three of those four rounds invisible.
     if (next.reconstruct?.fromHead)
       log(`${tag} ${next.phase}: rollback directive delivered — restoring ${next.reconstruct.paths.join(', ')} at ${next.reconstruct.fromHead}. It stands until \`rollbackTo\` is cleared from the policy.`)
+    showStage(stageLabel(next))
     let contractPending = false
     const dispatchStage = async () => {
       if (stage === 'prepare') return prepare(next)
