@@ -40,3 +40,6 @@ apps/website/scripts/landing-video/_login-closing.html
 
 # repo-local tools (scripts/dev/install-*.sh)
 .tools/
+
+# package-manual.sh temporary dts tsconfig (removed on exit; ignored if a killed run leaves it)
+apps/pair-cli/tsconfig.dts.json

@@ -60,6 +60,12 @@ jobs:
           pnpm --filter @pair/brand exec playwright install --with-deps chromium
           pnpm --filter @pair/website exec playwright install --with-deps chromium
 
+      # Same as ci.yml: tests that build fixture repos and commit (base sync, filesystem adapter) need an identity.
+      - name: Configure git identity
+        run: |
+          git config --global user.name "pair-ci"
+          git config --global user.email "pair-ci@users.noreply.github.com"
+
       - name: Run quality checks
         run: pnpm quality-gate
 

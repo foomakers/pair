@@ -225,7 +225,9 @@ if [ -f "$PKG_DIR/dist/cli.js" ]; then
   if [ "$DRY_RUN" = true ]; then
     echo "[dry-run] would create temporary tsconfig at $DTS_TSCONF and run dts-bundle-generator"
   else
-    # Create a temporary tsconfig tailored for dts-bundle-generator to avoid composite-project warnings
+    # Create a temporary tsconfig tailored for dts-bundle-generator to avoid composite-project warnings.
+    # Removed on any exit, a killed run included: a leftover makes the worktree dirty for the next stage.
+    trap 'rm -f "$DTS_TSCONF"' EXIT INT TERM
     cat > "$DTS_TSCONF" <<'JSON'
 {
   "extends": "./tsconfig.json",

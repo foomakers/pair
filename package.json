@@ -28,6 +28,7 @@
     "hygiene:check": "pnpm --filter @pair/dev-tools code-hygiene:check",
     "smoke-modes:check": "pnpm --filter @pair/dev-tools smoke-modes:check",
     "sync-version": "pnpm --filter @pair/dev-tools sync-version",
+    "changelog-version": "pnpm --filter @pair/dev-tools changelog-version",
     "docs:staleness": "pnpm --filter @pair/website docs:staleness",
     "skills:conformance": "pnpm --filter @pair/knowledge-hub skills:conformance",
     "mirrors:regenerate": "./scripts/regenerate-mirrors.sh",

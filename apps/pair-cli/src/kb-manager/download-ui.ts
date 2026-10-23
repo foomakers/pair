@@ -1,4 +1,5 @@
 import { logger } from '@pair/content-ops'
+import { buildGithubReleaseUrl } from './url-utils'
 
 function stripLeadingV(v: string): string {
   return v.startsWith('v') ? v.slice(1) : v
@@ -6,7 +7,8 @@ function stripLeadingV(v: string): string {
 
 export function announceDownload(version: string, url: string): void {
   const clean = stripLeadingV(version)
-  if (String(url).includes('github.com')) {
+  // Only the official release URL is known to carry `version`; any other URL (github.com included) is custom
+  if (url === buildGithubReleaseUrl(clean)) {
     logger.info(`KB not found, downloading v${clean} from GitHub`)
     return
   }

@@ -79,4 +79,33 @@ describe('announceDownload (#548 AC-9)', () => {
     expect(out).toContain('downloading from https://kb.example.com/kb.zip')
     expect(out).not.toMatch(/0\.4\.3|downloading v/)
   })
+
+  it('names no version for a custom URL on github.com that is not the official release', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const url =
+      'https://github.com/foomakers/pair/releases/download/v0.4.3/knowledge-base-0.4.3.zip'
+    announceDownload('0.5.1', url)
+    const out = log.mock.calls.map(c => String(c[0])).join('\n')
+    log.mockRestore()
+    expect(out).toContain(`downloading from ${url}`)
+    expect(out).not.toMatch(/downloading v/)
+  })
+
+  const platformCases = ['darwin', 'linux', 'win32']
+  it.each(platformCases)(
+    'classifies the official release URL the same on platform %s',
+    platform => {
+      const original = Object.getOwnPropertyDescriptor(process, 'platform')!
+      Object.defineProperty(process, 'platform', { value: platform })
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+      announceDownload(
+        '0.5.1',
+        'https://github.com/foomakers/pair/releases/download/v0.5.1/knowledge-base-0.5.1.zip',
+      )
+      const out = log.mock.calls.map(c => String(c[0])).join('\n')
+      log.mockRestore()
+      Object.defineProperty(process, 'platform', original)
+      expect(out).toContain('downloading v0.5.1 from GitHub')
+    },
+  )
 })
