@@ -236,7 +236,7 @@ describe('spawnIteration — idle timeout, not a wall-clock kill (US-573 AC5)', 
       idleTimeoutSeconds: 1,
     })
     expect(result).toMatchObject({ outcome: 'failed', cause: 'timed-out', stalled: true })
-    expect(result.detail).toBe('timed out (idle) at ENG-7/implement — no engine event for 1s')
+    expect(result.detail).toBe('timed out (idle) at ENG-7/implement: no engine event for 1s')
   }, 20000)
 
   it('the total cap applies only when given, and is reported as a timeout too', async () => {

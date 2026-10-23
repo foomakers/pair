@@ -176,7 +176,7 @@ tag:risk:red ⇒ Done
 max-iterations: 20
 ```
 
-**`## Stop Predicate`**: when an unattended run stops. `<selector> ⇒ <condition>` (selector: `root` / `tag:<label>` / `type:<issue-type>`; condition: a canonical macrostate and/or `has-tag:<label>`) plus a `max-iterations: <n>` backstop that always applies. Absent ⇒ `max-iterations: 1`, no predicate: a run advances exactly one iteration and stops.
+**`## Stop Predicate`**: when an unattended run stops. `<selector> ⇒ <condition>` (selector: `root` / `tag:<label>` / `type:<issue-type>`; condition: a canonical macrostate and/or `has-tag:<label>`) plus a `max-iterations: <n>` backstop that always applies, and an optional `idle-timeout: <seconds>`: how long `pair-cli run` waits with no engine event before stopping an iteration (default `1800`). Absent ⇒ `max-iterations: 1`, no predicate: a run advances exactly one iteration and stops.
 
 ```text
 ## Max Parallelism

@@ -88,7 +88,7 @@ function createWatchdog(
     kill()
   }
   const idleSeconds = input.idleTimeoutSeconds ?? DEFAULT_IDLE_TIMEOUT_SECONDS
-  const onIdle = stop(() => `timed out (idle)${where} — no engine event for ${idleSeconds}s`)
+  const onIdle = stop(() => `timed out (idle)${where}: no engine event for ${idleSeconds}s`)
   let idle = setTimeout(onIdle, idleSeconds * 1000)
   const cap =
     input.timeoutSeconds === undefined
