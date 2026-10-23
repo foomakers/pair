@@ -39,6 +39,20 @@ describe('run events — one typed source per engine stream (US-573 AC1)', () =>
     expect(events.at(-1)?.status).toBe('completed')
   })
 
+  // r0-3 (recorded live, claude 2.x, 2026-10-23): a background Workflow's log() never reaches
+  // `claude -p` stream-json; its agents' labels do, live, in system/task_progress.workflow_progress.
+  it('claude live stream: agent labels in task_progress.workflow_progress map to card-start + one stage per agent', async () => {
+    const { events } = await eventsOf('claude-live-workflow-progress.jsonl', 'claude')
+    expect(events.map(e => [e.event, e.card, e.stage])).toEqual([
+      ['card-start', '573', undefined],
+      ['stage', '573', 'implement'],
+      ['stage', '573', 'review'],
+      ['stage', '573', 'prepare'],
+      ['stage', '573', 'fix'],
+      ['stage', '573', 'merge'],
+    ])
+  })
+
   it('keeps a non-numeric card id unchanged and coerces a numeric one to its string', () => {
     expect(parseRunEvent('{"event":"card-start","card":"ENG-12"}')?.card).toBe('ENG-12')
     expect(parseRunEvent('{"event":"card-start","card":573}')?.card).toBe('573')

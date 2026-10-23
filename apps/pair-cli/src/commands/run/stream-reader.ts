@@ -1,5 +1,5 @@
 import type { EngineDefinition, TerminalEventRule } from './engines'
-import { eventBodyRuns, parseRunEvent, type RunEvent } from './run-events'
+import { eventBodyRuns, parseRunEvent, progressRunEvents, type RunEvent } from './run-events'
 
 /**
  * The JSONL terminal-event reader (US-451 T-7) — the ONLY thing that decides an iteration's
@@ -281,6 +281,8 @@ interface EventTally {
   loopEnd?: RunEvent
   /** Bodies relayed so far, in stream order — the history a re-quote is matched against. */
   readonly seen: string[]
+  /** Agents (and cards) already mapped from claude's `workflow_progress` (r0-3). */
+  readonly progress: Set<string>
 }
 
 /** The longest k such that the first k bodies of `next` repeat the last k of `seen`. */
@@ -321,6 +323,10 @@ function tallyRunEvents(
     tally.count++
     if (event.event === 'loop-start') tally.loopStarted = true
     if (event.event === 'loop-end') tally.loopEnd = event
+    onRunEvent?.(event)
+  }
+  for (const event of progressRunEvents(payload, tally.progress)) {
+    tally.count++
     onRunEvent?.(event)
   }
 }
@@ -384,7 +390,13 @@ export async function readIterationOutcome(
   onRunEvent: ((event: RunEvent) => void) | undefined = undefined,
 ): Promise<IterationResult> {
   let continueToken: string | undefined
-  const tally: EventTally = { count: 0, skipped: 0, loopStarted: false, seen: [] }
+  const tally: EventTally = {
+    count: 0,
+    skipped: 0,
+    loopStarted: false,
+    seen: [],
+    progress: new Set(),
+  }
 
   for await (const line of lines) {
     const trimmed = line.trim()

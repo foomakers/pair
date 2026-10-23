@@ -106,3 +106,54 @@ export function eventBodyRuns(payload: unknown, depth = 0): string[][] {
 
 /** Every `PAIR_EVENT` body carried by ONE decoded stream event, in order. */
 export const eventBodies = (payload: unknown): string[] => eventBodyRuns(payload).flat()
+
+/**
+ * r0-3 (recorded live, claude 2.x): a background Workflow's `log()` never reaches `claude -p`
+ * stream-json, so its `PAIR_EVENT` lines are mute there. Its agents' labels do stream, live, in
+ * `system/task_progress.workflow_progress` — `pair-implement-batch` names each stage agent
+ * `<step>:#<card> …` (`implement:#573`, `verify:#573 r1`). Every progress event repeats the whole
+ * list, so an agent is mapped once (keyed by `agentId`); a card's first agent opens it.
+ */
+const STAGE_OF_STEP: Readonly<Record<string, string>> = {
+  prepare: 'prepare',
+  validate: 'prepare',
+  implement: 'implement',
+  verify: 'review',
+  green: 'fix',
+  merge: 'merge',
+}
+const STAGE_LABEL = /^([a-z]+):#?([A-Za-z0-9._-]+)(?:\s|$)/
+
+/** The `workflow_progress` list of a claude `task_progress` event, or `[]` for any other event. */
+function progressEntries(payload: unknown): ReadonlyArray<Record<string, unknown> | null> {
+  if (typeof payload !== 'object' || payload === null) return []
+  const p = payload as Record<string, unknown>
+  if (p['type'] !== 'system' || p['subtype'] !== 'task_progress') return []
+  return Array.isArray(p['workflow_progress']) ? (p['workflow_progress'] as []) : []
+}
+
+/** An agent entry's `{ card, stage }` from its label, or `undefined` when the label names no stage. */
+function stageOfAgent(
+  entry: Record<string, unknown> | null,
+): { card: string; stage: string } | undefined {
+  if (entry?.['type'] !== 'workflow_agent' || typeof entry['label'] !== 'string') return undefined
+  const match = STAGE_LABEL.exec(entry['label'])
+  const stage = match ? STAGE_OF_STEP[match[1]!] : undefined
+  return match && stage !== undefined ? { card: match[2]!, stage } : undefined
+}
+
+export function progressRunEvents(payload: unknown, seen: Set<string>): RunEvent[] {
+  const events: RunEvent[] = []
+  for (const entry of progressEntries(payload)) {
+    const key = `agent:${String(entry?.['agentId'] ?? entry?.['index'])}`
+    const found = stageOfAgent(entry)
+    if (found === undefined || seen.has(key)) continue
+    seen.add(key)
+    if (!seen.has(`card:${found.card}`)) {
+      seen.add(`card:${found.card}`)
+      events.push({ event: 'card-start', card: found.card })
+    }
+    events.push({ event: 'stage', card: found.card, stage: found.stage })
+  }
+  return events
+}

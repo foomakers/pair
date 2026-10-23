@@ -1126,7 +1126,9 @@ workflow after its 10-minute wait ceiling.
 
 The workflows announce each run event as one `PAIR_EVENT {json}` log line (`loop-start`, `iteration`,
 `card-start`, `stage`, `card-end`, `loop-end`); the driver maps them to typed events, one source for
-the console, the audit and `--json`.
+the console, the audit and `--json`. With the `claude` engine a background workflow's log lines never
+reach the stream, so the driver reads the stage agents' labels (`implement:#573`, `verify:#573 r1`)
+from Claude Code's live `task_progress` events instead: each card still gets its line and stages.
 
 | Output            | What you get |
 | ----------------- | ------------ |
