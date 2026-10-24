@@ -16,15 +16,18 @@ import { readWorkflowMapping, type WorkflowMapping } from './workflow-mapping'
  * written.
  *
  * Fail-safes come from the same guideline: absent file or absent section ⇒ automation off
- * (empty eligibility), `max-iterations: 1`, parallelism `1`, audit `automation/loop-audit.md`.
+ * (empty eligibility), no iteration cap (US-576), parallelism `1`, audit `automation/loop-audit.md`.
  * A malformed value HALTs before any card is touched — a malformed policy is a policy that has
  * not been read.
  */
 
 export { POLICY_PATH } from './policy-sections'
 export const DEFAULT_AUDIT_LOCATION = 'automation/loop-audit.md'
-/** Absent stop-predicate section ⇒ exactly one iteration, never an unbounded run. */
-export const FAIL_SAFE_MAX_ITERATIONS = 1
+/**
+ * US-576: no `max-iterations` declared ⇒ no iteration cap — the loop runs until a natural stop (nothing eligible,
+ * every remaining card blocked or parked; each card still stops at its own gates). A declared cap still binds.
+ */
+export const NO_ITERATION_CAP = Number.POSITIVE_INFINITY
 export const FAIL_SAFE_MAX_PARALLELISM = 1
 
 /** `## Auto-Advance`'s fail-closed default: nothing pushes or merges unattended. */
@@ -104,7 +107,7 @@ export function readAutomationPolicy(fs: FileSystemService, projectRoot: string)
   if (!fs.existsSync(path)) {
     return {
       autoAdvance: AUTO_ADVANCE_OFF,
-      maxIterations: FAIL_SAFE_MAX_ITERATIONS,
+      maxIterations: NO_ITERATION_CAP,
       maxParallelism: FAIL_SAFE_MAX_PARALLELISM,
       auditLocation: DEFAULT_AUDIT_LOCATION,
       source: 'fail-safe defaults (policy file absent)',
@@ -315,7 +318,7 @@ function readStopPredicate(markdown: string): {
 } {
   const lines = sectionLines(markdown, 'Stop Predicate')
   if (lines === undefined || lines.length === 0) {
-    return { maxIterations: FAIL_SAFE_MAX_ITERATIONS }
+    return { maxIterations: NO_ITERATION_CAP }
   }
 
   let predicate: string | undefined
@@ -342,7 +345,7 @@ function readStopPredicate(markdown: string): {
 
   return {
     ...(predicate !== undefined && { predicate }),
-    maxIterations: maxIterations ?? FAIL_SAFE_MAX_ITERATIONS,
+    maxIterations: maxIterations ?? NO_ITERATION_CAP,
     ...(idleTimeoutSeconds !== undefined && { idleTimeoutSeconds }),
   }
 }

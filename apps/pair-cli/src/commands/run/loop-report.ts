@@ -1,7 +1,7 @@
 import { adoptionSelection } from './autonomy-policy'
 import { describeMergePosture, type AutomationPolicy } from './automation-policy'
 import type { AutonomyResolution } from './cycle-scripts'
-import { FAIL_SAFE_MAX_ITERATIONS } from './automation-policy'
+import { NO_ITERATION_CAP } from './automation-policy'
 import { DEFAULT_WATCH_INTERVAL, type RunCommandConfig } from './parser'
 import {
   DEFAULT_RETRY_BUDGET,
@@ -76,6 +76,8 @@ export function resolveSelection(
   }
 }
 
+const capText = (cap: number): string => (cap === NO_ITERATION_CAP ? 'none' : String(cap))
+
 /** The effective iteration cap and what bound it (narrow-only: a flag never widens the policy cap). */
 function resolveCap(config: RunCommandConfig, policy: AutomationPolicy): LoopValues['cap'] {
   const policyCap = policy.maxIterations
@@ -88,12 +90,12 @@ function resolveCap(config: RunCommandConfig, policy: AutomationPolicy): LoopVal
       bound: `min(--max-iterations ${config.maxIterations}, ## Stop Predicate max-iterations ${policyCap})`,
     }
   }
-  const failSafe = policy.stopPredicate === undefined && policyCap === FAIL_SAFE_MAX_ITERATIONS
   return {
     value: policyCap,
-    bound: failSafe
-      ? `fail-safe ${policyCap} — no \`## Stop Predicate\` declared (--max-iterations can only narrow it)`
-      : `## Stop Predicate max-iterations ${policyCap}`,
+    bound:
+      policyCap === NO_ITERATION_CAP
+        ? 'no `max-iterations` declared: runs to a natural stop (--max-iterations can narrow it)'
+        : `## Stop Predicate max-iterations ${policyCap}`,
   }
 }
 
@@ -151,7 +153,7 @@ export function describeLoopValues(
     'Loop (watch loop — each iteration re-selects; precedence: argument > adoption > KB default):',
     `  watch: ${show(values.watch)}`,
     `  interval: ${show(values.interval)}${values.watch.value === 'on' ? '' : ' — used only under --watch'}`,
-    `  max-iterations: ${values.cap.value} — ${values.cap.bound}${values.watch.value === 'on' ? '; idle polls count' : ''}`,
+    `  max-iterations: ${capText(values.cap.value)} — ${values.cap.bound}${values.watch.value === 'on' ? '; idle polls count' : ''}`,
     `  parallel: --parallel ${requested} · ## Max Parallelism ${maxParallelism} (the ceiling)`,
     `  root: ${show(selection.root)}`,
     `  filter: ${show(selection.filter)}`,
@@ -245,7 +247,7 @@ export function loopStartFields(
     ['status', selection.status?.value ?? '(none)'],
     ['watch', values.watch.value],
     ['interval', values.interval.value],
-    ['max-iterations', String(values.cap.value)],
+    ['max-iterations', capText(values.cap.value)],
     ['parallel', String(requested)],
     ['max-parallelism', String(effectiveParallelCeiling)],
   ]

@@ -193,7 +193,8 @@ function validateSelector(selectorRaw) {
 
 function parseStopPredicate(policyText) {
   const body = sectionBody(policyText, 'Stop Predicate')
-  if (body === null || body.trim() === '') return { predicate: null, maxIterations: 1 } // fail-safe default
+  // US-576: no `max-iterations` declared ⇒ no cap — the loop runs to a natural stop (nothing eligible / all parked).
+  if (body === null || body.trim() === '') return { predicate: null, maxIterations: Infinity }
   const lines = body.split('\n').map(l => l.trim()).filter(Boolean)
   let predicate = null
   let maxIterations = null
@@ -227,7 +228,7 @@ function parseStopPredicate(policyText) {
     }
     HALT(`\`## Stop Predicate\` — line \`${line}\` matches neither \`<selector> ⇒ <condition>\` nor \`max-iterations: <n>\`.`)
   }
-  return { predicate, maxIterations: maxIterations ?? 1 }
+  return { predicate, maxIterations: maxIterations ?? Infinity }
 }
 
 function evaluateStopPredicate(predicate, boardSnapshot) {
@@ -724,7 +725,8 @@ function parsePolicyOrHalt(policyText, tagProjectionFamily, eligibility) {
 // documented on the skill and silently ignored here).
 function applyPredicateOverride(stop, predicateOverride) {
   if (!predicateOverride) return stop
-  const parsed = parseStopPredicate(`## Stop Predicate\n\n${predicateOverride}\nmax-iterations: ${stop.maxIterations}`)
+  const cap = Number.isFinite(stop.maxIterations) ? `\nmax-iterations: ${stop.maxIterations}` : ''
+  const parsed = parseStopPredicate(`## Stop Predicate\n\n${predicateOverride}${cap}`)
   return parsed
 }
 
@@ -734,7 +736,7 @@ const resolvedFilter = typeof args?.policyText === 'string' && args.policyText.t
 const policy = parsePolicyOrHalt(args?.policyText, args?.tagProjectionFamily, resolvedFilter)
 policy.stop = applyPredicateOverride(policy.stop, args?.predicateOverride)
 log(`Eligibility filter: ${policy.eligibility.value}`)
-emit('loop-start', { auditLocation: policy.auditLocation, maxIterations: policy.stop.maxIterations, ...(policy.stop.predicate ? { predicate: `${policy.stop.predicate.selector} ⇒ ${policy.stop.predicate.condition}` } : {}) })
+emit('loop-start', { auditLocation: policy.auditLocation, maxIterations: Number.isFinite(policy.stop.maxIterations) ? policy.stop.maxIterations : 'none', ...(policy.stop.predicate ? { predicate: `${policy.stop.predicate.selector} ⇒ ${policy.stop.predicate.condition}` } : {}) })
 
 // Review M8 — audit-based resume: a killed-and-restarted run reads its OWN
 // prior audit file (rather than re-deriving a separate checkpoint store) and
