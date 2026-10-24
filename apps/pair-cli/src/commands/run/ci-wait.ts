@@ -18,6 +18,11 @@ export interface CiWaitOptions {
   readonly wait?: Wait
   /** Injectable clock (ms) for tests. */
   readonly now?: () => number
+  /**
+   * US-575 AC7: asked when `check` reports FAILED CI (`ciFailed`): request a re-run of the failed jobs and
+   * answer whether one was requested (the first is free, later ones spend `autoRecoveryRounds`). Absent ⇒ none.
+   */
+  readonly rerun?: () => boolean
 }
 
 const positive = (raw: string | undefined, fallback: number): number => {
@@ -48,7 +53,12 @@ export async function checkWithCiWait(
   const { capMs, intervalMs, now, sleep } = resolveOptions(options, wait)
   const start = now()
   let result = check(true)
-  while (result.mergeAllowed !== true && result['ciPending'] === true) {
+  const reran = (): boolean => {
+    if (result['ciFailed'] !== true || options.rerun?.() !== true) return false
+    notice('  Merge: CI failed — re-run of the failed jobs requested')
+    return true
+  }
+  while (result.mergeAllowed !== true && (result['ciPending'] === true || reran())) {
     const remaining = capMs - (now() - start)
     if (remaining <= 0) return parkOnce(result, check)
     const step = Math.min(intervalMs, remaining)

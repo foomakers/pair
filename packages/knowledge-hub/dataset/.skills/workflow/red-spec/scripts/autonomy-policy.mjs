@@ -18,7 +18,8 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-export const KEYS = ['filter', 'assignee', 'status', 'root', 'until', 'prepare', 'merge']
+// US-575: `autoRecoveryRounds` / `maxFixRounds` — the run's two budgets before a card is parked `needs-human`.
+export const KEYS = ['filter', 'assignee', 'status', 'root', 'until', 'prepare', 'merge', 'autoRecoveryRounds', 'maxFixRounds']
 export const UNTIL_VALUES = ['ready', 'pr', 'merged']
 export const GATE_MODES = ['always', 'never', 'when']
 export const DECISIONS = ['proceed', 'await-human', 'escalate', 'stop-at-target']
@@ -130,6 +131,11 @@ export function parseValue(key, raw) {
     case 'until': {
       const v = String(raw ?? '').trim()
       return UNTIL_VALUES.includes(v) ? { value: v } : { errors: [err('until', `${JSON.stringify(v)} is not one of ${UNTIL_VALUES.join(' | ')}`)] }
+    }
+    case 'autoRecoveryRounds':
+    case 'maxFixRounds': {
+      const v = String(raw ?? '').trim()
+      return /^\d{1,3}$/.test(v) ? { value: Number(v) } : { errors: [err(key, `${JSON.stringify(v)} is not a whole number of rounds (0 parks at once)`)] }
     }
     case 'prepare':
     case 'merge':
@@ -263,6 +269,9 @@ const DEFAULTS = {
   until: 'pr',
   prepare: { mode: 'always', has: [], lacks: [] },
   merge: { mode: 'always', has: [], lacks: [] },
+  // Same values as cycle-state.mjs POLICY_DEFAULTS (a parity test pins them).
+  autoRecoveryRounds: 5,
+  maxFixRounds: 10,
 }
 
 export const SURFACES = ['unattended', 'interactive']
@@ -310,7 +319,7 @@ export function resolvePolicy({ args = {}, adoptionText = '', surface = 'unatten
     const v = e.value === undefined ? (key === 'filter' || key === 'status' ? '(all)' : '(none)') : display(key, e.value)
     return `${key}: ${v} (${e.source})`
   }).concat(notes)
-  const policy = { until: effective.until.value, merge: normalizeGate(effective.merge.value), prepare: normalizeGate(effective.prepare.value), ...(legacyActive ? { legacyTiers: legacyMerge.legacyTiers } : {}) }
+  const policy = { until: effective.until.value, merge: normalizeGate(effective.merge.value), prepare: normalizeGate(effective.prepare.value), autoRecoveryRounds: effective.autoRecoveryRounds.value, maxFixRounds: effective.maxFixRounds.value, ...(legacyActive ? { legacyTiers: legacyMerge.legacyTiers } : {}) }
   // `active`: the run declared its own target or merge gate (argument or `## Autonomy`). Legacy-only and
   // nothing-declared runs are NOT active — consumers keep today's code path, byte for byte.
   const active = ['until', 'merge'].some(k => effective[k].source === 'argument' || effective[k].source === 'adoption')

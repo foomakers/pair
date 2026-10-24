@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'fs'
 import { appendAuditLine, type AuditAppender } from './dispatch-audit'
 import type { RunEvent } from './run-events'
 
@@ -60,5 +61,69 @@ export function createRunAudit(input: RunAuditInput): RunAudit {
       ended = true
       write('loop-end', null, null, { status, reason })
     },
+  }
+}
+
+/** US-575 AC9: a card an earlier run of this audit ended on a durable terminal, as that run recorded it. */
+export interface PreviousExclusion {
+  readonly card: string
+  readonly reason: string
+  readonly runId: string
+  readonly date: string
+}
+
+const DURABLE_END = (status: string): boolean =>
+  status.startsWith('failed-') || status === 'needs-human' || status === 'escalate'
+
+/**
+ * Every card whose LATEST `card-end` in the audit is a durable terminal (`failed-*`, `needs-human`, `escalate`). Listed
+ * at the start of a new run and never inherited: the run drives them again and `resolve` re-evaluates each one (a
+ * failure recorded on heads that since moved is stale). Lines that are not this audit's JSON events are skipped.
+ */
+export function previousExclusions(path: string): PreviousExclusion[] {
+  if (!existsSync(path)) return []
+  const latest = new Map<string, PreviousExclusion | undefined>()
+  for (const line of readFileSync(path, 'utf-8').split('\n')) {
+    const end = cardEndOf(line)
+    if (end !== undefined) latest.set(end.card, end.durable ? end.exclusion : undefined)
+  }
+  return [...latest.values()].filter((e): e is PreviousExclusion => e !== undefined)
+}
+
+interface AuditLine {
+  ts?: string
+  runId?: string
+  card?: string
+  event?: string
+  detail?: { status?: string; reason?: string }
+}
+
+/** One audit line as a `card-end` (durable or not), or `undefined` for any other line. */
+function cardEndOf(
+  line: string,
+): { card: string; durable: boolean; exclusion: PreviousExclusion } | undefined {
+  let entry: AuditLine
+  try {
+    entry = JSON.parse(line) as AuditLine
+  } catch {
+    return undefined
+  }
+  if (entry.event !== 'card-end' || typeof entry.card !== 'string') return undefined
+  const status = String(entry.detail?.status ?? '')
+  return {
+    card: entry.card,
+    durable: DURABLE_END(status),
+    exclusion: exclusionOf(entry.card, status, entry),
+  }
+}
+
+/** The exclusion as listed: a `needs-human: <reason>` keeps its reason, any other terminal its status. */
+function exclusionOf(card: string, status: string, entry: AuditLine): PreviousExclusion {
+  const reason = entry.detail?.reason?.startsWith('needs-human') ? entry.detail.reason : status
+  return {
+    card,
+    reason,
+    runId: String(entry.runId ?? '?'),
+    date: String(entry.ts ?? '').slice(0, 10),
   }
 }

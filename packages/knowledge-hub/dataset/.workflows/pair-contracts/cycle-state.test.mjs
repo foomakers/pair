@@ -462,6 +462,37 @@ test('resolve: remediation round — prepare(g1) → validate+seal → green →
   assert.equal(r.next.prior, 'r0-review-phase')
 })
 
+test('resolve: a GREEN that reports contractGaps (a gate rejects a path outside fixScope) routes a revision of its group, never a dead stop', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1')] })
+  const plan = { groups: [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [] }
+  redSpec(dir, 'r1-g1', { plan, groupId: 'r1-g1' }, { predecessor: 'r0-review-phase' })
+  redVerify(dir, 'r1-g1', {}, { predecessor: 'r1-g1-red-spec' })
+  handoff(dir, 'r1-g1', 'green-fix', { fixed: false, needsHumanDecision: false, outputHead: SHA('d'), evidenceLedger: [], reason: 'contract-gap', contractGaps: ['pre-push gate: config.json must exclude the new test file — outside allowedPaths'] }, { predecessor: 'r1-g1-red-verify' })
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(pick(r.next, 'step', 'mode', 'phase', 'revision', 'round'), { step: 'prepare', mode: 'revision', phase: 'r1-g1-rev2', revision: 2, round: 1 })
+  assert.equal(r.next.group.groupId, 'r1-g1')
+  assert.equal(r.next.group.widen, true, 'a gap revision may widen its scope by the paths the gap requires')
+  assert.equal(r.next.contract.snapshot, SHA('b'))
+  assert.equal(r.next.base, SHA('d'), 'the revision starts where the GREEN left the worktree')
+  assert.deepEqual(r.next.findings.map(f => [f.kind, f.groupId, f.blocking]), [['contract-gap', 'r1-g1', true]])
+  assert.match(r.next.findings[0].description, /outside allowedPaths/)
+  // the revision's preparation refused as stale (its head was not the worktree's): the retry is re-derived from the GREEN, same base
+  handoff(dir, 'r1-g1-rev2', 'red-spec', { status: 'stale', mode: 'revision', reason: 'worktree HEAD is not $head', inputHead: SHA('c') }, { predecessor: 'r1-g1-green-fix' })
+  const retry = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next
+  assert.deepEqual(pick(retry, 'step', 'mode', 'phase', 'attempt', 'base'), { step: 'prepare', mode: 'revision', phase: 'r1-g1-rev2', attempt: 2, base: SHA('d') })
+  assert.equal(retry.contract.snapshot, SHA('b'))
+  assert.equal(retry.findings[0].kind, 'contract-gap')
+  assert.equal(retry.group.widen, true)
+  // control: a GREEN that failed with no gap is still the failed-fix stop
+  const other = runDir().dir
+  review(other, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1')] })
+  redSpec(other, 'r1-g1', { plan, groupId: 'r1-g1' }, { predecessor: 'r0-review-phase' })
+  redVerify(other, 'r1-g1', {}, { predecessor: 'r1-g1-red-spec' })
+  handoff(other, 'r1-g1', 'green-fix', { fixed: false, needsHumanDecision: false, outputHead: SHA('d'), evidenceLedger: [] }, { predecessor: 'r1-g1-red-verify' })
+  assert.equal(resolve({ dir: other, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 }).next.reason, 'failed-fix')
+})
+
 test('resolve: a plan group keyed `findingIds` hands its findings to the next prepare AND its green (later groups are never empty)', () => {
   const { dir } = runDir()
   review(dir, 'r0', { readiness: { ready: false, remoteHead: SHA('c') }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1'), finding('r0-2'), finding('r0-4', { location: 'src/b.ts:4' })] })

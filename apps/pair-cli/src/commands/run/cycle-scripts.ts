@@ -110,6 +110,8 @@ export interface CycleResolveOptions {
   readonly story?: string
   readonly runsRoot?: string
   readonly head?: string
+  /** US-575: the base branch's remote head — a durable failure recorded on another base is stale. */
+  readonly baseHead?: string
   readonly inputs?: string
   readonly acHash?: string
   /** US-490: the card's current `risk:*` label — with `policy.autoAdvance.tiers`, what lets `resolve` offer `merge`. */
@@ -193,8 +195,55 @@ export interface CyclePacketResult {
   readonly [key: string]: unknown
 }
 
+/** US-575: `cycle-state.mjs recover` — one round of `autoRecoveryRounds`, or the `needs-human` park once spent. */
+export interface CycleRecoveryResult {
+  readonly allowed: boolean
+  readonly round?: number
+  readonly budget?: number
+  readonly next?: { readonly step: string; readonly reason?: string; readonly detail?: string }
+}
+
+/** US-575: one gate of the merge-time tier gate set, as the gate stage recorded it. */
+export interface GateRecord {
+  readonly name: string
+  readonly ok: boolean
+  readonly lastLines?: string
+}
+
+/** US-575: `cycle-state.mjs base-sync` — the mechanical merge of the base into the story branch. */
+export interface BaseSyncResult {
+  readonly synced: boolean
+  readonly reason?: string
+  readonly needsHuman?: boolean
+  readonly detail?: string
+  readonly head?: string
+  readonly conflicts?: readonly { readonly path: string; readonly side: string }[]
+}
+
+/** US-575: `cycle-state.mjs prereq-state` — the card's prerequisites, read through the bound PM adapter. */
+export interface PrereqState {
+  readonly blocked: boolean
+  readonly prerequisites: readonly {
+    readonly id: string
+    readonly state: string
+    readonly reason?: string
+  }[]
+  readonly blockedBy?: { readonly id: string; readonly reason: string }
+}
+
 export interface CycleScriptsBridge {
   resolve(options: CycleResolveOptions): CycleResolveResult
+  recover(options: {
+    dir: string
+    kind: 'gate-retry' | 'base-sync' | 'ci-rerun' | 'worktree-clean' | 'stage-retry'
+    detail: string
+    policy: Record<string, unknown>
+  }): CycleRecoveryResult
+  gateRed(options: { dir: string; reviewedHead: string; gates: readonly GateRecord[] }): {
+    readonly recorded: boolean
+  }
+  baseSync(options: { cwd: string; base: string; story: string }): BaseSyncResult
+  prereqState(options: { story: string; dir?: string }): PrereqState
   worktree(options: CycleWorktreeOptions): CycleWorktreeResult
   /** `cycle-merge.mjs check`: conditions 1-5 re-read live; a failure PARKS the card. */
   mergeCheck(options: CycleMergeOptions): CycleMergeResult
@@ -250,6 +299,9 @@ export interface AutonomyResolution {
       readonly lacks: readonly string[]
     }
     readonly legacyTiers?: readonly string[]
+    /** US-575: the run's budgets (`## Autonomy`, KB default 5 / 10). */
+    readonly autoRecoveryRounds?: number
+    readonly maxFixRounds?: number
   }
   /** Per-key effective value and the source that won (argument | adoption | default | translated). */
   readonly effective?: Readonly<
@@ -424,6 +476,7 @@ function resolveArgs(options: CycleResolveOptions): ScriptArgs {
       ['story', options.story],
       ['runsRoot', options.runsRoot],
       ['head', options.head],
+      ['baseHead', options.baseHead],
       ['inputs', options.inputs],
       ['acHash', options.acHash],
       ['tier', options.tier],
@@ -590,6 +643,41 @@ function prepareMethods(
  * resolves the repository from its cwd, so a script run from anywhere else hashes another
  * repository's issue. Absent ⇒ this process's cwd (the bridge's own unit tests).
  */
+/** `cycle-state.mjs resolve`, and US-575's auto-recovery commands (budget, gate-red record, base sync, prerequisite state). */
+function stateMethods(
+  runScript: (script: string, cmd: string, args: ScriptArgs) => unknown,
+  cycleStatePath: string,
+): Pick<CycleScriptsBridge, 'resolve' | 'recover' | 'gateRed' | 'baseSync' | 'prereqState'> {
+  return {
+    resolve: options =>
+      runScript(cycleStatePath, 'resolve', resolveArgs(options)) as CycleResolveResult,
+    recover: o =>
+      runScript(cycleStatePath, 'recover', [
+        ['dir', o.dir],
+        ['kind', o.kind],
+        ['detail', o.detail],
+        ['policy', JSON.stringify(o.policy)],
+      ]) as CycleRecoveryResult,
+    gateRed: o =>
+      runScript(cycleStatePath, 'gate-red', [
+        ['dir', o.dir],
+        ['reviewedHead', o.reviewedHead],
+        ['gates', JSON.stringify(o.gates)],
+      ]) as { recorded: boolean },
+    baseSync: o =>
+      runScript(cycleStatePath, 'base-sync', [
+        ['cwd', o.cwd],
+        ['base', o.base],
+        ['story', o.story],
+      ]) as BaseSyncResult,
+    prereqState: o =>
+      runScript(cycleStatePath, 'prereq-state', [
+        ['story', o.story],
+        ...optional([['dir', o.dir]]),
+      ]) as PrereqState,
+  }
+}
+
 export function createCycleScriptsBridge(
   location: CycleScriptsLocation,
   cwd?: string,
@@ -600,8 +688,7 @@ export function createCycleScriptsBridge(
     runScriptIn(script, cmd, args, cwd)
 
   return {
-    resolve: options =>
-      runScript(cycleStatePath, 'resolve', resolveArgs(options)) as CycleResolveResult,
+    ...stateMethods(runScript, cycleStatePath),
     worktree: options =>
       runScript(cycleDispatchPath, 'worktree', [
         ['main', options.main],
