@@ -152,6 +152,14 @@ A stage dispatched when another step is due returns `{ status: "redirect", next 
 - **Moved head or changed relevant inputs** ⇒ the prior findings plus the delta and its
   affected boundaries are re-validated (`re-review`), never a fresh full pass; an unrelated card
   edit invalidates nothing.
+- **Auto-recovery** (US-575) ⇒ a `failed-preparation` / `failed-implement` / `failed-custody`
+  is keyed by the PR and base heads it was first observed on (`resolve --head --baseHead`,
+  recorded in the run directory's `recovery.json`); once either moved it is stale and the step is
+  re-derived. `cycle-state.mjs recover` spends one `autoRecoveryRounds` round (gate re-run, base
+  sync, CI re-run) or answers `needs-human` once the budget is spent; `gate-red` records the
+  merge-time gates that stayed red, which `resolve` turns into a remediation of the approved card;
+  `base-sync` merges the base by ownership with a `Pair-Base-Sync` trailer `verify-chain` checks;
+  `prereq-state` reads a card's prerequisites through the PM adapter, fail closed.
 - **An approved witness fails on production** ⇒ back to `green-fix` on the same seal, once; a
 second failure is `failed-fix`. **A genuine contract gap** ⇒ `red-spec` revises only the affected group (`r<n>-g<k>-rev<m>`), stable row ids kept, the changed rows re-validated and sealed as a successor snapshot; `verify-chain` treats the earlier seal as history.
 
@@ -165,7 +173,7 @@ comment each PER RUN, keyed by a hidden marker that carries the run id (`<!-- pa
 
 The scope-decision packet stays PR-scoped: its `sc-` ids and the maintainer's answer outlive cycles.
 - **Statuses** a caller may see: `ready-for-merge` (only with a 40-hex `reviewedHead` and a
-`verdict`), `merged`, `awaiting-human`, `escalated` (an autonomy gate condition fired, distinct from the review's `escalate`), `target-ready`, `escalate`, `failed-preparation`, `failed-contract`, `failed-seal`, `failed-implement`, `failed-fix`, `failed-verify`, `failed-custody`, `failed-resume`, `incompatible`, and four added in `4.0.0`: `awaiting-scope-decision` (quality converged, one or more scope proposals still pending a human decision), `failed-publication` (the final summary could not be confirmed, retry publication only, quality evidence stays intact), `interrupted` and `abandoned` (an explicit developer abandonment).
+`verdict`), `merged`, `awaiting-human`, `escalated` (an autonomy gate condition fired, distinct from the review's `escalate`), `target-ready`, `escalate`, `failed-preparation`, `failed-contract`, `failed-seal`, `failed-implement`, `failed-fix`, `failed-verify`, `failed-custody`, `failed-resume`, `needs-human` (a recovery budget spent, `4.0.1`), `incompatible`, and four added in `4.0.0`: `awaiting-scope-decision` (quality converged, one or more scope proposals still pending a human decision), `failed-publication` (the final summary could not be confirmed, retry publication only, quality evidence stays intact), `interrupted` and `abandoned` (an explicit developer abandonment).
 
 `pair-loop` halts on every one but the first.
 

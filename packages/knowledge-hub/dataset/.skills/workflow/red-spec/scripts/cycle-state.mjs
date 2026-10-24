@@ -10,9 +10,20 @@
 //
 //   node <skill dir>/scripts/cycle-state.mjs resolve --dir <run/story dir> --workflowVersion <v>
 //        --policy '{"maxFixRounds":3,"redRepairs":1,"greenRetries":1,"reviewers":1}' --entry fresh|pr
-//        [--pr <n>] [--head <remote 40-hex>] [--inputs <digest>] [--acHash <digest>]
+//        [--pr <n>] [--head <remote 40-hex>] [--baseHead <base remote 40-hex>] [--inputs <digest>] [--acHash <digest>]
 //        [--runsRoot <.pair/working/runs>] [--story <id>]
-//     → { status: empty | in-progress | completed | blocked | incompatible | invalid | other-run, next, ... }
+//     → { status: empty | in-progress | completed | blocked | incompatible | invalid | other-run, next, recovery, ... }
+//     US-575: with --head/--baseHead a durable failure is keyed by the heads it was first seen on (recovery.json) and
+//     re-derived once either moved; a terminal review on a head that is no longer the PR head re-verifies.
+//
+//   node … recover --dir <dir> --kind gate-retry|base-sync|ci-rerun --detail <text> [--policy <json>]
+//     → { allowed, round, budget } | { allowed: false, next: { step: blocked, reason: needs-human, budget: autoRecoveryRounds } }
+//   node … gate-red --dir <dir> --reviewedHead <40-hex> --gates '[{name, ok, lastLines}]'
+//     → { recorded }   the approved card's next resolve is a remediation with the failing gates as findings
+//   node … base-sync --cwd <story worktree> --base <ref> --story <id> [--owned '<json paths>']
+//     → { synced, conflicts: [{path, side}] } | { synced: false, needsHuman: true, sealedConflicts } | { reason: up-to-date }
+//   node … prereq-state --story <id> [--dir <run/story dir>]
+//     → { blocked, prerequisites: [{id, state: merged|open|parked|unknown, reason}], blockedBy? }   fail closed
 //
 //   node … publish --dir <dir> --file <complete draft.json> --phase <p> --skill <s> --workflowVersion <v>
 //        [--predecessor <phase>-<skill>] [--attempt <n>] [--pr <n>]
