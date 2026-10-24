@@ -16,7 +16,6 @@ risk:green
 ## Stop Predicate
 
 tag:risk:red ⇒ Done
-max-iterations: 20
 
 ## Max Parallelism
 

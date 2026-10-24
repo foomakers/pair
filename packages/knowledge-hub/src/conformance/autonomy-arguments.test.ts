@@ -34,6 +34,7 @@ const CONSUMERS: readonly Consumer[] = [
     name: 'pair-cli run (metadata)',
     file: join(REPO_ROOT, 'apps/pair-cli/src/commands/run/metadata.ts'),
     names: [
+      '--preset <full|escalate-red|supervised|custom>',
       '--filter <tag>',
       '--assignee <login|@me>',
       '--status <macrostates>',
@@ -90,14 +91,15 @@ describe('US-521 T-9: one vocabulary across the autonomy consumers', () => {
   it('every consumer states the SAME precedence sentence, owned by the shared script', async () => {
     const { PRECEDENCE_SENTENCE } = await script()
     expect(PRECEDENCE_SENTENCE).toMatch(
-      /argument > adoption .* > KB default .* printed with its source/,
+      /argument > argument preset > explicit adoption key .* > adoption preset > KB default .* printed with its source/,
     )
     for (const { name, file } of CONSUMERS) expect(read(file), name).toContain(PRECEDENCE_SENTENCE)
   })
 
-  it('the script’s key list is exactly the nine names the KB documents (US-575: the two budgets)', async () => {
+  it('the script’s key list is exactly the ten names the KB documents (US-575: the two budgets; US-576: preset)', async () => {
     const { KEYS } = await script()
     expect(KEYS).toEqual([
+      'preset',
       'filter',
       'assignee',
       'status',
@@ -119,7 +121,7 @@ describe('US-521 T-9: one vocabulary across the autonomy consumers', () => {
       '.claude/workflows/pair-loop.js',
     ]) {
       const text = read(join(REPO_ROOT, rel))
-      expect(text, rel).toContain('Precedence: argument > adoption')
+      expect(text, rel).toContain('Precedence: argument > argument preset > explicit adoption key')
     }
   })
 })
@@ -205,8 +207,8 @@ describe('US-521 T-3: the KB examples are parsed by the shared script', () => {
       join(DATASET, '.pair/knowledge/guidelines/collaboration/automation/automation-policy.md'),
     )
     expect(doc).toContain('| `## Eligibility` `<label>` | `filter: <label>` |')
-    expect(doc).toContain('| `## Auto-Advance` `(none)` | `merge: always` |')
-    expect(doc).toContain('`merge: when; lacks: <tier>`')
+    expect(doc).toContain('| `## Auto-Advance` `(none)` | `merge: hold-always` |')
+    expect(doc).toContain('`merge: hold-when; lacks: <tier>`')
     const t = parse(
       '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n',
     ) as unknown as {
@@ -226,5 +228,60 @@ describe('US-521 T-3: the KB examples are parsed by the shared script', () => {
     const rel = '.pair/knowledge/guidelines/collaboration/automation/automation-policy.md'
     for (const path of [join(DATASET, rel), join(REPO_ROOT, rel)])
       expect(read(path)).toContain('## Autonomy — selection, target and gates')
+  })
+})
+
+// US-576 — the gate vocabulary is `hold-always | hold-never | hold-when`. The bare `always | never | when` are
+// deprecated aliases the script still accepts; no shipped doc, skill, template or prompt teaches them any more.
+describe('US-576: the gate vocabulary is hold-*, everywhere it is taught', () => {
+  const walk = (d: string, ext: RegExp): string[] =>
+    readdirSync(d, { withFileTypes: true }).flatMap(e =>
+      e.isDirectory()
+        ? e.name === 'node_modules'
+          ? []
+          : walk(join(d, e.name), ext)
+        : ext.test(e.name)
+          ? [join(d, e.name)]
+          : [],
+    )
+  const TAUGHT = [
+    ...walk(join(DATASET, '.skills'), /\.md$/),
+    ...walk(join(DATASET, '.pair/knowledge'), /\.md$/),
+    ...walk(join(DATASET, 'plugin'), /\.md$/),
+    ...walk(join(DATASET, '.workflows'), /^pair-[a-z-]+\.js$/),
+    // the v0.4→v0.5 migration page records history as it was written
+    ...walk(join(REPO_ROOT, 'apps/website/content/docs'), /\.mdx$/).filter(
+      f => !f.includes('/migrations/'),
+    ),
+    join(REPO_ROOT, 'apps/pair-cli/src/commands/run/metadata.ts'),
+  ]
+  const BARE = [
+    /\b(?:prepare|merge)(?::\s?|=)(?:always|never|when)\b(?!-)/,
+    /<always\\?\|never/,
+    /`always` \\?\| `never`/,
+    /(?<![\w-])when; (?:has|lacks):/,
+  ]
+
+  it.each(TAUGHT.map(f => [f.slice(REPO_ROOT.length + 1), f]))(
+    '%s teaches no bare gate value',
+    (_rel, file) => {
+      const offending = read(file)
+        .split('\n')
+        .filter(line => !/deprecated/i.test(line))
+        .filter(line => BARE.some(re => re.test(line)))
+      expect(offending).toEqual([])
+    },
+  )
+
+  it('the guideline and the CLI reference document the deprecated aliases and the presets', () => {
+    const guideline = read(
+      join(DATASET, '.pair/knowledge/guidelines/collaboration/automation/automation-policy.md'),
+    )
+    expect(guideline).toMatch(/`always \| never \| when` are deprecated aliases/)
+    for (const preset of ['full', 'escalate-red', 'supervised', 'custom'])
+      expect(guideline, preset).toContain(`| \`${preset}\``)
+    expect(read(join(REPO_ROOT, 'apps/website/content/docs/reference/cli/commands.mdx'))).toContain(
+      '`--preset <name>`',
+    )
   })
 })

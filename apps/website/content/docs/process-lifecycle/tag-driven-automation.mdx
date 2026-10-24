@@ -30,7 +30,7 @@ until: pr
 - No file, or no filter: every open card is a candidate for the drivers that take an explicit root; nothing runs unattended until a project declares `## Autonomy`.
 - The tier-to-gate and tier-to-review policy is not restated here; it stays in the [quality model](/docs/reference/quality-model).
 
-**Legacy sections.** Projects written for v0.4 may still carry `## Eligibility` (one label) and `## Auto-Advance` (`(none)` or a tier). `autonomy-policy.mjs` translates them: `## Eligibility` becomes `filter`, `## Auto-Advance` becomes the `merge` gate (`(none)` is `always`, a tier is `when; lacks: <tier>`). They keep working; a `## Autonomy` section that contradicts them is refused. New projects write `## Autonomy` only. Every key: [Adoption settings](/docs/reference/adoption-settings#techautomationmd).
+**Legacy sections.** Projects written for v0.4 may still carry `## Eligibility` (one label) and `## Auto-Advance` (`(none)` or a tier). `autonomy-policy.mjs` translates them: `## Eligibility` becomes `filter`, `## Auto-Advance` becomes the `merge` gate (`(none)` is `hold-always`, a tier is `hold-when; lacks: <tier>`). They keep working; a `## Autonomy` section that contradicts them is refused. New projects write `## Autonomy` only. Every key: [Adoption settings](/docs/reference/adoption-settings#techautomationmd).
 
 ## Tags route cards to workflows
 

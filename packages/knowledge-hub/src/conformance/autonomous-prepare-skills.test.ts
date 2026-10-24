@@ -5,7 +5,7 @@
  * `/pair-process-refine-story` and `/pair-process-plan-tasks` honour `$approval`
  * (ADR-021). Phase 0 of refine-story (the grill sync) is a judgement gate: it stays
  * `kind=gate; auto=halt` and lifts ONLY when a caller passes BOTH `$approval: auto`
- * AND `$prepare: never|when`. `$approval: auto` alone still halts.
+ * AND `$prepare: hold-never|hold-when`. `$approval: auto` alone still halts.
  *
  * These skills are outside `APPROVAL_SIGNAL_FAMILIES` (assess-/map-), so the gate
  * does not see them; this file applies the same detector (`findApprovalRounds`,
@@ -102,7 +102,7 @@ describe('refine-story — $approval + $prepare (ADR-028)', () => {
       }
       expect(p0).toMatch(/Compose `\/(?:pair-capability-)?grill` with `\$mode: sync`/)
       expect(p0).toMatch(
-        /`\$prepare` (?:is )?(?:absent|omitted)[^\n]*`always`|`always`[^\n]*(?:absent|omitted)/i,
+        /`\$prepare` (?:is )?(?:absent|omitted)[^\n]*`hold-always`|`hold-always`[^\n]*(?:absent|omitted)/i,
       )
       expect(p0).toMatch(/no shared understanding[\s\S]{0,200}HALT|HALT[\s\S]{0,300}unaligned/i)
     })
@@ -111,14 +111,16 @@ describe('refine-story — $approval + $prepare (ADR-028)', () => {
     it(`${label} — $approval: auto alone still halts at phase 0 (ADR-021, ADR-028)`, () => {
       const p0 = section(skill, /Phase 0/)
       expect(p0).toMatch(/`\$approval: auto` (?:alone|by itself)[^\n]*(?:still )?HALT/i)
-      expect(p0).toMatch(/`\$prepare: never\|when`|`\$prepare`[^\n]*`never`[^\n]*`when`/)
+      expect(p0).toMatch(
+        /`\$prepare: hold-never\|hold-when`|`\$prepare`[^\n]*`hold-never`[^\n]*`hold-when`/,
+      )
       const prepare = argRow(skill, '$prepare') as string
       expect(prepare).toMatch(/`\$approval: auto`[^|]*(?:alone|by itself)[^|]*HALT/i)
     })
 
     it(`${label} — the exception needs BOTH signals and does not compose grill`, () => {
       const p0 = section(skill, /Phase 0/)
-      expect(p0).toMatch(/both[^\n]*`\$approval: auto`[^\n]*`\$prepare: never\|when`/i)
+      expect(p0).toMatch(/both[^\n]*`\$approval: auto`[^\n]*`\$prepare: hold-never\|hold-when`/i)
       expect(p0).toMatch(
         /(?:not|never) compos\w*[^\n]*`\/(?:pair-capability-)?grill`|`\/(?:pair-capability-)?grill`[^\n]*(?:is )?not composed/i,
       )
@@ -132,10 +134,10 @@ describe('refine-story — $approval + $prepare (ADR-028)', () => {
       expect(skill).toMatch(/open-question/)
     })
 
-    it(`${label} — Step 5 holds back the Ready status write under $prepare never|when`, () => {
+    it(`${label} — Step 5 holds back the Ready status write under $prepare hold-never|hold-when`, () => {
       const step5 = section(skill, /Step 5:/)
       expect(step5).toMatch(
-        /\$prepare: never\|when[\s\S]{0,300}(?:omit|withh|hold)[\s\S]{0,120}`\$status/i,
+        /\$prepare: hold-never\|hold-when[\s\S]{0,300}(?:omit|withh|hold)[\s\S]{0,120}`\$status/i,
       )
       // default path unchanged
       expect(step5).toMatch(/`\$status: Ready` — \*\*pass it only when a board state maps/)

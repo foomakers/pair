@@ -106,6 +106,22 @@ describe('plain console: technical lines hidden, finished steps as short notes',
     ],
   ])('shortens %s', (line, note) => expect(plainNote(line)).toBe(note))
 
+  it.each([
+    [
+      '  Iteration 3/∞: selected 1 · skipped #577 durable failure: escalate — not retried · ran none · waiting 10m',
+      '  Waiting for new cards — next check in 10m · skipped #577 durable failure: escalate — not retried',
+    ],
+    [
+      '  Iteration 2/∞: selected 0 · skipped none · ran none · waiting 10m',
+      '  Waiting for new cards — next check in 10m',
+    ],
+    ['  Iteration 1/∞: selected 1 · skipped none · ran #577 completed · next iteration', undefined],
+    [
+      '  Checking for cards: pair-next --root 578 --filter * (preset escalate-red)',
+      '  Checking for cards (--root 578 --filter * (preset escalate-red))…',
+    ],
+  ])('loop status %s', (line, note) => expect(plainNote(line)).toBe(note))
+
   it('never hides an unknown line (errors, questions)', () => {
     expect(plainNote('  Escalated at stage verify: needs a human decision')).toBe(
       '  Escalated at stage verify: needs a human decision',

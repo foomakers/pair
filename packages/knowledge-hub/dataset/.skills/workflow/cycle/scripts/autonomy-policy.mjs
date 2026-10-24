@@ -19,13 +19,27 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 // US-575: `autoRecoveryRounds` / `maxFixRounds` — the run's two budgets before a card is parked `needs-human`.
-export const KEYS = ['filter', 'assignee', 'status', 'root', 'until', 'prepare', 'merge', 'autoRecoveryRounds', 'maxFixRounds']
+export const KEYS = ['preset', 'filter', 'assignee', 'status', 'root', 'until', 'prepare', 'merge', 'autoRecoveryRounds', 'maxFixRounds']
 export const UNTIL_VALUES = ['ready', 'pr', 'merged']
+// US-576: a gate reads the way it behaves — `hold-always | hold-never | hold-when`. The bare `always | never | when`
+// are deprecated aliases (accepted with a warning). The parsed gate keeps the bare token as its internal `mode`
+// (every consumer compares that), `gateToString` prints the `hold-*` form.
 export const GATE_MODES = ['always', 'never', 'when']
+export const GATE_NAMES = GATE_MODES.map(m => `hold-${m}`)
+// US-576: named presets — the values a preset supplies when no explicit key declares them. `custom` supplies none.
+export const PRESETS = {
+  full: { filter: '*', prepare: 'hold-never', merge: 'hold-never', until: 'merged' },
+  'escalate-red': { filter: '*', prepare: 'hold-never', merge: 'hold-when; has: risk:red', until: 'merged' },
+  supervised: { filter: '*', prepare: 'hold-always', merge: 'hold-always', until: 'merged' },
+  custom: {},
+}
+export const PRESET_NAMES = Object.keys(PRESETS)
+// `filter: *` — every card in scope, untagged included.
+export const FILTER_ALL = '*'
 export const DECISIONS = ['proceed', 'await-human', 'escalate', 'stop-at-target']
-export const SOURCES = ['argument', 'adoption', 'default']
+export const SOURCES = ['argument', 'adoption', 'preset', 'default']
 // The one precedence sentence every consumer states (conformance test pins it).
-export const PRECEDENCE_SENTENCE = 'Precedence: argument > adoption (`## Autonomy`, then translated legacy sections) > KB default — every effective value is printed with its source.'
+export const PRECEDENCE_SENTENCE = 'Precedence: argument > argument preset > explicit adoption key (`## Autonomy`, then translated legacy sections) > adoption preset > KB default — every effective value is printed with its source.'
 
 const LABEL_CAP = 50
 const MAX_TEXT = 200
@@ -71,12 +85,15 @@ function parseList(key, raw, { validate = labelError } = {}) {
   return errors.length ? { errors } : { value: items }
 }
 
-// A gate: `<always|never|when>[; has: a,b][; lacks: c]`. has/lacks only with `when`.
+// A gate: `<hold-always|hold-never|hold-when>[; has: a,b][; lacks: c]`. has/lacks only with `hold-when`.
+// `always | never | when` still parse, with a `warnings` entry naming the new form.
 export function parseGate(key, raw) {
   const text = String(raw ?? '').trim()
-  if (text.length === 0) return { errors: [err(key, 'is empty (expected <always|never|when>[; has: …][; lacks: …])')] }
-  const [modeRaw, ...clauses] = text.split(';').map(s => s.trim())
-  if (!GATE_MODES.includes(modeRaw)) return { errors: [err(key, `mode ${JSON.stringify(modeRaw)} is not one of ${GATE_MODES.join(' | ')}`)] }
+  if (text.length === 0) return { errors: [err(key, 'is empty (expected <hold-always|hold-never|hold-when>[; has: …][; lacks: …])')] }
+  const [nameRaw, ...clauses] = text.split(';').map(s => s.trim())
+  const alias = GATE_MODES.includes(nameRaw)
+  if (!alias && !GATE_NAMES.includes(nameRaw)) return { errors: [err(key, `mode ${JSON.stringify(nameRaw)} is not one of ${GATE_NAMES.join(' | ')}`)] }
+  const modeRaw = nameRaw.replace(/^hold-/, '')
   const gate = { mode: modeRaw, has: [], lacks: [] }
   const errors = []
   const seen = new Set()
@@ -92,30 +109,39 @@ export function parseGate(key, raw) {
     }
     seen.add(m[1])
     if (modeRaw !== 'when') {
-      errors.push(err(key, `\`${m[1]}:\` is valid only with \`when\` (got \`${modeRaw}\`)`))
+      errors.push(err(key, `\`${m[1]}:\` is valid only with \`hold-when\` (got \`${nameRaw}\`)`))
       continue
     }
     const list = parseList(`${key} ${m[1]}`, m[2])
     if (list.errors) errors.push(...list.errors)
     else gate[m[1]] = list.value
   }
-  if (!errors.length && modeRaw === 'when' && gate.has.length === 0 && gate.lacks.length === 0) errors.push(err(key, '`when` needs at least one `has:` or `lacks:` list'))
-  return errors.length ? { errors } : { value: gate }
+  if (!errors.length && modeRaw === 'when' && gate.has.length === 0 && gate.lacks.length === 0) errors.push(err(key, '`hold-when` needs at least one `has:` or `lacks:` list'))
+  if (errors.length) return { errors }
+  return alias ? { value: gate, warnings: [`\`${key}: ${nameRaw}\` is deprecated — write \`${key}: ${gateToString(gate)}\``] } : { value: gate }
 }
 
 // A gate is `mode` + `has[]` + `lacks[]`; a relayed one may drop the empty arrays — every consumer reads it through here.
-export const normalizeGate = g => (g && typeof g === 'object' ? { ...g, has: Array.isArray(g.has) ? g.has : [], lacks: Array.isArray(g.lacks) ? g.lacks : [] } : g)
+// A relayed `hold-*` mode is read as its internal token.
+export const normalizeGate = g => (g && typeof g === 'object' ? { ...g, ...(typeof g.mode === 'string' ? { mode: g.mode.replace(/^hold-/, '') } : {}), has: Array.isArray(g.has) ? g.has : [], lacks: Array.isArray(g.lacks) ? g.lacks : [] } : g)
 
 export const gateToString = g => {
   const n = normalizeGate(g)
-  return n.mode === 'when' ? ['when', n.has.length ? `has: ${n.has.join(',')}` : null, n.lacks.length ? `lacks: ${n.lacks.join(',')}` : null].filter(Boolean).join('; ') : n.mode
+  return n.mode === 'when' ? ['hold-when', n.has.length ? `has: ${n.has.join(',')}` : null, n.lacks.length ? `lacks: ${n.lacks.join(',')}` : null].filter(Boolean).join('; ') : `hold-${n.mode}`
 }
 
 // ── one key's value ─────────────────────────────────────────────────────────────────────────
 export function parseValue(key, raw) {
   switch (key) {
-    case 'filter':
-      return parseList('filter', raw)
+    case 'preset': {
+      const v = String(raw ?? '').trim()
+      return Object.hasOwn(PRESETS, v) ? { value: v } : { errors: [err('preset', `${JSON.stringify(v)} is not a known preset (known: ${PRESET_NAMES.join(' | ')})`)] }
+    }
+    case 'filter': {
+      if (String(raw ?? '').trim() === FILTER_ALL) return { value: [FILTER_ALL] }
+      const list = parseList('filter', raw, { validate: v => (v === FILTER_ALL ? '`*` (every card) stands alone — it cannot be combined with labels' : labelError(v)) })
+      return list
+    }
     case 'status':
       return parseList('status', raw, { validate: v => (v.length === 0 ? 'is empty' : v.length > 40 || !/^[A-Za-z][A-Za-z0-9 _-]*$/.test(v) ? 'is not a macrostate name' : null) })
     case 'assignee': {
@@ -224,6 +250,8 @@ export function parse(policyText) {
   const sec = sectionLines(policyText, 'Autonomy')
   if (sec.errors) errors.push(...sec.errors)
   for (const line of sec.lines ?? []) {
+    // US-576: a table row (the preset table the template ships) documents, it never declares.
+    if (line.startsWith('|')) continue
     const m = /^([A-Za-z][A-Za-z-]*):\s*(.*)$/.exec(line)
     if (!m) {
       errors.push(err('Autonomy', `line ${JSON.stringify(line)} is not \`key: value\``))
@@ -241,6 +269,7 @@ export function parse(policyText) {
     const r = parseValue(key, raw)
     if (r.errors) errors.push(...r.errors)
     else autonomy[key] = r.value
+    if (r.warnings) warnings.push(...r.warnings)
   }
   const legacy = translateLegacy(policyText)
   errors.push(...legacy.errors)
@@ -279,6 +308,7 @@ export const SURFACES = ['unattended', 'interactive']
 export function resolvePolicy({ args = {}, adoptionText = '', surface = 'unattended' } = {}) {
   const parsed = parse(adoptionText)
   const errors = [...parsed.errors]
+  const warnings = [...parsed.warnings]
   const effective = {}
   const fromArgs = {}
   for (const key of Object.keys(args)) {
@@ -290,12 +320,20 @@ export function resolvePolicy({ args = {}, adoptionText = '', surface = 'unatten
     const r = parseValue(key, Array.isArray(args[key]) ? args[key].join(',') : args[key])
     if (r.errors) errors.push(...r.errors.map(e => ({ ...e, reason: `argument ${e.reason}` })))
     else fromArgs[key] = r.value
+    if (r.warnings) warnings.push(...r.warnings.map(w => `argument ${w}`))
   }
+  const preset = fromArgs.preset ?? parsed.autonomy.preset
+  const presetValues = Object.fromEntries(Object.entries(PRESETS[preset] ?? {}).map(([k, raw]) => [k, parseValue(k, raw).value]))
   for (const key of KEYS) {
     if (Object.hasOwn(fromArgs, key)) effective[key] = { value: fromArgs[key], source: 'argument' }
+    // An argument preset is an argument: it beats every adoption key; only an argument key beats it.
+    else if (fromArgs.preset !== undefined && Object.hasOwn(presetValues, key)) effective[key] = { value: presetValues[key], source: `preset ${preset}` }
     else if (Object.hasOwn(parsed.autonomy, key)) effective[key] = { value: parsed.autonomy[key], source: 'adoption' }
     else if (parsed.translated[key]) effective[key] = { value: parsed.translated[key].value, source: `adoption (translated from ${parsed.translated[key].from})` }
+    else if (Object.hasOwn(presetValues, key)) effective[key] = { value: presetValues[key], source: `preset ${preset}` }
     else effective[key] = { value: DEFAULTS[key], source: 'default' }
+    // An explicit key that contradicts the preset wins — named, never silent.
+    if (Object.hasOwn(presetValues, key) && !effective[key].source.startsWith('preset') && JSON.stringify(effective[key].value) !== JSON.stringify(presetValues[key])) warnings.push(`\`${key}: ${display(key, effective[key].value)}\` (${effective[key].source}) overrides \`preset: ${preset}\` (\`${key}: ${display(key, presetValues[key])}\`) — the key wins`)
   }
   // Selection is scoped by surface. A `filter` that comes ONLY from the legacy `## Eligibility` translation is the
   // unattended-loop eligibility (pair-cli run, /pair-loop, batch): an interactive run sets it aside. An explicit
@@ -322,8 +360,8 @@ export function resolvePolicy({ args = {}, adoptionText = '', surface = 'unatten
   const policy = { until: effective.until.value, merge: normalizeGate(effective.merge.value), prepare: normalizeGate(effective.prepare.value), autoRecoveryRounds: effective.autoRecoveryRounds.value, maxFixRounds: effective.maxFixRounds.value, ...(legacyActive ? { legacyTiers: legacyMerge.legacyTiers } : {}) }
   // `active`: the run declared its own target or merge gate (argument or `## Autonomy`). Legacy-only and
   // nothing-declared runs are NOT active — consumers keep today's code path, byte for byte.
-  const active = ['until', 'merge'].some(k => effective[k].source === 'argument' || effective[k].source === 'adoption')
-  return { ok: errors.length === 0, active, effective, policy, lines, warnings: parsed.warnings, errors, translated: Object.fromEntries(Object.entries(parsed.translated).map(([k, t]) => [k, { from: t.from, equivalent: `${k}: ${display(k, t.value)}` }])) }
+  const active = ['until', 'merge'].some(k => effective[k].source === 'argument' || effective[k].source === 'adoption' || effective[k].source.startsWith('preset'))
+  return { ok: errors.length === 0, active, effective, policy, lines, warnings, errors, translated: Object.fromEntries(Object.entries(parsed.translated).map(([k, t]) => [k, { from: t.from, equivalent: `${k}: ${display(k, t.value)}` }])) }
 }
 
 // ── the decision — pure ─────────────────────────────────────────────────────────────────────
@@ -356,8 +394,8 @@ export function decide({ boundary, labels: cardLabels, prLabels, policy } = {}) 
   const until = policy?.until ?? 'pr'
   const gate = normalizeGate(policy?.merge ?? DEFAULTS.merge)
   // Fail closed: a gate that is not a known mode, or a `when` with no condition, is never read as "proceed".
-  if (!GATE_MODES.includes(gate?.mode)) throw new Error(`merge gate mode ${JSON.stringify(gate?.mode ?? null)} is not one of ${GATE_MODES.join(' | ')}`)
-  if (gate.mode === 'when' && gate.has.length === 0 && gate.lacks.length === 0) throw new Error('merge gate `when` needs at least one `has:` or `lacks:` condition')
+  if (!GATE_MODES.includes(gate?.mode)) throw new Error(`merge gate mode ${JSON.stringify(gate?.mode ?? null)} is not one of ${GATE_NAMES.join(' | ')}`)
+  if (gate.mode === 'when' && gate.has.length === 0 && gate.lacks.length === 0) throw new Error('merge gate `hold-when` needs at least one `has:` or `lacks:` condition')
   const kind = boundary?.kind === 'merge' ? 'merge' : 'stage'
   const stage = kind === 'merge' ? 'merge' : boundary?.stage
   if (kind === 'stage' && !STAGE_STEPS.includes(stage)) return { decision: 'proceed', reason: `${stage} is not a delivery stage boundary` }
@@ -373,7 +411,7 @@ export function decide({ boundary, labels: cardLabels, prLabels, policy } = {}) 
   if (gate.mode === 'when' && !Array.isArray(labels)) return { decision: 'escalate', stage, conditions: ['labels-unreadable'], reason: 'the card labels could not be read, so the merge gate cannot be evaluated — fail-safe escalation' }
   const conditions = escalationConditions(gate, labels)
   if (conditions.length) return { decision: 'escalate', stage, conditions, reason: `merge gate condition fired at ${stage}: ${conditions.join(', ')}` }
-  if (kind === 'merge') return gate.mode === 'always' ? { decision: 'await-human', stage, reason: 'merge: always — parked awaiting a human' } : { decision: 'proceed', stage }
+  if (kind === 'merge') return gate.mode === 'always' ? { decision: 'await-human', stage, reason: 'merge: hold-always — parked awaiting a human' } : { decision: 'proceed', stage }
   return { decision: 'proceed', stage }
 }
 

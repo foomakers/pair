@@ -283,7 +283,7 @@ function rowBlock(input: ConsoleSinkInput, cards: Map<string, CardView>, now: ()
 }
 
 /** The loop's per-iteration line: on a plain live terminal it replaces the previous one. */
-const LOOP_STATUS = /^ {2}Iteration \d+\/\d+:/
+const LOOP_STATUS = /^ {2}(Iteration \d+\/\S+:|Waiting for new cards|Checking for cards)/
 /** A card's plain note (`  #577 review: approved`): on a plain live terminal it becomes the card row's detail. */
 const CARD_NOTE = /^ {2}#(\S+) (.+)$/
 const NOTE_CHARS = 60

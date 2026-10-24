@@ -65,6 +65,11 @@ export type DispatchDecision =
  * Decides what runs on one card. Throws (HALTs) rather than guessing — see the two routing-time
  * rules the schema states, both of which need something the policy file alone cannot answer.
  */
+/** US-576: `*` (`filter: *`) admits every card, untagged included; any other value is one label the card carries. */
+export const ELIGIBLE_ALL = '*'
+export const carriesEligibility = (tags: readonly string[], eligibility: string): boolean =>
+  eligibility === ELIGIBLE_ALL || tags.includes(eligibility)
+
 export function decideDispatch(request: DispatchRequest): DispatchDecision {
   const { card, mapping, eligibility } = request
 
@@ -86,7 +91,7 @@ export function decideDispatch(request: DispatchRequest): DispatchDecision {
   }
   // Eligibility BEFORE routing (BR3), and by the same plain string equality `pair-next --filter`
   // applies — an untagged card never matches, which is the fail-safe, not an accident.
-  if (!request.tags.includes(eligibility)) {
+  if (!carriesEligibility(request.tags, eligibility)) {
     return skip(
       card,
       'ineligible',

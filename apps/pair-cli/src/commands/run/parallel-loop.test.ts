@@ -77,6 +77,8 @@ interface Options {
   policy?: string
   /** One answer per iteration; the last repeats. An Error is a selection failure. */
   script: Array<SelectionAnswer | Error>
+  /** Without blockWait: the wait answers `interrupted` from this many waits on (default 20). */
+  stopAfterWaits?: number
   /** `true`: each wait blocks until `releaseWait`. Otherwise it elapses at once. */
   blockWait?: boolean
   /** `true`: the shipped wait (real timer, hooked to the interrupt module) instead of the fake. */
@@ -150,9 +152,11 @@ async function start(options: Options): Promise<Run> {
         wait: (ms: number) => {
           waits.push(ms)
           options.onWait?.()
-          return options.blockWait
-            ? new Promise<WaitOutcome>(r => (pendingWait = r))
-            : Promise.resolve<WaitOutcome>('elapsed')
+          if (options.blockWait) return new Promise<WaitOutcome>(r => (pendingWait = r))
+          // --watch with nothing to do never ends on its own: the test's Ctrl-C after `stopAfterWaits` idle waits
+          return Promise.resolve<WaitOutcome>(
+            waits.length >= (options.stopAfterWaits ?? 20) ? 'interrupted' : 'elapsed',
+          )
         },
       }),
     },
@@ -251,8 +255,10 @@ describe('US-522 — the watch loop through the handler', () => {
         answer(card('1', { escalated: true }), card('3')),
         answer(card('1', { escalated: true })),
       ],
+      stopAfterWaits: 3,
     })
-    expect(await run.code).toBe(0)
+    // --watch keeps waiting on the escalated card until Ctrl-C (130), never ending on its own
+    expect(await run.code).toBe(130)
     expect(run.started).toEqual(['2', '3'])
     const first = run.stdout.find(l => l.startsWith('  Iteration 1/'))!
     expect(first).toContain('#1 escalated')
@@ -260,15 +266,16 @@ describe('US-522 — the watch loop through the handler', () => {
     expect(run.stdout.filter(l => l.includes('#1 escalated')).length).toBeGreaterThanOrEqual(2)
   })
 
-  it('AC7/AC9: idle under --watch waits the interval and re-selects; idle polls count toward the cap', async () => {
+  it('AC7/AC9: idle under --watch waits the interval and re-selects; idle polls never spend the cap', async () => {
     const run = await start({
-      flags: { watch: true, interval: '90s', maxIterations: '3' },
+      flags: { watch: true, interval: '90s', maxIterations: '1' },
       script: [answer()],
+      stopAfterWaits: 3,
     })
-    expect(await run.code).toBe(0)
-    expect(run.waits).toEqual([90_000, 90_000])
+    expect(await run.code).toBe(130)
+    expect(run.waits).toEqual([90_000, 90_000, 90_000])
     expect(run.selections()).toBe(3)
-    expect(run.audit.at(-1)).toMatch(/reason=iteration cap iterations=3 exit=0/)
+    expect(run.audit.at(-1)).toMatch(/reason=interrupted iterations=1/)
   })
 
   it('AC8: the stop predicate stops the run from the same selection answer', async () => {

@@ -132,11 +132,13 @@ test('decideMerge with a gate: always parks awaiting-human, never/when merge, es
   assert.deepEqual([esc.mergeAllowed, esc.parkKind, esc.conditions], [false, 'escalated', ['has:cost:red', `lacks:${GREEN}`]])
 })
 
-test('merge: never does NOT bypass #490 signals: head moved, pair-review, approval and gate stay mandatory', () => {
+test('merge: never does NOT bypass #490 signals: head moved, pair-review, a rejected approval and gate stay mandatory', () => {
   const g = { mergeGate: gate('never'), labels: [GREEN] }
   assert.deepEqual(decideMerge({ ...base, ...g, signals: { ...OK, headSha: SHA('b') } }).failed.map(f => f.code), ['head-moved'])
   assert.deepEqual(decideMerge({ ...base, ...g, signals: { ...OK, pairReview: 'failure' } }).failed.map(f => f.code), ['pair-review'])
-  assert.deepEqual(decideMerge({ ...base, ...g, signals: { ...OK, explicitApproval: 'missing' }, effectiveTier: 'risk:red' }).failed.map(f => f.code), ['explicit-approval'])
+  // US-576: `hold-never` waives a missing red approval; a rejected one still halts.
+  assert.deepEqual(decideMerge({ ...base, ...g, signals: { ...OK, explicitApproval: 'missing' }, effectiveTier: 'risk:red' }).failed.map(f => f.code), [])
+  assert.deepEqual(decideMerge({ ...base, ...g, signals: { ...OK, explicitApproval: 'failure' }, effectiveTier: 'risk:red' }).failed.map(f => f.code), ['explicit-approval'])
   assert.deepEqual(decideMerge({ ...base, ...g, gate: undefined }).failed.map(f => f.code), ['gate-unverified'])
   assert.deepEqual(decideMerge({ ...base, ...g, currentTier: 'risk:red' }).failed.map(f => f.code), ['tier-changed'])
   assert.equal(decideMerge({ ...base, ...g, signals: null }).failed[0].code, 'signals-unreadable')
@@ -220,7 +222,7 @@ test('parseArgs: --autoAdvance (legacy, pair-loop) or --mergeGate, exactly one; 
   assert.deepEqual(parseArgs(flat({ ...o, mergeGate: JSON.stringify(gate('when', ['a:b'])) })).opts.mergeGate, gate('when', ['a:b']))
   assert.throws(() => parseArgs(flat(o)), /exactly one of/)
   assert.throws(() => parseArgs(flat({ ...o, autoAdvance: '["a:b"]', mergeGate: '{}' })), /exactly one of/)
-  assert.throws(() => parseArgs(flat({ ...o, mergeGate: JSON.stringify(gate('always', ['a:b'])) })), /only with `when`/)
+  assert.throws(() => parseArgs(flat({ ...o, mergeGate: JSON.stringify(gate('always', ['a:b'])) })), /only with `hold-when`/)
   assert.throws(() => parseArgs(flat({ ...o, mergeGate: 'x' })), /JSON gate object/)
   const e = parseArgs(['escalate', '--dir', '/x', '--story', '42', '--stage', 'green', '--conditions', '["has:cost:red"]'])
   assert.deepEqual(e.opts.conditions, ['has:cost:red'])
@@ -286,13 +288,14 @@ test('D5 control: card and PR both risk:green and gate lacks risk:green -> merge
   assert.equal(checkMerge(input(h, { mergeGate: gate('when', [], [GREEN]) })).mergeAllowed, true)
 })
 
-test('D4 through checkMerge: yellow PR, approval check absent, review success -> merge allowed under never', () => {
+test('D4 through checkMerge: yellow PR, approval check absent, review success -> merge allowed under never; a red PR too (US-576 waiver), but not under a red-holding gate', () => {
   const h = fakeHosts({ labels: [YELLOW], prLabels: [YELLOW] })
   h.hosts.code.readCheck = ({ context }) => (context === 'pair-review' ? 'success' : null)
   const out = checkMerge({ ...input(h, { mergeGate: gate('never') }), cardTier: YELLOW })
   assert.deepEqual([out.mergeAllowed, out.failed], [true, []])
   const red = fakeHosts({ labels: [YELLOW], prLabels: ['risk:red'] })
   red.hosts.code.readCheck = h.hosts.code.readCheck
-  const parked = checkMerge({ ...input(red, { mergeGate: gate('never') }), cardTier: YELLOW })
+  assert.deepEqual(checkMerge({ ...input(red, { mergeGate: gate('never') }), cardTier: YELLOW }).failed, [])
+  const parked = checkMerge({ ...input(red, { mergeGate: gate('when', ['cost:red']) }), cardTier: YELLOW })
   assert.deepEqual([parked.mergeAllowed, parked.parkKind, parked.failed.map(f => f.code)], [false, 'awaiting-human', ['explicit-approval']])
 })

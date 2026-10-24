@@ -27,6 +27,7 @@ import {
   forwardedAutonomy,
   forwardedFields,
   describeMergeLine,
+  effectiveGateOf,
   loopStartFields,
   renderIterationLine,
   renderLoopAuditLine,
@@ -113,7 +114,7 @@ function reportHeader(
   if (forwarded.length > 0)
     console.log(`  Forwarded to each card: ${forwarded.map(([k, v]) => `--${k} ${v}`).join(' · ')}`)
   console.log(
-    `  ${describeMergeLine(policy, forwarded, effectiveUntilOf(context.autonomySelection))}`,
+    `  ${describeMergeLine(policy, forwarded, effectiveUntilOf(context.autonomySelection), effectiveGateOf(context.autonomySelection))}`,
   )
   for (const warning of policy.warnings) console.log(chalk.yellow(`  ! ${warning}`))
 }
@@ -572,6 +573,7 @@ function loopDeps(
   return {
     select: async (): Promise<LoopSelection> => {
       hooks.onSelect()
+      console.log(`  Checking for cards: ${describeScope(selection)}`)
       return await answer(selectionInput(fan, { predicateSelector }))
     },
     probeLock: probeLockFor(input.context.workingArea),

@@ -9,7 +9,7 @@ export const meta = {
   // NOTE: `meta` must be a PURE LITERAL — the loader parses it statically and rejects any
   // expression node. Keep every value a single literal, however long the line gets.
   whenToUse:
-    'REQUIRED args shape: {"items":[{"id":"218","mode":"classify"}]} where mode is one of classify | refine | triage. Optional per item: notes (a directive threaded into the prompt), breakdown (refine only: carry the card past Ready into a task list) and fixStatusLine (the issue body declares a status contradicting its content). Optional per run: prepare (a gate: always | never | when[; has: <labels>][; lacks: <labels>] — the argument that overrides adoption and the KB default for refine mode; resolved by autonomy-policy.mjs together with the adoption ## Autonomy section: default always keeps the human grill path exactly as before, never or when refines autonomously and writes Ready only through cycle-prepare.mjs complete after a task breakdown). Both flags must be REAL booleans, true or false — a JSON string "true" or a number is rejected, never coerced, because a wrong-typed flag would silently drop the directive it controls. This batch is I/O-bound (GitHub API + KB reads) and touches NO repo file, so it is safe to run CONCURRENTLY with an implement-batch: the two contend for neither files nor CPU. Items are independent by construction — each writes a different issue — so there is no mutex to pre-filter, unlike implement-batch.',
+    'REQUIRED args shape: {"items":[{"id":"218","mode":"classify"}]} where mode is one of classify | refine | triage. Optional per item: notes (a directive threaded into the prompt), breakdown (refine only: carry the card past Ready into a task list) and fixStatusLine (the issue body declares a status contradicting its content). Optional per run: prepare (a gate: hold-always | hold-never | hold-when[; has: <labels>][; lacks: <labels>] — the argument that overrides adoption and the KB default for refine mode; resolved by autonomy-policy.mjs together with the adoption ## Autonomy section: default always keeps the human grill path exactly as before, never or when refines autonomously and writes Ready only through cycle-prepare.mjs complete after a task breakdown). Both flags must be REAL booleans, true or false — a JSON string "true" or a number is rejected, never coerced, because a wrong-typed flag would silently drop the directive it controls. This batch is I/O-bound (GitHub API + KB reads) and touches NO repo file, so it is safe to run CONCURRENTLY with an implement-batch: the two contend for neither files nor CPU. Items are independent by construction — each writes a different issue — so there is no mutex to pre-filter, unlike implement-batch.',
   phases: [{ title: 'Work' }, { title: 'Verify' }],
 }
 
@@ -319,9 +319,9 @@ async function agentRetry(prompt, opts) {
 
 // ── US-523 T-9 / ADR-028 — the refine path under the RESOLVED prepare gate ────────────────────────────
 // This sandbox holds NO rule of the autonomy model: the effective prepare gate (argument > adoption `## Autonomy`
-// > KB default `always`) is resolved by `autonomy-policy.mjs`, run by an agent, and its JSON is only shape-checked
+// > KB default `hold-always`) is resolved by `autonomy-policy.mjs`, run by an agent, and its JSON is only shape-checked
 // here. `always` (the default) keeps the pre-#523 refine prompt BYTE FOR BYTE — the attended / human path, R3.11
-// intact. `never` / `when` is the declared autonomous path: `$approval: auto` + `$prepare: <mode>`, the truthful
+// intact. `hold-never` / `hold-when` is the declared autonomous path: `$approval: auto` + `$prepare: <mode>`, the truthful
 // provenance line, escalation and the Ready write through `cycle-prepare.mjs` only, and Ready only after a breakdown.
 const AUTONOMY_SCRIPT = '.claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs'
 const PREPARE_SCRIPT = '.claude/skills/pair-workflow-cycle/scripts/cycle-prepare.mjs'
@@ -331,7 +331,8 @@ const RESOLVE_SCHEMA = { type: 'object', properties: { ok: { type: 'boolean' }, 
 // Mirrors autonomy-policy `conditionError`: any label the gate grammar accepts (spaces included), nothing that could become a shell fragment.
 const GATE_LABEL_RE = /^[^\u0000-\u001f\u007f-\u009f`'"\\;|&<>\s][^\u0000-\u001f\u007f-\u009f`'"\\;|&<>]{0,49}$/
 const GATE_SOURCES = ['argument', 'adoption', 'default']
-const gateString = g => (g.mode === 'when' ? ['when', g.has.length ? `has: ${g.has.join(',')}` : null, g.lacks.length ? `lacks: ${g.lacks.join(',')}` : null].filter(Boolean).join('; ') : g.mode)
+// US-576: printed in the `hold-*` vocabulary (the script's internal token is the bare mode).
+const gateString = g => (g.mode === 'when' ? ['hold-when', g.has.length ? `has: ${g.has.join(',')}` : null, g.lacks.length ? `lacks: ${g.lacks.join(',')}` : null].filter(Boolean).join('; ') : `hold-${g.mode}`)
 // null = the default / human path (no resolve needed when no card is refined).
 let PREPARE = null
 async function resolvePrepareGate() {
@@ -446,7 +447,7 @@ const refineDeclared = item => {
   const base = `--dir ${dir} --story ${item.id}`
   const decide = (readiness, boundary) => `node ${PREPARE_SCRIPT} decide --gate '${P.json}' --readiness ${readiness} --attended false --boundary ${boundary} ${base} --source ${P.source}`
   const escalate = (boundary, via) => `node ${PREPARE_SCRIPT} escalate ${base} --boundary ${boundary} --gate '${P.json}' --source ${P.source} ${via}`
-  return `Refine backlog card #${item.id} via /pair-process-refine-story with \`$approval: auto\` and \`$prepare: ${P.gate.mode}\` (the declared prepare gate \`${P.text}\`, source: ${P.source} — ADR-028; both signals together, never \`$approval: auto\` alone). ${READONLY} The ONE exception to that clause: the \`cycle-prepare.mjs\` commands below take \`--dir ${dir}\` — a path they check against the story, never one you create or write into. Deliver the refinement: Given-When-Then acceptance criteria, Definition of Done, subdomain/context mapping scoped to what it touches, the classification matrix, the \`risk:*\` label and story points. Do NOT write any board state yourself.
+  return `Refine backlog card #${item.id} via /pair-process-refine-story with \`$approval: auto\` and \`$prepare: hold-${P.gate.mode}\` (the declared prepare gate \`${P.text}\`, source: ${P.source} — ADR-028; both signals together, never \`$approval: auto\` alone). ${READONLY} The ONE exception to that clause: the \`cycle-prepare.mjs\` commands below take \`--dir ${dir}\` — a path they check against the story, never one you create or write into. Deliver the refinement: Given-When-Then acceptance criteria, Definition of Done, subdomain/context mapping scoped to what it touches, the classification matrix, the \`risk:*\` label and story points. Do NOT write any board state yourself.
 
 FIRST read the card as it stands. It may be empty, or it may already carry content that is WRONG — acceptance criteria presuming a capability that was never shipped, a plan for something merged since, a body superseded by a reformulation whose old sections were never removed. Where existing content is wrong, REPLACE it; do not append a second version beside it, and do not leave a body that contradicts itself (that includes the title: if it names a superseded framing, say so in your return so it can be corrected). Where it is right, keep it and say so rather than rewriting for the sake of it.
 

@@ -61,7 +61,15 @@ const NOTES: ReadonlyArray<readonly [RegExp, string]> = [
 const word = (step: string): string => WORD[step] ?? step
 
 /** A driver line whose note keeps a part of it (the stage, the reason, the audit path). */
-const SHAPED: ReadonlyArray<readonly [RegExp, (m: RegExpExecArray) => string]> = [
+const SHAPED: ReadonlyArray<readonly [RegExp, (m: RegExpExecArray) => string | undefined]> = [
+  // The loop's iteration, in plain words: waiting names what it skipped; a working one is shown on the card rows.
+  [
+    /^ {2}Iteration \d+\/\S+: selected \d+ · skipped (.+?) · ran .* · waiting (\S+)$/,
+    m =>
+      `  Waiting for new cards — next check in ${m[2]}${m[1] === 'none' ? '' : ` · skipped ${m[1]}`}`,
+  ],
+  [/^ {2}Iteration \d+\/\S+: .* · next iteration$/, () => undefined],
+  [/^ {2}Checking for cards: pair-next (.*)$/, m => `  Checking for cards (${m[1]})…`],
   [/^ {2}Stage (\w+)\S* stopped the card: (\S+)/, m => `  ${word(m[1]!)}: stopped (${m[2]})`],
   [/^ {2}Recovery: (\S+) — retrying (\w+)/, m => `  ${word(m[2]!)}: ${m[1]}, retrying`],
   [/^ {2}Audit: (\S+)/, m => `  audit: ${m[1]}`],

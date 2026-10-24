@@ -134,8 +134,9 @@ if [ -n "${RUNNER_TEMP:-}" ]; then
   TMP_DIR="${RUNNER_TEMP}/${TMP_DIR_NAME}"
   mkdir -p "$TMP_DIR"
 else
-  mkdir -p "$REPO_ROOT/.tmp"
-  TMP_DIR="$REPO_ROOT/.tmp/${TMP_DIR_NAME}"
+  # Local runs live in the gitignored working area, next to the other runs (CI uses RUNNER_TEMP).
+  mkdir -p "$REPO_ROOT/.pair/working/smoke-tests"
+  TMP_DIR="$REPO_ROOT/.pair/working/smoke-tests/${TMP_DIR_NAME}"
   mkdir -p "$TMP_DIR"
 fi
 

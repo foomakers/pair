@@ -266,8 +266,8 @@ ensure_tmp_dir() {
     DATETIME=$(date +"%Y%m%d.%H%M%S")
     RANDOM_HASH=$(openssl rand -hex 4 2>/dev/null || cat /dev/urandom | tr -dc 'a-f0-9' | head -c 8)
     TMP_DIR_NAME="smoke-tests.${DATETIME}.${RANDOM_HASH}"
-    mkdir -p "$REPO_ROOT/.tmp"
-    TMP_DIR="$REPO_ROOT/.tmp/${TMP_DIR_NAME}"
+    mkdir -p "$REPO_ROOT/.pair/working/smoke-tests"
+    TMP_DIR="$REPO_ROOT/.pair/working/smoke-tests/${TMP_DIR_NAME}"
     mkdir -p "$TMP_DIR"
     export TMP_DIR
     echo "Created TMP_DIR: $TMP_DIR"

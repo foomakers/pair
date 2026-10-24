@@ -9,7 +9,7 @@ import type { CardReadiness } from './cycle-scripts'
 import { CardUnreadableError, createCardReadinessProbe, readCardLabels } from './cycle-wiring'
 import { CardOutOfScopeError } from './card-readiness'
 import { filterDeliveryFor } from './invocation'
-import type { DispatchSkipReason } from './dispatch'
+import { carriesEligibility, type DispatchSkipReason } from './dispatch'
 import { driveRun } from './loop-driver'
 import {
   handlePreparation,
@@ -82,7 +82,8 @@ export function isDorFallbackReason(gate: DorFallbackGate): boolean {
   if (gate.reason !== 'no-mapping-declared') return false
   if (!gate.autonomous || gate.approveIneligible === true) return true
   return (
-    gate.policy.eligibility === undefined || (gate.tags ?? []).includes(gate.policy.eligibility)
+    gate.policy.eligibility === undefined ||
+    carriesEligibility(gate.tags ?? [], gate.policy.eligibility)
   )
 }
 
@@ -91,7 +92,8 @@ export function ineligibleOverrideApplied(gate: DorFallbackGate): boolean {
   if (gate.reason !== 'no-mapping-declared') return false
   if (!gate.autonomous || gate.approveIneligible !== true) return false
   return (
-    gate.policy.eligibility !== undefined && !(gate.tags ?? []).includes(gate.policy.eligibility)
+    gate.policy.eligibility !== undefined &&
+    !carriesEligibility(gate.tags ?? [], gate.policy.eligibility)
   )
 }
 

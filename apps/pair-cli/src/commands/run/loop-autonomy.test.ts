@@ -41,11 +41,11 @@ describe('loop carries --until/--prepare/--merge to each child card', () => {
     }
   })
 
-  it('still refuses them where meaningless (no --card, no --parallel)', () => {
+  it('still refuses them where meaningless (--skill/--prompt); a --root without --parallel is the loop at 1', () => {
     expect(() => parseRunCommand({ skill: 'pair-next', until: 'merged' })).toThrow(
       /--card or --parallel/,
     )
-    expect(() => parseRunCommand({ root: '1', merge: 'never' })).toThrow(/--card or --parallel/)
+    expect(parseRunCommand({ root: '1', merge: 'never' }).parallel).toBe(1)
   })
 
   it('child argv carries them as separate elements, keeping --engine/--autonomous', () => {

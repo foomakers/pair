@@ -14,7 +14,7 @@ export const runCommandMetadata = {
     'pair-cli run --card 487 --rounds 1                     # bounds remediation to one round, never widened',
     'pair-cli run --root 66 --parallel 3 --autonomous       # fan-out: up to 3 `run --card` processes at once',
     'pair-cli run --filter PIPPO --assignee @me --parallel 2 --watch --interval 10m   # portable loop: re-selects each iteration',
-    "pair-cli run --card 521 --until merged --merge 'when; has: cost:red'   # merge unless escalated; prints every effective value and its source",
+    "pair-cli run --card 521 --until merged --merge 'hold-when; has: cost:red'   # merge unless escalated; prints every effective value and its source",
     'pair-cli run --skill pair-next --filter risk:green,risk:yellow --assignee @me --status Draft,Ready --max-iterations 1',
   ],
   options: [
@@ -41,19 +41,24 @@ export const runCommandMetadata = {
         'US-521: comma-separated canonical macrostates (e.g. Draft,Ready), for a skill that declares it (pair-next); refused for pair-loop (the driver declares only root/predicate/iteration for it)',
     },
     {
+      flags: '--preset <full|escalate-red|supervised|custom>',
+      description:
+        'US-576: a named autonomy preset — full (filter *, prepare/merge hold-never, until merged), escalate-red (same, but merge hold-when; has: risk:red), supervised (filter *, prepare/merge hold-always, until merged), custom (explicit keys only). Requires --card, or the loop (--root/--filter; --parallel defaults to 1, forwarded to every child card). Precedence: argument > argument preset > explicit adoption key > adoption preset > KB default — every effective value is printed with its source.',
+    },
+    {
       flags: '--until <ready|pr|merged>',
       description:
-        "US-521: how far the card's delivery cycle goes — ready (stop before implement), pr (default: the review-approved PR), merged (enter the merge stage; the only value that evaluates the merge gate). Requires --card or --parallel (the loop forwards it to every child card). Precedence: argument > adoption (`## Autonomy`, then translated legacy sections) > KB default — every effective value is printed with its source.",
+        "US-521: how far the card's delivery cycle goes — ready (stop before implement), pr (default: the review-approved PR), merged (enter the merge stage; the only value that evaluates the merge gate). Requires --card, or the loop (--root/--filter; --parallel defaults to 1, forwarded to every child card). Precedence: argument > argument preset > explicit adoption key (`## Autonomy`, then translated legacy sections) > adoption preset > KB default — every effective value is printed with its source.",
     },
     {
       flags: '--prepare <gate>',
       description:
-        'US-523: the prepare gate `<always|never|when>[; has: <labels>][; lacks: <labels>]` (with --card or --parallel; forwarded to every child card) — who prepares a Draft card: `always` (default) needs a human (R3.11), `never` proceeds alone recording assumptions, `when` proceeds alone unless a boundary escalates (`needs-review`, card stays Draft). Requires --card',
+        'US-523: the prepare gate `<hold-always|hold-never|hold-when>[; has: <labels>][; lacks: <labels>]` (with --card, or the loop: --root/--filter, --parallel defaults to 1, forwarded to every child card; `always|never|when` are deprecated aliases) — who prepares a Draft card: `hold-always` (default) needs a human (R3.11), `hold-never` proceeds alone recording assumptions, `hold-when` proceeds alone unless a boundary escalates (`needs-review`, card stays Draft). Requires --card',
     },
     {
       flags: '--merge <gate>',
       description:
-        "US-521: the merge gate, same grammar: always parks awaiting-human (default), never/when enter the merge stage unless a has/lacks escalation fires (status escalated, exit 1, on-halt). #490's signal checks stay mandatory. Requires --card or --parallel (forwarded to every child card)",
+        "US-521: the merge gate, same grammar: hold-always parks awaiting-human (default), hold-never/hold-when enter the merge stage unless a has/lacks escalation fires (status escalated, exit 1, on-halt). hold-never waives pair-explicit-approval on a risk:red/untagged PR (US-576); #490's other signal checks stay mandatory. Requires --card, or the loop (--root/--filter; --parallel defaults to 1, forwarded to every child card)",
     },
     {
       flags: '--card <id>',
@@ -83,12 +88,12 @@ export const runCommandMetadata = {
     {
       flags: '--parallel <n>',
       description:
-        "US-491: fan-out — pair-next selects (--root and/or --filter, --assignee, --status), pair-loop's dependency + mutex analysis plans, and up to min(dependency-allowed, ## Max Parallelism, n) `pair-cli run --card` processes run at once; one iteration, or a re-selecting loop with --watch / --max-iterations (US-522). Needs --root or --filter (or the policy's); not with --card/--skill/--prompt",
+        "US-491: fan-out (optional: the loop flags --watch, --preset, --until, --prepare, --merge, --predicate imply --parallel 1) — pair-next selects (--root and/or --filter, --assignee, --status), pair-loop's dependency + mutex analysis plans, and up to min(dependency-allowed, ## Max Parallelism, n) `pair-cli run --card` processes run at once; one iteration, or a re-selecting loop with --watch / --max-iterations (US-522). Needs --root or --filter (or the policy's); not with --card/--skill/--prompt",
     },
     {
       flags: '--watch',
       description:
-        'US-522: with --parallel, loop: each iteration re-selects (skipping escalated, locked and already-driven cards), and an idle one waits --interval and re-selects. Stops at the Stop Predicate, the iteration cap (idle polls count) or Ctrl-C. Needs --parallel (--parallel 1 for sequential)',
+        'US-522: the loop (--root/--filter; --parallel optional, default 1): each iteration re-selects (skipping escalated, locked and already-driven cards), and an idle one waits --interval and re-selects. Stops at the Stop Predicate, the iteration cap (only iterations that ran a card count; idle polls never do) or Ctrl-C',
     },
     {
       flags: '--no-watch',
@@ -103,7 +108,7 @@ export const runCommandMetadata = {
     {
       flags: '--max-iterations <n>',
       description:
-        'Hard cap on iterations (narrows the policy cap, never widens it); with --parallel it enables the re-selecting loop, idle polls included',
+        'Hard cap on iterations (narrows the policy cap, never widens it); with --parallel it enables the re-selecting loop; under --watch it counts the iterations that ran a card, never an idle poll',
     },
     {
       flags: '--autonomous',
@@ -122,7 +127,7 @@ export const runCommandMetadata = {
     {
       flags: '--predicate <selector⇒condition>',
       description:
-        'With --parallel: the loop stop predicate (same grammar as `## Stop Predicate`), argument > adoption, printed with its source. Checked at each iteration boundary before work; an empty or incomplete board snapshot never counts as satisfied',
+        'On the loop (--parallel optional, default 1): the loop stop predicate (same grammar as `## Stop Predicate`), argument > adoption, printed with its source. Checked at each iteration boundary before work; an empty or incomplete board snapshot never counts as satisfied',
     },
     {
       flags: '--eligibility-filter <labels>',

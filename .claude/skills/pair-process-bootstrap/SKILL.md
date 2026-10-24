@@ -367,6 +367,25 @@ Runs **before either step's presence check**, and gates the whole phase on both 
 
 **Quick mode**: unlike the PM tool, this step is skipped by default in quick mode rather than asked — it has a safe KB default (no declaration) that Step 4.2's PM tool does not.
 
+### Step 4.2c: Autonomy Preset
+
+1. **Check**: Does `.pair/adoption/tech/automation.md` declare anything under `## Autonomy` (a `preset:` or any key)?
+2. **Skip**: If it does, confirm it and move to Step 4.3 — never overwrite a declared autonomy.
+3. **Act**: Ask the preset, recommending `escalate-red`:
+
+   > **How autonomous should unattended runs be?**
+   >
+   > - `full` — prepare and merge alone, `risk:red` included
+   > - `escalate-red` (recommended) — prepare and merge alone, a `risk:red` card waits for a human
+   > - `supervised` — every preparation and every merge waits for a human
+   >
+   > The table in [automation-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/automation-template.md) lists each preset's values.
+
+4. **Act**: Write `preset: <answer>` under `## Autonomy` via `/pair-capability-record-decision` — creating `tech/automation.md` from the [automation template](../../../.pair/knowledge/guidelines/collaboration/templates/automation-template.md) when it is absent (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)) (its `preset: escalate-red` replaced by the answer).
+5. **Verify**: `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve --adoption .pair/adoption/tech/automation.md` returns `ok: true` and `preset: <answer> (adoption)`.
+
+**Quick mode**: not asked — the template's `preset: escalate-red` (the new-project default) is written and reported in the Step 4.3 summary.
+
 ### Step 4.3: Final Summary
 
 1. **Act**: Present bootstrap completion summary to the developer for final approval:

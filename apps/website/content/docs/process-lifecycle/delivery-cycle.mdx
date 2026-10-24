@@ -256,7 +256,7 @@ Stage hooks run in the **story worktree**, the tree the stage works on; cycle-le
 
 The `merge` stage ([#490](https://github.com/foomakers/pair/issues/490)) is the cycle's last, and it is **opt-in per project**. A review-approved PR stops *ready-for-merge* and a human merges it: that is the default, and it is the fail-closed posture.
 
-**The default is no automatic merge.** The `merge` gate of `## Autonomy` is `always` unless written otherwise, and `always` parks every review-approved card for a human. A maintainer opts in with `until: merged` plus `merge: never` (every selected card may merge) or `merge: when; has: …; lacks: …` (a card matching the condition escalates instead). The legacy `## Auto-Advance` section is translated to the same gate by `autonomy-policy.mjs` (`(none)` is `always`, a tier is `when; lacks: <tier>`) and keeps working ([Autonomy](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md#autonomy--selection-target-and-gates-us-521-adr-027)).
+**The default is no automatic merge.** The `merge` gate of `## Autonomy` is `hold-always` unless written otherwise, and `hold-always` parks every review-approved card for a human. A maintainer opts in with `until: merged` plus `merge: hold-never` (every selected card may merge) or `merge: hold-when; has: …; lacks: …` (a card matching the condition escalates instead). The legacy `## Auto-Advance` section is translated to the same gate by `autonomy-policy.mjs` (`(none)` is `hold-always`, a tier is `hold-when; lacks: <tier>`) and keeps working ([Autonomy](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md#autonomy--selection-target-and-gates-us-521-adr-027)).
 
 **What the stage re-verifies, on freshly read signals, before any merge**: the conjunction that *is* the merge-allowed synthesis ([pr-states.md](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md)):
 
@@ -304,7 +304,7 @@ A further optional set of primitives serves scope decisions and state lookups; o
 
 1. **The trigger.** A tracker event (a label added to a card) reaches the **host adapter**, the thin per-host piece that holds the credentials the trigger runs under. It calls the dispatcher; it carries no cycle rule. See [github-automation.md](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/github-automation.md) and [#492](https://github.com/foomakers/pair/issues/492).
 2. **The dispatch.** The console driver (or `pair-loop`) reads `tech/automation.md` and maps the card's tags through `## Workflows` ([automation-policy.md](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md#workflows--which-workflow-each-tag-routes-to)). A tag is an opaque routing key; **an untagged card is never routed by tag**. With no mapping, the card's own Definition of Ready decides: a Ready card with a task breakdown enters the cycle, a card with a PR enters at `verify`.
-3. **The gates.** The `## Autonomy` `filter` bounds `--autonomous` runs: a card without a listed label is skipped as ineligible, and `--approve-ineligible` lets exactly one run through. Unattended runs never start a preparation skill unless the `prepare` gate says so (`always` by default: a human prepares). A card that cannot be read is a clean skip.
+3. **The gates.** The `## Autonomy` `filter` bounds `--autonomous` runs: a card without a listed label is skipped as ineligible, and `--approve-ineligible` lets exactly one run through. Unattended runs never start a preparation skill unless the `prepare` gate says so (`hold-always` by default: a human prepares). A card that cannot be read is a clean skip.
 4. **The safety rails.** An exclusive **per-card lock** (no timeout; SIGTERM and SIGINT release it, so re-running the same command continues the run); an **audit trail**, `start`, `skip`, `end`, with the start also printed as a `DISPATCH-RECORD:` line the adapter can post on the card; the **dispatch cap**; and `## Max Parallelism` as the ceiling on fan-out. An escalation condition in `## Autonomy` stops the cycle with one marker-keyed comment on the card.
 5. **The way out.** The `merge` gate of `## Autonomy` and the `merge` stage ([section 6](#6-the-merge-stage-and-the-merge-gate)). By default the run ends *ready-for-merge* and the merge stays a human decision.
 
@@ -312,7 +312,7 @@ A further optional set of primitives serves scope decisions and state lookups; o
 
 ### Worked example: a label to a PR ready for merge, no one present
 
-Setup: `## Workflows` maps `auto-dev` to the cycle; `## Autonomy` declares `filter: risk:green` and leaves the `merge` gate at `always`. Card 123 is Ready, has a task breakdown, and carries `risk:green`.
+Setup: `## Workflows` maps `auto-dev` to the cycle; `## Autonomy` declares `filter: risk:green` and leaves the `merge` gate at `hold-always`. Card 123 is Ready, has a task breakdown, and carries `risk:green`.
 
 | # | What happens | Printed / recorded |
 | --- | --- | --- |
@@ -321,10 +321,10 @@ Setup: `## Workflows` maps `auto-dev` to the cycle; `## Autonomy` declares `filt
 | 3 | `implement` writes tests and code, opens PR 456. | a handoff; the PR body |
 | 4 | `verify` reviews the exact head. | one review on the PR; the `pair-review` check |
 | 5 | Blocking findings? A remediation round runs `prepare → validate → green → verify` until clean or the budget is spent. | one handoff per stage |
-| 6 | Approved, the `merge` gate is `always` ⇒ no `merge` stage. | audit `end`; status *ready-for-merge* |
+| 6 | Approved, the `merge` gate is `hold-always` ⇒ no `merge` stage. | audit `end`; status *ready-for-merge* |
 | 7 | A human merges PR 456. | n/a |
 
-Had the policy declared `until: merged` and `merge: never`, step 6 would have run the `merge` stage: re-read the signals, merge pinned to the reviewed head, close the story and cascade to its parent, or park with a comment naming the signal that failed.
+Had the policy declared `until: merged` and `merge: hold-never`, step 6 would have run the `merge` stage: re-read the signals, merge pinned to the reviewed head, close the story and cascade to its parent, or park with a comment naming the signal that failed.
 
 The mechanics of every step are in the owner links of sections 1–7; the walk-through as a hands-on tutorial is on the docs site ([Automated development](/docs/tutorials/automated-development)).
 

@@ -4,6 +4,12 @@ import { join } from 'path'
 import { completeCandidates, type RootCandidate } from './root-plan'
 import { runWatchLoop } from './watch-loop'
 
+/** A --watch loop with nothing left to do waits forever: the test's Ctrl-C after `limit` idle waits. */
+const idleWait = (limit = 20) => {
+  let n = 0
+  return async () => (++n >= limit ? ('interrupted' as const) : ('elapsed' as const))
+}
+
 /**
  * Parity with `.claude/workflows/pair-loop.js` (the in-session realization of the loop): the branch a card with
  * none gets, and the slug it is derived from, are the SAME rule in both (US-... E / Z).
@@ -90,7 +96,7 @@ const viaCli = async (steps: Step[]): Promise<boolean[]> => {
           })),
         }
       },
-      wait: async () => 'elapsed',
+      wait: idleWait(),
       isInterrupted: () => false,
       onIteration: () => {},
     },
@@ -154,7 +160,7 @@ describe('pair-loop.js <-> pair-cli parity: a failed selection is a failure, not
         },
         probeLock: () => ({ kind: 'free' }),
         runBatch: async () => ({ outcomes: [] }),
-        wait: async () => 'elapsed',
+        wait: idleWait(),
         isInterrupted: () => false,
         onIteration: () => {},
       },
@@ -190,7 +196,7 @@ describe('pair-loop.js <-> pair-cli parity: no cross-run halt memory beyond the 
               })),
             }
           },
-          wait: async () => 'elapsed',
+          wait: idleWait(),
           isInterrupted: () => false,
           onIteration: () => {},
         },
@@ -229,7 +235,7 @@ describe('pair-loop.js <-> pair-cli parity: the SAME status string gets the SAME
             ...(cycleStatus !== undefined && { cycleStatus }),
           })),
         }),
-        wait: async () => 'elapsed',
+        wait: idleWait(),
         isInterrupted: () => false,
         onIteration: r => void records.push(r as never),
       },

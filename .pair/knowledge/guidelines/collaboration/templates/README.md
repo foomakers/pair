@@ -18,6 +18,7 @@ Standardized formats and checklists for every project management activity, from 
 - **[Branch Template](branch-template.md)** - Git branch naming and workflow standards
 - **[Commit Template](commit-template.md)** - Commit message formats and best practices
 - **[Pull Request Template](pr-template.md)** - PR description and review guide
+- **[Automation Template](automation-template.md)** - `tech/automation.md` starter: `## Autonomy` `preset: escalate-red` and the preset table
 - **[Code Review Template](code-review-template.md)** - Structured code review checklists
 - **[Team Template](user-story-template.md)** - Team formation and collaboration guidelines
 

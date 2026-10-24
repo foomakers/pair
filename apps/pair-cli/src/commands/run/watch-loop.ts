@@ -244,7 +244,8 @@ function stopReason(
 ): StopReason | undefined {
   if (facts.interrupted) return 'interrupted'
   if (facts.satisfied) return 'stop predicate satisfied'
-  if (facts.iteration >= config.cap) return 'iteration cap'
+  // Under --watch an idle poll is a wait, not an iteration: it never spends the cap — the loop stays vigilant.
+  if (facts.iteration >= config.cap && !(config.watch && facts.idle)) return 'iteration cap'
   return facts.idle && !config.watch ? 'nothing workable' : undefined
 }
 
@@ -399,13 +400,16 @@ export async function runWatchLoop(
     ...extra,
   })
 
+  let polling = false
   for (;;) {
     // No selection (and so no spawn) starts after a signal.
     if (deps.isInterrupted()) return finish('interrupted')
-    state.iteration++
+    // A --watch poll that found nothing keeps its iteration number: only an iteration that ran work counts.
+    if (!polling) state.iteration++
     state.base = deps.baseHead?.()
     const step = await iterate(config, deps, state, finish)
     if ('done' in step) return step.done
+    polling = config.watch && step.idle
     if (step.idle && (await deps.wait(config.intervalMs)) === 'interrupted') {
       return finish('interrupted')
     }

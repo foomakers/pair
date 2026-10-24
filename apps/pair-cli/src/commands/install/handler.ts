@@ -43,6 +43,7 @@ import {
   reportSourceDeclaration,
 } from '../registry-run'
 import { applySkipRegistries, persistSkipRegistries } from '../skip-registries'
+import { ensureWorkingIgnored } from '../working-gitignore'
 import { emitVersionDriftHint, recordInstalledVersion } from '../kb-info/version-hint'
 
 /**
@@ -128,7 +129,10 @@ async function runInstall(ctx: {
     presenter,
     ...(sourceDeclaration && { sourceDeclaration }),
   })
-  if (exitCode === 0) await persistSkipRegistries(fs, baseTarget, config.skipRegistries)
+  if (exitCode === 0) {
+    await persistSkipRegistries(fs, baseTarget, config.skipRegistries)
+    await ensureWorkingIgnored(fs, baseTarget)
+  }
   return exitCode
 }
 

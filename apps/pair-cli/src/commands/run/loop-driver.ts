@@ -56,7 +56,9 @@ function policySnapshot(resolved: ResolvedRun, config: RunCommandConfig): Record
     source: resolved.policy.source,
     eligibility: resolved.policy.eligibility ?? null,
     stopPredicate: resolved.policy.stopPredicate ?? null,
-    maxIterations: resolved.perimeter.maxIterations,
+    maxIterations: Number.isFinite(resolved.perimeter.maxIterations)
+      ? resolved.perimeter.maxIterations
+      : null,
     maxParallelism: resolved.policy.maxParallelism,
     auditLocation: resolved.policy.auditLocation,
     ...(resolved.idleTimeout !== undefined && { idleTimeout: resolved.idleTimeout }),
@@ -322,7 +324,7 @@ function reportOutcome(outcome: LoopOutcome, run: RunSinks): void {
  */
 function approvalArguments(resolved: ResolvedRun): {
   approval?: 'auto'
-  prepare?: 'never' | 'when'
+  prepare?: 'hold-never' | 'hold-when'
 } {
   const extras = resolved.promptExtras
   return {

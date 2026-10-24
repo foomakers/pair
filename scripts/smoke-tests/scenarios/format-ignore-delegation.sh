@@ -96,7 +96,7 @@ node_modules/
 pkg/gen/
 EOF
 
-# HERMETIC: the workspace lives under this repo's own .tmp/, so without a config of
+# HERMETIC: the workspace lives under this repo's own .pair/working/smoke-tests/, so without a config of
 # its own prettier's discovery walks OUT of the fixture and resolves the pair repo's
 # `package.json#prettier` — making the scenario depend on the outer repo's install
 # state (that is how the reviewer saw prettier exit 2 here). A local package.json +
