@@ -95,6 +95,22 @@ Task                →   Checklist item in story file
 
 The PR itself never lives here: a filesystem tracker hosts no repositories or pull requests, so declare a [code host](/docs/concepts/code-host) in `way-of-working.md` → `## Git Workflow`. The rows above are the *item-state* effects of PR events that happen on that host.
 
+## Unattended loop (`pair-cli run`)
+
+The delivery cycle (`pair-cli run --root IN-01 --autonomous`, `/pair-loop`, the batch engine) runs on a filesystem backlog exactly as on GitHub: every card read and write goes through the shipped `filesystem` PM adapter, PRs, checks and merge go to your `code-host`.
+
+| Concept | Filesystem |
+|---------|-----------|
+| Card id | The file name's leading id: `01-01-001` for `01-01-001-login.md`, `IN-01` for `IN-01-demo.md` (`--root`, `--story`) |
+| State | The status folder **and** the `**Status**:` line, written together |
+| Labels | One `**Labels**: risk:yellow, cli` line |
+| Comments | Marker blocks after a `<!-- pair-comments -->` line at the end of the file |
+| Close | `completed/` + `**Status**: Done`, then the parent epic when all its stories are done |
+
+**Where the state is written.** While a card is implemented, its state change is written **inside the story worktree** and committed on the PR branch, so it reaches the default branch with the PR. With no worktree (an attended run) the write lands in the repository root with a one-line warning: commit it yourself. The epic cascade runs only at merge, on the default branch, so parallel cards under one epic never race on the epic file.
+
+**Not supported:** `--assignee @me` (a backlog of files has no logged-in user): the run HALTs `not-implemented` naming `resolveUser`. Pass a name instead.
+
 ### Templates
 
 Each work item type uses the standard pair templates:
