@@ -107,6 +107,8 @@ export interface WatchLoopDeps {
   wait: Wait
   isInterrupted(): boolean
   onIteration(record: IterationRecord): void
+  /** The base branch's remote head now: a durable failure recorded on another base is stale and driven again. */
+  baseHead?(): string | undefined
 }
 
 const NEEDS_REVIEW = 'needs-review'
@@ -130,11 +132,19 @@ function notePid(into: { id: string; pid: number }[], id: string, lock: LockStat
   if (lock.kind === 'stale') into.push({ id, pid: lock.pid })
 }
 
+/** US-575 AC3 at loop level: a durable failure seen on another base is stale — dropped, `cycle-state` re-evaluates it. */
+function liveDurable(id: string, state: LoopState): { status: string } | undefined {
+  const durable = state.durable.get(id)
+  if (durable?.base === undefined || durable.base === state.base) return durable
+  state.durable.delete(id)
+  return undefined
+}
+
 /** Why a card is NOT driven this iteration before any lock is probed, or `undefined` when it may be. */
 function skipFor(card: RootCandidate, state: LoopState, budget: number): SkippedCard | undefined {
-  const durableStatus = state.durable.get(card.id)
-  if (durableStatus !== undefined) {
-    const detail = `durable failure: ${durableStatus} — not retried`
+  const durable = liveDurable(card.id, state)
+  if (durable !== undefined) {
+    const detail = `durable failure: ${durable.status} — not retried`
     return { id: card.id, reason: 'durable failure', detail }
   }
   if (state.drivenSet.has(card.id)) {
@@ -197,7 +207,9 @@ interface LoopState {
   readonly drivenSet: Set<string>
   readonly failures: Map<string, number>
   /** Cards whose failure was a DURABLE cycle terminal (a reported `failed-*`): reported and excluded, never retried. */
-  readonly durable: Map<string, string>
+  readonly durable: Map<string, { status: string; base: string | undefined }>
+  /** The base head read at the start of this iteration. */
+  base: string | undefined
   anyFailed: boolean
   iteration: number
 }
@@ -213,7 +225,12 @@ function absorb(state: LoopState, outcomes: readonly CardOutcome[]): void {
       // re-picked once cleared — NOT durable, and it never burns the retry budget; `escalate` (the review/fix budget is spent,
       // a human decision is owed) IS durable.
       if (outcome.cycleStatus === 'escalated') continue
-      if (outcome.cycleStatus !== undefined) state.durable.set(outcome.id, outcome.cycleStatus)
+      // US-575 AC8: a card parked `needs-human` keeps its reason — the loop goes on with the other cards.
+      if (outcome.cycleStatus !== undefined)
+        state.durable.set(outcome.id, {
+          status: outcome.detail.startsWith('needs-human: ') ? outcome.detail : outcome.cycleStatus,
+          base: state.base,
+        })
       else state.failures.set(outcome.id, (state.failures.get(outcome.id) ?? 0) + 1)
     } else {
       state.drivenSet.add(outcome.id)
@@ -365,6 +382,7 @@ export async function runWatchLoop(
     drivenSet: new Set(),
     failures: new Map(),
     durable: new Map(),
+    base: undefined,
     anyFailed: false,
     iteration: 0,
   }
@@ -385,6 +403,7 @@ export async function runWatchLoop(
     // No selection (and so no spawn) starts after a signal.
     if (deps.isInterrupted()) return finish('interrupted')
     state.iteration++
+    state.base = deps.baseHead?.()
     const step = await iterate(config, deps, state, finish)
     if ('done' in step) return step.done
     if (step.idle && (await deps.wait(config.intervalMs)) === 'interrupted') {

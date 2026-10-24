@@ -5,6 +5,9 @@ import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import type { RootCandidate } from './root-plan'
 
+/** US-575 AC6: no card in this suite has a prerequisite (the deterministic read is faked). */
+const NO_PREREQS = () => ({ blocked: false, prerequisites: [] })
+
 /**
  * US-491 review r0-1 — SIGTERM/SIGINT on `run --root --parallel` must release every mutex-resource
  * lock the driver holds BEFORE the driver exits: `card-lock` has no stale reclaim, so a lock that
@@ -143,6 +146,7 @@ async function startBatch(candidates: RootCandidate[], parallel: string): Promis
     parseRunCommand({ root: '66', parallel, autonomous: true, cwd: root }),
     fs,
     {
+      readPrereqState: NO_PREREQS,
       selectCandidates: async () => candidates,
       acquireLock: acquireCardLock,
       runCardProcess: spawnCardProcess,

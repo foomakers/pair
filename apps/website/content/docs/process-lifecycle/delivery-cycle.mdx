@@ -140,6 +140,23 @@ Each subsection below says what the stage is for, who runs it, what it reads and
 
 The cycle never decides these for itself: `decide` records a maintainer's answer to a finding that needs one (the cycle leaves `escalate` without re-running anything); `supersede` sets aside an unvalidated attempt so the stage can be redone; the explicit approval of a high-risk PR (`/approve`) is a recorded human act the `merge` stage requires. The recovery paths, including a stale card lock and custody after a base merge, are in the [`pair-workflow-cycle` skill](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.skills/workflow/cycle/SKILL.md).
 
+### Auto-recovery
+
+A failure whose cause is gone, or mechanical, is not a reason to park a card. The rules live in `cycle-state.mjs` (the run directory's `recovery.json`, beside the handoffs) and `pair-cli run` drives them.
+
+- **Stale failures**: `failed-preparation`, `failed-implement` and `failed-custody` are keyed by the PR head and the base head they were first observed on. Once either moved, the failure is stale: `resolve` re-derives the step (one more attempt; a re-verification for custody). The same keys keep it durable.
+- **A moved PR head**: a terminal review whose `reviewedHead` is not the current PR head is re-verified, except a review waiting on a human decision.
+- **Merge-time gate**: a red tier gate is re-run once on the same reviewed head, after the adopted `worktree-setup-command` ran in the story worktree; `merge-gate.json` names every gate with its last error lines. Still red, the approved card goes back to the fix stage with the failing gates as findings, never an exit.
+- **Base sync**: a story branch that conflicts with its base is merged mechanically: story-owned paths keep the story's bytes, base-owned ones take the base's, and the merge commit records it as a `Pair-Base-Sync` trailer that custody checks. A hand-resolved merge still fails custody, its breach naming the fix; a conflict on a sealed test is never resolved (`needs-human`).
+- **CI**: a failed external CI run is re-run once before it counts; later re-runs spend the budget. CI still red after that goes to the fix stage: the failing checks, with their log tail, become the findings to fix.
+- **Prerequisites**: read through the PM adapter by `cycle-state.mjs prereq-state`, never claimed by an agent; unreadable blocks. A blocked card is reported `blocked by #<id> (<reason>)` and selected again later.
+- **Dirty story worktree**: a preparation refused because the story worktree holds files no attempt owns (a killed probe's leftovers) is not a park. `pair-cli run` stashes them (`git stash list`: `pair-recovery: …`, kept, never deleted), spends one `autoRecoveryRounds` round (`worktree-clean`) and the step is re-derived.
+- **Seal not pushed**: a validation that sealed the contract but could not push it (`seal-not-pushed`: a pre-push hook or the network failed) is not a stop. `pair-cli run` spends one `autoRecoveryRounds` round (`stage-retry`) and dispatches the validation again; the seal and its push are idempotent.
+- **The loop**: a card the loop excluded as a durable failure is driven again once the base moved; `cycle-state` decides whether the failure is stale.
+- **Budgets**: `autoRecoveryRounds` (default 5) and `maxFixRounds` (default 10), `## Autonomy` keys. `autoRecoveryRounds` bounds recovery *without progress*: only rounds spent since the last step that advanced count, so a card that keeps advancing is never parked by an earlier step's rounds. Spent, the card is parked `needs-human: <reason>` in the console and the audit, and the run goes on with the other cards. A new run lists the exclusions of earlier runs (`excluded: <id> (<reason>, run <id>, <date>)`) and re-evaluates them instead of inheriting them.
+
+Recovery never bypasses a merge condition: `pair-review` success on the reviewed head, green CI, the green tier gate set and custody on sealed bytes stay mandatory.
+
 ## 3. Three realizations, and which to use
 
 One cycle, three ways to turn its crank. They differ in *who dispatches the stages*, never in what the rules are.

@@ -10,9 +10,20 @@
 //
 //   node <skill dir>/scripts/cycle-state.mjs resolve --dir <run/story dir> --workflowVersion <v>
 //        --policy '{"maxFixRounds":3,"redRepairs":1,"greenRetries":1,"reviewers":1}' --entry fresh|pr
-//        [--pr <n>] [--head <remote 40-hex>] [--inputs <digest>] [--acHash <digest>]
+//        [--pr <n>] [--head <remote 40-hex>] [--baseHead <base remote 40-hex>] [--inputs <digest>] [--acHash <digest>]
 //        [--runsRoot <.pair/working/runs>] [--story <id>]
-//     → { status: empty | in-progress | completed | blocked | incompatible | invalid | other-run, next, ... }
+//     → { status: empty | in-progress | completed | blocked | incompatible | invalid | other-run, next, recovery, ... }
+//     US-575: with --head/--baseHead a durable failure is keyed by the heads it was first seen on (recovery.json) and
+//     re-derived once either moved; a terminal review on a head that is no longer the PR head re-verifies.
+//
+//   node … recover --dir <dir> --kind gate-retry|base-sync|ci-rerun --detail <text> [--policy <json>]
+//     → { allowed, round, budget } | { allowed: false, next: { step: blocked, reason: needs-human, budget: autoRecoveryRounds } }
+//   node … gate-red --dir <dir> --reviewedHead <40-hex> --gates '[{name, ok, lastLines}]'
+//     → { recorded }   the approved card's next resolve is a remediation with the failing gates as findings
+//   node … base-sync --cwd <story worktree> --base <ref> --story <id> [--owned '<json paths>']
+//     → { synced, conflicts: [{path, side}] } | { synced: false, needsHuman: true, sealedConflicts } | { reason: up-to-date }
+//   node … prereq-state --story <id> [--dir <run/story dir>]
+//     → { blocked, prerequisites: [{id, state: merged|open|parked|unknown, reason}], blockedBy? }   fail closed
 //
 //   node … publish --dir <dir> --file <complete draft.json> --phase <p> --skill <s> --workflowVersion <v>
 //        [--predecessor <phase>-<skill>] [--attempt <n>] [--pr <n>]
@@ -121,7 +132,10 @@ export const CAPS = { consecutiveRedirects: 3 }
 // KB default blocking floor is `Minor` — every severity except Questions blocks, today's behaviour
 // byte for byte. A project declares `## Blocking Severities` only to differ (delta-only adoption,
 // ADR-018/D21); pair itself declares nothing.
-export const POLICY_DEFAULTS = { deadDispatchRetries: 1 }
+// US-575: `maxFixRounds` (completed corrective cycles) and `autoRecoveryRounds` (mechanical recoveries: gate retry,
+// base sync, CI re-run) are the two budgets a run spends before it parks a card `needs-human` — KB defaults, a
+// project's `## Autonomy` (or the caller's policy) overrides them.
+export const POLICY_DEFAULTS = { deadDispatchRetries: 1, maxFixRounds: 10, autoRecoveryRounds: 5 }
 export const DEFAULT_BLOCKING_FLOOR = 'Minor'
 // r1-1: no `Blocker` alias — `Blocker` is one entry OF a resolved template contract's OWN
 // `severityRanks`, never pair's guess at what it means. The severity vocabulary neither the
@@ -429,7 +443,7 @@ export const PIPELINE_DEFAULTS = {
   auditLogDir: '.pair/working/reviews',
   baseBranch: 'origin/main',
   reviewTemplate: '.pair/knowledge/guidelines/collaboration/templates/code-review-template.md',
-  maxFixRounds: 3,
+  maxFixRounds: 10,
   reviewers: 1,
 }
 export const DEFAULT_SEVERITY_FLOOR = 'Minor'
@@ -2151,6 +2165,167 @@ export function rollbackNotes(handoffs, precomputedLedger) {
 
 // ── resolve ────────────────────────────────────────────────────────────────────────────────
 const blocked = (reason, extra = {}) => ({ step: 'blocked', reason, ...extra })
+
+// ── US-575: auto-recovery ───────────────────────────────────────────────────────────────────
+// `<run dir>/recovery.json` — the run's recovery record, beside the handoffs (never a handoff: no stage
+// publishes it). `failures`: each durable failure handoff → the heads it was first observed on (+ `stale`
+// once they moved); `rounds`: every mechanical recovery spent (gate retry, base sync, CI re-run);
+// `gateRed`: the merge-time gate set that stayed red on a reviewed head.
+const DURABLE_FAILURES = new Set(['failed-preparation', 'failed-implement', 'failed-custody'])
+export const RECOVERY_FILE = 'recovery.json'
+export const RECOVERY_KINDS = ['gate-retry', 'base-sync', 'ci-rerun', 'worktree-clean', 'stage-retry']
+function readRecovery(dir) {
+  try {
+    return { failures: {}, rounds: [], ...JSON.parse(readFileSync(join(dir, RECOVERY_FILE), 'utf8')) }
+  } catch {
+    return { failures: {}, rounds: [] }
+  }
+}
+function writeRecovery(dir, state) {
+  const tmp = join(dir, `.${RECOVERY_FILE}.${process.pid}.tmp`)
+  writeFileSync(tmp, JSON.stringify(state, null, 2) + '\n')
+  renameSync(tmp, join(dir, RECOVERY_FILE))
+}
+// The budget bounds recovery WITHOUT progress: a round counts only after the last step that advanced (a phase's
+// first handoff — `.attempt-N` retries are not progress), so a card that keeps advancing is never parked by
+// rounds an earlier step spent.
+const STEP_HANDOFF = /^[ar]\d+(?:-g\d+)?-[a-z-]+\.json$/
+function spentRounds(dir, rounds) {
+  let since = 0
+  try {
+    for (const f of readdirSync(dir)) if (STEP_HANDOFF.test(f)) since = Math.max(since, statSync(join(dir, f)).mtimeMs)
+  } catch {}
+  return rounds.filter(r => Date.parse(r.at) > since)
+}
+const recoveryBudget = policy => (Number.isInteger(policy?.autoRecoveryRounds) && policy.autoRecoveryRounds >= 0 ? policy.autoRecoveryRounds : POLICY_DEFAULTS.autoRecoveryRounds)
+
+/** Spends ONE recovery round of `autoRecoveryRounds`, or answers the `needs-human` park once the budget is spent (0 ⇒ at once). */
+export function recover({ dir, kind, detail = '', policy = {}, lockWaitMs = 5000, now = new Date() }) {
+  const where = safeRunDir(dir)
+  if (where.error) return { allowed: false, error: where.error }
+  if (!RECOVERY_KINDS.includes(kind)) return { allowed: false, error: `kind-invalid:${kind} (expected ${RECOVERY_KINDS.join(' | ')})` }
+  const budget = recoveryBudget(policy)
+  mkdirSync(dir, { recursive: true })
+  return withLock(dir, lockWaitMs, () => {
+    const state = readRecovery(dir)
+    const spent = spentRounds(dir, state.rounds)
+    if (spent.length >= budget)
+      return { allowed: false, round: spent.length, budget, next: blocked('needs-human', { budget: 'autoRecoveryRounds', detail: `autoRecoveryRounds (${budget}) spent — last: ${kind}: ${detail}`.trim(), rounds: spent }) }
+    state.rounds.push({ kind, detail, at: now.toISOString() })
+    writeRecovery(dir, state)
+    return { allowed: true, round: spent.length + 1, budget }
+  })
+}
+
+/** The merge-time gate set that stayed red on `reviewedHead` (#575/AC2): `resolve` routes the approved card to the fix stage with it. */
+export function recordGateRed({ dir, reviewedHead, gates, lockWaitMs = 5000, now = new Date() }) {
+  const where = safeRunDir(dir)
+  if (where.error) return { recorded: false, error: where.error }
+  if (!SHA_RE.test(String(reviewedHead ?? ''))) return { recorded: false, error: 'reviewedHead-not-a-sha' }
+  if (!Array.isArray(gates) || !gates.some(g => g && typeof g.name === 'string' && g.ok !== true)) return { recorded: false, error: 'gates-invalid: at least one {name, ok:false, lastLines} is required' }
+  return withLock(dir, lockWaitMs, () => {
+    writeRecovery(dir, { ...readRecovery(dir), gateRed: { reviewedHead, gates, at: now.toISOString() } })
+    return { recorded: true }
+  })
+}
+
+// #575/AC5 — the mechanical base sync. Merges `base` into the story branch checked out at `cwd`; a conflict is resolved by
+// OWNERSHIP, never by judgment: a story-owned path (`owned` — the sealed fixScope's allowedPaths — else every path the
+// story itself changed) keeps the story's bytes, a base-owned one (anything else) takes the base's; a generated mirror takes
+// the side its dataset source took. A conflict on a SEALED test (a path a `Pair-RED-Snapshot` commit carries) is never resolved: the merge is
+// aborted and a human decides. The merge commit carries `Pair-Base-Sync: base=<sha>; ours=…; theirs=…` — the record
+// custody (`red-snapshot.mjs verify-chain`) checks the resolution against. Pushing is the caller's.
+const DATASET_ROOT = 'packages/knowledge-hub/dataset/'
+// The mirror transform of `red-snapshot.mjs mirrorPathMatches`: identical relative path, or same basename with a mirror parent
+// dir equal to / ending with `-<dataset parent dir>` (leading dots ignored).
+const mirrorOf = (mirror, source) => {
+  const rel = source.slice(DATASET_ROOT.length)
+  if (rel === mirror) return true
+  const m = mirror.split('/')
+  const o = rel.split('/')
+  if (m.at(-1) !== o.at(-1) || m.length < 2 || o.length < 2) return false
+  const [mp, op] = [m.at(-2), o.at(-2)].map(d => d.replace(/^\./, ''))
+  return mp === op || mp.endsWith(`-${op}`)
+}
+const BASE_OWNED_GENERATED = ['.claude/', '.agents/', '.agent/', '.cursor/', '.windsurf/', '.pair/knowledge/', '.pair/llms.txt']
+export function baseSync({ cwd, base, story, owned }) {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !GIT_ENV_RE.test(k)))
+  const run = args => spawnSync('git', args, { cwd, encoding: 'utf8', env })
+  const g = args => {
+    const r = run(args)
+    if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${(r.stderr || r.stdout).trim()}`)
+    return r.stdout.trim()
+  }
+  const lines = out => out.split('\n').filter(Boolean)
+  const baseSha = g(['rev-parse', '--verify', `${base}^{commit}`])
+  if (run(['merge-base', '--is-ancestor', baseSha, 'HEAD']).status === 0) return { synced: false, reason: 'up-to-date', base: baseSha, conflicts: [] }
+  if (g(['status', '--porcelain', '--untracked-files=no'])) return { synced: false, reason: 'dirty-worktree', base: baseSha, conflicts: [] }
+  const fork = g(['merge-base', 'HEAD', baseSha])
+  const sealed = new Set()
+  for (const sha of lines(g(['log', '--format=%H', '--grep=^Pair-RED-Snapshot: ', `${fork}..HEAD`])))
+    for (const p of lines(g(['-c', 'core.quotePath=false', 'diff-tree', '--no-commit-id', '--name-only', '-r', sha]))) sealed.add(p)
+  const storyPaths = new Set(lines(g(['-c', 'core.quotePath=false', 'diff', '--name-only', fork, 'HEAD'])))
+  const generated = p => BASE_OWNED_GENERATED.some(r => (r.endsWith('/') ? p.startsWith(r) : p === r))
+  const ownedPath = p => (Array.isArray(owned) ? owned.some(o => p === o || (o.endsWith('/') && p.startsWith(o))) : storyPaths.has(p))
+  // A generated mirror takes the side its dataset source took: ours when a story-owned dataset path the story changed maps onto it.
+  const isOwned = p => (generated(p) ? [...storyPaths].some(s => s.startsWith(DATASET_ROOT) && mirrorOf(p, s) && ownedPath(s)) : ownedPath(p))
+  const merge = run(['merge', '--no-ff', '--no-commit', baseSha])
+  const conflicted = lines(g(['-c', 'core.quotePath=false', 'diff', '--name-only', '--diff-filter=U'])).sort()
+  if (merge.status !== 0 && !conflicted.length) {
+    run(['merge', '--abort'])
+    throw new Error(`git merge ${baseSha} failed: ${(merge.stderr || merge.stdout).trim()}`)
+  }
+  const sealedConflicts = conflicted.filter(p => sealed.has(p))
+  if (sealedConflicts.length) {
+    g(['merge', '--abort'])
+    return { synced: false, needsHuman: true, reason: 'sealed-conflict', base: baseSha, sealedConflicts, detail: `the base conflicts with sealed test(s) ${sealedConflicts.join(', ')} — never auto-resolved: a human merges ${baseSha} and the contract is revised`, conflicts: [] }
+  }
+  const conflicts = conflicted.map(path => ({ path, side: isOwned(path) ? 'ours' : 'theirs' }))
+  for (const { path, side } of conflicts) {
+    if (run(['checkout', `--${side}`, '--', path]).status === 0) g(['add', '--', path])
+    else g(['rm', '-q', '--', path]) // that side deleted it
+  }
+  const side = s => conflicts.filter(c => c.side === s).map(c => c.path)
+  const trailer = `Pair-Base-Sync: base=${baseSha}${side('ours').length ? `; ours=${side('ours').join(',')}` : ''}${side('theirs').length ? `; theirs=${side('theirs').join(',')}` : ''}`
+  g(['commit', '-q', '--no-verify', '-m', `[#${story}] chore: sync base ${base}`, '-m', trailer])
+  return { synced: true, base: baseSha, head: g(['rev-parse', 'HEAD']), conflicts }
+}
+
+// #575/AC6 — a card's prerequisites, read deterministically through the bound PM adapter (never an agent's claim): the
+// `**Prerequisite Stories**:` line of the card, then each one's state — `merged` (closed as COMPLETED: its PR merged and
+// closed it), `closed` (closed any other way — not planned, duplicate, no reason: nothing merged, blocks),
+// `parked` (open and labelled for a human), `open`. Anything that cannot be read is `unknown` and BLOCKS (fail closed).
+const PREREQ_RE = /^\*\*Prerequisite Stories\*\*:[ \t]*(.*)$/m
+const PARK_LABELS = ['needs-review', 'pr-state:not-approved']
+export function prereqState({ story, dir, host }) {
+  const closed = reason => ({ story: String(story), blocked: true, prerequisites: [], blockedBy: { id: String(story), reason } })
+  let h
+  try {
+    h = host ?? bindHosts(dir ? { dir } : { from: process.cwd() })
+  } catch (e) {
+    return closed(`prerequisites unreadable: ${hostDetail(e)}`)
+  }
+  let body
+  try {
+    body = h.pm.readCard(story).body
+  } catch (e) {
+    return closed(`card unreadable: ${hostDetail(e)}`)
+  }
+  const ids = [...new Set((PREREQ_RE.exec(String(body ?? ''))?.[1] ?? '').match(/#\d+/g) ?? [])].map(id => id.slice(1))
+  const prerequisites = ids.map(id => {
+    try {
+      const card = h.pm.readCard(id, { fields: ['state', 'stateReason', 'labels'] })
+      if (String(card?.state ?? '').toUpperCase() === 'CLOSED')
+        return String(card?.stateReason ?? '').toUpperCase() === 'COMPLETED' ? { id, state: 'merged' } : { id, state: 'closed', reason: `closed not merged (stateReason ${card?.stateReason ?? 'absent'})` }
+      const park = (card?.labels ?? []).map(l => String(l?.name ?? l)).find(l => PARK_LABELS.includes(l))
+      return park ? { id, state: 'parked', reason: `parked (${park})` } : { id, state: 'open', reason: 'not merged' }
+    } catch (e) {
+      return { id, state: 'unknown', reason: `state unreadable: ${hostDetail(e)}` }
+    }
+  })
+  const first = prerequisites.find(p => p.state !== 'merged')
+  return { story: String(story), blocked: !!first, prerequisites, ...(first ? { blockedBy: { id: first.id, reason: first.reason } } : {}) }
+}
 const orderGroups = groups => {
   const byId = new Map(groups.map(g => [g.groupId, g]))
   const done = new Set()
@@ -2403,8 +2578,8 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     // once a human clears it: the same phase, the next attempt. A refusal the cycle owns
     // (`unprovable`, `split-required`) is terminal at once; a second identical external refusal too
     // (canary v4 run 17: a cleared `dirty` had no resume path and the cycle stayed blocked).
-    if (EXTERNAL_REFUSALS.has(d.status) && byPhase('red-spec', last.phase).length <= 1)
-      return { step: 'prepare', mode: d.mode ?? (parts.kind === 'initial' ? 'initial' : 'remediation'), phase: last.phase, round: parts.round, attempt: byPhase('red-spec', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined, detail: `retry after the ${d.status} refusal: ${d.reason ?? ''}`.trim() }
+    if ((EXTERNAL_REFUSALS.has(d.status) && byPhase('red-spec', last.phase).length <= 1) || ctx.stale)
+      return { ...(ctx.stale ? { stale: true } : {}), step: 'prepare', mode: d.mode ?? (parts.kind === 'initial' ? 'initial' : 'remediation'), phase: last.phase, round: parts.round, attempt: byPhase('red-spec', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: d.findings?.received ? findingsByIds(d.findings.received) : undefined, detail: `retry after the ${d.status} refusal: ${d.reason ?? ''}`.trim() }
     return blocked('failed-preparation', { refusal: d.status, detail: d.reason ?? d.splitReason, phase: last.phase })
   }
   if (last.skill === 'red-verify') {
@@ -2431,7 +2606,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     // A red gate or a failed build is the implementer's to fix on the SAME seal — once. The
     // contract was approved; the implementation was not.
     const attempts = byPhase('implement-phase', last.phase).length
-    if (attempts <= (policy.greenRetries ?? 1)) return { step: 'implement', mode: 'retry', phase: last.phase, round: 0, attempt: attempts + 1, base: d.inputHead, contract: contractOf(last.phase), pr: Number.isInteger(d.prNumber) ? d.prNumber : undefined, detail: d.gatesPassed === false ? 'gate red' : d.reason }
+    if (attempts <= (policy.greenRetries ?? 1) || ctx.stale) return { step: 'implement', mode: 'retry', phase: last.phase, round: 0, attempt: attempts + 1, base: d.inputHead, contract: contractOf(last.phase), pr: Number.isInteger(d.prNumber) ? d.prNumber : undefined, detail: d.gatesPassed === false ? 'gate red' : d.reason, ...(ctx.stale ? { stale: true } : {}) }
     return blocked('failed-implement', { budget: 'greenRetries', detail: d.gatesPassed === false ? 'gate red twice' : d.reason })
   }
   if (last.skill === 'green-fix') {
@@ -2440,7 +2615,11 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     return afterGreen(last.phase, d.outputHead)
   }
   if (last.skill === 'review-phase') {
-    if (d.custody?.contractBreach === true) return blocked('failed-custody', { phase: last.phase, breaches: d.custody.breaches })
+    // US-575 (#575/AC3): a custody failure recorded on heads that have since moved is stale — re-verify the new head.
+    if (d.custody?.contractBreach === true)
+      return ctx.stale ? { step: 'verify', mode: 're-review', phase: `r${(parts.round ?? 0) + 1}`, round: (parts.round ?? 0) + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], priorFindings: priorFindings(), stale: true } : blocked('failed-custody', { phase: last.phase, breaches: d.custody.breaches })
+    const maxFix = policy.maxFixRounds ?? POLICY_DEFAULTS.maxFixRounds
+    const fixBudgetSpent = `maxFixRounds (${maxFix}) spent — the remaining blocking findings need a human`
     const findings = Array.isArray(d.findings) ? d.findings : []
     const blocking = findings.filter(isBlocking)
     const round = parts.round ?? 0
@@ -2470,7 +2649,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     // the very transition the request was meant to hold. The kind, when given, only says WHY.
     if (d.needsHumanDecision === true) return blocked('escalate', { detail: `${d.humanDecisionKind ?? 'human'} decision requested by the review — a human decides before any automatic rewind`, findings: blocking, regressionRisks: activeRisks })
     if (activeRisks.length) {
-      if (cycleCounters(list).spentCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', detail: 'an active regression risk remains and the remediation budget is spent', findings: blocking, regressionRisks: activeRisks })
+      if (cycleCounters(list).spentCycles >= maxFix) return blocked('escalate', { budget: 'maxFixRounds', needsHuman: fixBudgetSpent, detail: 'an active regression risk remains and the remediation budget is spent', findings: blocking, regressionRisks: activeRisks })
       // The earliest introducing batch is repaired first; every active risk travels with it.
       const roundOf = b => phaseParts(`${b}-g1`)?.round ?? 0
       const batch = [...new Set(activeRisks.map(r => String(r.introducedByRemediationBatchId)))].sort((a, b) => roundOf(a) - roundOf(b))[0]
@@ -2573,7 +2752,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     // US-479 T-21 (S4): the budget bounds COMPLETED corrective cycles, never the raw round
     // counter — a metadata-only re-review (inputsChanged, a moved head) bumps `round` without any
     // actual fix and must not spend the budget a real remediation earns.
-    if (cycleCounters(list).spentCycles >= (policy.maxFixRounds ?? 3)) return blocked('escalate', { budget: 'maxFixRounds', findings: blocking })
+    if (cycleCounters(list).spentCycles >= maxFix) return blocked('escalate', { budget: 'maxFixRounds', needsHuman: fixBudgetSpent, findings: blocking })
     // US-506: `approved-test-failing` and `contract-gap` presuppose a SEALED contract of their group.
     // On a fresh run `a0` never sealed one, so such a finding has nothing to retry or revise: it is an
     // ordinary finding and routes the test-first remediation below (AC-3 — no new finding class).
@@ -2864,7 +3043,7 @@ const priorStepOfRole = (handoffs, toStep) => {
 const withContext = (next, handoffs, contextPolicy) =>
   next && typeof next === 'object' && next.context === undefined ? { ...next, context: contextOf(priorStepOfRole(handoffs, next.step), next.step, contextPolicy) } : next
 
-export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels }) {
+export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels }) {
   // Fail closed before ANY state is read: an unusable freshness policy is never resolved around.
   const policyError = contextPolicyError(contextPolicy)
   if (policyError) throw new Error(policyError)
@@ -2879,12 +3058,12 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   if (autoAdvanceError) return { status: 'invalid', reason: autoAdvanceError, workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
   const autonomyError = autonomyPolicyError(policy.autonomy)
   if (autonomyError) return { status: 'invalid', reason: autonomyError, workflowVersion, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
-  const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels })
+  const out = resolveState({ dir, workflowVersion, policy, entry, pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels })
   // The budgets a coordinator spends are the cycle's data, never the coordinator's own constants.
   return { ...out, policy: { ...POLICY_DEFAULTS, ...policy }, caps: CAPS }
 }
 
-function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels }) {
+function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, head, baseHead, inputs, acHash, runsRoot, story, contextPolicy, redirects, tier, labels, prLabels }) {
   const where = safeRunDir(dir)
   if (where.error) return { status: 'invalid', reason: where.error, path: where.path, workflowVersion }
   const handoffs = readHandoffs(dir)
@@ -2918,7 +3097,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
     // US-521: the autonomy decision applies to a card with no handoff yet too (`until: ready` stops it before
     // `implement`; an escalation fires before its first dispatch).
     const first = withContext(applyAutonomy(deriveNext([], policy, { entry }), { policy, tier, labels, prLabels }), [], contextPolicy)
-    return { status: first.step === 'blocked' && first.reason === 'escalated' ? 'escalated' : first.step === 'done' ? 'completed' : 'empty', next: first, handoffs: [], legacyRuns, workflowVersion }
+    return { status: first.step === 'blocked' && first.reason === 'escalated' ? 'escalated' : first.step === 'done' ? 'completed' : 'empty', next: first, handoffs: [], legacyRuns, workflowVersion, recovery: { spent: spentRounds(dir, readRecovery(dir).rounds).length, budget: recoveryBudget(policy) } }
   }
   for (const h of handoffs) {
     if (h.data.schemaVersion !== SCHEMA_VERSION) return { status: 'incompatible', reason: `schemaVersion ${JSON.stringify(h.data.schemaVersion)} != ${SCHEMA_VERSION} in ${h.name}`, workflowVersion }
@@ -2944,7 +3123,45 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // US-479 F-RR-06: the derived ledger is computed ONCE per resolution and handed to every reader
   // — the next step, the counters and the returned active matrix all see the same view.
   const ledger = regressionRiskLedger(handoffs)
-  let next = deriveNext(handoffs, policy, { entry, head, siblingContradictionKeys, predecessors: predecessorEvidence(dir), ledger })
+  // US-575 (#575/AC3): a durable failure is keyed by the heads it was FIRST observed on (PR head, base head). Once
+  // either moved, its cause may be gone: the failure is stale and the step is re-derived — and that verdict
+  // sticks for the same handoff, so a stage's own Step 0 resolve (which passes no heads) agrees with it.
+  const heads = Object.fromEntries([['prHead', head], ['baseHead', baseHead]].filter(([, v]) => SHA_RE.test(String(v ?? ''))))
+  const recovery = readRecovery(dir)
+  const failureId = `${last.name}.attempt-${last.attempt}`
+  const recorded = recovery.failures[failureId]
+  const moved = !!recorded && Object.entries(heads).some(([k, v]) => recorded[k] !== undefined && recorded[k] !== v)
+  // A `worktree-clean` round (the driver stashed what made the worktree dirty) after the failure was seen clears its cause too.
+  const cleaned = !!recorded && recorded.reason === 'failed-preparation' && recovery.rounds.some(r => r.kind === 'worktree-clean' && r.at >= recorded.at)
+  const stale = !!recorded && (recorded.stale !== undefined || moved || cleaned)
+  let next = deriveNext(handoffs, policy, { entry, head, stale, siblingContradictionKeys, predecessors: predecessorEvidence(dir), ledger })
+  if (stale && next.step !== 'blocked') {
+    if (recorded.stale === undefined) writeRecovery(dir, { ...recovery, failures: { ...recovery.failures, [failureId]: { ...recorded, stale: heads } } })
+  } else if (next.step === 'blocked' && DURABLE_FAILURES.has(next.reason)) {
+    const key = recorded ? Object.fromEntries(['prHead', 'baseHead'].filter(k => recorded[k] !== undefined).map(k => [k, recorded[k]])) : heads
+    if (!recorded && Object.keys(heads).length) writeRecovery(dir, { ...recovery, failures: { ...recovery.failures, [failureId]: { reason: next.reason, ...heads, at: new Date().toISOString() } } })
+    if (Object.keys(key).length) next = { ...next, failureKey: key }
+  }
+  const reReviewOf = extra =>
+    withActiveGuards(
+      { step: 'verify', mode: 're-review', phase: `r${(phaseParts(last.phase)?.round ?? 0) + 1}`, round: (phaseParts(last.phase)?.round ?? 0) + 1, attempt: 1, base: last.data.reviewedHead, prior: last.name, openIds: (last.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: [...new Map(handoffs.filter(h => h.skill === 'review-phase').flatMap(r => (r.data.findings ?? []).filter(f => f?.id).map(f => [f.id, { id: f.id, severity: f.severity }]))).values()], ...extra },
+      ledger.filter(r => r.state === 'active'),
+    )
+  // US-575 (#575/AC4): a review's terminal verdict holds for the head it reviewed. The PR head moved since ⇒ re-verify
+  // the new head (custody judges the new commits). A request for a HUMAN decision keeps waiting for it.
+  if (last.skill === 'review-phase' && heads.prHead && heads.prHead !== last.data.reviewedHead && next.step === 'blocked' && next.reason !== 'awaiting-scope-decision' && !(next.reason === 'escalate' && !next.budget)) next = reReviewOf({ headMoved: true })
+  // US-575 (#575/AC2): the merge-time tier gate stayed red after its recovery budget — a real failure. The approved
+  // card goes back to the fix stage with the failing gates as its findings, on the head the review approved.
+  const gateRed = recovery.gateRed
+  if (next.step === 'done' && gateRed && gateRed.reviewedHead === next.reviewedHead) {
+    const round = (next.round ?? 0) + 1
+    const findings = gateRed.gates.filter(g => g.ok !== true).map(g => ({ id: `gate-${g.name}`, severity: 'Major', location: `gate:${g.name}`, description: `the ${g.name} gate failed at merge time on ${gateRed.reviewedHead}: ${g.lastLines ?? '(no output recorded)'}`, recommendation: `make the ${g.name} gate pass`, blocking: true, transition: 'open', kind: 'defect' }))
+    const maxFix = policy.maxFixRounds ?? POLICY_DEFAULTS.maxFixRounds
+    next =
+      cycleCounters(handoffs).spentCycles >= maxFix
+        ? blocked('escalate', { budget: 'maxFixRounds', needsHuman: `maxFixRounds (${maxFix}) spent — the merge gate is still red: a human decides`, findings })
+        : { step: 'prepare', mode: 'remediation', phase: `r${round}-g1`, round, attempt: 1, base: gateRed.reviewedHead, findings }
+  }
   const names = handoffs.map(h => h.name)
   // Changed effective inputs invalidate REVIEW evidence: prior findings + the delta are re-validated
   // from the last reviewed head. Sealed contracts and GREEN commits stay trusted.
@@ -2957,13 +3174,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // handoffs) is history, never evidence of a change.
   const acThen = last.data.acHashSource === 'publish' ? canonicalHash(last.data.acHash) : undefined
   if (last.skill === 'review-phase' && ((inputs && last.data.inputsDigest && last.data.inputsDigest !== inputs) || (acNow && acThen && acThen !== acNow)) && next.step !== 'blocked') {
-    const round = phaseParts(last.phase)?.round ?? 0
-    const seen = new Map()
-    for (const r of handoffs.filter(h => h.skill === 'review-phase')) for (const f of r.data.findings ?? []) if (f?.id) seen.set(f.id, { id: f.id, severity: f.severity })
-    next = withActiveGuards(
-      { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: last.data.reviewedHead, prior: last.name, openIds: (last.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: [...seen.values()], inputsChanged: true, invalidated: handoffs.filter(h => h.skill === 'review-phase').map(h => h.name) },
-      ledger.filter(r => r.state === 'active'),
-    )
+    next = reReviewOf({ inputsChanged: true, invalidated: handoffs.filter(h => h.skill === 'review-phase').map(h => h.name) })
   }
   // The PR the cycle is bound to travels with EVERY next: a coordinator resuming a fresh-path card
   // (no prNumber in its args) learns it from here — a verification dispatched without it would
@@ -3001,7 +3212,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   next = withContext(next, handoffs, contextPolicy)
   const status = next.step === 'done' ? 'completed' : next.reason === 'escalated' && next.step === 'blocked' ? 'escalated' : next.step === 'blocked' ? 'blocked' : 'in-progress'
   const nextFindingSeq = handoffs.filter(h => h.skill === 'review-phase').reduce((m, h) => Math.max(m, ...(h.data.findings ?? []).map(f => Number(/-(\d+)$/.exec(String(f.id ?? ''))?.[1] ?? 0))), 0) + 1
-  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion, counters: cycleCounters(handoffs, ledger), predecessorRuns, activeRegressionRisks: ledger.filter(r => r.state === 'active'), rollbackNotes: rollbackNotes(handoffs, ledger), ...(warnings.length ? { warnings } : {}) }
+  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, recovery: { spent: spentRounds(dir, recovery.rounds).length, budget: recoveryBudget(policy) }, workflowVersion, counters: cycleCounters(handoffs, ledger), predecessorRuns, activeRegressionRisks: ledger.filter(r => r.state === 'active'), rollbackNotes: rollbackNotes(handoffs, ledger), ...(warnings.length ? { warnings } : {}) }
 }
 
 // ── migration (US-479 T-19, S10) ───────────────────────────────────────────────────────────
@@ -3301,7 +3512,7 @@ if (isMain()) {
     const { cmd, opts } = parseCli(process.argv.slice(2))
     // t9d-19 (DT-32): the flag set is closed per command — an unknown flag is refused, never ignored.
     const FLAGS = {
-      resolve: ['acHash', 'contextPolicy', 'dir', 'entry', 'head', 'inputs', 'labels', 'policy', 'pr', 'prLabels', 'redirects', 'runsRoot', 'story', 'tier', 'workflowVersion'],
+      resolve: ['acHash', 'baseHead', 'contextPolicy', 'dir', 'entry', 'head', 'inputs', 'labels', 'policy', 'pr', 'prLabels', 'redirects', 'runsRoot', 'story', 'tier', 'workflowVersion'],
       publish: ['attempt', 'dir', 'file', 'phase', 'policy', 'pr', 'predecessor', 'repoRoot', 'skill', 'workflowVersion'],
       hash: ['file'],
       'ac-hash': ['dir', 'story'],
@@ -3316,6 +3527,10 @@ if (isMain()) {
       supersede: ['attempt', 'by', 'dir', 'entry', 'phase', 'policy', 'pr', 'reason', 'skill', 'workflowVersion'],
       decide: ['by', 'decision', 'dir', 'entry', 'finding', 'phase', 'policy', 'pr', 'workflowVersion'],
       version: [],
+      recover: ['detail', 'dir', 'kind', 'policy'],
+      'gate-red': ['dir', 'gates', 'reviewedHead'],
+      'base-sync': ['base', 'cwd', 'owned', 'story'],
+      'prereq-state': ['dir', 'story'],
     }
     if (FLAGS[cmd]) {
       const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
@@ -3346,7 +3561,7 @@ if (isMain()) {
     let out
     if (cmd === 'resolve') {
       need('dir', 'workflowVersion', 'entry')
-      out = resolve({ dir: opts.dir, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr, head: opts.head, inputs: opts.inputs, acHash: opts.acHash, runsRoot: opts.runsRoot, story: opts.story, contextPolicy: opts.contextPolicy ? JSON.parse(opts.contextPolicy) : undefined, redirects: opts.redirects, tier: opts.tier, labels: opts.labels ? JSON.parse(opts.labels) : undefined, prLabels: opts.prLabels ? JSON.parse(opts.prLabels) : undefined })
+      out = resolve({ dir: opts.dir, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr, head: opts.head, baseHead: opts.baseHead, inputs: opts.inputs, acHash: opts.acHash, runsRoot: opts.runsRoot, story: opts.story, contextPolicy: opts.contextPolicy ? JSON.parse(opts.contextPolicy) : undefined, redirects: opts.redirects, tier: opts.tier, labels: opts.labels ? JSON.parse(opts.labels) : undefined, prLabels: opts.prLabels ? JSON.parse(opts.prLabels) : undefined })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
     } else if (cmd === 'publish') {
@@ -3455,6 +3670,26 @@ if (isMain()) {
       out = decide({ dir: opts.dir, phase: opts.phase, finding: opts.finding, decision: opts.decision, by: opts.by, workflowVersion: opts.workflowVersion, policy: opts.policy ? JSON.parse(opts.policy) : {}, entry: opts.entry, pr: opts.pr !== undefined ? Number(opts.pr) : undefined })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.decided ? 0 : 1)
+    } else if (cmd === 'recover') {
+      need('dir', 'kind')
+      out = recover({ dir: opts.dir, kind: opts.kind, detail: opts.detail, policy: opts.policy ? JSON.parse(opts.policy) : {} })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.error ? 2 : 0)
+    } else if (cmd === 'gate-red') {
+      need('dir', 'reviewedHead', 'gates')
+      out = recordGateRed({ dir: opts.dir, reviewedHead: opts.reviewedHead, gates: JSON.parse(opts.gates) })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.recorded ? 0 : 1)
+    } else if (cmd === 'base-sync') {
+      need('cwd', 'base', 'story')
+      out = baseSync({ cwd: opts.cwd, base: opts.base, story: opts.story, owned: opts.owned ? JSON.parse(opts.owned) : undefined })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.synced || out.reason === 'up-to-date' ? 0 : 1)
+    } else if (cmd === 'prereq-state') {
+      need('story')
+      out = prereqState({ story: opts.story, dir: opts.dir })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(0)
     } else if (cmd === 'version') {
       // The pin, printed bare so a shell can capture it: `WV="$(… cycle-state.mjs version)"`. It is
       // the one value this realization passes to every `--workflowVersion`, and having a producer
@@ -3468,7 +3703,7 @@ if (isMain()) {
       out = testIdentity({ cwd: opts.cwd, command: opts.command, env, toolchain: opts.toolchain ?? `node ${process.version}` })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
-    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | activate-card | migrate-inspect | apply-scope-decisions | scope-baseline | supersede | decide | test-identity | version)`)
+    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | activate-card | migrate-inspect | apply-scope-decisions | scope-baseline | supersede | decide | recover | gate-red | base-sync | prereq-state | test-identity | version)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)
