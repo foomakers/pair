@@ -1,0 +1,72 @@
+{
+  "$meta": {
+    "pr": "581",
+    "phase": "r3-g1",
+    "base": "31bfc3d614d94665549cfc1cd3320b4c339557b0",
+    "trailer": "Pair-RED-Snapshot: pr=581; phase=r3-g1; base=31bfc3d614d94665549cfc1cd3320b4c339557b0; manifest=.pair/red-snapshots/pr-581-r3-g1.json",
+    "artifacts": []
+  },
+  "phase": "r3-g1",
+  "mode": "remediation",
+  "inputHead": "31bfc3d614d94665549cfc1cd3320b4c339557b0",
+  "sourceOfTruth": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs (baseSync isOwned L2258-2259, prereqState L2283-2285 and L2307) at 31bfc3d6",
+  "inventory": [
+    {
+      "id": "r2-5",
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs baseSync (generated mirror side: isOwned via mirrorOf over story-owned dataset paths, L2258-2259) and prereqState (merged only when stateReason COMPLETED, L2307)",
+      "inputs": [
+        "base-sync conflict on a generated mirror path",
+        "prerequisite card closed with stateReason COMPLETED | NOT_PLANNED | DUPLICATE | absent"
+      ],
+      "representations": [
+        ".pair/adoption/decision-log/2026-10-24-run-auto-recovery-state-and-budgets.md (adoption ADL, lines 25-26; single copy, not mirrored)"
+      ],
+      "consumers": [
+        "readers of the ADL Decision section",
+        "reviewers checking code against recorded decisions"
+      ],
+      "classes": [
+        "mirror whose dataset source is story-owned -> ours",
+        "mirror whose dataset source is not story-owned -> theirs",
+        "non-mirror story-owned -> ours (unchanged)",
+        "non-mirror other -> theirs (unchanged)",
+        "sealed test conflict -> needs-human (unchanged)",
+        "prereq closed COMPLETED -> merged",
+        "prereq closed NOT_PLANNED/DUPLICATE/no reason -> blocks as closed not merged",
+        "needs-review / pr-state:not-approved -> parked (unchanged)",
+        "unreadable -> blocks, fail closed (unchanged)"
+      ],
+      "interactions": []
+    }
+  ],
+  "fixScope": {
+    "owner": ".pair/adoption/decision-log/2026-10-24-run-auto-recovery-state-and-budgets.md",
+    "mode": "doc",
+    "allowedPaths": [
+      ".pair/adoption/decision-log/2026-10-24-run-auto-recovery-state-and-budgets.md"
+    ]
+  },
+  "checklist": [
+    {
+      "id": "r2-5-c1",
+      "finding": "r2-5",
+      "requirement": "Base sync bullet (line 25) no longer says generated mirrors take theirs; it states a generated mirror takes the side its dataset source took (ours when its dataset source is story-owned, theirs otherwise). Other paths: story-owned keep ours, everything else takes theirs; sealed test conflict -> needs-human; Pair-Base-Sync trailer stay. Text 'generated mirrors take theirs' is absent from the ADL.",
+      "authority": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs L2258-2259: 'A generated mirror takes the side its dataset source took: ours when a story-owned dataset path the story changed maps onto it.' isOwned via mirrorOf"
+    },
+    {
+      "id": "r2-5-c2",
+      "finding": "r2-5",
+      "requirement": "Prerequisites bullet (line 26) no longer says 'closed ⇒ merged'; it states a prerequisite counts as merged only when closed as COMPLETED, and any other closure (not planned, duplicate, no reason) blocks as closed not merged. needs-review / pr-state:not-approved ⇒ parked and fail closed stay. Text 'closed ⇒ merged' is absent from the ADL.",
+      "authority": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs L2283-2285 and L2307: stateReason COMPLETED ⇒ merged, else state closed, reason 'closed not merged (stateReason …)', which blocks"
+    },
+    {
+      "id": "r2-5-c3",
+      "finding": "r2-5",
+      "requirement": "Regression guard (missedUpstream): 'git grep -n -e \"closed ⇒ merged\" -e \"generated mirrors take theirs\" -- .pair/adoption/decision-log/2026-10-24-run-auto-recovery-state-and-budgets.md' returns no match; only .pair/adoption/decision-log/2026-10-24-run-auto-recovery-state-and-budgets.md changes.",
+      "authority": "finding r2-5 recommendation ASSERT; fixScope"
+    }
+  ],
+  "matrix": [],
+  "redTests": [],
+  "testExempt": false
+}
