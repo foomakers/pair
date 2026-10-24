@@ -1692,6 +1692,15 @@ const findingTargetPaths = (group, finding) => {
 }
 // A plan group names its finding ids as `findings` (canonical) or `findingIds` (alias) — every reader goes through here.
 export const groupFindingIds = group => group?.findings ?? group?.findingIds ?? []
+// A generated mirror's source is in scope: a source file mirrorOf it, or a directory holding it — the whole
+// dataset, the identical relative path, or a dir whose name the mirror's parent dirs carry (`red-spec/` ⇒ `pair-workflow-red-spec/`).
+const sourceInScope = (mirror, a) => {
+  const rel = a.startsWith(DATASET_ROOT) ? a.slice(DATASET_ROOT.length) : a
+  if (!a.endsWith('/')) return mirrorOf(mirror, DATASET_ROOT + rel)
+  if (!rel || mirror.startsWith(rel)) return true
+  const name = rel.split('/').at(-2).replace(/^\./, '')
+  return mirror.split('/').slice(0, -1).some(d => d === name || d.endsWith(`-${name}`))
+}
 export function planErrors(plan, findings) {
   const errs = []
   const byId = new Map((findings ?? []).map(f => [f?.id, f]))
@@ -1707,9 +1716,10 @@ export function planErrors(plan, findings) {
       if ((group.mode === 'behavioral' || group.mode === 'test') && proseOnly) errs.push(`prose-finding-not-doc: ${id} belongs in a doc group`)
       if (group.mode === 'doc' && !proseOnly) errs.push(`code-finding-in-doc-group: ${id} touches code, it stays behavioral`)
       // US-582: one stale claim ⇒ one finding listing every location, so a doc group's scope covers EVERY target path (a
-      // directory entry covers its children); a generated mirror is fixed at its dataset source, which the location lists too.
+      // directory entry covers its children); a generated mirror is fixed at its dataset source, so it is exempt only when
+      // that source is in scope.
       if (group.mode === 'doc' && proseOnly)
-        for (const p of targets.filter(p => !isGenerated(p) && !(group.allowedPaths ?? []).some(a => p === a || (a.endsWith('/') && p.startsWith(a)))))
+        for (const p of targets.filter(p => !(group.allowedPaths ?? []).some(a => p === a || (a.endsWith('/') && p.startsWith(a)) || (isGenerated(p) && sourceInScope(p, a)))))
           errs.push(`finding-location-outside-scope: ${id}: ${p}`)
     }
   }
