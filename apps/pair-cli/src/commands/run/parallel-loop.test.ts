@@ -15,6 +15,9 @@ import type { RootCandidate } from './root-plan'
 import type { SelectionAnswer } from './root-select'
 import type { WaitOutcome } from './wait'
 
+/** US-575 AC6: no card in this suite has a prerequisite (the deterministic read is faked). */
+const NO_PREREQS = () => ({ blocked: false, prerequisites: [] })
+
 /**
  * US-522 T-8 — the watch loop end to end through the REAL handler: fake `pair-next` selection (scripted
  * per iteration), fake `run --card` children, a fake wait on a recorded queue (no real timer), and a real
@@ -129,6 +132,7 @@ async function start(options: Options): Promise<Run> {
     parseRunCommand({ cwd: root, autonomous: true, parallel: '2', ...options.flags }),
     fs,
     {
+      readPrereqState: NO_PREREQS,
       selectAnswer: async () => {
         const entry = options.script[Math.min(selections, options.script.length - 1)]!
         selections++

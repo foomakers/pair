@@ -202,6 +202,34 @@ describe('AD: only TRANSIENT failures are retried; a durable cycle terminal is r
     )
   })
 
+  it('US-575 AC8: a card parked needs-human is reported with its reason and excluded; the loop goes on with the other cards', async () => {
+    const batches: string[][] = []
+    const records: IterationRecord[] = []
+    const result = await runWatchLoop(
+      { watch: true, intervalMs: 1, cap: 2 },
+      {
+        select: async () => sel(card('1'), card('2'), card('3')),
+        probeLock: () => ({ kind: 'free' }),
+        runBatch: async cards => (
+          batches.push(cards.map(c => c.id)),
+          {
+            outcomes: cards.map(c =>
+              c.id === '1'
+                ? { id: '1', outcome: 'failed' as const, detail: 'needs-human: maxFixRounds (10) spent', cycleStatus: 'needs-human' }
+                : out(c.id, 'completed'),
+            ),
+          }
+        ),
+        wait: async () => 'elapsed',
+        isInterrupted: () => false,
+        onIteration: r => void records.push(r),
+      },
+    )
+    expect(batches).toEqual([['1', '2', '3']])
+    expect(records[1]!.skipped.find(s => s.id === '1')!.detail).toBe('durable failure: needs-human: maxFixRounds (10) spent — not retried')
+    expect(result.exitCode).toBe(1)
+  })
+
   it('a crash / no cycle status (engine or API error before the cycle reported) is transient: retried within the budget', async () => {
     const batches: string[][] = []
     await runWatchLoop(

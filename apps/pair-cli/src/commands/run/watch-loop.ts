@@ -213,7 +213,9 @@ function absorb(state: LoopState, outcomes: readonly CardOutcome[]): void {
       // re-picked once cleared — NOT durable, and it never burns the retry budget; `escalate` (the review/fix budget is spent,
       // a human decision is owed) IS durable.
       if (outcome.cycleStatus === 'escalated') continue
-      if (outcome.cycleStatus !== undefined) state.durable.set(outcome.id, outcome.cycleStatus)
+      // US-575 AC8: a card parked `needs-human` keeps its reason — the loop goes on with the other cards.
+      if (outcome.cycleStatus !== undefined)
+        state.durable.set(outcome.id, outcome.detail.startsWith('needs-human: ') ? outcome.detail : outcome.cycleStatus)
       else state.failures.set(outcome.id, (state.failures.get(outcome.id) ?? 0) + 1)
     } else {
       state.drivenSet.add(outcome.id)

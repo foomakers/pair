@@ -43,6 +43,8 @@ export interface CardProcessExit {
   readonly prepare?: PrepareResult
   /** AD: the cycle status the child printed, when it printed one. */
   readonly cycleStatus?: string
+  /** US-575 AC8: the reason the child parked the card (`needs-human: <reason>`), when it printed one. */
+  readonly needsHuman?: string
 }
 
 export type CardProcessRunner = (input: {
@@ -61,7 +63,8 @@ export function outcomeOfExit(id: string, exit: CardProcessExit): Omit<CardOutco
   const prepare = exit.prepare !== undefined ? { prepare: exit.prepare } : {}
   if (exit.exitCode === 0) return { id, outcome: 'completed', detail: 'exit 0', ...prepare }
   const cycle = exit.cycleStatus !== undefined ? { cycleStatus: exit.cycleStatus } : {}
-  return { id, outcome: 'failed', detail: `exit ${String(exit.exitCode)}`, ...prepare, ...cycle }
+  const detail = exit.needsHuman !== undefined ? `needs-human: ${exit.needsHuman}` : `exit ${String(exit.exitCode)}`
+  return { id, outcome: 'failed', detail, ...prepare, ...cycle }
 }
 
 // ── the pool ───────────────────────────────────────────────────────────────────────────────────
@@ -236,9 +239,15 @@ export function parseCycleStatus(line: string): string | undefined {
   return /^\s*Cycle status: (\S+)/.exec(line)?.[1]
 }
 
+/** US-575: the `needs-human: <reason>` line a `run --card` child prints when a budget parks the card. */
+export function parseNeedsHuman(line: string): string | undefined {
+  return /^\s*needs-human: (.+?)\s*$/.exec(line)?.[1]
+}
+
 interface RelayHandlers {
   readonly onPrepare: (result: PrepareResult) => void
   readonly onCycle: (status: string) => void
+  readonly onNeedsHuman?: (reason: string) => void
   /** US-573: present ⇒ the child's `PAIR_EVENT` lines are relayed here instead of printed. */
   readonly onEvent?: ((event: RunEvent) => void) | undefined
 }
@@ -253,7 +262,7 @@ function relayedEvent(line: string, onEvent: RelayHandlers['onEvent']): boolean 
 }
 
 function relay(child: ChildProcess, id: string, handlers: RelayHandlers): void {
-  const { onPrepare, onCycle, onEvent } = handlers
+  const { onPrepare, onCycle, onNeedsHuman, onEvent } = handlers
   for (const stream of [child.stdout, child.stderr]) {
     if (stream === null) continue
     createInterface({ input: stream }).on('line', line => {
@@ -262,6 +271,8 @@ function relay(child: ChildProcess, id: string, handlers: RelayHandlers): void {
       if (prepare !== undefined) onPrepare(prepare)
       const cycle = parseCycleStatus(line)
       if (cycle !== undefined) onCycle(cycle)
+      const human = parseNeedsHuman(line)
+      if (human !== undefined) onNeedsHuman?.(human)
       console.log(prefixLine(id, line))
     })
   }
@@ -300,9 +311,11 @@ export const spawnCardProcess: CardProcessRunner = ({ card, args, cwd, onEvent }
     trackEngine(child)
     let prepare: PrepareResult | undefined
     let cycleStatus: string | undefined
+    let needsHuman: string | undefined
     relay(child, card.id, {
       onPrepare: result => (prepare = result),
       onCycle: status => (cycleStatus = status),
+      onNeedsHuman: reason => (needsHuman = reason),
       onEvent,
     })
     child.once('error', error => resolve({ exitCode: null, signal: null, error: error.message }))
@@ -312,6 +325,7 @@ export const spawnCardProcess: CardProcessRunner = ({ card, args, cwd, onEvent }
         signal,
         ...(prepare !== undefined && { prepare }),
         ...(cycleStatus !== undefined && { cycleStatus }),
+        ...(needsHuman !== undefined && { needsHuman }),
       }),
     )
   })

@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'fs'
 import { appendAuditLine, type AuditAppender } from './dispatch-audit'
 import type { RunEvent } from './run-events'
 
@@ -61,4 +62,43 @@ export function createRunAudit(input: RunAuditInput): RunAudit {
       write('loop-end', null, null, { status, reason })
     },
   }
+}
+
+/** US-575 AC9: a card an earlier run of this audit ended on a durable terminal, as that run recorded it. */
+export interface PreviousExclusion {
+  readonly card: string
+  readonly reason: string
+  readonly runId: string
+  readonly date: string
+}
+
+const DURABLE_END = (status: string): boolean =>
+  status.startsWith('failed-') || status === 'needs-human' || status === 'escalate'
+
+/**
+ * Every card whose LATEST `card-end` in the audit is a durable terminal (`failed-*`, `needs-human`, `escalate`). Listed
+ * at the start of a new run and never inherited: the run drives them again and `resolve` re-evaluates each one (a
+ * failure recorded on heads that since moved is stale). Lines that are not this audit's JSON events are skipped.
+ */
+export function previousExclusions(path: string): PreviousExclusion[] {
+  if (!existsSync(path)) return []
+  const latest = new Map<string, PreviousExclusion | undefined>()
+  for (const line of readFileSync(path, 'utf-8').split('\n')) {
+    let entry: { ts?: string; runId?: string; card?: string; event?: string; detail?: { status?: string; reason?: string } }
+    try {
+      entry = JSON.parse(line) as typeof entry
+    } catch {
+      continue
+    }
+    if (entry.event !== 'card-end' || typeof entry.card !== 'string') continue
+    const status = String(entry.detail?.status ?? '')
+    const reason = entry.detail?.reason?.startsWith('needs-human') ? entry.detail.reason : status
+    latest.set(
+      entry.card,
+      DURABLE_END(status)
+        ? { card: entry.card, reason, runId: String(entry.runId ?? '?'), date: String(entry.ts ?? '').slice(0, 10) }
+        : undefined,
+    )
+  }
+  return [...latest.values()].filter((e): e is PreviousExclusion => e !== undefined)
 }

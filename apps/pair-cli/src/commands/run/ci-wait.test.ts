@@ -90,4 +90,38 @@ describe('ciWaitFromEnv', () => {
     ).toEqual({ capSeconds: 60, intervalSeconds: 5 })
     expect(ciWaitFromEnv({ PAIR_CI_WAIT_CAP_SECONDS: 'x' }).capSeconds).toBe(1800)
   })
+
+  describe('US-575 AC7: a failed external CI is re-run before it counts', () => {
+    const FAILED: CycleMergeResult = { mergeAllowed: false, ciPending: false, ciFailed: true }
+
+    it('a failure is re-run (the run goes pending), polled, and the merge proceeds once it passes', async () => {
+      const answers = [FAILED, PENDING, OK]
+      let reruns = 0
+      const result = await checkWithCiWait(
+        () => answers.shift()!,
+        async () => 'elapsed',
+        { capSeconds: 600, rerun: () => (reruns++, true) },
+      )
+      expect(reruns).toBe(1)
+      expect(result).toBe(OK)
+    })
+
+    it('a re-run refused (budget spent) returns the failure — parked as before', async () => {
+      const answers = [FAILED, PENDING, FAILED]
+      const granted = [true, false]
+      const result = await checkWithCiWait(
+        () => answers.shift()!,
+        async () => 'elapsed',
+        { capSeconds: 600, rerun: () => granted.shift()! },
+      )
+      expect(granted).toEqual([])
+      expect(result).toBe(FAILED)
+    })
+
+    it('no rerun collaborator: a failure returns at once, unchanged', async () => {
+      let calls = 0
+      const result = await checkWithCiWait(() => (calls++, FAILED), async () => 'elapsed', {})
+      expect([calls, result]).toEqual([1, FAILED])
+    })
+  })
 })

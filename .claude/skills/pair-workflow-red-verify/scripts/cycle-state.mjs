@@ -2263,7 +2263,7 @@ export function prereqState({ story, dir, host }) {
   const closed = reason => ({ story: String(story), blocked: true, prerequisites: [], blockedBy: { id: String(story), reason } })
   let h
   try {
-    h = host ?? bindHosts({ dir })
+    h = host ?? bindHosts(dir ? { dir } : { from: process.cwd() })
   } catch (e) {
     return closed(`prerequisites unreadable: ${hostDetail(e)}`)
   }

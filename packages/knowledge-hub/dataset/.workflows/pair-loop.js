@@ -316,7 +316,7 @@ function resolveAuditLocation(policyText) {
 }
 
 // ── Dependency analysis: ordering + mutex sets + overrides ─────────────────
-// card: { id, title, branch, tags, mutexResources: string[], prerequisites: [{id, merged}] }
+// card: { id, title, branch, tags, mutexResources: string[], prerequisites: [{id, merged, reason?}] }
 
 function dependencyFilter(cards) {
   const allowed = []
@@ -324,7 +324,7 @@ function dependencyFilter(cards) {
   for (const card of cards) {
     const unmergedPrereq = (card.prerequisites ?? []).find(p => !p.merged)
     if (unmergedPrereq) {
-      audit.push({ id: card.id, excluded: true, reason: `blocked by #${unmergedPrereq.id} (not merged)` })
+      audit.push({ id: card.id, excluded: true, reason: `blocked by #${unmergedPrereq.id} (${unmergedPrereq.reason ?? 'not merged'})` })
     } else {
       allowed.push(card)
     }

@@ -92,6 +92,13 @@ if (isMain) {
   }
   const policy = opts.policy ? JSON.parse(opts.policy) : {}
   const effective = { deadDispatchRetries: 1, ...policy }
+  // US-575 AC2: the REAL resolve routes a recorded merge-time gate-red to the fix stage (cycle-recovery.test.mjs);
+  // here that route is a typed terminal, so the driver's hand-off to it is observable.
+  const recovery = existsSync(opts.dir + '/recovery.json') ? JSON.parse(readFileSync(opts.dir + '/recovery.json', 'utf8')) : {}
+  if (recovery.gateRed) {
+    process.stdout.write(JSON.stringify({ status: 'blocked', next: { step: 'blocked', reason: 'stub-fix-stage', findings: recovery.gateRed.gates }, pr: ${PR}, policy: effective }) + '\\n')
+    process.exit(0)
+  }
   const error = autoAdvancePolicyError(policy.autoAdvance)
   if (error) {
     process.stdout.write(JSON.stringify({ status: 'invalid', reason: error, policy: effective }) + '\\n')
@@ -265,11 +272,15 @@ const argv = process.argv.slice(2)
 fs.appendFileSync(process.env.FAKE_ENGINE_LOG, JSON.stringify({ argv }) + '\\n')
 const prompt = argv[argv.length - 1] || ''
 const path = (prompt.match(/(\\/[^\\s\`'"]+merge-gate\\.json)/) || [])[1]
-if (prompt.includes('${GATE_SKILL}') && process.env.FAKE_GATE_RESULT && path) {
+// FAKE_GATE_SEQUENCE: one RESULT line per successive gate dispatch (US-575: BLOCKED once, then PASS).
+const gateRuns = fs.readFileSync(process.env.FAKE_ENGINE_LOG, 'utf8').split('\\n').filter(l => l.includes('${GATE_SKILL}')).length
+const result = process.env.FAKE_GATE_SEQUENCE ? JSON.parse(process.env.FAKE_GATE_SEQUENCE)[gateRuns - 1] : process.env.FAKE_GATE_RESULT
+if (prompt.includes('${GATE_SKILL}') && result && path) {
   fs.writeFileSync(path, JSON.stringify({
     tier: process.env.FAKE_GATE_TIER || (prompt.match(/risk:[a-z]+/) || [])[0],
     reviewedHead: process.env.FAKE_GATE_HEAD || (prompt.match(/[0-9a-f]{40}/) || [])[0],
-    result: process.env.FAKE_GATE_RESULT,
+    result,
+    gates: result.includes('BLOCKED') ? [{ name: 'lint', ok: false, lastLines: 'error  no-unused-vars' }, { name: 'test', ok: true }] : [{ name: 'lint', ok: true }],
   }))
 }
 process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\\n')
@@ -340,6 +351,8 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
   }, 60_000)
 
   it('g2-w2: a merge next runs cycle-merge.mjs check, then cycle-merge.mjs run — never a ready-for-merge terminal', async () => {
+    // US-575: a red gate no longer reaches `run` (it is routed to the fix stage) — the pinning is observed on a green one.
+    vi.stubEnv('FAKE_GATE_RESULT', GATE_PASS)
     const outcome = await settle(drive(adopt(ELIGIBLE)))
 
     const cmds = mergeCalls().map(c => c.cmd)
@@ -352,6 +365,8 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
   }, 60_000)
 
   it('g2-w3: check and run are pinned to the reviewed head, the PR, the story, the tier and the Auto-Advance tiers', async () => {
+    // US-575: a red gate no longer reaches `run` (it is routed to the fix stage) — the pinning is observed on a green one.
+    vi.stubEnv('FAKE_GATE_RESULT', GATE_PASS)
     await settle(drive(adopt(ELIGIBLE)))
 
     const calls = mergeCalls()
@@ -370,19 +385,15 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
     expect((run['message'] ?? '').trim().length).toBeGreaterThan(0)
   }, 60_000)
 
-  it('g2-w4: the gate stage ran but wrote NO evidence — the run is handed --gate red and nothing merges', async () => {
+  it('g2-w4: the gate stage ran but wrote NO evidence — red: retried once, then routed to the fix stage; nothing merges', async () => {
     const outcome = await settle(drive(adopt(ELIGIBLE)))
 
-    expect(gatePrompts()).toHaveLength(1)
+    expect(gatePrompts()).toHaveLength(2)
     expect(existsSync(join(runDir(), 'merge-gate.json'))).toBe(false)
-    const runs = mergeCalls().filter(c => c.cmd === 'run')
-    expect(runs).toHaveLength(1)
-    expect(runs[0]!.opts['gate']).toBe('red')
-    expect(mergeCalls().some(c => c.opts['gate'] === 'green')).toBe(false)
+    expect(runCalls()).toHaveLength(0)
     expect(outcome).not.toContain('"merged":true')
-    expect(`${outcome}\n${printed.join('\n')}`).toContain(
-      "the tier's gate set came back red at merge time",
-    )
+    expect(outcome).toContain('stub-fix-stage')
+    expect(`${outcome}\n${printed.join('\n')}`).toContain('no gate evidence for this tier and head')
   }, 60_000)
 
   it('g2-w5: a parked check never runs the merge, and its reason is reported verbatim', async () => {
@@ -441,16 +452,99 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
     expect(reported(outcome)).toContain(reason)
   }, 60_000)
 
-  it('g2-w9: gate evidence that ran and FAILED gives run --gate red, not merged, with the verify-quality line reported', async () => {
+  it('g2-w9 / US-575 AC2: gate evidence that ran and FAILED twice is routed to the fix stage with the failing gates as findings — never run --gate red', async () => {
     vi.stubEnv('FAKE_GATE_RESULT', GATE_BLOCKED)
 
     const outcome = await settle(drive(adopt(ELIGIBLE)))
 
-    expect(gatePrompts()).toHaveLength(1)
-    expect(runCalls()).toHaveLength(1)
-    expect(runCalls()[0]!.opts['gate']).toBe('red')
+    expect(gatePrompts()).toHaveLength(2)
+    expect(runCalls()).toHaveLength(0)
     expect(outcome).not.toContain('"merged":true')
     expect(reported(outcome)).toContain(GATE_BLOCKED)
+    const recovery = JSON.parse(readFileSync(join(runDir(), 'recovery.json'), 'utf8'))
+    expect(recovery.gateRed).toMatchObject({ reviewedHead: REVIEWED_HEAD, gates: [{ name: 'lint', ok: false, lastLines: 'error  no-unused-vars' }, { name: 'test', ok: true }] })
+    expect(outcome).toContain('stub-fix-stage')
+  }, 60_000)
+
+  it('US-575 AC1: a gate BLOCKED once, then green on re-run, merges — the driver never exits on the first BLOCKED (#568 / PR #574)', async () => {
+    vi.stubEnv('FAKE_GATE_SEQUENCE', JSON.stringify([GATE_BLOCKED, GATE_PASS]))
+
+    const outcome = await settle(drive(adopt(ELIGIBLE)))
+
+    expect(gatePrompts()).toHaveLength(2)
+    expect(gatePrompts().every(p => p.includes(REVIEWED_HEAD))).toBe(true)
+    expect(runCalls()).toHaveLength(1)
+    expect(runCalls()[0]!.opts['gate']).toBe('green')
+    expect(outcome).toContain('"status":"merged"')
+    expect(printed.join('\n')).toMatch(/recovery round 1\/5/)
+    const recovery = JSON.parse(readFileSync(join(runDir(), 'recovery.json'), 'utf8'))
+    expect(recovery.rounds).toMatchObject([{ kind: 'gate-retry', detail: GATE_BLOCKED }])
+  }, 60_000)
+
+  it('US-575 AC1: the gate prompt asks for every gate by name with its last error lines in merge-gate.json', async () => {
+    vi.stubEnv('FAKE_GATE_RESULT', GATE_PASS)
+    await settle(drive(adopt(ELIGIBLE)))
+    expect(gatePrompts()[0]).toMatch(/"gates": \[\{"name": "<gate>", "ok": <true\|false>, "lastLines": "<its last error lines>"\}/)
+  }, 60_000)
+
+  it('US-575 AC1: before the re-run the driver runs the adopted worktree-setup-command in the story worktree; a failing setup is one round, its error recorded', async () => {
+    vi.stubEnv('FAKE_GATE_RESULT', GATE_BLOCKED)
+    const wow = join(main, '.pair/adoption/tech/way-of-working.md')
+    mkdirSync(dirname(wow), { recursive: true })
+    writeFileSync(wow, "- **`worktree-setup-command`**: `node -e \"require('fs').appendFileSync('setup.log', process.cwd() + '\\\\n'); process.exit(3)\"` — run once.\n")
+
+    const outcome = await settle(drive(adopt(ELIGIBLE)))
+
+    const recovery = JSON.parse(readFileSync(join(runDir(), 'recovery.json'), 'utf8'))
+    expect(recovery.rounds.map((r: { detail: string }) => r.detail)).toEqual([GATE_BLOCKED])
+    expect(recovery.gateRed.gates).toContainEqual({ name: 'worktree-setup-command', ok: false, lastLines: expect.stringMatching(/worktree-setup-command .* exited 3/) })
+    expect(printed.join('\n')).toMatch(/worktree-setup-command .* exited 3/)
+    expect(readFileSync(join(root, 'pair-worktrees/7/setup.log'), 'utf8')).toContain('pair-worktrees/7')
+    expect(gatePrompts()).toHaveLength(1)
+    expect(outcome).toContain('stub-fix-stage')
+  }, 60_000)
+
+  it('US-575 AC5: a story branch that conflicts with its base is synced mechanically, pushed, and the new head re-resolved — then it merges', async () => {
+    vi.stubEnv('FAKE_GATE_RESULT', GATE_PASS)
+    const git = (...args: string[]) =>
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: main, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+    git('checkout', '-q', '-b', 'scratch')
+    writeFileSync(join(main, 'f.txt'), 'story\n')
+    git('add', 'f.txt')
+    git('commit', '-q', '-m', '[#7] feat: story side')
+    git('push', '-q', 'origin', `HEAD:refs/heads/${BRANCH}`)
+    git('checkout', '-q', 'main')
+    writeFileSync(join(main, 'f.txt'), 'base\n')
+    git('add', 'f.txt')
+    git('commit', '-q', '-m', 'base side')
+    git('push', '-q', 'origin', 'main')
+
+    const outcome = await settle(drive(adopt(ELIGIBLE)))
+
+    const synced = git('rev-parse', `origin/${BRANCH}`)
+    expect(git('log', '-1', '--format=%B', synced)).toMatch(/Pair-Base-Sync: base=[0-9a-f]{40}; ours=f\.txt/)
+    expect(resolveCalls().some(c => c['head'] === synced)).toBe(true)
+    expect(JSON.parse(readFileSync(join(runDir(), 'recovery.json'), 'utf8')).rounds).toMatchObject([{ kind: 'base-sync' }])
+    expect(outcome).toContain('"status":"merged"')
+  }, 60_000)
+
+  it('US-575 AC8 edge: the run budgets reach resolve; autoRecoveryRounds 0 re-runs nothing — the red gate goes straight to the fix stage', async () => {
+    vi.stubEnv('FAKE_GATE_RESULT', GATE_BLOCKED)
+    const outcome = await settle(
+      createDefaultCycleDriver({
+        engine: { ...ENGINES.claude, command: join(root, 'bin', 'fake-engine') },
+        cwd: main,
+        fs: adopt(ELIGIBLE),
+        location: { scriptsDir: join(main, '.claude/skills/pair-workflow-cycle/scripts') },
+        autonomyArgs: [],
+        timeoutSeconds: 30,
+        workflowVersion: CYCLE_WORKFLOW_VERSION,
+        baseBranch: CYCLE_BASE_BRANCH_DEFAULT,
+      })({ runId: 'story-7', card: '7', pr: PR, budgets: { autoRecoveryRounds: 0, maxFixRounds: 4 } }),
+    )
+    expect(JSON.parse(resolveCalls()[0]!['policy']!)).toMatchObject({ autoRecoveryRounds: 0, maxFixRounds: 4 })
+    expect(gatePrompts()).toHaveLength(1)
+    expect(outcome).toContain('stub-fix-stage')
   }, 60_000)
 
   it('g2-w10: the gate is dispatched ONCE, after check, for the card tier, the PR, the reviewed head and the evidence path', async () => {
@@ -469,29 +563,27 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
     )
   }, 60_000)
 
-  it('g2-w11: passing evidence for ANOTHER tier is not green — run --gate red', async () => {
+  it('g2-w11: passing evidence for ANOTHER tier is not green — never merged', async () => {
     vi.stubEnv('FAKE_GATE_RESULT', GATE_PASS)
     vi.stubEnv('FAKE_GATE_TIER', 'risk:yellow')
 
     const outcome = await settle(drive(adopt(ELIGIBLE)))
 
-    expect(runCalls()).toHaveLength(1)
-    expect(runCalls()[0]!.opts['gate']).toBe('red')
+    expect(runCalls()).toHaveLength(0)
     expect(outcome).not.toContain('"merged":true')
   }, 60_000)
 
-  it('g2-w12: passing evidence for ANOTHER head is not green — run --gate red', async () => {
+  it('g2-w12: passing evidence for ANOTHER head is not green — never merged', async () => {
     vi.stubEnv('FAKE_GATE_RESULT', GATE_PASS)
     vi.stubEnv('FAKE_GATE_HEAD', remoteHead)
 
     const outcome = await settle(drive(adopt(ELIGIBLE)))
 
-    expect(runCalls()).toHaveLength(1)
-    expect(runCalls()[0]!.opts['gate']).toBe('red')
+    expect(runCalls()).toHaveLength(0)
     expect(outcome).not.toContain('"merged":true')
   }, 60_000)
 
-  it('g2-w13: passing evidence left by an EARLIER dispatch is never reused — run --gate red', async () => {
+  it('g2-w13: passing evidence left by an EARLIER dispatch is never reused — never merged', async () => {
     mkdirSync(runDir(), { recursive: true })
     writeFileSync(
       join(runDir(), 'merge-gate.json'),
@@ -500,9 +592,8 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
 
     const outcome = await settle(drive(adopt(ELIGIBLE)))
 
-    expect(gatePrompts()).toHaveLength(1)
-    expect(runCalls()).toHaveLength(1)
-    expect(runCalls()[0]!.opts['gate']).toBe('red')
+    expect(gatePrompts()).toHaveLength(2)
+    expect(runCalls()).toHaveLength(0)
     expect(outcome).not.toContain('"merged":true')
   }, 60_000)
 

@@ -64,6 +64,8 @@ export interface CycleResolveStop {
 export type CycleResolveAnswer = CycleResolveResult | CycleResolveStop
 
 export interface CycleOutcome {
+  /** US-575: internal — the merge stage recovered; `runCycleLoop` resolves again instead of returning. */
+  readonly resume?: true
   readonly status: string
   readonly stagesRun: number
   readonly next?: CycleNext
@@ -134,6 +136,11 @@ export interface CycleMergeOutcome {
   readonly status: string
   readonly stagesRun: number
   readonly merge: unknown
+  /**
+   * US-575: the merge stage RECOVERED instead of ending the cycle (a base sync moved the head, a red gate was
+   * routed to the fix stage) — the loop resolves again. Never set on a merge that ran or a park.
+   */
+  readonly resume?: true
 }
 
 /** The steps `cycle-dispatch.mjs packet` can render a prompt for; anything else is terminal. */
@@ -154,6 +161,8 @@ interface LoopState {
   reuseNoticeGiven: boolean
   /** The story worktree, once created: where `pre-<stage>`/`post-<stage>` hooks run. */
   worktreePath: string | undefined
+  /** US-575: the `next` a recovered merge stage last resumed from. */
+  resumedFrom?: CycleNext
 }
 
 function buildStageRecord(
@@ -431,6 +440,7 @@ async function terminalStep(
     stagesRun: state.stagesRun + merged.stagesRun,
     next,
     merge: merged.merge,
+    ...(merged.resume === true && { resume: true as const }),
   }
 }
 
@@ -483,7 +493,16 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     if (settled !== null) return settled
     await runPostStageHook(state, next, hooks, onNotice)
 
-    if (!DISPATCHABLE_STEPS.has(next.step)) return await terminalStep(input, state, next, answer)
+    if (!DISPATCHABLE_STEPS.has(next.step)) {
+      const outcome = await terminalStep(input, state, next, answer)
+      // US-575: a recovered merge stage hands the card back to `resolve` — once per distinct `next`, so a resolve
+      // that keeps offering the very same merge can never spin here.
+      if (outcome.resume !== true || sameNext(state.resumedFrom, next)) return outcome
+      state.resumedFrom = next
+      state.stagesRun = outcome.stagesRun
+      state.dispatchedNext = null
+      continue
+    }
     noticeReuseOnce(state, next, onNotice)
     const gated = await gateDispatch(state, next, input)
     if (gated !== null) return gated
@@ -590,6 +609,7 @@ function hookFailure(halted: HaltedHook, stagesRun: number): CycleOutcome {
 const NOT_TERMINAL = new Set(['rounds-bound-reached', 'incompatible', 'invalid', 'other-run'])
 const isHaltOutcome = (o: CycleOutcome): boolean =>
   o.status.startsWith('failed-') ||
+  o.status === 'needs-human' ||
   o.status === 'escalate' ||
   o.status === 'escalated' ||
   o.status === 'merged-closure-unfinished' ||

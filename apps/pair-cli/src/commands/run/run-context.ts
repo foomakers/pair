@@ -96,6 +96,8 @@ export interface RunHandlerDependencies {
   /** US-491: the `pair-next --root` selection (one engine process, shipped `selectRootCandidates`). */
   /** Live title read for a candidate the selection returned without one. */
   readCardTitle?: (card: string, cwd: string) => string | undefined
+  /** US-575 AC6: a card's prerequisite state (`cycle-state.mjs prereq-state`); injected in tests. */
+  readPrereqState?: (card: string) => import('./cycle-scripts').PrereqState
   selectCandidates?: (input: SelectRootInput) => Promise<RootCandidate[]>
   /** US-522: the loop's selection (candidates + predicate snapshot); defaults to `selectCandidates` or the shipped one. */
   selectAnswer?: (input: SelectRootInput) => Promise<SelectionAnswer>
