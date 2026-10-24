@@ -36,6 +36,15 @@ describe('mode: doc — prose-only remediation groups (maintainer decision 2026-
     expect(text).toMatch(/prose-finding-not-doc/)
     expect(text).toMatch(/dependsOn/)
   })
+  // US-582: one stale claim ⇒ one finding with N locations; the doc group's scope covers every one of them.
+  it('a doc group covers every location its finding lists, mirrors fixed at the dataset source (owner + red-spec)', () => {
+    const redSpec = readFileSync(join(DATASET, '.skills/workflow/red-spec/SKILL.md'), 'utf-8')
+    for (const text of [owner, redSpec]) {
+      expect(text).toMatch(/finding-location-outside-scope/)
+      expect(text).toMatch(/allowedPaths`?[^.\n]*every[^.\n]*location/i)
+      expect(text).toMatch(/mirror[^.\n]*dataset source/i)
+    }
+  })
   it.each(SKILLS)('%s references it and states its part', skill => {
     const text = readFileSync(join(DATASET, `.skills/workflow/${skill}/SKILL.md`), 'utf-8')
     expect(text).toContain('doc-remediation-groups.md')
