@@ -171,6 +171,47 @@ test('AC2 control: gate findings recorded for another head are ignored', () => {
   assert.equal(go(dir).next.step, 'done')
 })
 
+// ── r1-g1 / r0-1: a red merge gate never outspends maxFixRounds (AC8, automation-policy Budgets) ──
+
+const fixRound = (dir, n, verdict) => {
+  put(dir, `r${n}-g1`, 'red-spec', { status: 'red', mode: 'remediation', contractPath: '/abs/c.json', contractHash: 'sha256:' + 'a'.repeat(64) })
+  put(dir, `r${n}-g1`, 'red-verify', { verified: true, sealed: true, snapshot: SHA('b') })
+  put(dir, `r${n}-g1`, 'green-fix', { fixed: true, outputHead: SHA('c') })
+  if (verdict === 'approved') approved(dir, SHA('c'), { phase: `r${n}` })
+  else put(dir, `r${n}`, 'review-phase', { pr: 7, reviewedHead: SHA('c'), verdict, findings: [{ id: `r${n}-1`, severity: 'Major', blocking: true, transition: 'open', kind: 'defect', location: 'a', description: 'd', recommendation: 'r' }], custody: { contractBreach: false }, readiness: { ready: false } })
+}
+const parkedOnFixBudget = next => {
+  assert.equal(next.step, 'blocked')
+  assert.ok(next.needsHuman || next.reason === 'needs-human', JSON.stringify(next))
+  assert.equal(next.budget, 'maxFixRounds')
+  assert.match(JSON.stringify(next), /gate[-:]test/)
+}
+
+test('r1-g1-w1 (r0-1): maxFixRounds 0 + a recorded gate-red parks needs-human at once, naming the red gate — never prepare', () => {
+  const dir = runDir()
+  approved(dir)
+  recordGateRed({ dir, reviewedHead: SHA('c'), gates: [{ name: 'test', ok: false, lastLines: 'FAIL t.test.mjs' }] })
+  parkedOnFixBudget(go(dir, { policy: { ...POLICY, maxFixRounds: 0, autoRecoveryRounds: 0 } }).next)
+})
+
+test('r1-g1-w2 (r0-1): a gate-red after maxFixRounds completed fix rounds parks needs-human — never a fix round past the budget', () => {
+  const dir = runDir()
+  put(dir, 'r0', 'review-phase', { pr: 7, reviewedHead: SHA('c'), verdict: 'changes-requested', findings: [{ id: 'r0-1', severity: 'Major', blocking: true, transition: 'open', kind: 'defect', location: 'a', description: 'd', recommendation: 'r' }], custody: { contractBreach: false }, readiness: { ready: false } })
+  fixRound(dir, 1, 'approved')
+  recordGateRed({ dir, reviewedHead: SHA('c'), gates: [{ name: 'test', ok: false, lastLines: 'FAIL t.test.mjs' }] })
+  parkedOnFixBudget(go(dir, { policy: { ...POLICY, maxFixRounds: 1 } }).next)
+})
+
+test('r1-g1-c1 (r0-1 control): fix rounds left ⇒ the gate-red still goes to the fix stage', () => {
+  const dir = runDir()
+  put(dir, 'r0', 'review-phase', { pr: 7, reviewedHead: SHA('c'), verdict: 'changes-requested', findings: [{ id: 'r0-1', severity: 'Major', blocking: true, transition: 'open', kind: 'defect', location: 'a', description: 'd', recommendation: 'r' }], custody: { contractBreach: false }, readiness: { ready: false } })
+  fixRound(dir, 1, 'approved')
+  recordGateRed({ dir, reviewedHead: SHA('c'), gates: [{ name: 'test', ok: false, lastLines: 'FAIL t.test.mjs' }] })
+  const r = go(dir, { policy: { ...POLICY, maxFixRounds: 2 } })
+  assert.deepEqual(pick(r.next, 'step', 'mode'), { step: 'prepare', mode: 'remediation' })
+  assert.deepEqual(r.next.findings.map(f => f.id), ['gate-test'])
+})
+
 test('CLI: recover / gate-red / resolve --baseHead are wired', () => {
   const dir = runDir()
   failedImplement(dir)
@@ -234,6 +275,62 @@ test('AC5: conflicts resolve mechanically — story-owned keeps ours, a generate
   assert.match(git(cwd, 'log', '-1', '--format=%B'), /Pair-Base-Sync: base=[0-9a-f]{40}; ours=shared\.txt; theirs=\.claude\/mirror\.md/)
 })
 
+// ── r1-g1 / r0-2: a generated mirror takes the side its dataset source took in a base sync ──
+
+const DS = 'packages/knowledge-hub/dataset/'
+// `suffix` models the skill-name rewriter: a mirror whose bytes differ from its dataset source.
+const syncedMirror = (dsPath, mirrorPath, owned, suffix = '') => {
+  const cwd = repo()
+  commit(cwd, 'seed', { [DS + dsPath]: 'seed\n', [mirrorPath]: `seed${suffix}\n` })
+  git(cwd, 'checkout', '-q', 'main')
+  git(cwd, 'merge', '-q', '--ff-only', 'story')
+  git(cwd, 'checkout', '-q', 'story')
+  commit(cwd, '[#42] feat: story kb', { [DS + dsPath]: 'story\n', [mirrorPath]: `story${suffix}\n` })
+  git(cwd, 'checkout', '-q', 'main')
+  commit(cwd, 'base kb', { [DS + dsPath]: 'main1\n', [mirrorPath]: `main1${suffix}\n` })
+  git(cwd, 'checkout', '-q', 'story')
+  const out = baseSync({ cwd, base: 'main', story: '42', ...(owned ? { owned } : {}) })
+  assert.equal(out.synced, true)
+  assert.equal(git(cwd, 'status', '--porcelain'), '')
+  return { dataset: git(cwd, 'show', `HEAD:${DS}${dsPath}`), mirror: git(cwd, 'show', `HEAD:${mirrorPath}`) }
+}
+
+test('r1-g1-w3 (r0-2): a KB mirror (.pair/knowledge) takes the side its story-owned dataset source took', () => {
+  const { dataset, mirror } = syncedMirror('.pair/knowledge/g.md', '.pair/knowledge/g.md')
+  assert.equal(dataset, 'story')
+  assert.equal(mirror, dataset)
+})
+
+test('r1-g1-w4 (r0-2): a skill-script mirror (.claude/skills/pair-workflow-cycle) takes the side its dataset source took', () => {
+  const { dataset, mirror } = syncedMirror('.skills/workflow/cycle/scripts/s.mjs', '.claude/skills/pair-workflow-cycle/scripts/s.mjs')
+  assert.equal(dataset, 'story')
+  assert.equal(mirror, dataset)
+})
+
+test('r1-g1-w9 (r0-2): a workflow mirror (.claude/workflows, same parent dir under another root) takes the side its dataset source took', () => {
+  const { dataset, mirror } = syncedMirror('.workflows/pair-contracts/x.test.mjs', '.claude/workflows/pair-contracts/x.test.mjs')
+  assert.equal(dataset, 'story')
+  assert.equal(mirror, dataset)
+})
+
+test('r1-g1-c2 (r0-2 control): a dataset source outside the declared ownership takes theirs — its mirror too', () => {
+  const { dataset, mirror } = syncedMirror('.pair/knowledge/g.md', '.pair/knowledge/g.md', ['src/'])
+  assert.equal(dataset, 'main1')
+  assert.equal(mirror, dataset)
+})
+
+test('r1-g1-w10 (r0-2): a rewritten mirror (bytes differ from its dataset source) takes the story side, never the dataset bytes', () => {
+  const { dataset, mirror } = syncedMirror('.pair/knowledge/g.md', '.pair/knowledge/g.md', undefined, '-rewritten')
+  assert.equal(dataset, 'story')
+  assert.equal(mirror, 'story-rewritten')
+})
+
+test('r1-g1-w11 (r0-2): with a declared owned list naming the dataset source, its mirror takes the story side', () => {
+  const { dataset, mirror } = syncedMirror('.pair/knowledge/g.md', '.pair/knowledge/g.md', [DS + '.pair/knowledge/g.md'])
+  assert.equal(dataset, 'story')
+  assert.equal(mirror, 'story')
+})
+
 test('AC5: a path outside the declared fixScope ownership is base-owned and takes theirs', () => {
   const cwd = repo()
   commit(cwd, '[#42] feat: own', { 'shared.txt': 'story\n', 'src/own.ts': 'story\n' })
@@ -268,13 +365,13 @@ test('AC5: a branch already above the base is up to date — nothing done', () =
 
 const pm = cards => ({ pm: { readCard: (id, { fields } = {}) => {
   if (!(id in cards)) throw Object.assign(new Error('HTTP 502'), { kind: 'failed', detail: 'HTTP 502' })
-  return fields ? cards[id] : { body: cards[id].body }
+  return fields ? Object.fromEntries(fields.filter(f => f in cards[id]).map(f => [f, cards[id][f]])) : { body: cards[id].body }
 } } })
 
 test('AC6: prerequisite state is read from the card, each one merged / open / parked; unreadable fails closed', () => {
   const host = pm({
     42: { body: '**Prerequisite Stories**: #572 (adapter), #573\n', state: 'OPEN', labels: [] },
-    572: { state: 'CLOSED', labels: [] },
+    572: { state: 'CLOSED', stateReason: 'COMPLETED', labels: [] },
     573: { state: 'OPEN', labels: [{ name: 'needs-review' }] },
   })
   const out = prereqState({ story: '42', host })
@@ -286,4 +383,38 @@ test('AC6: prerequisite state is read from the card, each one merged / open / pa
   assert.deepEqual(pick(closed, 'blocked'), { blocked: true })
   assert.match(closed.blockedBy.reason, /unreadable/)
   assert.deepEqual(pick(prereqState({ story: '42', host: pm({ 42: { body: '**Prerequisite Stories**: None' } }) }), 'blocked', 'prerequisites'), { blocked: false, prerequisites: [] })
+})
+
+// ── r1-g1 / r0-3: an issue closed as NOT_PLANNED is not a merged prerequisite (AC6) ──
+// The fake PM adapter answers only the `fields` asked for, like `gh issue view --json <fields>`.
+
+test('r1-g1-w5 (r0-3): a prerequisite closed as NOT_PLANNED blocks its dependant — nothing merged', () => {
+  const out = prereqState({ story: '1', host: pm({ 1: { body: '**Prerequisite Stories**: #2' }, 2: { state: 'CLOSED', stateReason: 'NOT_PLANNED', labels: [] } }) })
+  assert.equal(out.blocked, true)
+  assert.equal(out.blockedBy.id, '2')
+  assert.notEqual(out.prerequisites[0].state, 'merged')
+})
+
+const closedAs = reason => prereqState({ story: '1', host: pm({ 1: { body: '**Prerequisite Stories**: #2' }, 2: { state: 'CLOSED', ...reason, labels: [] } }) })
+const assertNotMerged = out => {
+  assert.equal(out.blocked, true)
+  assert.equal(out.blockedBy.id, '2')
+  assert.notEqual(out.prerequisites[0].state, 'merged')
+}
+
+test('r1-g1-w6 (r0-3): a prerequisite closed as DUPLICATE blocks its dependant — nothing merged', () => {
+  assertNotMerged(closedAs({ stateReason: 'DUPLICATE' }))
+})
+
+test('r1-g1-w7 (r0-3): a prerequisite closed with a null stateReason blocks its dependant — fail closed', () => {
+  assertNotMerged(closedAs({ stateReason: null }))
+})
+
+test('r1-g1-w8 (r0-3): a prerequisite closed with no stateReason at all blocks its dependant — fail closed', () => {
+  assertNotMerged(closedAs({}))
+})
+
+test('r1-g1-c3 (r0-3 control): a prerequisite closed as COMPLETED is merged — the dependant is not blocked', () => {
+  const out = prereqState({ story: '1', host: pm({ 1: { body: '**Prerequisite Stories**: #2' }, 2: { state: 'CLOSED', stateReason: 'COMPLETED', labels: [] } }) })
+  assert.deepEqual(pick(out, 'blocked', 'prerequisites'), { blocked: false, prerequisites: [{ id: '2', state: 'merged' }] })
 })

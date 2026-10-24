@@ -1,0 +1,413 @@
+{
+  "$meta": {
+    "pr": "581",
+    "phase": "r1-g1",
+    "base": "fe44d6c361db0c5ea665b505737ebd39c27e7f2e",
+    "trailer": "Pair-RED-Snapshot: pr=581; phase=r1-g1; base=fe44d6c361db0c5ea665b505737ebd39c27e7f2e; manifest=.pair/red-snapshots/pr-581-r1-g1.json",
+    "artifacts": [
+      ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-recovery.test.mjs",
+      "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts"
+    ]
+  },
+  "status": "red",
+  "mode": "repair",
+  "phase": "r1-g1",
+  "inputHead": "fe44d6c361db0c5ea665b505737ebd39c27e7f2e",
+  "sourceOfTruth": [
+    "#575 AC2, AC6, AC8, edge \"budget 0 parks at once\"",
+    "automation-policy.md Budgets",
+    "red-snapshot.mjs mirrorPathMatches (dataset↔mirror transform)",
+    "github.mjs readCard fields passthrough"
+  ],
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs resolve() — the US-575 gate-red override after deriveNext (gateRed → prepare r<n>-g1), against the maxFixRounds check deriveNext applies to review-phase handoffs (spentCycles >= maxFix ⇒ blocked escalate, budget maxFixRounds, needsHuman)",
+      "inputs": [
+        "run dir handoffs (approved review on reviewedHead)",
+        "recovery.json gateRed {reviewedHead, gates}",
+        "policy.maxFixRounds / autoRecoveryRounds"
+      ],
+      "representations": [
+        "dataset cycle/scripts/cycle-state.mjs (canonical)",
+        "5 dataset copies under workflow/*/scripts",
+        "6 .claude/skills/pair-workflow-*/scripts mirrors",
+        "CLI: cycle-state.mjs resolve / gate-red"
+      ],
+      "consumers": [
+        "apps/pair-cli cycle-wiring.ts merge stage (gateWithRecovery → routeToFix → resolve)",
+        "pair-workflow-cycle coordinator"
+      ],
+      "classes": [
+        "maxFixRounds 0, gate-red recorded ⇒ park needs-human (budget 0 parks at once)",
+        "maxFixRounds spent by completed fix rounds, gate-red ⇒ park needs-human",
+        "fix rounds left, gate-red ⇒ prepare remediation with gate findings (AC2)",
+        "gate-red on another head ⇒ ignored (existing AC2 control)",
+        "autoRecoveryRounds 0 at the merge gate with fix rounds left ⇒ fix stage (AC2 is the specific rule for a spent recovery budget at merge time; existing cycle-merge-stage AC8-edge test kept as control)"
+      ],
+      "interactions": [
+        "gate-red override × maxFixRounds budget",
+        "autoRecoveryRounds spent (driver) × maxFixRounds left/spent (resolve)"
+      ]
+    },
+    {
+      "id": "r0-2",
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs baseSync() — conflict side resolution (BASE_OWNED_GENERATED / isOwned) — the mirror takes the SIDE its dataset source took (ours ⇒ the story branch mirror bytes, theirs ⇒ the base mirror bytes), never the dataset bytes copied onto it and never paired by blob identity",
+      "inputs": [
+        "story branch + base ref in a git checkout",
+        "owned (sealed fixScope allowedPaths) or the story diff",
+        "conflicted paths: dataset source and its generated mirror",
+        "rewritten mirrors whose bytes differ from the dataset source (skill-name rewriter, e.g. .pair/knowledge/how-to/10-how-to-implement-a-task.md line 9)"
+      ],
+      "representations": [
+        "dataset cycle-state.mjs + copies + .claude mirrors",
+        "CLI: cycle-state.mjs base-sync"
+      ],
+      "consumers": [
+        "cycle-wiring.ts base-sync recovery (push of the synced head)",
+        "red-snapshot.mjs verify-chain (Pair-Base-Sync trailer)",
+        "executed .claude scripts / pnpm workflows:test after the sync"
+      ],
+      "classes": [
+        "mirror with identical relative path (.pair/knowledge/…) whose dataset source is story-owned ⇒ mirror = dataset (story)",
+        "flattened skill layout mirror (.claude/skills/pair-workflow-cycle/scripts/…) whose dataset source is story-owned ⇒ mirror = dataset",
+        "workflow mirror, same parent dir under another root (dataset/.workflows/** ↔ .claude/workflows/**) whose dataset source is story-owned ⇒ mirror = dataset (mirrorPathMatches branch 2)",
+        "rewritten mirror (mirror bytes != dataset bytes) whose dataset source is story-owned ⇒ mirror = story branch mirror bytes, dataset = story (no blob match, no dataset copy)",
+        "declared owned list naming the dataset source ⇒ dataset ours, mirror takes the story side (owned mode, not only story-diff mode)",
+        "dataset source base-owned (outside declared owned) ⇒ both theirs, mirror = dataset (control)",
+        "generated path with no dataset counterpart ⇒ theirs (existing AC5 control)",
+        "sealed-test conflict ⇒ aborted needs-human (existing AC5 edge, unchanged)"
+      ],
+      "interactions": [
+        "mirror side × dataset source side within one merge",
+        "rewritten mirror bytes × source side",
+        "ownership mode (declared owned vs story diff) × mirror side"
+      ]
+    },
+    {
+      "id": "r0-3",
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs prereqState() — the per-prerequisite state mapping (CLOSED ⇒ merged)",
+      "inputs": [
+        "card body **Prerequisite Stories** line",
+        "PM adapter readCard(id, {fields}) — github.mjs passes fields to gh issue view --json, so stateReason is readable"
+      ],
+      "representations": [
+        "dataset cycle-state.mjs + copies + mirrors",
+        "CLI: cycle-state.mjs prereq-state"
+      ],
+      "consumers": [
+        ".workflows/pair-loop.js dependency filter",
+        "pair-cli run blocked-by reporting"
+      ],
+      "classes": [
+        "CLOSED + stateReason NOT_PLANNED ⇒ not merged, blocked",
+        "CLOSED + stateReason DUPLICATE ⇒ not merged, blocked",
+        "CLOSED + stateReason null ⇒ not merged, blocked (fail closed)",
+        "CLOSED with stateReason absent ⇒ not merged, blocked (fail closed)",
+        "CLOSED + stateReason COMPLETED ⇒ merged (control)",
+        "OPEN / parked / unreadable ⇒ blocked (existing AC6 control)"
+      ],
+      "interactions": [
+        "strict adapter: only the requested fields come back — the producer must ask for stateReason"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/cycle-state.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-cycle/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-green-fix/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-implement-phase/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-red-spec/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-red-verify/scripts/cycle-state.mjs",
+      ".claude/skills/pair-workflow-review-phase/scripts/cycle-state.mjs"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r1-g1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=r1-g1-w1 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "approved r0 on C, gate-red {test} on C, policy maxFixRounds 0 autoRecoveryRounds 0",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1-g1-w1; AC8 + automation-policy Budgets (0 parks at once, naming the budget)",
+      "expected": "next.step==='blocked', needsHuman or reason needs-human, budget 'maxFixRounds', next names gate-test/gate:test"
+    },
+    {
+      "id": "r1-g1-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=r1-g1-w2 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "r0 changes-requested, one completed fix round r1-g1, r1 approved on C, gate-red {test} on C, maxFixRounds 1",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1-g1-w2; AC8",
+      "expected": "blocked needs-human, budget maxFixRounds, names the red gate — no r2 prepare"
+    },
+    {
+      "id": "r1-g1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=r1-g1-c1 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "same as w2 with maxFixRounds 2",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1-g1-c1; AC2",
+      "expected": "next prepare remediation, findings ['gate-test']"
+    },
+    {
+      "id": "r1-g1-c4",
+      "kind": "control",
+      "baseline": "pass",
+      "covers": [
+        "r0-1"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=^AC2:.a.gate.still.red .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "existing AC2 test: approved, gate-red lint on C, maxFixRounds 3, no rounds spent",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs AC2 test; AC2",
+      "expected": "prepare r1-g1 with gate-lint finding (unchanged)"
+    },
+    {
+      "id": "r1-g1-c5",
+      "kind": "control",
+      "baseline": "pass",
+      "covers": [
+        "r0-1"
+      ],
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-merge-stage.test.ts -t US-575.AC8.edge",
+      "condition": "driver: autoRecoveryRounds 0, maxFixRounds 4, gate BLOCKED (resolve stubbed)",
+      "oracle": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts 'US-575 AC8 edge'; AC2",
+      "expected": "gate dispatched once, outcome routed to the fix stage (unchanged)",
+      "rationale": "AC2 is the specific rule for a merge gate still red after the autoRecoveryRounds budget: the card goes to the fix stage. The \"budget 0 parks at once\" edge and AC8 park are honoured by maxFixRounds in resolve (w1/w2), which is where a permanently red gate is bounded; the driver test stubs resolve, so its fix-stage route is the hand-off, not a missing park. No change in cycle-wiring.ts is contracted."
+    },
+    {
+      "id": "r1-g1-w3",
+      "kind": "witness",
+      "baseline": "red",
+      "covers": [
+        "r0-2"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=r1-g1-w3 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "temp repo: dataset/.pair/knowledge/g.md + .pair/knowledge/g.md; story writes 'story' to both, main 'main1' to both; baseSync no owned",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1-g1-w3; mirror == dataset after sync",
+      "expected": "HEAD:dataset = 'story' and HEAD:mirror = 'story'"
+    },
+    {
+      "id": "r1-g1-w4",
+      "kind": "interaction",
+      "baseline": "red",
+      "covers": [
+        "r0-2"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=r1-g1-w4 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "same, flattened skill layout: dataset/.skills/workflow/cycle/scripts/s.mjs ↔ .claude/skills/pair-workflow-cycle/scripts/s.mjs",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1-g1-w4; mirror transform as red-snapshot.mjs mirrorPathMatches",
+      "expected": "mirror == dataset == story"
+    },
+    {
+      "id": "r1-g1-w9",
+      "kind": "witness",
+      "baseline": "red",
+      "covers": [
+        "r0-2"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=r1-g1-w9 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "syncedMirror(\".workflows/pair-contracts/x.test.mjs\", \".claude/workflows/pair-contracts/x.test.mjs\") — same parent dir under another root",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1-g1-w9; mirror transform as red-snapshot.mjs mirrorPathMatches branch 2",
+      "expected": "mirror == dataset == story (observed at base: mirror main1)"
+    },
+    {
+      "id": "r1-g1-w10",
+      "kind": "witness",
+      "baseline": "red",
+      "covers": [
+        "r0-2"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=r1-g1-w10 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "syncedMirror(\".pair/knowledge/g.md\", \".pair/knowledge/g.md\", undefined, \"-rewritten\"): story writes dataset story / mirror story-rewritten, main writes main1 / main1-rewritten, no owned",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1-g1-w10; the mirror takes the side its dataset source took (rejection r1-g1-gap3)",
+      "expected": "HEAD:dataset === story and HEAD:mirror === story-rewritten (observed at base: mirror main1-rewritten); a fix copying dataset bytes onto the mirror yields story and fails"
+    },
+    {
+      "id": "r1-g1-w11",
+      "kind": "witness",
+      "baseline": "red",
+      "covers": [
+        "r0-2"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=r1-g1-w11 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "syncedMirror(\".pair/knowledge/g.md\", \".pair/knowledge/g.md\", [\"packages/knowledge-hub/dataset/.pair/knowledge/g.md\"]): declared owned list naming the dataset source",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1-g1-w11; declared-owned mode, mirror takes the source side (rejection r1-g1-gap4)",
+      "expected": "HEAD:dataset === story and HEAD:mirror === story (observed at base: mirror main1)"
+    },
+    {
+      "id": "r1-g1-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "covers": [
+        "r0-2"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=r1-g1-c2 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "same as w3 with owned ['src/'] (dataset base-owned)",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1-g1-c2",
+      "expected": "mirror == dataset == 'main1'"
+    },
+    {
+      "id": "r1-g1-c6",
+      "kind": "control",
+      "baseline": "pass",
+      "covers": [
+        "r0-2"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=resolve.mechanically .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "existing AC5: .claude/mirror.md with no dataset counterpart + story-owned shared.txt",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs AC5 conflicts test",
+      "expected": "shared.txt ours, .claude/mirror.md theirs, trailer unchanged"
+    },
+    {
+      "id": "r1-g1-w5",
+      "kind": "witness",
+      "baseline": "red",
+      "covers": [
+        "r0-3"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=r1-g1-w5 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "strict fake PM adapter (answers only requested fields); #2 CLOSED stateReason NOT_PLANNED",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1-g1-w5; AC6",
+      "expected": "blocked true, blockedBy.id '2', prerequisite state !== 'merged'"
+    },
+    {
+      "id": "r1-g1-w6",
+      "kind": "witness",
+      "baseline": "red",
+      "covers": [
+        "r0-3"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=r1-g1-w6 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "strict fake PM adapter; #2 CLOSED + stateReason DUPLICATE",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1-g1-w6; AC6 merged state, fail closed",
+      "expected": "blocked true, blockedBy.id 2, prerequisite state !== merged"
+    },
+    {
+      "id": "r1-g1-w7",
+      "kind": "witness",
+      "baseline": "red",
+      "covers": [
+        "r0-3"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=r1-g1-w7 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "strict fake PM adapter; #2 CLOSED + stateReason null",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1-g1-w7; AC6 merged state, fail closed",
+      "expected": "blocked true, blockedBy.id 2, prerequisite state !== merged"
+    },
+    {
+      "id": "r1-g1-w8",
+      "kind": "witness",
+      "baseline": "red",
+      "covers": [
+        "r0-3"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=r1-g1-w8 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "strict fake PM adapter; #2 CLOSED, stateReason absent (strict fake omits the field)",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1-g1-w8; AC6 merged state, fail closed",
+      "expected": "blocked true, blockedBy.id 2, prerequisite state !== merged"
+    },
+    {
+      "id": "r1-g1-c3",
+      "kind": "control",
+      "baseline": "pass",
+      "covers": [
+        "r0-3"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=r1-g1-c3 .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "strict fake; #2 CLOSED stateReason COMPLETED",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs r1-g1-c3; AC6",
+      "expected": "blocked false, [{id:'2', state:'merged'}]"
+    },
+    {
+      "id": "r1-g1-c7",
+      "kind": "control",
+      "baseline": "pass",
+      "covers": [
+        "r0-3"
+      ],
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "command": "node --test --test-reporter=tap --test-name-pattern=^AC6: .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "condition": "existing AC6 test; fake now strict on fields, #572 fixture gains stateReason COMPLETED",
+      "oracle": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs AC6 test",
+      "expected": "572 merged, 573 parked, open/unreadable blocked (unchanged)"
+    }
+  ],
+  "redTests": [
+    {
+      "file": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:9dacb50512221fd074290c1bd7810585fe9e9507147279fb1d55c85ca754a053",
+      "command": "node --test --test-reporter=tap .claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "observed": "# tests 35 # pass 24 # fail 11 — failing: r1-g1-w1, r1-g1-w2 (next.step prepare, expected blocked), r1-g1-w3, r1-g1-w4, r1-g1-w9 (mirror main1, expected story), r1-g1-w10 (mirror main1-rewritten, expected story-rewritten), r1-g1-w11 (mirror main1, expected story), r1-g1-w5, r1-g1-w6, r1-g1-w7, r1-g1-w8 (blocked false, expected true)"
+    },
+    {
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-recovery.test.mjs",
+      "kind": "fixture",
+      "baseline": "red",
+      "sha256": "sha256:9dacb50512221fd074290c1bd7810585fe9e9507147279fb1d55c85ca754a053",
+      "consumedBy": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs"
+    },
+    {
+      "file": "apps/pair-cli/src/commands/run/cycle-merge-stage.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:41483d36e73b651b2f5a4faf53ae04693915bae1ccf8d05306091e82098db110",
+      "command": "pnpm --dir apps/pair-cli exec vitest run src/commands/run/cycle-merge-stage.test.ts -t US-575.AC8.edge",
+      "observed": "Tests 1 passed | 49 skipped (50)"
+    }
+  ],
+  "testExempt": false,
+  "notes": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-recovery.test.mjs is the dataset source of the executed mirror .claude/workflows/pair-contracts/cycle-recovery.test.mjs; both byte-identical, both sealed. Copies/mirrors of cycle-state.mjs must stay byte-identical to the canonical source.",
+  "attempt": 3,
+  "changedRows": [
+    "r1-g1-w10",
+    "r1-g1-w11"
+  ],
+  "reconciled": [
+    {
+      "path": ".claude/workflows/pair-contracts/cycle-recovery.test.mjs",
+      "sha256": "sha256:f1264bce1403f6c74ffde7576a7a911ecb2117c36497972dc4c878458b343721"
+    },
+    {
+      "path": "packages/knowledge-hub/dataset/.workflows/pair-contracts/cycle-recovery.test.mjs",
+      "sha256": "sha256:f1264bce1403f6c74ffde7576a7a911ecb2117c36497972dc4c878458b343721"
+    }
+  ]
+}
