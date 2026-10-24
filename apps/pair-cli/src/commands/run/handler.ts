@@ -14,7 +14,9 @@ import {
 import { createPerimeter, describePerimeter, type Perimeter } from './perimeter'
 import { describeMergePosture, describeParallelism } from './automation-policy'
 import { describeApprovalPosture, filterDeliveryFor, selectionDeliveredBy } from './invocation'
-import { readCardLabels } from './cycle-wiring'
+import { mainCheckoutOrCwd, readCardClosedAt, readCardLabels } from './cycle-wiring'
+import { readWorkingCleanup, sweepWorkingArea } from './working-cleanup'
+import { POLICY_PATH } from './policy-sections'
 import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
 import { whileInterruptible } from './interrupt'
@@ -202,6 +204,7 @@ function resolveEntry(
 ): { config: RunCommandConfig; context: RunContext; deps: RunHandlerDependencies } {
   config = withLiveCardTags(config, cwd, callerDeps)
   const base = resolveContext(config, fs, cwd)
+  if (!config.dryRun) sweepWorkingState(base.workingArea, fs, cwd, callerDeps)
   const selection = resolveRunAutonomy({
     resolver: callerDeps.resolveAutonomy ?? spawnAutonomyResolver,
     config,
@@ -214,6 +217,28 @@ function resolveEntry(
     context: { ...base, ...(selection && { autonomySelection: selection }) },
     deps: { ...callerDeps, resolveAutonomy: () => selection },
   }
+}
+
+/** US-576 AC7: at run start, drop the run state of cards Done longer than `## Working Cleanup` allows. */
+function sweepWorkingState(
+  workingArea: string,
+  fs: FileSystemService,
+  cwd: string,
+  deps: RunHandlerDependencies,
+): void {
+  const policyFile = resolve(mainCheckoutOrCwd(cwd), POLICY_PATH)
+  const policy = readWorkingCleanup(fs.existsSync(policyFile) ? fs.readFileSync(policyFile) : undefined)
+  const closedAt = deps.readCardClosedAt ?? readCardClosedAt
+  const removed = sweepWorkingArea({
+    workingArea,
+    policy,
+    closedAt: card => closedAt(card, cwd),
+    now: new Date(),
+  })
+  if (removed.length > 0)
+    console.log(
+      `  Working cleanup (${policy.text}): removed the run state of Done card(s) ${removed.map(id => `#${id}`).join(', ')}`,
+    )
 }
 
 /** #568 B3: a dry run validates the profile too — the unknown name must not surface only at dispatch. */
