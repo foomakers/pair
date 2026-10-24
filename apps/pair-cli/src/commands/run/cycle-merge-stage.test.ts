@@ -452,6 +452,36 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
     expect(reported(outcome)).toContain(reason)
   }, 60_000)
 
+  // 2026-10-24 (#575 / PR #581): CI stayed red on a deterministic failure (no git identity on the
+  // runner); re-runs cannot fix it, and the card parked awaiting a human instead of being fixed.
+  const platformCases = ['darwin', 'linux']
+  it.each(platformCases)(
+    'US-575 follow-up: CI still red after its re-run is routed to the fix stage with the failing checks as findings — never parked (platform %s)',
+    async platform => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform as NodeJS.Platform)
+      vi.stubEnv(
+        'FAKE_MERGE_CHECK',
+        JSON.stringify({
+          mergeAllowed: false,
+          ciPending: false,
+          ciFailed: true,
+          failed: [{ code: 'ci-failed', detail: 'build: failure' }],
+          reason: 'required CI failed: build',
+          parkKind: 'halted',
+        }),
+      )
+
+      const outcome = await settle(drive(adopt(ELIGIBLE), { capSeconds: 0 }))
+
+      expect(runCalls()).toHaveLength(0)
+      expect(outcome).not.toContain('merge-parked')
+      const recovery = JSON.parse(readFileSync(join(runDir(), 'recovery.json'), 'utf8'))
+      expect(recovery.gateRed.reviewedHead).toBe(REVIEWED_HEAD)
+      expect(JSON.stringify(recovery.gateRed.gates)).toContain('build')
+    },
+    60_000,
+  )
+
   it('g2-w9 / US-575 AC2: gate evidence that ran and FAILED twice is routed to the fix stage with the failing gates as findings — never run --gate red', async () => {
     vi.stubEnv('FAKE_GATE_RESULT', GATE_BLOCKED)
 

@@ -22,6 +22,7 @@ import {
   type AutonomyResolution,
   type CardReadiness,
   type BaseSyncResult,
+  type CycleMergeResult,
   type CycleScriptsLocation,
   type GateRecord,
 } from './cycle-scripts'
@@ -862,6 +863,71 @@ function routeToFix(
   return gate
 }
 
+/** A refused merge check: CI still red goes to the fix stage, anything else parks with its reason. */
+function refusedCheck(
+  co: Coordinates,
+  pins: MergePins,
+  check: CycleMergeResult,
+): CycleMergeOutcome {
+  if (check['ciFailed'] === true) return routeCiToFix(co, pins, check)
+  console.log(`  Merge: parked — ${check.reason ?? 'the merge check did not allow it'}`)
+  return { status: mergeStatus(check), stagesRun: 0, merge: check }
+}
+
+/**
+ * CI still red after its re-run is a real failure, not a wait: the failing checks (with their log
+ * tail when the code host gives one) become findings for the fix stage — never a park for a human.
+ */
+function routeCiToFix(
+  co: Coordinates,
+  pins: MergePins,
+  check: CycleMergeResult,
+): CycleMergeOutcome {
+  const reason =
+    typeof check.reason === 'string' && check.reason ? check.reason : 'required CI failed'
+  const logged = failedCiLogs(co.main, pins.reviewedHead)
+  const gates = logged.length > 0 ? logged : [{ name: 'ci', ok: false, lastLines: reason }]
+  co.bridge.gateRed({ dir: co.runDir, reviewedHead: pins.reviewedHead, gates })
+  console.log(
+    `  Merge: CI still red on ${pins.reviewedHead} — routed to the fix stage with the failing checks as findings`,
+  )
+  return { status: 'gate-red', stagesRun: 1, merge: { ciFailed: true, reason }, resume: true }
+}
+
+/** One gate per failed CI run on `head`: its name and the tail of its failed-step log (empty when unreadable). */
+function failedCiLogs(cwd: string, head: string): { name: string; ok: false; lastLines: string }[] {
+  try {
+    const runs = JSON.parse(
+      execFileSync(
+        'gh',
+        ['run', 'list', '--commit', head, '--json', 'databaseId,conclusion,name'],
+        {
+          cwd,
+          encoding: 'utf-8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      ),
+    ) as { databaseId?: number; conclusion?: string; name?: string }[]
+    return runs
+      .filter(r => r.conclusion === 'failure' && Number.isInteger(r.databaseId))
+      .map(r => ({
+        name: `ci: ${r.name ?? r.databaseId}`,
+        ok: false as const,
+        lastLines: tail(
+          execFileSync('gh', ['run', 'view', String(r.databaseId), '--log-failed'], {
+            cwd,
+            encoding: 'utf-8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+            maxBuffer: 64 * 1024 * 1024,
+          }),
+          40,
+        ),
+      }))
+  } catch {
+    return []
+  }
+}
+
 const worktreePathOf = (created: unknown): string | undefined => {
   const path = (created as { path?: unknown } | null | undefined)?.path
   return typeof path === 'string' ? path : undefined
@@ -993,10 +1059,7 @@ const mergeFor =
       { ...ctx.ciWait, rerun: rerunFailedCi(input, co, pins.reviewedHead) },
       message => console.log(message),
     )
-    if (check.mergeAllowed !== true) {
-      console.log(`  Merge: parked — ${check.reason ?? 'the merge check did not allow it'}`)
-      return { status: mergeStatus(check), stagesRun: 0, merge: check }
-    }
+    if (check.mergeAllowed !== true) return refusedCheck(co, pins, check)
     progress.merge('running checks')
     const gate = await gateWithRecovery(ctx, input, co, pins)
     if (!gate.green)
