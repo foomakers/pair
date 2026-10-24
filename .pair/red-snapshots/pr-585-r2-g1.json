@@ -1,0 +1,157 @@
+{
+  "$meta": {
+    "pr": "585",
+    "phase": "r2-g1",
+    "base": "2a450bbcc294fa29006dbba622d27b0bf9cbfa3f",
+    "trailer": "Pair-RED-Snapshot: pr=585; phase=r2-g1; base=2a450bbcc294fa29006dbba622d27b0bf9cbfa3f; manifest=.pair/red-snapshots/pr-585-r2-g1.json",
+    "artifacts": [
+      ".claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "packages/knowledge-hub/dataset/.workflows/pair-contracts/filesystem-adapter.test.mjs"
+    ]
+  },
+  "phase": "r2-g1",
+  "mode": "remediation",
+  "inputHead": "2a450bbcc294fa29006dbba622d27b0bf9cbfa3f",
+  "sourceOfTruth": "review r1 finding r0-1 (reopened)",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "filesystem.mjs isChild/matches/locate (readCard)",
+      "inputs": [
+        "backlog file <id>-<slug>.md",
+        "card ref"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/host/filesystem.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/host/filesystem.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/host/filesystem.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/host/filesystem.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/host/filesystem.mjs",
+        ".claude/skills/pair-workflow-cycle/scripts/host/filesystem.mjs",
+        ".claude/skills/pair-workflow-green-fix/scripts/host/filesystem.mjs",
+        ".claude/skills/pair-workflow-implement-phase/scripts/host/filesystem.mjs",
+        ".claude/skills/pair-workflow-red-spec/scripts/host/filesystem.mjs",
+        ".claude/skills/pair-workflow-red-verify/scripts/host/filesystem.mjs",
+        ".claude/skills/pair-workflow-review-phase/scripts/host/filesystem.mjs"
+      ],
+      "consumers": [
+        "readCard",
+        "cardHash",
+        "setBoardState",
+        "closeAndCascade"
+      ],
+      "classes": [
+        "own slug opening on 2+ digit number (01-01-005-10-step-plan) -> resolves to itself",
+        "own slug opening on 1 digit (sealed r1 w1) -> resolves",
+        "parent epic vs child story file -> epic"
+      ],
+      "interactions": [
+        "numeric-slug story under epic 01-01: epic lookup unaffected"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "filesystem PM adapter isChild/matches/locate",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/host/filesystem.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/host/filesystem.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/host/filesystem.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/host/filesystem.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/host/filesystem.mjs",
+      ".claude/skills/pair-workflow-cycle/scripts/host/filesystem.mjs",
+      ".claude/skills/pair-workflow-green-fix/scripts/host/filesystem.mjs",
+      ".claude/skills/pair-workflow-implement-phase/scripts/host/filesystem.mjs",
+      ".claude/skills/pair-workflow-red-spec/scripts/host/filesystem.mjs",
+      ".claude/skills/pair-workflow-red-verify/scripts/host/filesystem.mjs",
+      ".claude/skills/pair-workflow-review-phase/scripts/host/filesystem.mjs"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r2-g1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "only not-started/01-01-005-10-step-plan.md for id 01-01-005; readCard(01-01-005). Id 005 not 002: fixture already holds completed/01-01-002-logout.md",
+      "oracle": "node --test --test-name-pattern=r2-g1: .claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "file": ".claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "expected": "title \"US 01-01-005: Plan\"",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r2-g1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "numeric-slug story present; readCard(01-01) still the epic",
+      "oracle": "node --test --test-name-pattern=r2-g1-control .claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "file": ".claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "expected": "body includes Auth",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r2-g1-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "whole existing adapter suite incl. sealed r0-1 digit-slug test",
+      "oracle": "node --test --test-skip-pattern=r2-g1 .claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "file": ".claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "expected": "12/12 pass",
+      "covers": [
+        "r0-1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": ".claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:0f4302f8be36afc813399a13313a23aa1a14c72fd5f71d0ae095707521e3dba5",
+      "command": "node --test --test-name-pattern=r2-g1: .claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "observed": "fail 1/1: HostError fs: card 01-01-005 not found under .pair/adoption/product/backlog"
+    },
+    {
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "kind": "fixture",
+      "baseline": "red",
+      "sha256": "sha256:0f4302f8be36afc813399a13313a23aa1a14c72fd5f71d0ae095707521e3dba5",
+      "consumedBy": ".claude/workflows/pair-contracts/filesystem-adapter.test.mjs"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r2-g1",
+        "findings": [
+          "r0-1"
+        ],
+        "owner": "filesystem PM adapter isChild/matches/locate",
+        "mode": "behavioral",
+        "oracle": "node --test filesystem-adapter.test.mjs",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/host/filesystem.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/host/filesystem.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/host/filesystem.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/host/filesystem.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/host/filesystem.mjs",
+          ".claude/skills/pair-workflow-cycle/scripts/host/filesystem.mjs",
+          ".claude/skills/pair-workflow-green-fix/scripts/host/filesystem.mjs",
+          ".claude/skills/pair-workflow-implement-phase/scripts/host/filesystem.mjs",
+          ".claude/skills/pair-workflow-red-spec/scripts/host/filesystem.mjs",
+          ".claude/skills/pair-workflow-red-verify/scripts/host/filesystem.mjs",
+          ".claude/skills/pair-workflow-review-phase/scripts/host/filesystem.mjs"
+        ],
+        "dependsOn": []
+      }
+    ],
+    "carried": []
+  }
+}

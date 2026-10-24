@@ -140,3 +140,15 @@ test('r0-1: a slug opening on a digit is the card own slug, not a child id', () 
   assert.equal(pm.readCard('01-01-004', { fields: ['title'] }).title, 'US 01-01-004: Wizard')
   assert.equal(pm.readCard('01-01').body.includes('Auth'), true, 'the epic still never resolves to a child story')
 })
+
+test('r2-g1: a slug opening on a 2+ digit number is the card own slug, not a child id', () => {
+  const { pm, b } = fixture()
+  writeFileSync(join(b, '03-user-stories/not-started/01-01-005-10-step-plan.md'), '# US 01-01-005: Plan\n\n**Status**: Todo\n')
+  assert.equal(pm.readCard('01-01-005', { fields: ['title'] }).title, 'US 01-01-005: Plan')
+})
+
+test('r2-g1-control: the epic never resolves to a story whose slug opens on a number', () => {
+  const { pm, b } = fixture()
+  writeFileSync(join(b, '03-user-stories/not-started/01-01-005-10-step-plan.md'), '# US 01-01-005: Plan\n\n**Status**: Todo\n')
+  assert.equal(pm.readCard('01-01').body.includes('Auth'), true)
+})
