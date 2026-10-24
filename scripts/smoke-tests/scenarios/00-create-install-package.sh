@@ -15,7 +15,7 @@ if [ -z "${REPO_ROOT:-}" ]; then
   REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 fi
 if [ -z "${TMP_DIR:-}" ]; then
-  TMP_DIR="$REPO_ROOT/.tmp/smoke-test-$(date +%s)"
+  TMP_DIR="$REPO_ROOT/.pair/working/smoke-tests/smoke-test-$(date +%s)"
   mkdir -p "$TMP_DIR"
 fi
 

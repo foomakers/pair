@@ -193,6 +193,14 @@ describe('resolveAutonomyPolicy: relay, never re-derive', () => {
     ).toBeUndefined()
   })
 
+  const platformCases = ['darwin', 'linux'] as const
+  it.each(platformCases)(
+    'US-576: the header names the --preset argument above the adoption (%s)',
+    () => {
+      expect(describeAutonomy(resolution({}))[0]).toContain('argument > --preset > adoption')
+    },
+  )
+
   it('R4: every effective value is printed with its source, then translations and warnings — verbatim', () => {
     const lines = describeAutonomy(
       resolution({
@@ -204,7 +212,7 @@ describe('resolveAutonomyPolicy: relay, never re-derive', () => {
         },
       }),
     )
-    expect(lines[0]).toMatch(/argument > adoption > KB default/)
+    expect(lines[0]).toMatch(/argument > --preset > adoption > adoption preset > KB default/)
     expect(lines).toContain('  until: merged (argument)')
     expect(lines).toContain('  prepare: always (default)')
     expect(lines.join('\n')).toMatch(

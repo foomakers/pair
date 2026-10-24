@@ -161,12 +161,11 @@ describe('console sink — TTY: one line per card, rewritten in place (AC2)', ()
       plain: true,
     })
     sink.event({ event: 'card-start', card: '1', title: 'a' })
-    sink.log('  Iteration 1/6: selected 2 · ran #1 failed · next iteration')
-    sink.log('  Iteration 2/6: selected 2 · ran none · waiting 10m')
-    expect(out.screen).toEqual([
-      '⠋ #1 · a · 00:00',
-      '  Iteration 2/6: selected 2 · ran none · waiting 10m',
-    ])
+    sink.log('  Checking for cards: pair-next --root 578')
+    expect(out.screen).toEqual(['⠋ #1 · a · 00:00', '  Checking for cards (--root 578)…'])
+    sink.log('  Iteration 1/6: selected 2 · skipped none · ran #1 failed · next iteration')
+    sink.log('  Iteration 2/6: selected 2 · skipped none · ran none · waiting 10m')
+    expect(out.screen).toEqual(['⠋ #1 · a · 00:00', '  Waiting for new cards — next check in 10m'])
   })
 
   it('plain: a card note is the card row detail, never a new line; a bare exit code ends with the last note', () => {

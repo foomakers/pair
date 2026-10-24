@@ -185,7 +185,8 @@ function resolveCap(input: PerimeterInput): {
   maxIterations: number
   source: Perimeter['capSource']
 } {
-  if (!Number.isInteger(input.policyCap) || input.policyCap <= 0) {
+  const uncapped = input.policyCap === Number.POSITIVE_INFINITY
+  if (!uncapped && (!Number.isInteger(input.policyCap) || input.policyCap <= 0)) {
     throw new Error(
       `Invalid iteration cap from the automation policy: ${String(input.policyCap)} (must be a positive integer)`,
     )
@@ -217,6 +218,8 @@ export function describePerimeter(perimeter: Perimeter): string {
     .join(', ')
   return (
     `Perimeter: ${scope || 'cwd only (--prompt run)'} · cwd ${perimeter.cwd} · ` +
-    `max ${perimeter.maxIterations} iteration(s) (from ${perimeter.capSource})`
+    (perimeter.maxIterations === Number.POSITIVE_INFINITY
+      ? 'no iteration cap — runs until nothing is eligible or every remaining card is blocked/parked (no `max-iterations` declared)'
+      : `max ${perimeter.maxIterations} iteration(s) (from ${perimeter.capSource})`)
   )
 }

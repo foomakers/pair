@@ -142,13 +142,27 @@ run_pair run --root 12 --parallel 2 || fail "--root --parallel 2 exited non-zero
 assert_output_contains "Requested: --parallel 2" || FAILED=1
 assert_output_contains "Nothing to do: pair-next --root 12 selected no card." || FAILED=1
 
-log_info "Test 4b-2: --watch --max-iterations 1 ⇒ one iteration, stops on the cap"
-run_pair run --root 12 --parallel 2 --watch --max-iterations 1 || fail "--watch --max-iterations 1 exited non-zero"
-assert_output_contains "Loop stopped after 1 iteration(s): iteration cap" || FAILED=1
+# --watch never stops on its own while idle (an idle poll never spends the cap): run it in the background, Ctrl-C once it waits.
+watch_until_idle() {
+  run_pair "$@" &
+  local job=$! i
+  for i in $(seq 1 240); do grep -q "waiting" "$TMP_DIR/last_cmd_output.log" 2>/dev/null && break; sleep 0.5; done
+  pkill -INT -f "run --root 12 .*--watch" 2>/dev/null
+  local code=0
+  wait "$job" || code=$?
+  return "$code"
+}
 
-log_info "Test 4b-3: --watch without --parallel is refused"
-if run_pair run --watch --max-iterations 1 --autonomous; then fail "--watch without --parallel was accepted"; fi
-assert_output_contains "--watch requires --parallel" || FAILED=1
+log_info "Test 4b-2: --watch --max-iterations 1, nothing workable ⇒ an idle poll never spends the cap: it waits until Ctrl-C (130)"
+watch_until_idle run --root 12 --parallel 2 --watch --max-iterations 1 && fail "an idle --watch loop stopped on its own"
+assert_output_contains "waiting" || FAILED=1
+assert_output_contains "Loop interrupted by SIGINT" || FAILED=1
+
+log_info "Test 4b-3: --watch without --parallel runs the loop at --parallel 1; with --card it is refused"
+watch_until_idle run --root 12 --watch --max-iterations 1
+assert_output_contains "Requested: --parallel 1" || FAILED=1
+if run_pair run --card 12 --watch --autonomous; then fail "--watch with --card was accepted"; fi
+assert_output_contains "--watch belongs to the loop" || FAILED=1
 
 log_info "Test 4b-4: --until ready stops at the prepare→implement boundary, nothing spawned"
 : >"$ENGINE_LOG"

@@ -31,7 +31,7 @@ The rule, stated as enforced: **a scenario runs in CI unless it declares `OFFLIN
 
 > **Note:** The runner sanitizes some `npm_config_*` environment variables (e.g. `npm_config_cleanup_unused_catalogs`, `npm_config_catalog`) before executing scenarios. These keys can surface from pnpm workspace config entries and may trigger noisy "Unknown env config" warnings from `npm`. Clearing them ensures consistent and quiet smoke-test runs across CI and local environments.
 
-Note: The runner creates a per-run temporary directory using the naming convention `smoke-tests.${DATETIME}.${RANDOM_HASH}` which contains logs, extracted artifacts, and the `packaged-cli` marker file written by the packaging preflight script.
+Note: The runner creates a per-run temporary directory under `.pair/working/smoke-tests/` (gitignored; `$RUNNER_TEMP` on CI) using the naming convention `smoke-tests.${DATETIME}.${RANDOM_HASH}` which contains logs, extracted artifacts, and the `packaged-cli` marker file written by the packaging preflight script.
 
 ## Covered Test Scenarios
 

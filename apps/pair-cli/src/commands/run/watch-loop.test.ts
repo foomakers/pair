@@ -45,6 +45,8 @@ function harness(
     outcomes?: (ids: string[]) => CardOutcome[]
     waitOutcome?: 'elapsed' | 'interrupted'
     interruptAfterBatch?: boolean
+    /** Under --watch an idle poll never ends the loop: the test's Ctrl-C after this many waits. */
+    interruptAfterWaits?: number
   } = {},
 ): Harness {
   let interrupted = false
@@ -75,6 +77,11 @@ function harness(
     wait: async ms => {
       h.waits.push(ms)
       if (options.waitOutcome === 'interrupted') interrupted = true
+      // a safety stop: a --watch loop with nothing to do never ends on its own
+      if (h.waits.length === (options.interruptAfterWaits ?? 50)) {
+        interrupted = true
+        return 'interrupted'
+      }
       return options.waitOutcome ?? 'elapsed'
     },
     isInterrupted: () => interrupted,
@@ -164,7 +171,7 @@ describe('runWatchLoop (US-522 T-6)', () => {
     const locks: Record<string, LockState> = {
       '1': { kind: 'held', path: '/w/locks/1', since: 'T0' },
     }
-    const h = harness([sel(card('1')), sel(card('1')), sel()])
+    const h = harness([sel(card('1')), sel(card('1')), sel()], { interruptAfterWaits: 2 })
     const base = h.deps.probeLock
     let calls = 0
     h.deps = {
@@ -183,21 +190,22 @@ describe('runWatchLoop (US-522 T-6)', () => {
   })
 
   it('AC7: idle under --watch waits the interval then re-selects; work starts the next at once', async () => {
-    const h = harness([sel(), sel(card('1')), sel(), sel()])
+    const h = harness([sel(), sel(card('1')), sel(), sel()], { interruptAfterWaits: 3 })
     const r = await runWatchLoop(config({ watch: true, cap: 4, intervalMs: 90_000 }), h.deps)
-    expect(h.waits).toEqual([90_000, 90_000])
-    expect(h.records.map(x => x.next.kind)).toEqual(['waiting', 'continue', 'waiting', 'stop'])
-    expect(r).toMatchObject({ reason: 'iteration cap', iterations: 4 })
+    expect(h.waits).toEqual([90_000, 90_000, 90_000])
+    expect(h.records.map(x => x.next.kind)).toEqual(['waiting', 'continue', 'waiting', 'waiting'])
+    expect(r).toMatchObject({ reason: 'interrupted' })
   })
 
   it('AC7: every candidate escalated or locked counts as idle', async () => {
     const h = harness([sel(card('1', { escalated: true }), card('2'))], {
       locks: { '2': { kind: 'held', path: '/p' } },
+      interruptAfterWaits: 3,
     })
     const r = await runWatchLoop(config({ watch: true, cap: 2 }), h.deps)
     expect(h.batches).toEqual([])
-    expect(h.waits).toHaveLength(1)
-    expect(r.reason).toBe('iteration cap')
+    expect(h.waits).toHaveLength(3)
+    expect(r.reason).toBe('interrupted')
   })
 
   it('AC7: idle without --watch exits 0, nothing workable, with no wait', async () => {
@@ -207,11 +215,28 @@ describe('runWatchLoop (US-522 T-6)', () => {
     expect(r).toMatchObject({ reason: 'nothing workable', exitCode: 0, iterations: 1 })
   })
 
-  it('AC9: the cap counts idle polls', async () => {
-    const h = harness([sel()])
-    const r = await runWatchLoop(config({ watch: true, cap: 3 }), h.deps)
-    expect(r).toMatchObject({ reason: 'iteration cap', iterations: 3, exitCode: 0 })
-    expect(h.waits).toHaveLength(2)
+  const platformCases = ['darwin', 'linux'] as const
+  it.each(platformCases)(
+    'AC9 (--watch stays vigilant): idle polls never spend the cap and keep the iteration number (platform %s)',
+    platform => {
+      const original = Object.getOwnPropertyDescriptor(process, 'platform')!
+      Object.defineProperty(process, 'platform', { value: platform })
+      const h = harness([sel()], { interruptAfterWaits: 5 })
+      return runWatchLoop(config({ watch: true, cap: 1 }), h.deps)
+        .then(r => {
+          expect(r).toMatchObject({ reason: 'interrupted', iterations: 1 })
+          expect(h.waits).toHaveLength(5)
+          expect(h.records.map(x => x.iteration)).toEqual([1, 1, 1, 1, 1])
+        })
+        .finally(() => Object.defineProperty(process, 'platform', original))
+    },
+  )
+
+  it('AC9: under --watch the cap counts the iterations that ran a card', async () => {
+    const h = harness([sel(card('1')), sel(), sel(card('2')), sel(card('3'))])
+    const r = await runWatchLoop(config({ watch: true, cap: 2 }), h.deps)
+    expect(r).toMatchObject({ reason: 'iteration cap', iterations: 2 })
+    expect(h.batches).toEqual([['1'], ['2']])
   })
 
   it('AC9: a cap of 1 runs exactly one iteration', async () => {
@@ -344,10 +369,13 @@ describe('runWatchLoop (US-522 T-6)', () => {
   })
 
   it('a card the plan did not run (no outcome) stays selectable and is not counted driven', async () => {
-    const h = harness([sel(card('1')), sel(card('1')), sel(card('1'))], { outcomes: () => [] })
+    const h = harness([sel(card('1')), sel(card('1')), sel(card('1'))], {
+      outcomes: () => [],
+      interruptAfterWaits: 3,
+    })
     const r = await runWatchLoop(config({ watch: true, cap: 3 }), h.deps)
     expect(h.batches).toEqual([['1'], ['1'], ['1']])
     expect(r.driven).toEqual([])
-    expect(h.waits).toHaveLength(2)
+    expect(h.waits).toHaveLength(3)
   })
 })

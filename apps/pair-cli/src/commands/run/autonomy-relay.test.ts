@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { createCycleScriptsBridge } from './cycle-scripts'
-import { spawnAutonomyResolver } from './autonomy-policy'
+import { adoptionSelection, resolveAutonomyPolicy, spawnAutonomyResolver } from './autonomy-policy'
 
 /**
  * US-521 T-7 — `pair-cli run` owns NO autonomy rule: the effective policy is the shared script's answer,
@@ -51,7 +51,7 @@ describe('autonomy policy relay (verbatim, no re-derivation)', () => {
     const relayed = createCycleScriptsBridge(location, root).autonomyResolve({ adoption, args })
     expect(relayed).toEqual(direct(adoption, args))
     // legacy translation is visible in the relayed answer — produced by the script, not by pair-cli
-    expect(relayed.translated['merge']?.equivalent).toBe('merge: when; lacks: risk:green')
+    expect(relayed.translated['merge']?.equivalent).toBe('merge: hold-when; lacks: risk:green')
   })
 
   it('V2: precedence and sources come from the script: argument beats adoption beats default', () => {
@@ -63,7 +63,7 @@ describe('autonomy policy relay (verbatim, no re-derivation)', () => {
       args: { until: 'ready' },
     })!
     expect(out.lines).toContain('until: ready (argument)')
-    expect(out.lines).toContain('merge: never (adoption)')
+    expect(out.lines).toContain('merge: hold-never (adoption)')
     expect(out.lines.some(l => l.startsWith('filter: (all) (default)'))).toBe(true)
     expect(out.active).toBe(true)
   })
@@ -126,4 +126,39 @@ describe('platform independence on darwin and linux of the policy read (AC6 path
       ).toBeUndefined()
     },
   )
+})
+
+describe('US-576: presets through the CLI relay', () => {
+  it('--preset escalate-red resolves the story table, sources `preset escalate-red`', () => {
+    const root = project('# nothing\n')
+    const out = spawnAutonomyResolver({
+      location,
+      main: root,
+      cwd: root,
+      args: { preset: 'escalate-red' },
+    })!
+    expect(out.ok).toBe(true)
+    expect(out.lines).toEqual(
+      expect.arrayContaining([
+        'preset: escalate-red (argument)',
+        'filter: * (preset escalate-red)',
+        'prepare: hold-never (preset escalate-red)',
+        'merge: hold-when; has: risk:red (preset escalate-red)',
+        'until: merged (preset escalate-red)',
+      ]),
+    )
+    expect(adoptionSelection(out, 'filter')).toBe('*')
+  })
+
+  it('an unknown --preset HALTs listing the known presets', () => {
+    const root = project('# nothing\n')
+    expect(() =>
+      resolveAutonomyPolicy(spawnAutonomyResolver, {
+        location,
+        main: root,
+        cwd: root,
+        args: { preset: 'yolo' },
+      }),
+    ).toThrow(/not a known preset \(known: full \| escalate-red \| supervised \| custom\)/)
+  })
 })

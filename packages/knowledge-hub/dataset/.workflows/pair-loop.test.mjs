@@ -141,9 +141,10 @@ test('extractAutoAdvance: without an eligibilityValue param, only shape/prompt-s
 })
 
 // ── Stop Predicate ───────────────────────────────────────────────────────────
-test('parseStopPredicate: absent -> max-iterations: 1, no predicate', () => {
+test('parseStopPredicate: absent -> no iteration cap (US-576: runs to a natural stop), no predicate', () => {
   const { parseStopPredicate } = getHelpers()
-  assert.deepEqual(parseStopPredicate(''), { predicate: null, maxIterations: 1 })
+  assert.deepEqual(parseStopPredicate(''), { predicate: null, maxIterations: Infinity })
+  assert.equal(parseStopPredicate('## Stop Predicate\n\ntag:risk:red ⇒ Done\n').maxIterations, Infinity)
 })
 
 test('parseStopPredicate: valid selector/condition + max-iterations', () => {
@@ -1456,7 +1457,7 @@ test('US-573 T-1: a 2-card run emits loop-start, iteration, card-start ×2, card
       { id: 'ENG-12', title: 'Linear card', branch: 'feature/ENG-12-a', tier: 'risk:green', mutexResources: ['a'], prerequisites: [] },
       { id: '7', title: 'Numeric', branch: 'feature/#7-b', tier: 'risk:green', mutexResources: ['b'], prerequisites: [] },
     ] } : {}
-  const policyText = '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n2\n'
+  const policyText = '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n2\n\n## Stop Predicate\n\nmax-iterations: 1\n'
   const { logs } = await runWorkflow({ args: { policyText }, dispatch: twoEligible, workflowDispatch: () => ({ batch: [{ id: 'ENG-12', status: 'awaiting-human', reason: 'merge: always' }, { id: '7', status: 'failed-implement', prNumber: 9 }] }) })
   const events = pairEvents(logs)
   assert.deepEqual(events.map(e => e.event), ['loop-start', 'iteration', 'card-start', 'card-start', 'card-end', 'card-end', 'loop-end'])
@@ -1481,4 +1482,22 @@ test('US-573 AC5: `## Stop Predicate` accepts `idle-timeout: <seconds>` (the dri
   const { parseStopPredicate } = getHelpers()
   assert.deepEqual(parseStopPredicate('## Stop Predicate\n\nroot ⇒ Done\nmax-iterations: 4\nidle-timeout: 900\n'), { predicate: { selector: 'root', condition: 'Done' }, maxIterations: 4 })
   assert.throws(() => parseStopPredicate('## Stop Predicate\n\nidle-timeout: 0\n'), /idle-timeout must be a positive integer/)
+})
+
+test('US-576 AC6: no max-iterations declared — the loop keeps selecting after the first batch and stops naturally, naming the reason and the cards left', async () => {
+  const twoEligible = (_prompt, opts) =>
+    opts.phase === 'Select' ? { candidates: [
+      { id: '1', title: 'a', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: ['a'], prerequisites: [] },
+      { id: '2', title: 'b', branch: 'feature/#2-b', tier: 'risk:green', mutexResources: ['b'], prerequisites: [] },
+    ] } : {}
+  let batches = 0
+  const { logs } = await runWorkflow({ args: { policyText: '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n1\n' }, dispatch: twoEligible, workflowDispatch: (_p, o) => { batches += 1; return { batch: [{ id: String(batches), status: 'awaiting-human' }] } } })
+  const events = pairEvents(logs)
+  assert.equal(events.filter(e => e.event === 'iteration').length >= 2, true, 'a second iteration ran — the run did not stop after one card')
+  assert.equal(events.filter(e => e.event === 'card-start').length, 2)
+  const end = events.at(-1)
+  assert.equal(end.event, 'loop-end')
+  assert.equal(end.status, 'completed')
+  assert.doesNotMatch(end.reason, /max-iterations/)
+  assert.equal(typeof end.eligibleLeft, 'number')
 })

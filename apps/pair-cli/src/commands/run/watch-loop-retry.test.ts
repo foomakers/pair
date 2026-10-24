@@ -10,6 +10,12 @@ import {
 } from './loop-report'
 import { createDefaultCycleDriver } from './cycle-wiring'
 
+/** A --watch loop with nothing left to do waits forever: the test's Ctrl-C after `limit` idle waits. */
+const idleWait = (limit = 20) => {
+  let n = 0
+  return async () => (++n >= limit ? ('interrupted' as const) : ('elapsed' as const))
+}
+
 const card = (id: string, extra: Partial<RootCandidate> = {}): RootCandidate => ({
   id,
   title: `C${id}`,
@@ -55,7 +61,7 @@ function run(
           ),
         }
       },
-      wait: async () => 'elapsed',
+      wait: idleWait(),
       isInterrupted: () => false,
       onIteration: r => void records.push(r),
     },
@@ -188,7 +194,7 @@ describe('AD: only TRANSIENT failures are retried; a durable cycle terminal is r
           batches.push(cards.map(c => c.id)),
           { outcomes: [durable('1', 'failed-contract')] }
         ),
-        wait: async () => 'elapsed',
+        wait: idleWait(),
         isInterrupted: () => false,
         onIteration: r => void records.push(r),
       },
@@ -211,12 +217,12 @@ describe('AD: only TRANSIENT failures are retried; a durable cycle terminal is r
       {
         select: async () => sel(card('1')),
         probeLock: () => ({ kind: 'free' }),
-        baseHead: () => bases[i++],
+        baseHead: () => bases[Math.min(i++, bases.length - 1)],
         runBatch: async cards => (
           batches.push(cards.map(c => c.id)),
           { outcomes: [durable('1', 'failed-preparation')] }
         ),
-        wait: async () => 'elapsed',
+        wait: idleWait(),
         isInterrupted: () => false,
         onIteration: () => {},
       },
@@ -228,7 +234,7 @@ describe('AD: only TRANSIENT failures are retried; a durable cycle terminal is r
     const batches: string[][] = []
     const records: IterationRecord[] = []
     const result = await runWatchLoop(
-      { watch: true, intervalMs: 1, cap: 2 },
+      { watch: false, intervalMs: 1, cap: 2 },
       {
         select: async () => sel(card('1'), card('2'), card('3')),
         probeLock: () => ({ kind: 'free' }),
@@ -247,7 +253,7 @@ describe('AD: only TRANSIENT failures are retried; a durable cycle terminal is r
             ),
           }
         ),
-        wait: async () => 'elapsed',
+        wait: idleWait(),
         isInterrupted: () => false,
         onIteration: r => void records.push(r),
       },
@@ -270,7 +276,7 @@ describe('AD: only TRANSIENT failures are retried; a durable cycle terminal is r
           batches.push(cards.map(c => c.id)),
           { outcomes: [out('1', 'crashed')] }
         ),
-        wait: async () => 'elapsed',
+        wait: idleWait(),
         isInterrupted: () => false,
         onIteration: () => {},
       },
@@ -305,7 +311,7 @@ describe('AD: only TRANSIENT failures are retried; a durable cycle terminal is r
               })),
             }
           },
-          wait: async () => 'elapsed',
+          wait: idleWait(),
           isInterrupted: () => false,
           onIteration: () => {},
         },
@@ -331,4 +337,20 @@ describe('A5: the merge header says the gate is NOT evaluated when the effective
     expect(line).toMatch(/each card merges per its gate/)
     expect(line).not.toMatch(/not evaluated/i)
   })
+  const platformCases = ['darwin', 'linux'] as const
+  it.each(platformCases)(
+    'a preset-only run (no --merge) reports the preset gate, never the legacy Auto-Advance posture (%s)',
+    () => {
+      const line = describeMergeLine(
+        policy,
+        [['preset', 'escalate-red (argument)']],
+        'merged',
+        'hold-when; has: risk:red (preset escalate-red)',
+      )
+      expect(line).toMatch(
+        /each card merges per its gate \(hold-when; has: risk:red, preset escalate-red\)/,
+      )
+      expect(line).not.toMatch(/Auto-Advance/)
+    },
+  )
 })
