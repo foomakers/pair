@@ -12,6 +12,7 @@ Every workflow skill that runs a cycle script ships the same directory, byte-ide
 ├── adapter-kit.mjs    defineAdapter, the shared card hash, the marker upsert, the CLI spawn
 ├── github.mjs         GitHub (gh)
 ├── azure-devops.mjs   Azure DevOps (az boards / az repos / az devops invoke)
+├── filesystem.mjs     Filesystem backlog (PM side only — cards are the backlog's markdown files)
 └── <id>.mjs           ← your adapter
 ```
 
@@ -27,7 +28,7 @@ Every `.mjs` file in `scripts/host/` is loaded by `loadAdapters` as a candidate 
 
 | Method            | Side (ADR-018) | Contract                                                                                                                             |
 | ----------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `readCard`        | pm-tool        | `readCard(id, { repo, fields })` — no `fields`: `{ body }`, the card text exactly as stored; `fields`: an object with those keys (`number`, `url`, `title`, `body`) |
+| `readCard`        | pm-tool        | `readCard(id, { repo, fields })` — no `fields`: `{ body }`, the card text exactly as stored; `fields`: an object with those keys, spelled as `gh issue view --json` spells them (`number`, `url`, `title`, `body`, `labels` as `[{ name }]`, `state` `OPEN \| CLOSED`, `stateReason`) |
 | `cardHash`        | pm-tool        | **Not yours to write.** `defineAdapter` derives it from `readCard` with the shared canonicalization; an adapter that defines it is refused |
 | `prHead`          | code-host      | `prHead({ pr, repo })` → the PR head as a 40-hex sha; a value that is not a 40-hex sha throws `HostError('invalid-output')` |
 | `upsertComment`   | code-host      | `upsertComment({ pr, marker, body, repo })` → `{ action: created \| updated \| unchanged, id, url, marker }`, or `{ error: body-too-long \| marker-ambiguous }` — build it on `upsertByMarker` |
@@ -45,7 +46,7 @@ Optional primitives (`SUPPORT_METHODS`, exported the same way) serve the scope-d
 | `createCard`      | pm-tool        | `createCard({ repo, title, body })` → returns the created card (adapter-shaped, at least a `url`)               |
 | `findCards`       | pm-tool        | `findCards({ repo, search })` → an array of matching cards                                                       |
 | `updateCard`      | pm-tool        | `updateCard({ repo, id, body })` → `{ id }`                                                                       |
-| `parseCardRef`    | pm-tool        | `parseCardRef(ref, { repo })` → `{ number, inScope }` or `null` when `ref` is not a card reference                |
+| `parseCardRef`    | pm-tool        | `parseCardRef(ref, { repo })` → `{ id, number, inScope }` or `null` when `ref` is not a card reference; a bare id (`572`, `#572`, `IN-01`) is the bound tracker's own card (`inScope: true`). The ONE validator of a card id (`--root`, `--story`) — an unsafe id throws `HostError('invalid-input')` |
 | `listComments`    | code-host      | `listComments({ pr, repo })` → an array of `{ id, body, url }`                                                    |
 | `readComment`     | code-host      | `readComment({ id, repo })` → `{ body, authorLogin, authorIsUser, pr }`                                           |
 | `parseCommentRef` | code-host      | `parseCommentRef(ref, { repo })` → `{ pr, id, inScope }` or `null`                                                |
@@ -56,9 +57,10 @@ Optional primitives (`SUPPORT_METHODS`, exported the same way) serve the scope-d
 | `readLabels`      | code-host      | `readLabels({ pr, repo })` → an array of label name strings                                                       |
 | `setClassification` | code-host   | `setClassification({ pr, repo, family, value })` — `family` ∈ `risk \| cost`; leaves exactly one `<family>:<value>` label of that family, the family's other values removed, then reads back: `{ applied, removed, confirmed, error }`, like `setPrState`. An out-of-enum `family`/`value` throws `HostError('invalid-input')` before any write. Written by `pr-state.mjs conclude` (`--tier`/`--cost`) — the review is the only writer of a PR's classification tags (pr-states.md) |
 | `commentOnCard`   | pm-tool        | `commentOnCard({ id, marker, body, repo })` → the marker-keyed upsert result (`{ action, id, url, marker }` or `{ error }`) on the CARD's thread, never the PR's. `merge` stage: the park comment |
+| `resolveUser`     | pm-tool        | `resolveUser()` → the login the tracker's CLI is authenticated as (`--assignee @me`); a tracker with no user (filesystem) leaves it out and `@me` HALTs `not-implemented` naming `resolveUser` |
 | `setBoardState`   | pm-tool        | `setBoardState({ id, state, repo })` → `{ applied, confirmed, error }`; writes the card's board `Status` and reads it back. A card that is not a board item, sits on several boards or lacks the option is `confirmed: false` with the reason, never a silent skip. `merge` stage: `Done` after the merge |
 
-Omit one and only the feature that needs it fails, typed `not-implemented` with the method name. Their shapes are the two shipped adapters' (`github.mjs`, `azure-devops.mjs`).
+Omit one and only the feature that needs it fails, typed `not-implemented` with the method name. Their shapes are the shipped adapters' (`github.mjs`, `azure-devops.mjs`, `filesystem.mjs`).
 
 Also expose `checkContext` (the check name, `pair-review`), `stateLabels` (the three `pr-state:*` labels) and `errorPrefix` (a short tag the cycle puts in its failure reasons, e.g. `gh`, `az`).
 
@@ -86,9 +88,9 @@ Declare it in `.pair/adoption/tech/way-of-working.md`. `index.mjs` resolves the 
 - A declared value with no adapter file stops the coordinator with `host-unsupported`, naming the value and the implemented set. The cycle never falls back to GitHub.
 - The coordinator binds with `cycle-state.mjs bind-hosts --dir <run/story dir>`. That writes `.host-binding.json`, and every later call naming the directory reuses it, even after way-of-working changes mid-cycle.
 
-## Worked example — a filesystem stub
+## Worked example — a filesystem sandbox
 
-This is a trivial third host that keeps cards and PRs as local files, useful as a sandbox. The `host-adapter` suite copies the block below **verbatim** into `scripts/host/filesystem.mjs` and runs it, so the example has to keep working.
+The real Filesystem PM adapter ships as `scripts/host/filesystem.mjs` (PM side only: cards are the files of `.pair/adoption/product/backlog/`, PRs go to the declared `code-host` — see [filesystem-implementation.md](filesystem-implementation.md#unattended-loop-pair-run)); read it for a production-grade local tracker. The example below is a deliberately trivial sandbox that keeps cards AND PRs as local files, to show the whole interface in one screen. The `host-adapter` suite copies the block **verbatim** over `filesystem.mjs` in a scratch copy of the directory and runs it, so the example has to keep working — never install it over the shipped adapter.
 
 <!-- worked-example:filesystem -->
 ```js
