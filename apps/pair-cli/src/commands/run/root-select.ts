@@ -276,7 +276,9 @@ export interface SelectRootInput extends SelectionScope {
   readonly cwd: string
   readonly autonomyArgs: readonly string[]
   readonly model?: string | undefined
-  readonly timeoutSeconds: number
+  readonly timeoutSeconds?: number | undefined
+  /** US-573: seconds without an engine event before the stage is stopped (default 30 min). */
+  readonly idleTimeoutSeconds?: number | undefined
   readonly runIteration?: (input: SpawnIterationInput) => Promise<IterationResult>
 }
 
@@ -315,6 +317,7 @@ async function selectOnce(input: SelectRootInput, correction: string): Promise<S
     autonomyArgs: input.autonomyArgs,
     ...(input.model !== undefined && { model: input.model }),
     timeoutSeconds: input.timeoutSeconds,
+    idleTimeoutSeconds: input.idleTimeoutSeconds,
     onEvent: payload => {
       try {
         answer = answerInEvent(payload, parse) ?? answer

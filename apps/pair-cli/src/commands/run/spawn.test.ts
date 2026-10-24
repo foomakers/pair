@@ -2,7 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { writeFileSync, mkdtempSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { buildEngineArgs, spawnIteration } from './spawn'
+import {
+  buildEngineArgs,
+  spawnIteration,
+  resolveIdleTimeout,
+  DEFAULT_IDLE_TIMEOUT_SECONDS,
+} from './spawn'
 import { ENGINES } from './engines'
 
 describe('buildEngineArgs', () => {
@@ -86,6 +91,31 @@ describe('spawnIteration — a real child process emitting fixture JSONL', () =>
 
     expect(result.outcome).toBe('success')
   })
+
+  const platformCases = ['darwin', 'linux'] as const
+  it.each(platformCases)(
+    'relays the engine stderr through console.log on %s, so live card rows are never overwritten',
+    async () => {
+      const { dir, file } = stubEngine(
+        `process.stderr.write('engine warning\\n'); process.stdout.write(JSON.stringify({type:'result',subtype:'success'})+'\\n')`,
+      )
+      const logged: string[] = []
+      const log = console.log
+      console.log = (line: string) => void logged.push(line)
+      try {
+        await spawnIteration({
+          engine: { ...ENGINES.claude, command: process.execPath, headlessArgs: [file] },
+          promptText: 'go',
+          cwd: dir,
+          autonomyArgs: [],
+          timeoutSeconds: 30,
+        })
+      } finally {
+        console.log = log
+      }
+      expect(logged).toContain('engine warning')
+    },
+  )
 
   it('fails an iteration whose process exits 0 with no terminal event (AC7)', async () => {
     const { dir, file } = stubEngine(
@@ -188,4 +218,139 @@ describe('spawnIteration — the stall is classified the same on every CI platfo
     },
     20000,
   )
+})
+
+describe('spawnIteration — idle timeout, not a wall-clock kill (US-573 AC5)', () => {
+  const stub = (script: string) => {
+    const dir = mkdtempSync(join(tmpdir(), 'pair-run-'))
+    const file = join(dir, 'engine.js')
+    writeFileSync(file, script)
+    return {
+      engine: { ...ENGINES.claude, command: process.execPath, headlessArgs: [file] },
+      cwd: dir,
+    }
+  }
+
+  it('an engine that keeps emitting events outlives the idle bound: every event resets the timer', async () => {
+    const { engine, cwd } = stub(
+      `let n=0;const t=setInterval(()=>{process.stdout.write(JSON.stringify({type:'system',n:n++})+'\\n');if(n===8){clearInterval(t);process.stdout.write(JSON.stringify({type:'result',subtype:'success'})+'\\n')}},300)`,
+    )
+    const result = await spawnIteration({
+      engine,
+      cwd,
+      promptText: 'go',
+      autonomyArgs: [],
+      idleTimeoutSeconds: 1,
+    })
+    expect(result.outcome).toBe('success')
+  }, 20000)
+
+  it('silence past the idle bound stops the engine and names the last card/stage', async () => {
+    const line = JSON.stringify({
+      type: 'system',
+      text: 'PAIR_EVENT {"event":"stage","card":"ENG-7","stage":"implement"}',
+    })
+    const { engine, cwd } = stub(
+      `process.stdout.write(${JSON.stringify(line)}+'\\n');setTimeout(()=>{},60000)`,
+    )
+    const result = await spawnIteration({
+      engine,
+      cwd,
+      promptText: 'go',
+      autonomyArgs: [],
+      idleTimeoutSeconds: 1,
+    })
+    expect(result).toMatchObject({ outcome: 'failed', cause: 'timed-out', stalled: true })
+    expect(result.detail).toBe('timed out (idle) at ENG-7/implement: no engine event for 1s')
+  }, 20000)
+
+  it('the total cap applies only when given, and is reported as a timeout too', async () => {
+    const { engine, cwd } = stub(
+      `setInterval(()=>process.stdout.write('{"type":"system"}\\n'),200)`,
+    )
+    const result = await spawnIteration({
+      engine,
+      cwd,
+      promptText: 'go',
+      autonomyArgs: [],
+      idleTimeoutSeconds: 5,
+      timeoutSeconds: 1,
+    })
+    expect(result).toMatchObject({ outcome: 'failed', cause: 'timed-out', stalled: true })
+  }, 20000)
+})
+
+describe('spawnIteration — engine env (US-573 AC7)', () => {
+  const envProbe = (engine: typeof ENGINES.claude, script: string) => {
+    const dir = mkdtempSync(join(tmpdir(), 'pair-run-'))
+    const file = join(dir, 'engine.js')
+    writeFileSync(file, script)
+    return spawnIteration({
+      engine: { ...engine, command: process.execPath, headlessArgs: [file] },
+      cwd: dir,
+      promptText: 'go',
+      autonomyArgs: [],
+    })
+  }
+
+  it('claude runs with CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0', async () => {
+    expect(ENGINES.claude.env).toEqual({ CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: '0' })
+    const result = await envProbe(
+      ENGINES.claude,
+      `process.stdout.write(JSON.stringify({type:'result',subtype:process.env.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS==='0'?'success':'missing'})+'\\n')`,
+    )
+    expect(result.outcome).toBe('success')
+  })
+
+  it.each(['pi', 'opencode', 'codex'] as const)('%s gets no engine env of its own', id => {
+    expect(ENGINES[id].env).toBeUndefined()
+  })
+})
+
+describe('resolveIdleTimeout — precedence flag > ## Stop Predicate > pair.config.json > default (US-573 AC5)', () => {
+  it.each([
+    [
+      { flag: 60, policy: 120, declared: 240 },
+      { seconds: 60, source: '--idle-timeout' },
+    ],
+    [
+      { policy: 120, declared: 240 },
+      { seconds: 120, source: '## Stop Predicate idle-timeout' },
+    ],
+    [{ declared: 240 }, { seconds: 240, source: 'pair.config.json engine.idleTimeout' }],
+    [{}, { seconds: DEFAULT_IDLE_TIMEOUT_SECONDS, source: 'default' }],
+  ])('%o', (input, expected) => {
+    expect(resolveIdleTimeout(input)).toEqual(expected)
+  })
+
+  it('the default is 30 minutes', () => {
+    expect(DEFAULT_IDLE_TIMEOUT_SECONDS).toBe(1800)
+  })
+})
+
+describe('spawnIteration — the run max fix rounds reaches the claude live stages (r2-6, fix-max-wiring)', () => {
+  it('r2-6-w5: a stub claude streaming the recorded fixture with maxFixRounds 10 renders fix 1/10', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pair-run-'))
+    const file = join(dir, 'engine.js')
+    const fixture = join(__dirname, '__fixtures__', 'claude-live-workflow-progress.jsonl')
+    writeFileSync(
+      file,
+      `process.stdout.write(require('fs').readFileSync(${JSON.stringify(fixture)}, 'utf-8'))`,
+    )
+    const stages: string[] = []
+    const input = {
+      engine: { ...ENGINES.claude, command: process.execPath, headlessArgs: [file] },
+      promptText: 'go',
+      cwd: dir,
+      autonomyArgs: [],
+      timeoutSeconds: 30,
+      maxFixRounds: 10,
+      onRunEvent: (e: { card?: string; event: string; stage?: string }) => {
+        if (e.card === '573' && e.event === 'stage') stages.push(e.stage!)
+      },
+    }
+    await spawnIteration(input)
+    expect(stages).toContain('fix 1/10')
+    expect(stages).not.toContain('fix 1/?')
+  })
 })

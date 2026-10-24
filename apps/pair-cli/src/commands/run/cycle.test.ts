@@ -535,3 +535,27 @@ describe('runCycle — handoff format errors are validated, then retried ONCE (A
     }
   })
 })
+
+describe('US-573: onDispatch announces each stage BEFORE it runs (live progress)', () => {
+  it('told once per dispatched stage, in order, never for a terminal step', async () => {
+    const resolve = scriptedResolve([
+      { status: 'empty', next: IMPLEMENT_A0 },
+      { status: 'in-progress', next: { step: 'verify', phase: 'r0', round: 0, attempt: 1 } },
+      { status: 'completed', next: DONE },
+    ])
+    const seen: string[] = []
+    const spawnStage = vi.fn(async (): Promise<CycleStageResult> => {
+      seen.push('spawn')
+      return { processOutcome: 'success' }
+    })
+    await runCycle({
+      resolve,
+      worktree,
+      packet,
+      spawnStage,
+      policy: {},
+      onDispatch: next => seen.push(next.step),
+    })
+    expect(seen).toEqual(['implement', 'spawn', 'verify', 'spawn'])
+  })
+})

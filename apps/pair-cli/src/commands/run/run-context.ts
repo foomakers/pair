@@ -18,6 +18,8 @@ import { readAutomationPolicy, type AutomationPolicy } from './automation-policy
 import type { CardReadiness } from './cycle-scripts'
 import type { ProfileRequest, ResolvedWorkflowProfile } from './workflow-profile'
 import type { IterationResult } from './stream-reader'
+import type { RunEvent } from './run-events'
+import { resolveIdleTimeout, type IdleTimeout } from './spawn'
 import type { SelectRootInput, SelectionAnswer } from './root-select'
 import type { Wait } from './wait'
 import type { RootCandidate } from './root-plan'
@@ -48,7 +50,9 @@ export type IterationRunner = (input: {
   promptText: string
   cwd: string
   autonomyArgs: readonly string[]
-  timeoutSeconds: number
+  timeoutSeconds?: number | undefined
+  idleTimeoutSeconds?: number | undefined
+  onRunEvent?: (event: RunEvent) => void
 }) => Promise<IterationResult>
 
 /** AC14: the card's readiness — the shipped probe is `createCardReadinessProbe` (`cycle-wiring.ts`). */
@@ -61,6 +65,8 @@ export interface DriveCycleInput {
   readonly rounds?: number | 'max'
   /** US-521: the ACTIVE autonomy policy as the shared script resolved it (absent ⇒ today's legacy path). */
   readonly autonomy?: { readonly policy: AutonomyResolution['policy'] }
+  /** Sees the card's run events (card-start, one stage per dispatch) — how a single `--card` renders its line. */
+  readonly onRunEvent?: (event: RunEvent) => void
 }
 
 export interface DriveCycleResult {
@@ -79,6 +85,8 @@ export interface RunHandlerDependencies {
   acquireLock?: LockAcquirer
   /** The audit writer. Injected for the same reason — the trail is a real file, by design. */
   appendAudit?: AuditAppender
+  /** US-573: the live run-audit writer (JSONL); defaults to the real `O_APPEND` file writer. */
+  runAudit?: AuditAppender
   /** AC14: a card's readiness (via the adopted State Mapping); out-of-scope throws CardOutOfScopeError. */
   cardReadiness?: CardReadinessProbe
   /** AC1: drives the delivery-cycle coordinator for a Ready card with no mapped route. */
@@ -113,6 +121,9 @@ export interface ResolvedRun {
   promptExtras?: PromptExtras
   /** Present only on a tag-driven run (US-217), and then always a `route` — a skip returns earlier. */
   dispatch?: DispatchDecision
+  /** US-573: where the live audit is appended (absolute) and the hang guard — from the run context. */
+  auditPath?: string
+  idleTimeout?: IdleTimeout
 }
 
 /**
@@ -150,6 +161,8 @@ export interface RunContext {
   workingArea: string
   /** `<cwd>/<working_path>/<Audit Location>` — where every dispatch record is appended. */
   auditPath: string
+  /** US-573: the hang guard, with the level it came from. */
+  idleTimeout: IdleTimeout
 }
 
 export type SkipDecision = Extract<DispatchDecision, { kind: 'skip' }>
@@ -182,6 +195,11 @@ export function resolveContext(
     ...(dispatch && { dispatch }),
     workingArea: resolve(cwd, workingPath),
     auditPath: resolveAuditPath(cwd, workingPath, policy.auditLocation),
+    idleTimeout: resolveIdleTimeout({
+      flag: config.idleTimeoutSeconds,
+      policy: policy.idleTimeoutSeconds,
+      declared: readEngineDeclaration(loaded.config, ENGINE_IDS).idleTimeout,
+    }),
   }
 }
 

@@ -1,0 +1,5 @@
+{"type": "thread.started", "thread_id": "c1"}
+{"type": "turn.started"}
+{"type": "item.completed", "item": {"id": "i1", "type": "command_execution", "command": "pair-loop", "aggregated_output": "PAIR_EVENT {\"event\":\"loop-start\",\"auditLocation\":\"automation/loop-audit.md\",\"maxIterations\":3}\nPAIR_EVENT {\"event\":\"iteration\",\"iteration\":0}\nPAIR_EVENT {\"event\":\"card-start\",\"card\":\"ENG-12\",\"title\":\"Linear card\",\"iteration\":0}\nPAIR_EVENT {\"event\":\"stage\",\"card\":\"ENG-12\",\"stage\":\"implement\"}\nPAIR_EVENT {\"event\":\"stage\",\"card\":\"ENG-12\",\"stage\":\"review\",\"pr\":41}\nPAIR_EVENT {\"event\":\"card-end\",\"card\":\"ENG-12\",\"status\":\"awaiting-human\",\"pr\":41,\"reason\":\"merge: always\"}\nPAIR_EVENT {\"event\":\"loop-end\",\"status\":\"completed\",\"reason\":\"nothing eligible\",\"iterations\":1,\"eligibleLeft\":0}", "exit_code": 0}}
+{"type": "item.completed", "item": {"id": "i2", "type": "agent_message", "text": "done"}}
+{"type": "turn.completed", "usage": {"input_tokens": 1}}

@@ -26,7 +26,7 @@ export interface EngineDeclaration {
   id: string
 }
 
-const DECLARABLE_FIELDS = ['id', 'bin', 'model'] as const
+const DECLARABLE_FIELDS = ['id', 'bin', 'model', 'idleTimeout'] as const
 
 export interface EngineBlockOutcome {
   /** The declared engine id, present only when the block is valid. */
@@ -46,12 +46,31 @@ export interface EngineBlockOutcome {
    * selection is #488's and is deliberately not this.
    */
   model?: Readonly<Record<string, string>>
+  /** US-573: `engine.idleTimeout` — seconds without an engine event before `pair run` stops an iteration. */
+  idleTimeout?: number
   /** Validation errors, in the same style as the registry ones (empty ⇒ valid or absent). */
   errors: string[]
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** The largest timeout in whole seconds `setTimeout` can hold (its delay is a signed 32-bit ms count; above it fires at once). */
+export const MAX_TIMEOUT_SECONDS = 2147483
+
+/** US-573: `engine.idleTimeout` — absent, or a positive integer of seconds up to `MAX_TIMEOUT_SECONDS`. */
+function readIdleTimeout(raw: unknown): { value: { idleTimeout?: number } } | { errors: string[] } {
+  if (raw === undefined) return { value: {} }
+  if (!Number.isInteger(raw) || Number(raw) <= 0)
+    return { errors: ['engine.idleTimeout: must be a positive integer of seconds'] }
+  if (Number(raw) > MAX_TIMEOUT_SECONDS)
+    return {
+      errors: [
+        `engine.idleTimeout: must be at most ${MAX_TIMEOUT_SECONDS} seconds (received: ${String(raw)})`,
+      ],
+    }
+  return { value: { idleTimeout: Number(raw) } }
 }
 
 /**
@@ -90,12 +109,23 @@ export function readEngineDeclaration(
     }
   }
 
+  const fields = readOptionalFields(block, knownEngineIds)
+  if ('errors' in fields) return fields
+  return { engine: id, ...fields.value, errors: [] }
+}
+
+/** `bin`, `model` and `idleTimeout`, each validated; the first invalid one is the error. */
+function readOptionalFields(
+  block: Record<string, unknown>,
+  knownEngineIds: readonly string[],
+): { value: Pick<EngineBlockOutcome, 'bin' | 'model' | 'idleTimeout'> } | { errors: string[] } {
   const bin = readIdKeyedPaths(block['bin'], knownEngineIds, 'bin')
   if ('errors' in bin) return bin
   const model = readIdKeyedPaths(block['model'], knownEngineIds, 'model')
   if ('errors' in model) return model
-
-  return { engine: id, bin: bin.value, model: model.value, errors: [] }
+  const idle = readIdleTimeout(block['idleTimeout'])
+  if ('errors' in idle) return idle
+  return { value: { bin: bin.value, model: model.value, ...idle.value } }
 }
 
 /** `engine.bin` / `engine.model`: a map keyed by engine id. Absent is legal; a bad entry is not. */
