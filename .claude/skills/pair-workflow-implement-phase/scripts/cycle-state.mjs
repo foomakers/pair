@@ -1692,6 +1692,18 @@ const findingTargetPaths = (group, finding) => {
 }
 // A plan group names its finding ids as `findings` (canonical) or `findingIds` (alias) — every reader goes through here.
 export const groupFindingIds = group => group?.findings ?? group?.findingIds ?? []
+// A generated mirror's source is in scope: a source file mirrorOf it, or a DATASET directory holding it — the whole
+// dataset, the identical relative path, or a dir whose path the mirror dirs carry (`.skills/workflow/red-spec/` ⇒ `skills/pair-workflow-red-spec/`).
+const sourceInScope = (mirror, a) => {
+  const rel = a.startsWith(DATASET_ROOT) ? a.slice(DATASET_ROOT.length) : a
+  if (!a.endsWith('/')) return mirrorOf(mirror, DATASET_ROOT + rel)
+  if (!a.startsWith(DATASET_ROOT)) return false
+  if (!rel || mirror.startsWith(rel)) return true
+  const [top, ...rest] = rel.split('/').filter(Boolean).map(d => d.replace(/^\./, ''))
+  const dirs = mirror.split('/').slice(0, -1)
+  const name = rest.join('-')
+  return dirs.includes(top) && (!name || dirs.some(d => d === name || d.endsWith(`-${name}`)))
+}
 export function planErrors(plan, findings) {
   const errs = []
   const byId = new Map((findings ?? []).map(f => [f?.id, f]))
@@ -1706,6 +1718,12 @@ export function planErrors(plan, findings) {
       const proseOnly = targets.every(p => PROSE_RE.test(p))
       if ((group.mode === 'behavioral' || group.mode === 'test') && proseOnly) errs.push(`prose-finding-not-doc: ${id} belongs in a doc group`)
       if (group.mode === 'doc' && !proseOnly) errs.push(`code-finding-in-doc-group: ${id} touches code, it stays behavioral`)
+      // US-582: one stale claim ⇒ one finding listing every location, so a doc group's scope covers EVERY target path (a
+      // directory entry covers its children); a generated mirror is fixed at its dataset source, so it is exempt only when
+      // that source is in scope.
+      if (group.mode === 'doc' && proseOnly)
+        for (const p of targets.filter(p => !(group.allowedPaths ?? []).some(a => p === a || (a.endsWith('/') && p.startsWith(a)) || (isGenerated(p) && sourceInScope(p, a)))))
+          errs.push(`finding-location-outside-scope: ${id}: ${p}`)
     }
   }
   return errs
@@ -2248,6 +2266,7 @@ const mirrorOf = (mirror, source) => {
   return mp === op || mp.endsWith(`-${op}`)
 }
 const BASE_OWNED_GENERATED = ['.claude/', '.agents/', '.agent/', '.cursor/', '.windsurf/', '.pair/knowledge/', '.pair/llms.txt']
+const isGenerated = p => BASE_OWNED_GENERATED.some(r => (r.endsWith('/') ? p.startsWith(r) : p === r))
 export function baseSync({ cwd, base, story, owned }) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !GIT_ENV_RE.test(k)))
   const run = args => spawnSync('git', args, { cwd, encoding: 'utf8', env })
@@ -2265,10 +2284,9 @@ export function baseSync({ cwd, base, story, owned }) {
   for (const sha of lines(g(['log', '--format=%H', '--grep=^Pair-RED-Snapshot: ', `${fork}..HEAD`])))
     for (const p of lines(g(['-c', 'core.quotePath=false', 'diff-tree', '--no-commit-id', '--name-only', '-r', sha]))) sealed.add(p)
   const storyPaths = new Set(lines(g(['-c', 'core.quotePath=false', 'diff', '--name-only', fork, 'HEAD'])))
-  const generated = p => BASE_OWNED_GENERATED.some(r => (r.endsWith('/') ? p.startsWith(r) : p === r))
   const ownedPath = p => (Array.isArray(owned) ? owned.some(o => p === o || (o.endsWith('/') && p.startsWith(o))) : storyPaths.has(p))
   // A generated mirror takes the side its dataset source took: ours when a story-owned dataset path the story changed maps onto it.
-  const isOwned = p => (generated(p) ? [...storyPaths].some(s => s.startsWith(DATASET_ROOT) && mirrorOf(p, s) && ownedPath(s)) : ownedPath(p))
+  const isOwned = p => (isGenerated(p) ? [...storyPaths].some(s => s.startsWith(DATASET_ROOT) && mirrorOf(p, s) && ownedPath(s)) : ownedPath(p))
   const merge = run(['merge', '--no-ff', '--no-commit', baseSha])
   const conflicted = lines(g(['-c', 'core.quotePath=false', 'diff', '--name-only', '--diff-filter=U'])).sort()
   if (merge.status !== 0 && !conflicted.length) {
