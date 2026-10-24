@@ -220,7 +220,7 @@ test('parseArgs: --autoAdvance (legacy, pair-loop) or --mergeGate, exactly one; 
   assert.deepEqual(parseArgs(flat({ ...o, mergeGate: JSON.stringify(gate('when', ['a:b'])) })).opts.mergeGate, gate('when', ['a:b']))
   assert.throws(() => parseArgs(flat(o)), /exactly one of/)
   assert.throws(() => parseArgs(flat({ ...o, autoAdvance: '["a:b"]', mergeGate: '{}' })), /exactly one of/)
-  assert.throws(() => parseArgs(flat({ ...o, mergeGate: JSON.stringify(gate('always', ['a:b'])) })), /only with `when`/)
+  assert.throws(() => parseArgs(flat({ ...o, mergeGate: JSON.stringify(gate('always', ['a:b'])) })), /only with `hold-when`/)
   assert.throws(() => parseArgs(flat({ ...o, mergeGate: 'x' })), /JSON gate object/)
   const e = parseArgs(['escalate', '--dir', '/x', '--story', '42', '--stage', 'green', '--conditions', '["has:cost:red"]'])
   assert.deepEqual(e.opts.conditions, ['has:cost:red'])

@@ -409,7 +409,7 @@ describe('AC11: the effective gate is printed with its source', () => {
   it('names value, source and route', async () => {
     const r = await run({ prepare: selection(gate('never'), 'pr', 'adoption'), autonomous: true })
     expect(r.stdout.join('\n')).toMatch(
-      /Prepare: never \(source: adoption\) — run-autonomous at B0/,
+      /Prepare: hold-never \(source: adoption\) — run-autonomous at B0/,
     )
   })
 })

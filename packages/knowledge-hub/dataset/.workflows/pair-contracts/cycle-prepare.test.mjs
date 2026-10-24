@@ -75,7 +75,7 @@ test('AC6: an escalation names the firing conditions (has: / lacks:)', () => {
   const d = decide({ gate: when(['risk:red'], ['triaged']), labels: ['risk:red'], readiness: 'draft', attended: false, boundary: 'B1', source: 'adoption' })
   assert.deepEqual(d.conditions, ['has:risk:red', 'lacks:triaged'])
   assert.equal(d.condition, 'has:risk:red, lacks:triaged')
-  assert.equal(d.gate, 'when; has: risk:red; lacks: triaged')
+  assert.equal(d.gate, 'hold-when; has: risk:red; lacks: triaged')
 })
 
 test('AC6: a `when` gate with unreadable labels escalates (fail-safe), never proceeds on a guess', () => {

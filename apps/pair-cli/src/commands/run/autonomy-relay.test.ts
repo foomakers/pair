@@ -51,7 +51,7 @@ describe('autonomy policy relay (verbatim, no re-derivation)', () => {
     const relayed = createCycleScriptsBridge(location, root).autonomyResolve({ adoption, args })
     expect(relayed).toEqual(direct(adoption, args))
     // legacy translation is visible in the relayed answer — produced by the script, not by pair-cli
-    expect(relayed.translated['merge']?.equivalent).toBe('merge: when; lacks: risk:green')
+    expect(relayed.translated['merge']?.equivalent).toBe('merge: hold-when; lacks: risk:green')
   })
 
   it('V2: precedence and sources come from the script: argument beats adoption beats default', () => {
@@ -63,7 +63,7 @@ describe('autonomy policy relay (verbatim, no re-derivation)', () => {
       args: { until: 'ready' },
     })!
     expect(out.lines).toContain('until: ready (argument)')
-    expect(out.lines).toContain('merge: never (adoption)')
+    expect(out.lines).toContain('merge: hold-never (adoption)')
     expect(out.lines.some(l => l.startsWith('filter: (all) (default)'))).toBe(true)
     expect(out.active).toBe(true)
   })

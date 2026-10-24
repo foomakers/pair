@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { parse, parseGate, resolvePolicy, decide, gateToString, gateFromLegacyTiers, escalationComment, ESCALATION_MARKER, KEYS } from '../../skills/pair-workflow-cycle/scripts/autonomy-policy.mjs'
+import { PRESETS, PRESET_NAMES, parse, parseGate, resolvePolicy, decide, gateToString, gateFromLegacyTiers, escalationComment, ESCALATION_MARKER, KEYS } from '../../skills/pair-workflow-cycle/scripts/autonomy-policy.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-cycle/scripts/autonomy-policy.mjs', import.meta.url))
 const section = body => `# Automation\n\n## Autonomy\n\n${body}\n`
@@ -18,12 +18,12 @@ test('gate grammar: always | never | when with has/lacks lists (any-of)', () => 
   assert.deepEqual(parseGate('merge', 'always').value, { mode: 'always', has: [], lacks: [] })
   assert.deepEqual(parseGate('merge', 'never').value, { mode: 'never', has: [], lacks: [] })
   assert.deepEqual(parseGate('merge', 'when; has: cost:red, security:red; lacks: risk:green').value, { mode: 'when', has: ['cost:red', 'security:red'], lacks: ['risk:green'] })
-  assert.equal(gateToString(parseGate('merge', 'when; lacks: risk:green').value), 'when; lacks: risk:green')
+  assert.equal(gateToString(parseGate('merge', 'when; lacks: risk:green').value), 'hold-when; lacks: risk:green')
 })
 
 for (const [text, re] of [
-  ['always; has: x:y', /valid only with `when`/],
-  ['never; lacks: x:y', /valid only with `when`/],
+  ['always; has: x:y', /valid only with `hold-when`/],
+  ['never; lacks: x:y', /valid only with `hold-when`/],
   ['sometimes', /mode "sometimes"/],
   ['', /is empty/],
   ['when', /at least one/],
@@ -62,7 +62,7 @@ test('## Autonomy parses every key; malformed values name the key', () => {
     ['filter:', 'filter', /empty list/],
     ['filter: a:b, a:b', 'filter', /twice/],
     ['until: pr\nuntil: merged', 'until', /twice/],
-    ['merge: always; has: a:b', 'merge', /only with `when`/],
+    ['merge: always; has: a:b', 'merge', /only with `hold-when`/],
     ['root: abc', 'root', /issue number/],
     ['assignee: a b', 'assignee', /neither @me nor a login/],
     ['just text', 'Autonomy', /key: value/],
@@ -115,7 +115,7 @@ test('precedence: argument > adoption > translated > default, each line carries 
   assert.equal(r.effective.status.source, 'default')
   assert.equal(r.lines.length, KEYS.length)
   assert.ok(r.lines.includes('until: merged (argument)'))
-  assert.ok(r.lines.includes('merge: never (adoption)'))
+  assert.ok(r.lines.includes('merge: hold-never (adoption)'))
   assert.ok(r.lines.some(l => l === 'filter: risk:green (adoption (translated from ## Eligibility))'))
 })
 
@@ -129,8 +129,8 @@ test('nothing declared, nothing passed: defaults only (until pr, gates always) �
 
 test('prepare is parsed and validated and printed with its value and source, no "treated as always" note (#523 executes it)', () => {
   const r = resolvePolicy({ args: { prepare: 'when; has: needs:refine' } })
-  assert.equal(r.lines.find(l => l.startsWith('prepare:')), 'prepare: when; has: needs:refine (argument)')
-  assert.equal(resolvePolicy().lines.find(l => l.startsWith('prepare:')), 'prepare: always (default)')
+  assert.equal(r.lines.find(l => l.startsWith('prepare:')), 'prepare: hold-when; has: needs:refine (argument)')
+  assert.equal(resolvePolicy().lines.find(l => l.startsWith('prepare:')), 'prepare: hold-always (default)')
   assert.equal(resolvePolicy({ args: { prepare: 'always; has: a:b' } }).ok, false)
 })
 
@@ -139,7 +139,7 @@ test('legacy Auto-Advance tier with no declared until: the target is merged (tod
   assert.equal(r.effective.until.value, 'merged')
   assert.match(r.effective.until.source, /translated from ## Auto-Advance/)
   assert.deepEqual(r.policy.legacyTiers, ['risk:green'])
-  assert.equal(r.translated.merge.equivalent, 'merge: when; lacks: risk:green')
+  assert.equal(r.translated.merge.equivalent, 'merge: hold-when; lacks: risk:green')
   // an explicit until still wins
   assert.equal(resolvePolicy({ args: { until: 'pr' }, adoptionText: '## Auto-Advance\n\nrisk:green\n' }).effective.until.value, 'pr')
 })
@@ -240,10 +240,10 @@ test('gate shape tolerance: a gate missing `lacks` / `has` / both decides, print
   assert.deepEqual(decide({ boundary: { kind: 'stage', stage: 'implement' }, labels, policy: { until: 'merged', merge: noHas } }).conditions, ['lacks:risk:green'])
   assert.equal(decide({ boundary: { kind: 'merge' }, labels, policy: { until: 'merged', merge: { mode: 'never' } } }).decision, 'proceed')
   assert.equal(decide({ boundary: { kind: 'merge' }, labels, policy: { until: 'merged', merge: { mode: 'always' } } }).decision, 'await-human')
-  assert.equal(gateToString(noLacks), 'when; has: needs-review')
-  assert.equal(gateToString(noHas), 'when; lacks: risk:green')
-  assert.equal(gateToString({ mode: 'never' }), 'never')
-  assert.equal(gateToString({ mode: 'when' }), 'when')
+  assert.equal(gateToString(noLacks), 'hold-when; has: needs-review')
+  assert.equal(gateToString(noHas), 'hold-when; lacks: risk:green')
+  assert.equal(gateToString({ mode: 'never' }), 'hold-never')
+  assert.equal(gateToString({ mode: 'when' }), 'hold-when')
 })
 
 test('gate shape tolerance: resolve output carries complete gates; an object gate with missing arrays parses; an unknown mode errors cleanly', () => {
@@ -336,4 +336,112 @@ test('US-575: autoRecoveryRounds / maxFixRounds — KB defaults 5 / 10 (= cycle-
   assert.ok(r.lines.includes('maxFixRounds: 4 (argument)'))
   for (const bad of ['-1', 'five', '1.5', ''])
     assert.match(parse(section(`autoRecoveryRounds: ${bad}`)).errors[0].reason, /whole number of rounds/)
+})
+
+// ── US-576: hold-* gate names, presets, filter: * ──────────────────────────────────────────
+test('US-576 AC1: hold-always | hold-never | hold-when parse with no warning; bare forms are deprecated aliases with a warning naming the new form', () => {
+  assert.deepEqual(parseGate('merge', 'hold-always'), { value: { mode: 'always', has: [], lacks: [] } })
+  assert.deepEqual(parseGate('merge', 'hold-never'), { value: { mode: 'never', has: [], lacks: [] } })
+  assert.deepEqual(parseGate('merge', 'hold-when; has: risk:red; lacks: a:b'), { value: { mode: 'when', has: ['risk:red'], lacks: ['a:b'] } })
+  for (const [alias, now] of [['always', 'hold-always'], ['never', 'hold-never'], ['when; has: risk:red', 'hold-when; has: risk:red']]) {
+    const r = parseGate('prepare', alias)
+    assert.equal(r.errors, undefined)
+    assert.deepEqual(r.warnings, [`\`prepare: ${alias.split(';')[0]}\` is deprecated — write \`prepare: ${now}\``])
+  }
+  assert.match(parseGate('merge', 'hold-sometimes').errors[0].reason, /not one of hold-always \| hold-never \| hold-when/)
+  assert.match(parseGate('merge', 'hold-never; has: a:b').errors[0].reason, /only with `hold-when`/)
+  assert.match(parseGate('merge', 'hold-when').errors[0].reason, /at least one/)
+  const fromFile = resolvePolicy({ adoptionText: section('merge: never') })
+  assert.equal(fromFile.ok, true)
+  assert.ok(fromFile.warnings.some(w => /`merge: never` is deprecated — write `merge: hold-never`/.test(w)))
+  const fromArg = resolvePolicy({ args: { merge: 'always' } })
+  assert.ok(fromArg.warnings.some(w => /^argument `merge: always` is deprecated/.test(w)))
+  assert.deepEqual(resolvePolicy({ adoptionText: section('merge: hold-never') }).warnings, [])
+})
+
+test('US-576 AC1: a relayed hold-* mode decides like its internal token', () => {
+  const labels = ['risk:red']
+  assert.equal(decide({ boundary: { kind: 'merge' }, labels, policy: { until: 'merged', merge: { mode: 'hold-never' } } }).decision, 'proceed')
+  assert.equal(decide({ boundary: { kind: 'merge' }, labels, policy: { until: 'merged', merge: { mode: 'hold-always' } } }).decision, 'await-human')
+  assert.equal(decide({ boundary: { kind: 'merge' }, labels, policy: { until: 'merged', merge: { mode: 'hold-when', has: ['risk:red'] } } }).decision, 'escalate')
+})
+
+test('US-576 AC3: filter: * selects everything; * inside a list HALTs', () => {
+  assert.deepEqual(parse(section('filter: *')).autonomy.filter, ['*'])
+  assert.equal(resolvePolicy({ args: { filter: '*' } }).lines.find(l => l.startsWith('filter:')), 'filter: * (argument)')
+  for (const bad of ['*, risk:green', 'risk:green, *']) {
+    const r = resolvePolicy({ adoptionText: section(`filter: ${bad}`) })
+    assert.equal(r.ok, false, bad)
+    assert.match(r.errors[0].reason, /`\*` \(every card\) stands alone/)
+    assert.equal(resolvePolicy({ args: { filter: bad } }).ok, false)
+  }
+})
+
+const EXPECTED_PRESETS = {
+  full: { filter: ['*'], prepare: 'hold-never', merge: 'hold-never', until: 'merged' },
+  'escalate-red': { filter: ['*'], prepare: 'hold-never', merge: 'hold-when; has: risk:red', until: 'merged' },
+  supervised: { filter: ['*'], prepare: 'hold-always', merge: 'hold-always', until: 'merged' },
+}
+for (const [name, want] of Object.entries(EXPECTED_PRESETS)) {
+  for (const [via, input] of [['adoption', { adoptionText: section(`preset: ${name}`) }], ['argument', { args: { preset: name } }]]) {
+    test(`US-576 AC4: preset ${name} via ${via} applies the story table, every value sourced \`preset ${name}\``, () => {
+      const r = resolvePolicy(input)
+      assert.equal(r.ok, true)
+      assert.deepEqual(r.effective.preset, { value: name, source: via })
+      assert.deepEqual(r.effective.filter, { value: want.filter, source: `preset ${name}` })
+      assert.equal(gateToString(r.effective.prepare.value), want.prepare)
+      assert.equal(gateToString(r.effective.merge.value), want.merge)
+      assert.equal(r.effective.until.value, want.until)
+      for (const k of ['prepare', 'merge', 'until']) assert.equal(r.effective[k].source, `preset ${name}`)
+      assert.ok(r.lines.includes(`until: merged (preset ${name})`))
+      assert.ok(r.lines.includes(`merge: ${want.merge} (preset ${name})`))
+      assert.equal(r.active, true)
+      assert.deepEqual(r.warnings, [])
+    })
+  }
+}
+
+test('US-576 AC4: preset custom supplies no value; unknown preset HALTs listing the known ones', () => {
+  assert.deepEqual(PRESET_NAMES, ['full', 'escalate-red', 'supervised', 'custom'])
+  assert.deepEqual(PRESETS.custom, {})
+  const c = resolvePolicy({ adoptionText: section('preset: custom\nmerge: hold-never') })
+  assert.equal(c.effective.until.source, 'default')
+  assert.equal(c.effective.merge.source, 'adoption')
+  for (const input of [{ adoptionText: section('preset: yolo') }, { args: { preset: 'yolo' } }]) {
+    const r = resolvePolicy(input)
+    assert.equal(r.ok, false)
+    assert.match(r.errors[0].reason, /"yolo" is not a known preset \(known: full \| escalate-red \| supervised \| custom\)/)
+  }
+})
+
+test('US-576 AC4: precedence argument > explicit adoption key > preset > default, each with its source', () => {
+  const text = section('preset: escalate-red\nuntil: pr')
+  const r = resolvePolicy({ adoptionText: text, args: { prepare: 'hold-always' } })
+  assert.deepEqual(r.effective.prepare, { value: { mode: 'always', has: [], lacks: [] }, source: 'argument' })
+  assert.deepEqual(r.effective.until, { value: 'pr', source: 'adoption' })
+  assert.equal(r.effective.merge.source, 'preset escalate-red')
+  assert.equal(r.effective.status.source, 'default')
+  assert.equal(r.effective.autoRecoveryRounds.source, 'default')
+  // an argument preset still loses to an explicit adoption key
+  const a = resolvePolicy({ adoptionText: section('merge: hold-always'), args: { preset: 'full' } })
+  assert.equal(gateToString(a.effective.merge.value), 'hold-always')
+  assert.equal(a.effective.merge.source, 'adoption')
+  // an argument preset replaces the adoption preset
+  assert.equal(resolvePolicy({ adoptionText: section('preset: supervised'), args: { preset: 'full' } }).effective.merge.source, 'preset full')
+})
+
+test('US-576 edge: preset plus a contradicting explicit key — key wins, the warning names both; an agreeing key warns nothing', () => {
+  const r = resolvePolicy({ adoptionText: section('preset: escalate-red\nmerge: hold-never') })
+  assert.equal(r.ok, true)
+  assert.equal(gateToString(r.effective.merge.value), 'hold-never')
+  assert.deepEqual(r.warnings, ['`merge: hold-never` (adoption) overrides `preset: escalate-red` (`merge: hold-when; has: risk:red`) — the key wins'])
+  assert.deepEqual(resolvePolicy({ adoptionText: section('preset: full\nmerge: hold-never') }).warnings, [])
+})
+
+test('US-576: no ## Autonomy keeps the safe default (every gate held, nothing merges unattended)', () => {
+  const r = resolvePolicy({})
+  assert.equal(r.effective.preset.value, undefined)
+  assert.equal(gateToString(r.effective.merge.value), 'hold-always')
+  assert.equal(gateToString(r.effective.prepare.value), 'hold-always')
+  assert.equal(r.active, false)
 })
