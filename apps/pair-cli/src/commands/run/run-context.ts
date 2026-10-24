@@ -65,6 +65,8 @@ export interface DriveCycleInput {
   readonly rounds?: number | 'max'
   /** US-521: the ACTIVE autonomy policy as the shared script resolved it (absent ⇒ today's legacy path). */
   readonly autonomy?: { readonly policy: AutonomyResolution['policy'] }
+  /** Sees the card's run events (card-start, one stage per dispatch) — how a single `--card` renders its line. */
+  readonly onRunEvent?: (event: RunEvent) => void
 }
 
 export interface DriveCycleResult {
