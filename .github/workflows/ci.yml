@@ -109,6 +109,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install
+      # Tests that build fixture repos and commit (base sync, custody) need an identity the runner lacks.
+      - name: Configure git identity
+        run: |
+          git config --global user.name "pair-ci"
+          git config --global user.email "pair-ci@users.noreply.github.com"
       - name: Load environment variables from GitHub Secrets
         run: |
           echo "PAIR_ADOPTION_FOLDER=$PAIR_ADOPTION_FOLDER" >> $GITHUB_ENV
@@ -323,6 +328,11 @@ jobs:
           fi
       - name: Install dependencies
         run: pnpm install
+      # Tests that build fixture repos and commit (base sync, custody) need an identity the runner lacks.
+      - name: Configure git identity
+        run: |
+          git config --global user.name "pair-ci"
+          git config --global user.email "pair-ci@users.noreply.github.com"
       # `...` = the package AND its workspace dependencies. Dependency-aware
       # deliberately: a filtered `pnpm build` bypasses turbo's dependsOn graph and
       # the CLI compile dies with ~45 `TS2307: Cannot find module
