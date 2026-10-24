@@ -1,0 +1,5 @@
+{"sessionId": "p1", "version": "0.84.3", "cwd": "/project"}
+{"type": "message_start", "message": {"role": "assistant"}}
+{"type": "message_end", "message": {"role": "assistant", "stopReason": "endTurn", "content": [{"type": "text", "text": "PAIR_EVENT {\"event\":\"loop-start\",\"auditLocation\":\"automation/loop-audit.md\",\"maxIterations\":3}\nPAIR_EVENT {\"event\":\"iteration\",\"iteration\":0}\nPAIR_EVENT {\"event\":\"card-start\",\"card\":\"ENG-12\",\"title\":\"Linear card\",\"iteration\":0}\nPAIR_EVENT {\"event\":\"stage\",\"card\":\"ENG-12\",\"stage\":\"implement\"}\nPAIR_EVENT {\"event\":\"stage\",\"card\":\"ENG-12\",\"stage\":\"review\",\"pr\":41}\nPAIR_EVENT {\"event\":\"card-end\",\"card\":\"ENG-12\",\"status\":\"awaiting-human\",\"pr\":41,\"reason\":\"merge: always\"}\nPAIR_EVENT {\"event\":\"loop-end\",\"status\":\"completed\",\"reason\":\"nothing eligible\",\"iterations\":1,\"eligibleLeft\":0}"}]}}
+{"type": "agent_end", "messages": [], "willRetry": false}
+{"type": "agent_settled"}

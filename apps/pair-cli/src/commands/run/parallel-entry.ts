@@ -12,7 +12,11 @@ import {
   signalExitCode,
   whileInterruptible,
   type InterruptSignal,
+  onInterrupt,
 } from './interrupt'
+import type { RunEvent } from './run-events'
+import { createConsoleSink, routeConsoleTo } from './run-renderer'
+import { createRunAudit } from './run-audit'
 import { probeCardLock, probeResourceLocks } from './lock-probe'
 import {
   describeLoopEnd,
@@ -74,6 +78,8 @@ export interface ParallelRunInput {
   readonly context: RunContext
   readonly fs: FileSystemService
   readonly cwd: string
+  /** US-573: where the pool's live card events go (the console sink). */
+  readonly onEvent?: (event: RunEvent) => void
 }
 
 /** The run's effective `until`, from the one autonomy resolution (`pr` is the KB default). */
@@ -199,6 +205,7 @@ function selectionInput(fan: FanOut, loop?: SelectRootInput['loop']): SelectRoot
     autonomyArgs: fan.autonomyArgs,
     model: declaredEngineModel(input.context.config, engineDef.id),
     timeoutSeconds: input.config.iterationTimeoutSeconds,
+    idleTimeoutSeconds: input.context.idleTimeout.seconds,
     ...(loop !== undefined && { loop }),
     ...(deps.runIteration !== undefined && { runIteration: deps.runIteration }),
   }
@@ -298,7 +305,59 @@ export async function handleParallelRun(
 
   const engineDef = resolveEngineFor(engine, context, cwd, fs)
   const fan: FanOut = { input, deps, selection, engineDef, autonomyArgs: autonomy.args }
-  return values.loopMode ? await runLoop(fan, values) : await runSingleBatch(fan)
+  return await withLiveCards(input, deps, onEvent => {
+    const live: FanOut = { ...fan, input: { ...input, onEvent } }
+    return values.loopMode ? runLoop(live, values) : runSingleBatch(live)
+  })
+}
+
+/** US-573 AC2: one live line per card while the pool runs (cursor-addressed rows on a TTY). */
+async function withLiveCards(
+  { config, context, cwd }: ParallelRunInput,
+  deps: RunHandlerDependencies,
+  run: (onEvent: (event: RunEvent) => void) => Promise<number>,
+): Promise<number> {
+  const sink = createConsoleSink({
+    out: process.stdout,
+    err: process.stderr,
+    mode: config.output ?? 'live',
+    color: config.noColor !== true && process.env['NO_COLOR'] === undefined,
+    plain: config.verbose !== true,
+  })
+  // US-573 AC4: the pool's card events go to the same live JSONL audit as a loop run's.
+  const audit = createRunAudit({
+    path: context.auditPath,
+    runId: `run-${new Date().toISOString().replace(/[:.]/g, '')}-${process.pid}`,
+    root: cwd,
+    policy: {
+      source: context.policy.source,
+      parallel: config.parallel ?? null,
+      idleTimeout: context.idleTimeout,
+    },
+    ...(deps.runAudit !== undefined && { append: deps.runAudit }),
+    onWriteError: error =>
+      sink.log(`  ! live audit ${context.auditPath} is not writable (${String(error)})`),
+  })
+  const restore = routeConsoleTo(sink)
+  const close = () => {
+    restore()
+    sink.finish()
+  }
+  const unsubscribe = onInterrupt(() => {
+    audit.end('interrupted', 'the driver received a signal')
+    close()
+  })
+  try {
+    const code = await run(event => {
+      audit.record(event)
+      sink.event(event)
+    })
+    audit.end(code === 0 ? 'completed' : 'halted', `exit ${code}`)
+    return code
+  } finally {
+    unsubscribe()
+    close()
+  }
 }
 
 /** The batch audit line's `root=` field: the root, or `(none)` for a filter-only scope. */
@@ -320,6 +379,7 @@ async function runCardInBatch({
   const outcome = await runPlannedCard({
     card,
     config: input.config,
+    ...(input.onEvent !== undefined && { onEvent: input.onEvent }),
     ...(forwardedEligibility(input) !== undefined && {
       eligibilityFilter: forwardedEligibility(input)!,
     }),

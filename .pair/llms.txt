@@ -199,6 +199,7 @@
 - [Decision: Fresh Worktrees Run `worktree-setup-command` Before Any Gate](.pair/adoption/decision-log/2026-10-14-worktree-setup-command.md)
 - [Decision: Docs IA, Process Lifecycle Spine, Three Path Labels, Customization Dissolved](.pair/adoption/decision-log/2026-10-18-docs-ia-process-lifecycle-spine.md)
 - [Decision: Landing Positioning for v0.5.0 and the Single Install Command](.pair/adoption/decision-log/2026-10-19-landing-positioning-v050-single-install-command.md)
+- [Decision: Live Run Events and One Audit File for Three Writers](.pair/adoption/decision-log/2026-10-23-live-run-events-and-shared-audit-file.md)
 
 ## How-To Guides
 

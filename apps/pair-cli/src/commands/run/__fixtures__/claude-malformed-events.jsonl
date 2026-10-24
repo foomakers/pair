@@ -1,0 +1,4 @@
+{"type": "system", "subtype": "init", "session_id": "w1"}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "PAIR_EVENT {not json\nPAIR_EVENT {\"event\":\"teleport\",\"card\":\"1\"}\nPAIR_EVENT {\"event\":\"stage\",\"card\":{\"x\":1}}\nPAIR_EVENT {\"event\":\"card-start\",\"card\":\"9\",\"title\":\"ok\"}"}]}}
+{this line is not json
+{"type": "result", "subtype": "success", "is_error": false, "result": "done", "session_id": "w1"}

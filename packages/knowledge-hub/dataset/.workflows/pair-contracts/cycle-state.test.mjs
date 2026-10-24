@@ -5170,3 +5170,25 @@ test('publish (#543): a control backed by its own passing redTests command publi
   const out = publishContract543({ fixScope: SCOPE543, redTests: [witness543(), control543()], matrix: [row543('W-1', 'witness', { file: 'test/a.test.mjs', oracle: 'node --test test/a.test.mjs' }), row543('C-1', 'control', { oracle: 'node --test test/c.test.mjs' })] })
   assert.equal(out.published, true, JSON.stringify(out))
 })
+
+// #575 (observed #573, 2026-10-23): green-fix listed the ids it fixed in `fixed` instead of a boolean;
+// `resolve` read `fixed !== true` as a failed fix and parked a successful round as `failed-fix`.
+test('publish: green-fix `fixed` given as an id list is normalized — true iff every finding is resolved, the ids kept as fixedIds', () => {
+  const { dir } = runDir()
+  const draft = (name, findings) => {
+    const f = join(dir, name)
+    writeFileSync(f, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'green-fix', inputHead: SHA('a'), fixed: findings.map(x => x.id), needsHumanDecision: false, outputHead: SHA('e'), findings }))
+    return f
+  }
+  const ok = publish({ dir, file: draft('tmp-gf-ok.json', [{ id: 'r0-1', transition: 'resolved' }, { id: 'r0-2', transition: 'resolved' }]), phase: 'r1-g1', skill: 'green-fix', workflowVersion: V })
+  assert.equal(ok.published, true)
+  const stored = JSON.parse(readFileSync(join(dir, readdirSync(dir).find(n => /^r1-g1-green-fix\.json$/.test(n))), 'utf8'))
+  assert.equal(stored.fixed, true)
+  assert.deepEqual(stored.fixedIds, ['r0-1', 'r0-2'])
+  const { dir: dir2 } = runDir()
+  const f2 = join(dir2, 'tmp-gf-open.json')
+  writeFileSync(f2, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r1-g1', skill: 'green-fix', inputHead: SHA('a'), fixed: ['r0-1'], needsHumanDecision: false, outputHead: SHA('e'), findings: [{ id: 'r0-1', transition: 'resolved' }, { id: 'r0-2', transition: 'open' }] }))
+  assert.equal(publish({ dir: dir2, file: f2, phase: 'r1-g1', skill: 'green-fix', workflowVersion: V }).published, true)
+  const stored2 = JSON.parse(readFileSync(join(dir2, 'r1-g1-green-fix.json'), 'utf8'))
+  assert.equal(stored2.fixed, false)
+})

@@ -1,4 +1,5 @@
 import type { EngineDefinition, TerminalEventRule } from './engines'
+import { eventBodyRuns, parseRunEvent, progressRunEvents, type RunEvent } from './run-events'
 
 /**
  * The JSONL terminal-event reader (US-451 T-7) — the ONLY thing that decides an iteration's
@@ -14,6 +15,13 @@ import type { EngineDefinition, TerminalEventRule } from './engines'
  */
 
 export type IterationOutcome = 'success' | 'failed'
+
+/**
+ * US-573 AC6: why a `failed` iteration failed, when the engine turn itself may have ended cleanly —
+ * the workflow HALTed, the background workflow was cut before its `loop-end`, or the idle watchdog
+ * stopped the engine. Each is a failure: `pair run` exits non-zero on all three.
+ */
+export type FailureCause = 'halted' | 'cut' | 'timed-out'
 
 export interface IterationResult {
   readonly outcome: IterationOutcome
@@ -34,6 +42,12 @@ export interface IterationResult {
   readonly stalled?: true
   /** The stage's final JSON result from the terminal event's text, when the engine exposes it and it carries one. */
   readonly final?: StageFinalResult
+  /** US-573: set when the iteration failed for one of the truthful-outcome causes. */
+  readonly cause?: FailureCause
+  /** US-573: unparseable stream lines + malformed `PAIR_EVENT` bodies, skipped (present when > 0). */
+  readonly skippedLines?: number
+  /** US-573: run events the stream carried (present when > 0; absent ⇒ the engine degrades to start/end lines). */
+  readonly runEvents?: number
 }
 
 /**
@@ -257,6 +271,185 @@ function outcomeFor(rule: TerminalEventRule, payload: unknown): IterationResult 
   }
 }
 
+/** The workflow's own HALT message (`pair-loop: HALT — <reason>`) — the fallback when no `loop-end` reached the stream. */
+const HALT_TEXT = /pair-loop: HALT — ([^\n]+)/
+
+interface EventTally {
+  count: number
+  skipped: number
+  loopStarted: boolean
+  loopEnd?: RunEvent
+  /** Bodies relayed so far, in stream order — the history a re-quote is matched against. */
+  readonly seen: string[]
+  /** Agents (and cards) already mapped from claude's `workflow_progress` (r0-3). */
+  readonly progress: Set<string>
+  /** Cards a `PAIR_EVENT` card-end already closed — never closed again at iteration end (r2-7). */
+  readonly ended: Set<string>
+  readonly maxFixRounds?: number
+}
+
+/** The longest k such that the first k bodies of `next` repeat the last k of `seen`. */
+function overlap(seen: readonly string[], next: readonly string[]): number {
+  for (let k = Math.min(seen.length, next.length); k > 0; k--) {
+    if (next.slice(0, k).every((body, i) => body === seen[seen.length - k + i])) return k
+  }
+  return 0
+}
+
+/**
+ * The bodies ONE decoded event adds to the run. A re-quote repeats what the stream just said (the
+ * same line in two fields of one event, pi's `turn_end`/`agent_end`, the final result text), so the
+ * part of the event that overlaps the tail of the history is dropped; a body that comes back after
+ * something else happened (`review` after `fix 1/3`, a card-end in a later iteration) is new.
+ * Within one string nothing is dropped: its lines are the workflow's own sequence.
+ * ponytail: a body repeated back-to-back by the workflow itself reads as a re-quote; a per-line seq would fix it.
+ */
+function freshBodies(payload: unknown, seen: readonly string[]): string[] {
+  const merged: string[] = []
+  for (const run of eventBodyRuns(payload)) merged.push(...run.slice(overlap(merged, run)))
+  return merged.slice(overlap(seen, merged))
+}
+
+/** Counts and relays the run events ONE decoded stream event carries; a malformed body is skipped and counted. */
+function tallyRunEvents(
+  payload: unknown,
+  tally: EventTally,
+  onRunEvent?: (event: RunEvent) => void,
+): void {
+  for (const body of freshBodies(payload, tally.seen)) {
+    tally.seen.push(body)
+    const event = parseRunEvent(body)
+    if (event === undefined) {
+      tally.skipped++
+      continue
+    }
+    tally.count++
+    if (event.event === 'loop-start') tally.loopStarted = true
+    if (event.event === 'card-end' && event.card !== undefined) tally.ended.add(event.card)
+    if (event.event === 'loop-end') tally.loopEnd = event
+    onRunEvent?.(event)
+  }
+  for (const event of progressRunEvents(payload, tally.progress, tally.maxFixRounds)) {
+    tally.count++
+    onRunEvent?.(event)
+  }
+}
+
+/** The card statuses a workflow return carries (`batch[]` of pair-implement-batch, `log[]` of pair-loop), last wins. */
+function returnedStatuses(text: unknown): Map<string, string> {
+  const statuses = new Map<string, string>()
+  if (typeof text !== 'string') return statuses
+  for (const span of topLevelObjects(text)) {
+    let raw: unknown
+    try {
+      raw = JSON.parse(span)
+    } catch {
+      continue
+    }
+    const found = raw as Record<string, unknown>
+    for (const entry of [found['batch'], found['log']].flatMap(v => (Array.isArray(v) ? v : []))) {
+      const { id, status } = (entry ?? {}) as Record<string, unknown>
+      if ((typeof id === 'string' || typeof id === 'number') && typeof status === 'string')
+        statuses.set(String(id), status)
+    }
+  }
+  return statuses
+}
+
+/**
+ * r2-7: a card opened from claude's progress labels has no `PAIR_EVENT` to close it, so the iteration's
+ * end does: with the status the workflow returned when readable, else the explicit `unknown` (the
+ * workflow's own tally token) — never a done status it did not report.
+ */
+function closeProgressCards(
+  tally: EventTally,
+  finalText: unknown,
+  onRunEvent?: (event: RunEvent) => void,
+): void {
+  const statuses = returnedStatuses(finalText)
+  for (const key of tally.progress) {
+    const card = key.startsWith('card:') ? key.slice(5) : undefined
+    if (card === undefined || tally.ended.has(card)) continue
+    tally.ended.add(card)
+    tally.count++
+    onRunEvent?.({ event: 'card-end', card, status: statuses.get(card) ?? 'unknown' })
+  }
+}
+
+/** The counters the result carries (each only when non-zero) and the continue-token when one was seen. */
+const extrasOf = (
+  tally: EventTally,
+  continueToken: string | undefined,
+): Partial<IterationResult> => ({
+  ...(tally.skipped > 0 && { skippedLines: tally.skipped }),
+  ...(tally.count > 0 && { runEvents: tally.count }),
+  ...(continueToken !== undefined && { continueToken }),
+})
+
+/**
+ * US-573 AC6: the engine turn's `subtype` only says the TURN ended; the workflow's own terminal status
+ * decides the iteration. A non-`completed` `loop-end`, or a HALT message in the final text, is
+ * `halted`; a `loop-start` with no `loop-end` means the background workflow was cut.
+ */
+function truthful(result: IterationResult, tally: EventTally, finalText: unknown): IterationResult {
+  if (result.outcome !== 'success') return result
+  const end = tally.loopEnd
+  if (end !== undefined && end.status !== 'completed')
+    return {
+      ...result,
+      outcome: 'failed',
+      cause: 'halted',
+      detail: `${end.status ?? 'halted'}: ${end.reason ?? 'no reason given'}`,
+    }
+  if (end !== undefined) return result
+  const halt = typeof finalText === 'string' ? HALT_TEXT.exec(finalText) : null
+  if (halt)
+    return { ...result, outcome: 'failed', cause: 'halted', detail: `halted: ${halt[1]!.trim()}` }
+  if (tally.loopStarted)
+    return {
+      ...result,
+      outcome: 'failed',
+      cause: 'cut',
+      detail:
+        'cut: the engine turn ended before the workflow reported its loop-end (background workflow stopped)',
+    }
+  return result
+}
+
+const newTally = (maxFixRounds: number | undefined): EventTally => ({
+  count: 0,
+  skipped: 0,
+  loopStarted: false,
+  seen: [],
+  progress: new Set(),
+  ended: new Set(),
+  ...(maxFixRounds !== undefined && { maxFixRounds }),
+})
+
+/** One stream line decoded, or `undefined` (blank, or unparseable — untrusted input, skipped and counted). */
+function decode(line: string, tally: EventTally): unknown {
+  const trimmed = line.trim()
+  if (trimmed.length === 0) return undefined
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    tally.skipped++
+    return undefined
+  }
+}
+
+/** The iteration's outcome from its terminal event; progress-opened cards are closed first (r2-7). */
+function terminalResult(
+  rule: TerminalEventRule,
+  payload: unknown,
+  tally: EventTally,
+  onRunEvent: ((event: RunEvent) => void) | undefined,
+): IterationResult {
+  const finalText = rule.resultField ? fieldAt(payload, rule.resultField) : undefined
+  closeProgressCards(tally, finalText, onRunEvent)
+  return truthful(outcomeFor(rule, payload), tally, finalText)
+}
+
 /**
  * Reads the engine's JSONL stream and returns exactly ONE outcome for the iteration.
  *
@@ -272,20 +465,24 @@ export async function readIterationOutcome(
    * A DEFAULTED parameter, so the reader's arity stays 2: no exit-code slot exists (AC7 test).
    */
   onEvent: ((payload: unknown) => void) | undefined = undefined,
+  /**
+   * US-573: `onRunEvent` sees every run event once, in stream order; r2-6: `options.maxFixRounds` is the
+   * run's budget a claude progress `fix n/<max>` renders (`?` when absent). A rest tuple, so the
+   * arity stays 2.
+   */
+  ...observers: [
+    onRunEvent?: ((event: RunEvent) => void) | undefined,
+    options?: { readonly maxFixRounds?: number | undefined },
+  ]
 ): Promise<IterationResult> {
+  const [onRunEvent, options = {}] = observers
   let continueToken: string | undefined
+  const tally = newTally(options.maxFixRounds)
 
   for await (const line of lines) {
-    const trimmed = line.trim()
-    if (trimmed.length === 0) continue
-
-    let payload: unknown
-    try {
-      payload = JSON.parse(trimmed)
-    } catch {
-      // Untrusted input: an unparseable line is skipped, never evaluated.
-      continue
-    }
+    const payload = decode(line, tally)
+    if (payload === undefined) continue
+    tallyRunEvents(payload, tally, onRunEvent)
 
     // Searched in the DECODED event, not in the raw JSONL line: the newlines the anchor needs are
     // `\n` escapes on the wire, so a raw-line match could not be anchored at all (finding 5).
@@ -293,15 +490,16 @@ export async function readIterationOutcome(
     onEvent?.(payload)
 
     const rule = engine.terminalEvents.find(candidate => matches(payload, candidate.match))
-    if (rule) {
-      const result = outcomeFor(rule, payload)
-      return { ...result, ...(continueToken !== undefined && { continueToken }) }
-    }
+    if (rule)
+      return {
+        ...terminalResult(rule, payload, tally, onRunEvent),
+        ...extrasOf(tally, continueToken),
+      }
   }
 
-  return { ...NO_TERMINAL_EVENT, ...(continueToken !== undefined && { continueToken }) }
+  closeProgressCards(tally, undefined, onRunEvent)
+  return { ...NO_TERMINAL_EVENT, ...extrasOf(tally, continueToken) }
 }
-
 /**
  * Splits a byte stream into lines, incrementally — the whole stream is never held in memory.
  *

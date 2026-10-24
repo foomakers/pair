@@ -1,3 +1,4 @@
+import { pooledCard } from './pooled-card'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
 import type { RunCommandConfig, RunDispatchRequest } from './parser'
@@ -13,6 +14,8 @@ import {
   type CycleScriptsLocation,
 } from './cycle-scripts'
 import { createDefaultCycleDriver, mainCheckout, mainCheckoutOrCwd } from './cycle-wiring'
+import { createConsoleSink, routeConsoleTo } from './run-renderer'
+import type { RunEvent } from './run-events'
 import {
   autonomyArgumentsOf,
   resolveAutonomyPolicy,
@@ -203,6 +206,7 @@ function productionCycleDriver(
     location: driver.location,
     autonomyArgs,
     timeoutSeconds: config.iterationTimeoutSeconds,
+    idleTimeoutSeconds: context.idleTimeout.seconds,
     workflowVersion: defaults.workflowVersion,
     baseBranch: defaults.baseBranch,
     model: declaredEngineModel(context.config, driver.engineDef.id),
@@ -389,20 +393,18 @@ export function prepareCycleCoordinator(
     autonomy,
   })
 
-  return async () => {
-    const outcome = await driveCycle({
-      runId: dispatch.runId,
-      card,
-      ...(dispatch.pr !== undefined && { pr: dispatch.pr }),
-      ...(dispatch.rounds !== undefined && { rounds: dispatch.rounds }),
-      // Only an ACTIVE policy (an argument or `## Autonomy` declared a target/merge gate) changes behavior.
-      ...(autonomy?.active === true && { autonomy: { policy: autonomy.policy } }),
-    })
-
-    console.log(`  Cycle status: ${outcome.status} (${outcome.stagesRun} stage(s) dispatched)`)
-    reportCycleReason(outcome.next)
-    return exitCodeFor(outcome)
-  }
+  return () =>
+    driveWithCardLine(config, card, onRunEvent =>
+      driveCycle({
+        runId: dispatch.runId,
+        card,
+        ...(dispatch.pr !== undefined && { pr: dispatch.pr }),
+        ...(dispatch.rounds !== undefined && { rounds: dispatch.rounds }),
+        // Only an ACTIVE policy (an argument or `## Autonomy` declared a target/merge gate) changes behavior.
+        ...(autonomy?.active === true && { autonomy: { policy: autonomy.policy } }),
+        onRunEvent,
+      }),
+    )
 }
 
 /**
@@ -420,6 +422,54 @@ function resolveEntryAutonomy(
     cwd: input.cwd,
     args: autonomyArgumentsOf(input.config),
   })
+}
+
+/** Drives the cycle under the card's own live line (US-573): stage events from every dispatch, closed with the outcome. */
+async function driveWithCardLine(
+  config: RunCommandConfig,
+  card: string,
+  drive: (onRunEvent: (event: RunEvent) => void) => ReturnType<CycleDriver>,
+): Promise<number> {
+  // Driven by the loop in its own process: the loop draws the card line, this card only reports.
+  const pooled = pooledCard()
+  if (pooled !== undefined) {
+    const outcome = await drive(event => {
+      if (event.event !== 'card-start') pooled.onEvent?.(event)
+    })
+    return reportOutcome(outcome)
+  }
+  const sink = createConsoleSink({
+    out: process.stdout,
+    err: process.stderr,
+    mode: config.output ?? 'live',
+    color: config.noColor !== true && process.env['NO_COLOR'] === undefined,
+    plain: config.verbose !== true,
+  })
+  const restore = routeConsoleTo(sink)
+  try {
+    const outcome = await drive(event => sink.event(event))
+    sink.event({ event: 'card-end', card, status: cardStatusOf(outcome), reason: outcome.status })
+    return reportOutcome(outcome)
+  } finally {
+    sink.finish()
+    restore()
+  }
+}
+
+function reportOutcome(outcome: DriveCycleResult): number {
+  console.log(`  Cycle status: ${outcome.status} (${outcome.stagesRun} stage(s) dispatched)`)
+  reportCycleReason(outcome.next)
+  return exitCodeFor(outcome)
+}
+
+/** The renderer's terminal status for the card: what the outcome means for the operator, never a raw cycle status. */
+function cardStatusOf(outcome: DriveCycleResult): string {
+  if (outcome.status === 'merged') return 'merged'
+  if (outcome.status === 'escalated' || outcome.status === 'escalate') return 'escalated'
+  if (outcome.status === 'ready-for-merge' || outcome.status === 'target-ready')
+    return outcome.status
+  if (outcome.status === 'merge-parked') return 'awaiting-human'
+  return 'failed'
 }
 
 /** Success = the card ended where its target says (PR, ready, merged) or awaits a human; `escalated` is a failure (exit 1). */

@@ -28,7 +28,7 @@ Read by the delivery cycle ([`/pair-workflow-cycle`, `pair-cli run`](/docs/proce
 | `## Autonomy` `merge` | `always`, `never`, `when; has: …; lacks: …` | `always` | `autonomy-policy.mjs`, `cycle-merge.mjs` | whether a review-approved card merges; a `when` condition escalates | yes |
 | `## Eligibility` (legacy) | one label | none | `autonomy-policy.mjs` | translated to `filter:`; still honoured | yes |
 | `## Auto-Advance` (legacy) | `(none)` or the eligibility tier | `(none)` | `autonomy-policy.mjs` | translated to `merge:`; still honoured | yes |
-| `## Stop Predicate` | `<selector> ⇒ <condition>`, `max-iterations: N` | `max-iterations: 1` | `pair-cli run`, `/pair-loop` | when an unattended run stops | no |
+| `## Stop Predicate` | `<selector> ⇒ <condition>`, `max-iterations: N`, `idle-timeout: <seconds>` | `max-iterations: 1`; idle timeout `1800` | `pair-cli run`, `/pair-loop` | when an unattended run stops | no |
 | `## Max Parallelism` | positive integer, optional `<tier>: N` | `1` | `pair-cli run --parallel`, `/pair-loop` | parallel batch ceiling | no |
 | `## Audit Location` | project-relative path | `automation/loop-audit.md` under `working_path` | `/pair-loop`, `pair-cli run` | where the unattended trail is appended | no |
 | `## Workflows` | `<tag> ⇒ <workflow>`, `Precedence:` | none (no tag routing) | dispatcher | opt-in per card: tag to workflow | no |

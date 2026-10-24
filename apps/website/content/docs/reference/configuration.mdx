@@ -303,6 +303,9 @@ id, sit beside it:
 
 - **`bin`**: where THIS machine keeps an engine's executable, when PATH cannot find it
   (`{"bin": {"pi": "/opt/pi/bin/pi"}}`). Consulted first when the engine is resolved.
+- **`idleTimeout`**: seconds without an engine event before `pair-cli run` stops an iteration
+  (positive integer, default `1800`). Below `--idle-timeout` and `## Stop Predicate`
+  `idle-timeout:` in precedence.
 - **`model`**: the model an engine drives, run-wide (`{"model": {"codex": "gpt-5.5"}}`). Per-stage
   selection is the [workflow profile](#workflow-profiles-workflowprofiles)'s.
 

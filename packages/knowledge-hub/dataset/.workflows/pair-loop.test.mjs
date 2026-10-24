@@ -514,7 +514,13 @@ function runWorkflow({ args, dispatch, workflowDispatch, auditWritten = true, re
     log,
     phase,
     workflow,
-  ).then(result => ({ result, calls, logs }))
+  ).then(
+    result => ({ result, calls, logs }),
+    error => {
+      if (error && typeof error === 'object') error.logs = logs
+      throw error
+    },
+  )
 }
 
 test('orchestration: fail-closed HALT on absent/empty policy — no card touched', async () => {
@@ -1440,4 +1446,39 @@ test('relay role: policy resolve / resume / audit calls default to haiku, select
   const stateCall = st.calls.find(c => /CURRENT state/.test(c.prompt))
   assert.ok(stateCall, 'the per-card state read ran')
   assert.notEqual(stateCall.opts.model, 'haiku', 'classifying a card into 5 states is a judgement, not a relay')
+})
+
+// ── US-573 T-1: the loop announces itself as `PAIR_EVENT {json}` lines ───────────────────────────────────
+const pairEvents = logs => logs.filter(l => typeof l === 'string' && l.startsWith('PAIR_EVENT ')).map(l => JSON.parse(l.slice('PAIR_EVENT '.length)))
+test('US-573 T-1: a 2-card run emits loop-start, iteration, card-start ×2, card-end ×2, loop-end completed — non-numeric ids preserved', async () => {
+  const twoEligible = (_prompt, opts) =>
+    opts.phase === 'Select' ? { candidates: [
+      { id: 'ENG-12', title: 'Linear card', branch: 'feature/ENG-12-a', tier: 'risk:green', mutexResources: ['a'], prerequisites: [] },
+      { id: '7', title: 'Numeric', branch: 'feature/#7-b', tier: 'risk:green', mutexResources: ['b'], prerequisites: [] },
+    ] } : {}
+  const policyText = '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n2\n'
+  const { logs } = await runWorkflow({ args: { policyText }, dispatch: twoEligible, workflowDispatch: () => ({ batch: [{ id: 'ENG-12', status: 'awaiting-human', reason: 'merge: always' }, { id: '7', status: 'failed-implement', prNumber: 9 }] }) })
+  const events = pairEvents(logs)
+  assert.deepEqual(events.map(e => e.event), ['loop-start', 'iteration', 'card-start', 'card-start', 'card-end', 'card-end', 'loop-end'])
+  assert.deepEqual(events.filter(e => e.event === 'card-start').map(e => [e.card, e.title]), [['ENG-12', 'Linear card'], ['7', 'Numeric']])
+  assert.deepEqual(events.filter(e => e.event === 'card-end').map(e => [e.card, e.status]), [['ENG-12', 'awaiting-human'], ['7', 'failed-implement']])
+  assert.equal(events.find(e => e.card === '7' && e.event === 'card-end').pr, 9)
+  const end = events.at(-1)
+  assert.equal(end.status, 'completed')
+  assert.equal(typeof end.reason, 'string')
+})
+
+test('US-573 T-1: a HALT emits loop-end halted with its reason before the error propagates', async () => {
+  const error = await runWorkflow({ args: { policyText: LEGACY_LOOP_POLICY }, dispatch: oneEligible, workflowDispatch: () => ({ batch: [{ id: '1', status: 'failed-implement' }] }), auditWritten: false }).catch(e => e)
+  assert.match(String(error.message), /HALT/)
+  const end = pairEvents(error.logs).at(-1)
+  assert.equal(end.event, 'loop-end')
+  assert.equal(end.status, 'halted')
+  assert.match(end.reason, /audit write/)
+})
+
+test('US-573 AC5: `## Stop Predicate` accepts `idle-timeout: <seconds>` (the driver\'s guard) and refuses a non-positive one', () => {
+  const { parseStopPredicate } = getHelpers()
+  assert.deepEqual(parseStopPredicate('## Stop Predicate\n\nroot ⇒ Done\nmax-iterations: 4\nidle-timeout: 900\n'), { predicate: { selector: 'root', condition: 'Done' }, maxIterations: 4 })
+  assert.throws(() => parseStopPredicate('## Stop Predicate\n\nidle-timeout: 0\n'), /idle-timeout must be a positive integer/)
 })

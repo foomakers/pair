@@ -2048,3 +2048,13 @@ test('AN2: a mirror whose dataset origin was REMOVED by the merged main is exemp
   assert.deepEqual(tampered.breaches.map(b => [b.code, b.path]), [['out-of-scope', FOO_MIRROR]])
   rmSync(again.cwd, { recursive: true, force: true })
 })
+
+// #575 (observed #573 r1-g1 and r4-g1, 2026-10-23): green-fix updated the PR's own changeset to describe
+// its fix — exactly what the docs AC asks — and custody parked it as out-of-scope twice.
+test('verify: a GREEN edit of a `.changeset/*.md` file is always in scope; any other out-of-scope path still breaches', () => {
+  const { cwd, base, manifest } = sealed()
+  green(cwd, manifest, { 'src/a.js': 'export const a = () => 2\n', '.changeset/us-1-story.md': "---\n'x': patch\n---\n\nfix\n", 'src/other.js': 'export const o = 1\n' })
+  const v = verify({ pr: PR, phase: PHASE, base, cwd })
+  assert.deepEqual(v.breaches.map(b => `${b.code}:${b.path}`).sort(), ['out-of-scope:src/other.js'])
+  rmSync(cwd, { recursive: true, force: true })
+})
