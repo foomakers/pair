@@ -16,6 +16,8 @@
 export interface RootPrerequisite {
   readonly id: string
   readonly merged: boolean
+  /** US-575: why it is not merged (`not merged`, `parked (needs-review)`, `state unreadable: …`). */
+  readonly reason?: string
 }
 
 /** One card `pair-next --root` selected, with the fields tier 1's Select phase returns. */
@@ -110,7 +112,11 @@ export function dependencyFilter(cards: readonly RootCandidate[]): {
   for (const card of cards) {
     const unmerged = (card.prerequisites ?? []).find(p => !p.merged)
     if (unmerged) {
-      audit.push({ id: card.id, excluded: true, reason: `blocked by #${unmerged.id} (not merged)` })
+      audit.push({
+        id: card.id,
+        excluded: true,
+        reason: `blocked by #${unmerged.id} (${unmerged.reason ?? 'not merged'})`,
+      })
     } else {
       allowed.push(card)
     }

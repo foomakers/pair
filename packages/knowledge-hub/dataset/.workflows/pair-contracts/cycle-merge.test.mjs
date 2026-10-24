@@ -909,6 +909,15 @@ test('CI-wait decideMerge: `ciPending` is true ONLY when every failure is a pend
   assert.equal(decideMerge({ ...base, signals: { ...ci([{ name: 'a', conclusion: 'pending' }]), pairReview: 'failure' } }).ciPending, false)
 })
 
+test('US-575 AC7 decideMerge: `ciFailed` is true ONLY when CI is the sole obstacle and a check FAILED (a driver may re-run it)', () => {
+  const ci = list => ({ ...OK, ci: list })
+  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'failure' }]) }).ciFailed, true)
+  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'a', conclusion: 'pending' }, { name: 'b', conclusion: 'failure' }]) }).ciFailed, true)
+  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'pending' }]) }).ciFailed, false)
+  assert.equal(decideMerge({ ...base, signals: ci([{ name: 'build', conclusion: 'success' }]) }).ciFailed, false)
+  assert.equal(decideMerge({ ...base, signals: { ...ci([{ name: 'b', conclusion: 'failure' }]), pairReview: 'failure' } }).ciFailed, false)
+})
+
 test('AL readSignals: reads the CI checks through the adapter on the pinned head; an adapter without the method leaves `ci` absent; a read that throws makes the signals unreadable', () => {
   const h = fakeHosts({ checks: { 'pair-review': 'success', 'pair-explicit-approval': 'success' } })
   const code = { ...h.hosts.code, readCiChecks: ({ sha }) => (assert.equal(sha, SHA('a')), [{ name: 'build', conclusion: 'failure' }]) }

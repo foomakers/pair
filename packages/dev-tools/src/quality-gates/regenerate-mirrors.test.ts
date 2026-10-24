@@ -307,6 +307,38 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
     SCRIPT_RUN_TIMEOUT_MS,
   )
 
+  const platformCases = ['darwin', 'linux'] as const
+  it.each(platformCases)(
+    'copies the dataset workflow suites into .claude/workflows (excluded from the install, guarded byte-identical) (platform %s)',
+    platform => {
+      const original = Object.getOwnPropertyDescriptor(process, 'platform')!
+      Object.defineProperty(process, 'platform', { value: platform })
+      try {
+        tmp = makeFixture()
+        const suite = 'pair-contracts/red-snapshot.test.mjs'
+        write(join(tmp, 'packages/knowledge-hub/dataset/.workflows', suite), 'export const v = 2\n')
+        write(
+          join(tmp, 'packages/knowledge-hub/dataset/.workflows/pair-contracts/new.test.mjs'),
+          'export const n = 1\n',
+        )
+        write(join(tmp, '.claude/workflows', suite), 'export const v = 1\n')
+
+        const result = run(tmp, isolatedHome(tmp))
+
+        expect(result.status).toBe(0)
+        expect(readFileSync(join(tmp, '.claude/workflows', suite), 'utf-8')).toBe(
+          'export const v = 2\n',
+        )
+        expect(
+          readFileSync(join(tmp, '.claude/workflows/pair-contracts/new.test.mjs'), 'utf-8'),
+        ).toBe('export const n = 1\n')
+      } finally {
+        Object.defineProperty(process, 'platform', original)
+      }
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
+
   it(
     "this repo's own decision records are a fixed point of the skill-reference rewrite (a clean main regenerates clean)",
     () => {

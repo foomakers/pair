@@ -21,7 +21,7 @@ A contract is evidence only once someone who did not write it reproduces it. You
 | `$pr`              | No       | PR number, when one exists.                                                                                                              |
 | `$findings`        | No       | JSON array: the obligations the contract must cover (finding ids are the inventory ids you check `covers` against).                       |
 | `$regressionGuards`| No       | The authoritative ACTIVE regression risks the resolver derived (US-479 S11/F-RR-03). Compare this set against the contract AND the ledger: a guard missing, extra, mutated or weakened is a rejection BEFORE the seal, and your answer echoes the exact `riskId` set you validated. |
-| `$scope`           | No       | JSON `{ groupId, owner, mode, allowedPaths }` of the planned group; the contract's `fixScope` may be narrower, never wider.                |
+| `$scope`           | No       | JSON `{ groupId, owner, mode, allowedPaths, widen? }` of the planned group; the contract's `fixScope` may be narrower, never wider — unless `widen: true` (a revision a GREEN's contract gap opened): then it may ADD the paths the `contract-gap` findings require, each tied to its gap in the inventory. |
 
 ## Algorithm
 
@@ -47,7 +47,7 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVer
 1. Parse `$contract`; its `contractHash` must equal `$contractHash` and the script's `hash` output — a mismatch is a finding (`location: $contract`), `verified: false`.
 2. `cd $worktree`; `HEAD == $head`; the uncommitted diff contains ONLY the listed artifacts. Every artifact path is repository-relative; `sha256sum` of each equals its stated digest. Anything else ⇒ finding, `verified: false`.
 3. Every artifact PASSES the project's format gate (US-479, canary 481-v1). Run the adopted check over the listed artifacts (`pnpm format:check`, or whatever `way-of-working.md` adopts; a project with none skips this). An artifact the formatter would rewrite is a gap like any other — name it with its path, `verified: false` — and NOT a reason to reformat it yourself: you never edit. This is not tidiness. The seal you are about to place makes these bytes untouchable, so an unformatted artifact hands the fixer a round it cannot finish: it cannot reformat (sealed) and cannot push (the pre-push hook runs the gate). Canary 481-v1 died there with the fix already written and green.
-4. `fixScope` has one owner, one mode, only the paths the contract needs, and is not wider than `$scope`. A `repair` or `revision` (`-rev<m>`) is not NARROWER than the contract it revises: same `mode`, every predecessor `allowedPaths` entry still present — the sealer re-checks this against the predecessor snapshot's manifest and refuses `fixScope-narrowed`; name the dropped paths as a gap.
+4. `fixScope` has one owner, one mode, only the paths the contract needs, and is not wider than `$scope` (with `$scope.widen: true`, only by paths a `contract-gap` finding requires — any other added path is a gap). A `repair` or `revision` (`-rev<m>`) is not NARROWER than the contract it revises: same `mode`, every predecessor `allowedPaths` entry still present — the sealer re-checks this against the predecessor snapshot's manifest and refuses `fixScope-narrowed`; name the dropped paths as a gap.
 
 ### Step 2: Reproduce (every row, every artifact)
 

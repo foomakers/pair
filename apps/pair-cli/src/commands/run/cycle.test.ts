@@ -102,6 +102,79 @@ describe('runCycle (US-487 T-4)', () => {
     expect(outcome.status).toBe('escalate')
   })
 
+  it('a preparation blocked on a dirty worktree is recovered once (stray files stashed) and the cycle resolves again; a refused recovery stays blocked', async () => {
+    const DIRTY = {
+      step: 'blocked',
+      reason: 'failed-preparation',
+      refusal: 'dirty',
+      phase: 'r1-g1',
+    }
+    const resolve = scriptedResolve([
+      { status: 'blocked', next: DIRTY },
+      { status: 'in-progress', next: VALIDATE_A0 },
+      { status: 'completed', next: DONE },
+    ])
+    const spawnStage = vi.fn(async (): Promise<CycleStageResult> => ({ processOutcome: 'success' }))
+    const recoverDirty = vi.fn(async () => true)
+    const outcome = await runCycle({
+      resolve,
+      worktree,
+      packet,
+      spawnStage,
+      policy: {},
+      recoverDirty,
+    })
+    expect(recoverDirty).toHaveBeenCalledOnce()
+    expect(outcome.status).toBe('ready-for-merge')
+
+    const stuck = await runCycle({
+      resolve: scriptedResolve([{ status: 'blocked', next: DIRTY }]),
+      worktree,
+      packet,
+      spawnStage,
+      policy: {},
+      recoverDirty: async () => false,
+    })
+    expect(stuck.next?.step).toBe('blocked')
+  })
+
+  it('a stage stopped for seal-not-pushed spends a recovery round and is dispatched again; a spent budget stops', async () => {
+    const sealFailed = async (): Promise<CycleStageResult> => ({
+      processOutcome: 'success',
+      final: { status: 'failed', reason: 'seal-not-pushed' },
+    })
+    const recoverStop = vi.fn(async () => true)
+    let calls = 0
+    const outcome = await runCycle({
+      resolve: scriptedResolve([
+        { status: 'in-progress', next: VALIDATE_A0 },
+        { status: 'in-progress', next: VALIDATE_A0 },
+        { status: 'in-progress', next: VALIDATE_A0 },
+        { status: 'completed', next: DONE },
+      ]),
+      worktree,
+      packet,
+      spawnStage: async () => (calls++ === 0 ? sealFailed() : { processOutcome: 'success' }),
+      policy: {},
+      recoverStop,
+    })
+    expect(recoverStop).toHaveBeenCalledWith(VALIDATE_A0, 'seal-not-pushed')
+    expect(outcome.status).toBe('ready-for-merge')
+
+    const spent = await runCycle({
+      resolve: scriptedResolve([
+        { status: 'in-progress', next: VALIDATE_A0 },
+        { status: 'in-progress', next: VALIDATE_A0 },
+      ]),
+      worktree,
+      packet,
+      spawnStage: sealFailed,
+      policy: {},
+      recoverStop: async () => false,
+    })
+    expect(spent).toMatchObject({ status: 'failed-validate', reason: 'seal-not-pushed' })
+  })
+
   it('AC4: a process outcome of "failed" with an ADVANCED handoff still continues (process ≠ stage outcome)', async () => {
     // The terminal event lied (or never arrived) but the handoff genuinely moved on — AC4's split:
     // stage outcome comes from `resolve`, not from the process outcome.

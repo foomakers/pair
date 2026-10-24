@@ -7,6 +7,19 @@ import type { LockAcquirer } from './card-lock'
 import type { RootCandidate } from './root-plan'
 import type { CardProcessExit, CardProcessRunner } from './parallel'
 
+/** US-575 AC6: the deterministic prerequisite state, faked from each fixture card's own prerequisites. */
+const prereqsOf = (candidates: readonly RootCandidate[]) => (id: string) => {
+  const listed = candidates.find(c => c.id === id)?.prerequisites ?? []
+  return {
+    blocked: listed.some(p => !p.merged),
+    prerequisites: listed.map(p => ({
+      id: p.id,
+      state: p.merged ? 'merged' : 'open',
+      ...(!p.merged && { reason: 'not merged' }),
+    })),
+  }
+}
+
 /**
  * US-491 — `pair-cli run --root <id> --parallel N` end to end through the real handler, with the
  * two process boundaries stubbed: the `pair-next` selection (an engine process) and each
@@ -76,6 +89,7 @@ function harness(candidates: RootCandidate[], exits: Record<string, CardProcessE
   })
   const selectCandidates = vi.fn(async () => candidates)
   const deps: RunHandlerDependencies = {
+    readPrereqState: prereqsOf(candidates),
     selectCandidates,
     runCardProcess,
     acquireLock: freeLock,
@@ -253,6 +267,41 @@ describe('run --root --parallel — AC6 aggregated audit', () => {
     expect(h.audit[0]!.path).toBe(`${cwd}/.pair/working/automation/fanout.md`)
     expect(h.audit[0]!.line).toMatch(
       /^\S+ event=batch root=66 started=\S+ parallel=2 effective=1 attempted=1 outcomes=1:failed\(exit 1\) excluded=2$/,
+    )
+  })
+})
+
+describe('US-575 AC6: prerequisite state comes from the deterministic script, never the selection', () => {
+  it('a card the selection calls ready but whose prerequisite is parked is excluded `blocked by #<id> (<reason>)`; an unreadable state fails closed', async () => {
+    process.env['PATH'] = '/bin'
+    const lines = captureLog()
+    // The selection claims every prerequisite merged — the script says otherwise, and wins.
+    const h = harness([
+      card('1', { prerequisites: [{ id: '9', merged: true }] }),
+      card('2'),
+      card('3'),
+    ])
+    h.deps.readPrereqState = id => {
+      if (id === '3') throw new Error('gh: HTTP 502')
+      return id === '1'
+        ? {
+            blocked: true,
+            prerequisites: [{ id: '9', state: 'parked', reason: 'parked (needs-review)' }],
+            blockedBy: { id: '9', reason: 'parked (needs-review)' },
+          }
+        : { blocked: false, prerequisites: [] }
+    }
+
+    await handleRunCommand(
+      parseRunCommand({ root: '66', parallel: '2', autonomous: true }),
+      projectFs(policy('3')),
+      h.deps,
+    )
+
+    expect(h.started).toEqual(['2'])
+    expect(lines.join('\n')).toContain('Excluded #1: blocked by #9 (parked (needs-review))')
+    expect(lines.join('\n')).toContain(
+      'Excluded #3: blocked by #3 (prerequisites unreadable: gh: HTTP 502)',
     )
   })
 })

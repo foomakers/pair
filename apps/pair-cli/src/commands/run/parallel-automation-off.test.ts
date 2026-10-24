@@ -6,6 +6,9 @@ import { handleRunCommand } from './handler'
 import type { CardProcessRunner } from './parallel'
 import { parseRunCommand } from './parser'
 import type { RootCandidate } from './root-plan'
+
+/** US-575 AC6: no card in this suite has a prerequisite (the deterministic read is faked). */
+const NO_PREREQS = () => ({ blocked: false, prerequisites: [] })
 import { readWorkflowMapping } from './workflow-mapping'
 
 /**
@@ -74,6 +77,7 @@ async function runBatch(policy: string, extra: Record<string, unknown> = {}) {
       parseRunCommand({ root: '66', parallel: '2', autonomous: true, ...extra }),
       fs,
       {
+        readPrereqState: NO_PREREQS,
         selectCandidates: async () => [card('1'), card('2')],
         runCardProcess,
         acquireLock: ({ card: id }) => ({

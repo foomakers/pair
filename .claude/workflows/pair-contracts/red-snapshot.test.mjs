@@ -17,8 +17,8 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { contractHash } from '../../skills/pair-workflow-red-verify/scripts/cycle-state.mjs'
-import { llmsDerivedTitle, pushSnapshot, artifactPaths as artifactPathsOf, contractErrors, hashFile, isTestPath, manifestPathFor, seal, trailerFor, verify, verifyChain, predecessorPhase, scopeNarrowing, isModulePath, OVERRIDABLE_BREACH_CODES } from '../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs'
+import { contractHash, baseSync } from '../../skills/pair-workflow-red-verify/scripts/cycle-state.mjs'
+import { BASE_SYNC_FIX, llmsDerivedTitle, pushSnapshot, artifactPaths as artifactPathsOf, contractErrors, hashFile, isTestPath, manifestPathFor, seal, trailerFor, verify, verifyChain, predecessorPhase, scopeNarrowing, isModulePath, OVERRIDABLE_BREACH_CODES } from '../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs'
 
 const CLI_URL = new URL('../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url).href
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url))
@@ -218,6 +218,25 @@ test('verify breach: an unlisted test file added after the seal, and an out-of-s
   green(cwd, manifest, { 'src/a.js': 'export const a = () => 2\n', 'test/b.test.js': 'ok\n', 'src/other.js': 'export const o = 1\n' })
   const v = verify({ pr: PR, phase: PHASE, base, cwd })
   assert.deepEqual(v.breaches.map(b => `${b.code}:${b.path}`).sort(), ['out-of-scope:src/other.js', 'unlisted-test-changed:test/b.test.js'])
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('verify: a generated mirror byte-identical to its dataset file is never out-of-scope nor an unlisted test — its origin carries the verdict; a diverging mirror still breaches', () => {
+  const { cwd, base, manifest } = sealed()
+  green(cwd, manifest, {
+    'src/a.js': 'export const a = () => 2\n',
+    'packages/knowledge-hub/dataset/.pair/knowledge/a.md': '# a\n',
+    '.pair/knowledge/a.md': '# a\n',
+    'packages/knowledge-hub/dataset/.claude/workflows/x.test.mjs': 'ok\n',
+    '.claude/workflows/x.test.mjs': 'ok\n',
+    '.pair/knowledge/b.md': '# drifted, no dataset origin\n',
+  })
+  const v = verify({ pr: PR, phase: PHASE, base, cwd })
+  assert.deepEqual(v.breaches.map(b => `${b.code}:${b.path}`).sort(), [
+    'out-of-scope:.pair/knowledge/b.md',
+    'out-of-scope:packages/knowledge-hub/dataset/.pair/knowledge/a.md',
+    'unlisted-test-changed:packages/knowledge-hub/dataset/.claude/workflows/x.test.mjs',
+  ])
   rmSync(cwd, { recursive: true, force: true })
 })
 
@@ -1646,6 +1665,21 @@ test('pushSnapshot: a local-only seal reaches the story branch; the repo pre-pus
   assert.equal(pushSnapshot({ snapshot: sealed.snapshot, branch: 'feature/US-1-x', cwd }).pushed, true)
 })
 
+test('pushSnapshot: a passing pre-push hook that prints more than 1 MB (a full quality gate) still pushes — the output never kills the push', () => {
+  const { cwd, base } = repo()
+  const remote = mkdtempSync(join(tmpdir(), 'red-remote-'))
+  git(remote, 'init', '-q', '--bare', '-b', 'main')
+  git(cwd, 'remote', 'add', 'origin', remote)
+  git(cwd, 'push', '-q', 'origin', 'main:refs/heads/feature/US-1-x')
+  const hooks = mkdtempSync(join(tmpdir(), 'red-hooks-'))
+  writeFileSync(join(hooks, 'pre-push'), '#!/bin/sh\nhead -c 3000000 /dev/zero | tr "\\\\0" "x"\necho\nexit 0\n', { mode: 0o755 })
+  git(cwd, 'config', 'core.hooksPath', hooks)
+  const { contractPath } = redContract(cwd)
+  const sealed = seal({ pr: PR, phase: PHASE, base, contractPath, cwd })
+  const out = pushSnapshot({ snapshot: sealed.snapshot, branch: 'feature/US-1-x', cwd })
+  assert.equal(out.pushed, true, JSON.stringify(out).slice(0, 400))
+})
+
 test('pushSnapshot: never forces — a diverged remote branch is a typed refusal', () => {
   const { cwd, base } = repo()
   const remote = mkdtempSync(join(tmpdir(), 'red-remote-'))
@@ -2056,5 +2090,60 @@ test('verify: a GREEN edit of a `.changeset/*.md` file is always in scope; any o
   green(cwd, manifest, { 'src/a.js': 'export const a = () => 2\n', '.changeset/us-1-story.md': "---\n'x': patch\n---\n\nfix\n", 'src/other.js': 'export const o = 1\n' })
   const v = verify({ pr: PR, phase: PHASE, base, cwd })
   assert.deepEqual(v.breaches.map(b => `${b.code}:${b.path}`).sort(), ['out-of-scope:src/other.js'])
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+// ══ US-575 AC5 — the mechanical base sync, verified by custody ═════════════════════════════════════
+// A sealed story whose fix-scope file the base ALSO edited on the same line (a real conflict), plus a base-only edit.
+function conflictingBase() {
+  const { cwd } = repo()
+  git(cwd, 'checkout', '-q', '-b', 'story')
+  write(cwd, 'src/a.js', 'export const a = () => 1 // implemented\n')
+  git(cwd, 'commit', '-q', '--no-verify', '-am', 'implement')
+  const head1 = git(cwd, 'rev-parse', 'HEAD')
+  const { contractPath } = redContract(cwd)
+  const s = seal({ pr: PR, phase: 'r1-g1', base: head1, contractPath, cwd })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  rmSync(join(cwd, contractPath))
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  git(cwd, 'checkout', '-q', 'main')
+  write(cwd, 'src/a.js', 'export const a = () => 1 // reformatted on main\n')
+  write(cwd, 'src/other.js', 'export const o = 7\n')
+  git(cwd, 'commit', '-q', '--no-verify', '-am', 'main moves on')
+  git(cwd, 'checkout', '-q', 'story')
+  const runDir = runDirWith({ 'r1-g1-red-verify': { skill: 'red-verify', phase: 'r1-g1', verified: true, sealed: true, inputHead: head1 } })
+  return { cwd, head1, runDir }
+}
+
+test('US-575 AC5: a mechanical base sync (story-owned conflict keeps ours, base-only change merged) passes custody', () => {
+  const { cwd, head1, runDir } = conflictingBase()
+  const out = baseSync({ cwd, base: 'main', story: PR, owned: ['src/a.js'] })
+  assert.deepEqual(out.conflicts, [{ path: 'src/a.js', side: 'ours' }], JSON.stringify(out))
+  const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
+  assert.deepEqual({ verified: chain.verified, breaches: chain.breaches }, { verified: true, breaches: [] }, JSON.stringify(chain))
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('US-575 AC5: a merge whose Pair-Base-Sync record does not match its bytes (edited by hand) fails custody, saying how to fix it', () => {
+  const { cwd, head1, runDir } = conflictingBase()
+  spawnSync('git', ['merge', '--no-ff', '--no-commit', 'main'], { cwd })
+  write(cwd, 'src/a.js', 'export const a = () => 2 // hand-resolved\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'sync', '-m', `Pair-Base-Sync: base=${git(cwd, 'rev-parse', 'main')}; ours=src/a.js`)
+  const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
+  assert.equal(chain.verified, false)
+  assert.deepEqual(chain.breaches.map(b => [b.code, b.path, b.side, b.fix]), [['base-sync-mismatch', 'src/a.js', 'ours', BASE_SYNC_FIX]])
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('US-575 AC5: a hand-resolved merge of the base touching a path outside the fix scope still fails custody, and the breach names the fix', () => {
+  const { cwd, head1, runDir } = conflictingBase()
+  spawnSync('git', ['merge', '--no-ff', '--no-commit', 'main'], { cwd })
+  write(cwd, 'src/a.js', 'export const a = () => 2\n')
+  write(cwd, 'src/other.js', 'export const o = 8 // hand edit inside the merge\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'hand merge')
+  const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
+  assert.deepEqual(chain.breaches.map(b => [b.code, b.path, b.fix]), [['out-of-scope', 'src/other.js', BASE_SYNC_FIX]])
   rmSync(cwd, { recursive: true, force: true })
 })

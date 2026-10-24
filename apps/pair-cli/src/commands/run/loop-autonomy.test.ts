@@ -9,6 +9,9 @@ import { isDorFallbackReason } from './card-entry'
 import { resolveContext } from './run-context'
 import { completeCandidates, resolveCards, type RootCandidate } from './root-plan'
 
+/** US-575 AC6: no card in this suite has a prerequisite (the deterministic read is faked). */
+const NO_PREREQS = () => ({ blocked: false, prerequisites: [] })
+
 const cand: RootCandidate = {
   id: '9',
   title: 't',
@@ -133,6 +136,7 @@ describe('loop carries --until/--prepare/--merge to each child card', () => {
               ok: false,
               errors: [{ key: 'merge', reason: 'argument "bogus" is not a gate' }],
             }) as never,
+          readPrereqState: NO_PREREQS,
           selectAnswer,
           runCardProcess,
         },
@@ -201,6 +205,7 @@ describe('loop carries --until/--prepare/--merge to each child card', () => {
         parseRunCommand({ cwd: '/w', parallel: '2', filter: 'risk:yellow', autonomous: true }),
         fsWith(),
         {
+          readPrereqState: NO_PREREQS,
           selectCandidates: async () => [yellow],
           runCardProcess: async ({ args }) => {
             argvs.push([...args])
@@ -253,6 +258,7 @@ describe('loop carries --until/--prepare/--merge to each child card', () => {
           parseRunCommand({ cwd: '/w', parallel: '2', root: '1', autonomous: true, ...flags }),
           fsWith(),
           {
+            readPrereqState: NO_PREREQS,
             selectCandidates: async () => [],
             runCardProcess: async () => ({ exitCode: 0, signal: null }),
             acquireLock: ({ card: id }) => ({
@@ -357,6 +363,7 @@ describe('loop carries --until/--prepare/--merge to each child card', () => {
           '/w',
         ),
         {
+          readPrereqState: NO_PREREQS,
           selectCandidates: async () => [{ ...cand, id: '399', title: 'T', branch: '' }],
           runCardProcess: async ({ card: c }) => {
             started.push(c.branch)
@@ -402,6 +409,7 @@ describe('loop carries --until/--prepare/--merge to each child card', () => {
         }),
         fs,
         {
+          readPrereqState: NO_PREREQS,
           selectAnswer: async (input: { loop?: { predicateSelector?: string } }) => {
             asked.push(input.loop?.predicateSelector)
             return {
