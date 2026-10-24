@@ -227,7 +227,7 @@ function makeFixture(): string {
   // Same line the real repo carries: `.pair/.kb-version.json` is a local install stamp
   // (it records a wall-clock `recordedAt`), so it is untracked by design. Without it the
   // fixture would report a diff on every run for a file no repo commits.
-  write(join(dir, '.gitignore'), '.pair/.kb-version.json\n')
+  write(join(dir, '.gitignore'), '.pair/.kb-version.json\n.pair/working/\n')
 
   initRepo(dir)
   return dir
@@ -478,7 +478,7 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
       const nested = join(tmp, '.pair/knowledge/sub/note.md')
       expect(readFileSync(nested, 'utf-8')).toBe(NESTED)
-      write(join(tmp, '.gitignore'), '.pair/.kb-version.json\n')
+      write(join(tmp, '.gitignore'), '.pair/.kb-version.json\n.pair/working/\n')
       git(tmp, ['add', '-A', '--', ':!.pair/knowledge/sub'])
       git(tmp, ['commit', '-q', '-m', 'converged, nested install left uncommitted'])
 

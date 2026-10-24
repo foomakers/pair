@@ -48,7 +48,7 @@ describe("readAutomationPolicy — absent file (today's real path for most proje
     const policy = policyFrom().read()
 
     expect(policy.eligibility).toBeUndefined()
-    expect(policy.maxIterations).toBe(1)
+    expect(policy.maxIterations).toBe(Number.POSITIVE_INFINITY)
     expect(policy.maxParallelism).toBe(1)
     expect(policy.auditLocation).toBe(DEFAULT_AUDIT_LOCATION)
     expect(policy.source).toContain('fail-safe defaults')
@@ -83,7 +83,7 @@ describe('readAutomationPolicy — present file', () => {
   it('applies section-level fail-safes when only some sections exist', () => {
     const policy = policyFrom('## Eligibility\n\nrisk:green\n').read()
 
-    expect(policy.maxIterations).toBe(1)
+    expect(policy.maxIterations).toBe(Number.POSITIVE_INFINITY)
     expect(policy.maxParallelism).toBe(1)
     expect(policy.auditLocation).toBe(DEFAULT_AUDIT_LOCATION)
   })
@@ -482,5 +482,34 @@ describe('US-573 AC5: `## Stop Predicate` idle-timeout', () => {
     expect(() => policyFrom('## Stop Predicate\n\nidle-timeout: 0\n').read()).toThrow(
       /idle-timeout/,
     )
+  })
+})
+
+describe('US-576 AC3: only `## Autonomy` declared', () => {
+  it('prints no "automation is off" warning (the selection is `## Autonomy`\'s)', () => {
+    const policy = policyFrom('# Automation\n\n## Autonomy\n\npreset: escalate-red\n').read()
+    expect(policy.eligibility).toBeUndefined()
+    expect(policy.warnings.join('\n')).not.toContain('automation is off')
+  })
+
+  it('still warns when neither `## Eligibility` nor `## Autonomy` is declared', () => {
+    expect(
+      policyFrom('# Automation\n\n## Max Parallelism\n\n1\n').read().warnings.join('\n'),
+    ).toContain('automation is off')
+  })
+})
+describe('US-576 AC6: no max-iterations declared ⇒ no iteration cap (the loop runs to a natural stop)', () => {
+  it('absent file, absent `## Stop Predicate`, a predicate with no max-iterations: all uncapped', () => {
+    expect(policyFrom().read().maxIterations).toBe(Number.POSITIVE_INFINITY)
+    expect(policyFrom('# A\n\n## Autonomy\n\npreset: full\n').read().maxIterations).toBe(
+      Number.POSITIVE_INFINITY,
+    )
+    expect(policyFrom('## Stop Predicate\n\ntag:risk:red ⇒ Done\n').read().maxIterations).toBe(
+      Number.POSITIVE_INFINITY,
+    )
+  })
+
+  it('a declared max-iterations still caps', () => {
+    expect(policyFrom('## Stop Predicate\n\nmax-iterations: 4\n').read().maxIterations).toBe(4)
   })
 })

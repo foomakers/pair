@@ -830,25 +830,25 @@ test('the resolve dispatch runs the policy script with the prepare argument, onl
   assert.equal(none.calls.some(c => c.opts.label === 'autonomy:resolve'), false, 'classify/triage never resolve a gate')
 })
 
-test('declared `never`: $approval auto + $prepare never, truthful provenance, Ready only through cycle-prepare complete after a breakdown', async () => {
+test('declared `hold-never`: $approval auto + $prepare hold-never, truthful provenance, Ready only through cycle-prepare complete after a breakdown', async () => {
   const p = await refinePrompt({ items: [{ id: '216', mode: 'refine', breakdown: true }], prepare: 'never' }, gateDispatch({ mode: 'never', has: [], lacks: [] }, 'argument'))
   assert.match(p, /\$approval: auto/)
-  assert.match(p, /\$prepare: never/)
-  assert.match(p, /Prepared autonomously under prepare: never \(argument\) — ADR-028/)
+  assert.match(p, /\$prepare: hold-never/)
+  assert.match(p, /Prepared autonomously under prepare: hold-never \(argument\) — ADR-028/)
   assert.match(p, /cycle-prepare\.mjs complete/)
   assert.match(p, /plan-tasks/)
   assert.match(p, /--refinedAutonomously true/)
   assert.match(p, /State Mapping/)
-  assert.doesNotMatch(p, /move the board state to Refined|never \(argument\).*adoption/s)
+  assert.doesNotMatch(p, /move the board state to Refined|hold-never \(argument\).*adoption/s)
 })
 
 test('provenance names the REAL source — adoption and default are never rendered as `(argument)`', async () => {
   const adoption = await refinePrompt({ items: [{ id: '216', mode: 'refine' }] }, gateDispatch({ mode: 'never', has: [], lacks: [] }, 'adoption'))
-  assert.match(adoption, /prepare: never \(adoption\)/)
-  assert.doesNotMatch(adoption, /prepare: never \(argument\)/)
+  assert.match(adoption, /prepare: hold-never \(adoption\)/)
+  assert.doesNotMatch(adoption, /prepare: hold-never \(argument\)/)
   const when = await refinePrompt({ items: [{ id: '216', mode: 'refine' }] }, gateDispatch({ mode: 'when', has: [], lacks: ['triaged'] }, 'adoption'))
-  assert.match(when, /\$prepare: when/)
-  assert.match(when, /prepare: when; lacks: triaged \(adoption\)/)
+  assert.match(when, /\$prepare: hold-when/)
+  assert.match(when, /prepare: hold-when; lacks: triaged \(adoption\)/)
 })
 
 test('refine-only (no breakdown) under a declared gate never writes Ready: the card is left for plan-tasks / complete, and verify does not demand Refined', async () => {

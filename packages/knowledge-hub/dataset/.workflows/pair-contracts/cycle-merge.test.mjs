@@ -936,3 +936,29 @@ test('AL/C6 decideMerge: approval not yet recorded (missing/pending) + CI still 
   assert.equal(decideMerge({ ...red, signals: sig('pending', [{ name: 'build', conclusion: 'failure' }]) }).parkKind, 'halted')
   assert.equal(decideMerge({ ...red, signals: sig('failure', [{ name: 'build', conclusion: 'pending' }]) }).parkKind, 'halted')
 })
+
+// ── US-576 AC2: `merge: hold-never` waives the red / untagged explicit approval, nothing else ──
+const NO_APPROVAL = { headSha: SHA('a'), pairReview: 'success', explicitApproval: 'missing', ci: [{ name: 'build', conclusion: 'success' }] }
+const WAIVER = { cardTier: RED, currentTier: RED, effectiveTier: RED, reviewedHead: SHA('a'), signals: NO_APPROVAL, gate: 'green', requireGate: true }
+for (const [tier, labels] of [['risk:red', ['risk:red']], ['untagged (read as risk:red)', ['user story']]]) {
+  test(`US-576 AC2: hold-never merges a review-approved ${tier} card with no pair-explicit-approval`, () => {
+    const d = decideMerge({ ...WAIVER, labels, mergeGate: { mode: 'never', has: [], lacks: [] } })
+    assert.equal(d.mergeAllowed, true, JSON.stringify(d))
+    assert.equal(decideMerge({ ...WAIVER, labels, mergeGate: { mode: 'hold-never' }, signals: { ...NO_APPROVAL, explicitApproval: 'pending' } }).mergeAllowed, true)
+  })
+}
+test('US-576 AC2: hold-never still requires pair-review success on the reviewed head, green CI, the green gate, and a rejected approval still halts', () => {
+  const g = { mode: 'never', has: [], lacks: [] }
+  const codes = o => decideMerge({ ...WAIVER, labels: ['risk:red'], mergeGate: g, ...o }).failed.map(f => f.code)
+  assert.deepEqual(codes({ signals: { ...NO_APPROVAL, pairReview: 'failure' } }), ['pair-review'])
+  assert.deepEqual(codes({ signals: { ...NO_APPROVAL, headSha: SHA('b') } }), ['head-moved'])
+  assert.deepEqual(codes({ signals: { ...NO_APPROVAL, ci: [{ name: 'build', conclusion: 'failure' }] } }), ['ci-not-green'])
+  assert.deepEqual(codes({ gate: 'red' }), ['gate-red'])
+  assert.deepEqual(codes({ signals: { ...NO_APPROVAL, explicitApproval: 'failure' } }), ['explicit-approval'])
+})
+test('US-576 AC2: hold-when; has: risk:red and hold-always keep the red hold; the legacy tier path keeps requiring the approval', () => {
+  assert.deepEqual(decideMerge({ ...WAIVER, labels: ['risk:red'], mergeGate: { mode: 'when', has: ['risk:red'], lacks: [] } }).failed.map(f => f.code), ['escalated', 'explicit-approval'])
+  assert.ok(decideMerge({ ...WAIVER, labels: ['risk:red'], mergeGate: { mode: 'always', has: [], lacks: [] } }).failed.some(f => f.code === 'explicit-approval'))
+  assert.ok(decideMerge({ ...WAIVER, labels: ['risk:red'], mergeGate: { mode: 'when', has: ['cost:red'], lacks: [] } }).failed.some(f => f.code === 'explicit-approval'))
+  assert.ok(decideMerge({ ...WAIVER, autoAdvanceTiers: [RED] }).failed.some(f => f.code === 'explicit-approval'))
+})
