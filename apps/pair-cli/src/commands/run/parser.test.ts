@@ -521,16 +521,12 @@ describe('parseRunCommand — --watch / --interval (US-522 AC14)', () => {
     expect(config).not.toHaveProperty('interval')
   })
 
-  it('refuses --watch without --parallel, suggesting --parallel 1', () => {
-    expect(() => parseRunCommand({ root: '1', watch: true })).toThrow(
-      /--watch requires --parallel.*--parallel 1/,
-    )
-    expect(() => parseRunCommand({ root: '1', watch: false })).toThrow(
-      /--no-watch requires --parallel/,
-    )
-    expect(() => parseRunCommand({ root: '1', interval: '5m' })).toThrow(
-      /--interval requires --parallel/,
-    )
+  it('--watch, --interval and --predicate without --parallel run the loop one card at a time (--parallel 1)', () => {
+    expect(parseRunCommand({ root: '1', watch: true })).toMatchObject({ parallel: 1, watch: true })
+    expect(parseRunCommand({ root: '1', watch: false }).parallel).toBe(1)
+    expect(parseRunCommand({ root: '1', watch: true, interval: '5m' }).parallel).toBe(1)
+    expect(parseRunCommand({ root: '1', parallel: '3', watch: true }).parallel).toBe(3)
+    expect(() => parseRunCommand({ card: '1', watch: true })).toThrow(/--watch belongs to the loop/)
   })
 
   it('refuses --interval without --watch', () => {
@@ -564,10 +560,16 @@ describe('R: --predicate (the loop override of ## Stop Predicate)', () => {
       parseRunCommand({ parallel: '2', filter: 'x', predicate: 'tag:risk:red ⇒ Done' }).predicate,
     ).toBe('tag:risk:red ⇒ Done')
   })
-  it('is refused without --parallel', () => {
+  it('is refused off the loop (--skill/--prompt/--card); a --root alone is the loop at 1', () => {
     expect(() => parseRunCommand({ skill: 'pair-next', predicate: 'root ⇒ Done' })).toThrow(
-      /--predicate.*--parallel/,
+      /--predicate .*the loop/,
     )
+    const platformCases = ['darwin', 'linux'] as const
+    for (const platform of platformCases)
+      expect(
+        parseRunCommand({ root: platform === 'darwin' ? '1' : '2', predicate: 'root ⇒ Done' })
+          .parallel,
+      ).toBe(1)
   })
   it.each(['tag:risk:red => Done', 'nonsense', 'tag: ⇒ Done', 'root ⇒ has-tag:$(id)'])(
     'an invalid predicate %s is refused at parse time, before anything spawns',
@@ -575,4 +577,26 @@ describe('R: --predicate (the loop override of ## Stop Predicate)', () => {
       expect(() => parseRunCommand({ parallel: '2', root: '1', predicate: bad })).toThrow()
     },
   )
+})
+
+describe('US-576 T-3: --preset and --filter *', () => {
+  it('carries --preset raw with --card or the loop (--parallel implied 1), refuses it on --skill/--prompt', () => {
+    expect(parseRunCommand({ card: '42', preset: 'escalate-red' }).autonomy).toEqual({
+      preset: 'escalate-red',
+    })
+    expect(parseRunCommand({ parallel: '2', root: '7', preset: 'full' }).autonomy).toEqual({
+      preset: 'full',
+    })
+    expect(parseRunCommand({ root: '578', preset: 'escalate-red' })).toMatchObject({
+      parallel: 1,
+      autonomy: { preset: 'escalate-red' },
+    })
+    expect(() => parseRunCommand({ skill: 'pair-next', preset: 'full' })).toThrow(
+      /--preset .*only meaningful with --card or --parallel/,
+    )
+  })
+
+  it("accepts --filter '*' as a scope", () => {
+    expect(parseRunCommand({ parallel: '2', filter: '*' }).scope.filter).toBe('*')
+  })
 })

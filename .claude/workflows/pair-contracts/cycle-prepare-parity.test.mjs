@@ -50,11 +50,11 @@ test('the `prepare` argument is stated with the shared grammar and precedence in
   assert.ok(PRECEDENCE_SENTENCE.startsWith('Precedence:'))
 })
 
-test('AC9: refine-story phase 0 stays a gate that HALTs under `$approval: auto` unless `$prepare: never|when` also lifts it; /grill is untouched', () => {
+test('AC9: refine-story phase 0 stays a gate that HALTs under `$approval: auto` unless `$prepare: hold-never|hold-when` also lifts it; /grill is untouched', () => {
   const s = read('../../skills/pair-process-refine-story/SKILL.md')
   assert.match(s, /approval-round: kind=gate; auto=halt/)
   assert.match(s, /`\$approval: auto` alone[^.]*never lifts phase 0|generic signal never bypasses R3\.11/)
-  assert.match(s, /\$approval: auto` without `\$prepare: never\|when`/)
+  assert.match(s, /\$approval: auto` without `\$prepare: hold-never\|hold-when`/)
   const grill = read('../../skills/pair-capability-grill/SKILL.md')
   assert.doesNotMatch(grill, /\$prepare/)
 })

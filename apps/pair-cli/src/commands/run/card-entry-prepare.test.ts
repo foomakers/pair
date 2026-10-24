@@ -254,7 +254,7 @@ describe('AC4/AC5/AC8: never and when proceed alone, Ready once, until decides w
     const r = await run({ prepare: selection(gate('never')), autonomous: true })
     expect(r.code).toBe(0)
     expect(r.prompts).toEqual([
-      '/pair-process-refine-story --story 523 --approval auto --prepare never',
+      '/pair-process-refine-story --story 523 --approval auto --prepare hold-never',
       '/pair-process-plan-tasks --story 523 --approval auto',
     ])
     expect(r.calls).toEqual([
@@ -276,7 +276,7 @@ describe('AC4/AC5/AC8: never and when proceed alone, Ready once, until decides w
       autonomous: true,
       labels: [['triaged']],
     })
-    expect(r.prompts[0]).toContain('--approval auto --prepare when')
+    expect(r.prompts[0]).toContain('--approval auto --prepare hold-when')
     expect(r.calls).toContain('complete')
     expect(r.code).toBe(0)
   })
@@ -301,7 +301,7 @@ describe('AC4/AC5/AC8: never and when proceed alone, Ready once, until decides w
 
   it('attended `never` is autonomous too (the maintainer declared it)', async () => {
     const r = await run({ prepare: selection(gate('never')), autonomous: false })
-    expect(r.prompts[0]).toContain('--approval auto --prepare never')
+    expect(r.prompts[0]).toContain('--approval auto --prepare hold-never')
   })
 })
 
@@ -409,7 +409,7 @@ describe('AC11: the effective gate is printed with its source', () => {
   it('names value, source and route', async () => {
     const r = await run({ prepare: selection(gate('never'), 'pr', 'adoption'), autonomous: true })
     expect(r.stdout.join('\n')).toMatch(
-      /Prepare: never \(source: adoption\) — run-autonomous at B0/,
+      /Prepare: hold-never \(source: adoption\) — run-autonomous at B0/,
     )
   })
 })

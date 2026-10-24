@@ -214,3 +214,18 @@ describe('createPerimeter, per platform', () => {
     })
   }
 })
+
+describe('US-576 AC6: an uncapped policy', () => {
+  it('runs to a natural stop, says so, and --max-iterations still narrows it', () => {
+    const p = createPerimeter({ ...base, root: '212', policyCap: Number.POSITIVE_INFINITY })
+    expect(p.maxIterations).toBe(Number.POSITIVE_INFINITY)
+    expect(describePerimeter(p)).toMatch(/no iteration cap — runs until nothing is eligible/)
+    const narrowed = createPerimeter({
+      ...base,
+      root: '212',
+      policyCap: Number.POSITIVE_INFINITY,
+      requestedCap: 3,
+    })
+    expect(narrowed.maxIterations).toBe(3)
+  })
+})

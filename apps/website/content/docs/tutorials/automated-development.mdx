@@ -22,9 +22,9 @@ All three read the same state machine and the same gates. Which assistants suppo
 Declared once in `## Autonomy` of `tech/automation.md` (or passed as `--until`, `--prepare`, `--merge`); precedence is argument, then adoption, then KB default, and the run prints every effective value with its source. Every key is in [Adoption settings](/docs/reference/adoption-settings#techautomationmd).
 
 - **`until`**: `ready` stops before implementation; `pr` (default) stops at the review-approved PR; `merged` is the only value under which the merge gate is evaluated.
-- **`prepare` gate**: who refines and breaks down a Draft card. `always` (default) keeps a human.
-- **`merge` gate**: `always` (default) parks every card for a human; `never` and `when; has: …; lacks: …` enter the merge stage.
-- **Escalation**: a `when` condition that fires stops the card as `escalated` with one comment on it naming the condition; the PR stays open, the rest of the backlog continues.
+- **`prepare` gate**: who refines and breaks down a Draft card. `hold-always` (default) keeps a human.
+- **`merge` gate**: `hold-always` (default) parks every card for a human; `hold-never` and `hold-when; has: …; lacks: …` enter the merge stage.
+- **Escalation**: a `hold-when` condition that fires stops the card as `escalated` with one comment on it naming the condition; the PR stays open, the rest of the backlog continues.
 - **Blocking Severities**: `## Blocking Severities` sets the floor (`Critical`, `Major`, `Minor`; default `Minor`) at or above which a review finding blocks, plus an optional `max-dispatches` ceiling on a run's handoffs.
 
 **In your assistant:** edit `tech/automation.md`, then `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve`. **With `/pair-assistant` (optional, Claude Code):** "let green cards go up to merge" shows the `## Autonomy` diff, validates it and writes it through record-decision ([how it writes](/docs/reference/pair-assistant#how-it-writes)).
@@ -174,17 +174,17 @@ automation/loop-audit.md
   string equality, any-of, no tier arithmetic.
 </Callout>
 
-**The `merge` gate is the one line that turns on unattended merging.** The shipped default is `merge: always`, and `always` parks every review-approved card for a human, whatever its tier. To let the loop merge the cards it selected once the PR is review-approved and the gates are green, write both lines:
+**The `merge` gate is the one line that turns on unattended merging.** The shipped default is `merge: hold-always`, and `hold-always` parks every review-approved card for a human, whatever its tier. To let the loop merge the cards it selected once the PR is review-approved and the gates are green, write both lines:
 
 ```markdown
 ## Autonomy
 
 filter: risk:green
 until: merged
-merge: never
+merge: hold-never
 ```
 
-`merge: when; has: cost:red; lacks: risk:green` enters the merge stage too, but escalates any card matching the condition instead of merging it. The gate is a switch, not a second risk model: the per-tier gate table lives in the [quality model](/docs/reference/quality-model) (lint, type, build for green; unit tests from yellow; integration and E2E on red), and the merge stage enacts it.
+`merge: hold-when; has: cost:red; lacks: risk:green` enters the merge stage too, but escalates any card matching the condition instead of merging it. The gate is a switch, not a second risk model: the per-tier gate table lives in the [quality model](/docs/reference/quality-model) (lint, type, build for green; unit tests from yellow; integration and E2E on red), and the merge stage enacts it.
 
 **Using a team-specific tag instead of `risk:green`.** Nothing ties the filter to the `risk` family. If a maintainer adds `automate` to specific cards rather than trusting the whole green set, declare `filter: automate`; the label only has to exist on the card.
 
@@ -398,8 +398,8 @@ done.
 ## Safety: what this does and does not protect you from
 
 - **The loop itself never merges; the merge gate decides.** Nothing merges unless the gate allows it
-  (`merge: always`, the default, parks every card for a human; `merge: never` and `when` enter the
-  merge stage under `until: merged`). Keep it at `always`, or leave `until` at `pr`, to get unattended
+  (`merge: hold-always`, the default, parks every card for a human; `merge: hold-never` and `hold-when` enter the
+  merge stage under `until: merged`). Keep it at `hold-always`, or leave `until` at `pr`, to get unattended
   *development*: every card still stops at a review-approved, gate-green PR for a human to merge.
 - **An untagged card is treated as the highest risk tier.** The loop no longer filters by tier
   itself (the selection filter does), so an untagged card can be selected, but it is handed over as

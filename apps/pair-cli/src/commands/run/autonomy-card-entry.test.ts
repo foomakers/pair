@@ -29,7 +29,7 @@ const SCRIPT_SRC = join(
   __dirname,
   '../../../../../packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/autonomy-policy.mjs',
 )
-const HEADER = 'Autonomy (argument > adoption > KB default):'
+const HEADER = 'Autonomy (argument > --preset > adoption > adoption preset > KB default):'
 const MAPPED_POLICY = '## Eligibility\n\nrisk:green\n\n## Workflows\n\nauto-dev ⇒ pair-loop\n'
 const ELIGIBILITY = '## Eligibility\n\nrisk:green\n'
 

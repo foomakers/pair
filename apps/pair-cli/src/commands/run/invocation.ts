@@ -38,9 +38,9 @@ export interface SkillArguments {
   /**
    * US-523 / ADR-028: the prepare mode that — together with `approval: auto` and ONLY together —
    * lifts phase 0 of `pair-process-refine-story`. A closed enum from the resolved prepare gate
-   * (`never` | `when`), never operator text; `always` is never passed (absent IS `always`).
+   * (`hold-never` | `hold-when`), never operator text; `hold-always` is never passed (absent IS `hold-always`).
    */
-  prepare?: 'never' | 'when'
+  prepare?: 'hold-never' | 'hold-when'
 }
 
 type SkillParameterMap = Readonly<Partial<Record<keyof SkillArguments, string>>>

@@ -133,6 +133,22 @@ export function readCardLabels(card: string, cwd: string): readonly string[] | u
   }
 }
 
+/** US-576: when the card was closed as Done — `null` while open (or closed as not planned), `undefined` when unreadable. */
+export function readCardClosedAt(card: string, cwd: string): Date | null | undefined {
+  try {
+    const parsed = JSON.parse(ghIssueView(card, cwd, 'state,stateReason,closedAt')) as {
+      state?: string
+      stateReason?: string
+      closedAt?: string | null
+    }
+    if (parsed.state !== 'CLOSED' || parsed.stateReason === 'NOT_PLANNED') return null
+    const at = new Date(parsed.closedAt ?? '')
+    return Number.isNaN(at.getTime()) ? undefined : at
+  } catch {
+    return undefined
+  }
+}
+
 /** The card's title, read live from the tracker; `undefined` when it cannot be read (the card is then excluded). */
 export function readCardTitle(card: string, cwd: string): string | undefined {
   try {

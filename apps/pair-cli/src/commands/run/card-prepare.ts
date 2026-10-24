@@ -45,7 +45,7 @@ export const PLAN_SKILL = 'pair-process-plan-tasks'
 /** What the autonomous drive asks of the skills: `$approval: auto` and — alone unlocking phase 0 — `$prepare`. */
 export interface PromptExtras {
   readonly approval: 'auto'
-  readonly prepare?: 'never' | 'when'
+  readonly prepare?: 'hold-never' | 'hold-when'
 }
 
 /** The test seam: every collaborator the phase uses, each defaulting to the shipped one. */
@@ -391,7 +391,7 @@ async function refineStep(drive: Drive, mode: 'never' | 'when'): Promise<number 
     'Draft (Definition of Ready not met)',
     {
       approval: 'auto',
-      prepare: mode,
+      prepare: `hold-${mode}` as const,
     },
   )
   if (refined !== 0) return await fail(drive.phase, `prepare:refine exited ${refined}`)
@@ -424,7 +424,7 @@ async function planStep(
   })
   if (done.completed) {
     console.log(
-      `  Prepared: card ${entry.card} is Ready with its task breakdown (prepare: ${phase.gate.mode}, source ${phase.source})`,
+      `  Prepared: card ${entry.card} is Ready with its task breakdown (prepare: hold-${phase.gate.mode}, source ${phase.source})`,
     )
     say('prepared')
     return 0

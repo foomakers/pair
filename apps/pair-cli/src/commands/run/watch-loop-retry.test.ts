@@ -331,4 +331,20 @@ describe('A5: the merge header says the gate is NOT evaluated when the effective
     expect(line).toMatch(/each card merges per its gate/)
     expect(line).not.toMatch(/not evaluated/i)
   })
+  const platformCases = ['darwin', 'linux'] as const
+  it.each(platformCases)(
+    'a preset-only run (no --merge) reports the preset gate, never the legacy Auto-Advance posture (%s)',
+    () => {
+      const line = describeMergeLine(
+        policy,
+        [['preset', 'escalate-red (argument)']],
+        'merged',
+        'hold-when; has: risk:red (preset escalate-red)',
+      )
+      expect(line).toMatch(
+        /each card merges per its gate \(hold-when; has: risk:red, preset escalate-red\)/,
+      )
+      expect(line).not.toMatch(/Auto-Advance/)
+    },
+  )
 })

@@ -70,7 +70,7 @@ Assisted needs only a tool that reads skills. Supervised in-session needs a [har
 | Assisted | Delivery | you, per skill | `/pair-process-implement`, `/pair-process-review` | after each skill | none |
 | Supervised | Refinement | you, per card or batch | `pair-cli run --card --until ready`, `/pair-refine-batch` | Ready, or a grill question | `prepare` |
 | Supervised | Delivery | you, per card or batch | `/pair-workflow-cycle`, `/pair-implement-batch`, `pair-cli run --card` | review-approved PR, escalation | `until`, Blocking Severities |
-| Autonomous | Refinement | the loop | `prepare` gate `never` or `when` | escalation (`needs-review`) | `prepare` |
+| Autonomous | Refinement | the loop | `prepare` gate `hold-never` or `hold-when` | escalation (`needs-review`) | `prepare` |
 | Autonomous | Delivery | the loop or daemon | `/pair-loop`, `pair-cli run --root --parallel --watch` | gates `until` and `merge`, escalation | `## Autonomy` |
 
 ## Which to use

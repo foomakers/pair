@@ -71,11 +71,15 @@ describe('buildSkillArgs', () => {
       buildSkillArgs('pair-process-refine-story', {
         root: '9',
         approval: 'auto',
-        prepare: 'never',
+        prepare: 'hold-never',
       }),
-    ).toEqual(['--story', '9', '--approval', 'auto', '--prepare', 'never'])
+    ).toEqual(['--story', '9', '--approval', 'auto', '--prepare', 'hold-never'])
     expect(
-      buildSkillArgs('pair-process-plan-tasks', { root: '9', approval: 'auto', prepare: 'when' }),
+      buildSkillArgs('pair-process-plan-tasks', {
+        root: '9',
+        approval: 'auto',
+        prepare: 'hold-when',
+      }),
     ).toEqual(['--story', '9', '--approval', 'auto'])
     expect(buildSkillArgs('pair-process-refine-story', { root: '9' })).toEqual(['--story', '9'])
   })

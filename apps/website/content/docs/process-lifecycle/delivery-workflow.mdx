@@ -29,7 +29,7 @@ Every stage publishes a [handoff](/docs/concepts/glossary#handoff) file under th
 
 ## Autonomy gates and escalation
 
-Three gates decide how far a card goes without you: `until` (`ready`, `pr`, `merged`), `prepare` (who refines a Draft card) and `merge` (whether a review-approved card merges). A `when` condition that fires **escalates** the card to a human. Defaults keep a human in the loop. Recipe: [Autonomy and per-stage engine and model](/docs/guides/autonomy-and-profiles); every key: [Adoption settings](/docs/reference/adoption-settings#techautomationmd).
+Three gates decide how far a card goes without you: `until` (`ready`, `pr`, `merged`), `prepare` (who refines a Draft card) and `merge` (whether a review-approved card merges). A `hold-when` condition that fires **escalates** the card to a human. Defaults keep a human in the loop. Recipe: [Autonomy and per-stage engine and model](/docs/guides/autonomy-and-profiles); every key: [Adoption settings](/docs/reference/adoption-settings#techautomationmd).
 
 ![Three drivers, one set of autonomy gates, escalation](/diagrams/drive-and-gates.svg)
 

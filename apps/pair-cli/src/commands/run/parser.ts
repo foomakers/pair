@@ -22,6 +22,8 @@ export interface RunScopeOptions {
  * the decision belong to `autonomy-policy.mjs`, which this CLI only spawns (pair-cli owns no cycle rule).
  */
 export interface RunAutonomyArguments {
+  /** US-576: `full | escalate-red | supervised | custom` — validated by the shared script. */
+  preset?: string
   until?: string
   prepare?: string
   merge?: string
@@ -132,6 +134,7 @@ interface ParseRunOptions {
   filter?: string
   assignee?: string
   status?: string
+  preset?: string
   until?: string
   prepare?: string
   merge?: string
@@ -442,7 +445,7 @@ function resolveWatch(options: ParseRunOptions): { watch?: boolean; interval?: R
   if (options.parallel === undefined) {
     const flag = watch === true ? '--watch' : watch === false ? '--no-watch' : '--interval'
     throw new Error(
-      `${flag} requires --parallel <n>: the loop is the fan-out's (use --parallel 1 for a sequential always-on agent)`,
+      `${flag} belongs to the loop (--root/--filter, one card at a time unless --parallel <n>): not with --card, --skill or --prompt`,
     )
   }
   if (interval !== undefined && watch !== true) {
@@ -519,8 +522,15 @@ function resolveScope(options: ParseRunOptions): RunScopeOptions {
  * Anywhere else they are refused here, never silently ignored.
  * Content is only safety-checked (prompt/shell); the grammar is the shared script's.
  */
-function refuseAutonomyOffCycle(until?: string, prepare?: string): never {
-  const flag = until !== undefined ? '--until' : prepare !== undefined ? '--prepare' : '--merge'
+function refuseAutonomyOffCycle(preset?: string, until?: string, prepare?: string): never {
+  const flag =
+    preset !== undefined
+      ? '--preset'
+      : until !== undefined
+        ? '--until'
+        : prepare !== undefined
+          ? '--prepare'
+          : '--merge'
   throw new Error(
     `${flag} sets how far ONE card's delivery cycle goes and is only meaningful with --card or --parallel ` +
       '(the loop forwards it to every child card; a plain skill run takes no autonomy arguments)',
@@ -528,13 +538,19 @@ function refuseAutonomyOffCycle(until?: string, prepare?: string): never {
 }
 
 function resolveAutonomyArguments(options: ParseRunOptions): RunAutonomyArguments | undefined {
+  const preset = promptSafeText(options.preset, '--preset')
   const until = promptSafeText(options.until, '--until')
   const prepare = promptSafeText(options.prepare, '--prepare')
   const merge = promptSafeText(options.merge, '--merge')
-  if (until === undefined && prepare === undefined && merge === undefined) return undefined
+  if ([preset, until, prepare, merge].every(v => v === undefined)) return undefined
   if (options.card === undefined && options.parallel === undefined)
-    refuseAutonomyOffCycle(until, prepare)
-  return { ...(until && { until }), ...(prepare && { prepare }), ...(merge && { merge }) }
+    refuseAutonomyOffCycle(preset, until, prepare)
+  return {
+    ...(preset && { preset }),
+    ...(until && { until }),
+    ...(prepare && { prepare }),
+    ...(merge && { merge }),
+  }
 }
 
 /**
@@ -546,7 +562,7 @@ function predicateOf(options: ParseRunOptions): { predicate?: string } {
   if (text === undefined) return {}
   if (options.parallel === undefined) {
     throw new Error(
-      '--predicate is the stop predicate of the loop and needs --parallel (with or without --watch)',
+      '--predicate is the stop predicate of the loop (--root/--filter): not with --card, --skill or --prompt',
     )
   }
   return { predicate: validateStopPredicateLine(text.trim()) }
@@ -586,10 +602,33 @@ function outputModeOf(
  * Two defaults are load-bearing and asserted by tests: `autonomous` and
  * `approveProjectTrust` are FALSE with no flags, so the parser can never pre-empt AC6.
  */
-export function parseRunCommand(options: ParseRunOptions, args: string[] = []): RunCommandConfig {
+const LOOP_ONLY_FLAGS = [
+  'watch',
+  'interval',
+  'predicate',
+  'preset',
+  'until',
+  'prepare',
+  'merge',
+] as const
+
+/**
+ * A loop flag (`--watch`, `--preset`, `--until`…) with no `--card`/`--skill`/`--prompt` IS the loop: `--parallel`
+ * only sets how many cards run at once, and defaults to 1.
+ */
+function withImpliedParallel(options: ParseRunOptions): ParseRunOptions {
+  if (options.parallel !== undefined) return options
+  if (FLAGS_CONFLICTING_WITH_PARALLEL.some(([key]) => options[key] !== undefined)) return options
+  return LOOP_ONLY_FLAGS.some(key => options[key] !== undefined)
+    ? { ...options, parallel: 1 }
+    : options
+}
+
+export function parseRunCommand(input: ParseRunOptions, args: string[] = []): RunCommandConfig {
   if (args.length > 0) {
     throw new Error(`Command 'run' does not accept positional arguments: ${args.join(', ')}`)
   }
+  const options = withImpliedParallel(input)
 
   const engine = resolveEngineFlag(options.engine)
   const cwd = optionalText(options.cwd, '--cwd')

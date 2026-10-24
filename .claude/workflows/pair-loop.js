@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Unattended delivery loop: per iteration, selects eligible cards via pair-next, runs a dependency + mutex analysis, composes pair-implement-batch for a mutex-safe parallel batch (or drives one card sequentially), hands it the autonomy policy (until / prepare / merge — the batch is the delivery cycle on N cards and owns the merge; this loop has none) and evaluates the stop predicate. NEVER iterates multiple cards in one context — every card is driven by implement-batch\'s own fresh-subagent fan-out.',
   whenToUse:
-    'Realization path for the `pair-loop` skill in Claude Code (ADR-017 §4) — the skill delegates here when a fan-out runner is available; elsewhere it takes the degraded one-card path itself and this file is never invoked. REQUIRED args shape: {"root": "<issue-id>" | undefined, "policyText": "<raw tech/automation.md contents>", "filter" | "assignee" | "status": "<selection value, passed to pair-next>" | undefined, "until" | "prepare" | "merge": "<autonomy value, passed to pair-implement-batch>" | undefined, "predicateOverride": "<selector> ⇒ <condition>" | undefined, "startIteration": <positive integer> | undefined, "overrides": {"exclude": [ids], "sequential": [ids]} | undefined, "tagProjectionFamily": ["risk:green","risk:yellow","risk:red"] | undefined}. `policyText` is the skill\'s own Read of the adoption file, handed in so this workflow never re-implements filesystem access outside agent()/Read (still REQUIRED here: this loop reads its own Eligibility / Auto-Advance / Stop Predicate / Max Parallelism / Audit Location knobs from it; the batch no longer requires it). Precedence: argument > adoption (`## Autonomy`, then translated legacy sections) > KB default — every effective value is printed with its source. `until` / `prepare` / `merge` are resolved by the batch\'s policy script, selection by pair-next. `tagProjectionFamily` is the skill\'s own resolution of `tech/risk-matrix.md`\'s `## Tag Projection` — every label the project actually emits — used only to validate `## Max Parallelism` per-tier override keys (a real, emitted tier that is simply never eligible is still a legal override target); `## Auto-Advance` needs no such list, since the only tier it may ever legally name is the policy\'s own `## Eligibility` value. `predicateOverride`/`startIteration` are the Argument tier of the Argument > Adoption > KB-default cascade for the `--predicate`/`--iteration` skill arguments. Every value is validated by TYPE and CONTENT at parse time, before any card is touched, because `root` and the predicate reach agent prompts that run `gh` — the same discipline the sibling pair-implement-batch/pair-analyze-pr-batch workflows enforce. Zero merit logic here (D18): every branch below reads tags/state/policy values verbatim, it classifies nothing.',
+    'Realization path for the `pair-loop` skill in Claude Code (ADR-017 §4) — the skill delegates here when a fan-out runner is available; elsewhere it takes the degraded one-card path itself and this file is never invoked. REQUIRED args shape: {"root": "<issue-id>" | undefined, "policyText": "<raw tech/automation.md contents>", "filter" | "assignee" | "status": "<selection value, passed to pair-next>" | undefined, "until" | "prepare" | "merge": "<autonomy value, passed to pair-implement-batch>" | undefined, "predicateOverride": "<selector> ⇒ <condition>" | undefined, "startIteration": <positive integer> | undefined, "overrides": {"exclude": [ids], "sequential": [ids]} | undefined, "tagProjectionFamily": ["risk:green","risk:yellow","risk:red"] | undefined}. `policyText` is the skill\'s own Read of the adoption file, handed in so this workflow never re-implements filesystem access outside agent()/Read (still REQUIRED here: this loop reads its own Eligibility / Auto-Advance / Stop Predicate / Max Parallelism / Audit Location knobs from it; the batch no longer requires it). Precedence: argument > argument preset > explicit adoption key (`## Autonomy`, then translated legacy sections) > adoption preset > KB default — every effective value is printed with its source. `until` / `prepare` / `merge` are resolved by the batch\'s policy script, selection by pair-next. `tagProjectionFamily` is the skill\'s own resolution of `tech/risk-matrix.md`\'s `## Tag Projection` — every label the project actually emits — used only to validate `## Max Parallelism` per-tier override keys (a real, emitted tier that is simply never eligible is still a legal override target); `## Auto-Advance` needs no such list, since the only tier it may ever legally name is the policy\'s own `## Eligibility` value. `predicateOverride`/`startIteration` are the Argument tier of the Argument > Adoption > KB-default cascade for the `--predicate`/`--iteration` skill arguments. Every value is validated by TYPE and CONTENT at parse time, before any card is touched, because `root` and the predicate reach agent prompts that run `gh` — the same discipline the sibling pair-implement-batch/pair-analyze-pr-batch workflows enforce. Zero merit logic here (D18): every branch below reads tags/state/policy values verbatim, it classifies nothing.',
   phases: [
     { title: 'Policy' },
     { title: 'Select' },
@@ -193,7 +193,8 @@ function validateSelector(selectorRaw) {
 
 function parseStopPredicate(policyText) {
   const body = sectionBody(policyText, 'Stop Predicate')
-  if (body === null || body.trim() === '') return { predicate: null, maxIterations: 1 } // fail-safe default
+  // US-576: no `max-iterations` declared ⇒ no cap — the loop runs to a natural stop (nothing eligible / all parked).
+  if (body === null || body.trim() === '') return { predicate: null, maxIterations: Infinity }
   const lines = body.split('\n').map(l => l.trim()).filter(Boolean)
   let predicate = null
   let maxIterations = null
@@ -227,7 +228,7 @@ function parseStopPredicate(policyText) {
     }
     HALT(`\`## Stop Predicate\` — line \`${line}\` matches neither \`<selector> ⇒ <condition>\` nor \`max-iterations: <n>\`.`)
   }
-  return { predicate, maxIterations: maxIterations ?? 1 }
+  return { predicate, maxIterations: maxIterations ?? Infinity }
 }
 
 function evaluateStopPredicate(predicate, boardSnapshot) {
@@ -724,7 +725,8 @@ function parsePolicyOrHalt(policyText, tagProjectionFamily, eligibility) {
 // documented on the skill and silently ignored here).
 function applyPredicateOverride(stop, predicateOverride) {
   if (!predicateOverride) return stop
-  const parsed = parseStopPredicate(`## Stop Predicate\n\n${predicateOverride}\nmax-iterations: ${stop.maxIterations}`)
+  const cap = Number.isFinite(stop.maxIterations) ? `\nmax-iterations: ${stop.maxIterations}` : ''
+  const parsed = parseStopPredicate(`## Stop Predicate\n\n${predicateOverride}${cap}`)
   return parsed
 }
 
@@ -734,7 +736,7 @@ const resolvedFilter = typeof args?.policyText === 'string' && args.policyText.t
 const policy = parsePolicyOrHalt(args?.policyText, args?.tagProjectionFamily, resolvedFilter)
 policy.stop = applyPredicateOverride(policy.stop, args?.predicateOverride)
 log(`Eligibility filter: ${policy.eligibility.value}`)
-emit('loop-start', { auditLocation: policy.auditLocation, maxIterations: policy.stop.maxIterations, ...(policy.stop.predicate ? { predicate: `${policy.stop.predicate.selector} ⇒ ${policy.stop.predicate.condition}` } : {}) })
+emit('loop-start', { auditLocation: policy.auditLocation, maxIterations: Number.isFinite(policy.stop.maxIterations) ? policy.stop.maxIterations : 'none', ...(policy.stop.predicate ? { predicate: `${policy.stop.predicate.selector} ⇒ ${policy.stop.predicate.condition}` } : {}) })
 
 // Review M8 — audit-based resume: a killed-and-restarted run reads its OWN
 // prior audit file (rather than re-deriving a separate checkpoint store) and
@@ -922,7 +924,7 @@ while (true) {
       ].filter(Boolean)
       runLog.push(incomplete.length
         ? { iteration, id: outcome.id, excluded: true, reason: `halted — engine reported ready-for-merge without ${incomplete.join(', ')}: an incomplete handoff is never a clean review` }
-        : { iteration, id: outcome.id, autoAdvance: false, parked: true, reason: 'PR-ready — the merge gate did not merge it (gate default `always`: nothing merges); a human merges' })
+        : { iteration, id: outcome.id, autoAdvance: false, parked: true, reason: 'PR-ready — the merge gate did not merge it (gate default `hold-always`: nothing merges); a human merges' })
     } else if (outcome.status === 'target-ready') {
       runLog.push({ iteration, id: outcome.id, excluded: true, reason: `stopped at the until target (${outcome.target ?? 'ready'}) at ${outcome.stage ?? 'a stage boundary'}` })
     } else {
