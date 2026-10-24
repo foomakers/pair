@@ -2219,10 +2219,22 @@ export function recordGateRed({ dir, reviewedHead, gates, lockWaitMs = 5000, now
 
 // #575/AC5 — the mechanical base sync. Merges `base` into the story branch checked out at `cwd`; a conflict is resolved by
 // OWNERSHIP, never by judgment: a story-owned path (`owned` — the sealed fixScope's allowedPaths — else every path the
-// story itself changed) keeps the story's bytes, a base-owned one (anything else, and every generated mirror) takes the
-// base's. A conflict on a SEALED test (a path a `Pair-RED-Snapshot` commit carries) is never resolved: the merge is
+// story itself changed) keeps the story's bytes, a base-owned one (anything else) takes the base's; a generated mirror takes
+// the side its dataset source took. A conflict on a SEALED test (a path a `Pair-RED-Snapshot` commit carries) is never resolved: the merge is
 // aborted and a human decides. The merge commit carries `Pair-Base-Sync: base=<sha>; ours=…; theirs=…` — the record
 // custody (`red-snapshot.mjs verify-chain`) checks the resolution against. Pushing is the caller's.
+const DATASET_ROOT = 'packages/knowledge-hub/dataset/'
+// The mirror transform of `red-snapshot.mjs mirrorPathMatches`: identical relative path, or same basename with a mirror parent
+// dir equal to / ending with `-<dataset parent dir>` (leading dots ignored).
+const mirrorOf = (mirror, source) => {
+  const rel = source.slice(DATASET_ROOT.length)
+  if (rel === mirror) return true
+  const m = mirror.split('/')
+  const o = rel.split('/')
+  if (m.at(-1) !== o.at(-1) || m.length < 2 || o.length < 2) return false
+  const [mp, op] = [m.at(-2), o.at(-2)].map(d => d.replace(/^\./, ''))
+  return mp === op || mp.endsWith(`-${op}`)
+}
 const BASE_OWNED_GENERATED = ['.claude/', '.agents/', '.agent/', '.cursor/', '.windsurf/', '.pair/knowledge/', '.pair/llms.txt']
 export function baseSync({ cwd, base, story, owned }) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !GIT_ENV_RE.test(k)))
@@ -2242,7 +2254,9 @@ export function baseSync({ cwd, base, story, owned }) {
     for (const p of lines(g(['-c', 'core.quotePath=false', 'diff-tree', '--no-commit-id', '--name-only', '-r', sha]))) sealed.add(p)
   const storyPaths = new Set(lines(g(['-c', 'core.quotePath=false', 'diff', '--name-only', fork, 'HEAD'])))
   const generated = p => BASE_OWNED_GENERATED.some(r => (r.endsWith('/') ? p.startsWith(r) : p === r))
-  const isOwned = p => !generated(p) && (Array.isArray(owned) ? owned.some(o => p === o || (o.endsWith('/') && p.startsWith(o))) : storyPaths.has(p))
+  const ownedPath = p => (Array.isArray(owned) ? owned.some(o => p === o || (o.endsWith('/') && p.startsWith(o))) : storyPaths.has(p))
+  // A generated mirror takes the side its dataset source took: ours when a story-owned dataset path the story changed maps onto it.
+  const isOwned = p => (generated(p) ? [...storyPaths].some(s => s.startsWith(DATASET_ROOT) && mirrorOf(p, s) && ownedPath(s)) : ownedPath(p))
   const merge = run(['merge', '--no-ff', '--no-commit', baseSha])
   const conflicted = lines(g(['-c', 'core.quotePath=false', 'diff', '--name-only', '--diff-filter=U'])).sort()
   if (merge.status !== 0 && !conflicted.length) {
@@ -2266,7 +2280,8 @@ export function baseSync({ cwd, base, story, owned }) {
 }
 
 // #575/AC6 — a card's prerequisites, read deterministically through the bound PM adapter (never an agent's claim): the
-// `**Prerequisite Stories**:` line of the card, then each one's state — `merged` (closed: its PR merged and closed it),
+// `**Prerequisite Stories**:` line of the card, then each one's state — `merged` (closed as COMPLETED: its PR merged and
+// closed it), `closed` (closed any other way — not planned, duplicate, no reason: nothing merged, blocks),
 // `parked` (open and labelled for a human), `open`. Anything that cannot be read is `unknown` and BLOCKS (fail closed).
 const PREREQ_RE = /^\*\*Prerequisite Stories\*\*:[ \t]*(.*)$/m
 const PARK_LABELS = ['needs-review', 'pr-state:not-approved']
@@ -2287,8 +2302,9 @@ export function prereqState({ story, dir, host }) {
   const ids = [...new Set((PREREQ_RE.exec(String(body ?? ''))?.[1] ?? '').match(/#\d+/g) ?? [])].map(id => id.slice(1))
   const prerequisites = ids.map(id => {
     try {
-      const card = h.pm.readCard(id, { fields: ['state', 'labels'] })
-      if (String(card?.state ?? '').toUpperCase() === 'CLOSED') return { id, state: 'merged' }
+      const card = h.pm.readCard(id, { fields: ['state', 'stateReason', 'labels'] })
+      if (String(card?.state ?? '').toUpperCase() === 'CLOSED')
+        return String(card?.stateReason ?? '').toUpperCase() === 'COMPLETED' ? { id, state: 'merged' } : { id, state: 'closed', reason: `closed not merged (stateReason ${card?.stateReason ?? 'absent'})` }
       const park = (card?.labels ?? []).map(l => String(l?.name ?? l)).find(l => PARK_LABELS.includes(l))
       return park ? { id, state: 'parked', reason: `parked (${park})` } : { id, state: 'open', reason: 'not merged' }
     } catch (e) {
@@ -3126,7 +3142,11 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   if (next.step === 'done' && gateRed && gateRed.reviewedHead === next.reviewedHead) {
     const round = (next.round ?? 0) + 1
     const findings = gateRed.gates.filter(g => g.ok !== true).map(g => ({ id: `gate-${g.name}`, severity: 'Major', location: `gate:${g.name}`, description: `the ${g.name} gate failed at merge time on ${gateRed.reviewedHead}: ${g.lastLines ?? '(no output recorded)'}`, recommendation: `make the ${g.name} gate pass`, blocking: true, transition: 'open', kind: 'defect' }))
-    next = { step: 'prepare', mode: 'remediation', phase: `r${round}-g1`, round, attempt: 1, base: gateRed.reviewedHead, findings }
+    const maxFix = policy.maxFixRounds ?? POLICY_DEFAULTS.maxFixRounds
+    next =
+      cycleCounters(handoffs).spentCycles >= maxFix
+        ? blocked('escalate', { budget: 'maxFixRounds', needsHuman: `maxFixRounds (${maxFix}) spent — the merge gate is still red: a human decides`, findings })
+        : { step: 'prepare', mode: 'remediation', phase: `r${round}-g1`, round, attempt: 1, base: gateRed.reviewedHead, findings }
   }
   const names = handoffs.map(h => h.name)
   // Changed effective inputs invalidate REVIEW evidence: prior findings + the delta are re-validated
