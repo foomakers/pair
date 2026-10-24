@@ -745,6 +745,26 @@ test('AJ plan: a code-touching finding in a doc group is refused (`code-finding-
   assert.match(tryPlan(d2, p2.plan).reason, /doc-group-code-paths/)
 })
 
+test('US-582 plan: a doc group\'s allowedPaths cover EVERY location its finding lists (`finding-location-outside-scope`); a directory covers its children; a generated mirror is fixed at its dataset source', () => {
+  const location = 'docs/guide.md:3, .pair/adoption/decision-log/x.md:7, .claude/skills/s/SKILL.md:4 ← packages/knowledge-hub/dataset/.skills/s/SKILL.md:4'
+  const docGroup = allowedPaths => [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'doc', allowedPaths }]
+  const { dir } = runDir()
+  const { plan } = planRound(dir, docGroup(['docs/guide.md', 'packages/knowledge-hub/dataset/.skills/s/SKILL.md']), [finding('r0-1', { location })])
+  const out = tryPlan(dir, plan)
+  assert.equal(out.published, false)
+  assert.match(out.reason, /^finding-location-outside-scope: r0-1: \.pair\/adoption\/decision-log\/x\.md$/)
+  const { dir: d2 } = runDir()
+  assert.equal(tryPlan(d2, planRound(d2, docGroup(['docs/guide.md', '.pair/adoption/decision-log/x.md', 'packages/knowledge-hub/dataset/.skills/s/SKILL.md']), [finding('r0-1', { location })]).plan).published, true, 'every location listed; the mirror is not required')
+  const { dir: d3 } = runDir()
+  assert.equal(tryPlan(d3, planRound(d3, docGroup(['docs/', '.pair/adoption/decision-log/', 'packages/knowledge-hub/dataset/']), [finding('r0-1', { location })]).plan).published, true, 'a directory entry covers its children')
+  const { dir: d4 } = runDir()
+  const p4 = planRound(d4, docGroup(['docs/guide.md']), [finding('r0-1', { location: 'docs/guide.md:3' })])
+  assert.match(tryPlan(d4, { groups: [{ ...p4.plan.groups[0], findingPaths: { 'r0-1': ['docs/other.md'] } }], carried: [] }).reason, /^finding-location-outside-scope: r0-1: docs\/other\.md$/, 'declared findingPaths are targets too')
+  const { dir: d5 } = runDir()
+  const p5 = planRound(d5, [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], [finding('r0-1', { location: 'src/a.ts:10 (and docs/a.md:5)' })])
+  assert.equal(tryPlan(d5, p5.plan).published, true, 'behavioral groups are unaffected')
+})
+
 test('AJ mixed round (#252 shape): a behavioral group + a doc group dependsOn it — accepted and routed in order g1 (prepare/validate/green) then g2, then ONE verify of both', () => {
   const { dir } = runDir()
   const groups = [
