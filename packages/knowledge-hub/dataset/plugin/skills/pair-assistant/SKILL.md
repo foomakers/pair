@@ -282,7 +282,8 @@ A request to change how pair behaves ("let green cards go up to merge", "add a p
 
 | Area | File and section | Owner |
 | --- | --- | --- |
-| Autonomy: `until`, `prepare`, `merge`, filter | `.pair/adoption/tech/automation.md` `## Autonomy` | `/pair-capability-record-decision` |
+| Autonomy: `preset`, `until`, `prepare`, `merge`, filter | `.pair/adoption/tech/automation.md` `## Autonomy` | `/pair-capability-record-decision` |
+| Working cleanup (`cleanup: never \| on-close \| after <duration>`) | `tech/automation.md` `## Working Cleanup` | `/pair-capability-record-decision` |
 | Cycle hooks | `tech/automation.md` `## Cycle Hooks` | `/pair-capability-record-decision` |
 | Blocking severities and `max-dispatches` | `tech/automation.md` `## Blocking Severities` | `/pair-capability-record-decision` |
 | Publish-PR Hooks | `tech/automation.md` Publish-PR Hooks | `/pair-capability-record-decision` |
@@ -308,6 +309,15 @@ Delegate to the owner when it is a skill; do not do its job here.
 3. **Write through `/pair-capability-record-decision`** (or the section-owning skill above). This skill never edits adoption files itself.
 4. `pair.config.json` is not an adoption file: `skipRegistries` via `update --skip-registries` (removal is a shown edit); `workflowProfiles` is a shown edit plus an ADL via record-decision.
 5. After writing, re-run the validator and echo the effective result (for autonomy: the effective gates).
+
+### Migrate legacy autonomy (`## Eligibility` / `## Auto-Advance`)
+
+When updating a project whose `tech/automation.md` still declares `## Eligibility` or `## Auto-Advance` (and no `## Autonomy`):
+
+1. Resolve the current file (`autonomy-policy.mjs resolve --adoption <file>`) and read the `translated` equivalents it prints.
+2. Propose `preset: <name>` when the translation equals a preset's values (the table in the automation template, `.pair/knowledge/guidelines/collaboration/templates/automation-template.md`); otherwise propose `preset: custom` plus the explicit keys, gates written with their `hold-*` names (`merge: hold-when; lacks: risk:green`, never the deprecated `when`).
+3. Show the diff (the legacy sections removed, the `## Autonomy` block added) and re-resolve the proposed copy: its effective values must equal today's, line by line.
+4. Write only on an explicit yes, through `/pair-capability-record-decision`. A no leaves the file untouched — the legacy sections keep working.
 
 ### Validate with the installed cycle scripts
 

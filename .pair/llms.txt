@@ -353,6 +353,7 @@
 - [Decision: [Decision Title]](.pair/knowledge/guidelines/collaboration/templates/adl-template.md)
 - [ADR: [Decision Title]](.pair/knowledge/guidelines/collaboration/templates/adr-template.md)
 - [Analysis Log: [Analysis Title]](.pair/knowledge/guidelines/collaboration/templates/analysis-log-template.md)
+- [Automation Policy](.pair/knowledge/guidelines/collaboration/templates/automation-template.md)
 - [[Context Name] Context](.pair/knowledge/guidelines/collaboration/templates/bounded-context-template.md)
 - [Branch Template](.pair/knowledge/guidelines/collaboration/templates/branch-template.md)
 - [Checkpoint: #[story-id] — [Story Title]](.pair/knowledge/guidelines/collaboration/templates/checkpoint-template.md)

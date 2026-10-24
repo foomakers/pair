@@ -250,6 +250,8 @@ export function parse(policyText) {
   const sec = sectionLines(policyText, 'Autonomy')
   if (sec.errors) errors.push(...sec.errors)
   for (const line of sec.lines ?? []) {
+    // US-576: a table row (the preset table the template ships) documents, it never declares.
+    if (line.startsWith('|')) continue
     const m = /^([A-Za-z][A-Za-z-]*):\s*(.*)$/.exec(line)
     if (!m) {
       errors.push(err('Autonomy', `line ${JSON.stringify(line)} is not \`key: value\``))

@@ -445,3 +445,24 @@ test('US-576: no ## Autonomy keeps the safe default (every gate held, nothing me
   assert.equal(gateToString(r.effective.prepare.value), 'hold-always')
   assert.equal(r.active, false)
 })
+
+test('US-576 AC8: a preset table inside ## Autonomy is documentation, not a declaration; the shipped template resolves to escalate-red', () => {
+  const tpl = readFileSync(fileURLToPath(new URL('../../../.pair/knowledge/guidelines/collaboration/templates/automation-template.md', import.meta.url)), 'utf8')
+  const r = resolvePolicy({ adoptionText: tpl })
+  assert.deepEqual(r.errors, [])
+  assert.deepEqual(r.effective.preset, { value: 'escalate-red', source: 'adoption' })
+  assert.equal(r.effective.merge.source, 'preset escalate-red')
+  assert.match(tpl, /\| `full` +\|/)
+  assert.deepEqual(parse(section('| preset | merge |\n| --- | --- |\n| `full` | hold-never |\npreset: full')).errors, [])
+})
+
+test('US-576 AC9: migration fixture — a legacy ## Eligibility / ## Auto-Advance file and its proposed `preset: custom` + hold-* keys resolve to the same effective policy', () => {
+  const legacy = '# A\n\n## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n'
+  const migrated = section('preset: custom\nfilter: risk:green\nmerge: hold-when; lacks: risk:green\nuntil: merged')
+  const a = resolvePolicy({ adoptionText: legacy })
+  const b = resolvePolicy({ adoptionText: migrated })
+  assert.deepEqual(b.errors, [])
+  assert.deepEqual(b.warnings, [])
+  for (const k of ['filter', 'prepare', 'merge', 'until']) assert.deepEqual(b.effective[k].value, a.effective[k].value, k)
+  assert.equal(a.translated.merge.equivalent, 'merge: hold-when; lacks: risk:green')
+})
