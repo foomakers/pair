@@ -4,6 +4,9 @@ import { handleRunCommand, type RunHandlerDependencies } from './handler'
 import { parseRunCommand } from './parser'
 import { POLICY_PATH } from './automation-policy'
 import type { RootCandidate } from './root-plan'
+
+/** US-575 AC6: no card in this suite has a prerequisite (the deterministic read is faked). */
+const NO_PREREQS = () => ({ blocked: false, prerequisites: [] })
 import type { CardProcessRunner } from './parallel'
 
 /**
@@ -37,6 +40,7 @@ async function capture(candidates: RootCandidate[], exits: Record<string, number
   })
   const audit: string[] = []
   const deps: RunHandlerDependencies = {
+    readPrereqState: NO_PREREQS,
     selectCandidates: async () => candidates,
     runCardProcess: vi.fn<CardProcessRunner>(async ({ card: c }) => ({
       exitCode: exits[c.id] ?? 0,

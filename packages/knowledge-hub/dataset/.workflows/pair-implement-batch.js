@@ -1811,7 +1811,7 @@ async function driveStoryInner(story) {
     // US-479 T-22 (S5) / ADR-024 amendment 2026-09-10: the four new non-ready statuses pass
     // through unmapped — never silently coerced to failed-resume, which would make a clean
     // technical convergence with pending scope proposals look like an engine failure.
-    const map = { 'failed-preparation': 'failed-preparation', 'failed-contract': 'failed-contract', 'failed-seal': 'failed-seal', 'failed-implement': 'failed-implement', 'failed-fix': 'failed-fix', 'failed-custody': 'failed-custody', 'failed-verify': 'failed-verify', escalate: 'escalate', 'failed-resume': 'failed-resume', 'awaiting-scope-decision': 'awaiting-scope-decision', 'failed-publication': 'failed-publication', interrupted: 'interrupted', abandoned: 'abandoned' }
+    const map = { 'failed-preparation': 'failed-preparation', 'failed-contract': 'failed-contract', 'failed-seal': 'failed-seal', 'failed-implement': 'failed-implement', 'failed-fix': 'failed-fix', 'failed-custody': 'failed-custody', 'failed-verify': 'failed-verify', escalate: 'escalate', 'needs-human': 'needs-human', 'failed-resume': 'failed-resume', 'awaiting-scope-decision': 'awaiting-scope-decision', 'failed-publication': 'failed-publication', interrupted: 'interrupted', abandoned: 'abandoned' }
     return result(map[n.reason] ?? 'failed-resume', { reason: n.detail ?? n.reason, budget: n.budget, refusal: n.refusal, findings: n.findings ?? n.rejection, phase: n.phase })
   }
 

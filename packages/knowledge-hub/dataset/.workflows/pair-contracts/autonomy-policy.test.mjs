@@ -320,3 +320,20 @@ test('unknown surface is an error; CLI --surface interactive sets the legacy fil
   assert.equal(run(['--surface', 'interactive']).effective.filter.value, undefined)
   assert.deepEqual(run([]).effective.filter.value, ['risk:green'])
 })
+
+// ── US-575 AC8: the two recovery budgets ─────────────────────────────────────────────────────
+test('US-575: autoRecoveryRounds / maxFixRounds — KB defaults 5 / 10 (= cycle-state POLICY_DEFAULTS), adoption overrides, an argument wins, 0 accepted, printed with source', async () => {
+  const { POLICY_DEFAULTS } = await import('../../skills/pair-workflow-cycle/scripts/cycle-state.mjs')
+  const none = resolvePolicy({})
+  assert.deepEqual([none.policy.autoRecoveryRounds, none.policy.maxFixRounds], [POLICY_DEFAULTS.autoRecoveryRounds, POLICY_DEFAULTS.maxFixRounds])
+  assert.deepEqual([none.policy.autoRecoveryRounds, none.policy.maxFixRounds], [5, 10])
+  assert.equal(none.active, false, 'a budget alone does not activate the autonomy path')
+  const r = resolvePolicy({ args: { maxFixRounds: 4 }, adoptionText: section('autoRecoveryRounds: 0\nmaxFixRounds: 7') })
+  assert.equal(r.ok, true)
+  assert.deepEqual(r.effective.autoRecoveryRounds, { value: 0, source: 'adoption' })
+  assert.deepEqual(r.effective.maxFixRounds, { value: 4, source: 'argument' })
+  assert.ok(r.lines.includes('autoRecoveryRounds: 0 (adoption)'))
+  assert.ok(r.lines.includes('maxFixRounds: 4 (argument)'))
+  for (const bad of ['-1', 'five', '1.5', ''])
+    assert.match(parse(section(`autoRecoveryRounds: ${bad}`)).errors[0].reason, /whole number of rounds/)
+})

@@ -6,6 +6,9 @@ import { handleRunCommand } from './handler'
 import { buildCardProcessArgs, type CardProcessRunner } from './parallel'
 import { parseRunCommand } from './parser'
 import { computeRootPlan } from './root-plan'
+
+/** US-575 AC6: no card in this suite has a prerequisite (the deterministic read is faked). */
+const NO_PREREQS = () => ({ blocked: false, prerequisites: [] })
 import { parseCandidates } from './root-select'
 
 /**
@@ -201,6 +204,7 @@ describe('r0-2: the batch never reports a card its child refused as completed', 
     )
 
     await handleRunCommand(operator(), fs, {
+      readPrereqState: NO_PREREQS,
       selectCandidates: async () => parseCandidates(payload({ tier: 'risk:green' })),
       runCardProcess,
       acquireLock: ({ card: id }) => ({

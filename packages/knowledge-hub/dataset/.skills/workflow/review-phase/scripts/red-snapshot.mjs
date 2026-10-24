@@ -888,6 +888,22 @@ function autoMergeTree(entry, cwd) {
   }
   return entry.autoTree
 }
+// US-575 (#575/AC5) — the mechanical base sync (`cycle-state.mjs base-sync`) records its conflict resolution as a trailer of
+// the merge commit: `Pair-Base-Sync: base=<sha>; ours=<paths>; theirs=<paths>`. Custody holds it to that record: the
+// recorded base is the merge's merged parent, every `ours` path carries the story's bytes (first parent), every `theirs`
+// path the base's. A merge that says otherwise was edited by hand after the sync.
+const BASE_SYNC_RE = /^Pair-Base-Sync: base=([0-9a-f]{40})(?:; ours=([^;\n]*))?(?:; theirs=([^;\n]*))?$/m
+export const BASE_SYNC_FIX = 'a merge of the base resolved this path by hand — re-run `cycle-state.mjs base-sync` (story-owned paths keep the story bytes, base-owned ones take the base) or restore the path to the story/base bytes, then push'
+function baseSyncBreaches(entry, cwd) {
+  const m = BASE_SYNC_RE.exec(git(['log', '-1', '--format=%B', entry.merge], cwd) ?? '')
+  if (!m) return []
+  if (m[1] !== entry.parent) return [{ code: 'base-sync-mismatch', merge: entry.merge, detail: `the trailer names base ${m[1]}, the merge merged ${entry.parent}`, fix: BASE_SYNC_FIX }]
+  const out = []
+  for (const [list, side, rev] of [[m[2], 'ours', entry.first], [m[3], 'theirs', entry.parent]])
+    for (const path of String(list ?? '').split(',').filter(Boolean))
+      if (blobAt(entry.merge, path, cwd) !== blobAt(rev, path, cwd)) out.push({ code: 'base-sync-mismatch', merge: entry.merge, path, side, fix: BASE_SYNC_FIX })
+  return out
+}
 // A path (sealed, or unsealed within a segment) whose blob differs from its blob at the segment start is still a breach — unless every difference was brought in by a
 // merge of the base: walking the story's merges of the base in order, each merge that touched the path must find the
 // path exactly as the previous step left it on its first parent, carry the clean-merge result (or the base's own blob),
@@ -1121,6 +1137,8 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [],
     const end = i + 1 < contracts.length ? `${contracts[i + 1].sha}^` : head
     const manifests = new Set(contracts.map(x => x.manifest))
     const mergedParents = mergedBaseParents({ from: c.sha, to: end, baseRef, cwd })
+    for (const entry of mergedParents) for (const b of baseSyncBreaches(entry, cwd)) breach(b.code, { ...b, segment: c.phase })
+    const byMerge = path => mergedParents.some(e => e.changed.has(path))
     const changes = (git(['-c', 'core.quotePath=false', 'diff', '--name-status', `${c.sha}..${end}`], cwd) ?? '')
       .split('\n')
       .filter(Boolean)
@@ -1152,16 +1170,17 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [],
         breach('test-blob-changed', { path, sealedBy: c.phase, segment: c.phase })
         continue
       }
+      const hint = byMerge(path) ? { fix: BASE_SYNC_FIX } : {}
       if (isTestPath(path)) {
-        if (!contracts.slice(i + 1).some(x => x.listed.includes(path))) breach('unlisted-test-changed', { path, segment: c.phase })
+        if (!contracts.slice(i + 1).some(x => x.listed.includes(path))) breach('unlisted-test-changed', { path, segment: c.phase, ...hint })
         continue
       }
       if (!c.contract?.fixScope || CHANGESET_RE.test(path)) continue
       const { allowedPaths, mode } = c.contract.fixScope
-      if (mode === 'test') breach('test-mode-production-change', { path, status, segment: c.phase })
-      else if (mode === 'doc' && !PROSE_RE.test(path)) breach('doc-code-change', { path, status, segment: c.phase })
-      else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path, segment: c.phase })
-      else if (mode === 'behavioral' && status !== 'M' && isModulePath(path)) breach('behavioral-adds-or-moves-module', { path, status, segment: c.phase })
+      if (mode === 'test') breach('test-mode-production-change', { path, status, segment: c.phase, ...hint })
+      else if (mode === 'doc' && !PROSE_RE.test(path)) breach('doc-code-change', { path, status, segment: c.phase, ...hint })
+      else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path, segment: c.phase, ...hint })
+      else if (mode === 'behavioral' && status !== 'M' && isModulePath(path)) breach('behavioral-adds-or-moves-module', { path, status, segment: c.phase, ...hint })
     }
   }
   // dedupe identical breaches

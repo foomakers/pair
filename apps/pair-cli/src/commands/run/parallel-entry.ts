@@ -4,7 +4,7 @@ import { adoptionSelection } from './autonomy-policy'
 import chalk from 'chalk'
 import { acquireCardLock } from './card-lock'
 import { resolveEngineFor } from './cycle-entry'
-import { locateCycleScripts } from './cycle-scripts'
+import { createCycleScriptsBridge, locateCycleScripts, type PrereqState } from './cycle-scripts'
 import { resolveWorkflowProfile } from './workflow-profile'
 import { appendAuditLine } from './dispatch-audit'
 import {
@@ -16,7 +16,7 @@ import {
 } from './interrupt'
 import type { RunEvent } from './run-events'
 import { createConsoleSink, routeConsoleTo } from './run-renderer'
-import { createRunAudit } from './run-audit'
+import { createRunAudit, previousExclusions } from './run-audit'
 import { probeCardLock, probeResourceLocks } from './lock-probe'
 import {
   describeLoopEnd,
@@ -211,12 +211,51 @@ function selectionInput(fan: FanOut, loop?: SelectRootInput['loop']): SelectRoot
   }
 }
 
+/**
+ * US-575 AC6: a candidate's prerequisites are the deterministic script's (`cycle-state.mjs prereq-state`, through the
+ * bound PM adapter, fail-closed), never the selection agent's claim — a blocked card is excluded `blocked by #<id> (<reason>)`
+ * and selected again on a later iteration, never driven into a durable failure.
+ */
+function withPrereqState(fan: FanOut, candidates: readonly RootCandidate[]): RootCandidate[] {
+  const read =
+    fan.deps.readPrereqState ??
+    ((id: string) =>
+      createCycleScriptsBridge(
+        locateCycleScripts(fan.input.fs, fan.input.context.config, fan.input.cwd),
+        fan.input.cwd,
+      ).prereqState({ story: id }))
+  return candidates.map(card => {
+    let state: PrereqState
+    try {
+      state = read(card.id)
+    } catch (error) {
+      const reason = `prerequisites unreadable: ${error instanceof Error ? error.message : String(error)}`
+      return { ...card, prerequisites: [{ id: card.id, merged: false, reason }] }
+    }
+    const listed = state.prerequisites.map(p => ({
+      id: p.id,
+      merged: p.state === 'merged',
+      ...(p.reason !== undefined && { reason: p.reason }),
+    }))
+    const closed = state.blocked && listed.every(p => p.merged) && state.blockedBy !== undefined
+    return {
+      ...card,
+      prerequisites: closed
+        ? [{ id: state.blockedBy!.id, merged: false, reason: state.blockedBy!.reason }]
+        : listed,
+    }
+  })
+}
+
 function planFor(fan: FanOut, candidates: RootCandidate[]): RootPlan {
   const { input } = fan
   const { policy } = input.context
   const { readCardTitle: readTitle = readCardTitle } = fan.deps
   const plan = computeRootPlan({
-    candidates: completeCandidates(candidates, id => readTitle(id, input.cwd)),
+    candidates: withPrereqState(
+      fan,
+      completeCandidates(candidates, id => readTitle(id, input.cwd)),
+    ),
     // Only the legacy `## Eligibility` is a tier gate; a filter from an argument or `## Autonomy` already
     // chose the cards (argument > adoption, ADR-027).
     eligibility: fan.selection.filter?.source === '## Eligibility' ? policy.eligibility : undefined,
@@ -311,6 +350,17 @@ export async function handleParallelRun(
   })
 }
 
+/**
+ * US-575 AC9: what earlier runs excluded is listed, never inherited — every card is driven again and `resolve`
+ * re-evaluates it (a failure recorded on heads that since moved is stale).
+ */
+function reportPreviousExclusions(auditPath: string): void {
+  for (const e of previousExclusions(auditPath))
+    console.log(
+      `  excluded: ${e.card} (${e.reason}, run ${e.runId}, ${e.date}) — re-evaluated, not inherited`,
+    )
+}
+
 /** US-573 AC2: one live line per card while the pool runs (cursor-addressed rows on a TTY). */
 async function withLiveCards(
   { config, context, cwd }: ParallelRunInput,
@@ -323,6 +373,7 @@ async function withLiveCards(
     mode: config.output ?? 'live',
     color: config.noColor !== true && process.env['NO_COLOR'] === undefined,
   })
+  reportPreviousExclusions(context.auditPath)
   // US-573 AC4: the pool's card events go to the same live JSONL audit as a loop run's.
   const audit = createRunAudit({
     path: context.auditPath,

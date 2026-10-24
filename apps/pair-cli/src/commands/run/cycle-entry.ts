@@ -94,7 +94,13 @@ function assertNoLoopModeConcerns(config: RunCommandConfig): void {
  */
 function reportCycleReason(next: DriveCycleResult['next']): void {
   if (!next || typeof next !== 'object') return
-  const n = next as { reason?: unknown; refusal?: unknown; detail?: unknown; budget?: unknown }
+  const n = next as {
+    reason?: unknown
+    refusal?: unknown
+    detail?: unknown
+    budget?: unknown
+    needsHuman?: unknown
+  }
   const parts = [
     n.reason !== undefined ? `reason ${String(n.reason)}` : undefined,
     n.refusal !== undefined ? `refusal ${String(n.refusal)}` : undefined,
@@ -102,8 +108,22 @@ function reportCycleReason(next: DriveCycleResult['next']): void {
   ].filter(Boolean)
   if (parts.length > 0) console.log(`  ${parts.join(' · ')}`)
   if (typeof n.detail === 'string' && n.detail.trim()) console.log(`  ${n.detail}`)
+  reportNeedsHuman(n)
   const step = describeNextStep(next)
   if (step !== undefined) console.log(`  Next step: ${step}`)
+}
+
+/** US-575 AC8: a spent budget parks the card `needs-human: <reason>` — the line the pool relays to its audit. */
+function reportNeedsHuman(n: { reason?: unknown; detail?: unknown; needsHuman?: unknown }): void {
+  const human = n.needsHuman ?? (n.reason === 'needs-human' ? n.detail : undefined)
+  if (typeof human === 'string' && human.trim()) console.log(`  needs-human: ${human}`)
+}
+
+/** US-575: the run's budgets apply whether or not a target/merge gate is declared. */
+function budgetsOf(autonomy: AutonomyResolution | undefined) {
+  if (autonomy === undefined) return {}
+  const { maxFixRounds, autoRecoveryRounds } = autonomy.policy
+  return { budgets: { maxFixRounds, autoRecoveryRounds } }
 }
 
 /**
@@ -401,6 +421,7 @@ export function prepareCycleCoordinator(
         ...(dispatch.rounds !== undefined && { rounds: dispatch.rounds }),
         // Only an ACTIVE policy (an argument or `## Autonomy` declared a target/merge gate) changes behavior.
         ...(autonomy?.active === true && { autonomy: { policy: autonomy.policy } }),
+        ...budgetsOf(autonomy),
         onRunEvent,
       }),
     )

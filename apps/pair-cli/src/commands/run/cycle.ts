@@ -64,6 +64,8 @@ export interface CycleResolveStop {
 export type CycleResolveAnswer = CycleResolveResult | CycleResolveStop
 
 export interface CycleOutcome {
+  /** US-575: internal — the merge stage recovered; `runCycleLoop` resolves again instead of returning. */
+  readonly resume?: true
   readonly status: string
   readonly stagesRun: number
   readonly next?: CycleNext
@@ -134,6 +136,11 @@ export interface CycleMergeOutcome {
   readonly status: string
   readonly stagesRun: number
   readonly merge: unknown
+  /**
+   * US-575: the merge stage RECOVERED instead of ending the cycle (a base sync moved the head, a red gate was
+   * routed to the fix stage) — the loop resolves again. Never set on a merge that ran or a park.
+   */
+  readonly resume?: true
 }
 
 /** The steps `cycle-dispatch.mjs packet` can render a prompt for; anything else is terminal. */
@@ -154,6 +161,8 @@ interface LoopState {
   reuseNoticeGiven: boolean
   /** The story worktree, once created: where `pre-<stage>`/`post-<stage>` hooks run. */
   worktreePath: string | undefined
+  /** US-575: the `next` a recovered merge stage last resumed from. */
+  resumedFrom?: CycleNext
 }
 
 function buildStageRecord(
@@ -431,7 +440,26 @@ async function terminalStep(
     stagesRun: state.stagesRun + merged.stagesRun,
     next,
     merge: merged.merge,
+    ...(merged.resume === true && { resume: true as const }),
   }
+}
+
+/**
+ * US-575: a terminal step's outcome — or `null` when a recovered merge stage hands the card back to `resolve`. Once
+ * per distinct `next`, so a resolve that keeps offering the very same merge can never spin here.
+ */
+async function terminalOrResume(
+  input: RunCycleInput,
+  state: LoopState,
+  next: CycleNext,
+  answer: CycleResolveAnswer,
+): Promise<CycleOutcome | null> {
+  const outcome = await terminalStep(input, state, next, answer)
+  if (outcome.resume !== true || sameNext(state.resumedFrom, next)) return outcome
+  state.resumedFrom = next
+  state.stagesRun = outcome.stagesRun
+  state.dispatchedNext = null
+  return null
 }
 
 /** Merge-stage statuses where `run` executed (so `post-merge` is due). */
@@ -470,20 +498,17 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     const answer = await resolve()
     const next = answer.next
     relayWarnings(answer, onNotice)
-    if (next === undefined) {
-      if (state.dispatchedNext !== null) {
-        const record = buildStageRecord(state.dispatchedNext, state.dispatchedResult!, false)
-        observers.onStage?.(record)
-        observers.appendAudit?.(record)
-      }
-      return stoppedWithoutNext(answer as CycleResolveStop, state.stagesRun)
-    }
+    if (next === undefined) return stopWithoutNext(state, answer as CycleResolveStop, observers)
 
     const settled = settlePreviousDispatch(state, next, deadDispatchRetries, observers)
     if (settled !== null) return settled
     await runPostStageHook(state, next, hooks, onNotice)
 
-    if (!DISPATCHABLE_STEPS.has(next.step)) return await terminalStep(input, state, next, answer)
+    if (!DISPATCHABLE_STEPS.has(next.step)) {
+      const outcome = await terminalOrResume(input, state, next, answer)
+      if (outcome !== null) return outcome
+      continue
+    }
     noticeReuseOnce(state, next, onNotice)
     const gated = await gateDispatch(state, next, input)
     if (gated !== null) return gated
@@ -494,6 +519,20 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     state.stagesRun += 1
     state.dispatchedNext = next
   }
+}
+
+/** `resolve` answered no `next`: the dispatch in flight (if any) is logged as not advanced, then the typed stop. */
+function stopWithoutNext(
+  state: LoopState,
+  answer: CycleResolveStop,
+  observers: StageObservers,
+): CycleOutcome {
+  if (state.dispatchedNext !== null) {
+    const record = buildStageRecord(state.dispatchedNext, state.dispatchedResult!, false)
+    observers.onStage?.(record)
+    observers.appendAudit?.(record)
+  }
+  return stoppedWithoutNext(answer, state.stagesRun)
 }
 
 /** AO: the dispatch that follows a format-validation failure carries the exact error ahead of the same prompt, once. */
@@ -590,6 +629,7 @@ function hookFailure(halted: HaltedHook, stagesRun: number): CycleOutcome {
 const NOT_TERMINAL = new Set(['rounds-bound-reached', 'incompatible', 'invalid', 'other-run'])
 const isHaltOutcome = (o: CycleOutcome): boolean =>
   o.status.startsWith('failed-') ||
+  o.status === 'needs-human' ||
   o.status === 'escalate' ||
   o.status === 'escalated' ||
   o.status === 'merged-closure-unfinished' ||
