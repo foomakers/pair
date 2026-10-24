@@ -178,3 +178,19 @@ describe('runLoop — the merge gate holds (AC10, BR3)', () => {
     expect(loopExitCode(failure)).toBe(1)
   })
 })
+
+describe('US-573 AC6: a halted / cut / timed-out iteration stops the loop with a non-zero exit', () => {
+  it.each(['halted', 'cut', 'timed-out'] as const)('%s', async cause => {
+    const outcome = await runLoop({
+      maxIterations: 3,
+      runIteration: async () => ({
+        outcome: 'failed',
+        cause,
+        detail: cause,
+        continueToken: 'pair-loop --iteration 2',
+      }),
+    })
+    expect(outcome.stopReason).toBe('iteration-failed')
+    expect(loopExitCode(outcome)).not.toBe(0)
+  })
+})

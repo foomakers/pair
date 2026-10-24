@@ -358,3 +358,56 @@ describe('r0-2 controls: resolved ONCE, the cycle route and default-off unchange
     expect(r.iterations).toHaveLength(1)
   })
 })
+
+// 2026-10-24 (#575 run): with a single `--card` no card line was rendered — stage events were
+// emitted only under the `--parallel` pool (RUN_EVENTS_ENV).
+describe('single --card: the driver renders its own card line', () => {
+  it('relays the stage events the cycle emits and closes the card with its outcome', async () => {
+    const written: string[] = []
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array) => {
+      written.push(String(chunk))
+      return true
+    })
+    const r = await run({})
+    await r.outcome
+    const input = r.driven[0]
+    expect(typeof input?.onRunEvent).toBe('function')
+    const text = written.join('') + r.stdout.join('\n')
+    expect(text).toMatch(/card-end.*#?521|#?521.*ready-for-merge|ready-for-merge.*521/s)
+  })
+})
+
+describe('single --card: the preparation skill run also renders the card line', () => {
+  it('a Draft card routed to refine-story shows the card in the prepare stage, then closes it', async () => {
+    const written: string[] = []
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array) => {
+      written.push(String(chunk))
+      return true
+    })
+    const r = await run({}, { readiness: 'draft' })
+    await r.outcome.catch(() => undefined)
+    const text = written.join('') + r.stdout.join('\n')
+    expect(text).toMatch(/card-start[^\n]*521|521[^\n]*prepare/)
+    expect(text).toMatch(/card-end[^\n]*521/)
+  })
+})
+
+describe('single --card live line is platform-independent', () => {
+  const platformCases = ['darwin', 'linux']
+  it.each(platformCases)('closes the card with its outcome on platform %s', async platform => {
+    const original = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: platform })
+    const written: string[] = []
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array) => {
+      written.push(String(chunk))
+      return true
+    })
+    try {
+      const r = await run({})
+      await r.outcome
+      expect(written.join('') + r.stdout.join('\n')).toMatch(/card-end[^\n]*521/)
+    } finally {
+      Object.defineProperty(process, 'platform', original)
+    }
+  })
+})

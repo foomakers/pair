@@ -210,7 +210,7 @@ describe('buildCardProcessArgs — each card is exactly #487’s run --card (AC2
       card('5'),
       '/p',
     )
-    expect(args).toEqual(['run', '--card', '5', '--cwd', '/p', '--iteration-timeout', '1800'])
+    expect(args).toEqual(['run', '--card', '5', '--cwd', '/p'])
     expect(args).not.toContain('--root')
     expect(args).not.toContain('--parallel')
   })
@@ -439,6 +439,62 @@ describe('spawnCardProcess — a genuinely separate OS process (a stub CLI, neve
       id: '9',
       outcome: 'crashed',
       detail: 'killed by SIGKILL',
+    })
+  })
+})
+
+describe('US-573 AC5: timeouts forwarded to each child card only when passed', () => {
+  it('--idle-timeout and --iteration-timeout travel verbatim', () => {
+    const args = buildCardProcessArgs(
+      parseRunCommand({ root: '66', parallel: '2', idleTimeout: '600', iterationTimeout: '7200' }),
+      card('5'),
+      '/p',
+    )
+    expect(args.slice(-4)).toEqual(['--iteration-timeout', '7200', '--idle-timeout', '600'])
+  })
+})
+
+describe('US-573 AC2: the pool reports each card live — start, relayed stages, end', () => {
+  it('card-start before the process, the child events relayed, card-end with its cycle status', async () => {
+    const area = mkdtempSync(join(tmpdir(), 'pair-573-'))
+    const events: unknown[] = []
+    const runCardProcess: CardProcessRunner = async ({ onEvent }) => {
+      onEvent?.({ event: 'stage', card: 'ENG-4', stage: 'review' })
+      return { exitCode: 0, signal: null, cycleStatus: 'ready-for-merge' }
+    }
+    await runPlannedCard({
+      card: card('ENG-4', { title: 'Linear card' }),
+      config: parseRunCommand({ root: '66', parallel: '2' }),
+      cwd: area,
+      workingArea: area,
+      acquireLock: acquireCardLock,
+      runCardProcess,
+      onEvent: e => events.push(e),
+    })
+    expect(events).toEqual([
+      { event: 'card-start', card: 'ENG-4', title: 'Linear card' },
+      { event: 'stage', card: 'ENG-4', stage: 'review' },
+      { event: 'card-end', card: 'ENG-4', status: 'ready-for-merge' },
+    ])
+  })
+
+  it('a crashed card ends failed with its reason', async () => {
+    const area = mkdtempSync(join(tmpdir(), 'pair-573-'))
+    const events: unknown[] = []
+    await runPlannedCard({
+      card: card('9'),
+      config: parseRunCommand({ root: '66', parallel: '2' }),
+      cwd: area,
+      workingArea: area,
+      acquireLock: acquireCardLock,
+      runCardProcess: async () => ({ exitCode: null, signal: 'SIGKILL' }),
+      onEvent: e => events.push(e),
+    })
+    expect(events.at(-1)).toEqual({
+      event: 'card-end',
+      card: '9',
+      status: 'failed (crashed)',
+      reason: 'killed by SIGKILL',
     })
   })
 })

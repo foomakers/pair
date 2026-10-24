@@ -1,0 +1,4 @@
+{"type": "system", "subtype": "init", "session_id": "w1"}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "Workflow", "input": {"name": "pair-loop"}}]}}
+{"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "PAIR_EVENT {\"event\":\"loop-start\",\"auditLocation\":\"automation/loop-audit.md\",\"maxIterations\":3}\nPAIR_EVENT {\"event\":\"iteration\",\"iteration\":0}\nPAIR_EVENT {\"event\":\"card-start\",\"card\":\"ENG-12\",\"title\":\"Linear card\",\"iteration\":0}\nPAIR_EVENT {\"event\":\"stage\",\"card\":\"ENG-12\",\"stage\":\"implement\"}\nPAIR_EVENT {\"event\":\"loop-end\",\"status\":\"halted\",\"reason\":\"audit write to `automation/loop-audit.md` could not be confirmed\"}"}]}}
+{"type": "result", "subtype": "success", "is_error": false, "result": "pair-loop: HALT \u2014 audit write could not be confirmed", "session_id": "w1"}

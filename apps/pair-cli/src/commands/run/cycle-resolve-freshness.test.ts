@@ -271,6 +271,39 @@ process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success' }) + '\
     expect(spawnedPrompts()[0]).toMatch(/^\/pair-workflow-review-phase /)
   }, 60_000)
 
+  it('R3-W4 (#573 run): the card read at driver start is stale by the time resolve runs ⇒ resolve uses the live AC hash, no re-review loop', async () => {
+    await converge(scriptDigest())
+    // The first `-q` read (driver setup) still sees the pre-edit card; every later read sees the card the review judged.
+    const edited = cardBody
+    cardBody = `${edited}\n<!-- pre-edit -->\n`
+    writeFileSync(
+      join(root, 'card.json'),
+      JSON.stringify({ title: TITLE, body: edited, stale: cardBody }),
+    )
+    writeFileSync(
+      join(root, 'bin', 'gh'),
+      `#!/usr/bin/env node
+const fs = require('fs')
+const a = process.argv.slice(2)
+const card = JSON.parse(fs.readFileSync(${JSON.stringify(join(root, 'card.json'))}, 'utf8'))
+const seen = ${JSON.stringify(join(root, 'seen'))}
+if (a[0] === 'issue' && a[1] === 'view') {
+  if (a.includes('-q')) {
+    const first = !fs.existsSync(seen)
+    fs.writeFileSync(seen, '1')
+    process.stdout.write(first ? card.stale : card.body)
+  } else process.stdout.write(JSON.stringify({ title: card.title, body: card.body }))
+} else if (a[0] === 'pr' && a[1] === 'view') process.stdout.write(${JSON.stringify(BRANCH)} + '\\n')
+else process.exit(1)
+`,
+    )
+
+    const outcome = await drive()
+
+    expect(outcome.status).toBe('ready-for-merge')
+    expect(spawnedPrompts()).toHaveLength(0)
+  }, 60_000)
+
   it('R3-W2: the effective inputs changed after approval ⇒ a re-review is dispatched, never ready-for-merge', async () => {
     await converge('0000000000000000')
 

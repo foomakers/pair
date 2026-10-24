@@ -816,7 +816,12 @@ pair-cli run [options]
 | `--eligibility-filter <labels>` | Internal, set by the `--parallel` loop on each child `--card` run: the loop's effective filter (argument or `## Autonomy`) as THIS card's eligibility, replacing the legacy `## Eligibility` label. Needs `--card`; not a selector, so the coordinator's `--filter` refusal does not apply |
 | `--profile <name>`              | With `--card`, `--root` or `--parallel` (forwarded to every child card): the named workflow profile (per-stage engine/model/effort/context) from `pair.config.json`'s `workflowProfiles`. An unknown name halts `profile-unresolved`, never the KB default |
 | `--workflow-config <path>`      | With `--card`, `--root` or `--parallel` (forwarded to every child card): an external profile file, used verbatim, wins over `--profile` and `pair.config.json`  |
-| `--iteration-timeout <seconds>` | Per-iteration wall-clock bound (hang guard, default `1800`)                                           |
+| `--iteration-timeout <seconds>` | Opt-in **total** wall-clock cap per iteration. No default: the idle timeout is the hang guard     |
+| `--idle-timeout <seconds>`      | Stop an iteration after this long with **no engine event** (default `1800`); any event resets it. Precedence: flag > `## Stop Predicate` `idle-timeout:` > `pair.config.json` `engine.idleTimeout` > default |
+| `--quiet`                       | Plain output as before live progress: one line per iteration, no live card lines                   |
+| `--verbose`                     | Live terminal: also print the driver's technical lines (stage records, dispatch records, banner), hidden by default |
+| `--json`                        | The run events as NDJSON on stdout (one object per line); every human line goes to stderr. Not combinable with `--quiet` |
+| `--no-color`                    | No ANSI colors in the live lines (`NO_COLOR` is honoured too)                                         |
 | `--dry-run`                     | Resolve engine, skill, perimeter and policy, print them, spawn nothing                               |
 
 What each timeout covers (stage, selection, per-card), what is retried (transient vs durable) and how stale locks are reclaimed: [Timeouts, stalls and retries by surface](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md#9-timeouts-stalls-and-retries-by-surface).
@@ -1111,6 +1116,45 @@ own** naming a concrete re-invocation: the documented template (`CONTINUE-TOKEN:
 command states the policy's `## Max Parallelism` ceiling and leaves batching to `pair-loop`,
 concurrency comes from running several driver processes.
 
+A workflow **HALT**, a background workflow **cut** before its `loop-end` (the engine turn ended while
+the workflow still ran), or the **idle watchdog** is never `success`, even when the engine turn itself
+reports success: the iteration is reported with that outcome (`halted: <reason>`, `cut: …`,
+`timed out (idle) at <card>/<stage>: no engine event for <n>s`) and the run exits `1`. The `claude`
+engine runs with `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`, so `claude -p` does not stop a background
+workflow after its 10-minute wait ceiling.
+
+### Live progress and output modes
+
+The workflows announce each run event as one `PAIR_EVENT {json}` log line (`loop-start`, `iteration`,
+`card-start`, `stage`, `card-end`, `loop-end`); the driver maps them to typed events, one source for
+the console, the audit and `--json`. With the `claude` engine a background workflow's log lines never
+reach the stream, so the driver reads the stage agents' labels (`implement:#573`, `verify:#573 r1`)
+from Claude Code's live `task_progress` events instead: each card still gets its line and stages.
+
+| Output            | What you get |
+| ----------------- | ------------ |
+| TTY (default)     | One line per card, rewritten in place: status icon · card id · title (truncated to the terminal width, re-read on resize; dropped first when the id and stage do not fit) · what it is doing now, in plain words (`planning`, `writing tests · try 2`, `checking tests`, `coding · <current task>`, `reviewing · round 2`, `fixing 2 issues`, `waiting for CI`, `running checks`, `merging`) · PR when known · elapsed. The terminal outcome replaces the spinner: `✔ merged`, `⏸ awaiting-human`, `⚠ escalated`, `✖ failed` + short reason, `? unknown` when the engine returned no readable card status. With `--parallel` each card keeps its own cursor-addressed row; other output prints above the rows. The driver's technical lines (stage records, `DISPATCH-RECORD:`, the banner) go to the audit and `--verbose`; each finished step leaves one short note above the rows (`review: changes requested`, `tests: accepted`, `checks: passed`) |
+| non-TTY / unknown width | Append-only timestamped lines, one per event |
+| `--quiet`         | Today's plain output: one line per iteration |
+| `--verbose`       | The live view plus the driver's technical lines |
+| `--json`          | NDJSON events on stdout, human text on stderr |
+
+Non-numeric card ids (Linear, Filesystem) render unchanged; numeric ones as `#<id>`. An engine
+whose stream carries no intermediate event degrades to start/end lines per iteration, stated once.
+The banner prints the resolved **absolute** audit path and the idle timeout with its source; the end
+summary lists cards merged / parked / failed / unknown and `stopped: <reason>, N eligible card(s) left`, plus
+the count of unparseable stream lines skipped (never fatal). Ctrl+C writes `loop-end interrupted`,
+finalizes the lines and restores the cursor.
+
+**Live audit.** At start the driver creates the `## Audit Location` file (absolute path printed)
+with a `loop-start` line (run id, root, effective policy and sources) before the first selection,
+then appends every event as one JSON line, flushed at once, so `tail -f` follows it and a killed run
+keeps its trail up to the last event:
+
+```json
+{"ts":"2026-10-23T10:00:02.000Z","runId":"run-…","iteration":1,"card":"573","event":"stage","detail":{"stage":"fix 1/3","pr":41}}
+```
+
 ### Merge
 
 `pair-cli run` never merges, on any path. What it reports is the **policy's** posture: with
@@ -1186,7 +1230,7 @@ Only `install` and `update` run the pre-flight at all; every other command reads
 | Code | Meaning                                          |
 | ---- | ------------------------------------------------ |
 | `0`  | Success                                          |
-| `1`  | Validation error or command failure              |
+| `1`  | Validation error or command failure; for `run`, also a workflow HALT, a cut background workflow, an idle/total timeout or a failed iteration |
 | `2`  | Download/packaging error                         |
 | `3`  | File system error (disk full, permission denied) |
 

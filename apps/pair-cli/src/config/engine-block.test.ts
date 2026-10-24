@@ -94,3 +94,18 @@ describe('readEngineDeclaration', () => {
     ).toEqual(['engine.model.pi: must be a non-empty path'])
   })
 })
+
+describe('US-573 AC5: engine.idleTimeout', () => {
+  it('reads a positive integer of seconds', () => {
+    expect(
+      readEngineDeclaration({ engine: { id: 'pi', idleTimeout: 900 } }, KNOWN).idleTimeout,
+    ).toBe(900)
+  })
+
+  it('rejects anything but a positive integer', () => {
+    for (const bad of [0, -1, 1.5, '900'])
+      expect(
+        readEngineDeclaration({ engine: { id: 'pi', idleTimeout: bad } }, KNOWN).errors,
+      ).toEqual(['engine.idleTimeout: must be a positive integer of seconds'])
+  })
+})

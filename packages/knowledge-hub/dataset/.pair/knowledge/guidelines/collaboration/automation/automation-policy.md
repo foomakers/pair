@@ -184,6 +184,7 @@ max-iterations: 20
 
 - **Grammar**: `<selector> ⇒ <condition>`, where `selector` is one of `root` (the whole scope), `tag:<label>` (every card carrying that label) or `type:<issue-type>`, and `condition` is a canonical macrostate (`Draft`, `Ready`, `In Progress`, `Done`) and/or `has-tag:<label>`, optionally combined (`Done` alone, `has-tag:risk:red` alone, or `Done and has-tag:risk:red`).
 - **`max-iterations: <positive integer>`** is a second, independent line — a hard backstop that always applies alongside the predicate, never a replacement for it.
+- **`idle-timeout: <positive integer seconds>`** (optional, US-573) is the console driver's hang guard: `pair-cli run` stops an iteration after that long with **no engine event** (any event resets it), and reports it `timed out (idle) at <card>/<stage>`. Absent ⇒ `pair.config.json` `engine.idleTimeout`, else `1800`; `--idle-timeout` overrides all three. The workflow validates the line and never acts on it.
 - **The condition is evaluated against PM-tool state through the state mapping** (never issue-body content — assessments are not predicates, D18) — see [canonical states](../../collaboration/project-management-tool/canonical-states.md).
 - **Whichever bound is reached first stops the run.**
 
@@ -193,7 +194,7 @@ max-iterations: 20
 
 ### Malformed ⇒ HALT before any card runs
 
-A consumer **MUST HALT**, printing the expected grammar, when: the selector or condition keyword is not one of the ones above; the condition names issue-body content instead of a macrostate/tag; `max-iterations` is zero, negative, or non-integer; or the section carries no line matching either grammar at all. An **unsatisfiable predicate** (a selector that matches nothing on the current board) is not malformed — it is reported at the first evaluation and the run exits cleanly; `max-iterations` still applies regardless.
+A consumer **MUST HALT**, printing the expected grammar, when: the selector or condition keyword is not one of the ones above; the condition names issue-body content instead of a macrostate/tag; `max-iterations` or `idle-timeout` is zero, negative, or non-integer; or the section carries no line matching either grammar at all. An **unsatisfiable predicate** (a selector that matches nothing on the current board) is not malformed — it is reported at the first evaluation and the run exits cleanly; `max-iterations` still applies regardless.
 
 ## Max Parallelism — the parallel-batch ceiling
 
@@ -247,6 +248,7 @@ automation/loop-audit.md
 
 - **A single project-relative path**, resolved under `working_path` from `pair.config.json` (default `.pair/working/`) — never an absolute path (rejected at config validation, same rule `working_path` itself already carries).
 - Every iteration is **appended**, never overwritten, so a killed-and-resumed run's history stays intact across the resume.
+- **Live JSONL from `pair-cli run`** (US-573): the console driver creates the file at run start with a `loop-start` line (run id, root, effective policy and sources) before the first selection, then appends every run event (`iteration`, `card-start`, `stage`, `card-end`, `loop-end`) as one JSON line `{ts, runId, iteration, card, event, detail}`, flushed at once — `tail -f` follows it and a killed run keeps its trail up to the last event; a signal ends it with `loop-end` `interrupted`. The workflow's own iteration record and the dispatch `key=value` lines share the file; the resume read accepts all three (ADL 2026-10-23).
 
 ### Fail-safe default
 

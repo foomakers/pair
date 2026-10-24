@@ -1,4 +1,6 @@
 import { execFileSync } from 'child_process'
+import { RUN_EVENTS_ENV, runEventLine, stageLabel, type RunEvent } from './run-events'
+import { cardProgress, todoInProgress, type CardProgress } from './card-progress'
 import { existsSync, readFileSync, rmSync } from 'fs'
 import { dirname, join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
@@ -305,7 +307,9 @@ export interface CycleDriverContext {
   readonly fs: FileSystemService
   readonly location: CycleScriptsLocation | undefined
   readonly autonomyArgs: readonly string[]
-  readonly timeoutSeconds: number
+  readonly timeoutSeconds?: number | undefined
+  /** US-573: seconds without an engine event before the stage is stopped (default 30 min). */
+  readonly idleTimeoutSeconds?: number | undefined
   readonly workflowVersion: string
   readonly baseBranch: string
   /** The model pinned for this engine, if the project declared one. */
@@ -355,6 +359,8 @@ export interface CycleDriverRequest {
    * re-derives nothing). Absent ⇒ today's behavior: the legacy `## Auto-Advance` tier path.
    */
   readonly autonomy?: Pick<AutonomyResolution, 'policy'>
+  /** Sees the card's run events; absent ⇒ only the `--parallel` pool's RUN_EVENTS_ENV relay. */
+  readonly onRunEvent?: (event: RunEvent) => void
 }
 
 /** The run's own coordinates, resolved once per invocation and shared by every collaborator below. */
@@ -387,10 +393,9 @@ function coordinatesFor(ctx: CycleDriverContext, input: CycleDriverRequest) {
     title: record.title,
     runDir,
     runsRoot,
-    // r0-3: the freshness evidence the in-session coordinator's Step 1 hands `resolve` — both
-    // produced by the scripts themselves, never computed here, so the two realizations agree.
+    // r0-3: the inputs digest the in-session coordinator's Step 1 hands `resolve` — produced by the
+    // script itself, never computed here, so the two realizations agree (the AC hash is read per resolve).
     inputs: bridge.inputs(card, ctx.workflowVersion),
-    acHash: bridge.acHash(input.card, runDir),
     // US-490: what lets `resolve` OFFER `merge` — read once, like the scripts' own inputs.
     tier: readCardTier(input.card, ctx.cwd),
     // An active autonomy policy replaces the tier list; otherwise the legacy read is unchanged (default off).
@@ -446,12 +451,17 @@ const liveLabels = (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coor
   return prLabels === undefined ? { labels } : { labels, prLabels }
 }
 
+// ponytail: fixed budgets above the script defaults (1/1/3) so a converging contract or fix is not parked; configurable in #575.
+// Sent to the coordinator's resolve AND every stage packet: a stage's own Step 0 resolve must see the same budget.
+const CYCLE_BUDGETS = { maxFixRounds: 10, redRepairs: 3, greenRetries: 2 }
+
 /** The `policy` object `resolve` takes: blocking floor, ceiling, and exactly ONE merge-offer source. */
 function resolvePolicyFor(
   blocking: ReturnType<typeof resolveBlockingSeverities>,
   co: Coordinates,
 ): Record<string, unknown> {
   return {
+    ...CYCLE_BUDGETS,
     blockingFloor: blocking.blockingFloor,
     ...(blocking.maxDispatches !== undefined && { maxDispatches: blocking.maxDispatches }),
     ...(co.autoAdvanceTiers.length > 0 && { autoAdvance: { tiers: co.autoAdvanceTiers } }),
@@ -488,7 +498,9 @@ const resolveFor =
       story: input.card,
       runsRoot: co.runsRoot,
       inputs: co.inputs,
-      acHash: co.acHash,
+      // Re-read at every resolve, never the setup snapshot: a card edited mid-run would otherwise
+      // disagree with the hash the stage itself stamps, and verify would redirect forever (#573).
+      acHash: co.bridge.acHash(input.card, co.runDir),
       ...(head !== undefined && { head }),
       ...(input.pr !== undefined && { pr: input.pr }),
       // US-488: the profile's `reuse` stages, as `cycle-state`'s OWN policy (admissible transitions
@@ -540,6 +552,7 @@ const packetFor =
     return co.bridge.packet({
       next: next as never,
       policy: {
+        ...CYCLE_BUDGETS,
         blockingFloor: blocking.blockingFloor,
         ...(blocking.maxDispatches !== undefined && { maxDispatches: blocking.maxDispatches }),
       },
@@ -560,26 +573,61 @@ const packetFor =
     }) as never
   }
 
-const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packet: unknown) => {
-  const spawn = stageSpawnFor(ctx, (packet as { step?: string }).step ?? '')
-  return (await runStage({
-    engine: spawn.engine,
-    // The stage starts in the MAIN CHECKOUT, never in the story's worktree. Every phase skill's
-    // Step 0 reads `MAIN="$(pwd)"` — "the main checkout, you have not cd'd yet" — and resolves the
-    // run directory from it; the packet's own `$worktree` is what tells the agent where to cd, and
-    // it is relative to that same anchor. Spawned in the worktree instead, the stage does all its
-    // work and writes its handoffs INSIDE the worktree, which the skills forbid in as many words
-    // ("never inside a story or review worktree"). The driver then finds no handoff where the
-    // contract says one must be, reads the stage as not advanced, retries, and reports
-    // `failed-<step>` — for a stage that actually succeeded. Silent, and invisible to any test
-    // whose bridge is a fake.
-    packet: { ...(packet as object), worktree: co.main } as never,
-    autonomyArgs: spawn.autonomyArgs,
-    ...(spawn.model !== undefined && { model: spawn.model }),
-    ...(spawn.effort !== undefined && { effort: spawn.effort }),
-    timeoutSeconds: ctx.timeoutSeconds,
-    runIteration: spawnIteration,
-  })) as CycleStageResult
+const spawnStageFor =
+  (ctx: CycleDriverContext, co: Coordinates, progress?: CardProgress) =>
+  async (packet: unknown) => {
+    const spawn = stageSpawnFor(ctx, (packet as { step?: string }).step ?? '')
+    return (await runStage({
+      engine: spawn.engine,
+      // The stage starts in the MAIN CHECKOUT, never in the story's worktree. Every phase skill's
+      // Step 0 reads `MAIN="$(pwd)"` — "the main checkout, you have not cd'd yet" — and resolves the
+      // run directory from it; the packet's own `$worktree` is what tells the agent where to cd, and
+      // it is relative to that same anchor. Spawned in the worktree instead, the stage does all its
+      // work and writes its handoffs INSIDE the worktree, which the skills forbid in as many words
+      // ("never inside a story or review worktree"). The driver then finds no handoff where the
+      // contract says one must be, reads the stage as not advanced, retries, and reports
+      // `failed-<step>` — for a stage that actually succeeded. Silent, and invisible to any test
+      // whose bridge is a fake.
+      packet: { ...(packet as object), worktree: co.main } as never,
+      autonomyArgs: spawn.autonomyArgs,
+      ...(spawn.model !== undefined && { model: spawn.model }),
+      ...(spawn.effort !== undefined && { effort: spawn.effort }),
+      timeoutSeconds: ctx.timeoutSeconds,
+      idleTimeoutSeconds: ctx.idleTimeoutSeconds,
+      runIteration: spawnIteration,
+      ...(progress !== undefined && {
+        onEvent: (payload: unknown) => {
+          const task = todoInProgress(payload)
+          if (task !== undefined) progress.task(task)
+        },
+      }),
+    })) as CycleStageResult
+  }
+
+export { stageLabel }
+
+/**
+ * US-573: the card's own events. A single `--card` hands its renderer in (`onRunEvent`): every
+ * dispatch, the implementer's current task and the merge steps feed one live card line. Under the
+ * `--parallel` pool (RUN_EVENTS_ENV) the stage lines go to stdout, where the parent renders them.
+ */
+function progressFor(
+  card: string,
+  policy: Record<string, unknown>,
+  title: string | undefined,
+  onRunEvent: ((event: RunEvent) => void) | undefined,
+): CardProgress | undefined {
+  if (onRunEvent !== undefined)
+    return cardProgress({ card, title, maxFixRounds: policy['maxFixRounds'], onRunEvent })
+  if (process.env[RUN_EVENTS_ENV] !== '1') return undefined
+  return {
+    dispatch: next =>
+      console.log(
+        runEventLine({ event: 'stage', card, stage: stageLabel(next, policy['maxFixRounds']) }),
+      ),
+    task: () => {},
+    merge: () => {},
+  }
 }
 
 const GATE_SKILL = 'pair-capability-verify-quality'
@@ -708,9 +756,10 @@ function mergeStatus(run: { merged?: boolean; cascaded?: boolean; parkKind?: str
  * `red`. This driver decides nothing itself: `merged` / `cascaded` / `reason` are relayed verbatim.
  */
 const mergeFor =
-  (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates) =>
+  (ctx: CycleDriverContext, input: CycleDriverRequest, co: Coordinates, progress?: CardProgress) =>
   async (next: CycleNext, answer: CycleResolveAnswer): Promise<CycleMergeOutcome> => {
     const pins = mergePinsFor(input, co, next, answer)
+    progress?.merge('waiting for CI')
     const check = await checkWithCiWait(
       deferPark => co.bridge.mergeCheck({ ...pins, deferPark }),
       wait,
@@ -721,7 +770,9 @@ const mergeFor =
       console.log(`  Merge: parked — ${check.reason ?? 'the merge check did not allow it'}`)
       return { status: mergeStatus(check), stagesRun: 0, merge: check }
     }
+    progress?.merge('running checks')
     const gate = await runTierGate(ctx, co, pins)
+    progress?.merge('merging')
     const run = co.bridge.mergeRun({
       ...pins,
       gate: gate.green ? 'green' : 'red',
@@ -825,17 +876,19 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
     const policy = (first as { policy?: Record<string, unknown> }).policy ?? {}
     recordRunProfile(ctx, co)
     const hooks = loadCycleHooks(ctx, co)
+    const progress = progressFor(input.card, policy, co.title, input.onRunEvent)
     return await runCycle({
       hooks,
       resolve: resolveFor(ctx, input, co),
       worktree: worktreeFor(ctx, input, co),
       packet: packetFor(ctx, input, co) as never,
-      spawnStage: spawnStageFor(ctx, co),
-      mergeStage: mergeFor(ctx, input, co),
+      spawnStage: spawnStageFor(ctx, co, progress),
+      mergeStage: mergeFor(ctx, input, co, progress),
       escalate: escalateFor(input, co),
       policy,
       ...(input.rounds !== undefined && { rounds: input.rounds }),
       onNotice: note => console.log(`  ${note}`),
+      ...(progress !== undefined && { onDispatch: progress.dispatch }),
       // One line per stage, the moment the NEXT resolve reveals whether it advanced. Without it a
       // forty-dispatch unattended run prints a single terminal status and nothing else: the stage
       // that mattered is indistinguishable from the thirty-nine that did not, and a stage that
