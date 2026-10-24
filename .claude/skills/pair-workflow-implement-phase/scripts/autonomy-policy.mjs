@@ -6,7 +6,8 @@
 // the decision, it never re-derives it (D18; `pair-cli` owns no cycle rule — US-487).
 //
 // Pure functions + a CLI. `parse`, `resolvePolicy` and `decide` read no file, spawn no process and
-// import no host adapter; only the CLI reads the adoption file it is pointed at.
+// import no host adapter; only the CLI reads the adoption file it is pointed at, and binds the PM adapter
+// to judge a `root` (US-572: the bound adapter's parseCardRef, never a digit rule).
 //
 //   node autonomy-policy.mjs resolve --adoption <tech/automation.md> [--args '<json>'] [--surface interactive|unattended] [--json]
 //     → { ok, effective: { key: { value, source } }, lines: [...], warnings: [...], errors: [...] }
@@ -16,7 +17,9 @@
 //
 // Exit 0 when an answer was produced (errors are data inside it), 2 on a usage error.
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { checkCardId } from './card-id.mjs'
 
 // US-575: `autoRecoveryRounds` / `maxFixRounds` — the run's two budgets before a card is parked `needs-human`.
 export const KEYS = ['preset', 'filter', 'assignee', 'status', 'root', 'until', 'prepare', 'merge', 'autoRecoveryRounds', 'maxFixRounds']
@@ -151,8 +154,9 @@ export function parseValue(key, raw) {
       return { value: v }
     }
     case 'root': {
-      const v = String(raw ?? '').trim().replace(/^#/, '')
-      return /^\d+$/.test(v) ? { value: v } : { errors: [err('root', `${JSON.stringify(String(raw ?? ''))} is not an issue number`)] }
+      // US-572: an opaque card id — its shape here; whether the bound tracker knows it, in the CLI (parseCardRef).
+      const r = checkCardId(String(raw ?? '').trim())
+      return r.error ? { errors: [err('root', r.error)] } : { value: r.id }
     }
     case 'until': {
       const v = String(raw ?? '').trim()
@@ -432,7 +436,7 @@ const isMain = () => {
     return false
   }
 }
-function cli(argv) {
+async function cli(argv) {
   const [cmd, ...rest] = argv
   const opts = {}
   for (let i = 0; i < rest.length; i++) {
@@ -442,7 +446,20 @@ function cli(argv) {
   }
   if (cmd === 'resolve') {
     const adoptionText = opts.adoption && existsSync(opts.adoption) ? readFileSync(opts.adoption, 'utf8') : ''
-    return resolvePolicy({ args: opts.args ? JSON.parse(opts.args) : {}, adoptionText, surface: opts.surface })
+    const out = resolvePolicy({ args: opts.args ? JSON.parse(opts.args) : {}, adoptionText, surface: opts.surface })
+    const root = out.effective.root?.value
+    if (root !== undefined) {
+      // AC1 (US-572): the root is a card of the BOUND PM tool — its parseCardRef decides, never a digit rule.
+      let why = null
+      try {
+        const pm = (await import('./host/index.mjs')).bindHosts({ from: opts.adoption ? dirname(opts.adoption) : process.cwd() }).pm
+        if (!pm.parseCardRef(root)) why = `${JSON.stringify(root)} is not a ${pm.id} card (parseCardRef)`
+      } catch (e) {
+        why = e.message
+      }
+      if (why) Object.assign(out, { ok: false, errors: [...out.errors, err('root', why)] })
+    }
+    return out
   }
   if (cmd === 'decide') {
     if (!opts.policy || !opts.boundary) throw new Error('--policy and --boundary are required')
@@ -453,7 +470,7 @@ function cli(argv) {
 }
 if (isMain()) {
   try {
-    process.stdout.write(JSON.stringify(cli(process.argv.slice(2))) + '\n')
+    process.stdout.write(JSON.stringify(await cli(process.argv.slice(2))) + '\n')
     process.exit(0)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')

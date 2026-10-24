@@ -2301,6 +2301,31 @@ export function baseSync({ cwd, base, story, owned }) {
 // `**Prerequisite Stories**:` line of the card, then each one's state — `merged` (closed as COMPLETED: its PR merged and
 // closed it), `closed` (closed any other way — not planned, duplicate, no reason: nothing merged, blocks),
 // `parked` (open and labelled for a human), `open`. Anything that cannot be read is `unknown` and BLOCKS (fail closed).
+// US-572: the card as every PM-agnostic consumer reads it (pair-cli run, the batch engine) — through the BOUND
+// adapter, never a tracker CLI of the caller's own: { id, title, labels: [names], state: OPEN|CLOSED, closed }.
+export function cardView({ story, dir, host }) {
+  const h = host ?? bindHosts(dir ? { dir } : { from: process.cwd() })
+  if (!h.pm.parseCardRef(story)) return { error: `not-a-card: ${JSON.stringify(story)} is not a ${h.pmTool} card` }
+  try {
+    const c = h.pm.readCard(story, { fields: ['title', 'labels', 'state', 'stateReason'] })
+    const closed = String(c?.state ?? '').toUpperCase() === 'CLOSED'
+    return { id: String(story), title: c?.title ?? null, labels: (c?.labels ?? []).map(l => String(l?.name ?? l)), state: closed ? 'CLOSED' : 'OPEN', closed, stateReason: c?.stateReason ?? null }
+  } catch (e) {
+    return { error: `card-unreadable: ${hostDetail(e)}` }
+  }
+}
+
+// US-572 AC4: `--assignee @me` through the bound PM adapter. No resolveUser ⇒ a typed HALT naming it.
+export function whoami({ dir, host }) {
+  const h = host ?? bindHosts(dir ? { dir } : { from: process.cwd() })
+  try {
+    return { login: h.pm.resolveUser(), pmTool: h.pmTool }
+  } catch (e) {
+    if (e.kind === 'not-implemented') return { halt: 'not-implemented', method: e.method, pmTool: h.pmTool, detail: e.message }
+    return { halt: 'user-unresolved', pmTool: h.pmTool, detail: hostDetail(e) }
+  }
+}
+
 const PREREQ_RE = /^\*\*Prerequisite Stories\*\*:[ \t]*(.*)$/m
 const PARK_LABELS = ['needs-review', 'pr-state:not-approved']
 export function prereqState({ story, dir, host }) {
@@ -3521,7 +3546,7 @@ if (isMain()) {
       hash: ['file'],
       'ac-hash': ['dir', 'story'],
       'bind-hosts': ['dir', 'from'],
-      'activate-card': ['dir', 'story'],
+      'activate-card': ['dir', 'story', 'worktree'],
       inputs: ['json', 'story', 'workflowVersion'],
       'apply-scope-decisions': ['decision-ref', 'dir', 'maintainer', 'pr', 'repo', 'workflowVersion'],
       'scope-baseline': ['dir'],
@@ -3535,6 +3560,8 @@ if (isMain()) {
       'gate-red': ['dir', 'gates', 'reviewedHead'],
       'base-sync': ['base', 'cwd', 'owned', 'story'],
       'prereq-state': ['dir', 'story'],
+      card: ['dir', 'story'],
+      whoami: ['dir'],
     }
     if (FLAGS[cmd]) {
       const unknown = Object.keys(opts).filter(k => !FLAGS[cmd].includes(k))
@@ -3610,7 +3637,8 @@ if (isMain()) {
       process.exit(0)
     } else if (cmd === 'activate-card') {
       need('dir', 'story')
-      out = activateCard({ story: opts.story, dir: opts.dir })
+      // US-572 AC6: `--worktree` — a local tracker (filesystem) writes the card in the story's tree, committed on its branch.
+      out = activateCard({ story: opts.story, dir: opts.dir, ...(opts.worktree ? { host: bindHosts({ dir: opts.dir, transport: { root: resolvePath(opts.worktree) } }) } : {}) })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.confirmed === true ? 0 : 1)
     } else if (cmd === 'inputs') {
@@ -3694,6 +3722,15 @@ if (isMain()) {
       out = prereqState({ story: opts.story, dir: opts.dir })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
+    } else if (cmd === 'card') {
+      need('story')
+      out = cardView({ story: opts.story, dir: opts.dir })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.error ? 1 : 0)
+    } else if (cmd === 'whoami') {
+      out = whoami({ dir: opts.dir })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.halt ? 1 : 0)
     } else if (cmd === 'version') {
       // The pin, printed bare so a shell can capture it: `WV="$(… cycle-state.mjs version)"`. It is
       // the one value this realization passes to every `--workflowVersion`, and having a producer
@@ -3707,7 +3744,7 @@ if (isMain()) {
       out = testIdentity({ cwd: opts.cwd, command: opts.command, env, toolchain: opts.toolchain ?? `node ${process.version}` })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(0)
-    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | activate-card | migrate-inspect | apply-scope-decisions | scope-baseline | supersede | decide | recover | gate-red | base-sync | prereq-state | test-identity | version)`)
+    } else throw new Error(`unknown command: ${cmd} (expected resolve | publish | hash | inputs | activate-card | migrate-inspect | apply-scope-decisions | scope-baseline | supersede | decide | recover | gate-red | base-sync | prereq-state | card | whoami | test-identity | version)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)

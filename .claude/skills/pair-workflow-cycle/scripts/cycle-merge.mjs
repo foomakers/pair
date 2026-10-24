@@ -42,6 +42,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { decide as decideAutonomy, effectiveLabels, gateFromLegacyTiers, escalationComment, ESCALATION_MARKER, parseGate, conditionError, normalizeGate } from './autonomy-policy.mjs'
 import { assertBranchName } from './host/adapter-kit.mjs'
+import { checkCardId } from './card-id.mjs'
 import { assertRunOwnsStory } from './run-guard.mjs'
 
 const SHA_RE = /^[0-9a-f]{40}$/
@@ -262,7 +263,7 @@ export function closeStory({ hosts, story, repo, branch, root = process.cwd(), g
     hosts.pm.updateCard({ repo, id: story, body: next })
     return { ok: true, changed: true }
   })
-  let closed = [Number(story)]
+  let closed = [String(story)]
   run('close', () => {
     const r = hosts.pm.closeAndCascade({ id: story, repo })
     closed = r.closed ?? closed
@@ -368,6 +369,13 @@ const FLAGS = {
   escalate: ['dir', 'story', 'stage', 'conditions', 'repo'],
 }
 
+// US-572: `--story` is an opaque card id (kept as given, judged by the bound adapter in main); `--pr` stays a number.
+const storyId = v => {
+  const r = checkCardId(v)
+  if (r.error) throw new Error(`--story: ${r.error}`)
+  return r.id
+}
+
 export function parseArgs(argv) {
   const [cmd, ...rest] = argv
   const opts = {}
@@ -383,7 +391,7 @@ export function parseArgs(argv) {
   }
   if (cmd === 'escalate') {
     need('dir', 'story', 'stage', 'conditions')
-    if (!/^\d+$/.test(opts.story)) throw new Error(`--story must be a number, got ${JSON.stringify(opts.story)}`)
+
     if (!/^[a-z-]+$/.test(opts.stage)) throw new Error('--stage must be a step name')
     let conditions
     try {
@@ -393,11 +401,10 @@ export function parseArgs(argv) {
     }
     if (!Array.isArray(conditions) || !conditions.length || conditions.some(c => conditionError(c) !== null)) throw new Error('--conditions must be a non-empty JSON array of label-shaped conditions')
     if (opts.repo !== undefined && !/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(opts.repo)) throw new Error('--repo must be owner/name')
-    return { cmd, opts: { ...opts, story: Number(opts.story), conditions } }
+    return { cmd, opts: { ...opts, story: storyId(opts.story), conditions } }
   }
   need('dir', 'story', 'pr', 'reviewedHead', 'cardTier')
   if ((opts.autoAdvance === undefined) === (opts.mergeGate === undefined)) throw new Error('exactly one of --autoAdvance or --mergeGate is required')
-  if (!/^\d+$/.test(opts.story)) throw new Error(`--story must be a number, got ${JSON.stringify(opts.story)}`)
   if (!/^\d+$/.test(opts.pr)) throw new Error(`--pr must be a number, got ${JSON.stringify(opts.pr)}`)
   if (!SHA_RE.test(opts.reviewedHead)) throw new Error('--reviewedHead must be a 40-hex sha')
   if (!TIER_RE.test(opts.cardTier)) throw new Error('--cardTier must be a label-shaped tier')
@@ -432,7 +439,7 @@ export function parseArgs(argv) {
   }
   if (cmd === 'run') need('gate', 'message')
   if (cmd === 'run' && !['green', 'red'].includes(opts.gate)) throw new Error('--gate must be green | red')
-  return { cmd, opts: { ...opts, story: Number(opts.story), pr: Number(opts.pr), ...(tiers ? { autoAdvanceTiers: tiers } : {}), ...(mergeGate ? { mergeGate } : {}) } }
+  return { cmd, opts: { ...opts, story: storyId(opts.story), pr: Number(opts.pr), ...(tiers ? { autoAdvanceTiers: tiers } : {}), ...(mergeGate ? { mergeGate } : {}) } }
 }
 
 const isMain = () => {
@@ -448,6 +455,7 @@ if (isMain()) {
     if (cmd === 'escalate') assertRunOwnsStory({ dir: opts.dir, story: opts.story, repo: opts.repo })
     const HOSTS = await import('./host/index.mjs')
     const hosts = HOSTS.bindHosts({ dir: opts.dir })
+    if (!hosts.pm.parseCardRef(opts.story)) throw new Error(`--story ${JSON.stringify(opts.story)} is not a ${hosts.pmTool} card (parseCardRef)`)
     if (cmd === 'escalate') {
       process.stdout.write(JSON.stringify({ stage: opts.stage, conditions: opts.conditions, comment: escalate({ hosts, story: opts.story, repo: opts.repo, stage: opts.stage, conditions: opts.conditions }) }) + '\n')
       process.exit(0)

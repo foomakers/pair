@@ -22,6 +22,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { parseGate, escalationConditions, gateToString, normalizeGate, conditionError, GATE_MODES } from './autonomy-policy.mjs'
 import { assertRunOwnsStory } from './run-guard.mjs'
+import { checkCardId } from './card-id.mjs'
 
 export const ROUTES = ['run-interactive', 'run-autonomous', 'skip-needs-human', 'skip-escalated', 'escalate', 'nothing-to-prepare']
 export const BOUNDARIES = ['B0', 'B1', 'B2']
@@ -215,6 +216,13 @@ const gateOf = raw => {
   return parsed.value
 }
 
+// US-572: `--story` is an opaque card id, kept as given; the bound adapter's parseCardRef judges it in main.
+const storyId = v => {
+  const r = checkCardId(v)
+  if (r.error) throw new Error(`--story: ${r.error}`)
+  return r.id
+}
+
 export function parseArgs(argv) {
   const [cmd, ...rest] = argv
   if (!FLAGS[cmd]) throw new Error(`unknown command: ${cmd} (expected decide | escalate | complete)`)
@@ -247,9 +255,8 @@ export function parseArgs(argv) {
     }
     if (opts.story !== undefined) {
       if (opts.labels !== undefined) throw new Error('--labels and --story are mutually exclusive')
-      if (!/^\d+$/.test(opts.story)) throw new Error(`--story must be a number, got ${JSON.stringify(opts.story)}`)
       if (opts.dir === undefined) throw new Error('--dir is required with --story')
-      out.opts.story = Number(opts.story)
+      out.opts.story = storyId(opts.story)
     }
     return out
   }
@@ -262,8 +269,7 @@ export function parseArgs(argv) {
     out.opts.refinedAutonomously = opts.refinedAutonomously === 'true'
   }
   need('dir', 'story')
-  if (!/^\d+$/.test(opts.story)) throw new Error(`--story must be a number, got ${JSON.stringify(opts.story)}`)
-  out.opts.story = Number(opts.story)
+  out.opts.story = storyId(opts.story)
   need('source')
   if (cmd === 'escalate') {
     need('boundary')
@@ -303,6 +309,7 @@ if (isMain()) {
     assertRunOwnsStory({ dir: opts.dir, story: opts.story, repo: opts.repo })
     const HOSTS = await import('./host/index.mjs')
     const hosts = HOSTS.bindHosts({ dir: opts.dir })
+    if (!hosts.pm.parseCardRef(opts.story)) throw new Error(`--story ${JSON.stringify(opts.story)} is not a ${hosts.pmTool} card (parseCardRef)`)
     const out =
       cmd === 'escalate'
         ? escalate({ hosts, story: opts.story, repo: opts.repo, boundary: opts.boundary, gate: gateToString(opts.gate), source: opts.source, conditions: opts.conditions, openQuestion: opts.openQuestion, openQuestionFromCard: opts.openQuestionFromCard, assumptions: opts.assumptionsFile && existsSync(opts.assumptionsFile) ? readFileSync(opts.assumptionsFile, 'utf8') : '' })

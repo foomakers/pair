@@ -16,7 +16,7 @@
 // the kit's runCli (ADR-026 amendment 2026-10-24); no credential exists.
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
-import { defineAdapter, runCli, upsertByMarker, HostError } from './adapter-kit.mjs'
+import { defineAdapter, assertCardId, runCli, upsertByMarker, HostError } from './adapter-kit.mjs'
 
 export const BACKLOG_REL = join('.pair', 'adoption', 'product', 'backlog')
 export const STATE_FOLDERS = ['not-started', 'in-progress', 'under-review', 'completed']
@@ -24,14 +24,15 @@ const FOLDER_OF = { todo: 'not-started', backlog: 'not-started', refined: 'not-s
 const COMMENTS = '<!-- pair-comments -->'
 const STATUS_RE = /^\*\*Status\*\*:[^\n]*$/m
 const LABELS_RE = /^\*\*Labels\*\*:([^\n]*)$/m
-const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 const fail = (kind, message, method) => new HostError(kind, { message: `fs: ${message}`, ...(method ? { method } : {}) })
 
-// The ONE id guard, before any fs access: no separator, no `..`, no whitespace, nothing absolute.
-export function cardId(ref) {
-  const v = String(ref ?? '').replace(/^#/, '')
-  if (!ID_RE.test(v) || v.includes('..') || v.length > 120) throw fail('invalid-input', `card id ${JSON.stringify(String(ref ?? ''))} is not a backlog id (no "/", "..", whitespace or absolute path)`, 'parseCardRef')
-  return v
+// The id guard, before any fs access (adapter-kit's assertCardId), under this adapter's errorPrefix.
+const cardId = ref => {
+  try {
+    return assertCardId(ref)
+  } catch (e) {
+    throw fail('invalid-input', `card id ${e.message}`, 'parseCardRef')
+  }
 }
 
 const split = text => {
