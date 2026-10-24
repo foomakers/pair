@@ -98,7 +98,7 @@ export function decideMerge({ cardTier, currentTier, effectiveTier = currentTier
   const awaitsOnly = failed.length > 0 && failed.every(isWait)
   // A driver may POLL (bounded) and re-check only when CI is the sole thing in the way and every unsettled check is still running.
   const ciPending = failed.length > 0 && failed.every(f => f.code === 'ci-not-green') && ciPendingOnly
-  // US-575 AC7: CI is the sole thing in the way and a check FAILED — a driver may re-run the failed jobs (once free,
+  // US-575 (#575/AC7): CI is the sole thing in the way and a check FAILED — a driver may re-run the failed jobs (once free,
   // then against its recovery budget) and poll, instead of parking on what may be a transient failure.
   const ciFailed = failed.length > 0 && failed.every(f => f.code === 'ci-not-green') && !ciPendingOnly
   return { mergeAllowed: failed.length === 0, ciPending, ciFailed, failed, reason: failed[0]?.detail ?? null, parkKind: failed.length === 0 ? null : first === 'tier-not-auto-advance' ? 'awaiting-human' : awaitsOnly ? 'awaiting-human' : first === 'escalated' ? 'escalated' : 'halted', ...(conditions ? { conditions } : {}) }

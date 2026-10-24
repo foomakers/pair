@@ -888,7 +888,7 @@ function autoMergeTree(entry, cwd) {
   }
   return entry.autoTree
 }
-// US-575 AC5 — the mechanical base sync (`cycle-state.mjs base-sync`) records its conflict resolution as a trailer of
+// US-575 (#575/AC5) — the mechanical base sync (`cycle-state.mjs base-sync`) records its conflict resolution as a trailer of
 // the merge commit: `Pair-Base-Sync: base=<sha>; ours=<paths>; theirs=<paths>`. Custody holds it to that record: the
 // recorded base is the merge's merged parent, every `ours` path carries the story's bytes (first parent), every `theirs`
 // path the base's. A merge that says otherwise was edited by hand after the sync.

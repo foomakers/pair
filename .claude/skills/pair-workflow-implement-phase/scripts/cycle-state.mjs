@@ -2205,7 +2205,7 @@ export function recover({ dir, kind, detail = '', policy = {}, lockWaitMs = 5000
   })
 }
 
-/** The merge-time gate set that stayed red on `reviewedHead` (AC2): `resolve` routes the approved card to the fix stage with it. */
+/** The merge-time gate set that stayed red on `reviewedHead` (#575/AC2): `resolve` routes the approved card to the fix stage with it. */
 export function recordGateRed({ dir, reviewedHead, gates, lockWaitMs = 5000, now = new Date() }) {
   const where = safeRunDir(dir)
   if (where.error) return { recorded: false, error: where.error }
@@ -2217,7 +2217,7 @@ export function recordGateRed({ dir, reviewedHead, gates, lockWaitMs = 5000, now
   })
 }
 
-// AC5 — the mechanical base sync. Merges `base` into the story branch checked out at `cwd`; a conflict is resolved by
+// #575/AC5 — the mechanical base sync. Merges `base` into the story branch checked out at `cwd`; a conflict is resolved by
 // OWNERSHIP, never by judgment: a story-owned path (`owned` — the sealed fixScope's allowedPaths — else every path the
 // story itself changed) keeps the story's bytes, a base-owned one (anything else, and every generated mirror) takes the
 // base's. A conflict on a SEALED test (a path a `Pair-RED-Snapshot` commit carries) is never resolved: the merge is
@@ -2265,7 +2265,7 @@ export function baseSync({ cwd, base, story, owned }) {
   return { synced: true, base: baseSha, head: g(['rev-parse', 'HEAD']), conflicts }
 }
 
-// AC6 — a card's prerequisites, read deterministically through the bound PM adapter (never an agent's claim): the
+// #575/AC6 — a card's prerequisites, read deterministically through the bound PM adapter (never an agent's claim): the
 // `**Prerequisite Stories**:` line of the card, then each one's state — `merged` (closed: its PR merged and closed it),
 // `parked` (open and labelled for a human), `open`. Anything that cannot be read is `unknown` and BLOCKS (fail closed).
 const PREREQ_RE = /^\*\*Prerequisite Stories\*\*:[ \t]*(.*)$/m
@@ -2587,7 +2587,7 @@ function deriveNextStep(handoffs, policy, ctx = {}) {
     return afterGreen(last.phase, d.outputHead)
   }
   if (last.skill === 'review-phase') {
-    // US-575 AC3: a custody failure recorded on heads that have since moved is stale — re-verify the new head.
+    // US-575 (#575/AC3): a custody failure recorded on heads that have since moved is stale — re-verify the new head.
     if (d.custody?.contractBreach === true)
       return ctx.stale ? { step: 'verify', mode: 're-review', phase: `r${(parts.round ?? 0) + 1}`, round: (parts.round ?? 0) + 1, attempt: 1, base: d.reviewedHead, prior: last.name, openIds: [], priorFindings: priorFindings(), stale: true } : blocked('failed-custody', { phase: last.phase, breaches: d.custody.breaches })
     const maxFix = policy.maxFixRounds ?? POLICY_DEFAULTS.maxFixRounds
@@ -3095,7 +3095,7 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
   // US-479 F-RR-06: the derived ledger is computed ONCE per resolution and handed to every reader
   // — the next step, the counters and the returned active matrix all see the same view.
   const ledger = regressionRiskLedger(handoffs)
-  // US-575 AC3: a durable failure is keyed by the heads it was FIRST observed on (PR head, base head). Once
+  // US-575 (#575/AC3): a durable failure is keyed by the heads it was FIRST observed on (PR head, base head). Once
   // either moved, its cause may be gone: the failure is stale and the step is re-derived — and that verdict
   // sticks for the same handoff, so a stage's own Step 0 resolve (which passes no heads) agrees with it.
   const heads = Object.fromEntries([['prHead', head], ['baseHead', baseHead]].filter(([, v]) => SHA_RE.test(String(v ?? ''))))
@@ -3117,10 +3117,10 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
       { step: 'verify', mode: 're-review', phase: `r${(phaseParts(last.phase)?.round ?? 0) + 1}`, round: (phaseParts(last.phase)?.round ?? 0) + 1, attempt: 1, base: last.data.reviewedHead, prior: last.name, openIds: (last.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: [...new Map(handoffs.filter(h => h.skill === 'review-phase').flatMap(r => (r.data.findings ?? []).filter(f => f?.id).map(f => [f.id, { id: f.id, severity: f.severity }]))).values()], ...extra },
       ledger.filter(r => r.state === 'active'),
     )
-  // US-575 AC4: a review's terminal verdict holds for the head it reviewed. The PR head moved since ⇒ re-verify
+  // US-575 (#575/AC4): a review's terminal verdict holds for the head it reviewed. The PR head moved since ⇒ re-verify
   // the new head (custody judges the new commits). A request for a HUMAN decision keeps waiting for it.
   if (last.skill === 'review-phase' && heads.prHead && heads.prHead !== last.data.reviewedHead && next.step === 'blocked' && next.reason !== 'awaiting-scope-decision' && !(next.reason === 'escalate' && !next.budget)) next = reReviewOf({ headMoved: true })
-  // US-575 AC2: the merge-time tier gate stayed red after its recovery budget — a real failure. The approved
+  // US-575 (#575/AC2): the merge-time tier gate stayed red after its recovery budget — a real failure. The approved
   // card goes back to the fix stage with the failing gates as its findings, on the head the review approved.
   const gateRed = recovery.gateRed
   if (next.step === 'done' && gateRed && gateRed.reviewedHead === next.reviewedHead) {

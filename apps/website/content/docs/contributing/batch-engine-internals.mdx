@@ -152,7 +152,7 @@ A stage dispatched when another step is due returns `{ status: "redirect", next 
 - **Moved head or changed relevant inputs** ⇒ the prior findings plus the delta and its
   affected boundaries are re-validated (`re-review`), never a fresh full pass; an unrelated card
   edit invalidates nothing.
-- **Auto-recovery** (US-575) ⇒ a `failed-preparation` / `failed-implement` / `failed-custody`
+- **Auto-recovery** ⇒ a `failed-preparation` / `failed-implement` / `failed-custody`
   is keyed by the PR and base heads it was first observed on (`resolve --head --baseHead`,
   recorded in the run directory's `recovery.json`); once either moved it is stale and the step is
   re-derived. `cycle-state.mjs recover` spends one `autoRecoveryRounds` round (gate re-run, base

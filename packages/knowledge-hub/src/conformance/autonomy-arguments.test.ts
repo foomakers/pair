@@ -95,9 +95,19 @@ describe('US-521 T-9: one vocabulary across the autonomy consumers', () => {
     for (const { name, file } of CONSUMERS) expect(read(file), name).toContain(PRECEDENCE_SENTENCE)
   })
 
-  it('the script’s key list is exactly the seven names the KB documents', async () => {
+  it('the script’s key list is exactly the nine names the KB documents (US-575: the two budgets)', async () => {
     const { KEYS } = await script()
-    expect(KEYS).toEqual(['filter', 'assignee', 'status', 'root', 'until', 'prepare', 'merge'])
+    expect(KEYS).toEqual([
+      'filter',
+      'assignee',
+      'status',
+      'root',
+      'until',
+      'prepare',
+      'merge',
+      'autoRecoveryRounds',
+      'maxFixRounds',
+    ])
   })
 
   it('the mirror of each consumer carries the same names (source and installed copy agree)', () => {
