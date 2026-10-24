@@ -223,7 +223,11 @@ export interface BaseSyncResult {
 /** US-575: `cycle-state.mjs prereq-state` — the card's prerequisites, read through the bound PM adapter. */
 export interface PrereqState {
   readonly blocked: boolean
-  readonly prerequisites: readonly { readonly id: string; readonly state: string; readonly reason?: string }[]
+  readonly prerequisites: readonly {
+    readonly id: string
+    readonly state: string
+    readonly reason?: string
+  }[]
   readonly blockedBy?: { readonly id: string; readonly reason: string }
 }
 
@@ -639,15 +643,11 @@ function prepareMethods(
  * resolves the repository from its cwd, so a script run from anywhere else hashes another
  * repository's issue. Absent ⇒ this process's cwd (the bridge's own unit tests).
  */
-export function createCycleScriptsBridge(
-  location: CycleScriptsLocation,
-  cwd?: string,
-): CycleScriptsBridge {
-  const cycleStatePath = join(location.scriptsDir, 'cycle-state.mjs')
-  const cycleDispatchPath = join(location.scriptsDir, 'cycle-dispatch.mjs')
-  const runScript = (script: string, cmd: string, args: ScriptArgs): unknown =>
-    runScriptIn(script, cmd, args, cwd)
-
+/** `cycle-state.mjs resolve`, and US-575's auto-recovery commands (budget, gate-red record, base sync, prerequisite state). */
+function stateMethods(
+  runScript: (script: string, cmd: string, args: ScriptArgs) => unknown,
+  cycleStatePath: string,
+): Pick<CycleScriptsBridge, 'resolve' | 'recover' | 'gateRed' | 'baseSync' | 'prereqState'> {
   return {
     resolve: options =>
       runScript(cycleStatePath, 'resolve', resolveArgs(options)) as CycleResolveResult,
@@ -675,6 +675,20 @@ export function createCycleScriptsBridge(
         ['story', o.story],
         ...optional([['dir', o.dir]]),
       ]) as PrereqState,
+  }
+}
+
+export function createCycleScriptsBridge(
+  location: CycleScriptsLocation,
+  cwd?: string,
+): CycleScriptsBridge {
+  const cycleStatePath = join(location.scriptsDir, 'cycle-state.mjs')
+  const cycleDispatchPath = join(location.scriptsDir, 'cycle-dispatch.mjs')
+  const runScript = (script: string, cmd: string, args: ScriptArgs): unknown =>
+    runScriptIn(script, cmd, args, cwd)
+
+  return {
+    ...stateMethods(runScript, cycleStatePath),
     worktree: options =>
       runScript(cycleDispatchPath, 'worktree', [
         ['main', options.main],

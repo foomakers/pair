@@ -120,7 +120,11 @@ describe('ciWaitFromEnv', () => {
 
     it('no rerun collaborator: a failure returns at once, unchanged', async () => {
       let calls = 0
-      const result = await checkWithCiWait(() => (calls++, FAILED), async () => 'elapsed', {})
+      const result = await checkWithCiWait(
+        () => (calls++, FAILED),
+        async () => 'elapsed',
+        {},
+      )
       expect([calls, result]).toEqual([1, FAILED])
     })
   })

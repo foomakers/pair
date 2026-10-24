@@ -444,6 +444,24 @@ async function terminalStep(
   }
 }
 
+/**
+ * US-575: a terminal step's outcome — or `null` when a recovered merge stage hands the card back to `resolve`. Once
+ * per distinct `next`, so a resolve that keeps offering the very same merge can never spin here.
+ */
+async function terminalOrResume(
+  input: RunCycleInput,
+  state: LoopState,
+  next: CycleNext,
+  answer: CycleResolveAnswer,
+): Promise<CycleOutcome | null> {
+  const outcome = await terminalStep(input, state, next, answer)
+  if (outcome.resume !== true || sameNext(state.resumedFrom, next)) return outcome
+  state.resumedFrom = next
+  state.stagesRun = outcome.stagesRun
+  state.dispatchedNext = null
+  return null
+}
+
 /** Merge-stage statuses where `run` executed (so `post-merge` is due). */
 const MERGE_RAN = new Set(['merged', 'merged-closure-unfinished'])
 
@@ -480,27 +498,15 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     const answer = await resolve()
     const next = answer.next
     relayWarnings(answer, onNotice)
-    if (next === undefined) {
-      if (state.dispatchedNext !== null) {
-        const record = buildStageRecord(state.dispatchedNext, state.dispatchedResult!, false)
-        observers.onStage?.(record)
-        observers.appendAudit?.(record)
-      }
-      return stoppedWithoutNext(answer as CycleResolveStop, state.stagesRun)
-    }
+    if (next === undefined) return stopWithoutNext(state, answer as CycleResolveStop, observers)
 
     const settled = settlePreviousDispatch(state, next, deadDispatchRetries, observers)
     if (settled !== null) return settled
     await runPostStageHook(state, next, hooks, onNotice)
 
     if (!DISPATCHABLE_STEPS.has(next.step)) {
-      const outcome = await terminalStep(input, state, next, answer)
-      // US-575: a recovered merge stage hands the card back to `resolve` — once per distinct `next`, so a resolve
-      // that keeps offering the very same merge can never spin here.
-      if (outcome.resume !== true || sameNext(state.resumedFrom, next)) return outcome
-      state.resumedFrom = next
-      state.stagesRun = outcome.stagesRun
-      state.dispatchedNext = null
+      const outcome = await terminalOrResume(input, state, next, answer)
+      if (outcome !== null) return outcome
       continue
     }
     noticeReuseOnce(state, next, onNotice)
@@ -513,6 +519,20 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     state.stagesRun += 1
     state.dispatchedNext = next
   }
+}
+
+/** `resolve` answered no `next`: the dispatch in flight (if any) is logged as not advanced, then the typed stop. */
+function stopWithoutNext(
+  state: LoopState,
+  answer: CycleResolveStop,
+  observers: StageObservers,
+): CycleOutcome {
+  if (state.dispatchedNext !== null) {
+    const record = buildStageRecord(state.dispatchedNext, state.dispatchedResult!, false)
+    observers.onStage?.(record)
+    observers.appendAudit?.(record)
+  }
+  return stoppedWithoutNext(answer, state.stagesRun)
 }
 
 /** AO: the dispatch that follows a format-validation failure carries the exact error ahead of the same prompt, once. */

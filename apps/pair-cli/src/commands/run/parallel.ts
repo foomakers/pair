@@ -63,7 +63,10 @@ export function outcomeOfExit(id: string, exit: CardProcessExit): Omit<CardOutco
   const prepare = exit.prepare !== undefined ? { prepare: exit.prepare } : {}
   if (exit.exitCode === 0) return { id, outcome: 'completed', detail: 'exit 0', ...prepare }
   const cycle = exit.cycleStatus !== undefined ? { cycleStatus: exit.cycleStatus } : {}
-  const detail = exit.needsHuman !== undefined ? `needs-human: ${exit.needsHuman}` : `exit ${String(exit.exitCode)}`
+  const detail =
+    exit.needsHuman !== undefined
+      ? `needs-human: ${exit.needsHuman}`
+      : `exit ${String(exit.exitCode)}`
   return { id, outcome: 'failed', detail, ...prepare, ...cycle }
 }
 

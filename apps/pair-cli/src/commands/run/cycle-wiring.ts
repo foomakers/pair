@@ -20,6 +20,7 @@ import {
   cycleHooksPolicyPath,
   type AutonomyResolution,
   type CardReadiness,
+  type BaseSyncResult,
   type CycleScriptsLocation,
   type GateRecord,
 } from './cycle-scripts'
@@ -757,7 +758,9 @@ interface TierGate {
 export function readWorktreeSetupCommand(main: string): string | undefined {
   const file = join(main, '.pair/adoption/tech/way-of-working.md')
   if (!existsSync(file)) return undefined
-  return /\*\*`worktree-setup-command`\*\*:\s*`([^`]+)`/.exec(readFileSync(file, 'utf-8'))?.[1]?.trim()
+  return /\*\*`worktree-setup-command`\*\*:\s*`([^`]+)`/
+    .exec(readFileSync(file, 'utf-8'))?.[1]
+    ?.trim()
 }
 
 const tail = (text: string, lines = 5): string => text.trim().split('\n').slice(-lines).join('\n')
@@ -767,51 +770,74 @@ function runSetupCommand(main: string, worktree: string | undefined): string | u
   const command = readWorktreeSetupCommand(main)
   if (command === undefined || worktree === undefined) return undefined
   console.log(`  Merge gate: worktree-setup-command \`${command}\` in ${worktree}`)
-  const run = spawnSync(command, { cwd: worktree, shell: true, encoding: 'utf-8', timeout: 20 * 60_000 })
+  const run = spawnSync(command, {
+    cwd: worktree,
+    shell: true,
+    encoding: 'utf-8',
+    timeout: 20 * 60_000,
+  })
   if (run.status === 0) return undefined
   const why = `worktree-setup-command \`${command}\` exited ${String(run.status ?? run.signal)}: ${tail(`${run.stdout ?? ''}${run.stderr ?? ''}`) || '(no output)'}`
   console.log(`  Merge gate: ${why}`)
   return why
 }
 
-// ponytail: one gate re-run per merge stage — a second red is a real failure for the fix stage; raise if flakes need more.
-const GATE_RETRIES_PER_MERGE = 1
+const NO_EVIDENCE = 'no gate evidence for this tier and head'
 
 /**
- * AC1/AC2 — a red tier gate is not an exit. While `autoRecoveryRounds` grants a round (and this stage has a re-run left),
- * the adopted `worktree-setup-command` runs in the story worktree and the gate runs again on the SAME reviewed head (a
- * failing setup spends its round, its error recorded). Still red ⇒ the failing gates are recorded for `resolve`, which
- * sends the approved card to the fix stage with them as findings.
+ * AC1/AC2 — a red tier gate is not an exit. When `autoRecoveryRounds` grants a round, the adopted
+ * `worktree-setup-command` runs in the story worktree and the gate runs again on the SAME reviewed head (a failing
+ * setup spends the round, its error kept). Still red ⇒ the failing gates are recorded for `resolve`, which sends the
+ * approved card to the fix stage with them as findings.
  */
+// ponytail: one gate re-run per merge stage — a second red is a real failure for the fix stage; raise if flakes need more.
 async function gateWithRecovery(
   ctx: CycleDriverContext,
   input: CycleDriverRequest,
   co: Coordinates,
   pins: MergePins,
 ): Promise<TierGate> {
-  let gate = await runTierGate(ctx, co, pins)
-  let why = gate.result ?? 'no gate evidence for this tier and head'
-  let setupFailed: string | undefined
-  const worktree = worktreePathOf(await worktreeFor(ctx, input, co)())
-  for (let retries = 0; !gate.green && retries <= GATE_RETRIES_PER_MERGE; retries++) {
-    const round =
-      retries < GATE_RETRIES_PER_MERGE
-        ? co.bridge.recover({ dir: co.runDir, kind: 'gate-retry', detail: why, policy: budgetsOf(input) })
-        : { allowed: false }
-    if (!round.allowed) {
-      const failing = gate.gates.filter(g => g.ok !== true)
-      const setup = setupFailed === undefined ? [] : [{ name: 'worktree-setup-command', ok: false, lastLines: setupFailed }]
-      const gates = failing.length > 0 ? gate.gates : [{ name: 'tier-gate', ok: false, lastLines: gate.result ?? 'no gate evidence for this tier and head' }]
-      co.bridge.gateRed({ dir: co.runDir, reviewedHead: pins.reviewedHead, gates: [...gates, ...setup] })
-      console.log(`  Merge gate: still red on ${pins.reviewedHead} — routed to the fix stage with the failing gates as findings`)
-      return gate
-    }
-    console.log(`  Merge gate: red — recovery round ${String(round.round)}/${String(round.budget)}: setup, then the gate again on ${pins.reviewedHead}`)
-    setupFailed = runSetupCommand(co.main, worktree)
-    if (setupFailed !== undefined) continue
-    gate = await runTierGate(ctx, co, pins)
-    why = gate.result ?? 'no gate evidence for this tier and head'
-  }
+  const first = await runTierGate(ctx, co, pins)
+  if (first.green) return first
+  const round = co.bridge.recover({
+    dir: co.runDir,
+    kind: 'gate-retry',
+    detail: first.result ?? NO_EVIDENCE,
+    policy: budgetsOf(input),
+  })
+  if (!round.allowed) return routeToFix(co, pins, first)
+  console.log(
+    `  Merge gate: red — recovery round ${String(round.round)}/${String(round.budget)}: setup, then the gate again on ${pins.reviewedHead}`,
+  )
+  const setupFailed = runSetupCommand(co.main, worktreePathOf(await worktreeFor(ctx, input, co)()))
+  const gate = setupFailed === undefined ? await runTierGate(ctx, co, pins) : first
+  return gate.green ? gate : routeToFix(co, pins, gate, setupFailed)
+}
+
+/** AC2: records the gates that stayed red (a failing setup among them) — `resolve` turns them into findings. */
+function routeToFix(
+  co: Coordinates,
+  pins: MergePins,
+  gate: TierGate,
+  setupFailed?: string,
+): TierGate {
+  const failing = gate.gates.filter(g => g.ok !== true)
+  const gates =
+    failing.length > 0
+      ? gate.gates
+      : [{ name: 'tier-gate', ok: false, lastLines: gate.result ?? NO_EVIDENCE }]
+  const setup =
+    setupFailed === undefined
+      ? []
+      : [{ name: 'worktree-setup-command', ok: false, lastLines: setupFailed }]
+  co.bridge.gateRed({
+    dir: co.runDir,
+    reviewedHead: pins.reviewedHead,
+    gates: [...gates, ...setup],
+  })
+  console.log(
+    `  Merge gate: still red on ${pins.reviewedHead} — routed to the fix stage with the failing gates as findings`,
+  )
   return gate
 }
 
@@ -839,17 +865,35 @@ function syncBase(
   co: Coordinates,
   worktree: string | undefined,
 ): CycleMergeOutcome | undefined {
-  if (worktree === undefined) return undefined
-  git(worktree, ['fetch', '-q', 'origin'])
-  if (git(worktree, ['merge-tree', '--write-tree', '--no-messages', 'HEAD', ctx.baseBranch]).status !== 1) return undefined
-  const round = co.bridge.recover({ dir: co.runDir, kind: 'base-sync', detail: `${co.branch} conflicts with ${ctx.baseBranch}`, policy: budgetsOf(input) })
+  if (worktree === undefined || !conflictsWithBase(worktree, ctx.baseBranch)) return undefined
+  const round = co.bridge.recover({
+    dir: co.runDir,
+    kind: 'base-sync',
+    detail: `${co.branch} conflicts with ${ctx.baseBranch}`,
+    policy: budgetsOf(input),
+  })
   if (!round.allowed) return needsHuman(round.next?.detail ?? 'autoRecoveryRounds spent')
-  console.log(`  Merge: ${co.branch} conflicts with ${ctx.baseBranch} — base sync (recovery round ${String(round.round)}/${String(round.budget)})`)
+  console.log(
+    `  Merge: ${co.branch} conflicts with ${ctx.baseBranch} — base sync (recovery round ${String(round.round)}/${String(round.budget)})`,
+  )
   const sync = co.bridge.baseSync({ cwd: worktree, base: ctx.baseBranch, story: input.card })
-  if (sync.synced !== true) return needsHuman(sync.detail ?? `base sync did not complete (${sync.reason ?? 'unknown'})`)
-  const push = git(worktree, ['push', '-q', 'origin', `HEAD:refs/heads/${co.branch}`])
+  if (sync.synced !== true)
+    return needsHuman(sync.detail ?? `base sync did not complete (${sync.reason ?? 'unknown'})`)
+  return pushSynced(worktree, co.branch, sync)
+}
+
+/** Whether the story worktree's HEAD conflicts with the (freshly fetched) base — `git merge-tree` exits 1 on a conflict. */
+function conflictsWithBase(worktree: string, base: string): boolean {
+  git(worktree, ['fetch', '-q', 'origin'])
+  return git(worktree, ['merge-tree', '--write-tree', '--no-messages', 'HEAD', base]).status === 1
+}
+
+/** Pushes a synced branch (its pre-push gate runs, never bypassed); the moved head is re-verified by `resolve`. */
+function pushSynced(worktree: string, branch: string, sync: BaseSyncResult): CycleMergeOutcome {
+  const push = git(worktree, ['push', '-q', 'origin', `HEAD:refs/heads/${branch}`])
   if (push.status !== 0) return needsHuman(`base sync pushed nothing: ${tail(push.stderr ?? '')}`)
-  console.log(`  Merge: base synced (${(sync.conflicts ?? []).map(c => `${c.path}→${c.side}`).join(', ') || 'clean'}) — the new head is re-verified`)
+  const resolved = (sync.conflicts ?? []).map(c => `${c.path}→${c.side}`).join(', ')
+  console.log(`  Merge: base synced (${resolved || 'clean'}) — the new head is re-verified`)
   return { status: 'base-synced', stagesRun: 0, merge: { baseSync: sync }, resume: true }
 }
 
@@ -858,7 +902,12 @@ function rerunFailedCi(input: CycleDriverRequest, co: Coordinates, head: string)
   let free = true
   return () => {
     if (!free) {
-      const round = co.bridge.recover({ dir: co.runDir, kind: 'ci-rerun', detail: `CI failed again on ${head}`, policy: budgetsOf(input) })
+      const round = co.bridge.recover({
+        dir: co.runDir,
+        kind: 'ci-rerun',
+        detail: `CI failed again on ${head}`,
+        policy: budgetsOf(input),
+      })
       if (!round.allowed) {
         console.log(`  needs-human: ${round.next?.detail ?? 'autoRecoveryRounds spent'}`)
         return false
@@ -881,7 +930,10 @@ function rerunFailedRuns(cwd: string, head: string): boolean {
     ) as { databaseId?: number; conclusion?: string }[]
     const failed = runs.filter(r => r.conclusion === 'failure' && Number.isInteger(r.databaseId))
     for (const r of failed)
-      execFileSync('gh', ['run', 'rerun', String(r.databaseId), '--failed'], { cwd, stdio: 'ignore' })
+      execFileSync('gh', ['run', 'rerun', String(r.databaseId), '--failed'], {
+        cwd,
+        stdio: 'ignore',
+      })
     return failed.length > 0
   } catch {
     return false
@@ -916,7 +968,13 @@ const mergeFor =
       return { status: mergeStatus(check), stagesRun: 0, merge: check }
     }
     const gate = await gateWithRecovery(ctx, input, co, pins)
-    if (!gate.green) return { status: 'gate-red', stagesRun: 1, merge: { gateResult: gate.result ?? null }, resume: true }
+    if (!gate.green)
+      return {
+        status: 'gate-red',
+        stagesRun: 1,
+        merge: { gateResult: gate.result ?? null },
+        resume: true,
+      }
     const run = co.bridge.mergeRun({
       ...pins,
       gate: gate.green ? 'green' : 'red',

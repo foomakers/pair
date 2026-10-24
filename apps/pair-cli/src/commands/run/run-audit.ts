@@ -84,21 +84,46 @@ export function previousExclusions(path: string): PreviousExclusion[] {
   if (!existsSync(path)) return []
   const latest = new Map<string, PreviousExclusion | undefined>()
   for (const line of readFileSync(path, 'utf-8').split('\n')) {
-    let entry: { ts?: string; runId?: string; card?: string; event?: string; detail?: { status?: string; reason?: string } }
-    try {
-      entry = JSON.parse(line) as typeof entry
-    } catch {
-      continue
-    }
-    if (entry.event !== 'card-end' || typeof entry.card !== 'string') continue
-    const status = String(entry.detail?.status ?? '')
-    const reason = entry.detail?.reason?.startsWith('needs-human') ? entry.detail.reason : status
-    latest.set(
-      entry.card,
-      DURABLE_END(status)
-        ? { card: entry.card, reason, runId: String(entry.runId ?? '?'), date: String(entry.ts ?? '').slice(0, 10) }
-        : undefined,
-    )
+    const end = cardEndOf(line)
+    if (end !== undefined) latest.set(end.card, end.durable ? end.exclusion : undefined)
   }
   return [...latest.values()].filter((e): e is PreviousExclusion => e !== undefined)
+}
+
+interface AuditLine {
+  ts?: string
+  runId?: string
+  card?: string
+  event?: string
+  detail?: { status?: string; reason?: string }
+}
+
+/** One audit line as a `card-end` (durable or not), or `undefined` for any other line. */
+function cardEndOf(
+  line: string,
+): { card: string; durable: boolean; exclusion: PreviousExclusion } | undefined {
+  let entry: AuditLine
+  try {
+    entry = JSON.parse(line) as AuditLine
+  } catch {
+    return undefined
+  }
+  if (entry.event !== 'card-end' || typeof entry.card !== 'string') return undefined
+  const status = String(entry.detail?.status ?? '')
+  return {
+    card: entry.card,
+    durable: DURABLE_END(status),
+    exclusion: exclusionOf(entry.card, status, entry),
+  }
+}
+
+/** The exclusion as listed: a `needs-human: <reason>` keeps its reason, any other terminal its status. */
+function exclusionOf(card: string, status: string, entry: AuditLine): PreviousExclusion {
+  const reason = entry.detail?.reason?.startsWith('needs-human') ? entry.detail.reason : status
+  return {
+    card,
+    reason,
+    runId: String(entry.runId ?? '?'),
+    date: String(entry.ts ?? '').slice(0, 10),
+  }
 }

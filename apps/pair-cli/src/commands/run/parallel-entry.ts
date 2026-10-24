@@ -240,7 +240,9 @@ function withPrereqState(fan: FanOut, candidates: readonly RootCandidate[]): Roo
     const closed = state.blocked && listed.every(p => p.merged) && state.blockedBy !== undefined
     return {
       ...card,
-      prerequisites: closed ? [{ id: state.blockedBy!.id, merged: false, reason: state.blockedBy!.reason }] : listed,
+      prerequisites: closed
+        ? [{ id: state.blockedBy!.id, merged: false, reason: state.blockedBy!.reason }]
+        : listed,
     }
   })
 }
@@ -250,7 +252,10 @@ function planFor(fan: FanOut, candidates: RootCandidate[]): RootPlan {
   const { policy } = input.context
   const { readCardTitle: readTitle = readCardTitle } = fan.deps
   const plan = computeRootPlan({
-    candidates: withPrereqState(fan, completeCandidates(candidates, id => readTitle(id, input.cwd))),
+    candidates: withPrereqState(
+      fan,
+      completeCandidates(candidates, id => readTitle(id, input.cwd)),
+    ),
     // Only the legacy `## Eligibility` is a tier gate; a filter from an argument or `## Autonomy` already
     // chose the cards (argument > adoption, ADR-027).
     eligibility: fan.selection.filter?.source === '## Eligibility' ? policy.eligibility : undefined,
@@ -360,7 +365,9 @@ async function withLiveCards(
   // US-575 AC9: what earlier runs excluded is listed, never inherited — every card is driven again and `resolve`
   // re-evaluates it (a failure recorded on heads that since moved is stale).
   for (const e of previousExclusions(context.auditPath))
-    console.log(`  excluded: ${e.card} (${e.reason}, run ${e.runId}, ${e.date}) — re-evaluated, not inherited`)
+    console.log(
+      `  excluded: ${e.card} (${e.reason}, run ${e.runId}, ${e.date}) — re-evaluated, not inherited`,
+    )
   // US-573 AC4: the pool's card events go to the same live JSONL audit as a loop run's.
   const audit = createRunAudit({
     path: context.auditPath,

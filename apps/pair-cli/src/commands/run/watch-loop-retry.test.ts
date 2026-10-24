@@ -215,7 +215,12 @@ describe('AD: only TRANSIENT failures are retried; a durable cycle terminal is r
           {
             outcomes: cards.map(c =>
               c.id === '1'
-                ? { id: '1', outcome: 'failed' as const, detail: 'needs-human: maxFixRounds (10) spent', cycleStatus: 'needs-human' }
+                ? {
+                    id: '1',
+                    outcome: 'failed' as const,
+                    detail: 'needs-human: maxFixRounds (10) spent',
+                    cycleStatus: 'needs-human',
+                  }
                 : out(c.id, 'completed'),
             ),
           }
@@ -226,7 +231,9 @@ describe('AD: only TRANSIENT failures are retried; a durable cycle terminal is r
       },
     )
     expect(batches).toEqual([['1', '2', '3']])
-    expect(records[1]!.skipped.find(s => s.id === '1')!.detail).toBe('durable failure: needs-human: maxFixRounds (10) spent — not retried')
+    expect(records[1]!.skipped.find(s => s.id === '1')!.detail).toBe(
+      'durable failure: needs-human: maxFixRounds (10) spent — not retried',
+    )
     expect(result.exitCode).toBe(1)
   })
 
