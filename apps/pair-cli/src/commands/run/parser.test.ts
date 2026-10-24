@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseRunCommand, DEFAULT_ITERATION_TIMEOUT_SECONDS } from './parser'
+import { parseRunCommand } from './parser'
 
 describe('parseRunCommand', () => {
   it('parses the flagless path off schema defaults (AC12)', () => {
@@ -12,9 +12,23 @@ describe('parseRunCommand', () => {
       autonomous: false,
       approveProjectTrust: false,
       approveIneligible: false,
-      iterationTimeoutSeconds: DEFAULT_ITERATION_TIMEOUT_SECONDS,
       dryRun: false,
     })
+  })
+
+  it('US-573 AC5: --iteration-timeout is an opt-in total cap (no default); --idle-timeout is carried when passed', () => {
+    expect(parseRunCommand({}).iterationTimeoutSeconds).toBeUndefined()
+    expect(parseRunCommand({}).idleTimeoutSeconds).toBeUndefined()
+    expect(parseRunCommand({ idleTimeout: '600' }).idleTimeoutSeconds).toBe(600)
+    expect(() => parseRunCommand({ idleTimeout: '0' })).toThrow(/--idle-timeout/)
+  })
+
+  it('US-573 AC3: --quiet, --json and --no-color pick the output mode; quiet and json are exclusive', () => {
+    expect(parseRunCommand({}).output).toBeUndefined()
+    expect(parseRunCommand({ quiet: true }).output).toBe('quiet')
+    expect(parseRunCommand({ json: true }).output).toBe('json')
+    expect(parseRunCommand({ color: false }).noColor).toBe(true)
+    expect(() => parseRunCommand({ quiet: true, json: true })).toThrow(/--quiet.*--json/)
   })
 
   it('never defaults to an autonomous or trust-approving value (AC6)', () => {

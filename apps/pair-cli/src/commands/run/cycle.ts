@@ -124,6 +124,8 @@ export interface RunCycleInput {
   readonly rounds?: number | 'max'
   readonly onStage?: (record: CycleStageRecord) => void
   readonly onNotice?: (note: string) => void
+  /** US-573: told of every stage about to be dispatched (live progress), before it runs. */
+  readonly onDispatch?: (next: CycleNext) => void
   readonly appendAudit?: (record: CycleStageRecord) => void
 }
 
@@ -440,6 +442,11 @@ const MERGE_RAN = new Set(['merged', 'merged-closure-unfinished'])
  * a time. Never judges a stage's content. The only merge is the injected `mergeStage`
  * collaborator's (US-490: `cycle-merge.mjs` re-verifies its own conjunction) — never this loop.
  */
+/** US-573: tells the live-progress observer, if any, which stage is about to run. */
+function announce(input: RunCycleInput, next: CycleNext): void {
+  input.onDispatch?.(next)
+}
+
 async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
   const { resolve, packet, spawnStage, policy, onNotice, hooks } = input
   const observers: StageObservers = {
@@ -481,6 +488,7 @@ async function runCycleLoop(input: RunCycleInput): Promise<CycleOutcome> {
     const gated = await gateDispatch(state, next, input)
     if (gated !== null) return gated
 
+    announce(input, next)
     const stagePacket = await packet(next)
     state.dispatchedResult = await spawnStage(withFormatCorrection(stagePacket, state))
     state.stagesRun += 1

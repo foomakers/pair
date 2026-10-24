@@ -1,5 +1,6 @@
 import type { ChildProcess } from 'child_process'
 import { constants } from 'os'
+import { pooledCard } from './pooled-card'
 
 /**
  * SIGTERM/SIGINT on a `--card` run (US-487 review r1-2, AC9).
@@ -84,7 +85,7 @@ export interface InterruptHost {
 export async function whileInterruptible<T>(
   onInterrupt: (signal: InterruptSignal) => void,
   run: () => Promise<T>,
-  host: InterruptHost = process,
+  host: InterruptHost = defaultHost(),
 ): Promise<T> {
   let handling = false
   const listener = (signal: InterruptSignal): void => {
@@ -115,3 +116,13 @@ export async function whileInterruptible<T>(
 
 /** The run an interruption took over: it settles only by the handler's `exit`. */
 const NEVER: Promise<never> = new Promise<never>(() => {})
+
+/** A card the loop drives in-process records its end on a signal; the loop owns the process exit. */
+function defaultHost(): InterruptHost {
+  if (pooledCard() === undefined) return process
+  return {
+    on: (signal, listener) => process.on(signal, listener),
+    off: (signal, listener) => process.off(signal, listener),
+    exit: () => {},
+  }
+}

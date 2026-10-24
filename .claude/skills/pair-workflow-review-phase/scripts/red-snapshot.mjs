@@ -627,6 +627,8 @@ export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, he
 // ── verify ─────────────────────────────────────────────────────────────────────────────────
 const inScope = (path, allowed) =>
   allowed.some(a => (a.endsWith('/') ? path.startsWith(a) : path === a || path.startsWith(`${a}/`)))
+// #575: a fix that updates the PR's own changeset to describe itself is what the docs AC asks for — never out of scope.
+const CHANGESET_RE = /^\.changeset\/[^/]+\.md$/
 
 /**
  * Publishes a sealed snapshot to the story branch. `green-fix` normally pushes the seal with its GREEN commit, but a
@@ -720,7 +722,7 @@ export function verify({ pr, phase, base, cwd }) {
   if (contract?.fixScope) {
     const { allowedPaths, mode } = contract.fixScope
     for (const { status, path } of after) {
-      if (isTestPath(path)) continue
+      if (isTestPath(path) || CHANGESET_RE.test(path)) continue
       if (mode === 'test') breach('test-mode-production-change', { path, status })
       // A doc segment admits PROSE only, by extension — whatever directory its scope names (a directory entry would otherwise let
       // `skills/x/scripts/run.mjs` change without a breach).
@@ -1154,7 +1156,7 @@ function verifyChainCore({ pr, base, cwd, expectContract = true, overrides = [],
         if (!contracts.slice(i + 1).some(x => x.listed.includes(path))) breach('unlisted-test-changed', { path, segment: c.phase })
         continue
       }
-      if (!c.contract?.fixScope) continue
+      if (!c.contract?.fixScope || CHANGESET_RE.test(path)) continue
       const { allowedPaths, mode } = c.contract.fixScope
       if (mode === 'test') breach('test-mode-production-change', { path, status, segment: c.phase })
       else if (mode === 'doc' && !PROSE_RE.test(path)) breach('doc-code-change', { path, status, segment: c.phase })

@@ -6,13 +6,15 @@ import { isInterrupted, trackEngine } from './interrupt'
 import type { RunCommandConfig } from './parser'
 import type { RootCandidate } from './root-plan'
 import { parsePrepareResult, type PrepareResult } from './card-prepare'
+import { eventBodies, parseRunEvent, RUN_EVENTS_ENV, type RunEvent } from './run-events'
+import { inPooledCard } from './pooled-card'
 
 /**
  * The `--root --parallel` process pool (US-491 T-4/T-5).
  *
- * The unit of concurrency is ONE `pair-cli run --card <id>` process (#487) — a genuinely separate
- * OS process, never a worker thread, so the context isolation #486/#487 guarantee per card holds.
- * The pool adds no policy: it starts at most `limit` of the planned cards at once, starts the next
+ * The unit of concurrency is ONE card's delivery cycle (#487), run in this process (`runCardInProcess`):
+ * the context isolation #486/#487 guarantee per card holds because every stage is its own engine
+ * process (a skill run fresh), never because of a nested `pair-cli run`. The pool adds no policy: it starts at most `limit` of the planned cards at once, starts the next
  * when a slot frees, and records each card's own exit. One card failing, crashing or timing out
  * (its own per-process timeout, #487) never stops the others (AC4). Merge is not here (AC5): each
  * card reaches — or does not reach — its own `merge` stage inside its own process.
@@ -48,6 +50,8 @@ export type CardProcessRunner = (input: {
   readonly card: RootCandidate
   readonly args: readonly string[]
   readonly cwd: string
+  /** US-573: the child's run events (`PAIR_EVENT` lines), relayed instead of printed. */
+  readonly onEvent?: (event: RunEvent) => void
 }) => Promise<CardProcessExit>
 
 /** Exit → outcome: 0 is the card's own terminal (its audit line says which), anything else is not. */
@@ -210,8 +214,16 @@ export function buildCardProcessArgs(
     ...autonomyArgv(config),
     ...(config.profile !== undefined ? ['--profile', config.profile] : []),
     ...(config.workflowConfig !== undefined ? ['--workflow-config', config.workflowConfig] : []),
-    '--iteration-timeout',
-    String(config.iterationTimeoutSeconds),
+    ...timeoutArgv(config),
+  ]
+}
+
+/** US-573: the timeouts travel to each child only when the operator passed them (the child resolves the rest). */
+function timeoutArgv(config: RunCommandConfig): string[] {
+  const { iterationTimeoutSeconds: cap, idleTimeoutSeconds: idle } = config
+  return [
+    ...(cap !== undefined ? ['--iteration-timeout', String(cap)] : []),
+    ...(idle !== undefined ? ['--idle-timeout', String(idle)] : []),
   ]
 }
 
@@ -225,23 +237,100 @@ export function parseCycleStatus(line: string): string | undefined {
   return /^\s*Cycle status: (\S+)/.exec(line)?.[1]
 }
 
-function relay(
-  child: ChildProcess,
+interface RelayHandlers {
+  readonly onPrepare: (result: PrepareResult) => void
+  readonly onCycle: (status: string) => void
+  /** US-573: present ⇒ the child's `PAIR_EVENT` lines are relayed here instead of printed. */
+  readonly onEvent?: ((event: RunEvent) => void) | undefined
+}
+
+/** A child's `PAIR_EVENT` line, relayed as an event; `false` for any other line (printed as before). */
+function relayedEvent(line: string, onEvent: RelayHandlers['onEvent']): boolean {
+  const body = onEvent === undefined ? undefined : eventBodies(line)[0]
+  const event = body === undefined ? undefined : parseRunEvent(body)
+  if (event === undefined) return false
+  onEvent!(event)
+  return true
+}
+
+/** One line of a card's output: an event is relayed, the status lines are read, every other line is printed under the card. */
+function relayLine(
+  line: string,
   id: string,
-  onPrepare: (result: PrepareResult) => void,
-  onCycle: (status: string) => void,
+  handlers: RelayHandlers,
+  print: (line: string) => void,
 ): void {
+  if (relayedEvent(line, handlers.onEvent)) return
+  const prepare = parsePrepareResult(line)
+  if (prepare !== undefined) handlers.onPrepare(prepare)
+  const cycle = parseCycleStatus(line)
+  if (cycle !== undefined) handlers.onCycle(cycle)
+  const human = parseNeedsHuman(line)
+  if (human !== undefined) handlers.onNeedsHuman?.(human)
+  print(prefixLine(id, line))
+}
+
+function relay(child: ChildProcess, id: string, handlers: RelayHandlers): void {
   for (const stream of [child.stdout, child.stderr]) {
     if (stream === null) continue
-    createInterface({ input: stream }).on('line', line => {
-      const prepare = parsePrepareResult(line)
-      if (prepare !== undefined) onPrepare(prepare)
-      const cycle = parseCycleStatus(line)
-      if (cycle !== undefined) onCycle(cycle)
-      console.log(prefixLine(id, line))
-    })
+    createInterface({ input: stream }).on('line', line =>
+      relayLine(line, id, handlers, l => console.log(l)),
+    )
   }
 }
+
+/** `run --card` argv → the parser's options (`--card-tags x` ⇒ `cardTags: 'x'`, a bare flag ⇒ `true`). */
+export function optionsOfArgv(args: readonly string[]): Record<string, string | boolean> {
+  const options: Record<string, string | boolean> = {}
+  for (let i = 0; i < args.length; i++) {
+    const flag = args[i]!
+    if (!flag.startsWith('--')) continue
+    const key = flag.slice(2).replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
+    const value = args[i + 1]
+    if (value !== undefined && !value.startsWith('--')) {
+      options[key] = value
+      i++
+    } else options[key] = true
+  }
+  return options
+}
+
+/**
+ * The loop's card runner: the card's delivery cycle runs in THIS process (its stages are the skills it
+ * dispatches, each its own engine process) — never a nested `pair-cli run`. Its lines and events reach
+ * the loop exactly as a child's would.
+ */
+export const runCardInProcess =
+  (runCard: (args: readonly string[]) => Promise<number>): CardProcessRunner =>
+  async ({ card, args, onEvent }) => {
+    let prepare: PrepareResult | undefined
+    let cycleStatus: string | undefined
+    let needsHuman: string | undefined
+    const handlers: RelayHandlers = {
+      onPrepare: result => (prepare = result),
+      onCycle: status => (cycleStatus = status),
+      onNeedsHuman: reason => (needsHuman = reason),
+      onEvent,
+    }
+    const relayed = (line: string, print: (line: string) => void) =>
+      line.split('\n').forEach(l => relayLine(l, card.id, handlers, print))
+    let exitCode: number
+    try {
+      exitCode = await inPooledCard({ onLine: relayed, onEvent }, () => runCard(args))
+    } catch (error) {
+      console.log(
+        prefixLine(card.id, `  ${error instanceof Error ? error.message : String(error)}`),
+      )
+      exitCode = 1
+    }
+    return {
+      exitCode,
+      signal: null,
+      ...(prepare !== undefined && { prepare }),
+      ...(cycleStatus !== undefined && { cycleStatus }),
+      ...(needsHuman !== undefined && { needsHuman }),
+    }
+  }
 
 /**
  * The shipped runner: this same `pair-cli`, re-invoked as `run --card` in a child process.
@@ -251,7 +340,7 @@ function relay(
  * `interrupt.ts` so a SIGTERM/SIGINT on the pool reaches every running card, which then writes its
  * own `end` record and releases its own lock (#487's handler).
  */
-export const spawnCardProcess: CardProcessRunner = ({ card, args, cwd }) =>
+export const spawnCardProcess: CardProcessRunner = ({ card, args, cwd, onEvent }) =>
   new Promise(resolve => {
     const entry = process.argv[1]
     if (entry === undefined) {
@@ -267,6 +356,7 @@ export const spawnCardProcess: CardProcessRunner = ({ card, args, cwd }) =>
       child = spawn(process.execPath, [...process.execArgv, entry, ...args], {
         cwd,
         stdio: ['ignore', 'pipe', 'pipe'],
+        ...(onEvent !== undefined && { env: { ...process.env, [RUN_EVENTS_ENV]: '1' } }),
       })
     } catch (error) {
       resolve({ exitCode: null, signal: null, error: String(error) })
@@ -275,12 +365,11 @@ export const spawnCardProcess: CardProcessRunner = ({ card, args, cwd }) =>
     trackEngine(child)
     let prepare: PrepareResult | undefined
     let cycleStatus: string | undefined
-    relay(
-      child,
-      card.id,
-      result => (prepare = result),
-      status => (cycleStatus = status),
-    )
+    relay(child, card.id, {
+      onPrepare: result => (prepare = result),
+      onCycle: status => (cycleStatus = status),
+      onEvent,
+    })
     child.once('error', error => resolve({ exitCode: null, signal: null, error: error.message }))
     child.once('close', (exitCode, signal) =>
       resolve({
@@ -311,6 +400,29 @@ export interface RunPlannedCardInput {
    * it acquired — before it exits, without waiting on the child's streams.
    */
   readonly heldLocks?: Set<() => void>
+  /** US-573: the card's live events — its start and end, plus whatever its process relays. */
+  readonly onEvent?: (event: RunEvent) => void
+}
+
+const cardStartEvent = (card: RootCandidate): RunEvent => ({
+  event: 'card-start',
+  card: card.id,
+  ...(card.title && { title: card.title }),
+})
+
+/** The card's terminal line: its cycle status when the child reported one, else how its process ended. */
+function cardEndEvent(
+  id: string,
+  exit: CardProcessExit,
+  outcome: Pick<CardOutcome, 'outcome' | 'detail'>,
+): RunEvent {
+  const completed = outcome.outcome === 'completed'
+  return {
+    event: 'card-end',
+    card: id,
+    status: exit.cycleStatus ?? (completed ? 'completed' : `failed (${outcome.outcome})`),
+    ...(!completed && { reason: outcome.detail }),
+  }
 }
 
 function holderNote(held: { pid?: number; alive?: boolean }): string {
@@ -342,15 +454,19 @@ export async function runPlannedCard(input: RunPlannedCardInput): Promise<CardOu
   input.heldLocks?.add(locks.release)
   const startedAt = now()
   try {
-    console.log(`  Started #${card.id}: pair-cli run --card ${card.id}`)
+    console.log(`  Started #${card.id}`)
+    const onEvent = input.onEvent ?? (() => {})
+    onEvent(cardStartEvent(card))
     const exit = await input.runCardProcess({
       card,
       args: buildCardProcessArgs(input.config, card, input.cwd, input.eligibilityFilter),
       cwd: input.cwd,
+      onEvent,
     })
     const outcome = isInterrupted()
       ? { id: card.id, outcome: 'interrupted' as const, detail: 'the driver was signalled' }
       : outcomeOfExit(card.id, exit)
+    onEvent(cardEndEvent(card.id, exit, outcome))
     return { ...outcome, startedAt, endedAt: now() }
   } finally {
     locks.release()

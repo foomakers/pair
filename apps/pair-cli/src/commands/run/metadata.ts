@@ -131,7 +131,31 @@ export const runCommandMetadata = {
     },
     {
       flags: '--iteration-timeout <seconds>',
-      description: 'Per-iteration wall-clock bound (hang guard, default 1800)',
+      description:
+        'Opt-in TOTAL wall-clock cap per iteration (no default; the idle timeout is the hang guard)',
+    },
+    {
+      flags: '--idle-timeout <seconds>',
+      description:
+        'Stop an iteration after this long with no engine event (default 1800); over `## Stop Predicate` idle-timeout and pair.config.json engine.idleTimeout',
+    },
+    {
+      flags: '--quiet',
+      description:
+        'Plain output as before live progress: one line per iteration, no live card lines',
+    },
+    {
+      flags: '--verbose',
+      description:
+        "Live terminal: also print the driver's technical lines (stage records, dispatch records, banner)",
+    },
+    {
+      flags: '--json',
+      description: 'Emit the run events as NDJSON on stdout (human text goes to stderr)',
+    },
+    {
+      flags: '--no-color',
+      description: 'No ANSI colors in live progress (NO_COLOR is honoured too)',
     },
     {
       flags: '--profile <name>',
