@@ -12,6 +12,7 @@ Single owner of the rule for findings whose fix is **prose only** — Markdown, 
 
 - A finding's **target paths** are the ones the planner declares for it (`group.findingPaths: { "<finding id>": [paths] }`), else every path in the review finding's `location` text. No target path at all ⇒ not judged.
 - A `behavioral` or `test` group holding a finding whose targets are ALL prose is refused: `prose-finding-not-doc: <id> belongs in a doc group` — the stage must re-plan. A `doc` group holding a finding that touches any code is refused: `code-finding-in-doc-group: <id>`; a doc group's `allowedPaths` must be prose (`doc-group-code-paths`).
+- A `doc` group's `allowedPaths` cover EVERY location its findings list (one stale claim ⇒ one finding with N locations, US-582; a directory entry covers its children); a generated mirror is fixed at its dataset source, which the location lists beside it (`<mirror> ← <dataset path>`). A missed location is refused: `finding-location-outside-scope: <id>: <path>`.
 - **Mixed finding** — one finding needing code AND its own doc text: it stays `behavioral`. Its `allowedPaths` may include the related prose files; its witnesses cover behaviour only; the review verifies the prose.
 - **Mixed round** — some findings prose-only, others code: split into a `behavioral` group and a `doc` group with `dependsOn: [<the behavioral group>]`, so the prose is written after the code fix. The cycle runs prepare → validate → green for the first group, then for the second, then ONE verify reviews both.
 
