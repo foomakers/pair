@@ -350,6 +350,17 @@ export async function handleParallelRun(
   })
 }
 
+/**
+ * US-575 AC9: what earlier runs excluded is listed, never inherited — every card is driven again and `resolve`
+ * re-evaluates it (a failure recorded on heads that since moved is stale).
+ */
+function reportPreviousExclusions(auditPath: string): void {
+  for (const e of previousExclusions(auditPath))
+    console.log(
+      `  excluded: ${e.card} (${e.reason}, run ${e.runId}, ${e.date}) — re-evaluated, not inherited`,
+    )
+}
+
 /** US-573 AC2: one live line per card while the pool runs (cursor-addressed rows on a TTY). */
 async function withLiveCards(
   { config, context, cwd }: ParallelRunInput,
@@ -362,12 +373,7 @@ async function withLiveCards(
     mode: config.output ?? 'live',
     color: config.noColor !== true && process.env['NO_COLOR'] === undefined,
   })
-  // US-575 AC9: what earlier runs excluded is listed, never inherited — every card is driven again and `resolve`
-  // re-evaluates it (a failure recorded on heads that since moved is stale).
-  for (const e of previousExclusions(context.auditPath))
-    console.log(
-      `  excluded: ${e.card} (${e.reason}, run ${e.runId}, ${e.date}) — re-evaluated, not inherited`,
-    )
+  reportPreviousExclusions(context.auditPath)
   // US-573 AC4: the pool's card events go to the same live JSONL audit as a loop run's.
   const audit = createRunAudit({
     path: context.auditPath,

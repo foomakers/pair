@@ -122,6 +122,32 @@ function iterationObserver(run: RunSinks, config: RunCommandConfig, engineId: st
   }
 }
 
+/** A `--card` preparation run (refine-story / plan-tasks) is that card in its `prepare` stage (US-573). */
+function openPrepareCard(run: RunSinks, card: string | undefined): void {
+  if (card === undefined) return
+  emit(run, { event: 'card-start', card }, 1)
+  emit(run, { event: 'stage', card, stage: 'prepare' }, 1)
+}
+
+function closePrepareCard(
+  run: RunSinks,
+  card: string | undefined,
+  outcome: Awaited<ReturnType<typeof runLoop>>,
+): void {
+  if (card === undefined) return
+  const failed = outcome.stopReason === 'iteration-failed'
+  emit(
+    run,
+    {
+      event: 'card-end',
+      card,
+      status: failed ? 'failed' : 'completed',
+      reason: failed ? stopText(outcome) : 'prepared',
+    },
+    1,
+  )
+}
+
 /**
  * The re-invocation loop itself — identical whether the run was dispatched, invoked directly, or
  * routed to a preparation skill by the DoR fallback: one resolved run, N fresh engine processes.
@@ -142,6 +168,8 @@ export async function driveRun(
     restore()
     run.sink.finish()
   })
+  const card = config.dispatch?.card
+  openPrepareCard(run, card)
   try {
     const outcome = await runLoop({
       maxIterations: resolved.perimeter.maxIterations,
@@ -164,6 +192,7 @@ export async function driveRun(
       outcome.stopReason === 'iteration-failed' ? 'halted' : 'completed',
       stopText(outcome),
     )
+    closePrepareCard(run, card, outcome)
     run.sink.finish()
     reportOutcome(outcome, run)
     return loopExitCode(outcome)

@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'child_process'
-import { RUN_EVENTS_ENV, runEventLine, stageLabel } from './run-events'
+import { RUN_EVENTS_ENV, runEventLine, stageLabel, type RunEvent } from './run-events'
 import { existsSync, readFileSync, rmSync } from 'fs'
 import { dirname, join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
@@ -362,6 +362,8 @@ export interface CycleDriverRequest {
   readonly autonomy?: Pick<AutonomyResolution, 'policy'>
   /** US-575: the run's budgets (`## Autonomy` `maxFixRounds` / `autoRecoveryRounds`), read whether or not autonomy is active. */
   readonly budgets?: { readonly maxFixRounds?: number; readonly autoRecoveryRounds?: number }
+  /** Sees the card's run events; absent ⇒ only the `--parallel` pool's RUN_EVENTS_ENV relay. */
+  readonly onRunEvent?: (event: RunEvent) => void
 }
 
 /** The run's own coordinates, resolved once per invocation and shared by every collaborator below. */
@@ -608,17 +610,36 @@ const spawnStageFor = (ctx: CycleDriverContext, co: Coordinates) => async (packe
 
 export { stageLabel }
 
-/** US-573: under the `--parallel` pool (RUN_EVENTS_ENV) the parent renders one live line per card from these. */
+/**
+ * US-573: the card's own events, one `stage` per dispatch. A single `--card` hands its renderer in
+ * (`onRunEvent`, which also gets the `card-start`); under the `--parallel` pool (RUN_EVENTS_ENV) the
+ * lines go to stdout, where the parent renders one live line per card from them.
+ */
 function stageEvents(
   card: string,
   policy: Record<string, unknown>,
+  title: string | undefined,
+  onRunEvent: ((event: RunEvent) => void) | undefined,
 ): { onDispatch?: (next: { step: string; round?: number }) => void } {
+  const stage = (next: { step: string; round?: number }): RunEvent => ({
+    event: 'stage',
+    card,
+    stage: stageLabel(next, policy['maxFixRounds']),
+  })
+  if (onRunEvent !== undefined) {
+    let opened = false
+    return {
+      onDispatch: next => {
+        if (!opened) onRunEvent({ event: 'card-start', card, ...(title && { title }) })
+        opened = true
+        onRunEvent(stage(next))
+      },
+    }
+  }
   if (process.env[RUN_EVENTS_ENV] !== '1') return {}
   return {
     onDispatch: next =>
-      console.log(
-        runEventLine({ event: 'stage', card, stage: stageLabel(next, policy['maxFixRounds']) }),
-      ),
+      console.log(runEventLine(stage(next) as unknown as Record<string, unknown>)),
   }
 }
 
@@ -1089,7 +1110,7 @@ export function createDefaultCycleDriver(ctx: CycleDriverContext) {
       policy,
       ...(input.rounds !== undefined && { rounds: input.rounds }),
       onNotice: note => console.log(`  ${note}`),
-      ...stageEvents(input.card, policy),
+      ...stageEvents(input.card, policy, co.title, input.onRunEvent),
       // One line per stage, the moment the NEXT resolve reveals whether it advanced. Without it a
       // forty-dispatch unattended run prints a single terminal status and nothing else: the stage
       // that mattered is indistinguishable from the thirty-nine that did not, and a stage that
