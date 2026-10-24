@@ -201,7 +201,7 @@ test('a card with no labels under `lacks: risk:green` escalates (fail-safe); unr
 test('decide is pure: no I/O modules imported by the module', () => {
   const src = readFileSync(CLI, 'utf8')
   const imports = [...src.matchAll(/^import .* from '([^']+)'/gm)].map(m => m[1])
-  assert.deepEqual(imports.sort(), ['./card-id.mjs', 'node:fs', 'node:path', 'node:url'])
+  assert.deepEqual(imports.sort(), ['node:fs', 'node:path', 'node:url'])
   // US-572: only the CLI binds the PM adapter (a dynamic import, to judge `--root`) — never a static one.
   assert.doesNotMatch(src, /child_process|^import .*host\/index|\bgh\b.*spawn/m)
 })

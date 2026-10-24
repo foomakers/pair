@@ -69,8 +69,8 @@ export function assertBranchName(branch) {
   return b
 }
 
-// US-572: the card-id shape guard, as a typed refusal — the same rule as ../card-id.mjs (the pure parsers'
-// copy; this directory stays self-contained, opaque-card-ids.test.mjs pins the two equal).
+// US-572: the card-id shape guard, as a typed refusal — the same rule as autonomy-policy.mjs checkCardId (the
+// pure parsers' copy; this directory stays self-contained, opaque-card-ids.test.mjs pins the two equal).
 export const CARD_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 export function assertCardId(ref, method = 'parseCardRef') {
   const id = String(ref ?? '').replace(/^#/, '')

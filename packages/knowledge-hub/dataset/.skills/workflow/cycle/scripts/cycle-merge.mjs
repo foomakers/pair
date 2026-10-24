@@ -40,9 +40,8 @@ import { existsSync, rmSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { decide as decideAutonomy, effectiveLabels, gateFromLegacyTiers, escalationComment, ESCALATION_MARKER, parseGate, conditionError, normalizeGate } from './autonomy-policy.mjs'
+import { decide as decideAutonomy, effectiveLabels, gateFromLegacyTiers, escalationComment, ESCALATION_MARKER, parseGate, conditionError, normalizeGate, checkCardId } from './autonomy-policy.mjs'
 import { assertBranchName } from './host/adapter-kit.mjs'
-import { checkCardId } from './card-id.mjs'
 import { assertRunOwnsStory } from './run-guard.mjs'
 
 const SHA_RE = /^[0-9a-f]{40}$/

@@ -99,8 +99,8 @@ test('AC4: whoami resolves @me through the bound adapter; filesystem HALTs not-i
   assert.deepEqual(JSON.parse(r.stdout), { halt: 'not-implemented', method: 'resolveUser', pmTool: 'filesystem', detail: 'host adapter filesystem does not implement resolveUser' })
 })
 
-test('the pure guard (card-id.mjs) and the adapter-kit guard are one rule', async () => {
-  const { checkCardId, CARD_ID_RE } = await import('../../skills/pair-workflow-cycle/scripts/card-id.mjs')
+test('the pure guard (autonomy-policy checkCardId) and the adapter-kit guard are one rule', async () => {
+  const { checkCardId, CARD_ID_RE } = await import('../../skills/pair-workflow-cycle/scripts/autonomy-policy.mjs')
   const kit = await import('../../skills/pair-workflow-cycle/scripts/host/adapter-kit.mjs')
   assert.equal(kit.CARD_ID_RE.source, CARD_ID_RE.source)
   for (const v of [...IDS, ...BAD, '#572', 'x'.repeat(121)]) {

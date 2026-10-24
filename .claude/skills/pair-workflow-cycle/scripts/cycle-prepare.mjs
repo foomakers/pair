@@ -20,9 +20,8 @@
 //            [--refinedAutonomously <true|false>] [--repo <o/n>]
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { parseGate, escalationConditions, gateToString, normalizeGate, conditionError, GATE_MODES } from './autonomy-policy.mjs'
+import { parseGate, escalationConditions, gateToString, normalizeGate, conditionError, GATE_MODES, checkCardId } from './autonomy-policy.mjs'
 import { assertRunOwnsStory } from './run-guard.mjs'
-import { checkCardId } from './card-id.mjs'
 
 export const ROUTES = ['run-interactive', 'run-autonomous', 'skip-needs-human', 'skip-escalated', 'escalate', 'nothing-to-prepare']
 export const BOUNDARIES = ['B0', 'B1', 'B2']

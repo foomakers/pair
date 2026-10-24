@@ -2302,17 +2302,26 @@ export function baseSync({ cwd, base, story, owned }) {
 // closed it), `closed` (closed any other way — not planned, duplicate, no reason: nothing merged, blocks),
 // `parked` (open and labelled for a human), `open`. Anything that cannot be read is `unknown` and BLOCKS (fail closed).
 // US-572: the card as every PM-agnostic consumer reads it (pair-cli run, the batch engine) — through the BOUND
-// adapter, never a tracker CLI of the caller's own: { id, title, labels: [names], state: OPEN|CLOSED, closed }.
+// adapter, never a tracker CLI of the caller's own: { id, title, body, labels: [names], state: OPEN|CLOSED,
+// closed, stateReason, closedAt, boardState }. `boardState`: the board item's Status (`projectItems`, which a
+// token without `read:project` cannot read — retried without it), else null; the caller falls back to the body.
+const CARD_FIELDS = ['title', 'body', 'labels', 'state', 'stateReason', 'closedAt']
 export function cardView({ story, dir, host }) {
   const h = host ?? bindHosts(dir ? { dir } : { from: process.cwd() })
   if (!h.pm.parseCardRef(story)) return { error: `not-a-card: ${JSON.stringify(story)} is not a ${h.pmTool} card` }
+  let c
   try {
-    const c = h.pm.readCard(story, { fields: ['title', 'labels', 'state', 'stateReason'] })
-    const closed = String(c?.state ?? '').toUpperCase() === 'CLOSED'
-    return { id: String(story), title: c?.title ?? null, labels: (c?.labels ?? []).map(l => String(l?.name ?? l)), state: closed ? 'CLOSED' : 'OPEN', closed, stateReason: c?.stateReason ?? null }
+    try {
+      c = h.pm.readCard(story, { fields: [...CARD_FIELDS, 'projectItems'] })
+    } catch {
+      c = h.pm.readCard(story, { fields: CARD_FIELDS })
+    }
   } catch (e) {
     return { error: `card-unreadable: ${hostDetail(e)}` }
   }
+  const closed = String(c?.state ?? '').toUpperCase() === 'CLOSED'
+  const boardState = (c?.projectItems ?? []).map(i => String(i?.status?.name ?? '').trim()).find(Boolean) ?? null
+  return { id: String(story), title: c?.title ?? null, body: c?.body ?? '', labels: (c?.labels ?? []).map(l => String(l?.name ?? l)), state: closed ? 'CLOSED' : 'OPEN', closed, stateReason: c?.stateReason ?? null, closedAt: c?.closedAt ?? null, boardState }
 }
 
 // US-572 AC4: `--assignee @me` through the bound PM adapter. No resolveUser ⇒ a typed HALT naming it.

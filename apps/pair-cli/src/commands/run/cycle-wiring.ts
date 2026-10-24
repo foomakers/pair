@@ -82,18 +82,79 @@ export class CardUnreadableError extends Error {
   override readonly name = 'CardUnreadableError'
 }
 
-function ghIssueView(card: string, cwd: string, fields: string): string {
-  try {
-    return execFileSync('gh', ['issue', 'view', card, '--json', fields], {
+/** The card as `cycle-state.mjs card` prints it (US-572) — one shape whatever PM tool is bound. */
+interface CardView {
+  readonly title: string | null
+  readonly body: string
+  readonly labels: readonly string[]
+  readonly state: 'OPEN' | 'CLOSED'
+  readonly stateReason: string | null
+  readonly closedAt: string | null
+  readonly boardState: string | null
+}
+
+const CYCLE_STATE_REL = join('.claude', 'skills', 'pair-workflow-cycle', 'scripts', 'cycle-state.mjs')
+
+/**
+ * US-572: the card is read through the PM adapter the project binds (`cycle-state.mjs card`), so a
+ * Filesystem or Azure backlog is read like a GitHub one. Without the installed cycle skill there is no
+ * adapter to ask: the operator's own `gh` answers, as before (a GitHub-only reader).
+ */
+// ponytail: the cycle skill at its default install path only; a redirected skills target falls back to gh.
+function readCard(card: string, cwd: string): CardView {
+  const script = join(cwd, CYCLE_STATE_REL)
+  if (existsSync(script)) {
+    const r = spawnSync(process.execPath, [script, 'card', '--story', card], { cwd, encoding: 'utf-8' })
+    let view: (CardView & { error?: string }) | undefined
+    try {
+      view = JSON.parse(r.stdout) as CardView & { error?: string }
+    } catch {
+      view = undefined
+    }
+    if (r.status !== 0 || view === undefined || view.error !== undefined)
+      throw new CardUnreadableError(
+        `card-unreadable: \`cycle-state.mjs card --story ${card}\` failed — ${view?.error ?? (r.stderr || r.stdout || '').trim()}. ` +
+          `pair-cli reads the card through the PM adapter way-of-working.md binds.`,
+      )
+    return view
+  }
+  return readCardViaGh(card, cwd)
+}
+
+function readCardViaGh(card: string, cwd: string): CardView {
+  const view = (fields: string): string =>
+    execFileSync('gh', ['issue', 'view', card, '--json', fields], {
       cwd,
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'pipe'],
     })
+  let raw: string
+  try {
+    try {
+      raw = view('title,body,labels,state,stateReason,closedAt,projectItems')
+    } catch {
+      raw = view('title,body,labels,state,stateReason,closedAt')
+    }
   } catch (error) {
     throw new CardUnreadableError(
       `card-unreadable: \`gh issue view ${card}\` failed — ${error instanceof Error ? error.message : String(error)}. ` +
         `pair-cli reads the tracker through your own authenticated \`gh\`; check \`gh auth status\`.`,
     )
+  }
+  const c = JSON.parse(raw) as GhCard & {
+    labels?: ReadonlyArray<{ name?: string }>
+    state?: string
+    stateReason?: string | null
+    closedAt?: string | null
+  }
+  return {
+    title: c.title ?? null,
+    body: c.body ?? '',
+    labels: (c.labels ?? []).map(label => label.name ?? ''),
+    state: c.state === 'CLOSED' ? 'CLOSED' : 'OPEN',
+    stateReason: c.stateReason ?? null,
+    closedAt: c.closedAt ?? null,
+    boardState: c.projectItems?.map(item => item.status?.name?.trim()).find(Boolean) ?? null,
   }
 }
 
@@ -106,12 +167,7 @@ const LABEL_SHAPE_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/i
  */
 export function readCardTier(card: string, cwd: string): string | undefined {
   try {
-    const parsed = JSON.parse(ghIssueView(card, cwd, 'labels')) as {
-      labels?: ReadonlyArray<{ name?: string }>
-    }
-    const tiers = (parsed.labels ?? [])
-      .map(label => label.name ?? '')
-      .filter(name => name.startsWith('risk:'))
+    const tiers = readCard(card, cwd).labels.filter(name => name.startsWith('risk:'))
     return tiers.length === 1 && LABEL_SHAPE_RE.test(tiers[0]!) ? tiers[0] : undefined
   } catch {
     return undefined
@@ -124,10 +180,7 @@ export function readCardTier(card: string, cwd: string): string | undefined {
  */
 export function readCardLabels(card: string, cwd: string): readonly string[] | undefined {
   try {
-    const parsed = JSON.parse(ghIssueView(card, cwd, 'labels')) as {
-      labels?: ReadonlyArray<{ name?: string }>
-    }
-    return (parsed.labels ?? []).map(label => label.name ?? '')
+    return readCard(card, cwd).labels
   } catch {
     return undefined
   }
@@ -136,11 +189,7 @@ export function readCardLabels(card: string, cwd: string): readonly string[] | u
 /** US-576: when the card was closed as Done — `null` while open (or closed as not planned), `undefined` when unreadable. */
 export function readCardClosedAt(card: string, cwd: string): Date | null | undefined {
   try {
-    const parsed = JSON.parse(ghIssueView(card, cwd, 'state,stateReason,closedAt')) as {
-      state?: string
-      stateReason?: string
-      closedAt?: string | null
-    }
+    const parsed = readCard(card, cwd)
     if (parsed.state !== 'CLOSED' || parsed.stateReason === 'NOT_PLANNED') return null
     const at = new Date(parsed.closedAt ?? '')
     return Number.isNaN(at.getTime()) ? undefined : at
@@ -152,7 +201,7 @@ export function readCardClosedAt(card: string, cwd: string): Date | null | undef
 /** The card's title, read live from the tracker; `undefined` when it cannot be read (the card is then excluded). */
 export function readCardTitle(card: string, cwd: string): string | undefined {
   try {
-    const title = (JSON.parse(ghIssueView(card, cwd, 'title')) as { title?: string }).title
+    const title = readCard(card, cwd).title
     return title?.trim() || undefined
   } catch {
     return undefined
@@ -173,25 +222,13 @@ interface GhCard {
 }
 
 /**
- * The card's BOARD STATE: the project item's own status when the card sits on a board, else the
- * `**Status**:` line the card template writes — the literal `## State Mapping` is keyed by.
- * `projectItems` needs the `read:project` scope, so a token without it falls back to the body.
+ * Reads one card through the bound PM adapter (US-572). Its BOARD STATE: the board item's own status
+ * when the card sits on a board, else the `**Status**:` line the card template writes — the literal
+ * `## State Mapping` is keyed by. Never parses prose it did not ask for.
  */
-function boardStateOf(card: GhCard): string | undefined {
-  const onBoard = card.projectItems?.map(item => item.status?.name?.trim()).find(Boolean)
-  return onBoard ?? STATUS_RE.exec(card.body ?? '')?.[1]
-}
-
-/** Reads one card through the operator's own `gh`. Never parses prose it did not ask for. */
 export function readCardDocumentViaGh(card: string, cwd: string): CardDocument {
-  let raw: string
-  try {
-    raw = ghIssueView(card, cwd, 'title,body,projectItems')
-  } catch {
-    raw = ghIssueView(card, cwd, 'title,body')
-  }
-  const parsed = JSON.parse(raw) as GhCard
-  return { title: parsed.title ?? '', body: parsed.body ?? '', boardState: boardStateOf(parsed) }
+  const c = readCard(card, cwd)
+  return { title: c.title ?? '', body: c.body, boardState: c.boardState ?? STATUS_RE.exec(c.body)?.[1] }
 }
 
 /**

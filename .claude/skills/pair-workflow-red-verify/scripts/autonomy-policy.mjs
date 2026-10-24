@@ -19,7 +19,6 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { checkCardId } from './card-id.mjs'
 
 // US-575: `autoRecoveryRounds` / `maxFixRounds` — the run's two budgets before a card is parked `needs-human`.
 export const KEYS = ['preset', 'filter', 'assignee', 'status', 'root', 'until', 'prepare', 'merge', 'autoRecoveryRounds', 'maxFixRounds']
@@ -131,6 +130,15 @@ export const normalizeGate = g => (g && typeof g === 'object' ? { ...g, ...(type
 export const gateToString = g => {
   const n = normalizeGate(g)
   return n.mode === 'when' ? ['hold-when', n.has.length ? `has: ${n.has.join(',')}` : null, n.lacks.length ? `lacks: ${n.lacks.join(',')}` : null].filter(Boolean).join('; ') : `hold-${n.mode}`
+}
+
+// US-572: the SHAPE every card id has on every tracker (`572`, `IN-01`, `01-01-001`, `ENG-123`): no separator,
+// no `..`, no whitespace, nothing absolute, bounded; a leading `#` is dropped. Which ids EXIST is the bound
+// adapter's `parseCardRef`. → { id } | { error }. host/adapter-kit.mjs keeps the same rule (pinned equal by a test).
+export const CARD_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+export function checkCardId(ref) {
+  const id = String(ref ?? '').replace(/^#/, '')
+  return CARD_ID_RE.test(id) && !id.includes('..') && id.length <= 120 ? { id } : { error: `${JSON.stringify(String(ref ?? ''))} is not a card id (no "/", "..", whitespace or absolute path)` }
 }
 
 // ── one key's value ─────────────────────────────────────────────────────────────────────────

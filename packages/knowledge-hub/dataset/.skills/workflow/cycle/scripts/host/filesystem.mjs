@@ -14,7 +14,7 @@
 // worktree (a card's story tree) every write is committed on that tree's branch; anywhere else the
 // write stays in the working tree and one warning line goes to stderr. The only CLI is `git`, through
 // the kit's runCli (ADR-026 amendment 2026-10-24); no credential exists.
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
 import { defineAdapter, assertCardId, runCli, upsertByMarker, HostError } from './adapter-kit.mjs'
 
@@ -126,8 +126,9 @@ export default defineAdapter({
       labels: labelsOf(c.head).map(name => ({ name })),
       state: closed(c) ? 'CLOSED' : 'OPEN',
       stateReason: closed(c) ? 'COMPLETED' : null,
-      closedAt: null,
-      status: statusOf(c.head),
+      closedAt: closed(c) ? statSync(c.file).mtime.toISOString() : null,
+      // the board item, in the code-host --json dialect every consumer already reads
+      projectItems: statusOf(c.head) ? [{ status: { name: statusOf(c.head) } }] : [],
     })
     // State = folder (when the file lives in a status folder) + the Status line.
     const writeState = (c, state) => {
