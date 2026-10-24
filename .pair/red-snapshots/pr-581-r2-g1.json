@@ -1,0 +1,73 @@
+{
+  "$meta": {
+    "pr": "581",
+    "phase": "r2-g1",
+    "base": "6b165e91473f552bcaee15d6e191d4e8621826f4",
+    "trailer": "Pair-RED-Snapshot: pr=581; phase=r2-g1; base=6b165e91473f552bcaee15d6e191d4e8621826f4; manifest=.pair/red-snapshots/pr-581-r2-g1.json",
+    "artifacts": []
+  },
+  "phase": "r2-g1",
+  "mode": "remediation",
+  "inputHead": "6b165e91473f552bcaee15d6e191d4e8621826f4",
+  "sourceOfTruth": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs (baseSync L2220-2259, prereqState L2283-2307) at 6b165e91",
+  "inventory": [
+    {
+      "id": "r1-4",
+      "producer": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs baseSync (mirror side: isOwned via mirrorOf over story-owned dataset paths, L2258-2259) and prereqState (merged only when stateReason COMPLETED, L2305-2307)",
+      "inputs": [
+        "base-sync conflict on a generated mirror path",
+        "prerequisite card closed with stateReason COMPLETED | NOT_PLANNED | DUPLICATE | absent"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md (canonical, lines 128 and 130)",
+        ".pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md (generated mirror, byte-equal today)"
+      ],
+      "consumers": [
+        "readers of the Auto-recovery section",
+        "pair-cli run operators"
+      ],
+      "classes": [
+        "mirror whose dataset source is story-owned -> story side",
+        "mirror whose dataset source is base-owned -> base side",
+        "prereq closed COMPLETED -> merged",
+        "prereq closed NOT_PLANNED/DUPLICATE/no reason -> blocks (closed not merged)",
+        "needs-review -> parked (unchanged)",
+        "unreadable -> blocks (unchanged)"
+      ],
+      "interactions": [
+        "dataset text and mirror must stay byte-equal after the edit"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+    "mode": "doc",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md",
+      ".pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md"
+    ]
+  },
+  "checklist": [
+    {
+      "id": "r1-4-c1",
+      "finding": "r1-4",
+      "requirement": "Base sync bullet (line 128) no longer says generated mirrors take the base's side; it states a generated mirror takes the side its dataset source took (story's bytes when its dataset source is story-owned, base's otherwise). The text 'and generated mirrors) take the base' is absent.",
+      "authority": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs L2222-2223: 'a generated mirror takes the side its dataset source took'; L2258-2259 isOwned via mirrorOf"
+    },
+    {
+      "id": "r1-4-c2",
+      "finding": "r1-4",
+      "requirement": "Prerequisites bullet (line 130) no longer says 'closed ⇒ merged'; it states a prerequisite counts as merged only when closed as COMPLETED, and any other closure (not planned, duplicate, no reason) blocks the card. needs-review ⇒ parked and unreadable ⇒ blocks (fail closed) stay.",
+      "authority": "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/cycle-state.mjs L2283-2285 and L2307: COMPLETED ⇒ merged, else 'closed not merged (stateReason …)'"
+    },
+    {
+      "id": "r1-4-c3",
+      "finding": "r1-4",
+      "requirement": "The .pair/knowledge mirror is regenerated and byte-identical to the dataset file (cmp equal); neither file contains 'closed ⇒ merged' or 'and generated mirrors) take the base'.",
+      "authority": "mirror rule: .pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md is the generated copy of packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/delivery-cycle.md"
+    }
+  ],
+  "matrix": [],
+  "redTests": [],
+  "testExempt": false
+}
