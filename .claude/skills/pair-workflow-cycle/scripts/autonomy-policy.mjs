@@ -457,7 +457,7 @@ async function cli(argv) {
     const out = resolvePolicy({ args: opts.args ? JSON.parse(opts.args) : {}, adoptionText, surface: opts.surface })
     const root = out.effective.root?.value
     if (root !== undefined) {
-      // AC1 (US-572): the root is a card of the BOUND PM tool — its parseCardRef decides, never a digit rule.
+      // US-572: the root is a card of the BOUND PM tool — its parseCardRef decides, never a digit rule.
       let why = null
       try {
         const pm = (await import('./host/index.mjs')).bindHosts({ from: opts.adoption ? dirname(opts.adoption) : process.cwd() }).pm

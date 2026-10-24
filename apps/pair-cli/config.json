@@ -73,6 +73,10 @@
         "pair-contracts/pr-state.test.mjs",
         "pair-contracts/engine-boundaries.test.mjs",
         "pair-contracts/host-adapter.test.mjs",
+        "pair-contracts/filesystem-adapter.test.mjs",
+        "pair-contracts/filesystem-roundtrip.test.mjs",
+        "pair-contracts/opaque-card-ids.test.mjs",
+        "pair-contracts/pm-agnostic-conformance.test.mjs",
         "pair-contracts/word-limits.test.mjs"
       ],
       "targets": [{ "path": ".claude/workflows/", "mode": "canonical" }],

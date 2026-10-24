@@ -2324,7 +2324,7 @@ export function cardView({ story, dir, host }) {
   return { id: String(story), title: c?.title ?? null, body: c?.body ?? '', labels: (c?.labels ?? []).map(l => String(l?.name ?? l)), state: closed ? 'CLOSED' : 'OPEN', closed, stateReason: c?.stateReason ?? null, closedAt: c?.closedAt ?? null, boardState }
 }
 
-// US-572 AC4: `--assignee @me` through the bound PM adapter. No resolveUser ⇒ a typed HALT naming it.
+// US-572: `--assignee @me` through the bound PM adapter. No resolveUser ⇒ a typed HALT naming it.
 export function whoami({ dir, host }) {
   const h = host ?? bindHosts(dir ? { dir } : { from: process.cwd() })
   try {
@@ -3646,7 +3646,7 @@ if (isMain()) {
       process.exit(0)
     } else if (cmd === 'activate-card') {
       need('dir', 'story')
-      // US-572 AC6: `--worktree` — a local tracker (filesystem) writes the card in the story's tree, committed on its branch.
+      // US-572: `--worktree` — a local tracker (filesystem) writes the card in the story's tree, committed on its branch.
       out = activateCard({ story: opts.story, dir: opts.dir, ...(opts.worktree ? { host: bindHosts({ dir: opts.dir, transport: { root: resolvePath(opts.worktree) } }) } : {}) })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.confirmed === true ? 0 : 1)

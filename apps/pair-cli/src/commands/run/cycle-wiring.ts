@@ -93,7 +93,13 @@ interface CardView {
   readonly boardState: string | null
 }
 
-const CYCLE_STATE_REL = join('.claude', 'skills', 'pair-workflow-cycle', 'scripts', 'cycle-state.mjs')
+const CYCLE_STATE_REL = join(
+  '.claude',
+  'skills',
+  'pair-workflow-cycle',
+  'scripts',
+  'cycle-state.mjs',
+)
 
 /**
  * US-572: the card is read through the PM adapter the project binds (`cycle-state.mjs card`), so a
@@ -104,7 +110,10 @@ const CYCLE_STATE_REL = join('.claude', 'skills', 'pair-workflow-cycle', 'script
 function readCard(card: string, cwd: string): CardView {
   const script = join(cwd, CYCLE_STATE_REL)
   if (existsSync(script)) {
-    const r = spawnSync(process.execPath, [script, 'card', '--story', card], { cwd, encoding: 'utf-8' })
+    const r = spawnSync(process.execPath, [script, 'card', '--story', card], {
+      cwd,
+      encoding: 'utf-8',
+    })
     let view: (CardView & { error?: string }) | undefined
     try {
       view = JSON.parse(r.stdout) as CardView & { error?: string }
@@ -141,12 +150,17 @@ function readCardViaGh(card: string, cwd: string): CardView {
         `pair-cli reads the tracker through your own authenticated \`gh\`; check \`gh auth status\`.`,
     )
   }
-  const c = JSON.parse(raw) as GhCard & {
+  return ghCardView(JSON.parse(raw))
+}
+
+function ghCardView(
+  c: GhCard & {
     labels?: ReadonlyArray<{ name?: string }>
     state?: string
     stateReason?: string | null
     closedAt?: string | null
-  }
+  },
+): CardView {
   return {
     title: c.title ?? null,
     body: c.body ?? '',
@@ -228,7 +242,11 @@ interface GhCard {
  */
 export function readCardDocumentViaGh(card: string, cwd: string): CardDocument {
   const c = readCard(card, cwd)
-  return { title: c.title ?? '', body: c.body, boardState: c.boardState ?? STATUS_RE.exec(c.body)?.[1] }
+  return {
+    title: c.title ?? '',
+    body: c.body,
+    boardState: c.boardState ?? STATUS_RE.exec(c.body)?.[1],
+  }
 }
 
 /**
