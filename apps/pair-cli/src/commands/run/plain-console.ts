@@ -17,6 +17,9 @@ const HIDDEN: readonly RegExp[] = [
   /^ {4}\S/,
 ]
 
+/** An ANSI color sequence, built from the ESC code so no control character sits in a regex literal. */
+const COLOR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
+
 const STAGE =
   /^ {2}Stage (\w+)(?::\S+)? — process \w+, handoff (advanced|NOT advanced).*?final: (.*)$/
 
@@ -41,7 +44,7 @@ function stageNote(step: string, advanced: boolean, final: string): string | und
 }
 
 export function plainNote(line: string): string | undefined {
-  const plain = line.replace(/\x1b\[[0-9;]*m/g, '') // eslint-disable-line no-control-regex
+  const plain = line.replace(COLOR, '')
   const stage = STAGE.exec(plain)
   if (stage) return stageNote(stage[1]!, stage[2] === 'advanced', stage[3]!)
   if (/^ {2}Merge gate: RESULT: ALL GATES PASS/.test(plain)) return '  checks: passed'

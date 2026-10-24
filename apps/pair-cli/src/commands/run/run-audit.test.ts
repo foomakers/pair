@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { mkdtempSync, readFileSync } from 'fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { createRunAudit } from './run-audit'
+import { createRunAudit, previousExclusions } from './run-audit'
 
 const lines = (path: string) =>
   readFileSync(path, 'utf-8')
@@ -64,5 +64,47 @@ describe('live JSONL audit (US-573 AC4)', () => {
     expect(end).toEqual([
       expect.objectContaining({ detail: { status: 'interrupted', reason: 'SIGINT' } }),
     ])
+  })
+})
+
+describe('US-575 AC9: exclusions of earlier runs, listed at start', () => {
+  it('every card whose LATEST card-end is durable (failed-*, needs-human, escalate), with its reason, run and date — a later success clears it', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'prev-audit-')), 'audit.md')
+    const end = ([runId, ts, card, status, reason]: readonly (string | undefined)[]) =>
+      JSON.stringify({
+        ts,
+        runId,
+        iteration: null,
+        card,
+        event: 'card-end',
+        detail: { status, ...(reason && { reason }) },
+      })
+    writeFileSync(
+      path,
+      [
+        '2026-10-22T10:00:00Z event=batch root=66 (a key=value line of the same file)',
+        end(['run-a', '2026-10-22T10:00:00Z', '1', 'failed-implement', 'exit 1']),
+        end([
+          'run-a',
+          '2026-10-22T10:01:00Z',
+          '2',
+          'needs-human',
+          'needs-human: maxFixRounds (10) spent',
+        ]),
+        end(['run-a', '2026-10-22T10:02:00Z', '3', 'failed (crashed)', 'killed by SIGKILL']),
+        end(['run-a', '2026-10-22T10:03:00Z', '4', 'escalate']),
+        end(['run-b', '2026-10-23T09:00:00Z', '1', 'merged']),
+      ].join('\n') + '\n',
+    )
+    expect(previousExclusions(path)).toEqual([
+      {
+        card: '2',
+        reason: 'needs-human: maxFixRounds (10) spent',
+        runId: 'run-a',
+        date: '2026-10-22',
+      },
+      { card: '4', reason: 'escalate', runId: 'run-a', date: '2026-10-22' },
+    ])
+    expect(previousExclusions(join(tmpdir(), 'no-such-audit.md'))).toEqual([])
   })
 })

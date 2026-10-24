@@ -17,8 +17,8 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { contractHash } from '../../skills/pair-workflow-red-verify/scripts/cycle-state.mjs'
-import { llmsDerivedTitle, pushSnapshot, artifactPaths as artifactPathsOf, contractErrors, hashFile, isTestPath, manifestPathFor, seal, trailerFor, verify, verifyChain, predecessorPhase, scopeNarrowing, isModulePath, OVERRIDABLE_BREACH_CODES } from '../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs'
+import { contractHash, baseSync } from '../../skills/pair-workflow-red-verify/scripts/cycle-state.mjs'
+import { BASE_SYNC_FIX, llmsDerivedTitle, pushSnapshot, artifactPaths as artifactPathsOf, contractErrors, hashFile, isTestPath, manifestPathFor, seal, trailerFor, verify, verifyChain, predecessorPhase, scopeNarrowing, isModulePath, OVERRIDABLE_BREACH_CODES } from '../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs'
 
 const CLI_URL = new URL('../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url).href
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url))
@@ -2056,5 +2056,60 @@ test('verify: a GREEN edit of a `.changeset/*.md` file is always in scope; any o
   green(cwd, manifest, { 'src/a.js': 'export const a = () => 2\n', '.changeset/us-1-story.md': "---\n'x': patch\n---\n\nfix\n", 'src/other.js': 'export const o = 1\n' })
   const v = verify({ pr: PR, phase: PHASE, base, cwd })
   assert.deepEqual(v.breaches.map(b => `${b.code}:${b.path}`).sort(), ['out-of-scope:src/other.js'])
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+// ══ US-575 AC5 — the mechanical base sync, verified by custody ═════════════════════════════════════
+// A sealed story whose fix-scope file the base ALSO edited on the same line (a real conflict), plus a base-only edit.
+function conflictingBase() {
+  const { cwd } = repo()
+  git(cwd, 'checkout', '-q', '-b', 'story')
+  write(cwd, 'src/a.js', 'export const a = () => 1 // implemented\n')
+  git(cwd, 'commit', '-q', '--no-verify', '-am', 'implement')
+  const head1 = git(cwd, 'rev-parse', 'HEAD')
+  const { contractPath } = redContract(cwd)
+  const s = seal({ pr: PR, phase: 'r1-g1', base: head1, contractPath, cwd })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  rmSync(join(cwd, contractPath))
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  git(cwd, 'checkout', '-q', 'main')
+  write(cwd, 'src/a.js', 'export const a = () => 1 // reformatted on main\n')
+  write(cwd, 'src/other.js', 'export const o = 7\n')
+  git(cwd, 'commit', '-q', '--no-verify', '-am', 'main moves on')
+  git(cwd, 'checkout', '-q', 'story')
+  const runDir = runDirWith({ 'r1-g1-red-verify': { skill: 'red-verify', phase: 'r1-g1', verified: true, sealed: true, inputHead: head1 } })
+  return { cwd, head1, runDir }
+}
+
+test('US-575 AC5: a mechanical base sync (story-owned conflict keeps ours, base-only change merged) passes custody', () => {
+  const { cwd, head1, runDir } = conflictingBase()
+  const out = baseSync({ cwd, base: 'main', story: PR, owned: ['src/a.js'] })
+  assert.deepEqual(out.conflicts, [{ path: 'src/a.js', side: 'ours' }], JSON.stringify(out))
+  const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
+  assert.deepEqual({ verified: chain.verified, breaches: chain.breaches }, { verified: true, breaches: [] }, JSON.stringify(chain))
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('US-575 AC5: a merge whose Pair-Base-Sync record does not match its bytes (edited by hand) fails custody, saying how to fix it', () => {
+  const { cwd, head1, runDir } = conflictingBase()
+  spawnSync('git', ['merge', '--no-ff', '--no-commit', 'main'], { cwd })
+  write(cwd, 'src/a.js', 'export const a = () => 2 // hand-resolved\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'sync', '-m', `Pair-Base-Sync: base=${git(cwd, 'rev-parse', 'main')}; ours=src/a.js`)
+  const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
+  assert.equal(chain.verified, false)
+  assert.deepEqual(chain.breaches.map(b => [b.code, b.path, b.side, b.fix]), [['base-sync-mismatch', 'src/a.js', 'ours', BASE_SYNC_FIX]])
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('US-575 AC5: a hand-resolved merge of the base touching a path outside the fix scope still fails custody, and the breach names the fix', () => {
+  const { cwd, head1, runDir } = conflictingBase()
+  spawnSync('git', ['merge', '--no-ff', '--no-commit', 'main'], { cwd })
+  write(cwd, 'src/a.js', 'export const a = () => 2\n')
+  write(cwd, 'src/other.js', 'export const o = 8 // hand edit inside the merge\n')
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'hand merge')
+  const chain = verifyChain({ pr: PR, base: head1, cwd, runDir, baseRef: 'main' })
+  assert.deepEqual(chain.breaches.map(b => [b.code, b.path, b.fix]), [['out-of-scope', 'src/other.js', BASE_SYNC_FIX]])
   rmSync(cwd, { recursive: true, force: true })
 })
