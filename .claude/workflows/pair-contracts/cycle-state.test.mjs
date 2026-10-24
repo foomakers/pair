@@ -776,6 +776,99 @@ test('AJ plan: a code-touching finding in a doc group is refused (`code-finding-
   assert.match(tryPlan(d2, p2.plan).reason, /doc-group-code-paths/)
 })
 
+test('US-582 plan: a doc group\'s allowedPaths cover EVERY location its finding lists (`finding-location-outside-scope`); a directory covers its children; a generated mirror is fixed at its dataset source', () => {
+  const location = 'docs/guide.md:3, .pair/adoption/decision-log/x.md:7, .claude/skills/s/SKILL.md:4 ← packages/knowledge-hub/dataset/.skills/s/SKILL.md:4'
+  const docGroup = allowedPaths => [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'doc', allowedPaths }]
+  const { dir } = runDir()
+  const { plan } = planRound(dir, docGroup(['docs/guide.md', 'packages/knowledge-hub/dataset/.skills/s/SKILL.md']), [finding('r0-1', { location })])
+  const out = tryPlan(dir, plan)
+  assert.equal(out.published, false)
+  assert.match(out.reason, /^finding-location-outside-scope: r0-1: \.pair\/adoption\/decision-log\/x\.md$/)
+  const { dir: d2 } = runDir()
+  assert.equal(tryPlan(d2, planRound(d2, docGroup(['docs/guide.md', '.pair/adoption/decision-log/x.md', 'packages/knowledge-hub/dataset/.skills/s/SKILL.md']), [finding('r0-1', { location })]).plan).published, true, 'every location listed; the mirror is not required')
+  const { dir: d3 } = runDir()
+  assert.equal(tryPlan(d3, planRound(d3, docGroup(['docs/', '.pair/adoption/decision-log/', 'packages/knowledge-hub/dataset/']), [finding('r0-1', { location })]).plan).published, true, 'a directory entry covers its children')
+  const { dir: d4 } = runDir()
+  const p4 = planRound(d4, docGroup(['docs/guide.md']), [finding('r0-1', { location: 'docs/guide.md:3' })])
+  assert.match(tryPlan(d4, { groups: [{ ...p4.plan.groups[0], findingPaths: { 'r0-1': ['docs/other.md'] } }], carried: [] }).reason, /^finding-location-outside-scope: r0-1: docs\/other\.md$/, 'declared findingPaths are targets too')
+  const { dir: d5 } = runDir()
+  const p5 = planRound(d5, [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], [finding('r0-1', { location: 'src/a.ts:10 (and docs/a.md:5)' })])
+  assert.equal(tryPlan(d5, p5.plan).published, true, 'behavioral groups are unaffected')
+})
+
+test('US-582 r0-1 plan: a generated mirror in a doc finding\'s location is exempt ONLY when its dataset source is in scope — else `finding-location-outside-scope`', () => {
+  const docGroup = allowedPaths => [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'doc', allowedPaths }]
+  const cases = [
+    ['.pair/knowledge/guidelines/collaboration/automation/doc-remediation-groups.md:12, docs/guide.md:3', /^finding-location-outside-scope: r0-1: \S*\.pair\/knowledge\/guidelines\/collaboration\/automation\/doc-remediation-groups\.md$/],
+    ['.claude/skills/pair-workflow-red-spec/SKILL.md:4, docs/guide.md:3', /^finding-location-outside-scope: r0-1: \S*\/(?:red-spec|pair-workflow-red-spec)\/SKILL\.md$/],    ...['.agents', '.agent', '.cursor', '.windsurf'].map(root => [`${root}/skills/pair-workflow-red-spec/SKILL.md:4, docs/guide.md:3`, /^finding-location-outside-scope: r0-1: \S*\/(?:red-spec|pair-workflow-red-spec)\/SKILL\.md$/]),
+    ['.pair/llms.txt:1, docs/guide.md:3', /^finding-location-outside-scope: r0-1: \S*\.pair\/llms\.txt$/],
+  ]
+  for (const [location, reason] of cases) {
+    const { dir } = runDir()
+    const out = tryPlan(dir, planRound(dir, docGroup(['docs/guide.md']), [finding('r0-1', { location })]).plan)
+    assert.equal(out.published, false, location)
+    assert.match(out.reason, reason)
+  }
+})
+
+test('US-582 r0-1 plan control: a mirror whose dataset source is in scope (file or directory) stays exempt', () => {
+  const docGroup = allowedPaths => [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'doc', allowedPaths }]
+  const kb = '.pair/knowledge/guidelines/collaboration/automation/doc-remediation-groups.md:12, docs/guide.md:3'
+  const skill = '.claude/skills/pair-workflow-red-spec/SKILL.md:4, docs/guide.md:3'
+  const cases = [
+    [kb, ['docs/guide.md', 'packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/doc-remediation-groups.md']],
+    [kb, ['docs/', 'packages/knowledge-hub/dataset/']],
+    [skill, ['docs/guide.md', 'packages/knowledge-hub/dataset/.skills/workflow/red-spec/SKILL.md']],
+    [skill, ['docs/', 'packages/knowledge-hub/dataset/.skills/workflow/red-spec/']],
+  ]
+  for (const [location, allowed] of cases) {
+    const { dir } = runDir()
+    assert.equal(tryPlan(dir, planRound(dir, docGroup(allowed), [finding('r0-1', { location })]).plan).published, true, `${location} ${allowed}`)
+  }
+})
+
+const R2_SKILL_MIRROR = '.claude/skills/pair-workflow-red-spec/SKILL.md'
+const R2_WORKFLOW_MIRROR = '.claude/workflows/pair-contracts/README.md'
+const r2Plan = (unrelated, mirror) => {
+  const docGroup = [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'doc', allowedPaths: ['docs/guide.md', unrelated] }]
+  const { dir } = runDir()
+  return tryPlan(dir, planRound(dir, docGroup, [finding('r0-1', { location: `${mirror}:4, docs/guide.md:3` })]).plan)
+}
+const r2OutsideDirRefusal = (unrelated, mirror = R2_SKILL_MIRROR) => {
+  const out = r2Plan(unrelated, mirror)
+  assert.equal(out.published, false, unrelated)
+  assert.equal(out.reason, `finding-location-outside-scope: r0-1: ${mirror}`, unrelated)
+}
+
+test('US-582 r2 r0-1 witness unrelated-red-spec: a directory OUTSIDE the dataset named like the mirror parent never exempts the mirror', () => {
+  r2OutsideDirRefusal('unrelated/red-spec/')
+})
+
+test('US-582 r2 r0-1 witness tmp-skills: a directory OUTSIDE the dataset named like a mirror ancestor never exempts the mirror', () => {
+  r2OutsideDirRefusal('tmp/skills/')
+})
+
+test('US-582 r2 r0-1 witness tmp-dot-skills: a directory OUTSIDE the dataset named like the dataset .skills dir never exempts the mirror', () => {
+  r2OutsideDirRefusal('tmp/.skills/')
+})
+
+test('US-582 r2 r0-1 boundary x-workflow: a directory OUTSIDE the dataset sharing no mirror dir name is refused', () => {
+  r2OutsideDirRefusal('x/workflow/')
+})
+
+test('US-582 r2 r0-1 witness dataset-capability-red-spec: a dataset directory that is NOT the mirror source never exempts the mirror', () => {
+  r2OutsideDirRefusal('packages/knowledge-hub/dataset/.skills/capability/red-spec/')
+})
+
+test('US-582 r2 r0-1 witness workflows-channel: a directory OUTSIDE the dataset named like a workflows mirror dir never exempts the mirror', () => {
+  for (const unrelated of ['tmp/workflows/', 'tmp/.workflows/', 'tmp/pair-contracts/']) r2OutsideDirRefusal(unrelated, R2_WORKFLOW_MIRROR)
+})
+
+test('US-582 r2 r0-1 control source-dirs: the mirror source directory in the dataset keeps the mirror exempt (skills and workflows channels)', () => {
+  assert.equal(r2Plan('packages/knowledge-hub/dataset/.skills/workflow/red-spec/', R2_SKILL_MIRROR).published, true)
+  assert.equal(r2Plan('packages/knowledge-hub/dataset/.workflows/pair-contracts/', R2_WORKFLOW_MIRROR).published, true)
+})
+
 test('AJ mixed round (#252 shape): a behavioral group + a doc group dependsOn it — accepted and routed in order g1 (prepare/validate/green) then g2, then ONE verify of both', () => {
   const { dir } = runDir()
   const groups = [

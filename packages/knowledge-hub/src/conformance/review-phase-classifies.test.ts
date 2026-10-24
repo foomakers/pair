@@ -51,6 +51,24 @@ for (const [label, path] of [
     })
   })
 
+  // US-582: one stale doc claim found one round apart (#575 r1-4 guideline, r2-5 ADL) cost a whole fix round per file.
+  describe(`review-phase stale-claim sweep (${label})`, () => {
+    const s4 = step4(text)
+    it('sweeps the whole PR diff and the repository docs for the same claim, not the topic', () => {
+      expect(s4).toMatch(/stale-claim sweep/i)
+      expect(s4).toMatch(/whole PR diff[^\n]*repository docs/i)
+      expect(s4).toMatch(/the specific claim, not the topic/i)
+    })
+    it('lists EVERY location in that one finding: one claim ⇒ one finding, a later hit joins its id', () => {
+      expect(s4).toMatch(/EVERY location[^\n]*one finding/)
+      expect(s4).toMatch(/One stale claim ⇒ one finding/)
+      expect(s4).toMatch(/joins that finding/i)
+    })
+    it('a generated mirror is listed with its dataset source and fixed at the source', () => {
+      expect(s4).toMatch(/`<mirror> ← <dataset path>`[^\n]*fixed at the source/)
+    })
+  })
+
   // #545 review: a broken worktree setup HALTs before any gate, and its exit is recorded with the gates run.
   describe(`review-phase Step 1.1 worktree setup (${label})`, () => {
     const s1 = text.slice(
