@@ -91,8 +91,11 @@ export default defineAdapter({
       return readdirSync(dir, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? files(join(dir, e.name)) : e.name.endsWith('.md') ? [join(dir, e.name)] : []))
     }
     const idOf = file => basename(file, '.md')
-    // `<id>-<rest>` where `<rest>` opens on a zero-padded (2+ digit) segment is a CHILD card's file, never this card's.
-    const isChild = (file, id) => idOf(file).startsWith(`${id}-`) && /^\d{2,}(-|$)/.test(idOf(file).slice(id.length + 1))
+    // Level of a file = its `NN-<level>` folder under the backlog (01 initiatives, 02 epics, 03 stories); an id's
+    // level = its segment count. A `<id>-…` file in a deeper level folder is a CHILD card's, never this card's;
+    // outside level folders, `<rest>` opening on a zero-padded (2+ digit) segment marks the child.
+    const levelOf = file => Number(/^(\d{2})-/.exec(relative(backlog, file))?.[1]) || 0
+    const isChild = (file, id) => idOf(file).startsWith(`${id}-`) && (levelOf(file) ? levelOf(file) > id.split('-').length : /^\d{2,}(-|$)/.test(idOf(file).slice(id.length + 1)))
     const matches = (file, id) => idOf(file) === id || (idOf(file).startsWith(`${id}-`) && !isChild(file, id))
     // Exact `<id>.md` wins; otherwise the ONE `<id>-…` file whose id is not a longer id (`01-01` never
     // resolves to `01-01-001-…`: a story under that epic). Two candidates ⇒ refused, never guessed.
