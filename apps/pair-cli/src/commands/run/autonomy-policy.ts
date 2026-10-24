@@ -1,5 +1,5 @@
-import { existsSync } from 'fs'
-import { join } from 'path'
+import { existsSync, mkdirSync, readFileSync, readSync, writeFileSync } from 'fs'
+import { dirname, join } from 'path'
 import { POLICY_PATH, policyHalt } from './policy-sections'
 import {
   createCycleScriptsBridge,
@@ -98,6 +98,8 @@ export function resolveRunAutonomy(input: {
   readonly projectConfig: Config
   readonly fs: FileSystemService
   readonly cwd: string
+  /** US-576: the preset question on an empty `## Autonomy`; `undefined` answer = non-TTY. */
+  readonly askPreset?: PresetAsk
 }): AutonomyResolution | undefined {
   const args = autonomyArgumentsOf(input.config)
   let location: CycleScriptsLocation
@@ -107,12 +109,25 @@ export function resolveRunAutonomy(input: {
     if (Object.keys(args).length > 0) throw error
     return undefined
   }
-  const resolution = resolveAutonomyPolicy(input.resolver, {
-    location,
-    main: mainCheckoutOrCwd(input.cwd),
-    cwd: input.cwd,
-    args,
-  })
+  const main = mainCheckoutOrCwd(input.cwd)
+  const resolve = (): AutonomyResolution | undefined =>
+    resolveAutonomyPolicy(input.resolver, { location, main, cwd: input.cwd, args })
+  const first = resolve()
+  const policyFile = join(main, POLICY_PATH)
+  const resolution =
+    first &&
+    settlePresetChoice({
+      resolution: first,
+      args,
+      ask: input.askPreset ?? askPresetOnTty,
+      readPolicy: () => (existsSync(policyFile) ? readFileSync(policyFile, 'utf8') : undefined),
+      writePolicy: text => {
+        mkdirSync(dirname(policyFile), { recursive: true })
+        writeFileSync(policyFile, text)
+      },
+      reresolve: () => resolve() ?? first,
+      log: line => console.log(line),
+    })
   if (resolution !== undefined)
     for (const line of describeAutonomy(resolution)) console.log(`  ${line}`)
   return resolution
@@ -131,4 +146,76 @@ export function adoptionSelection(
   )
     return undefined
   return Array.isArray(entry.value) ? entry.value.join(',') : String(entry.value)
+}
+
+/* ------------------------------------------------- US-576 AC5: the preset question */
+
+export const PRESET_CHOICES = ['full', 'escalate-red', 'supervised'] as const
+export const PRESET_PROMPT =
+  'No autonomy preset declared in `## Autonomy`. Choose full / escalate-red / supervised (Enter = supervised): '
+
+/** Returns the operator's answer, or `undefined` when nobody can answer (non-TTY). */
+export type PresetAsk = (question: string) => string | undefined
+
+/** Default: one line from a TTY stdin, read synchronously (the entry is synchronous); non-TTY ⇒ `undefined`. */
+// ponytail: byte-at-a-time sync read, enough for one short answer; a readline interface if prompts multiply.
+export const askPresetOnTty: PresetAsk = question => {
+  if (process.stdin.isTTY !== true || process.stdout.isTTY !== true) return undefined
+  process.stdout.write(question)
+  const byte = Buffer.alloc(1)
+  let line = ''
+  try {
+    while (readSync(0, byte, 0, 1, null) === 1 && byte[0] !== 0x0a) line += String.fromCharCode(byte[0]!)
+  } catch {
+    return ''
+  }
+  return line.replace(/\r$/, '')
+}
+
+/** `preset: <name>` under `## Autonomy` — filling an empty section, appending it, or creating the file. */
+export function withPresetLine(markdown: string | undefined, preset: string): string {
+  const line = `preset: ${preset}`
+  if (markdown === undefined) return `# Automation Policy\n\n## Autonomy\n\n${line}\n`
+  const heading = /^## Autonomy[ \t]*$/m.exec(markdown)
+  if (heading === null) return `${markdown.replace(/\n*$/, '')}\n\n## Autonomy\n\n${line}\n`
+  const at = heading.index + heading[0].length
+  const rest = markdown.slice(at).replace(/^\n*/, '')
+  return `${markdown.slice(0, at)}\n\n${line}\n${rest.length > 0 ? `\n${rest}` : ''}`
+}
+
+/**
+ * Nothing declared (no `## Autonomy` key or preset, no legacy section) and nothing passed ⇒ ask once.
+ * TTY: the answer (Enter = `supervised`) is written as `preset:` and the policy re-resolved from the file.
+ * Non-TTY: nothing is written; the run keeps the KB default — every gate held, the supervised behaviour —
+ * and says how to set a preset.
+ */
+export function settlePresetChoice(input: {
+  readonly resolution: AutonomyResolution
+  readonly args: Readonly<Record<string, string>>
+  readonly ask: PresetAsk
+  readonly readPolicy: () => string | undefined
+  readonly writePolicy: (text: string) => void
+  readonly reresolve: () => AutonomyResolution
+  readonly log: (line: string) => void
+}): AutonomyResolution {
+  const { resolution } = input
+  const undeclared =
+    Object.keys(input.args).length === 0 &&
+    Object.keys(resolution.translated ?? {}).length === 0 &&
+    Object.values(resolution.effective ?? {}).every(entry => entry.source === 'default')
+  if (!undeclared) return resolution
+  const answer = input.ask(PRESET_PROMPT)
+  if (answer === undefined) {
+    input.log(
+      `  No autonomy preset declared — running supervised (every gate held). Set one: add \`preset: escalate-red\` ` +
+        `under \`## Autonomy\` in ${POLICY_PATH}, or pass --preset <full|escalate-red|supervised>.`,
+    )
+    return resolution
+  }
+  const preset = answer.trim() === '' ? 'supervised' : answer.trim()
+  if (!(PRESET_CHOICES as readonly string[]).includes(preset))
+    policyHalt(`preset ${JSON.stringify(preset)} is not one of ${PRESET_CHOICES.join(' | ')}`)
+  input.writePolicy(withPresetLine(input.readPolicy(), preset))
+  input.log(`  Wrote \`preset: ${preset}\` to ${POLICY_PATH} (\`## Autonomy\`).`)
+  return input.reresolve()
 }
