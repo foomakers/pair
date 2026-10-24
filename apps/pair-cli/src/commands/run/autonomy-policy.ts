@@ -16,7 +16,7 @@ import type { Config } from '#registry'
  * The autonomy policy of `run --card` (US-521, ADR-027) — READ through the shared script, never derived.
  *
  * `autonomy-policy.mjs resolve` owns the grammar, the legacy translation, the precedence
- * (argument > adoption > KB default) and every error; this module only spawns it, turns its `errors` into
+ * (argument > adoption > preset > KB default) and every error; this module only spawns it, turns its `errors` into
  * the policy HALT every other adoption read uses, and prints what the script returned. pair-cli holds no
  * autonomy rule (US-487, D18): a second copy here would be the drift the verbatim-relay test pins.
  */
@@ -77,7 +77,7 @@ export function resolveAutonomyPolicy(
 /** The transparency block: every effective value and its source, then warnings and translations — verbatim. */
 export function describeAutonomy(resolution: AutonomyResolution): string[] {
   return [
-    'Autonomy (argument > adoption > KB default):',
+    'Autonomy (argument > adoption > preset > KB default):',
     ...resolution.lines.map(line => `  ${line}`),
     ...Object.values(resolution.translated).map(
       t => `  translated from ${t.from} — the \`## Autonomy\` equivalent is \`${t.equivalent}\``,
@@ -118,13 +118,17 @@ export function resolveRunAutonomy(input: {
   return resolution
 }
 
-/** A selection value the adoption declared (`## Autonomy`, source `adoption` exactly), never an argument or default. */
+/** A selection value the adoption declared (`## Autonomy` key, or its preset — US-576), never an argument or default. */
 export function adoptionSelection(
   resolution: AutonomyResolution | undefined,
   key: 'filter' | 'assignee' | 'status' | 'root',
 ): string | undefined {
   const entry = resolution?.effective?.[key]
-  if (entry === undefined || entry.source !== 'adoption' || entry.value === undefined)
+  if (
+    entry === undefined ||
+    entry.value === undefined ||
+    (entry.source !== 'adoption' && !entry.source.startsWith('preset '))
+  )
     return undefined
   return Array.isArray(entry.value) ? entry.value.join(',') : String(entry.value)
 }

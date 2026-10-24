@@ -223,7 +223,7 @@ export function forwardedAutonomy(
   config: RunCommandConfig,
   autonomy: AutonomyResolution | undefined,
 ): Array<[string, string]> {
-  return (['until', 'prepare', 'merge'] as const).flatMap(key => {
+  return (['preset', 'until', 'prepare', 'merge'] as const).flatMap(key => {
     const value = config.autonomy?.[key]
     if (value === undefined) return []
     const source = autonomy?.effective?.[key]?.source ?? 'argument'

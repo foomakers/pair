@@ -41,19 +41,24 @@ export const runCommandMetadata = {
         'US-521: comma-separated canonical macrostates (e.g. Draft,Ready), for a skill that declares it (pair-next); refused for pair-loop (the driver declares only root/predicate/iteration for it)',
     },
     {
+      flags: '--preset <full|escalate-red|supervised|custom>',
+      description:
+        "US-576: a named autonomy preset — full (filter *, prepare/merge hold-never, until merged), escalate-red (same, but merge hold-when; has: risk:red), supervised (filter *, prepare/merge hold-always, until merged), custom (explicit keys only). Requires --card or --parallel (forwarded to every child card). Precedence: argument > explicit adoption key > preset > KB default — every effective value is printed with its source.",
+    },
+    {
       flags: '--until <ready|pr|merged>',
       description:
-        "US-521: how far the card's delivery cycle goes — ready (stop before implement), pr (default: the review-approved PR), merged (enter the merge stage; the only value that evaluates the merge gate). Requires --card or --parallel (the loop forwards it to every child card). Precedence: argument > adoption (`## Autonomy`, then translated legacy sections) > KB default — every effective value is printed with its source.",
+        "US-521: how far the card's delivery cycle goes — ready (stop before implement), pr (default: the review-approved PR), merged (enter the merge stage; the only value that evaluates the merge gate). Requires --card or --parallel (the loop forwards it to every child card). Precedence: argument > explicit adoption key (`## Autonomy`, then translated legacy sections) > preset > KB default — every effective value is printed with its source.",
     },
     {
       flags: '--prepare <gate>',
       description:
-        'US-523: the prepare gate `<always|never|when>[; has: <labels>][; lacks: <labels>]` (with --card or --parallel; forwarded to every child card) — who prepares a Draft card: `always` (default) needs a human (R3.11), `never` proceeds alone recording assumptions, `when` proceeds alone unless a boundary escalates (`needs-review`, card stays Draft). Requires --card',
+        'US-523: the prepare gate `<hold-always|hold-never|hold-when>[; has: <labels>][; lacks: <labels>]` (with --card or --parallel; forwarded to every child card; `always|never|when` are deprecated aliases) — who prepares a Draft card: `hold-always` (default) needs a human (R3.11), `hold-never` proceeds alone recording assumptions, `hold-when` proceeds alone unless a boundary escalates (`needs-review`, card stays Draft). Requires --card',
     },
     {
       flags: '--merge <gate>',
       description:
-        "US-521: the merge gate, same grammar: always parks awaiting-human (default), never/when enter the merge stage unless a has/lacks escalation fires (status escalated, exit 1, on-halt). #490's signal checks stay mandatory. Requires --card or --parallel (forwarded to every child card)",
+        "US-521: the merge gate, same grammar: hold-always parks awaiting-human (default), hold-never/hold-when enter the merge stage unless a has/lacks escalation fires (status escalated, exit 1, on-halt). hold-never waives pair-explicit-approval on a risk:red/untagged PR (US-576); #490's other signal checks stay mandatory. Requires --card or --parallel (forwarded to every child card)",
     },
     {
       flags: '--card <id>',

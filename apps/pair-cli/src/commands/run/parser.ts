@@ -22,6 +22,8 @@ export interface RunScopeOptions {
  * the decision belong to `autonomy-policy.mjs`, which this CLI only spawns (pair-cli owns no cycle rule).
  */
 export interface RunAutonomyArguments {
+  /** US-576: `full | escalate-red | supervised | custom` — validated by the shared script. */
+  preset?: string
   until?: string
   prepare?: string
   merge?: string
@@ -132,6 +134,7 @@ interface ParseRunOptions {
   filter?: string
   assignee?: string
   status?: string
+  preset?: string
   until?: string
   prepare?: string
   merge?: string
@@ -519,8 +522,15 @@ function resolveScope(options: ParseRunOptions): RunScopeOptions {
  * Anywhere else they are refused here, never silently ignored.
  * Content is only safety-checked (prompt/shell); the grammar is the shared script's.
  */
-function refuseAutonomyOffCycle(until?: string, prepare?: string): never {
-  const flag = until !== undefined ? '--until' : prepare !== undefined ? '--prepare' : '--merge'
+function refuseAutonomyOffCycle(preset?: string, until?: string, prepare?: string): never {
+  const flag =
+    preset !== undefined
+      ? '--preset'
+      : until !== undefined
+        ? '--until'
+        : prepare !== undefined
+          ? '--prepare'
+          : '--merge'
   throw new Error(
     `${flag} sets how far ONE card's delivery cycle goes and is only meaningful with --card or --parallel ` +
       '(the loop forwards it to every child card; a plain skill run takes no autonomy arguments)',
@@ -528,13 +538,19 @@ function refuseAutonomyOffCycle(until?: string, prepare?: string): never {
 }
 
 function resolveAutonomyArguments(options: ParseRunOptions): RunAutonomyArguments | undefined {
+  const preset = promptSafeText(options.preset, '--preset')
   const until = promptSafeText(options.until, '--until')
   const prepare = promptSafeText(options.prepare, '--prepare')
   const merge = promptSafeText(options.merge, '--merge')
-  if (until === undefined && prepare === undefined && merge === undefined) return undefined
+  if ([preset, until, prepare, merge].every(v => v === undefined)) return undefined
   if (options.card === undefined && options.parallel === undefined)
-    refuseAutonomyOffCycle(until, prepare)
-  return { ...(until && { until }), ...(prepare && { prepare }), ...(merge && { merge }) }
+    refuseAutonomyOffCycle(preset, until, prepare)
+  return {
+    ...(preset && { preset }),
+    ...(until && { until }),
+    ...(prepare && { prepare }),
+    ...(merge && { merge }),
+  }
 }
 
 /**

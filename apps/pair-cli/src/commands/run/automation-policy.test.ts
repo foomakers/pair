@@ -484,3 +484,17 @@ describe('US-573 AC5: `## Stop Predicate` idle-timeout', () => {
     )
   })
 })
+
+describe('US-576 AC3: only `## Autonomy` declared', () => {
+  it('prints no "automation is off" warning (the selection is `## Autonomy`\'s)', () => {
+    const policy = policyFrom('# Automation\n\n## Autonomy\n\npreset: escalate-red\n').read()
+    expect(policy.eligibility).toBeUndefined()
+    expect(policy.warnings.join('\n')).not.toContain('automation is off')
+  })
+
+  it('still warns when neither `## Eligibility` nor `## Autonomy` is declared', () => {
+    expect(policyFrom('# Automation\n\n## Max Parallelism\n\n1\n').read().warnings.join('\n')).toContain(
+      'automation is off',
+    )
+  })
+})
