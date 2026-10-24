@@ -13,7 +13,8 @@
 //   3. the PR's remote head, `pair-review` and `pair-explicit-approval` conclusions are re-read NOW,
 //      and any of them unreadable parks the card;
 //   4. the remote head is the head the verifier reviewed (`reviewedHead`);
-//   5. both conclusions are `success` — except that below 🔴 an ABSENT `pair-explicit-approval` is satisfied (D4: the tier does
+//   5. both conclusions are `success` — except that an explicit `merge: hold-never` waives `pair-explicit-approval` unless it
+//      is `failure` (US-576), and below 🔴 an ABSENT `pair-explicit-approval` is satisfied (D4: the tier does
 //      not require it, so a repo with no job publishing it is not parked), and the tier that decides this and the merge gate
 //      is the PR's CURRENT `risk:*` (D5: the review writes it; an untagged PR is `risk:red`), never the card's stale one;
 //   5b. the PR's CI checks on that head (AL) — any check but pair's own that is not `success` refuses with `ci-not-green`
@@ -39,7 +40,7 @@ import { existsSync, rmSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { decide as decideAutonomy, effectiveLabels, gateFromLegacyTiers, escalationComment, ESCALATION_MARKER, parseGate, conditionError } from './autonomy-policy.mjs'
+import { decide as decideAutonomy, effectiveLabels, gateFromLegacyTiers, escalationComment, ESCALATION_MARKER, parseGate, conditionError, normalizeGate } from './autonomy-policy.mjs'
 import { assertBranchName } from './host/adapter-kit.mjs'
 import { assertRunOwnsStory } from './run-guard.mjs'
 
@@ -66,7 +67,7 @@ export function decideMerge({ cardTier, currentTier, effectiveTier = currentTier
     if (d.decision === 'escalate') {
       conditions = d.conditions
       add('escalated', `merge gate escalates: ${d.conditions.join(', ')} — a human decides`)
-    } else if (d.decision === 'await-human') add('tier-not-auto-advance', 'merge: always — the merge gate parks the card for a human')
+    } else if (d.decision === 'await-human') add('tier-not-auto-advance', 'merge: hold-always — the merge gate parks the card for a human')
   } else if (!Array.isArray(autoAdvanceTiers) || !autoAdvanceTiers.includes(effectiveTier)) add('tier-not-auto-advance', `tier ${effectiveTier} not in Auto-Advance`)
   const readable = signals && SHA_RE.test(String(signals.headSha ?? '')) && typeof signals.pairReview === 'string' && typeof signals.explicitApproval === 'string'
   if (!readable) add('signals-unreadable', 'PR SIGNALS unreadable at merge time, never merged on unread evidence')
@@ -75,8 +76,10 @@ export function decideMerge({ cardTier, currentTier, effectiveTier = currentTier
     if (signals.pairReview !== 'success') add('pair-review', `pair-review conclusion on head ${signals.headSha} is ${signals.pairReview}, never merged without a published approval`)
     // D4: below 🔴 the check auto-passes (the tier does not require explicit approval), so a repo that publishes no such job
     // reads `missing` and that is satisfied; at 🔴 (or any tier not named below it) missing/pending awaits a human, failure halts.
+    // US-576: an explicit `merge: hold-never` waives the approval at 🔴/untagged too (missing or pending) — never a rejection.
+    const waived = mergeGate && normalizeGate(mergeGate).mode === 'never'
     const approvalRequired = !BELOW_RED.includes(effectiveTier)
-    if (signals.explicitApproval !== 'success' && (approvalRequired || signals.explicitApproval !== 'missing')) add('explicit-approval', `pair-explicit-approval conclusion on head ${signals.headSha} is ${signals.explicitApproval} (D10: no recorded human approval), never merged`)
+    if (signals.explicitApproval !== 'success' && !(waived && signals.explicitApproval !== 'failure') && (approvalRequired || signals.explicitApproval !== 'missing')) add('explicit-approval', `pair-explicit-approval conclusion on head ${signals.headSha} is ${signals.explicitApproval} (D10: no recorded human approval), never merged`)
   }
   // AL: the PR's own CI checks on the pinned head — pair's two contexts are judged above, everything else must be green.
   if (readable && Array.isArray(signals.ci)) {
