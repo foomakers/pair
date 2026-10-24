@@ -765,6 +765,37 @@ test('US-582 plan: a doc group\'s allowedPaths cover EVERY location its finding 
   assert.equal(tryPlan(d5, p5.plan).published, true, 'behavioral groups are unaffected')
 })
 
+test('US-582 r0-1 plan: a generated mirror in a doc finding\'s location is exempt ONLY when its dataset source is in scope — else `finding-location-outside-scope`', () => {
+  const docGroup = allowedPaths => [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'doc', allowedPaths }]
+  const cases = [
+    ['.pair/knowledge/guidelines/collaboration/automation/doc-remediation-groups.md:12, docs/guide.md:3', /^finding-location-outside-scope: r0-1: \S*\.pair\/knowledge\/guidelines\/collaboration\/automation\/doc-remediation-groups\.md$/],
+    ['.claude/skills/pair-workflow-red-spec/SKILL.md:4, docs/guide.md:3', /^finding-location-outside-scope: r0-1: \S*\/(?:red-spec|pair-workflow-red-spec)\/SKILL\.md$/],    ...['.agents', '.agent', '.cursor', '.windsurf'].map(root => [`${root}/skills/pair-workflow-red-spec/SKILL.md:4, docs/guide.md:3`, /^finding-location-outside-scope: r0-1: \S*\/(?:red-spec|pair-workflow-red-spec)\/SKILL\.md$/]),
+    ['.pair/llms.txt:1, docs/guide.md:3', /^finding-location-outside-scope: r0-1: \S*\.pair\/llms\.txt$/],
+  ]
+  for (const [location, reason] of cases) {
+    const { dir } = runDir()
+    const out = tryPlan(dir, planRound(dir, docGroup(['docs/guide.md']), [finding('r0-1', { location })]).plan)
+    assert.equal(out.published, false, location)
+    assert.match(out.reason, reason)
+  }
+})
+
+test('US-582 r0-1 plan control: a mirror whose dataset source is in scope (file or directory) stays exempt', () => {
+  const docGroup = allowedPaths => [{ groupId: 'r1-g1', findings: ['r0-1'], owner: 'g', mode: 'doc', allowedPaths }]
+  const kb = '.pair/knowledge/guidelines/collaboration/automation/doc-remediation-groups.md:12, docs/guide.md:3'
+  const skill = '.claude/skills/pair-workflow-red-spec/SKILL.md:4, docs/guide.md:3'
+  const cases = [
+    [kb, ['docs/guide.md', 'packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/doc-remediation-groups.md']],
+    [kb, ['docs/', 'packages/knowledge-hub/dataset/']],
+    [skill, ['docs/guide.md', 'packages/knowledge-hub/dataset/.skills/workflow/red-spec/SKILL.md']],
+    [skill, ['docs/', 'packages/knowledge-hub/dataset/.skills/workflow/red-spec/']],
+  ]
+  for (const [location, allowed] of cases) {
+    const { dir } = runDir()
+    assert.equal(tryPlan(dir, planRound(dir, docGroup(allowed), [finding('r0-1', { location })]).plan).published, true, `${location} ${allowed}`)
+  }
+})
+
 test('AJ mixed round (#252 shape): a behavioral group + a doc group dependsOn it — accepted and routed in order g1 (prepare/validate/green) then g2, then ONE verify of both', () => {
   const { dir } = runDir()
   const groups = [
