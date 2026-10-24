@@ -1,7 +1,10 @@
+import { format } from 'util'
+import { plainConsole, plainNote } from './plain-console'
 import { resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
-import type { RunCommandConfig } from './parser'
+import { parseRunCommand, type RunCommandConfig } from './parser'
+import { optionsOfArgv, runCardInProcess } from './parallel'
 import { assertEngineAvailable, describeEngineResolution, resolveEngine } from './resolve-engine'
 import { createExecutableProbe } from './path-probe'
 import {
@@ -15,6 +18,7 @@ import { describeApprovalPosture, filterDeliveryFor, selectionDeliveredBy } from
 import { readCardLabels } from './cycle-wiring'
 import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
+import { whileInterruptible } from './interrupt'
 import { adoptionSelection, resolveRunAutonomy, spawnAutonomyResolver } from './autonomy-policy'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
 import { locateCycleScripts } from './cycle-scripts'
@@ -132,6 +136,8 @@ function resolveRun(
     policy,
     autonomy,
     ...(context.dispatch && { dispatch: context.dispatch }),
+    auditPath: context.auditPath,
+    idleTimeout: context.idleTimeout,
   }
 }
 
@@ -241,6 +247,59 @@ export async function handleRunCommand(
   fs: FileSystemService,
   callerDeps: RunHandlerDependencies = {},
 ): Promise<number> {
+  if (
+    plainConsole({
+      isTTY: process.stdout.isTTY,
+      output: rawConfig.output,
+      verbose: rawConfig.verbose,
+    })
+  )
+    return await withPlainConsole(() => runCommand(rawConfig, fs, callerDeps))
+  if (rawConfig.output !== 'json') return await runCommand(rawConfig, fs, callerDeps)
+  // US-573 AC3: under --json stdout carries ONLY the NDJSON run events; every human line goes to stderr.
+  const log = console.log
+  console.log = console.error
+  try {
+    return await runCommand(rawConfig, fs, callerDeps)
+  } finally {
+    console.log = log
+  }
+}
+
+/** A live terminal without --verbose: the driver's technical lines are hidden, a few become plain notes. */
+async function withPlainConsole(run: () => Promise<number>): Promise<number> {
+  const log = console.log
+  console.log = (...args: unknown[]) => {
+    const shown = plainNote(format(...args))
+    if (shown !== undefined) log(shown)
+  }
+  try {
+    return await run()
+  } finally {
+    console.log = log
+  }
+}
+
+/** The loop drives each card's cycle in this process (no nested `pair-cli run`), unless a runner was injected. */
+function withInProcessCards(
+  deps: RunHandlerDependencies,
+  fs: FileSystemService,
+  callerDeps: RunHandlerDependencies,
+): RunHandlerDependencies {
+  const runCard = (args: readonly string[]) =>
+    runCommand(
+      parseRunCommand(optionsOfArgv(args) as Parameters<typeof parseRunCommand>[0]),
+      fs,
+      callerDeps,
+    )
+  return { ...deps, runCardProcess: deps.runCardProcess ?? runCardInProcess(runCard) }
+}
+
+async function runCommand(
+  rawConfig: RunCommandConfig,
+  fs: FileSystemService,
+  callerDeps: RunHandlerDependencies,
+): Promise<number> {
   // ABSOLUTE, always: the perimeter's directory is printed as the run's containment boundary and
   // probed against the engine's trust store, and `--cwd .` is neither legible as a boundary nor
   // comparable against an absolute trust-store key.
@@ -249,9 +308,9 @@ export async function handleRunCommand(
 
   haltOnUnresolvedProfileInDryRun({ config, context, fs, cwd }, deps)
   // US-491: `--root --parallel N` — the fan-out mode, its own entry (the parser guarantees no card).
-  if (config.parallel !== undefined) {
-    return await handleParallelRun({ config, context, fs, cwd }, deps)
-  }
+  const ctx = { config, context, fs, cwd }
+  if (config.parallel !== undefined)
+    return await handleParallelRun(ctx, withInProcessCards(deps, fs, callerDeps))
 
   // Nothing to run on this card: report the decision and stop. This is a clean exit, never an
   // error — automation is opt-in per card (D21), so "no workflow applies here" is the shipped
@@ -284,7 +343,19 @@ export async function handleRunCommand(
 
   return resolved.dispatch
     ? await driveDispatchedCard({ resolved, decision: resolved.dispatch, context, config }, deps)
-    : await driveRun(resolved, config, deps)
+    : await driveTrapped(resolved, config, deps)
+}
+
+/** US-573: a plain loop run, trapped so Ctrl+C finalizes the live lines and the audit's `loop-end interrupted`. */
+async function driveTrapped(
+  resolved: ResolvedRun,
+  config: RunCommandConfig,
+  deps: RunHandlerDependencies,
+): Promise<number> {
+  return await whileInterruptible(
+    () => {},
+    () => driveRun(resolved, config, deps),
+  )
 }
 
 /** The routed card, when the invocation ALSO names a `--pr` (AC2 wins over the mapped workflow). */

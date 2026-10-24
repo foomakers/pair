@@ -1,4 +1,5 @@
 import { join } from 'path'
+import { MAX_TIMEOUT_SECONDS } from '../../config/engine-block'
 import type { FileSystemService } from '@pair/content-ops'
 import { isLabelShape, isSafePromptText, promptSafetyFailure } from './prompt-safety'
 import { assertLabelValue, policyHalt, POLICY_PATH, sectionLines } from './policy-sections'
@@ -44,6 +45,8 @@ export interface AutomationPolicy {
   /** `## Stop Predicate`'s `<selector> ⇒ <condition>` line, verbatim (passed on, never evaluated here). */
   readonly stopPredicate?: string
   readonly maxIterations: number
+  /** US-573: `## Stop Predicate`'s `idle-timeout: <seconds>`, present only when declared. */
+  readonly idleTimeoutSeconds?: number
   readonly maxParallelism: number
   /**
    * `## Max Parallelism`'s per-tier override lines (`<tier>: <n>`), present only when declared.
@@ -121,6 +124,7 @@ export function readAutomationPolicy(fs: FileSystemService, projectRoot: string)
     autoAdvance: readAutoAdvance(markdown, eligibility),
     ...(stop.predicate !== undefined && { stopPredicate: stop.predicate }),
     maxIterations: stop.maxIterations,
+    ...(stop.idleTimeoutSeconds !== undefined && { idleTimeoutSeconds: stop.idleTimeoutSeconds }),
     maxParallelism: parallelism.global,
     ...(Object.keys(parallelism.perTier).length > 0 && {
       maxParallelismOverrides: parallelism.perTier,
@@ -303,7 +307,11 @@ export function validateStopPredicateLine(line: string): string {
 }
 
 /** `## Stop Predicate` — the predicate line (borrowed verbatim) plus its `max-iterations` backstop. */
-function readStopPredicate(markdown: string): { predicate?: string; maxIterations: number } {
+function readStopPredicate(markdown: string): {
+  predicate?: string
+  maxIterations: number
+  idleTimeoutSeconds?: number
+} {
   const lines = sectionLines(markdown, 'Stop Predicate')
   if (lines === undefined || lines.length === 0) {
     return { maxIterations: FAIL_SAFE_MAX_ITERATIONS }
@@ -311,8 +319,18 @@ function readStopPredicate(markdown: string): { predicate?: string; maxIteration
 
   let predicate: string | undefined
   let maxIterations: number | undefined
+  let idleTimeoutSeconds: number | undefined
 
   for (const line of lines) {
+    const idle = /^idle-timeout:\s*(.+)$/.exec(line)
+    if (idle) {
+      idleTimeoutSeconds = positiveInteger(idle[1]!, '`## Stop Predicate` idle-timeout')
+      if (idleTimeoutSeconds > MAX_TIMEOUT_SECONDS)
+        policyHalt(
+          `\`## Stop Predicate\` idle-timeout declares \`${idleTimeoutSeconds}\`, above the ${MAX_TIMEOUT_SECONDS}-second maximum`,
+        )
+      continue
+    }
     const iterations = /^max-iterations:\s*(.+)$/.exec(line)
     if (iterations) {
       maxIterations = positiveInteger(iterations[1]!, '`## Stop Predicate` max-iterations')
@@ -324,6 +342,7 @@ function readStopPredicate(markdown: string): { predicate?: string; maxIteration
   return {
     ...(predicate !== undefined && { predicate }),
     maxIterations: maxIterations ?? FAIL_SAFE_MAX_ITERATIONS,
+    ...(idleTimeoutSeconds !== undefined && { idleTimeoutSeconds }),
   }
 }
 

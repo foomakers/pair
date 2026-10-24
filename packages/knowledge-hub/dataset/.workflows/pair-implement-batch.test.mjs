@@ -2521,3 +2521,14 @@ test('AO control: a stage that answers correctly is dispatched once — no retry
   assert.equal(reviewerCalls(calls).length, 1)
   assert.ok(!calls.some(c => /REJECTED by the coordinator/.test(c.prompt)))
 })
+
+// ── US-573 T-1: one machine-readable `PAIR_EVENT` line per stage transition ─────────────────────────────
+const pairEvents = logs => logs.filter(l => l.startsWith('PAIR_EVENT ')).map(l => JSON.parse(l.slice('PAIR_EVENT '.length)))
+test('US-573 T-1: a fresh card with one fix round emits stage events implement → review → fix 1/3 → review, once each, card id as a string', async () => {
+  const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] })
+  const { result, logs } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ review }), entry: 'fresh' })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  const stages = pairEvents(logs).filter(e => e.event === 'stage')
+  assert.deepEqual(stages.map(e => e.stage), ['implement', 'review', 'fix 1/3', 'review'])
+  assert.ok(stages.every(e => e.card === '292'))
+})
