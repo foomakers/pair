@@ -40,3 +40,10 @@ test('AC3: the conformance check bites — an unconditional `gh issue view` step
   assert.ok(PM_CLI.test(line))
   assert.equal(/github|linear|azure|jira|filesystem/i.test(line), false)
 })
+
+test('r0-2: workflow stage skills name a tracker CLI only on a per-tool dispatch line', () => {
+  const perTool = line => /github|linear|azure|jira|filesystem/i.test(line)
+  const dir = join(DATASET, '.skills', 'workflow')
+  const files = readdirSync(dir).map(d => join(dir, d, 'SKILL.md'))
+  assert.deepEqual(files.flatMap(f => hits(f, perTool)), [])
+})

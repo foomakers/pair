@@ -1,0 +1,228 @@
+{
+  "$meta": {
+    "pr": "585",
+    "phase": "r1-g1",
+    "base": "4f2c3e962808f3d50c4101e91cc7a74ef8d6dc74",
+    "trailer": "Pair-RED-Snapshot: pr=585; phase=r1-g1; base=4f2c3e962808f3d50c4101e91cc7a74ef8d6dc74; manifest=.pair/red-snapshots/pr-585-r1-g1.json",
+    "artifacts": [
+      ".claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      ".claude/workflows/pair-contracts/pm-agnostic-conformance.test.mjs",
+      "packages/knowledge-hub/dataset/.workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "packages/knowledge-hub/dataset/.workflows/pair-contracts/pm-agnostic-conformance.test.mjs"
+    ]
+  },
+  "phase": "r1-g1",
+  "mode": "remediation",
+  "inputHead": "4f2c3e962808f3d50c4101e91cc7a74ef8d6dc74",
+  "sourceOfTruth": "review r0 findings r0-1, r0-2",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "filesystem.mjs isChild/matches/locate (filesystem PM adapter readCard)",
+      "inputs": [
+        "backlog file names <id>-<slug>.md",
+        "card ref"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/host/filesystem.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/host/filesystem.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/host/filesystem.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/host/filesystem.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/host/filesystem.mjs",
+        ".claude/skills/pair-workflow-cycle/scripts/host/filesystem.mjs",
+        ".claude/skills/pair-workflow-green-fix/scripts/host/filesystem.mjs",
+        ".claude/skills/pair-workflow-implement-phase/scripts/host/filesystem.mjs",
+        ".claude/skills/pair-workflow-red-spec/scripts/host/filesystem.mjs",
+        ".claude/skills/pair-workflow-red-verify/scripts/host/filesystem.mjs",
+        ".claude/skills/pair-workflow-review-phase/scripts/host/filesystem.mjs"
+      ],
+      "consumers": [
+        "readCard",
+        "cardHash",
+        "setBoardState",
+        "closeAndCascade"
+      ],
+      "classes": [
+        "own slug opening on a digit (01-01-004-3-step-wizard) -> resolves",
+        "parent id vs child story file (01-01 vs 01-01-001-login) -> epic, never child"
+      ],
+      "interactions": [
+        "digit-slug story under epic 01-01: epic lookup unaffected"
+      ]
+    },
+    {
+      "id": "r0-2",
+      "producer": "pm-agnostic-conformance.test.mjs hits() over .skills/workflow/*/SKILL.md; prose producer red-spec SKILL.md Step 2",
+      "inputs": [
+        "dataset .skills/workflow/*/SKILL.md"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.skills/workflow/red-spec/SKILL.md",
+        ".claude/skills/pair-workflow-red-spec/SKILL.md"
+      ],
+      "consumers": [
+        "red-spec initial-mode card read"
+      ],
+      "classes": [
+        "unconditional gh issue line in a workflow SKILL.md -> flagged",
+        "per-tool dispatch line -> allowed"
+      ],
+      "interactions": []
+    }
+  ],
+  "fixScope": {
+    "owner": "filesystem PM adapter + red-spec card read",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/host/filesystem.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/host/filesystem.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/host/filesystem.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/host/filesystem.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/host/filesystem.mjs",
+      ".claude/skills/pair-workflow-cycle/scripts/host/filesystem.mjs",
+      ".claude/skills/pair-workflow-green-fix/scripts/host/filesystem.mjs",
+      ".claude/skills/pair-workflow-implement-phase/scripts/host/filesystem.mjs",
+      ".claude/skills/pair-workflow-red-spec/scripts/host/filesystem.mjs",
+      ".claude/skills/pair-workflow-red-verify/scripts/host/filesystem.mjs",
+      ".claude/skills/pair-workflow-review-phase/scripts/host/filesystem.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-spec/SKILL.md",
+      ".claude/skills/pair-workflow-red-spec/SKILL.md"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r1-g1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "only 01-01-004-3-step-wizard.md present; readCard(01-01-004)",
+      "oracle": "node --test --test-name-pattern=r0-1 .claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "file": ".claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "expected": "title \"US 01-01-004: Wizard\"",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1-g1-c1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "existing adapter suite incl. epic 01-01 never resolves to child 01-01-001-login",
+      "oracle": "node --test --test-skip-pattern=r0- .claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "file": ".claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "expected": "11/11 pass",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r1-g1-i1",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "same test: readCard(01-01) with digit-slug story present returns epic",
+      "oracle": "node --test --test-name-pattern=r0-1 .claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "file": ".claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "expected": "body includes Auth",
+      "covers": [
+        "r0-1"
+      ],
+      "rationale": "asserted inside w1 test after the witness assertion"
+    },
+    {
+      "id": "r1-g1-w2",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "scan .skills/workflow/*/SKILL.md for gh issue/gh api user outside per-tool lines",
+      "oracle": "node --test --test-name-pattern=r0-2 .claude/workflows/pair-contracts/pm-agnostic-conformance.test.mjs",
+      "file": ".claude/workflows/pair-contracts/pm-agnostic-conformance.test.mjs",
+      "expected": "hits == []",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r1-g1-c2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "existing conformance tests (prompts, next/loop, publish-pr/write-issue, bite check)",
+      "oracle": "node --test --test-skip-pattern=r0- .claude/workflows/pair-contracts/pm-agnostic-conformance.test.mjs",
+      "file": ".claude/workflows/pair-contracts/pm-agnostic-conformance.test.mjs",
+      "expected": "4/4 pass",
+      "covers": [
+        "r0-2"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": ".claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:b33d9a2aa8c4f1ef43f902ff1d2d58f1e806bf930127fe49e2f21c072a4fdd71",
+      "command": "node --test --test-name-pattern=r0-1 .claude/workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "observed": "fail 1: HostError fs: card 01-01-004 not found under .pair/adoption/product/backlog"
+    },
+    {
+      "file": ".claude/workflows/pair-contracts/pm-agnostic-conformance.test.mjs",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:7adfd68872b41f455358d7619ca9d02ed459d4b20be0f6592b61b014efe1ecfa",
+      "command": "node --test --test-name-pattern=r0-2 .claude/workflows/pair-contracts/pm-agnostic-conformance.test.mjs",
+      "observed": "fail 1: actual [.skills/workflow/red-spec/SKILL.md:72 ... gh issue view $story --json body]"
+    },
+    {
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/filesystem-adapter.test.mjs",
+      "kind": "fixture",
+      "baseline": "red",
+      "sha256": "sha256:b33d9a2aa8c4f1ef43f902ff1d2d58f1e806bf930127fe49e2f21c072a4fdd71",
+      "consumedBy": ".claude/workflows/pair-contracts/filesystem-adapter.test.mjs"
+    },
+    {
+      "file": "packages/knowledge-hub/dataset/.workflows/pair-contracts/pm-agnostic-conformance.test.mjs",
+      "kind": "fixture",
+      "baseline": "red",
+      "sha256": "sha256:7adfd68872b41f455358d7619ca9d02ed459d4b20be0f6592b61b014efe1ecfa",
+      "consumedBy": ".claude/workflows/pair-contracts/pm-agnostic-conformance.test.mjs"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1",
+          "r0-2"
+        ],
+        "owner": "filesystem PM adapter + red-spec card read",
+        "mode": "behavioral",
+        "oracle": "node --test pair-contracts filesystem-adapter + pm-agnostic-conformance",
+        "allowedPaths": [
+          "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/host/filesystem.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/green-fix/scripts/host/filesystem.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/implement-phase/scripts/host/filesystem.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/scripts/host/filesystem.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/host/filesystem.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/host/filesystem.mjs",
+          ".claude/skills/pair-workflow-cycle/scripts/host/filesystem.mjs",
+          ".claude/skills/pair-workflow-green-fix/scripts/host/filesystem.mjs",
+          ".claude/skills/pair-workflow-implement-phase/scripts/host/filesystem.mjs",
+          ".claude/skills/pair-workflow-red-spec/scripts/host/filesystem.mjs",
+          ".claude/skills/pair-workflow-red-verify/scripts/host/filesystem.mjs",
+          ".claude/skills/pair-workflow-review-phase/scripts/host/filesystem.mjs",
+          "packages/knowledge-hub/dataset/.skills/workflow/red-spec/SKILL.md",
+          ".claude/skills/pair-workflow-red-spec/SKILL.md"
+        ],
+        "findingPaths": {
+          "r0-2": [
+            "packages/knowledge-hub/dataset/.skills/workflow/red-spec/SKILL.md",
+            "packages/knowledge-hub/dataset/.workflows/pair-contracts/pm-agnostic-conformance.test.mjs"
+          ]
+        },
+        "dependsOn": []
+      }
+    ],
+    "carried": []
+  }
+}

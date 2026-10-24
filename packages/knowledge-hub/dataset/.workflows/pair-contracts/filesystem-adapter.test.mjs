@@ -133,3 +133,10 @@ test('code-side operations are refused typed (hostsCode: false)', () => {
   assert.throws(() => pm.prHead({ pr: 1 }), e => e.kind === 'unsupported' && e.method === 'prHead')
   assert.throws(() => pm.resolveUser(), e => e.kind === 'not-implemented' && e.method === 'resolveUser')
 })
+
+test('r0-1: a slug opening on a digit is the card own slug, not a child id', () => {
+  const { pm, b } = fixture()
+  writeFileSync(join(b, '03-user-stories/not-started/01-01-004-3-step-wizard.md'), '# US 01-01-004: Wizard\n\n**Status**: Todo\n')
+  assert.equal(pm.readCard('01-01-004', { fields: ['title'] }).title, 'US 01-01-004: Wizard')
+  assert.equal(pm.readCard('01-01').body.includes('Auth'), true, 'the epic still never resolves to a child story')
+})
