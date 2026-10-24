@@ -579,9 +579,15 @@ describe('R: --predicate (the loop override of ## Stop Predicate)', () => {
 
 describe('US-576 T-3: --preset and --filter *', () => {
   it('carries --preset raw as an autonomy argument with --card or --parallel, refuses it elsewhere', () => {
-    expect(parseRunCommand({ card: '42', preset: 'escalate-red' }).autonomy).toEqual({ preset: 'escalate-red' })
-    expect(parseRunCommand({ parallel: '2', root: '7', preset: 'full' }).autonomy).toEqual({ preset: 'full' })
-    expect(() => parseRunCommand({ preset: 'full' })).toThrow(/--preset .*only meaningful with --card or --parallel/)
+    expect(parseRunCommand({ card: '42', preset: 'escalate-red' }).autonomy).toEqual({
+      preset: 'escalate-red',
+    })
+    expect(parseRunCommand({ parallel: '2', root: '7', preset: 'full' }).autonomy).toEqual({
+      preset: 'full',
+    })
+    expect(() => parseRunCommand({ preset: 'full' })).toThrow(
+      /--preset .*only meaningful with --card or --parallel/,
+    )
   })
 
   it("accepts --filter '*' as a scope", () => {

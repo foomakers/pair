@@ -40,7 +40,7 @@ const ASSUMPTIONS_HEADING_RE = /^##\s+Assumptions\s*$/m
 // Fail closed: a gate, readiness, boundary or `attended` that is not one of its values throws — never a route.
 // `labels` unreadable (not an array) under a `when` gate escalates, as #521's `decide` does for the merge gate.
 export function decide({ gate, labels, readiness, attended, boundary, source } = {}) {
-  if (!gate || !GATE_MODES.includes(gate.mode)) throw new Error(`gate must be a prepare gate {mode, has, lacks}, got ${JSON.stringify(gate ?? null)}`)
+  if (!gate || !GATE_MODES.includes(normalizeGate(gate).mode)) throw new Error(`gate must be a prepare gate {mode, has, lacks}, got ${JSON.stringify(gate ?? null)}`)
   gate = normalizeGate(gate)
   if (gate.mode === 'when' && gate.has.length === 0 && gate.lacks.length === 0) throw new Error('a `when` gate needs at least one has or lacks label')
   if (!READINESS.includes(readiness)) throw new Error(`readiness must be ${READINESS.join(' | ')}, got ${JSON.stringify(readiness ?? null)}`)
@@ -209,7 +209,7 @@ const gateOf = raw => {
   } catch {
     throw new Error('--gate must be a JSON gate object {mode, has, lacks}')
   }
-  const text = g && typeof g === 'object' ? `${g.mode}${g.has?.length ? `; has: ${g.has.join(',')}` : ''}${g.lacks?.length ? `; lacks: ${g.lacks.join(',')}` : ''}` : ''
+  const text = g && typeof g === 'object' ? gateToString(g) : ''
   const parsed = parseGate('prepare', text)
   if (parsed.errors) throw new Error(`--gate is invalid: ${parsed.errors.map(e => `${e.key} ${e.reason}`).join('; ')}`)
   return parsed.value

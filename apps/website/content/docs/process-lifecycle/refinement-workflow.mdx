@@ -32,6 +32,6 @@ pair refines one card end to end; you trigger it and read the result. **With pai
 
 ### Autonomous
 
-The `prepare` [autonomy gate](/docs/concepts/glossary#autonomy-gates) lets pair refine a Draft card alone. `never` proceeds and records assumptions on the card; `when` proceeds unless a condition escalates. An escalation keeps the card Draft, labels it `needs-review` and exits non-zero, so a human takes over. Default is `always`: a human prepares. Setting the gate: [Autonomy and per-stage engine and model](/docs/guides/autonomy-and-profiles).
+The `prepare` [autonomy gate](/docs/concepts/glossary#autonomy-gates) lets pair refine a Draft card alone. `hold-never` proceeds and records assumptions on the card; `hold-when` proceeds unless a condition escalates. An escalation keeps the card Draft, labels it `needs-review` and exits non-zero, so a human takes over. Default is `hold-always`: a human prepares. Setting the gate: [Autonomy and per-stage engine and model](/docs/guides/autonomy-and-profiles).
 
 **Next:** [Delivery workflow](/docs/process-lifecycle/delivery-workflow), from Ready card to review-approved PR.

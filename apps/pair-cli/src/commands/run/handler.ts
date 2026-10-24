@@ -227,7 +227,9 @@ function sweepWorkingState(
   deps: RunHandlerDependencies,
 ): void {
   const policyFile = resolve(mainCheckoutOrCwd(cwd), POLICY_PATH)
-  const policy = readWorkingCleanup(fs.existsSync(policyFile) ? fs.readFileSync(policyFile) : undefined)
+  const policy = readWorkingCleanup(
+    fs.existsSync(policyFile) ? fs.readFileSync(policyFile) : undefined,
+  )
   const closedAt = deps.readCardClosedAt ?? readCardClosedAt
   const removed = sweepWorkingArea({
     workingArea,

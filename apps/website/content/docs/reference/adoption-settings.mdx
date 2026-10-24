@@ -21,14 +21,16 @@ Read by the delivery cycle ([`/pair-workflow-cycle`, `pair-cli run`](/docs/proce
 
 | Section / key | Allowed values | Default when absent | Read by | Effect | Assistant |
 | --- | --- | --- | --- | --- | --- |
-| `## Autonomy` `filter` | labels, any-of | all cards | `autonomy-policy.mjs` | which cards unattended runs pick | yes |
+| `## Autonomy` `preset` | `full`, `escalate-red`, `supervised`, `custom` | none (KB defaults: every gate held) | `autonomy-policy.mjs` | supplies `filter`/`prepare`/`merge`/`until` a key does not declare; an explicit key wins | yes |
+| `## Autonomy` `filter` | labels, any-of, or `*` (every card) | all cards | `autonomy-policy.mjs` | which cards unattended runs pick | yes |
 | `## Autonomy` `assignee`, `status`, `root` | `@me` or login; canonical macrostates; issue id | all open | `autonomy-policy.mjs` | narrows the selection | yes |
 | `## Autonomy` `until` | `ready`, `pr`, `merged` | `pr` | `autonomy-policy.mjs` | how far a card goes; only `merged` evaluates the merge gate | yes |
-| `## Autonomy` `prepare` | `always`, `never`, `when; has: …; lacks: …` | `always` | `cycle-prepare.mjs` | who refines and breaks down a Draft card (`always` keeps a human) | yes |
-| `## Autonomy` `merge` | `always`, `never`, `when; has: …; lacks: …` | `always` | `autonomy-policy.mjs`, `cycle-merge.mjs` | whether a review-approved card merges; a `when` condition escalates | yes |
+| `## Autonomy` `prepare` | `hold-always`, `hold-never`, `hold-when; has: …; lacks: …` | `hold-always` | `cycle-prepare.mjs` | who refines and breaks down a Draft card (`hold-always` keeps a human) | yes |
+| `## Autonomy` `merge` | `hold-always`, `hold-never`, `hold-when; has: …; lacks: …` | `hold-always` | `autonomy-policy.mjs`, `cycle-merge.mjs` | whether a review-approved card merges; a `hold-when` condition escalates | yes |
 | `## Eligibility` (legacy) | one label | none | `autonomy-policy.mjs` | translated to `filter:`; still honoured | yes |
 | `## Auto-Advance` (legacy) | `(none)` or the eligibility tier | `(none)` | `autonomy-policy.mjs` | translated to `merge:`; still honoured | yes |
-| `## Stop Predicate` | `<selector> ⇒ <condition>`, `max-iterations: N`, `idle-timeout: <seconds>` | `max-iterations: 1`; idle timeout `1800` | `pair-cli run`, `/pair-loop` | when an unattended run stops | no |
+| `## Stop Predicate` | `<selector> ⇒ <condition>`, `max-iterations: N`, `idle-timeout: <seconds>` | no iteration cap (runs to a natural stop); idle timeout `1800` | `pair-cli run`, `/pair-loop` | when an unattended run stops | no |
+| `## Working Cleanup` | `cleanup: never`, `on-close`, `after <n>d\|h\|m` | `after 7d` | `pair-cli run` | removes the run state and checkpoint of cards Done longer than the duration | yes |
 | `## Max Parallelism` | positive integer, optional `<tier>: N` | `1` | `pair-cli run --parallel`, `/pair-loop` | parallel batch ceiling | no |
 | `## Audit Location` | project-relative path | `automation/loop-audit.md` under `working_path` | `/pair-loop`, `pair-cli run` | where the unattended trail is appended | no |
 | `## Workflows` | `<tag> ⇒ <workflow>`, `Precedence:` | none (no tag routing) | dispatcher | opt-in per card: tag to workflow | no |

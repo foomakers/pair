@@ -17,8 +17,16 @@ describe('readWorkingCleanup', () => {
 
   it('reads never | on-close | after <n>d|h|m; `after 0d` is on-close', () => {
     expect(readWorkingCleanup(section('cleanup: never'))).toEqual({ mode: 'never', text: 'never' })
-    expect(readWorkingCleanup(section('cleanup: on-close'))).toEqual({ mode: 'after', ms: 0, text: 'on-close' })
-    expect(readWorkingCleanup(section('cleanup: after 0d'))).toEqual({ mode: 'after', ms: 0, text: 'after 0d' })
+    expect(readWorkingCleanup(section('cleanup: on-close'))).toEqual({
+      mode: 'after',
+      ms: 0,
+      text: 'on-close',
+    })
+    expect(readWorkingCleanup(section('cleanup: after 0d'))).toEqual({
+      mode: 'after',
+      ms: 0,
+      text: 'after 0d',
+    })
     expect(readWorkingCleanup(section('cleanup: after 12h'))).toMatchObject({ ms: 12 * 3_600_000 })
     expect(readWorkingCleanup(section('cleanup: after 30m'))).toMatchObject({ ms: 30 * 60_000 })
   })
@@ -55,7 +63,12 @@ const closedAt = (id: string): Date | null | undefined =>
 describe('sweepWorkingArea', () => {
   it('removes runs/<card>/** and the checkpoint of cards Done longer than the duration — nothing else', () => {
     const root = area()
-    const removed = sweepWorkingArea({ workingArea: root, policy: DEFAULT_CLEANUP, closedAt, now: NOW })
+    const removed = sweepWorkingArea({
+      workingArea: root,
+      policy: DEFAULT_CLEANUP,
+      closedAt,
+      now: NOW,
+    })
     expect(removed).toEqual(['1'])
     expect(existsSync(join(root, 'runs', 'story-1'))).toBe(false)
     expect(existsSync(join(root, 'checkpoints', '1.md'))).toBe(false)
@@ -69,7 +82,12 @@ describe('sweepWorkingArea', () => {
   it('on-close removes every Done card, never an open (parked / reopened) or unreadable one', () => {
     const root = area()
     expect(
-      sweepWorkingArea({ workingArea: root, policy: readWorkingCleanup(section('cleanup: after 0d')), closedAt, now: NOW }),
+      sweepWorkingArea({
+        workingArea: root,
+        policy: readWorkingCleanup(section('cleanup: after 0d')),
+        closedAt,
+        now: NOW,
+      }),
     ).toEqual(['1', '2'])
   })
 
@@ -77,8 +95,22 @@ describe('sweepWorkingArea', () => {
     const root = area()
     let reads = 0
     const count = (id: string) => ((reads += 1), closedAt(id))
-    expect(sweepWorkingArea({ workingArea: root, policy: { mode: 'never', text: 'never' }, closedAt: count, now: NOW })).toEqual([])
+    expect(
+      sweepWorkingArea({
+        workingArea: root,
+        policy: { mode: 'never', text: 'never' },
+        closedAt: count,
+        now: NOW,
+      }),
+    ).toEqual([])
     expect(reads).toBe(0)
-    expect(sweepWorkingArea({ workingArea: join(root, 'nope'), policy: DEFAULT_CLEANUP, closedAt, now: NOW })).toEqual([])
+    expect(
+      sweepWorkingArea({
+        workingArea: join(root, 'nope'),
+        policy: DEFAULT_CLEANUP,
+        closedAt,
+        now: NOW,
+      }),
+    ).toEqual([])
   })
 })

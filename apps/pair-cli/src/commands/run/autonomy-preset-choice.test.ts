@@ -8,7 +8,9 @@ const resolution = (sources: Record<string, string>, translated = {}): AutonomyR
   ({
     ok: true,
     active: false,
-    effective: Object.fromEntries(Object.entries(sources).map(([k, source]) => [k, { value: undefined, source }])),
+    effective: Object.fromEntries(
+      Object.entries(sources).map(([k, source]) => [k, { value: undefined, source }]),
+    ),
     policy: {},
     lines: [],
     warnings: [],
@@ -72,7 +74,10 @@ describe('settlePresetChoice', () => {
     for (const r of [
       resolution({ preset: 'default', merge: 'adoption' }),
       resolution({ preset: 'adoption' }),
-      resolution({ preset: 'default' }, { filter: { from: '## Eligibility', equivalent: 'filter: x' } }),
+      resolution(
+        { preset: 'default' },
+        { filter: { from: '## Eligibility', equivalent: 'filter: x' } },
+      ),
     ]) {
       let asked = false
       const out = settlePresetChoice({
@@ -103,7 +108,9 @@ describe('settlePresetChoice', () => {
 
 describe('withPresetLine', () => {
   it('fills an empty `## Autonomy`, appends the section when absent, creates the file when missing', () => {
-    expect(withPresetLine('# A\n\n## Autonomy\n', 'full')).toBe('# A\n\n## Autonomy\n\npreset: full\n')
+    expect(withPresetLine('# A\n\n## Autonomy\n', 'full')).toBe(
+      '# A\n\n## Autonomy\n\npreset: full\n',
+    )
     expect(withPresetLine('# A\n\n## Max Parallelism\n\n1\n', 'full')).toBe(
       '# A\n\n## Max Parallelism\n\n1\n\n## Autonomy\n\npreset: full\n',
     )

@@ -16,23 +16,34 @@ description: Decide how far unattended runs go, and which engine, model and effo
 ### How far a run goes
 
 1. **Set `## Autonomy`**
-   - In your assistant: edit `until`, `prepare`, `merge` and `filter` in `tech/automation.md`.
+   - Pick a preset: `preset: escalate-red` processes the whole backlog alone and stops only on a `risk:red` card (new projects get it from bootstrap); `full` merges every tier; `supervised` holds every preparation and merge for a human; `custom` takes only the keys you write.
+
+     | preset         | filter             | prepare       | merge                      | until    |
+     | -------------- | ------------------ | ------------- | -------------------------- | -------- |
+     | `full`         | `*`                | `hold-never`  | `hold-never`               | `merged` |
+     | `escalate-red` | `*`                | `hold-never`  | `hold-when; has: risk:red` | `merged` |
+     | `supervised`   | `*`                | `hold-always` | `hold-always`              | `merged` |
+     | `custom`       | explicit keys only |               |                            |          |
+
+   - Or edit `until`, `prepare`, `merge` and `filter` in `tech/automation.md` (an explicit key beats the preset, with a warning naming both). `filter: *` means every card in scope, untagged included. The bare gate values `always`, `never`, `when` still work as deprecated aliases, with a warning.
 
      ```markdown
      ## Autonomy
 
-     filter: risk:green
+     preset: escalate-red
      until: pr
-     prepare: always
-     merge: always
      ```
+
+   - With an empty `## Autonomy`, the first interactive `pair-cli run` (or `/pair-loop`, `/pair-next --mode`, `/pair-workflow-cycle`) asks `full / escalate-red / supervised` (Enter = `supervised`) and writes the answer; a non-interactive run writes nothing and keeps every gate held.
 
    - With `/pair-assistant` (optional, Claude Code): "let green cards go up to merge" shows the diff first, then writes it through record-decision.
 2. **Check the effective values**
-   - With pair-cli: `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve` prints each value with its source (argument, adoption, KB default).
+   - With pair-cli: `pair-cli run --preset escalate-red --dry-run` (or `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve`) prints each value with its source (argument, adoption, preset, KB default).
    - With `/pair-assistant` (optional, Claude Code): it echoes the effective gates.
 3. **Override per run when needed**
-   - With pair-cli: `--until`, `--prepare`, `--merge` on `pair-cli run --card` (forwarded to every child card under `--parallel`).
+   - With pair-cli: `--preset`, `--until`, `--prepare`, `--merge` on `pair-cli run --card` (forwarded to every child card under `--parallel`).
+4. **Keep `.pair/working/` tidy**
+   - `## Working Cleanup` `cleanup: never | on-close | after <duration>` (default `after 7d`): at the start of `pair-cli run`, the run state and checkpoint of cards Done for longer than that are removed; parked, escalated and failed cards are never touched. `pair-cli install` / `pair-cli update` add `.pair/working/` to `.gitignore`.
 
 ### Engine, model and effort per stage
 
@@ -82,7 +93,7 @@ Cascade, highest first: `--workflow-config` > `--profile` > `workflowProfiles.de
 
 ## Verify
 
-- `autonomy-policy.mjs resolve` prints each gate with its source; defaults are `until: pr`, `prepare: always`, `merge: always`: nothing merges and no Draft card is prepared unattended until you change them.
+- `autonomy-policy.mjs resolve` prints each gate with its source; defaults are `until: pr`, `prepare: hold-always`, `merge: hold-always`: nothing merges and no Draft card is prepared unattended until you change them.
 - `workflow-profile.mjs resolve` prints `Profile: mixed`, its source and hash, then a line per stage; with no profile it prints `Profile: KB default`.
 - A stage asking `context: reuse` into `validate` or `verify` is refused at load, so the independent checks always run fresh.
 

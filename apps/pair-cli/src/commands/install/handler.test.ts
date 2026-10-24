@@ -341,7 +341,12 @@ describe('#257: working area exclusion on install (D14)', () => {
   })
   test('US-576 AC7: a successful install adds `.pair/working/` to .gitignore, once', async () => {
     const fs = createTestFs(testConfig, extraFiles, cwd)
-    const config: InstallCommandConfig = { command: 'install', resolution: 'default', kb: true, offline: false }
+    const config: InstallCommandConfig = {
+      command: 'install',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
     expect(await handleInstallCommand(config, fs)).toBe(0)
     expect(fs.readFileSync(`${cwd}/.gitignore`)).toBe('.pair/working/\n')
   })

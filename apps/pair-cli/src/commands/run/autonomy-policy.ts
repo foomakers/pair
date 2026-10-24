@@ -165,7 +165,8 @@ export const askPresetOnTty: PresetAsk = question => {
   const byte = Buffer.alloc(1)
   let line = ''
   try {
-    while (readSync(0, byte, 0, 1, null) === 1 && byte[0] !== 0x0a) line += String.fromCharCode(byte[0]!)
+    while (readSync(0, byte, 0, 1, null) === 1 && byte[0] !== 0x0a)
+      line += String.fromCharCode(byte[0]!)
   } catch {
     return ''
   }

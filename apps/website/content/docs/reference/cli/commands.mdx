@@ -867,7 +867,7 @@ Review findings still go through `prepare → validate → green`, their failing
 
    Bounds on that fallback, all towards *not running*:
    - **Unattended runs never start a preparation skill unless the prepare gate says so.** With
-     `--autonomous` and the default `prepare: always`, a card routed to refinement or planning is skipped
+     `--autonomous` and the default `prepare: hold-always`, a card routed to refinement or planning is skipped
      (exit `0`, "needs a human", nothing spawned, audited `prepare-needs-human`). A declared
      `--prepare never|when` is the maintainer-chosen exception (ADR-028): the card is refined and planned
      alone, every self-answer recorded under `## Assumptions`; a firing `when` condition at a stage

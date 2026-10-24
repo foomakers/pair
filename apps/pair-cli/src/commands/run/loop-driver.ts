@@ -324,7 +324,7 @@ function reportOutcome(outcome: LoopOutcome, run: RunSinks): void {
  */
 function approvalArguments(resolved: ResolvedRun): {
   approval?: 'auto'
-  prepare?: 'never' | 'when'
+  prepare?: 'hold-never' | 'hold-when'
 } {
   const extras = resolved.promptExtras
   return {

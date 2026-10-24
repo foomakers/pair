@@ -381,7 +381,7 @@ Runs **before either step's presence check**, and gates the whole phase on both 
    >
    > The table in [automation-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/automation-template.md) lists each preset's values.
 
-4. **Act**: Write `preset: <answer>` under `## Autonomy` via `/pair-capability-record-decision` — creating `tech/automation.md` from the [automation template](../../../.pair/knowledge/guidelines/collaboration/templates/automation-template.md) when it is absent (its `preset: escalate-red` replaced by the answer).
+4. **Act**: Write `preset: <answer>` under `## Autonomy` via `/pair-capability-record-decision` — creating `tech/automation.md` from the [automation template](../../../.pair/knowledge/guidelines/collaboration/templates/automation-template.md) when it is absent (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)) (its `preset: escalate-red` replaced by the answer).
 5. **Verify**: `node .claude/skills/pair-workflow-cycle/scripts/autonomy-policy.mjs resolve --adoption .pair/adoption/tech/automation.md` returns `ok: true` and `preset: <answer> (adoption)`.
 
 **Quick mode**: not asked — the template's `preset: escalate-red` (the new-project default) is written and reported in the Step 4.3 summary.

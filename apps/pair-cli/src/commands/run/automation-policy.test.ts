@@ -493,9 +493,9 @@ describe('US-576 AC3: only `## Autonomy` declared', () => {
   })
 
   it('still warns when neither `## Eligibility` nor `## Autonomy` is declared', () => {
-    expect(policyFrom('# Automation\n\n## Max Parallelism\n\n1\n').read().warnings.join('\n')).toContain(
-      'automation is off',
-    )
+    expect(
+      policyFrom('# Automation\n\n## Max Parallelism\n\n1\n').read().warnings.join('\n'),
+    ).toContain('automation is off')
   })
 })
 describe('US-576 AC6: no max-iterations declared ⇒ no iteration cap (the loop runs to a natural stop)', () => {
@@ -513,4 +513,3 @@ describe('US-576 AC6: no max-iterations declared ⇒ no iteration cap (the loop 
     expect(policyFrom('## Stop Predicate\n\nmax-iterations: 4\n').read().maxIterations).toBe(4)
   })
 })
-

@@ -167,7 +167,8 @@ function readEligibility(markdown: string, warnings: string[]): string | undefin
   const lines = sectionLines(markdown, 'Eligibility')
   if (lines === undefined) {
     // US-576: `## Autonomy` owns the selection (its `filter`, its preset) — automation is not off.
-    if (sectionLines(markdown, 'Autonomy') === undefined) warnings.push(ELIGIBILITY_OFF_SECTION_ABSENT)
+    if (sectionLines(markdown, 'Autonomy') === undefined)
+      warnings.push(ELIGIBILITY_OFF_SECTION_ABSENT)
     return undefined
   }
   if (lines.length === 0)

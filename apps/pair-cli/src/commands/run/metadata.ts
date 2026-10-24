@@ -14,7 +14,7 @@ export const runCommandMetadata = {
     'pair-cli run --card 487 --rounds 1                     # bounds remediation to one round, never widened',
     'pair-cli run --root 66 --parallel 3 --autonomous       # fan-out: up to 3 `run --card` processes at once',
     'pair-cli run --filter PIPPO --assignee @me --parallel 2 --watch --interval 10m   # portable loop: re-selects each iteration',
-    "pair-cli run --card 521 --until merged --merge 'when; has: cost:red'   # merge unless escalated; prints every effective value and its source",
+    "pair-cli run --card 521 --until merged --merge 'hold-when; has: cost:red'   # merge unless escalated; prints every effective value and its source",
     'pair-cli run --skill pair-next --filter risk:green,risk:yellow --assignee @me --status Draft,Ready --max-iterations 1',
   ],
   options: [
@@ -43,7 +43,7 @@ export const runCommandMetadata = {
     {
       flags: '--preset <full|escalate-red|supervised|custom>',
       description:
-        "US-576: a named autonomy preset — full (filter *, prepare/merge hold-never, until merged), escalate-red (same, but merge hold-when; has: risk:red), supervised (filter *, prepare/merge hold-always, until merged), custom (explicit keys only). Requires --card or --parallel (forwarded to every child card). Precedence: argument > explicit adoption key > preset > KB default — every effective value is printed with its source.",
+        'US-576: a named autonomy preset — full (filter *, prepare/merge hold-never, until merged), escalate-red (same, but merge hold-when; has: risk:red), supervised (filter *, prepare/merge hold-always, until merged), custom (explicit keys only). Requires --card or --parallel (forwarded to every child card). Precedence: argument > explicit adoption key > preset > KB default — every effective value is printed with its source.',
     },
     {
       flags: '--until <ready|pr|merged>',

@@ -805,13 +805,17 @@ describe('automation-policy.md — Stop Predicate section (story #250 T1)', () =
     },
   )
 
-  it.each(policySources)('%s: fail-safe default is one iteration, no predicate', (_, content) => {
-    const section = content.slice(
-      content.indexOf('## Stop Predicate — when an unattended run stops'),
-      content.indexOf('## Max Parallelism — the parallel-batch ceiling'),
-    )
-    expect(section).toMatch(/max-iterations: 1/)
-  })
+  it.each(policySources)(
+    '%s: no max-iterations declared ⇒ no cap, a natural stop (US-576)',
+    (_, content) => {
+      const section = content.slice(
+        content.indexOf('## Stop Predicate — when an unattended run stops'),
+        content.indexOf('## Max Parallelism — the parallel-batch ceiling'),
+      )
+      expect(section).toMatch(/no iteration cap/)
+      expect(section).toMatch(/stopped: <reason>, N eligible cards left/)
+    },
+  )
 
   it.each(policySources)(
     '%s: rejects issue-body content and HALTs on malformed grammar',

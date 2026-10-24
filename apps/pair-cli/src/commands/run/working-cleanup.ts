@@ -13,7 +13,11 @@ export type WorkingCleanup =
   | { readonly mode: 'after'; readonly ms: number; readonly text: string }
 
 const UNIT_MS: Record<string, number> = { d: 86_400_000, h: 3_600_000, m: 60_000 }
-export const DEFAULT_CLEANUP: WorkingCleanup = { mode: 'after', ms: 7 * UNIT_MS['d']!, text: 'after 7d' }
+export const DEFAULT_CLEANUP: WorkingCleanup = {
+  mode: 'after',
+  ms: 7 * UNIT_MS['d']!,
+  text: 'after 7d',
+}
 
 export function readWorkingCleanup(markdown: string | undefined): WorkingCleanup {
   const lines = markdown === undefined ? undefined : sectionLines(markdown, 'Working Cleanup')
@@ -32,9 +36,7 @@ export function readWorkingCleanup(markdown: string | undefined): WorkingCleanup
 export type CardClosedAt = (card: string) => Date | null | undefined
 
 const dirs = (path: string): string[] =>
-  existsSync(path)
-    ? readdirSync(path).filter(name => statSync(join(path, name)).isDirectory())
-    : []
+  existsSync(path) ? readdirSync(path).filter(name => statSync(join(path, name)).isDirectory()) : []
 
 /** Removes the Done cards' run state; returns the card ids removed. */
 export function sweepWorkingArea(input: {

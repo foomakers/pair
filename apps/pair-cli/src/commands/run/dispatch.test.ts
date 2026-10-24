@@ -348,6 +348,8 @@ describe('lockedSkip — a held card reports the holder, not just the refusal', 
 
 describe('US-576 AC3: eligibility `*` admits every card, untagged included', () => {
   it('routes a mapped card whatever else it carries', () => {
-    expect(decideDispatch(request({ eligibility: '*', tags: ['auto-dev'] }))).toMatchObject({ kind: 'route' })
+    expect(decideDispatch(request({ eligibility: '*', tags: ['auto-dev'] }))).toMatchObject({
+      kind: 'route',
+    })
   })
 })

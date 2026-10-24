@@ -131,7 +131,12 @@ describe('platform independence on darwin and linux of the policy read (AC6 path
 describe('US-576: presets through the CLI relay', () => {
   it('--preset escalate-red resolves the story table, sources `preset escalate-red`', () => {
     const root = project('# nothing\n')
-    const out = spawnAutonomyResolver({ location, main: root, cwd: root, args: { preset: 'escalate-red' } })!
+    const out = spawnAutonomyResolver({
+      location,
+      main: root,
+      cwd: root,
+      args: { preset: 'escalate-red' },
+    })!
     expect(out.ok).toBe(true)
     expect(out.lines).toEqual(
       expect.arrayContaining([
@@ -148,7 +153,12 @@ describe('US-576: presets through the CLI relay', () => {
   it('an unknown --preset HALTs listing the known presets', () => {
     const root = project('# nothing\n')
     expect(() =>
-      resolveAutonomyPolicy(spawnAutonomyResolver, { location, main: root, cwd: root, args: { preset: 'yolo' } }),
+      resolveAutonomyPolicy(spawnAutonomyResolver, {
+        location,
+        main: root,
+        cwd: root,
+        args: { preset: 'yolo' },
+      }),
     ).toThrow(/not a known preset \(known: full \| escalate-red \| supervised \| custom\)/)
   })
 })
