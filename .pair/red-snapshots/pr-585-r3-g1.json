@@ -1,0 +1,126 @@
+{
+  "$meta": {
+    "pr": "585",
+    "phase": "r3-g1",
+    "base": "84d8d7f5558e0edfe98d90fced34ed27faa06461",
+    "trailer": "Pair-RED-Snapshot: pr=585; phase=r3-g1; base=84d8d7f5558e0edfe98d90fced34ed27faa06461; manifest=.pair/red-snapshots/pr-585-r3-g1.json",
+    "artifacts": [
+      "scripts/smoke-tests/scenarios/run-card.sh",
+      "scripts/smoke-tests/witnesses/run-card-watch-default.sh"
+    ]
+  },
+  "phase": "r3-g1",
+  "mode": "repair",
+  "inputHead": "84d8d7f5558e0edfe98d90fced34ed27faa06461",
+  "sourceOfTruth": "CI run 40116301114 smoke (ubuntu-latest) log: run-card.sh [FAIL] Output does not contain '--watch requires --parallel'; same failure on origin/main 0bac8e3d (merge-base) — #576 (changeset run-parallel-default-one, parser.test.ts) made --watch without --parallel imply --parallel 1",
+  "inventory": [
+    {
+      "id": "gate-ci",
+      "producer": "apps/pair-cli/src/commands/run/parser.ts parseRunCommand (--watch ⇒ parallel 1, #576) observed by scripts/smoke-tests/scenarios/run-card.sh Test 4b-3",
+      "inputs": [
+        "pair run --root 12 --watch --max-iterations 1 (no --parallel)"
+      ],
+      "representations": [
+        "packaged CLI bundle (00-create-install-package.sh)",
+        "apps/pair-cli/dist/cli.js",
+        "smoke run-all.sh --ci list"
+      ],
+      "consumers": [
+        "ci.yml smoke job (ubuntu-latest, macos-latest)",
+        "merge gate:ci"
+      ],
+      "classes": [
+        "--watch without --parallel with scope ⇒ loop at --parallel 1, stops on iteration cap",
+        "--watch with --parallel 2 ⇒ loop (4b-2, already green)",
+        "rest of run-card.sh scenarios (4, 4b-1, 4b-4, 4b-5…) already green"
+      ],
+      "interactions": [
+        "--watch × --max-iterations × implied --parallel 1"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "smoke scenario run-card.sh Test 4b-3 (stale vs #576 --parallel default 1)",
+    "mode": "test",
+    "allowedPaths": []
+  },
+  "matrix": [
+    {
+      "id": "W1",
+      "kind": "witness",
+      "baseline": "pass",
+      "file": "scripts/smoke-tests/witnesses/run-card-watch-default.sh",
+      "condition": "run --root 12 --watch --max-iterations 1 without --parallel",
+      "oracle": "./scripts/smoke-tests/witnesses/run-card-watch-default.sh",
+      "expected": "exit 0 in ~7s (built dist/cli.js, no packaging preflight): run-card.sh Test 4b-3 has \"Requested: --parallel 1\", no [FAIL]; with arg regress (shim refusing --watch without --parallel) exit 1 with 3 [FAIL] incl. Output does not contain Requested: --parallel 1",
+      "covers": [
+        "gate-ci"
+      ],
+      "rationale": "mode test: production already correct per #576; the stale assertion was the defect"
+    },
+    {
+      "id": "C1",
+      "kind": "control",
+      "baseline": "pass",
+      "file": "scripts/smoke-tests/witnesses/run-card-watch-default.sh",
+      "condition": "remaining run-card.sh tests (4, 4b-1, 4b-2, 4b-4, 4b-5, …) unchanged",
+      "oracle": "./scripts/smoke-tests/witnesses/run-card-watch-default.sh",
+      "expected": "run-card.sh output has no [FAIL] (witness script exits 1 on any [FAIL])",
+      "covers": [
+        "gate-ci"
+      ]
+    },
+    {
+      "id": "N1",
+      "kind": "not-applicable",
+      "file": "scripts/smoke-tests/scenarios/run-card.sh",
+      "condition": "macOS-specific failure distinct from ubuntu",
+      "oracle": "./scripts/smoke-tests/scenarios/run-card.sh",
+      "expected": "n/a",
+      "covers": [
+        "gate-ci"
+      ],
+      "rationale": "macOS job log ends inside Install dependencies (step conclusion null, runner/log truncation); same scenario script and assertion run on both OS, no OS-specific branch in Test 4b-3",
+      "baseline": "pass"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "scripts/smoke-tests/scenarios/run-card.sh",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:ec66595e6ac9fe8d15a8435be9e8e11d2b7cba5849e83e8ea4274052a6d231d1",
+      "command": "./scripts/smoke-tests/witnesses/run-card-watch-default.sh",
+      "observed": "pass: ok, 4b-3 passes, run-card.sh green (exit 0)"
+    },
+    {
+      "file": "scripts/smoke-tests/witnesses/run-card-watch-default.sh",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:be1218a8449250ea7c7fba07611d6c84c7baf4ad8c11516717ee877161526f29",
+      "command": "./scripts/smoke-tests/witnesses/run-card-watch-default.sh",
+      "observed": "pass: ok, 4b-3 passes, run-card.sh green (exit 0, 7.3s)"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r3-g1",
+        "findings": [
+          "gate-ci"
+        ],
+        "owner": "smoke scenario run-card.sh Test 4b-3 (stale vs #576 --parallel default 1)",
+        "mode": "test",
+        "oracle": "./scripts/smoke-tests/scenarios/run-card.sh",
+        "allowedPaths": [],
+        "dependsOn": []
+      }
+    ],
+    "carried": []
+  },
+  "changedRows": [
+    "W1",
+    "C1"
+  ]
+}
