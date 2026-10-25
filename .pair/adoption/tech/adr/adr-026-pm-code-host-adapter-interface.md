@@ -73,3 +73,11 @@ Accepted
 - **`resolveUser`**: new optional PM method for `--assignee @me`; absent ⇒ typed `not-implemented` naming it (filesystem). Never `gh api user` outside the github adapter.
 - **`readCard` fields contract**: the `gh issue view --json` dialect (`labels: [{ name }]`, `state: OPEN | CLOSED`, `stateReason`, `closedAt`, `projectItems`) is the cross-adapter field contract. `cycle-state.mjs card` and `whoami` are the reads every PM-agnostic consumer (pair-cli, batch prompts, pair-next) uses — no `gh issue` in workflow prompts or PM-side skill steps (conformance test).
 - **Where filesystem writes land**: in a story worktree, committed on its branch; elsewhere uncommitted with one warning line. The epic cascade runs only outside a worktree (at merge, on the default branch).
+
+## Amendment 2026-10-25 — US-577: Linear PM adapter
+
+- **Linear PM adapter** ships as `scripts/host/linear.mjs` (`hostsCode: false`, `binaries: ['sh', 'curl']`): Linear has no CLI, so the transport is its GraphQL API through `curl`, spawned by the kit's `runCli` via `sh -c`.
+- **Credential — §2 relaxed for this adapter only**: the spawned shell expands `$LINEAR_API_KEY` into the `Authorization` header and hands it to `curl` through a here-doc on fd 3 (`-H @/dev/fd/3`). The adapter never reads the key into JS, it is never an argv element (`ps`), never printed or written to a handoff. Absent ⇒ the child exits 64 ⇒ `HostError('host-unconfigured')` naming `LINEAR_API_KEY`. The `host-adapter` credential scan exempts exactly that header line.
+- **Team binding**: the `linear-team` key (`<KEY>`, or the prose `Team: <KEY>.`) in way-of-working; an issue of another team is refused naming both; no team ⇒ `createCard` is `unsupported`.
+- **States**: `setBoardState` takes a board state or a macrostate (translated through `## State Mapping`) and writes the team's workflow state by name; `closeAndCascade` writes the `Done`-mapped state and cascades to a parent only when every sub-issue is `completed`.
+- **Rate limit**: HTTP 429 / `RATELIMITED` ⇒ one retry, then `failed` with detail `linear-rate-limited`. Error prefix `linear` (§5).

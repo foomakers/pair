@@ -227,7 +227,7 @@ const SPLIT_WOW = '# Way of Working\n\n- Azure DevOps is adopted for project man
 // ── T-1: the interface + the shared canonicalization ─────────────────────────────────────────
 test('AC1/T-1: the interface is exactly the eight named methods, and both shipped adapters implement every one', () => {
   assert.deepEqual(INTERFACE_METHODS, ['readCard', 'cardHash', 'prHead', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'closeAndCascade'])
-  assert.deepEqual(implementedHosts(), ['azure-devops', 'filesystem', 'github'])
+  assert.deepEqual(implementedHosts(), ['azure-devops', 'filesystem', 'github', 'linear'])
   for (const a of [github, azure]) {
     const inst = a.instantiate({})
     for (const m of INTERFACE_METHODS) assert.equal(typeof inst[m], 'function', `${a.id}.${m}`)
@@ -422,16 +422,16 @@ test('AC4: a declared host without scripts/host/<name>.mjs HALTs host-unsupporte
   ]) {
     assert.throws(
       () => resolveHosts({ text }),
-      e => e.kind === 'host-unsupported' && JSON.parse(e.detail).declared === declared && JSON.parse(e.detail).side === side && /implemented: azure-devops, filesystem, github/.test(e.message),
+      e => e.kind === 'host-unsupported' && JSON.parse(e.detail).declared === declared && JSON.parse(e.detail).side === side && /implemented: azure-devops, filesystem, github, linear/.test(e.message),
     )
   }
   // through the coordinator entry: typed, exit 1, nothing bound
-  const { runDir } = wowDir('- Linear is adopted for project management.\n\n## Git Workflow\n\n- `code-host`: `github`\n')
+  const { runDir } = wowDir('- Jira is adopted for project management.\n\n## Git Workflow\n\n- `code-host`: `github`\n')
   const r = spawnSync(process.execPath, [CYCLE_STATE, 'bind-hosts', '--dir', runDir], { encoding: 'utf8' })
   assert.equal(r.status, 1)
   const out = JSON.parse(r.stdout)
-  assert.deepEqual([out.halt, out.side, out.declared, out.implemented], ['host-unsupported', 'pm-tool', 'Linear', ['azure-devops', 'filesystem', 'github']])
-  assert.match(out.detail, /implemented: azure-devops, filesystem, github/)
+  assert.deepEqual([out.halt, out.side, out.declared, out.implemented], ['host-unsupported', 'pm-tool', 'Jira', ['azure-devops', 'filesystem', 'github', 'linear']])
+  assert.match(out.detail, /implemented: azure-devops, filesystem, github, linear/)
   assert.equal(existsSync(join(runDir, BINDING_FILE)), false)
   // a split project whose PM tool hosts no code and declares no code host: PR operations fail typed
   const { runDir: d2 } = wowDir('- `pm-tool`: `github`\n')
@@ -516,7 +516,8 @@ test('AC6: every adapter method is a CLI spawn — no MCP, no HTTP client, no ne
 })
 
 test('AC7: no adapter reads, writes, stores or prints a credential — static scan plus a sentinel token that never surfaces', () => {
-  for (const [f, src] of hostSources()) assert.doesNotMatch(code(src), /GH_TOKEN|GITHUB_TOKEN|AZURE_DEVOPS_EXT_PAT|SYSTEM_ACCESSTOKEN|\bPAT\b|Authorization|process\.env\.[A-Z_]*(TOKEN|PAT|SECRET|PASSWORD)/, `${f} touches a credential`)
+  // US-577: the one exemption — linear.mjs's header line, `$LINEAR_API_KEY` expanded by the child shell (ADR-026 amendment 2026-10-25).
+  for (const [f, src] of hostSources()) assert.doesNotMatch(code(src), /GH_TOKEN|GITHUB_TOKEN|AZURE_DEVOPS_EXT_PAT|SYSTEM_ACCESSTOKEN|\bPAT\b|Authorization(?!: \$\$\{TOKEN_VAR\}\n)|process\.env\.[A-Z_]*(TOKEN|PAT|SECRET|PASSWORD)/, `${f} touches a credential`)
   const SECRET = 'ghp_SENTINEL_never_echo_1234567890'
   const prev = { GH_TOKEN: process.env.GH_TOKEN, AZURE_DEVOPS_EXT_PAT: process.env.AZURE_DEVOPS_EXT_PAT }
   process.env.GH_TOKEN = SECRET
@@ -579,7 +580,7 @@ test('BR2: a new host is a new file — dropping <id>.mjs into a host directory 
   for (const f of readdirSync(HOST_DIR)) cpSync(join(HOST_DIR, f), join(dir, f))
   writeFileSync(join(dir, 'broken.mjs'), 'export default 42\n')
   const before = await loadAdapters(dir)
-  assert.deepEqual([...before.adapters.keys()].sort(), ['azure-devops', 'filesystem', 'github'])
+  assert.deepEqual([...before.adapters.keys()].sort(), ['azure-devops', 'filesystem', 'github', 'linear'])
   assert.ok(before.broken.has('broken'), 'a file that is not an adapter is recorded, never bound, never fatal')
   assert.throws(() => resolveHosts({ text: '- `pm-tool`: `broken`\n', registry: before }), /broken\.mjs failed to load/)
 })
@@ -598,7 +599,7 @@ test('AC8: the extension guide names the eight methods, the registration wiring 
   for (const f of readdirSync(HOST_DIR)) cpSync(join(HOST_DIR, f), join(dir, f))
   writeFileSync(join(dir, 'filesystem.mjs'), block[1])
   const registry = await loadAdapters(dir)
-  assert.deepEqual([...registry.adapters.keys()].sort(), ['azure-devops', 'filesystem', 'github'], JSON.stringify([...registry.broken]))
+  assert.deepEqual([...registry.adapters.keys()].sort(), ['azure-devops', 'filesystem', 'github', 'linear'], JSON.stringify([...registry.broken]))
   // registered the way the guide says: a way-of-working declaration
   const r = resolveHosts({ text: '- `pm-tool`: `filesystem`\n\n## Git Workflow\n\n- `code-host`: `filesystem`\n', registry })
   assert.deepEqual([r.pmTool, r.codeHost], ['filesystem', 'filesystem'])
