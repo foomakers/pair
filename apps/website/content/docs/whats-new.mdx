@@ -1,51 +1,53 @@
 ---
-title: What's new in v0.5.1
-description: What v0.5.1 changes for you and your team compared with v0.4.3, most important first.
+title: What's new in v0.5
+description: What v0.5 (v0.5.1 and v0.5.2) changes for you and your team compared with v0.4.3, most important first.
 ---
 
-Most important first. Each item says what it changes for you; the link opens the page that explains it. Coming from v0.4? Run the [v0.4 to v0.5 migration](/docs/migrations/v0.4-to-v0.5) after upgrading.
+Most important first. Each item says what it changes for you; the link opens the page that explains it. Coming from v0.4? Run the [v0.4 to v0.5 migration](/docs/migrations/v0.4-to-v0.5) after upgrading. From v0.5.1 to v0.5.2 there is nothing to migrate: the merge and prepare settings have new names (`hold-always`, `hold-never`, `hold-when`) and the old ones keep working with a warning.
 
 1. **Hand a card to pair, get back a reviewed pull request.** pair implements the card, has an independent reviewer check the work, fixes what the review finds and stops when the pull request is approved. You review a finished PR instead of driving every step. [Delivery workflow](/docs/process-lifecycle/delivery-workflow)
 
-2. **Choose how much pair does on its own.** Three modes, like the levels of driving automation in cars:
+2. **Choose how much pair does on its own, with one word if you like.** Three modes, like the levels of driving automation in cars:
    - **Assisted**: pair guides you through every step, you stay at the wheel.
    - **Supervised**: pair takes one card from start to finish and stops when it needs you.
    - **Autonomous**: pair works through every card that matches a rule you set, for example all low-risk cards, and hands back the ones that need a person.
 
-   Nothing merges without you unless you allow it. [Lifecycle modes](/docs/process-lifecycle/lifecycle-modes)
+   A preset sets every rule at once: `escalate-red` works through the whole backlog and stops only on high-risk cards, `full` merges everything, `supervised` waits for you before preparing or merging. Nothing merges without you unless you allow it. [Autonomy and profiles](/docs/guides/autonomy-and-profiles)
 
-3. **Let pair work through the backlog while you do something else.** Start it from the terminal (`pair-cli run`) or from Claude Code (`/pair-loop`): it picks the cards it is allowed to take, delivers them in parallel and hands back the ones that need a person. [Automated development](/docs/tutorials/automated-development)
+3. **Let pair work through the backlog while you do something else.** Start it from the terminal (`pair-cli run`) or from Claude Code (`/pair-loop`): it picks the cards it is allowed to take, delivers them and hands back the ones that need a person. With `--watch` it stays on, waiting for new cards or for your decision, until you stop it. On a terminal each card is one line that updates in place: what it is doing now, its PR and how long it has run. [Automated development](/docs/tutorials/automated-development)
 
-4. **Install and configure pair by asking.** With the optional Claude Code plugin, `/pair-assistant` installs pair, updates it and changes its settings for you, and shows every change before writing it. [Install via the marketplace](/docs/guides/install-via-marketplace)
+4. **pair gets itself out of trouble instead of stopping.** A red CI run goes back to the fix step with the failing checks, a branch behind its base is synced, a worktree left messy by an interrupted run is cleaned up or resumed, and a fix that needs a file outside its plan widens the plan instead of stopping. When it really cannot continue, the card says why. [The delivery cycle](/docs/process-lifecycle/delivery-cycle)
 
-5. **Use the AI tool your team already has.** Besides Claude Code, pair runs with Codex, pi and opencode, and its skills work in Cursor, GitHub Copilot and Windsurf. [Integrations](/docs/integrations)
+5. **Install and configure pair by asking.** With the optional Claude Code plugin, `/pair-assistant` installs pair, updates it and changes its settings for you, and shows every change before writing it. [Install via the marketplace](/docs/guides/install-via-marketplace)
 
-6. **Spend the right model on each step.** Delivering a card is a sequence of steps: implement, review, fix. You can pick the AI engine, model and effort for each one, for example a cheaper model to implement and a stronger one to review. [Autonomy and per-stage engine and model](/docs/guides/autonomy-and-profiles)
+6. **Use the AI tool your team already has.** Besides Claude Code, pair runs with Codex, pi and opencode, and its skills work in Cursor, GitHub Copilot and Windsurf. [Integrations](/docs/integrations)
 
-7. **Plug your own checks into delivery and decide what stops a card.** Run your own scripts before or after a step, for example to notify a channel or run a custom check. Decide which review findings block a card: only critical ones, or minor ones too. [Hooks and blocking severities](/docs/guides/hooks-and-severities)
+7. **Spend the right model on each step.** Delivering a card is a sequence of steps: implement, review, fix. You can pick the AI engine, model and effort for each one, for example a cheaper model to implement and a stronger one to review. [Autonomy and per-stage engine and model](/docs/guides/autonomy-and-profiles)
 
-8. **Review effort matches the risk of the change.** Each card gets a risk level (green, yellow or red) based on what it touches. Low-risk changes get lighter checks and review; high-risk ones get more, plus a human approval. [Classify stories and use risk tags](/docs/guides/classify-risk)
+8. **Plug your own checks into delivery and decide what stops a card.** Run your own scripts before or after a step, for example to notify a channel or run a custom check. Decide which review findings block a card: only critical ones, or minor ones too. [Hooks and blocking severities](/docs/guides/hooks-and-severities)
 
-9. **Catch quality problems before merge, the same way on your machine and in CI.** The checks grow with the risk level, test coverage can be locked so it only goes up, and the review also flags security, cost and architecture problems. [Quality gates](/docs/guides/quality-gates)
+9. **Review effort matches the risk of the change.** Each card gets a risk level (green, yellow or red) based on what it touches. Low-risk changes get lighter checks and review; high-risk ones get more, plus a human approval. [Classify stories and use risk tags](/docs/guides/classify-risk)
 
-10. **Keep your board the way it is.** pair needs to know where each card is (draft, ready, in progress, done), whatever your columns are called: you tell it once which column means what. You can also agree when a card is ready to start and when it is done, and switch off process steps your team does not use. [Configure card states](/docs/guides/card-states)
+10. **Catch quality problems before merge, the same way on your machine and in CI.** The checks grow with the risk level, test coverage can be locked so it only goes up, and the review also flags security, cost and architecture problems. [Quality gates](/docs/guides/quality-gates)
 
-11. **Go from a raw idea to ready stories, with the AI asking the right questions.** New skills run brainstorming and refinement: the AI interviews you one question at a time, then writes the stories and their tasks. [Analysis and refinement workflow](/docs/process-lifecycle/refinement-workflow)
+11. **Keep your board the way it is.** pair needs to know where each card is (draft, ready, in progress, done), whatever your columns are called: you tell it once which column means what. You can also agree when a card is ready to start and when it is done, and switch off process steps your team does not use. [Configure card states](/docs/guides/card-states)
 
-12. **See at a glance whether a pull request can merge.** A required `pair-review` check and a label say where the PR is: waiting for review, approved, or changes needed. Reviews can run under a dedicated reviewer account, and small low-risk PRs can be approved automatically if you allow it. [PR state flow](/docs/concepts/pr-state-flow)
+12. **Go from a raw idea to ready stories, with the AI asking the right questions.** New skills run brainstorming and refinement: the AI interviews you one question at a time, then writes the stories and their tasks. [Analysis and refinement workflow](/docs/process-lifecycle/refinement-workflow)
 
-13. **Decide what happens to a card by adding a label.** Labels route cards to the right flow, for example "automation may take this one". [Tag-driven automation](/docs/process-lifecycle/tag-driven-automation)
+13. **See at a glance whether a pull request can merge.** A required `pair-review` check and a label say where the PR is: waiting for review, approved, or changes needed. Reviews can run under a dedicated reviewer account, and small low-risk PRs can be approved automatically if you allow it. [PR state flow](/docs/concepts/pr-state-flow)
 
-14. **Track work in one tool and keep code in another.** For example, cards in Linear or Azure DevOps Boards and code with pull requests on GitHub. Azure DevOps is now fully supported, and a guide explains how to connect any other tool. [Code host](/docs/concepts/code-host)
+14. **Decide what happens to a card by adding a label.** Labels route cards to the right flow, for example "automation may take this one". [Tag-driven automation](/docs/process-lifecycle/tag-driven-automation)
 
-15. **Adapt pair to your team and to each package of a monorepo.** Replace the story, pull request and review templates with your own, and give each package of a monorepo its own rules. [Customize templates](/docs/guides/customize-templates)
+15. **Track work in one tool and keep code in another.** For example, cards in Linear or Azure DevOps Boards and code with pull requests on GitHub, or a backlog kept as files in your repo. The unattended loop works with all of them, and a guide explains how to connect any other tool. [Code host](/docs/concepts/code-host)
 
-16. **Share one set of standards across all your repositories.** Publish your organization's Knowledge Base once and install it everywhere; pair tells you when a repository is behind and how to update it. [Use an external Knowledge Base](/docs/guides/external-kb)
+16. **Adapt pair to your team and to each package of a monorepo.** Replace the story, pull request and review templates with your own, and give each package of a monorepo its own rules. [Customize templates](/docs/guides/customize-templates)
 
-17. **See how your delivery is going.** A report for a period you choose: how long bugs take to fix, how long pull requests take to merge, and how much of the process the team actually follows. Bring it to the retrospective and pick one thing to improve. [Measure delivery](/docs/guides/delivery-metrics)
+17. **Share one set of standards across all your repositories.** Publish your organization's Knowledge Base once and install it everywhere; pair tells you when a repository is behind and how to update it. [Use an external Knowledge Base](/docs/guides/external-kb)
 
-18. **Start with fewer questions.** The quick bootstrap sets up a project with sensible defaults and asks only what it cannot guess; the guided one still walks you through everything. [Bootstrap quick mode](/docs/getting-started/bootstrap-quick-mode)
+18. **See how your delivery is going.** A report for a period you choose: how long bugs take to fix, how long pull requests take to merge, and how much of the process the team actually follows. Bring it to the retrospective and pick one thing to improve. [Measure delivery](/docs/guides/delivery-metrics)
 
-19. **Add pair to an existing repository without losing your files.** Installing keeps your own `AGENTS.md` and `CLAUDE.md` if you ask it to, and updates back up files before replacing them. [Adopt pair in an existing repo](/docs/guides/adopt-existing-repo)
+19. **Start with fewer questions.** The quick bootstrap sets up a project with sensible defaults and asks only what it cannot guess; the guided one still walks you through everything. [Bootstrap quick mode](/docs/getting-started/bootstrap-quick-mode)
+
+20. **Add pair to an existing repository without losing your files.** Installing keeps your own `AGENTS.md` and `CLAUDE.md` if you ask it to, and updates back up files before replacing them. [Adopt pair in an existing repo](/docs/guides/adopt-existing-repo)
 
 Next: [v0.4 to v0.5 migration](/docs/migrations/v0.4-to-v0.5).
