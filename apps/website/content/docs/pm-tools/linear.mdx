@@ -66,7 +66,7 @@ Configure the MCP server with your Linear API key following your AI tool's MCP s
 
 The delivery cycle and the unattended loop talk to Linear through the `linear` PM adapter (`scripts/host/linear.mjs`): Linear's GraphQL API, called with `curl`. Branches, PRs, checks and merge go to the declared `code-host`.
 
-- **Token**: export `LINEAR_API_KEY` (a personal API key) in the shell that runs `pair-cli run`. It is expanded by the spawned shell into the request header: never read by pair, never an argv element, never printed or written to a handoff. Missing ⇒ the run HALTs `host-unconfigured` naming `LINEAR_API_KEY`.
+- **Token**: export `LINEAR_API_KEY` (a personal API key) in the shell that runs `pair-cli run`. The key needs the **Read** and **Write** scopes; a team-restricted key is enough. **Create issues** + **Create comments** alone are not: label adds and comment updates fail with `Invalid scope: write required`. It is expanded by the spawned shell into the request header: never read by pair, never an argv element, never printed or written to a handoff. Missing ⇒ the run HALTs `host-unconfigured` naming `LINEAR_API_KEY`.
 - **Card ids**: `ENG-123` or its `https://linear.app/<workspace>/issue/ENG-123/…` URL (`pair-cli run --card ENG-123`). Anything else is `invalid-input`.
 - **Team**: `linear-team` binds one team; an issue of another team is refused naming both. New cards (scope decisions) are created in that team.
 - **States**: board states are the team's Linear workflow states, translated through `## State Mapping`. A Linear state the map does not name (e.g. `Triage`) leaves the card out of process, never an error. A state the team does not have is reported, never guessed.
