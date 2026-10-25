@@ -1,4 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
+import { EventEmitter } from 'events'
+import { ANSI_SEQUENCE, createConsoleSink, routeConsoleTo } from './run-renderer'
 import { buildCardProcessArgs, optionsOfArgv, runCardInProcess } from './parallel'
 import { parseRunCommand } from './parser'
 import { pooledCard } from './pooled-card'
@@ -82,4 +84,68 @@ describe('the loop drives each card in its own process — no nested pair-cli ru
     expect(exit).toMatchObject({ exitCode: 1, signal: null })
     expect(printed).toContain('  [#9]   boom')
   })
+})
+
+describe('a card driven in-process never draws a second block (the loop owns the terminal)', () => {
+  const platformCases = ['darwin', 'linux'] as const
+  it.each(platformCases)(
+    'a preparing card that builds its own live sink: one block, one row for the card (platform %s)',
+    async platform => {
+      const original = Object.getOwnPropertyDescriptor(process, 'platform')!
+      Object.defineProperty(process, 'platform', { value: platform })
+      const chunks: string[] = []
+      const tty = Object.assign(new EventEmitter(), {
+        isTTY: true,
+        columns: 120,
+        rows: 20,
+        write: (s: string) => void chunks.push(s),
+      })
+      const loop = createConsoleSink({
+        out: tty,
+        err: tty,
+        mode: 'live',
+        color: false,
+        ticker: false,
+        plain: true,
+        now: () => 0,
+      })
+      const restore = routeConsoleTo(loop)
+      try {
+        const runner = runCardInProcess(async () => {
+          // what loop-driver does for a Draft card's preparation: its own sink, its own events and lines
+          const inner = createConsoleSink({
+            out: tty,
+            err: tty,
+            mode: 'live',
+            color: false,
+            ticker: false,
+            plain: true,
+            now: () => 0,
+          })
+          const back = routeConsoleTo(inner)
+          inner.event({ event: 'card-start', card: '587', title: 'Contract-gap revision' })
+          inner.event({ event: 'stage', card: '587', stage: 'refine' })
+          console.log('  Engine: claude')
+          console.error('  some stderr line')
+          inner.finish()
+          back()
+          return 0
+        })
+        loop.event({ event: 'card-start', card: '587', title: 'Contract-gap revision' })
+        await runner({ card: card('587'), args: [], cwd: '/repo', onEvent: e => loop.event(e) })
+        loop.finish()
+      } finally {
+        restore()
+        Object.defineProperty(process, 'platform', original)
+      }
+      expect(chunks.filter(c => c.includes('\x1b[?25l'))).toHaveLength(1)
+      const frames = chunks.filter(c => c.includes('\x1b[2K'))
+      const last = frames.at(-1)!.replace(ANSI_SEQUENCE, '')
+      expect(last.split('#587 ·').length - 1).toBe(1)
+      // the card's stderr line is relayed like stdout: it becomes the row's note, never a line beside the block
+      expect(last).toContain('some stderr line')
+      const outside = chunks.filter(c => !c.includes('\x1b[2K')).join('')
+      expect(outside).not.toContain('some stderr line')
+    },
+  )
 })

@@ -144,10 +144,19 @@ assert_output_contains "Nothing to do: pair-next --root 12 selected no card." ||
 
 # --watch never stops on its own while idle (an idle poll never spends the cap): run it in the background, Ctrl-C once it waits.
 watch_until_idle() {
+  # A fresh log: the previous run's "waiting" must never trigger this run's Ctrl-C before it printed anything.
+  ensure_tmp_dir
+  : >"$TMP_DIR/last_cmd_output.log"
   run_pair "$@" &
   local job=$! i
   for i in $(seq 1 240); do grep -q "waiting" "$TMP_DIR/last_cmd_output.log" 2>/dev/null && break; sleep 0.5; done
-  pkill -INT -f "run --root 12 .*--watch" 2>/dev/null
+  # Ctrl-C until it is gone (a signal sent before the process exists is lost); never a hung scenario.
+  for i in $(seq 1 60); do
+    kill -0 "$job" 2>/dev/null || break
+    pkill -INT -f "run --root 12 .*--watch" 2>/dev/null
+    sleep 0.5
+  done
+  pkill -KILL -f "run --root 12 .*--watch" 2>/dev/null
   local code=0
   wait "$job" || code=$?
   return "$code"

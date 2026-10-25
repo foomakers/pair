@@ -1,6 +1,7 @@
 import { format } from 'util'
 import type { RunEvent } from './run-events'
 import { plainNote } from './plain-console'
+import { pooledCard } from './pooled-card'
 
 /**
  * Console renderers for the run events (US-573 T-7).
@@ -148,6 +149,17 @@ const isLiveTty = (out: Output) => out.isTTY === true && (out.columns ?? 0) > 0
 export function createConsoleSink(input: ConsoleSinkInput): ConsoleSink {
   const now = input.now ?? Date.now
   const { out, err } = input
+  // A card the loop drives in-process never draws its own block: the loop owns the terminal.
+  const pooled = pooledCard()
+  if (pooled !== undefined)
+    return {
+      inPlace: false,
+      event: event => {
+        if (event.event !== 'card-start') pooled.onEvent?.(event)
+      },
+      log: line => console.log(line),
+      finish: () => {},
+    }
   if (input.mode === 'quiet')
     return {
       inPlace: false,
@@ -353,9 +365,12 @@ function liveTtySink(input: ConsoleSinkInput, now: () => number): ConsoleSink {
  */
 export function routeConsoleTo(sink: ConsoleSink): () => void {
   if (!sink.inPlace) return () => {}
-  const log = console.log
-  console.log = (...args: unknown[]) => sink.log(format(...args))
+  const { log, error, warn } = console
+  // Every console write lands above the rows: a line written beside them would shift the block the next redraw erases.
+  console.log = console.error = console.warn = (...args: unknown[]) => sink.log(format(...args))
   return () => {
     console.log = log
+    console.error = error
+    console.warn = warn
   }
 }

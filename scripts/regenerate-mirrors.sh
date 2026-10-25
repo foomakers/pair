@@ -91,7 +91,7 @@ fi
 # exclusive (O_EXCL), so a leftover or hostile path is never followed or reused. The signals
 # `exit`, so a TERM that lands early stops the script instead of letting it carry on past a
 # removed log; EXIT then does the removal. The explicit `rm`s below cover the paths this script
-# controls; the trap cannot cover the final `exec` (which replaces this process), which is why
+# controls; the EXIT trap covers the rest (the CLI run and the workflow-suite copy), which is why
 # the success path removes the log itself.
 BUILD_LOG=""
 trap 'rm -f "$BUILD_LOG"' EXIT
@@ -129,4 +129,10 @@ fi
 # subdirectory — so it is pinned here instead of inherited.
 cd "$TARGET_ROOT"
 export INIT_CWD="$TARGET_ROOT"
-exec node "$CLI" update --source "$DATASET" --offline
+node "$CLI" update --source "$DATASET" --offline
+# The workflow dry-run suites are EXCLUDED from the install (adopters never get them), yet the guard
+# requires `.claude/workflows/` to hold them byte-identical — they run only there. The install cannot
+# write them, so this does: the dataset copy is the source, as for every other mirror.
+if [ -d "$DATASET/.workflows" ] && [ -d "$TARGET_ROOT/.claude/workflows" ]; then
+  cp -R "$DATASET/.workflows/." "$TARGET_ROOT/.claude/workflows/"
+fi
