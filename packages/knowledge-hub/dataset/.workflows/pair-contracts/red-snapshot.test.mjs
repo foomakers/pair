@@ -1476,6 +1476,76 @@ test('US-587 seal: a revision red witness already GREEN at head is reclassified 
   rmSync(cwd, { recursive: true, force: true })
 })
 
+const AFAIL = 'import { a } from "../src/a.js"\nif (a() !== 2) throw new Error("FAIL")\nif (a(0) !== 0) throw new Error("FAIL empty")\n'
+const GREENT = 'import { a } from "../src/a.js"\nif (a() !== 2) throw new Error("FAIL")\n'
+const witnessRow = (id, file, covers) => ({ id, kind: 'witness', baseline: 'red', condition: id, oracle: `node ${file}`, expected: '2', covers: [covers] })
+const revContract = (cwd, files, matrix, extra = {}) => {
+  const contract = {
+    sourceOfTruth: 'a()',
+    fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/a.js'] },
+    revision: 2,
+    supersedes: 'r1-g1',
+    matrix,
+    redTests: files.map(f => ({ file: f, kind: 'test', sha256: hashFile(f, cwd), command: `node ${f}`, observed: 'Error: FAIL' })),
+    testExempt: false,
+    ...extra,
+  }
+  write(cwd, '.pair/working/rev-draft.json', JSON.stringify(contract))
+}
+const commitAll = (cwd, msg) => {
+  git(cwd, 'add', '-A')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', msg)
+  return git(cwd, 'rev-parse', 'HEAD')
+}
+
+// US-587 r0-1 (AC5): the #577 shape in ONE prep + ONE validation — omitted changedRows, an unchanged tracked witness, a witness green at head
+test('US-587 AC5 replay: omitted changedRows + unchanged witness + green-at-head witness seal in a single revision, manifest carries all three derivations', () => {
+  const { cwd } = chainRepo()
+  write(cwd, 'test/c.test.js', 'throw new Error("FAIL c")\n')
+  const head = commitAll(cwd, 'c already at head')
+  write(cwd, 'test/a.test.js', AFAIL)
+  write(cwd, 'test/b.test.js', GREENT)
+  revContract(cwd, ['test/a.test.js', 'test/b.test.js', 'test/c.test.js'], [witnessRow('row-1', 'test/a.test.js', 'r0-1'), witnessRow('row-2', 'test/a.test.js', 'r1-1'), witnessRow('row-3', 'test/b.test.js', 'r1-2'), witnessRow('row-4', 'test/c.test.js', 'r1-3')])
+  const s = seal({ pr: PR, phase: 'r1-g1-rev2', base: head, contractPath: '.pair/working/rev-draft.json', cwd, hermetic: true })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  assert.deepEqual(s.preSeal.reclassified, ['test/b.test.js'])
+  const m = JSON.parse(git(cwd, 'show', `${s.snapshot}:${s.manifest}`))
+  for (const id of ['row-2', 'row-3', 'row-4']) assert.ok(m.changedRows.includes(id), id)
+  assert.equal(m.reattest.reason, 'witness unchanged at head')
+  assert.deepEqual(m.matrix.map(r => r.baseline), ['red', 'red', 'pass', 'red'])
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+// US-587 r0-2: a revision that edits one witness AND reattests another
+test('US-587 seal: a revision editing one witness and leaving another unchanged at head seals; reattest recorded, edited witness hashed', () => {
+  const { cwd } = chainRepo()
+  write(cwd, 'test/c.test.js', 'throw new Error("FAIL c")\n')
+  const head = commitAll(cwd, 'c already at head')
+  write(cwd, 'test/a.test.js', AFAIL)
+  revContract(cwd, ['test/a.test.js', 'test/c.test.js'], [witnessRow('row-1', 'test/a.test.js', 'r0-1'), witnessRow('row-2', 'test/a.test.js', 'r1-1'), witnessRow('row-3', 'test/c.test.js', 'r1-2')], { changedRows: ['row-2', 'row-3'] })
+  const s = seal({ pr: PR, phase: 'r1-g1-rev2', base: head, contractPath: '.pair/working/rev-draft.json', cwd })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  const m = JSON.parse(git(cwd, 'show', `${s.snapshot}:${s.manifest}`))
+  assert.equal(m.reattest.reason, 'witness unchanged at head')
+  assert.equal(m.redTests.find(t => t.file === 'test/a.test.js').sha256, hashFile('test/a.test.js', cwd))
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+// US-587 r0-3: reclassification matches the green witness by path token, never by substring
+test('US-587 seal: a red row naming `test/sub.test.js` stays red when `test/b.test.js` is green at head (basename is a suffix of it)', () => {
+  const { cwd, head1 } = chainRepo()
+  write(cwd, 'test/a.test.js', AFAIL)
+  write(cwd, 'test/sub.test.js', 'throw new Error("FAIL sub")\n')
+  write(cwd, 'test/b.test.js', GREENT)
+  revContract(cwd, ['test/a.test.js', 'test/sub.test.js', 'test/b.test.js'], [witnessRow('row-1', 'test/a.test.js', 'r0-1'), witnessRow('row-2', 'test/sub.test.js', 'r1-1'), witnessRow('row-3', 'test/b.test.js', 'r1-2')])
+  const s = seal({ pr: PR, phase: 'r1-g1-rev2', base: head1, contractPath: '.pair/working/rev-draft.json', cwd, hermetic: true })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  assert.deepEqual(s.preSeal.reclassified, ['test/b.test.js'])
+  const m = JSON.parse(git(cwd, 'show', `${s.snapshot}:${s.manifest}`))
+  assert.deepEqual(m.matrix.map(r => r.baseline), ['red', 'red', 'pass'])
+  rmSync(cwd, { recursive: true, force: true })
+})
+
 test('US-506 T-6 c1 (control): a clean contract seals unchanged through the CLI — the same commit shape, the same manifest — and the guard reports what it ran', () => {
   const { cwd, base } = repo()
   const { contractPath } = redContract(cwd)
