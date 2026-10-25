@@ -23,6 +23,11 @@ if (left > 0) {
 }
 
 const team = key => world.teams.find(t => t.key === key)
+// a label is workspace-wide (no `team`) or scoped to one team key; it reads back as Linear shapes it
+const label = l => l && { id: l.id, name: l.name, team: l.team ? { id: team(l.team).id, key: l.team } : null }
+// the team a label query is scoped to: any team key or id among the request's variable values, wherever the adapter puts it
+const leaves = x => (x && typeof x === 'object' ? Object.values(x).flatMap(leaves) : [x])
+const scope = world.teams.find(t => leaves(v).some(x => x === t.key || x === t.id))
 const find = id => world.issues.find(i => i.identifier === id || i.id === id)
 const shape = i => {
   const t = team(i.team)
@@ -36,7 +41,7 @@ const shape = i => {
     completedAt: i.completedAt,
     state: { name: st.name, type: st.type },
     team: { id: t.id, key: t.key, states: { nodes: t.states.map(({ id, name }) => ({ id, name })) } },
-    labels: { nodes: i.labels.map(name => world.labels.find(l => l.name === name)) },
+    labels: { nodes: i.labels.map(name => label(world.labels.find(l => l.name === name && (!l.team || l.team === i.team)))) },
     comments: { nodes: i.comments },
     parent: i.parent
       ? { identifier: i.parent, children: { nodes: world.issues.filter(c => c.parent === i.parent).map(c => ({ identifier: c.identifier, state: { type: team(c.team).states.find(s => s.name === c.state).type } })) } }
@@ -69,9 +74,12 @@ switch (op) {
     reply({ data: { issueUpdate: { success: true } } })
   }
   case 'PairLabel':
-    reply({ data: { issueLabels: { nodes: world.labels.filter(l => l.name === v.name) } } })
+    reply({ data: { issueLabels: { nodes: world.labels.filter(l => l.name === v.name && (!scope || !l.team || l.team === scope.key)).map(label) } } })
   case 'PairAddLabel': {
     const i = find(v.id)
+    const l = world.labels.find(x => x.id === v.labelId)
+    // Linear refuses a label scoped to another team than the issue's
+    if (l.team && l.team !== i.team) reply({ data: null, errors: [{ message: 'Label does not belong to the issue team', extensions: { code: 'INVALID_INPUT' } }] })
     i.labels.push(world.labels.find(l => l.id === v.labelId).name)
     reply({ data: { issueAddLabel: { success: true } } })
   }

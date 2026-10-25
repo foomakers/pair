@@ -33,7 +33,12 @@ function fake({ token = SECRET, limited = 0, wayOfWorking = WOW } = {}) {
   const pm = linear.instantiate({ curlBin, wayOfWorking, retryDelayMs: 0 })
   const calls = () => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l))
   const issue = id => JSON.parse(readFileSync(world, 'utf8')).issues.find(i => i.identifier === id)
-  return { pm, calls, issue }
+  const labels = list => {
+    const w = JSON.parse(readFileSync(world, 'utf8'))
+    w.labels = [...w.labels.filter(l => l.name !== 'needs-review'), ...list]
+    writeFileSync(world, JSON.stringify(w))
+  }
+  return { pm, calls, issue, labels }
 }
 
 test('AC1: pm-tool linear binds linear.mjs on the PM side and github on the code side, with every PM method', () => {
@@ -138,4 +143,30 @@ test('T-2: readCard/cardHash, findCards, createCard, updateCard, labels and mark
   assert.equal(pm.commentOnCard({ id: 'ENG-2', marker: '<!-- pair:pr -->', body: 'PR #2' }).action, 'unchanged')
   assert.deepEqual(issue('ENG-2').comments.map(c => c.body), ['<!-- pair:pr -->\nPR #2'])
   assert.throws(() => fake({ wayOfWorking: '- `pm-tool`: `linear`\n' }).pm.createCard({ title: 't', body: 'b' }), e => e.kind === 'unsupported' && /linear-team/.test(e.message))
+})
+
+test('r0-1 W1: same-name labels scoped to OPS (first) and ENG ⇒ labelCard on an ENG issue adds the ENG label, confirmed', () => {
+  const { pm, calls, issue, labels } = fake()
+  labels([{ id: 'lb-ops-review', name: 'needs-review', team: 'OPS' }, { id: 'lb-eng-review', name: 'needs-review', team: 'ENG' }])
+  assert.deepEqual(pm.labelCard({ id: 'ENG-2', label: 'needs-review' }), { applied: 'needs-review', confirmed: true, error: null })
+  assert.deepEqual(calls().filter(c => c.op === 'PairAddLabel').map(c => c.variables.labelId), ['lb-eng-review'])
+  assert.ok(issue('ENG-2').labels.includes('needs-review'))
+})
+
+test('r0-1 B1: the name exists only as another team\'s label ⇒ "no Linear label", never an add of the foreign id', () => {
+  const { pm, calls, labels } = fake()
+  labels([{ id: 'lb-ops-review', name: 'needs-review', team: 'OPS' }])
+  const r = pm.labelCard({ id: 'ENG-2', label: 'needs-review' })
+  assert.equal(r.confirmed, false)
+  assert.match(r.error, /no Linear label "needs-review"/)
+  assert.equal(calls().filter(c => c.op === 'PairAddLabel').length, 0)
+})
+
+test('r0-1 C1: a workspace label and an ENG-first pair both resolve to an addable label (controls)', () => {
+  for (const list of [[{ id: 'lb-ws-review', name: 'needs-review' }], [{ id: 'lb-eng-review', name: 'needs-review', team: 'ENG' }, { id: 'lb-ops-review', name: 'needs-review', team: 'OPS' }]]) {
+    const { pm, labels } = fake()
+    labels(list)
+    assert.deepEqual(pm.labelCard({ id: 'ENG-2', label: 'needs-review' }), { applied: 'needs-review', confirmed: true, error: null })
+    assert.deepEqual(pm.unlabelCard({ id: 'ENG-2', label: 'needs-review' }), { removed: 'needs-review', confirmed: true, error: null })
+  }
 })
