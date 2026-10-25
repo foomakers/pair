@@ -1,0 +1,197 @@
+{
+  "$meta": {
+    "pr": "588",
+    "phase": "r1-g1-rev2",
+    "base": "885d3180673283ae21c0d10c264ae2322c8191cd",
+    "trailer": "Pair-RED-Snapshot: pr=588; phase=r1-g1-rev2; base=885d3180673283ae21c0d10c264ae2322c8191cd; manifest=.pair/red-snapshots/pr-588-r1-g1-rev2.json",
+    "artifacts": [
+      ".claude/workflows/pair-contracts/red-snapshot.test.mjs",
+      "packages/knowledge-hub/src/tools/workflow-mirror.test.ts"
+    ]
+  },
+  "sourceOfTruth": "seal() in red-snapshot.mjs",
+  "fixScope": {
+    "owner": "red-snapshot.mjs seal",
+    "mode": "behavioral",
+    "allowedPaths": [
+      ".claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs",
+      ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/red-snapshot.mjs",
+      "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs",
+      "packages/knowledge-hub/dataset/.workflows/pair-contracts/red-snapshot.test.mjs"
+    ]
+  },
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "seal() in red-snapshot.mjs (rowMentions/reclassify, reattest, diffRows)",
+      "inputs": [
+        "revision contract",
+        "sealed predecessor",
+        "HEAD tree"
+      ],
+      "representations": [
+        ".claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs",
+        ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/red-snapshot.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs"
+      ],
+      "consumers": [
+        "red-verify",
+        "review-phase verify-chain"
+      ],
+      "classes": [
+        "replay: omitted row + unchanged + green-at-head"
+      ],
+      "interactions": [
+        "reattest + reclassify + derived changedRows in one revision"
+      ]
+    },
+    {
+      "id": "r0-2",
+      "producer": "seal() in red-snapshot.mjs (rowMentions/reclassify, reattest, diffRows)",
+      "inputs": [
+        "revision contract",
+        "sealed predecessor",
+        "HEAD tree"
+      ],
+      "representations": [
+        ".claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs",
+        ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/red-snapshot.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs"
+      ],
+      "consumers": [
+        "red-verify",
+        "review-phase verify-chain"
+      ],
+      "classes": [
+        "edited witness + reattested witness"
+      ],
+      "interactions": [
+        "reattest + reclassify + derived changedRows in one revision"
+      ]
+    },
+    {
+      "id": "r0-3",
+      "producer": "seal() in red-snapshot.mjs (rowMentions/reclassify, reattest, diffRows)",
+      "inputs": [
+        "revision contract",
+        "sealed predecessor",
+        "HEAD tree"
+      ],
+      "representations": [
+        ".claude/skills/pair-workflow-review-phase/scripts/red-snapshot.mjs",
+        ".claude/skills/pair-workflow-red-verify/scripts/red-snapshot.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/red-snapshot.mjs",
+        "packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs"
+      ],
+      "consumers": [
+        "red-verify",
+        "review-phase verify-chain"
+      ],
+      "classes": [
+        "row names sub.test.js, green witness b.test.js"
+      ],
+      "interactions": [
+        "reattest + reclassify + derived changedRows in one revision"
+      ]
+    },
+    {
+      "id": "r1-g1-gap1",
+      "producer": "workflow-mirror.test.ts byte-identity guard over listFiles(dataset/.workflows) vs .claude/workflows",
+      "inputs": [
+        "dataset red-snapshot.test.mjs",
+        "installed .claude red-snapshot.test.mjs"
+      ],
+      "representations": [
+        "packages/knowledge-hub/dataset/.workflows/pair-contracts/red-snapshot.test.mjs",
+        ".claude/workflows/pair-contracts/red-snapshot.test.mjs"
+      ],
+      "consumers": [
+        "pre-push gate @pair/knowledge-hub test"
+      ],
+      "classes": [
+        "dataset red-snapshot.test.mjs diverges from the sealed installed test (cmp: differ char 104105, line 1479 — not a prefix; 2183 vs 2253 lines, 70 line delta): fix = bring the dataset copy to the installed bytes; the installed file is sealed and must not change"
+      ],
+      "interactions": []
+    }
+  ],
+  "matrix": [
+    {
+      "id": "r0-1-w1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "US-587 AC5 replay seals in one revision",
+      "oracle": "node --test --test-name-pattern US-587.AC5.replay .claude/workflows/pair-contracts/red-snapshot.test.mjs (file .claude/workflows/pair-contracts/red-snapshot.test.mjs)",
+      "file": ".claude/workflows/pair-contracts/red-snapshot.test.mjs",
+      "expected": "sealed:true; changedRows derived; reattest reason; reclassified [b]",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "r0-2-w1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "edit + reattest",
+      "oracle": "node --test --test-name-pattern US-587.seal:.a.revision.editing.one .claude/workflows/pair-contracts/red-snapshot.test.mjs (file .claude/workflows/pair-contracts/red-snapshot.test.mjs)",
+      "file": ".claude/workflows/pair-contracts/red-snapshot.test.mjs",
+      "expected": "sealed:true; reattest present; edited witness hashed",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "r0-3-w1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "sub.test.js row stays red (green at head: reclassify matches by path token; sealed predecessor holds the discriminating witness)",
+      "oracle": "node --test --test-name-pattern a.red.row.naming .claude/workflows/pair-contracts/red-snapshot.test.mjs (file .claude/workflows/pair-contracts/red-snapshot.test.mjs)",
+      "file": ".claude/workflows/pair-contracts/red-snapshot.test.mjs",
+      "expected": "matrix baselines [red,red,pass]; exit 0",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "r1-g1-gap1-w1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "dataset red-snapshot.test.mjs differs from the installed copy (first divergence line 1479, 70 line length delta)",
+      "oracle": "pnpm --dir packages/knowledge-hub exec vitest run src/tools/workflow-mirror.test.ts (file packages/knowledge-hub/src/tools/workflow-mirror.test.ts)",
+      "file": "packages/knowledge-hub/src/tools/workflow-mirror.test.ts",
+      "expected": "20/20 pass: dataset red-snapshot.test.mjs byte-identical to .claude copy",
+      "covers": [
+        "r1-g1-gap1"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": ".claude/workflows/pair-contracts/red-snapshot.test.mjs",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:f6c2e4ace5daf52dc004c343582d15607d5ff7d80903ad9fb21b6ec8a05bad81",
+      "command": "node --test --test-name-pattern a.red.row.naming .claude/workflows/pair-contracts/red-snapshot.test.mjs",
+      "observed": "ok: 1/1 pass; exit 0"
+    },
+    {
+      "file": "packages/knowledge-hub/src/tools/workflow-mirror.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:89a8bf41605865ff9b72124a179094208037453fefdace616b994987f9f00921",
+      "command": "pnpm --dir packages/knowledge-hub exec vitest run src/tools/workflow-mirror.test.ts",
+      "observed": "1 failed | 19 passed (20): .claude/workflows/pair-contracts/red-snapshot.test.mjs differs from its dataset copy; exit 1"
+    }
+  ],
+  "testExempt": false,
+  "revision": 2,
+  "supersedes": "r1-g1",
+  "predecessorContractHash": "sha256:4633e06085dcddee662c6a3a16f001e1f125df7bf14d63f1ac0686d3a58bef16",
+  "changedRows": [
+    "r0-3-w1",
+    "r1-g1-gap1",
+    "r1-g1-gap1-w1"
+  ]
+}

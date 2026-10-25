@@ -292,7 +292,7 @@ describe.each(PAIRS)(
         const live = readFileSync(join(installedDir, name), 'utf-8')
         expect(
           live,
-          `${installed}/${name} has drifted from the dataset — copy the dataset version`,
+          `${installed}/${name} differs from its dataset copy — reconcile the two (a sealed installed file is the truth: sync the dataset to it)`,
         ).toBe(source)
       }
     })
