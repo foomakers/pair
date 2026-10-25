@@ -1425,6 +1425,17 @@ export function findAdoptionFile(from, rel = join('.pair', 'adoption', 'tech', '
     cur = up
   }
 }
+// Runs the adopted `format-command` (way-of-working; files appended) over the artifacts, so `formatRefusals` finds them
+// formatted. None adopted ⇒ no-op. A formatter failure is not judged here — the check that follows refuses what remains.
+export function formatArtifacts(repoRoot, files) {
+  const file = findAdoptionFile(repoRoot)
+  const m = file && /^\s*[-*]\s*\**`format-command`\**\s*:\s*`([^`]+)`/m.exec(readFileSync(file, 'utf8'))
+  if (!m || !files.length) return null
+  const root = resolvePath(dirname(file), '..', '..', '..')
+  const present = files.filter(f => existsSync(join(root, f)))
+  if (present.length) spawnSync(`${m[1]} ${present.map(f => `'${f}'`).join(' ')}`, { cwd: root, shell: true, encoding: 'utf8', timeout: Number(process.env.PAIR_FORMAT_CHECK_TIMEOUT_MS) || 300000 })
+  return root
+}
 // The refusals the adopted `format-check-command` (way-of-working, run at the repo root) yields for these artifacts;
 // none adopted ⇒ []. Fail closed: a missing artifact, an extension outside its declared `(covers: …)`, or a check that
 // does not finish in PAIR_FORMAT_CHECK_TIMEOUT_MS (default 5 min) is refused, never skipped.
@@ -1798,7 +1809,24 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
       if (cmdErrs.length) return { published: false, reason: cmdErrs[0].split(' ')[0], errors: cmdErrs }
       // A sealed byte can never be reformatted: a test artifact the adopted format check rejects is refused HERE, before
       // the validator spends a round on it.
-      const fmt = formatRefusals(repoRoot, (parsed.redTests ?? []).map(t => t?.file).filter(Boolean))
+      const artifactFiles = (parsed.redTests ?? []).map(t => t?.file).filter(Boolean)
+      const fmtRoot = formatArtifacts(repoRoot, artifactFiles)
+      // Formatting rewrites bytes: restamp the digests the contract states, so it describes the file that exists.
+      let restamped = false
+      for (const t of parsed.redTests ?? []) {
+        const abs = fmtRoot && t?.file && join(fmtRoot, t.file)
+        if (!abs || !existsSync(abs)) continue
+        const digest = `sha256:${createHash('sha256').update(readFileSync(abs)).digest('hex')}`
+        if (t.sha256 !== digest) {
+          t.sha256 = digest
+          restamped = true
+        }
+      }
+      if (restamped) {
+        writeFileSync(cp0, JSON.stringify(parsed))
+        data = { ...data, contractHash: contractHash(parsed) }
+      }
+      const fmt = formatRefusals(repoRoot, artifactFiles)
       if (fmt.length) return { published: false, reason: fmt[0], errors: fmt }
       // C5: the contract's own fixScope.mode is AUTHORITATIVE — stamped on the handoff (resolve reads it, never the plan) and
       // the plan may not disagree with it.
