@@ -348,8 +348,8 @@ export function sealedContracts(cwd) {
 }
 const testArtifacts = c => (c.testExempt === true || isDocContract(c) ? [] : c.redTests.filter(a => (a?.kind ?? 'test') === 'test'))
 const rowMentions = (row, file) => {
-  const base = basename(file)
-  return Object.values(row ?? {}).some(v => (Array.isArray(v) ? v : [v]).some(x => typeof x === 'string' && (x.includes(file) || x.includes(base))))
+  const re = new RegExp(`(?<![\\w.-])(${[file, basename(file)].map(f => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\w-]|\\.\\w)`)
+  return Object.values(row ?? {}).some(v => (Array.isArray(v) ? v : [v]).some(x => typeof x === 'string' && re.test(x)))
 }
 // Rows a revision adds or edits against its predecessor's matrix — what `seal` derives `changedRows` from.
 const diffRows = ({ prev, contract }) => {
