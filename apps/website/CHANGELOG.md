@@ -1,5 +1,44 @@
 # @pair/website
 
+## 0.5.2
+
+### Patch Changes
+
+- [#570](https://github.com/foomakers/pair/pull/570) [`80f5788`](https://github.com/foomakers/pair/commit/80f57888658cd646ecc5e69885dd52d063a84b35) Thanks [@rucka](https://github.com/rucka)! - What's new rewritten benefit-first with a one-line explanation of every term and a single link per item; CHANGELOGs released with v0.5.1 no longer mention 0.5.0 ([#562](https://github.com/foomakers/pair/issues/562)).
+
+- [#569](https://github.com/foomakers/pair/pull/569) [`8b3a54e`](https://github.com/foomakers/pair/commit/8b3a54e01c22883072340c500d97b3926d8c54ba) Thanks [@rucka](https://github.com/rucka)! - Release flakes and v0.5 validation defects: `tokens.pipe` test no longer spawns the CLI in a hook, website `ts:check` runs after the build that regenerates `.source`, `run --dry-run --profile <unknown>` halts for `--card` and `--root`, 404 message keeps hyphenated prerelease ids, invalid project config prints the error prefix once, `pair-cli --help | head` exits quietly on EPIPE, docs sidebar separator renders, `package` skips the markdown parse for link-free files, `/pair-assistant` states how to opt back in after a skipped registry and names every installed path.
+
+  Release with `--version X.Y.Z`: CHANGELOG headings and `@pair/*` dependency lines now carry X.Y.Z, like every `package.json` (`changelog-version` step in `version.yml`).
+
+  `install --source <github.com URL>` that is not the official release no longer announces the CLI version in the download line.
+
+- [`b167de2`](https://github.com/foomakers/pair/commit/b167de27a9c33a9b0bfd9c026c619ba6b855c56b) Thanks [@rucka](https://github.com/rucka)! - `pair-cli run` shows live per-card progress: on a terminal each card keeps one line rewritten in place (id, title, stage `prepare` → `implement` → `review` → `fix N/max` → `merge`, PR, elapsed, then `✔ merged` / `⏸ awaiting-human` / `⚠ escalated` / `✖ failed` / `? unknown` when the engine returned no readable card status), with one row per card under `--parallel`. A finished card's line is printed once above the live rows, which show only running cards and never grow past the terminal height. Without a terminal you get one timestamped line per event. `--json` prints the events as NDJSON, `--quiet` gives back the old output, `--no-color` and `NO_COLOR` turn colors off.
+
+  The audit file is written live: a `loop-start` line before the first selection, then one JSON line per event, so you can `tail -f` it and a killed run keeps its trail. The banner prints the absolute audit path; the end summary lists cards merged / parked / failed / unknown and how many eligible cards are left.
+
+  The run outcome is now truthful: a workflow HALT, a background workflow cut before it finished, or an idle timeout exits non-zero instead of reporting `success`. A run is stopped only after 30 minutes with no engine event (`--idle-timeout`, `## Stop Predicate` `idle-timeout:`, `pair.config.json` `engine.idleTimeout`); `--iteration-timeout` becomes an opt-in total cap with no default. Both timeouts accept at most 2147483 seconds. `claude` runs with `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`.
+
+  With the `claude` engine, live stages come from the stage agents of Claude Code's `task_progress` events: a background workflow's log lines never reach `claude -p` output.
+
+  Also in this release:
+  - One live row per card for the whole run, `--card` included: the preparation flows into the cycle on the same row, a finished card keeps it and a re-driven card reuses it; the row shows the current step in plain words (`writing tests · try 2`, `coding · <task>`, `reviewing · round 2`, `waiting for CI`) and the PR number once known.
+  - A quiet terminal: the driver's technical lines, child output and the loop banner move to the audit and the new `--verbose` flag; a card's notes become its row's detail, never a new line.
+  - The loop shows one status row: `Checking for cards (…)…` while it selects, `Waiting for new cards — next check in 10m` while idle.
+  - The loop drives each card's cycle in its own process (no nested `pair-cli run`); a card never draws a second live block, its stderr is relayed like stdout, and rows are drawn with auto-wrap off so a wide row is clipped, never duplicated.
+
+- [`9502db6`](https://github.com/foomakers/pair/commit/9502db600aec74adf02fe15fe7b557d0503f08aa) Thanks [@rucka](https://github.com/rucka)! - `pair run` recovers instead of parking or exiting ([#575](https://github.com/foomakers/pair/issues/575)): a merge-time tier gate that comes back red is re-run once on the same reviewed head after `worktree-setup-command`, then routed to the fix stage with the failing gates as findings (or parked `needs-human` once `maxFixRounds` is spent); a durable failure recorded on a PR or base head that has since moved is stale and retried; a review on a head that is no longer the PR head is re-verified; a branch that conflicts with its base is synced mechanically (`Pair-Base-Sync` trailer, checked by custody; a generated mirror takes the side its dataset source took); a failed CI run is re-run once; prerequisites are read deterministically through the PM adapter (`blocked by #<id> (<reason>)`, fail closed; only an issue closed as completed counts as merged). Budgets `autoRecoveryRounds` (default 5) and `maxFixRounds` (default 10, was 3) are `## Autonomy` keys; a spent budget parks the card `needs-human: <reason>` and the run continues; a new run lists earlier exclusions and re-evaluates them.
+
+  Also in this release:
+  - CI still red after its re-run goes to the fix stage with the failing checks and their log tail as findings.
+  - A preparation refused for a dirty story worktree stashes the stray files (`pair-recovery: …`, kept) and retries; a validation stopped with `seal-not-pushed` is dispatched again; the seal push is no longer killed by a pre-push hook printing over 1 MB.
+  - `autoRecoveryRounds` counts only the rounds since the last step that advanced; a durable failure (`failed-preparation`, `failed-contract`…) is driven again once the base or the PR head moved.
+  - A GREEN that a gate rejects on a path outside its fixScope reports `contractGaps`; `resolve` routes a revision of the group's contract that may widen the scope by exactly those paths.
+  - `implement-phase` resumes the story's own uncommitted work left by an interrupted attempt instead of stopping on it.
+  - Generated mirrors are never a contract gap: custody judges a mirror byte-identical to its dataset file by its origin, and `pnpm mirrors:regenerate` also copies the workflow suites into `.claude/workflows/`.
+
+- Updated dependencies []:
+  - @pair/brand@0.5.2
+
 ## 0.5.1
 
 ### Patch Changes

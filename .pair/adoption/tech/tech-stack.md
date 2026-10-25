@@ -104,7 +104,7 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 - dts-bundle-generator is adopted to generate TypeScript definition files for bundles.
 - zip is adopted as the archive creation utility for packaging release artifacts.
 - sha256sum / shasum are adopted for checksum generation and verification.
-- adm-zip v0.5.16 is adopted for ZIP archive extraction in Node.js runtime (CLI KB installation).
+- adm-zip v0.5.26 is adopted for ZIP archive extraction in Node.js runtime (CLI KB installation).
 
 ## Release & versioning
 
