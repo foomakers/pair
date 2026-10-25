@@ -560,6 +560,24 @@ test('publish: a red-spec contract whose test artifact fails the adopted `format
   assert.equal(publish(fmtFixture({ exitCode: 0 }).args).published, true)
 })
 
+test('publish: an adopted `format-command` formats the artifacts first and restamps their sha256; without it the check still refuses; a still-unformatted file stays refused', () => {
+  const setup = (formatCmd, formatted = 'formatted\n') => {
+    const f = fmtFixture()
+    writeFileSync(join(f.repo, 'fmt.mjs'), `import { writeFileSync } from 'node:fs'; for (const p of process.argv.slice(2)) writeFileSync(p, ${JSON.stringify(formatted)})`)
+    writeFileSync(join(f.repo, 'check.mjs'), `import { readFileSync } from 'node:fs'; const ok = readFileSync('test/a.test.ts', 'utf8') === 'formatted\\n'; if (!ok) process.stdout.write('test/a.test.ts\\n'); process.exit(ok ? 0 : 1)`)
+    writeFileSync(join(f.repo, '.pair', 'adoption', 'tech', 'way-of-working.md'), `- **\`format-check-command\`**: \`node check.mjs\`\n${formatCmd}`)
+    return f
+  }
+  const bare = setup('')
+  assert.equal(publish(bare.args).reason, 'artifact-unformatted:test/a.test.ts')
+  const auto = setup('- **`format-command`**: `node fmt.mjs`\n')
+  const pr = publish(auto.args)
+  assert.equal(pr.published, true, JSON.stringify(pr))
+  const contract = JSON.parse(readFileSync(join(auto.dir, 'r1-g1-red-contract.json'), 'utf8'))
+  assert.equal(contract.redTests[0].sha256, `sha256:${_hash('sha256').update('formatted\n').digest('hex')}`)
+  assert.equal(publish(setup('- **`format-command`**: `node fmt.mjs`\n', 'still bad\n').args).reason, 'artifact-unformatted:test/a.test.ts')
+})
+
 test('publish: with a format check adopted, a listed artifact missing under the repo root is refused (`artifact-missing`), never skipped', () => {
   const out = publish(fmtFixture({ files: ['test/a.test.ts', 'test/gone.test.ts'], present: ['test/a.test.ts'] }).args)
   assert.equal(out.reason, 'artifact-missing:test/gone.test.ts')

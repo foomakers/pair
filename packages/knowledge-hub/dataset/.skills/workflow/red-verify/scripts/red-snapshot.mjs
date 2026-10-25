@@ -351,6 +351,11 @@ const rowMentions = (row, file) => {
   const base = basename(file)
   return Object.values(row ?? {}).some(v => (Array.isArray(v) ? v : [v]).some(x => typeof x === 'string' && (x.includes(file) || x.includes(base))))
 }
+// Rows a revision adds or edits against its predecessor's matrix — what `seal` derives `changedRows` from.
+const diffRows = ({ prev, contract }) => {
+  const before = new Map((prev.contract?.matrix ?? []).map(r => [r?.id, canonical(r)]))
+  return (contract.matrix ?? []).filter(r => r?.id && before.get(r.id) !== canonical(r)).map(r => r.id)
+}
 // A revision names every row it adds or edits, and every sealed witness file its diff modifies is
 // covered by one of those rows — `changedRows` is checked against what the diff actually touched.
 export function changedRowsErrors({ prev, contract, cwd }) {
@@ -364,8 +369,7 @@ export function changedRowsErrors({ prev, contract, cwd }) {
     if (atPrev === now) continue
     if (!changedRows.some(r => rowMentions(r, a.file))) return { reason: 'changed-rows-omit-witness', path: a.file, changedRows: [...changed] }
   }
-  const before = new Map((prev.contract?.matrix ?? []).map(r => [r?.id, canonical(r)]))
-  const rows = (contract.matrix ?? []).filter(r => r?.id && before.get(r.id) !== canonical(r) && !changed.has(r.id)).map(r => r.id)
+  const rows = diffRows({ prev, contract }).filter(id => !changed.has(id))
   if (rows.length) return { reason: 'changed-rows-omit-row', rows, changedRows: [...changed] }
   return null
 }
@@ -507,12 +511,14 @@ export function hermeticProbe({ contract, cwd, timeoutMs = 120000 }) {
     const preload = join(trap, 'net-trap.cjs')
     writeFileSync(preload, NET_TRAP)
     let probed = 0
+    const passed = []
     for (const [i, a] of testArtifacts(contract).entries()) {
       if (!String(a.command ?? '').trim()) continue
       const log = join(trap, `t${i}.log`)
       const env = { ...cleanGitEnv(), PATH: `${trap}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}`, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require ${JSON.stringify(preload)}`.trim(), PAIR_SEAL_TRAP_LOG: log }
       const r = spawnSync('/bin/sh', ['-c', a.command], { cwd, encoding: 'utf8', timeout: timeoutMs, env })
       probed++
+      if (r.status === 0) passed.push(a.file)
       if (r.error?.code === 'ETIMEDOUT') return { refusal: { reason: 'hermetic-probe-timeout', path: a.file, command: a.command, timeoutMs } }
       const hits = existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter(Boolean) : []
       const gh = hits.find(l => l.startsWith('gh'))
@@ -520,7 +526,7 @@ export function hermeticProbe({ contract, cwd, timeoutMs = 120000 }) {
       const netHit = hits.find(l => l.startsWith('net '))
       if (netHit) return { refusal: { reason: 'test-reaches-network', path: a.file, command: a.command, host: netHit.slice(4) } }
     }
-    return { probed }
+    return { probed, passed }
   } finally {
     rmSync(trap, { recursive: true, force: true })
   }
@@ -586,7 +592,12 @@ export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, he
     // dirty requirement — every notDirty path's sha256 was already proven against the real artifact
     // above, before `dirty` was even computed. Nothing here trusts the content; it only stops
     // demanding a working-tree change that a merge already made moot.
-    const reattestOk = contract.reattest && typeof contract.reattest === 'object' && String(contract.reattest.reason ?? '').trim()
+    let reattestOk = contract.reattest && typeof contract.reattest === 'object' && String(contract.reattest.reason ?? '').trim()
+    // A revision's witness already at HEAD (tracked, unmodified) seals as a reattest with a visible, auto-filled reason.
+    if (!reattestOk && prev && notDirty.every(f => git(['ls-files', '--error-unmatch', '--', f], cwd, { allowFail: true }) !== null)) {
+      contract.reattest = { reason: 'witness unchanged at head' }
+      reattestOk = true
+    }
     if (!reattestOk) return { sealed: false, reason: 'artifact-not-changed', paths: notDirty }
   }
 
@@ -598,6 +609,8 @@ export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, he
     preSeal.provenance = 'matched'
   }
   if (prev) {
+    // Derivation only widens: the agent's list plus every row the diff proves edited.
+    contract.changedRows = [...new Set([...(Array.isArray(contract.changedRows) ? contract.changedRows : []), ...diffRows({ prev, contract })])]
     const omitted = changedRowsErrors({ prev, contract, cwd })
     if (omitted) return { sealed: false, predecessor, ...omitted }
   }
@@ -610,6 +623,18 @@ export function seal({ pr, phase, base, contractPath, cwd, root, staticGates, he
     const probe = hermeticProbe({ contract, cwd })
     if (probe.refusal) return { sealed: false, ...probe.refusal }
     preSeal.hermetic = { probed: probe.probed }
+    // A revision's red witness that already passes at the GREEN head is a control, not a gap (kept red when it would leave no witness).
+    const green = new Set(probe.passed ?? [])
+    const stillRed = testArtifacts(contract).filter(a => artifactBaseline(a) === 'red' && !green.has(a.file))
+    if (prev && green.size && (stillRed.length || contract.fixScope?.mode === 'test')) {
+      for (const a of testArtifacts(contract)) {
+        if (artifactBaseline(a) !== 'red' || !green.has(a.file)) continue
+        a.baseline = 'pass'
+        a.observed = 'pass (reclassified: already green at head)'
+        for (const r of contract.matrix ?? []) if (r.baseline === 'red' && rowMentions(r, a.file)) r.baseline = 'pass'
+        preSeal.reclassified = [...(preSeal.reclassified ?? []), a.file]
+      }
+    }
   }
 
   const manifestAbs = join(cwd, manifest)
