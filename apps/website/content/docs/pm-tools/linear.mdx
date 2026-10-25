@@ -29,6 +29,17 @@ Add these lines to `.pair/adoption/tech/way-of-working.md`:
   Team: <your-team-key>. Project: <your-project-name>.
   Access: Linear MCP Server (fallback: GraphQL API).
   See `.pair/knowledge/guidelines/collaboration/project-management-tool/linear-implementation.md` for usage.
+- `pm-tool`: `linear`
+- `linear-team`: `<your-team-key>`
+
+## State Mapping
+
+| Board State | Macrostate  |
+| ----------- | ----------- |
+| Backlog     | Draft       |
+| Todo        | Ready       |
+| In Progress | In Progress |
+| Done        | Done        |
 
 ## Git Workflow
 
@@ -50,6 +61,18 @@ Issue and state operations go to Linear; branch, PR, review and merge operations
 pair's AI assistants use the Linear MCP Server to interact with Linear programmatically. This enables creating issues, updating statuses, and querying project state for `/pair-next` recommendations.
 
 Configure the MCP server with your Linear API key following your AI tool's MCP setup guide.
+
+## Unattended loop (`pair-cli run`)
+
+The delivery cycle and the unattended loop talk to Linear through the `linear` PM adapter (`scripts/host/linear.mjs`): Linear's GraphQL API, called with `curl`. Branches, PRs, checks and merge go to the declared `code-host`.
+
+- **Token**: export `LINEAR_API_KEY` (a personal API key) in the shell that runs `pair-cli run`. The key needs the **Read** and **Write** scopes; a team-restricted key is enough. **Create issues** + **Create comments** alone are not: label adds and comment updates fail with `Invalid scope: write required`. It is expanded by the spawned shell into the request header: never read by pair, never an argv element, never printed or written to a handoff. Missing ⇒ the run HALTs `host-unconfigured` naming `LINEAR_API_KEY`.
+- **Card ids**: `ENG-123` or its `https://linear.app/<workspace>/issue/ENG-123/…` URL (`pair-cli run --card ENG-123`). Anything else is `invalid-input`.
+- **Team**: `linear-team` binds one team; an issue of another team is refused naming both. New cards (scope decisions) are created in that team.
+- **States**: board states are the team's Linear workflow states, translated through `## State Mapping`. A Linear state the map does not name (e.g. `Triage`) leaves the card out of process, never an error. A state the team does not have is reported, never guessed.
+- **Close**: at merge the issue moves to the state mapped to `Done`; its parent follows only when every sub-issue is completed.
+- **Rate limit**: one bounded retry, then the call fails `linear-rate-limited`.
+- **Cross-link**: `Refs: ENG-123` in the PR body; the PR URL is commented on the issue.
 
 ## Mapping Model
 

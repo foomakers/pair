@@ -13,6 +13,7 @@ Every workflow skill that runs a cycle script ships the same directory, byte-ide
 ├── github.mjs         GitHub (gh)
 ├── azure-devops.mjs   Azure DevOps (az boards / az repos / az devops invoke)
 ├── filesystem.mjs     Filesystem backlog (PM side only — cards are the backlog's markdown files)
+├── linear.mjs         Linear (PM side only — GraphQL through curl, key from LINEAR_API_KEY)
 └── <id>.mjs           ← your adapter
 ```
 
@@ -67,7 +68,7 @@ Also expose `checkContext` (the check name, `pair-review`), `stateLabels` (the t
 ## The rules every adapter keeps
 
 - **CLI-first.** Every method is a CLI spawn through `runCli` from `adapter-kit.mjs`. No MCP, no HTTP client, no network module. List the CLIs in `binaries: []` only for a local tracker with no CLI — its methods take a stub or nothing through `transport.<x>`, with a `PAIR_<CLI>_BIN` override only mattering when `binaries` is non-empty.
-- **No credentials.** Never read, write, store or print a token. The CLI authenticates itself from its own configuration.
+- **No credentials.** Never read, write, store or print a token. The CLI authenticates itself from its own configuration. One exception, for a tool with no CLI of its own (`linear.mjs`, ADR-026 amendment 2026-10-25): the spawned shell expands the key from the environment (`$LINEAR_API_KEY`) into a header it hands `curl` on a file descriptor — the adapter still never reads it, it is never an argv element, and its absence is `host-unconfigured` naming the variable.
 - **Take the transport from `create(transport)`.** A test's stub binary comes in there (`transport.<cli>Bin`), with an env override (`PAIR_<CLI>_BIN`) and the bare CLI name as fallbacks. The cycle scripts never name a binary.
 - **Fail typed.** Throw `HostError` (`failed`, `invalid-json`, `invalid-output`, `unsupported`). `merge`'s `MERGE_STRATEGIES` (exported by `adapter-kit.mjs`) is the only accepted set of `strategy` values, and both shipped adapters enforce it — an unsupported `strategy` throws `unsupported`. `concludeCheck`'s `CHECK_STATES` (same export) is what a well-behaved new adapter refuses a `state` outside of, as the worked example below does; the shipped adapters pass `state` through unchecked — `pr-state.mjs conclude`, the only cycle caller, passes only `success | failure`. Any other exception is reported as an adapter bug, with the method name.
 

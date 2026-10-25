@@ -1,0 +1,75 @@
+{
+  "teams": [
+    {
+      "id": "team-eng",
+      "key": "ENG",
+      "states": [
+        { "id": "st-backlog", "name": "Backlog", "type": "backlog" },
+        { "id": "st-todo", "name": "Todo", "type": "unstarted" },
+        { "id": "st-doing", "name": "In Progress", "type": "started" },
+        { "id": "st-done", "name": "Done", "type": "completed" },
+        { "id": "st-canceled", "name": "Canceled", "type": "canceled" },
+        { "id": "st-triage", "name": "Triage", "type": "triage" }
+      ]
+    },
+    { "id": "team-ops", "key": "OPS", "states": [{ "id": "st-ops-done", "name": "Done", "type": "completed" }] }
+  ],
+  "labels": [
+    { "id": "lb-risk", "name": "risk:yellow" },
+    { "id": "lb-review", "name": "needs-review" }
+  ],
+  "issues": [
+    {
+      "id": "uuid-ENG-1",
+      "identifier": "ENG-1",
+      "url": "https://linear.app/acme/issue/ENG-1/epic-auth",
+      "title": "Epic: Auth",
+      "description": "Epic body",
+      "completedAt": null,
+      "team": "ENG",
+      "state": "In Progress",
+      "labels": [],
+      "parent": null,
+      "comments": []
+    },
+    {
+      "id": "uuid-ENG-2",
+      "identifier": "ENG-2",
+      "url": "https://linear.app/acme/issue/ENG-2/login",
+      "title": "Login",
+      "description": "## Acceptance Criteria\n\n1. works\n<!-- pair:scope-decision:0123456789abcdef0123456789abcdef -->",
+      "completedAt": null,
+      "team": "ENG",
+      "state": "Todo",
+      "labels": ["risk:yellow"],
+      "parent": "ENG-1",
+      "comments": []
+    },
+    {
+      "id": "uuid-ENG-3",
+      "identifier": "ENG-3",
+      "url": "https://linear.app/acme/issue/ENG-3/logout",
+      "title": "Logout",
+      "description": "logout",
+      "completedAt": null,
+      "team": "ENG",
+      "state": "Todo",
+      "labels": [],
+      "parent": "ENG-1",
+      "comments": []
+    },
+    {
+      "id": "uuid-ENG-4",
+      "identifier": "ENG-4",
+      "url": "https://linear.app/acme/issue/ENG-4/triaged",
+      "title": "Triaged",
+      "description": "t",
+      "completedAt": null,
+      "team": "ENG",
+      "state": "Triage",
+      "labels": [],
+      "parent": null,
+      "comments": []
+    }
+  ]
+}
