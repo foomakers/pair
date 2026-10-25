@@ -248,7 +248,7 @@ describe('createCycleScriptsBridge — real spawn against the installed scripts'
       '- Jira is adopted for project management.\n',
     )
     expect(() => bridge().bindHosts(join(runsRoot, 'story-492/493'))).toThrow(
-      /host-unsupported: .*"Jira".*implemented: azure-devops, github/,
+      /host-unsupported: .*"Jira".*implemented: azure-devops, filesystem, github/,
     )
     expect(existsSync(join(runsRoot, 'story-492/493/.host-binding.json'))).toBe(false)
   })
