@@ -372,7 +372,7 @@ const argv = (cmd, extra = {}) => {
 }
 
 test('parseArgs: every value that reaches gh/git is validated as a safe segment', () => {
-  assert.equal(parseArgs(argv('check')).opts.story, 42)
+  assert.equal(parseArgs(argv('check')).opts.story, '42')
   const bad = [
     ['check', { story: '42; rm -rf /' }, /--story/],
     ['check', { pr: 'x' }, /--pr/],

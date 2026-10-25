@@ -164,9 +164,12 @@ export default defineAdapter({
         gh(['issue', 'edit', String(id), '--repo', resolveRepo(repo), '--body', body])
         return { id }
       },
+      // A bare `#?<n>` is a card of the bound repo (US-572: `--root`/`--story` are validated here).
       parseCardRef(ref, { repo } = {}) {
+        const bare = /^#?(\d+)$/.exec(String(ref ?? ''))
+        if (bare) return { id: bare[1], number: Number(bare[1]), inScope: true }
         const m = ISSUE_URL_RE.exec(String(ref ?? ''))
-        return m ? { number: Number(m[3]), inScope: `${m[1]}/${m[2]}` === repo } : null
+        return m ? { id: m[3], number: Number(m[3]), inScope: `${m[1]}/${m[2]}` === repo } : null
       },
       // Close the card (`completed`), then walk up: a parent whose sub-issues are ALL closed is
       // closed too, recursively (merge-and-cascade.md Steps 6.2–6.4). Board state is the caller's.
@@ -235,6 +238,12 @@ export default defineAdapter({
         } catch (e) {
           return { removed: label, confirmed: false, error: e.message }
         }
+      },
+      // US-572: `--assignee @me` — the login the tracker CLI is authenticated as.
+      resolveUser() {
+        const login = gh(['api', 'user', '-q', '.login']).trim()
+        if (!login) throw new HostError('invalid-output', { message: 'gh api user: empty login', method: 'resolveUser' })
+        return login
       },
       // One marker-keyed comment on the CARD (never the PR thread): the park path's "awaits action".
       commentOnCard({ id, marker, body, repo }) {

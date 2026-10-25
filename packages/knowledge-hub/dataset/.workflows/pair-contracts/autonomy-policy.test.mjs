@@ -63,7 +63,7 @@ test('## Autonomy parses every key; malformed values name the key', () => {
     ['filter: a:b, a:b', 'filter', /twice/],
     ['until: pr\nuntil: merged', 'until', /twice/],
     ['merge: always; has: a:b', 'merge', /only with `hold-when`/],
-    ['root: abc', 'root', /issue number/],
+    ['root: a/b', 'root', /not a card id/],
     ['assignee: a b', 'assignee', /neither @me nor a login/],
     ['just text', 'Autonomy', /key: value/],
   ]) {
@@ -201,8 +201,9 @@ test('a card with no labels under `lacks: risk:green` escalates (fail-safe); unr
 test('decide is pure: no I/O modules imported by the module', () => {
   const src = readFileSync(CLI, 'utf8')
   const imports = [...src.matchAll(/^import .* from '([^']+)'/gm)].map(m => m[1])
-  assert.deepEqual(imports.sort(), ['node:fs', 'node:url'])
-  assert.doesNotMatch(src, /child_process|host\/index|\bgh\b.*spawn/)
+  assert.deepEqual(imports.sort(), ['node:fs', 'node:path', 'node:url'])
+  // US-572: only the CLI binds the PM adapter (a dynamic import, to judge `--root`) — never a static one.
+  assert.doesNotMatch(src, /child_process|^import .*host\/index|\bgh\b.*spawn/m)
 })
 
 test('legacy --autoAdvance tiers translate to `merge: when; lacks: <tier>`', () => {

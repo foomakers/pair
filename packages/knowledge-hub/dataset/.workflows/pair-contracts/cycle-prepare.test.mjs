@@ -131,7 +131,7 @@ test('parseArgs: escalate needs exactly one of --conditions / --openQuestion; co
   assert.throws(() => parseArgs(['escalate', '--dir', '.', '--story', '5', '--boundary', 'B1', '--gate', g, '--source', 'argument', '--conditions', '["a"]', '--openQuestion', 'q']), /exactly one/)
   assert.throws(() => parseArgs(['complete', '--dir', '.', '--story', '5', '--gate', g]), /--source is required/)
   const { opts } = parseArgs(['escalate', '--dir', '.', '--story', '5', '--boundary', 'B1', '--gate', g, '--source', 'argument', '--openQuestion', 'who pays?'])
-  assert.equal(opts.story, 5)
+  assert.equal(opts.story, '5')
   assert.equal(opts.openQuestion, 'who pays?')
 })
 

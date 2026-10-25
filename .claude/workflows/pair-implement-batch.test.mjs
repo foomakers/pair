@@ -2108,7 +2108,8 @@ test('US-524 AC-1: every stage boundary asks the script (decide, relayed, with t
   assert.equal(row.stage, 'implement')
   const decide = r.calls.find(c => c.opts.label === 'decide:#292 implement')
   assert.match(decide.prompt, /autonomy-policy\.mjs decide --policy '\{"until":"ready","merge":\{"mode":"never","has":\[\],"lacks":\[\]\}\}' --boundary stage:implement --labels '<labels>'/)
-  assert.match(decide.prompt, /gh issue view 292 --json labels/)
+  assert.match(decide.prompt, /cycle-state\.mjs card --story 292/)
+  assert.doesNotMatch(decide.prompt, /gh issue/)
   assert.ok(!r.calls.some(c => c.opts.agentType === 'pair-implementer'), 'never dispatched past the target')
 })
 

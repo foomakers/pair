@@ -205,8 +205,10 @@ export default defineAdapter({
         }
       },
       parseCardRef(ref, { repo } = {}) {
+        const bare = /^#?(\d+)$/.exec(String(ref ?? ''))
+        if (bare) return { id: bare[1], number: Number(bare[1]), inScope: true }
         const m = CARD_URL_RE.exec(String(ref ?? ''))
-        return m ? { number: Number(m[3]), inScope: m[2] === splitRepo(repo).project } : null
+        return m ? { id: m[3], number: Number(m[3]), inScope: m[2] === splitRepo(repo).project } : null
       },
       // Recursive Parent Cascade Logic (azure-devops-implementation.md): the card takes the Done
       // state; a parent whose children are ALL in it takes it too, up the hierarchy.

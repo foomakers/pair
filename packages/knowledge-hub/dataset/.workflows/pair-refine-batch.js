@@ -137,7 +137,7 @@ function parseArgs(raw) {
     if (!id) throw new Error(`refine-batch: items[${i}] is missing id.`)
     // Presence is not validity. `id` and `notes` are interpolated VERBATIM into the prompt of a
     // `general-purpose` agent — a host built-in with UNRESTRICTED tools, `Bash` included — and
-    // `id` lands inside an instruction the agent then runs as `gh issue view <id>`. So a card
+    // `id` lands inside an instruction the agent then runs as a tracker read of `<id>`. So a card
     // value here carries the authority of the command line it reaches, exactly as on the sibling
     // engine: `id: '218 --json body; gh pr merge 432 --squash'` reached the prompt and the agent
     // label intact, and a `notes` carrying a backtick or a newline restructures the prompt around
@@ -185,7 +185,7 @@ function parseArgs(raw) {
     // `.` resolves to the worktree ROOT and `git worktree remove --force` on it is unrecoverable.
     // Same rule in both engines, kept together deliberately.
     const isSegment = v => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v) && !v.includes('..')
-    constrain(id, 'id', isSegment, 'a single safe path segment (it reaches `gh issue view <id>`)')
+    constrain(id, 'id', isSegment, 'a single safe path segment (it reaches a tracker read of `<id>`)')
     constrain(it.notes, 'notes', isProse, 'plain text (no backtick, no `$(`, no newline)')
     // Type before coercion, same rule as `constrain` and `checkModel`: `mode: ['refine']`
     // joined to "refine" and was silently accepted as the mode the caller never wrote.

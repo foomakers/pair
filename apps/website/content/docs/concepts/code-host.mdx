@@ -90,6 +90,18 @@ The cycle then runs across both tools:
 /pair-process-review          → review + merge on GitHub; ENG-412 → Done on Linear
 ```
 
+## Mixed Setup in the Delivery Cycle: Filesystem + GitHub
+
+```markdown
+- `pm-tool`: `filesystem`
+
+## Git Workflow
+
+- `code-host`: `github`
+```
+
+`pair-cli run` binds the two once per run and keeps them apart: the card (labels, state, comments, close and the epic cascade) is read and written as files of `.pair/adoption/product/backlog/`, the PR (head, checks, labels, review, merge) goes to GitHub. A card read never reaches `gh`, a PR operation never reaches the files. The card's state change is committed on the PR branch from the story worktree; see [Filesystem → Unattended loop](/docs/pm-tools/filesystem#unattended-loop-pair-cli-run).
+
 ## Failure Modes
 
 | Situation                                        | Behavior                                                                                 |

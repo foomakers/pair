@@ -23,9 +23,9 @@ export const REQUIRED_METHODS = INTERFACE_METHODS.filter(m => m !== 'cardHash')
 // Primitives the cycle's scope-decision and pr-state paths already used through `gh` beyond the
 // eight (card create/search/edit, one comment read, the check/label read-backs, ref parsing). An
 // adapter MAY omit them: the feature that needs one then fails typed, naming the method.
-export const SUPPORT_METHODS = ['createCard', 'findCards', 'updateCard', 'parseCardRef', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'commentOnCard', 'setBoardState']
+export const SUPPORT_METHODS = ['createCard', 'findCards', 'updateCard', 'parseCardRef', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'commentOnCard', 'setBoardState', 'resolveUser']
 // ADR-018's split: card operations resolve `pm-tool`, pull-request operations resolve `code-host`.
-export const PM_METHODS = ['readCard', 'cardHash', 'closeAndCascade', 'createCard', 'findCards', 'updateCard', 'parseCardRef', 'commentOnCard', 'setBoardState', 'labelCard', 'unlabelCard']
+export const PM_METHODS = ['readCard', 'cardHash', 'closeAndCascade', 'createCard', 'findCards', 'updateCard', 'parseCardRef', 'commentOnCard', 'setBoardState', 'labelCard', 'unlabelCard', 'resolveUser']
 export const CODE_METHODS = ['prHead', 'upsertComment', 'concludeCheck', 'setPrState', 'merge', 'listComments', 'readComment', 'parseCommentRef', 'commentRef', 'readCheck', 'readCheckRun', 'readCiChecks', 'readLabels', 'setClassification', 'deleteBranch']
 // setClassification's family/value vocabulary (the review's classification tags, pr-states.md /
 // quality-model.md §5): each family carries its own chromatic enum — never shared across families.
@@ -67,6 +67,15 @@ export function assertBranchName(branch) {
   const bad = !b || /[#%?\s\x00-\x1f\x7f\\]/.test(b) || b.startsWith('-') || b.includes('@{') || b === 'HEAD' || spawnSync('git', ['check-ref-format', `refs/heads/${b}`], { encoding: 'utf8', env: cleanGitEnv(process.env) }).status !== 0
   if (bad) throw new HostError('invalid-input', { message: `invalid branch name ${JSON.stringify(branch)}` })
   return b
+}
+
+// US-572: the card-id shape guard, as a typed refusal — the same rule as autonomy-policy.mjs checkCardId (the
+// pure parsers' copy; this directory stays self-contained, opaque-card-ids.test.mjs pins the two equal).
+export const CARD_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+export function assertCardId(ref, method = 'parseCardRef') {
+  const id = String(ref ?? '').replace(/^#/, '')
+  if (!CARD_ID_RE.test(id) || id.includes('..') || id.length > 120) throw new HostError('invalid-input', { message: `${JSON.stringify(String(ref ?? ''))} is not a card id (no "/", "..", whitespace or absolute path)`, method })
+  return id
 }
 
 export function runCli({ bin, args, input, label }) {
