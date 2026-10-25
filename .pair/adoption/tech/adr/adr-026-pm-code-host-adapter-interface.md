@@ -78,6 +78,6 @@ Accepted
 
 - **Linear PM adapter** ships as `scripts/host/linear.mjs` (`hostsCode: false`, `binaries: ['sh', 'curl']`): Linear has no CLI, so the transport is its GraphQL API through `curl`, spawned by the kit's `runCli` via `sh -c`.
 - **Credential — §2 relaxed for this adapter only**: the spawned shell expands `$LINEAR_API_KEY` into the `Authorization` header and hands it to `curl` through a here-doc on fd 3 (`-H @/dev/fd/3`). The adapter never reads the key into JS, it is never an argv element (`ps`), never printed or written to a handoff. Absent ⇒ the child exits 64 ⇒ `HostError('host-unconfigured')` naming `LINEAR_API_KEY`. The `host-adapter` credential scan exempts exactly that header line.
-- **Team binding**: `- \`linear-team\`: \`<KEY>\`` (or `Team: <KEY>.`) in way-of-working; an issue of another team is refused naming both; no team ⇒ `createCard` is `unsupported`.
+- **Team binding**: the `linear-team` key (`<KEY>`, or the prose `Team: <KEY>.`) in way-of-working; an issue of another team is refused naming both; no team ⇒ `createCard` is `unsupported`.
 - **States**: `setBoardState` takes a board state or a macrostate (translated through `## State Mapping`) and writes the team's workflow state by name; `closeAndCascade` writes the `Done`-mapped state and cascades to a parent only when every sub-issue is `completed`.
 - **Rate limit**: HTTP 429 / `RATELIMITED` ⇒ one retry, then `failed` with detail `linear-rate-limited`. Error prefix `linear` (§5).
