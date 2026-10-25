@@ -219,6 +219,20 @@ Status changes are reflected by moving files between directories:
 
 Grep is the filtered view: `grep -rl 'Assignee.*<name>' .pair/adoption/product/backlog/` — which is exactly why an item with the line missing is invisible. **If the assignee cannot be resolved**: **report it** — never drop it silently by writing the file with the line omitted or left as a placeholder.
 
+## Unattended Loop (pair run)
+
+The delivery cycle reads and writes filesystem cards through the shipped `scripts/host/filesystem.mjs` adapter (PM side only; declare `code-host` for the PRs):
+
+- **Declaration**: `- \`pm-tool\`: \`filesystem\`` (or the "Filesystem is adopted for project management" line), plus `## Git Workflow` → `- \`code-host\`: \`github\``.
+- **Card id**: the file name's leading id — `01-01-001` for `01-01-001-login.md`, `IN-01` for `IN-01-demo.md`. An id with `/`, `..`, whitespace or an absolute path is refused (`invalid-input`) before any file is read; an id matching two files is refused, never guessed.
+- **State**: the status folder (`not-started | in-progress | under-review | completed`) and the first `**Status**:` line, written together and read back.
+- **Labels**: one `**Labels**: a, b` line.
+- **Comments**: marker-keyed blocks after a `<!-- pair-comments -->` line at the end of the file (idempotent upsert).
+- **Card hash**: the file minus the Status line, the Labels line and the comments — a state, label or comment write never changes it.
+- **Where writes land**: inside a story worktree every write is committed on its branch (`[#<id>] chore: card …`); anywhere else (an attended run, the default branch after merge) the write stays in the working tree with one `fs: warning` line — commit it yourself.
+- **Close + cascade**: `closeAndCascade` moves the card to `completed/` with `**Status**: Done`, then walks up the id (`01-01-001` → `01-01` → `01`) closing a parent whose children are all done. Inside a story worktree only the card closes: the cascade runs at merge, on the default branch, so parallel cards under one epic never race.
+- **`--assignee @me`**: not supported (no logged-in user) — `cycle-state.mjs whoami` HALTs `not-implemented` naming `resolveUser`.
+
 ## Working with Initiatives
 
 ### Creating Initiatives

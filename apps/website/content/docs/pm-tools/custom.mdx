@@ -17,7 +17,7 @@ pair ships adapters for [GitHub Projects](/docs/pm-tools/github-projects), [Line
 1. **Declare the tool** in `.pair/adoption/tech/way-of-working.md`, and the `code-host` under `## Git Workflow` if the tool hosts no code.
 2. **Map your states** in `## State Mapping`.
 3. **Document the tool** in a `<id>-implementation.md` guide beside the shipped ones: CLI setup and how authentication works (the adapter never stores credentials).
-4. **For the delivery cycle**, add `scripts/host/<id>.mjs` to every workflow skill, with the eight methods, tests against a stub CLI, then regenerate the mirrors. Registration is the file itself.
+4. **For the delivery cycle**, add `scripts/host/<id>.mjs` to every workflow skill, with the eight methods, tests against a stub CLI, then regenerate the mirrors. Registration is the file itself. For a tracker that hosts no code, the shipped `filesystem.mjs` is the real reference: PM methods only (`hostsCode: false`), every pull-request method refused, card ids validated by `parseCardRef` before anything is read.
 
 Without step 4 the skills still work through the guide; the cycle stops with `host-unsupported` naming the missing adapter, and never falls back to GitHub.
 

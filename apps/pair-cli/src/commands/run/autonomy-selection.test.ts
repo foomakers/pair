@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import {
   copyFileSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -9,7 +10,7 @@ import {
   writeFileSync,
 } from 'fs'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { handleRunCommand, type IterationRunner } from './handler'
 import { parseRunCommand } from './parser'
@@ -39,6 +40,8 @@ beforeEach(() => {
   const scripts = join(root, '.claude/skills/pair-workflow-cycle/scripts')
   mkdirSync(scripts, { recursive: true })
   copyFileSync(SCRIPT_SRC, join(scripts, 'autonomy-policy.mjs'))
+  // US-572: a `root` is judged by the bound PM adapter — the installed skill ships its host/ directory.
+  cpSync(join(dirname(SCRIPT_SRC), 'host'), join(scripts, 'host'), { recursive: true })
   mkdirSync(join(root, '.pair/adoption/tech'), { recursive: true })
   bin = join(root, 'bin')
   mkdirSync(bin)

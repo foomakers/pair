@@ -51,7 +51,8 @@ esac
 }
 const labelsJson = names => JSON.stringify(names.map(name => ({ name })))
 const runCommand = (prompt, { root, gh }, labelNames, prLabelNames = labelNames) => {
-  const cmd = /`(node \S+\.mjs [^`]*)`/.exec(prompt)?.[1]
+  // the LAST script command: a prompt reads the card first (`cycle-state.mjs card`, US-572), then names the decision
+  const cmd = [...prompt.matchAll(/`(node \S+\.mjs [^`]*)`/g)].pop()?.[1]
   assert.ok(cmd, `no script command in the prompt: ${prompt.slice(0, 120)}`)
   const r = spawnSync('sh', ['-c', cmd.replaceAll('.claude/skills/pair-workflow-cycle/scripts', SCRIPTS).replace("'<labels>'", `'${JSON.stringify(labelNames)}'`).replace("'<prLabels>'", `'${JSON.stringify(prLabelNames)}'`)], { cwd: root, encoding: 'utf8', env: { ...process.env, PAIR_GH_BIN: gh, PARITY_LABELS: labelsJson(labelNames), PARITY_PR_LABELS: labelsJson(prLabelNames) } })
   assert.equal(r.status, 0, `${cmd}\n${r.stderr}`)

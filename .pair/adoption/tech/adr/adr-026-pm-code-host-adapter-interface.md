@@ -65,3 +65,11 @@ Accepted
 
 - `architecture.md` → `## Unattended Dispatch`: a new bullet on the PM/code-host adapter layer.
 - KB: `collaboration/project-management-tool/host-adapter-extension-guide.md` (the extension guide, with a worked filesystem stub that is executed by the test suite).
+
+## Amendment 2026-10-24 — US-572: PM-agnostic unattended loop
+
+- **Filesystem PM adapter** ships as `scripts/host/filesystem.mjs` (`hostsCode: false`): transport = the local backlog files, not a CLI spawn — §2 (CLI-first) is relaxed for this adapter only. Its one spawned CLI is `git`, through the kit's `runCli`, to commit a card write inside a story worktree. No credential exists. Every PR-side method throws `unsupported`.
+- **Opaque card ids**: `--story` / `--root` are shape-guarded (no `/`, `..`, whitespace, absolute path; `#` dropped) and validated by the bound adapter's `parseCardRef` — github/azure accept a bare `#?<n>`. Never `/^\d+$/`, never `Number(story)`. `--pr` stays numeric (code-host id).
+- **`resolveUser`**: new optional PM method for `--assignee @me`; absent ⇒ typed `not-implemented` naming it (filesystem). Never `gh api user` outside the github adapter.
+- **`readCard` fields contract**: the `gh issue view --json` dialect (`labels: [{ name }]`, `state: OPEN | CLOSED`, `stateReason`, `closedAt`, `projectItems`) is the cross-adapter field contract. `cycle-state.mjs card` and `whoami` are the reads every PM-agnostic consumer (pair-cli, batch prompts, pair-next) uses — no `gh issue` in workflow prompts or PM-side skill steps (conformance test).
+- **Where filesystem writes land**: in a story worktree, committed on its branch; elsewhere uncommitted with one warning line. The epic cascade runs only outside a worktree (at merge, on the default branch).
