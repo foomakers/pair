@@ -719,6 +719,9 @@ export function verify({ pr, phase, base, cwd }) {
       return { status: status[0], path: rest[rest.length - 1] }
     })
     .filter(({ path }) => path !== manifest && !listed.includes(path))
+    // A generated mirror byte-identical to its dataset file is the realign script's output, not a change of its own:
+    // its origin carries the verdict (a mirror that diverges, or has no dataset origin, is still judged).
+    .filter(({ path, status }) => !isGeneratedPath({ path, status, from: snapshot, end: 'HEAD', cwd, cache: new Map() }))
   for (const { path } of after) if (isTestPath(path)) breach('unlisted-test-changed', { path })
   if (contract?.fixScope) {
     const { allowedPaths, mode } = contract.fixScope

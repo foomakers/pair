@@ -221,6 +221,25 @@ test('verify breach: an unlisted test file added after the seal, and an out-of-s
   rmSync(cwd, { recursive: true, force: true })
 })
 
+test('verify: a generated mirror byte-identical to its dataset file is never out-of-scope nor an unlisted test — its origin carries the verdict; a diverging mirror still breaches', () => {
+  const { cwd, base, manifest } = sealed()
+  green(cwd, manifest, {
+    'src/a.js': 'export const a = () => 2\n',
+    'packages/knowledge-hub/dataset/.pair/knowledge/a.md': '# a\n',
+    '.pair/knowledge/a.md': '# a\n',
+    'packages/knowledge-hub/dataset/.claude/workflows/x.test.mjs': 'ok\n',
+    '.claude/workflows/x.test.mjs': 'ok\n',
+    '.pair/knowledge/b.md': '# drifted, no dataset origin\n',
+  })
+  const v = verify({ pr: PR, phase: PHASE, base, cwd })
+  assert.deepEqual(v.breaches.map(b => `${b.code}:${b.path}`).sort(), [
+    'out-of-scope:.pair/knowledge/b.md',
+    'out-of-scope:packages/knowledge-hub/dataset/.pair/knowledge/a.md',
+    'unlisted-test-changed:packages/knowledge-hub/dataset/.claude/workflows/x.test.mjs',
+  ])
+  rmSync(cwd, { recursive: true, force: true })
+})
+
 test('verify breach: a behavioral scope may not add a production module even inside an allowed directory', () => {
   const { cwd, base } = repo()
   redContract(cwd, { fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/'] } })
