@@ -59,6 +59,8 @@
         "pair-contracts/ensure-contract.test.mjs",
         "pair-contracts/red-snapshot.test.mjs",
         "pair-contracts/cycle-state.test.mjs",
+        "pair-contracts/gitleaks-allowlist.test.mjs",
+        "pair-contracts/gitleaks-allowlist-control.test.mjs",
         "pair-contracts/cycle-recovery.test.mjs",
         "pair-contracts/stage-achash.test.mjs",
         "pair-contracts/workflow-profile.test.mjs",
