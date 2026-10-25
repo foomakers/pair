@@ -128,7 +128,8 @@ export default defineAdapter({
       if (!t) throw fail('failed', `team ${team} not found`, 'createCard')
       return t.id
     }
-    const labelId = name => gql('query PairLabel($name: String!) { issueLabels(filter: { name: { eq: $name } }) { nodes { id name } } }', { name })?.issueLabels?.nodes?.[0]?.id
+    // the issue's team labels or workspace labels only: Linear refuses another team's label on the issue
+    const labelId = (name, teamKey) => gql('query PairLabel($name: String!, $team: String!) { issueLabels(filter: { name: { eq: $name }, or: [{ team: { key: { eq: $team } } }, { team: { null: true } }] }) { nodes { id name } } }', { name, team: teamKey })?.issueLabels?.nodes?.[0]?.id
     const labelNames = ref => (issue(ref, 'readLabels').labels?.nodes ?? []).map(l => l.name)
     // Board state or macrostate → the team's workflow state; the board write is read back.
     const writeState = (ref, wanted, method) => {
@@ -178,7 +179,7 @@ export default defineAdapter({
         try {
           const i = issue(id, 'labelCard')
           if (!(i.labels?.nodes ?? []).some(l => l.name === label)) {
-            const lid = labelId(label)
+            const lid = labelId(label, i.team.key)
             if (!lid) return { applied: label, confirmed: false, error: `no Linear label ${JSON.stringify(label)} — create it in the workspace` }
             gql('mutation PairAddLabel($id: String!, $labelId: String!) { issueAddLabel(id: $id, labelId: $labelId) { success } }', { id: i.identifier, labelId: lid })
           }
