@@ -241,15 +241,18 @@ export function computeRootPlan(input: RootPlanInput): RootPlan {
 
   const { resolved, audit: resolveAudit } = resolveCards(eligible)
   const { allowed, audit: depAudit } = dependencyFilter(resolved)
-  const { batch, audit: mutexAudit } = computeMutexBatch(allowed)
-  for (const entry of [...resolveAudit, ...depAudit, ...mutexAudit]) {
-    if (entry.excluded) excluded.push({ id: entry.id, reason: entry.reason ?? 'excluded' })
-  }
-
+  const { batch: mutexBatch, audit: mutexAudit } = computeMutexBatch(allowed)
+  // Mutex protects concurrency, not sequential selection: when the ceiling is 1 (request, global or
+  // per-tier) at most one child is active, so every dependency-allowed card runs, in order.
   const maxParallelism = resolveMaxParallelism(
     input.maxParallelism,
-    batch.map(c => c.tier),
+    mutexBatch.map(c => c.tier),
   )
+  const serial = Math.min(maxParallelism, input.requested) === 1
+  const batch = serial ? allowed : mutexBatch
+  for (const entry of [...resolveAudit, ...depAudit, ...(serial ? [] : mutexAudit)]) {
+    if (entry.excluded) excluded.push({ id: entry.id, reason: entry.reason ?? 'excluded' })
+  }
   const limit = resolveEffectiveLimit({
     dependencyAllowed: batch.length,
     maxParallelism,

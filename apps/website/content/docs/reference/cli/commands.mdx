@@ -920,7 +920,9 @@ pair-cli run --root 66 --parallel 3 --autonomous
 
 Nothing is invented here: the scope is `pair-next`'s: `--root`, `--filter`, `--assignee` and `--status` are forwarded verbatim (`--root` is optional when a filter resolves; with neither, the run is refused before anything spawns).
 2. **Plan**: `pair-loop`'s own dependency + mutex analysis (a card whose prerequisite is not merged
-   is excluded; of two cards sharing a resource, the first wins). The plan is printed **before any
+   is excluded; of two cards sharing a resource, the first wins **when concurrency is above 1**; at effective
+   parallelism 1, `--parallel 1`, a global or per-tier `## Max Parallelism` of 1, every
+   dependency-allowed card runs once, in selection order, one child at a time). The plan is printed **before any
    process starts**: the cards that run, every excluded card with its reason, and the effective
    parallelism `min(dependency-allowed, ## Max Parallelism, n)` naming which limit bound it.
 3. **Run**: at most that many cards at once, each card's delivery cycle driven in this process

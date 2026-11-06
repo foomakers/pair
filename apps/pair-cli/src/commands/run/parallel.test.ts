@@ -359,7 +359,10 @@ describe('renderBatchAuditLine — AC6, one line per batch in the trail’s own 
     })
     expect(line).toBe(
       '2026-09-23T10:05:00.000Z event=batch root=66 started=2026-09-23T10:00:00.000Z parallel=3 ' +
-        'effective=2 attempted=10,13 outcomes=10:completed(exit 0),13:failed(exit 1) excluded=11',
+        'effective=2 attempted=10,13 outcomes=10:completed(exit 0),13:failed(exit 1) excluded=11 excludedReasons=(none)'.replace(
+          '(none)',
+          encodeURIComponent('[{"id":"11","reason":""}]'),
+        ),
     )
     expect(line).not.toContain('\n')
   })
@@ -374,7 +377,30 @@ describe('renderBatchAuditLine — AC6, one line per batch in the trail’s own 
       outcomes: [],
       excluded: [],
     })
-    expect(line).toContain('attempted=(none) outcomes=(none) excluded=(none)')
+    expect(line).toContain(
+      'attempted=(none) outcomes=(none) excluded=(none) excludedReasons=(none)',
+    )
+  })
+})
+
+describe('renderBatchAuditLine — AC4, reasons reconstructable', () => {
+  it('round-trips multiline/special-character reasons next to the ids', () => {
+    const reason = 'blocked by #9 (a b="c"\nd, e=f)'
+    const line = renderBatchAuditLine({
+      at: 'a',
+      startedAt: 's',
+      root: '66',
+      requested: 1,
+      effective: 1,
+      outcomes: [],
+      excluded: [{ id: '11', reason }],
+    })
+    expect(line).not.toContain('\n')
+    expect(line).toContain(' excluded=11 ')
+    const token = line.split(' ').find(t => t.startsWith('excludedReasons='))!
+    expect(JSON.parse(decodeURIComponent(token.slice('excludedReasons='.length)))).toEqual([
+      { id: '11', reason },
+    ])
   })
 })
 

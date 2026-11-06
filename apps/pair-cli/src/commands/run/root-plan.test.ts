@@ -222,6 +222,56 @@ describe('computeRootPlan — AC1 plan, excluded cards reported with a reason, n
   })
 })
 
+describe('computeRootPlan — serial runs ignore mutex (US-590)', () => {
+  const shared = [
+    card('1', { mutexResources: ['r'] }),
+    card('2', { mutexResources: ['r'] }),
+    card('3', { mutexResources: ['r'] }),
+  ]
+  const run = (over: Partial<Parameters<typeof computeRootPlan>[0]>) =>
+    computeRootPlan({
+      candidates: shared,
+      eligibility: 'risk:green',
+      maxParallelism: { global: 3, perTier: {} },
+      requested: 3,
+      ...over,
+    })
+
+  it.each([
+    ['requested 1', { requested: 1 }],
+    ['global 1', { maxParallelism: { global: 1, perTier: {} } }],
+    ['per-tier 1', { maxParallelism: { global: 3, perTier: { 'risk:green': 1 } } }],
+  ])('%s: every shared-resource card runs once, in order', (_n, over) => {
+    const plan = run(over)
+    expect(plan.run.map(c => c.id)).toEqual(['1', '2', '3'])
+    expect(plan.excluded).toEqual([])
+    expect(plan.limit.effective).toBe(1)
+  })
+
+  it('concurrency > 1 still excludes overlapping cards with a reason', () => {
+    const plan = run({})
+    expect(plan.run.map(c => c.id)).toEqual(['1'])
+    expect(plan.excluded.map(e => e.id)).toEqual(['2', '3'])
+    expect(plan.excluded[0]!.reason).toContain('mutex conflict on r')
+  })
+
+  it('serial never admits a dependency-blocked card sharing resources', () => {
+    const plan = run({
+      requested: 1,
+      candidates: [
+        card('1', { mutexResources: ['r'] }),
+        card('2', { mutexResources: ['r'], prerequisites: [{ id: '9', merged: false }] }),
+      ],
+    })
+    expect(plan.run.map(c => c.id)).toEqual(['1'])
+    expect(plan.excluded[0]!.reason).toContain('blocked by #9')
+  })
+
+  it('edge: empty queue', () => {
+    expect(run({ requested: 1, candidates: [] }).run).toEqual([])
+  })
+})
+
 describe('describeRootPlan — printed before any process starts', () => {
   it('names the concurrent set, every exclusion and the binding limit', () => {
     const plan = computeRootPlan({
@@ -235,10 +285,10 @@ describe('describeRootPlan — printed before any process starts', () => {
       requested: 1,
     })
     const text = describeRootPlan(plan).join('\n')
-    expect(text).toContain('Run (2): #1, #3')
-    expect(text).toContain('Excluded #2: mutex conflict on r — waits for a later iteration')
+    expect(text).toContain('Run (3): #1, #2, #3')
+    expect(text).not.toContain('Excluded')
     expect(text).toContain(
-      'Effective parallelism: 1 = min(dependency-allowed 2, ## Max Parallelism 3, --parallel 1) — bound by --parallel',
+      'Effective parallelism: 1 = min(dependency-allowed 3, ## Max Parallelism 3, --parallel 1) — bound by --parallel',
     )
   })
 
