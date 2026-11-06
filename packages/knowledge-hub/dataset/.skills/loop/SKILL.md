@@ -56,7 +56,7 @@ Fan-out is ONE capability with THREE realizations, in preference order: **(1) in
    - Append the iteration to the audit file at the resolved `## Audit Location`.
    - Write/update the checkpoint via `/checkpoint` for the driven card's story.
    - Stop, and print a **continue-token**: `pair-loop [--root <id>] [--filter <v>] [--assignee <v>] [--status <v>] [--until <v>] [--prepare <v>] [--merge <v>] [--predicate '<text>'] --iteration <n+1>` — only the arguments given or effective, each value single-quoted (shell-safe: a value with spaces or `;` pastes back whole); a resumed run accepts them all, so a stricter argument (e.g. `--merge hold-always` over an adoption `merge: hold-never`) is never lost. The caller (human/CI/cron) pastes it back to resume. No new persistence format (Assumption 7): the token is the loop's scope + arguments + predicate + iteration counter rendered as a re-invocation line.
-4. **Verify**: Exactly one card advanced this invocation (degraded path) or the workflow ran to its own stop condition (fan-out path). Never both cards and context growth in the same session.
+5. **Verify**: Exactly one card advanced this invocation (degraded path) or the workflow ran to its own stop condition (fan-out path). Never both cards and context growth in the same session.
 
 ## Boundaries — What This Skill Does Not Do
 
