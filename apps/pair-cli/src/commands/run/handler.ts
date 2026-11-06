@@ -3,7 +3,7 @@ import { plainConsole, plainNote } from './plain-console'
 import { resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
-import { parseRunCommand, type RunCommandConfig } from './parser'
+import { isParallelRun, parseRunCommand, type RunCommandConfig } from './parser'
 import { optionsOfArgv, runCardInProcess } from './parallel'
 import { assertEngineAvailable, describeEngineResolution, resolveEngine } from './resolve-engine'
 import { createExecutableProbe } from './path-probe'
@@ -269,7 +269,7 @@ function haltOnUnresolvedProfileInDryRun(
 ): void {
   const flagged = config.profile !== undefined || config.workflowConfig !== undefined
   // --parallel resolves its own profile (parallel-entry)
-  if (!config.dryRun || config.parallel !== undefined || !flagged) return
+  if (!config.dryRun || isParallelRun(config) || !flagged) return
   ;(deps.resolveWorkflowProfile ?? resolveWorkflowProfile)(
     locateCycleScripts(fs, context.config, cwd).scriptsDir,
     { root: cwd, profile: config.profile, workflowConfig: config.workflowConfig },
@@ -349,7 +349,7 @@ async function runCommand(
   haltOnUnresolvedProfileInDryRun({ config, context, fs, cwd }, deps)
   // US-491: `--root --parallel N` — the fan-out mode, its own entry (the parser guarantees no card).
   const ctx = { config, context, fs, cwd }
-  if (config.parallel !== undefined)
+  if (isParallelRun(config))
     return await handleParallelRun(ctx, withInProcessCards(deps, fs, callerDeps))
 
   // Nothing to run on this card: report the decision and stop. This is a clean exit, never an

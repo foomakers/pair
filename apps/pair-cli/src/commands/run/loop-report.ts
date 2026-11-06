@@ -134,19 +134,30 @@ export function describeScope(selection: FanOutSelection): string {
   return `pair-next${root}${part('--filter', selection.filter)}${part('--assignee', selection.assignee)}${part('--status', selection.status)}`
 }
 
+interface ParallelPolicy {
+  readonly value: number
+  readonly source: string
+}
+
+const parallelPolicy = (policy: number | ParallelPolicy): ParallelPolicy =>
+  typeof policy === 'number' ? { value: policy, source: '## Max Parallelism' } : policy
+
 /** AC12: every effective loop value and where it came from, printed before any selection. */
 export function describeLoopValues(
   values: LoopValues,
   selection: FanOutSelection,
-  requested: number,
-  maxParallelism: number,
+  requested: number | undefined,
+  policy: number | ParallelPolicy,
 ): string[] {
+  const { value: maxParallelism, source } = parallelPolicy(policy)
   return [
     'Loop (watch loop — each iteration re-selects; precedence: argument > adoption > KB default):',
     `  watch: ${show(values.watch)}`,
     `  interval: ${show(values.interval)}${values.watch.value === 'on' ? '' : ' — used only under --watch'}`,
     `  max-iterations: ${capText(values.cap.value)} — ${values.cap.bound}${values.watch.value === 'on' ? '; idle polls never count' : ''}`,
-    `  parallel: --parallel ${requested} (argument overrides ## Max Parallelism ${maxParallelism})`,
+    requested !== undefined
+      ? `  parallel: --parallel ${requested} (argument overrides ## Max Parallelism ${maxParallelism})`
+      : `  parallel: ${maxParallelism} (${source})`,
     `  root: ${show(selection.root)}`,
     `  filter: ${show(selection.filter)}`,
     `  assignee: ${show(selection.assignee)}`,
@@ -228,20 +239,25 @@ export function forwardedAutonomy(
 export function loopStartFields(
   values: LoopValues,
   selection: FanOutSelection,
-  requested: number,
-  effectiveParallelCeiling: number,
+  requested: number | undefined,
+  policy: number | ParallelPolicy,
 ): Array<[string, string]> {
+  const { value: maxParallelism, source } = parallelPolicy(policy)
+  const parallel = requested ?? maxParallelism
+  const parallelSource = requested !== undefined ? '--parallel' : source
+  const scope = (key: keyof FanOutSelection) => selection[key]?.value ?? '(none)'
   return [
     ['event', 'loop-start'],
-    ['root', selection.root?.value ?? '(none)'],
-    ['filter', selection.filter?.value ?? '(none)'],
-    ['assignee', selection.assignee?.value ?? '(none)'],
-    ['status', selection.status?.value ?? '(none)'],
+    ['root', scope('root')],
+    ['filter', scope('filter')],
+    ['assignee', scope('assignee')],
+    ['status', scope('status')],
     ['watch', values.watch.value],
     ['interval', values.interval.value],
     ['max-iterations', capText(values.cap.value)],
-    ['parallel', String(requested)],
-    ['max-parallelism', String(effectiveParallelCeiling)],
+    ['parallel', String(parallel)],
+    ['max-parallelism', String(maxParallelism)],
+    ['parallel-source', parallelSource],
   ]
 }
 
