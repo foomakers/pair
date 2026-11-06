@@ -236,6 +236,12 @@ gh issue view <issue-number> --json comments --jq '.comments[].body'
 
 ## Code Review & PR Management
 
+### Native story link recipe for `/pair-capability-publish-pr`
+
+Use this recipe only when the resolved PM item is a GitHub issue. Resolve its **owner, repository, and number** from the item URL, and the PR repository and default branch from the code host. Put one plain closing line in the PR description's conditional native-link slot: `Closes #<number>` for the same repository, or `Closes <owner>/<repo>#<number>` for a different repository. Never link the parent or another issue. GitHub [interprets these keywords only for a PR targeting the repository's default branch](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue); on a non-default base, omit the keyword and report `not-linked — non-default base; link manually when eligible`. A text mention alone is not a native link.
+
+On create and update, preserve unrelated PR body content and keep exactly one link line for the resolved story; check existing lines before adding one. Read the PR's `closingIssuesReferences` through `gh api graphql` (query `repository(owner: $owner, name: $repo) { pullRequest(number: $pr) { closingIssuesReferences(first: 100) { nodes { number repository { nameWithOwner } } pageInfo { hasNextPage endCursor } } } }`). Page until exhausted. Report `native-linked` only if a node's exact repository and issue number match the resolved item. An empty, inaccessible or incomplete read is `not-linked` or `fallback` with the reason and a manual-link remedy; a successful body write is not proof. An already linked PR needs no second keyword. Closing on merge does not replace the adopted explicit story closure and board cascade.
+
 ### PR Review States
 
 GitHub supports three review actions. The `/pair-process-review` skill uses these through a tool-agnostic interface — this section documents the GitHub-specific implementation.
