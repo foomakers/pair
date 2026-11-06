@@ -76,13 +76,13 @@ async function capture(candidates: RootCandidate[], exits: Record<string, number
   }
 }
 
-describe('US-522 AC13 — --root --parallel without any new flag is byte-identical to US-491', () => {
+describe('US-522 AC13 — --root --parallel preserves US-491 output with parallel source attribution', () => {
   it('golden: two cards, one failing', async () => {
     const out = await capture([card('10'), card('11')], { '11': 1 })
     expect(out).toMatchInlineSnapshot(`
       {
         "audit": [
-          "<ts> event=batch root=66 started=<ts> parallel=2 effective=2 attempted=10,11 outcomes=10:completed(exit 0),11:failed(exit 1) excluded=(none) excludedReasons=(none)",
+          "<ts> event=batch root=66 started=<ts> parallel=2 effective=2 attempted=10,11 outcomes=10:completed(exit 0),11:failed(exit 1) excluded=(none) excludedReasons=(none) parallel-source=--parallel",
         ],
         "code": 1,
         "stdout": [

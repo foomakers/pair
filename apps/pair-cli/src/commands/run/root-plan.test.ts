@@ -127,6 +127,7 @@ describe('resolveEffectiveLimit — explicit parallel supersedes adoption', () =
       dependencyAllowed: 5,
       maxParallelism: 4,
       requested: 3,
+      source: '--parallel',
     })
   })
 
