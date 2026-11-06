@@ -5,7 +5,7 @@ import { isSafeId, isSafePromptText } from './prompt-safety'
 import type { PredicateCard } from './stop-predicate'
 import type { RootCandidate } from './root-plan'
 import { spawnIteration, type SpawnIterationInput } from './spawn'
-import type { IterationResult } from './stream-reader'
+import { agentMessageOf, type IterationResult } from './stream-reader'
 
 /**
  * The `--root --parallel` selection (US-491 AC7) — `pair-next`'s, never this module's.
@@ -320,6 +320,15 @@ async function selectOnce(input: SelectRootInput, correction: string): Promise<S
     idleTimeoutSeconds: input.idleTimeoutSeconds,
     onEvent: payload => {
       try {
+        // US-603: an engine with an agent-message rule is read from its LAST message only.
+        const message = agentMessageOf(input.engine, payload)
+        if (input.engine.messageField !== undefined) {
+          if (message === undefined) return
+          answer = undefined
+          invalid = undefined
+          answer = answerInEvent(message, parse)
+          return
+        }
         answer = answerInEvent(payload, parse) ?? answer
       } catch (error) {
         invalid = error

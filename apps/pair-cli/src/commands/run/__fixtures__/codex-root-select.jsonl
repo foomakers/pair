@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"t2"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"i1","type":"agent_message","text":"Resolved the candidates."}}
+{"type":"item.completed","item":{"id":"i2","type":"agent_message","text":"Candidates below.\nPAIR-ROOT-CANDIDATES: {\"candidates\":[{\"id\":\"603\",\"title\":\"t\",\"branch\":\"\",\"tier\":\"risk:yellow\",\"labels\":[\"risk:yellow\"]}]}"}}
+{"type":"turn.completed","usage":{"input_tokens":10}}

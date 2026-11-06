@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"t1"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"i1","type":"agent_message","text":"Working on it. {\"status\":\"cache-hit\"}"}}
+{"type":"item.completed","item":{"id":"i2","type":"command_execution","command":"ls","aggregated_output":"{\"status\":\"failed\"}","exit_code":0}}
+{"type":"item.completed","item":{"id":"i3","type":"agent_message","text":"Done.\n{\"status\":\"ok\",\"next\":{\"step\":\"verify\"}}"}}
+{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}
