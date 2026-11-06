@@ -583,7 +583,8 @@ describe('publish-pr native story links (#589)', () => {
   it('AC1 — the publisher consumes guide recipes and a conditional template slot', () => {
     expect(skill).toMatch(/native.link recipe/i)
     expect(skill).toMatch(/template override/i)
-    expect(template).toMatch(/^Native story link: \[conditional/m)
+    expect(template).toMatch(/Conditional native story link/)
+    expect(template).toMatch(/^Closes #\[number/m)
   })
 
   it('AC2 — GitHub recipe handles exact same/cross-repo identity and default base', () => {
