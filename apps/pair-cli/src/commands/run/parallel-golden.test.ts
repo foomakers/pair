@@ -82,7 +82,7 @@ describe('US-522 AC13 — --root --parallel without any new flag is byte-identic
     expect(out).toMatchInlineSnapshot(`
       {
         "audit": [
-          "<ts> event=batch root=66 started=<ts> parallel=2 effective=2 attempted=10,11 outcomes=10:completed(exit 0),11:failed(exit 1) excluded=(none)",
+          "<ts> event=batch root=66 started=<ts> parallel=2 effective=2 attempted=10,11 outcomes=10:completed(exit 0),11:failed(exit 1) excluded=(none) excludedReasons=(none)",
         ],
         "code": 1,
         "stdout": [
