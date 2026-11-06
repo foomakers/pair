@@ -82,3 +82,7 @@ See Decision.
 - [Agent-harness framework](../../../knowledge/guidelines/technical-standards/ai-development/agent-harness/README.md) (#450) — what each supported harness/engine is, and how it is provisioned.
 - [Automation policy](../../../knowledge/guidelines/collaboration/automation/automation-policy.md) — ADR-017 §6's schema, which tier 2 reads and never writes.
 - Stories: #451 (this driver), #250 (`pair-loop`, whose realization rule is amended here), #441 (Codex in-harness fan-out — a tier-1 sibling), #219 (`implement-batch`), #217 (tag-driven dispatch, which should invoke the driver rather than assume Claude Code).
+
+## Amendment 2026-11-06 (#604)
+
+Tier 1 on a harness without `Workflow` (Codex) is realized by `pair-loop` itself: it drives the loop body in-session and spawns one `/pair-workflow-cycle --card <id>` subagent per card through the subagent primitive the `cycle-dispatch.mjs realizations` probe bound (capability, never product name). Nesting forbidden or no primitive bound ⇒ degraded one-card path (ADR-017 §5 note amended accordingly). Merge authority and context isolation (§3) unchanged.
