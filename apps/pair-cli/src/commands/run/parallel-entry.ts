@@ -1,6 +1,8 @@
+import { join } from 'path'
+import { POLICY_PATH, sectionLines } from './policy-sections'
 import type { FileSystemService } from '@pair/content-ops'
 import { readCardTitle, remoteBaseHead } from './cycle-wiring'
-import { adoptionSelection } from './autonomy-policy'
+import { effectiveSelection } from './autonomy-policy'
 import chalk from 'chalk'
 import { acquireCardLock } from './card-lock'
 import { resolveEngineFor } from './cycle-entry'
@@ -89,6 +91,15 @@ function effectiveUntilOf(resolution: RunContext['autonomySelection']): string |
   return typeof value === 'string' ? value : undefined
 }
 
+function parallelSource(input: ParallelRunInput): string {
+  if (input.config.parallel !== undefined) return '--parallel'
+  const path = join(input.cwd, POLICY_PATH)
+  return input.fs.existsSync(path) &&
+    sectionLines(input.fs.readFileSync(path), 'Max Parallelism') !== undefined
+    ? '## Max Parallelism'
+    : 'KB default'
+}
+
 function reportHeader(
   input: ParallelRunInput,
   engineLine: string,
@@ -102,7 +113,9 @@ function reportHeader(
   console.log(`  Scope: ${describeScope(selection)}`)
   console.log(`  Policy: ${policy.source} · audit ${policy.auditLocation}`)
   console.log(
-    `  Requested: --parallel ${String(config.parallel)} · ## Max Parallelism ${policy.maxParallelism}` +
+    (config.parallel !== undefined
+      ? `  Requested: --parallel ${config.parallel} (overrides ## Max Parallelism ${policy.maxParallelism})`
+      : `  Parallel: ${policy.maxParallelism} (${parallelSource(input)})`) +
       (overrides !== undefined
         ? ` (per-tier: ${Object.entries(overrides)
             .map(([tier, n]) => `${tier} ${n}`)
@@ -138,15 +151,16 @@ interface BatchRecordInput {
 }
 
 function recordBatch({ input, deps, plan, root, startedAt, outcomes }: BatchRecordInput): void {
-  const line = renderBatchAuditLine({
-    at: new Date().toISOString(),
-    startedAt,
-    root,
-    requested: input.config.parallel!,
-    effective: plan.limit.effective,
-    outcomes,
-    excluded: plan.excluded,
-  })
+  const line =
+    renderBatchAuditLine({
+      at: new Date().toISOString(),
+      startedAt,
+      root,
+      requested: plan.limit.requested,
+      effective: plan.limit.effective,
+      outcomes,
+      excluded: plan.excluded,
+    }) + ` parallel-source=${plan.limit.source}`
   ;(deps.appendAudit ?? appendAuditLine)(input.context.auditPath, line)
 }
 
@@ -191,7 +205,10 @@ interface FanOut {
  * `--filter`: `--filter` is a loop-mode selector the cycle coordinator refuses on a `--card` entry.
  */
 function forwardedEligibility(input: ParallelRunInput): string | undefined {
-  return input.config.scope.filter ?? adoptionSelection(input.context.autonomySelection, 'filter')
+  return (
+    input.config.scope.filter ??
+    effectiveSelection(input.context.autonomySelection, 'filter')?.value
+  )
 }
 
 function selectionInput(fan: FanOut, loop?: SelectRootInput['loop']): SelectRootInput {
@@ -264,7 +281,8 @@ function planFor(fan: FanOut, candidates: RootCandidate[]): RootPlan {
       global: policy.maxParallelism,
       perTier: policy.maxParallelismOverrides ?? {},
     },
-    requested: input.config.parallel!,
+    requested: input.config.parallel,
+    source: parallelSource(input),
   })
   for (const line of describeRootPlan(plan)) console.log(`  ${line}`)
   return plan
@@ -280,12 +298,10 @@ function reportPreamble(
   reportHeader(input, engineLine, selection)
   for (const note of notes) console.log(`  ${note}`)
   if (!values.loopMode) return
-  const lines = describeLoopValues(
-    values,
-    selection,
-    config.parallel!,
-    context.policy.maxParallelism,
-  )
+  const lines = describeLoopValues(values, selection, config.parallel, {
+    value: context.policy.maxParallelism,
+    source: parallelSource(input),
+  })
   for (const line of lines) console.log(`  ${line}`)
 }
 
@@ -364,7 +380,7 @@ function reportPreviousExclusions(auditPath: string): void {
 
 /** US-573 AC2: one live line per card while the pool runs (cursor-addressed rows on a TTY). */
 async function withLiveCards(
-  { config, context, cwd }: ParallelRunInput,
+  { config, context, cwd, fs: inputFs }: ParallelRunInput,
   deps: RunHandlerDependencies,
   run: (onEvent: (event: RunEvent) => void) => Promise<number>,
 ): Promise<number> {
@@ -383,7 +399,9 @@ async function withLiveCards(
     root: cwd,
     policy: {
       source: context.policy.source,
-      parallel: config.parallel ?? null,
+      parallel: config.parallel ?? context.policy.maxParallelism,
+      parallelSource: parallelSource({ config, context, cwd, fs: inputFs }),
+      parallelOverrides: context.policy.maxParallelismOverrides ?? {},
       idleTimeout: context.idleTimeout,
     },
     ...(deps.runAudit !== undefined && { append: deps.runAudit }),
@@ -641,7 +659,10 @@ function finishLoop(
 function startFields(fan: FanOut, values: LoopValues): Array<[string, string]> {
   const { config, context } = fan.input
   return [
-    ...loopStartFields(values, fan.selection, config.parallel!, context.policy.maxParallelism),
+    ...loopStartFields(values, fan.selection, config.parallel, {
+      value: context.policy.maxParallelism,
+      source: parallelSource(fan.input),
+    }),
     ...forwardedFields(forwardedAutonomy(config, context.autonomySelection)),
   ]
 }

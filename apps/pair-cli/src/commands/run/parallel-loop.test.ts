@@ -192,9 +192,9 @@ describe('US-522 — the watch loop through the handler', () => {
     expect(run.selections()).toBe(3)
     const lines = run.stdout.filter(l => l.startsWith('  Iteration '))
     expect(lines).toEqual([
-      '  Iteration 1/6: selected 1 · skipped none · ran #1 completed · next iteration',
-      '  Iteration 2/6: selected 2 · skipped #1 already driven this run · ran #2 completed · next iteration',
-      '  Iteration 3/6: selected 0 · skipped none · ran none · stopping: nothing workable',
+      '  Iteration 1/9: selected 1 · skipped none · ran #1 completed · next iteration',
+      '  Iteration 2/9: selected 2 · skipped #1 already driven this run · ran #2 completed · next iteration',
+      '  Iteration 3/9: selected 0 · skipped none · ran none · stopping: nothing workable',
     ])
     expect(events(run.audit)).toEqual([
       'loop-start',
@@ -218,7 +218,7 @@ describe('US-522 — the watch loop through the handler', () => {
     expect(text).toContain('watch: on (--watch)')
     expect(text).toContain('interval: 2m (--interval)')
     expect(text).toContain('max-iterations: 6 — ## Stop Predicate max-iterations 6')
-    expect(text).toContain('parallel: --parallel 2 · ## Max Parallelism 3')
+    expect(text).toContain('parallel: --parallel 2 (argument overrides ## Max Parallelism 3)')
     expect(text).toContain('filter: PIPPO (--filter)')
     expect(text).toContain('assignee: @me (--assignee)')
     expect(text).toContain('Scope: pair-next --filter PIPPO --assignee @me')

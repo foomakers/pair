@@ -4,7 +4,7 @@ import { handleRunCommand, type RunHandlerDependencies } from './handler'
 import { parseRunCommand } from './parser'
 import { POLICY_PATH } from './automation-policy'
 import type { LockAcquirer } from './card-lock'
-import type { RootCandidate } from './root-plan'
+import { resolveMaxParallelism, type RootCandidate } from './root-plan'
 import type { CardProcessExit, CardProcessRunner } from './parallel'
 
 /** US-575 AC6: the deterministic prerequisite state, faked from each fixture card's own prerequisites. */
@@ -43,6 +43,7 @@ function projectFs(policyText?: string) {
       [`${cwd}/config.json`]: JSON.stringify({ asset_registries: {} }),
       '/bin/claude': '',
       '/bin/pi': '',
+      [`${cwd}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
       ...(policyText !== undefined && { [`${cwd}/${POLICY_PATH}`]: policyText }),
     },
     cwd,
@@ -87,8 +88,9 @@ function harness(candidates: RootCandidate[], exits: Record<string, CardProcessE
     inFlight -= 1
     return exits[c.id] ?? { exitCode: 0, signal: null }
   })
-  const selectCandidates = vi.fn(async () => candidates)
+  const selectCandidates = vi.fn(async (_input?: unknown) => candidates)
   const deps: RunHandlerDependencies = {
+    runAudit: () => {},
     readPrereqState: prereqsOf(candidates),
     selectCandidates,
     runCardProcess,
@@ -134,7 +136,7 @@ describe('run --root --parallel — AC1 plan printed before dispatch', () => {
     expect(before).toContain('Excluded #11: mutex conflict on skill:a')
     expect(before).toContain('Excluded #12: blocked by #10 (not merged)')
     expect(before).toContain(
-      'Effective parallelism: 2 = min(dependency-allowed 3, ## Max Parallelism 3, --parallel 2) — bound by --parallel',
+      'Effective parallelism: 2 = min(dependency-allowed 3, --parallel 2 [overrides ## Max Parallelism 3]) — bound by --parallel',
     )
   })
 
@@ -153,7 +155,7 @@ describe('run --root --parallel — AC1 plan printed before dispatch', () => {
 })
 
 describe('run --root --parallel — AC2 each card is its own run --card process, at most the limit at once', () => {
-  it('runs every planned card through the pool and never exceeds min(D, ## Max Parallelism, N)', async () => {
+  it('runs every planned card through the pool at the explicitly requested limit', async () => {
     process.env['PATH'] = '/bin'
     captureLog()
     const h = harness([card('1'), card('2'), card('3'), card('4'), card('5')])
@@ -165,7 +167,10 @@ describe('run --root --parallel — AC2 each card is its own run --card process,
     )
 
     expect(h.started.sort()).toEqual(['1', '2', '3', '4', '5'])
-    expect(h.peak()).toBe(2)
+    expect(h.peak()).toBe(4)
+    expect(h.audit.find(e => e.line.includes('event=batch'))?.line).toContain(
+      'parallel-source=--parallel',
+    )
     const call = h.runCardProcess.mock.calls[0]![0]
     expect(call.args.slice(0, 3)).toEqual(['run', '--card', call.card.id])
     expect(call.args).toContain('--autonomous')
@@ -204,6 +209,34 @@ describe('run --root --parallel — AC2 each card is its own run --card process,
     expect(h.selectCandidates.mock.calls[0]).toMatchObject([
       { root: '66', eligibility: 'risk:green', cwd, engine: { id: 'pi' } },
     ])
+  })
+
+  it('relays full-preset eligibility to selection and card children over legacy green', async () => {
+    process.env['PATH'] = '/bin'
+    captureLog()
+    const h = harness([card('1', { tier: 'risk:red', labels: ['risk:red'] })])
+    h.deps.resolveAutonomy = () => ({
+      ok: true,
+      active: true,
+      policy: {
+        until: 'pr',
+        prepare: { mode: 'always' },
+        merge: { mode: 'never', has: [], lacks: [] },
+      },
+      effective: { filter: { value: '*', source: 'preset full' } },
+      lines: [],
+      warnings: [],
+      errors: [],
+      translated: {},
+    })
+    await handleRunCommand(
+      parseRunCommand({ root: '66', parallel: '2', autonomous: true, preset: 'full' }),
+      projectFs(policy('3')),
+      h.deps,
+    )
+    expect(h.selectCandidates.mock.calls[0]?.[0]).toMatchObject({ eligibility: '*' })
+    expect(h.runCardProcess.mock.calls[0]?.[0].args).toContain('--eligibility-filter')
+    expect(h.runCardProcess.mock.calls[0]?.[0].args).toContain('*')
   })
 })
 
@@ -265,7 +298,7 @@ describe('run --root --parallel — AC6 aggregated audit', () => {
 
     expect(h.audit).toHaveLength(1)
     expect(h.audit[0]!.path).toBe(`${cwd}/.pair/working/automation/fanout.md`)
-    expect(h.audit[0]!.line).toMatch(
+    expect(h.audit[0]!.line.replace(/ parallel-source=--parallel(?= |$)/, '')).toMatch(
       /^\S+ event=batch root=66 started=\S+ parallel=2 effective=1 attempted=1 outcomes=1:failed\(exit 1\) excluded=2 excludedReasons=\S+$/,
     )
   })
@@ -463,7 +496,185 @@ describe('US-590 r0-2: the audited excludedReasons equal the plan’s own exclus
       .filter((m): m is RegExpExecArray => m !== null)
       .map(m => ({ id: m[1]!, reason: m[2]! }))
     expect(planned.length).toBe(2)
-    const encoded = /excludedReasons=(\S+)$/.exec(h.audit[0]!.line)![1]!
+    const encoded = /(?:^| )excludedReasons=(\S+)(?= |$)/.exec(h.audit[0]!.line)![1]!
     expect(JSON.parse(decodeURIComponent(encoded))).toEqual(planned)
+  })
+})
+
+describe('US-593 omitted argument precedence through the handler', () => {
+  function adoptionRun(count = 5, text = policy('3')) {
+    process.env['PATH'] = '/bin'
+    const lines = captureLog()
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const h = harness(Array.from({ length: count }, (_, i) => card(String(i + 1))))
+    const live: Array<Record<string, unknown>> = []
+    h.deps.runAudit = (_path, line) => void live.push(JSON.parse(line))
+    h.deps.resolveAutonomy = () => ({
+      ok: true,
+      active: true,
+      policy: {
+        until: 'pr',
+        prepare: { mode: 'always' },
+        merge: { mode: 'never', has: [], lacks: [] },
+      },
+      effective: { filter: { value: '*', source: 'preset full' } },
+      lines: [],
+      warnings: [],
+      errors: [],
+      translated: {},
+    })
+    return {
+      ...h,
+      lines,
+      live,
+      fs: projectFs(text + '\n\n## Stop Predicate\n\nmax-iterations: 1\n'),
+    }
+  }
+
+  function assertAdoption(h: ReturnType<typeof adoptionRun>, loop = false) {
+    expect(h.started.slice().sort()).toEqual(['1', '2', '3', '4', '5'])
+    expect(h.peak()).toBe(3)
+    expect(h.lines.join('\n')).toMatch(/Effective parallelism: 3[^\n]*## Max Parallelism/)
+    const batch = h.audit.find(e => e.line.includes('event=batch'))?.line
+    expect(batch).toContain('parallel=3')
+    expect(batch).toContain('effective=3')
+    expect(batch).toContain('parallel-source=## Max Parallelism')
+    expect(h.live[0]).toMatchObject({
+      event: 'loop-start',
+      detail: { policy: { parallel: 3, parallelSource: '## Max Parallelism' } },
+    })
+    if (loop) {
+      const start = h.audit.find(e => e.line.includes('event=loop-start'))?.line
+      expect(start).toContain('parallel=3')
+      expect(start).toContain('max-parallelism=3')
+      expect(start).toContain('parallel-source=## Max Parallelism')
+    }
+  }
+
+  it('inherits adopted parallelism when full preset omits --parallel', async () => {
+    const h = adoptionRun()
+    await handleRunCommand(
+      parseRunCommand({
+        root: '66',
+        preset: 'full',
+        autonomous: true,
+        watch: true,
+        maxIterations: '1',
+      }),
+      h.fs,
+      h.deps,
+    )
+    assertAdoption(h, true)
+    expect(h.selectCandidates.mock.calls[0]?.[0]).toMatchObject({ eligibility: '*' })
+    for (const [call] of h.runCardProcess.mock.calls) expect(call.args).toContain('*')
+  })
+
+  const cases = [
+    ['--watch', { watch: true }],
+    ['--watch + --interval', { watch: true, interval: '60s' }],
+    ['--predicate', { predicate: 'tag:ready ⇒ Done' }],
+    ['--preset', { preset: 'full' }],
+    ['--until', { until: 'pr' }],
+    ['--prepare', { prepare: 'always' }],
+    ['--merge', { merge: 'never' }],
+  ] as const
+  for (const [flag, options] of cases) {
+    it(`omitted --parallel under ${flag}`, async () => {
+      const h = adoptionRun()
+      const watching = 'watch' in options
+      await handleRunCommand(
+        parseRunCommand({
+          root: '66',
+          autonomous: true,
+          ...options,
+          ...(watching && { maxIterations: '1' }),
+        }),
+        h.fs,
+        h.deps,
+      )
+      assertAdoption(h, watching)
+      if (!watching) {
+        expect(h.selectCandidates).toHaveBeenCalledTimes(1)
+        expect(h.audit.filter(e => e.line.includes('event=batch'))).toHaveLength(1)
+        expect(h.audit.some(e => e.line.includes('event=loop-start'))).toBe(false)
+      }
+    })
+  }
+
+  it('standalone --interval requires --watch before handler dispatch', () => {
+    expect(() => parseRunCommand({ root: '66', interval: '60s' })).toThrow(
+      '--interval requires --watch',
+    )
+  })
+
+  it('omitted --parallel with --no-watch', async () => {
+    const h = adoptionRun()
+    await handleRunCommand(
+      parseRunCommand({ root: '66', watch: false, autonomous: true }),
+      h.fs,
+      h.deps,
+    )
+    assertAdoption(h)
+    expect(h.selectCandidates).toHaveBeenCalledTimes(1)
+    expect(h.audit.filter(e => e.line.includes('event=batch'))).toHaveLength(1)
+    expect(h.audit.some(e => e.line.includes('event=loop-start'))).toBe(false)
+  })
+
+  it('fewer eligible cards than the adopted cap', async () => {
+    const h = adoptionRun(2)
+    await handleRunCommand(
+      parseRunCommand({ root: '66', preset: 'full', autonomous: true }),
+      h.fs,
+      h.deps,
+    )
+    expect(h.started).toEqual(['1', '2'])
+    expect(h.peak()).toBe(2)
+    expect(h.lines.join('\n')).toMatch(/Effective parallelism: 2[^\n]*bound by dependency-allowed/)
+  })
+
+  it('omitted --parallel uses the policy default', async () => {
+    const h = adoptionRun(5, '## Eligibility\n\nrisk:green\n')
+    const config = parseRunCommand({ root: '66', preset: 'full', autonomous: true })
+    await handleRunCommand(config, h.fs, h.deps)
+    expect(h.peak()).toBe(1)
+    expect(h.started).toHaveLength(5)
+    expect(h.lines.join('\n')).toContain('KB default')
+    expect(h.live[0]).toMatchObject({
+      detail: { policy: { parallel: 1, parallelSource: 'KB default' } },
+    })
+    expect(config.parallel).toBeUndefined()
+  })
+
+  it('omitted --parallel uses the single-tier adoption override', async () => {
+    const h = adoptionRun(5, policy('3', 'risk:green: 2'))
+    await handleRunCommand(
+      parseRunCommand({ root: '66', preset: 'full', autonomous: true }),
+      h.fs,
+      h.deps,
+    )
+    expect(h.peak()).toBe(2)
+    expect(h.started).toHaveLength(5)
+    expect(h.lines.join('\n')).toMatch(/Effective parallelism: 2[^\n]*risk:green/)
+    expect(h.audit.find(e => e.line.includes('event=batch'))?.line).toContain(
+      'parallel-source=## Max Parallelism risk:green',
+    )
+  })
+
+  it('mixed tiers use the global policy cap', () => {
+    const limits = { global: 3, perTier: { 'risk:green': 2, 'risk:red': 1 } }
+    expect(resolveMaxParallelism(limits, ['risk:green'])).toBe(2)
+    expect(resolveMaxParallelism(limits, ['risk:green', 'risk:red'])).toBe(3)
+  })
+
+  it('ordinary --root without a loop flag', async () => {
+    const h = adoptionRun()
+    const config = parseRunCommand({ root: '66' })
+    await expect(handleRunCommand(config, h.fs, h.deps)).rejects.toThrow(
+      /skill|invocation|installed/i,
+    )
+    expect(config.parallel).toBeUndefined()
+    expect(h.selectCandidates).not.toHaveBeenCalled()
+    expect(h.started).toEqual([])
+    expect(h.audit).toEqual([])
   })
 })

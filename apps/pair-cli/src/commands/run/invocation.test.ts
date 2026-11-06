@@ -25,8 +25,16 @@ describe('buildSkillArgs', () => {
       iteration: 3,
     })
 
-    // No --filter: pair-loop reads eligibility from tech/automation.md itself (AC8).
-    expect(args).toEqual(['--root', '212', '--predicate', 'Done', '--iteration', '3'])
+    expect(args).toEqual([
+      '--root',
+      '212',
+      '--filter',
+      'risk:green',
+      '--predicate',
+      'Done',
+      '--iteration',
+      '3',
+    ])
   })
 
   it('passes pair-next only the parameters pair-next declares', () => {
@@ -328,9 +336,9 @@ describe('filterDeliveryFor', () => {
     expect(filterDeliveryFor({ kind: 'skill', name: 'pair-next', source: 'cascade' })).toBe(
       'argument',
     )
-    // Read by the skill: pair-loop declares none because it reads `## Eligibility` itself.
+    // Passed as an argument: pair-loop declares the selector too.
     expect(filterDeliveryFor({ kind: 'skill', name: 'pair-loop', source: 'cascade' })).toBe(
-      'read-by-skill',
+      'argument',
     )
     // Neither: a workflow scoped to ONE card applies no label at all, so reporting the policy's
     // label as this run's perimeter would name a boundary nothing applies.

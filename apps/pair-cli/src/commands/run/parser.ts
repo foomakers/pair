@@ -614,7 +614,8 @@ const LOOP_ONLY_FLAGS = [
 
 /**
  * A loop flag (`--watch`, `--preset`, `--until`…) with no `--card`/`--skill`/`--prompt` IS the loop: `--parallel`
- * only sets how many cards run at once, and defaults to 1.
+ * only sets how many cards run at once. The temporary value validates loop grammar;
+ * it is never returned as an argument request (omission inherits policy).
  */
 function withImpliedParallel(options: ParseRunOptions): ParseRunOptions {
   if (options.parallel !== undefined) return options
@@ -622,6 +623,23 @@ function withImpliedParallel(options: ParseRunOptions): ParseRunOptions {
   return LOOP_ONLY_FLAGS.some(key => options[key] !== undefined)
     ? { ...options, parallel: 1 }
     : options
+}
+
+export function isParallelRun(config: RunCommandConfig): boolean {
+  return (
+    config.parallel !== undefined ||
+    (config.invocation.kind === 'skill' &&
+      config.invocation.name === undefined &&
+      config.dispatch?.card === undefined &&
+      (config.watch !== undefined ||
+        config.interval !== undefined ||
+        config.predicate !== undefined ||
+        config.autonomy !== undefined))
+  )
+}
+
+function explicitParallel(input: ParseRunOptions, parallel: Pick<RunCommandConfig, 'parallel'>) {
+  return input.parallel !== undefined ? parallel : {}
 }
 
 export function parseRunCommand(input: ParseRunOptions, args: string[] = []): RunCommandConfig {
@@ -663,7 +681,7 @@ export function parseRunCommand(input: ParseRunOptions, args: string[] = []): Ru
     }),
     ...outputModeOf(options),
     dryRun: options.dryRun === true,
-    ...parallel,
+    ...explicitParallel(input, parallel),
     ...watch,
   }
 }

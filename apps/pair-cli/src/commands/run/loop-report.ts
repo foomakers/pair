@@ -1,4 +1,4 @@
-import { adoptionSelection } from './autonomy-policy'
+import { effectiveSelection } from './autonomy-policy'
 import { describeMergePosture, type AutomationPolicy } from './automation-policy'
 import type { AutonomyResolution } from './cycle-scripts'
 import { NO_ITERATION_CAP } from './automation-policy'
@@ -39,27 +39,19 @@ export interface LoopValues {
   readonly predicate?: Sourced | undefined
 }
 
-const flagOr = (
-  flag: string | undefined,
-  flagName: string,
-  adopted: string | undefined,
-  other?: Sourced,
-) =>
-  flag !== undefined
-    ? { value: flag, source: flagName }
-    : adopted !== undefined
-      ? { value: adopted, source: '## Autonomy' }
-      : other
-
-/** Root/filter/assignee/status: argument > `## Autonomy` > (filter only) `## Eligibility`. */
+/** Root/filter/assignee/status: argument > argument preset > adoption > adoption preset > default. */
 export function resolveSelection(
   config: RunCommandConfig,
   policy: AutomationPolicy,
   autonomy: AutonomyResolution | undefined,
 ): FanOutSelection {
   const { scope } = config
-  const pick = (key: 'root' | 'filter' | 'assignee' | 'status', fallback?: Sourced) =>
-    flagOr(scope[key], `--${key}`, adoptionSelection(autonomy, key), fallback)
+  const pick = (key: 'root' | 'filter' | 'assignee' | 'status', fallback?: Sourced) => {
+    const flag = scope[key]
+    return flag !== undefined
+      ? { value: flag, source: `--${key}` }
+      : (effectiveSelection(autonomy, key) ?? fallback)
+  }
   const eligibility =
     policy.eligibility !== undefined
       ? { value: policy.eligibility, source: '## Eligibility' }
@@ -78,7 +70,7 @@ export function resolveSelection(
 
 const capText = (cap: number): string => (cap === NO_ITERATION_CAP ? 'none' : String(cap))
 
-/** The effective iteration cap and what bound it (narrow-only: a flag never widens the policy cap). */
+/** The effective iteration cap and its source. */
 function resolveCap(config: RunCommandConfig, policy: AutomationPolicy): LoopValues['cap'] {
   const policyCap = policy.maxIterations
   if (config.watch !== true && config.maxIterations === undefined) {
@@ -86,15 +78,15 @@ function resolveCap(config: RunCommandConfig, policy: AutomationPolicy): LoopVal
   }
   if (config.maxIterations !== undefined) {
     return {
-      value: Math.min(config.maxIterations, policyCap),
-      bound: `min(--max-iterations ${config.maxIterations}, ## Stop Predicate max-iterations ${policyCap})`,
+      value: config.maxIterations,
+      bound: `--max-iterations ${config.maxIterations}`,
     }
   }
   return {
     value: policyCap,
     bound:
       policyCap === NO_ITERATION_CAP
-        ? 'no `max-iterations` declared: runs to a natural stop (--max-iterations can narrow it)'
+        ? 'no `max-iterations` declared: runs to a natural stop (--max-iterations can override it)'
         : `## Stop Predicate max-iterations ${policyCap}`,
   }
 }
@@ -142,19 +134,30 @@ export function describeScope(selection: FanOutSelection): string {
   return `pair-next${root}${part('--filter', selection.filter)}${part('--assignee', selection.assignee)}${part('--status', selection.status)}`
 }
 
+interface ParallelPolicy {
+  readonly value: number
+  readonly source: string
+}
+
+const parallelPolicy = (policy: number | ParallelPolicy): ParallelPolicy =>
+  typeof policy === 'number' ? { value: policy, source: '## Max Parallelism' } : policy
+
 /** AC12: every effective loop value and where it came from, printed before any selection. */
 export function describeLoopValues(
   values: LoopValues,
   selection: FanOutSelection,
-  requested: number,
-  maxParallelism: number,
+  requested: number | undefined,
+  policy: number | ParallelPolicy,
 ): string[] {
+  const { value: maxParallelism, source } = parallelPolicy(policy)
   return [
     'Loop (watch loop — each iteration re-selects; precedence: argument > adoption > KB default):',
     `  watch: ${show(values.watch)}`,
     `  interval: ${show(values.interval)}${values.watch.value === 'on' ? '' : ' — used only under --watch'}`,
     `  max-iterations: ${capText(values.cap.value)} — ${values.cap.bound}${values.watch.value === 'on' ? '; idle polls never count' : ''}`,
-    `  parallel: --parallel ${requested} · ## Max Parallelism ${maxParallelism} (the ceiling)`,
+    requested !== undefined
+      ? `  parallel: --parallel ${requested} (argument overrides ## Max Parallelism ${maxParallelism})`
+      : `  parallel: ${maxParallelism} (${source})`,
     `  root: ${show(selection.root)}`,
     `  filter: ${show(selection.filter)}`,
     `  assignee: ${show(selection.assignee)}`,
@@ -236,20 +239,25 @@ export function forwardedAutonomy(
 export function loopStartFields(
   values: LoopValues,
   selection: FanOutSelection,
-  requested: number,
-  effectiveParallelCeiling: number,
+  requested: number | undefined,
+  policy: number | ParallelPolicy,
 ): Array<[string, string]> {
+  const { value: maxParallelism, source } = parallelPolicy(policy)
+  const parallel = requested ?? maxParallelism
+  const parallelSource = requested !== undefined ? '--parallel' : source
+  const scope = (key: keyof FanOutSelection) => selection[key]?.value ?? '(none)'
   return [
     ['event', 'loop-start'],
-    ['root', selection.root?.value ?? '(none)'],
-    ['filter', selection.filter?.value ?? '(none)'],
-    ['assignee', selection.assignee?.value ?? '(none)'],
-    ['status', selection.status?.value ?? '(none)'],
+    ['root', scope('root')],
+    ['filter', scope('filter')],
+    ['assignee', scope('assignee')],
+    ['status', scope('status')],
     ['watch', values.watch.value],
     ['interval', values.interval.value],
     ['max-iterations', capText(values.cap.value)],
-    ['parallel', String(requested)],
-    ['max-parallelism', String(effectiveParallelCeiling)],
+    ['parallel', String(parallel)],
+    ['max-parallelism', String(maxParallelism)],
+    ['parallel-source', parallelSource],
   ]
 }
 

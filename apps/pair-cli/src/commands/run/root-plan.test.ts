@@ -27,6 +27,7 @@ interface Tier1 {
   dependencyFilter: (cards: unknown[]) => unknown
   computeMutexBatch: (cards: unknown[]) => unknown
   resolveMaxParallelism: (policy: unknown, tiers: string[]) => number
+  resolveRunParallelism: (policy: unknown, tiers: string[], requested?: number) => number
 }
 
 function tier1(): Tier1 {
@@ -34,9 +35,17 @@ function tier1(): Tier1 {
   if (!source.includes(ORCH_MARKER)) throw new Error(`marker moved in ${WORKFLOW}`)
   const helpers = source.slice(0, source.indexOf(ORCH_MARKER))
   return new Function(
-    `${helpers}\nreturn { resolveCards, dependencyFilter, computeMutexBatch, resolveMaxParallelism }`,
+    `${helpers}\nreturn { resolveCards, dependencyFilter, computeMutexBatch, resolveMaxParallelism, resolveRunParallelism }`,
   )() as Tier1
 }
+
+it('US-593: workflow parallel argument supersedes adopted global and per-tier limits', () => {
+  const policy = { global: 3, perTier: { 'risk:green': 2 } }
+  const workflow = tier1()
+  expect(workflow.resolveRunParallelism(policy, ['risk:green'], 5)).toBe(5)
+  expect(workflow.resolveRunParallelism(policy, ['risk:green'], 1)).toBe(1)
+  expect(workflow.resolveRunParallelism(policy, ['risk:green'])).toBe(2)
+})
 
 /**
  * A candidate as `pair-next` reports it: its `tier` IS its `risk:*` label, so `labels` carries it
@@ -108,7 +117,7 @@ describe('root-plan — parity with pair-loop.js (tier 1) over one corpus', () =
   })
 })
 
-describe('resolveEffectiveLimit — min(dependency-allowed, ## Max Parallelism, --parallel)', () => {
+describe('resolveEffectiveLimit — explicit parallel supersedes adoption', () => {
   it('names --parallel when it is the smallest', () => {
     expect(
       resolveEffectiveLimit({ dependencyAllowed: 5, maxParallelism: 4, requested: 3 }),
@@ -118,13 +127,14 @@ describe('resolveEffectiveLimit — min(dependency-allowed, ## Max Parallelism, 
       dependencyAllowed: 5,
       maxParallelism: 4,
       requested: 3,
+      source: '--parallel',
     })
   })
 
-  it('names ## Max Parallelism when the policy is the smallest', () => {
+  it('ignores adopted parallelism when the argument is larger', () => {
     expect(
       resolveEffectiveLimit({ dependencyAllowed: 5, maxParallelism: 2, requested: 3 }).boundBy,
-    ).toEqual(['## Max Parallelism'])
+    ).toEqual(['--parallel'])
   })
 
   it('edge: --parallel above the dependency-allowed count resolves to that count, reported', () => {
@@ -136,7 +146,7 @@ describe('resolveEffectiveLimit — min(dependency-allowed, ## Max Parallelism, 
   it('names every limit that ties at the minimum', () => {
     expect(
       resolveEffectiveLimit({ dependencyAllowed: 3, maxParallelism: 3, requested: 3 }).boundBy,
-    ).toEqual(['dependency-allowed', '## Max Parallelism', '--parallel'])
+    ).toEqual(['dependency-allowed', '--parallel'])
   })
 
   it('edge: --parallel 1 is not a special case — it is min() resolving to 1', () => {
@@ -205,7 +215,7 @@ describe('computeRootPlan — AC1 plan, excluded cards reported with a reason, n
     expect(plan.run.map(c => c.id)).toEqual(['1', '2'])
   })
 
-  it('applies a per-tier ## Max Parallelism override exactly as tier 1 does', () => {
+  it('lets the argument supersede a per-tier adopted limit', () => {
     const plan = computeRootPlan({
       candidates: [card('1'), card('2'), card('3')],
       eligibility: 'risk:green',
@@ -213,9 +223,9 @@ describe('computeRootPlan — AC1 plan, excluded cards reported with a reason, n
       requested: 3,
     })
     expect(plan.limit).toMatchObject({
-      effective: 1,
+      effective: 3,
       maxParallelism: 1,
-      boundBy: ['## Max Parallelism'],
+      boundBy: ['dependency-allowed', '--parallel'],
     })
     // Over-cap cards are QUEUED in the pool, never excluded: --parallel 1 runs them one at a time.
     expect(plan.run.map(c => c.id)).toEqual(['1', '2', '3'])
@@ -237,15 +247,20 @@ describe('computeRootPlan — serial runs ignore mutex (US-590)', () => {
       ...over,
     })
 
-  it.each([
-    ['requested 1', { requested: 1 }],
-    ['global 1', { maxParallelism: { global: 1, perTier: {} } }],
-    ['per-tier 1', { maxParallelism: { global: 3, perTier: { 'risk:green': 1 } } }],
-  ])('%s: every shared-resource card runs once, in order', (_n, over) => {
-    const plan = run(over)
+  it('requested 1 runs every shared-resource card once, in order', () => {
+    const plan = run({ requested: 1 })
     expect(plan.run.map(c => c.id)).toEqual(['1', '2', '3'])
     expect(plan.excluded).toEqual([])
     expect(plan.limit.effective).toBe(1)
+  })
+
+  it.each([
+    { global: 1, perTier: {} },
+    { global: 3, perTier: { 'risk:green': 1 } },
+  ])('adopted 1 cannot force serial execution of explicit 3', maxParallelism => {
+    const plan = run({ maxParallelism })
+    expect(plan.run.map(c => c.id)).toEqual(['1'])
+    expect(plan.excluded.map(e => e.id)).toEqual(['2', '3'])
   })
 
   it('concurrency > 1 still excludes overlapping cards with a reason', () => {
@@ -288,7 +303,7 @@ describe('describeRootPlan — printed before any process starts', () => {
     expect(text).toContain('Run (3): #1, #2, #3')
     expect(text).not.toContain('Excluded')
     expect(text).toContain(
-      'Effective parallelism: 1 = min(dependency-allowed 3, ## Max Parallelism 3, --parallel 1) — bound by --parallel',
+      'Effective parallelism: 1 = min(dependency-allowed 3, --parallel 1 [overrides ## Max Parallelism 3]) — bound by --parallel',
     )
   })
 

@@ -148,6 +148,19 @@ export function adoptionSelection(
   return Array.isArray(entry.value) ? entry.value.join(',') : String(entry.value)
 }
 
+/** A selection value and its provenance from the shared resolver, across every precedence tier. */
+export function effectiveSelection(
+  resolution: AutonomyResolution | undefined,
+  key: 'filter' | 'assignee' | 'status' | 'root',
+): { value: string; source: string } | undefined {
+  const entry = resolution?.effective?.[key]
+  if (entry?.value === undefined) return undefined
+  return {
+    value: Array.isArray(entry.value) ? entry.value.join(',') : String(entry.value),
+    source: entry.source,
+  }
+}
+
 /* ------------------------------------------------- US-576 AC5: the preset question */
 
 export const PRESET_CHOICES = ['full', 'escalate-red', 'supervised'] as const
