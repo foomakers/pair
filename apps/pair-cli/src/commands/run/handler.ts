@@ -80,28 +80,38 @@ function perimeterFor(input: {
   invocation: ResolvedInvocation
 }): Perimeter {
   const { config, context, cwd, invocation } = input
-  const selection = context.autonomySelection
-  const selectionDelivered = selectionDeliveredBy(invocation)
-  const resolved = (key: 'root' | 'filter' | 'assignee' | 'status') =>
-    effectiveSelection(selection, key)
+  const selection = perimeterSelection(config, context, invocation)
   return createPerimeter({
-    root: scopeRoot(config, context.dispatch) ?? resolved('root')?.value,
+    ...selection,
     filter: config.scope.filter,
-    assignee:
-      config.scope.assignee ?? (selectionDelivered ? resolved('assignee')?.value : undefined),
-    status: config.scope.status ?? (selectionDelivered ? resolved('status')?.value : undefined),
-    selectionDelivered,
-    eligibility: resolved('filter')?.value ?? context.policy.eligibility,
-    eligibilitySource: resolved('filter')?.source,
     cwd,
     cwdDeclared: config.cwd !== undefined,
     requestedCap: config.maxIterations,
     policyCap: context.policy.maxIterations,
     invocationKind: invocation.kind,
-    // Whether `--filter` can be HONOURED, and by whom, depends on the skill the cascade resolved,
-    // so the check has to happen after skill resolution and before any spawn (round 1, finding 1).
     filterDelivery: filterDeliveryFor(invocation),
   })
+}
+
+function perimeterSelection(
+  config: RunCommandConfig,
+  context: RunContext,
+  invocation: ResolvedInvocation,
+) {
+  const selection = context.autonomySelection
+  const selectionDelivered = selectionDeliveredBy(invocation)
+  const resolved = (key: 'root' | 'filter' | 'assignee' | 'status') =>
+    effectiveSelection(selection, key)
+  const delivered = (key: 'assignee' | 'status') =>
+    selectionDelivered ? resolved(key)?.value : undefined
+  return {
+    root: scopeRoot(config, context.dispatch) ?? resolved('root')?.value,
+    assignee: config.scope.assignee ?? delivered('assignee'),
+    status: config.scope.status ?? delivered('status'),
+    selectionDelivered,
+    eligibility: resolved('filter')?.value ?? context.policy.eligibility,
+    eligibilitySource: resolved('filter')?.source,
+  }
 }
 
 /**
