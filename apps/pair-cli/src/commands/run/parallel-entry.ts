@@ -1,6 +1,6 @@
 import type { FileSystemService } from '@pair/content-ops'
 import { readCardTitle, remoteBaseHead } from './cycle-wiring'
-import { adoptionSelection } from './autonomy-policy'
+import { effectiveSelection } from './autonomy-policy'
 import chalk from 'chalk'
 import { acquireCardLock } from './card-lock'
 import { resolveEngineFor } from './cycle-entry'
@@ -191,7 +191,7 @@ interface FanOut {
  * `--filter`: `--filter` is a loop-mode selector the cycle coordinator refuses on a `--card` entry.
  */
 function forwardedEligibility(input: ParallelRunInput): string | undefined {
-  return input.config.scope.filter ?? adoptionSelection(input.context.autonomySelection, 'filter')
+  return input.config.scope.filter ?? effectiveSelection(input.context.autonomySelection, 'filter')?.value
 }
 
 function selectionInput(fan: FanOut, loop?: SelectRootInput['loop']): SelectRootInput {

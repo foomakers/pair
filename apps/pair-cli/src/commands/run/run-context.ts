@@ -25,6 +25,7 @@ import type { Wait } from './wait'
 import type { RootCandidate } from './root-plan'
 import type { CardProcessRunner } from './parallel'
 import { decideDispatch, describeDispatch, lockedSkip, type DispatchDecision } from './dispatch'
+import { effectiveSelection } from './autonomy-policy'
 import { acquireCardLock, type CardLock, type LockAcquirer } from './card-lock'
 import { isInterrupted, whileInterruptible } from './interrupt'
 import {
@@ -175,13 +176,14 @@ export function resolveContext(
   config: RunCommandConfig,
   fs: FileSystemService,
   cwd: string,
+  deferDispatch = false,
 ): RunContext {
   const loaded = loadConfigWithOverrides(fs, { projectRoot: cwd })
   // One probe per RUN, not per iteration: the installed skill set does not change mid-run.
   const probe = createSkillProbe(fs, loaded.config, cwd)
   const policy = effectiveCardEligibility(readAutomationPolicy(fs, cwd), config)
   const dispatch =
-    config.dispatch &&
+    !deferDispatch && config.dispatch &&
     decideDispatch({
       card: config.dispatch.card,
       tags: config.dispatch.tags,
@@ -205,6 +207,27 @@ export function resolveContext(
       declared: readEngineDeclaration(loaded.config, ENGINE_IDS).idleTimeout,
     }),
   }
+}
+
+/** Apply the shared resolver's effective filter before the card's eligibility and route decision. */
+export function withResolvedCardSelection(
+  context: RunContext,
+  config: RunCommandConfig,
+  selection: AutonomyResolution | undefined,
+): RunContext {
+  if (config.dispatch === undefined) return { ...context, ...(selection && { autonomySelection: selection }) }
+  const filter =
+    config.eligibilityFilter ?? config.scope.filter ?? effectiveSelection(selection, 'filter')?.value
+  const carried = filter?.split(',').map(label => label.trim()).find(label => config.dispatch?.tags.includes(label))
+  const policy = filter === undefined ? context.policy : { ...context.policy, eligibility: carried ?? filter }
+  const dispatch = decideDispatch({
+    card: config.dispatch.card,
+    tags: config.dispatch.tags,
+    eligibility: policy.eligibility,
+    mapping: policy.workflows,
+    isInstalled: context.probe,
+  })
+  return { ...context, policy, dispatch, ...(selection && { autonomySelection: selection }) }
 }
 
 /** `engine.bin` from `pair.config.json`: where THIS machine keeps each executable, when it must say. */

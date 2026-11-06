@@ -359,6 +359,33 @@ describe('r0-2 controls: resolved ONCE, the cycle route and default-off unchange
   })
 })
 
+describe('US-593 direct-card effective eligibility', () => {
+  it.each([
+    ['mapped', MAPPED_POLICY, 'auto-dev,risk:red'],
+    ['fallback red', ELIGIBILITY, 'risk:red'],
+    ['fallback untagged', ELIGIBILITY, ''],
+  ])('full + autonomous admits %s despite legacy green', async (_route, policy, cardTags) => {
+    const r = await run(
+      { preset: 'full', autonomous: true, cardTags },
+      { resolver: 'real', files: { [`${root}/${POLICY_PATH}`]: policy } },
+    )
+    expect(await r.outcome).toBe(0)
+    expect(r.stdout.join('\n')).toContain('filter: * (preset full)')
+    expect(r.stdout.join('\n')).not.toContain('skipped (ineligible)')
+    expect(r.iterations.length + r.driven.length).toBeGreaterThan(0)
+  })
+
+  it('full without autonomous keeps interactive approval', async () => {
+    const r = await run(
+      { preset: 'full', cardTags: 'auto-dev,risk:red' },
+      { resolver: 'real', files: { [`${root}/${POLICY_PATH}`]: MAPPED_POLICY } },
+    )
+    expect(await r.outcome).toBe(0)
+    expect(r.iterations).toHaveLength(1)
+    expect(r.iterations[0]?.autonomyArgs).not.toContain('bypassPermissions')
+  })
+})
+
 // 2026-10-24 (#575 run): with a single `--card` no card line was rendered — stage events were
 // emitted only under the `--parallel` pool (RUN_EVENTS_ENV).
 describe('single --card: the driver renders its own card line', () => {

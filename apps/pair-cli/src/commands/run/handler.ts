@@ -31,6 +31,7 @@ import {
   driveLockedCard,
   resolveAutonomyFor,
   resolveContext,
+  withResolvedCardSelection,
   type ResolvedRun,
   type RunContext,
   type RunHandlerDependencies,
@@ -205,7 +206,7 @@ function resolveEntry(
   callerDeps: RunHandlerDependencies,
 ): { config: RunCommandConfig; context: RunContext; deps: RunHandlerDependencies } {
   config = withLiveCardTags(config, cwd, callerDeps)
-  const base = resolveContext(config, fs, cwd)
+  const base = resolveContext(config, fs, cwd, true)
   if (!config.dryRun) sweepWorkingState(base.workingArea, fs, cwd, callerDeps)
   const selection = resolveRunAutonomy({
     resolver: callerDeps.resolveAutonomy ?? spawnAutonomyResolver,
@@ -216,7 +217,7 @@ function resolveEntry(
   })
   return {
     config,
-    context: { ...base, ...(selection && { autonomySelection: selection }) },
+    context: withResolvedCardSelection(base, config, selection),
     deps: { ...callerDeps, resolveAutonomy: () => selection },
   }
 }
