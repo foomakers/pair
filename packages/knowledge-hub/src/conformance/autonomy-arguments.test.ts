@@ -12,6 +12,18 @@ const DATASET = join(__dirname, '../../dataset')
 const POLICY_SCRIPT = join(DATASET, '.skills/workflow/cycle/scripts/autonomy-policy.mjs')
 const read = (path: string) => readFileSync(path, 'utf-8')
 
+describe('/pair-loop Codex fan-out contract', () => {
+  const loop = read(join(DATASET, '.skills/loop/SKILL.md'))
+  const realization = loop.split('## Step 1: Realization')[1]?.split('## Boundaries')[0] ?? ''
+
+  it('probes an available subagent primitive and drives scoped cards in fresh agents', () => {
+    expect(realization).toContain('collaboration.spawn_agent')
+    expect(realization).toContain('collaboration.followup_task')
+    expect(realization).toContain('/pair-workflow-cycle --card')
+    expect(realization).toMatch(/Codex.*(?:iteration|iterate)/s)
+  })
+})
+
 interface Consumer {
   readonly name: string
   readonly file: string
