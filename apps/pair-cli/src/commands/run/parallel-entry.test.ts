@@ -266,7 +266,7 @@ describe('run --root --parallel — AC6 aggregated audit', () => {
     expect(h.audit).toHaveLength(1)
     expect(h.audit[0]!.path).toBe(`${cwd}/.pair/working/automation/fanout.md`)
     expect(h.audit[0]!.line).toMatch(
-      /^\S+ event=batch root=66 started=\S+ parallel=2 effective=1 attempted=1 outcomes=1:failed\(exit 1\) excluded=2$/,
+      /^\S+ event=batch root=66 started=\S+ parallel=2 effective=1 attempted=1 outcomes=1:failed\(exit 1\) excluded=2 excludedReasons=\S+$/,
     )
   })
 })
@@ -405,5 +405,65 @@ describe('US-573: the pool writes its card events to the live JSONL audit', () =
       ['ENG-2', 'failed-verify'],
     ])
     expect(lines.at(-1)).toMatchObject({ event: 'loop-end', detail: { status: 'halted' } })
+  })
+})
+
+describe('US-590 r0-1: shared-mutex cards at --parallel 1 run serially, in order, one child at a time', () => {
+  const shared = (id: string) => card(id, { mutexResources: ['skill:a'] })
+
+  it('every shared-mutex card runs in selection order with at most one active child', async () => {
+    process.env['PATH'] = '/bin'
+    const lines = captureLog()
+    const h = harness([shared('1'), shared('2'), shared('3')])
+    const code = await handleRunCommand(
+      parseRunCommand({ root: '66', parallel: '1', autonomous: true }),
+      projectFs(policy('3')),
+      h.deps,
+    )
+    expect(code).toBe(0)
+    expect(h.started).toEqual(['1', '2', '3'])
+    expect(h.peak()).toBe(1)
+    expect(lines.join('\n')).not.toContain('mutex conflict')
+  })
+
+  it('a failing card in the serial chain never aborts the next; exit 1', async () => {
+    process.env['PATH'] = '/bin'
+    captureLog()
+    const h = harness([shared('1'), shared('2'), shared('3')], {
+      '2': { exitCode: 1, signal: null },
+    })
+    const code = await handleRunCommand(
+      parseRunCommand({ root: '66', parallel: '1', autonomous: true }),
+      projectFs(policy('3')),
+      h.deps,
+    )
+    expect(code).toBe(1)
+    expect(h.started).toEqual(['1', '2', '3'])
+    expect(h.peak()).toBe(1)
+  })
+})
+
+describe('US-590 r0-2: the audited excludedReasons equal the plan’s own exclusion reasons', () => {
+  it('decoded excludedReasons match the printed plan exclusions, id for id', async () => {
+    process.env['PATH'] = '/bin'
+    const lines = captureLog()
+    const h = harness([
+      card('1', { mutexResources: ['skill:a'] }),
+      card('2', { mutexResources: ['skill:a'] }),
+      card('3', { prerequisites: [{ id: '9', merged: false }] }),
+    ])
+    await handleRunCommand(
+      parseRunCommand({ root: '66', parallel: '2', autonomous: true }),
+      projectFs(policy('3', '\n## Audit Location\n\nautomation/fanout.md\n')),
+      h.deps,
+    )
+    const planned = lines
+      .flatMap(l => l.split('\n'))
+      .map(l => /^ +Excluded #(\S+): (.+)$/.exec(l))
+      .filter((m): m is RegExpExecArray => m !== null)
+      .map(m => ({ id: m[1]!, reason: m[2]! }))
+    expect(planned.length).toBe(2)
+    const encoded = /excludedReasons=(\S+)$/.exec(h.audit[0]!.line)![1]!
+    expect(JSON.parse(decodeURIComponent(encoded))).toEqual(planned)
   })
 })

@@ -498,7 +498,7 @@ export interface BatchSummary {
   readonly requested: number
   readonly effective: number
   readonly outcomes: readonly CardOutcome[]
-  readonly excluded: readonly { readonly id: string }[]
+  readonly excluded: readonly { readonly id: string; readonly reason?: string }[]
 }
 
 const oneLine = (value: string): string => value.replace(/[\r\n]+/g, ' ').trim()
@@ -525,6 +525,16 @@ export function renderBatchAuditLine(summary: BatchSummary): string {
     [
       'excluded',
       summary.excluded.length > 0 ? summary.excluded.map(e => e.id).join(',') : '(none)',
+    ],
+    // Additive: `excluded=` keeps its ids-only shape for existing readers; reasons are the plan's own,
+    // percent-encoded JSON so spaces, quotes, delimiters and newlines survive one key=value token.
+    [
+      'excludedReasons',
+      summary.excluded.length > 0
+        ? encodeURIComponent(
+            JSON.stringify(summary.excluded.map(e => ({ id: e.id, reason: e.reason ?? '' }))),
+          )
+        : '(none)',
     ],
   ]
   return `${summary.at} ${fields.map(([k, v]) => `${k}=${oneLine(v)}`).join(' ')}`
