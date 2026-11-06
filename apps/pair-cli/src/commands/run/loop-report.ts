@@ -78,7 +78,7 @@ export function resolveSelection(
 
 const capText = (cap: number): string => (cap === NO_ITERATION_CAP ? 'none' : String(cap))
 
-/** The effective iteration cap and what bound it (narrow-only: a flag never widens the policy cap). */
+/** The effective iteration cap and its source. */
 function resolveCap(config: RunCommandConfig, policy: AutomationPolicy): LoopValues['cap'] {
   const policyCap = policy.maxIterations
   if (config.watch !== true && config.maxIterations === undefined) {
@@ -86,15 +86,15 @@ function resolveCap(config: RunCommandConfig, policy: AutomationPolicy): LoopVal
   }
   if (config.maxIterations !== undefined) {
     return {
-      value: Math.min(config.maxIterations, policyCap),
-      bound: `min(--max-iterations ${config.maxIterations}, ## Stop Predicate max-iterations ${policyCap})`,
+      value: config.maxIterations,
+      bound: `--max-iterations ${config.maxIterations}`,
     }
   }
   return {
     value: policyCap,
     bound:
       policyCap === NO_ITERATION_CAP
-        ? 'no `max-iterations` declared: runs to a natural stop (--max-iterations can narrow it)'
+        ? 'no `max-iterations` declared: runs to a natural stop (--max-iterations can override it)'
         : `## Stop Predicate max-iterations ${policyCap}`,
   }
 }
@@ -154,7 +154,7 @@ export function describeLoopValues(
     `  watch: ${show(values.watch)}`,
     `  interval: ${show(values.interval)}${values.watch.value === 'on' ? '' : ' — used only under --watch'}`,
     `  max-iterations: ${capText(values.cap.value)} — ${values.cap.bound}${values.watch.value === 'on' ? '; idle polls never count' : ''}`,
-    `  parallel: --parallel ${requested} · ## Max Parallelism ${maxParallelism} (the ceiling)`,
+    `  parallel: --parallel ${requested} (argument overrides ## Max Parallelism ${maxParallelism})`,
     `  root: ${show(selection.root)}`,
     `  filter: ${show(selection.filter)}`,
     `  assignee: ${show(selection.assignee)}`,

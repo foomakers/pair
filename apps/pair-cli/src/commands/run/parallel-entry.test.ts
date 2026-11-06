@@ -134,7 +134,7 @@ describe('run --root --parallel — AC1 plan printed before dispatch', () => {
     expect(before).toContain('Excluded #11: mutex conflict on skill:a')
     expect(before).toContain('Excluded #12: blocked by #10 (not merged)')
     expect(before).toContain(
-      'Effective parallelism: 2 = min(dependency-allowed 3, ## Max Parallelism 3, --parallel 2) — bound by --parallel',
+      'Effective parallelism: 2 = min(dependency-allowed 3, --parallel 2 [overrides ## Max Parallelism 3]) — bound by --parallel',
     )
   })
 
@@ -153,7 +153,7 @@ describe('run --root --parallel — AC1 plan printed before dispatch', () => {
 })
 
 describe('run --root --parallel — AC2 each card is its own run --card process, at most the limit at once', () => {
-  it('runs every planned card through the pool and never exceeds min(D, ## Max Parallelism, N)', async () => {
+  it('runs every planned card through the pool at the explicitly requested limit', async () => {
     process.env['PATH'] = '/bin'
     captureLog()
     const h = harness([card('1'), card('2'), card('3'), card('4'), card('5')])
@@ -165,7 +165,7 @@ describe('run --root --parallel — AC2 each card is its own run --card process,
     )
 
     expect(h.started.sort()).toEqual(['1', '2', '3', '4', '5'])
-    expect(h.peak()).toBe(2)
+    expect(h.peak()).toBe(4)
     const call = h.runCardProcess.mock.calls[0]![0]
     expect(call.args.slice(0, 3)).toEqual(['run', '--card', call.card.id])
     expect(call.args).toContain('--autonomous')

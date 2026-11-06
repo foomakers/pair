@@ -163,11 +163,11 @@ export function resolveMaxParallelism(
 
 // ── the pool's limit ───────────────────────────────────────────────────────────────────────────
 
-export type LimitName = 'dependency-allowed' | '## Max Parallelism' | '--parallel'
+export type LimitName = 'dependency-allowed' | '--parallel'
 
 export interface EffectiveLimit {
   readonly effective: number
-  /** Every limit equal to the minimum — the one(s) that bound it, named (AC1). */
+  /** The workload and the selected configuration limit that bound execution. */
   readonly boundBy: readonly LimitName[]
   readonly dependencyAllowed: number
   readonly maxParallelism: number
@@ -182,10 +182,9 @@ export function resolveEffectiveLimit(input: {
   const { dependencyAllowed, maxParallelism, requested } = input
   const limits: Array<[LimitName, number]> = [
     ['dependency-allowed', dependencyAllowed],
-    ['## Max Parallelism', maxParallelism],
     ['--parallel', requested],
   ]
-  const effective = Math.min(dependencyAllowed, maxParallelism, requested)
+  const effective = Math.min(dependencyAllowed, requested)
   return {
     effective,
     boundBy: limits.filter(([, value]) => value === effective).map(([name]) => name),
@@ -248,7 +247,7 @@ export function computeRootPlan(input: RootPlanInput): RootPlan {
     input.maxParallelism,
     mutexBatch.map(c => c.tier),
   )
-  const serial = Math.min(maxParallelism, input.requested) === 1
+  const serial = input.requested === 1
   const batch = serial ? allowed : mutexBatch
   for (const entry of [...resolveAudit, ...depAudit, ...(serial ? [] : mutexAudit)]) {
     if (entry.excluded) excluded.push({ id: entry.id, reason: entry.reason ?? 'excluded' })
@@ -273,7 +272,7 @@ export function describeRootPlan(plan: RootPlan): string[] {
   for (const entry of plan.excluded) lines.push(`  Excluded #${entry.id}: ${entry.reason}`)
   lines.push(
     `Effective parallelism: ${limit.effective} = min(dependency-allowed ${limit.dependencyAllowed}, ` +
-      `## Max Parallelism ${limit.maxParallelism}, --parallel ${limit.requested}) — bound by ` +
+      `--parallel ${limit.requested} [overrides ## Max Parallelism ${limit.maxParallelism}]) — bound by ` +
       limit.boundBy.join(' and '),
   )
   return lines

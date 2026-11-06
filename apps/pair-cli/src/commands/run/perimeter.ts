@@ -8,8 +8,7 @@ import type { FilterDelivery } from './invocation'
  * ceilings that hold this story's cost at orange, and the primary mitigation for the
  * "autonomous loop with no confirmations" risk.
  *
- * It can only be NARROWED by flags, never WIDENED by configuration: the effective iteration
- * cap is `min(--max-iterations, policy max-iterations)`.
+ * An explicit iteration cap supersedes the adopted cap.
  */
 
 export interface Perimeter {
@@ -178,8 +177,7 @@ function assertScopeDeclared(input: PerimeterInput, filter: string | undefined):
 }
 
 /**
- * A flag may only NARROW the policy's cap; configuration can never widen what a flag asked
- * for either. `min` is both halves of that rule in one expression.
+ * An explicit cap has precedence over the adopted cap.
  */
 function resolveCap(input: PerimeterInput): {
   maxIterations: number
@@ -191,7 +189,7 @@ function resolveCap(input: PerimeterInput): {
       `Invalid iteration cap from the automation policy: ${String(input.policyCap)} (must be a positive integer)`,
     )
   }
-  return input.requestedCap !== undefined && input.requestedCap < input.policyCap
+  return input.requestedCap !== undefined
     ? { maxIterations: input.requestedCap, source: '--max-iterations' }
     : { maxIterations: input.policyCap, source: 'tech/automation.md' }
 }

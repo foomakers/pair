@@ -1,0 +1,50 @@
+import { describe, expect, it } from 'vitest'
+import { createPerimeter } from './perimeter'
+import { computeRootPlan, resolveEffectiveLimit, type RootCandidate } from './root-plan'
+import { resolveLoopValues } from './loop-report'
+import { readAutomationPolicy } from './automation-policy'
+import { InMemoryFileSystemService } from '@pair/content-ops'
+import { parseRunCommand } from './parser'
+
+const cards: RootCandidate[] = Array.from({ length: 5 }, (_, i) => ({
+  id: String(i + 1),
+  title: `Card ${i + 1}`,
+  branch: `feature/US-${i + 1}-card`,
+  tier: 'risk:green',
+  labels: ['risk:green'],
+  mutexResources: [],
+  prerequisites: [],
+}))
+
+describe('US-593 argument precedence', () => {
+  it.each([1, 5])('uses explicit parallel %i over adopted 3', requested => {
+    const plan = computeRootPlan({
+      candidates: cards,
+      eligibility: 'risk:green',
+      maxParallelism: { global: 3, perTier: { 'risk:green': 2 } },
+      requested,
+    })
+    expect(plan.limit.effective).toBe(requested)
+    expect(plan.run).toHaveLength(5)
+  })
+
+  it('reports the argument as the effective source even when wider than adoption', () => {
+    expect(resolveEffectiveLimit({ dependencyAllowed: 5, maxParallelism: 3, requested: 5 })).toMatchObject({
+      effective: 5,
+      boundBy: ['dependency-allowed', '--parallel'],
+    })
+    expect(createPerimeter({
+      root: '593', cwd: '/tmp', cwdDeclared: false, policyCap: 3, requestedCap: 5,
+      invocationKind: 'skill', filterDelivery: 'argument',
+    })).toMatchObject({ maxIterations: 5, capSource: '--max-iterations' })
+  })
+
+  it('uses explicit iteration limit over adopted stop predicate budget', () => {
+    const fs = new InMemoryFileSystemService({
+      '/project/.pair/adoption/tech/automation.md': '## Stop Predicate\n\nmax-iterations: 3\n',
+    }, '/project', '/project')
+    const policy = readAutomationPolicy(fs, '/project')
+    const config = parseRunCommand({ root: '593', parallel: '5', maxIterations: '5' })
+    expect(resolveLoopValues(config, policy).cap).toEqual({ value: 5, bound: '--max-iterations 5' })
+  })
+})

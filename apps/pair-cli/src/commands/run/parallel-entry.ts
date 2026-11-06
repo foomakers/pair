@@ -102,7 +102,7 @@ function reportHeader(
   console.log(`  Scope: ${describeScope(selection)}`)
   console.log(`  Policy: ${policy.source} · audit ${policy.auditLocation}`)
   console.log(
-    `  Requested: --parallel ${String(config.parallel)} · ## Max Parallelism ${policy.maxParallelism}` +
+    `  Requested: --parallel ${String(config.parallel)} (overrides ## Max Parallelism ${policy.maxParallelism})` +
       (overrides !== undefined
         ? ` (per-tier: ${Object.entries(overrides)
             .map(([tier, n]) => `${tier} ${n}`)
