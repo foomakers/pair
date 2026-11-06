@@ -256,18 +256,48 @@ function matches(payload: unknown, expected: Readonly<Record<string, unknown>>):
   return Object.entries(expected).every(([path, value]) => fieldAt(payload, path) === value)
 }
 
-function outcomeFor(rule: TerminalEventRule, payload: unknown): IterationResult {
+/** US-603: the text of ONE event when it is the engine's agent message (`messageWhen`), else `undefined`. */
+export function agentMessageOf(engine: EngineDefinition, payload: unknown): string | undefined {
+  if (engine.messageField === undefined || !matches(payload, engine.messageWhen ?? {}))
+    return undefined
+  const text = fieldAt(payload, engine.messageField)
+  return typeof text === 'string' ? text : undefined
+}
+
+const TAIL_CHARS = 500
+
+/** The engine's last agent message so far: `undefined` for an engine with no message rule, `{}` before the first one. */
+type LastMessage = { text?: string | undefined } | undefined
+
+/** The result text of a terminal event: its own `resultField`, else the engine's last agent message. */
+function resultText(rule: TerminalEventRule, payload: unknown, message: LastMessage): unknown {
+  return rule.resultField ? fieldAt(payload, rule.resultField) : message?.text
+}
+
+/** AC3: a message-engine stage that ended with no parseable result says why — the tail of what it last said. */
+function whyNoResult(message: LastMessage): string {
+  if (message === undefined) return ''
+  if (message.text === undefined) return ' — no agent message in the stream'
+  return ` — no parseable result in the last agent message: …${message.text.slice(-TAIL_CHARS)}`
+}
+
+function outcomeFor(
+  rule: TerminalEventRule,
+  payload: unknown,
+  message: LastMessage,
+): IterationResult {
   const success = rule.successWhen === undefined || matches(payload, rule.successWhen)
   const detail = rule.detailField ? fieldAt(payload, rule.detailField) : undefined
-  const text = rule.resultField ? fieldAt(payload, rule.resultField) : undefined
+  const text = resultText(rule, payload, message)
   const final = typeof text === 'string' ? parseFinalResult(text) : undefined
+  const base =
+    typeof detail === 'string'
+      ? `terminal event: ${detail}`
+      : `terminal event matched (${success ? 'success' : 'failure'})`
   return {
     ...(final !== undefined && { final }),
     outcome: success ? 'success' : 'failed',
-    detail:
-      typeof detail === 'string'
-        ? `terminal event: ${detail}`
-        : `terminal event matched (${success ? 'success' : 'failure'})`,
+    detail: base + (final === undefined && !rule.resultField ? whyNoResult(message) : ''),
   }
 }
 
@@ -286,6 +316,8 @@ interface EventTally {
   /** Cards a `PAIR_EVENT` card-end already closed — never closed again at iteration end (r2-7). */
   readonly ended: Set<string>
   readonly maxFixRounds?: number
+  /** US-603: the engine's last agent message (see `LastMessage`). */
+  readonly message?: { text?: string | undefined }
 }
 
 /** The longest k such that the first k bodies of `next` repeat the last k of `seen`. */
@@ -416,7 +448,8 @@ function truthful(result: IterationResult, tally: EventTally, finalText: unknown
   return result
 }
 
-const newTally = (maxFixRounds: number | undefined): EventTally => ({
+const newTally = (maxFixRounds: number | undefined, withMessage: boolean): EventTally => ({
+  ...(withMessage && { message: {} }),
   count: 0,
   skipped: 0,
   loopStarted: false,
@@ -445,9 +478,9 @@ function terminalResult(
   tally: EventTally,
   onRunEvent: ((event: RunEvent) => void) | undefined,
 ): IterationResult {
-  const finalText = rule.resultField ? fieldAt(payload, rule.resultField) : undefined
+  const finalText = resultText(rule, payload, tally.message)
   closeProgressCards(tally, finalText, onRunEvent)
-  return truthful(outcomeFor(rule, payload), tally, finalText)
+  return truthful(outcomeFor(rule, payload, tally.message), tally, finalText)
 }
 
 /**
@@ -477,7 +510,7 @@ export async function readIterationOutcome(
 ): Promise<IterationResult> {
   const [onRunEvent, options = {}] = observers
   let continueToken: string | undefined
-  const tally = newTally(options.maxFixRounds)
+  const tally = newTally(options.maxFixRounds, engine.messageField !== undefined)
 
   for await (const line of lines) {
     const payload = decode(line, tally)
@@ -488,6 +521,7 @@ export async function readIterationOutcome(
     // `\n` escapes on the wire, so a raw-line match could not be anchored at all (finding 5).
     continueToken = findContinueToken(payload) ?? continueToken
     onEvent?.(payload)
+    if (tally.message) tally.message.text = agentMessageOf(engine, payload) ?? tally.message.text
 
     const rule = engine.terminalEvents.find(candidate => matches(payload, candidate.match))
     if (rule)

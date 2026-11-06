@@ -1294,6 +1294,10 @@ function loadCycleHooks(ctx: CycleDriverContext, co: Coordinates) {
   return hooks
 }
 
+/** US-603: why a message-reading engine's stage has no result (its last message's tail), when its detail says. */
+const noResultWhy = (record: CycleStageRecord): string =>
+  record.detail?.match(/ — (?:no agent message|no parseable result).*/s)?.[0] ?? ''
+
 /** The stage line's tail: the stage's own final result, or a flag that a "successful" stage ended without one. */
 export function finalPart(record: CycleStageRecord): string {
   const { final } = record
@@ -1304,7 +1308,7 @@ export function finalPart(record: CycleStageRecord): string {
     return ` — final: status=${final.status ?? '?'}${reason}${verdict}${next}`
   }
   if (record.processOutcome !== 'success' || record.handoffAdvanced) return ''
-  return ' — no final result (the stage ended without its structured JSON; the retry resumes from the commits already on the branch)'
+  return ` — no final result (the stage ended without its structured JSON; the retry resumes from the commits already on the branch)${noResultWhy(record)}`
 }
 
 export function createDefaultCycleDriver(ctx: CycleDriverContext) {

@@ -26,8 +26,8 @@ describe('AC1/AC2: verified effort flags', () => {
     ['low', 'low'],
     ['medium', 'medium'],
     ['high', 'high'],
-    ['xhigh', 'high'],
-    ['max', 'high'],
+    ['xhigh', 'xhigh'],
+    ['max', 'max'],
   ])('codex %s -> -c model_reasoning_effort=%s', (level, mapped) => {
     expect(argsFor('codex', level)).toEqual(
       expect.arrayContaining(['-c', `model_reasoning_effort=${mapped}`]),
@@ -148,7 +148,7 @@ describe('effort argv is platform-independent', () => {
       Object.defineProperty(process, 'platform', { value: platform })
       try {
         expect(argsFor('codex', 'max')).toEqual(
-          expect.arrayContaining(['-c', 'model_reasoning_effort=high']),
+          expect.arrayContaining(['-c', 'model_reasoning_effort=max']),
         )
       } finally {
         Object.defineProperty(process, 'platform', { value: original })

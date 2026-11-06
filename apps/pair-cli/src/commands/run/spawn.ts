@@ -140,7 +140,7 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   // Tracked so a SIGTERM/SIGINT on the driver stops it instead of orphaning it (r1-2).
   trackEngine(child)
   // Relayed, never inherited: a raw write to the terminal moves the cursor under the live card rows.
-  const stderr = relayLines(child.stderr)
+  const stderr = relayLines(child.stderr, input.engine.id)
 
   const watchdog = createWatchdog(input, () => child.kill('SIGTERM'))
   try {
@@ -178,6 +178,15 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   }
 }
 
-async function relayLines(stream: AsyncIterable<string | Uint8Array>): Promise<void> {
-  for await (const line of toLines(stream)) if (line.trim()) console.log(line)
+/** codex prints this on a non-TTY stdin even though stdin is closed (US-603): cosmetic noise. */
+const CODEX_STDIN_NOISE = 'Reading additional input from stdin...'
+
+export async function relayLines(
+  stream: AsyncIterable<string | Uint8Array>,
+  engineId?: string,
+): Promise<void> {
+  for await (const line of toLines(stream)) {
+    if (!line.trim() || (engineId === 'codex' && line.trim() === CODEX_STDIN_NOISE)) continue
+    console.log(line)
+  }
 }
