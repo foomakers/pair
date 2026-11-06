@@ -189,6 +189,7 @@ PUBLISH-PR REPORT:
 ├── Assignee:   [login — confirmed by read | unchanged: login — confirmed by read | none — WARNING: PR invisible in an assignee-filtered view]
 ├── Code host:  [same as PM tool | <host> (board updates → PM tool)]
 ├── Cross-link: [n-a (single tool) | Refs: <issue-id> + PR URL posted on <item> | already linked — comment present, not re-posted | back-link failed — manual link needed]
+├── Native story link: [native-linked — exact association read | not-linked — reason; manual remedy | fallback — unsupported or integration/read unavailable; manual remedy]
 ├── Conditional: [Services to Release: N deployable packages / n-a | Screenshots: UI touched / n-a]
 ├── Board:      [→ Review — confirmed by read | n-a — no Review state on this board | not updated — reason]
 ├── Identity:   [session (default — no identity configured) | identity: <app|bot-user> | HALTED — configured but unusable | unusable: <reason> — no identity write in this phase (Review enforcement disabled)]

@@ -241,7 +241,9 @@ az repos pr create \
   --work-items [story_id]
 ```
 
-`--work-items` links the PR to the work item — enables board automation (state transition on PR completion) and traceability.
+`--work-items` requests the PR/work-item association; it does not prove board automation is configured. For an existing PR, first run `az repos pr work-item list --id <pr-id>` and add only when the exact work-item id is absent: `az repos pr work-item add --id <pr-id> --work-items <story-id>`. Re-read with `az repos pr work-item list --id <pr-id>` (or the REST pull-request `workItemRefs`) and compare the exact id. A missing or failed read is `not-linked` with the reason and the manual Work items action; keep the PR. Never link the parent or sibling. The [Azure Repos work-item commands](https://learn.microsoft.com/en-us/azure/devops/repos/git/pull-requests?view=azure-devops#link-work-items-to-a-pull-request) support create and repeat publication.
+
+For **Azure Boards PM + GitHub code host** only, an already configured Azure Boards/GitHub integration can link from a PR description containing `AB#<work-item-id>` in the conditional native-link slot. Confirm the exact GitHub PR URL in the work item's Development links after saving; a body token or a GitHub PR read alone is insufficient. Without the integration or readable Development links, retain `Refs: <issue-id>` and the deduplicated PR URL back-link, and report `fallback — native link unconfirmed; connect Azure Boards to this GitHub repository or link the PR manually`. Do not provision the integration during publication. [Azure Boards documents this syntax and prerequisite](https://learn.microsoft.com/en-us/azure/devops/boards/github/link-to-from-github?view=azure-devops).
 
 ### Review Actions
 
