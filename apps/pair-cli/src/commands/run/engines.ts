@@ -258,9 +258,9 @@ const CODEX: EngineDefinition = {
   messageField: 'item.text',
   messageWhen: { type: 'item.completed', 'item.type': 'agent_message' },
   verifiedAgainst:
-    'codex-cli 0.166.0 — item.completed{item.type:agent_message,item.text} then turn.completed{usage} ' +
-    '(fixtures under run/__fixtures__/codex-*.jsonl are hand-built to that shape; a recorded live ' +
-    '`codex exec --json` run is still pending). Earlier: 0.155.1 live run (2026-09-22): ' +
+    'codex-cli 0.166.0 — item.completed{item.type:agent_message,item.text} then turn.completed{usage}, ' +
+    'recorded live in run/__fixtures__/codex-0.166-live.jsonl (read by codex-live-reader.test.ts). ' +
+    'Earlier: 0.155.1 live run (2026-09-22): ' +
     'thread.started / turn.started / item.completed / turn.completed; turn.failed and its ' +
     "`error.message` read from the binary's own TurnFailedEvent symbols, not yet observed live",
 }
