@@ -934,7 +934,7 @@ Nothing is invented here: the scope is `pair-next`'s: `--root`, `--filter`, `--a
    detail, never a new line), and the loop's latest iteration is one status line under the rows; under `--verbose` (or `--quiet`, or a non-TTY) its lines
    are prefixed `[#<id>]`; `DISPATCH-RECORD:` lines pass through verbatim.
 4. **Report**: every card's outcome (`completed`, `failed`, `crashed`, `skipped`), and one
-   `event=batch` line in `## Audit Location` (start time, cards attempted, per-card outcome), next
+   `event=batch` line in `## Audit Location` (start time, cards attempted, per-card outcome, ids-only `excluded=` plus `excludedReasons=`: percent-encoded JSON array of `{id, reason}`, `(none)` when nothing is excluded), next
    to each card's own `start`/`end` lines.
 
 - **One card failing never aborts the others.** A failed, crashed or timed-out card (its own
