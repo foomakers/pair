@@ -16,7 +16,9 @@
 
 Refs: [PM-tool item id — renders as `Refs: ENG-412`]
 
-Native story link: [conditional — exact tool-guide token, e.g. `Closes #123`; omit when unsupported or prerequisites fail. A body token alone is not proof of association.]
+<!-- Conditional native story link — render the guide's exact token as a plain line (for example, Closes #123). Omit the line when unsupported or prerequisites fail. A body token alone is not proof of association. -->
+
+Closes #[number — conditional GitHub example; replace with exact native-link line from the PM guide, or omit]
 
 ## Summary
 
