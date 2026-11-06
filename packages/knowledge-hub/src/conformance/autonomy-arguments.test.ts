@@ -13,14 +13,79 @@ const POLICY_SCRIPT = join(DATASET, '.skills/workflow/cycle/scripts/autonomy-pol
 const read = (path: string) => readFileSync(path, 'utf-8')
 
 describe('/pair-loop Codex fan-out contract', () => {
-  const loop = read(join(DATASET, '.skills/loop/SKILL.md'))
-  const realization = loop.split('## Step 1: Realization')[1]?.split('## Boundaries')[0] ?? ''
+  const SOURCE = join(DATASET, '.skills/loop/SKILL.md')
+  const MIRROR = join(REPO_ROOT, '.claude/skills/pair-loop/SKILL.md')
+  const realizationOf = (file: string) =>
+    read(file).split('## Step 1: Realization')[1]?.split('## Boundaries')[0] ?? ''
+  const itemOf = (realization: string, n: number) =>
+    new RegExp(`^${n}\\. .*`, 'm').exec(realization)?.[0] ?? ''
+  const realization = realizationOf(SOURCE)
+  const item = (n: number) => itemOf(realization, n)
 
   it('probes an available subagent primitive and drives scoped cards in fresh agents', () => {
     expect(realization).toContain('collaboration.spawn_agent')
-    expect(realization).toContain('collaboration.followup_task')
     expect(realization).toContain('/pair-workflow-cycle --card')
     expect(realization).toMatch(/Codex.*(?:iteration|iterate)/s)
+  })
+
+  it.each([
+    ['source', SOURCE],
+    ['mirror', MIRROR],
+  ])('AC1 item cross-refs resolve to the intended items (%s)', (_label, file) => {
+    const r = realizationOf(file)
+    const degrade = /one-card path \((\d)\)/.exec(itemOf(r, 1))?.[1]
+    const retry = /exactly as in item (\d)/.exec(itemOf(r, 2))?.[1]
+    expect(itemOf(r, Number(degrade))).toContain('**Act — any other tool**')
+    expect(itemOf(r, Number(retry))).toContain('**Act — Claude Code (`Workflow`)**')
+  })
+
+  it.each([
+    ['source', SOURCE],
+    ['mirror', MIRROR],
+  ])('AC3 resume uses the bound resume primitive, never a hardcoded name (%s)', (_label, file) => {
+    const codex = itemOf(realizationOf(file), 2)
+    expect(codex).not.toContain('collaboration.followup_task')
+    expect(codex).not.toContain('multi_agent_v1__resume_agent')
+    expect(codex).toContain('bound resume primitive')
+  })
+
+  it('AC1 the Codex iteration runs selection, mutex analysis, one subagent per card, outcome, stop predicate in order', () => {
+    const codex = item(2)
+    const order = ['/pair-next', 'mutex', 'spawn ONE fresh subagent', 'outcome', 'stop predicate']
+    const at = order.map(k => codex.indexOf(k))
+    expect(at.every(i => i >= 0)).toBe(true)
+    expect([...at].sort((a, b) => a - b)).toEqual(at)
+  })
+
+  it('AC2 orchestrator context stays independent of N', () => {
+    expect(item(2)).toContain('this context never grows with N')
+    expect(item(2)).toContain("never read a card's transcript")
+  })
+
+  it('AC3 exclusion, retry budget, audit and dead-dispatch budget are named', () => {
+    const codex = item(2)
+    expect(codex).toContain('exclusion, retry budget and audit')
+    expect(codex).toContain('pair-cli run --watch')
+    expect(codex).toContain('same dead-dispatch budget as the cycle')
+    expect(read(SOURCE)).toMatch(/retry budget exhausted/)
+  })
+
+  it('AC4 no runner: one-card path with the continue-token, never a multi-card loop', () => {
+    expect(item(1)).toContain('nesting forbidden')
+    expect(item(1)).toContain('name the tier')
+    expect(item(4)).toContain('**one-card path**')
+    expect(item(4)).toContain("never iterate multiple cards in this session's own context")
+    expect(read(SOURCE)).toContain('continue-token**:')
+  })
+
+  it('AC5 Claude Code with Workflow still delegates the whole run to the pair-loop workflow', () => {
+    expect(item(3)).toContain('Delegate the entire unattended run to the `pair-loop` workflow')
+    expect(item(3)).toContain('`--until` / `--prepare` / `--merge`')
+  })
+
+  it('edge: --iteration resumes in tier 1 and merge authority stays in cycle-merge.mjs', () => {
+    expect(item(2)).toContain('`--iteration` resumes the counter')
+    expect(item(2)).toContain('This loop never merges: `cycle-merge.mjs` owns it.')
   })
 })
 
