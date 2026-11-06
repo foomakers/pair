@@ -58,6 +58,7 @@
 - [Infrastructure](.pair/adoption/tech/infrastructure.md)
 - [`tech/risk-matrix.md`](.pair/adoption/tech/risk-matrix.md)
 - [Tech Stack](.pair/adoption/tech/tech-stack.md)
+- [Commit Message Template](.pair/adoption/tech/templates/commit-template.md)
 - [UX/UI](.pair/adoption/tech/ux-ui.md)
 - [Way of Working](.pair/adoption/tech/way-of-working.md)
 
@@ -202,6 +203,8 @@
 - [Decision: Live Run Events and One Audit File for Three Writers](.pair/adoption/decision-log/2026-10-23-live-run-events-and-shared-audit-file.md)
 - [Decision: Autonomy presets, hold-* gate names, natural stop, working cleanup (US-576)](.pair/adoption/decision-log/2026-10-24-autonomy-presets-hold-gates.md)
 - [Decision: Auto-Recovery Lives in cycle-state, Beside the Handoffs, Bounded by Two Budgets](.pair/adoption/decision-log/2026-10-24-run-auto-recovery-state-and-budgets.md)
+- [Decision: use native GitHub issue references in commits](.pair/adoption/decision-log/2026-11-06-native-issue-commit-references.md)
+- [Decision: expose the canonical Review state on the project board](.pair/adoption/decision-log/2026-11-06-review-board-state.md)
 
 ## How-To Guides
 

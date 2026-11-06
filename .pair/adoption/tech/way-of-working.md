@@ -25,6 +25,12 @@ Per merged PR, in order: **1)** squash merge, message per [commit template](../.
 
 Detail: [merge-and-cascade.md](../../knowledge/guidelines/technical-standards/) Steps 6.0–6.6 · local-branch + analysis-retention rules: [ADL 2026-08-25](decision-log/2026-08-25-post-merge-cleanup-covers-local-branches-pr-analyses-retire-at-merge.md).
 
+## Templates
+
+- Commit messages: [`templates/commit-template.md`](templates/commit-template.md)
+  overrides the KB default; use native GitHub references (`[#123]`). See the
+  [decision](../decision-log/2026-11-06-native-issue-commit-references.md).
+
 ## State Mapping
 
 Maps this project's GitHub Projects board columns to the 5 canonical macrostates (see [canonical-states.md](../../knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)). Skills read and write item state through this map, never the raw board labels.
@@ -34,10 +40,11 @@ Maps this project's GitHub Projects board columns to the 5 canonical macrostates
 | Todo        | Draft       |
 | Refined     | Ready       |
 | In Progress | In Progress |
+| Review      | Review      |
 | Done        | Done        |
 
 - `Refined` (legacy board column) maps to the canonical `Ready` — the column keeps its name, skills treat it as `Ready` (migration note #243). This is what lets `/pair-process-refine-story` complete its Draft→Ready transition on this board.
-- No board column maps to `Review`: this project reviews on the PR and merges straight to `Done`. A skill asked to write `Review` will HALT and report the gap rather than guess.
+- `Review` holds stories whose implementation is complete and whose PR is ready for review. PR states (`to-be-reviewed`, `not-approved`, `ready-to-merge`) remain within this macrostate; only merge produces `Done`. See [ADL](../decision-log/2026-11-06-review-board-state.md).
 - `Not planned` (Status option `1d5cee95`) is a board column **deliberately left unmapped** — skills ignore it, like `Removed` ([Closure Without Completion](../../knowledge/guidelines/collaboration/project-management-tool/canonical-states.md#closure-without-completion)). Whoever closes an item as not planned sets its Status to `Not planned`, never `Done`: the built-in close automation cannot tell the reasons apart ([ADL](../decision-log/2026-10-14-not-planned-board-column.md)).
 
 ## Assignment
