@@ -25,7 +25,16 @@ describe('buildSkillArgs', () => {
       iteration: 3,
     })
 
-    expect(args).toEqual(['--root', '212', '--filter', 'risk:green', '--predicate', 'Done', '--iteration', '3'])
+    expect(args).toEqual([
+      '--root',
+      '212',
+      '--filter',
+      'risk:green',
+      '--predicate',
+      'Done',
+      '--iteration',
+      '3',
+    ])
   })
 
   it('passes pair-next only the parameters pair-next declares', () => {

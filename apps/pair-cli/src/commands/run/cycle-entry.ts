@@ -121,10 +121,19 @@ function reportNeedsHuman(n: { reason?: unknown; detail?: unknown; needsHuman?: 
 }
 
 /** US-575: the run's budgets apply whether or not a target/merge gate is declared. */
-function budgetsOf(autonomy: AutonomyResolution | undefined) {
+function budgetsOf(autonomy: AutonomyResolution | undefined, rounds: number | 'max' | undefined) {
   if (autonomy === undefined) return {}
   const { maxFixRounds, autoRecoveryRounds } = autonomy.policy
-  return { budgets: { maxFixRounds, autoRecoveryRounds } }
+  return {
+    budgets: {
+      ...(typeof rounds === 'number'
+        ? { maxFixRounds: rounds }
+        : maxFixRounds !== undefined
+          ? { maxFixRounds }
+          : {}),
+      ...(autoRecoveryRounds !== undefined && { autoRecoveryRounds }),
+    },
+  }
 }
 
 /**
@@ -170,9 +179,7 @@ function reportCycleEntry(input: {
   console.log(`  Scripts: ${input.scriptsDir ?? '(resolved by the cycle driver)'}`)
   console.log(`  Run dir: ${input.runDir}`)
   console.log(`  Worktree root: ${input.shown.worktreeRoot}`)
-  console.log(
-    `  Rounds bound: ${input.dispatch.rounds ?? '(policy default: maxFixRounds)'} — rounds narrows, never widens it`,
-  )
+  console.log(`  Rounds bound: ${input.dispatch.rounds ?? '(policy default: maxFixRounds)'}`)
   console.log(`  Dispatch ceiling: ${input.shown.maxDispatchesDisplay}`)
 }
 
@@ -422,7 +429,7 @@ export function prepareCycleCoordinator(
         ...(dispatch.rounds !== undefined && { rounds: dispatch.rounds }),
         // Only an ACTIVE policy (an argument or `## Autonomy` declared a target/merge gate) changes behavior.
         ...(autonomy?.active === true && { autonomy: { policy: autonomy.policy } }),
-        ...budgetsOf(autonomy),
+        ...budgetsOf(autonomy, dispatch.rounds),
         onRunEvent,
       }),
     )

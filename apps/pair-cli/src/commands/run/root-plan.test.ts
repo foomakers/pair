@@ -27,6 +27,7 @@ interface Tier1 {
   dependencyFilter: (cards: unknown[]) => unknown
   computeMutexBatch: (cards: unknown[]) => unknown
   resolveMaxParallelism: (policy: unknown, tiers: string[]) => number
+  resolveRunParallelism: (policy: unknown, tiers: string[], requested?: number) => number
 }
 
 function tier1(): Tier1 {
@@ -34,9 +35,17 @@ function tier1(): Tier1 {
   if (!source.includes(ORCH_MARKER)) throw new Error(`marker moved in ${WORKFLOW}`)
   const helpers = source.slice(0, source.indexOf(ORCH_MARKER))
   return new Function(
-    `${helpers}\nreturn { resolveCards, dependencyFilter, computeMutexBatch, resolveMaxParallelism }`,
+    `${helpers}\nreturn { resolveCards, dependencyFilter, computeMutexBatch, resolveMaxParallelism, resolveRunParallelism }`,
   )() as Tier1
 }
+
+it('US-593: workflow parallel argument supersedes adopted global and per-tier limits', () => {
+  const policy = { global: 3, perTier: { 'risk:green': 2 } }
+  const workflow = tier1()
+  expect(workflow.resolveRunParallelism(policy, ['risk:green'], 5)).toBe(5)
+  expect(workflow.resolveRunParallelism(policy, ['risk:green'], 1)).toBe(1)
+  expect(workflow.resolveRunParallelism(policy, ['risk:green'])).toBe(2)
+})
 
 /**
  * A candidate as `pair-next` reports it: its `tier` IS its `risk:*` label, so `labels` carries it

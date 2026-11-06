@@ -64,6 +64,7 @@ export interface DriveCycleInput {
   readonly card: string
   readonly pr?: number
   readonly rounds?: number | 'max'
+  readonly budgets?: { readonly maxFixRounds?: number; readonly autoRecoveryRounds?: number }
   /** US-521: the ACTIVE autonomy policy as the shared script resolved it (absent ⇒ today's legacy path). */
   readonly autonomy?: { readonly policy: AutonomyResolution['policy'] }
   /** Sees the card's run events (card-start, one stage per dispatch) — how a single `--card` renders its line. */
@@ -183,7 +184,8 @@ export function resolveContext(
   const probe = createSkillProbe(fs, loaded.config, cwd)
   const policy = effectiveCardEligibility(readAutomationPolicy(fs, cwd), config)
   const dispatch =
-    !deferDispatch && config.dispatch &&
+    !deferDispatch &&
+    config.dispatch &&
     decideDispatch({
       card: config.dispatch.card,
       tags: config.dispatch.tags,
@@ -215,11 +217,18 @@ export function withResolvedCardSelection(
   config: RunCommandConfig,
   selection: AutonomyResolution | undefined,
 ): RunContext {
-  if (config.dispatch === undefined) return { ...context, ...(selection && { autonomySelection: selection }) }
+  if (config.dispatch === undefined)
+    return { ...context, ...(selection && { autonomySelection: selection }) }
   const filter =
-    config.eligibilityFilter ?? config.scope.filter ?? effectiveSelection(selection, 'filter')?.value
-  const carried = filter?.split(',').map(label => label.trim()).find(label => config.dispatch?.tags.includes(label))
-  const policy = filter === undefined ? context.policy : { ...context.policy, eligibility: carried ?? filter }
+    config.eligibilityFilter ??
+    config.scope.filter ??
+    effectiveSelection(selection, 'filter')?.value
+  const carried = filter
+    ?.split(',')
+    .map(label => label.trim())
+    .find(label => config.dispatch?.tags.includes(label))
+  const policy =
+    filter === undefined ? context.policy : { ...context.policy, eligibility: carried ?? filter }
   const dispatch = decideDispatch({
     card: config.dispatch.card,
     tags: config.dispatch.tags,

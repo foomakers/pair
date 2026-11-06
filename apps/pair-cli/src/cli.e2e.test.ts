@@ -308,7 +308,7 @@ Precedence: auto-plan, auto-dev
       {
         card: '301',
         tags: ['auto-dev', 'risk:green'],
-        routes: '/pair-loop --root 301 --iteration 1',
+        routes: '/pair-loop --root 301 --filter risk:green --iteration 1',
         trail: [
           /event=start card=301 tag=auto-dev workflow=pair-loop/,
           /event=end card=301 .*outcome=completed/,

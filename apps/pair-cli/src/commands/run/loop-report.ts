@@ -50,7 +50,7 @@ export function resolveSelection(
     const flag = scope[key]
     return flag !== undefined
       ? { value: flag, source: `--${key}` }
-      : effectiveSelection(autonomy, key) ?? fallback
+      : (effectiveSelection(autonomy, key) ?? fallback)
   }
   const eligibility =
     policy.eligibility !== undefined

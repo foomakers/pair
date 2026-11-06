@@ -87,7 +87,8 @@ function perimeterFor(input: {
   return createPerimeter({
     root: scopeRoot(config, context.dispatch) ?? resolved('root')?.value,
     filter: config.scope.filter,
-    assignee: config.scope.assignee ?? (selectionDelivered ? resolved('assignee')?.value : undefined),
+    assignee:
+      config.scope.assignee ?? (selectionDelivered ? resolved('assignee')?.value : undefined),
     status: config.scope.status ?? (selectionDelivered ? resolved('status')?.value : undefined),
     selectionDelivered,
     eligibility: resolved('filter')?.value ?? context.policy.eligibility,

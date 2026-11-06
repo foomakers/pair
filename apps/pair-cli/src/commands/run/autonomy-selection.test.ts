@@ -207,7 +207,10 @@ describe('r0-3 controls: legacy and default-off selection unchanged', () => {
 
 describe('US-593 loop selector relay', () => {
   it('passes explicit selectors and a full-preset filter to pair-loop', async () => {
-    const r = await run({ skill: 'pair-loop', root: '1', assignee: '@me', status: 'Ready' }, '## Autonomy\n\npreset: full\n')
+    const r = await run(
+      { skill: 'pair-loop', root: '1', assignee: '@me', status: 'Ready' },
+      '## Autonomy\n\npreset: full\n',
+    )
     expect(await r.outcome).toBe(0)
     expect(r.calls[0]?.promptText).toContain('--root 1 --filter * --assignee @me --status Ready')
     expect(perimeterLine(r.stdout)).toContain('filter * (from preset full, passed to the skill)')

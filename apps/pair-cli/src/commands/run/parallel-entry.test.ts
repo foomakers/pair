@@ -43,6 +43,7 @@ function projectFs(policyText?: string) {
       [`${cwd}/config.json`]: JSON.stringify({ asset_registries: {} }),
       '/bin/claude': '',
       '/bin/pi': '',
+      [`${cwd}/.claude/skills/pair-workflow-cycle/SKILL.md`]: '',
       ...(policyText !== undefined && { [`${cwd}/${POLICY_PATH}`]: policyText }),
     },
     cwd,
@@ -87,7 +88,7 @@ function harness(candidates: RootCandidate[], exits: Record<string, CardProcessE
     inFlight -= 1
     return exits[c.id] ?? { exitCode: 0, signal: null }
   })
-  const selectCandidates = vi.fn(async () => candidates)
+  const selectCandidates = vi.fn(async (_input?: unknown) => candidates)
   const deps: RunHandlerDependencies = {
     readPrereqState: prereqsOf(candidates),
     selectCandidates,
@@ -204,6 +205,34 @@ describe('run --root --parallel — AC2 each card is its own run --card process,
     expect(h.selectCandidates.mock.calls[0]).toMatchObject([
       { root: '66', eligibility: 'risk:green', cwd, engine: { id: 'pi' } },
     ])
+  })
+
+  it('relays full-preset eligibility to selection and card children over legacy green', async () => {
+    process.env['PATH'] = '/bin'
+    captureLog()
+    const h = harness([card('1', { tier: 'risk:red', labels: ['risk:red'] })])
+    h.deps.resolveAutonomy = () => ({
+      ok: true,
+      active: true,
+      policy: {
+        until: 'pr',
+        prepare: { mode: 'always' },
+        merge: { mode: 'never', has: [], lacks: [] },
+      },
+      effective: { filter: { value: '*', source: 'preset full' } },
+      lines: [],
+      warnings: [],
+      errors: [],
+      translated: {},
+    })
+    await handleRunCommand(
+      parseRunCommand({ root: '66', parallel: '2', autonomous: true, preset: 'full' }),
+      projectFs(policy('3')),
+      h.deps,
+    )
+    expect(h.selectCandidates.mock.calls[0]?.[0]).toMatchObject({ eligibility: '*' })
+    expect(h.runCardProcess.mock.calls[0]?.[0].args).toContain('--eligibility-filter')
+    expect(h.runCardProcess.mock.calls[0]?.[0].args).toContain('*')
   })
 })
 

@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'fs'
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
@@ -131,6 +139,10 @@ interface Harness {
 }
 
 async function run(flags: Record<string, string | boolean>, h: Harness = {}) {
+  if (h.files?.[`${root}/${POLICY_PATH}`] !== undefined) {
+    mkdirSync(join(root, '.pair/adoption/tech'), { recursive: true })
+    writeFileSync(join(root, POLICY_PATH), h.files[`${root}/${POLICY_PATH}`]!)
+  }
   const stdout: string[] = []
   vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
     stdout.push(args.map(String).join(' '))
@@ -360,6 +372,20 @@ describe('r0-2 controls: resolved ONCE, the cycle route and default-off unchange
 })
 
 describe('US-593 direct-card effective eligibility', () => {
+  it.each([
+    ['5', 5],
+    ['max', 3],
+  ])('rounds %s preserves its numeric or policy sentinel meaning', async (rounds, maxFixRounds) => {
+    const r = await run(
+      { rounds, cardTags: 'risk:green' },
+      {
+        resolver: 'real',
+        files: { [`${root}/${POLICY_PATH}`]: `${ELIGIBILITY}\n## Autonomy\n\nmaxFixRounds: 3\n` },
+      },
+    )
+    expect(await r.outcome).toBe(0)
+    expect(r.driven[0]?.budgets?.maxFixRounds).toBe(maxFixRounds)
+  })
   it.each([
     ['mapped', MAPPED_POLICY, 'auto-dev,risk:red'],
     ['fallback red', ELIGIBILITY, 'risk:red'],

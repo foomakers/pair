@@ -45,6 +45,12 @@ Accepted (story #521, epic #485). **Revises ADR-013 Q2b** (eligibility is an any
 - `prepare` is parsed and validated but not executed (treated as `always`) until #523.
 - Batch and loop refuse `## Autonomy` / new arguments (`autonomy-not-supported-until-#524`).
 
+### Amendment (2026-11-06, US-593)
+
+- Effective precedence is explicit key > argument preset > adoption key (including legacy translation) > adoption preset > default. An explicit key or argument preset supersedes a conflicting legacy value; the conflict is reported as a warning.
+- Numeric run limits (`--parallel`, `--max-iterations`, `--rounds`) override corresponding adoption limits. `--rounds max` keeps the adopted repair budget. Dependency and mutex constraints still govern which cards can start together.
+- The effective filter decides both direct-card eligibility and loop selection. `preset: full` can admit red or untagged cards only when `--autonomous` supplies unattended consent.
+
 ## Consequences
 
 ### Benefits

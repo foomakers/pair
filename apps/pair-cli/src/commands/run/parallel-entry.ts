@@ -191,7 +191,10 @@ interface FanOut {
  * `--filter`: `--filter` is a loop-mode selector the cycle coordinator refuses on a `--card` entry.
  */
 function forwardedEligibility(input: ParallelRunInput): string | undefined {
-  return input.config.scope.filter ?? effectiveSelection(input.context.autonomySelection, 'filter')?.value
+  return (
+    input.config.scope.filter ??
+    effectiveSelection(input.context.autonomySelection, 'filter')?.value
+  )
 }
 
 function selectionInput(fan: FanOut, loop?: SelectRootInput['loop']): SelectRootInput {

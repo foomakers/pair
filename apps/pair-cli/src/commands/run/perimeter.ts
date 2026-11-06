@@ -110,9 +110,8 @@ const UNHONOURABLE_FILTER_MESSAGE =
  * finding 1).
  */
 export const UNHONOURABLE_SELECTION_MESSAGE =
-  '--assignee/--status cannot be honoured by this invocation: only `pair-next` declares them. ' +
-  '`pair-loop` accepts only root/predicate/iteration through this driver (the autonomy arguments go through ' +
-  '`pair-cli run --card` or the skill) — drop them, or pass `--skill pair-next`.'
+  '--assignee/--status cannot be honoured by this invocation: only `pair-next` or `pair-loop` ' +
+  'declares them — drop them, or pass a declaring skill.'
 
 export function createPerimeter(input: PerimeterInput): Perimeter {
   if (

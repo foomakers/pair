@@ -33,34 +33,52 @@ describe('US-593 argument precedence', () => {
   })
 
   it('reports the argument as the effective source even when wider than adoption', () => {
-    expect(resolveEffectiveLimit({ dependencyAllowed: 5, maxParallelism: 3, requested: 5 })).toMatchObject({
+    expect(
+      resolveEffectiveLimit({ dependencyAllowed: 5, maxParallelism: 3, requested: 5 }),
+    ).toMatchObject({
       effective: 5,
       boundBy: ['dependency-allowed', '--parallel'],
     })
-    expect(createPerimeter({
-      root: '593', cwd: '/tmp', cwdDeclared: false, policyCap: 3, requestedCap: 5,
-      invocationKind: 'skill', filterDelivery: 'argument',
-    })).toMatchObject({ maxIterations: 5, capSource: '--max-iterations' })
+    expect(
+      createPerimeter({
+        root: '593',
+        cwd: '/tmp',
+        cwdDeclared: false,
+        policyCap: 3,
+        requestedCap: 5,
+        invocationKind: 'skill',
+        filterDelivery: 'argument',
+      }),
+    ).toMatchObject({ maxIterations: 5, capSource: '--max-iterations' })
   })
 
   it('uses explicit iteration limit over adopted stop predicate budget', () => {
-    const fs = new InMemoryFileSystemService({
-      '/project/.pair/adoption/tech/automation.md': '## Stop Predicate\n\nmax-iterations: 3\n',
-    }, '/project', '/project')
+    const fs = new InMemoryFileSystemService(
+      {
+        '/project/.pair/adoption/tech/automation.md': '## Stop Predicate\n\nmax-iterations: 3\n',
+      },
+      '/project',
+      '/project',
+    )
     const policy = readAutomationPolicy(fs, '/project')
     const config = parseRunCommand({ root: '593', parallel: '5', maxIterations: '5' })
     expect(resolveLoopValues(config, policy).cap).toEqual({ value: 5, bound: '--max-iterations 5' })
   })
 
   it('relays argument preset and adopted selectors with their real sources', () => {
-    const resolution = { effective: {
-      root: { value: '42', source: 'preset full' },
-      filter: { value: ['*'], source: 'preset full' },
-      assignee: { value: 'rucka', source: 'adoption' },
-      status: { value: ['Ready'], source: 'adoption' },
-    } } as unknown as AutonomyResolution
+    const resolution = {
+      effective: {
+        root: { value: '42', source: 'preset full' },
+        filter: { value: ['*'], source: 'preset full' },
+        assignee: { value: 'rucka', source: 'adoption' },
+        status: { value: ['Ready'], source: 'adoption' },
+      },
+    } as unknown as AutonomyResolution
     const config = parseRunCommand({ parallel: '5', assignee: 'other' })
-    const policy = readAutomationPolicy(new InMemoryFileSystemService({}, '/project', '/project'), '/project')
+    const policy = readAutomationPolicy(
+      new InMemoryFileSystemService({}, '/project', '/project'),
+      '/project',
+    )
     expect(resolveSelection(config, policy, resolution)).toEqual({
       root: { value: '42', source: 'preset full' },
       filter: { value: '*', source: 'preset full' },
@@ -70,8 +88,13 @@ describe('US-593 argument precedence', () => {
     const invocation = { kind: 'skill' as const, name: 'pair-loop', source: '--skill' as const }
     expect(filterDeliveryFor(invocation)).toBe('argument')
     expect(selectionDeliveredBy(invocation)).toBe(true)
-    expect(buildPromptText(ENGINES.claude, invocation, {
-      root: '42', filter: '*', assignee: 'other', status: 'Ready',
-    })).toContain('--root 42 --filter * --assignee other --status Ready')
+    expect(
+      buildPromptText(ENGINES.claude, invocation, {
+        root: '42',
+        filter: '*',
+        assignee: 'other',
+        status: 'Ready',
+      }),
+    ).toContain('--root 42 --filter * --assignee other --status Ready')
   })
 })

@@ -288,6 +288,10 @@ function resolveMaxParallelism(policy, batchTiers) {
   return policy.global
 }
 
+function resolveRunParallelism(policy, batchTiers, requested) {
+  return requested ?? resolveMaxParallelism(policy, batchTiers)
+}
+
 // ── `## Audit Location` ─────────────────────────────────────────────────────
 function resolveAuditLocation(policyText) {
   const body = sectionBody(policyText, 'Audit Location')
@@ -548,6 +552,10 @@ const RELAY_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
 const relayOpts = opts => ({ ...opts, model: args?.models?.relay ?? 'haiku', ...(args?.efforts?.relay ? { effort: args.efforts.relay } : {}) })
 
 function validateArgs(args) {
+  for (const key of ['parallel', 'maxIterations']) {
+    if (args?.[key] !== undefined && (!Number.isInteger(args[key]) || args[key] <= 0))
+      HALT(`args.${key} must be a positive integer, got ${JSON.stringify(args[key])}.`)
+  }
   for (const [key, known] of [['models', RELAY_MODELS], ['efforts', RELAY_EFFORTS]]) {
     const v = args?.[key]
     if (v === undefined || v === null) continue
@@ -735,6 +743,7 @@ phase('Policy')
 const resolvedFilter = typeof args?.policyText === 'string' && args.policyText.trim() !== '' ? await resolveFilterOrHalt(args) : undefined
 const policy = parsePolicyOrHalt(args?.policyText, args?.tagProjectionFamily, resolvedFilter)
 policy.stop = applyPredicateOverride(policy.stop, args?.predicateOverride)
+if (args?.maxIterations !== undefined) policy.stop.maxIterations = args.maxIterations
 log(`Eligibility filter: ${policy.eligibility.value}`)
 emit('loop-start', { auditLocation: policy.auditLocation, maxIterations: Number.isFinite(policy.stop.maxIterations) ? policy.stop.maxIterations : 'none', ...(policy.stop.predicate ? { predicate: `${policy.stop.predicate.selector} ⇒ ${policy.stop.predicate.condition}` } : {}) })
 
@@ -864,7 +873,7 @@ while (true) {
   const { batch: mutexBatch, audit: mutexAudit } = computeMutexBatch(depAllowed, args?.overrides)
 
   phase('Batch')
-  const cap = resolveMaxParallelism(policy.maxParallelism, mutexBatch.map(c => c.tier))
+  const cap = resolveRunParallelism(policy.maxParallelism, mutexBatch.map(c => c.tier), args?.parallel)
   const batch = composeBatch(mutexBatch, cap)
   const reconciledAudit = reconcileCapAudit(mutexAudit, batch.map(c => c.id)) // M2 fix
   runLog.push(...reconciledAudit.map(a => ({ iteration, ...a })))
