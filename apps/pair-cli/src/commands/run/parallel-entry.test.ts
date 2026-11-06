@@ -266,7 +266,7 @@ describe('run --root --parallel — AC6 aggregated audit', () => {
     expect(h.audit).toHaveLength(1)
     expect(h.audit[0]!.path).toBe(`${cwd}/.pair/working/automation/fanout.md`)
     expect(h.audit[0]!.line).toMatch(
-      /^\S+ event=batch root=66 started=\S+ parallel=2 effective=1 attempted=1 outcomes=1:failed\(exit 1\) excluded=2$/,
+      /^\S+ event=batch root=66 started=\S+ parallel=2 effective=1 attempted=1 outcomes=1:failed\(exit 1\) excluded=2 excludedReasons=\S+$/,
     )
   })
 })
