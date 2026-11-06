@@ -4,7 +4,7 @@
 
 ## PR Information
 
-> Conditional — the closing `Refs:` line is included ONLY when the code host differs from the PM tool (`way-of-working.md` → `## Git Workflow` → `code-host`); omit it on a single-tool project (the host links PR and item natively). It is the PR → item half of the text-convention cross-link: `/pair-capability-publish-pr` writes it verbatim from the story id; `/pair-process-review` Step 1.2 and `/pair-next`'s open-PR row read it back. Keep the token PLAIN — nothing before it on the line, no bold, **no trailing markdown hard-break spaces** — in its own paragraph, so the anchored read-back (`^Refs:[ \t]*(.+?)[ \t]*$`) captures the item id and nothing else.
+> Conditional — the closing `Refs:` line is included ONLY when the code host differs from the PM tool (`way-of-working.md` → `## Git Workflow` → `code-host`); omit it on a single-tool project. It is the PR → item half of the text-convention cross-link, independent of a native link: `/pair-capability-publish-pr` writes it verbatim from the story id; `/pair-process-review` Step 1.2 and `/pair-next`'s open-PR row read it back. Keep the token PLAIN — nothing before it on the line, no bold, **no trailing markdown hard-break spaces** — in its own paragraph, so the anchored read-back (`^Refs:[ \t]*(.+?)[ \t]*$`) captures the item id and nothing else.
 
 **PR Title:** [US-XXX] [type]: [brief description]  
 **Story/Epic:** [Link]  
@@ -15,6 +15,10 @@
 **Labels:** [feature, bug-fix, documentation, etc.]  
 
 Refs: [PM-tool item id — renders as `Refs: ENG-412`]
+
+<!-- Conditional native story link — render the guide's exact token as a plain line (for example, Closes #123). Omit the line when unsupported or prerequisites fail. A body token alone is not proof of association. -->
+
+Closes #[number — conditional GitHub example; replace with exact native-link line from the PM guide, or omit]
 
 ## Summary
 

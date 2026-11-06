@@ -574,3 +574,40 @@ describe('code-host / PM-tool split — Linear PM guideline at parity (#236, AC5
     expect(read(REPO_ROOT, '.pair/llms.txt')).toContain('linear-implementation.md')
   })
 })
+
+describe('publish-pr native story links (#589)', () => {
+  const skill = datasetSkill('capability/publish-pr/SKILL.md')
+  const template = dataset('.pair/knowledge/guidelines/collaboration/templates/pr-template.md')
+  const guide = (tool: string) => dataset(`${PM_TOOL_KB}/${tool}-implementation.md`)
+
+  it('AC1 — the publisher consumes guide recipes and a conditional template slot', () => {
+    expect(skill).toMatch(/native.link recipe/i)
+    expect(skill).toMatch(/template override/i)
+    expect(template).toMatch(/Conditional native story link/)
+    expect(template).toMatch(/^Closes #\[number/m)
+  })
+
+  it('AC2 — GitHub recipe handles exact same/cross-repo identity and default base', () => {
+    const github = guide('github')
+    expect(github).toContain('Closes #<number>')
+    expect(github).toContain('Closes <owner>/<repo>#<number>')
+    expect(github).toContain('closingIssuesReferences')
+    expect(github).toMatch(/exact repository and issue/i)
+    expect(github).toMatch(/non-default base[\s\S]{0,300}not-linked/i)
+  })
+
+  it('AC3 — Azure association and configured split integrations have readback and fallback', () => {
+    expect(guide('azure-devops')).toMatch(/--work-items[\s\S]{0,500}workItemRefs/)
+    expect(guide('azure-devops')).toMatch(/AB#<work-item-id>[\s\S]{0,500}Development/)
+    expect(guide('linear')).toMatch(/configured[\s\S]{0,500}magic words/i)
+    expect(guide('filesystem')).toMatch(/native.link[\s\S]{0,300}unsupported/i)
+  })
+
+  it('AC4 — publication is idempotent and reports verified status without losing split links', () => {
+    expect(skill).toMatch(/existing PR[\s\S]{0,500}duplicate/i)
+    expect(skill).toMatch(/preserve unrelated body content/i)
+    expect(skill).toMatch(/native-linked \| not-linked \| fallback/)
+    expect(skill).toContain('Refs: <issue-id>')
+    expect(skill).toMatch(/back-link[\s\S]{0,400}already linked/i)
+  })
+})
