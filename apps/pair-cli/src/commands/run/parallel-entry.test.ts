@@ -298,8 +298,8 @@ describe('run --root --parallel — AC6 aggregated audit', () => {
 
     expect(h.audit).toHaveLength(1)
     expect(h.audit[0]!.path).toBe(`${cwd}/.pair/working/automation/fanout.md`)
-    expect(h.audit[0]!.line).toMatch(
-      /^\S+ event=batch root=66 started=\S+ parallel=2 effective=1 attempted=1 outcomes=1:failed\(exit 1\) excluded=2 excludedReasons=\S+(?: parallel-source=--parallel)?$/,
+    expect(h.audit[0]!.line.replace(/ parallel-source=--parallel(?= |$)/, '')).toMatch(
+      /^\S+ event=batch root=66 started=\S+ parallel=2 effective=1 attempted=1 outcomes=1:failed\(exit 1\) excluded=2 excludedReasons=\S+$/,
     )
   })
 })
@@ -496,7 +496,7 @@ describe('US-590 r0-2: the audited excludedReasons equal the plan’s own exclus
       .filter((m): m is RegExpExecArray => m !== null)
       .map(m => ({ id: m[1]!, reason: m[2]! }))
     expect(planned.length).toBe(2)
-    const encoded = /excludedReasons=(\S+)$/.exec(h.audit[0]!.line)![1]!
+    const encoded = /(?:^| )excludedReasons=(\S+)(?= |$)/.exec(h.audit[0]!.line)![1]!
     expect(JSON.parse(decodeURIComponent(encoded))).toEqual(planned)
   })
 })
