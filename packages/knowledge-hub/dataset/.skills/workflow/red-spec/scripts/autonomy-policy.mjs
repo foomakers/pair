@@ -319,7 +319,7 @@ export const SURFACES = ['unattended', 'interactive']
 
 export function resolvePolicy({ args = {}, adoptionText = '', surface = 'unattended' } = {}) {
   const parsed = parse(adoptionText)
-  const errors = [...parsed.errors]
+  const errors = []
   const warnings = [...parsed.warnings]
   const effective = {}
   const fromArgs = {}
@@ -336,6 +336,13 @@ export function resolvePolicy({ args = {}, adoptionText = '', surface = 'unatten
   }
   const preset = fromArgs.preset ?? parsed.autonomy.preset
   const presetValues = Object.fromEntries(Object.entries(PRESETS[preset] ?? {}).map(([k, raw]) => [k, parseValue(k, raw).value]))
+  for (const error of parsed.errors) {
+    const overridden = Object.hasOwn(fromArgs, error.key) ||
+      (fromArgs.preset !== undefined && Object.hasOwn(presetValues, error.key))
+    if (overridden && error.reason.includes('conflicts with'))
+      warnings.push(`\`${error.key}\` legacy/adoption conflict superseded by explicit run value`)
+    else errors.push(error)
+  }
   for (const key of KEYS) {
     if (Object.hasOwn(fromArgs, key)) effective[key] = { value: fromArgs[key], source: 'argument' }
     // An argument preset is an argument: it beats every adoption key; only an argument key beats it.
