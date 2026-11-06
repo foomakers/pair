@@ -105,6 +105,13 @@ export interface EngineDefinition {
   readonly autonomy: AutonomyPosture
   readonly projectTrust: ProjectTrustPosture
   readonly terminalEvents: readonly TerminalEventRule[]
+  /**
+   * US-603: engines whose terminal event carries no text (codex: `turn.completed` holds only `usage`)
+   * expose the agent's final text on an EARLIER event: the LAST event matching `messageWhen` has its
+   * `messageField` read as the stage's final text (and the marker line of a root selection).
+   */
+  readonly messageField?: string
+  readonly messageWhen?: Readonly<Record<string, string | number | boolean>>
   /** US-573 AC7: environment the engine's process needs on top of the driver's own (absent ⇒ none). */
   readonly env?: Readonly<Record<string, string>>
   /** Where this entry's values were verified. Printed nowhere; read by the next maintainer. */
@@ -221,12 +228,9 @@ const CLAUDE: EngineDefinition = {
 const CODEX: EngineDefinition = {
   id: 'codex',
   modelFlag: '--model',
-  // `-c model_reasoning_effort=<level>` (codex config override), verified 2026-10-19. Codex's vocabulary
-  // stops at `high`: pair's `xhigh` / `max` map to it.
-  effortArgs: level => [
-    '-c',
-    `model_reasoning_effort=${level === 'xhigh' || level === 'max' ? 'high' : level}`,
-  ],
+  // `-c model_reasoning_effort=<level>` (codex config override), verified 2026-10-19. US-603: the level
+  // is passed through unclamped (codex's model cache lists xhigh in `supported_reasoning_levels`).
+  effortArgs: level => ['-c', `model_reasoning_effort=${level}`],
   command: 'codex',
   headlessArgs: ['exec', '--json'],
   skillInvocationStyle: 'instruction',
@@ -250,11 +254,15 @@ const CODEX: EngineDefinition = {
       detailField: 'error.message',
     },
   ],
+  // US-603: `turn.completed` carries only `usage`; the stage's final text is the last agent message.
+  messageField: 'item.text',
+  messageWhen: { type: 'item.completed', 'item.type': 'agent_message' },
   verifiedAgainst:
-    'codex 0.155.1 — `codex exec --help` and a live `codex exec --json` run (2026-09-22): ' +
-    'thread.started / turn.started / item.completed / turn.completed observed on the wire; ' +
-    "turn.failed and its `error.message` read from the binary's own TurnFailedEvent symbols, " +
-    'not yet observed live',
+    'codex-cli 0.166.0 — item.completed{item.type:agent_message,item.text} then turn.completed{usage} ' +
+    '(fixtures under run/__fixtures__/codex-*.jsonl are hand-built to that shape; a recorded live ' +
+    '`codex exec --json` run is still pending). Earlier: 0.155.1 live run (2026-09-22): ' +
+    'thread.started / turn.started / item.completed / turn.completed; turn.failed and its ' +
+    "`error.message` read from the binary's own TurnFailedEvent symbols, not yet observed live",
 }
 
 export const ENGINES: Readonly<Record<EngineId, EngineDefinition>> = Object.freeze({
