@@ -49,9 +49,9 @@ describe('/pair-loop Codex fan-out contract', () => {
     expect(codex).toContain('bound resume primitive')
   })
 
-  it('AC1 the Codex iteration runs selection, mutex analysis, one subagent per card, outcome, stop predicate in order', () => {
+  it('AC1 the Codex iteration runs selection, mutex analysis, bounded subagents, outcome, stop predicate in order', () => {
     const codex = item(2)
-    const order = ['/pair-next', 'mutex', 'spawn ONE fresh subagent', 'outcome', 'stop predicate']
+    const order = ['/pair-next', 'mutex', 'spawn up to the effective `--parallel`', 'outcome', 'stop predicate']
     const at = order.map(k => codex.indexOf(k))
     expect(at.every(i => i >= 0)).toBe(true)
     expect([...at].sort((a, b) => a - b)).toEqual(at)
