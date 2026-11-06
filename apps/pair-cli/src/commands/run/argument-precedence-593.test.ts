@@ -5,6 +5,10 @@ import { resolveLoopValues } from './loop-report'
 import { readAutomationPolicy } from './automation-policy'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { parseRunCommand } from './parser'
+import { resolveSelection } from './loop-report'
+import { buildPromptText, filterDeliveryFor, selectionDeliveredBy } from './invocation'
+import { ENGINES } from './engines'
+import type { AutonomyResolution } from './cycle-scripts'
 
 const cards: RootCandidate[] = Array.from({ length: 5 }, (_, i) => ({
   id: String(i + 1),
@@ -46,5 +50,28 @@ describe('US-593 argument precedence', () => {
     const policy = readAutomationPolicy(fs, '/project')
     const config = parseRunCommand({ root: '593', parallel: '5', maxIterations: '5' })
     expect(resolveLoopValues(config, policy).cap).toEqual({ value: 5, bound: '--max-iterations 5' })
+  })
+
+  it('relays argument preset and adopted selectors with their real sources', () => {
+    const resolution = { effective: {
+      root: { value: '42', source: 'preset full' },
+      filter: { value: ['*'], source: 'preset full' },
+      assignee: { value: 'rucka', source: 'adoption' },
+      status: { value: ['Ready'], source: 'adoption' },
+    } } as unknown as AutonomyResolution
+    const config = parseRunCommand({ parallel: '5', assignee: 'other' })
+    const policy = readAutomationPolicy(new InMemoryFileSystemService({}, '/project', '/project'), '/project')
+    expect(resolveSelection(config, policy, resolution)).toEqual({
+      root: { value: '42', source: 'preset full' },
+      filter: { value: '*', source: 'preset full' },
+      assignee: { value: 'other', source: '--assignee' },
+      status: { value: 'Ready', source: 'adoption' },
+    })
+    const invocation = { kind: 'skill' as const, name: 'pair-loop', source: '--skill' as const }
+    expect(filterDeliveryFor(invocation)).toBe('argument')
+    expect(selectionDeliveredBy(invocation)).toBe(true)
+    expect(buildPromptText(ENGINES.claude, invocation, {
+      root: '42', filter: '*', assignee: 'other', status: 'Ready',
+    })).toContain('--root 42 --filter * --assignee other --status Ready')
   })
 })

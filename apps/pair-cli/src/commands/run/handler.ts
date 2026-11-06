@@ -21,7 +21,7 @@ import { POLICY_PATH } from './policy-sections'
 import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
 import { whileInterruptible } from './interrupt'
-import { adoptionSelection, resolveRunAutonomy, spawnAutonomyResolver } from './autonomy-policy'
+import { effectiveSelection, resolveRunAutonomy, spawnAutonomyResolver } from './autonomy-policy'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
 import { locateCycleScripts } from './cycle-scripts'
 import { refuseProfileOffCycle, resolveWorkflowProfile } from './workflow-profile'
@@ -81,15 +81,16 @@ function perimeterFor(input: {
   const { config, context, cwd, invocation } = input
   const selection = context.autonomySelection
   const selectionDelivered = selectionDeliveredBy(invocation)
-  const adopted = (key: 'assignee' | 'status') =>
-    selectionDelivered ? adoptionSelection(selection, key) : undefined
+  const resolved = (key: 'root' | 'filter' | 'assignee' | 'status') =>
+    effectiveSelection(selection, key)
   return createPerimeter({
-    root: scopeRoot(config, context.dispatch) ?? adoptionSelection(selection, 'root'),
+    root: scopeRoot(config, context.dispatch) ?? resolved('root')?.value,
     filter: config.scope.filter,
-    assignee: config.scope.assignee ?? adopted('assignee'),
-    status: config.scope.status ?? adopted('status'),
+    assignee: config.scope.assignee ?? (selectionDelivered ? resolved('assignee')?.value : undefined),
+    status: config.scope.status ?? (selectionDelivered ? resolved('status')?.value : undefined),
     selectionDelivered,
-    eligibility: adoptionSelection(selection, 'filter') ?? context.policy.eligibility,
+    eligibility: resolved('filter')?.value ?? context.policy.eligibility,
+    eligibilitySource: resolved('filter')?.source,
     cwd,
     cwdDeclared: config.cwd !== undefined,
     requestedCap: config.maxIterations,

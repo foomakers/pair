@@ -1,4 +1,4 @@
-import { adoptionSelection } from './autonomy-policy'
+import { effectiveSelection } from './autonomy-policy'
 import { describeMergePosture, type AutomationPolicy } from './automation-policy'
 import type { AutonomyResolution } from './cycle-scripts'
 import { NO_ITERATION_CAP } from './automation-policy'
@@ -39,27 +39,19 @@ export interface LoopValues {
   readonly predicate?: Sourced | undefined
 }
 
-const flagOr = (
-  flag: string | undefined,
-  flagName: string,
-  adopted: string | undefined,
-  other?: Sourced,
-) =>
-  flag !== undefined
-    ? { value: flag, source: flagName }
-    : adopted !== undefined
-      ? { value: adopted, source: '## Autonomy' }
-      : other
-
-/** Root/filter/assignee/status: argument > `## Autonomy` > (filter only) `## Eligibility`. */
+/** Root/filter/assignee/status: argument > argument preset > adoption > adoption preset > default. */
 export function resolveSelection(
   config: RunCommandConfig,
   policy: AutomationPolicy,
   autonomy: AutonomyResolution | undefined,
 ): FanOutSelection {
   const { scope } = config
-  const pick = (key: 'root' | 'filter' | 'assignee' | 'status', fallback?: Sourced) =>
-    flagOr(scope[key], `--${key}`, adoptionSelection(autonomy, key), fallback)
+  const pick = (key: 'root' | 'filter' | 'assignee' | 'status', fallback?: Sourced) => {
+    const flag = scope[key]
+    return flag !== undefined
+      ? { value: flag, source: `--${key}` }
+      : effectiveSelection(autonomy, key) ?? fallback
+  }
   const eligibility =
     policy.eligibility !== undefined
       ? { value: policy.eligibility, source: '## Eligibility' }

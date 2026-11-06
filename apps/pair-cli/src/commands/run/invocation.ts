@@ -62,7 +62,7 @@ type SkillParameterMap = Readonly<Partial<Record<keyof SkillArguments, string>>>
  * there to answer its human-judgment gates.
  */
 export const SKILL_PARAMETERS: Readonly<Record<string, SkillParameterMap>> = Object.freeze({
-  'pair-loop': { root: '--root', predicate: '--predicate', iteration: '--iteration' },
+  'pair-loop': { root: '--root', filter: '--filter', assignee: '--assignee', status: '--status', predicate: '--predicate', iteration: '--iteration' },
   'pair-next': { root: '--root', filter: '--filter', assignee: '--assignee', status: '--status' },
   'pair-process-refine-story': { root: '--story' },
   'pair-process-plan-tasks': { root: '--story' },

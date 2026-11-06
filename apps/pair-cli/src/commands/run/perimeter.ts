@@ -33,7 +33,7 @@ export interface Perimeter {
   /** Which bound produced `maxIterations`; printed, so a surprising cap is visible. */
   readonly capSource: '--max-iterations' | 'tech/automation.md'
   /** Where `filter` came from, when there is one. */
-  readonly filterSource?: '--filter' | 'tech/automation.md'
+  readonly filterSource?: string
   /**
    * HOW the label reaches the selection, when there is one:
    *
@@ -62,6 +62,7 @@ export interface PerimeterInput {
   selectionDelivered?: boolean | undefined
   /** The policy's `## Eligibility` label, if the adoption file declares one. */
   eligibility?: string | undefined
+  eligibilitySource?: string | undefined
   /** The resolved working directory. */
   cwd: string
   /** Whether the working directory was DECLARED (`--cwd`) rather than inherited. */
@@ -161,7 +162,7 @@ function resolveFilter(input: PerimeterInput): {
   if (input.eligibility !== undefined && input.filterDelivery !== 'none') {
     return {
       value: input.eligibility,
-      source: 'tech/automation.md',
+      source: input.eligibilitySource ?? 'tech/automation.md',
       delivery: input.filterDelivery,
     }
   }
