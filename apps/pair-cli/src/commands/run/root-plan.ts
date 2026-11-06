@@ -47,6 +47,16 @@ export interface MaxParallelismPolicy {
   readonly perTier: Readonly<Record<string, number>>
 }
 
+function adoptedParallelSource(
+  input: RootPlanInput,
+  batch: readonly RootCandidate[],
+): string | undefined {
+  const tiers = [...new Set(batch.map(c => c.tier))]
+  return tiers.length === 1 && input.maxParallelism.perTier[tiers[0]!] !== undefined
+    ? `## Max Parallelism ${tiers[0]}`
+    : input.source
+}
+
 /** Tier 1's fail-safe for an untagged card (quality-model §3.2). */
 const FAIL_SAFE_TIER = 'risk:red'
 
@@ -163,35 +173,40 @@ export function resolveMaxParallelism(
 
 // ── the pool's limit ───────────────────────────────────────────────────────────────────────────
 
-export type LimitName = 'dependency-allowed' | '## Max Parallelism' | '--parallel'
+export type LimitName = string
 
 export interface EffectiveLimit {
   readonly effective: number
-  /** Every limit equal to the minimum — the one(s) that bound it, named (AC1). */
+  /** The workload and the selected configuration limit that bound execution. */
   readonly boundBy: readonly LimitName[]
   readonly dependencyAllowed: number
   readonly maxParallelism: number
   readonly requested: number
+  readonly source: string
 }
 
 export function resolveEffectiveLimit(input: {
   dependencyAllowed: number
   maxParallelism: number
-  requested: number
+  requested?: number | undefined
+  source?: string | undefined
 }): EffectiveLimit {
-  const { dependencyAllowed, maxParallelism, requested } = input
+  const { dependencyAllowed, maxParallelism } = input
+  const requested = input.requested ?? maxParallelism
+  const source =
+    input.requested !== undefined ? '--parallel' : (input.source ?? '## Max Parallelism')
   const limits: Array<[LimitName, number]> = [
     ['dependency-allowed', dependencyAllowed],
-    ['## Max Parallelism', maxParallelism],
-    ['--parallel', requested],
+    [source, requested],
   ]
-  const effective = Math.min(dependencyAllowed, maxParallelism, requested)
+  const effective = Math.min(dependencyAllowed, requested)
   return {
     effective,
     boundBy: limits.filter(([, value]) => value === effective).map(([name]) => name),
     dependencyAllowed,
     maxParallelism,
     requested,
+    source,
   }
 }
 
@@ -210,8 +225,9 @@ export interface RootPlanInput {
   /** `## Eligibility`, verbatim; absent ⇒ no tier guard (the selection is `pair-next --root`'s alone). */
   readonly eligibility: string | undefined
   readonly maxParallelism: MaxParallelismPolicy
-  /** `--parallel N`. */
-  readonly requested: number
+  /** Explicit `--parallel N`; absent inherits adoption. */
+  readonly requested?: number | undefined
+  readonly source?: string | undefined
 }
 
 /** Tier 1's Select → resolve → dependency → mutex pipeline, then the pool's limit. */
@@ -248,7 +264,7 @@ export function computeRootPlan(input: RootPlanInput): RootPlan {
     input.maxParallelism,
     mutexBatch.map(c => c.tier),
   )
-  const serial = Math.min(maxParallelism, input.requested) === 1
+  const serial = (input.requested ?? maxParallelism) === 1
   const batch = serial ? allowed : mutexBatch
   for (const entry of [...resolveAudit, ...depAudit, ...(serial ? [] : mutexAudit)]) {
     if (entry.excluded) excluded.push({ id: entry.id, reason: entry.reason ?? 'excluded' })
@@ -257,6 +273,7 @@ export function computeRootPlan(input: RootPlanInput): RootPlan {
     dependencyAllowed: batch.length,
     maxParallelism,
     requested: input.requested,
+    source: adoptedParallelSource(input, mutexBatch),
   })
   return { run: batch, excluded, limit }
 }
@@ -273,7 +290,9 @@ export function describeRootPlan(plan: RootPlan): string[] {
   for (const entry of plan.excluded) lines.push(`  Excluded #${entry.id}: ${entry.reason}`)
   lines.push(
     `Effective parallelism: ${limit.effective} = min(dependency-allowed ${limit.dependencyAllowed}, ` +
-      `## Max Parallelism ${limit.maxParallelism}, --parallel ${limit.requested}) — bound by ` +
+      (limit.source === '--parallel'
+        ? `--parallel ${limit.requested} [overrides ## Max Parallelism ${limit.maxParallelism}]) — bound by `
+        : `${limit.source} ${limit.requested}) — bound by `) +
       limit.boundBy.join(' and '),
   )
   return lines

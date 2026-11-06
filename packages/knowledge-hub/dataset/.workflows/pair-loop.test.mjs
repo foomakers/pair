@@ -1376,8 +1376,8 @@ test('r1g1-L-I1: `## Autonomy` filter (no `## Eligibility`) x legacy `## Auto-Ad
   assert.deepEqual(sent, resolved.effective.filter.value)
 })
 
-test('r1g1-L-W7: a filter ARGUMENT does not bypass the authority — `## Autonomy` `filter:` empty (or conflicting with `## Eligibility`) still HALTs naming the filter, Select never runs', async () => {
-  for (const policyText of ['## Autonomy\n\nfilter: \n', '## Eligibility\n\nrisk:green\n\n## Autonomy\n\nfilter: risk:yellow\n']) {
+test('r1g1-L-W7: a filter ARGUMENT cannot repair malformed `## Autonomy` filter', async () => {
+  for (const policyText of ['## Autonomy\n\nfilter: \n']) {
     let selected = false
     await assert.rejects(
       runWorkflow({
@@ -1392,6 +1392,12 @@ test('r1g1-L-W7: a filter ARGUMENT does not bypass the authority — `## Autonom
     )
     assert.equal(selected, false, policyText)
   }
+})
+
+test('US-593: a filter argument wins over conflicting legacy and Autonomy adoption values', async () => {
+  const policyText = '## Eligibility\n\nrisk:green\n\n## Autonomy\n\nfilter: risk:yellow\n'
+  const { selectPrompt } = await r1g1Select({ policyText, filter: 'cost:green' })
+  assert.deepEqual(r1g1FilterOf(selectPrompt), ['cost:green'])
 })
 
 // r1-1 (security): filter/assignee/status reach a single-quoted shell arg of the resolve dispatch — quote-free.

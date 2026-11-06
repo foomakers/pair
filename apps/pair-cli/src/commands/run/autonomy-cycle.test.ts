@@ -112,10 +112,14 @@ describe('selection arguments reach pair-next only', () => {
     ).toEqual(['--root', '9', '--filter', 'a,b', '--assignee', '@me', '--status', 'Draft,Ready'])
   })
 
-  it('S2: pair-loop declares neither, so they are never rendered for it', () => {
+  it('S2: pair-loop declares selection arguments', () => {
     expect(buildSkillArgs('pair-loop', { root: '9', assignee: '@me', status: 'Ready' })).toEqual([
       '--root',
       '9',
+      '--assignee',
+      '@me',
+      '--status',
+      'Ready',
     ])
   })
 
@@ -131,7 +135,7 @@ describe('selection arguments reach pair-next only', () => {
     expect(() => createPerimeter({ ...base, assignee: '@me', selectionDelivered: false })).toThrow(
       UNHONOURABLE_SELECTION_MESSAGE,
     )
-    expect(UNHONOURABLE_SELECTION_MESSAGE).toMatch(/only root\/predicate\/iteration/)
+    expect(UNHONOURABLE_SELECTION_MESSAGE).toMatch(/only `pair-next` or `pair-loop`/)
     const ok = createPerimeter({
       ...base,
       assignee: '@me',
@@ -149,7 +153,7 @@ describe('selection arguments reach pair-next only', () => {
     ).toBe(true)
     expect(
       selectionDeliveredBy({ kind: 'skill', name: 'pair-loop', source: 'cascade' } as never),
-    ).toBe(false)
+    ).toBe(true)
     expect(selectionDeliveredBy({ kind: 'prompt', text: 'x' } as never)).toBe(false)
   })
 })

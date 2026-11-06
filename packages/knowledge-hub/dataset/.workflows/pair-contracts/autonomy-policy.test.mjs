@@ -104,6 +104,16 @@ test('coexistence: a differing translation HALTs naming both; an identical one w
   assert.deepEqual(parse('## Eligibility\n\nrisk:green\n\n## Autonomy\n\nuntil: pr\n').errors, [])
 })
 
+test('US-593: an explicit preset or key supersedes a conflicting legacy declaration', () => {
+  const adoptionText = '## Eligibility\n\nrisk:green\n\n## Autonomy\n\nfilter: risk:yellow\n'
+  assert.equal(resolvePolicy({ adoptionText }).ok, false)
+  for (const args of [{ preset: 'full' }, { filter: 'risk:red' }]) {
+    const resolution = resolvePolicy({ adoptionText, args })
+    assert.equal(resolution.ok, true)
+    assert.deepEqual(resolution.effective.filter.value, args.preset ? ['*'] : ['risk:red'])
+  }
+})
+
 // ── AC2: precedence, always printed with its source ─────────────────────────────────────────
 test('precedence: argument > adoption > translated > default, each line carries its source', () => {
   const text = '## Eligibility\n\nrisk:green\n\n## Autonomy\n\nuntil: pr\nmerge: never\n'

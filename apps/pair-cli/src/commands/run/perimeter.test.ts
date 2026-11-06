@@ -134,16 +134,16 @@ describe('createPerimeter', () => {
     expect(perimeter.capSource).toBe('--max-iterations')
   })
 
-  it('never lets a flag widen the policy cap', () => {
+  it('lets an explicit argument supersede the policy cap', () => {
     const perimeter = createPerimeter({ ...base, root: '212', requestedCap: 100 })
 
-    expect(perimeter.maxIterations).toBe(20)
-    expect(perimeter.capSource).toBe('tech/automation.md')
+    expect(perimeter.maxIterations).toBe(100)
+    expect(perimeter.capSource).toBe('--max-iterations')
   })
 
-  it('keeps the boundary value: a flag equal to the policy cap reports the policy', () => {
+  it('reports an equal explicit value as an argument', () => {
     expect(createPerimeter({ ...base, root: '212', requestedCap: 20 }).capSource).toBe(
-      'tech/automation.md',
+      '--max-iterations',
     )
   })
 

@@ -3,7 +3,7 @@ import { plainConsole, plainNote } from './plain-console'
 import { resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
-import { parseRunCommand, type RunCommandConfig } from './parser'
+import { isParallelRun, parseRunCommand, type RunCommandConfig } from './parser'
 import { optionsOfArgv, runCardInProcess } from './parallel'
 import { assertEngineAvailable, describeEngineResolution, resolveEngine } from './resolve-engine'
 import { createExecutableProbe } from './path-probe'
@@ -21,7 +21,7 @@ import { POLICY_PATH } from './policy-sections'
 import { describeDispatch, type DispatchDecision } from './dispatch'
 import { driveRun } from './loop-driver'
 import { whileInterruptible } from './interrupt'
-import { adoptionSelection, resolveRunAutonomy, spawnAutonomyResolver } from './autonomy-policy'
+import { effectiveSelection, resolveRunAutonomy, spawnAutonomyResolver } from './autonomy-policy'
 import { enterCycleAtReview, handleSkipDecision } from './card-entry'
 import { locateCycleScripts } from './cycle-scripts'
 import { refuseProfileOffCycle, resolveWorkflowProfile } from './workflow-profile'
@@ -31,6 +31,7 @@ import {
   driveLockedCard,
   resolveAutonomyFor,
   resolveContext,
+  withResolvedCardSelection,
   type ResolvedRun,
   type RunContext,
   type RunHandlerDependencies,
@@ -79,26 +80,38 @@ function perimeterFor(input: {
   invocation: ResolvedInvocation
 }): Perimeter {
   const { config, context, cwd, invocation } = input
-  const selection = context.autonomySelection
-  const selectionDelivered = selectionDeliveredBy(invocation)
-  const adopted = (key: 'assignee' | 'status') =>
-    selectionDelivered ? adoptionSelection(selection, key) : undefined
+  const selection = perimeterSelection(config, context, invocation)
   return createPerimeter({
-    root: scopeRoot(config, context.dispatch) ?? adoptionSelection(selection, 'root'),
+    ...selection,
     filter: config.scope.filter,
-    assignee: config.scope.assignee ?? adopted('assignee'),
-    status: config.scope.status ?? adopted('status'),
-    selectionDelivered,
-    eligibility: adoptionSelection(selection, 'filter') ?? context.policy.eligibility,
     cwd,
     cwdDeclared: config.cwd !== undefined,
     requestedCap: config.maxIterations,
     policyCap: context.policy.maxIterations,
     invocationKind: invocation.kind,
-    // Whether `--filter` can be HONOURED, and by whom, depends on the skill the cascade resolved,
-    // so the check has to happen after skill resolution and before any spawn (round 1, finding 1).
     filterDelivery: filterDeliveryFor(invocation),
   })
+}
+
+function perimeterSelection(
+  config: RunCommandConfig,
+  context: RunContext,
+  invocation: ResolvedInvocation,
+) {
+  const selection = context.autonomySelection
+  const selectionDelivered = selectionDeliveredBy(invocation)
+  const resolved = (key: 'root' | 'filter' | 'assignee' | 'status') =>
+    effectiveSelection(selection, key)
+  const delivered = (key: 'assignee' | 'status') =>
+    selectionDelivered ? resolved(key)?.value : undefined
+  return {
+    root: scopeRoot(config, context.dispatch) ?? resolved('root')?.value,
+    assignee: config.scope.assignee ?? delivered('assignee'),
+    status: config.scope.status ?? delivered('status'),
+    selectionDelivered,
+    eligibility: resolved('filter')?.value ?? context.policy.eligibility,
+    eligibilitySource: resolved('filter')?.source,
+  }
 }
 
 /**
@@ -204,7 +217,7 @@ function resolveEntry(
   callerDeps: RunHandlerDependencies,
 ): { config: RunCommandConfig; context: RunContext; deps: RunHandlerDependencies } {
   config = withLiveCardTags(config, cwd, callerDeps)
-  const base = resolveContext(config, fs, cwd)
+  const base = resolveContext(config, fs, cwd, true)
   if (!config.dryRun) sweepWorkingState(base.workingArea, fs, cwd, callerDeps)
   const selection = resolveRunAutonomy({
     resolver: callerDeps.resolveAutonomy ?? spawnAutonomyResolver,
@@ -215,7 +228,7 @@ function resolveEntry(
   })
   return {
     config,
-    context: { ...base, ...(selection && { autonomySelection: selection }) },
+    context: withResolvedCardSelection(base, config, selection),
     deps: { ...callerDeps, resolveAutonomy: () => selection },
   }
 }
@@ -256,7 +269,7 @@ function haltOnUnresolvedProfileInDryRun(
 ): void {
   const flagged = config.profile !== undefined || config.workflowConfig !== undefined
   // --parallel resolves its own profile (parallel-entry)
-  if (!config.dryRun || config.parallel !== undefined || !flagged) return
+  if (!config.dryRun || isParallelRun(config) || !flagged) return
   ;(deps.resolveWorkflowProfile ?? resolveWorkflowProfile)(
     locateCycleScripts(fs, context.config, cwd).scriptsDir,
     { root: cwd, profile: config.profile, workflowConfig: config.workflowConfig },
@@ -336,7 +349,7 @@ async function runCommand(
   haltOnUnresolvedProfileInDryRun({ config, context, fs, cwd }, deps)
   // US-491: `--root --parallel N` — the fan-out mode, its own entry (the parser guarantees no card).
   const ctx = { config, context, fs, cwd }
-  if (config.parallel !== undefined)
+  if (isParallelRun(config))
     return await handleParallelRun(ctx, withInProcessCards(deps, fs, callerDeps))
 
   // Nothing to run on this card: report the decision and stop. This is a clean exit, never an
