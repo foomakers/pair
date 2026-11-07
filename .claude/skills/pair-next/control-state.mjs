@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Canonical control-state authority shared by pair-next and pair run.
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
 export const MACROSTATES = ['Draft', 'Ready', 'In Progress', 'Review', 'Done']
 const WAY = '.pair/adoption/tech/way-of-working.md'
@@ -213,7 +213,11 @@ export function validateStatusFilter(value, mapping) {
   return states
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  existsSync(process.argv[1]) &&
+  realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+) {
   try {
     const [command, projectRoot, json] = process.argv.slice(2)
     const mapping = readStateMapping(projectRoot ?? process.cwd())

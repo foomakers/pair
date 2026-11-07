@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -154,6 +154,32 @@ test('real executable reads a consuming project adoption', () => {
       ),
     )
     assert.equal(answer.macrostate, 'Ready')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('symlinked installed executable emits JSON and reports invalid status filters', () => {
+  const root = mkdtempSync(join(tmpdir(), 'pair-state-link-'))
+  try {
+    const alias = join(root, 'control-state.mjs')
+    symlinkSync(script, alias)
+    const adoption = join(root, '.pair/adoption/tech/way-of-working.md')
+    mkdirSync(dirname(adoption), { recursive: true })
+    writeFileSync(
+      adoption,
+      '## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n| Next | Ready |\n',
+    )
+    const valid = spawnSync(process.execPath, [alias, 'status-filter', root, 'Ready'], {
+      encoding: 'utf8',
+    })
+    assert.equal(valid.status, 0)
+    assert.deepEqual(JSON.parse(valid.stdout), ['Ready'])
+    const invalid = spawnSync(process.execPath, [alias, 'status-filter', root, 'Review'], {
+      encoding: 'utf8',
+    })
+    assert.notEqual(invalid.status, 0)
+    assert.match(invalid.stderr, /status-filter-invalid/)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
