@@ -6,6 +6,7 @@ import { POLICY_PATH } from './automation-policy'
 import type { LockAcquirer } from './card-lock'
 import { resolveMaxParallelism, type RootCandidate } from './root-plan'
 import type { CardProcessExit, CardProcessRunner } from './parallel'
+import { parseCandidates } from './root-select'
 
 /** US-575 AC6: the deterministic prerequisite state, faked from each fixture card's own prerequisites. */
 const prereqsOf = (candidates: readonly RootCandidate[]) => (id: string) => {
@@ -56,6 +57,7 @@ const card = (id: string, extra: Partial<RootCandidate> = {}): RootCandidate => 
   title: `Card ${id}`,
   branch: `feature/US-${id}-x`,
   tier: 'risk:green',
+  macrostate: 'Ready',
   labels: ['risk:green'],
   mutexResources: [],
   prerequisites: [],
@@ -108,6 +110,28 @@ afterEach(() => {
 })
 
 describe('run --root --parallel — AC1 plan printed before dispatch', () => {
+  it('passes pair-next reported state through selection and excludes unknown before dispatch', async () => {
+    process.env['PATH'] = '/bin'
+    const lines = captureLog()
+    // Scripted engine answer: this test does not execute the pair-next agent.
+    const candidates = parseCandidates(
+      JSON.stringify({
+        candidates: [card('1', { macrostate: 'Ready' }), card('2', { macrostate: 'Unmapped' })],
+      }),
+    )
+    const h = harness(candidates)
+    await handleRunCommand(
+      parseRunCommand({ root: '66', parallel: '2', autonomous: true }),
+      projectFs(policy('2')),
+      h.deps,
+    )
+    expect(h.selectCandidates).toHaveBeenCalledTimes(1)
+    expect(h.started).toEqual(['1'])
+    expect(lines.join('\n')).toContain(
+      'Excluded #2: state "Unmapped" is not a runnable mapped macrostate',
+    )
+  })
+
   it('prints the plan, every exclusion and why, and the effective limit naming what bound it, before any card starts', async () => {
     process.env['PATH'] = '/bin'
     const lines = captureLog()
@@ -132,11 +156,10 @@ describe('run --root --parallel — AC1 plan printed before dispatch', () => {
 
     expect(code).toBe(0)
     const before = lines.slice(0, firstStartLine).join('\n')
-    expect(before).toContain('Plan: Run (3): #10, #13, #14')
-    expect(before).toContain('Excluded #11: mutex conflict on skill:a')
+    expect(before).toContain('Plan: Run (4): #10, #11, #13, #14')
     expect(before).toContain('Excluded #12: blocked by #10 (not merged)')
     expect(before).toContain(
-      'Effective parallelism: 2 = min(dependency-allowed 3, --parallel 2 [overrides ## Max Parallelism 3]) — bound by --parallel',
+      'Effective parallelism: 2 = min(dependency-allowed 4, --parallel 2 [overrides ## Max Parallelism 3]) — bound by --parallel',
     )
   })
 
@@ -155,6 +178,62 @@ describe('run --root --parallel — AC1 plan printed before dispatch', () => {
 })
 
 describe('run --root --parallel — AC2 each card is its own run --card process, at most the limit at once', () => {
+  it('US-611: selection → plan → pool prioritizes Review #589, then drains Ready #598', async () => {
+    process.env['PATH'] = '/bin'
+    const lines = captureLog()
+    const candidates = parseCandidates(
+      JSON.stringify({
+        candidates: [
+          card('598', { macrostate: 'Ready', mutexResources: ['pair-capability-publish-pr'] }),
+          card('589', { macrostate: 'Review', mutexResources: ['pair-capability-publish-pr'] }),
+          card('600', { macrostate: 'In Progress' }),
+        ],
+      }),
+    )
+    const h = harness(candidates)
+    let release!: () => void
+    const held = new Promise<void>(resolve => {
+      release = resolve
+    })
+    h.runCardProcess.mockImplementation(async ({ card: c }) => {
+      h.started.push(c.id)
+      if (c.id === '589') await held
+      return { exitCode: 0, signal: null }
+    })
+    const running = handleRunCommand(
+      parseRunCommand({ root: '605', parallel: '2', autonomous: true }),
+      projectFs(policy('2')),
+      h.deps,
+    )
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(h.started).toEqual(['589', '600'])
+    expect(lines.join('\n')).toContain('Plan: Run (3): #589, #600, #598')
+    release()
+    expect(await running).toBe(0)
+    expect(h.started).toEqual(['589', '600', '598'])
+    expect(h.audit[0]!.line).toContain('attempted=589,600,598')
+  })
+
+  it('US-611: explicit order beats adoption and is reported in the audit', async () => {
+    process.env['PATH'] = '/bin'
+    const lines = captureLog()
+    const h = harness([card('589', { macrostate: 'Review' }), card('598', { macrostate: 'Ready' })])
+    expect(
+      await handleRunCommand(
+        parseRunCommand({
+          root: '605',
+          parallel: '1',
+          stateOrder: 'Ready,Review,In Progress',
+          autonomous: true,
+        }),
+        projectFs(policy('2', '\n## Delivery State Order\n\nReview,In Progress,Ready\n')),
+        h.deps,
+      ),
+    ).toBe(0)
+    expect(h.started).toEqual(['598', '589'])
+    expect(lines.join('\n')).toContain('Ready → Review → In Progress → Draft (--state-order)')
+    expect(h.audit[0]!.line).toContain('state-order-source=--state-order')
+  })
   it('runs every planned card through the pool at the explicitly requested limit', async () => {
     process.env['PATH'] = '/bin'
     captureLog()
@@ -298,8 +377,8 @@ describe('run --root --parallel — AC6 aggregated audit', () => {
 
     expect(h.audit).toHaveLength(1)
     expect(h.audit[0]!.path).toBe(`${cwd}/.pair/working/automation/fanout.md`)
-    expect(h.audit[0]!.line.replace(/ parallel-source=--parallel(?= |$)/, '')).toMatch(
-      /^\S+ event=batch root=66 started=\S+ parallel=2 effective=1 attempted=1 outcomes=1:failed\(exit 1\) excluded=2 excludedReasons=\S+$/,
+    expect(h.audit[0]!.line).toMatch(
+      /^\S+ event=batch root=66 started=\S+ parallel=2 effective=1 attempted=1 outcomes=1:failed\(exit 1\) excluded=2 excludedReasons=\S+ parallel-source=--parallel state-order=Review,In_Progress,Ready state-order-source=default$/,
     )
   })
 })
@@ -456,7 +535,7 @@ describe('US-590 r0-1: shared-mutex cards at --parallel 1 run serially, in order
     expect(code).toBe(0)
     expect(h.started).toEqual(['1', '2', '3'])
     expect(h.peak()).toBe(1)
-    expect(lines.join('\n')).not.toContain('mutex conflict')
+    expect(lines.join('\n')).not.toContain('Excluded #')
   })
 
   it('a failing card in the serial chain never aborts the next; exit 1', async () => {
@@ -495,7 +574,7 @@ describe('US-590 r0-2: the audited excludedReasons equal the plan’s own exclus
       .map(l => /^ +Excluded #(\S+): (.+)$/.exec(l))
       .filter((m): m is RegExpExecArray => m !== null)
       .map(m => ({ id: m[1]!, reason: m[2]! }))
-    expect(planned.length).toBe(2)
+    expect(planned.length).toBe(1)
     const encoded = /(?:^| )excludedReasons=(\S+)(?= |$)/.exec(h.audit[0]!.line)![1]!
     expect(JSON.parse(decodeURIComponent(encoded))).toEqual(planned)
   })

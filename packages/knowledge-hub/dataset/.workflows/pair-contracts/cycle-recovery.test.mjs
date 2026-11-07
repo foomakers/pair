@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { resolve, recover, recordGateRed, baseSync, prereqState, POLICY_DEFAULTS } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
+import { resolve, recover, recordGateRed, baseSync, prereqState, supersede, POLICY_DEFAULTS } from '../../skills/pair-workflow-cycle/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-cycle/scripts/cycle-state.mjs', import.meta.url))
 const V = '4.0.1'
@@ -96,6 +96,34 @@ test('AC3: failed-contract (the repair budget spent) re-derives one more repair 
   assert.deepEqual([r.next.step, r.next.reason], ['blocked', 'failed-contract'])
   r = go(dir, { head: SHA('c'), baseHead: SHA('2') })
   assert.deepEqual(pick(r.next, 'step', 'mode', 'phase', 'stale'), { step: 'prepare', mode: 'repair', phase: 'r1-g1', stale: true })
+})
+
+test('moved PR head after an unsealed failed remediation re-reviews the new head after supersede', () => {
+  const dir = runDir()
+  const finding = { id: 'r0-1', severity: 'Major', blocking: true, transition: 'open', kind: 'defect', location: 'a', description: 'd', recommendation: 'r' }
+  put(dir, 'r0', 'review-phase', { pr: 7, reviewedHead: SHA('c'), findings: [finding], custody: { contractBreach: false }, readiness: { ready: false } })
+  put(dir, 'r1-g1', 'red-spec', { status: 'red', mode: 'remediation', inputHead: SHA('c') })
+  put(dir, 'r1-g1', 'red-verify', { verified: false, sealed: false, inputHead: SHA('c'), findings: [{ rowId: 'W1' }] })
+  put(dir, 'r1-g1', 'red-spec', { status: 'unprovable', mode: 'repair', inputHead: SHA('c') }, 2)
+  assert.equal(supersede({ dir, phase: 'r1-g1', attempt: 2, reason: 'stale witness', by: 'maintainer', workflowVersion: V, policy: POLICY, entry: 'fresh', pr: 7 }).superseded, true)
+  const old = go(dir, { head: SHA('c') })
+  assert.deepEqual(pick(old.next, 'step', 'mode', 'base'), { step: 'prepare', mode: 'repair', base: SHA('c') })
+  const moved = go(dir, { head: SHA('e') })
+  assert.deepEqual(pick(moved.next, 'step', 'mode', 'phase', 'base', 'headMoved'), { step: 'verify', mode: 're-review', phase: 'r2', base: SHA('c'), headMoved: true })
+  assert.deepEqual(moved.next.priorFindings, [{ id: finding.id, severity: finding.severity }])
+  assert.deepEqual(go(dir).next, moved.next)
+  assert.deepEqual(pick(resolve({ dir, workflowVersion: V, policy: { ...POLICY, maxFixRounds: 0 }, entry: 'fresh', head: SHA('e') }).next, 'step', 'mode', 'base'), { step: 'prepare', mode: 'repair', base: SHA('c') })
+})
+
+test('sealed remediation and human decision remain guarded when the PR head moves', () => {
+  const sealed = runDir()
+  put(sealed, 'r0', 'review-phase', { pr: 7, reviewedHead: SHA('c'), findings: [], custody: { contractBreach: false }, readiness: { ready: true, remoteHead: SHA('c') } })
+  put(sealed, 'r1-g1', 'red-spec', { status: 'red', mode: 'remediation', inputHead: SHA('c') })
+  put(sealed, 'r1-g1', 'red-verify', { verified: true, sealed: true, inputHead: SHA('c') })
+  assert.equal(go(sealed, { head: SHA('e') }).next.step, 'green')
+  const human = runDir()
+  put(human, 'r0', 'review-phase', { pr: 7, reviewedHead: SHA('c'), needsHumanDecision: true, findings: [], custody: { contractBreach: false }, readiness: { ready: false } })
+  assert.deepEqual(pick(go(human, { head: SHA('e') }).next, 'step', 'reason'), { step: 'blocked', reason: 'escalate' })
 })
 
 test('AC3: failed-custody re-derives a re-verification once the base moved', () => {

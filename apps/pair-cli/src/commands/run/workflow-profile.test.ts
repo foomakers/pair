@@ -28,10 +28,10 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
   beforeEach(() => {
     root = realpathSync(mkdtempSync(join(tmpdir(), 'pair-wfp-')))
     write('pair.config.json', {
-      workflowProfiles: { default: 'cheap-green', files: 'profiles/*.json' },
+      workflowProfiles: { default: 'claude-cheap', files: 'profiles/*.json' },
     })
-    write('profiles/cheap-green.json', {
-      name: 'cheap-green',
+    write('profiles/claude-cheap.json', {
+      name: 'claude-cheap',
       defaults: { engine: 'pi', effort: 'medium' },
       modelClasses: { cheap: 'm-cheap', frontier: 'm-front' },
       stages: {
@@ -47,22 +47,22 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
   it('resolves the configured default, printing-ready: name, source, hash, table', () => {
     const p = resolveWorkflowProfile(SCRIPTS, { root, tier: 'risk:yellow' })
 
-    expect(p.name).toBe('cheap-green')
+    expect(p.name).toBe('claude-cheap')
     expect(p.source).toBe('pair.config.json')
     expect(p.hash).toMatch(/^[0-9a-f]{64}$/)
-    expect(p.table[0]).toMatch(/^Profile: cheap-green \(source: pair\.config\.json/)
+    expect(p.table[0]).toMatch(/^Profile: claude-cheap \(source: pair\.config\.json/)
     expect(p.table.join('\n')).toContain('m-cheap')
   })
 
   it('--profile is reported as `argument`; --workflow-config wins over it', () => {
     write('ext.json', { name: 'ext' })
 
-    expect(resolveWorkflowProfile(SCRIPTS, { root, profile: 'cheap-green' }).source).toBe(
+    expect(resolveWorkflowProfile(SCRIPTS, { root, profile: 'claude-cheap' }).source).toBe(
       'argument',
     )
     const external = resolveWorkflowProfile(SCRIPTS, {
       root,
-      profile: 'cheap-green',
+      profile: 'claude-cheap',
       workflowConfig: 'ext.json',
     })
     expect([external.name, external.source]).toEqual(['ext', '--workflow-config'])
@@ -107,20 +107,20 @@ describe('resolveWorkflowProfile — the shared resolver, through the real scrip
 
   it('globs resolve identically on every platform (darwin and linux differ in filesystem case-sensitivity): matching is by the listed name, exactly, in a root with spaces', () => {
     const spaced = join(root, 'my project')
-    write('my project/profiles/cheap-green.json', { name: 'cheap-green' })
+    write('my project/profiles/claude-cheap.json', { name: 'claude-cheap' })
     const declare = (files: string) =>
       write('my project/pair.config.json', { workflowProfiles: { files } })
 
     declare('profiles/*.json')
-    expect(resolveWorkflowProfile(SCRIPTS, { root: spaced, profile: 'cheap-green' }).name).toBe(
-      'cheap-green',
+    expect(resolveWorkflowProfile(SCRIPTS, { root: spaced, profile: 'claude-cheap' }).name).toBe(
+      'claude-cheap',
     )
     // A differently-cased glob must not match here either: a case-insensitive volume would otherwise
     // find the profile on macOS and lose it on Linux CI.
     declare('Profiles/*.json')
-    expect(() => resolveWorkflowProfile(SCRIPTS, { root: spaced, profile: 'cheap-green' })).toThrow(
-      /profile-unresolved/,
-    )
+    expect(() =>
+      resolveWorkflowProfile(SCRIPTS, { root: spaced, profile: 'claude-cheap' }),
+    ).toThrow(/profile-unresolved/)
   })
 
   it('workflowProfileRequested: only a flag or a declared workflowProfiles block asks for a profile (AC9)', () => {

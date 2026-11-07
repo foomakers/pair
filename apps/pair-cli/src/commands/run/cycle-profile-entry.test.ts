@@ -52,13 +52,13 @@ const stage = (engine = 'default') => ({
 })
 
 const profileOf = (engine = 'default'): ResolvedWorkflowProfile => ({
-  name: 'cheap-green',
+  name: 'claude-cheap',
   source: 'argument',
   sourceDetail: '/project/p.json',
   hash: 'f'.repeat(64),
   stages: { implement: stage(engine) },
   table: [
-    'Profile: cheap-green (source: argument — /project/p.json) hash ffffffffffff',
+    'Profile: claude-cheap (source: argument — /project/p.json) hash ffffffffffff',
     '  implement | TABLE-ROW',
   ],
   contextPolicy: {},
@@ -122,7 +122,7 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
     const output = capture()
 
     await run(
-      { card: '12', cardTags: 'foo,risk:yellow', profile: 'cheap-green' },
+      { card: '12', cardTags: 'foo,risk:yellow', profile: 'claude-cheap' },
       files(),
       baseDeps({ resolveWorkflowProfile: resolver }),
     )
@@ -130,7 +130,7 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
     expect(resolver).toHaveBeenCalledTimes(1)
     expect(resolver).toHaveBeenCalledWith(`${cwd}/.claude/skills/pair-workflow-cycle/scripts`, {
       root: cwd,
-      profile: 'cheap-green',
+      profile: 'claude-cheap',
       workflowConfig: undefined,
       tier: 'risk:yellow',
     })
@@ -162,7 +162,7 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
 
     await run(
       { card: '12', cardTags: '' },
-      files({}, { workflowProfiles: { default: 'cheap-green' } }),
+      files({}, { workflowProfiles: { default: 'claude-cheap' } }),
       baseDeps({ resolveWorkflowProfile: resolver }),
     )
 
@@ -192,7 +192,7 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
 
     await expect(
       run(
-        { card: '12', cardTags: '', profile: 'cheap-green' },
+        { card: '12', cardTags: '', profile: 'claude-cheap' },
         files(),
         baseDeps({ resolveWorkflowProfile: () => profileOf('gpt-99') }),
       ),
@@ -206,7 +206,7 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
 
     await expect(
       run(
-        { card: '12', cardTags: '', profile: 'cheap-green' },
+        { card: '12', cardTags: '', profile: 'claude-cheap' },
         files(),
         baseDeps({ resolveWorkflowProfile: () => profileOf('codex') }),
       ),
@@ -224,7 +224,7 @@ describe('the profile at the run --card entry (US-488 T-5)', () => {
 
     await expect(
       run(
-        { card: '12', cardTags: 'auto-dev,risk:green', profile: 'cheap-green' },
+        { card: '12', cardTags: 'auto-dev,risk:green', profile: 'claude-cheap' },
         fs,
         baseDeps({ resolveWorkflowProfile: () => profileOf() }),
       ),

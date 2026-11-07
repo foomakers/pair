@@ -17,7 +17,7 @@ No `pair.config.json`, no `workflowProfiles` block, no `--profile` / `--workflow
 ```json
 {
   "workflowProfiles": {
-    "default": "cheap-green",
+    "default": "claude-cheap",
     "files": ".pair/adoption/tech/workflow-profiles/*.json",
     "inline": { "quick": { "name": "quick", "defaults": { "effort": "low" } } }
   }
@@ -33,7 +33,7 @@ No `pair.config.json`, no `workflowProfiles` block, no `--profile` / `--workflow
 
 ```json
 {
-  "name": "cheap-green",
+  "name": "claude-cheap",
   "defaults": { "engine": "claude", "model": "by-tier", "effort": "medium", "context": "fresh" },
   "modelClasses": { "cheap": "claude-haiku-5-5", "balanced": "claude-sonnet-5-5", "frontier": "claude-opus-5-5" },
   "stages": {
@@ -90,12 +90,12 @@ The resolved profile's **name and content hash** are recorded in every handoff (
 | --- | --- | --- |
 | `engine` | spawns that engine for the stage (proven installed before the first dispatch) | reported only — the session is the engine |
 | `model` | passed under the engine's model flag | applied to the dispatch primitive's model parameter where it has one |
-| `effort` | passed only to an engine declaring an effort flag (none does yet — recorded and printed, not sent) | the packet's `--profile` effort: enforced for Codex, a prompt request for Claude |
+| `effort` | passed through the engine adapter: Codex `-c model_reasoning_effort=<level>`, Claude `--effort <level>`; recorded only when no effort flag is declared | the packet's `--profile` effort: enforced for Codex, a prompt request for Claude |
 | `context` | `reuse` is reported and run fresh (the driver spawns a new process per stage) | honoured as `next.context` |
 
 ## Example
 
-The `cheap-green` profile above is the shipped example, a **pilot** and never active by default. A sample sits at `.pair/adoption/tech/workflow-profiles/cheap-green.json`; to use it, pass `--profile cheap-green` and register the glob `"workflowProfiles": { "files": ".pair/adoption/tech/workflow-profiles/*.json" }` in `pair.config.json` — do **not** set it as `default`.
+The `claude-cheap` profile above is the shipped example, a **pilot** and never active by default. A sample sits at `.pair/adoption/tech/workflow-profiles/claude-cheap.json`; to use it, pass `--profile claude-cheap` and register the glob `"workflowProfiles": { "files": ".pair/adoption/tech/workflow-profiles/*.json" }` in `pair.config.json` — do **not** set it as `default`.
 
 ### Recommended stage → model mapping (pilot)
 
@@ -108,7 +108,7 @@ The `cheap-green` profile above is the shipped example, a **pilot** and never ac
 | prepare, validate, verify | frontier | `claude-opus-5-5` | independent judgment stages |
 | post-merge closure (`merge`) | balanced | `claude-sonnet-5-5` | |
 
-**Pilot status.** A profile cannot tell a `doc` group from a behavioral one, so `cheap-green` puts the whole `green` stage on the cheap class: use it only for doc-only cards, and run behavioral cards on a profile with `green: balanced`. **Success criterion:** doc-group GREEN by Haiku passes review on the first round in at least 2 of 3 cards; otherwise return to `balanced`.
+**Pilot status.** A profile cannot tell a `doc` group from a behavioral one, so `claude-cheap` puts the whole `green` stage on the cheap class: use it only for doc-only cards, and run behavioral cards on a profile with `green: balanced`. **Success criterion:** doc-group GREEN by Haiku passes review on the first round in at least 2 of 3 cards; otherwise return to `balanced`.
 
 ## Refusals
 

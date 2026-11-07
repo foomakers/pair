@@ -22,12 +22,20 @@ const candidate = {
   title: 'Fan-out',
   branch: 'feature/US-491-x',
   tier: 'risk:green',
+  macrostate: 'Ready',
   labels: ['user story', 'risk:green'],
   mutexResources: ['apps/pair-cli/src/commands/run'],
   prerequisites: [{ id: '487', merged: true }],
 }
 
 const marker = (value: unknown) => `${CANDIDATES_MARKER} ${JSON.stringify(value)}`
+
+it('US-611: preserves the canonical delivery state returned by selection', () => {
+  const [parsed] = parseCandidates(
+    JSON.stringify({ candidates: [{ ...candidate, macrostate: 'Review' }] }),
+  )
+  expect(parsed).toMatchObject({ id: '491', macrostate: 'Review' })
+})
 
 describe('buildSelectionPrompt', () => {
   it('invokes pair-next with --root, and --filter only when ## Eligibility is declared', () => {
@@ -48,6 +56,15 @@ describe('buildSelectionPrompt', () => {
     expect(prompt).toContain('mutex-resource')
     expect(prompt).toContain(CANDIDATES_MARKER)
     expect(prompt).toMatch(/do not invoke/i)
+  })
+
+  it('requests pair-next resolved control state and its mapping, without a second resolver', () => {
+    const prompt = buildSelectionPrompt(ENGINES.claude, { root: '66' })
+    expect(prompt).toMatch(/^\/pair-next --root 66/m)
+    expect(prompt).toContain('pair-next resolves')
+    expect(prompt).toContain('pair-next Control-State Resolution')
+    expect(prompt).toContain('## State Mapping')
+    expect(prompt).toContain('unknown value if unmapped')
   })
 })
 

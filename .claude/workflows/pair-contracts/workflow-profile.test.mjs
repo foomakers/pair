@@ -20,7 +20,7 @@ test('T-1/AC1: a minimal {name, defaults} profile is valid and needs no stages',
 })
 
 test('T-1/AC1: a stage entry overrides only the fields it declares; the rest fall back to defaults', () => {
-  const p = { name: 'cheap-green', defaults: { engine: 'pi', model: 'big', effort: 'high', context: 'fresh' }, stages: { green: { model: 'small', context: 'reuse' } } }
+  const p = { name: 'claude-cheap', defaults: { engine: 'pi', model: 'big', effort: 'high', context: 'fresh' }, stages: { green: { model: 'small', context: 'reuse' } } }
   assert.deepEqual(errorsOf(p), [])
   assert.deepEqual(effectiveStage(p, 'green'), {
     engine: { value: 'pi', source: 'defaults' },
@@ -98,14 +98,14 @@ const project = ({ config, files = {} } = {}) => {
   return root
 }
 const GLOB = '.pair/adoption/tech/workflow-profiles/*.json'
-const cheap = { name: 'cheap-green', defaults: { model: 'small' } }
+const cheap = { name: 'claude-cheap', defaults: { model: 'small' } }
 const pricey = { name: 'pricey', defaults: { model: 'big' } }
 const halt = (fn, code) => assert.throws(fn, e => e instanceof ProfileError && e.code === code, code)
 
 test('T-2/AC2: --profile resolves from files and reports source `argument`', () => {
   const root = project({ config: { workflowProfiles: { default: 'pricey', files: GLOB } }, files: { '.pair/adoption/tech/workflow-profiles/a.json': cheap, '.pair/adoption/tech/workflow-profiles/b.json': pricey } })
-  const r = resolveProfile({ root, profile: 'cheap-green' })
-  assert.equal(r.name, 'cheap-green')
+  const r = resolveProfile({ root, profile: 'claude-cheap' })
+  assert.equal(r.name, 'claude-cheap')
   assert.equal(r.source, 'argument')
   assert.equal(r.stages.green.model.value, 'small')
   assert.match(r.hash, /^[0-9a-f]{64}$/)
@@ -127,15 +127,15 @@ test('T-2/AC2/AC9: neither argument nor default (or no pair.config.json at all) 
 
 test('T-2/AC2: profiles are indexed by their own `name`, never the filename', () => {
   const root = project({ config: { workflowProfiles: { files: [GLOB] } }, files: { '.pair/adoption/tech/workflow-profiles/zzz-not-the-name.json': cheap } })
-  assert.equal(resolveProfile({ root, profile: 'cheap-green' }).name, 'cheap-green')
+  assert.equal(resolveProfile({ root, profile: 'claude-cheap' }).name, 'claude-cheap')
 })
 
 test('T-2: inline profiles resolve, and inline wins over a file with the same name (reported)', () => {
   const root = project({
-    config: { workflowProfiles: { files: GLOB, inline: { 'cheap-green': { name: 'cheap-green', defaults: { model: 'from-inline' } } } } },
+    config: { workflowProfiles: { files: GLOB, inline: { 'claude-cheap': { name: 'claude-cheap', defaults: { model: 'from-inline' } } } } },
     files: { '.pair/adoption/tech/workflow-profiles/a.json': cheap },
   })
-  const r = resolveProfile({ root, profile: 'cheap-green' })
+  const r = resolveProfile({ root, profile: 'claude-cheap' })
   assert.equal(r.stages.green.model.value, 'from-inline')
   assert.match(r.notes.join('\n'), /inline.*wins.*a\.json/)
 })
@@ -156,7 +156,7 @@ test('T-2/AC3: a malformed --workflow-config is profile-invalid with the parse e
 
 test('T-2/AC8: an unresolvable --profile HALTs profile-unresolved naming the searched sources — never the KB default', () => {
   const root = project({ config: { workflowProfiles: { files: GLOB, inline: { x: { name: 'x' } } } }, files: { '.pair/adoption/tech/workflow-profiles/a.json': cheap } })
-  assert.throws(() => resolveProfile({ root, profile: 'does-not-exist' }), e => e.code === 'profile-unresolved' && e.detail.includes(GLOB) && e.detail.includes('inline') && e.detail.includes('does-not-exist') && e.detail.includes('cheap-green'))
+  assert.throws(() => resolveProfile({ root, profile: 'does-not-exist' }), e => e.code === 'profile-unresolved' && e.detail.includes(GLOB) && e.detail.includes('inline') && e.detail.includes('does-not-exist') && e.detail.includes('claude-cheap'))
 })
 
 test('T-2/AC8: an unresolvable configured default HALTs too; with no pair.config.json an --profile name is unresolved', () => {
@@ -166,7 +166,7 @@ test('T-2/AC8: an unresolvable configured default HALTs too; with no pair.config
 
 test('T-2: two files declaring the same name HALT profile-name-collision naming both paths', () => {
   const root = project({ config: { workflowProfiles: { files: GLOB } }, files: { '.pair/adoption/tech/workflow-profiles/a.json': cheap, '.pair/adoption/tech/workflow-profiles/b.json': cheap } })
-  assert.throws(() => resolveProfile({ root, profile: 'cheap-green' }), e => e.code === 'profile-name-collision' && e.detail.includes('a.json') && e.detail.includes('b.json'))
+  assert.throws(() => resolveProfile({ root, profile: 'claude-cheap' }), e => e.code === 'profile-name-collision' && e.detail.includes('a.json') && e.detail.includes('b.json'))
 })
 
 test('T-2: the selected profile is validated on load — a bad context is profile-invalid through the resolver too', () => {
@@ -181,7 +181,7 @@ test('T-2: a malformed workflowProfiles block (unknown key, wrong types) is prof
 
 test('T-2: `**` globs recurse and a glob never escapes the project root', () => {
   const root = project({ config: { workflowProfiles: { files: 'profiles/**/*.json' } }, files: { 'profiles/deep/er/a.json': cheap } })
-  assert.equal(resolveProfile({ root, profile: 'cheap-green' }).name, 'cheap-green')
+  assert.equal(resolveProfile({ root, profile: 'claude-cheap' }).name, 'claude-cheap')
   halt(() => resolveProfile({ root: project({ config: { workflowProfiles: { files: '../*.json' } } }), profile: 'x' }), 'profile-invalid')
 })
 
@@ -423,12 +423,12 @@ test('T-6: the KB workflow-profiles.md example profile validates and resolves, a
   const kb = read('../../../.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md')
   assert.equal(kb, read('../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md'), 'KB mirror drifted from the dataset source')
   const blocks = [...kb.matchAll(/```json\n([\s\S]*?)```/g)].map(m => JSON.parse(m[1]))
-  const example = blocks.find(b => b.name === 'cheap-green')
+  const example = blocks.find(b => b.name === 'claude-cheap')
   const config = blocks.find(b => b.workflowProfiles)
   assert.ok(example && config)
   assert.deepEqual(errorsOf(example), [])
   // the doc's own claim: green cheap + reuse, prepare frontier + reuse, validate/verify frontier + fresh, implement balanced
-  const root = project({ config: { workflowProfiles: { default: 'cheap-green', files: GLOB } }, files: { '.pair/adoption/tech/workflow-profiles/cheap-green.json': example, '.pair/adoption/tech/automation.md': POLICY_MD } })
+  const root = project({ config: { workflowProfiles: { default: 'claude-cheap', files: GLOB } }, files: { '.pair/adoption/tech/workflow-profiles/claude-cheap.json': example, '.pair/adoption/tech/automation.md': POLICY_MD } })
   const r = resolveProfile({ root, tier: 'risk:yellow' })
   assert.deepEqual([r.stages.prepare.model.resolved.class, r.stages.prepare.context.value], ['frontier', 'reuse'])
   assert.deepEqual([r.stages.green.model.resolved.class, r.stages.green.context.value], ['cheap', 'reuse'])
@@ -512,8 +512,8 @@ test('PR517-C3: the CLI still resolves a class and an explicit id side by side (
   assert.deepEqual([r.out.stages.verify.model.resolved.id, r.out.stages.green.model.resolved.id], ['m-frontier', 'sonnet'])
 })
 
-// ── cheap-green pilot: the KB table + adoption sample (conformance) ────────────────────────────
-test('cheap-green: the KB documents the stage->model table with *-5-5 ids; the adoption sample is valid, resolves and is NOT activated', () => {
+// ── claude-cheap pilot: the KB table + adoption sample (conformance) ────────────────────────────
+test('claude-cheap: the KB documents the stage->model table with *-5-5 ids; the adoption sample is valid, resolves and is NOT activated', () => {
   const repo = fileURLToPath(new URL('../../../', import.meta.url))
   const kb = readFileSync(join(repo, '.pair/knowledge/guidelines/collaboration/automation/workflow-profiles.md'), 'utf8')
   assert.match(kb, /### Recommended stage → model mapping \(pilot\)/)
@@ -522,8 +522,10 @@ test('cheap-green: the KB documents the stage->model table with *-5-5 ids; the a
   const ids = [...kb.matchAll(/claude-[a-z]+-[0-9]+-[0-9]+/g)].map(m => m[0])
   assert.ok(ids.length >= 3)
   for (const id of ids) assert.match(id, /^claude-(haiku|sonnet|opus)-5-5$/)
-  const sample = JSON.parse(readFileSync(join(repo, '.pair/adoption/tech/workflow-profiles/cheap-green.json'), 'utf8'))
+  const sample = JSON.parse(readFileSync(join(repo, '.pair/adoption/tech/workflow-profiles/claude-cheap.json'), 'utf8'))
   assert.deepEqual(validateProfile(sample).errors, [])
   assert.deepEqual(sample.modelClasses, { cheap: 'claude-haiku-5-5', balanced: 'claude-sonnet-5-5', frontier: 'claude-opus-5-5' })
-  assert.equal(existsSync(join(repo, 'pair.config.json')), false, 'the pilot is never activated by a shipped pair.config.json')
+  const configPath = join(repo, 'pair.config.json')
+  const config = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : {}
+  assert.notEqual(config.workflowProfiles?.default, sample.name, 'the Claude pilot is never the project default')
 })

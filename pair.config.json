@@ -1,0 +1,7 @@
+{
+  "engine": { "id": "codex", "model": { "codex": "gpt-6-sol" } },
+  "workflowProfiles": {
+    "default": "codex-cheap",
+    "files": ".pair/adoption/tech/workflow-profiles/*.json"
+  }
+}

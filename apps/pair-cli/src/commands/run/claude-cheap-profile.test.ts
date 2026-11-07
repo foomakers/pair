@@ -7,7 +7,7 @@ import { resolveWorkflowProfile } from './workflow-profile'
 const REPO_ROOT = join(__dirname, '..', '..', '..', '..', '..')
 const SCRIPTS = join(REPO_ROOT, '.claude', 'skills', 'pair-workflow-cycle', 'scripts')
 
-describe('the cheap-green sample profile (pilot, not activated)', () => {
+describe('the claude-cheap sample profile (pilot, not activated)', () => {
   const profile = resolveWorkflowProfile(SCRIPTS, {
     root: REPO_ROOT,
     workflowConfig: join(
@@ -16,13 +16,13 @@ describe('the cheap-green sample profile (pilot, not activated)', () => {
       'adoption',
       'tech',
       'workflow-profiles',
-      'cheap-green.json',
+      'claude-cheap.json',
     ),
     tier: 'risk:yellow',
   })
 
   it('resolves and prints its stage table', () => {
-    expect(profile.name).toBe('cheap-green')
+    expect(profile.name).toBe('claude-cheap')
     expect(profile.table.join('\n')).toContain('green     | engine claude')
     expect(profile.stages['green']?.model.resolved.id).toBe('claude-haiku-5-5')
     expect(profile.stages['verify']?.model.resolved.id).toBe('claude-opus-5-5')

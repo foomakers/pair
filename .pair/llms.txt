@@ -205,6 +205,7 @@
 - [Decision: Auto-Recovery Lives in cycle-state, Beside the Handoffs, Bounded by Two Budgets](.pair/adoption/decision-log/2026-10-24-run-auto-recovery-state-and-budgets.md)
 - [Decision: use native GitHub issue references in commits](.pair/adoption/decision-log/2026-11-06-native-issue-commit-references.md)
 - [Decision: expose the canonical Review state on the project board](.pair/adoption/decision-log/2026-11-06-review-board-state.md)
+- [Decision: named Claude and Codex workflow profiles](.pair/adoption/decision-log/2026-11-07-codex-workflow-profile.md)
 
 ## How-To Guides
 

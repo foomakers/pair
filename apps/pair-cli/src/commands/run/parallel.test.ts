@@ -50,6 +50,26 @@ const poolDefaults = {
 }
 
 describe('runPool — AC2 concurrency bound, AC4 partial-batch isolation', () => {
+  it('queues a mutex conflict until its holder finishes, while independent work uses the other slot', async () => {
+    const gate = deferred<void>()
+    const started: string[] = []
+    const pool = runPool({
+      items: ['589', '598', '600'],
+      limit: 2,
+      resources: id => (id === '600' ? [] : ['pair-capability-publish-pr']),
+      worker: async id => {
+        started.push(id)
+        if (id === '589') await gate.promise
+        return ok(id)
+      },
+      ...poolDefaults,
+    })
+    await new Promise(r => setTimeout(r, 0))
+    expect(started).toEqual(['589', '600'])
+    gate.resolve()
+    expect((await pool).map(o => o.id)).toEqual(['589', '598', '600'])
+    expect(started).toEqual(['589', '600', '598'])
+  })
   it('never runs more than `limit` workers at once, and starts the next when a slot frees', async () => {
     let inFlight = 0
     let peak = 0
@@ -112,6 +132,20 @@ describe('runPool — AC2 concurrency bound, AC4 partial-batch isolation', () =>
       { id: '2', outcome: 'crashed', detail: 'Error: boom' },
       ok('3'),
     ])
+  })
+
+  it('releases a mutex when a worker throws before returning a promise', async () => {
+    const outcomes = await runPool({
+      items: ['1', '2'],
+      limit: 2,
+      resources: () => ['shared'],
+      worker: id => {
+        if (id === '1') throw new Error('boom')
+        return Promise.resolve(ok(id))
+      },
+      ...poolDefaults,
+    })
+    expect(outcomes).toEqual([{ id: '1', outcome: 'crashed', detail: 'Error: boom' }, ok('2')])
   })
 
   it('once signalled, no NEW card starts; the not-started ones are reported, never dropped', async () => {

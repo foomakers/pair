@@ -34,7 +34,7 @@ This framework does not cover:
 
 **[automation-policy.md](automation-policy.md)** - `tech/automation.md` schema: the `## Eligibility` declaration that selects which cards may run unattended, and the `## Workflows` mapping that routes a tagged card to the workflow that runs on it
 
-**[workflow-profiles.md](workflow-profiles.md)** - named JSON profiles declaring the engine, model, effort and context each delivery-cycle stage uses; the resolution cascade, the `context` validation against the cycle's transition table, model classes, and the example `cheap-green` profile
+**[workflow-profiles.md](workflow-profiles.md)** - named JSON profiles declaring the engine, model, effort and context each delivery-cycle stage uses; the resolution cascade, the `context` validation against the cycle's transition table, model classes, and the example `claude-cheap` profile
 
 **[github-automation.md](github-automation.md)** - GitHub Actions and workflow automation strategies, including the reference tag-driven dispatch trigger adapter
 

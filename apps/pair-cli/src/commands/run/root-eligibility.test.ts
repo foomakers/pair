@@ -32,6 +32,7 @@ const payload = (candidate: Record<string, unknown>): string =>
         id: '7',
         title: 't',
         branch: 'feature/US-7-x',
+        macrostate: 'Ready',
         mutexResources: [],
         prerequisites: [],
         ...candidate,

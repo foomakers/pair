@@ -1,0 +1,17 @@
+{
+  "name": "codex-cheap",
+  "defaults": {
+    "effort": "low"
+  },
+  "stages": {
+    "verify": {
+      "effort": "high"
+    },
+    "prepare": {
+      "effort": "medium"
+    },
+    "implement": {
+      "effort": "medium"
+    }
+  }
+}

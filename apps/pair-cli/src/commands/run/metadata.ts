@@ -91,6 +91,11 @@ export const runCommandMetadata = {
         "US-491: fan-out (optional: the loop flags --watch, --preset, --until, --prepare, --merge, --predicate imply fan-out; omitted --parallel inherits adoption (## Max Parallelism), otherwise KB default 1) — pair-next selects (--root and/or --filter, --assignee, --status), pair-loop's dependency + mutex analysis plans, and up to min(dependency-allowed, n) `pair-cli run --card` processes run at once; explicit n overrides adoption; one iteration, or a re-selecting loop with --watch / --max-iterations (US-522). Needs --root or --filter (or the policy's); not with --card/--skill/--prompt",
     },
     {
+      flags: '--state-order <states>',
+      description:
+        'Root delivery priority for this run: a comma-separated permutation of Review,In Progress,Ready. Overrides ## Delivery State Order; Draft follows these states.',
+    },
+    {
       flags: '--watch',
       description:
         'US-522: the loop (--root/--filter; --parallel optional; omission inherits adoption (## Max Parallelism), otherwise KB default 1): each iteration re-selects (skipping escalated, locked and already-driven cards), and an idle one waits --interval and re-selects. Stops at the Stop Predicate, the iteration cap (only iterations that ran a card count; idle polls never do) or Ctrl-C',

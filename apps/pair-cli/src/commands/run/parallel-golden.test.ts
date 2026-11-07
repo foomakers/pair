@@ -23,6 +23,7 @@ const card = (id: string, extra: Partial<RootCandidate> = {}): RootCandidate => 
   title: `Card ${id}`,
   branch: `feature/US-${id}-x`,
   tier: 'risk:green',
+  macrostate: 'Ready',
   labels: ['risk:green'],
   mutexResources: [],
   prerequisites: [],
@@ -82,7 +83,7 @@ describe('US-522 AC13 — --root --parallel preserves US-491 output with paralle
     expect(out).toMatchInlineSnapshot(`
       {
         "audit": [
-          "<ts> event=batch root=66 started=<ts> parallel=2 effective=2 attempted=10,11 outcomes=10:completed(exit 0),11:failed(exit 1) excluded=(none) excludedReasons=(none) parallel-source=--parallel",
+          "<ts> event=batch root=66 started=<ts> parallel=2 effective=2 attempted=10,11 outcomes=10:completed(exit 0),11:failed(exit 1) excluded=(none) excludedReasons=(none) parallel-source=--parallel state-order=Review,In_Progress,Ready state-order-source=default",
         ],
         "code": 1,
         "stdout": [
@@ -95,6 +96,7 @@ describe('US-522 AC13 — --root --parallel preserves US-491 output with paralle
           "  Merge: the driver never merges, and \`## Auto-Advance\` is (none) — nothing is pushed or merged unattended; every gate stays human (AC10)",
           "  Autonomy: explicit opt-in (--permission-mode bypassPermissions)",
           "  Project trust: nothing to approve — claude -p skips the workspace trust dialog (claude --help)",
+          "  Delivery priority: Review → In Progress → Ready → Draft (default); mutex conflicts queue until release",
           "  Plan: Run (2): #10, #11",
           "  Effective parallelism: 2 = min(dependency-allowed 2, --parallel 2 [overrides ## Max Parallelism 3]) — bound by dependency-allowed and --parallel",
           "  Started #10",
