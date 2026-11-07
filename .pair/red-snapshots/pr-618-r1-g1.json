@@ -1,0 +1,501 @@
+{
+  "$meta": {
+    "pr": "618",
+    "phase": "r1-g1",
+    "base": "82394d1cc9d8543bc6455eec9e90591a125be16a",
+    "trailer": "Pair-RED-Snapshot: pr=618; phase=r1-g1; base=82394d1cc9d8543bc6455eec9e90591a125be16a; manifest=.pair/red-snapshots/pr-618-r1-g1.json",
+    "artifacts": [
+      "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "packages/dev-tools/src/test-audit/inventory.controls.test.ts"
+    ]
+  },
+  "mode": "remediation",
+  "inputHead": "82394d1cc9d8543bc6455eec9e90591a125be16a",
+  "sourceOfTruth": "packages/dev-tools/src/test-audit/inventory.ts",
+  "inventory": [
+    {
+      "id": "r0-1",
+      "producer": "inventory.ts parseTests/countSignals (packages/dev-tools/src/test-audit/inventory.ts)",
+      "inputs": [
+        "test source text"
+      ],
+      "representations": [
+        "canonical source packages/dev-tools/src/test-audit/inventory.ts"
+      ],
+      "consumers": [
+        "gateViolations G1/G2",
+        "buildInventory",
+        "summarize"
+      ],
+      "classes": [
+        "callback last (ok)",
+        "callback followed by numeric timeout",
+        "async callback+timeout",
+        "expect.assertions/hasAssertions only",
+        "zero assertions+timeout (G1 stays)",
+        "options-object in the middle (callback last)",
+        "function-expression callback + numeric timeout"
+      ],
+      "interactions": [
+        "r0-1 x r0-3: tagged each + trailing timeout"
+      ]
+    },
+    {
+      "id": "r0-2",
+      "producer": "inventory.ts parseTests/countSignals (packages/dev-tools/src/test-audit/inventory.ts)",
+      "inputs": [
+        "test source text"
+      ],
+      "representations": [
+        "canonical source packages/dev-tools/src/test-audit/inventory.ts"
+      ],
+      "consumers": [
+        "gateViolations G1/G2",
+        "buildInventory",
+        "summarize"
+      ],
+      "classes": [
+        "describe skip/only",
+        "describe skipIf",
+        "nested describe under skip",
+        "it skipIf/runIf",
+        "plain it skip (ok)",
+        "sibling outside skipped describe (not skipped)",
+        "describe runIf",
+        "it skip inside describe only (skipped+focused)",
+        "plain it only focused",
+        "plain Playwright test skip/only"
+      ],
+      "interactions": [
+        "r0-2 x r0-3: test.describe skip"
+      ]
+    },
+    {
+      "id": "r0-3",
+      "producer": "inventory.ts parseTests/countSignals (packages/dev-tools/src/test-audit/inventory.ts)",
+      "inputs": [
+        "test source text"
+      ],
+      "representations": [
+        "canonical source packages/dev-tools/src/test-audit/inventory.ts"
+      ],
+      "consumers": [
+        "gateViolations G1/G2",
+        "buildInventory",
+        "summarize"
+      ],
+      "classes": [
+        "tagged template it.each",
+        "array it.each (ok)",
+        "test.describe path",
+        "describe path (ok)",
+        "test.describe.serial path",
+        "buildInventory reconciliation: tagged each + timeout + describe skip"
+      ],
+      "interactions": [
+        "r0-1 x r0-3",
+        "r0-2 x r0-3"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "packages/dev-tools/src/test-audit",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/dev-tools/src/test-audit/inventory.ts"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "w-r0-1a",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-1a",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-1a",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "assertions===1, not in G1",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "w-r0-1b",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-1b",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-1b",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "assertions===3, not in G1",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "w-r0-1c",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-1c",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-1c",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "hasAssertions counted >=1",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "w-r0-1d",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-1d",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-1d",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "expect.assertions counted >=1",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "w-r0-2a",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-2a",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-2a",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "describe skip child skipped, in G2, not G1",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "w-r0-2b",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-2b",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-2b",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "describe only child focused, in G2",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "w-r0-2c",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-2c",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-2c",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "describe skipIf child skipped, in G2",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "w-r0-2d",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-2d",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-2d",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "it skipIf skipped, in G2",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "w-r0-2e",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-2e",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-2e",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "it runIf skipped, in G2",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "w-r0-2f",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-2f",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-2f",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "nested describe under skip: skipped",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "w-r0-3a",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-3a",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-3a",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "1 parametrized record, assertions 1",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "w-r0-3b",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-3b",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-3b",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "id suite > t",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "w-r0-3c",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "w-r0-3c",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-3c",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "test.describe skip: id suite > t and skipped",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "w-r0-3d",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "w-r0-3d",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-3d",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "tagged each + timeout: 1 record, assertions 1, not G1",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "c-r0-1a",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "c-r0-1a",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.controls.test.ts :: c-r0-1a",
+      "file": "packages/dev-tools/src/test-audit/inventory.controls.test.ts",
+      "expected": "zero-assertion+timeout remains in G1",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "c-r0-1b",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "c-r0-1b",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.controls.test.ts :: c-r0-1b",
+      "file": "packages/dev-tools/src/test-audit/inventory.controls.test.ts",
+      "expected": "callback last: assertions 2",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "c-r0-2a",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "c-r0-2a",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.controls.test.ts :: c-r0-2a",
+      "file": "packages/dev-tools/src/test-audit/inventory.controls.test.ts",
+      "expected": "plain it skip skipped, G2",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "c-r0-2b",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "c-r0-2b",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.controls.test.ts :: c-r0-2b",
+      "file": "packages/dev-tools/src/test-audit/inventory.controls.test.ts",
+      "expected": "sibling not skipped",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "c-r0-3a",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "c-r0-3a",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.controls.test.ts :: c-r0-3a",
+      "file": "packages/dev-tools/src/test-audit/inventory.controls.test.ts",
+      "expected": "array each: 1 parametrized record",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "c-r0-3b",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "c-r0-3b",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.controls.test.ts :: c-r0-3b",
+      "file": "packages/dev-tools/src/test-audit/inventory.controls.test.ts",
+      "expected": "describe path id",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "w-r0-1f",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-1f",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-1f",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "function-expression + timeout: assertions===1",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "w-r0-2g",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-2g",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-2g",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "describe runIf child skipped, in G2",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "w-r0-2h",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-2h",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-2h",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "it skip in describe only: skipped+focused, G2",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "w-r0-3e",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-3e",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-3e",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "test.describe.serial: id suite > t",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "w-r0-3f",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "w-r0-3f",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts :: w-r0-3f",
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "expected": "buildInventory total 1, G1 [], G2 length 1",
+      "covers": [
+        "r0-3"
+      ]
+    },
+    {
+      "id": "c-r0-1c",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "c-r0-1c",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.controls.test.ts :: c-r0-1c",
+      "file": "packages/dev-tools/src/test-audit/inventory.controls.test.ts",
+      "expected": "options-object middle: assertions 1, not G1",
+      "covers": [
+        "r0-1"
+      ]
+    },
+    {
+      "id": "c-r0-2c",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "c-r0-2c",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.controls.test.ts :: c-r0-2c",
+      "file": "packages/dev-tools/src/test-audit/inventory.controls.test.ts",
+      "expected": "plain it only focused, G2",
+      "covers": [
+        "r0-2"
+      ]
+    },
+    {
+      "id": "c-r0-2d",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "c-r0-2d",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.controls.test.ts :: c-r0-2d",
+      "file": "packages/dev-tools/src/test-audit/inventory.controls.test.ts",
+      "expected": "plain test skip/only flagged",
+      "covers": [
+        "r0-2"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/dev-tools/src/test-audit/inventory.remediation.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:f9bb487319e9dc773647804725820a9a568f50b5366d5927a6307b83dd808f5d",
+      "command": "pnpm --dir packages/dev-tools exec vitest run src/test-audit/inventory.remediation.test.ts",
+      "observed": "Tests 19 failed (19); e.g. AssertionError: expected +0 to be 1 (w-r0-1a)"
+    },
+    {
+      "file": "packages/dev-tools/src/test-audit/inventory.controls.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:2154a8b0f550f7147e0e01be7f9b83fb997d6bec44bfaa74d8c89b6fd4006f21",
+      "command": "pnpm --dir packages/dev-tools exec vitest run src/test-audit/inventory.controls.test.ts",
+      "observed": "Tests 9 passed (9)"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1",
+          "r0-2",
+          "r0-3"
+        ],
+        "owner": "packages/dev-tools/src/test-audit",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/dev-tools/src/test-audit/inventory.ts"
+        ],
+        "oracle": "vitest inventory.remediation.test.ts + inventory.controls.test.ts",
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g2",
+        "findings": [
+          "r0-4"
+        ],
+        "owner": "packages/dev-tools/src/test-audit",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/dev-tools/src/test-audit/inventory.ts",
+          "docs/testing/TESTING_POLICY.md"
+        ],
+        "oracle": "a test changes a threshold in test-policy.config.json and the gate result changes (consumer API chosen by the g2 preparation)",
+        "dependsOn": [
+          "r1-g1"
+        ]
+      }
+    ],
+    "carried": []
+  }
+}
