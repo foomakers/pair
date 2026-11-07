@@ -43,3 +43,4 @@ apps/website/scripts/landing-video/_login-closing.html
 
 # package-manual.sh temporary dts tsconfig (removed on exit; ignored if a killed run leaves it)
 apps/pair-cli/tsconfig.dts.json
+test-audit/.tmp/

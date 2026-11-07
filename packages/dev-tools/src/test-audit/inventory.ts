@@ -30,6 +30,8 @@ export interface TestRecord {
 
 const TEST_FNS = new Set(['it', 'test'])
 const ASSERT_RE = /^(expect|expectTypeOf)$|^expect\.(assertions|hasAssertions)$|^assert(\.\w+)?$/
+/** Assertion-named helpers (`expectX`, `assertX`, `checkX`…): the assertion lives in the helper. */
+const ASSERT_HELPER_RE = /^(expect|assert|verify|ensure|should|check|validate|must)([A-Z_]|$)/
 const MOCK_RE = /^(vi|jest)\.(fn|mock|spyOn|doMock)$/
 
 const calleeName = (e: ts.Expression): string =>
@@ -55,19 +57,42 @@ export const moduleOf = (file: string): string => {
   return ['apps', 'packages', '.claude'].includes(a) && file.split('/').length > 2 ? `${a}/${b}` : a
 }
 
-function countSignals(fn: ts.Node | undefined): { assertions: number; mocks: number } {
+function countSignals(
+  fn: ts.Node | undefined,
+  helpers: Map<string, ts.Node>,
+): { assertions: number; mocks: number } {
   let assertions = 0
   let mocks = 0
+  const visited = new Set<string>()
   const walk = (n: ts.Node): void => {
     if (ts.isCallExpression(n)) {
       const c = calleeName(n.expression)
-      if (ASSERT_RE.test(c)) assertions++
+      const last = c.split('.').pop() ?? ''
+      if (ASSERT_RE.test(c) || ASSERT_HELPER_RE.test(last)) assertions++
       if (MOCK_RE.test(c)) mocks++
+      const helper = helpers.get(c)
+      if (helper && !visited.has(c)) {
+        visited.add(c)
+        walk(helper)
+      }
     }
     ts.forEachChild(n, walk)
   }
   if (fn) walk(fn)
   return { assertions, mocks }
+}
+
+/** Same-file function declarations and `const x = () => …` helpers, by name. */
+function collectHelpers(sf: ts.SourceFile): Map<string, ts.Node> {
+  const m = new Map<string, ts.Node>()
+  const visit = (n: ts.Node): void => {
+    if (ts.isFunctionDeclaration(n) && n.name && n.body) m.set(n.name.text, n.body)
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && ts.isFunctionLike(n.initializer))
+      m.set(n.name.text, n.initializer)
+    ts.forEachChild(n, visit)
+  }
+  visit(sf)
+  return m
 }
 
 const titleOf = (call: ts.CallExpression): string | null => {
@@ -95,6 +120,7 @@ export function parseTests(file: string, source: string): TestRecord[] {
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
   const out: TestRecord[] = []
   const seen = new Map<string, number>()
+  const helpers = collectHelpers(sf)
   const base = { module: moduleOf(file), level: levelOf(file) }
 
   const record = (call: ts.CallExpression, path: string[], mods: string[], inh: Inh): void => {
@@ -105,7 +131,7 @@ export function parseTests(file: string, source: string): TestRecord[] {
     out.push({
       test_id: n > 1 ? `${id}#${n}` : id,
       ...base,
-      ...countSignals(call.arguments.find(a => ts.isFunctionLike(a))),
+      ...countSignals(call.arguments.find(a => ts.isFunctionLike(a)), helpers),
       skipped: flags(mods, inh).skip,
       focused: flags(mods, inh).only,
       parametrized: mods.includes('each') || label === null,
