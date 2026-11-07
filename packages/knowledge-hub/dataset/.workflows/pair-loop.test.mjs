@@ -541,6 +541,16 @@ function runWorkflow({ args, dispatch, workflowDispatch, auditWritten = true, re
   )
 }
 
+test('CLI state order overrides a malformed adopted order through the executable dispatcher', async () => {
+  const policyText = '## Eligibility\n\nrisk:green\n\n## Delivery State Order\n\nReady, Ready\n'
+  const request = JSON.parse(execFileSync(process.execPath, [new URL('../skills/pair-workflow-cycle/scripts/loop-workflow-dispatch.mjs', import.meta.url).pathname], {
+    input: JSON.stringify({ policyText, options: { '--state-order': 'Review, In Progress, Ready' } }), encoding: 'utf8',
+  }))
+  assert.equal(request.name, 'pair-loop')
+  const { logs } = await runWorkflow({ args: request.args, dispatch: () => ({ candidates: [] }) })
+  assert.ok(logs.some(line => line.includes('Review → In Progress → Ready') && line.includes('--state-order')))
+})
+
 test('US-611: workflow plans Review first and drains a mutex conflict on the next finite iteration', async () => {
   const batches = []
   const candidates = [

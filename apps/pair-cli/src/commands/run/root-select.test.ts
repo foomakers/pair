@@ -57,6 +57,15 @@ describe('buildSelectionPrompt', () => {
     expect(prompt).toContain(CANDIDATES_MARKER)
     expect(prompt).toMatch(/do not invoke/i)
   })
+
+  it('requests pair-next resolved control state and its mapping, without a second resolver', () => {
+    const prompt = buildSelectionPrompt(ENGINES.claude, { root: '66' })
+    expect(prompt).toMatch(/^\/pair-next --root 66/m)
+    expect(prompt).toContain('pair-next resolves')
+    expect(prompt).toContain('pair-next Control-State Resolution')
+    expect(prompt).toContain('## State Mapping')
+    expect(prompt).toContain('unknown value if unmapped')
+  })
 })
 
 describe('candidatesInEvent / parseCandidates', () => {

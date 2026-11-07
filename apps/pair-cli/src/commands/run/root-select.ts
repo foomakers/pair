@@ -66,8 +66,9 @@ export function buildSelectionPrompt(engine: EngineDefinition, scope: SelectionS
       "prerequisite's MERGED status, checked on the code host, never assumed), its declared " +
       'touched-surface (Technical Analysis "Key Components" / task list) rendered as a flat list of ' +
       'mutex-resource strings (skill names, file paths, module names), its canonical `macrostate` ' +
-      '(map the literal board state through `## State Mapping` in way-of-working.md; report ' +
-      'the literal as an unknown value if unmapped, never guess), its `risk:*` label (or ' +
+      'from pair-next Control-State Resolution (including its `## State Mapping` and DoR fallback; ' +
+      'report the literal as an unknown value if unmapped, never guess or resolve it separately), ' +
+      'its `risk:*` label (or ' +
       "'untagged'), every label it carries, its title and its branch name (feature/US-<id>-* " +
       'convention; empty if none exists yet).',
     `Then print, as the LAST line of your answer and on a line of its own, exactly one line: ` +

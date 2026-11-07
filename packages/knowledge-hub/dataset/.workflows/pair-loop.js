@@ -738,7 +738,7 @@ async function resolveFilterOrHalt(args) {
   return { kind: 'value', value: v.join(','), list: v, source: r.effective.filter.source }
 }
 
-function parsePolicyOrHalt(policyText, tagProjectionFamily, eligibility) {
+function parsePolicyOrHalt(policyText, tagProjectionFamily, eligibility, explicitOrder) {
   if (typeof policyText !== 'string' || policyText.trim() === '')
     HALT('tech/automation.md is absent or empty — eligibility set is empty, automation is off. Nothing to run.')
   // The legacy `## Auto-Advance` is validated against ITS OWN adoption's `## Eligibility` when one is declared.
@@ -750,8 +750,8 @@ function parsePolicyOrHalt(policyText, tagProjectionFamily, eligibility) {
   )
   const auditLocation = resolveAuditLocation(policyText)
   const adoptedOrder = sectionBody(policyText, 'Delivery State Order')
-  const stateOrder = adoptedOrder === null ? DEFAULT_DELIVERY_ORDER : parseDeliveryStateOrder(adoptedOrder, '## Delivery State Order')
-  return { eligibility, stop, maxParallelism, auditLocation, stateOrder, stateOrderSource: adoptedOrder === null ? 'default' : '## Delivery State Order' }
+  const stateOrder = explicitOrder !== undefined ? parseDeliveryStateOrder(explicitOrder, 'args.stateOrder') : adoptedOrder === null ? DEFAULT_DELIVERY_ORDER : parseDeliveryStateOrder(adoptedOrder, '## Delivery State Order')
+  return { eligibility, stop, maxParallelism, auditLocation, stateOrder, stateOrderSource: explicitOrder !== undefined ? '--state-order' : adoptedOrder === null ? 'default' : '## Delivery State Order' }
 }
 
 // Argument > Adoption > KB default: `--predicate` overrides the adoption file's
@@ -767,11 +767,7 @@ function applyPredicateOverride(stop, predicateOverride) {
 validateArgs(args)
 phase('Policy')
 const resolvedFilter = typeof args?.policyText === 'string' && args.policyText.trim() !== '' ? await resolveFilterOrHalt(args) : undefined
-const policy = parsePolicyOrHalt(args?.policyText, args?.tagProjectionFamily, resolvedFilter)
-if (args?.stateOrder !== undefined) {
-  policy.stateOrder = parseDeliveryStateOrder(args.stateOrder, 'args.stateOrder')
-  policy.stateOrderSource = '--state-order'
-}
+const policy = parsePolicyOrHalt(args?.policyText, args?.tagProjectionFamily, resolvedFilter, args?.stateOrder)
 policy.stop = applyPredicateOverride(policy.stop, args?.predicateOverride)
 if (args?.maxIterations !== undefined) policy.stop.maxIterations = args.maxIterations
 log(`Eligibility filter: ${policy.eligibility.value}`)

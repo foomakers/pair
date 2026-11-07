@@ -110,6 +110,28 @@ afterEach(() => {
 })
 
 describe('run --root --parallel — AC1 plan printed before dispatch', () => {
+  it('passes pair-next reported state through selection and excludes unknown before dispatch', async () => {
+    process.env['PATH'] = '/bin'
+    const lines = captureLog()
+    // Scripted engine answer: this test does not execute the pair-next agent.
+    const candidates = parseCandidates(
+      JSON.stringify({
+        candidates: [card('1', { macrostate: 'Ready' }), card('2', { macrostate: 'Unmapped' })],
+      }),
+    )
+    const h = harness(candidates)
+    await handleRunCommand(
+      parseRunCommand({ root: '66', parallel: '2', autonomous: true }),
+      projectFs(policy('2')),
+      h.deps,
+    )
+    expect(h.selectCandidates).toHaveBeenCalledTimes(1)
+    expect(h.started).toEqual(['1'])
+    expect(lines.join('\n')).toContain(
+      'Excluded #2: state "Unmapped" is not a runnable mapped macrostate',
+    )
+  })
+
   it('prints the plan, every exclusion and why, and the effective limit naming what bound it, before any card starts', async () => {
     process.env['PATH'] = '/bin'
     const lines = captureLog()
