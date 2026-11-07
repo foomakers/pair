@@ -1,0 +1,224 @@
+{
+  "$meta": {
+    "pr": "612",
+    "phase": "r3-g1",
+    "base": "cad8ea56795c122f5c416cbc29f2104971a3f98a",
+    "trailer": "Pair-RED-Snapshot: pr=612; phase=r3-g1; base=cad8ea56795c122f5c416cbc29f2104971a3f98a; manifest=.pair/red-snapshots/pr-612-r3-g1.json",
+    "artifacts": [
+      "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts"
+    ]
+  },
+  "run": "story-611",
+  "story": "611",
+  "phase": "r3-g1",
+  "mode": "repair",
+  "inputHead": "cad8ea56795c122f5c416cbc29f2104971a3f98a",
+  "sourceOfTruth": [
+    "Story #611 AC2 public state-order override",
+    "review r2-3",
+    "loop-workflow-dispatch.mjs workflowRequest"
+  ],
+  "inventory": [
+    {
+      "id": "r2-3",
+      "producer": "loop-workflow-dispatch.mjs workflowRequest options-to-args loop",
+      "inputs": [
+        "options has --state-order:null",
+        "options omits --state-order",
+        "options has valid state order",
+        "policyText",
+        "all 12 mapped public options",
+        "explicit undefined",
+        "unknown option",
+        "non-string policyText",
+        "overrides omitted or supplied",
+        "tagProjectionFamily omitted or supplied"
+      ],
+      "representations": [
+        "dataset dispatcher script",
+        "installed skill dispatcher",
+        "workflow args stateOrder"
+      ],
+      "consumers": [
+        "pair-loop.js argument validation",
+        "delivery order selection"
+      ],
+      "classes": [
+        "supplied valid string forwarded",
+        "supplied null rejected",
+        "omitted key omitted",
+        "undefined key omitted",
+        "unknown option rejected",
+        "null for each mapped public option",
+        "non-string policyText rejected",
+        "each of 12 mapped values forwarded",
+        "overrides omitted or supplied",
+        "tagProjectionFamily omitted or supplied"
+      ],
+      "interactions": [
+        "explicit null with valid adopted order must reject before workflow can fall back",
+        "extensions with mapped --root option"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "loop-workflow-dispatch.mjs workflowRequest",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/knowledge-hub/dataset/.skills/workflow/cycle/scripts/loop-workflow-dispatch.mjs"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "r2-3-W1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "explicit --state-order null",
+      "oracle": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/pair-loop-dispatch.test.ts",
+      "file": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
+      "expected": "nonzero exit, --state-order error, no workflow request",
+      "covers": [
+        "r2-3"
+      ]
+    },
+    {
+      "id": "r2-3-C1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "--state-order omitted",
+      "oracle": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/pair-loop-dispatch.test.ts -t r2-3-C1",
+      "file": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
+      "expected": "omits stateOrder and preserves other public options",
+      "covers": [
+        "r2-3"
+      ]
+    },
+    {
+      "id": "r2-3-I1",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "explicit null with valid adopted Delivery State Order",
+      "oracle": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/pair-loop-dispatch.test.ts -t r2-3-I1",
+      "file": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
+      "expected": "omitted override produces workflow request with valid adopted policy; explicit null rejects with named error and empty stdout",
+      "covers": [
+        "r2-3"
+      ]
+    },
+    {
+      "id": "r2-3-C2",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "valid explicit state order",
+      "oracle": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/pair-loop-dispatch.test.ts -t r2-3-C2",
+      "file": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
+      "expected": "forwards exact explicit stateOrder and policyText",
+      "covers": [
+        "r2-3"
+      ]
+    },
+    {
+      "id": "r2-3-C3",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "explicit undefined key",
+      "oracle": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/pair-loop-dispatch.test.ts -t r2-3-C3",
+      "file": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
+      "expected": "direct workflowRequest call omits explicit undefined stateOrder",
+      "covers": [
+        "r2-3"
+      ]
+    },
+    {
+      "id": "r2-3-C4",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "unknown option",
+      "oracle": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/pair-loop-dispatch.test.ts -t r2-3-C4",
+      "file": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
+      "expected": "nonzero exit, named unknown option error, empty stdout",
+      "covers": [
+        "r2-3"
+      ]
+    },
+    {
+      "id": "r2-3-R1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "installed entry representation",
+      "oracle": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/pair-loop-dispatch.test.ts -t r2-3-R1",
+      "file": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
+      "expected": "installed mirror byte-identical to dataset dispatcher",
+      "covers": [
+        "r2-3"
+      ]
+    },
+    {
+      "id": "r2-3-V1",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "each of 12 mapped public options supplied null in isolated parameterized cases",
+      "oracle": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/pair-loop-dispatch.test.ts",
+      "file": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
+      "expected": "12 independent failures, each naming its option and emitting no workflow request",
+      "covers": [
+        "r2-3"
+      ],
+      "rationale": "Each parameterized test executes independently."
+    },
+    {
+      "id": "r2-3-P1",
+      "kind": "boundary",
+      "baseline": "pass",
+      "condition": "non-string policyText",
+      "oracle": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/pair-loop-dispatch.test.ts -t r2-3-P1",
+      "file": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
+      "expected": "typed refusal and no request",
+      "covers": [
+        "r2-3"
+      ]
+    },
+    {
+      "id": "r2-3-O1",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "each of 12 mapped options with non-null value",
+      "oracle": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/pair-loop-dispatch.test.ts -t r2-3-O1",
+      "file": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
+      "expected": "each value forwarded to its mapped argument",
+      "covers": [
+        "r2-3"
+      ]
+    },
+    {
+      "id": "r2-3-X1",
+      "kind": "interaction",
+      "baseline": "pass",
+      "condition": "overrides and tagProjectionFamily omitted or supplied with --root",
+      "oracle": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/pair-loop-dispatch.test.ts -t r2-3-X1",
+      "file": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
+      "expected": "extensions and mapped root forwarded exactly",
+      "covers": [
+        "r2-3"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/knowledge-hub/src/conformance/pair-loop-dispatch.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:3436003d488d8773e24e6d63b5976400f1afc3cfe7c7702157f04e5763cbeed7",
+      "command": "pnpm --dir packages/knowledge-hub exec vitest run src/conformance/pair-loop-dispatch.test.ts",
+      "observed": "14 failed, 19 passed (33); null values accepted by dispatcher at base"
+    }
+  ],
+  "testExempt": false,
+  "changedRows": [
+    "r2-3-C1",
+    "r2-3-C2",
+    "r2-3-P1",
+    "r2-3-O1",
+    "r2-3-X1"
+  ]
+}
