@@ -1,0 +1,14 @@
+{
+  "budgets": {
+    "unit": { "maxTestMs": 100, "totalMs": 60000 },
+    "integration": { "maxTestMs": 2000, "totalMs": 300000 },
+    "e2e": { "maxTestMs": 30000, "totalMs": 900000 }
+  },
+  "maxLevelGrowthPct": 5,
+  "minMutationScoreOnDiffPct": 80,
+  "minUniqueKillsPerNewTest": 1,
+  "flakyRuns": { "audit": 10, "pr": 5 },
+  "maxMockAssertionRatio": 2,
+  "maxSnapshotLines": 50,
+  "maxTestToCodeRatio": 3
+}
