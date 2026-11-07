@@ -29,7 +29,7 @@ export interface TestRecord {
 }
 
 const TEST_FNS = new Set(['it', 'test'])
-const ASSERT_RE = /^(expect|expectTypeOf)$|^assert(\.\w+)?$/
+const ASSERT_RE = /^(expect|expectTypeOf)$|^expect\.(assertions|hasAssertions)$|^assert(\.\w+)?$/
 const MOCK_RE = /^(vi|jest)\.(fn|mock|spyOn|doMock)$/
 
 const calleeName = (e: ts.Expression): string =>
@@ -39,7 +39,9 @@ const calleeName = (e: ts.Expression): string =>
       ? `${calleeName(e.expression)}.${e.name.text}`
       : ts.isCallExpression(e)
         ? calleeName(e.expression)
-        : ''
+        : ts.isTaggedTemplateExpression(e)
+          ? calleeName(e.tag)
+          : ''
 
 export const levelOf = (file: string): Level =>
   /(^|\/)e2e(\/|$)|\.e2e\./.test(file)
@@ -73,13 +75,29 @@ const titleOf = (call: ts.CallExpression): string | null => {
   return t && ts.isStringLiteralLike(t) ? t.text : null
 }
 
+type Inh = { skip: boolean; only: boolean }
+const SKIP_MODS = ['skip', 'todo', 'skipIf', 'runIf']
+const flags = (mods: string[], inh: Inh): Inh => ({
+  skip: inh.skip || mods.some(m => SKIP_MODS.includes(m)),
+  only: inh.only || mods.includes('only'),
+})
+
+const splitCallee = (e: ts.Expression): [string, string[]] => {
+  const [head = '', ...mods] = calleeName(e).split('.')
+  return head === 'test' && mods[0] === 'describe' ? ['describe', mods.slice(1)] : [head, mods]
+}
+
+const isTestCall = (e: ts.Expression, head: string, mods: string[]): boolean =>
+  TEST_FNS.has(head) &&
+  (!mods.includes('each') || ts.isCallExpression(e) || ts.isTaggedTemplateExpression(e))
+
 export function parseTests(file: string, source: string): TestRecord[] {
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
   const out: TestRecord[] = []
   const seen = new Map<string, number>()
   const base = { module: moduleOf(file), level: levelOf(file) }
 
-  const record = (call: ts.CallExpression, path: string[], mods: string[]): void => {
+  const record = (call: ts.CallExpression, path: string[], mods: string[], inh: Inh): void => {
     const label = titleOf(call)
     const id = `${file}::${[...path, label ?? '<dynamic>'].join(' > ')}`
     const n = (seen.get(id) ?? 0) + 1
@@ -87,9 +105,9 @@ export function parseTests(file: string, source: string): TestRecord[] {
     out.push({
       test_id: n > 1 ? `${id}#${n}` : id,
       ...base,
-      ...countSignals(call.arguments[call.arguments.length - 1]),
-      skipped: mods.includes('skip') || mods.includes('todo'),
-      focused: mods.includes('only'),
+      ...countSignals(call.arguments.find(a => ts.isFunctionLike(a))),
+      skipped: flags(mods, inh).skip,
+      focused: flags(mods, inh).only,
       parametrized: mods.includes('each') || label === null,
       duration_ms_median: NOT_MEASURED,
       mutants_killed: NOT_MEASURED,
@@ -98,21 +116,20 @@ export function parseTests(file: string, source: string): TestRecord[] {
     })
   }
 
-  const visit = (node: ts.Node, path: string[]): void => {
+  const visit = (node: ts.Node, path: string[], inh: Inh): void => {
     if (ts.isCallExpression(node)) {
-      const [head = '', ...mods] = calleeName(node.expression).split('.')
+      const [head, mods] = splitCallee(node.expression)
       const label = titleOf(node)
       if (head === 'describe' && label !== null) {
-        ts.forEachChild(node, c => visit(c, [...path, label]))
+        const next = flags(mods, inh)
+        ts.forEachChild(node, c => visit(c, [...path, label], next))
         return
       }
-      const isTest =
-        TEST_FNS.has(head) && (!mods.includes('each') || ts.isCallExpression(node.expression))
-      if (isTest) return record(node, path, mods)
+      if (isTestCall(node.expression, head, mods)) return record(node, path, mods, inh)
     }
-    ts.forEachChild(node, c => visit(c, path))
+    ts.forEachChild(node, c => visit(c, path, inh))
   }
-  visit(sf, [])
+  visit(sf, [], { skip: false, only: false })
   return out
 }
 
