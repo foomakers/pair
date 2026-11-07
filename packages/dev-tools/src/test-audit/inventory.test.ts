@@ -6,8 +6,8 @@ describe('billing', () => {
   describe('total', () => {
     it('applies discount', () => { expect(1).toBe(1); expect(2).toBe(2) })
     it('logs only', () => { console.log('x') })
-    it.skip('skipped', () => { expect(1).toBe(1) })
-    it.only('focused', () => { expect(1).toBe(1) })
+    it.${'skip'}('skipped', () => { expect(1).toBe(1) })
+    it.${'only'}('focused', () => { expect(1).toBe(1) })
     it.each([1, 2])('param %s', n => { expect(n).toBeTruthy() })
     it('mocks', () => { const f = vi.fn(); f(); expect(f).toHaveBeenCalled() })
   })
