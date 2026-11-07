@@ -22,7 +22,8 @@ export function workflowRequest({ policyText, options = {}, overrides, tagProjec
   for (const [option, value] of Object.entries(options)) {
     const key = optionsToArgs[option]
     if (!key) throw new Error(`unknown loop option: ${option}`)
-    if (value !== undefined && value !== null) args[key] = value
+    if (value === null) throw new Error(`${option} must not be null`)
+    if (value !== undefined) args[key] = value
   }
   if (overrides !== undefined) args.overrides = overrides
   if (tagProjectionFamily !== undefined) args.tagProjectionFamily = tagProjectionFamily
