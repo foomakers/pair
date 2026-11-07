@@ -1117,12 +1117,14 @@ describe('checkStepMarkers', () => {
     expect(checkStepMarkers(entries, root).join('\n')).toContain('maps `/review` to step `review`')
   })
 
-  it('fails when neither the skill nor a disclosed sibling points at the gate convention', () => {
+  // QUARANTINE U6 (#613): fixture `root` is shared and mutated across tests; result depends on order. Tracking: docs/testing/test-policy.config.json `quarantine`.
+  it.skip('fails when neither the skill nor a disclosed sibling points at the gate convention', () => {
     writeSkill('process/review', delta('review', 'Nothing else.'))
     expect(checkStepMarkers(entries, root).join('\n')).toContain('points at skill-conventions/')
   })
 
-  it('accepts the convention pointer in a DISCLOSED SIBLING (progressive disclosure)', () => {
+  // QUARANTINE U6 (#613): fixture `root` is shared and mutated across tests; result depends on order. Tracking: docs/testing/test-policy.config.json `quarantine`.
+  it.skip('accepts the convention pointer in a DISCLOSED SIBLING (progressive disclosure)', () => {
     // A skill under a byte budget keeps the marker in its entrypoint and discloses
     // its half of the convention to the sibling that already owns that topic.
     writeSkill('process/review', delta('review', 'See [more](more.md).'))
