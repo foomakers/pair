@@ -1,3 +1,4 @@
+import * as path from 'path'
 import { join, resolve } from 'path'
 import { createRequire } from 'module'
 import { existsSync } from 'fs'
@@ -61,6 +62,20 @@ function authority(path: string): ControlStateModule {
   }
 }
 
+/** Target containment uses the host path grammar; tests inject each supported platform grammar. */
+export function withinSkillTarget(
+  root: string,
+  skill: string,
+  platformPath: Pick<typeof path, 'relative' | 'isAbsolute' | 'sep'> = path,
+): boolean {
+  const relative = platformPath.relative(root, skill)
+  return (
+    relative !== '..' &&
+    !relative.startsWith(`..${platformPath.sep}`) &&
+    !platformPath.isAbsolute(relative)
+  )
+}
+
 function installedScriptInTarget(
   fs: FileSystemService,
   root: string,
@@ -68,7 +83,7 @@ function installedScriptInTarget(
 ): string | undefined {
   for (const name of names) {
     const skill = resolve(root, name)
-    if (!skill.startsWith(`${root}/`) || !fs.existsSync(join(skill, 'SKILL.md'))) continue
+    if (!withinSkillTarget(root, skill) || !fs.existsSync(join(skill, 'SKILL.md'))) continue
     const script = join(skill, 'control-state.mjs')
     if (!fs.existsSync(script))
       throw new Error(

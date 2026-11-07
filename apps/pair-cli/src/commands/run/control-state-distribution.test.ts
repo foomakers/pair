@@ -8,10 +8,15 @@ import {
   writeFileSync,
 } from 'fs'
 import { tmpdir } from 'os'
-import { dirname, join, resolve } from 'path'
+import { dirname, join, posix, resolve, win32 } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Config } from '#registry'
-import { locateControlStateScript, readStateMapping, resolveCardReadiness } from './card-readiness'
+import {
+  locateControlStateScript,
+  readStateMapping,
+  resolveCardReadiness,
+  withinSkillTarget,
+} from './card-readiness'
 
 const source = resolve(
   __dirname,
@@ -47,6 +52,18 @@ const put = (path: string, data: string) => {
 afterEach(() => roots.splice(0).forEach(root => rmSync(root, { recursive: true, force: true })))
 
 describe('installed pair-next control state', () => {
+  it('contains skill paths on injected linux and Windows platform grammars', () => {
+    expect(withinSkillTarget('/project/skills', '/project/skills/pair-next', posix)).toBe(true)
+    expect(withinSkillTarget('/project/skills', '/project/skills-other/pair-next', posix)).toBe(
+      false,
+    )
+    expect(withinSkillTarget('C:\\project\\skills', 'C:\\project\\skills\\pair-next', win32)).toBe(
+      true,
+    )
+    expect(withinSkillTarget('C:\\project\\skills', 'D:\\project\\skills\\pair-next', win32)).toBe(
+      false,
+    )
+  })
   it('routes a custom board through the real copied producer', () => {
     const root = project()
     const skill = join(root, '.agents/skills/pair-next')
