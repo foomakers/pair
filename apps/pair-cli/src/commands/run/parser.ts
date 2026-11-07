@@ -2,6 +2,7 @@ import { MAX_TIMEOUT_SECONDS } from '../../config/engine-block'
 import { validateStopPredicateLine } from './automation-policy'
 import { ENGINE_IDS, isEngineId, type EngineId } from './engines'
 import { idSafetyFailure, isSafeId, isSafePromptText, promptSafetyFailure } from './prompt-safety'
+import { parseStateOrder } from './root-plan'
 
 /**
  * The perimeter's scope components, expressed with `pair-next`'s OWN frozen parameter names
@@ -110,6 +111,8 @@ export interface RunCommandConfig {
    * borrowed dependency + mutex analysis plans, and up to N `run --card` processes run at once.
    */
   parallel?: number
+  /** --state-order overrides ## Delivery State Order for this root run. */
+  stateOrder?: readonly string[]
   /** US-522: `--watch` (true) / `--no-watch` (false) — present only when passed; needs `--parallel`. */
   watch?: boolean
   /** US-522: `--interval <n>s|m|h` — the idle wait under `--watch`; present only when passed. */
@@ -163,6 +166,7 @@ interface ParseRunOptions {
   rounds?: string
   /** US-491: `--parallel N` — the fan-out; with `--root` and/or `--filter` (US-522). */
   parallel?: string | number
+  stateOrder?: string
   /** US-522: `--watch` (true) / `--no-watch` (false) — both together are refused at argv (cli.ts). */
   watch?: boolean
   /** US-522: `--interval <n>s|m|h`. */
@@ -477,6 +481,14 @@ function resolveParallel(options: ParseRunOptions): { parallel?: number } {
   return { parallel }
 }
 
+function resolveStateOrder(options: ParseRunOptions): { stateOrder?: readonly string[] } {
+  if (options.stateOrder === undefined) return {}
+  if (options.parallel === undefined && options.root === undefined && options.filter === undefined)
+    throw new Error('--state-order requires a root/filter run')
+  // The planner's parser owns the supported values.
+  return { stateOrder: parseStateOrder(options.stateOrder) }
+}
+
 /**
  * US-488: `--profile` / `--workflow-config` select the DELIVERY-CYCLE profile, so they mean something
  * only on a `--card` entry or a `--root`/`--parallel` fan-out (forwarded to each child) — anywhere else they would be accepted and silently ignored, which is the
@@ -610,6 +622,7 @@ const LOOP_ONLY_FLAGS = [
   'until',
   'prepare',
   'merge',
+  'stateOrder',
 ] as const
 
 /**
@@ -651,6 +664,7 @@ export function parseRunCommand(input: ParseRunOptions, args: string[] = []): Ru
   const engine = resolveEngineFlag(options.engine)
   const cwd = optionalText(options.cwd, '--cwd')
   const parallel = resolveParallel(options)
+  const stateOrder = resolveStateOrder(options)
   const watch = resolveWatch(options)
   const dispatch = resolveDispatch(options)
   const profileSelection = resolveProfileSelection(options)
@@ -682,6 +696,7 @@ export function parseRunCommand(input: ParseRunOptions, args: string[] = []): Ru
     ...outputModeOf(options),
     dryRun: options.dryRun === true,
     ...explicitParallel(input, parallel),
+    ...stateOrder,
     ...watch,
   }
 }

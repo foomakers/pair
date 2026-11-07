@@ -18,6 +18,7 @@ const cand: RootCandidate = {
   branch: 'b',
   tier: 'risk:green',
   labels: [],
+  macrostate: 'Ready',
   mutexResources: [],
   prerequisites: [],
 }

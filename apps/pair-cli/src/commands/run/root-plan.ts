@@ -27,6 +27,8 @@ export interface RootCandidate {
   readonly branch: string
   /** The card's `risk:*` label, `untagged` or empty when it carries none. */
   readonly tier: string
+  /** Canonical state from the adopted PM State Mapping; an absent/unmapped value is excluded. */
+  readonly macrostate?: string
   /** Every label on the card, forwarded to its `run --card` process as `--card-tags`. */
   readonly labels?: readonly string[]
   readonly mutexResources: readonly string[]
@@ -213,11 +215,31 @@ export function resolveEffectiveLimit(input: {
 // ── the plan ───────────────────────────────────────────────────────────────────────────────────
 
 export interface RootPlan {
-  /** Mutex-safe, dependency-allowed cards, in selection order; the pool runs at most `limit.effective` at once. */
+  /** Dependency-allowed cards in stable delivery order; the pool holds mutexes during execution. */
   readonly run: readonly RootCandidate[]
-  /** Every card NOT run, with tier 1's own reason — never silently dropped (AC1). */
+  /** Every card NOT run, with its actual exclusion reason. */
   readonly excluded: ReadonlyArray<{ readonly id: string; readonly reason: string }>
   readonly limit: EffectiveLimit
+  readonly stateOrder: readonly string[]
+  readonly stateOrderSource: string
+}
+
+export const DEFAULT_STATE_ORDER = ['Review', 'In Progress', 'Ready'] as const
+const RUNNABLE_STATES = [...DEFAULT_STATE_ORDER, 'Draft']
+
+/** Exactly the three prioritized states, once each; Draft always follows them. */
+export function parseStateOrder(raw: string): string[] {
+  const parts = raw.split(',').map(part => part.trim())
+  if (
+    parts.length !== DEFAULT_STATE_ORDER.length ||
+    new Set(parts).size !== DEFAULT_STATE_ORDER.length ||
+    parts.some(part => !DEFAULT_STATE_ORDER.includes(part as (typeof DEFAULT_STATE_ORDER)[number]))
+  ) {
+    throw new Error(
+      `delivery state order must be a permutation of ${DEFAULT_STATE_ORDER.join(', ')} (received: ${JSON.stringify(raw)})`,
+    )
+  }
+  return parts
 }
 
 export interface RootPlanInput {
@@ -228,11 +250,14 @@ export interface RootPlanInput {
   /** Explicit `--parallel N`; absent inherits adoption. */
   readonly requested?: number | undefined
   readonly source?: string | undefined
+  readonly stateOrder?: readonly string[] | undefined
+  readonly stateOrderSource?: string | undefined
 }
 
-/** Tier 1's Select → resolve → dependency → mutex pipeline, then the pool's limit. */
+/** Select → resolve → dependency → stable priority; mutexes are held by the pool. */
 export function computeRootPlan(input: RootPlanInput): RootPlan {
   const excluded: Array<{ id: string; reason: string }> = []
+  const stateOrder = input.stateOrder ?? DEFAULT_STATE_ORDER
   const tiered = input.candidates.map(c => ({
     ...c,
     tier: c.tier === 'untagged' || !c.tier ? FAIL_SAFE_TIER : c.tier,
@@ -250,38 +275,58 @@ export function computeRootPlan(input: RootPlanInput): RootPlan {
   }
   const eligible: typeof tiered = []
   for (const c of tiered) {
-    const reason = notEligible(c)
+    const reason =
+      notEligible(c) ??
+      (!RUNNABLE_STATES.includes(c.macrostate ?? '')
+        ? `state ${JSON.stringify(c.macrostate ?? '(unreadable)')} is not a runnable mapped macrostate`
+        : undefined)
     if (reason === undefined) eligible.push(c)
     else excluded.push({ id: c.id, reason })
   }
 
   const { resolved, audit: resolveAudit } = resolveCards(eligible)
   const { allowed, audit: depAudit } = dependencyFilter(resolved)
-  const { batch: mutexBatch, audit: mutexAudit } = computeMutexBatch(allowed)
-  // Mutex protects concurrency, not sequential selection: when the ceiling is 1 (request, global or
-  // per-tier) at most one child is active, so every dependency-allowed card runs, in order.
+  const ordered = allowed
+    .map((card, index) => ({ card, index }))
+    .sort(
+      (a, b) =>
+        (stateOrder.indexOf(a.card.macrostate!) < 0
+          ? stateOrder.length
+          : stateOrder.indexOf(a.card.macrostate!)) -
+          (stateOrder.indexOf(b.card.macrostate!) < 0
+            ? stateOrder.length
+            : stateOrder.indexOf(b.card.macrostate!)) || a.index - b.index,
+    )
+    .map(entry => entry.card)
   const maxParallelism = resolveMaxParallelism(
     input.maxParallelism,
-    mutexBatch.map(c => c.tier),
+    ordered.map(c => c.tier),
   )
-  const serial = (input.requested ?? maxParallelism) === 1
-  const batch = serial ? allowed : mutexBatch
-  for (const entry of [...resolveAudit, ...depAudit, ...(serial ? [] : mutexAudit)]) {
+  for (const entry of [...resolveAudit, ...depAudit]) {
     if (entry.excluded) excluded.push({ id: entry.id, reason: entry.reason ?? 'excluded' })
   }
   const limit = resolveEffectiveLimit({
-    dependencyAllowed: batch.length,
+    dependencyAllowed: ordered.length,
     maxParallelism,
     requested: input.requested,
-    source: adoptedParallelSource(input, mutexBatch),
+    source: adoptedParallelSource(input, ordered),
   })
-  return { run: batch, excluded, limit }
+  return {
+    run: ordered,
+    excluded,
+    limit,
+    stateOrder,
+    stateOrderSource: input.stateOrderSource ?? 'default',
+  }
 }
 
 /** The plan, as printed before any `run --card` process starts (AC1). */
 export function describeRootPlan(plan: RootPlan): string[] {
   const { limit } = plan
   const lines: string[] = []
+  lines.push(
+    `Delivery priority: ${plan.stateOrder.join(' → ')} → Draft (${plan.stateOrderSource}); mutex conflicts queue until release`,
+  )
   lines.push(
     plan.run.length === 0
       ? 'Plan: Nothing eligible to run concurrently'

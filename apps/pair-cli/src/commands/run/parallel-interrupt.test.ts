@@ -32,6 +32,7 @@ const card = (id: string, mutexResources: string[]): RootCandidate => ({
   branch: `feature/US-${id}-x`,
   tier: 'risk:green',
   labels: ['risk:green'],
+  macrostate: 'Ready',
   mutexResources,
   prerequisites: [],
 })

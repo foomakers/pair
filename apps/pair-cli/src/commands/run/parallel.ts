@@ -77,6 +77,8 @@ export interface PoolInput<T> {
   readonly items: readonly T[]
   readonly limit: number
   readonly worker: (item: T) => Promise<CardOutcome>
+  /** Conflicting resources cannot be active together; waiting items stay in this finite batch. */
+  readonly resources?: (item: T) => readonly string[]
   /** Whether a NOT-yet-started item may still start (false once the driver was signalled). */
   readonly mayStart?: () => boolean
   /** Outcome of an item the pool never started (interrupted before its turn). */
@@ -89,25 +91,37 @@ export interface PoolInput<T> {
 export async function runPool<T>(input: PoolInput<T>): Promise<CardOutcome[]> {
   const results: CardOutcome[] = new Array(input.items.length)
   const mayStart = input.mayStart ?? (() => true)
-  let next = 0
-  const lane = async (): Promise<void> => {
-    while (next < input.items.length) {
-      const index = next
-      next += 1
-      const item = input.items[index]!
-      if (!mayStart()) {
-        results[index] = input.notStarted(item)
-        continue
-      }
-      try {
-        results[index] = await input.worker(item)
-      } catch (error) {
-        results[index] = input.onWorkerError(item, error)
-      }
+  const pending = input.items.map((_, index) => index)
+  const active = new Map<number, Promise<void>>()
+  const held = new Set<string>()
+  while (pending.length > 0 || active.size > 0) {
+    if (!mayStart()) {
+      for (const index of pending.splice(0)) results[index] = input.notStarted(input.items[index]!)
     }
+    while (active.size < input.limit && pending.length > 0) {
+      const position = pending.findIndex(index =>
+        (input.resources?.(input.items[index]!) ?? []).every(resource => !held.has(resource)),
+      )
+      if (position < 0) break
+      const [index] = pending.splice(position, 1)
+      const item = input.items[index!]!
+      const resources = [...new Set(input.resources?.(item) ?? [])]
+      for (const resource of resources) held.add(resource)
+      const task = (async () => {
+        try {
+          results[index!] = await Promise.resolve().then(() => input.worker(item))
+        } catch (error) {
+          results[index!] = input.onWorkerError(item, error)
+        } finally {
+          for (const resource of resources) held.delete(resource)
+          active.delete(index!)
+        }
+      })()
+      active.set(index!, task)
+    }
+    if (active.size === 0) break
+    await Promise.race(active.values())
   }
-  const lanes = Math.max(0, Math.min(input.limit, input.items.length))
-  await Promise.all(Array.from({ length: lanes }, lane))
   return results
 }
 

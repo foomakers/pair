@@ -65,12 +65,15 @@ export function buildSelectionPrompt(engine: EngineDefinition, scope: SelectionS
     'For every candidate issue also determine: its declared `**Prerequisite Stories**` (with each ' +
       "prerequisite's MERGED status, checked on the code host, never assumed), its declared " +
       'touched-surface (Technical Analysis "Key Components" / task list) rendered as a flat list of ' +
-      'mutex-resource strings (skill names, file paths, module names), its `risk:*` label (or ' +
+      'mutex-resource strings (skill names, file paths, module names), its canonical `macrostate` ' +
+      '(map the literal board state through `## State Mapping` in way-of-working.md; report ' +
+      'the literal as an unknown value if unmapped, never guess), its `risk:*` label (or ' +
       "'untagged'), every label it carries, its title and its branch name (feature/US-<id>-* " +
       'convention; empty if none exists yet).',
     `Then print, as the LAST line of your answer and on a line of its own, exactly one line: ` +
       `${CANDIDATES_MARKER} {"candidates":[{"id":"<id>","title":"<title>","branch":"<branch>",` +
-      `"tier":"<risk:* or untagged>","labels":["<label>"],"mutexResources":["<resource>"],` +
+      `"tier":"<risk:* or untagged>","macrostate":"<canonical state or unmapped literal>",` +
+      `"labels":["<label>"],"mutexResources":["<resource>"],` +
       `"prerequisites":[{"id":"<id>","merged":true}]}]} — single-line JSON, {"candidates":[]} ` +
       'when the scope selects nothing.',
     ...(scope.loop !== undefined ? loopRequest(scope.loop.predicateSelector, scope) : []),
@@ -183,6 +186,7 @@ function parseCandidate(entry: unknown, loop: boolean): RootCandidate {
     title: text('title'),
     branch: text('branch'),
     tier,
+    ...(c['macrostate'] !== undefined && { macrostate: text('macrostate') }),
     labels,
     mutexResources: stringArray(c['mutexResources'], 'mutexResources', id),
     prerequisites: parsePrerequisites(c['prerequisites'], id),

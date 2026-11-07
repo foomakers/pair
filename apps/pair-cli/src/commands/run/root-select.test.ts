@@ -22,6 +22,7 @@ const candidate = {
   title: 'Fan-out',
   branch: 'feature/US-491-x',
   tier: 'risk:green',
+  macrostate: 'Ready',
   labels: ['user story', 'risk:green'],
   mutexResources: ['apps/pair-cli/src/commands/run'],
   prerequisites: [{ id: '487', merged: true }],
