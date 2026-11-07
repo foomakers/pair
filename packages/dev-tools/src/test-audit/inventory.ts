@@ -4,7 +4,7 @@
  * Signals needing a runner (duration, coverage, mutation, flakiness) are `not measured`.
  */
 import { execFileSync } from 'child_process'
-import { readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import ts from 'typescript'
 
@@ -142,11 +142,32 @@ export function summarize(records: TestRecord[]): Record<string, Record<Level, n
   return s
 }
 
-/** G1 (no/zero assertions → U2 candidate) and G2 (skip/only). */
-export function gateViolations(records: TestRecord[]): { G1: string[]; G2: string[] } {
+export interface Policy {
+  maxMockAssertionRatio: number
+}
+
+/** Policy is mandatory: missing file or non-numeric ratio throws. */
+export function loadPolicy(file: string): Policy {
+  const { maxMockAssertionRatio } = JSON.parse(readFileSync(file, 'utf8'))
+  if (typeof maxMockAssertionRatio !== 'number' || !Number.isFinite(maxMockAssertionRatio))
+    throw new Error(
+      `${file}: maxMockAssertionRatio must be a number, got ${JSON.stringify(maxMockAssertionRatio)}`,
+    )
+  return { maxMockAssertionRatio }
+}
+
+/** G1 (no/zero assertions → U2 candidate), G2 (skip/only), U4 (mock/assertion ratio above policy). */
+export function gateViolations(
+  records: TestRecord[],
+  policy?: Policy,
+): { G1: string[]; G2: string[]; U4: string[] } {
   return {
     G1: records.filter(r => r.assertions === 0 && !r.skipped).map(r => r.test_id),
     G2: records.filter(r => r.skipped || r.focused).map(r => r.test_id),
+    U4: records
+      .filter(r => policy && r.mocks > policy.maxMockAssertionRatio * r.assertions)
+      .map(r => r.test_id)
+      .sort(),
   }
 }
 
@@ -156,10 +177,12 @@ export function buildInventory(root: string, files: string[]) {
   const records = files
     .filter(f => TEST_FILE_RE.test(f))
     .flatMap(f => parseTests(f, readFileSync(join(root, f), 'utf8')))
+  // ponytail: no config under root => U4 not evaluated (legacy roots/tests); main() runs on the repo root where it exists
+  const policyFile = join(root, 'docs/testing/test-policy.config.json')
   return {
     total: records.length,
     byModuleLevel: summarize(records),
-    gates: gateViolations(records),
+    gates: gateViolations(records, existsSync(policyFile) ? loadPolicy(policyFile) : undefined),
     tests: records,
   }
 }
