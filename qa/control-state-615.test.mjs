@@ -11,9 +11,11 @@ import {
   resolveMacrostate,
   unmetReadinessCriteria,
   validateStatusFilter,
-} from './control-state.mjs'
+} from '../packages/knowledge-hub/dataset/.skills/next/control-state.mjs'
 
-const script = fileURLToPath(new URL('./control-state.mjs', import.meta.url))
+const script = fileURLToPath(
+  new URL('../packages/knowledge-hub/dataset/.skills/next/control-state.mjs', import.meta.url),
+)
 const mapping = rows =>
   parseStateMapping(
     `## State Mapping\n\n| Board State | Macrostate |\n| --- | --- |\n${rows.map(row => `| ${row[0]} | ${row[1]} |`).join('\n')}\n`,

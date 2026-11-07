@@ -207,7 +207,7 @@ A skill encountering such an item resolves it as "not in the tracked view" and i
 | Skill           | Interaction                                                                                          |
 | ---------------- | ----------------------------------------------------------------------------------------------------- |
 | `/write-issue`   | Resolves a target macrostate (`$status`) to a board state before writing the board field (Writing rule above) |
-| `/next`          | Runs its `control-state.mjs` executable against the consuming project's adoption before evaluating the cascade; `pair run` loads the same resolver. An unmapped state is reported out-of-process, never an error. |
+| `/next`          | Runs its **Control-State Resolution** executable (`control-state.mjs`) against the consuming project's adoption before evaluating the cascade; `pair run` loads the same resolver. An unmapped state is reported out-of-process, never an error. |
 | `/refine-story`  | Produces `Ready` — writes it through `/write-issue` (it passes `$status` **and** renders a full body in the same call, so write mode is the right route) |
 | `/implement`     | Produces `In Progress` / `Review` — **writes the board field directly**, applying `/write-issue` Step 7b (membership → a read that confirms it → the state field) **by reference** |
 | `/review`        | Produces `Done` on merge — **writes the board field directly**, same application of Step 7b **by reference** (its terminal writes cover the story and its parent hierarchy) |
