@@ -57,6 +57,11 @@ export function buildSelectionPrompt(engine: EngineDefinition, scope: SelectionS
     'This is a READ-ONLY selection for `pair-cli run --root --parallel`: report the candidate set ' +
       'pair-next resolves for this scope and do not invoke the skill it recommends — change no ' +
       'file, no issue, no pull request, no board state.',
+    'For each real item document, run the installed pair-next `control-state.mjs resolve` ' +
+      'against this consuming project and use its canonical `macrostate`, `outOfProcess`, and ' +
+      '`warnings` when filtering and reporting. Validate `--status` with the same script. ' +
+      'Exclude out-of-process and Done items; report their cause and every Ready/DoR warning. ' +
+      'If the script cannot load or rejects the adoption, fail the selection with its cause.',
     'For every candidate issue also determine: its declared `**Prerequisite Stories**` (with each ' +
       "prerequisite's MERGED status, checked on the code host, never assumed), its declared " +
       'touched-surface (Technical Analysis "Key Components" / task list) rendered as a flat list of ' +

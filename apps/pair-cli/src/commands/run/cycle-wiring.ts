@@ -28,7 +28,13 @@ import {
 } from './cycle-scripts'
 import { runStage, styleFor } from './stage-runner'
 import { spawnIteration } from './spawn'
-import { readStateMapping, resolveCardReadiness, type CardDocument } from './card-readiness'
+import {
+  locateControlStateScript,
+  readStateMapping,
+  resolveCardReadiness,
+  type CardDocument,
+} from './card-readiness'
+import type { Config } from '#registry'
 import { resolveBlockingSeverities } from './blocking-severities'
 import { checkWithCiWait, type CiWaitOptions } from './ci-wait'
 import { wait } from './wait'
@@ -254,12 +260,20 @@ export function readCardDocumentViaGh(card: string, cwd: string): CardDocument {
  * adoption file (a malformed one HALTs before the tracker is asked), then the card through `gh`.
  * The verdict line is printed so the routing can be checked against the board.
  */
-export function createCardReadinessProbe(fs: FileSystemService, projectRoot: string) {
+export function createCardReadinessProbe(
+  fs: FileSystemService,
+  projectRoot: string,
+  config?: Config,
+) {
   return async (card: string): Promise<CardReadiness> => {
-    const mapping = readStateMapping(fs, projectRoot)
+    const script =
+      config === undefined ? undefined : locateControlStateScript(fs, config, projectRoot)
+    const mapping = readStateMapping(fs, projectRoot, script)
     // r1-3: `gh` resolves the repository from ITS cwd — the project's, never this process's.
-    const verdict = resolveCardReadiness(readCardDocumentViaGh(card, projectRoot), mapping)
+    const verdict = resolveCardReadiness(readCardDocumentViaGh(card, projectRoot), mapping, script)
     console.log(`  Readiness: card ${card} — ${verdict.explanation}`)
+    for (const warning of verdict.warnings ?? [])
+      console.log(`  Conflict: card ${card} — ${warning}`)
     return verdict.readiness
   }
 }
