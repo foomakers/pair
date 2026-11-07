@@ -163,13 +163,17 @@ watch_until_idle() {
 }
 
 log_info "Test 4b-2: --watch --max-iterations 1, nothing workable ⇒ an idle poll never spends the cap: it waits until Ctrl-C (130)"
-watch_until_idle run --root 12 --parallel 2 --watch --max-iterations 1 && fail "an idle --watch loop stopped on its own"
-assert_output_contains "waiting" || FAILED=1
-assert_output_contains "Loop interrupted by SIGINT" || FAILED=1
+if [ "${PAIR_RED_SPEC_FOREGROUND_ONLY:-}" != "1" ]; then
+  watch_until_idle run --root 12 --parallel 2 --watch --max-iterations 1 && fail "an idle --watch loop stopped on its own"
+  assert_output_contains "waiting" || FAILED=1
+  assert_output_contains "Loop interrupted by SIGINT" || FAILED=1
+fi
 
 log_info "Test 4b-3: --watch without --parallel uses KB default 1; with --card it is refused"
-watch_until_idle run --root 12 --watch --max-iterations 1
-assert_output_contains "Parallel: 1 (KB default)" || FAILED=1
+if [ "${PAIR_RED_SPEC_FOREGROUND_ONLY:-}" != "1" ]; then
+  watch_until_idle run --root 12 --watch --max-iterations 1
+  assert_output_contains "Parallel: 1 (KB default)" || FAILED=1
+fi
 if run_pair run --card 12 --watch --autonomous; then fail "--watch with --card was accepted"; fi
 assert_output_contains "--watch belongs to the loop" || FAILED=1
 

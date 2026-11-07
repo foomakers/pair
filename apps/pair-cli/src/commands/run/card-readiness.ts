@@ -12,6 +12,7 @@ const SOURCE_SCRIPT = resolve(
   '../../../../../packages/knowledge-hub/dataset/.skills/next/control-state.mjs',
 )
 const BUNDLED_SCRIPT = resolve(__dirname, '../../assets/control-state.mjs')
+const PACKAGED_SCRIPT = resolve(__dirname, 'assets/control-state.mjs')
 const requireScript = createRequire(__filename)
 export const WAY_OF_WORKING_PATH = '.pair/adoption/tech/way-of-working.md'
 export const MACROSTATES = ['Draft', 'Ready', 'In Progress', 'Review', 'Done'] as const
@@ -108,8 +109,8 @@ export function locateControlStateScript(
     const script = installedScriptInTarget(fs, resolve(projectRoot, target), names)
     if (script !== undefined) return script
   }
-  if (existsSync(BUNDLED_SCRIPT)) return BUNDLED_SCRIPT
-  if (existsSync(SOURCE_SCRIPT)) return SOURCE_SCRIPT
+  const fallback = [PACKAGED_SCRIPT, BUNDLED_SCRIPT, SOURCE_SCRIPT].find(existsSync)
+  if (fallback) return fallback
   throw new Error(
     `control-state-load-failed: pair-next is not installed under configured skills targets and the bundled resolver is missing`,
   )

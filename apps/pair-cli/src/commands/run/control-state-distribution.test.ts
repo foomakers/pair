@@ -9,7 +9,18 @@ import {
 } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join, posix, resolve, win32 } from 'path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const resolverFixture = vi.hoisted(() => ({ bundlePresent: false }))
+vi.mock('fs', async importOriginal => {
+  const actual = await importOriginal<typeof import('fs')>()
+  return {
+    ...actual,
+    existsSync: (path: Parameters<typeof actual.existsSync>[0]) =>
+      (resolverFixture.bundlePresent && String(path).endsWith('/src/assets/control-state.mjs')) ||
+      actual.existsSync(path),
+  }
+})
 import type { Config } from '#registry'
 import {
   locateControlStateScript,
@@ -50,6 +61,10 @@ const put = (path: string, data: string) => {
   writeFileSync(path, data)
 }
 afterEach(() => roots.splice(0).forEach(root => rmSync(root, { recursive: true, force: true })))
+afterEach(() => {
+  resolverFixture.bundlePresent = false
+  vi.restoreAllMocks()
+})
 
 describe('installed pair-next control state', () => {
   it('contains skill paths on injected linux and Windows platform grammars', () => {
@@ -89,5 +104,51 @@ describe('installed pair-next control state', () => {
     const root = project()
     put(join(root, '.agents/skills/pair-next/SKILL.md'), '# next')
     expect(() => locateControlStateScript(fs, config, root)).toThrow(/has no control-state\.mjs/)
+  })
+
+  it.each(['pair-next', 'pair-pair-next', 'next'])(
+    'configured target resolves %s before packaged fallback',
+    name => {
+      const root = project()
+      const skill = join(root, '.agents/skills', name)
+      put(join(skill, 'SKILL.md'), '# next')
+      put(join(skill, 'control-state.mjs'), 'module.exports = {}')
+      expect(locateControlStateScript(fs, config, root)).toBe(join(skill, 'control-state.mjs'))
+    },
+  )
+
+  it('first configured target wins even when the later target has the canonical name', () => {
+    const root = project()
+    const first = join(root, '.agents/skills/next')
+    const later = join(root, '.claude/skills/pair-next')
+    for (const skill of [first, later]) {
+      put(join(skill, 'SKILL.md'), '# next')
+      put(join(skill, 'control-state.mjs'), 'module.exports = {}')
+    }
+    const twoTargets = {
+      asset_registries: {
+        skills: {
+          ...config.asset_registries['skills'],
+          targets: [
+            { path: '.agents/skills', mode: 'canonical' },
+            { path: '.claude/skills', mode: 'canonical' },
+          ],
+        },
+      },
+    } as Config
+    expect(locateControlStateScript(fs, twoTargets, root)).toBe(join(first, 'control-state.mjs'))
+  })
+
+  it('source resolver is used only when the bundle is absent', () => {
+    const root = project()
+    const script = locateControlStateScript(fs, config, root)
+    expect(script).toBe(source)
+  })
+
+  it('bundled resolver wins when both bundle and source exist', () => {
+    const root = project()
+    const bundle = resolve(__dirname, '../../assets/control-state.mjs')
+    resolverFixture.bundlePresent = true
+    expect(locateControlStateScript(fs, config, root)).toBe(bundle)
   })
 })
