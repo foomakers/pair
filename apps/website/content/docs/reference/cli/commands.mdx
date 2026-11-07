@@ -795,6 +795,7 @@ pair-cli run [options]
 | `--filter <tag>`                | Label filter, one label or a comma-separated any-of list (`risk:green,risk:yellow`), for a skill that declares one (`pair-next` or `pair-loop`)     |
 | `--assignee <login\|@me>`       | Keep issues assigned to this user (`@me` = the authenticated code-host user), for a skill that declares it (`pair-next` or `pair-loop`) |
 | `--status <macrostates>`        | Comma-separated canonical macrostates (e.g. `Draft,Ready`), for a skill that declares it (`pair-next` or `pair-loop`) |
+| `--state-order <states>`        | Root delivery order for this run: a permutation of `Review,In Progress,Ready`; overrides `## Delivery State Order`. `Draft` follows. |
 | `--preset <name>`               | With `--card`, or on the loop (`--root`/`--filter`, forwarded to every child card; omitted `--parallel` inherits adopted `## Max Parallelism`, otherwise KB default 1): a named autonomy preset. `full` = `filter: *`, prepare/merge `hold-never`, until `merged`; `escalate-red` = the same but merge `hold-when; has: risk:red`; `supervised` = `filter: *`, prepare/merge `hold-always`, until `merged`; `custom` = explicit keys only. A `--preset` argument beats every adoption key (legacy sections included); only an explicit argument (`--merge`, `--filter`…) beats it. With no `--preset`, the adoption applies: an explicit `## Autonomy` key beats the adoption preset (warning names both); an unknown preset HALTs listing the known ones |
 | `--until <ready\|pr\|merged>`   | With `--card`, or on the loop (`--root`/`--filter`, forwarded to every child card; omitted `--parallel` inherits adopted `## Max Parallelism`, otherwise KB default 1): how far the delivery cycle goes, `ready` (stop before implement), `pr` (default), `merged` (enter the merge stage; the only value that evaluates the merge gate). Argument > `--preset` > explicit `## Autonomy` key > adoption preset > default, every effective value printed with its source |
 | `--prepare <gate>`              | With `--card`, or on the loop (`--root`/`--filter`, forwarded to every child card; omitted `--parallel` inherits adopted `## Max Parallelism`, otherwise KB default 1): the prepare gate `<hold-always\|hold-never\|hold-when>[; has: …][; lacks: …]` (`always\|never\|when` are deprecated aliases, accepted with a warning): who prepares a Draft card. `hold-always` (default) needs a human (R3.11); `hold-never` proceeds alone recording assumptions; `hold-when` proceeds alone unless a stage boundary escalates (`needs-review`, the card stays Draft, exit 1). `--until ready` stops right after the phase |
@@ -913,15 +914,13 @@ pair-cli run --root 66 --parallel 3 --autonomous
 ```
 
 1. **Select**: one fresh engine process runs `pair-next --root <id>` (with `--filter` set to
-`## Eligibility` when the policy declares one, exactly as `pair-loop` does) and reports the candidate set on a `PAIR-ROOT-CANDIDATES:` line: prerequisites with their merged status, the touched surface as mutex resources, labels, tier, title, branch.
+`## Eligibility` when the policy declares one, exactly as `pair-loop` does) and reports the candidate set on a `PAIR-ROOT-CANDIDATES:` line: canonical macrostate through the adopted State Mapping, prerequisites with their merged status, the touched surface as mutex resources, labels, tier, title, branch.
 
 Nothing is invented here: the scope is `pair-next`'s: `--root`, `--filter`, `--assignee` and `--status` are forwarded verbatim (`--root` is optional when a filter resolves; with neither, the run is refused before anything spawns).
-2. **Plan**: `pair-loop`'s own dependency + mutex analysis (a card whose prerequisite is not merged
-   is excluded; of two cards sharing a resource, the first wins **when concurrency is above 1**; at effective
-   parallelism 1 from explicit `--parallel 1` (or adopted `## Max Parallelism` of 1 when omitted), every
-   dependency-allowed card runs once, in selection order, one child at a time). The plan is printed **before any
+2. **Plan**: delivery priority is `Review → In Progress → Ready → Draft` by default. `--state-order` overrides `## Delivery State Order` and must name each of the first three states once. Within each state, selection order is stable. An unmapped or unreadable state is excluded with a reason. A card whose prerequisite is not merged
+   is excluded; conflicting cards queue behind their first holder and run after it finishes, including at `--parallel 1`. The plan is printed **before any
    process starts**: the cards that run, every excluded card with its reason, and the effective
-   parallelism `min(dependency-allowed, n)` when `n` is explicit, naming the effective source.
+   parallelism `min(dependency-allowed, n)` when `n` is explicit, naming the effective source and state order.
 3. **Run**: at most that many cards at once, each card's delivery cycle driven in this process
    exactly as `run --card` drives it (no nested `pair-cli run`: the stages are the skills, each its
    own engine process); the next card starts when a slot frees (`--parallel 1` is sequential, not a

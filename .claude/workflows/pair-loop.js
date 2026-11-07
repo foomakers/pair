@@ -292,6 +292,29 @@ function resolveRunParallelism(policy, batchTiers, requested) {
   return requested ?? resolveMaxParallelism(policy, batchTiers)
 }
 
+const DEFAULT_DELIVERY_ORDER = ['Review', 'In Progress', 'Ready']
+const RUNNABLE_DELIVERY_STATES = new Set([...DEFAULT_DELIVERY_ORDER, 'Draft'])
+function parseDeliveryStateOrder(value, source) {
+  if (typeof value !== 'string') HALT(`${source} must be a comma-separated delivery state order, got ${JSON.stringify(value)}.`)
+  const parts = value.split(',').map(part => part.trim())
+  if (parts.length !== 3 || new Set(parts).size !== 3 || parts.some(part => !DEFAULT_DELIVERY_ORDER.includes(part)))
+    HALT(`${source} must be a permutation of Review, In Progress, Ready; got ${JSON.stringify(value)}.`)
+  return parts
+}
+
+function prioritizeDeliveryStates(cards, order) {
+  const allowed = []
+  const audit = []
+  for (const card of cards) {
+    if (RUNNABLE_DELIVERY_STATES.has(card.macrostate)) allowed.push(card)
+    else audit.push({ id: card.id, excluded: true, reason: `state ${JSON.stringify(card.macrostate ?? '(unreadable)')} is not a runnable mapped macrostate` })
+  }
+  return { ordered: allowed.map((card, index) => ({ card, index })).sort((a, b) => {
+    const rank = c => Math.max(0, [...order, 'Draft'].indexOf(c.macrostate))
+    return rank(a.card) - rank(b.card) || a.index - b.index
+  }).map(entry => entry.card), audit }
+}
+
 // ── `## Audit Location` ─────────────────────────────────────────────────────
 function resolveAuditLocation(policyText) {
   const body = sectionBody(policyText, 'Audit Location')
@@ -519,9 +542,9 @@ function reconcileCapAudit(mutexAudit, finalBatchIds) {
 const selectionText = v => (Array.isArray(v) ? v.join(',') : String(v))
 // Shell-safe word: single-quoted, an embedded quote closed/escaped/reopened (gate values are validated quote-free).
 const shellQuote = v => `'${String(v).replace(/'/g, `'\\''`)}'`
-function renderContinueToken({ root, predicateText, iteration, filter, assignee, status, until, prepare, merge }) {
+function renderContinueToken({ root, predicateText, iteration, filter, assignee, status, stateOrder, until, prepare, merge }) {
   const rootPart = root ? ` --root ${shellQuote(root)}` : ''
-  const given = { filter, assignee, status, until, prepare, merge }
+  const given = { filter, assignee, status, stateOrder, until, prepare, merge }
   const argParts = Object.entries(given)
     .filter(([, v]) => v !== undefined && v !== null && v !== '')
     .map(([k, v]) => ` --${k} ${shellQuote(selectionText(v))}`)
@@ -552,6 +575,7 @@ const RELAY_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
 const relayOpts = opts => ({ ...opts, model: args?.models?.relay ?? 'haiku', ...(args?.efforts?.relay ? { effort: args.efforts.relay } : {}) })
 
 function validateArgs(args) {
+  if (args?.stateOrder !== undefined) parseDeliveryStateOrder(args.stateOrder, 'args.stateOrder')
   for (const key of ['parallel', 'maxIterations']) {
     if (args?.[key] !== undefined && (!Number.isInteger(args[key]) || args[key] <= 0))
       HALT(`args.${key} must be a positive integer, got ${JSON.stringify(args[key])}.`)
@@ -725,7 +749,9 @@ function parsePolicyOrHalt(policyText, tagProjectionFamily, eligibility) {
     tagProjectionFamily ? new Set(tagProjectionFamily) : undefined,
   )
   const auditLocation = resolveAuditLocation(policyText)
-  return { eligibility, stop, maxParallelism, auditLocation }
+  const adoptedOrder = sectionBody(policyText, 'Delivery State Order')
+  const stateOrder = adoptedOrder === null ? DEFAULT_DELIVERY_ORDER : parseDeliveryStateOrder(adoptedOrder, '## Delivery State Order')
+  return { eligibility, stop, maxParallelism, auditLocation, stateOrder, stateOrderSource: adoptedOrder === null ? 'default' : '## Delivery State Order' }
 }
 
 // Argument > Adoption > KB default: `--predicate` overrides the adoption file's
@@ -742,9 +768,14 @@ validateArgs(args)
 phase('Policy')
 const resolvedFilter = typeof args?.policyText === 'string' && args.policyText.trim() !== '' ? await resolveFilterOrHalt(args) : undefined
 const policy = parsePolicyOrHalt(args?.policyText, args?.tagProjectionFamily, resolvedFilter)
+if (args?.stateOrder !== undefined) {
+  policy.stateOrder = parseDeliveryStateOrder(args.stateOrder, 'args.stateOrder')
+  policy.stateOrderSource = '--state-order'
+}
 policy.stop = applyPredicateOverride(policy.stop, args?.predicateOverride)
 if (args?.maxIterations !== undefined) policy.stop.maxIterations = args.maxIterations
 log(`Eligibility filter: ${policy.eligibility.value}`)
+log(`Delivery priority: ${policy.stateOrder.join(' → ')} → Draft (${policy.stateOrderSource}); mutex conflicts wait for a later batch`)
 emit('loop-start', { auditLocation: policy.auditLocation, maxIterations: Number.isFinite(policy.stop.maxIterations) ? policy.stop.maxIterations : 'none', ...(policy.stop.predicate ? { predicate: `${policy.stop.predicate.selector} ⇒ ${policy.stop.predicate.condition}` } : {}) })
 
 // Review M8 — audit-based resume: a killed-and-restarted run reads its OWN
@@ -863,8 +894,11 @@ while (true) {
     }
   }
   const eligible = completeCandidates(driven)
+  const priority = prioritizeDeliveryStates(eligible, policy.stateOrder)
+  runLog.push({ iteration, priority: policy.stateOrder, prioritySource: policy.stateOrderSource, draft: 'last' })
+  runLog.push(...priority.audit.map(entry => ({ iteration, ...entry })))
 
-  const { resolved, audit: resolveAudit } = resolveCards(eligible)
+  const { resolved, audit: resolveAudit } = resolveCards(priority.ordered)
   runLog.push(...resolveAudit.map(a => ({ iteration, ...a })))
 
   const { allowed: depAllowed, audit: depAudit } = dependencyFilter(resolved)
