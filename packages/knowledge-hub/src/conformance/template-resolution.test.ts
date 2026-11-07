@@ -172,3 +172,18 @@ describe('every template-linking guideline carries the resolution pointer (AC5, 
     },
   )
 })
+
+describe('PR title publication precedence', () => {
+  const skill = readFileSync(join(DATASET_SKILLS, 'capability/publish-pr/SKILL.md'), 'utf-8')
+
+  it('prioritizes explicit PR naming rules and otherwise uses the resolved template', () => {
+    expect(skill).toMatch(/explicit PR title naming rules.*override/i)
+    expect(skill).toMatch(/unrelated naming rules.*resolved template/i)
+    expect(skill).toMatch(/no code prefix.*no type prefix/i)
+  })
+
+  it('updates the existing title and verifies the host readback', () => {
+    expect(skill).toMatch(/update its title and body/i)
+    expect(skill).toMatch(/read.*title.*mismatch/i)
+  })
+})
