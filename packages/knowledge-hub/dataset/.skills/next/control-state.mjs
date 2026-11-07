@@ -2,6 +2,7 @@
 // Canonical control-state authority shared by pair-next and pair run.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 export const MACROSTATES = ['Draft', 'Ready', 'In Progress', 'Review', 'Done']
 const WAY = '.pair/adoption/tech/way-of-working.md'
@@ -153,7 +154,7 @@ export function resolveControlState(card, mapping) {
     return {
       macrostate: 'Done',
       readiness: null,
-      outOfProcess: 'resolves to Done (delivered)',
+      outOfProcess: `board state ${JSON.stringify(literal)} resolves to Done (delivered)`,
       warnings,
     }
   if (mapped === 'Review')
@@ -199,7 +200,7 @@ export function validateStatusFilter(value, mapping) {
   return states
 }
 
-if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const [command, projectRoot, json] = process.argv.slice(2)
     const mapping = readStateMapping(projectRoot ?? process.cwd())

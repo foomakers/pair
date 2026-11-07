@@ -76,6 +76,7 @@ test('DoR and routing cover every state and the Draft/Ready boundary', () => {
   assert.match(resolveControlState(card(undefined), map).outOfProcess, /not declared/)
   assert.equal(resolveControlState(card('Next', ''), map).macrostate, 'Ready')
   assert.equal(resolveControlState(card('Next', ''), map).warnings.length, 1)
+  assert.match(resolveControlState(card('Closed'), map).outOfProcess, /"Closed" resolves to Done/)
   const noReady = mapping([
     ['Todo', 'Draft'],
     ['Closed', 'Done'],
@@ -90,6 +91,18 @@ test('DoR and routing cover every state and the Draft/Ready boundary', () => {
     'Dependencies',
     'Design flag',
   ])
+  const criteria = [
+    ['Clear title', card('Todo', full, '[Title]')],
+    ['Problem/goal', card('Todo', full.replace('**I want** a state', ''))],
+    ['Verifiable AC', card('Todo', full.replace('Given input When read Then resolve', ''))],
+    ['Estimate', card('Todo', full.replace('**Final Story Points**: 3', ''))],
+    ['Dependencies', card('Todo', full.replace('**Story Dependencies**: none', ''))],
+    ['Design flag', card('Todo', full.replace('Design: not required', ''))],
+  ]
+  for (const [name, document] of criteria) {
+    assert.deepEqual(unmetReadinessCriteria(document), [name])
+    assert.match(resolveControlState(document, noReady).explanation, new RegExp(name))
+  }
   assert.equal(
     resolveControlState(
       card('Todo', full.replace('Design: not required', '')),
