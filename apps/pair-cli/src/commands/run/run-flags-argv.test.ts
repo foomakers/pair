@@ -159,6 +159,7 @@ describe('pair-cli run — the cycle-coordinator flags through the registered co
           branch: `feature/card-${i + 1}`,
           tier: 'risk:green',
           labels: ['risk:green'],
+          macrostate: 'Ready',
           mutexResources: [],
           prerequisites: [],
         })),

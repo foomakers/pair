@@ -15,6 +15,7 @@ const cards: RootCandidate[] = Array.from({ length: 5 }, (_, i) => ({
   title: `Card ${i + 1}`,
   branch: `feature/US-${i + 1}-card`,
   tier: 'risk:green',
+  macrostate: 'Ready',
   labels: ['risk:green'],
   mutexResources: [],
   prerequisites: [],

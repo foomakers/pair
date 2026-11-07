@@ -3247,6 +3247,21 @@ function resolveState({ dir, workflowVersion, policy = {}, entry = 'fresh', pr, 
       { step: 'verify', mode: 're-review', phase: `r${(phaseParts(last.phase)?.round ?? 0) + 1}`, round: (phaseParts(last.phase)?.round ?? 0) + 1, attempt: 1, base: last.data.reviewedHead, prior: last.name, openIds: (last.data.findings ?? []).filter(isBlocking).map(f => f.id), priorFindings: [...new Map(handoffs.filter(h => h.skill === 'review-phase').flatMap(r => (r.data.findings ?? []).filter(f => f?.id).map(f => [f.id, { id: f.id, severity: f.severity }]))).values()], ...extra },
       ledger.filter(r => r.state === 'active'),
     )
+  // An unsealed rejected contract has no authority over a PR head changed outside this run.
+  // Persist the observed head so a stage-local resolve (without --head) gets the same dispatch.
+  const movedReview = recovery.movedReviews?.[failureId]
+  const priorReview = handoffs.filter(h => h.skill === 'review-phase').pop()
+  const unsealedFailure = last.skill === 'red-verify' && last.data.verified !== true && last.data.sealed !== true
+  const priorBlocking = (priorReview?.data.findings ?? []).filter(isBlocking)
+  const humanHeld = priorReview?.data.needsHumanDecision === true || (priorBlocking.length > 0 && priorBlocking.every(f => f.external === true))
+  if (unsealedFailure && priorReview && !humanHeld && !ledger.some(r => r.state === 'active') && cycleCounters(handoffs).spentCycles < (policy.maxFixRounds ?? POLICY_DEFAULTS.maxFixRounds)) {
+    if (heads.prHead && heads.prHead !== last.data.inputHead && heads.prHead !== priorReview.data.reviewedHead && !movedReview)
+      writeRecovery(dir, { ...recovery, movedReviews: { ...recovery.movedReviews, [failureId]: heads.prHead } })
+    if ((heads.prHead && heads.prHead !== last.data.inputHead && heads.prHead !== priorReview.data.reviewedHead) || (!heads.prHead && movedReview)) {
+      const round = Math.max(phaseParts(last.phase)?.round ?? 0, phaseParts(priorReview.phase)?.round ?? 0) + 1
+      next = withActiveGuards({ step: 'verify', mode: 're-review', phase: `r${round}`, round, attempt: 1, base: priorReview.data.reviewedHead, prior: priorReview.name, openIds: priorBlocking.map(f => f.id), priorFindings: [...new Map(handoffs.filter(h => h.skill === 'review-phase').flatMap(r => (r.data.findings ?? []).filter(f => f?.id).map(f => [f.id, { id: f.id, severity: f.severity }]))).values()], headMoved: true }, ledger.filter(r => r.state === 'active'))
+    }
+  }
   // US-575 (#575/AC4): a review's terminal verdict holds for the head it reviewed. The PR head moved since ⇒ re-verify
   // the new head (custody judges the new commits). A request for a HUMAN decision keeps waiting for it.
   if (last.skill === 'review-phase' && heads.prHead && heads.prHead !== last.data.reviewedHead && next.step === 'blocked' && next.reason !== 'awaiting-scope-decision' && !(next.reason === 'escalate' && !next.budget)) next = reReviewOf({ headMoved: true })

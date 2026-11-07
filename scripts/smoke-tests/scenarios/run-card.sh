@@ -93,7 +93,7 @@ if (process.env.PAIR_SELECTION_ITEMS && prompt.includes('PAIR-ROOT-CANDIDATES'))
     const state = invoke('resolve', JSON.stringify({ ...card, boardState }))
     observed.push({ id, state })
     if (state.outOfProcess || state.macrostate === 'Done' || !allowed.includes(state.macrostate)) continue
-    candidates.push({ id, title: card.title, branch: '', tier: 'risk:green', labels: ['risk:green'] })
+    candidates.push({ id, title: card.title, branch: '', tier: 'risk:green', labels: ['risk:green'], macrostate: state.macrostate })
   }
   fs.writeFileSync(process.env.PAIR_SELECTION_TRACE, JSON.stringify({ allowed, observed, selected: candidates.map(c => c.id) }))
   const warnings = observed.flatMap(item => item.state.warnings)

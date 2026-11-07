@@ -38,12 +38,25 @@ const HELPERS_SRC = FULL_SRC.slice(0, FULL_SRC.indexOf(ORCH_MARKER))
 const SRC = FULL_SRC
 
 const HELPERS = new Function(
-  `${HELPERS_SRC}\nreturn { currentHalted, selectionFailure, completeCandidates, stopVerdict, outcomeKind, newDriveState, recordOutcome, decideDrive, DEFAULT_RETRY_BUDGET, extractEligibility, extractAutoAdvance, parseStopPredicate, evaluateStopPredicate, parseMaxParallelism, resolveMaxParallelism, resolveAuditLocation, dependencyFilter, computeMutexBatch, resolveCards, composeBatch, reconcileCapAudit, renderContinueToken, validateArgs, APPROVAL_DECLARING_SKILLS, approvalArgsFor }`,
+  `${HELPERS_SRC}\nreturn { currentHalted, selectionFailure, completeCandidates, stopVerdict, outcomeKind, newDriveState, recordOutcome, decideDrive, DEFAULT_RETRY_BUDGET, extractEligibility, extractAutoAdvance, parseStopPredicate, evaluateStopPredicate, parseMaxParallelism, resolveMaxParallelism, resolveAuditLocation, parseDeliveryStateOrder, prioritizeDeliveryStates, dependencyFilter, computeMutexBatch, resolveCards, composeBatch, reconcileCapAudit, renderContinueToken, validateArgs, APPROVAL_DECLARING_SKILLS, approvalArgsFor }`,
 )()
 
 function getHelpers() {
   return HELPERS
 }
+
+test('US-611: priority is stable, override is validated, unmapped states are excluded', () => {
+  const { parseDeliveryStateOrder, prioritizeDeliveryStates } = getHelpers()
+  const cards = [
+    { id: '598', macrostate: 'Ready' }, { id: '589', macrostate: 'Review' },
+    { id: '600', macrostate: 'In Progress' }, { id: '591', macrostate: 'Review' },
+    { id: '0', macrostate: 'Unplanned' },
+  ]
+  assert.deepEqual(prioritizeDeliveryStates(cards, ['Review', 'In Progress', 'Ready']).ordered.map(c => c.id), ['589', '591', '600', '598'])
+  assert.deepEqual(prioritizeDeliveryStates(cards, ['Review', 'In Progress', 'Ready']).audit.map(a => a.id), ['0'])
+  assert.deepEqual(prioritizeDeliveryStates(cards, parseDeliveryStateOrder('Ready,Review,In Progress', '--state-order')).ordered.map(c => c.id), ['598', '589', '591', '600'])
+  assert.throws(() => parseDeliveryStateOrder('Ready,Ready,Review', '--state-order'), /permutation/)
+})
 
 // ── Eligibility ──────────────────────────────────────────────────────────────
 test('extractEligibility: absent section -> empty eligibility set (fail-safe)', () => {
@@ -501,7 +514,11 @@ function runWorkflow({ args, dispatch, workflowDispatch, auditWritten = true, re
       const given = /--args '([^']*)'/.exec(prompt)
       return resolvePolicy({ args: given ? JSON.parse(given[1]) : {}, adoptionText: args.policyText })
     }
-    return dispatch(prompt, opts)
+    const answer = dispatch(prompt, opts)
+    // Older fixtures predate state transport; their board state is Ready unless the fixture names it.
+    if (opts.phase === 'Select' && answer?.candidates && Array.isArray(answer.candidates))
+      return { ...answer, candidates: answer.candidates.map(card => typeof card === 'object' && card !== null && card.macrostate === undefined ? { macrostate: 'Ready', ...card } : card) }
+    return answer
   }
   const parallel = fns => Promise.all(fns.map(f => Promise.resolve().then(f).catch(() => null)))
   const workflow = async (name, wfArgs) => (workflowDispatch ?? (() => ({ batch: [] })))(name, wfArgs)
@@ -523,6 +540,33 @@ function runWorkflow({ args, dispatch, workflowDispatch, auditWritten = true, re
     },
   )
 }
+
+test('CLI state order overrides a malformed adopted order through the executable dispatcher', async () => {
+  const policyText = '## Eligibility\n\nrisk:green\n\n## Delivery State Order\n\nReady, Ready\n'
+  const request = JSON.parse(execFileSync(process.execPath, [new URL('../skills/pair-workflow-cycle/scripts/loop-workflow-dispatch.mjs', import.meta.url).pathname], {
+    input: JSON.stringify({ policyText, options: { '--state-order': 'Review, In Progress, Ready' } }), encoding: 'utf8',
+  }))
+  assert.equal(request.name, 'pair-loop')
+  const { logs } = await runWorkflow({ args: request.args, dispatch: () => ({ candidates: [] }) })
+  assert.ok(logs.some(line => line.includes('Review → In Progress → Ready') && line.includes('--state-order')))
+})
+
+test('US-611: workflow plans Review first and drains a mutex conflict on the next finite iteration', async () => {
+  const batches = []
+  const candidates = [
+    { id: '598', title: 'Ready', branch: 'feature/US-598-x', tier: 'risk:green', labels: ['risk:green'], macrostate: 'Ready', mutexResources: ['pair-capability-publish-pr'], prerequisites: [], escalated: false },
+    { id: '589', title: 'Review', branch: 'feature/US-589-x', tier: 'risk:green', labels: ['risk:green'], macrostate: 'Review', mutexResources: ['pair-capability-publish-pr'], prerequisites: [], escalated: false },
+  ]
+  await runWorkflow({
+    args: { policyText: '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n2\n', root: '605', parallel: 2, maxIterations: 3 },
+    dispatch: (_prompt, opts) => opts.phase === 'Select' ? { candidates } : { states: [] },
+    workflowDispatch: (_name, input) => {
+      batches.push(input.cards.map(c => c.id))
+      return { batch: input.cards.map(c => ({ id: c.id, status: 'target-ready' })) }
+    },
+  })
+  assert.deepEqual(batches, [['589'], ['598']])
+})
 
 test('orchestration: fail-closed HALT on absent/empty policy — no card touched', async () => {
   await assert.rejects(

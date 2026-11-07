@@ -55,6 +55,7 @@ import {
   completeCandidates,
   computeRootPlan,
   describeRootPlan,
+  parseStateOrder,
   type RootCandidate,
   type RootPlan,
 } from './root-plan'
@@ -160,7 +161,8 @@ function recordBatch({ input, deps, plan, root, startedAt, outcomes }: BatchReco
       effective: plan.limit.effective,
       outcomes,
       excluded: plan.excluded,
-    }) + ` parallel-source=${plan.limit.source}`
+    }) +
+    ` parallel-source=${plan.limit.source} state-order=${plan.stateOrder.join(',').replaceAll(' ', '_')} state-order-source=${plan.stateOrderSource.replaceAll(' ', '_')}`
   ;(deps.appendAudit ?? appendAuditLine)(input.context.auditPath, line)
 }
 
@@ -269,6 +271,7 @@ function planFor(fan: FanOut, candidates: RootCandidate[]): RootPlan {
   const { input } = fan
   const { policy } = input.context
   const { readCardTitle: readTitle = readCardTitle } = fan.deps
+  const stateOrder = stateOrderOf(input)
   const plan = computeRootPlan({
     candidates: withPrereqState(
       fan,
@@ -283,9 +286,27 @@ function planFor(fan: FanOut, candidates: RootCandidate[]): RootPlan {
     },
     requested: input.config.parallel,
     source: parallelSource(input),
+    ...stateOrder,
   })
   for (const line of describeRootPlan(plan)) console.log(`  ${line}`)
   return plan
+}
+
+function stateOrderOf(input: ParallelRunInput): {
+  stateOrder?: readonly string[]
+  stateOrderSource?: string
+} {
+  if (input.config.stateOrder !== undefined)
+    return { stateOrder: input.config.stateOrder, stateOrderSource: '--state-order' }
+  const path = join(input.cwd, POLICY_PATH)
+  if (!input.fs.existsSync(path)) return {}
+  const lines = sectionLines(input.fs.readFileSync(path), 'Delivery State Order')
+  if (lines === undefined) return {}
+  if (lines.length !== 1)
+    throw new Error(
+      `## Delivery State Order must contain one comma-separated line (received: ${JSON.stringify(lines)})`,
+    )
+  return { stateOrder: parseStateOrder(lines[0]!), stateOrderSource: '## Delivery State Order' }
 }
 
 function reportPreamble(
@@ -513,6 +534,7 @@ function createBatch(ctx: BatchContext): {
       const outcomes = await runPool({
         items: plan.run,
         limit: plan.limit.effective,
+        resources: card => card.mutexResources,
         mayStart: () => !isInterrupted(),
         worker: card => runCardInBatch({ input, deps, card, finished, heldLocks }),
         notStarted: card => ({ id: card.id, outcome: 'interrupted', detail: 'never started' }),

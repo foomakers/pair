@@ -2,6 +2,17 @@ import { describe, it, expect } from 'vitest'
 import { parseRunCommand } from './parser'
 
 describe('parseRunCommand', () => {
+  it('US-611: validates --state-order as a root-run argument', () => {
+    expect(
+      parseRunCommand({ root: '605', stateOrder: 'Ready,Review,In Progress' }).stateOrder,
+    ).toEqual(['Ready', 'Review', 'In Progress'])
+    expect(() => parseRunCommand({ card: '1', stateOrder: 'Ready,Review,In Progress' })).toThrow(
+      /requires a root\/filter run/,
+    )
+    expect(() => parseRunCommand({ root: '605', stateOrder: 'Ready,Ready,Review' })).toThrow(
+      /permutation/,
+    )
+  })
   it('parses the flagless path off schema defaults (AC12)', () => {
     const config = parseRunCommand({})
 

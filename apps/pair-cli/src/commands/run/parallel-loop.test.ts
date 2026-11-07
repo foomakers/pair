@@ -34,6 +34,7 @@ const card = (id: string, extra: Partial<RootCandidate> = {}): RootCandidate => 
   title: `Card ${id}`,
   branch: `feature/US-${id}-x`,
   tier: 'risk:green',
+  macrostate: 'Ready',
   labels: ['risk:green'],
   mutexResources: [],
   prerequisites: [],

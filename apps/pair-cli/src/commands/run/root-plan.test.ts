@@ -4,6 +4,7 @@ import { join } from 'path'
 import {
   computeMutexBatch,
   computeRootPlan,
+  parseStateOrder,
   dependencyFilter,
   describeRootPlan,
   resolveCards,
@@ -58,6 +59,7 @@ const card = (id: string, extra: Partial<RootCandidate> = {}): RootCandidate => 
     title: `Card ${id}`,
     branch: `feature/US-${id}-x`,
     tier,
+    macrostate: 'Ready',
     labels: tier.startsWith('risk:') ? [tier] : [],
     mutexResources: [],
     prerequisites: [],
@@ -179,15 +181,14 @@ describe('computeRootPlan — AC1 plan, excluded cards reported with a reason, n
       requested: 2,
     })
 
-    expect(plan.run.map(c => c.id)).toEqual(['10', '13'])
+    expect(plan.run.map(c => c.id)).toEqual(['10', '11', '13'])
     expect(plan.excluded).toEqual([
       { id: '14', reason: 'not eligible (tier risk:red !== risk:green)' },
       { id: '12', reason: 'blocked by #10 (not merged)' },
-      { id: '11', reason: 'mutex conflict on skill:a — waits for a later iteration' },
     ])
     expect(plan.limit).toMatchObject({
       effective: 2,
-      boundBy: ['dependency-allowed', '--parallel'],
+      boundBy: ['--parallel'],
     })
   })
 
@@ -259,15 +260,14 @@ describe('computeRootPlan — serial runs ignore mutex (US-590)', () => {
     { global: 3, perTier: { 'risk:green': 1 } },
   ])('adopted 1 cannot force serial execution of explicit 3', maxParallelism => {
     const plan = run({ maxParallelism })
-    expect(plan.run.map(c => c.id)).toEqual(['1'])
-    expect(plan.excluded.map(e => e.id)).toEqual(['2', '3'])
+    expect(plan.run.map(c => c.id)).toEqual(['1', '2', '3'])
+    expect(plan.excluded).toEqual([])
   })
 
-  it('concurrency > 1 still excludes overlapping cards with a reason', () => {
+  it('concurrency > 1 queues overlapping cards', () => {
     const plan = run({})
-    expect(plan.run.map(c => c.id)).toEqual(['1'])
-    expect(plan.excluded.map(e => e.id)).toEqual(['2', '3'])
-    expect(plan.excluded[0]!.reason).toContain('mutex conflict on r')
+    expect(plan.run.map(c => c.id)).toEqual(['1', '2', '3'])
+    expect(plan.excluded).toEqual([])
   })
 
   it('serial never admits a dependency-blocked card sharing resources', () => {
@@ -323,6 +323,90 @@ describe('zero merit logic (D18) — the module reads values, it defines no elig
     const source = readFileSync(join(__dirname, 'root-plan.ts'), 'utf-8')
     const literals = source.match(/'risk:[a-z]+'/g) ?? []
     expect(literals).toEqual(["'risk:red'"])
-    expect(source).not.toMatch(/'(Ready|Draft|In Progress|Done)'/)
+    expect(source).not.toMatch(/'risk:(green|yellow)'/)
+  })
+})
+
+it('US-611: prioritizes Review and retains mutex-conflicting cards for a finite run', () => {
+  const ready = {
+    ...card('598', { mutexResources: ['pair-capability-publish-pr'] }),
+    macrostate: 'Ready',
+  }
+  const review = {
+    ...card('589', { mutexResources: ['pair-capability-publish-pr'] }),
+    macrostate: 'Review',
+  }
+  const plan = computeRootPlan({
+    candidates: [ready, review],
+    eligibility: undefined,
+    maxParallelism: { global: 2, perTier: {} },
+    requested: 2,
+  })
+  expect(plan.run.map(c => c.id)).toEqual(['589', '598'])
+  expect(plan.excluded).toEqual([])
+})
+
+describe('US-611 delivery order and state boundaries', () => {
+  const policy = { global: 2, perTier: {} }
+  const plan = (candidates: RootCandidate[], stateOrder?: readonly string[]) =>
+    computeRootPlan({
+      candidates,
+      eligibility: undefined,
+      maxParallelism: policy,
+      requested: 2,
+      stateOrder,
+    })
+
+  it('keeps input order within each state and puts Draft last', () => {
+    expect(
+      plan([
+        card('1', { macrostate: 'Ready' }),
+        card('2', { macrostate: 'Review' }),
+        card('3', { macrostate: 'In Progress' }),
+        card('4', { macrostate: 'Review' }),
+        card('5', { macrostate: 'Draft' }),
+        card('6', { macrostate: 'Ready' }),
+      ]).run.map(c => c.id),
+    ).toEqual(['2', '4', '3', '1', '6', '5'])
+  })
+
+  it('honors a complete explicit permutation', () => {
+    expect(
+      plan(
+        [card('1', { macrostate: 'Review' }), card('2', { macrostate: 'Ready' })],
+        parseStateOrder('Ready,Review,In Progress'),
+      ).run.map(c => c.id),
+    ).toEqual(['2', '1'])
+  })
+
+  it.each(['Ready', 'Ready,Ready,Review', 'Ready,Review,Done', 'Ready,Review,In progress', ''])(
+    'rejects unsupported order %j',
+    raw => {
+      expect(() => parseStateOrder(raw)).toThrow(/received:/)
+    },
+  )
+
+  it('excludes unreadable, unmapped and terminal states with actual values', () => {
+    const unreadable: RootCandidate = {
+      id: '1',
+      title: 'Card 1',
+      branch: 'feature/US-1-x',
+      tier: 'risk:green',
+      labels: ['risk:green'],
+      mutexResources: [],
+      prerequisites: [],
+    }
+    const result = plan([
+      unreadable,
+      card('2', { macrostate: 'Unplanned' }),
+      card('3', { macrostate: 'Done' }),
+      card('4', { macrostate: 'Review' }),
+    ])
+    expect(result.run.map(c => c.id)).toEqual(['4'])
+    expect(result.excluded).toEqual([
+      { id: '1', reason: 'state "(unreadable)" is not a runnable mapped macrostate' },
+      { id: '2', reason: 'state "Unplanned" is not a runnable mapped macrostate' },
+      { id: '3', reason: 'state "Done" is not a runnable mapped macrostate' },
+    ])
   })
 })

@@ -41,6 +41,7 @@ const card = (id: string): RootCandidate => ({
   branch: `feature/US-${id}-x`,
   tier: 'risk:green',
   labels: ['risk:green', 'auto-dev'],
+  macrostate: 'Ready',
   mutexResources: [],
   prerequisites: [],
 })
