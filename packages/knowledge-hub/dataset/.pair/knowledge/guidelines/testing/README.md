@@ -38,6 +38,7 @@ Strategic testing approaches and methodologies for comprehensive quality assuran
 - **[Testing Philosophy](test-strategy/testing-philosophy.md)** - Core principles and strategic approach ✓
 - **[Test Pyramid](test-strategy/test-pyramid.md)** - Testing level distribution and balance ✓
 - **[Coverage Strategy](test-strategy/coverage-strategy.md)** - Code coverage goals and measurement ✓
+- **[Behavior-First Tests](test-strategy/behavior-first-tests.md)** - Choosing, writing, auditing and cleaning tests; U1–U8 taxonomy and G1–G8 gates ✓
 - **[BDD - Behavior Driven Development](test-strategy/bdd-behavior-driven-development.md)** - User behavior testing
 - **[TDD - Test Driven Development](test-strategy/tdd-test-driven-development.md)** - Development methodology
 

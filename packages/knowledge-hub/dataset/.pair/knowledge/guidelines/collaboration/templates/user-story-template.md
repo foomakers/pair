@@ -1,6 +1,6 @@
 # User Story Template
 
-<!-- word-limits: Initial Breakdown Template=600; Refined User Story Template=1600; Story Statement=40; Epic Context=40; User Value=60; Rough Sizing=40; Initial Scope=90; Definition of Done Expectations=70; Dependencies=30; Notes=40; Classification=80; Acceptance Criteria=250; Definition of Done Checklist=120; Story Sizing and Sprint Readiness=100; Dependencies and Coordination=70; Validation and Testing Strategy=60; Notes and Additional Context=60; Technical Analysis=140 -->
+<!-- word-limits: Initial Breakdown Template=600; Refined User Story Template=1600; Story Statement=40; Epic Context=40; User Value=60; Rough Sizing=40; Initial Scope=90; Definition of Done Expectations=70; Dependencies=30; Notes=40; Classification=80; Acceptance Criteria=250; Test plan=120; Definition of Done Checklist=120; Story Sizing and Sprint Readiness=100; Dependencies and Coordination=70; Validation and Testing Strategy=60; Notes and Additional Context=60; Technical Analysis=140 -->
 
 ## 📋 Table of Contents
 
@@ -151,6 +151,16 @@
 - **System Errors**: [conditions and user feedback]
 - **Boundary Conditions**: [limits and constraints]
 - **Exceptional Scenarios**: [unusual but valid use cases]
+
+## Test plan
+
+Required when the story touches production code; written before implementation. Behaviors come from the acceptance criteria — test count follows from this list.
+
+| Behavior | Acceptance criterion | Level | Cases (equivalence classes) |
+| --- | --- | --- | --- |
+| [Verifiable behavior] | [AC id] | [unit / integration / e2e] | [one case per equivalence class] |
+
+Outside test scope: [what must not be tested and why]
 
 ## Definition of Done Checklist
 

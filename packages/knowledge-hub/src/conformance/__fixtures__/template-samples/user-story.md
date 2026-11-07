@@ -49,6 +49,14 @@
 
 - **Invalid Input**: unknown area exits 1
 
+## Test plan
+
+| Behavior | Acceptance criterion | Level | Cases (equivalence classes) |
+| --- | --- | --- | --- |
+| Discount never brings the total below zero | AC2 | unit | total > discount, total = discount, total < discount |
+
+Outside test scope: payment-provider internals.
+
 ## Definition of Done Checklist
 
 ### Development Completion
