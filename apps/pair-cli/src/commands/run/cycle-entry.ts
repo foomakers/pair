@@ -498,7 +498,7 @@ function cardStatusOf(outcome: DriveCycleResult): string {
   if (outcome.status === 'escalated' || outcome.status === 'escalate') return 'escalated'
   if (outcome.status === 'ready-for-merge' || outcome.status === 'target-ready')
     return outcome.status
-  if (outcome.status === 'merge-parked') return 'awaiting-human'
+  if (outcome.status === 'merge-parked' && exitCodeFor(outcome) === 0) return 'awaiting-human'
   return 'failed'
 }
 
