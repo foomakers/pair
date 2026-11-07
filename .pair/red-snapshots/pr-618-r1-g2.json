@@ -1,0 +1,270 @@
+{
+  "$meta": {
+    "pr": "618",
+    "phase": "r1-g2",
+    "base": "63efef4babf993b04c5a69b62360058798864090",
+    "trailer": "Pair-RED-Snapshot: pr=618; phase=r1-g2; base=63efef4babf993b04c5a69b62360058798864090; manifest=.pair/red-snapshots/pr-618-r1-g2.json",
+    "artifacts": [
+      "packages/dev-tools/src/test-audit/inventory.policy.test.ts",
+      "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts",
+      "packages/dev-tools/src/test-audit/inventory.policy.controls.test.ts"
+    ]
+  },
+  "mode": "repair",
+  "inputHead": "63efef4babf993b04c5a69b62360058798864090",
+  "sourceOfTruth": "packages/dev-tools/src/test-audit/inventory.ts",
+  "inventory": [
+    {
+      "id": "r0-4",
+      "producer": "inventory.ts (new loadPolicy + gateViolations U4 consumer of docs/testing/test-policy.config.json)",
+      "inputs": [
+        "test-policy.config.json maxMockAssertionRatio",
+        "TestRecord mocks/assertions"
+      ],
+      "representations": [
+        "docs/testing/test-policy.config.json (canonical)",
+        "TESTING_POLICY.md single-source claim"
+      ],
+      "consumers": [
+        "gateViolations",
+        "buildInventory",
+        "main"
+      ],
+      "classes": [
+        "ratio threshold low -> violation",
+        "ratio threshold high -> no violation",
+        "mocks == ratio*assertions (boundary, pass)",
+        "mocks > ratio*assertions (violation)",
+        "mocks>0 with zero assertions (violation)",
+        "committed config has numeric ratio (control)",
+        "no mocks (assertions>0 / assertions=0) is never U4",
+        "loadPolicy missing file / non-numeric ratio / absent key => throws Error (rule: policy is mandatory and strictly numeric, no silent default)",
+        "skipped record with mocks>ratio*assertions: U4 ignores skip (pure ratio), G1 still excludes skipped",
+        "audit path: buildInventory(root)/main(root) read <root>/docs/testing/test-policy.config.json",
+        "doc and consumer module name the same test-policy.config.json"
+      ],
+      "interactions": [
+        "config value x record ratio -> U4 result",
+        "config threshold x buildInventory/main -> gates.U4"
+      ]
+    }
+  ],
+  "fixScope": {
+    "owner": "packages/dev-tools/src/test-audit",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/dev-tools/src/test-audit/inventory.ts",
+      "docs/testing/TESTING_POLICY.md"
+    ]
+  },
+  "matrix": [
+    {
+      "id": "w-r0-4a",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-4a",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.policy.test.ts :: w-r0-4a",
+      "file": "packages/dev-tools/src/test-audit/inventory.policy.test.ts",
+      "expected": "changing maxMockAssertionRatio 1->5 in config flips U4 from [id] to []",
+      "covers": [
+        "r0-4"
+      ]
+    },
+    {
+      "id": "w-r0-4b",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-4b",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.policy.test.ts :: w-r0-4b",
+      "file": "packages/dev-tools/src/test-audit/inventory.policy.test.ts",
+      "expected": "loadPolicy(file).maxMockAssertionRatio === 7",
+      "covers": [
+        "r0-4"
+      ]
+    },
+    {
+      "id": "w-r0-4c",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "w-r0-4c",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.policy.test.ts :: w-r0-4c",
+      "file": "packages/dev-tools/src/test-audit/inventory.policy.test.ts",
+      "expected": "ratio==threshold passes; above fails; mocks without assertions fail",
+      "covers": [
+        "r0-4"
+      ]
+    },
+    {
+      "id": "c-r0-4a",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "c-r0-4a",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.policy.controls.test.ts :: c-r0-4a",
+      "file": "packages/dev-tools/src/test-audit/inventory.policy.controls.test.ts",
+      "expected": "committed config has numeric maxMockAssertionRatio",
+      "covers": [
+        "r0-4"
+      ]
+    },
+    {
+      "id": "w-r0-4d",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-4d",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts :: w-r0-4d",
+      "file": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts",
+      "expected": "buildInventory(root,files) gates.U4 = [id] at ratio 1, [] at ratio 5, config at <root>/docs/testing/test-policy.config.json",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "policy location rule is stated here: root-relative, so a default/hardcoded policy in buildInventory fails"
+    },
+    {
+      "id": "w-r0-4e",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "w-r0-4e",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts :: w-r0-4e",
+      "file": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts",
+      "expected": "main(root) writes test-audit/inventory.json gates.U4 length 1 at ratio 1, [] at ratio 5",
+      "covers": [
+        "r0-4"
+      ]
+    },
+    {
+      "id": "w-r0-4f",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "w-r0-4f",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts :: w-r0-4f",
+      "file": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts",
+      "expected": "mocks=0 with assertions 3 or 0 => U4 [] even at ratio 0",
+      "covers": [
+        "r0-4"
+      ]
+    },
+    {
+      "id": "w-r0-4g",
+      "kind": "boundary",
+      "baseline": "red",
+      "condition": "w-r0-4g",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts :: w-r0-4g",
+      "file": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts",
+      "expected": "loadPolicy throws Error on missing file, string ratio, absent key",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "typed throw rule: policy invalid => Error, never a silent default"
+    },
+    {
+      "id": "w-r0-4h",
+      "kind": "witness",
+      "baseline": "red",
+      "condition": "w-r0-4h",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts :: w-r0-4h",
+      "file": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts",
+      "expected": "inventory.ts source names test-policy.config.json (consumer references the file the doc names)",
+      "covers": [
+        "r0-4"
+      ]
+    },
+    {
+      "id": "w-r0-4i",
+      "kind": "interaction",
+      "baseline": "red",
+      "condition": "w-r0-4i",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts :: w-r0-4i",
+      "file": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts",
+      "expected": "ratio 2: skipped(3,0) in U4 not G1; live(3,0) in U4 and G1",
+      "covers": [
+        "r0-4"
+      ],
+      "rationale": "U4 is a pure ratio gate independent of skip; G1 keeps its skipped exclusion"
+    },
+    {
+      "id": "c-r0-4b",
+      "kind": "control",
+      "baseline": "pass",
+      "condition": "c-r0-4b",
+      "oracle": "packages/dev-tools/src/test-audit/inventory.policy.controls.test.ts :: c-r0-4b",
+      "file": "packages/dev-tools/src/test-audit/inventory.policy.controls.test.ts",
+      "expected": "TESTING_POLICY.md names test-policy.config.json",
+      "covers": [
+        "r0-4"
+      ]
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/dev-tools/src/test-audit/inventory.policy.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:64d836fdc6e930c663c13e6ed83a275e205ccd96946ab534d9aac85d9650da74",
+      "command": "pnpm --dir packages/dev-tools exec vitest run src/test-audit/inventory.policy.test.ts",
+      "observed": "Tests 3 failed (3); TypeError: api.loadPolicy is not a function"
+    },
+    {
+      "file": "packages/dev-tools/src/test-audit/inventory.policy.consumers.test.ts",
+      "kind": "test",
+      "baseline": "red",
+      "sha256": "sha256:828d60ee399c0cc3d6cb01e75bd91ecf61064612ab0cd0c0bf28a5f0d73c9c43",
+      "command": "pnpm --dir packages/dev-tools exec vitest run src/test-audit/inventory.policy.consumers.test.ts",
+      "observed": "Tests 6 failed (6); TypeError: api.loadPolicy is not a function"
+    },
+    {
+      "file": "packages/dev-tools/src/test-audit/inventory.policy.controls.test.ts",
+      "kind": "test",
+      "baseline": "pass",
+      "sha256": "sha256:fbcd0fc7a10685b8d2374db82a3bc03ae1b50b12a79cb2523f7162f3f5749edc",
+      "command": "pnpm --dir packages/dev-tools exec vitest run src/test-audit/inventory.policy.controls.test.ts",
+      "observed": "Tests 2 passed (2)"
+    }
+  ],
+  "testExempt": false,
+  "plan": {
+    "groups": [
+      {
+        "groupId": "r1-g1",
+        "findings": [
+          "r0-1",
+          "r0-2",
+          "r0-3"
+        ],
+        "owner": "packages/dev-tools/src/test-audit",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/dev-tools/src/test-audit/inventory.ts"
+        ],
+        "oracle": "vitest inventory.remediation.test.ts + inventory.controls.test.ts",
+        "dependsOn": []
+      },
+      {
+        "groupId": "r1-g2",
+        "findings": [
+          "r0-4"
+        ],
+        "owner": "packages/dev-tools/src/test-audit",
+        "mode": "behavioral",
+        "allowedPaths": [
+          "packages/dev-tools/src/test-audit/inventory.ts",
+          "docs/testing/TESTING_POLICY.md"
+        ],
+        "oracle": "a test changes a threshold in test-policy.config.json and the gate result changes (consumer API chosen by the g2 preparation)",
+        "dependsOn": [
+          "r1-g1"
+        ]
+      }
+    ],
+    "carried": []
+  },
+  "changedRows": [
+    "r0-4",
+    "w-r0-4d",
+    "w-r0-4e",
+    "w-r0-4f",
+    "w-r0-4g",
+    "w-r0-4h",
+    "w-r0-4i",
+    "c-r0-4b"
+  ]
+}
