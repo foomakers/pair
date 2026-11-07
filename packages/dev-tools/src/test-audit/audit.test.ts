@@ -8,6 +8,7 @@ import {
   reconcile,
   renderMarkdown,
   renderRemovalPlan,
+  repeatCost,
   total,
   type Config,
 } from './audit'
@@ -29,6 +30,7 @@ const cfg: Config = {
   maxTestToCodeRatio: 3,
   rollout: 'report-only',
   criticalModules: ['*'],
+  repeatedGates: ['implement', 'pre-push', 'review'],
 }
 const F = 'packages/m/src/x.test.ts'
 const recs = (src: string, file = F) => parseTests(file, src)
@@ -137,5 +139,19 @@ describe('loadConfig', () => {
     expect(() => loadConfig(w({ maxSnapshotLines: 'x' }))).toThrow('maxSnapshotLines must be a number, got "x"')
     expect(() => loadConfig(w({ rollout: 'now' }))).toThrow('rollout must be')
     expect(loadConfig(w({})).rollout).toBe('report-only')
+  })
+})
+
+describe('repeatCost (AC6)', () => {
+  const b = baseline({})
+  b.packages['packages/n'] = { runs: [], wall_ms_median: 4, tests: {} }
+  it('multiplies one suite wall time by the repeating stages, derived not measured', () => {
+    expect(repeatCost(b, ['implement', 'pre-push', 'review'])).toEqual({ suite_ms: 5, stages: 3, repeated_ms: 15 })
+  })
+  it('report separates repeat runs from duplicate cases and names the reuse identity', () => {
+    const md = renderMarkdown(buildReport('rev', [], [], b, cfg), b, cfg)
+    expect(md).toContain('implement, pre-push, review → 3 runs, 15 ms')
+    expect(md).toContain('**repeat execution**, not duplicate test cases')
+    expect(md).toContain('same evidence identity and custody')
   })
 })

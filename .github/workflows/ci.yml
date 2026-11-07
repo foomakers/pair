@@ -166,6 +166,13 @@ jobs:
         run: pnpm workflows:test
       - name: Run dev-scripts tests
         run: pnpm dev-scripts:test
+      # US-613 Part C: G1/G2/G7 on the PR diff (G3-G6 need runner/mutation artifacts, see docs/testing/TESTING_POLICY.md).
+      # Blocking only per `rollout` in docs/testing/test-policy.config.json; report-only by default.
+      - name: Test gates (G1, G2, G7)
+        if: github.event_name == 'pull_request'
+        run: >-
+          pnpm --filter @pair/dev-tools test-audit:gates --base origin/${{ github.base_ref }}
+          --labels "$(echo '${{ toJSON(github.event.pull_request.labels.*.name) }}' | jq -r 'join(",")')"
       - name: Install Playwright browsers
         run: |
           pnpm --filter @pair/brand exec playwright install --with-deps chromium

@@ -15,6 +15,7 @@
     "mdlint:fix": "markdownlint-fix",
     "test-audit:inventory": "ts-node -T src/test-audit/inventory.ts",
     "test-audit": "ts-node -T src/test-audit/audit.ts",
+    "test-audit:gates": "ts-node -T src/test-audit/gates.ts",
     "test-audit:baseline": "ts-node -T src/test-audit/baseline.ts rerun",
     "code-hygiene:check": "ts-node src/quality-gates/code-hygiene-check.ts",
     "smoke-modes:check": "ts-node src/quality-gates/smoke-scenario-modes.ts",

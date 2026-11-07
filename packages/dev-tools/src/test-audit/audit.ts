@@ -23,6 +23,8 @@ export interface Config {
   maxTestToCodeRatio: number
   rollout: 'report-only' | 'block-cheap' | 'block-full'
   criticalModules: string[]
+  /** Stages that each re-run the full suite on the same head: cost = repeat runs, not duplicate cases. */
+  repeatedGates: string[]
 }
 
 export function loadConfig(file: string): Config {
@@ -31,7 +33,8 @@ export function loadConfig(file: string): Config {
     if (typeof c[k] !== 'number' || !Number.isFinite(c[k])) throw new Error(`${file}: ${k} must be a number, got ${JSON.stringify(c[k])}`)
   if (!['report-only', 'block-cheap', 'block-full'].includes(c.rollout))
     throw new Error(`${file}: rollout must be report-only | block-cheap | block-full, got ${JSON.stringify(c.rollout)}`)
-  if (!Array.isArray(c.criticalModules)) throw new Error(`${file}: criticalModules must be an array`)
+  for (const k of ['criticalModules', 'repeatedGates'])
+    if (!Array.isArray(c[k])) throw new Error(`${file}: ${k} must be an array`)
   return c as Config
 }
 
@@ -227,7 +230,13 @@ export function buildReport(
 
 const COLS: (keyof Reconciliation)[] = ['before', 'audited', 'unnecessary', 'protected', 'removed', 'rewritten', 'added', 'remaining', 'unmeasured']
 
-export function renderMarkdown(rep: Report, baseline: CompactBaseline | undefined): string {
+/** One full-suite wall time (sum of per-package medians) × the stages that each repeat it. Derived, not measured per stage. */
+export function repeatCost(baseline: CompactBaseline, gates: string[]): { suite_ms: number; stages: number; repeated_ms: number } {
+  const suite_ms = Object.values(baseline.packages).reduce((a, p) => a + p.wall_ms_median, 0)
+  return { suite_ms, stages: gates.length, repeated_ms: suite_ms * gates.length }
+}
+
+export function renderMarkdown(rep: Report, baseline: CompactBaseline | undefined, cfg?: Config): string {
   const rec = rep.reconciliation
   const mods = [...new Set(COLS.flatMap(c => Object.keys(rec[c])))].sort()
   const cell = (c: keyof Reconciliation, m: string, l: Level): number => rec[c][m]?.[l] ?? 0
@@ -249,6 +258,19 @@ export function renderMarkdown(rep: Report, baseline: CompactBaseline | undefine
       lines.push(`| ${p} | ${Object.keys(v.tests).length} | ${v.wall_ms_median} | ${cov?.lines ?? NOT_MEASURED} | ${cov?.branches ?? NOT_MEASURED} |`)
     }
     lines.push('')
+  }
+  if (baseline && cfg) {
+    const c = repeatCost(baseline, cfg.repeatedGates)
+    lines.push(
+      '## Repeated gate runs vs duplicate cases',
+      '',
+      `One full suite run: ${c.suite_ms} ms (sum of per-package median wall time, 3 baseline runs). Stages that each re-run it on the same head: ${cfg.repeatedGates.join(', ')} → ${c.stages} runs, ${c.repeated_ms} ms (derived: runs × measured median; per-stage wall time is not measured).`,
+      '',
+      `This cost is **repeat execution**, not duplicate test cases: duplicates are counted only by U3 (unique kills = 0 and unique coverage = 0), which is ${NOT_MEASURED} here. Removing a test case lowers each repeat run; it does not remove a repeated stage.`,
+      '',
+      'Reuse of a stage result is allowed only under the same evidence identity and custody: `cycle-state.mjs test-identity` (command + cwd + env keys + toolchain + head tree) must match, and the run must come from the verified PR head.',
+      '',
+    )
   }
   const hit = rep.records.filter(r => r.classes.length)
   lines.push('## Flagged tests', '', '| test | classes | signal | protected | action |', '| --- | --- | --- | --- | --- |')
@@ -297,7 +319,7 @@ export function main(root = REPO_ROOT): void {
   const rep = buildReport(baseRev, inventoryAt(root, baseRev), current, baseline, cfg, rewritten, confirmations)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'report.json'), JSON.stringify(rep, null, 2) + '\n')
-  writeFileSync(join(dir, 'report.md'), renderMarkdown(rep, baseline))
+  writeFileSync(join(dir, 'report.md'), renderMarkdown(rep, baseline, cfg))
   writeFileSync(join(dir, 'removal-plan.md'), renderRemovalPlan(rep))
   console.log(`audit: ${total(rep.reconciliation.before)} before, ${total(rep.reconciliation.remaining)} remaining → ${dir}`)
 }

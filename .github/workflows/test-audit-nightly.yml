@@ -1,0 +1,24 @@
+name: Test audit (nightly, G8)
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.15.0'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile && pnpm build
+      # Report-only: regenerate test-audit/ and compare with the committed report (G8).
+      - run: git show HEAD:test-audit/report.json > "$RUNNER_TEMP/prev-report.json"
+      - run: pnpm --filter @pair/dev-tools test-audit
+      - run: pnpm --filter @pair/dev-tools test-audit:gates --g8-from "$RUNNER_TEMP/prev-report.json"
