@@ -199,6 +199,15 @@ if [ -f "$PKG_DIR/dist/cli.js" ]; then
     (cd "$PKG_DIR" && npx @vercel/ncc build "dist/cli.js" -o "$RELEASE_DIR/bundle-cli") || { echo "ncc bundling failed"; exit 1; }
   fi
 
+  # ncc leaves the dynamically loaded pair-next authority outside index.js.
+  if [ "$DRY_RUN" = true ]; then
+    echo "[dry-run] would copy pair-next control-state.mjs into bundle-cli/assets/"
+  else
+    mkdir -p "$RELEASE_DIR/bundle-cli/assets"
+    cp "$ROOT_DIR/packages/knowledge-hub/dataset/.skills/next/control-state.mjs" \
+      "$RELEASE_DIR/bundle-cli/assets/control-state.mjs"
+  fi
+
   # Remove unnecessary package.json from bundle-cli (created by ncc)
   if [ "$DRY_RUN" = true ]; then
     echo "[dry-run] would remove $RELEASE_DIR/bundle-cli/package.json if present"
