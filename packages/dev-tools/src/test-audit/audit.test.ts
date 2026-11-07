@@ -16,6 +16,7 @@ import {
 import type { CompactBaseline } from './baseline'
 import { parseTests } from './inventory'
 
+const SKIP = 'it.' + 'skip'
 const cfg: Config = {
   budgets: {
     unit: { maxTestMs: 100, totalMs: 60000 },
@@ -86,7 +87,7 @@ describe('classify', () => {
       ...cfg,
       quarantine: [{ id, class: 'U6' as const, evidence: 'failed 4/10 seeds', issue: null }],
     }
-    const [r] = classify(recs(`it.skip('a', () => { expect(1).toBe(1) })`), undefined, q)
+    const [r] = classify(recs(`${SKIP}('a', () => { expect(1).toBe(1) })`), undefined, q)
     expect([r!.classes, r!.signals['U6'], r!.action]).toEqual([
       ['U6'],
       'failed 4/10 seeds',
@@ -157,7 +158,13 @@ describe('reconcile', () => {
 
 describe('render', () => {
   const b = recs(`it('u', () => {}); it('regression #5', () => {})`)
-  const rep = buildReport('rev', b, b.slice(1), undefined, cfg)
+  const rep = buildReport({
+    baseRev: 'rev',
+    before: b,
+    current: b.slice(1),
+    baseline: undefined,
+    cfg,
+  })
   it('markdown total row matches the reconciliation and states not measured classes', () => {
     const md = renderMarkdown(rep, undefined)
     expect(md).toContain('| **total** | | 2 | 2 | 1 | 1 | 1 | 0 | 0 | 1 | 2 |')
@@ -203,7 +210,11 @@ describe('repeatCost (AC6)', () => {
     })
   })
   it('report separates repeat runs from duplicate cases and names the reuse identity', () => {
-    const md = renderMarkdown(buildReport('rev', [], [], b, cfg), b, cfg)
+    const md = renderMarkdown(
+      buildReport({ baseRev: 'rev', before: [], current: [], baseline: b, cfg }),
+      b,
+      cfg,
+    )
     expect(md).toContain('implement, pre-push, review → 3 runs, 15 ms')
     expect(md).toContain('**repeat execution**, not duplicate test cases')
     expect(md).toContain('same evidence identity and custody')

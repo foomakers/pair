@@ -9,7 +9,7 @@ import { join } from 'path'
 
 import { REPO_ROOT } from '../quality-gates/repo-root'
 
-import type { CompactBaseline } from './baseline'
+import { rerunBaseline, type CompactBaseline } from './baseline'
 import {
   TEST_FILE_RE,
   NOT_MEASURED,
@@ -109,7 +109,46 @@ export type Confirmations = Record<
   { class: string; verdict: 'confirmed' | 'dismissed'; reason: string }
 >
 
+type Found = { classes: string[]; signals: Partial<Record<string, string>> }
+
 /** U4's mock ratio only nominates; a written-rule confirmation (internal collaborator mocked) makes it a class. */
+function u4Signal(r: TestRecord, cfg: Config, confirmations: Confirmations): Found {
+  const none: Found = { classes: [], signals: {} }
+  if (!(r.mocks > 0 && r.mocks > cfg.maxMockAssertionRatio * r.assertions)) return none
+  const c = confirmations[r.test_id]
+  const sig = `mocks=${r.mocks} > ${cfg.maxMockAssertionRatio}*assertions=${r.assertions}`
+  if (c?.class === 'U4' && c.verdict === 'confirmed')
+    return { classes: ['U4'], signals: { U4: `${sig}; confirmed: ${c.reason}` } }
+  if (c?.verdict === 'dismissed')
+    return { classes: [], signals: { 'U4-dismissed': `${sig}; dismissed: ${c.reason}` } }
+  return { classes: [], signals: { 'U4-candidate': `${sig}; unconfirmed` } }
+}
+
+function u6Signal(id: string, cfg: Config, statuses: string | undefined): Found {
+  const q = cfg.quarantine.find(x => x.id === id)
+  if (q) return { classes: ['U6'], signals: { U6: q.evidence } }
+  if (statuses && new Set(statuses).size > 1)
+    return { classes: ['U6'], signals: { U6: `status differs across runs: ${statuses}` } }
+  return { classes: [], signals: {} }
+}
+
+function detect(
+  r: TestRecord,
+  t: [number, string] | undefined,
+  cfg: Config,
+  cf: Confirmations,
+): Found {
+  const u2: Found =
+    r.assertions === 0 && !r.skipped
+      ? { classes: ['U2'], signals: { U2: 'assertions=0' } }
+      : { classes: [], signals: {} }
+  const parts = [u2, u4Signal(r, cfg, cf), u6Signal(r.test_id, cfg, t?.[1])]
+  return {
+    classes: parts.flatMap(p => p.classes),
+    signals: Object.assign({}, ...parts.map(p => p.signals)),
+  }
+}
+
 export function classify(
   records: TestRecord[],
   baseline: CompactBaseline | undefined,
@@ -118,36 +157,10 @@ export function classify(
 ): ReportRecord[] {
   return records.map(r => {
     const t = timingOf(baseline, r.module)[r.test_id]
-    const classes: string[] = []
-    const signals: Partial<Record<string, string>> = {}
-    const unmeasured: string[] = ['U1', 'U3', 'U5', 'U8'] // need the mutant × test / coverage matrix: no supported tool
-    if (r.assertions === 0 && !r.skipped) {
-      classes.push('U2')
-      signals['U2'] = 'assertions=0'
-    }
-    if (r.mocks > cfg.maxMockAssertionRatio * r.assertions && r.mocks > 0) {
-      const c = confirmations[r.test_id]
-      const sig = `mocks=${r.mocks} > ${cfg.maxMockAssertionRatio}*assertions=${r.assertions}`
-      if (c?.class === 'U4' && c.verdict === 'confirmed') {
-        classes.push('U4')
-        signals['U4'] = `${sig}; confirmed: ${c.reason}`
-      } else if (c?.verdict === 'dismissed')
-        signals['U4-dismissed'] = `${sig}; dismissed: ${c.reason}`
-      else signals['U4-candidate'] = `${sig}; unconfirmed`
-    }
-    const q = cfg.quarantine.find(x => x.id === r.test_id)
-    if (q) {
-      classes.push('U6')
-      signals['U6'] = q.evidence
-    } else if (t && new Set(t[1]).size > 1) {
-      classes.push('U6')
-      signals['U6'] = `status differs across runs: ${t[1]}`
-    }
-    if (t && t[0] > cfg.budgets[r.level].maxTestMs)
-      unmeasured.push('U7') // over budget; unique kills not measured
-    else if (!t) unmeasured.push('U7')
+    const { classes, signals } = detect(r, t, cfg, confirmations)
     const prot = isProtected(r.test_id)
     const top = CLASS_ORDER.concat('U6').find(c => classes.includes(c))
+    const act = prot || !top ? undefined : top
     return {
       test_id: r.test_id,
       module: r.module,
@@ -162,10 +175,11 @@ export function classify(
       flaky_runs: t ? flakyRuns(t[1]) : NOT_MEASURED,
       classes,
       signals,
-      unmeasured,
+      // no mutant × test / per-test coverage matrix and no unique-kills tool: these signals are never computed
+      unmeasured: ['U1', 'U3', 'U5', 'U7', 'U8'],
       protected: prot,
-      action: prot || !top ? 'keep' : (ACTION_OF[top] ?? 'keep'),
-      pr: prot || !top ? null : (PR_OF[top] ?? null),
+      action: act ? (ACTION_OF[act] ?? 'keep') : 'keep',
+      pr: act ? (PR_OF[act] ?? null) : null,
     }
   })
 }
@@ -238,22 +252,25 @@ export interface Report {
   added_ids: string[]
 }
 
-export function buildReport(
-  baseRev: string,
-  before: TestRecord[],
-  current: TestRecord[],
-  baseline: CompactBaseline | undefined,
-  cfg: Config,
-  rewrittenIds: string[] = [],
-  confirmations: Confirmations = {},
-): Report {
-  const records = classify(before, baseline, cfg, confirmations)
+export interface ReportInput {
+  baseRev: string
+  before: TestRecord[]
+  current: TestRecord[]
+  baseline: CompactBaseline | undefined
+  cfg: Config
+  rewrittenIds?: string[]
+  confirmations?: Confirmations
+}
+
+export function buildReport(i: ReportInput): Report {
+  const { before, current, rewrittenIds = [] } = i
+  const records = classify(before, i.baseline, i.cfg, i.confirmations)
   const cur = new Set(current.map(r => r.test_id))
   const was = new Set(before.map(r => r.test_id))
   const classes: Record<string, number> = {}
   for (const r of records) for (const c of r.classes) classes[c] = (classes[c] ?? 0) + 1
   return {
-    base_rev: baseRev,
+    base_rev: i.baseRev,
     reconciliation: reconcile(records, current, rewrittenIds),
     classes,
     records,
@@ -284,128 +301,158 @@ export function repeatCost(
   return { suite_ms, stages: gates.length, repeated_ms: suite_ms * gates.length }
 }
 
+const LEVELS: Level[] = ['unit', 'integration', 'e2e']
+const ALL_CLASSES = ['U1', 'U2', 'U3', 'U4', 'U5', 'U6', 'U7', 'U8']
+const UNMEASURED_CLASSES = ['U1', 'U3', 'U5', 'U7', 'U8']
+
+function reconciliationSection(rec: Reconciliation): string[] {
+  const mods = [...new Set(COLS.flatMap(c => Object.keys(rec[c])))].sort()
+  const cell = (c: keyof Reconciliation, m: string, l: Level): number => rec[c][m]?.[l] ?? 0
+  const rows = mods.flatMap(m =>
+    LEVELS.filter(l => COLS.some(c => cell(c, m, l))).map(
+      l => `| ${m} | ${l} | ${COLS.map(c => cell(c, m, l)).join(' | ')} |`,
+    ),
+  )
+  return [
+    '## Reconciliation by module and level',
+    '',
+    `| module | level | ${COLS.join(' | ')} |`,
+    `| --- | --- | ${COLS.map(() => '---:').join(' | ')} |`,
+    ...rows,
+    `| **total** | | ${COLS.map(c => total(rec[c])).join(' | ')} |`,
+    '',
+    '`before − removed + added = remaining`. `unnecessary` = classified and not protected; `unmeasured` = at least one class signal has no supported tool.',
+    '',
+  ]
+}
+
+const classesSection = (rep: Report): string[] => [
+  '## Classes (confirmed by deterministic signal)',
+  '',
+  '| class | tests |',
+  '| --- | ---: |',
+  ...ALL_CLASSES.map(
+    c => `| ${c} | ${rep.classes[c] ?? (UNMEASURED_CLASSES.includes(c) ? NOT_MEASURED : 0)} |`,
+  ),
+  '',
+]
+
+function baselineSection(baseline: CompactBaseline): string[] {
+  const rows = Object.entries(baseline.packages)
+    .sort()
+    .map(([p, v]) => {
+      const cov = v.runs.find(r => r.coverage)?.coverage
+      return `| ${p} | ${Object.keys(v.tests).length} | ${v.wall_ms_median} | ${cov?.lines ?? NOT_MEASURED} | ${cov?.branches ?? NOT_MEASURED} | ${NOT_MEASURED} |`
+    })
+  return [
+    '## Baseline (F0)',
+    '',
+    `Runner: ${baseline.tool['runner']}. Mutation: ${baseline.tool['mutation']} (no supported tool installed). Per-test coverage: ${baseline.tool['per_test_coverage']}.`,
+    '',
+    '| package | tests | wall ms (median of runs) | line cov % | branch cov % | mutation score |',
+    '| --- | ---: | ---: | ---: | ---: | ---: |',
+    ...rows,
+    '',
+  ]
+}
+
+function costSection(baseline: CompactBaseline, cfg: Config): string[] {
+  const c = repeatCost(baseline, cfg.repeatedGates)
+  return [
+    '## Repeated gate runs vs duplicate cases',
+    '',
+    `One full suite run: ${c.suite_ms} ms (sum of per-package median wall time, 3 baseline runs). Stages that each re-run it on the same head: ${cfg.repeatedGates.join(', ')} → ${c.stages} runs, ${c.repeated_ms} ms (derived: runs × measured median; per-stage wall time is not measured).`,
+    '',
+    `This cost is **repeat execution**, not duplicate test cases: duplicates are counted only by U3 (unique kills = 0 and unique coverage = 0), which is ${NOT_MEASURED} here. Removing a test case lowers each repeat run; it does not remove a repeated stage.`,
+    '',
+    'Reuse of a stage result is allowed only under the same evidence identity and custody: `cycle-state.mjs test-identity` (command + cwd + env keys + toolchain + head tree) must match, and the run must come from the verified PR head.',
+    '',
+  ]
+}
+
+function cleanupSection(rep: Report, cfg: Config | undefined): string[] {
+  const q = cfg?.quarantine ?? []
+  const none =
+    ' — removal needs a confirmed signal; the removable classes (U1, U3, U5, U7, U8) are not measured and U2 candidates were rewritten'
+  return [
+    '## Cleanup applied',
+    '',
+    `- Removed: ${rep.removed_ids.length}${rep.removed_ids.length ? ` (${rep.removed_ids.join('; ')})` : none}.`,
+    `- Rewritten (U2, explicit assertion added, same id): ${rep.rewritten_ids.length}${rep.rewritten_ids.map(i => `\n  - \`${i}\``).join('')}`,
+    `- Quarantined (U6): ${q.length}${q.map(x => `\n  - \`${x.id}\` — ${x.evidence}; tracking issue: ${x.issue ?? 'pending (not created by the implementer)'}`).join('')}`,
+    '- Permitted exceptions used: none (no U8 removal, so no mutation-score exception; no U5/U8 branch-coverage reduction).',
+    `- Unmeasured: mutation score per module and U1, U3, U5, U7 (unique kills), U8 — ${NOT_MEASURED}: no supported tool installed, nothing removed on those classes.`,
+    '',
+  ]
+}
+
+const esc = (s: string): string => s.replace(/\|/g, '\\|')
+
+const flaggedSection = (rep: Report): string[] => [
+  '## Flagged tests',
+  '',
+  '| test | classes | signal | protected | action |',
+  '| --- | --- | --- | --- | --- |',
+  ...rep.records
+    .filter(r => r.classes.length)
+    .map(
+      r =>
+        `| \`${esc(r.test_id)}\` | ${r.classes.join(', ')} | ${esc(Object.values(r.signals).join('; '))} | ${r.protected} | ${r.action} |`,
+    ),
+  '',
+  `Removed: ${rep.removed_ids.length}. Added by this story: ${rep.added_ids.length}.`,
+  '',
+]
+
 export function renderMarkdown(
   rep: Report,
   baseline: CompactBaseline | undefined,
   cfg?: Config,
 ): string {
-  const rec = rep.reconciliation
-  const mods = [...new Set(COLS.flatMap(c => Object.keys(rec[c])))].sort()
-  const cell = (c: keyof Reconciliation, m: string, l: Level): number => rec[c][m]?.[l] ?? 0
-  const lines = [
+  return [
     '# Test audit report',
     '',
     `Base revision: \`${rep.base_rev}\`. Regenerate: \`pnpm --filter @pair/dev-tools test-audit\`.`,
     '',
+    ...reconciliationSection(rep.reconciliation),
+    ...classesSection(rep),
+    ...(baseline ? baselineSection(baseline) : []),
+    ...(baseline && cfg ? costSection(baseline, cfg) : []),
+    ...cleanupSection(rep, cfg),
+    ...flaggedSection(rep),
+  ].join('\n')
+}
+
+function planSection(rep: Report, c: string): string[] {
+  const rs = rep.records.filter(r => r.classes.includes(c) && !r.protected && r.action !== 'keep')
+  const prot = rep.records.filter(r => r.classes.includes(c) && r.protected)
+  const head = `## ${c}${PR_OF[c] ? ` — ${PR_OF[c]}` : ''}`
+  if (!rs.length && !prot.length) {
+    const unsupported = CLASS_ORDER.includes(c) && !PR_OF[c]
+    return [
+      head,
+      '',
+      unsupported ? `not measured: no ${c} signal available.` : 'no candidates.',
+      '',
+    ]
+  }
+  return [
+    head,
+    '',
+    ...rs.map(r => `- ${r.action} \`${r.test_id}\` — ${r.signals[c]}`),
+    ...prot.map(r => `- protected, kept \`${r.test_id}\` — ${r.signals[c]}`),
+    '',
   ]
-  lines.push(
-    '## Reconciliation by module and level',
-    '',
-    `| module | level | ${COLS.join(' | ')} |`,
-    `| --- | --- | ${COLS.map(() => '---:').join(' | ')} |`,
-  )
-  for (const m of mods)
-    for (const l of ['unit', 'integration', 'e2e'] as Level[])
-      if (COLS.some(c => cell(c, m, l)))
-        lines.push(`| ${m} | ${l} | ${COLS.map(c => cell(c, m, l)).join(' | ')} |`)
-  lines.push(`| **total** | | ${COLS.map(c => total(rec[c])).join(' | ')} |`, '')
-  lines.push(
-    '`before − removed + added = remaining`. `unnecessary` = classified and not protected; `unmeasured` = at least one class signal has no supported tool.',
-    '',
-  )
-  lines.push(
-    '## Classes (confirmed by deterministic signal)',
-    '',
-    '| class | tests |',
-    '| --- | ---: |',
-  )
-  for (const c of ['U1', 'U2', 'U3', 'U4', 'U5', 'U6', 'U7', 'U8'])
-    lines.push(
-      `| ${c} | ${rep.classes[c] ?? (['U1', 'U3', 'U5', 'U7', 'U8'].includes(c) ? NOT_MEASURED : 0)} |`,
-    )
-  lines.push('')
-  if (baseline) {
-    lines.push(
-      '## Baseline (F0)',
-      '',
-      `Runner: ${baseline.tool['runner']}. Mutation: ${baseline.tool['mutation']} (no supported tool installed). Per-test coverage: ${baseline.tool['per_test_coverage']}.`,
-      '',
-      '| package | tests | wall ms (median of runs) | line cov % | branch cov % | mutation score |',
-      '| --- | ---: | ---: | ---: | ---: | ---: |',
-    )
-    for (const [p, v] of Object.entries(baseline.packages).sort()) {
-      const cov = v.runs.find(r => r.coverage)?.coverage
-      lines.push(
-        `| ${p} | ${Object.keys(v.tests).length} | ${v.wall_ms_median} | ${cov?.lines ?? NOT_MEASURED} | ${cov?.branches ?? NOT_MEASURED} | ${NOT_MEASURED} |`,
-      )
-    }
-    lines.push('')
-  }
-  if (baseline && cfg) {
-    const c = repeatCost(baseline, cfg.repeatedGates)
-    lines.push(
-      '## Repeated gate runs vs duplicate cases',
-      '',
-      `One full suite run: ${c.suite_ms} ms (sum of per-package median wall time, 3 baseline runs). Stages that each re-run it on the same head: ${cfg.repeatedGates.join(', ')} → ${c.stages} runs, ${c.repeated_ms} ms (derived: runs × measured median; per-stage wall time is not measured).`,
-      '',
-      `This cost is **repeat execution**, not duplicate test cases: duplicates are counted only by U3 (unique kills = 0 and unique coverage = 0), which is ${NOT_MEASURED} here. Removing a test case lowers each repeat run; it does not remove a repeated stage.`,
-      '',
-      'Reuse of a stage result is allowed only under the same evidence identity and custody: `cycle-state.mjs test-identity` (command + cwd + env keys + toolchain + head tree) must match, and the run must come from the verified PR head.',
-      '',
-    )
-  }
-  lines.push(
-    '## Cleanup applied',
-    '',
-    `- Removed: ${rep.removed_ids.length}${rep.removed_ids.length ? ` (${rep.removed_ids.join('; ')})` : ' — removal needs a confirmed signal; the removable classes (U1, U3, U5, U7, U8) are not measured and U2 candidates were rewritten'}.`,
-    `- Rewritten (U2, explicit assertion added, same id): ${rep.rewritten_ids.length}${rep.rewritten_ids.map(i => `\n  - \`${i}\``).join('')}`,
-    `- Quarantined (U6): ${cfg?.quarantine.length ?? 0}${(cfg?.quarantine ?? []).map(q => `\n  - \`${q.id}\` — ${q.evidence}; tracking issue: ${q.issue ?? 'pending (not created by the implementer)'}`).join('')}`,
-    '- Permitted exceptions used: none (no U8 removal, so no mutation-score exception; no U5/U8 branch-coverage reduction).',
-    `- Unmeasured: mutation score per module and U1, U3, U5, U7 (unique kills), U8 — ${NOT_MEASURED}: no supported tool installed, nothing removed on those classes.`,
-    '',
-  )
-  const hit = rep.records.filter(r => r.classes.length)
-  lines.push(
-    '## Flagged tests',
-    '',
-    '| test | classes | signal | protected | action |',
-    '| --- | --- | --- | --- | --- |',
-  )
-  for (const r of hit)
-    lines.push(
-      `| \`${r.test_id.replace(/\|/g, '\\|')}\` | ${r.classes.join(', ')} | ${Object.values(r.signals).join('; ').replace(/\|/g, '\\|')} | ${r.protected} | ${r.action} |`,
-    )
-  lines.push(
-    '',
-    `Removed: ${rep.removed_ids.length}. Added by this story: ${rep.added_ids.length}.`,
-    '',
-  )
-  return lines.join('\n')
 }
 
 export function renderRemovalPlan(rep: Report): string {
-  const lines = [
+  return [
     '# Removal plan',
     '',
     'Commits inside the single PR, safest class first (U6 is quarantined, never removed). Mutation score and branch coverage must not fall: not measured here (no mutation tool) — removals are limited to classes with a deterministic static signal.',
     '',
-  ]
-  for (const c of [...CLASS_ORDER, 'U6']) {
-    const rs = rep.records.filter(r => r.classes.includes(c) && !r.protected && r.action !== 'keep')
-    const prot = rep.records.filter(r => r.classes.includes(c) && r.protected)
-    lines.push(`## ${c}${PR_OF[c] ? ` — ${PR_OF[c]}` : ''}`, '')
-    if (!rs.length && !prot.length)
-      lines.push(
-        CLASS_ORDER.includes(c) && !PR_OF[c]
-          ? `not measured: no ${c} signal available.`
-          : 'no candidates.',
-        '',
-      )
-    for (const r of rs) lines.push(`- ${r.action} \`${r.test_id}\` — ${r.signals[c]}`)
-    for (const r of prot) lines.push(`- protected, kept \`${r.test_id}\` — ${r.signals[c]}`)
-    if (rs.length || prot.length) lines.push('')
-  }
-  return lines.join('\n')
+    ...[...CLASS_ORDER, 'U6'].flatMap(c => planSection(rep, c)),
+  ].join('\n')
 }
 
 /** A renamed test is the same test: map new ids back to the baseline id so it is neither removed nor added. */
@@ -425,7 +472,8 @@ export function inventoryAt(root: string, rev: string): TestRecord[] {
     .flatMap(f => parseTests(f, git(root, 'show', `${rev}:${f}`)))
 }
 
-export function main(root = REPO_ROOT): void {
+export function main(root = REPO_ROOT, rebaseline = false): void {
+  if (rebaseline) rerunBaseline(root)
   const dir = join(root, 'test-audit')
   const cfg = loadConfig(join(root, 'docs/testing/test-policy.config.json'))
   const bf = join(dir, 'baseline.json')
@@ -441,15 +489,15 @@ export function main(root = REPO_ROOT): void {
   const rewritten: string[] = existsSync(mf) ? JSON.parse(readFileSync(mf, 'utf8')) : []
   const cf = join(dir, 'confirmations.json')
   const confirmations: Confirmations = existsSync(cf) ? JSON.parse(readFileSync(cf, 'utf8')) : {}
-  const rep = buildReport(
+  const rep = buildReport({
     baseRev,
-    inventoryAt(root, baseRev),
+    before: inventoryAt(root, baseRev),
     current,
     baseline,
     cfg,
-    rewritten,
+    rewrittenIds: rewritten,
     confirmations,
-  )
+  })
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'report.json'), JSON.stringify(rep) + '\n')
   writeFileSync(join(dir, 'report.md'), renderMarkdown(rep, baseline, cfg))
@@ -459,4 +507,4 @@ export function main(root = REPO_ROOT): void {
   )
 }
 
-if (require.main === module) main()
+if (require.main === module) main(REPO_ROOT, process.argv.includes('--baseline'))

@@ -31,12 +31,13 @@ Level growth per PR ≤ `maxLevelGrowthPct` (5%); beyond it, remove/speed up oth
 ## Audit
 
 ```bash
+pnpm --filter @pair/dev-tools test-audit:all        # ONE command: re-runs the baseline, then regenerates the four files (minutes)
 pnpm --filter @pair/dev-tools test-audit            # regenerates test-audit/report.json, report.md, removal-plan.md from baseline.json
 pnpm --filter @pair/dev-tools test-audit:baseline   # re-runs F0 (3 seeded runs per package, minutes) → baseline.json
 pnpm --filter @pair/dev-tools test-audit:inventory  # static inventory only → test-audit/inventory.json
 ```
 
-Capabilities on this stack (TypeScript/Vitest): per-test duration, status and package coverage are measured from the runner; per-test coverage and mutation (U1, U3, U5, U7 unique kills, U8) are `not measured` — no supported tool is installed (Stryker is not a dependency). Counts reconcile per module and level: before − removed + added = remaining (the tool refuses otherwise).
+Capabilities on this stack (TypeScript/Vitest): per-test duration, status and package coverage are measured from the runner; per-test coverage and mutation (U1, U3, U5, U7 unique kills, U8) are `not measured` — no supported tool is installed (Stryker is not a dependency). The trivial-assertion list (`expect(true)`) is not implemented: U2 is zero assertions only. Counts reconcile per module and level: before − removed + added = remaining (the tool refuses otherwise).
 
 ## Quarantine (U6)
 

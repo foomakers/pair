@@ -42,20 +42,13 @@ export const BLOCKING: Record<Config['rollout'], GateId[]> = {
 export const bypassed = (id: GateId, labels: string[]): boolean =>
   labels.some(l => new RegExp(`^gate-bypass:${id}: \\S`).test(l))
 
-const result = (
-  id: GateId,
-  cfg: Config,
-  violations: string[],
-  labels: string[],
-  detail?: string,
-): GateResult => {
+const result = (id: GateId, cfg: Config, violations: string[], labels: string[]): GateResult => {
   const fail = violations.length > 0 && !bypassed(id, labels)
   return {
     id,
     status: fail ? 'fail' : 'pass',
     blocking: fail && BLOCKING[cfg.rollout].includes(id),
     violations,
-    ...(detail ? { detail } : {}),
   }
 }
 export const unsupported = (id: GateId, detail: string): GateResult => ({
@@ -88,6 +81,35 @@ const callee = (e: ts.Expression): string =>
       ? `${callee(e.expression)}.${e.name.text}`
       : ''
 
+const spyPrivate = (n: ts.CallExpression, c: string): string[] => {
+  const m = n.arguments[1]
+  return /\.spyOn$/.test(c) && m && ts.isStringLiteralLike(m) && /^[_#]/.test(m.text)
+    ? [`spy on private ${m.text}`]
+    : []
+}
+
+const bigSnapshot = (n: ts.CallExpression, c: string, max: number): string[] => {
+  const a = n.arguments[0]
+  const lines =
+    /\.toMatchInlineSnapshot$/.test(c) && a && ts.isStringLiteralLike(a)
+      ? a.text.split('\n').length
+      : 0
+  return lines > max ? [`snapshot ${lines} lines > ${max}`] : []
+}
+
+const sleeps = (n: ts.CallExpression, c: string): string[] =>
+  SLEEP.test(c) || (c === 'setTimeout' && n.getText().includes('new Promise')) ? ['sleep'] : []
+
+const callPatterns = (n: ts.CallExpression, max: number): string[] => {
+  const c = callee(n.expression)
+  return [
+    ...sleeps(n, c),
+    ...(PRINT.test(c) ? ['print'] : []),
+    ...spyPrivate(n, c),
+    ...bigSnapshot(n, c, max),
+  ]
+}
+
 /** Static F1 patterns per file: sleep, print, private spies, inline snapshot over N lines. */
 export function forbiddenPatterns(
   file: string,
@@ -96,25 +118,10 @@ export function forbiddenPatterns(
 ): string[] {
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
   const out: string[] = []
-  const at = (n: ts.Node): string =>
-    `${file}:${sf.getLineAndCharacterOfPosition(n.getStart()).line + 1}`
   const visit = (n: ts.Node): void => {
     if (ts.isCallExpression(n)) {
-      const c = callee(n.expression)
-      if (SLEEP.test(c)) out.push(`${at(n)} sleep`)
-      if (PRINT.test(c)) out.push(`${at(n)} print`)
-      if (c === 'setTimeout' && n.getText().includes('new Promise')) out.push(`${at(n)} sleep`)
-      if (/\.spyOn$/.test(c)) {
-        const m = n.arguments[1]
-        if (m && ts.isStringLiteralLike(m) && /^[_#]/.test(m.text))
-          out.push(`${at(n)} spy on private ${m.text}`)
-      }
-      if (/\.toMatchInlineSnapshot$/.test(callee(n.expression))) {
-        const a = n.arguments[0]
-        const lines = a && ts.isStringLiteralLike(a) ? a.text.split('\n').length : 0
-        if (lines > maxSnapshotLines)
-          out.push(`${at(n)} snapshot ${lines} lines > ${maxSnapshotLines}`)
-      }
+      const where = `${file}:${sf.getLineAndCharacterOfPosition(n.getStart()).line + 1}`
+      out.push(...callPatterns(n, maxSnapshotLines).map(p => `${where} ${p}`))
     }
     ts.forEachChild(n, visit)
   }
@@ -127,9 +134,9 @@ export function g2(
   recs: TestRecord[],
   sources: Record<string, string>,
   cfg: Config,
-  quarantine: Quarantined[] = [],
-  labels: string[] = [],
+  opts: { quarantine?: Quarantined[]; labels?: string[] } = {},
 ): GateResult {
+  const { quarantine = [], labels = [] } = opts
   const q = new Set(quarantine.map(x => x.id))
   const v = [
     ...recs
@@ -225,7 +232,7 @@ export function g4(
   const ms = onDiff(rep, diff, cfg.criticalModules).filter(m =>
     ['Killed', 'Survived', 'Timeout'].includes(m.status),
   )
-  if (!ms.length) return result('G4', cfg, [], labels, 'no mutants on the diff')
+  if (!ms.length) return { ...result('G4', cfg, [], labels), detail: 'no mutants on the diff' }
   const killed = ms.filter(m => m.status !== 'Survived').length
   const pct = (killed / ms.length) * 100
   return result(
@@ -238,26 +245,29 @@ export function g4(
   )
 }
 
+/** Diff mutants killed by exactly one test, counted per added test (Stryker `killedBy` ids resolved to `file::name`). */
+function uniqueKills(rep: StrykerReport, diff: DiffLines, added: string[], cfg: Config) {
+  const name = new Map<string, string>()
+  for (const [f, { tests }] of Object.entries(rep.testFiles ?? {}))
+    for (const t of tests) name.set(t.id, `${f}::${t.name}`)
+  const unique = new Map<string, number>(added.map(i => [i, 0]))
+  for (const m of onDiff(rep, diff, cfg.criticalModules)) {
+    const killers = (m.killedBy ?? []).map(k => name.get(k) ?? k)
+    const sole = killers.length === 1 ? killers[0]! : undefined
+    if (sole !== undefined && unique.has(sole)) unique.set(sole, unique.get(sole)! + 1)
+  }
+  return unique
+}
+
 /** G5: every added test is the sole killer of ≥ minUniqueKillsPerNewTest diff mutants (blocks U3/U1 at creation). */
 export function g5(
   rep: StrykerReport | undefined,
-  diff: DiffLines,
-  addedIds: string[],
+  scope: { diff: DiffLines; addedIds: string[] },
   cfg: Config,
   labels: string[] = [],
 ): GateResult {
   if (!rep) return unsupported('G5', NO_MUTATION)
-  const name = new Map<string, string>()
-  for (const [f, { tests }] of Object.entries(rep.testFiles ?? {}))
-    for (const t of tests) name.set(t.id, `${f}::${t.name}`)
-  const added = new Set(addedIds)
-  const unique = new Map<string, number>(addedIds.map(i => [i, 0]))
-  for (const m of onDiff(rep, diff, cfg.criticalModules)) {
-    const killers = (m.killedBy ?? []).map(k => name.get(k) ?? k)
-    if (killers.length === 1 && added.has(killers[0]!))
-      unique.set(killers[0]!, (unique.get(killers[0]!) ?? 0) + 1)
-  }
-  const v = [...unique]
+  const v = [...uniqueKills(rep, scope.diff, scope.addedIds, cfg)]
     .filter(([, n]) => n < cfg.minUniqueKillsPerNewTest)
     .map(([id, n]) => `${id} unique_kills=${n}`)
   return result('G5', cfg, v.sort(), labels)
@@ -274,24 +284,27 @@ export function g6(runs: Record<string, string>[], cfg: Config, labels: string[]
   return result('G6', cfg, v.sort(), labels)
 }
 
-/** G7: `git diff --numstat` test lines added vs production lines changed; above ratio needs a label. */
-export function g7(numstat: string, cfg: Config, labels: string[] = []): GateResult {
-  let test = 0
-  let prod = 0
+const SKIP_G7 = /^docs\/|\.md$|^test-audit\/|\.json$|\.changeset\//
+const num = (s: string): number => (s === '-' ? 0 : Number(s))
+
+/** Test lines added vs production lines changed (docs, json, audit output and changesets excluded). */
+export function countLines(numstat: string): { test: number; prod: number } {
+  const out = { test: 0, prod: 0 }
   for (const l of numstat.split('\n').filter(Boolean)) {
     const [a = '0', d = '0', f = ''] = l.split('\t')
-    if (/^docs\/|\.md$|^test-audit\/|\.json$|\.changeset\//.test(f)) continue
-    const lines = (a === '-' ? 0 : Number(a)) + (d === '-' ? 0 : Number(d))
-    if (TEST_FILE_RE.test(f) || /\.test\./.test(f)) test += a === '-' ? 0 : Number(a)
-    else prod += lines
+    if (SKIP_G7.test(f)) continue
+    if (TEST_FILE_RE.test(f) || /\.test\./.test(f)) out.test += num(a)
+    else out.prod += num(a) + num(d)
   }
+  return out
+}
+
+/** G7: `git diff --numstat` test lines added vs production lines changed; above ratio needs a label. */
+export function g7(numstat: string, cfg: Config, labels: string[] = []): GateResult {
+  const { test, prod } = countLines(numstat)
   const over = prod === 0 ? test > 0 : test / prod > cfg.maxTestToCodeRatio
-  return result(
-    'G7',
-    cfg,
-    over ? [`test:prod ${test}:${prod} > ${cfg.maxTestToCodeRatio}:1`] : [],
-    labels,
-  )
+  const v = over ? [`test:prod ${test}:${prod} > ${cfg.maxTestToCodeRatio}:1`] : []
+  return result('G7', cfg, v, labels)
 }
 
 /** G8: no new U2/U3 test versus the previous audit. */
@@ -382,56 +395,73 @@ export const optValue = (argv: string[], key: string): string | undefined => {
   return i < 0 ? undefined : argv[i + 1]
 }
 
-/** CLI: `gates.ts [--base origin/main] [--labels a,b] [--durations run.json] [--stryker report.json] [--g6]`. */
-export function main(argv: string[], root = REPO_ROOT): number {
-  const opt = (k: string): string | undefined => optValue(argv, k)
-  const cfg = loadConfig(join(root, 'docs/testing/test-policy.config.json'))
-  const base = opt('--base') ?? 'origin/main'
-  const labels = (opt('--labels') ?? '').split(',').filter(Boolean)
+const readJson = <T>(file: string): T => JSON.parse(readFileSync(file, 'utf8')) as T
+
+/** Test ids present at HEAD in `files` but absent from the same file at `base` (all of them for a new file). */
+function addedTestIds(root: string, base: string, files: string[]): string[] {
+  return files.flatMap(f => {
+    let was = new Set<string>()
+    try {
+      was = new Set(parseTests(f, git(root, 'show', `${base}:${f}`)).map(r => r.test_id))
+    } catch {
+      // file is new on this branch
+    }
+    return parseTests(f, readFileSync(join(root, f), 'utf8'))
+      .map(r => r.test_id)
+      .filter(id => !was.has(id))
+  })
+}
+
+interface Inputs {
+  recs: TestRecord[]
+  sources: Record<string, string>
+  changed: string[]
+  addedIds: string[]
+  diff: DiffLines
+  numstat: string
+}
+
+function collect(root: string, base: string): Inputs {
   const changed = git(root, 'diff', '--name-only', '--diff-filter=AM', `${base}...HEAD`)
     .split('\n')
     .filter(f => TEST_FILE_RE.test(f))
   const sources = Object.fromEntries(changed.map(f => [f, readFileSync(join(root, f), 'utf8')]))
-  const recs = changed.flatMap(f => parseTests(f, sources[f]!))
-  const quarantine =
-    JSON.parse(readFileSync(join(root, 'docs/testing/test-policy.config.json'), 'utf8'))
-      .quarantine ?? []
-  const diff = parseDiffLines(git(root, 'diff', '-U0', `${base}...HEAD`))
-  const stryker: StrykerReport | undefined = opt('--stryker')
-    ? JSON.parse(readFileSync(opt('--stryker')!, 'utf8'))
-    : undefined
+  return {
+    recs: changed.flatMap(f => parseTests(f, sources[f]!)),
+    sources,
+    changed,
+    addedIds: addedTestIds(root, base, changed),
+    diff: parseDiffLines(git(root, 'diff', '-U0', `${base}...HEAD`)),
+    numstat: git(root, 'diff', '--numstat', `${base}...HEAD`),
+  }
+}
+
+/** CLI: `gates.ts [--base origin/main] [--labels a,b] [--durations run.json] [--stryker report.json] [--g6] [--g8-from prev.json]`. */
+export function main(argv: string[], root = REPO_ROOT): number {
+  const opt = (k: string): string | undefined => optValue(argv, k)
+  const cfgFile = join(root, 'docs/testing/test-policy.config.json')
+  const cfg = loadConfig(cfgFile)
+  const labels = (opt('--labels') ?? '').split(',').filter(Boolean)
+  const i = collect(root, opt('--base') ?? 'origin/main')
+  const sFile = opt('--stryker')
+  const stryker = sFile ? readJson<StrykerReport>(sFile) : undefined
+  const dFile = opt('--durations')
+  const pFile = opt('--g8-from')
   const results: GateResult[] = [
-    g1(recs, cfg, labels),
-    g2(recs, sources, cfg, quarantine, labels),
-    opt('--durations')
-      ? g3(JSON.parse(readFileSync(opt('--durations')!, 'utf8')), undefined, cfg, labels)
+    g1(i.recs, cfg, labels),
+    g2(i.recs, i.sources, cfg, { quarantine: cfg.quarantine, labels }),
+    dFile
+      ? g3(readJson(dFile), undefined, cfg, labels)
       : unsupported('G3', 'pass --durations <{id: ms}.json> from the runner JSON report'),
-    g4(stryker, diff, cfg, labels),
-    g5(
-      stryker,
-      diff,
-      recs.map(r => r.test_id),
-      cfg,
-      labels,
-    ),
+    g4(stryker, i.diff, cfg, labels),
+    g5(stryker, { diff: i.diff, addedIds: i.addedIds }, cfg, labels),
     argv.includes('--g6')
-      ? g6(runShuffled(root, changed, cfg), cfg, labels)
-      : unsupported(
-          'G6',
-          'pass --g6 (executes the changed files in random order, flakyRuns.pr times)',
-        ),
-    g7(git(root, 'diff', '--numstat', `${base}...HEAD`), cfg, labels),
-    opt('--g8-from')
-      ? g8(
-          JSON.parse(readFileSync(opt('--g8-from')!, 'utf8')),
-          JSON.parse(readFileSync(join(root, 'test-audit/report.json'), 'utf8')),
-          cfg,
-          labels,
-        )
-      : unsupported(
-          'G8',
-          'nightly: pass --g8-from <previous report.json> after regenerating test-audit/',
-        ),
+      ? g6(runShuffled(root, i.changed, cfg), cfg, labels)
+      : unsupported('G6', 'pass --g6 (runs the changed files in random order, flakyRuns.pr times)'),
+    g7(i.numstat, cfg, labels),
+    pFile
+      ? g8(readJson(pFile), readJson(join(root, 'test-audit/report.json')), cfg, labels)
+      : unsupported('G8', 'nightly: pass --g8-from <previous report.json> after regenerating'),
   ]
   const v = verdict(results, labels)
   process.stdout.write(renderGates(results, cfg, v.bypasses))

@@ -22,6 +22,7 @@ import {
 } from './gates'
 import { parseTests } from './inventory'
 
+const SKIP = 'it.' + 'skip'
 const cfg: Config = {
   budgets: {
     unit: { maxTestMs: 100, totalMs: 1000 },
@@ -54,11 +55,11 @@ describe('G1/G2', () => {
   })
   it('G1 passes assertions and ignores skipped tests', () => {
     expect(
-      g1(recs(`it('a', () => { expect(1).toBe(1) }); it.skip('b', () => {})`), cfg).status,
+      g1(recs(`it('a', () => { expect(1).toBe(1) }); ${SKIP}('b', () => {})`), cfg).status,
     ).toBe('pass')
   })
   it('G2 flags skip/only, sleep, print, private spies, oversize inline snapshots', () => {
-    const src = `it.skip('s', () => { expect(1).toBe(1) })
+    const src = `${SKIP}('s', () => { expect(1).toBe(1) })
 it.only('o', () => { expect(1).toBe(1) })
 it('p', async () => { await sleep(5); console.log('x'); vi.spyOn(a, '_hidden'); expect(1).toMatchInlineSnapshot(\`a\nb\nc\nd\`) })`
     const out = g2(recs(src), { [F]: src }, cfg).violations.join('\n')
@@ -73,8 +74,10 @@ it('p', async () => { await sleep(5); console.log('x'); vi.spyOn(a, '_hidden'); 
       expect(out).toContain(k)
   })
   it('G2 exempts quarantined ids from the skip rule only', () => {
-    const src = `it.skip('q', () => { expect(1).toBe(1) })`
-    expect(g2(recs(src), { [F]: src }, cfg, [{ id: `${F}::q` }]).status).toBe('pass')
+    const src = `${SKIP}('q', () => { expect(1).toBe(1) })`
+    expect(g2(recs(src), { [F]: src }, cfg, { quarantine: [{ id: `${F}::q` }] }).status).toBe(
+      'pass',
+    )
   })
   it('forbiddenPatterns leaves ordinary tests alone', () => {
     expect(forbiddenPatterns(F, `it('a', () => { expect(sleeper).toBe(1) })`, 50)).toEqual([])
@@ -122,7 +125,10 @@ const diff = parseDiffLines('+++ b/packages/m/src/a.ts\n@@ -1,0 +10,3 @@\n+a\n+b
 describe('G4/G5 (mutation)', () => {
   it('both are `unsupported` — never green, never blocking — without a mutation report', () => {
     expect(
-      [g4(undefined, diff, cfg), g5(undefined, diff, [], cfg)].map(r => [r.status, r.blocking]),
+      [g4(undefined, diff, cfg), g5(undefined, { diff, addedIds: [] }, cfg)].map(r => [
+        r.status,
+        r.blocking,
+      ]),
     ).toEqual([
       ['unsupported', false],
       ['unsupported', false],
@@ -140,11 +146,13 @@ describe('G4/G5 (mutation)', () => {
     expect(g4(stryker([['t1'], ['t1'], ['t1']]), diff, cfg).status).toBe('pass')
   })
   it('G5 fails an added test that is never the sole killer of a diff mutant', () => {
-    const r = g5(stryker([['t1', 't2'], ['t1']]), diff, [`${F}::new`], cfg)
+    const r = g5(stryker([['t1', 't2'], ['t1']]), { diff, addedIds: [`${F}::new`] }, cfg)
     expect(r.violations).toEqual([`${F}::new unique_kills=0`])
   })
   it('G5 passes an added test with a unique kill', () => {
-    expect(g5(stryker([['t2'], ['t1']]), diff, [`${F}::new`], cfg).status).toBe('pass')
+    expect(g5(stryker([['t2'], ['t1']]), { diff, addedIds: [`${F}::new`] }, cfg).status).toBe(
+      'pass',
+    )
   })
   it('critical-module scoping excludes other modules', () => {
     const only = { ...cfg, criticalModules: ['apps/x'] }

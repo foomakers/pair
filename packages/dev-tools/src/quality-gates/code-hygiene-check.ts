@@ -13,6 +13,8 @@
  * the package dir, not the repo root).
  */
 import { execSync } from 'child_process'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 
 import { REPO_ROOT } from './repo-root'
 
@@ -48,12 +50,26 @@ export function buildGitGrepCommand(
   return `git grep -n "${regex}" -- ${globsArg} ':!${selfExclude}'`
 }
 
-/** Parse raw `git grep -n` stdout into formatted `  file:line` entries. */
-export function parseGrepOutput(out: string): string[] {
+/**
+ * Titles of quarantined (U6) tests from the test policy: the one sanctioned reason to leave a skip in
+ * the tree (US-613). Absent or unreadable config ⇒ no exemption.
+ */
+export function quarantinedTitles(root: string = REPO_ROOT): string[] {
+  try {
+    const cfg = JSON.parse(readFileSync(join(root, 'docs/testing/test-policy.config.json'), 'utf8'))
+    return (cfg.quarantine ?? []).map((q: { id: string }) => q.id.split(' > ').pop() ?? '')
+  } catch {
+    return []
+  }
+}
+
+/** Parse raw `git grep -n` stdout into formatted `  file:line` entries; lines carrying an exempt title are dropped. */
+export function parseGrepOutput(out: string, exempt: string[] = []): string[] {
   return out
     .trim()
     .split('\n')
     .filter(Boolean)
+    .filter(line => !exempt.some(t => t && line.includes(t)))
     .map(line => {
       const sep = line.indexOf(':')
       const sep2 = line.indexOf(':', sep + 1)
@@ -78,7 +94,7 @@ export function scanPattern(
 ): string[] {
   try {
     const out = exec(buildGitGrepCommand(pattern.regex, fileGlobs, selfExclude))
-    return parseGrepOutput(out)
+    return parseGrepOutput(out, quarantinedTitles())
   } catch {
     return []
   }
