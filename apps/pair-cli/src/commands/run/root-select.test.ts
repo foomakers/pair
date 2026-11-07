@@ -29,6 +29,13 @@ const candidate = {
 
 const marker = (value: unknown) => `${CANDIDATES_MARKER} ${JSON.stringify(value)}`
 
+it('US-611: preserves the canonical delivery state returned by selection', () => {
+  const [parsed] = parseCandidates(
+    JSON.stringify({ candidates: [{ ...candidate, macrostate: 'Review' }] }),
+  )
+  expect(parsed).toMatchObject({ id: '491', macrostate: 'Review' })
+})
+
 describe('buildSelectionPrompt', () => {
   it('invokes pair-next with --root, and --filter only when ## Eligibility is declared', () => {
     const withEligibility = buildSelectionPrompt(ENGINES.claude, {
