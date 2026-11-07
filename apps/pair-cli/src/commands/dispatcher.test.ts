@@ -161,10 +161,8 @@ describe('dispatchCommand() - real handlers integration', () => {
       absolute: false, // will try relative
     }
 
-    await dispatchCommand(config, fs)
-    // Effect check - it should have processed the file
-    // We don't verify exact link transformation here as that's handler responsibility,
-    // but just checking it ran without error.
+    // link transformation is the handler's responsibility; the dispatcher must route and resolve
+    await expect(dispatchCommand(config, fs)).resolves.not.toThrow()
   })
 
   test('dispatches package command', async () => {

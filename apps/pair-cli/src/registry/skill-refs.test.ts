@@ -101,13 +101,14 @@ describe('rewriteSkillRefsInTarget', () => {
     const fs = new InMemoryFileSystemService({}, '/project', '/project')
     const map = makeSkillNameMap([['next', 'pair-process-next']])
 
-    // Should not throw
-    await rewriteSkillRefsInTarget(
-      fs,
-      '/project/nonexistent.md',
-      { skillNameMap: map, skillLinkPathMap: new Map() },
-      noopLog,
-    )
+    await expect(
+      rewriteSkillRefsInTarget(
+        fs,
+        '/project/nonexistent.md',
+        { skillNameMap: map, skillLinkPathMap: new Map() },
+        noopLog,
+      ),
+    ).resolves.not.toThrow()
   })
 
   it('skips non-markdown files', async () => {
@@ -306,13 +307,9 @@ describe('detectOrphanedSkillReferences', () => {
       },
     }
 
-    await detectOrphanedSkillReferences(
-      { fs, baseTarget: '/project', pushLog: noopLog },
-      registries,
-      [],
-    )
-
-    // no-op — nothing to assert beyond "did not throw"
+    await expect(
+      detectOrphanedSkillReferences({ fs, baseTarget: '/project', pushLog: noopLog }, registries, []),
+    ).resolves.not.toThrow()
   })
 
   it('warns when an orphaned installed name is still referenced', async () => {

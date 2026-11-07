@@ -1,0 +1,9 @@
+[
+  "apps/pair-cli/src/kb-manager/cache-manager.test.ts::cache-manager > restoreCachedKB is no-op when no backup exists",
+  "apps/pair-cli/src/kb-manager/cache-manager.test.ts::cache-manager > removeBackupKB is no-op when no backup exists",
+  "apps/pair-cli/src/registry/operations.test.ts::distributeToSecondaryTargets > handles empty targets array",
+  "apps/pair-cli/src/registry/skill-refs.test.ts::rewriteSkillRefsInTarget > no-op when target does not exist",
+  "apps/pair-cli/src/registry/skill-refs.test.ts::detectOrphanedSkillReferences > does nothing when there are no orphaned names",
+  "apps/pair-cli/src/commands/dispatcher.test.ts::dispatchCommand() - real handlers integration > dispatches update-link command",
+  "packages/content-ops/src/ops/link-rewriter.test.ts::rewriteLinksInFile > warns on unresolvable links but does not fail"
+]

@@ -247,7 +247,7 @@ describe('cache-manager', () => {
 
   it('restoreCachedKB is no-op when no backup exists', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
-    await cacheManager.restoreCachedKB(officialSource('0.2.0'), fs)
+    await expect(cacheManager.restoreCachedKB(officialSource('0.2.0'), fs)).resolves.not.toThrow()
   })
 
   it('removeBackupKB deletes .bak directory', async () => {
@@ -259,7 +259,7 @@ describe('cache-manager', () => {
 
   it('removeBackupKB is no-op when no backup exists', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
-    await cacheManager.removeBackupKB(officialSource('0.2.0'), fs)
+    await expect(cacheManager.removeBackupKB(officialSource('0.2.0'), fs)).resolves.not.toThrow()
   })
 
   /**
