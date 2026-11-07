@@ -74,6 +74,33 @@ cat >"$STUB/claude" <<EOF
 #!/usr/bin/env node
 require('fs').appendFileSync('$ENGINE_LOG', JSON.stringify(process.argv.slice(2)) + '\n')
 const prompt = process.argv.join(' ')
+if (process.env.PAIR_SELECTION_ITEMS && prompt.includes('PAIR-ROOT-CANDIDATES')) {
+  const fs = require('fs')
+  const cp = require('child_process')
+  const path = require('path')
+  const root = process.env.PAIR_SELECTION_ROOT || process.cwd()
+  const resolver = path.join(root, '.claude/skills/pair-next/control-state.mjs')
+  const status = /--status ([A-Za-z,]+)/.exec(prompt)?.[1]
+  if (!status) throw new Error('selection prompt omitted --status')
+  const invoke = (command, value) => JSON.parse(cp.execFileSync(process.execPath,
+    [resolver, command, root, value], { encoding: 'utf8' }))
+  const allowed = invoke('status-filter', status)
+  const candidates = []
+  const observed = []
+  for (const id of ['16', '17', '18', '19']) {
+    const card = JSON.parse(fs.readFileSync(path.join(process.env.PAIR_SELECTION_ITEMS, id + '.json')))
+    const boardState = /\*\*Status\*\*: ([^\n]+)/.exec(card.body)?.[1]
+    const state = invoke('resolve', JSON.stringify({ ...card, boardState }))
+    observed.push({ id, state })
+    if (state.outOfProcess || state.macrostate === 'Done' || !allowed.includes(state.macrostate)) continue
+    candidates.push({ id, title: card.title, branch: '', tier: 'risk:green', labels: ['risk:green'] })
+  }
+  fs.writeFileSync(process.env.PAIR_SELECTION_TRACE, JSON.stringify({ allowed, observed, selected: candidates.map(c => c.id) }))
+  const warnings = observed.flatMap(item => item.state.warnings)
+  const result = warnings.join('\n') + '\nPAIR-ROOT-CANDIDATES: ' + JSON.stringify({ candidates })
+  process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }) + '\n')
+  process.exit(0)
+}
 // A --parallel selection reads PAIR-ROOT-CANDIDATES from the stream: answer it with an empty set.
 const result = prompt.includes('PAIR-ROOT-CANDIDATES') ? 'PAIR-ROOT-CANDIDATES: {"candidates":[]}' : ''
 process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }) + '\n')
@@ -141,6 +168,57 @@ log_info "Test 4b-1: --root --parallel 2 with an empty selection ⇒ clean 'Noth
 run_pair run --root 12 --parallel 2 || fail "--root --parallel 2 exited non-zero"
 assert_output_contains "Requested: --parallel 2" || FAILED=1
 assert_output_contains "Nothing to do: pair-next --root 12 selected no card." || FAILED=1
+
+log_info "Test 4b-1a: real installed pair-next authority selects custom mapped items for --root"
+cp "$MAIN/.pair/adoption/tech/way-of-working.md" "$WORK/original-way-of-working.md"
+mkdir -p "$MAIN/.claude/skills/pair-next"
+cp "$REPO_ROOT/.claude/skills/pair-next/control-state.mjs" "$MAIN/.claude/skills/pair-next/"
+cat > "$MAIN/.pair/adoption/tech/way-of-working.md" <<'EOF'
+## State Mapping
+
+| Board State | Macrostate |
+| --- | --- |
+| Queued | Draft |
+| Approved | Ready |
+| Shipped | Done |
+EOF
+card 16 "First story" "Approved" "## Task Breakdown\\n\\n- [ ] **T-1**: build it\\n"
+card 17 "Second story" "Queued" "## Task Breakdown\\n\\n- [ ] **T-1**: build it\\n"
+card 18 "Delivered story" "Shipped" "## Task Breakdown\\n\\n- [ ] **T-1**: done\\n"
+card 19 "Outside story" "Mystery" "## Task Breakdown\\n\\n- [ ] **T-1**: unknown\\n"
+export PAIR_SELECTION_ITEMS="$CARDS" PAIR_SELECTION_TRACE="$WORK/selection.json"
+run_pair run --root 50 --parallel 2 --status Ready --autonomous --until ready || fail "first mapped selection exited non-zero"
+assert_output_contains "#16: completed — exit 0" || FAILED=1
+node -e 'const a=require(process.argv[1]);if(JSON.stringify(a.selected)!==JSON.stringify(["16"])||a.allowed[0]!=="Ready"||!a.observed.find(x=>x.id==="16").state.warnings.length||a.observed.find(x=>x.id==="18").state.macrostate!=="Done"||!a.observed.find(x=>x.id==="19").state.outOfProcess)process.exit(1)' "$WORK/selection.json" || fail "first map, warning, Done or unknown control failed"
+
+cat > "$MAIN/.pair/adoption/tech/way-of-working.md" <<'EOF'
+## State Mapping
+
+| Board State | Macrostate |
+| --- | --- |
+| Backlog | Draft |
+| Qualified | Ready |
+| Delivered | Done |
+EOF
+card 16 "First story" "Backlog" "## Task Breakdown\\n\\n- [ ] **T-1**: build it\\n"
+card 17 "Second story" "Qualified" "## Task Breakdown\\n\\n- [ ] **T-1**: build it\\n"
+card 18 "Delivered story" "Delivered" "## Task Breakdown\\n\\n- [ ] **T-1**: done\\n"
+run_pair run --root 50 --parallel 2 --status Ready --autonomous --until ready || fail "second mapped selection exited non-zero"
+assert_output_contains "#17: completed — exit 0" || FAILED=1
+node -e 'const a=require(process.argv[1]);if(JSON.stringify(a.selected)!==JSON.stringify(["17"])||!a.observed.find(x=>x.id==="17").state.warnings.length)process.exit(1)' "$WORK/selection.json" || fail "second project map did not select its own Ready item"
+
+mkdir -p "$WORK/wrong-project/.claude/skills/pair-next" "$WORK/wrong-project/.pair/adoption/tech"
+cp "$MAIN/.claude/skills/pair-next/control-state.mjs" "$WORK/wrong-project/.claude/skills/pair-next/"
+cp "$WORK/original-way-of-working.md" "$WORK/wrong-project/.pair/adoption/tech/way-of-working.md"
+PAIR_SELECTION_ROOT="$WORK/wrong-project" run_pair run --root 50 --parallel 2 --status Ready --autonomous --until ready || fail "wrong-project mapping control exited non-zero"
+assert_output_contains "Nothing to do: pair-next --root 50 selected no card." || FAILED=1
+node -e 'const a=require(process.argv[1]);if(a.selected.length)process.exit(1)' "$WORK/selection.json" || fail "wrong-project mapping emitted a candidate"
+mv "$MAIN/.claude/skills/pair-next/control-state.mjs" "$WORK/pair-next-control-state.mjs"
+if run_pair run --root 50 --parallel 2 --status Ready --autonomous --until ready; then fail "missing installed selector resolver was accepted"; fi
+assert_output_contains "control-state.mjs" || FAILED=1
+mv "$WORK/pair-next-control-state.mjs" "$MAIN/.claude/skills/pair-next/control-state.mjs"
+unset PAIR_SELECTION_ITEMS PAIR_SELECTION_TRACE
+cp "$WORK/original-way-of-working.md" "$MAIN/.pair/adoption/tech/way-of-working.md"
 
 # --watch never stops on its own while idle (an idle poll never spends the cap): run it in the background, Ctrl-C once it waits.
 watch_until_idle() {
