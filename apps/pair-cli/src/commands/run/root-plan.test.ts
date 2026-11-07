@@ -326,3 +326,16 @@ describe('zero merit logic (D18) — the module reads values, it defines no elig
     expect(source).not.toMatch(/'(Ready|Draft|In Progress|Done)'/)
   })
 })
+
+it('US-611: prioritizes Review and retains mutex-conflicting cards for a finite run', () => {
+  const ready = { ...card('598', { mutexResources: ['pair-capability-publish-pr'] }), macrostate: 'Ready' }
+  const review = { ...card('589', { mutexResources: ['pair-capability-publish-pr'] }), macrostate: 'Review' }
+  const plan = computeRootPlan({
+    candidates: [ready, review],
+    eligibility: undefined,
+    maxParallelism: { global: 2, perTier: {} },
+    requested: 2,
+  })
+  expect(plan.run.map(c => c.id)).toEqual(['589', '598'])
+  expect(plan.excluded).toEqual([])
+})
