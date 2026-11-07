@@ -387,7 +387,15 @@ describe('US-611 delivery order and state boundaries', () => {
   )
 
   it('excludes unreadable, unmapped and terminal states with actual values', () => {
-    const { macrostate: _unreadableMacrostate, ...unreadable } = card('1')
+    const unreadable: RootCandidate = {
+      id: '1',
+      title: 'Card 1',
+      branch: 'feature/US-1-x',
+      tier: 'risk:green',
+      labels: ['risk:green'],
+      mutexResources: [],
+      prerequisites: [],
+    }
     const result = plan([
       unreadable,
       card('2', { macrostate: 'Unplanned' }),

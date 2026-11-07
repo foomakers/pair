@@ -254,6 +254,41 @@ export interface RootPlanInput {
   readonly stateOrderSource?: string | undefined
 }
 
+function candidateExclusion(c: RootCandidate, eligibility: string | undefined): string | undefined {
+  if (eligibility !== undefined && c.tier !== eligibility)
+    return `not eligible (tier ${c.tier} !== ${eligibility})`
+  if (eligibility !== undefined && !(c.labels ?? []).includes(eligibility))
+    return `not eligible (label ${eligibility} absent: its run --card gate reads the labels, tier ${c.tier} is the untagged fail-safe)`
+  if (!RUNNABLE_STATES.includes(c.macrostate ?? ''))
+    return `state ${JSON.stringify(c.macrostate ?? '(unreadable)')} is not a runnable mapped macrostate`
+  return undefined
+}
+
+function selectRunnable(
+  candidates: readonly RootCandidate[],
+  eligibility: string | undefined,
+  excluded: Array<{ id: string; reason: string }>,
+): RootCandidate[] {
+  const eligible: RootCandidate[] = []
+  for (const c of candidates) {
+    const reason = candidateExclusion(c, eligibility)
+    if (reason === undefined) eligible.push(c)
+    else excluded.push({ id: c.id, reason })
+  }
+  return eligible
+}
+
+function stableDeliveryOrder(cards: readonly RootCandidate[], stateOrder: readonly string[]) {
+  const rank = (card: RootCandidate) => {
+    const index = stateOrder.indexOf(card.macrostate ?? '')
+    return index < 0 ? stateOrder.length : index
+  }
+  return cards
+    .map((card, index) => ({ card, index }))
+    .sort((a, b) => rank(a.card) - rank(b.card) || a.index - b.index)
+    .map(entry => entry.card)
+}
+
 /** Select → resolve → dependency → stable priority; mutexes are held by the pool. */
 export function computeRootPlan(input: RootPlanInput): RootPlan {
   const excluded: Array<{ id: string; reason: string }> = []
@@ -265,39 +300,10 @@ export function computeRootPlan(input: RootPlanInput): RootPlan {
   // The child `run --card` gates `## Eligibility` on the labels it is forwarded, not on this tier:
   // a card whose tier passes only through the fail-safe (untagged ⇒ risk:red) carries no label its
   // child could admit it on, so it is excluded here rather than planned, spawned and refused (r0-2).
-  const notEligible = (c: (typeof tiered)[number]): string | undefined => {
-    if (input.eligibility === undefined) return undefined
-    if (c.tier !== input.eligibility)
-      return `not eligible (tier ${c.tier} !== ${input.eligibility})`
-    if (!(c.labels ?? []).includes(input.eligibility))
-      return `not eligible (label ${input.eligibility} absent: its run --card gate reads the labels, tier ${c.tier} is the untagged fail-safe)`
-    return undefined
-  }
-  const eligible: typeof tiered = []
-  for (const c of tiered) {
-    const reason =
-      notEligible(c) ??
-      (!RUNNABLE_STATES.includes(c.macrostate ?? '')
-        ? `state ${JSON.stringify(c.macrostate ?? '(unreadable)')} is not a runnable mapped macrostate`
-        : undefined)
-    if (reason === undefined) eligible.push(c)
-    else excluded.push({ id: c.id, reason })
-  }
-
+  const eligible = selectRunnable(tiered, input.eligibility, excluded)
   const { resolved, audit: resolveAudit } = resolveCards(eligible)
   const { allowed, audit: depAudit } = dependencyFilter(resolved)
-  const ordered = allowed
-    .map((card, index) => ({ card, index }))
-    .sort(
-      (a, b) =>
-        (stateOrder.indexOf(a.card.macrostate!) < 0
-          ? stateOrder.length
-          : stateOrder.indexOf(a.card.macrostate!)) -
-          (stateOrder.indexOf(b.card.macrostate!) < 0
-            ? stateOrder.length
-            : stateOrder.indexOf(b.card.macrostate!)) || a.index - b.index,
-    )
-    .map(entry => entry.card)
+  const ordered = stableDeliveryOrder(allowed, stateOrder)
   const maxParallelism = resolveMaxParallelism(
     input.maxParallelism,
     ordered.map(c => c.tier),
