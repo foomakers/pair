@@ -25,6 +25,7 @@
 - **[test-pyramid.md](test-pyramid.md)** - Test distribution strategy, pyramid implementation, and optimization approaches for balanced testing investment
 - **[testing-philosophy.md](testing-philosophy.md)** - Core testing principles, quality-first mindset, and enhanced testing approaches that drive organizational culture
 - **[coverage-strategy.md](coverage-strategy.md)** - Code coverage requirements, quality standards, and metrics frameworks for comprehensive validation
+- **[behavior-first-tests.md](behavior-first-tests.md)** - Behavior-first test selection and writing, useless-test taxonomy (U1–U8), cleanup procedure and deterministic gates (G1–G8)
 - **[bdd-behavior-driven-development.md](bdd-behavior-driven-development.md)** - Behavior Driven Development methodology, collaborative specification, and natural language testing approaches
 - **[tdd-test-driven-development.md](tdd-test-driven-development.md)** - Test Driven Development practices, Red-Green-Refactor cycle, and design-driven testing methodologies
 

@@ -625,6 +625,7 @@
 - [Test Reporting](.pair/knowledge/guidelines/testing/test-automation/test-reporting.md)
 - [🎯 Testing Strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md)
 - [Behavior Driven Development (BDD)](.pair/knowledge/guidelines/testing/test-strategy/bdd-behavior-driven-development.md)
+- [Behavior-First Tests: Choosing, Writing, Auditing and Cleaning](.pair/knowledge/guidelines/testing/test-strategy/behavior-first-tests.md)
 - [Coverage Strategy](.pair/knowledge/guidelines/testing/test-strategy/coverage-strategy.md)
 - [Test Driven Development (TDD)](.pair/knowledge/guidelines/testing/test-strategy/tdd-test-driven-development.md)
 - [Test Pyramid](.pair/knowledge/guidelines/testing/test-strategy/test-pyramid.md)

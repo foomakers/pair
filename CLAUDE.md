@@ -79,6 +79,18 @@ pnpm lint --filter <package_name>                      # quality checks
 - **Record decisions** - architectural/project decisions MUST be recorded as ADR or ADL. Use `/pair-capability-record-decision` skill or write to `.pair/adoption/tech/adr/` (architectural) / `.pair/adoption/decision-log/` (non-architectural).
 - **Follow templates** - PRs, code reviews, commits, branches, tasks, user stories MUST follow templates in `.pair/knowledge/guidelines/collaboration/templates/` unless adoption files specify otherwise. Key templates: `pr-template.md`, `code-review-template.md`, `commit-template.md`, `branch-template.md`, `task-template.md`, `user-story-template.md`.
 
+## 🧪 Testing
+
+Tests verify specified behavior; coverage is never a goal.
+
+- Before writing: cite the AC or requirement (none → no test); derive expected values from the spec, never by running the code under test; extend an existing test of the same behavior.
+- Writing: one equivalence class = one case (parameterize); public interface only; mock only external boundaries; no sleep, print, whole-object snapshot, skip or only; every test has an assertion that fails if behavior is wrong; skip getters, constants, frameworks.
+- Budget: unit under 100 ms per test, suite under 60 s.
+- Closing: mutation-test changed files if a tool is adopted, else state `mutation: not measured`; each new test kills a mutant no other test kills; PR lists tests added/removed, duration delta, mutation score.
+- Bug fix: failing regression test first (issue ref), then minimal fix, then run all tests.
+
+Details: `.pair/knowledge/guidelines/testing/test-strategy/behavior-first-tests.md`
+
 ## 🐛 Bug Resolution Workflow
 
 **Critical principle**: Test-first debugging proves the fix, prevents regressions, documents behavior. Confidence: lint + tests pass before committing.
