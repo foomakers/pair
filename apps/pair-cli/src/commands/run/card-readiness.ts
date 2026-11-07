@@ -61,6 +61,24 @@ function authority(path: string): ControlStateModule {
   }
 }
 
+function installedScriptInTarget(
+  fs: FileSystemService,
+  root: string,
+  names: string[],
+): string | undefined {
+  for (const name of names) {
+    const skill = resolve(root, name)
+    if (!skill.startsWith(`${root}/`) || !fs.existsSync(join(skill, 'SKILL.md'))) continue
+    const script = join(skill, 'control-state.mjs')
+    if (!fs.existsSync(script))
+      throw new Error(
+        `control-state-load-failed: installed pair-next at ${skill} has no control-state.mjs`,
+      )
+    return script
+  }
+  return undefined
+}
+
 /** Resolve through every configured skills target, including prefixed installs. */
 export function locateControlStateScript(
   fs: FileSystemService,
@@ -72,19 +90,8 @@ export function locateControlStateScript(
   const prefix = registry?.prefix
   const names = ['pair-next', ...(prefix ? [`${prefix}-pair-next`, 'next'] : [])]
   for (const target of targets) {
-    const root = resolve(projectRoot, target)
-    for (const name of names) {
-      const skill = resolve(root, name)
-      if (!skill.startsWith(`${root}/`)) continue
-      if (fs.existsSync(join(skill, 'SKILL.md'))) {
-        const script = join(skill, 'control-state.mjs')
-        if (!fs.existsSync(script))
-          throw new Error(
-            `control-state-load-failed: installed pair-next at ${skill} has no control-state.mjs`,
-          )
-        return script
-      }
-    }
+    const script = installedScriptInTarget(fs, resolve(projectRoot, target), names)
+    if (script !== undefined) return script
   }
   if (existsSync(BUNDLED_SCRIPT)) return BUNDLED_SCRIPT
   if (existsSync(SOURCE_SCRIPT)) return SOURCE_SCRIPT
