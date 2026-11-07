@@ -5,6 +5,7 @@ import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
 import { isParallelRun, parseRunCommand, type RunCommandConfig } from './parser'
 import { optionsOfArgv, runCardInProcess } from './parallel'
+import { handleCardsRun } from './cards-entry'
 import { assertEngineAvailable, describeEngineResolution, resolveEngine } from './resolve-engine'
 import { createExecutableProbe } from './path-probe'
 import {
@@ -335,6 +336,22 @@ function withInProcessCards(
   return { ...deps, runCardProcess: deps.runCardProcess ?? runCardInProcess(runCard) }
 }
 
+/** The multi-card entries: `--cards` (ordered, serial passes) or the `--parallel` fan-out. */
+async function runMulti(
+  ctx: { config: RunCommandConfig; context: RunContext; fs: FileSystemService; cwd: string },
+  deps: RunHandlerDependencies,
+  fs: FileSystemService,
+  callerDeps: RunHandlerDependencies,
+): Promise<number> {
+  if (ctx.config.cards === undefined)
+    return await handleParallelRun(ctx, withInProcessCards(deps, fs, callerDeps))
+  return await handleCardsRun({
+    ...ctx,
+    deps,
+    runCard: config => runCommand(config, fs, callerDeps),
+  })
+}
+
 async function runCommand(
   rawConfig: RunCommandConfig,
   fs: FileSystemService,
@@ -349,8 +366,8 @@ async function runCommand(
   haltOnUnresolvedProfileInDryRun({ config, context, fs, cwd }, deps)
   // US-491: `--root --parallel N` — the fan-out mode, its own entry (the parser guarantees no card).
   const ctx = { config, context, fs, cwd }
-  if (isParallelRun(config))
-    return await handleParallelRun(ctx, withInProcessCards(deps, fs, callerDeps))
+  if (config.cards !== undefined || isParallelRun(config))
+    return await runMulti(ctx, deps, fs, callerDeps)
 
   // Nothing to run on this card: report the decision and stop. This is a clean exit, never an
   // error — automation is opt-in per card (D21), so "no workflow applies here" is the shipped
