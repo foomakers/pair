@@ -41,6 +41,27 @@ const cells = row =>
     .split('|')
     .map(cell => cell.trim())
 
+function mappingRow(raw) {
+  const row = cells(raw)
+  if (row.length !== 2 || !row[0])
+    malformed(`row ${JSON.stringify(raw)} is not \`| Board State | Macrostate |\``)
+  const macrostate = canonical(row[1])
+  if (!macrostate)
+    malformed(
+      `\`${row[0]}\` maps to ${JSON.stringify(row[1])}, which is not one of ${MACROSTATES.join(', ')}`,
+    )
+  return { boardState: row[0], macrostate }
+}
+
+function addRow(result, row) {
+  const prior = result.find(seen => same(seen.boardState, row.boardState))
+  if (!prior) result.push(row)
+  else if (prior.macrostate !== row.macrostate)
+    malformed(
+      `board state \`${row.boardState}\` is listed under two macrostates (${prior.macrostate} and ${row.macrostate})`,
+    )
+}
+
 export function parseStateMapping(markdown) {
   const bodies = sections(markdown, 'State Mapping')
   if (bodies.length === 0) return undefined
@@ -50,22 +71,7 @@ export function parseStateMapping(markdown) {
     malformed('no parseable two-column table')
   if (rows.length === 2) malformed('the table declares no board state')
   const result = []
-  for (const raw of rows.slice(2)) {
-    const row = cells(raw)
-    if (row.length !== 2 || !row[0])
-      malformed(`row ${JSON.stringify(raw)} is not \`| Board State | Macrostate |\``)
-    const macrostate = canonical(row[1])
-    if (!macrostate)
-      malformed(
-        `\`${row[0]}\` maps to ${JSON.stringify(row[1])}, which is not one of ${MACROSTATES.join(', ')}`,
-      )
-    const prior = result.find(seen => same(seen.boardState, row[0]))
-    if (!prior) result.push({ boardState: row[0], macrostate })
-    else if (prior.macrostate !== macrostate)
-      malformed(
-        `board state \`${row[0]}\` is listed under two macrostates (${prior.macrostate} and ${macrostate})`,
-      )
-  }
+  for (const raw of rows.slice(2)) addRow(result, mappingRow(raw))
   return result
 }
 
@@ -129,6 +135,29 @@ export function unmetReadinessCriteria(card) {
   return criteria.filter(([, met]) => !met).map(([name]) => name)
 }
 
+const readiness = card => (hasTaskBreakdown(card.body) ? 'ready' : 'refined-no-breakdown')
+const breakdownNote = card =>
+  hasTaskBreakdown(card.body) ? 'task breakdown present' : 'no task breakdown yet'
+
+function draftState(card, mapping, via, unmet) {
+  if (mapping === undefined || mapping.some(row => row.macrostate === 'Ready'))
+    return { macrostate: 'Draft', readiness: 'draft', explanation: via, warnings: [] }
+  const fallback = `${via}; no board state maps to Ready, so the Definition of Ready decides`
+  if (unmet.length)
+    return {
+      macrostate: 'Draft',
+      readiness: 'draft',
+      explanation: `${fallback} — unmet: ${unmet.join(', ')}`,
+      warnings: [],
+    }
+  return {
+    macrostate: 'Ready',
+    readiness: readiness(card),
+    explanation: `${fallback} — all six criteria met, ${breakdownNote(card)}`,
+    warnings: [],
+  }
+}
+
 export function resolveControlState(card, mapping) {
   const literal = card.boardState
   if (literal == null)
@@ -159,30 +188,14 @@ export function resolveControlState(card, mapping) {
     }
   if (mapped === 'Review')
     return { macrostate: 'Review', readiness: 'ready', explanation: via, warnings }
-  const ready = () => (hasTaskBreakdown(card.body) ? 'ready' : 'refined-no-breakdown')
   if (mapped === 'Ready' || mapped === 'In Progress')
     return {
       macrostate: mapped,
-      readiness: ready(),
-      explanation: `${via}, ${hasTaskBreakdown(card.body) ? 'task breakdown present' : 'no task breakdown yet'}`,
+      readiness: readiness(card),
+      explanation: `${via}, ${breakdownNote(card)}`,
       warnings,
     }
-  if (mapping === undefined || mapping.some(row => row.macrostate === 'Ready'))
-    return { macrostate: 'Draft', readiness: 'draft', explanation: via, warnings }
-  const fallback = `${via}; no board state maps to Ready, so the Definition of Ready decides`
-  if (unmet.length)
-    return {
-      macrostate: 'Draft',
-      readiness: 'draft',
-      explanation: `${fallback} — unmet: ${unmet.join(', ')}`,
-      warnings,
-    }
-  return {
-    macrostate: 'Ready',
-    readiness: ready(),
-    explanation: `${fallback} — all six criteria met, ${hasTaskBreakdown(card.body) ? 'task breakdown present' : 'no task breakdown yet'}`,
-    warnings,
-  }
+  return draftState(card, mapping, via, unmet)
 }
 
 export function validateStatusFilter(value, mapping) {

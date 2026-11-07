@@ -77,6 +77,9 @@ test('DoR and routing cover every state and the Draft/Ready boundary', () => {
   assert.equal(resolveControlState(card('Next', ''), map).macrostate, 'Ready')
   assert.equal(resolveControlState(card('Next', ''), map).warnings.length, 1)
   assert.match(resolveControlState(card('Closed'), map).outOfProcess, /"Closed" resolves to Done/)
+})
+
+test('the six DoR failures and inline breakdown are resolved at the boundary', () => {
   const noReady = mapping([
     ['Todo', 'Draft'],
     ['Closed', 'Done'],
