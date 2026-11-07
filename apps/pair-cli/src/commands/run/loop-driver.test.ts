@@ -88,10 +88,24 @@ describe('pair run — live progress wiring (US-573 T-8)', () => {
     expect(code).toBe(0)
     expect(out()).toMatch(/card-start ENG-12 Linear card\n/)
     expect(out()).toMatch(/stage ENG-12 review PR #41\n/)
-    expect(out()).toContain('Cards: 0 merged · 1 parked · 0 failed')
+    expect(out()).toContain('Cards: 0 merged · 1 parked · 0 prepared · 0 failed')
     expect(out()).toMatch(
       /stopped: the skill reported itself finished.*, 0 eligible card\(s\) left/,
     )
+  })
+
+  it('counts a prepared terminal card separately from failures', async () => {
+    const runIteration: IterationRunner = input => {
+      input.onRunEvent?.({ event: 'card-end', card: '596', status: 'prepared' })
+      return replay('claude-success.jsonl')(input)
+    }
+    const { out } = capture()
+    const code = await handleRunCommand(parseRunCommand({ root: '212' }), projectFs(), {
+      runIteration,
+      runAudit: () => undefined,
+    })
+    expect(code).toBe(0)
+    expect(out()).toContain('0 merged · 0 parked · 1 prepared · 0 failed')
   })
 
   it('the audit opens with loop-start (root + effective policy) and carries every event, then loop-end', async () => {
