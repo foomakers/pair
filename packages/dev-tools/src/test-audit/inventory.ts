@@ -87,7 +87,12 @@ function collectHelpers(sf: ts.SourceFile): Map<string, ts.Node> {
   const m = new Map<string, ts.Node>()
   const visit = (n: ts.Node): void => {
     if (ts.isFunctionDeclaration(n) && n.name && n.body) m.set(n.name.text, n.body)
-    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && ts.isFunctionLike(n.initializer))
+    if (
+      ts.isVariableDeclaration(n) &&
+      ts.isIdentifier(n.name) &&
+      n.initializer &&
+      ts.isFunctionLike(n.initializer)
+    )
       m.set(n.name.text, n.initializer)
     ts.forEachChild(n, visit)
   }
@@ -131,7 +136,10 @@ export function parseTests(file: string, source: string): TestRecord[] {
     out.push({
       test_id: n > 1 ? `${id}#${n}` : id,
       ...base,
-      ...countSignals(call.arguments.find(a => ts.isFunctionLike(a)), helpers),
+      ...countSignals(
+        call.arguments.find(a => ts.isFunctionLike(a)),
+        helpers,
+      ),
       skipped: flags(mods, inh).skip,
       focused: flags(mods, inh).only,
       parametrized: mods.includes('each') || label === null,

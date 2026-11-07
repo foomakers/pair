@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
 import {
+  applyRenames,
   buildReport,
   classify,
   isProtected,
@@ -31,6 +32,7 @@ const cfg: Config = {
   rollout: 'report-only',
   criticalModules: ['*'],
   repeatedGates: ['implement', 'pre-push', 'review'],
+  quarantine: [],
 }
 const F = 'packages/m/src/x.test.ts'
 const recs = (src: string, file = F) => parseTests(file, src)
@@ -43,7 +45,11 @@ const baseline = (tests: Record<string, [number, string]>): CompactBaseline => (
 
 describe('classify', () => {
   it('U2: zero assertions classifies and removes; one assertion does not', () => {
-    const [a, b] = classify(recs(`it('a', () => {}); it('b', () => { expect(1).toBe(1) })`), undefined, cfg)
+    const [a, b] = classify(
+      recs(`it('a', () => {}); it('b', () => { expect(1).toBe(1) })`),
+      undefined,
+      cfg,
+    )
     expect([a!.classes, a!.action, a!.signals['U2']]).toEqual([['U2'], 'remove', 'assertions=0'])
     expect([b!.classes, b!.action]).toEqual([[], 'keep'])
   })
@@ -52,19 +58,48 @@ describe('classify', () => {
     expect([r!.classes, r!.protected, r!.action]).toEqual([['U2'], true, 'keep'])
   })
   it('protection covers regression, issue refs, security, contract, requirement, a11y', () => {
-    const hits = ['regression x', 'US-12 y', 'fixes #9', 'security z', 'public contract', 'requirement r', 'a11y w']
+    const hits = [
+      'regression x',
+      'US-12 y',
+      'fixes #9',
+      'security z',
+      'public contract',
+      'requirement r',
+      'a11y w',
+    ]
     expect(hits.map(isProtected)).toEqual(hits.map(() => true))
     expect(isProtected('formats a date')).toBe(false)
   })
   it('U6: status differing across runs classifies; identical runs do not', () => {
     const r = recs(`it('a', () => { expect(1).toBe(1) }); it('b', () => { expect(1).toBe(1) })`)
     const out = classify(r, baseline({ [`${F}::a`]: [1, 'pfp'], [`${F}::b`]: [1, 'ppp'] }), cfg)
-    expect([out[0]!.classes, out[0]!.flaky_runs, out[0]!.action]).toEqual([['U6'], '1/3', 'quarantine'])
+    expect([out[0]!.classes, out[0]!.flaky_runs, out[0]!.action]).toEqual([
+      ['U6'],
+      '1/3',
+      'quarantine',
+    ])
     expect([out[1]!.classes, out[1]!.flaky_runs]).toEqual([[], '0/3'])
+  })
+  it('U6: a quarantined id carries its recorded evidence even without baseline divergence', () => {
+    const id = `${F}::a`
+    const q = {
+      ...cfg,
+      quarantine: [{ id, class: 'U6' as const, evidence: 'failed 4/10 seeds', issue: null }],
+    }
+    const [r] = classify(recs(`it.skip('a', () => { expect(1).toBe(1) })`), undefined, q)
+    expect([r!.classes, r!.signals['U6'], r!.action]).toEqual([
+      ['U6'],
+      'failed 4/10 seeds',
+      'quarantine',
+    ])
   })
   it('missing runtime data is `not measured`, never a class', () => {
     const [r] = classify(recs(`it('a', () => { expect(1).toBe(1) })`), undefined, cfg)
-    expect([r!.duration_ms_median, r!.flaky_runs, r!.classes]).toEqual(['not measured', 'not measured', []])
+    expect([r!.duration_ms_median, r!.flaky_runs, r!.classes]).toEqual([
+      'not measured',
+      'not measured',
+      [],
+    ])
     expect(r!.unmeasured).toEqual(expect.arrayContaining(['U1', 'U3', 'U5', 'U8', 'U7']))
   })
   it('U4 ratio only nominates; confirmation makes it a class, dismissal records why', () => {
@@ -72,10 +107,17 @@ describe('classify', () => {
     const id = `${F}::m`
     expect(classify(recs(src), undefined, cfg)[0]!.signals['U4-candidate']).toContain('unconfirmed')
     expect(classify(recs(src), undefined, cfg)[0]!.classes).toEqual([])
-    const yes = classify(recs(src), undefined, cfg, { [id]: { class: 'U4', verdict: 'confirmed', reason: 'internal' } })
+    const yes = classify(recs(src), undefined, cfg, {
+      [id]: { class: 'U4', verdict: 'confirmed', reason: 'internal' },
+    })
     expect([yes[0]!.classes, yes[0]!.action]).toEqual([['U4'], 'rewrite'])
-    const no = classify(recs(src), undefined, cfg, { [id]: { class: 'U4', verdict: 'dismissed', reason: 'boundary' } })
-    expect([no[0]!.classes, no[0]!.signals['U4-dismissed']]).toEqual([[], expect.stringContaining('boundary')])
+    const no = classify(recs(src), undefined, cfg, {
+      [id]: { class: 'U4', verdict: 'dismissed', reason: 'boundary' },
+    })
+    expect([no[0]!.classes, no[0]!.signals['U4-dismissed']]).toEqual([
+      [],
+      expect.stringContaining('boundary'),
+    ])
   })
 })
 
@@ -94,14 +136,20 @@ describe('reconcile', () => {
       ...recs(`it('i', () => { expect(1).toBe(1) })`, 'packages/m/src/integration/y.test.ts'),
     ]
     const r = reconcile(before, current, [`${F}::k`])
-    expect([total(r.before), total(r.removed), total(r.added), total(r.remaining)]).toEqual([3, 1, 1, 3])
+    expect([total(r.before), total(r.removed), total(r.added), total(r.remaining)]).toEqual([
+      3, 1, 1, 3,
+    ])
     expect(r.removed['packages/m']).toEqual({ unit: 1, integration: 0, e2e: 0 })
     expect(r.remaining['packages/m']).toEqual({ unit: 2, integration: 1, e2e: 0 })
     expect(total(r.rewritten)).toBe(1)
     expect(total(r.unnecessary)).toBe(1)
   })
   it('overlapping classes count a test once in unnecessary', () => {
-    const two = classify(recs(`it('x', () => { vi.fn() })`), baseline({ [`${F}::x`]: [1, 'pf'] }), cfg)
+    const two = classify(
+      recs(`it('x', () => { vi.fn() })`),
+      baseline({ [`${F}::x`]: [1, 'pf'] }),
+      cfg,
+    )
     expect(two[0]!.classes).toEqual(['U2', 'U6'])
     expect(total(reconcile(two, recs(`it('x', () => { vi.fn() })`), []).unnecessary)).toBe(1)
   })
@@ -136,7 +184,9 @@ describe('loadConfig', () => {
       writeFileSync(join(dir, 'c.json'), JSON.stringify({ ...cfg, ...o }))
       return join(dir, 'c.json')
     }
-    expect(() => loadConfig(w({ maxSnapshotLines: 'x' }))).toThrow('maxSnapshotLines must be a number, got "x"')
+    expect(() => loadConfig(w({ maxSnapshotLines: 'x' }))).toThrow(
+      'maxSnapshotLines must be a number, got "x"',
+    )
     expect(() => loadConfig(w({ rollout: 'now' }))).toThrow('rollout must be')
     expect(loadConfig(w({})).rollout).toBe('report-only')
   })
@@ -146,12 +196,32 @@ describe('repeatCost (AC6)', () => {
   const b = baseline({})
   b.packages['packages/n'] = { runs: [], wall_ms_median: 4, tests: {} }
   it('multiplies one suite wall time by the repeating stages, derived not measured', () => {
-    expect(repeatCost(b, ['implement', 'pre-push', 'review'])).toEqual({ suite_ms: 5, stages: 3, repeated_ms: 15 })
+    expect(repeatCost(b, ['implement', 'pre-push', 'review'])).toEqual({
+      suite_ms: 5,
+      stages: 3,
+      repeated_ms: 15,
+    })
   })
   it('report separates repeat runs from duplicate cases and names the reuse identity', () => {
     const md = renderMarkdown(buildReport('rev', [], [], b, cfg), b, cfg)
     expect(md).toContain('implement, pre-push, review → 3 runs, 15 ms')
     expect(md).toContain('**repeat execution**, not duplicate test cases')
     expect(md).toContain('same evidence identity and custody')
+  })
+})
+
+describe('applyRenames', () => {
+  it('maps a renamed test back to its baseline id so reconciliation sees no removal or addition', () => {
+    const before = classify(recs(`it('old title', () => { expect(1).toBe(1) })`), undefined, cfg)
+    const current = applyRenames(recs(`it('new title', () => { expect(1).toBe(1) })`), {
+      [`${F}::old title`]: `${F}::new title`,
+    })
+    const rec = reconcile(before, current, [])
+    expect([total(rec.removed), total(rec.added), total(rec.remaining)]).toEqual([0, 0, 1])
+  })
+  it('without the manifest the same rename counts as one removal plus one addition', () => {
+    const before = classify(recs(`it('old title', () => { expect(1).toBe(1) })`), undefined, cfg)
+    const rec = reconcile(before, recs(`it('new title', () => { expect(1).toBe(1) })`), [])
+    expect([total(rec.removed), total(rec.added)]).toEqual([1, 1])
   })
 })

@@ -24,7 +24,12 @@ export interface Run {
 interface VitestJson {
   testResults: {
     name: string
-    assertionResults: { ancestorTitles: string[]; title: string; status: string; duration?: number | null }[]
+    assertionResults: {
+      ancestorTitles: string[]
+      title: string
+      status: string
+      duration?: number | null
+    }[]
   }[]
 }
 
@@ -56,9 +61,20 @@ export function runPackage(root: string, pkg: string, seed: number, withCoverage
   const dir = join(root, 'test-audit', '.tmp', pkg.replace(/\//g, '_'))
   mkdirSync(dir, { recursive: true })
   const out = join(dir, `run-${seed}.json`)
-  const args = ['vitest', 'run', '--reporter=json', `--outputFile=${out}`, '--sequence.shuffle', `--sequence.seed=${seed}`]
+  const args = [
+    'vitest',
+    'run',
+    '--reporter=json',
+    `--outputFile=${out}`,
+    '--sequence.shuffle',
+    `--sequence.seed=${seed}`,
+  ]
   if (withCoverage)
-    args.push('--coverage', '--coverage.reporter=json-summary', `--coverage.reportsDirectory=${dir}/cov`)
+    args.push(
+      '--coverage',
+      '--coverage.reporter=json-summary',
+      `--coverage.reportsDirectory=${dir}/cov`,
+    )
   const t0 = Date.now()
   try {
     execFileSync('npx', args, { cwd, stdio: 'ignore', timeout: 590_000 })
@@ -67,7 +83,11 @@ export function runPackage(root: string, pkg: string, seed: number, withCoverage
   }
   const wall_ms = Date.now() - t0
   if (!existsSync(out)) throw new Error(`${pkg}: vitest produced no JSON report (seed ${seed})`)
-  const run: Run = { seed, wall_ms, tests: parseVitestJson(root, JSON.parse(readFileSync(out, 'utf8'))) }
+  const run: Run = {
+    seed,
+    wall_ms,
+    tests: parseVitestJson(root, JSON.parse(readFileSync(out, 'utf8'))),
+  }
   const cov = join(dir, 'cov', 'coverage-summary.json')
   if (withCoverage && existsSync(cov)) {
     const { total } = JSON.parse(readFileSync(cov, 'utf8'))
@@ -101,7 +121,9 @@ const RAW = (root: string) => join(root, 'test-audit', '.tmp', 'raw.json')
 /** Appends one run to the (gitignored) raw store; `finalize` compacts it into the versioned baseline. */
 export function recordRun(root: string, pkg: string, seed: number, withCoverage: boolean): void {
   const file = RAW(root)
-  const raw: Record<string, Run[]> = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).packages : {}
+  const raw: Record<string, Run[]> = existsSync(file)
+    ? JSON.parse(readFileSync(file, 'utf8')).packages
+    : {}
   ;(raw[pkg] ??= []).push(runPackage(root, pkg, seed, withCoverage))
   writeFileSync(file, JSON.stringify({ packages: raw }))
 }
@@ -118,16 +140,22 @@ export interface CompactBaseline {
 
 const TOOL = {
   runner: 'vitest 3.2.4, --sequence.shuffle with recorded seed per run',
-  coverage: '@vitest/coverage-v8 json-summary, first run per package; absent when the package lacks the provider',
+  coverage:
+    '@vitest/coverage-v8 json-summary, first run per package; absent when the package lacks the provider',
   mutation: NOT_MEASURED,
   per_test_coverage: NOT_MEASURED,
 }
 
 /** Per-test `[median_ms, "ppf"]` (one status letter per run: p/f/s/o) instead of every run's full map. */
-export function compact(raw: Record<string, Run[]>, baseRev: string, runsRequired = 3): CompactBaseline {
+export function compact(
+  raw: Record<string, Run[]>,
+  baseRev: string,
+  runsRequired = 3,
+): CompactBaseline {
   const packages: CompactBaseline['packages'] = {}
   for (const [pkg, runs] of Object.entries(raw)) {
-    if (runs.length < runsRequired) throw new Error(`${pkg}: ${runs.length}/${runsRequired} baseline runs`)
+    if (runs.length < runsRequired)
+      throw new Error(`${pkg}: ${runs.length}/${runsRequired} baseline runs`)
     const tests: Record<string, [number, string]> = {}
     for (const [id, a] of Object.entries(aggregate(runs)))
       tests[id] = [Math.round(a.median_ms * 100) / 100, a.statuses.map(x => x[0]).join('')]
@@ -151,7 +179,10 @@ export function rerunBaseline(root: string): void {
 
 export function finalize(root: string): void {
   const raw = JSON.parse(readFileSync(RAW(root), 'utf8')).packages
-  const rev = execFileSync('git', ['merge-base', 'origin/main', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
+  const rev = execFileSync('git', ['merge-base', 'origin/main', 'HEAD'], {
+    cwd: root,
+    encoding: 'utf8',
+  }).trim()
   writeFileSync(join(root, 'test-audit', 'baseline.json'), JSON.stringify(compact(raw, rev)) + '\n')
 }
 
@@ -159,6 +190,7 @@ if (require.main === module) {
   const [cmd, pkg, seed, cov] = process.argv.slice(2)
   if (cmd === 'finalize') finalize(REPO_ROOT)
   else if (cmd === 'rerun') rerunBaseline(REPO_ROOT)
-  else if (cmd === 'run' && pkg && seed) recordRun(REPO_ROOT, pkg, Number(seed), cov === '--coverage')
+  else if (cmd === 'run' && pkg && seed)
+    recordRun(REPO_ROOT, pkg, Number(seed), cov === '--coverage')
   else throw new Error('usage: baseline.ts run <package> <seed> [--coverage] | finalize | rerun')
 }

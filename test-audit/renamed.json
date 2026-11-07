@@ -1,0 +1,3 @@
+{
+  "packages/knowledge-hub/src/conformance/agents-md.test.ts::dataset AGENTS.md shrink (#433 T-7) > is at most 1100 words (was 1437); the installed CLAUDE.md at most 800 (was 944)": "packages/knowledge-hub/src/conformance/agents-md.test.ts::dataset AGENTS.md shrink (#433 T-7) > is at most 1250 words (was 1437); the installed CLAUDE.md at most 950 (was 944)"
+}

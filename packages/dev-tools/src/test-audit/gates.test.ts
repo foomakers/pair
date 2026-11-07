@@ -38,6 +38,7 @@ const cfg: Config = {
   rollout: 'block-cheap',
   criticalModules: ['*'],
   repeatedGates: ['implement', 'pre-push', 'review'],
+  quarantine: [],
 }
 const F = 'packages/m/src/x.test.ts'
 const recs = (src: string) => parseTests(F, src)
@@ -46,17 +47,30 @@ describe('G1/G2', () => {
   it('G1 fails a test without assertions and blocks at block-cheap, not at report-only', () => {
     const r = recs(`it('a', () => {})`)
     expect(g1(r, cfg)).toMatchObject({ status: 'fail', blocking: true, violations: [`${F}::a`] })
-    expect(g1(r, { ...cfg, rollout: 'report-only' })).toMatchObject({ status: 'fail', blocking: false })
+    expect(g1(r, { ...cfg, rollout: 'report-only' })).toMatchObject({
+      status: 'fail',
+      blocking: false,
+    })
   })
   it('G1 passes assertions and ignores skipped tests', () => {
-    expect(g1(recs(`it('a', () => { expect(1).toBe(1) }); it.skip('b', () => {})`), cfg).status).toBe('pass')
+    expect(
+      g1(recs(`it('a', () => { expect(1).toBe(1) }); it.skip('b', () => {})`), cfg).status,
+    ).toBe('pass')
   })
   it('G2 flags skip/only, sleep, print, private spies, oversize inline snapshots', () => {
     const src = `it.skip('s', () => { expect(1).toBe(1) })
 it.only('o', () => { expect(1).toBe(1) })
 it('p', async () => { await sleep(5); console.log('x'); vi.spyOn(a, '_hidden'); expect(1).toMatchInlineSnapshot(\`a\nb\nc\nd\`) })`
     const out = g2(recs(src), { [F]: src }, cfg).violations.join('\n')
-    for (const k of [`${F}::s skip/only`, `${F}::o skip/only`, 'sleep', 'print', 'spy on private _hidden', 'snapshot 4 lines > 3']) expect(out).toContain(k)
+    for (const k of [
+      `${F}::s skip/only`,
+      `${F}::o skip/only`,
+      'sleep',
+      'print',
+      'spy on private _hidden',
+      'snapshot 4 lines > 3',
+    ])
+      expect(out).toContain(k)
   })
   it('G2 exempts quarantined ids from the skip rule only', () => {
     const src = `it.skip('q', () => { expect(1).toBe(1) })`
@@ -86,16 +100,33 @@ describe('G3', () => {
 const stryker = (killedBy: string[][], status = 'Killed'): StrykerReport => ({
   files: {
     'packages/m/src/a.ts': {
-      mutants: killedBy.map((k, i) => ({ id: `${i}`, status, location: { start: { line: 10 + i }, end: { line: 10 + i } }, killedBy: k })),
+      mutants: killedBy.map((k, i) => ({
+        id: `${i}`,
+        status,
+        location: { start: { line: 10 + i }, end: { line: 10 + i } },
+        killedBy: k,
+      })),
     },
   },
-  testFiles: { [F]: { tests: [{ id: 't1', name: 'old' }, { id: 't2', name: 'new' }] } },
+  testFiles: {
+    [F]: {
+      tests: [
+        { id: 't1', name: 'old' },
+        { id: 't2', name: 'new' },
+      ],
+    },
+  },
 })
 const diff = parseDiffLines('+++ b/packages/m/src/a.ts\n@@ -1,0 +10,3 @@\n+a\n+b\n+c\n')
 
 describe('G4/G5 (mutation)', () => {
   it('both are `unsupported` — never green, never blocking — without a mutation report', () => {
-    expect([g4(undefined, diff, cfg), g5(undefined, diff, [], cfg)].map(r => [r.status, r.blocking])).toEqual([['unsupported', false], ['unsupported', false]])
+    expect(
+      [g4(undefined, diff, cfg), g5(undefined, diff, [], cfg)].map(r => [r.status, r.blocking]),
+    ).toEqual([
+      ['unsupported', false],
+      ['unsupported', false],
+    ])
     expect(g4(undefined, diff, cfg).detail).toContain('Stryker is not a dependency')
   })
   it('G4 scores only mutants on diff lines', () => {
@@ -126,16 +157,24 @@ describe('G6/G7/G8', () => {
     expect(g6([{ a: 'passed' }], cfg).status).toBe('unsupported')
     const runs = [{ a: 'passed' }, { a: 'failed' }, { a: 'passed' }]
     expect(g6(runs, cfg).violations).toEqual(['a 2/3 green'])
-    expect(g6(runs.map(() => ({ a: 'passed' })), cfg).status).toBe('pass')
+    expect(
+      g6(
+        runs.map(() => ({ a: 'passed' })),
+        cfg,
+      ).status,
+    ).toBe('pass')
   })
   it('G7 fails above 3:1 test:prod, ignores docs/json, and a justified bypass label clears it', () => {
     const n = `40\t0\tpackages/m/src/a.test.ts\n10\t0\tpackages/m/src/a.ts\n99\t0\tdocs/x.md\n`
     expect(g7(n, cfg).violations).toEqual(['test:prod 40:10 > 3:1'])
     expect(g7(n, cfg, ['gate-bypass:G7: generated fixtures']).status).toBe('pass')
-    expect(g7(`30\t0\tpackages/m/src/a.test.ts\n10\t0\tpackages/m/src/a.ts\n`, cfg).status).toBe('pass')
+    expect(g7(`30\t0\tpackages/m/src/a.test.ts\n10\t0\tpackages/m/src/a.ts\n`, cfg).status).toBe(
+      'pass',
+    )
   })
   it('G8 fails only for a new U2/U3 versus the previous audit', () => {
-    const rec = (id: string, classes: string[]) => ({ test_id: id, classes }) as Report['records'][number]
+    const rec = (id: string, classes: string[]) =>
+      ({ test_id: id, classes }) as Report['records'][number]
     const prev = { records: [rec('old', ['U2'])] } as Report
     const now = { records: [rec('old', ['U2']), rec('new', ['U3']), rec('x', ['U4'])] } as Report
     expect(g8(prev, now, cfg).violations).toEqual(['new U3'])
@@ -157,14 +196,21 @@ describe('rollout and bypass', () => {
   it('a bypassed failure is not blocking and is counted', () => {
     const r = g1(recs(`it('a', () => {})`), cfg, ['gate-bypass:G1: legacy'])
     expect(r.status).toBe('pass')
-    expect(verdict([r], ['gate-bypass:G1: legacy', 'other'])).toEqual({ exit: 0, bypasses: ['gate-bypass:G1: legacy'] })
+    expect(verdict([r], ['gate-bypass:G1: legacy', 'other'])).toEqual({
+      exit: 0,
+      bypasses: ['gate-bypass:G1: legacy'],
+    })
   })
   it('exit 1 only on a blocking failure; unsupported gates never block', () => {
     expect(verdict([g1(recs(`it('a', () => {})`), cfg), unsupported('G4', 'x')], []).exit).toBe(1)
     expect(verdict([unsupported('G4', 'x')], []).exit).toBe(0)
   })
   it('renders every gate with its status', () => {
-    const md = renderGates([g1(recs(`it('a', () => {})`), cfg), unsupported('G4', 'no tool')], cfg, [])
+    const md = renderGates(
+      [g1(recs(`it('a', () => {})`), cfg), unsupported('G4', 'no tool')],
+      cfg,
+      [],
+    )
     expect(md).toContain('| G1 | fail | true | 1 |')
     expect(md).toContain('| G4 | unsupported (no tool) | false | 0 |')
   })

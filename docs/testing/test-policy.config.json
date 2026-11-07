@@ -24,9 +24,7 @@
   "maxSnapshotLines": 50,
   "maxTestToCodeRatio": 3,
   "rollout": "report-only",
-  "criticalModules": [
-    "*"
-  ],
+  "criticalModules": ["*"],
   "quarantine": [
     {
       "id": "packages/dev-tools/src/quality-gates/sync-version-in-docs.test.ts::readGitignoreExcludes > returns [] when no .gitignore exists at root",
@@ -47,9 +45,5 @@
       "issue": null
     }
   ],
-  "repeatedGates": [
-    "implement (verify-quality)",
-    "pre-push (quality-gate)",
-    "review (verify)"
-  ]
+  "repeatedGates": ["implement (verify-quality)", "pre-push (quality-gate)", "review (verify)"]
 }

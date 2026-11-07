@@ -308,7 +308,11 @@ describe('detectOrphanedSkillReferences', () => {
     }
 
     await expect(
-      detectOrphanedSkillReferences({ fs, baseTarget: '/project', pushLog: noopLog }, registries, []),
+      detectOrphanedSkillReferences(
+        { fs, baseTarget: '/project', pushLog: noopLog },
+        registries,
+        [],
+      ),
     ).resolves.not.toThrow()
   })
 

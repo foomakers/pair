@@ -10,7 +10,14 @@ import { join } from 'path'
 import { REPO_ROOT } from '../quality-gates/repo-root'
 
 import type { CompactBaseline } from './baseline'
-import { TEST_FILE_RE, NOT_MEASURED, parseTests, buildInventory, type Level, type TestRecord } from './inventory'
+import {
+  TEST_FILE_RE,
+  NOT_MEASURED,
+  parseTests,
+  buildInventory,
+  type Level,
+  type TestRecord,
+} from './inventory'
 
 export interface Config {
   budgets: Record<Level, { maxTestMs: number; totalMs: number }>
@@ -25,16 +32,29 @@ export interface Config {
   criticalModules: string[]
   /** Stages that each re-run the full suite on the same head: cost = repeat runs, not duplicate cases. */
   repeatedGates: string[]
+  /** Confirmed U6 cases (evidence from seeded random-order runs); `issue` is the tracking issue once filed. */
+  quarantine: { id: string; class: 'U6'; evidence: string; issue: string | null }[]
 }
 
 export function loadConfig(file: string): Config {
   const c = JSON.parse(readFileSync(file, 'utf8'))
-  for (const k of ['maxLevelGrowthPct', 'minMutationScoreOnDiffPct', 'minUniqueKillsPerNewTest', 'maxMockAssertionRatio', 'maxSnapshotLines', 'maxTestToCodeRatio'])
-    if (typeof c[k] !== 'number' || !Number.isFinite(c[k])) throw new Error(`${file}: ${k} must be a number, got ${JSON.stringify(c[k])}`)
+  for (const k of [
+    'maxLevelGrowthPct',
+    'minMutationScoreOnDiffPct',
+    'minUniqueKillsPerNewTest',
+    'maxMockAssertionRatio',
+    'maxSnapshotLines',
+    'maxTestToCodeRatio',
+  ])
+    if (typeof c[k] !== 'number' || !Number.isFinite(c[k]))
+      throw new Error(`${file}: ${k} must be a number, got ${JSON.stringify(c[k])}`)
   if (!['report-only', 'block-cheap', 'block-full'].includes(c.rollout))
-    throw new Error(`${file}: rollout must be report-only | block-cheap | block-full, got ${JSON.stringify(c.rollout)}`)
+    throw new Error(
+      `${file}: rollout must be report-only | block-cheap | block-full, got ${JSON.stringify(c.rollout)}`,
+    )
   for (const k of ['criticalModules', 'repeatedGates'])
     if (!Array.isArray(c[k])) throw new Error(`${file}: ${k} must be an array`)
+  c.quarantine ??= []
   return c as Config
 }
 
@@ -60,7 +80,8 @@ export interface ReportRecord {
 }
 
 /** Regression (issue ref), public-contract, security, documented requirement: never auto-removed. */
-export const PROTECTED_RE = /#\d+|\bUS-\d+|\bregression\b|\bsecurity\b|\bcontract\b|\brequirement\b|a11y|accessib/i
+export const PROTECTED_RE =
+  /#\d+|\bUS-\d+|\bregression\b|\bsecurity\b|\bcontract\b|\brequirement\b|a11y|accessib/i
 export const isProtected = (id: string): boolean => PROTECTED_RE.test(id)
 
 const PR_OF: Record<string, string> = {
@@ -83,7 +104,10 @@ type Timing = Record<string, [number, string]>
 const timingOf = (b: CompactBaseline | undefined, module: string): Timing =>
   Object.entries(b?.packages ?? {}).find(([pkg]) => pkg === module)?.[1].tests ?? {}
 
-export type Confirmations = Record<string, { class: string; verdict: 'confirmed' | 'dismissed'; reason: string }>
+export type Confirmations = Record<
+  string,
+  { class: string; verdict: 'confirmed' | 'dismissed'; reason: string }
+>
 
 /** U4's mock ratio only nominates; a written-rule confirmation (internal collaborator mocked) makes it a class. */
 export function classify(
@@ -107,14 +131,20 @@ export function classify(
       if (c?.class === 'U4' && c.verdict === 'confirmed') {
         classes.push('U4')
         signals['U4'] = `${sig}; confirmed: ${c.reason}`
-      } else if (c?.verdict === 'dismissed') signals['U4-dismissed'] = `${sig}; dismissed: ${c.reason}`
+      } else if (c?.verdict === 'dismissed')
+        signals['U4-dismissed'] = `${sig}; dismissed: ${c.reason}`
       else signals['U4-candidate'] = `${sig}; unconfirmed`
     }
-    if (t && new Set(t[1]).size > 1) {
+    const q = cfg.quarantine.find(x => x.id === r.test_id)
+    if (q) {
+      classes.push('U6')
+      signals['U6'] = q.evidence
+    } else if (t && new Set(t[1]).size > 1) {
       classes.push('U6')
       signals['U6'] = `status differs across runs: ${t[1]}`
     }
-    if (t && t[0] > cfg.budgets[r.level].maxTestMs) unmeasured.push('U7') // over budget; unique kills not measured
+    if (t && t[0] > cfg.budgets[r.level].maxTestMs)
+      unmeasured.push('U7') // over budget; unique kills not measured
     else if (!t) unmeasured.push('U7')
     const prot = isProtected(r.test_id)
     const top = CLASS_ORDER.concat('U6').find(c => classes.includes(c))
@@ -162,7 +192,8 @@ const tally = (rs: { module: string; level: Level }[]): Counts => {
   rs.forEach(r => bump(c, r))
   return c
 }
-export const total = (c: Counts): number => Object.values(c).reduce((a, m) => a + m.unit + m.integration + m.e2e, 0)
+export const total = (c: Counts): number =>
+  Object.values(c).reduce((a, m) => a + m.unit + m.integration + m.e2e, 0)
 
 /**
  * before = inventory at the base revision; remaining = current inventory.
@@ -191,7 +222,9 @@ export function reconcile(
     unmeasured: tally(before.filter(r => r.unmeasured.length)),
   }
   if (total(rec.before) - total(rec.removed) + total(rec.added) !== total(rec.remaining))
-    throw new Error(`reconciliation: ${total(rec.before)} - ${total(rec.removed)} + ${total(rec.added)} != ${total(rec.remaining)}`)
+    throw new Error(
+      `reconciliation: ${total(rec.before)} - ${total(rec.removed)} + ${total(rec.added)} != ${total(rec.remaining)}`,
+    )
   return rec
 }
 
@@ -201,6 +234,7 @@ export interface Report {
   classes: Record<string, number>
   records: ReportRecord[]
   removed_ids: string[]
+  rewritten_ids: string[]
   added_ids: string[]
 }
 
@@ -224,38 +258,86 @@ export function buildReport(
     classes,
     records,
     removed_ids: records.filter(r => !cur.has(r.test_id)).map(r => r.test_id),
+    rewritten_ids: rewrittenIds,
     added_ids: current.filter(r => !was.has(r.test_id)).map(r => r.test_id),
   }
 }
 
-const COLS: (keyof Reconciliation)[] = ['before', 'audited', 'unnecessary', 'protected', 'removed', 'rewritten', 'added', 'remaining', 'unmeasured']
+const COLS: (keyof Reconciliation)[] = [
+  'before',
+  'audited',
+  'unnecessary',
+  'protected',
+  'removed',
+  'rewritten',
+  'added',
+  'remaining',
+  'unmeasured',
+]
 
 /** One full-suite wall time (sum of per-package medians) × the stages that each repeat it. Derived, not measured per stage. */
-export function repeatCost(baseline: CompactBaseline, gates: string[]): { suite_ms: number; stages: number; repeated_ms: number } {
+export function repeatCost(
+  baseline: CompactBaseline,
+  gates: string[],
+): { suite_ms: number; stages: number; repeated_ms: number } {
   const suite_ms = Object.values(baseline.packages).reduce((a, p) => a + p.wall_ms_median, 0)
   return { suite_ms, stages: gates.length, repeated_ms: suite_ms * gates.length }
 }
 
-export function renderMarkdown(rep: Report, baseline: CompactBaseline | undefined, cfg?: Config): string {
+export function renderMarkdown(
+  rep: Report,
+  baseline: CompactBaseline | undefined,
+  cfg?: Config,
+): string {
   const rec = rep.reconciliation
   const mods = [...new Set(COLS.flatMap(c => Object.keys(rec[c])))].sort()
   const cell = (c: keyof Reconciliation, m: string, l: Level): number => rec[c][m]?.[l] ?? 0
-  const lines = ['# Test audit report', '', `Base revision: \`${rep.base_rev}\`. Regenerate: \`pnpm --filter @pair/dev-tools test-audit\`.`, '']
-  lines.push('## Reconciliation by module and level', '', `| module | level | ${COLS.join(' | ')} |`, `| --- | --- | ${COLS.map(() => '---:').join(' | ')} |`)
+  const lines = [
+    '# Test audit report',
+    '',
+    `Base revision: \`${rep.base_rev}\`. Regenerate: \`pnpm --filter @pair/dev-tools test-audit\`.`,
+    '',
+  ]
+  lines.push(
+    '## Reconciliation by module and level',
+    '',
+    `| module | level | ${COLS.join(' | ')} |`,
+    `| --- | --- | ${COLS.map(() => '---:').join(' | ')} |`,
+  )
   for (const m of mods)
     for (const l of ['unit', 'integration', 'e2e'] as Level[])
-      if (COLS.some(c => cell(c, m, l))) lines.push(`| ${m} | ${l} | ${COLS.map(c => cell(c, m, l)).join(' | ')} |`)
+      if (COLS.some(c => cell(c, m, l)))
+        lines.push(`| ${m} | ${l} | ${COLS.map(c => cell(c, m, l)).join(' | ')} |`)
   lines.push(`| **total** | | ${COLS.map(c => total(rec[c])).join(' | ')} |`, '')
-  lines.push('`before − removed + added = remaining`. `unnecessary` = classified and not protected; `unmeasured` = at least one class signal has no supported tool.', '')
-  lines.push('## Classes (confirmed by deterministic signal)', '', '| class | tests |', '| --- | ---: |')
+  lines.push(
+    '`before − removed + added = remaining`. `unnecessary` = classified and not protected; `unmeasured` = at least one class signal has no supported tool.',
+    '',
+  )
+  lines.push(
+    '## Classes (confirmed by deterministic signal)',
+    '',
+    '| class | tests |',
+    '| --- | ---: |',
+  )
   for (const c of ['U1', 'U2', 'U3', 'U4', 'U5', 'U6', 'U7', 'U8'])
-    lines.push(`| ${c} | ${rep.classes[c] ?? (['U1', 'U3', 'U5', 'U7', 'U8'].includes(c) ? NOT_MEASURED : 0)} |`)
+    lines.push(
+      `| ${c} | ${rep.classes[c] ?? (['U1', 'U3', 'U5', 'U7', 'U8'].includes(c) ? NOT_MEASURED : 0)} |`,
+    )
   lines.push('')
   if (baseline) {
-    lines.push('## Baseline (F0)', '', `Runner: ${baseline.tool['runner']}. Mutation: ${baseline.tool['mutation']} (no supported tool installed). Per-test coverage: ${baseline.tool['per_test_coverage']}.`, '', '| package | tests | wall ms (median of runs) | line cov % | branch cov % |', '| --- | ---: | ---: | ---: | ---: |')
+    lines.push(
+      '## Baseline (F0)',
+      '',
+      `Runner: ${baseline.tool['runner']}. Mutation: ${baseline.tool['mutation']} (no supported tool installed). Per-test coverage: ${baseline.tool['per_test_coverage']}.`,
+      '',
+      '| package | tests | wall ms (median of runs) | line cov % | branch cov % | mutation score |',
+      '| --- | ---: | ---: | ---: | ---: | ---: |',
+    )
     for (const [p, v] of Object.entries(baseline.packages).sort()) {
       const cov = v.runs.find(r => r.coverage)?.coverage
-      lines.push(`| ${p} | ${Object.keys(v.tests).length} | ${v.wall_ms_median} | ${cov?.lines ?? NOT_MEASURED} | ${cov?.branches ?? NOT_MEASURED} |`)
+      lines.push(
+        `| ${p} | ${Object.keys(v.tests).length} | ${v.wall_ms_median} | ${cov?.lines ?? NOT_MEASURED} | ${cov?.branches ?? NOT_MEASURED} | ${NOT_MEASURED} |`,
+      )
     }
     lines.push('')
   }
@@ -272,21 +354,53 @@ export function renderMarkdown(rep: Report, baseline: CompactBaseline | undefine
       '',
     )
   }
+  lines.push(
+    '## Cleanup applied',
+    '',
+    `- Removed: ${rep.removed_ids.length}${rep.removed_ids.length ? ` (${rep.removed_ids.join('; ')})` : ' — removal needs a confirmed signal; the removable classes (U1, U3, U5, U7, U8) are not measured and U2 candidates were rewritten'}.`,
+    `- Rewritten (U2, explicit assertion added, same id): ${rep.rewritten_ids.length}${rep.rewritten_ids.map(i => `\n  - \`${i}\``).join('')}`,
+    `- Quarantined (U6): ${cfg?.quarantine.length ?? 0}${(cfg?.quarantine ?? []).map(q => `\n  - \`${q.id}\` — ${q.evidence}; tracking issue: ${q.issue ?? 'pending (not created by the implementer)'}`).join('')}`,
+    '- Permitted exceptions used: none (no U8 removal, so no mutation-score exception; no U5/U8 branch-coverage reduction).',
+    `- Unmeasured: mutation score per module and U1, U3, U5, U7 (unique kills), U8 — ${NOT_MEASURED}: no supported tool installed, nothing removed on those classes.`,
+    '',
+  )
   const hit = rep.records.filter(r => r.classes.length)
-  lines.push('## Flagged tests', '', '| test | classes | signal | protected | action |', '| --- | --- | --- | --- | --- |')
+  lines.push(
+    '## Flagged tests',
+    '',
+    '| test | classes | signal | protected | action |',
+    '| --- | --- | --- | --- | --- |',
+  )
   for (const r of hit)
-    lines.push(`| \`${r.test_id.replace(/\|/g, '\\|')}\` | ${r.classes.join(', ')} | ${Object.values(r.signals).join('; ').replace(/\|/g, '\\|')} | ${r.protected} | ${r.action} |`)
-  lines.push('', `Removed: ${rep.removed_ids.length}. Added by this story: ${rep.added_ids.length}.`, '')
+    lines.push(
+      `| \`${r.test_id.replace(/\|/g, '\\|')}\` | ${r.classes.join(', ')} | ${Object.values(r.signals).join('; ').replace(/\|/g, '\\|')} | ${r.protected} | ${r.action} |`,
+    )
+  lines.push(
+    '',
+    `Removed: ${rep.removed_ids.length}. Added by this story: ${rep.added_ids.length}.`,
+    '',
+  )
   return lines.join('\n')
 }
 
 export function renderRemovalPlan(rep: Report): string {
-  const lines = ['# Removal plan', '', 'Commits inside the single PR, safest class first (U6 is quarantined, never removed). Mutation score and branch coverage must not fall: not measured here (no mutation tool) — removals are limited to classes with a deterministic static signal.', '']
+  const lines = [
+    '# Removal plan',
+    '',
+    'Commits inside the single PR, safest class first (U6 is quarantined, never removed). Mutation score and branch coverage must not fall: not measured here (no mutation tool) — removals are limited to classes with a deterministic static signal.',
+    '',
+  ]
   for (const c of [...CLASS_ORDER, 'U6']) {
-    const rs = rep.records.filter(r => r.classes.includes(c) && !r.protected && (r.action !== 'keep'))
+    const rs = rep.records.filter(r => r.classes.includes(c) && !r.protected && r.action !== 'keep')
     const prot = rep.records.filter(r => r.classes.includes(c) && r.protected)
     lines.push(`## ${c}${PR_OF[c] ? ` — ${PR_OF[c]}` : ''}`, '')
-    if (!rs.length && !prot.length) lines.push(CLASS_ORDER.includes(c) && !PR_OF[c] ? `not measured: no ${c} signal available.` : 'no candidates.', '')
+    if (!rs.length && !prot.length)
+      lines.push(
+        CLASS_ORDER.includes(c) && !PR_OF[c]
+          ? `not measured: no ${c} signal available.`
+          : 'no candidates.',
+        '',
+      )
     for (const r of rs) lines.push(`- ${r.action} \`${r.test_id}\` — ${r.signals[c]}`)
     for (const r of prot) lines.push(`- protected, kept \`${r.test_id}\` — ${r.signals[c]}`)
     if (rs.length || prot.length) lines.push('')
@@ -294,7 +408,14 @@ export function renderRemovalPlan(rep: Report): string {
   return lines.join('\n')
 }
 
-const git = (cwd: string, ...a: string[]): string => execFileSync('git', a, { cwd, encoding: 'utf8', maxBuffer: 1 << 28 })
+/** A renamed test is the same test: map new ids back to the baseline id so it is neither removed nor added. */
+export function applyRenames(records: TestRecord[], renames: Record<string, string>): TestRecord[] {
+  const back = new Map(Object.entries(renames).map(([from, to]) => [to, from]))
+  return records.map(r => (back.has(r.test_id) ? { ...r, test_id: back.get(r.test_id)! } : r))
+}
+
+const git = (cwd: string, ...a: string[]): string =>
+  execFileSync('git', a, { cwd, encoding: 'utf8', maxBuffer: 1 << 28 })
 
 /** Static inventory of the tree at `rev` — the audited "before" set. */
 export function inventoryAt(root: string, rev: string): TestRecord[] {
@@ -308,20 +429,34 @@ export function main(root = REPO_ROOT): void {
   const dir = join(root, 'test-audit')
   const cfg = loadConfig(join(root, 'docs/testing/test-policy.config.json'))
   const bf = join(dir, 'baseline.json')
-  const baseline: CompactBaseline | undefined = existsSync(bf) ? JSON.parse(readFileSync(bf, 'utf8')) : undefined
+  const baseline: CompactBaseline | undefined = existsSync(bf)
+    ? JSON.parse(readFileSync(bf, 'utf8'))
+    : undefined
   const baseRev = baseline?.base_rev ?? git(root, 'merge-base', 'origin/main', 'HEAD').trim()
   const files = git(root, 'ls-files').split('\n').filter(Boolean)
-  const current = buildInventory(root, files).tests
+  const rf = join(dir, 'renamed.json')
+  const renames: Record<string, string> = existsSync(rf) ? JSON.parse(readFileSync(rf, 'utf8')) : {}
+  const current = applyRenames(buildInventory(root, files).tests, renames)
   const mf = join(dir, 'rewritten.json')
   const rewritten: string[] = existsSync(mf) ? JSON.parse(readFileSync(mf, 'utf8')) : []
   const cf = join(dir, 'confirmations.json')
   const confirmations: Confirmations = existsSync(cf) ? JSON.parse(readFileSync(cf, 'utf8')) : {}
-  const rep = buildReport(baseRev, inventoryAt(root, baseRev), current, baseline, cfg, rewritten, confirmations)
+  const rep = buildReport(
+    baseRev,
+    inventoryAt(root, baseRev),
+    current,
+    baseline,
+    cfg,
+    rewritten,
+    confirmations,
+  )
   mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'report.json'), JSON.stringify(rep, null, 2) + '\n')
+  writeFileSync(join(dir, 'report.json'), JSON.stringify(rep) + '\n')
   writeFileSync(join(dir, 'report.md'), renderMarkdown(rep, baseline, cfg))
   writeFileSync(join(dir, 'removal-plan.md'), renderRemovalPlan(rep))
-  console.log(`audit: ${total(rep.reconciliation.before)} before, ${total(rep.reconciliation.remaining)} remaining → ${dir}`)
+  console.log(
+    `audit: ${total(rep.reconciliation.before)} before, ${total(rep.reconciliation.remaining)} remaining → ${dir}`,
+  )
 }
 
 if (require.main === module) main()
