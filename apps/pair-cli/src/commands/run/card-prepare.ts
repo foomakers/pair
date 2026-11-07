@@ -18,7 +18,7 @@ import {
   type PrepareGateValue,
   type PrepareReadiness,
 } from './cycle-scripts'
-import { readStateMapping, readyBoardState } from './card-readiness'
+import { locateControlStateScript, readStateMapping, readyBoardState } from './card-readiness'
 import { mainCheckoutOrCwd, readCardDocumentViaGh, readCardLabels } from './cycle-wiring'
 import type { RunContext } from './run-context'
 
@@ -449,7 +449,8 @@ async function runAutonomous(
   const mode = phase.gate.mode as 'never' | 'when'
   let readyState: string
   try {
-    readyState = readyBoardState(readStateMapping(entry.fs, entry.cwd))
+    const script = locateControlStateScript(entry.fs, entry.context.config, entry.cwd)
+    readyState = readyBoardState(readStateMapping(entry.fs, entry.cwd, script), script)
   } catch (error) {
     return await fail(phase, (error as Error).message)
   }

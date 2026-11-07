@@ -38,4 +38,12 @@ delete pkg.devDependencies
 // Write to dist/package.json
 fs.writeFileSync(distPkgPath, JSON.stringify(pkg, null, 2) + '\n')
 
+const stateSource = path.join(
+  rootDir,
+  '../../packages/knowledge-hub/dataset/.skills/next/control-state.mjs',
+)
+const stateTarget = path.join(rootDir, 'dist/assets/control-state.mjs')
+fs.mkdirSync(path.dirname(stateTarget), { recursive: true })
+fs.copyFileSync(stateSource, stateTarget)
+
 console.log('✅ Post-build: package.json copied to dist/ with rewritten imports')

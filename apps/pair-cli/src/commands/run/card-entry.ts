@@ -373,7 +373,9 @@ async function readReadiness(
 ): Promise<CardReadiness | undefined> {
   const { decision, fs, cwd } = input
   try {
-    return await (deps.cardReadiness ?? createCardReadinessProbe(fs, cwd))(decision.card)
+    return await (deps.cardReadiness ?? createCardReadinessProbe(fs, cwd, input.context.config))(
+      decision.card,
+    )
   } catch (error) {
     if (!isCleanSkip(error, decision)) throw error
     console.log(`  Skipped: ${(error as Error).message}`)
