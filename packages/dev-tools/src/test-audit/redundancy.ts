@@ -38,7 +38,10 @@ export interface Candidate {
 export interface Report {
   generatedAt: string
   revision: string
-  mutation: Record<string, { score: number | null; mutants: Record<string, number>; tests: number }>
+  mutation: Record<
+    string,
+    { score: number | null; mutants: Record<string, number>; tests: number; slices?: string }
+  >
   playwright: { tests: number; redundant: number; effective: number; noSignal: number }
   totals: { candidates: number; bySource: Record<string, number> }
   candidates: Candidate[]
@@ -81,6 +84,7 @@ export function parseArgs(argv: string[], root: string) {
     concurrency: Number(get('--concurrency') ?? 4),
     skipMutation: argv.includes('--skip-mutation'),
     skipPlaywright: argv.includes('--skip-playwright'),
+    full: argv.includes('--full'),
   }
 }
 
@@ -92,7 +96,8 @@ function mutateModule(
   opts: ReturnType<typeof parseArgs>,
   root: string,
 ): MutationSummary {
-  const slices = DEFAULT_SLICES[module] ?? [[]]
+  const all = DEFAULT_SLICES[module] ?? [[]]
+  const slices = opts.full ? all : all.slice(0, 1)
   const parts = slices.map((mutate, i) =>
     runMutation(
       {
@@ -113,6 +118,16 @@ function mutateModule(
   return slices.length > 1 ? mergeSummaries(module, parts) : (parts[0] as MutationSummary)
 }
 
+function entryOf(
+  s: MutationSummary,
+  module: string,
+  opts: ReturnType<typeof parseArgs>,
+): Report['mutation'][string] {
+  const n = DEFAULT_SLICES[module]?.length ?? 1
+  const base = { score: s.score, mutants: s.mutants, tests: s.tests.length }
+  return n > 1 ? { ...base, slices: `${opts.full ? n : 1}/${n}` } : base
+}
+
 export function build(opts: ReturnType<typeof parseArgs>, root: string): Report {
   const errors: Report['errors'] = []
   const mutation: Report['mutation'] = {}
@@ -120,7 +135,7 @@ export function build(opts: ReturnType<typeof parseArgs>, root: string): Report 
   for (const module of opts.skipMutation ? [] : opts.modules) {
     try {
       const s = mutateModule(module, opts, root)
-      mutation[module] = { score: s.score, mutants: s.mutants, tests: s.tests.length }
+      mutation[module] = entryOf(s, module, opts)
       candidates = candidates.concat(fromMutation(s))
     } catch (e) {
       errors.push({ level: 'mutation', module, message: message(e) })

@@ -93,7 +93,8 @@ const NO_TESTS = ['!src/**/*.test.ts', '!src/**/*.spec.ts']
 /**
  * Default mutate scope per module, as slices run one after the other and merged per test.
  * knowledge-hub: sources compiled into shipped assets stay unmutated (tests compare byte for byte).
- * pair-cli: one run over the whole module is too slow under per-test coverage, so it is cut by directory.
+ * pair-cli: one run over the whole module is too slow under per-test coverage, so it is cut by directory;
+ * the first slice is the default, the others (hours) run with `redundancy --full`.
  */
 export const DEFAULT_SLICES: Record<string, string[][]> = {
   'packages/knowledge-hub': [
