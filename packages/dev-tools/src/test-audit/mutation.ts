@@ -125,7 +125,7 @@ export function buildConfig(o: Options, raw: string, tmp: string): Record<string
     plugins: ['@stryker-mutator/vitest-runner'],
     coverageAnalysis: 'perTest',
     disableBail: true,
-    reporters: ['json', 'clear-text'],
+    reporters: ['progress', 'json', 'clear-text'],
     jsonReporter: { fileName: raw },
     tempDirName: tmp,
     concurrency: o.concurrency,
