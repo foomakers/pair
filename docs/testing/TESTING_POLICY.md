@@ -71,6 +71,6 @@ CI: PR step "Test gates" (G1, G2, G7) and the manual-only `test-audit-nightly.ym
 
 ### Mutation report (manual)
 
-`pnpm --filter @pair/dev-tools test-audit:mutation --module <dir> [--mutate a,b] [--out file] [--concurrency n] [--incremental] [--analyze-only raw.json]`
+`pnpm test-audit:mutation --module <dir> [--mutate a,b] [--out file] [--concurrency n] [--incremental] [--analyze-only raw.json]`
 
 Runs Stryker (vitest runner, per-test coverage, bail disabled) on one module and writes a per-test JSON report (default `test-audit/mutation/<module>.json`, git-ignored; `--out` is configurable). Test classes: `effective` (kills a mutant no other test kills), `redundant` (every mutant it kills is also killed by another test), `never-kills` (covers mutants, kills none), `out-of-scope` (touches no mutated code). `redundant` and `never-kills` are candidates for a cleanup card, never automatic deletions: only the `--mutate` scope is judged, so a narrow scope over-reports `redundant`. Not part of `quality-gate`; Playwright and bash smoke tests are out of mutation scope.
