@@ -201,6 +201,8 @@ export function buildConfig(o: Options, raw: string, tmp: string): Record<string
     disableTypeChecks: false,
     // The default 5 min dry-run cap is too short for the larger suites under per-test coverage.
     dryRunTimeoutMinutes: 60,
+    // Default `threads` rejects process.chdir(), which some repo tests use; forks behave like plain vitest.
+    vitest: { pool: 'forks' },
     reporters: ['progress', 'json', 'clear-text'],
     jsonReporter: { fileName: raw },
     tempDirName: tmp,
