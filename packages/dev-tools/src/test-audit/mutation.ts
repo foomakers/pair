@@ -125,6 +125,7 @@ export function buildConfig(o: Options, raw: string, tmp: string): Record<string
     plugins: ['@stryker-mutator/vitest-runner'],
     coverageAnalysis: 'perTest',
     disableBail: true,
+    inPlace: true,
     reporters: ['progress', 'json', 'clear-text'],
     jsonReporter: { fileName: raw },
     tempDirName: tmp,
@@ -133,6 +134,10 @@ export function buildConfig(o: Options, raw: string, tmp: string): Record<string
     ...(o.incremental ? { incremental: true, incrementalFile: `${raw}.incremental.json` } : {}),
   }
 }
+
+/** Stryker runs in place (the repo's tests need the real tree): flag a module left mutated. */
+const status = (root: string, module: string): string =>
+  execFileSync('git', ['status', '--porcelain', '--', module], { cwd: root, encoding: 'utf8' })
 
 export function run(o: Options, root: string): MutationSummary {
   const dir = dirname(o.out)
@@ -144,6 +149,7 @@ export function run(o: Options, root: string): MutationSummary {
     writeFileSync(config, JSON.stringify(buildConfig(o, raw, tmp)))
     const pkg = require.resolve('@stryker-mutator/core/package.json')
     const bin = join(dirname(pkg), 'bin', 'stryker.js')
+    const before = status(root, o.module)
     try {
       execFileSync(process.execPath, [bin, 'run', config], {
         cwd: resolve(root, o.module),
@@ -152,6 +158,11 @@ export function run(o: Options, root: string): MutationSummary {
     } finally {
       rmSync(tmp, { recursive: true, force: true })
       rmSync(config, { force: true })
+      if (status(root, o.module) !== before) {
+        console.error(
+          `WARNING: ${o.module} differs from before the run; restore with: git checkout -- ${o.module}`,
+        )
+      }
     }
   }
   const summary = analyze(JSON.parse(readFileSync(raw, 'utf8')), o.module, o.mutate)
