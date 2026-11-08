@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { analyze, buildConfig, parseArgs, type StrykerReport } from './mutation'
+import { analyze, buildConfig, mergeSummaries, parseArgs, type StrykerReport } from './mutation'
 
 const report: StrykerReport = {
   files: {
@@ -65,5 +65,52 @@ describe('mutation options', () => {
       'perTest',
       undefined,
     ])
+  })
+})
+
+describe('mutation slices', () => {
+  const row = (
+    name: string,
+    cls: 'effective' | 'redundant' | 'never-kills' | 'out-of-scope',
+    kills = 0,
+  ) => ({
+    file: 'a.test.ts',
+    name,
+    covered: cls === 'out-of-scope' ? 0 : 2,
+    kills,
+    uniqueKills: cls === 'effective' ? kills : 0,
+    class: cls,
+  })
+  const part = (mutants: Record<string, number>, ...tests: ReturnType<typeof row>[]) => ({
+    module: 'm',
+    mutate: ['x'],
+    score: null,
+    mutants,
+    tests,
+    candidates: [],
+  })
+
+  it('keeps the strongest verdict per test across slices and adds up kills', () => {
+    const s = mergeSummaries('m', [
+      part(
+        { Killed: 3, Survived: 1 },
+        row('a', 'never-kills'),
+        row('b', 'out-of-scope'),
+        row('c', 'redundant', 1),
+      ),
+      part(
+        { Killed: 1, Survived: 1 },
+        row('a', 'effective', 2),
+        row('b', 'out-of-scope'),
+        row('c', 'never-kills'),
+      ),
+    ])
+    expect(s.tests.map(t => [t.name, t.class, t.kills])).toEqual([
+      ['a', 'effective', 2],
+      ['b', 'out-of-scope', 0],
+      ['c', 'redundant', 1],
+    ])
+    expect(s.candidates.map(t => t.name)).toEqual(['c'])
+    expect([s.score, s.mutants]).toEqual([66.67, { Killed: 4, Survived: 2 }])
   })
 })

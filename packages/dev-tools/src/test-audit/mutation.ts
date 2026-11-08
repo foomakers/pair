@@ -88,14 +88,75 @@ export function analyze(
   }
 }
 
-/** Sources compiled into shipped assets: tests compare asset and source byte for byte, so they stay unmutated. */
-export const DEFAULT_MUTATE: Record<string, string[]> = {
+const NO_TESTS = ['!src/**/*.test.ts', '!src/**/*.spec.ts']
+
+/**
+ * Default mutate scope per module, as slices run one after the other and merged per test.
+ * knowledge-hub: sources compiled into shipped assets stay unmutated (tests compare byte for byte).
+ * pair-cli: one run over the whole module is too slow under per-test coverage, so it is cut by directory.
+ */
+export const DEFAULT_SLICES: Record<string, string[][]> = {
   'packages/knowledge-hub': [
-    'src/**/*.ts',
-    '!src/**/*.test.ts',
-    '!src/tools/coverage-baseline-ratchet.ts',
-    '!src/tools/mirror-realign.ts',
+    [
+      'src/**/*.ts',
+      ...NO_TESTS,
+      '!src/tools/coverage-baseline-ratchet.ts',
+      '!src/tools/mirror-realign.ts',
+    ],
   ],
+  'apps/pair-cli': [
+    [
+      'src/registry/**/*.ts',
+      'src/kb-manager/**/*.ts',
+      'src/config/**/*.ts',
+      'src/ui/**/*.ts',
+      ...NO_TESTS,
+    ],
+    ['src/commands/run/**/*.ts', ...NO_TESTS],
+    ['src/commands/**/*.ts', '!src/commands/run/**', ...NO_TESTS],
+  ],
+}
+
+const RANK: Record<TestClass, number> = {
+  effective: 3,
+  redundant: 2,
+  'never-kills': 1,
+  'out-of-scope': 0,
+}
+
+/**
+ * Slices judge a test only inside their own mutate scope: a test is `never-kills` overall only if no
+ * slice saw it kill anything, so the strongest verdict across slices wins and kills add up.
+ */
+export function mergeSummaries(module: string, parts: MutationSummary[]): MutationSummary {
+  const byKey = new Map<string, TestRow>()
+  for (const t of parts.flatMap(p => p.tests)) {
+    const key = `${t.file}::${t.name}`
+    const prev = byKey.get(key)
+    if (!prev) {
+      byKey.set(key, { ...t })
+      continue
+    }
+    prev.covered += t.covered
+    prev.kills += t.kills
+    prev.uniqueKills += t.uniqueKills
+    if (RANK[t.class] > RANK[prev.class]) prev.class = t.class
+  }
+  const tests = [...byKey.values()]
+  const mutants: Record<string, number> = {}
+  for (const p of parts)
+    for (const [k, v] of Object.entries(p.mutants)) mutants[k] = (mutants[k] ?? 0) + v
+  const judged = Object.entries(mutants).filter(([k]) => k !== 'Ignored' && k !== 'CompileError')
+  const total = judged.reduce((n, [, v]) => n + v, 0)
+  const detected = (mutants['Killed'] ?? 0) + (mutants['Timeout'] ?? 0)
+  return {
+    module,
+    mutate: parts.flatMap(p => p.mutate),
+    score: total ? Math.round((detected / total) * 10000) / 100 : null,
+    mutants,
+    tests,
+    candidates: tests.filter(t => t.class === 'never-kills' || t.class === 'redundant'),
+  }
 }
 
 export interface Options {
@@ -128,9 +189,6 @@ export function parseArgs(argv: string[], root: string): Options {
   }
 }
 
-const mutateOf = (o: Options): string[] =>
-  o.mutate.length ? o.mutate : (DEFAULT_MUTATE[o.module] ?? [])
-
 /** Stryker has no CLI flag for the JSON path: the run is driven by a generated config file. */
 export function buildConfig(o: Options, raw: string, tmp: string): Record<string, unknown> {
   return {
@@ -147,7 +205,7 @@ export function buildConfig(o: Options, raw: string, tmp: string): Record<string
     jsonReporter: { fileName: raw },
     tempDirName: tmp,
     concurrency: o.concurrency,
-    ...(mutateOf(o).length ? { mutate: mutateOf(o) } : {}),
+    ...(o.mutate.length ? { mutate: o.mutate } : {}),
     ...(o.incremental ? { incremental: true, incrementalFile: `${raw}.incremental.json` } : {}),
   }
 }
@@ -190,7 +248,7 @@ export function run(o: Options, root: string): MutationSummary {
       restore(root, o.module)
     }
   }
-  const summary = analyze(JSON.parse(readFileSync(raw, 'utf8')), o.module, mutateOf(o))
+  const summary = analyze(JSON.parse(readFileSync(raw, 'utf8')), o.module, o.mutate)
   writeFileSync(o.out, JSON.stringify(summary, null, 2) + '\n')
   return summary
 }

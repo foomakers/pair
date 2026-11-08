@@ -11,7 +11,7 @@ import { basename, dirname, join, relative, resolve } from 'path'
 
 import { REPO_ROOT } from '../quality-gates/repo-root'
 
-import { run as runMutation } from './mutation'
+import { DEFAULT_SLICES, mergeSummaries, run as runMutation } from './mutation'
 import type { MutationSummary } from './mutation'
 import { rowsFor } from './playwright-overlap'
 import type { PwRow } from './playwright-overlap'
@@ -86,17 +86,40 @@ export function parseArgs(argv: string[], root: string) {
 
 const message = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 
+/** One module = one or more slices (own mutate scope each), merged per test. */
+function mutateModule(
+  module: string,
+  opts: ReturnType<typeof parseArgs>,
+  root: string,
+): MutationSummary {
+  const slices = DEFAULT_SLICES[module] ?? [[]]
+  const parts = slices.map((mutate, i) =>
+    runMutation(
+      {
+        module,
+        mutate,
+        out: join(
+          root,
+          'test-audit',
+          'mutation',
+          `${basename(module)}${slices.length > 1 ? `-${i + 1}` : ''}.json`,
+        ),
+        concurrency: opts.concurrency,
+        incremental: true,
+      },
+      root,
+    ),
+  )
+  return slices.length > 1 ? mergeSummaries(module, parts) : (parts[0] as MutationSummary)
+}
+
 export function build(opts: ReturnType<typeof parseArgs>, root: string): Report {
   const errors: Report['errors'] = []
   const mutation: Report['mutation'] = {}
   let candidates: Candidate[] = []
   for (const module of opts.skipMutation ? [] : opts.modules) {
     try {
-      const out = join(root, 'test-audit', 'mutation', `${basename(module)}.json`)
-      const s = runMutation(
-        { module, mutate: [], out, concurrency: opts.concurrency, incremental: true },
-        root,
-      )
+      const s = mutateModule(module, opts, root)
       mutation[module] = { score: s.score, mutants: s.mutants, tests: s.tests.length }
       candidates = candidates.concat(fromMutation(s))
     } catch (e) {
