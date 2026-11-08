@@ -1,13 +1,9 @@
-name: Test audit (manual, G8 and mutation)
+name: Test audit (manual, G8 and redundancy)
 on:
   workflow_dispatch:
     inputs:
-      mutation_module:
-        description: 'Optional: module to mutate with Stryker (e.g. packages/content-ops); empty skips mutation'
-        required: false
-        default: ''
-      mutation_mutate:
-        description: 'Optional: comma-separated mutate globs inside the module (empty = Stryker default)'
+      redundancy_modules:
+        description: 'Optional: comma-separated vitest modules for the redundancy report (e.g. packages/content-ops,apps/pair-cli); empty skips it'
         required: false
         default: ''
 jobs:
@@ -29,16 +25,16 @@ jobs:
       - run: git show HEAD:test-audit/report.json > "$RUNNER_TEMP/prev-report.json"
       - run: pnpm --filter @pair/dev-tools test-audit
       - run: pnpm --filter @pair/dev-tools test-audit:gates --g8-from "$RUNNER_TEMP/prev-report.json"
-      # Manual only: per-test mutation report for a cleanup card. Never scheduled, never on PRs.
-      - name: Mutation report
-        if: inputs.mutation_module != ''
+      # Manual only: one redundancy report (vitest mutation + Playwright fingerprint) for a cleanup card.
+      # Never scheduled, never on PRs.
+      - name: Redundancy report
+        if: inputs.redundancy_modules != ''
         run: >
-          pnpm --filter @pair/dev-tools test-audit:mutation
-          --module "${{ inputs.mutation_module }}"
-          ${{ inputs.mutation_mutate != '' && format('--mutate "{0}"', inputs.mutation_mutate) || '' }}
-          --out test-audit/mutation/report.json
+          pnpm --filter @pair/dev-tools test-audit:redundancy
+          --modules "${{ inputs.redundancy_modules }}"
+          --out test-audit/redundancy/report.json
       - uses: actions/upload-artifact@v4
-        if: inputs.mutation_module != ''
+        if: inputs.redundancy_modules != ''
         with:
-          name: test-audit-mutation
-          path: test-audit/mutation/report.json
+          name: test-audit-redundancy
+          path: test-audit/redundancy/report.json
