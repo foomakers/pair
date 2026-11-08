@@ -81,6 +81,14 @@ describe('run --cards through the handler', () => {
     expect(code).toBe(1)
   })
 
+  it('AC6: an awaiting-human card with exit 0 remains terminal and is not reported done', async () => {
+    const parked: CardProcessExit = { exitCode: 0, signal: null, cycleStatus: 'awaiting-human' }
+    const { code, out, started } = await runCards({ cards: '1,2' }, { 1: [parked], 2: [ok] })
+    expect(started.map(s => s.split(':')[0])).toEqual(['1', '2'])
+    expect(out).toContain('#1: terminal — awaiting-human')
+    expect(code).toBe(1)
+  })
+
   it('AC8: a closed card is skipped, reported done', async () => {
     const { code, out, started } = await runCards({ cards: '1,2' }, { 1: [ok], 2: [ok] }, ['1'])
     expect(started.map(s => s.split(':')[0])).toEqual(['2'])
