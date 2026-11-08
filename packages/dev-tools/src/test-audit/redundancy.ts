@@ -14,6 +14,8 @@ import { REPO_ROOT } from '../quality-gates/repo-root'
 import { DEFAULT_SLICES, mergeSummaries, run as runMutation } from './mutation'
 import type { MutationSummary } from './mutation'
 import { rowsFor } from './playwright-overlap'
+import { runSuites, totals } from './playwright-run'
+import type { RunRow, TargetTotals } from './playwright-run'
 import type { PwRow } from './playwright-overlap'
 
 export const MODULES = [
@@ -34,6 +36,8 @@ export interface Candidate {
   kills?: number
   uniqueKills?: number
   containedIn?: string
+  status?: string
+  ms?: number
 }
 export interface Report {
   generatedAt: string
@@ -42,7 +46,13 @@ export interface Report {
     string,
     { score: number | null; mutants: Record<string, number>; tests: number; slices?: string }
   >
-  playwright: { tests: number; redundant: number; effective: number; noSignal: number }
+  playwright: {
+    tests: number
+    redundant: number
+    effective: number
+    noSignal: number
+    run?: { targets: Record<string, TargetTotals>; notPassing: RunRow[] }
+  }
   totals: { candidates: number; bySource: Record<string, number> }
   candidates: Candidate[]
   errors: { level: string; module: string; message: string }[]
@@ -60,17 +70,22 @@ export function fromMutation(s: MutationSummary): Candidate[] {
   }))
 }
 
-export function fromPlaywright(rows: PwRow[]): Candidate[] {
+export function fromPlaywright(rows: PwRow[], run: RunRow[] = []): Candidate[] {
+  const byKey = new Map(run.map(r => [`${r.file}::${r.name}`, r]))
   return rows
     .filter(r => r.class === 'redundant')
-    .map(r => ({
-      source: 'playwright-fingerprint' as const,
-      module: r.file.split('/').slice(0, 2).join('/'),
-      file: r.file,
-      name: r.name,
-      class: r.class,
-      ...(r.containedIn ? { containedIn: r.containedIn } : {}),
-    }))
+    .map(r => {
+      const ran = byKey.get(`${r.file}::${r.name}`)
+      return {
+        source: 'playwright-fingerprint' as const,
+        module: r.file.split('/').slice(0, 2).join('/'),
+        file: r.file,
+        name: r.name,
+        class: r.class,
+        ...(r.containedIn ? { containedIn: r.containedIn } : {}),
+        ...(ran ? { status: ran.status, ms: ran.ms } : {}),
+      }
+    })
 }
 
 export function parseArgs(argv: string[], root: string) {
@@ -85,6 +100,8 @@ export function parseArgs(argv: string[], root: string) {
     skipMutation: argv.includes('--skip-mutation'),
     skipPlaywright: argv.includes('--skip-playwright'),
     full: argv.includes('--full'),
+    skipPlaywrightRun: argv.includes('--skip-playwright-run'),
+    repeatEach: Number(get('--repeat-each') ?? 1),
   }
 }
 
@@ -128,8 +145,11 @@ function entryOf(
   return n > 1 ? { ...base, slices: `${opts.full ? n : 1}/${n}` } : base
 }
 
-export function build(opts: ReturnType<typeof parseArgs>, root: string): Report {
-  const errors: Report['errors'] = []
+type Opts = ReturnType<typeof parseArgs>
+type Errors = Report['errors']
+
+function mutationPhase(opts: Opts, root: string) {
+  const errors: Errors = []
   const mutation: Report['mutation'] = {}
   let candidates: Candidate[] = []
   for (const module of opts.skipMutation ? [] : opts.modules) {
@@ -141,29 +161,49 @@ export function build(opts: ReturnType<typeof parseArgs>, root: string): Report 
       errors.push({ level: 'mutation', module, message: message(e) })
     }
   }
+  return { mutation, candidates, errors }
+}
+
+function playwrightPhase(opts: Opts, root: string) {
+  const errors: Errors = []
   let rows: PwRow[] = []
+  let run: RunRow[] = []
   try {
     if (!opts.skipPlaywright) rows = rowsFor(root)
   } catch (e) {
     errors.push({ level: 'playwright', module: '*', message: message(e) })
   }
-  candidates = candidates.concat(fromPlaywright(rows))
-  const n = (c: PwRow['class']) => rows.filter(r => r.class === c).length
+  if (!opts.skipPlaywright && !opts.skipPlaywrightRun) {
+    const r = runSuites(root, { repeatEach: opts.repeatEach })
+    run = r.rows
+    r.errors.forEach(m => errors.push({ level: 'playwright-run', module: '*', message: m }))
+  }
+  return { rows, run, errors }
+}
+
+export function build(opts: Opts, root: string): Report {
+  const m = mutationPhase(opts, root)
+  const p = playwrightPhase(opts, root)
+  const candidates = m.candidates.concat(fromPlaywright(p.rows, p.run))
+  const n = (c: PwRow['class']) => p.rows.filter(r => r.class === c).length
   const bySource: Record<string, number> = {}
   for (const c of candidates) bySource[c.source] = (bySource[c.source] ?? 0) + 1
   return {
     generatedAt: new Date().toISOString(),
     revision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
-    mutation,
+    mutation: m.mutation,
     playwright: {
-      tests: rows.length,
+      tests: p.rows.length,
       redundant: n('redundant'),
       effective: n('effective'),
       noSignal: n('no-signal'),
+      ...(p.run.length
+        ? { run: { targets: totals(p.run), notPassing: p.run.filter(r => r.status !== 'passed') } }
+        : {}),
     },
     totals: { candidates: candidates.length, bySource },
     candidates,
-    errors,
+    errors: [...m.errors, ...p.errors],
   }
 }
 
