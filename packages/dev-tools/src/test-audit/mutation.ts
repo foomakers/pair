@@ -141,6 +141,8 @@ export function buildConfig(o: Options, raw: string, tmp: string): Record<string
     inPlace: true,
     // No TypeScript checker here; the default prepends `// @ts-nocheck` to every src/test file, mutated or not.
     disableTypeChecks: false,
+    // The default 5 min dry-run cap is too short for the larger suites under per-test coverage.
+    dryRunTimeoutMinutes: 60,
     reporters: ['progress', 'json', 'clear-text'],
     jsonReporter: { fileName: raw },
     tempDirName: tmp,
