@@ -1,8 +1,15 @@
-name: Test audit (nightly, G8)
+name: Test audit (manual, G8 and mutation)
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 3 * * *'
+    inputs:
+      mutation_module:
+        description: 'Optional: module to mutate with Stryker (e.g. packages/content-ops); empty skips mutation'
+        required: false
+        default: ''
+      mutation_mutate:
+        description: 'Optional: comma-separated mutate globs inside the module (empty = Stryker default)'
+        required: false
+        default: ''
 jobs:
   audit:
     runs-on: ubuntu-latest
@@ -22,3 +29,16 @@ jobs:
       - run: git show HEAD:test-audit/report.json > "$RUNNER_TEMP/prev-report.json"
       - run: pnpm --filter @pair/dev-tools test-audit
       - run: pnpm --filter @pair/dev-tools test-audit:gates --g8-from "$RUNNER_TEMP/prev-report.json"
+      # Manual only: per-test mutation report for a cleanup card. Never scheduled, never on PRs.
+      - name: Mutation report
+        if: inputs.mutation_module != ''
+        run: >
+          pnpm --filter @pair/dev-tools test-audit:mutation
+          --module "${{ inputs.mutation_module }}"
+          ${{ inputs.mutation_mutate != '' && format('--mutate "{0}"', inputs.mutation_mutate) || '' }}
+          --out test-audit/mutation/report.json
+      - uses: actions/upload-artifact@v4
+        if: inputs.mutation_module != ''
+        with:
+          name: test-audit-mutation
+          path: test-audit/mutation/report.json

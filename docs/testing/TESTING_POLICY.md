@@ -24,7 +24,7 @@ Unavailable signal ⇒ `not measured`; never estimated; never grounds for remova
 | --- | --- | --- | --- |
 | unit | 100 ms | 60 s | every commit |
 | integration | 2 s | 5 min | every PR |
-| e2e | 30 s | 15 min | main and nightly |
+| e2e | 30 s | 15 min | main and the manual audit workflow |
 
 Level growth per PR ≤ `maxLevelGrowthPct` (5%); beyond it, remove/speed up other tests or use a bypass label.
 
@@ -56,7 +56,7 @@ A test failing in at least one seeded random-order run is quarantined: `it.skip`
 | G5 | each added test has unique kills ≥ `minUniqueKillsPerNewTest`; scope = `criticalModules` (`*` = all, including runs above 10 min; reassess after measuring in report-only) | same as G4 |
 | G6 | added/changed tests green in `flakyRuns.pr` random-order runs | yes (`--g6`) |
 | G7 | test:prod changed lines ≤ `maxTestToCodeRatio` | yes |
-| G8 | no new U2/U3 vs previous audit | yes (nightly workflow) |
+| G8 | no new U2/U3 vs previous audit | yes (manual workflow) |
 
 An unsupported gate is reported `unsupported`, never green, never blocking. A bypass is the PR label `gate-bypass:<ID>: <reason>` (reason required); bypasses are counted in the output.
 
@@ -67,4 +67,10 @@ An unsupported gate is reported `unsupported`, never green, never blocking. A by
 3. `block-full` (from week 5): all supported gates block.
 
 A gate above 10% false positives in report-only is not promoted until its rule is corrected.
-CI: PR step "Test gates" (G1, G2, G7) and the nightly workflow (audit + G8).
+CI: PR step "Test gates" (G1, G2, G7) and the manual-only `test-audit-nightly.yml` workflow (`workflow_dispatch`, no schedule): audit + G8, plus an optional Stryker mutation report.
+
+### Mutation report (manual)
+
+`pnpm --filter @pair/dev-tools test-audit:mutation --module <dir> [--mutate a,b] [--out file] [--concurrency n] [--incremental] [--analyze-only raw.json]`
+
+Runs Stryker (vitest runner, per-test coverage, bail disabled) on one module and writes a per-test JSON report (default `test-audit/mutation/<module>.json`, git-ignored; `--out` is configurable). Test classes: `effective` (kills a mutant no other test kills), `redundant` (every mutant it kills is also killed by another test), `never-kills` (covers mutants, kills none), `out-of-scope` (touches no mutated code). `redundant` and `never-kills` are candidates for a cleanup card, never automatic deletions: only the `--mutate` scope is judged, so a narrow scope over-reports `redundant`. Not part of `quality-gate`; Playwright and bash smoke tests are out of mutation scope.
