@@ -139,6 +139,8 @@ export function buildConfig(o: Options, raw: string, tmp: string): Record<string
     coverageAnalysis: 'perTest',
     disableBail: true,
     inPlace: true,
+    // No TypeScript checker here; the default prepends `// @ts-nocheck` to every src/test file, mutated or not.
+    disableTypeChecks: false,
     reporters: ['progress', 'json', 'clear-text'],
     jsonReporter: { fileName: raw },
     tempDirName: tmp,
