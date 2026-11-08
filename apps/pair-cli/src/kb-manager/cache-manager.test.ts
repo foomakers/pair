@@ -247,7 +247,9 @@ describe('cache-manager', () => {
 
   it('restoreCachedKB is no-op when no backup exists', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
-    await expect(cacheManager.restoreCachedKB(officialSource('0.2.0'), fs)).resolves.not.toThrow()
+    await cacheManager.restoreCachedKB(officialSource('0.2.0'), fs)
+    expect(fs.existsSync(officialSlot('0.2.0'))).toBe(false)
+    expect(fs.existsSync(officialSlot('0.2.0') + '.bak')).toBe(false)
   })
 
   it('removeBackupKB deletes .bak directory', async () => {
@@ -259,7 +261,9 @@ describe('cache-manager', () => {
 
   it('removeBackupKB is no-op when no backup exists', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
-    await expect(cacheManager.removeBackupKB(officialSource('0.2.0'), fs)).resolves.not.toThrow()
+    await cacheManager.removeBackupKB(officialSource('0.2.0'), fs)
+    expect(fs.existsSync(officialSlot('0.2.0'))).toBe(false)
+    expect(fs.existsSync(officialSlot('0.2.0') + '.bak')).toBe(false)
   })
 
   /**

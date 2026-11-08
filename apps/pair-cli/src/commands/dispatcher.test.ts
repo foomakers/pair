@@ -161,8 +161,10 @@ describe('dispatchCommand() - real handlers integration', () => {
       absolute: false, // will try relative
     }
 
-    // link transformation is the handler's responsibility; the dispatcher must route and resolve
-    await expect(dispatchCommand(config, fs)).resolves.not.toThrow()
+    await dispatchCommand(config, fs)
+
+    // routed to the real handler: the file is still there and the unresolvable link is untouched
+    expect(await fs.readFile(`${cwd}/docs/a.md`)).toBe('[link](/abs/path)')
   })
 
   test('dispatches package command', async () => {

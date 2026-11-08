@@ -80,15 +80,17 @@ describe('rewriteLinksInFile', () => {
       '/',
     )
 
-    await expect(
-      rewriteLinksInFile({
-        fileService: fs,
-        filePath: '/dataset/target/skill/SKILL.md',
-        originalDir: '.skills/catalog',
-        newDir: 'target/skill',
-        datasetRoot: '/dataset',
-      }),
-    ).resolves.not.toThrow()
+    await rewriteLinksInFile({
+      fileService: fs,
+      filePath: '/dataset/target/skill/SKILL.md',
+      originalDir: '.skills/catalog',
+      newDir: 'target/skill',
+      datasetRoot: '/dataset',
+    })
+
+    expect(await fs.readFile('/dataset/target/skill/SKILL.md')).toBe(
+      '# Skill\n[broken](../../nonexistent/file.md)',
+    )
   })
 
   it('rewrites multiple links in a single file without offset corruption', async () => {

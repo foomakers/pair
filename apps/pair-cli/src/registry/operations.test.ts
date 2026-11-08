@@ -371,14 +371,13 @@ describe('distributeToSecondaryTargets', () => {
 
   it('handles empty targets array', async () => {
     const fs = createTestFs({}, {}, '/project')
-    await expect(
-      distributeToSecondaryTargets({
-        fileService: fs,
-        sourcePath: '/dataset/.claude/skills',
-        targets: [],
-        baseTarget: '/project',
-      }),
-    ).resolves.not.toThrow()
+    await distributeToSecondaryTargets({
+      fileService: fs,
+      sourcePath: '/dataset/.claude/skills',
+      targets: [],
+      baseTarget: '/project',
+    })
+    expect(fs.getSymlinks().size).toBe(0)
   })
 
   it('skips distribution when canonical path does not exist', async () => {
