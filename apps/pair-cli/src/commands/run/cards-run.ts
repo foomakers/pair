@@ -136,7 +136,10 @@ async function runOne(
   state.snapshots.set(id, before)
   if (before.atTarget) {
     results.set(id, { id, end: 'at-target', reason: 'already at target' })
-    return { progress: false }
+    // A peer completed during this pass advanced: count it, still skip its run.
+    const progress = advanced(before.progress, best.get(id)!)
+    best.set(id, highWater(before.progress, best.get(id)!))
+    return { progress }
   }
   const { outcome, halt } = await input.runCard(id)
   if (halt !== undefined) {

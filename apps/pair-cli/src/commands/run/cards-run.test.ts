@@ -81,6 +81,38 @@ describe('runCardList', () => {
     expect(cardsExitCode(report)).toBe(1)
   })
 
+  it('r1-5: a peer completed during the pass counts as progress (peer skipped, retryable card retried)', async () => {
+    const ranks = new Map<string, number>()
+    const done15 = new Set<string>()
+    const runs: string[] = []
+    let n12 = 0
+    const report = await runCardList({
+      cards: ['12', '15'],
+      maxPasses: 5,
+      runCard: async id => {
+        runs.push(id)
+        if (id === '12' && n12++ === 0) {
+          done15.add('15')
+          ranks.set('15', 50)
+          return { outcome: out('12', { cycleStatus: 'rounds-bound-reached' }) }
+        }
+        done15.add(id)
+        return { outcome: out(id, done.o) }
+      },
+      readRank: id => ranks.get(id) ?? 0,
+      atTarget: id => done15.has(id),
+      interrupted: () => false,
+    })
+    expect(runs).toEqual(['12', '12'])
+    expect(report.stop).toBe('all-at-target')
+  })
+
+  it('r1-5 control: a card already at target at run start is no progress', async () => {
+    const h = harness({ 1: [unfinished(10), unfinished(10)], 2: [done] })
+    const report = await h.drive(['1', '2'], 5, ['2'])
+    expect(report.stop).toBe('no-progress')
+  })
+
   it('oscillation: regress then recover is no progress', async () => {
     const h = harness({ 1: [unfinished(20), unfinished(10), unfinished(20), done] })
     const report = await h.drive(['1'])
