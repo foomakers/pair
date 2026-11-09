@@ -657,5 +657,7 @@ describe('US-623 AC6 — stray files of a failed attempt are stashed before the 
     expect(await run({ ...PREPARE_A0, attempt: 2 })).toEqual(['stash:2', 'spawn'])
     expect(await run(PREPARE_A0)).toEqual(['spawn'])
     expect(await run(VALIDATE_A0)).toEqual(['spawn'])
+    // A repair works ON the predecessor's untracked contract files: stashing them makes it `unprovable`.
+    expect(await run({ ...PREPARE_A0, mode: 'repair', attempt: 2 })).toEqual(['spawn'])
   })
 })

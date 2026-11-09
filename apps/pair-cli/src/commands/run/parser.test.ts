@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseRunCommand } from './parser'
+import { isParallelRun, parseRunCommand } from './parser'
 
 describe('parseRunCommand', () => {
   it('US-611: validates --state-order as a root-run argument', () => {
@@ -613,5 +613,52 @@ describe('US-576 T-3: --preset and --filter *', () => {
 
   it("accepts --filter '*' as a scope", () => {
     expect(parseRunCommand({ parallel: '2', filter: '*' }).scope.filter).toBe('*')
+  })
+})
+
+describe('US-614 --cards', () => {
+  const usage = (opts: Record<string, unknown>) => {
+    try {
+      parseRunCommand({ cards: '1,2', ...opts })
+    } catch (e) {
+      return e as Error & { exitCode?: number }
+    }
+    throw new Error('expected a refusal')
+  }
+
+  it('AC1: keeps the order, trims ids', () => {
+    expect(parseRunCommand({ cards: '12, 15,9' }).cards).toEqual(['12', '15', '9'])
+  })
+
+  it('single id behaves as a one-card list; --card alone is unchanged (AC2)', () => {
+    expect(parseRunCommand({ cards: '12' }).cards).toEqual(['12'])
+    const card = parseRunCommand({ card: '12' })
+    expect(card.cards).toBeUndefined()
+    expect(card.dispatch?.card).toBe('12')
+  })
+
+  it('--cards with the loop autonomy args is a cards run, not a fan-out', () => {
+    const config = parseRunCommand({ cards: '1,2', until: 'merged' })
+    expect(isParallelRun(config)).toBe(false)
+    expect(config.autonomy).toEqual({ until: 'merged' })
+  })
+
+  it.each([
+    ['empty list', { cards: '' }],
+    ['empty element', { cards: '1,,2' }],
+    ['duplicate', { cards: '1,2,1' }],
+    ['unsafe id', { cards: '1,$(rm)' }],
+    ['--card', { card: '3' }],
+    ['--root', { root: '3' }],
+    ['--filter', { filter: 'x' }],
+    ['--parallel 2', { parallel: 2 }],
+    ['--skill', { skill: 'x' }],
+    ['--watch', { watch: true, parallel: 1 }],
+  ])('AC10: refuses %s with exit code 2', (_name, opts) => {
+    expect(usage(opts).exitCode).toBe(2)
+  })
+
+  it('--parallel 1 is accepted and dropped', () => {
+    expect(parseRunCommand({ cards: '1,2', parallel: 1 }).parallel).toBeUndefined()
   })
 })

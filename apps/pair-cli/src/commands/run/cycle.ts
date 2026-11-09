@@ -513,9 +513,10 @@ const MERGE_RAN = new Set(['merged', 'merged-closure-unfinished'])
  * a time. Never judges a stage's content. The only merge is the injected `mergeStage`
  * collaborator's (US-490: `cycle-merge.mjs` re-verifies its own conjunction) — never this loop.
  */
-/** US-623 AC6: a `prepare` beyond attempt 1 starts from a tree the failed attempt left clean. */
+/** US-623 AC6: a `prepare` beyond attempt 1 starts from a clean tree — except a `repair`, which works on its predecessor's untracked contract files. */
 async function cleanBeforePrepare(input: RunCycleInput, next: CycleNext): Promise<void> {
-  if (next.step === 'prepare' && Number(next['attempt']) > 1) await input.beforePrepare?.(next)
+  if (next.step === 'prepare' && next['mode'] !== 'repair' && Number(next['attempt']) > 1)
+    await input.beforePrepare?.(next)
 }
 
 /** US-573: tells the live-progress observer, if any, which stage is about to run. */

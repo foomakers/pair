@@ -179,7 +179,8 @@ export async function main() {
     // but centralize colors and exit logic here.
     logger.error(`Error: ${errMessage}`)
 
-    process.exit(1)
+    // US-614: a usage refusal carries its own exit code (2).
+    process.exit((err as { exitCode?: unknown }).exitCode === 2 ? 2 : 1)
   }
 }
 
