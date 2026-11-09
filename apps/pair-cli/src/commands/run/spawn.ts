@@ -127,6 +127,36 @@ function createWatchdog(
   }
 }
 
+/** US-506 T-8 (AC12): stopped by a bound before any terminal event ⇒ a STALL, named as one. */
+function stalledOrResult(result: IterationResult, stopped: string | undefined): IterationResult {
+  if (stopped === undefined || result.outcome === 'success') return result
+  const { skippedLines, runEvents } = result
+  return {
+    outcome: 'failed',
+    cause: 'timed-out',
+    detail: stopped,
+    stalled: true,
+    ...(skippedLines !== undefined && { skippedLines }),
+    ...(runEvents !== undefined && { runEvents }),
+  }
+}
+
+/** US-623 AC3: a temp file the engine writes its final message to; read only when the stream carried no result. */
+function openLastMessageChannel(engine: EngineDefinition) {
+  if (!engine.lastMessageArgs) return undefined
+  const dir = mkdtempSync(join(tmpdir(), 'pair-last-message-'))
+  const path = join(dir, 'last-message.txt')
+  return {
+    path,
+    merge: (result: IterationResult): IterationResult | undefined => {
+      if (result.final !== undefined || !existsSync(path)) return undefined
+      const final = parseFinalResult(readFileSync(path, 'utf-8'))
+      return final && { ...result, final }
+    },
+    close: () => rmSync(dir, { recursive: true, force: true }),
+  }
+}
+
 /**
  * Runs one iteration and returns what its STREAM said.
  *
@@ -139,10 +169,8 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
   // r1-2: once the driver was signalled, the engine it is stopping must not be replaced by the next.
   if (isInterrupted())
     throw new Error('interrupted: the driver received a signal, no engine is started')
-  const channelDir = input.engine.lastMessageArgs
-    ? mkdtempSync(join(tmpdir(), 'pair-last-message-'))
-    : undefined
-  const lastMessagePath = channelDir && join(channelDir, 'last-message.txt')
+  const channel = openLastMessageChannel(input.engine)
+  const lastMessagePath = channel?.path
   const child = spawn(input.engine.command, buildEngineArgs({ ...input, lastMessagePath }), {
     cwd: input.cwd,
     stdio: [HEADLESS_STDIN, 'pipe', 'pipe'],
@@ -171,25 +199,11 @@ export async function spawnIteration(input: SpawnIterationInput): Promise<Iterat
       { maxFixRounds: input.maxFixRounds },
     )
     // US-623 AC3: the stream's last text carried no result ⇒ the engine's dedicated channel is read.
-    if (result.final === undefined && lastMessagePath && existsSync(lastMessagePath)) {
-      const final = parseFinalResult(readFileSync(lastMessagePath, 'utf-8'))
-      if (final !== undefined) return { ...result, final }
-    }
-    // US-506 T-8 (AC12): stopped by a bound before any terminal event ⇒ a STALL, named as one.
-    const stopped = watchdog.stopped()
-    if (stopped === undefined || result.outcome === 'success') return result
-    const { skippedLines, runEvents } = result
-    return {
-      outcome: 'failed',
-      cause: 'timed-out',
-      detail: stopped,
-      stalled: true,
-      ...(skippedLines !== undefined && { skippedLines }),
-      ...(runEvents !== undefined && { runEvents }),
-    }
+    const channelResult = channel?.merge(result)
+    return stalledOrResult(channelResult ?? result, watchdog.stopped())
   } finally {
     watchdog.clear()
-    if (channelDir) rmSync(channelDir, { recursive: true, force: true })
+    channel?.close()
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
     // ponytail: 1s drain bound — a grandchild holding stderr open must not hold the iteration.
     await Promise.race([stderr, new Promise(done => setTimeout(done, 1000).unref())])
